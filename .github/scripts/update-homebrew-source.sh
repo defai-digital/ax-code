@@ -25,6 +25,10 @@ if [ -z "${TAP_AUTH_TOKEN}" ]; then
   echo "::error::TAP_TOKEN or GH_TOKEN is required to update the Homebrew tap"
   exit 1
 fi
+# Override GH_TOKEN for all subsequent commands (gh clone, git push via
+# credential helper) so they use the tap write token, not the default
+# github-actions read-only GITHUB_TOKEN from the workflow env.
+export GH_TOKEN="${TAP_AUTH_TOKEN}"
 
 # Wait briefly for the npm registry to converge — publish-source job
 # completes before this homebrew-source job runs, but the registry CDN
@@ -89,8 +93,8 @@ cat /tmp/ax-code-source.rb
 
 TAP_DIR="$(mktemp -d)"
 trap 'rm -rf "${TAP_DIR}"' EXIT
-GH_TOKEN="${TAP_AUTH_TOKEN}" gh auth setup-git
-GH_TOKEN="${TAP_AUTH_TOKEN}" gh repo clone defai-digital/homebrew-ax-code "${TAP_DIR}" -- --depth 1
+gh auth setup-git
+gh repo clone defai-digital/homebrew-ax-code "${TAP_DIR}" -- --depth 1
 cp /tmp/ax-code-source.rb "${TAP_DIR}/ax-code-source.rb"
 cd "${TAP_DIR}"
 git config user.name "github-actions[bot]"

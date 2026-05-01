@@ -75987,6 +75987,32 @@
           "output": 1000000
         }
       },
+      "alibaba/qwen3.6-27b": {
+        "id": "alibaba/qwen3.6-27b",
+        "name": "Qwen 3.6 27B",
+        "family": "qwen3.6",
+        "attachment": true,
+        "reasoning": true,
+        "tool_call": true,
+        "temperature": true,
+        "release_date": "2026-04-22",
+        "last_updated": "2026-05-01",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 256000,
+          "output": 256000
+        }
+      },
       "alibaba/qwen3-embedding-8b": {
         "id": "alibaba/qwen3-embedding-8b",
         "name": "Qwen3 Embedding 8B",
@@ -76387,6 +76413,31 @@
         "limit": {
           "context": 256000,
           "output": 65536
+        }
+      },
+      "alibaba/qwen3-vl-235b-a22b-instruct": {
+        "id": "alibaba/qwen3-vl-235b-a22b-instruct",
+        "name": "Qwen3 VL 235B A22B Instruct",
+        "family": "qwen",
+        "attachment": true,
+        "reasoning": false,
+        "tool_call": false,
+        "temperature": true,
+        "release_date": "2025-09-24",
+        "last_updated": "2026-05-01",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 131072,
+          "output": 129024
         }
       },
       "alibaba/qwen3-coder": {
@@ -77451,6 +77502,32 @@
           "output": 131072
         }
       },
+      "xai/grok-4.3": {
+        "id": "xai/grok-4.3",
+        "name": "Grok 4.3",
+        "family": "grok",
+        "attachment": true,
+        "reasoning": true,
+        "tool_call": true,
+        "temperature": true,
+        "release_date": "2026-04-30",
+        "last_updated": "2026-05-01",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 1000000
+        }
+      },
       "xai/grok-4.20-non-reasoning": {
         "id": "xai/grok-4.20-non-reasoning",
         "name": "Grok 4.20 Non-Reasoning",
@@ -77899,6 +77976,30 @@
         "limit": {
           "context": 128000,
           "output": 128000
+        }
+      },
+      "inception/mercury-coder-small": {
+        "id": "inception/mercury-coder-small",
+        "name": "Mercury Coder Small Beta",
+        "family": "mercury",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": true,
+        "temperature": true,
+        "release_date": "2025-02-26",
+        "last_updated": "2026-05-01",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 32000,
+          "output": 16384
         }
       },
       "openai/gpt-5.1-codex-max": {
@@ -81287,6 +81388,58 @@
         "limit": {
           "context": 200000,
           "output": 32000
+        }
+      },
+      "xiaomi/mimo-v2.5-pro": {
+        "id": "xiaomi/mimo-v2.5-pro",
+        "name": "MiMo V2.5 Pro",
+        "family": "mimo-v2.5-pro",
+        "attachment": true,
+        "reasoning": true,
+        "tool_call": true,
+        "temperature": true,
+        "release_date": "2026-04-22",
+        "last_updated": "2026-05-01",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1050000,
+          "output": 131000
+        }
+      },
+      "xiaomi/mimo-v2.5": {
+        "id": "xiaomi/mimo-v2.5",
+        "name": "MiMo M2.5",
+        "family": "mimo-v2.5",
+        "attachment": true,
+        "reasoning": true,
+        "tool_call": true,
+        "temperature": true,
+        "release_date": "2026-04-22",
+        "last_updated": "2026-05-01",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1050000,
+          "output": 131100
         }
       },
       "xiaomi/mimo-v2-pro": {
