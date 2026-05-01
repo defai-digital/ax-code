@@ -294,6 +294,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
     return sidebarSessionStatusView({
       status: status(),
       hasMessages: messages().length > 0,
+      pendingTodos: todoRemaining(),
       now: Date.now(),
     })
   })
@@ -325,6 +326,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                 <text fg={theme.text}>
                   <b>{session().title}</b>
                 </text>
+                <text fg={theme.textMuted}>{session().id}</text>
                 <text fg={sidebarStatusColor(theme, titleStatus().tone)}>{titleStatus().label}</text>
                 <Show when={session().share?.url}>{(url) => <text fg={theme.textMuted}>{url()}</text>}</Show>
               </box>
