@@ -16,6 +16,7 @@ import { INDEXER_SEMANTIC_METHODS } from "../lsp/prewarm-profile"
 
 const log = Log.create({ service: "code-intelligence.builder" })
 const SYMBOL_RANGE_SCALE = 1000
+const MAX_BOOKMARKS_PER_REFERENCE_QUERY = 50
 
 // LSP's textDocument/documentSymbol returns DocumentSymbol objects with
 // a numeric `kind` field matching the LSP spec SymbolKind enum.
@@ -294,7 +295,7 @@ function planReferenceQueries(bookmarks: ReferenceBookmark[], limit: number): Re
     const key = `${bookmark.selectionLine}:${bookmark.selectionChar}`
     const existing = byKey.get(key)
     if (existing) {
-      existing.bookmarks.push(bookmark)
+      if (existing.bookmarks.length < MAX_BOOKMARKS_PER_REFERENCE_QUERY) existing.bookmarks.push(bookmark)
       continue
     }
     if (planned.length >= limit) continue

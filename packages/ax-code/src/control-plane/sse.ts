@@ -3,6 +3,9 @@ import { Log } from "@/util/log"
 const log = Log.create({ service: "control-plane.sse" })
 const MAX_SSE_BUFFER_CHARS = 1024 * 1024
 
+// Each parser invocation owns exactly one reader/buffer pair for one response
+// body. Callers must not share a ReadableStream body across concurrent
+// parseSSE calls; the stream reader lock is the intended serialization point.
 export async function parseSSE(
   body: ReadableStream<Uint8Array>,
   signal: AbortSignal,

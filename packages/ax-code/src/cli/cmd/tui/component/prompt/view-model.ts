@@ -11,6 +11,32 @@ export type PromptSubmissionView = {
   parts: PromptInfo["parts"]
 }
 
+export const DOUBLE_ESCAPE_CLEAR_MS = 3_000
+
+export function promptEscapeClearIntent(input: {
+  keyName?: string
+  hasDraft: boolean
+  previousEscapeAt?: number
+  now: number
+  windowMs?: number
+}): {
+  action: "arm" | "clear" | "passthrough"
+  nextEscapeAt?: number
+} {
+  if (input.keyName !== "escape") return { action: "passthrough" }
+  if (!input.hasDraft) return { action: "passthrough" }
+
+  const windowMs = input.windowMs ?? DOUBLE_ESCAPE_CLEAR_MS
+  if (input.previousEscapeAt !== undefined && input.now - input.previousEscapeAt <= windowMs) {
+    return { action: "clear" }
+  }
+
+  return {
+    action: "arm",
+    nextEscapeAt: input.now,
+  }
+}
+
 export function isPromptExitCommand(input: string) {
   const trimmed = input.trim()
   return trimmed === "exit" || trimmed === "quit" || trimmed === ":q"

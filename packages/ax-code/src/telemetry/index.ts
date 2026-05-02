@@ -43,7 +43,11 @@ export namespace Telemetry {
         const { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } = await import("@opentelemetry/semantic-conventions")
 
         if (!endpointUrl) return
-        exporter = new OTLPTraceExporter({ url: endpointUrl })
+        exporter = new OTLPTraceExporter({
+          url: endpointUrl,
+          fetch: (url: string | URL, init?: RequestInit) =>
+            Ssrf.pinnedFetch(url.toString(), { ...init, label: "AX_CODE_OTLP_ENDPOINT" }),
+        } as any)
         provider = new NodeTracerProvider({
           resource: resourceFromAttributes({
             [ATTR_SERVICE_NAME]: "ax-code",

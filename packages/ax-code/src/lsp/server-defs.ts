@@ -971,15 +971,15 @@ const spawnJdtls = async (java: string, root: string, distPath: string, launcher
     throw err
   }
 
-  void proc.exited.finally(() => {
-    fs.rm(dataDir, { recursive: true, force: true }).catch((err) =>
-      log.warn("failed to remove jdtls data dir", { dataDir, err }),
-    )
-  })
   proc.stderr.on("data", (chunk: Buffer | string) => {
     const message = chunk.toString().trim()
     if (!message) return
     log.debug("jdtls stderr", { root, message: message.slice(0, 500) })
+  })
+  void proc.exited.finally(() => {
+    fs.rm(dataDir, { recursive: true, force: true }).catch((err) =>
+      log.warn("failed to remove jdtls data dir", { dataDir, err }),
+    )
   })
 
   return { process: proc }

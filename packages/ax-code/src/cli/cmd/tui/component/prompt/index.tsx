@@ -59,7 +59,7 @@ import { useTextareaKeybindings } from "../textarea-keybindings"
 import { Usage } from "../../routes/session/usage"
 import { Log } from "@/util/log"
 import { DiagnosticLog } from "@/debug/diagnostic-log"
-import { isPromptExitCommand, promptSubmissionView } from "./view-model"
+import { promptEscapeClearIntent, isPromptExitCommand, promptSubmissionView } from "./view-model"
 import { applySessionUpsertEvent } from "../../context/sync-event-dispatch"
 import { summarizedPasteViews } from "./paste-view-model"
 import { withTimeout } from "@/util/timeout"
@@ -175,6 +175,7 @@ export function Prompt(props: PromptProps) {
   let submitRunID = 0
   let submitInFlight = false
   let routeHandoffTimer: ReturnType<typeof setTimeout> | undefined
+  let lastDraftEscapeAt: number | undefined
 
   function upsertSessionInStore(session: (typeof sync.data.session)[number]) {
     sync.set(
@@ -232,6 +233,17 @@ export function Prompt(props: PromptProps) {
       if (options.gotoBufferEnd) input.gotoBufferEnd()
       renderer.requestRender()
     })
+  }
+
+  function clearPromptDraft() {
+    input.clear()
+    input.extmarks.clear()
+    setStore("prompt", {
+      input: "",
+      parts: [],
+    })
+    setStore("extmarkToPartIndex", new Map())
+    lastDraftEscapeAt = undefined
   }
 
   function syncInputCursorColor() {
@@ -1478,13 +1490,7 @@ export function Prompt(props: PromptProps) {
                   // If no image, let the default paste behavior continue
                 }
                 if (keybind.match("input_clear", e) && store.prompt.input !== "") {
-                  input.clear()
-                  input.extmarks.clear()
-                  setStore("prompt", {
-                    input: "",
-                    parts: [],
-                  })
-                  setStore("extmarkToPartIndex", new Map())
+                  clearPromptDraft()
                   return
                 }
                 if (keybind.match("app_exit", e)) {
@@ -1514,7 +1520,28 @@ export function Prompt(props: PromptProps) {
                 // submit) and the user can't navigate the dropdown. The
                 // mode-gate still applies for the *initial* triggers
                 // (`/`, `@`) which only make sense in normal mode.
-                if (autocomplete?.visible || store.mode === "normal") autocomplete?.onKeyDown(e)
+                if (autocomplete?.visible) {
+                  autocomplete.onKeyDown(e)
+                  if (e.defaultPrevented) return
+                } else if (store.mode === "normal") {
+                  autocomplete?.onKeyDown(e)
+                }
+                const escapeIntent = promptEscapeClearIntent({
+                  keyName: e.name,
+                  hasDraft: store.prompt.input !== "" || store.prompt.parts.length > 0,
+                  previousEscapeAt: lastDraftEscapeAt,
+                  now: Date.now(),
+                })
+                lastDraftEscapeAt = escapeIntent.nextEscapeAt
+                if (escapeIntent.action === "arm") {
+                  e.preventDefault()
+                  return
+                }
+                if (escapeIntent.action === "clear") {
+                  clearPromptDraft()
+                  e.preventDefault()
+                  return
+                }
                 if (!autocomplete?.visible) {
                   if (
                     (keybind.match("history_previous", e) && input.cursorOffset === 0) ||

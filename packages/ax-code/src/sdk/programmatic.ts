@@ -322,12 +322,15 @@ async function withRetry<T>(
   fn: () => Promise<T>,
   maxRetries: number,
   onRetry?: (attempt: number, error: Error) => void,
+  signal?: AbortSignal,
 ): Promise<T> {
   let lastError: Error | undefined
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    if (signal?.aborted) throw new Error("Operation aborted")
     try {
       return await fn()
     } catch (e) {
+      if (signal?.aborted) throw new Error("Operation aborted")
       lastError = e instanceof Error ? e : new Error(String(e))
       const isRetryable = (() => {
         if (e instanceof ProviderError) {
@@ -349,9 +352,19 @@ async function withRetry<T>(
 
       if (onRetry) onRetry(attempt + 1, lastError)
       // Exponential backoff: 1s, 2s, 4s — unref timer to avoid blocking process exit
-      await new Promise<void>((resolve) => {
-        const timer = setTimeout(resolve, Math.min(1000 * Math.pow(2, attempt), 8000))
+      await new Promise<void>((resolve, reject) => {
+        const cleanup = () => signal?.removeEventListener("abort", abort)
+        const abort = () => {
+          clearTimeout(timer)
+          cleanup()
+          reject(new Error("Operation aborted"))
+        }
+        const timer = setTimeout(() => {
+          cleanup()
+          resolve()
+        }, Math.min(1000 * Math.pow(2, attempt), 8000))
         if (typeof timer === "object" && "unref" in timer) timer.unref()
+        signal?.addEventListener("abort", abort, { once: true })
       })
     }
   }
@@ -737,18 +750,27 @@ function createSessionHandle(
         }
         return result
       }
-      const resultPromise = opts.maxRetries ? withRetry(collect, opts.maxRetries, opts.hooks?.onRetry) : collect()
-      const abortable = options?.signal
-        ? withAbort(resultPromise, options.signal, () => {
-            void sdk.session.abort({ sessionID }).catch(() => {})
-          })
-        : resultPromise
+      const abortController = new AbortController()
+      const abortSession = () => {
+        void sdk.session.abort({ sessionID }).catch(() => {})
+      }
+      const abortOperation = () => {
+        abortController.abort()
+        abortSession()
+      }
+      if (options?.signal?.aborted) abortOperation()
+      else options?.signal?.addEventListener("abort", abortOperation, { once: true })
+      const signal = abortController.signal
+      const resultPromise = opts.maxRetries ? withRetry(collect, opts.maxRetries, opts.hooks?.onRetry, signal) : collect()
+      const abortable = withAbort(resultPromise, signal, abortSession)
 
       if (options?.timeout) {
         const timeoutMs = options.timeout
-        return withSdkTimeout(abortable, timeoutMs, () => new TimeoutError(timeoutMs, "agent.run"))
+        return withSdkTimeout(abortable, timeoutMs, () => new TimeoutError(timeoutMs, "agent.run"), abortOperation).finally(
+          () => options?.signal?.removeEventListener("abort", abortOperation),
+        )
       }
-      return abortable
+      return abortable.finally(() => options?.signal?.removeEventListener("abort", abortOperation))
     },
 
     stream(message: string, options?: RunOptions): StreamHandle {

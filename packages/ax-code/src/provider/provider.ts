@@ -980,7 +980,7 @@ export namespace Provider {
       throw new ModelNotFoundError({ providerID: model.providerID, modelID: model.id })
     }
 
-    const promise = (async (): Promise<Lang> => {
+    const promise = Promise.resolve().then(async (): Promise<Lang> => {
       // CLI providers bypass SDK loading — their custom loaders handle everything
       if (s.modelLoaders[model.providerID] && model.api?.npm === "cli") {
         const language = await s.modelLoaders[model.providerID](null, model.api.id, {
@@ -1010,10 +1010,7 @@ export namespace Provider {
           )
         throw e
       }
-    })()
-    if (s.modelPending.has(key)) {
-      return s.modelPending.get(key)!
-    }
+    })
     s.modelPending.set(key, promise)
 
     try {

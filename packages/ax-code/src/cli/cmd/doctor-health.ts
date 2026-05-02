@@ -10,6 +10,7 @@ export type DoctorCheck = {
 const READ_ONLY_AX_CODE_PATTERNS = [/(\s|^)doctor(\s|$)/, /(\s|^)--version(\s|$)/]
 const RECENT_LOG_WINDOW_MS = 24 * 60 * 60 * 1000
 const MAX_RECENT_LOG_FILES = 5
+const DEFAULT_RUN_TIMEOUT_MS = 5_000
 
 function isReadOnlyAxCodeCommand(command: string) {
   return READ_ONLY_AX_CODE_PATTERNS.some((pattern) => pattern.test(command))
@@ -175,5 +176,13 @@ async function defaultRun(command: string[]) {
     stdout: "pipe",
     stderr: "pipe",
   })
-  return await new Response(proc.stdout).text()
+  const timeout = setTimeout(() => {
+    proc.kill()
+  }, DEFAULT_RUN_TIMEOUT_MS)
+  if (typeof timeout === "object" && "unref" in timeout) timeout.unref()
+  try {
+    return await new Response(proc.stdout).text()
+  } finally {
+    clearTimeout(timeout)
+  }
 }
