@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import {
   autocompleteOptionID,
+  autocompletePopupPlacement,
   autocompleteSelectionScrollDelta,
 } from "../../../src/cli/cmd/tui/component/prompt/autocomplete-scroll"
 
@@ -9,8 +10,9 @@ describe("autocomplete scroll", () => {
     expect(
       autocompleteSelectionScrollDelta({
         selectedIndex: 4,
-        scrollTop: 2,
+        viewportY: 20,
         viewportHeight: 3,
+        scrollOffset: 2,
       }),
     ).toBe(0)
   })
@@ -19,8 +21,9 @@ describe("autocomplete scroll", () => {
     expect(
       autocompleteSelectionScrollDelta({
         selectedIndex: 8,
-        scrollTop: 0,
+        viewportY: 20,
         viewportHeight: 3,
+        scrollOffset: 0,
       }),
     ).toBe(6)
   })
@@ -29,8 +32,9 @@ describe("autocomplete scroll", () => {
     expect(
       autocompleteSelectionScrollDelta({
         selectedIndex: 0,
-        scrollTop: 6,
+        viewportY: 20,
         viewportHeight: 3,
+        scrollOffset: 6,
       }),
     ).toBe(-6)
   })
@@ -39,7 +43,7 @@ describe("autocomplete scroll", () => {
     expect(
       autocompleteSelectionScrollDelta({
         selectedIndex: 8,
-        scrollTop: 10,
+        viewportY: 10,
         viewportHeight: 4,
         targetY: 15,
       }),
@@ -48,5 +52,29 @@ describe("autocomplete scroll", () => {
 
   test("keeps option ids stable", () => {
     expect(autocompleteOptionID(3)).toBe("autocomplete-option-3")
+  })
+
+  test("opens above a bottom prompt even when local parent space is shallow", () => {
+    expect(
+      autocompletePopupPlacement({
+        desiredHeight: 10,
+        anchorLocalY: 0,
+        anchorGlobalY: 36,
+        anchorHeight: 4,
+        terminalHeight: 42,
+      }),
+    ).toEqual({ direction: "above", height: 10, top: -10 })
+  })
+
+  test("opens below when the prompt is near the top of the terminal", () => {
+    expect(
+      autocompletePopupPlacement({
+        desiredHeight: 10,
+        anchorLocalY: 0,
+        anchorGlobalY: 1,
+        anchorHeight: 3,
+        terminalHeight: 42,
+      }),
+    ).toEqual({ direction: "below", height: 10, top: 3 })
   })
 })

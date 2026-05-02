@@ -16,7 +16,7 @@ import { Locale } from "@/util/locale"
 import type { PromptInfo } from "./history"
 import { useFrecency } from "./frecency"
 import { createAbortableResourceFetcher } from "@tui/util/abortable-resource"
-import { autocompleteOptionID, autocompleteSelectionScrollDelta } from "./autocomplete-scroll"
+import { autocompleteOptionID, autocompletePopupPlacement, autocompleteSelectionScrollDelta } from "./autocomplete-scroll"
 import { useKV } from "@tui/context/kv"
 import { buildGlyphSet, NERD_FONT_KV_KEY, resolveNerdFontEnabled } from "@tui/ui/glyphs"
 import { Flag } from "@/flag/flag"
@@ -108,7 +108,7 @@ export function Autocomplete(props: {
   const [cursorTick, setCursorTick] = createSignal(0)
 
   const anchorMetrics = createMemo(() => {
-    if (!store.visible) return { x: 0, y: 0, width: 0 }
+    if (!store.visible) return { x: 0, y: 0, width: 0, globalY: 0, height: 1 }
     props.value
     cursorTick()
     dimensions()
@@ -121,6 +121,8 @@ export function Autocomplete(props: {
       x: anchor.x - parentX,
       y: anchor.y - parentY,
       width: anchor.width,
+      globalY: anchor.y,
+      height: anchor.height ?? 1,
     }
   })
 
@@ -395,7 +397,7 @@ export function Autocomplete(props: {
     if (!max) return results
     return results.map((item) => ({
       ...item,
-      display: item.display.padEnd(max + 2),
+      display: item.display.padEnd(max + 4),
     }))
   })
 
@@ -458,14 +460,17 @@ export function Autocomplete(props: {
     const target = scroll.getChildren().find((child) => child.id === autocompleteOptionID(next))
     const scrollDelta = autocompleteSelectionScrollDelta({
       selectedIndex: next,
-      scrollTop: scroll.y,
+      viewportY: scroll.y,
       viewportHeight: scroll.height,
       targetY: target?.y,
+      scrollOffset,
     })
     if (scrollDelta !== 0) {
       scroll.scrollBy(scrollDelta)
+      scrollOffset = Math.max(0, scrollOffset + scrollDelta)
       if (next === 0) scroll.scrollTo(0)
     }
+    if (next === 0) scrollOffset = 0
   }
 
   function select() {
@@ -498,6 +503,8 @@ export function Autocomplete(props: {
 
   function show(mode: "@" | "/") {
     command.keybinds(false)
+    scrollOffset = 0
+    scroll?.scrollTo(0)
     setStore({
       visible: mode,
       index: props.input().cursorOffset,
@@ -632,39 +639,25 @@ export function Autocomplete(props: {
     return Math.min(10, count)
   })
 
-  const direction = createMemo<"above" | "below">(() => {
-    if (!store.visible) return "above"
-    // Prefer above (TUI convention with bottom prompt). Fall back to below
-    // when the parent box is too short to fit the desired height above the
-    // anchor — common on the home screen and the session bottom flex box,
-    // where the prompt's parent shrink-wraps to the prompt itself.
-    if (anchorMetrics().y >= desired()) return "above"
-    return "below"
-  })
-
-  const height = createMemo(() => {
-    if (!store.visible) return desired()
-    if (direction() === "above") {
-      return Math.min(desired(), Math.max(1, anchorMetrics().y))
-    }
-    return desired()
-  })
-
-  const top = createMemo(() => {
-    if (direction() === "above") {
-      return Math.max(0, anchorMetrics().y - height())
-    }
-    const anchor = props.anchor()
-    return anchorMetrics().y + (anchor.height ?? 1)
+  const placement = createMemo(() => {
+    const metrics = anchorMetrics()
+    return autocompletePopupPlacement({
+      desiredHeight: desired(),
+      anchorLocalY: metrics.y,
+      anchorGlobalY: metrics.globalY,
+      anchorHeight: metrics.height,
+      terminalHeight: dimensions().height,
+    })
   })
 
   let scroll: ScrollBoxRenderable
+  let scrollOffset = 0
 
   return (
     <box
       visible={store.visible !== false}
       position="absolute"
-      top={top()}
+      top={placement().top}
       left={anchorMetrics().x}
       width={anchorMetrics().width}
       zIndex={100}
@@ -674,7 +667,7 @@ export function Autocomplete(props: {
       <scrollbox
         ref={(r: ScrollBoxRenderable) => (scroll = r)}
         backgroundColor={theme.backgroundMenu}
-        height={height()}
+        height={placement().height}
         scrollbarOptions={{ visible: false }}
       >
         <Index

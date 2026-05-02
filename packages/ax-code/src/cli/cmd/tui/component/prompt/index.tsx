@@ -1508,8 +1508,14 @@ export function Prompt(props: PromptProps) {
                     return
                   }
                 }
-                if (store.mode === "normal") autocomplete.onKeyDown(e)
-                if (!autocomplete.visible) {
+                // Always feed keys to autocomplete when its dropdown is
+                // visible — otherwise up/down/enter/tab would fall through
+                // to the textarea's own keybindings (move-up/move-down,
+                // submit) and the user can't navigate the dropdown. The
+                // mode-gate still applies for the *initial* triggers
+                // (`/`, `@`) which only make sense in normal mode.
+                if (autocomplete?.visible || store.mode === "normal") autocomplete?.onKeyDown(e)
+                if (!autocomplete?.visible) {
                   if (
                     (keybind.match("history_previous", e) && input.cursorOffset === 0) ||
                     (keybind.match("history_next", e) && input.cursorOffset === Bun.stringWidth(input.plainText))
