@@ -271,7 +271,7 @@ export async function generate(root: string, options?: WarmupOptions): Promise<P
       const content = truncateToTokens(section.content, remaining)
       const tokens = estimateTokens(content)
       sections[key] = { content, tokens, scannedAt: section.scannedAt }
-      remaining -= tokens
+      remaining = Math.max(0, remaining - tokens)
     }
   }
 

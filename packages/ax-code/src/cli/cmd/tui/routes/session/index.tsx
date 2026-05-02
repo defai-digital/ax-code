@@ -114,6 +114,7 @@ import {
   nextSessionEntrySyncRetry,
   type SessionEntrySyncRetryState,
 } from "./entry-sync"
+import { buildSubagentStatusView, type SubagentRollupTask } from "./subagent-status-view"
 
 addDefaultParsers(parsers.parsers)
 
@@ -198,18 +199,35 @@ export function Session() {
   const messages = createMemo(() => sync.data.message[route.sessionID] ?? [])
   const subagentTasks = createMemo(() => {
     const sessionMessages = sync.data.message[route.sessionID] ?? []
-    let running = 0
-    let done = 0
+    const tasks: SubagentRollupTask[] = []
     for (const message of sessionMessages) {
       const parts = sync.data.part[message.id] ?? []
       for (const part of parts) {
         if (part.type !== "tool" || (part as any).tool !== "task") continue
-        const status = (part as any).state?.status
-        if (status === "running" || status === "pending") running++
-        else if (status === "completed") done++
+        const state = (part as any).state ?? {}
+        const status = state.status
+        const input = state.input ?? {}
+        const metadata = state.metadata ?? {}
+        const sessionID = metadata.sessionId ?? metadata.sessionID ?? input.task_id
+        tasks.push({
+          id: part.id,
+          sessionID: typeof sessionID === "string" ? sessionID : undefined,
+          title: state.title ?? input.description,
+          agent: input.subagent_type,
+          status,
+          startedAt: state.time?.start,
+          lastActivityAt: state.time?.end ?? state.time?.start,
+        })
       }
     }
-    return { running, done, total: running + done }
+
+    const parentID = session()?.parentID ?? route.sessionID
+    return buildSubagentStatusView({
+      tasks,
+      childSessions: children(),
+      statuses: sync.data.session_status,
+      parentSessionID: parentID,
+    })
   })
   const permissions = createMemo(() => {
     if (session()?.parentID) return []
@@ -1007,16 +1025,39 @@ export function Session() {
               <Header />
             </Show>
             <Show when={subagentTasks().total > 0}>
-              <box flexShrink={0} paddingLeft={1}>
-                <text fg={theme.textMuted}>
-                  {subagentTasks().total} subagent{subagentTasks().total !== 1 ? "s" : ""}
-                  {subagentTasks().running > 0 ? (
-                    <span style={{ fg: theme.primary }}> · {subagentTasks().running} active</span>
-                  ) : null}
-                  {subagentTasks().done > 0 ? (
-                    <span style={{ fg: theme.success }}> · {subagentTasks().done} done</span>
-                  ) : null}
-                </text>
+              <box flexShrink={0} paddingLeft={1} gap={0}>
+                <Show
+                  when={subagentTasks().running > 0}
+                  fallback={
+                    <text fg={theme.textMuted}>
+                      ◇ {subagentTasks().total} subagent{subagentTasks().total !== 1 ? "s" : ""}
+                      {subagentTasks().done > 0 ? (
+                        <span style={{ fg: theme.success }}> · {subagentTasks().done} done</span>
+                      ) : null}
+                    </text>
+                  }
+                >
+                  <Spinner color={subagentTasks().items.some((item) => item.stale) ? theme.warning : theme.primary}>
+                    <span>
+                      {subagentTasks().running} subagent{subagentTasks().running !== 1 ? "s" : ""} active
+                      {subagentTasks().done > 0 ? (
+                        <span style={{ fg: theme.success }}> · {subagentTasks().done} done</span>
+                      ) : null}
+                    </span>
+                  </Spinner>
+                </Show>
+                <For each={subagentTasks().items.filter((item) => item.active).slice(0, 2)}>
+                  {(item) => (
+                    <text paddingLeft={3} fg={item.stale ? theme.warning : theme.textMuted}>
+                      ↳ {item.label}
+                    </text>
+                  )}
+                </For>
+                <Show when={subagentTasks().items.filter((item) => item.active).length > 2}>
+                  <text paddingLeft={3} fg={theme.textMuted}>
+                    ↳ +{subagentTasks().items.filter((item) => item.active).length - 2} more active
+                  </text>
+                </Show>
               </box>
             </Show>
             <scrollbox

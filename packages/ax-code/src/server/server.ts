@@ -1250,6 +1250,14 @@ export namespace Server {
           const plans = DebugEngine.listPlans(projectID, { status: "pending", limit: 25 })
           const DRE_TOOL_COUNT = ToolRegistry.debugEngineToolCount()
           const graph = CodeIntelligence.status(projectID)
+          if (graph.nodeCount === 0) {
+            try {
+              AutoIndex.maybeStart(projectID)
+            } catch {
+              // Best-effort only: the status endpoint must never fail
+              // just because background indexing could not be scheduled.
+            }
+          }
           const indexState = AutoIndex.getState(projectID)
           return c.json({
             count: plans.length,

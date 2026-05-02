@@ -430,6 +430,8 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                             ? `indexing... (${sync.data.debugEngine.graph.completed.toLocaleString()}/${sync.data.debugEngine.graph.total.toLocaleString()})`
                             : sync.data.debugEngine.graph.nodeCount > 0
                               ? `${sync.data.debugEngine.graph.nodeCount.toLocaleString()} symbols indexed`
+                              : sync.data.debugEngine.graph.error
+                                ? sync.data.debugEngine.graph.error
                               : "not indexed · run ax-code index"}
                       </text>
                     </box>

@@ -8,7 +8,7 @@ import { LSP } from "../lsp"
 import { FileTime } from "../file/time"
 import DESCRIPTION from "./read.txt"
 import { Instance } from "../project/instance"
-import { assertExternalDirectory } from "./external-directory"
+import { assertExternalDirectory, assertSymlinkInsideProject } from "./external-directory"
 import { InstructionPrompt } from "../session/instruction"
 import { Filesystem } from "../util/filesystem"
 import { DEFAULT_READ_LIMIT, MAX_LINE_LENGTH, MAX_LINE_SUFFIX, MAX_BYTES, MAX_BYTES_LABEL } from "@/constants/tool"
@@ -100,10 +100,9 @@ export const ReadTool = Tool.define("read", {
       // a separate workflow gated by `assertExternalDirectory` above
       // and must still be allowed after the permission grant.
       if (stat && Filesystem.contains(Instance.directory, filepath)) {
-        const realFilepath = await fs.realpath(filepath).catch(() => null)
-        if (realFilepath && !Filesystem.contains(Instance.directory, realFilepath)) {
-          throw readError("ReadSymlinkEscapeError", "Access denied: symlink target escapes project directory")
-        }
+        await assertSymlinkInsideProject(filepath).catch((error) => {
+          throw readError("ReadSymlinkEscapeError", readErrorMessage(error), error)
+        })
       }
 
       await ctx.ask({

@@ -58,12 +58,32 @@ function footerToolLabel(tool: string) {
   return Locale.titlecase(normalized || "tool")
 }
 
+function footerTaskLabel(tool?: string) {
+  if (!tool) return "Using tool"
+
+  const normalized = tool.replace(/[_-]+/g, " ").trim().toLowerCase()
+  if (normalized.includes("todo")) return "Updating todos"
+  if (["lsp", "code intelligence", "codesearch", "impact analyze", "debug analyze"].some((name) => normalized.includes(name)))
+    return "Analyzing code"
+  if (["grep", "glob", "ls", "list", "read", "scan"].some((name) => normalized.includes(name))) return "Scanning files"
+  if (["bash", "shell", "terminal", "command"].some((name) => normalized.includes(name))) return "Running command"
+  if (["edit", "write", "patch", "diff", "refactor apply"].some((name) => normalized.includes(name)))
+    return "Editing files"
+  if (["task", "agent", "subagent"].some((name) => normalized.includes(name))) return "Running subtask"
+  if (["web", "fetch", "search"].some((name) => normalized.includes(name))) return "Searching web"
+  if (["plan", "hypothesis"].some((name) => normalized.includes(name))) return "Planning changes"
+  if (normalized.includes("question")) return "Waiting for input"
+  if (normalized.includes("skill")) return "Loading skill"
+  if (normalized.includes("memory")) return "Saving memory"
+  if (normalized.includes("batch")) return "Running tools"
+
+  return `Running ${footerToolLabel(tool)}`
+}
+
 export function footerSessionStatusView(input: {
   status?: FooterSessionStatus
   now?: number
   stalledAfterMs?: number
-  model?: string
-  interruptHint?: string
 }): FooterSessionStatusView {
   const status = input.status
   if (!status || status.type === "idle") return { stale: false, tone: "muted" }
@@ -85,14 +105,11 @@ export function footerSessionStatusView(input: {
     status.startedAt !== undefined ? Math.max(1, Math.floor((now - status.startedAt) / MS_PER_SECOND)) : undefined
   const elapsed = elapsedSeconds !== undefined ? formatDuration(elapsedSeconds) : ""
 
-  let label = "Working"
-  let shortLabel = "Processing..."
+  let label = "Thinking"
   if (status.waitState === "tool") {
-    label = status.activeTool ? `Running ${footerToolLabel(status.activeTool)}` : "Running tool"
-    shortLabel = status.activeTool ? `Running ${footerToolLabel(status.activeTool)}` : "Running tool"
+    label = footerTaskLabel(status.activeTool)
   } else if (status.waitState === "llm") {
-    label = "Waiting for response"
-    shortLabel = "Thinking..."
+    label = "Thinking"
   }
 
   const staleAfterMs =
@@ -103,21 +120,20 @@ export function footerSessionStatusView(input: {
   const inactive = stale && idleMs > 0 ? formatDuration(Math.max(1, Math.floor(idleMs / MS_PER_SECOND))) : undefined
   const text = elapsed ? `${label} · ${elapsed}` : label
 
-  if (!inactive) return { label: text, shortLabel, stale, tone: stale ? "warning" : "working" }
+  if (!inactive) return { label: text, shortLabel: text, stale, tone: stale ? "warning" : "working" }
 
-  // Give context-aware stale messages instead of generic "no activity"
   const staleHint =
     status.waitState === "tool"
-      ? `tool may be stalled · ${inactive}`
+      ? `no tool update ${inactive}`
       : status.waitState === "llm"
-        ? `response delayed · ${inactive}`
-        : `no update · ${inactive}`
+        ? `no model output ${inactive}`
+        : `no activity ${inactive}`
+  const stalledText = `${label} stalled`
+  const stalled = elapsed ? `${stalledText} · ${elapsed}` : stalledText
 
-  const stallWho = input.model ?? (status.waitState === "llm" ? "Thinking" : "Processing")
-  const interruptSuffix = input.interruptHint ? ` · ${input.interruptHint} to cancel` : ""
   return {
-    label: `${text} · ${staleHint}`,
-    shortLabel: `${stallWho} stalled${interruptSuffix}`,
+    label: `${stalled} · ${staleHint}`,
+    shortLabel: `${stalled} · ${staleHint}`,
     stale,
     tone: "warning",
   }

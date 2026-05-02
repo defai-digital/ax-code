@@ -100,7 +100,7 @@ export namespace Bus {
   ) {
     const { payload, pending } = prepare(def, properties)
     emitGlobal(payload)
-    void Promise.all(pending)
+    void Promise.all(pending).catch(() => {})
   }
 
   export function subscribe<Definition extends BusEvent.Definition>(

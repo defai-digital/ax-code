@@ -93,7 +93,6 @@ export namespace SessionRevert {
       })
     }
     throw new Error(`Session revert failed: message ${input.messageID} not found in session ${input.sessionID}`)
-    return session
   }
 
   export async function unrevert(input: { sessionID: SessionID }) {

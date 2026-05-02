@@ -110,6 +110,7 @@ export const toolBin = async (input: {
 export const spawnInfo = (bin: string, root: string, args: string[] = [], initialization?: Record<string, any>) => ({
   process: spawn(bin, args, {
     cwd: root,
+    env: { ...Env.sanitize() },
   }),
   initialization,
 })

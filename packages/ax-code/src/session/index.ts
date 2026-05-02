@@ -31,6 +31,7 @@ import { ModelID, ProviderID } from "@/provider/schema"
 import { Permission } from "@/permission"
 import { Global } from "@/global"
 import type { LanguageModelV2Usage } from "@ai-sdk/provider"
+import { Filesystem } from "@/util/filesystem"
 
 export namespace Session {
   const log = Log.create({ service: "session" })
@@ -469,6 +470,13 @@ export namespace Session {
       Database.effect(() => Bus.publishDetached(Event.Updated, { info }))
       return info
     })
+  }
+
+  export function isCompatibleWithCurrentProject(info: Pick<Info, "projectID" | "directory">) {
+    if (info.projectID !== Instance.project.id) return false
+    if (Filesystem.overlaps(Instance.directory, info.directory)) return true
+    if (Instance.worktree === "/") return false
+    return Filesystem.contains(Instance.worktree, Instance.directory) && Filesystem.contains(Instance.worktree, info.directory)
   }
 
   export const setTitle = fn(z.object({ sessionID: SessionID.zod, title: z.string().min(1) }), async (input) =>

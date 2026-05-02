@@ -220,7 +220,11 @@ export namespace Storage {
     const dir = await state().then((x) => x.dir)
     const target = path.join(dir, ...key) + ".json"
     return withErrorHandling(async () => {
-      using _ = await Lock.read(target)
+      using _inProcess = await Lock.read(target)
+      // Participate in the same cross-process lock used by writes so
+      // reads cannot observe an in-flight read-modify-write from another
+      // ax-code process.
+      using _crossProcess = await FileLock.acquire(target)
       const result = await Filesystem.readJson<T>(target)
       return result as T
     })

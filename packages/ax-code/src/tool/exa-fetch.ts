@@ -28,7 +28,7 @@ export async function fetchExaTool(config: {
   const { signal, clearTimeout } = abortAfterAny(config.timeout, ...(config.abort ? [config.abort] : []))
 
   try {
-    const response = await fetch(`${EXA_BASE_URL}${EXA_ENDPOINT}`, {
+    const response = await Ssrf.pinnedFetch(`${EXA_BASE_URL}${EXA_ENDPOINT}`, {
       method: "POST",
       headers: {
         accept: "application/json, text/event-stream",
@@ -37,6 +37,7 @@ export async function fetchExaTool(config: {
       body: JSON.stringify(config.request),
       signal,
       redirect: "manual",
+      label: "exa-fetch",
     })
 
     if (response.status >= 300 && response.status < 400) {

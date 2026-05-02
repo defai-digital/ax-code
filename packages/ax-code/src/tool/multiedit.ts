@@ -33,7 +33,11 @@ export const MultiEditTool = Tool.define("multiedit", {
       .describe("Array of edit operations to perform sequentially on the file"),
   }),
   async execute(params, ctx) {
-    const files = Array.from(new Set(params.edits.map((edit) => path.resolve(edit.filePath ?? params.filePath)))).sort()
+    const resolveFilePath = (filePath: string) => {
+      if (filePath.includes("\x00")) throw new Error("File path contains null byte")
+      return path.isAbsolute(filePath) ? filePath : path.resolve(Instance.directory, filePath)
+    }
+    const files = Array.from(new Set(params.edits.map((edit) => resolveFilePath(edit.filePath ?? params.filePath)))).sort()
     const original = new Map<string, string>()
     const current = new Map<string, string>()
     const writeDeltas = new Map<string, { additions: number; deletions: number }>()
@@ -69,7 +73,7 @@ export const MultiEditTool = Tool.define("multiedit", {
 
     try {
       for (const edit of params.edits) {
-        const file = path.resolve(edit.filePath ?? params.filePath)
+        const file = resolveFilePath(edit.filePath ?? params.filePath)
         if (edit.oldString === edit.newString) {
           throw new Error("No changes to apply: oldString and newString are identical.")
         }

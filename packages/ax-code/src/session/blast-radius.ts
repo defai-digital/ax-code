@@ -40,6 +40,7 @@ export namespace BlastRadius {
     caps: Caps
   }
 
+  const MAX_SESSIONS = 256
   const sessions = new Map<SessionID, State>()
 
   function defaultCaps(): Caps {
@@ -72,11 +73,18 @@ export namespace BlastRadius {
   export function get(sessionID: SessionID, overrides?: Partial<Caps>): State {
     let state = sessions.get(sessionID)
     if (!state) {
+      while (sessions.size >= MAX_SESSIONS) {
+        const oldest = sessions.keys().next().value
+        if (!oldest) break
+        sessions.delete(oldest)
+      }
       const caps = mergeCaps(defaultCaps(), overrides ?? {})
       state = { files: new Set(), lines: 0, steps: 0, toolCalls: new Map(), caps }
       sessions.set(sessionID, state)
       return state
     }
+    sessions.delete(sessionID)
+    sessions.set(sessionID, state)
     if (overrides) {
       state.caps = mergeCaps(state.caps, overrides)
     }

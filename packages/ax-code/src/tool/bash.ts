@@ -19,6 +19,8 @@ import { BashArity } from "@/permission/arity"
 import { Truncate } from "./truncate"
 import { Plugin } from "@/plugin"
 import { Isolation } from "@/isolation"
+import { BlastRadius } from "@/session/blast-radius"
+import { assertSymlinkInsideProject } from "./external-directory"
 
 import { BASH_MAX_METADATA_LENGTH as MAX_METADATA_LENGTH } from "@/constants/network"
 const DEFAULT_TIMEOUT = Flag.AX_CODE_EXPERIMENTAL_BASH_DEFAULT_TIMEOUT_MS || 2 * 60 * 1000
@@ -91,8 +93,12 @@ export const BashTool = Tool.define("bash", async () => {
         ),
     }),
     async execute(params, ctx) {
+      if (params.workdir?.includes("\x00")) throw new Error("Working directory contains null byte")
+      if (params.command.includes("\x00")) throw new Error("Command contains null byte")
+      const requestedCwd = params.workdir ? path.resolve(Instance.directory, params.workdir) : Instance.directory
+      await assertSymlinkInsideProject(requestedCwd)
       const cwd = params.workdir
-        ? await fs.realpath(path.resolve(Instance.directory, params.workdir)).catch(() => {
+        ? await fs.realpath(requestedCwd).catch(() => {
             throw new Error(`Working directory does not exist: ${params.workdir}`)
           })
         : Instance.directory
@@ -112,6 +118,7 @@ export const BashTool = Tool.define("bash", async () => {
       const directories = new Set<string>()
       if (!Instance.containsPath(cwd)) directories.add(cwd)
       const resolvedPaths = new Set<string>()
+      const redirectWritePaths = new Set<string>()
       const patterns = new Set<string>()
       const always = new Set<string>()
       let foundCommands = false
@@ -291,10 +298,17 @@ export const BashTool = Tool.define("bash", async () => {
           const normalized =
             process.platform === "win32" ? Filesystem.windowsPath(resolved).replace(/\//g, "\\") : resolved
           resolvedPaths.add(normalized)
+          redirectWritePaths.add(normalized)
           if (!Instance.containsPath(normalized)) {
             const dir = (await Filesystem.isDir(normalized)) ? normalized : path.dirname(normalized)
             directories.add(dir)
           }
+        }
+      }
+
+      for (const filePath of redirectWritePaths) {
+        if (Filesystem.contains(Instance.worktree, filePath)) {
+          BlastRadius.assertWritable(ctx.sessionID, path.relative(Instance.worktree, filePath))
         }
       }
 
@@ -460,14 +474,14 @@ export const BashTool = Tool.define("bash", async () => {
 
       const abortHandler = () => {
         aborted = true
-        void kill()
+        void kill().catch(() => {})
       }
 
       ctx.abort.addEventListener("abort", abortHandler, { once: true })
 
       const timeoutTimer = setTimeout(() => {
         timedOut = true
-        void kill()
+        void kill().catch(() => {})
       }, timeout + 100)
 
       await new Promise<void>((resolve, reject) => {
@@ -491,7 +505,7 @@ export const BashTool = Tool.define("bash", async () => {
 
         if (ctx.abort.aborted) {
           aborted = true
-          void kill()
+          void kill().catch(() => {})
         }
       })
 
@@ -507,6 +521,14 @@ export const BashTool = Tool.define("bash", async () => {
 
       if (resultMetadata.length > 0) {
         output += "\n\n<bash_metadata>\n" + resultMetadata.join("\n") + "\n</bash_metadata>"
+      }
+
+      if (proc.exitCode === 0) {
+        for (const filePath of redirectWritePaths) {
+          if (Filesystem.contains(Instance.worktree, filePath)) {
+            BlastRadius.recordWriteAndAssert(ctx.sessionID, filePath, 1)
+          }
+        }
       }
 
       return {

@@ -22,6 +22,7 @@ import { getTuiPreloadCheck } from "./doctor-preload"
 import { getDoctorDatabaseCheck } from "./doctor-storage"
 import { getRecentLogsChecks, getRunningInstancesCheck } from "./doctor-health"
 import path from "path"
+import { ProjectIdentity } from "../../project/project-identity"
 
 async function exists(file: string) {
   return Bun.file(file).exists()
@@ -44,6 +45,33 @@ async function getConfiguredTuiPort(): Promise<number> {
     if (typeof configured === "number" && configured > 0) return configured
   } catch {}
   return 4096
+}
+
+export async function getDuplicateProjectIdentityCheck(input: {
+  worktree: string
+  useDatabase?: typeof Database.use
+}): Promise<{ name: string; status: "ok" | "warn" | "fail"; detail: string } | undefined> {
+  const useDatabase = input.useDatabase ?? Database.use
+  try {
+    const rows = await ProjectIdentity.listWorktreeIdentities({ worktree: input.worktree, useDatabase })
+    if (rows.length <= 1) return
+    const detail = rows
+      .map((row) => `${row.id} (${row.sessionCount} session${row.sessionCount === 1 ? "" : "s"})`)
+      .join(", ")
+    return {
+      name: "Project identity",
+      status: "warn",
+      detail: `Duplicate project ids for ${input.worktree}: ${detail}. Run project-scoped storage cleanup before continuing old sessions.`,
+    }
+  } catch (error) {
+    return {
+      name: "Project identity",
+      status: "warn",
+      detail: `Could not inspect project identity for ${input.worktree}: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    }
+  }
 }
 
 export async function doctorProjectContext(callerCwd = Filesystem.callerCwd()) {
@@ -204,6 +232,9 @@ export const DoctorCommand: CommandModule = {
       status: gitExists ? "ok" : "warn",
       detail: gitExists ? "Found" : "Not a git repository",
     })
+
+    const duplicateProjectIdentity = await getDuplicateProjectIdentityCheck({ worktree: project.projectRoot })
+    if (duplicateProjectIdentity) checks.push(duplicateProjectIdentity)
 
     // 9. Native Rust addons — routed through the central NativeAddon registry
     // so the doctor reflects the exact same load semantics (flag gating +

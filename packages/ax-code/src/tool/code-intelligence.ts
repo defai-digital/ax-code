@@ -1,9 +1,12 @@
 import z from "zod"
+import path from "path"
 import { Tool } from "./tool"
 import DESCRIPTION from "./code-intelligence.txt"
 import { Instance } from "../project/instance"
 import { CodeIntelligence } from "../code-intelligence"
 import { CodeNodeID } from "../code-intelligence/id"
+import { assertSymlinkInsideProject } from "./external-directory"
+import { Filesystem } from "../util/filesystem"
 import type { CodeNodeKind } from "../code-intelligence/schema.sql"
 
 // Semantic Trust v2 §S4: every operation returns an envelope stamped
@@ -117,12 +120,18 @@ export const CodeIntelligenceTool = Tool.define("code_intelligence", {
       }
       if (args.operation === "symbolsInFile") {
         if (!args.file) throw new Error("symbolsInFile requires `file`")
-        const symbols = CodeIntelligence.symbolsInFile(projectID, args.file, { scope })
+        if (args.file.includes("\x00")) throw new Error("File path contains null byte")
+        const file = path.isAbsolute(args.file) ? args.file : path.join(Instance.directory, args.file)
+        if (!Filesystem.contains(Instance.directory, file)) {
+          throw new Error("symbolsInFile requires a file inside the project")
+        }
+        await assertSymlinkInsideProject(file)
+        const symbols = CodeIntelligence.symbolsInFile(projectID, file, { scope })
         const clipped = symbols.slice(0, limit)
         const envelope = CodeIntelligence.graphEnvelope(projectID, clipped)
         return {
-          title: `symbolsInFile ${args.file}`,
-          output: clipped.length === 0 ? `No indexed symbols in ${args.file}` : clipped.map(formatSymbol).join("\n"),
+          title: `symbolsInFile ${file}`,
+          output: clipped.length === 0 ? `No indexed symbols in ${file}` : clipped.map(formatSymbol).join("\n"),
           metadata: { count: symbols.length, truncated: symbols.length > clipped.length, symbols: clipped, envelope },
         }
       }

@@ -21,10 +21,10 @@ describe("footerSessionStatusView", () => {
     })
 
     expect(view.stale).toBe(false)
-    expect(view.label).toContain("Waiting for response")
-    expect(view.shortLabel).toBe("Thinking...")
+    expect(view.label).toContain("Thinking")
+    expect(view.shortLabel).toContain("Thinking")
     expect(view.tone).toBe("working")
-    expect(view.label).not.toContain("no activity")
+    expect(view.label).not.toContain("no model output")
   })
 
   test("marks stalled llm work after prolonged inactivity", () => {
@@ -40,14 +40,10 @@ describe("footerSessionStatusView", () => {
     })
 
     expect(view.stale).toBe(true)
-    expect(view.label).toContain("Waiting for response")
-    expect(view.shortLabel).toBe("Thinking stalled")
+    expect(view.label).toContain("Thinking stalled")
+    expect(view.shortLabel).toContain("Thinking stalled")
     expect(view.tone).toBe("warning")
-    // Production now uses context-aware stale messaging (see
-    // footer-view-model.ts:94-99 "Give context-aware stale messages
-    // instead of generic 'no activity'") — llm wait state surfaces
-    // "response delayed".
-    expect(view.label).toContain("response delayed")
+    expect(view.label).toContain("no model output")
   })
 
   test("gives tools a longer inactivity budget before warning", () => {
@@ -74,11 +70,72 @@ describe("footerSessionStatusView", () => {
     })
 
     expect(recentTool.stale).toBe(false)
-    expect(recentTool.label).toContain("Running Bash Tool")
+    expect(recentTool.label).toContain("Running command")
     expect(staleTool.stale).toBe(true)
-    // Tool wait state surfaces "tool may be stalled" (per
-    // footer-view-model.ts:97 context-aware stale messaging).
-    expect(staleTool.label).toContain("tool may be stalled")
+    expect(staleTool.label).toContain("Running command stalled")
+    expect(staleTool.label).toContain("no tool update")
+  })
+
+  test("describes file discovery tools as scanning files", () => {
+    const now = 3_500_000
+    const view = footerSessionStatusView({
+      now,
+      status: {
+        type: "busy",
+        startedAt: now - 8_000,
+        lastActivityAt: now - 2_000,
+        waitState: "tool",
+        activeTool: "grep_tool",
+      },
+    })
+
+    expect(view.label).toContain("Scanning files")
+  })
+
+  test("prioritizes todo tools before generic write/edit wording", () => {
+    const now = 3_600_000
+    const view = footerSessionStatusView({
+      now,
+      status: {
+        type: "busy",
+        startedAt: now - 8_000,
+        lastActivityAt: now - 2_000,
+        waitState: "tool",
+        activeTool: "todowrite",
+      },
+    })
+
+    expect(view.label).toContain("Updating todos")
+  })
+
+  test("uses thinking as the generic busy status", () => {
+    const now = 3_700_000
+    const view = footerSessionStatusView({
+      now,
+      status: {
+        type: "busy",
+        startedAt: now - 8_000,
+        lastActivityAt: now - 2_000,
+      },
+    })
+
+    expect(view.label).toContain("Thinking")
+  })
+
+  test("does not classify lsp as file listing", () => {
+    const now = 3_800_000
+    const view = footerSessionStatusView({
+      now,
+      status: {
+        type: "busy",
+        startedAt: now - 8_000,
+        lastActivityAt: now - 2_000,
+        waitState: "tool",
+        activeTool: "lsp",
+      },
+    })
+
+    expect(view.label).toContain("Analyzing code")
   })
 })
 

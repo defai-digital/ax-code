@@ -358,9 +358,10 @@ async function calculateComplexity(root: string, info: ProjectInfo): Promise<Com
       const cwd = path.join(root, sourceDir)
       for await (const file of glob.scan({ cwd, onlyFiles: true })) {
         batch.push(file)
-        if (batch.length >= 50 || fileCount + batch.length > 5000) {
+        if (batch.length >= 50 || fileCount + batch.length >= 5000) {
+          const batchToRead = batch.splice(0, Math.max(0, 5000 - fileCount))
           const results = await Promise.all(
-            batch.map((f) =>
+            batchToRead.map((f) =>
               Bun.file(path.join(cwd, f))
                 .text()
                 .catch(() => ""),
@@ -371,12 +372,13 @@ async function calculateComplexity(root: string, info: ProjectInfo): Promise<Com
             loc += countLines(content)
           }
           batch.length = 0
-          if (fileCount > 5000) break
+          if (fileCount >= 5000) break
         }
       }
-      if (batch.length > 0) {
+      if (batch.length > 0 && fileCount < 5000) {
+        const batchToRead = batch.slice(0, 5000 - fileCount)
         const results = await Promise.all(
-          batch.map((f) =>
+          batchToRead.map((f) =>
             Bun.file(path.join(cwd, f))
               .text()
               .catch(() => ""),

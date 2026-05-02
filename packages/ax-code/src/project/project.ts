@@ -17,6 +17,7 @@ import { NodeFileSystem, NodePath } from "@effect/platform-node"
 import { AppFileSystem } from "@/filesystem"
 import * as CrossSpawnSpawner from "@/effect/cross-spawn-spawner"
 import path from "path"
+import { createHash } from "node:crypto"
 
 export namespace Project {
   const log = Log.create({ service: "project" })
@@ -138,6 +139,12 @@ export namespace Project {
 
   type GitResult = { code: number; text: string; stderr: string }
 
+  function directoryProjectID(directory: string) {
+    const normalized = path.resolve(directory)
+    const hash = createHash("sha1").update(normalized).digest("hex")
+    return ProjectID.make(`dir-${hash}`)
+  }
+
   export const layer: Layer.Layer<
     Service,
     never,
@@ -208,9 +215,9 @@ export namespace Project {
 
           if (!dotgit) {
             return {
-              id: ProjectID.global,
-              worktree: "/",
-              sandbox: "/",
+              id: directoryProjectID(directory),
+              worktree: directory,
+              sandbox: directory,
               vcs: fakeVcs,
             }
           }
@@ -554,9 +561,9 @@ export namespace Project {
 
       if (!dotgit) {
         return {
-          id: ProjectID.global,
-          worktree: "/",
-          sandbox: "/",
+          id: directoryProjectID(directory),
+          worktree: directory,
+          sandbox: directory,
           vcs: fakeVcs,
         } satisfies DiscoveryResult
       }

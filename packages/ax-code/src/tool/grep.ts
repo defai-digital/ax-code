@@ -12,6 +12,7 @@ import { assertExternalDirectory, assertSymlinkInsideProject } from "./external-
 import { MAX_LINE_LENGTH } from "@/constants/tool"
 import { NativePerf } from "../perf/native"
 import { NativeAddon } from "../native/addon"
+import { Env } from "@/util/env"
 
 export const GrepTool = Tool.define("grep", {
   description: DESCRIPTION,
@@ -25,6 +26,8 @@ export const GrepTool = Tool.define("grep", {
       throw new Error("pattern is required")
     }
     if (params.path?.includes("\x00")) throw new Error("File path contains null byte")
+    if (params.pattern.includes("\x00")) throw new Error("Pattern contains null byte")
+    if (params.include?.includes("\x00")) throw new Error("Include pattern contains null byte")
 
     await ctx.ask({
       permission: "grep",
@@ -141,6 +144,7 @@ export const GrepTool = Tool.define("grep", {
       stdout: "pipe",
       stderr: "pipe",
       abort: ctx.abort,
+      env: Env.sanitize(),
     })
 
     let output: string

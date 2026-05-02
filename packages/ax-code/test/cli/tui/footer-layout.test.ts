@@ -7,28 +7,24 @@ describe("promptFooterLayout", () => {
       contentWidth: 48,
       toggleWidth: 39,
       mode: "normal",
-      agentsWidth: footerHintWidth("tab", "agents"),
       variantsWidth: footerHintWidth("shift-tab", "variants"),
       shellWidth: footerHintWidth("esc", "exit shell mode"),
     })
 
     expect(layout.stacked).toBe(true)
-    expect(layout.showAgents).toBe(false)
     expect(layout.showVariants).toBe(false)
   })
 
-  test("keeps the footer inline and progressively reveals hints as width allows", () => {
+  test("keeps the footer inline and reveals the variant hint as width allows", () => {
     const layout = promptFooterLayout({
       contentWidth: 124,
       toggleWidth: 39,
       mode: "normal",
-      agentsWidth: footerHintWidth("tab", "agents"),
       variantsWidth: footerHintWidth("shift-tab", "variants"),
       shellWidth: footerHintWidth("esc", "exit shell mode"),
     })
 
     expect(layout.stacked).toBe(false)
-    expect(layout.showAgents).toBe(true)
     expect(layout.showVariants).toBe(true)
   })
 
@@ -37,14 +33,12 @@ describe("promptFooterLayout", () => {
       contentWidth: 92,
       toggleWidth: 39,
       mode: "shell",
-      agentsWidth: footerHintWidth("tab", "agents"),
       variantsWidth: 0,
       shellWidth: footerHintWidth("esc", "exit shell mode"),
     })
 
     expect(layout.stacked).toBe(true)
     expect(layout.showShellHint).toBe(true)
-    expect(layout.showAgents).toBe(false)
     expect(layout.showVariants).toBe(false)
   })
 })

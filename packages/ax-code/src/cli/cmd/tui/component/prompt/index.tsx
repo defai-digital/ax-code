@@ -63,7 +63,7 @@ import { promptEscapeClearIntent, isPromptExitCommand, promptSubmissionView } fr
 import { applySessionUpsertEvent } from "../../context/sync-event-dispatch"
 import { summarizedPasteViews } from "./paste-view-model"
 import { withTimeout } from "@/util/timeout"
-import { footerSessionStatusView, type FooterSessionStatusTone } from "../../routes/session/footer-view-model"
+import { footerSessionStatusView } from "../../routes/session/footer-view-model"
 import { selectedForeground } from "@tui/context/theme"
 import { footerToggleLabel } from "./footer-toggle"
 import { footerHintWidth, promptFooterLayout } from "./footer-layout"
@@ -222,10 +222,6 @@ export function Prompt(props: PromptProps) {
     )
   }
 
-  function promptStatusColor(tone?: FooterSessionStatusTone) {
-    return tone === "warning" ? theme.warning : theme.textMuted
-  }
-
   function requestInputLayoutRefresh(options: { gotoBufferEnd?: boolean } = {}) {
     scheduleMicrotaskTask(() => {
       if (!input || input.isDestroyed) return
@@ -273,7 +269,7 @@ export function Prompt(props: PromptProps) {
     if (!sync.data.provider_loaded) {
       toast.show({
         variant: "info",
-        message: "Providers are still loading",
+        message: "Providers are still loading. Please wait about 10 seconds and try again.",
         duration: 2000,
       })
       return
@@ -421,7 +417,6 @@ export function Prompt(props: PromptProps) {
         footerToggleLabel("Autonomous", sync.data.autonomous).length +
         footerToggleLabel("Sandbox", sync.data.isolation.mode !== "full-access").length,
       mode: store.mode,
-      agentsWidth: footerHintWidth(keybind.print("agent_cycle"), "agents"),
       variantsWidth:
         local.model.variant.list().length > 0 ? footerHintWidth(keybind.print("variant_cycle"), "variants") : 0,
       shellWidth: footerHintWidth("esc", "exit shell mode"),
@@ -1381,9 +1376,17 @@ export function Prompt(props: PromptProps) {
     return footerSessionStatusView({
       status: current,
       now: Date.now(),
-      model: local.model.parsed().model,
-      interruptHint: keybind.print("session_interrupt"),
     })
+  })
+
+  const finishedStatus = createMemo(() => {
+    if (!props.sessionID) return false
+    if (status().type !== "idle") return false
+    if (submitPending()) return false
+
+    const msgs = sync.data.message[props.sessionID]
+    const lastMessage = msgs?.at(-1)
+    return lastMessage?.role === "assistant" && !lastMessage.error && Boolean(lastMessage.time?.completed)
   })
 
   return (
@@ -1779,8 +1782,15 @@ export function Prompt(props: PromptProps) {
           <Show
             when={status().type !== "idle"}
             fallback={
-              <Show when={submitPending()} fallback={<text />}>
-                <text fg={theme.textMuted}>
+              <Show
+                when={submitPending()}
+                fallback={
+                  <Show when={finishedStatus()} fallback={<text />}>
+                    <text fg={theme.success}>Finished</text>
+                  </Show>
+                }
+              >
+                <text fg={theme.warning}>
                   {pendingSubmitStatusText(submitStage())}
                   {pendingCancelHint() ? ` ${pendingCancelHint()} to cancel` : ""}
                 </text>
@@ -1811,9 +1821,7 @@ export function Prompt(props: PromptProps) {
                 </box>
                 <box flexDirection="row" gap={1} flexShrink={0}>
                   <Show when={busyStatus()?.label}>
-                    <text fg={promptStatusColor(busyStatus()?.tone)}>
-                      {busyStatus()?.shortLabel ?? busyStatus()?.label}
-                    </text>
+                    <text fg={theme.warning}>{busyStatus()?.label}</text>
                   </Show>
                   {(() => {
                     const retry = createMemo(() => {
@@ -1876,7 +1884,7 @@ export function Prompt(props: PromptProps) {
               <text fg={store.interrupt > 0 ? theme.primary : theme.text}>
                 esc{" "}
                 <span style={{ fg: store.interrupt > 0 ? theme.primary : theme.textMuted }}>
-                  {store.interrupt > 0 ? "again to force stop" : "to stop"}
+                  {store.interrupt > 0 ? "again to interrupt" : "interrupt"}
                 </span>
               </text>
             </box>
@@ -1893,7 +1901,7 @@ export function Prompt(props: PromptProps) {
                   active: sync.data.autonomous,
                   activeFg: theme.text,
                   inactiveFg: theme.textMuted,
-                  background: theme.secondary,
+                  background: theme.warning,
                   onMouseUp: () => command.trigger("app.toggle.autonomous"),
                 })}
                 {footerToggleChip({
@@ -1906,26 +1914,16 @@ export function Prompt(props: PromptProps) {
               </box>
               <Show
                 when={
-                  !footerLayout().stacked &&
-                  (footerLayout().showAgents || footerLayout().showVariants || footerLayout().showShellHint)
+                  footerLayout().showVariants ||
+                  footerLayout().showShellHint
                 }
               >
-                <text fg={theme.borderSubtle} flexShrink={0}>
-                  ·
-                </text>
-              </Show>
-              <Show when={footerLayout().showAgents || footerLayout().showVariants || footerLayout().showShellHint}>
                 <box gap={2} flexDirection="row" flexShrink={0}>
                   <Switch>
                     <Match when={store.mode === "normal"}>
                       <Show when={footerLayout().showVariants}>
                         <text fg={theme.text}>
                           {keybind.print("variant_cycle")} <span style={{ fg: theme.textMuted }}>variants</span>
-                        </text>
-                      </Show>
-                      <Show when={footerLayout().showAgents}>
-                        <text fg={theme.text}>
-                          {keybind.print("agent_cycle")} <span style={{ fg: theme.textMuted }}>agents</span>
                         </text>
                       </Show>
                     </Match>

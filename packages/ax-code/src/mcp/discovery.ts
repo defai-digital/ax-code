@@ -8,6 +8,7 @@
 
 import { Log } from "../util/log"
 import { Process } from "../util/process"
+import { Env } from "../util/env"
 
 const log = Log.create({ service: "mcp.discovery" })
 
@@ -38,6 +39,7 @@ export async function spawnExitsCleanly(
       stdout: "ignore",
       stderr: "ignore",
       abort: abort.signal,
+      env: Env.sanitize(),
     })
     const code = await proc.exited
     return code === 0

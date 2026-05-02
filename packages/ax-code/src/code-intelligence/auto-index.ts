@@ -100,6 +100,10 @@ export namespace AutoIndex {
 
   const stateByProject = new Map<string, IndexState>()
   const MAX_STATE_ENTRIES = 64
+  const BACKGROUND_AUTO_INDEX_NATIVE_CONCURRENCY = 2
+  const BACKGROUND_AUTO_INDEX_FALLBACK_CONCURRENCY = 1
+  const MANUAL_INDEX_DISABLED_MESSAGE =
+    "Automatic indexing is disabled by AX_CODE_DISABLE_AUTO_INDEX. Run `ax-code index` when you want to build the graph."
 
   export function getState(projectID: ProjectID): IndexState {
     const key = projectID as unknown as string
@@ -163,13 +167,18 @@ export namespace AutoIndex {
     return lang !== undefined && lang !== "plaintext"
   }
 
-  // Standalone release binaries do not ship the code-intelligence native
-  // addon set. The pure TypeScript path is still valid for explicit/manual
-  // indexing, but auto-starting it from the first prompt can monopolize the
-  // worker long enough to feel like the UI hung. Keep auto-index opt-in to
-  // environments where the native index core is actually present.
-  function supportsAutomaticIndexing(): boolean {
-    return NativeAddon.index() !== undefined
+  // Standalone release binaries may not ship the code-intelligence native
+  // addon set. The pure TypeScript path is still valid, but it should be
+  // gentler when it runs in the background so it does not monopolize the
+  // same process the user is actively interacting with.
+  function automaticIndexConcurrency(): { concurrency: number; nativeIndexAvailable: boolean } {
+    const nativeIndexAvailable = NativeAddon.index() !== undefined
+    return {
+      concurrency: nativeIndexAvailable
+        ? BACKGROUND_AUTO_INDEX_NATIVE_CONCURRENCY
+        : BACKGROUND_AUTO_INDEX_FALLBACK_CONCURRENCY,
+      nativeIndexAvailable,
+    }
   }
 
   /**
@@ -189,11 +198,6 @@ export namespace AutoIndex {
     // sites planned for future releases and each should be safe
     // on its own.
     if (!Flag.AX_CODE_EXPERIMENTAL_CODE_INTELLIGENCE) return
-    if (Flag.AX_CODE_DISABLE_AUTO_INDEX) return
-    if (!supportsAutomaticIndexing()) {
-      log.info("skipping: native index addon unavailable for automatic indexing", { projectID })
-      return
-    }
 
     const key = projectID as unknown as string
     if (inFlight.has(key)) {
@@ -214,6 +218,34 @@ export namespace AutoIndex {
       })
       return
     }
+    if (Flag.AX_CODE_DISABLE_AUTO_INDEX) {
+      setState(projectID, {
+        state: "idle",
+        completed: 0,
+        total: 0,
+        startedAt: null,
+        finishedAt: Date.now(),
+        error: MANUAL_INDEX_DISABLED_MESSAGE,
+      })
+      return
+    }
+    if (!supportsAutomaticIndexing()) {
+      log.info("skipping: native index addon unavailable for automatic indexing", {
+        projectID,
+        recommendation: "run ax-code index",
+      })
+      setState(projectID, {
+        state: "idle",
+        completed: 0,
+        total: 0,
+        startedAt: null,
+        finishedAt: Date.now(),
+        error: MANUAL_INDEX_REQUIRED_NATIVE_MESSAGE,
+      })
+      return
+    }
+
+    const indexer = automaticIndexConcurrency()
 
     // Capture the instance directory snapshot for the background
     // task. The background Promise runs outside the Instance
@@ -221,7 +253,12 @@ export namespace AutoIndex {
     const directory = Instance.directory
 
     inFlight.add(key)
-    log.info("starting background auto-index", { projectID, directory })
+    log.info("starting background auto-index", {
+      projectID,
+      directory,
+      concurrency: indexer.concurrency,
+      nativeIndexAvailable: indexer.nativeIndexAvailable,
+    })
 
     // Fire and forget. Wrapped in an IIFE so we can use async/await
     // syntax while still returning from maybeStart synchronously.
@@ -270,7 +307,7 @@ export namespace AutoIndex {
         // The other process will populate the graph and our next
         // session will see it via the empty-graph check.
         const result = await CodeIntelligence.indexFiles(projectID, files, {
-          concurrency: 4,
+          concurrency: indexer.concurrency,
           lock: "try",
           onProgress: (completed, total) => reportProgress(projectID, completed, total),
         })

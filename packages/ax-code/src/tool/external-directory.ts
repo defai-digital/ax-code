@@ -16,14 +16,26 @@ type Options = {
  * to a path outside the project. No-op for paths already outside the project —
  * those go through the `assertExternalDirectory` permission flow above.
  *
- * Stricter variants (e.g. `write.ts`'s lstat-first dangling-symlink rejection,
- * or `read.ts`'s typed error) intentionally inline their own check.
+ * Dangling symlinks are rejected so write-mode tools do not silently replace
+ * them with regular files.
  */
 export async function assertSymlinkInsideProject(target: string): Promise<void> {
   if (!Filesystem.contains(Instance.directory, target)) return
-  const real = await fs.realpath(target).catch(() => null)
-  if (real && !Filesystem.contains(Instance.directory, real)) {
-    throw new Error("Access denied: symlink target escapes project directory")
+  const lstat = await fs.lstat(target).catch(() => null)
+  if (lstat?.isSymbolicLink()) {
+    const real = await fs.realpath(target).catch(() => null)
+    if (!real) throw new Error("Access denied: symlink target is dangling or inaccessible")
+    if (!Filesystem.contains(Instance.directory, real)) {
+      throw new Error("Access denied: symlink target escapes project directory")
+    }
+  }
+
+  const parentDir = path.dirname(target)
+  if (parentDir !== Instance.directory) {
+    const realParent = await fs.realpath(parentDir).catch(() => parentDir)
+    if (!Filesystem.contains(Instance.directory, realParent)) {
+      throw new Error("Access denied: parent directory escapes project directory")
+    }
   }
 }
 

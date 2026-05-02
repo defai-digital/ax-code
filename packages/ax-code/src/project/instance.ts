@@ -236,8 +236,10 @@ export const Instance = {
    */
   containsPath(filepath: string) {
     if (Filesystem.contains(Instance.directory, filepath)) return true
-    // Non-git projects set worktree to "/" which would match ANY absolute path.
-    // Skip worktree check in this case to preserve external_directory permissions.
+    // Older non-git projects used "/" as the worktree, which would match ANY
+    // absolute path. Skip that legacy sentinel to preserve external_directory
+    // permissions; current non-git projects use the directory as their
+    // worktree, so the normal containment check remains safe.
     if (Instance.worktree === "/") return false
     return Filesystem.contains(Instance.worktree, filepath)
   },

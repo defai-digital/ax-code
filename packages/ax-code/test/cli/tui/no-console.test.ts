@@ -93,12 +93,12 @@ describe("tui console hygiene", () => {
     expect(footer).toContain("showStatusSeparator")
   })
 
-  test("keeps stalled prompt status static and stop copy direct", async () => {
+  test("keeps stalled prompt status static and interrupt copy direct", async () => {
     const prompt = await fs.readFile(PROMPT_SRC, "utf8")
 
     expect(prompt).toContain('when={status().type === "busy" && busyStatus()?.stale}')
-    expect(prompt).toContain("again to force stop")
-    expect(prompt).toContain("to stop")
+    expect(prompt).toContain("again to interrupt")
+    expect(prompt).toContain("interrupt")
   })
 
   test("does not assume fork responses contain session data", async () => {

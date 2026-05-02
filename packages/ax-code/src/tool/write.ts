@@ -8,7 +8,7 @@ import { FileTime } from "../file/time"
 import { Filesystem } from "../util/filesystem"
 import { Instance } from "../project/instance"
 import { trimDiff } from "./edit"
-import { assertExternalDirectory } from "./external-directory"
+import { assertExternalDirectory, assertSymlinkInsideProject } from "./external-directory"
 import { notifyFileEdited, collectDiagnostics } from "./diagnostics"
 import { Isolation } from "@/isolation"
 import { BlastRadius } from "@/session/blast-radius"
@@ -42,15 +42,7 @@ export const WriteTool = Tool.define("write", {
       // Keep the symlink and directory validation inside the same lock as
       // the read/permission/write flow so the checked path cannot be
       // swapped between validation and write.
-      if (Filesystem.contains(Instance.directory, filepath)) {
-        const lstat = await fs.promises.lstat(filepath).catch(() => null)
-        if (lstat?.isSymbolicLink()) {
-          const realFilepath = await fs.promises.realpath(filepath).catch(() => null)
-          if (!realFilepath) throw new Error("Access denied: symlink target is dangling or inaccessible")
-          if (!Filesystem.contains(Instance.directory, realFilepath))
-            throw new Error("Access denied: symlink target escapes project directory")
-        }
-      }
+      await assertSymlinkInsideProject(filepath)
 
       const stats = await fs.promises.stat(filepath).catch(() => null)
       if (stats?.isDirectory()) throw new Error(`Path is a directory, not a file: ${filepath}`)

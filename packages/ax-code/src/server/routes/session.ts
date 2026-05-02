@@ -114,6 +114,14 @@ function startObservedAsyncSessionTask(input: {
   })
 }
 
+async function requireCurrentProjectSession(sessionID: SessionID) {
+  const session = await Session.get(sessionID)
+  if (Session.isCompatibleWithCurrentProject(session)) return session
+  throw new HTTPException(409, {
+    message: `Session ${sessionID} belongs to a different project directory; start a new session from the current project instead.`,
+  })
+}
+
 export const SessionRoutes = lazy(() =>
   new Hono()
     .get(
@@ -217,7 +225,7 @@ export const SessionRoutes = lazy(() =>
       ),
       async (c) => {
         const sessionID = c.req.valid("param").sessionID
-        const session = await Session.get(sessionID)
+        const session = await requireCurrentProjectSession(sessionID)
         return c.json(session)
       },
     )
@@ -248,6 +256,7 @@ export const SessionRoutes = lazy(() =>
       ),
       async (c) => {
         const sessionID = c.req.valid("param").sessionID
+        await requireCurrentProjectSession(sessionID)
         const session = await Session.children(sessionID)
         return c.json(session)
       },
@@ -531,6 +540,7 @@ export const SessionRoutes = lazy(() =>
       ),
       async (c) => {
         const sessionID = c.req.valid("param").sessionID
+        await requireCurrentProjectSession(sessionID)
         const todos = await Todo.get(sessionID)
         return c.json(todos)
       },
@@ -955,17 +965,17 @@ export const SessionRoutes = lazy(() =>
         const query = c.req.valid("query")
         const sessionID = c.req.valid("param").sessionID
         if (query.limit === undefined) {
-          await Session.get(sessionID)
+          await requireCurrentProjectSession(sessionID)
           const messages = await Session.messages({ sessionID })
           return c.json(messages)
         }
 
         if (query.limit === 0) {
-          await Session.get(sessionID)
+          await requireCurrentProjectSession(sessionID)
           return c.json([])
         }
 
-        await Session.get(sessionID)
+        await requireCurrentProjectSession(sessionID)
         const page = await MessageV2.page({
           sessionID,
           limit: query.limit,
@@ -1184,6 +1194,7 @@ export const SessionRoutes = lazy(() =>
           const sessionID = c.req.valid("param").sessionID
           const body = c.req.valid("json")
           try {
+            await requireCurrentProjectSession(sessionID)
             const msg = await SessionPrompt.prompt({ ...body, sessionID })
             stream.write(JSON.stringify(msg))
           } catch (err) {
@@ -1217,6 +1228,7 @@ export const SessionRoutes = lazy(() =>
       async (c) => {
         const sessionID = c.req.valid("param").sessionID
         const body = c.req.valid("json")
+        await requireCurrentProjectSession(sessionID)
         startObservedAsyncSessionTask({
           sessionID,
           kind: "prompt",
@@ -1255,6 +1267,7 @@ export const SessionRoutes = lazy(() =>
       async (c) => {
         const sessionID = c.req.valid("param").sessionID
         const body = c.req.valid("json")
+        await requireCurrentProjectSession(sessionID)
         startObservedAsyncSessionTask({
           sessionID,
           kind: "command",
@@ -1303,6 +1316,7 @@ export const SessionRoutes = lazy(() =>
       async (c) => {
         const sessionID = c.req.valid("param").sessionID
         const body = c.req.valid("json")
+        await requireCurrentProjectSession(sessionID)
         const msg = await SessionPrompt.command({ ...body, sessionID })
         return c.json(msg)
       },
@@ -1330,6 +1344,7 @@ export const SessionRoutes = lazy(() =>
       async (c) => {
         const sessionID = c.req.valid("param").sessionID
         const body = c.req.valid("json")
+        await requireCurrentProjectSession(sessionID)
         startObservedAsyncSessionTask({
           sessionID,
           kind: "shell",
@@ -1373,6 +1388,7 @@ export const SessionRoutes = lazy(() =>
       async (c) => {
         const sessionID = c.req.valid("param").sessionID
         const body = c.req.valid("json")
+        await requireCurrentProjectSession(sessionID)
         const msg = await SessionPrompt.shell({ ...body, sessionID })
         return c.json(msg)
       },

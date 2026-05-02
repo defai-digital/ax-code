@@ -81,6 +81,12 @@ import {
 // @ts-ignore
 globalThis.AI_SDK_LOG_WARNINGS = false
 
+const MAX_STAGNANT_TODO_RETRIES = 2
+
+function pendingTodoSignature(todos: Todo.Info[]) {
+  return todos.map((todo) => `${todo.status}\u0000${todo.priority}\u0000${todo.content}`).join("\u0001")
+}
+
 const STRUCTURED_OUTPUT_DESCRIPTION = `Use this tool to return your final response in the requested structured format.
 
 IMPORTANT:
@@ -334,6 +340,10 @@ export namespace SessionPrompt {
       .boolean()
       .optional()
       .describe("@deprecated Agent auto-routing was removed. Field accepted for backwards compatibility but ignored."),
+    agentRouting: z
+      .enum(["auto", "preserve"])
+      .optional()
+      .describe("Controls specialist agent auto-routing. Use preserve for synthetic continuation prompts."),
     noReply: z.boolean().optional(),
     tools: z
       .record(z.string(), z.boolean())
@@ -531,7 +541,7 @@ export namespace SessionPrompt {
 
     let step = 0
     let totalSteps = 0
-    let reason: "completed" | "aborted" | "error" | "step_limit" = "error"
+    let reason: "completed" | "aborted" | "error" | "step_limit" | "stalled" = "error"
     let consecutiveErrors = 0
     let continuations = 0
     let deferredAutoIndexProjectID: ProjectID | undefined
@@ -561,6 +571,8 @@ export namespace SessionPrompt {
     const maxContinuations = cfg.session?.max_continuations ?? 3
     const maxTodoRetries = cfg.session?.max_todo_retries ?? 10
     let todoRetries = 0
+    let lastPendingTodoSignature: string | undefined
+    let stagnantTodoRetries = 0
     const cachedSystemPrompt: import("./prompt-helpers").SystemCache = {
       environment: undefined,
       environmentModelKey: undefined,
@@ -625,6 +637,7 @@ export namespace SessionPrompt {
           const lastUserInfo = lastMsgs.filter((m) => m.info.role === "user").pop()?.info as MessageV2.User | undefined
           await createUserMessage({
             sessionID,
+            agentRouting: "preserve",
             parts: [
               {
                 type: "text",
@@ -985,6 +998,37 @@ export namespace SessionPrompt {
           (t) => t.status === "pending" || t.status === "in_progress",
         )
         if (pendingTodos.length > 0) {
+          const signature = pendingTodoSignature(pendingTodos)
+          if (signature === lastPendingTodoSignature) {
+            stagnantTodoRetries++
+          } else {
+            lastPendingTodoSignature = signature
+            stagnantTodoRetries = 0
+          }
+
+          if (stagnantTodoRetries >= MAX_STAGNANT_TODO_RETRIES) {
+            log.warn("autonomous todo continuation stopped on unchanged pending todos", {
+              command: "session.prompt.loop",
+              status: "stopped",
+              sessionID,
+              pendingCount: pendingTodos.length,
+              attempts: todoRetries,
+              stagnantAttempts: stagnantTodoRetries,
+              maxStagnantAttempts: MAX_STAGNANT_TODO_RETRIES,
+            })
+            Bus.publishDetached(Session.Event.Error, {
+              sessionID,
+              error: new NamedError.Unknown({
+                message:
+                  `Autonomous mode stopped because ${pendingTodos.length} todo${pendingTodos.length === 1 ? "" : "s"} ` +
+                  `remained unchanged after ${stagnantTodoRetries} retry attempts. ` +
+                  `The session is stopped, but the remaining todos are not complete.`,
+              }).toObject(),
+            })
+            reason = "stalled"
+            break
+          }
+
           todoRetries++
           log.info("autonomous todo continuation", {
             command: "session.prompt.loop",
@@ -993,6 +1037,7 @@ export namespace SessionPrompt {
             pendingCount: pendingTodos.length,
             attempt: todoRetries,
             maxAttempts: maxTodoRetries,
+            stagnantAttempts: stagnantTodoRetries,
           })
           const lastMsgs = await Session.messages({ sessionID })
           const lastUserInfo = lastMsgs.filter((m) => m.info.role === "user").pop()?.info as
@@ -1000,6 +1045,7 @@ export namespace SessionPrompt {
             | undefined
           await createUserMessage({
             sessionID,
+            agentRouting: "preserve",
             parts: [
               {
                 type: "text",
@@ -1427,12 +1473,14 @@ export namespace SessionPrompt {
       .join(" ")
 
     // v2-style auto agent switching: simple sync keyword route, fires whenever
-    // a topic keyword scores ≥ 0.4. Skipped only when the user explicitly named
-    // an agent (@-mention), or when routing.disable is set in config.
+    // a topic keyword scores ≥ 0.4. Skipped when the user explicitly named an
+    // agent (@-mention), routing.disable is set in config, or a synthetic
+    // continuation prompt asks to preserve the current agent.
     const cfg = await Config.get()
     const hasAgentPart = input.parts.some((p) => p.type === "agent")
     const routingDisabled = cfg.routing?.disable === true
-    if (messageText && !hasAgentPart && !routingDisabled) {
+    const preserveAgent = input.agentRouting === "preserve"
+    if (messageText && !preserveAgent && !hasAgentPart && !routingDisabled) {
       const routeResult = routeAgent(messageText, agentName)
       if (routeResult) {
         const routedAgent = await Agent.get(routeResult.agent).catch(() => undefined)
@@ -2468,10 +2516,6 @@ NOTE: At any point in time through this workflow you should feel free to ask the
         )
       }
       flushRunning = false
-      if (flushDirty && !flushRunning) {
-        flushRunning = true
-        pending = drainFlush()
-      }
     }
 
     const flush = () => {
@@ -2505,7 +2549,7 @@ NOTE: At any point in time through this workflow you should feel free to ask the
 
     const abortHandler = () => {
       aborted = true
-      void kill()
+      void kill().catch(() => {})
     }
 
     abort.addEventListener("abort", abortHandler, { once: true })
@@ -2521,7 +2565,7 @@ NOTE: At any point in time through this workflow you should feel free to ask the
           shell,
           args,
         })
-        void kill()
+        void kill().catch(() => {})
       }
     }, SHELL_TIMEOUT)
     let abortTimer: ReturnType<typeof setTimeout> | undefined

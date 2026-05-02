@@ -22,6 +22,7 @@ export const GlobTool = Tool.define("glob", {
   }),
   async execute(params, ctx) {
     if (params.path?.includes("\x00")) throw new Error("File path contains null byte")
+    if (params.pattern.includes("\x00")) throw new Error("Glob pattern contains null byte")
     await ctx.ask({
       permission: "glob",
       patterns: [params.pattern],

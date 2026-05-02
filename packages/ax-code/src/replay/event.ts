@@ -17,7 +17,7 @@ export const SessionStartEvent = Base.extend({
 
 export const SessionEndEvent = Base.extend({
   type: z.literal("session.end"),
-  reason: z.enum(["completed", "aborted", "error", "step_limit"]),
+  reason: z.enum(["completed", "aborted", "error", "step_limit", "stalled"]),
   totalSteps: z.number().int(),
 })
 

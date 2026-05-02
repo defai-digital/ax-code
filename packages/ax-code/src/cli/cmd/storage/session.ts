@@ -11,6 +11,11 @@ import { Process } from "../../../util/process"
 import { EOL } from "os"
 import path from "path"
 import { which } from "../../../util/which"
+import { Instance } from "../../../project/instance"
+import { Global } from "../../../global"
+import { EventQuery } from "../../../replay/query"
+import { buildTransfer } from "./transfer"
+import { ProjectIdentity } from "../../../project/project-identity"
 
 function pagerCmd(): string[] {
   const lessOptions = ["-R", "-S"]
@@ -43,8 +48,263 @@ export const SessionCommand = cmd({
   command: "session",
   describe: "manage sessions",
   builder: (yargs: Argv) =>
-    yargs.command(SessionListCommand).command(SessionDeleteCommand).command(SessionPruneCommand).demandCommand(),
+    yargs
+      .command(SessionListCommand)
+      .command(SessionDeleteCommand)
+      .command(SessionPruneCommand)
+      .command(SessionBackupProjectCommand)
+      .command(SessionClearProjectCommand)
+      .command(SessionProjectStatusCommand)
+      .demandCommand(),
   async handler() {},
+})
+
+function cleanupStamp() {
+  return new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z")
+}
+
+type DuplicateProjectIdentity = {
+  id: string
+  sessionCount: number
+  current: boolean
+}
+
+function formatDuplicateProjectIdentities(identities: DuplicateProjectIdentity[]) {
+  return identities.map((project) => `${project.id}${project.current ? " (current)" : ""}: ${project.sessionCount}`).join(", ")
+}
+
+function printWarning(message: string) {
+  UI.println(`Warning: ${message}`)
+}
+
+async function backupSessions(input: {
+  sessions: Session.Info[]
+  deletionRoots: Session.Info[]
+  duplicateProjectIdentities: DuplicateProjectIdentity[]
+  backupDir?: string
+}) {
+  const backupDir = input.backupDir ?? path.join(Global.Path.data, "cleanup-backups")
+  const backupPath = path.join(backupDir, `session-project-${cleanupStamp()}.json`)
+  const transfers = []
+  for (const session of input.sessions) {
+    const messages = await Session.messages({ sessionID: session.id })
+    transfers.push(
+      buildTransfer({
+        info: session,
+        messages: messages.map((msg) => ({
+          info: msg.info,
+          parts: msg.parts,
+        })),
+        events: EventQuery.bySessionLog(session.id),
+      }),
+    )
+  }
+  await Filesystem.writeJson(backupPath, {
+    type: "ax-code.project-session-backup",
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    scope: "current-project-id-only",
+    worktree: Instance.worktree,
+    directory: Instance.directory,
+    projectID: Instance.project.id,
+    deletionPlan: {
+      sessionCount: input.sessions.length,
+      rootSessionCount: input.deletionRoots.length,
+      rootSessionIDs: input.deletionRoots.map((session) => session.id),
+    },
+    duplicateProjectIdentities: input.duplicateProjectIdentities,
+    restoreHint:
+      "This backup is a safety archive for project cleanup. To restore, choose the target project first, then import individual entries from sessions[].",
+    count: input.sessions.length,
+    sessions: transfers,
+  })
+  return backupPath
+}
+
+export function sessionProjectStatusPayload(input: {
+  projectID: string
+  worktree: string
+  directory: string
+  sessions: Session.Info[]
+  duplicateProjectIdentities?: Array<{ id: string; sessionCount: number; current: boolean }>
+}) {
+  const roots = input.sessions.filter((session) => !session.parentID).length
+  const children = input.sessions.length - roots
+  return {
+    projectID: input.projectID,
+    worktree: input.worktree,
+    directory: input.directory,
+    sessions: input.sessions.length,
+    rootSessions: roots,
+    childSessions: children,
+    latest: input.sessions
+      .toSorted((a, b) => b.time.updated - a.time.updated)
+      .slice(0, 5)
+      .map((session) => ({
+        id: session.id,
+        title: session.title,
+        directory: session.directory,
+        updated: session.time.updated,
+      })),
+    duplicateProjectIdentities: input.duplicateProjectIdentities ?? [],
+  }
+}
+
+async function getDuplicateProjectIdentities() {
+  return ProjectIdentity.listDuplicateWorktreeIdentities({
+    worktree: Instance.worktree,
+    currentProjectID: Instance.project.id,
+  })
+}
+
+export const SessionClearProjectCommand = cmd({
+  command: "clear-project",
+  describe: "delete all sessions for the current project after writing a backup",
+  builder: (yargs: Argv) => {
+    return yargs
+      .option("yes", {
+        describe: "confirm deletion",
+        type: "boolean",
+      })
+      .option("backup-dir", {
+        describe: "directory for the JSON backup (default: ax-code cleanup-backups data directory)",
+        type: "string",
+      })
+  },
+  handler: async (args) => {
+    await bootstrap(process.cwd(), async () => {
+      const sessions = [...Session.list()]
+      const duplicateProjectIdentities = await getDuplicateProjectIdentities()
+      const deletionRoots = sessions.filter((session) => !session.parentID)
+
+      if (sessions.length === 0) {
+        UI.println(`No sessions found for current project: ${Instance.worktree}`)
+        if (duplicateProjectIdentities.length > 0) {
+          printWarning(
+            `This worktree also has duplicate project identities: ${formatDuplicateProjectIdentities(duplicateProjectIdentities)}`,
+          )
+        }
+        return
+      }
+
+      const backupPath = await backupSessions({
+        sessions,
+        deletionRoots,
+        duplicateProjectIdentities,
+        backupDir: args.backupDir,
+      })
+      UI.println(`Backed up ${sessions.length} session${sessions.length === 1 ? "" : "s"} to ${backupPath}`)
+      UI.println(`Backup scope: current project id only (${Instance.project.id})`)
+      if (duplicateProjectIdentities.length > 0) {
+        printWarning(
+          `Only sessions for the current project id will be deleted. Duplicate identities remain: ${formatDuplicateProjectIdentities(
+            duplicateProjectIdentities,
+          )}`,
+        )
+      }
+
+      if (!args.yes) {
+        UI.println("Dry run only. Re-run with --yes to delete these sessions.")
+        return
+      }
+
+      for (const session of deletionRoots.length > 0 ? deletionRoots : sessions) {
+        await Session.remove(session.id)
+      }
+
+      UI.println(
+        UI.Style.TEXT_SUCCESS_BOLD +
+          `Deleted ${sessions.length} session${sessions.length === 1 ? "" : "s"} for ${Instance.worktree}` +
+          UI.Style.TEXT_NORMAL,
+      )
+    })
+  },
+})
+
+export const SessionBackupProjectCommand = cmd({
+  command: "backup-project",
+  describe: "back up all sessions for the current project without deleting them",
+  builder: (yargs: Argv) => {
+    return yargs.option("backup-dir", {
+      describe: "directory for the JSON backup (default: ax-code cleanup-backups data directory)",
+      type: "string",
+    })
+  },
+  handler: async (args) => {
+    await bootstrap(process.cwd(), async () => {
+      const sessions = [...Session.list()]
+      const duplicateProjectIdentities = await getDuplicateProjectIdentities()
+      const deletionRoots = sessions.filter((session) => !session.parentID)
+
+      if (sessions.length === 0) {
+        UI.println(`No sessions found for current project: ${Instance.worktree}`)
+        if (duplicateProjectIdentities.length > 0) {
+          printWarning(
+            `This worktree also has duplicate project identities: ${formatDuplicateProjectIdentities(duplicateProjectIdentities)}`,
+          )
+        }
+        return
+      }
+
+      const backupPath = await backupSessions({
+        sessions,
+        deletionRoots,
+        duplicateProjectIdentities,
+        backupDir: args.backupDir,
+      })
+      UI.println(`Backed up ${sessions.length} session${sessions.length === 1 ? "" : "s"} to ${backupPath}`)
+      UI.println(`Backup scope: current project id only (${Instance.project.id})`)
+      if (duplicateProjectIdentities.length > 0) {
+        printWarning(`Duplicate project identities detected: ${formatDuplicateProjectIdentities(duplicateProjectIdentities)}`)
+      }
+    })
+  },
+})
+
+export const SessionProjectStatusCommand = cmd({
+  command: "project-status",
+  describe: "show current project session storage status",
+  builder: (yargs: Argv) => {
+    return yargs.option("format", {
+      describe: "output format",
+      type: "string",
+      choices: ["text", "json"],
+      default: "text",
+    })
+  },
+  handler: async (args) => {
+    await bootstrap(process.cwd(), async () => {
+      const sessions = [...Session.list()]
+      const payload = sessionProjectStatusPayload({
+        projectID: Instance.project.id,
+        worktree: Instance.worktree,
+        directory: Instance.directory,
+        sessions,
+        duplicateProjectIdentities: await getDuplicateProjectIdentities(),
+      })
+
+      if (args.format === "json") {
+        UI.println(JSON.stringify(payload, null, 2))
+        return
+      }
+
+      UI.println(`Project: ${payload.projectID}`)
+      UI.println(`Worktree: ${payload.worktree}`)
+      UI.println(`Directory: ${payload.directory}`)
+      UI.println(`Sessions: ${payload.sessions} (${payload.rootSessions} root, ${payload.childSessions} child)`)
+      if (payload.duplicateProjectIdentities.length > 0) {
+        printWarning(
+          `Duplicate project identities detected: ${formatDuplicateProjectIdentities(payload.duplicateProjectIdentities)}`,
+        )
+      }
+      if (payload.latest.length > 0) {
+        UI.println("Latest:")
+        for (const session of payload.latest) {
+          UI.println(`  ${session.id}  ${Locale.truncate(session.title, 60)}`)
+        }
+      }
+    })
+  },
 })
 
 export const SessionPruneCommand = cmd({

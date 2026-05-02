@@ -5,7 +5,7 @@ import { LSP } from "../lsp"
 import DESCRIPTION from "./lsp.txt"
 import { Instance } from "../project/instance"
 import { pathToFileURL } from "url"
-import { assertExternalDirectory } from "./external-directory"
+import { assertExternalDirectory, assertSymlinkInsideProject } from "./external-directory"
 import { Filesystem } from "../util/filesystem"
 import { AuditSemanticCall } from "../audit/semantic-call"
 import type { LSPServer } from "../lsp/server"
@@ -80,6 +80,8 @@ export const LspTool = Tool.define("lsp", {
     character: z.number().int().min(1).optional().describe("The character offset (1-based, as shown in editors)"),
   }),
   execute: async (args, ctx) => {
+    if (args.filePath?.includes("\x00")) throw new Error("File path contains null byte")
+
     // Audit helper bound to this tool invocation. On success or
     // failure we write one row — audit is load-bearing, not opt-in.
     // In queue mode this is ~zero-cost (array push). In sync mode
@@ -102,7 +104,6 @@ export const LspTool = Tool.define("lsp", {
         // Caller still gets the real result.
       }
     }
-
     if (args.operation === "workspaceSymbol") {
       if (!args.query?.trim()) {
         audit({
@@ -165,6 +166,7 @@ export const LspTool = Tool.define("lsp", {
       if (args.filePath) {
         file = path.isAbsolute(args.filePath) ? args.filePath : path.join(Instance.directory, args.filePath)
         await assertExternalDirectory(ctx, file)
+        await assertSymlinkInsideProject(file)
         const exists = await Filesystem.exists(file)
         if (!exists) {
           audit({ operation: args.operation, args, envelope: syntheticEnvelope([]), errorCode: "FileNotFound" })
@@ -237,6 +239,7 @@ export const LspTool = Tool.define("lsp", {
 
     const file = path.isAbsolute(args.filePath) ? args.filePath : path.join(Instance.directory, args.filePath)
     await assertExternalDirectory(ctx, file)
+    await assertSymlinkInsideProject(file)
 
     // Validate BEFORE asking permission. Previously the user saw a
     // "Grant LSP access?" prompt for non-existent files or files with

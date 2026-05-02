@@ -1,5 +1,6 @@
 import type { ChildProcessWithoutNullStreams } from "child_process"
 import { Process } from "../util/process"
+import { Env } from "../util/env"
 
 type Child = Process.Child & ChildProcessWithoutNullStreams
 
@@ -10,6 +11,7 @@ export function spawn(cmd: string, argsOrOpts?: string[] | Process.Options, opts
   const cfg = Array.isArray(argsOrOpts) ? opts : argsOrOpts
   const proc = Process.spawn([cmd, ...args], {
     ...(cfg ?? {}),
+    env: cfg?.env ?? { ...Env.sanitize() },
     stdin: "pipe",
     stdout: "pipe",
     stderr: "pipe",

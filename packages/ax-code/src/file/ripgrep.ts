@@ -17,6 +17,7 @@ import { Log } from "@/util/log"
 import { NativePerf } from "../perf/native"
 import { NativeAddon } from "../native/addon"
 import { Ssrf } from "@/util/ssrf"
+import { Env } from "@/util/env"
 
 export namespace Ripgrep {
   const log = Log.create({ service: "ripgrep" })
@@ -324,6 +325,7 @@ export namespace Ripgrep {
       stdout: "pipe",
       stderr: "ignore",
       abort: input.signal,
+      env: Env.sanitize(),
     })
 
     if (!proc.stdout) {

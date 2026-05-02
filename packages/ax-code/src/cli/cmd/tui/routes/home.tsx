@@ -18,6 +18,8 @@ export function Home() {
   const { theme } = useTheme()
   const route = useRouteData("home")
   const promptRef = usePromptRef()
+  const args = useArgs()
+  const local = useLocal()
   const mcp = createMemo(() => Object.keys(sync.data.mcp).length > 0)
   const mcpError = createMemo(() => {
     return Object.values(sync.data.mcp).some((x) => x.status === "failed")
@@ -28,30 +30,39 @@ export function Home() {
   })
 
   const isFirstTimeUser = createMemo(() => sync.data.session.length === 0)
+  const modelLoading = createMemo(() => !sync.data.provider_failed && (!sync.data.provider_loaded || !local.model.ready))
 
   const Hint = (
-    <Show when={connectedMcpCount() > 0}>
-      <box flexShrink={0} flexDirection="row" gap={1}>
-        <text fg={theme.text}>
-          <Switch>
-            <Match when={mcpError()}>
-              <span style={{ fg: theme.error }}>•</span> mcp errors{" "}
-              <span style={{ fg: theme.textMuted }}>ctrl+x s</span>
-            </Match>
-            <Match when={true}>
-              <span style={{ fg: theme.success }}>•</span>{" "}
-              {Locale.pluralize(connectedMcpCount(), "{} mcp server", "{} mcp servers")}
-            </Match>
-          </Switch>
-        </text>
-      </box>
-    </Show>
+    <Switch>
+      <Match when={modelLoading()}>
+        <box flexShrink={0} flexDirection="row" gap={1}>
+          <text fg={theme.warning}>
+            <span style={{ fg: theme.warning }}>•</span> Provider is loading{" "}
+            <span style={{ fg: theme.textMuted }}>· please wait about 10 seconds while models initialize</span>
+          </text>
+        </box>
+      </Match>
+      <Match when={connectedMcpCount() > 0}>
+        <box flexShrink={0} flexDirection="row" gap={1}>
+          <text fg={theme.text}>
+            <Switch>
+              <Match when={mcpError()}>
+                <span style={{ fg: theme.error }}>•</span> mcp errors{" "}
+                <span style={{ fg: theme.textMuted }}>ctrl+x s</span>
+              </Match>
+              <Match when={true}>
+                <span style={{ fg: theme.success }}>•</span>{" "}
+                {Locale.pluralize(connectedMcpCount(), "{} mcp server", "{} mcp servers")}
+              </Match>
+            </Switch>
+          </text>
+        </box>
+      </Match>
+    </Switch>
   )
 
   let prompt: PromptRef
   let once = false
-  const args = useArgs()
-  const local = useLocal()
   onMount(() => {
     recordTuiStartupOnce("tui.startup.homeMounted", { hasPrompt: !!args.prompt })
     if (once) return

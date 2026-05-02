@@ -11,6 +11,8 @@ import { useTerminalDimensions } from "@opentui/solid"
 import { collapseSessionBreadcrumbs, sessionBreadcrumbs } from "./header-view-model"
 import { computeSidebarWidth } from "./layout"
 
+const SUBAGENT_PARENT_DOUBLE_CLICK_MS = 400
+
 const Title = (props: { session: Accessor<Session | undefined> }) => {
   const { theme } = useTheme()
   return (
@@ -55,6 +57,7 @@ export function Header() {
   const keybind = useKeybind()
   const command = useCommandDialog()
   const [hover, setHover] = createSignal<"parent" | "prev" | "next" | null>(null)
+  let lastSubagentHeaderClickAt = 0
   const dimensions = useTerminalDimensions()
   const narrow = createMemo(() => {
     const sw = dimensions().width > 120 ? computeSidebarWidth(dimensions().width) : 0
@@ -65,6 +68,15 @@ export function Header() {
       narrow: narrow(),
     }),
   )
+  function handleSubagentHeaderMouseUp() {
+    const now = Date.now()
+    if (now - lastSubagentHeaderClickAt <= SUBAGENT_PARENT_DOUBLE_CLICK_MS) {
+      lastSubagentHeaderClickAt = 0
+      command.trigger("session.parent")
+      return
+    }
+    lastSubagentHeaderClickAt = now
+  }
 
   return (
     <box flexShrink={0}>
@@ -104,7 +116,7 @@ export function Header() {
                 </text>
               </Show>
               <box flexDirection={narrow() ? "column" : "row"} justifyContent="space-between" gap={narrow() ? 1 : 0}>
-                <box flexDirection="column">
+                <box flexDirection="column" onMouseUp={handleSubagentHeaderMouseUp}>
                   <text fg={theme.text}>
                     <b>Subagent session</b>
                   </text>
