@@ -77,7 +77,7 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
 
     for (const hunk of hunks) {
       if (hunk.path.includes("\x00")) throw new Error("File path contains null byte")
-      if (hunk.move_path?.includes("\x00")) throw new Error("Move path contains null byte")
+      if (hunk.type === "update" && hunk.move_path?.includes("\x00")) throw new Error("Move path contains null byte")
       const filePath = path.resolve(Instance.directory, hunk.path)
       await assertExternalDirectory(ctx, filePath)
       // BUG-293 DEFERRED: The symlink check and subsequent file write

@@ -229,21 +229,6 @@ export namespace AutoIndex {
       })
       return
     }
-    if (!supportsAutomaticIndexing()) {
-      log.info("skipping: native index addon unavailable for automatic indexing", {
-        projectID,
-        recommendation: "run ax-code index",
-      })
-      setState(projectID, {
-        state: "idle",
-        completed: 0,
-        total: 0,
-        startedAt: null,
-        finishedAt: Date.now(),
-        error: MANUAL_INDEX_REQUIRED_NATIVE_MESSAGE,
-      })
-      return
-    }
 
     const indexer = automaticIndexConcurrency()
 

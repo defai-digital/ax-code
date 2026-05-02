@@ -83,7 +83,7 @@ globalThis.AI_SDK_LOG_WARNINGS = false
 
 const MAX_STAGNANT_TODO_RETRIES = 2
 
-function pendingTodoSignature(todos: Todo.Info[]) {
+function pendingTodoSignature(todos: { content: string; status: string; priority: string }[]) {
   return todos.map((todo) => `${todo.status}\u0000${todo.priority}\u0000${todo.content}`).join("\u0001")
 }
 
@@ -741,13 +741,24 @@ export namespace SessionPrompt {
               lastIndexedAt: s.lastUpdated,
             })
             CodeIntelligence.startWatcher(Instance.project.id)
-            // Keep automatic indexing out of the first-prompt critical
-            // path. Standalone release binaries can only use the slower
-            // TypeScript fallback, and starting that work immediately on
-            // session start can make the UI appear hung after the first
-            // Enter. The deferred callback below still self-gates on
-            // native availability, empty-graph state, and the existing
-            // auto-index opt-out flag.
+            if (s.nodeCount === 0) {
+              try {
+                AutoIndex.maybeStart(Instance.project.id)
+              } catch (error) {
+                log.warn("auto-index scheduling failed during code graph init", {
+                  command: "session.prompt.codeGraph",
+                  status: "error",
+                  sessionID,
+                  error,
+                })
+              }
+            }
+            // Start auto-index from the same reliable path that starts
+            // the graph watcher. maybeStart() is fire-and-forget and
+            // self-gates on empty-graph state, in-flight runs, and the
+            // explicit auto-index opt-out flag. The deferred callback
+            // below remains a second chance for sessions that initialized
+            // before the graph became observable.
             deferredAutoIndexProjectID = Instance.project.id
           } catch (e) {
             log.warn("code.graph init skipped", {
