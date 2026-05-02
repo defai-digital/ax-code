@@ -97,11 +97,25 @@ export class CliLanguageModel implements LanguageModelV3 {
     if (!proc.stdout || !proc.stderr) throw new Error("CLI process output not available")
 
     let timeoutTimer: ReturnType<typeof setTimeout>
+    let killTimer: ReturnType<typeof setTimeout> | undefined
+    proc.exited
+      .finally(() => {
+        if (killTimer) {
+          clearTimeout(killTimer)
+          killTimer = undefined
+        }
+      })
+      .catch(() => {})
     const timeout = new Promise<never>(
       (_, reject) =>
         (timeoutTimer = setTimeout(() => {
           proc.kill("SIGTERM")
-          setTimeout(() => proc.kill("SIGKILL"), 5000).unref()
+          killTimer = setTimeout(() => {
+            try {
+              proc.kill("SIGKILL")
+            } catch {}
+          }, 5000)
+          killTimer.unref()
           reject(new Error(`CLI process timed out after ${CLI_TIMEOUT_MS / 1000}s`))
         }, CLI_TIMEOUT_MS)),
     )

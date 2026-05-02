@@ -123,41 +123,6 @@ export function footerSessionStatusView(input: {
   }
 }
 
-export function sidebarSessionStatusView(input: {
-  status?: FooterSessionStatus
-  hasMessages: boolean
-  pendingTodos?: number
-  now?: number
-}): FooterSessionStatusView & { label: string } {
-  if (!input.status || input.status.type === "idle") {
-    if (input.hasMessages && input.pendingTodos && input.pendingTodos > 0) {
-      const label = input.pendingTodos === 1 ? "1 todo left" : `${input.pendingTodos} todos left`
-      return {
-        label,
-        shortLabel: label,
-        stale: false,
-        tone: "warning",
-      }
-    }
-    return {
-      label: input.hasMessages ? "Finished" : "Ready",
-      shortLabel: input.hasMessages ? "Finished" : "Ready",
-      stale: false,
-      tone: input.hasMessages ? "success" : "muted",
-    }
-  }
-
-  const view = footerSessionStatusView({
-    status: input.status,
-    now: input.now,
-  })
-
-  return {
-    ...view,
-    label: view.shortLabel ?? view.label ?? "Working",
-  }
-}
-
 export function footerSessionStatusLabel(input: {
   status?: FooterSessionStatus
   now?: number
@@ -200,4 +165,68 @@ export function footerSandboxView(mode: string) {
     label: mode === "full-access" ? "sandbox off" : "sandbox on",
     risk: mode === "full-access" ? "danger" : "safe",
   } as const
+}
+
+export function isFooterSessionStatus(value: unknown): value is FooterSessionStatus {
+  if (!value || typeof value !== "object") return false
+  const status = value as Record<string, unknown>
+  if (status.type === "idle") return true
+  if (status.type === "retry") {
+    return typeof status.attempt === "number" && typeof status.message === "string" && typeof status.next === "number"
+  }
+  if (status.type === "busy") return true
+  return false
+}
+
+export type FooterProgressBarView = {
+  filled: string
+  empty: string
+  label: string
+  percent: number
+  stale: boolean
+  overSoftMax: boolean
+}
+
+const PROGRESS_BAR_WIDTH = 10
+const PROGRESS_MIN_TERMINAL_WIDTH = 80
+// Soft target — the bar fills relative to this, not the global hard cap
+// (typically 500). 50 covers ordinary task density (a ~5-10 task batch);
+// reaching it means "this run is unusually long" and the bar flips to a
+// warning tone. The hard cap stays in `status.maxSteps` for correctness
+// but is intentionally hidden from the bar's visual scale because a
+// 4/500 bar reads as empty and gives users no useful feedback.
+export const PROGRESS_SOFT_MAX = 50
+
+// Pure data-driven progress bar derived from step/maxSteps in the session
+// status. Re-renders only when those values change — there is no internal
+// timer, no animation frame, and no shimmer cell. v2's earlier "animated
+// usage bar" used a 120ms setInterval driving a moving cell, which was a
+// known TUI hang vector under opentui + compiled-binary rendering. This
+// helper deliberately avoids that pattern.
+export function footerProgressBar(input: {
+  status?: FooterSessionStatus
+  terminalWidth?: number
+  stale?: boolean
+  softMax?: number
+}): FooterProgressBarView | undefined {
+  const status = input.status
+  if (!status || status.type !== "busy") return
+  if (status.step === undefined || status.maxSteps === undefined) return
+  if (status.maxSteps <= 0) return
+  if (input.terminalWidth !== undefined && input.terminalWidth < PROGRESS_MIN_TERMINAL_WIDTH) return
+
+  const softMax = input.softMax ?? PROGRESS_SOFT_MAX
+  const overSoftMax = status.step > softMax
+  // Visual fill scales against softMax and clamps at 100% — a "long-run"
+  // task pegs the bar full and the warning tone communicates the overrun.
+  const ratio = Math.max(0, Math.min(1, status.step / softMax))
+  const fillCells = Math.max(0, Math.min(PROGRESS_BAR_WIDTH, Math.round(ratio * PROGRESS_BAR_WIDTH)))
+  return {
+    filled: "█".repeat(fillCells),
+    empty: "░".repeat(PROGRESS_BAR_WIDTH - fillCells),
+    label: `${status.step}`,
+    percent: Math.round(ratio * 100),
+    stale: input.stale ?? false,
+    overSoftMax,
+  }
 }

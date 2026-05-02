@@ -233,63 +233,117 @@ export namespace Provider {
     })
   export type Info = z.infer<typeof Info>
 
-  function fromModelsDevModel(provider: ModelsDev.Provider, model: ModelsDev.Model): Model {
-    const m: Model = {
-      id: ModelID.make(model.id),
-      providerID: ProviderID.make(provider.id),
-      name: model.name,
-      family: model.family,
-      api: {
-        id: model.id,
-        url: model.provider?.api ?? provider.api!,
-        npm: model.provider?.npm ?? provider.npm ?? "@ai-sdk/openai-compatible",
-      },
-      status: model.status ?? "active",
-      headers: model.headers ?? {},
-      options: model.options ?? {},
-      limit: {
-        context: model.limit.context,
-        input: model.limit.input,
-        output: model.limit.output,
-      },
-      capabilities: {
-        temperature: model.temperature,
-        reasoning: model.reasoning,
-        attachment: model.attachment,
-        toolcall: model.tool_call,
-        input: {
-          text: model.modalities?.input?.includes("text") ?? false,
-          audio: model.modalities?.input?.includes("audio") ?? false,
-          image: model.modalities?.input?.includes("image") ?? false,
-          video: model.modalities?.input?.includes("video") ?? false,
-          pdf: model.modalities?.input?.includes("pdf") ?? false,
+  // Convert a models.dev snapshot entry into our internal Model shape.
+  //
+  // Hardening contract (matches v4.6.2 permissiveness, with extra safety):
+  //
+  // 1. Missing api URL is **allowed**. Many providers (xai, google,
+  //    openrouter, claude-code, gemini-cli, codex-cli, etc.) intentionally
+  //    omit api.url in the bundled snapshot because their URL is supplied
+  //    by the bundled npm SDK package itself (BUNDLED_PROVIDERS). Throwing
+  //    here would kill `Provider.warmup` and leave `/connect` empty.
+  //
+  // 2. Every other optional field (name, family, limit, capabilities,
+  //    release_date, modalities, status, headers, options) gets a safe
+  //    default rather than reading `undefined.x` and crashing.
+  //
+  // 3. The whole body is wrapped in try/catch as a final safety net for
+  //    any unforeseen runtime error — `mapValues(ProviderTransform.variants)`,
+  //    ID validators, etc. Returning `undefined` lets the caller skip the
+  //    entry with a warning instead of crashing the warmup.
+  function fromModelsDevModel(provider: ModelsDev.Provider, model: ModelsDev.Model): Model | undefined {
+    try {
+      const apiUrl = model.provider?.api ?? provider.api ?? ""
+      const limit = model.limit ?? { context: 0, output: 0 }
+      const m: Model = {
+        id: ModelID.make(model.id),
+        providerID: ProviderID.make(provider.id),
+        name: model.name ?? model.id,
+        family: model.family,
+        api: {
+          id: model.id,
+          url: apiUrl,
+          npm: model.provider?.npm ?? provider.npm ?? "@ai-sdk/openai-compatible",
         },
-        output: {
-          text: model.modalities?.output?.includes("text") ?? false,
-          audio: model.modalities?.output?.includes("audio") ?? false,
-          image: model.modalities?.output?.includes("image") ?? false,
-          video: model.modalities?.output?.includes("video") ?? false,
-          pdf: model.modalities?.output?.includes("pdf") ?? false,
+        status: model.status ?? "active",
+        headers: model.headers ?? {},
+        options: model.options ?? {},
+        limit: {
+          context: limit.context ?? 0,
+          input: limit.input,
+          output: limit.output ?? 0,
         },
-        interleaved: model.interleaved ?? false,
-      },
-      release_date: model.release_date,
-      variants: {},
+        capabilities: {
+          temperature: model.temperature ?? false,
+          reasoning: model.reasoning ?? false,
+          attachment: model.attachment ?? false,
+          toolcall: model.tool_call ?? false,
+          input: {
+            text: model.modalities?.input?.includes("text") ?? false,
+            audio: model.modalities?.input?.includes("audio") ?? false,
+            image: model.modalities?.input?.includes("image") ?? false,
+            video: model.modalities?.input?.includes("video") ?? false,
+            pdf: model.modalities?.input?.includes("pdf") ?? false,
+          },
+          output: {
+            text: model.modalities?.output?.includes("text") ?? false,
+            audio: model.modalities?.output?.includes("audio") ?? false,
+            image: model.modalities?.output?.includes("image") ?? false,
+            video: model.modalities?.output?.includes("video") ?? false,
+            pdf: model.modalities?.output?.includes("pdf") ?? false,
+          },
+          interleaved: model.interleaved ?? false,
+        },
+        release_date: model.release_date ?? "",
+        variants: {},
+      }
+      m.variants = mapValues(ProviderTransform.variants(m), (v) => v)
+      return m
+    } catch (error) {
+      log.warn("skipping malformed model", {
+        providerID: provider?.id,
+        modelID: model?.id,
+        reason: error instanceof Error ? error.message : String(error),
+      })
+      return undefined
     }
-
-    m.variants = mapValues(ProviderTransform.variants(m), (v) => v)
-
-    return m
   }
 
-  export function fromModelsDevProvider(provider: ModelsDev.Provider): Info {
-    return {
-      id: ProviderID.make(provider.id),
-      source: "custom",
-      name: provider.name,
-      env: provider.env ?? [],
-      options: {},
-      models: mapValues(provider.models, (model) => fromModelsDevModel(provider, model)),
+  // Convert a models.dev snapshot provider entry.
+  //
+  // Hardening contract:
+  //   - Skip individual malformed models (handled inside
+  //     fromModelsDevModel) — one bad model never blocks the rest.
+  //   - Wrap the whole conversion in try/catch — one bad provider never
+  //     blocks the rest of the registry. Returns `undefined` on failure.
+  //   - Permissive on missing fields: defaults rather than throws so the
+  //     `/provider` list endpoint stays populated even when the snapshot
+  //     drifts ahead of what we expect.
+  export function fromModelsDevProvider(provider: ModelsDev.Provider): Info | undefined {
+    try {
+      if (!provider?.id) {
+        throw new Error("missing provider id")
+      }
+      const models: Record<string, Model> = {}
+      const rawModels = provider.models ?? {}
+      for (const [id, model] of Object.entries(rawModels)) {
+        const result = fromModelsDevModel(provider, model)
+        if (result) models[id] = result
+      }
+      return {
+        id: ProviderID.make(provider.id),
+        source: "custom",
+        name: provider.name ?? provider.id,
+        env: provider.env ?? [],
+        options: {},
+        models,
+      }
+    } catch (error) {
+      log.warn("skipping malformed provider", {
+        providerID: provider?.id,
+        reason: error instanceof Error ? error.message : String(error),
+      })
+      return undefined
     }
   }
 
@@ -301,7 +355,13 @@ export namespace Provider {
     // Parallelize independent init calls — Config, ModelsDev, and Auth
     // have no cross-dependencies and each may involve network I/O.
     const [config, modelsDev, authEntries] = await Promise.all([Config.get(), ModelsDev.get(), Auth.all()])
-    const database = mapValues(modelsDev, fromModelsDevProvider)
+    // fromModelsDevProvider may return undefined for malformed entries.
+    // Filter those out so downstream code never observes a partial map.
+    const database: Record<string, Info> = {}
+    for (const [id, raw] of Object.entries(modelsDev)) {
+      const converted = fromModelsDevProvider(raw)
+      if (converted) database[id] = converted
+    }
 
     const disabled = new Set(config.disabled_providers ?? [])
     const enabled = config.enabled_providers ? new Set(config.enabled_providers) : null

@@ -78,10 +78,14 @@ export const ProviderRoutes = lazy(() =>
 
         const connectedRaw = await Provider.list()
         const connected = mapValues(connectedRaw, ({ key: _key, ...rest }) => rest)
-        const providers = Object.assign(
-          mapValues(filteredProviders, (x) => Provider.fromModelsDevProvider(x)),
-          connected,
-        )
+        // fromModelsDevProvider may return undefined for malformed
+        // entries. Drop those so the dialog never sees holes.
+        const converted: Record<string, Provider.Info> = {}
+        for (const [id, raw] of Object.entries(filteredProviders)) {
+          const result = Provider.fromModelsDevProvider(raw)
+          if (result) converted[id] = result
+        }
+        const providers = Object.assign(converted, connected)
         return c.json({
           all: Object.values(providers),
           default: mapValues(providers, (item) => Provider.sort(Object.values(item.models))[0]?.id ?? ""),

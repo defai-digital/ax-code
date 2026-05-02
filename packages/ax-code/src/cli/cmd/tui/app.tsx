@@ -899,6 +899,16 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       },
     },
     {
+      title: kv.get("nerd_font_enabled", false) ? "Disable Nerd Font glyphs" : "Enable Nerd Font glyphs",
+      description: "Recommended terminal font: Cascadia Code Nerd Font",
+      value: "app.toggle.nerd_font",
+      category: "System",
+      onSelect: (dialog) => {
+        kv.set("nerd_font_enabled", !kv.get("nerd_font_enabled", false))
+        dialog.clear()
+      },
+    },
+    {
       title: kv.get("diff_wrap_mode", "word") === "word" ? "Disable diff wrapping" : "Enable diff wrapping",
       value: "app.toggle.diffwrap",
       category: "System",

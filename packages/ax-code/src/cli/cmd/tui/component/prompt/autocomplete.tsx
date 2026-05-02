@@ -17,6 +17,9 @@ import type { PromptInfo } from "./history"
 import { useFrecency } from "./frecency"
 import { createAbortableResourceFetcher } from "@tui/util/abortable-resource"
 import { autocompleteOptionID, autocompleteSelectionScrollDelta } from "./autocomplete-scroll"
+import { useKV } from "@tui/context/kv"
+import { buildGlyphSet, NERD_FONT_KV_KEY, resolveNerdFontEnabled } from "@tui/ui/glyphs"
+import { Flag } from "@/flag/flag"
 
 function removeLineRange(input: string) {
   const hashIndex = input.lastIndexOf("#")
@@ -85,6 +88,15 @@ export function Autocomplete(props: {
   const { theme } = useTheme()
   const dimensions = useTerminalDimensions()
   const frecency = useFrecency()
+  const kv = useKV()
+  const glyphs = createMemo(() =>
+    buildGlyphSet(
+      resolveNerdFontEnabled({
+        env: Flag.AX_CODE_NERD_FONT_ENV,
+        kv: kv.get(NERD_FONT_KV_KEY, false),
+      }),
+    ),
+  )
 
   const [store, setStore] = createStore({
     index: 0,
@@ -240,7 +252,11 @@ export function Autocomplete(props: {
           return a.localeCompare(b)
         })
 
-        const width = props.anchor().width - 4
+        // When nerd-font glyphs are prepended (icon + 2 spaces = 3 cols)
+        // shrink the truncation budget to keep rows from overflowing the
+        // popup width.
+        const glyphReserve = glyphs().enabled ? 3 : 0
+        const width = props.anchor().width - 4 - glyphReserve
         options.push(
           ...sortedFiles.map((item): AutocompleteOption => {
             const baseDir = (sync.data.path.directory || process.cwd()).replace(/\/+$/, "")
@@ -257,8 +273,10 @@ export function Autocomplete(props: {
             const url = urlObj.href
 
             const isDir = item.endsWith("/")
+            const glyph = glyphs().enabled ? (isDir ? glyphs().folder() : glyphs().fileType(item)) : ""
+            const displayPath = Locale.truncateMiddle(filename, width)
             return {
-              display: Locale.truncateMiddle(filename, width),
+              display: glyph ? `${glyph}  ${displayPath}` : displayPath,
               value: filename,
               isDirectory: isDir,
               path: item,
@@ -674,6 +692,8 @@ export function Autocomplete(props: {
               paddingRight={1}
               backgroundColor={index === store.selected ? theme.primary : undefined}
               flexDirection="row"
+              width="100%"
+              flexShrink={0}
               onMouseMove={() => {
                 setStore("input", "mouse")
               }}
@@ -691,7 +711,11 @@ export function Autocomplete(props: {
                 {option().display}
               </text>
               <Show when={option().description}>
-                <text fg={index === store.selected ? selectedForeground(theme) : theme.textMuted} wrapMode="none">
+                <text
+                  fg={index === store.selected ? selectedForeground(theme) : theme.textMuted}
+                  wrapMode="none"
+                  flexGrow={1}
+                >
                   {option().description}
                 </text>
               </Show>

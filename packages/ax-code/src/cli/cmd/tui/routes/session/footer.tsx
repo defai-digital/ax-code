@@ -10,6 +10,7 @@ import { createStore } from "solid-js/store"
 import { useRoute } from "../../context/route"
 import { Installation } from "@/installation"
 import { Flag } from "@/flag/flag"
+import { footerProgressBar, isFooterSessionStatus, type FooterSessionStatus } from "./footer-view-model"
 
 const RECONNECT_DEBOUNCE_MS = 3_000
 
@@ -41,6 +42,14 @@ export function Footer() {
     if (route.data.type !== "session") return []
     return sync.data.permission[route.data.sessionID] ?? []
   })
+  // Session step progress for the footer bar. Pure data-driven: re-renders
+  // only when `step` or `maxSteps` advance via SessionStatus events. No
+  // animation frames, no internal tick — see footerProgressBar() rationale.
+  const sessionStatus = createMemo<FooterSessionStatus>(() => {
+    if (route.data.type !== "session") return { type: "idle" }
+    const candidate = sync.data.session_status?.[route.data.sessionID]
+    return isFooterSessionStatus(candidate) ? candidate : { type: "idle" }
+  })
   const directory = useDirectory()
   const connected = useConnected()
   const sdk = useSDK()
@@ -52,6 +61,7 @@ export function Footer() {
   const showHints = createMemo(() => dimensions().width >= 100)
   const showLspChip = createMemo(() => dimensions().width >= 90 && lsp().length > 0)
   const showDreChip = createMemo(() => dimensions().width >= 80)
+  const progressBar = createMemo(() => footerProgressBar({ status: sessionStatus(), terminalWidth: dimensions().width }))
   const showDreStatus = createMemo(() => dreChipVisible() && showDreChip())
   const showSecondaryStatus = createMemo(() => mcp() > 0 || showLspChip() || showHints())
   const showStatusSeparator = createMemo(() => (permissions().length > 0 || showDreStatus()) && showSecondaryStatus())
@@ -107,7 +117,20 @@ export function Footer() {
 
   return (
     <box flexDirection="row" justifyContent="space-between" gap={1} flexShrink={0}>
-      <text fg={theme.textMuted}>{directory()}</text>
+      <box flexDirection="row" gap={1} flexShrink={1}>
+        <text fg={theme.textMuted}>{directory()}</text>
+        <Show when={progressBar()}>
+          {(bar) => (
+            <text>
+              <span style={{ fg: theme.borderSubtle }}>[</span>
+              <span style={{ fg: bar().overSoftMax ? theme.warning : theme.accent }}>{bar().filled}</span>
+              <span style={{ fg: theme.borderSubtle }}>{bar().empty}</span>
+              <span style={{ fg: theme.borderSubtle }}>]</span>
+              <span style={{ fg: bar().overSoftMax ? theme.warning : theme.textMuted }}> {bar().label}</span>
+            </text>
+          )}
+        </Show>
+      </box>
       <box gap={2} flexDirection="row" flexShrink={0}>
         <Switch>
           <Match when={store.welcome}>

@@ -75,6 +75,18 @@ export namespace Flag {
   //   the row is durable. Compliance mode only.
   export const AX_CODE_AUDIT_SYNC = truthy("AX_CODE_AUDIT_SYNC")
 
+  // Nerd Font glyphs in the TUI. Tri-state:
+  //   AX_CODE_NERD_FONT=1/true  → force ON
+  //   AX_CODE_NERD_FONT=0/false → force OFF
+  //   unset                     → fall through to user kv preference
+  // Resolved at runtime in src/cli/cmd/tui/ui/glyphs.ts.
+  export const AX_CODE_NERD_FONT_ENV = (() => {
+    const value = process.env["AX_CODE_NERD_FONT"]?.toLowerCase()
+    if (value === "1" || value === "true") return true
+    if (value === "0" || value === "false") return false
+    return undefined
+  })()
+
   // Experimental
   export const AX_CODE_EXPERIMENTAL = truthy("AX_CODE_EXPERIMENTAL")
   export const AX_CODE_EXPERIMENTAL_FILEWATCHER = Config.boolean("AX_CODE_EXPERIMENTAL_FILEWATCHER").pipe(

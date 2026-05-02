@@ -152,7 +152,7 @@ export const WebFetchTool = Tool.define("webfetch", {
         if (done) break
         totalBytes += value.byteLength
         if (totalBytes > MAX_RESPONSE_SIZE) {
-          reader.cancel()
+          await reader.cancel().catch(() => {})
           throw new Error("Response too large (exceeds 5MB limit)")
         }
         chunks.push(value)

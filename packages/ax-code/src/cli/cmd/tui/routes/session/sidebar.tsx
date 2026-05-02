@@ -1,5 +1,5 @@
 import { useSync } from "@tui/context/sync"
-import { createEffect, createMemo, createSignal, For, Match, onCleanup, Show, Switch } from "solid-js"
+import { createMemo, For, Match, Show, Switch } from "solid-js"
 import { useTerminalDimensions } from "@opentui/solid"
 import { createStore } from "solid-js/store"
 import { useTheme } from "../../context/theme"
@@ -18,7 +18,7 @@ import { SessionDreView } from "./dre"
 import { SessionBranch } from "./branch"
 import { SessionRollbackView } from "./rollback"
 import { SessionSemanticDiff } from "@/session/semantic-diff"
-import { sidebarSessionStatusView, type FooterSessionStatus, type FooterSessionStatusTone } from "./footer-view-model"
+import { type FooterSessionStatus } from "./footer-view-model"
 import { computeSidebarWidth } from "./layout"
 import type { McpStatus } from "@ax-code/sdk/v2"
 import type { SyncedSessionQualityReadiness } from "../../context/sync-session-risk"
@@ -88,12 +88,6 @@ function qualityColor(
   return theme.textMuted
 }
 
-function sidebarStatusColor(theme: ReturnType<typeof useTheme>["theme"], tone: FooterSessionStatusTone) {
-  if (tone === "success") return theme.success
-  if (tone === "warning" || tone === "working") return theme.warning
-  return theme.textMuted
-}
-
 function isFooterSessionStatus(value: unknown): value is FooterSessionStatus {
   if (!value || typeof value !== "object") return false
 
@@ -123,19 +117,8 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
     const candidate = sync.data.session_status?.[props.sessionID]
     return isFooterSessionStatus(candidate) ? candidate : { type: "idle" }
   })
-  const [statusTick, setStatusTick] = createSignal(0)
   const dimensions = useTerminalDimensions()
   const sidebarWidth = createMemo(() => computeSidebarWidth(dimensions().width))
-
-  createEffect(() => {
-    const statusType = status().type
-    if (statusType === "idle") return
-    // 5s ticks keep the sidebar stall detection in step with the
-    // Prompt's status indicator. A 30s tick was leaving the sidebar
-    // showing "Thinking..." for up to 30s after the LLM had stalled.
-    const timer = setInterval(() => setStatusTick((tick) => tick + 1), 5_000)
-    onCleanup(() => clearInterval(timer))
-  })
 
   const todoRemaining = createMemo(() => todo().filter((item) => item.status !== "completed").length)
 
@@ -289,15 +272,6 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
 
   const hasProviders = createMemo(() => sync.data.provider.length > 0)
   const gettingStartedDismissed = createMemo(() => kv.get("dismissed_getting_started", false))
-  const titleStatus = createMemo(() => {
-    statusTick()
-    return sidebarSessionStatusView({
-      status: status(),
-      hasMessages: messages().length > 0,
-      pendingTodos: todoRemaining(),
-      now: Date.now(),
-    })
-  })
 
   return (
     <Show when={session()}>
@@ -327,7 +301,6 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                   <b>{session().title}</b>
                 </text>
                 <text fg={theme.textMuted}>{session().id}</text>
-                <text fg={sidebarStatusColor(theme, titleStatus().tone)}>{titleStatus().label}</text>
                 <Show when={session().share?.url}>{(url) => <text fg={theme.textMuted}>{url()}</text>}</Show>
               </box>
               <Show when={mcpEntries().length > 0}>

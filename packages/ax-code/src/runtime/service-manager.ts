@@ -162,7 +162,6 @@ function createManager(state: ManagerState): ServiceManager.Manager {
     },
     async track<T>(input: ServiceManager.TrackInput<T>) {
       const startedAt = Date.now()
-      createManager(state).start(input.service, startedAt)
       const id = `${input.service}:${++state.nextTaskID}`
 
       if (state.tasks.size > 1000) {
@@ -257,6 +256,7 @@ function createManager(state: ManagerState): ServiceManager.Manager {
           ...current,
           state: "running",
           startedAt: current.startedAt ?? startedAt,
+          lastError: undefined,
         }))
 
         return result

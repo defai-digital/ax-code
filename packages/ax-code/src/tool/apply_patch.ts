@@ -180,7 +180,10 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
             ? await fs
                 .stat(movePath)
                 .then((stats) => !stats.isDirectory())
-                .catch(() => false)
+                .catch((error: unknown) => {
+                  if ((error as NodeJS.ErrnoException | undefined)?.code === "ENOENT") return false
+                  throw error
+                })
             : undefined
           let moveOldContent: string | undefined
           if (moveExisted) {

@@ -3,7 +3,6 @@ import {
   footerTrustChip,
   footerSessionStatusLabel,
   footerSessionStatusView,
-  sidebarSessionStatusView,
   SESSION_STATUS_STALE_AFTER_MS,
   SESSION_STATUS_TOOL_STALE_AFTER_MS,
 } from "../../src/cli/cmd/tui/routes/session/footer-view-model"
@@ -80,75 +79,6 @@ describe("footerSessionStatusView", () => {
     // Tool wait state surfaces "tool may be stalled" (per
     // footer-view-model.ts:97 context-aware stale messaging).
     expect(staleTool.label).toContain("tool may be stalled")
-  })
-})
-
-describe("sidebarSessionStatusView", () => {
-  test("uses short status labels for the sidebar title", () => {
-    const now = 5_000_000
-
-    expect(
-      sidebarSessionStatusView({
-        now,
-        hasMessages: true,
-        status: {
-          type: "busy",
-          startedAt: now - 20_000,
-          lastActivityAt: now - 10_000,
-          waitState: "llm",
-        },
-      }),
-    ).toMatchObject({
-      label: "Thinking...",
-      stale: false,
-      tone: "working",
-    })
-  })
-
-  test("marks completed sessions as success and empty sessions as muted", () => {
-    expect(
-      sidebarSessionStatusView({
-        hasMessages: true,
-        status: { type: "idle" },
-      }),
-    ).toMatchObject({
-      label: "Finished",
-      tone: "success",
-    })
-
-    expect(
-      sidebarSessionStatusView({
-        hasMessages: false,
-        status: { type: "idle" },
-      }),
-    ).toMatchObject({
-      label: "Ready",
-      tone: "muted",
-    })
-  })
-
-  test("keeps idle sessions with open todos out of the finished state", () => {
-    expect(
-      sidebarSessionStatusView({
-        hasMessages: true,
-        pendingTodos: 2,
-        status: { type: "idle" },
-      }),
-    ).toMatchObject({
-      label: "2 todos left",
-      tone: "warning",
-    })
-
-    expect(
-      sidebarSessionStatusView({
-        hasMessages: true,
-        pendingTodos: 1,
-        status: { type: "idle" },
-      }),
-    ).toMatchObject({
-      label: "1 todo left",
-      tone: "warning",
-    })
   })
 })
 

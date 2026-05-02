@@ -467,8 +467,12 @@ describe("tui OpenTUI stability guardrails", () => {
     const sidebar = await fs.readFile(SIDEBAR_SRC, "utf8")
     const matches = sidebar.match(/setInterval\(/g) ?? []
 
-    expect(matches.length).toBe(1)
-    expect(sidebar).toContain("5_000")
+    // Sidebar must not introduce its own timers — busy/stall messaging
+    // lives in the prompt area and the footer progress bar, both of
+    // which are event-driven and re-render only on session status
+    // changes. A sidebar setInterval was the v2.x render-amplification
+    // pattern we explicitly removed.
+    expect(matches.length).toBe(0)
     expect(sidebar).not.toContain("1_000")
     expect(sidebar).not.toContain("clockId")
     expect(sidebar).not.toContain("clockTick")
@@ -476,18 +480,6 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(sidebar).not.toContain("tokens")
     expect(sidebar).not.toContain("sidebar-eta")
     expect(sidebar).not.toContain("./usage")
-  })
-
-  test("surfaces concise session status in the sidebar title", async () => {
-    const sidebar = await fs.readFile(SIDEBAR_SRC, "utf8")
-    const footerViewModel = await fs.readFile(FOOTER_VIEW_MODEL_SRC, "utf8")
-
-    expect(sidebar).toContain("sidebarSessionStatusView")
-    expect(sidebar).toContain("titleStatus().label")
-    expect(footerViewModel).toContain('"Thinking..."')
-    expect(footerViewModel).toContain('"Processing..."')
-    expect(footerViewModel).toContain('"Finished"')
-    expect(footerViewModel).toContain("stalled")
   })
 
   test("keeps the theme dialog reactive while custom themes hydrate", async () => {

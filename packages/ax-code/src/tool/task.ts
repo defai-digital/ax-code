@@ -216,7 +216,12 @@ export const TaskTool = Tool.define("task", async (ctx) => {
         // Without this, a timed-out subagent's processor continues
         // running (making LLM calls, executing tools) in the background
         // even though the parent has moved on.
-        await SessionPrompt.cancel(session.id).catch(() => {})
+        await SessionPrompt.cancel(session.id).catch((error) => {
+          log.warn("failed to cancel subagent session after task error", {
+            sessionID: session.id,
+            error,
+          })
+        })
         await Session.remove(session.id).catch((error) => {
           log.warn("failed to remove session after task error", { sessionID: session.id, error })
         })
