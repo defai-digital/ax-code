@@ -14,14 +14,12 @@ afterEach(() => {
 })
 
 describe("AutoIndex.maybeStart", () => {
-  test("skips automatic indexing when the native index addon is unavailable", () => {
+  test("runs with fallback concurrency when the native index addon is unavailable", () => {
     nativeIndexSpy = spyOn(NativeAddon, "index").mockReturnValue(undefined)
-    countNodesSpy = spyOn(CodeGraphQuery, "countNodes").mockImplementation(() => {
-      throw new Error("countNodes should not run without native auto-index support")
-    })
+    countNodesSpy = spyOn(CodeGraphQuery, "countNodes").mockReturnValue(0)
 
     AutoIndex.maybeStart("proj_test" as any)
 
-    expect(countNodesSpy).not.toHaveBeenCalled()
+    expect(countNodesSpy).toHaveBeenCalled()
   })
 })

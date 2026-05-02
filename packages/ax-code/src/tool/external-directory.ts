@@ -21,6 +21,7 @@ type Options = {
  */
 export async function assertSymlinkInsideProject(target: string): Promise<void> {
   if (!Filesystem.contains(Instance.directory, target)) return
+  if (target === Instance.directory) return
   const lstat = await fs.lstat(target).catch(() => null)
   if (lstat?.isSymbolicLink()) {
     const real = await fs.realpath(target).catch(() => null)

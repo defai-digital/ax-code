@@ -231,6 +231,13 @@ export namespace AutoIndex {
     }
 
     const indexer = automaticIndexConcurrency()
+    if (!indexer.nativeIndexAvailable) {
+      log.info("skipping: native index addon unavailable for automatic indexing", {
+        projectID,
+        recommendation: "run ax-code index",
+      })
+      return
+    }
 
     // Capture the instance directory snapshot for the background
     // task. The background Promise runs outside the Instance

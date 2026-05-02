@@ -1118,6 +1118,7 @@ Helper subagent prompt`,
 
 test("merges instructions arrays from global and local configs", async () => {
   await using tmp = await tmpdir({
+    git: true,
     init: async (dir) => {
       const projectDir = path.join(dir, "project")
       const opencodeDir = path.join(projectDir, ".ax-code")
@@ -1157,6 +1158,7 @@ test("merges instructions arrays from global and local configs", async () => {
 
 test("deduplicates duplicate instructions from global and local configs", async () => {
   await using tmp = await tmpdir({
+    git: true,
     init: async (dir) => {
       const projectDir = path.join(dir, "project")
       const opencodeDir = path.join(projectDir, ".ax-code")

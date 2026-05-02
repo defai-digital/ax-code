@@ -92,10 +92,10 @@ describe("Project.fromDirectory", () => {
     expect(await Bun.file(opencodeFile).exists()).toBe(true)
   })
 
-  test("returns global for non-git directory", async () => {
+  test("returns directory-hash id for non-git directory", async () => {
     await using tmp = await tmpdir()
     const { project } = await Project.fromDirectory(tmp.path)
-    expect(project.id).toBe(ProjectID.global)
+    expect(project.id).toMatch(/^dir-[0-9a-f]{40}$/)
   })
 
   test("derives stable project ID from root commit", async () => {
