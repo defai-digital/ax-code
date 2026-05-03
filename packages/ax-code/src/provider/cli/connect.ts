@@ -3,9 +3,11 @@ import { CliLanguageModel, cliEnv } from "./cli-language-model"
 import { getCliProviderDefinition, type CliProviderDefinition } from "./config"
 import { resolveCliModel, type CliModelInfo } from "./resolve"
 import { Process } from "../../util/process"
+import { Log } from "../../util/log"
 
 export const CLI_CONNECT_TIMEOUT_MS = 15_000
 const CLI_CONNECT_PROMPT = "Reply with exactly OK."
+const log = Log.create({ service: "provider.cli.connect" })
 
 async function checkClaudeAuth(binary: string): Promise<string | undefined> {
   try {
@@ -31,7 +33,13 @@ async function checkClaudeAuth(binary: string): Promise<string | undefined> {
     }
 
     return
-  } catch {
+  } catch (error) {
+    log.debug("claude auth probe failed", {
+      command: "provider.cli.auth_probe",
+      status: "error",
+      binary,
+      error,
+    })
     return
   }
 }

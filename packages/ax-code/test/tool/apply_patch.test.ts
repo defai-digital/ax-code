@@ -379,7 +379,7 @@ describe("tool.apply_patch freeform", () => {
         const patchText =
           "*** Begin Patch\n*** Update File: old.txt\n*** Move to: link.txt\n@@\n-from\n+new\n*** End Patch"
 
-        await expect(execute({ patchText }, ctx)).rejects.toThrow("move_path symlink target escapes project directory")
+        await expect(execute({ patchText }, ctx)).rejects.toThrow("symlink target escapes project directory")
         expect(await fs.readFile(original, "utf-8")).toBe("from\n")
         expect(await fs.readFile(outside, "utf-8")).toBe("outside\n")
         await fs.unlink(outside).catch(() => undefined)

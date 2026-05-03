@@ -8,9 +8,15 @@ import { useSDK } from "../../context/sdk"
 import { useKeybind } from "../../context/keybind"
 import { createStore } from "solid-js/store"
 import { useRoute } from "../../context/route"
+import { AgentControlReplayQuery } from "@/replay/agent-control-query"
 import { Installation } from "@/installation"
 import { Flag } from "@/flag/flag"
-import { footerProgressBar, isFooterSessionStatus, type FooterSessionStatus } from "./footer-view-model"
+import {
+  footerAgentControlStatusView,
+  footerProgressBar,
+  isFooterSessionStatus,
+  type FooterSessionStatus,
+} from "./footer-view-model"
 
 const RECONNECT_DEBOUNCE_MS = 3_000
 
@@ -63,8 +69,33 @@ export function Footer() {
   const showDreChip = createMemo(() => dimensions().width >= 80)
   const progressBar = createMemo(() => footerProgressBar({ status: sessionStatus(), terminalWidth: dimensions().width }))
   const showDreStatus = createMemo(() => dreChipVisible() && showDreChip())
+  const agentControlStatus = createMemo(() => {
+    if (route.data.type !== "session") return undefined
+    void sync.data.message[route.data.sessionID]
+    void sync.data.permission[route.data.sessionID]
+    void sync.data.session_status?.[route.data.sessionID]
+    const sessionID = route.data.sessionID as Parameters<typeof AgentControlReplayQuery.summaryBySession>[0]
+    const readModel = AgentControlReplayQuery.readModelBySession(sessionID)
+    return footerAgentControlStatusView(readModel.summary, readModel.tools)
+  })
+  const showAgentControlStatus = createMemo(() => dimensions().width >= 115 && !!agentControlStatus())
+  const agentControlStatusColor = createMemo(() => {
+    switch (agentControlStatus()?.tone) {
+      case "success":
+        return theme.success
+      case "warning":
+        return theme.warning
+      case "working":
+        return theme.accent
+      case "muted":
+      default:
+        return theme.textMuted
+    }
+  })
   const showSecondaryStatus = createMemo(() => mcp() > 0 || showLspChip() || showHints())
-  const showStatusSeparator = createMemo(() => (permissions().length > 0 || showDreStatus()) && showSecondaryStatus())
+  const showStatusSeparator = createMemo(
+    () => (permissions().length > 0 || showDreStatus() || showAgentControlStatus()) && showSecondaryStatus(),
+  )
 
   // Show "reconnecting" badge only after the first successful connection —
   // avoids a false-alarm flash during initial startup. A 3-second debounce
@@ -166,6 +197,9 @@ export function Footer() {
                   </Match>
                 </Switch>
               </text>
+            </Show>
+            <Show when={showAgentControlStatus()}>
+              <text fg={agentControlStatusColor()}>{agentControlStatus()?.label}</text>
             </Show>
             <Show when={showStatusSeparator()}>
               <text fg={theme.borderSubtle}>·</text>

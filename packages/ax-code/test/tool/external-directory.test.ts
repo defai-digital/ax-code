@@ -1,10 +1,12 @@
 import { describe, expect, test } from "bun:test"
+import fs from "fs/promises"
 import path from "path"
 import type { Tool } from "../../src/tool/tool"
 import { Instance } from "../../src/project/instance"
-import { assertExternalDirectory } from "../../src/tool/external-directory"
+import { assertExternalDirectory, assertSymlinkInsideProject } from "../../src/tool/external-directory"
 import type { Permission } from "../../src/permission"
 import { SessionID, MessageID } from "../../src/session/schema"
+import { tmpdir } from "../fixture/fixture"
 
 const baseCtx: Omit<Tool.Context, "ask"> = {
   sessionID: SessionID.make("ses_test"),
@@ -124,5 +126,99 @@ describe("tool.assertExternalDirectory", () => {
     })
 
     expect(requests.length).toBe(0)
+  })
+})
+
+describe("tool.assertSymlinkInsideProject", () => {
+  test("allows the project root itself", async () => {
+    await using project = await tmpdir()
+
+    await Instance.provide({
+      directory: project.path,
+      fn: async () => {
+        await expect(assertSymlinkInsideProject(project.path)).resolves.toBeUndefined()
+      },
+    })
+  })
+
+  test("allows missing nested paths under normal project directories", async () => {
+    await using project = await tmpdir()
+
+    await Instance.provide({
+      directory: project.path,
+      fn: async () => {
+        await expect(assertSymlinkInsideProject(path.join(project.path, "new", "file.txt"))).resolves.toBeUndefined()
+      },
+    })
+  })
+
+  test("rejects missing paths under symlinked ancestor directories that escape the project", async () => {
+    await using project = await tmpdir()
+    await using outside = await tmpdir()
+    await fs.symlink(outside.path, path.join(project.path, "escape"))
+
+    await Instance.provide({
+      directory: project.path,
+      fn: async () => {
+        await expect(assertSymlinkInsideProject(path.join(project.path, "escape", "new.txt"))).rejects.toThrow(
+          "parent directory escapes project directory",
+        )
+      },
+    })
+  })
+
+  test("rejects existing paths under symlinked ancestor directories that escape the project", async () => {
+    await using project = await tmpdir()
+    await using outside = await tmpdir()
+    await fs.writeFile(path.join(outside.path, "secret.txt"), "secret")
+    await fs.symlink(outside.path, path.join(project.path, "escape"))
+
+    await Instance.provide({
+      directory: project.path,
+      fn: async () => {
+        await expect(assertSymlinkInsideProject(path.join(project.path, "escape", "secret.txt"))).rejects.toThrow(
+          "parent directory escapes project directory",
+        )
+      },
+    })
+  })
+
+  test("rejects dangling symlink targets inside the project", async () => {
+    await using project = await tmpdir()
+    await fs.symlink(path.join(project.path, "missing"), path.join(project.path, "dangling"))
+
+    await Instance.provide({
+      directory: project.path,
+      fn: async () => {
+        await expect(assertSymlinkInsideProject(path.join(project.path, "dangling"))).rejects.toThrow(
+          "symlink target is dangling or inaccessible",
+        )
+      },
+    })
+  })
+
+  test.skipIf(process.platform === "win32")("allows symlink pointing within the project", async () => {
+    await using project = await tmpdir()
+    await fs.writeFile(path.join(project.path, "real.txt"), "data")
+    await fs.symlink(path.join(project.path, "real.txt"), path.join(project.path, "link.txt"))
+
+    await Instance.provide({
+      directory: project.path,
+      fn: async () => {
+        await expect(assertSymlinkInsideProject(path.join(project.path, "link.txt"))).resolves.toBeUndefined()
+      },
+    })
+  })
+
+  test("allows paths that are entirely outside the project without error", async () => {
+    await using project = await tmpdir()
+    await using outside = await tmpdir()
+
+    await Instance.provide({
+      directory: project.path,
+      fn: async () => {
+        await expect(assertSymlinkInsideProject(path.join(outside.path, "file.txt"))).resolves.toBeUndefined()
+      },
+    })
   })
 })

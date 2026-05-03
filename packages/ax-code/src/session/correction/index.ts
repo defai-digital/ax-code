@@ -62,12 +62,9 @@ export namespace SelfCorrection {
   }
 
   function key(tool: string, error: string): string {
-    // Normalize error: collapse numeric tokens but preserve the filename so
-    // budgets are scoped per file, not shared across all paths.
-    const normalized = error
-      .replace(/[0-9]+/g, "N")
-      .replace(/\/[^\s/]+\//g, "/")
-      .slice(0, 100)
+    // Normalize numeric tokens but preserve path context so unrelated files
+    // do not accidentally share the same retry budget.
+    const normalized = error.replace(/[0-9]+/g, "N").slice(0, 160)
     return `${tool}:${normalized}`
   }
 

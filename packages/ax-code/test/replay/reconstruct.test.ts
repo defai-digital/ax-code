@@ -41,6 +41,35 @@ afterEach(() => {
 })
 
 describe("replay.reconstructStream", () => {
+  test("check mode flags tool calls without matching results", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const sid = session.id
+        Recorder.begin(sid)
+        Recorder.emit({
+          type: "tool.call",
+          sessionID: sid,
+          tool: "task",
+          callID: "call_open_task",
+          input: { subagent_type: "explore" },
+          stepIndex: 0,
+        })
+        Recorder.end(sid)
+        await new Promise((r) => setTimeout(r, 50))
+
+        const result = Replay.run({ sessionID: sid, mode: "check" })
+        expect(result.divergences.map((item) => item.reason)).toEqual([
+          'tool.call "call_open_task" (task) has no matching tool.result',
+        ])
+
+        EventQuery.deleteBySession(sid)
+      },
+    })
+  })
+
   test("reconstructs steps from recorded events", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({

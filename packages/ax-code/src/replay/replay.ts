@@ -2,6 +2,7 @@ import { Log } from "@/util/log"
 import { EventQuery } from "./query"
 import type { ReplayEvent } from "./event"
 import type { SessionID } from "@/session/schema"
+import { ToolCallReplayQuery } from "./tool-call-query"
 
 const log = Log.create({ service: "replay" })
 
@@ -46,6 +47,7 @@ export namespace Replay {
     const divergences: DivergenceInfo[] = []
     let steps = 0
     let toolCalls = 0
+    const toolSummary = ToolCallReplayQuery.summaryFromEvents(events)
 
     for (let i = 0; i < events.length; i++) {
       const event = events[i]
@@ -94,6 +96,19 @@ export namespace Replay {
             options.onDivergence?.(div)
           }
         }
+      }
+    }
+
+    if (options.mode === "verify" || options.mode === "check") {
+      for (const open of toolSummary.openCalls) {
+        const div: DivergenceInfo = {
+          sequence: open.sequence,
+          expected: open.event,
+          actual: undefined,
+          reason: `tool.call "${open.callID}" (${open.tool}) has no matching tool.result`,
+        }
+        divergences.push(div)
+        options.onDivergence?.(div)
       }
     }
 

@@ -137,6 +137,34 @@ function expandPromptTextParts(input: string, parts: PromptInfo["parts"]) {
     }, input)
 }
 
+export function hasUnfinishedTodosInPromptParts(
+  messages: Array<{ id?: string }> | undefined,
+  partsByMessage: Record<string, unknown[]>,
+) {
+  let latestTodos: Array<{ status?: unknown }> | undefined
+  for (const message of messages ?? []) {
+    if (!message.id) continue
+    for (const part of partsByMessage[message.id] ?? []) {
+      const toolPart = part as {
+        type?: unknown
+        tool?: unknown
+        state?: {
+          status?: unknown
+          metadata?: {
+            todos?: unknown
+          }
+        }
+      }
+      if (toolPart.type !== "tool" || toolPart.tool !== "todowrite") continue
+      if (toolPart.state?.status !== "completed") continue
+      const todos = toolPart.state.metadata?.todos
+      if (!Array.isArray(todos)) continue
+      latestTodos = todos as Array<{ status?: unknown }>
+    }
+  }
+  return latestTodos?.some((todo) => todo.status === "pending" || todo.status === "in_progress") ?? false
+}
+
 export function Prompt(props: PromptProps) {
   let input: TextareaRenderable
   let anchor: BoxRenderable
@@ -1386,6 +1414,7 @@ export function Prompt(props: PromptProps) {
 
     const msgs = sync.data.message[props.sessionID]
     const lastMessage = msgs?.at(-1)
+    if (hasUnfinishedTodosInPromptParts(msgs, sync.data.part)) return false
     return lastMessage?.role === "assistant" && !lastMessage.error && Boolean(lastMessage.time?.completed)
   })
 

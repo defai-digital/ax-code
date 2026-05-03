@@ -573,6 +573,7 @@ export const TuiThreadCommand = cmd({
       const error = (e: unknown) => {
         DiagnosticLog.recordProcess("tui.threadError", { error: e })
         Log.Default.error(e)
+        setTimeout(() => process.exit(1), 100).unref()
       }
       const reload = () => {
         client.call("reload", undefined).catch((err) => {

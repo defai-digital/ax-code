@@ -185,4 +185,128 @@ describe("tui session routing helpers", () => {
     expect(items.map((item) => item.label)).toEqual(["Fast model", "run bash"])
     expect(items[1]?.status).toBe("completed")
   })
+
+  test("renders agent control-plane replay events in activity history", () => {
+    const items = activityItems(
+      [tool("t1", "bash", 20)],
+      [
+        {
+          time_created: 40,
+          event_data: {
+            type: "agent.reasoning.selected",
+            sessionID: "s",
+            depth: "deep",
+            reason: "planning_risk_signal",
+            checkpoint: true,
+          },
+        },
+        {
+          time_created: 30,
+          event_data: {
+            type: "agent.phase.changed",
+            sessionID: "s",
+            previousPhase: "assess",
+            phase: "plan",
+            reason: "plan_mode",
+          },
+        },
+        {
+          time_created: 10,
+          event_data: {
+            type: "agent.plan.created",
+            sessionID: "s",
+            plan: {
+              id: "plan_01",
+              objective: "Review agent planner and autonomous mode",
+              evidence: ["shadow plan"],
+              assumptions: [],
+              tasks: [
+                {
+                  id: "task_01",
+                  title: "Assess",
+                  status: "completed",
+                  evidence: [],
+                  validation: [],
+                },
+                {
+                  id: "task_02",
+                  title: "Plan",
+                  status: "pending",
+                  evidence: [],
+                  validation: [],
+                },
+              ],
+              risks: [],
+              validation: [],
+              approvalState: "not_required",
+            },
+          },
+        },
+      ],
+    )
+
+    expect(items.map((item) => item.label)).toEqual([
+      "Reasoning: Deep",
+      "Phase: Plan",
+      "run bash",
+      "Plan: Review agent planner and autonomous mode",
+    ])
+    expect(items[0]?.description).toBe("planning_risk_signal · checkpoint")
+    expect(items[3]?.description).toBe("1/2 tasks completed · approval not_required")
+    expect(items[3]?.category).toBe("agent-control")
+  })
+
+  test("renders safety decisions in activity history", () => {
+    const items = activityItems(
+      [],
+      [
+        {
+          time_created: 60,
+          event_data: {
+            type: "agent.safety.decided",
+            sessionID: "s",
+            action: "allow_with_checkpoint",
+            risk: "medium",
+            reason: "risky_permission",
+            permission: "bash",
+            checkpointRequired: true,
+            matchedRule: "bash",
+            shadow: true,
+          },
+        },
+        {
+          time_created: 50,
+          event_data: {
+            type: "agent.safety.decided",
+            sessionID: "s",
+            action: "ask",
+            risk: "high",
+            reason: "autonomous_risky_permission",
+            permission: "write",
+            tool: "write",
+            path: "src/app.ts",
+            checkpointRequired: true,
+            matchedRule: "write",
+            shadow: true,
+          },
+        },
+      ],
+    )
+
+    expect(items).toHaveLength(2)
+    expect(items[0]).toMatchObject({
+      label: "Safety: Shadow Checkpoint",
+      status: "allow_with_checkpoint",
+      tool: "agent.safety",
+      description: "bash · risky_permission · bash",
+      category: "agent-control",
+    })
+    expect(items[1]).toMatchObject({
+      label: "Safety: Shadow Ask",
+      status: "ask",
+      tool: "agent.safety",
+      description: "write · autonomous_risky_permission · write",
+      category: "agent-control",
+    })
+  })
 })

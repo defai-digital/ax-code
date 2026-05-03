@@ -2,10 +2,21 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-04-13
+Last reviewed: 2026-05-03
 Owner: ax-code runtime
 
 This document describes the semantic layer that exists today in AX Code. It is a current-state contract, not a roadmap.
+
+## Source of Truth
+
+This page documents shipped semantic behavior, not future code-graph ambitions. When behavior changes, verify it against:
+
+- `packages/ax-code/src/tool/lsp.ts` and related LSP modules for live semantic operations.
+- `packages/ax-code/src/code-intelligence/` for indexed graph behavior.
+- `packages/ax-code/src/debug-engine/` for graph-backed debugging/refactoring consumers.
+- Replay, export, and audit tests before claiming durable provenance guarantees.
+
+If a capability is planned or experimental, keep that status explicit.
 
 ## Purpose
 

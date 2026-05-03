@@ -13,6 +13,7 @@ import {
 } from "../../src/debug-engine/runtime-debug"
 import { Recorder } from "../../src/replay/recorder"
 import { EventQuery } from "../../src/replay/query"
+import { Risk } from "../../src/risk/score"
 import { Session } from "../../src/session"
 import { SessionRisk } from "../../src/session/risk"
 import type { SessionID } from "../../src/session/schema"
@@ -36,6 +37,57 @@ describe("session.risk", () => {
         const session = await Session.create({})
         const detail = await SessionRisk.load(session.id)
         expect(detail.quality).toBeUndefined()
+      },
+    })
+  })
+
+  test("blocks risk readiness when autonomous completion gate blocks at step limit", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const sid = session.id
+
+        try {
+          Recorder.begin(sid)
+          Recorder.emit({
+            type: "session.start",
+            sessionID: sid,
+            agent: "build",
+            model: "test/model",
+            directory: tmp.path,
+          })
+          Recorder.emit({
+            type: "agent.completion_gate.decided",
+            sessionID: sid,
+            messageID: "msg_completion_gate",
+            stepIndex: 29,
+            status: "blocked",
+            reason: "empty_subagent_result",
+            message: "Subagent ses_child completed without a usable final response.",
+            retryCount: 0,
+            maxRetries: 2,
+          } as any)
+          Recorder.emit({
+            type: "session.end",
+            sessionID: sid,
+            reason: "step_limit",
+            totalSteps: 30,
+          })
+          Recorder.end(sid)
+
+          await new Promise((resolve) => setTimeout(resolve, 50))
+
+          const assessment = Risk.fromSession(sid)
+          expect(assessment.readiness).toBe("blocked")
+          expect(assessment.summary).toContain("completion gate blocked")
+          expect(assessment.summary).toContain("session ended step_limit")
+          expect(assessment.evidence).toContain("control-plane completion gate blocked: empty_subagent_result")
+        } finally {
+          await Session.remove(sid)
+        }
       },
     })
   })

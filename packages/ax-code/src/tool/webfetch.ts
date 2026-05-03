@@ -267,7 +267,7 @@ async function extractTextFromHTML(html: string) {
       element(element) {
         skipDepth++
         element.onEndTag(() => {
-          skipDepth--
+          skipDepth = Math.max(0, skipDepth - 1)
         })
       },
     })

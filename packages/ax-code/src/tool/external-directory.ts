@@ -20,23 +20,42 @@ type Options = {
  * them with regular files.
  */
 export async function assertSymlinkInsideProject(target: string): Promise<void> {
-  if (!Filesystem.contains(Instance.directory, target)) return
-  if (target === Instance.directory) return
-  const lstat = await fs.lstat(target).catch(() => null)
+  const projectRoot = path.resolve(Instance.directory)
+  const targetPath = path.resolve(target)
+  if (!Filesystem.contains(projectRoot, targetPath)) return
+  if (targetPath === projectRoot) return
+
+  const lstat = await fs.lstat(targetPath).catch((err: NodeJS.ErrnoException) => {
+    if (err?.code === "ENOENT") return null
+    throw err
+  })
   if (lstat?.isSymbolicLink()) {
-    const real = await fs.realpath(target).catch(() => null)
+    const real = await fs.realpath(targetPath).catch(() => null)
     if (!real) throw new Error("Access denied: symlink target is dangling or inaccessible")
-    if (!Filesystem.contains(Instance.directory, real)) {
+    if (!Filesystem.contains(projectRoot, real)) {
       throw new Error("Access denied: symlink target escapes project directory")
     }
   }
 
-  const parentDir = path.dirname(target)
-  if (parentDir !== Instance.directory) {
-    const realParent = await fs.realpath(parentDir).catch(() => parentDir)
-    if (!Filesystem.contains(Instance.directory, realParent)) {
+  let ancestor = path.dirname(targetPath)
+  while (ancestor !== projectRoot && Filesystem.contains(projectRoot, ancestor)) {
+    const stat = await fs.lstat(ancestor).catch((err: NodeJS.ErrnoException) => {
+      if (err?.code === "ENOENT") return null
+      throw err
+    })
+    if (!stat) {
+      const next = path.dirname(ancestor)
+      if (next === ancestor) break
+      ancestor = next
+      continue
+    }
+
+    const realAncestor = await fs.realpath(ancestor).catch(() => null)
+    if (!realAncestor) throw new Error("Access denied: parent directory is dangling or inaccessible")
+    if (!Filesystem.contains(projectRoot, realAncestor)) {
       throw new Error("Access denied: parent directory escapes project directory")
     }
+    break
   }
 }
 

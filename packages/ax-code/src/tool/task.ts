@@ -229,12 +229,19 @@ export const TaskTool = Tool.define("task", async (ctx) => {
       }
 
       const text = result.parts.findLast((x) => x.type === "text")?.text ?? ""
+      const emptyResult = text.trim().length === 0
+      const taskResultText = emptyResult
+        ? [
+            "Subagent completed without a final response.",
+            "Treat this as incomplete evidence: retry the task, resume the task_id, or explain that no usable subagent result was returned.",
+          ].join("\n")
+        : text
 
       const output = [
         `task_id: ${session.id} (for resuming to continue this task if needed)`,
         "",
         "<task_result>",
-        text,
+        taskResultText,
         "</task_result>",
       ].join("\n")
 
@@ -243,6 +250,7 @@ export const TaskTool = Tool.define("task", async (ctx) => {
         metadata: {
           sessionId: session.id,
           model,
+          emptyResult,
         },
         output,
       }

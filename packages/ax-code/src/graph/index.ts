@@ -286,6 +286,22 @@ export namespace ExecutionGraph {
     }
 
     const risk = Risk.fromSession(sessionID)
+    if (rows.length === 0) {
+      return {
+        sessionID,
+        nodes,
+        edges,
+        metadata: {
+          duration: 0,
+          tokens: { input: totalInput, output: totalOutput },
+          risk: { level: risk.level, score: risk.score, summary: risk.summary },
+          agents: [...agents].sort(),
+          tools: [...tools].sort(),
+          steps: stepCount,
+          errors: errorCount,
+        },
+      }
+    }
     const first = rows[0].time_created
     const last = rows[rows.length - 1].time_created
 

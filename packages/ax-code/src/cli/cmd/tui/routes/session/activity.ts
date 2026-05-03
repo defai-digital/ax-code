@@ -1,5 +1,6 @@
 import type { Part } from "@ax-code/sdk/v2"
 import type { ReplayEvent } from "@/replay/event"
+import { agentControlActivityItems } from "./agent-control-activity"
 import { routeEvent, type AgentInfo } from "./route"
 
 export type Activity = {
@@ -23,10 +24,54 @@ export function statusLabel(status: string): string {
       return "running"
     case "pending":
       return "pending"
+    case "fast":
+      return "fast"
+    case "standard":
+      return "standard"
     case "delegate":
       return "delegate"
     case "switch":
       return "switch"
+    case "blocked":
+      return "blocked"
+    case "assess":
+      return "assess"
+    case "plan":
+      return "plan"
+    case "await_approval":
+      return "approval"
+    case "execute":
+      return "exec"
+    case "validate":
+      return "validate"
+    case "recover":
+      return "recover"
+    case "summarize":
+      return "summary"
+    case "complete":
+      return "done"
+    case "deep":
+      return "deep"
+    case "xdeep":
+      return "xdeep"
+    case "passed":
+      return "passed"
+    case "failed":
+      return "failed"
+    case "allow":
+      return "allow"
+    case "ask":
+      return "ask"
+    case "deny":
+      return "deny"
+    case "allow_with_checkpoint":
+      return "checkpoint"
+    case "approved":
+      return "approved"
+    case "rejected":
+      return "rejected"
+    case "not_required":
+      return "skip"
     default:
       return status
   }
@@ -113,5 +158,6 @@ export function activityItems(
   return [
     ...parts.map(toolItem).filter((item) => !!item),
     ...rows.map((row) => routeItem(row, agents)).filter((item) => !!item),
+    ...agentControlActivityItems(rows),
   ].toSorted((a, b) => (b.time ?? 0) - (a.time ?? 0))
 }

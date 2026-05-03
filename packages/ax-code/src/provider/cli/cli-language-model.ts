@@ -233,6 +233,13 @@ export class CliLanguageModel implements LanguageModelV3 {
         stderr.on("data", (chunk: Buffer) => {
           stderrRaw.push(chunk)
         })
+        stderr.on("error", (err: Error) => {
+          clearTimeout(timer)
+          proc.kill("SIGTERM")
+          if (closed()) return
+          controller.enqueue({ type: "error", error: err })
+          safeClose()
+        })
         stdout.on("data", (chunk: Buffer) => {
           if (closed()) return
           const text = remainder + chunk.toString()

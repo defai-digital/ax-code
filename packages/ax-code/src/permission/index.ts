@@ -1,6 +1,8 @@
 import { Bus } from "@/bus"
 import { BusEvent } from "@/bus/bus-event"
 import { Config } from "@/config/config"
+import { AgentControlEvents } from "@/control-plane/agent-control-events"
+import { SafetyPolicy } from "@/control-plane/safety-policy"
 import { Recorder } from "@/replay/recorder"
 import { makeRunPromise } from "@/effect/run-service"
 import { ProjectID } from "@/project/schema"
@@ -186,10 +188,37 @@ export namespace Permission {
     return error
   }
 
+  function emitShadowSafetyDecision(request: Omit<z.infer<typeof AskInput>, "ruleset" | "agent">) {
+    if (!Recorder.active(request.sessionID)) return
+    const tool = typeof request.metadata?.tool === "string" ? request.metadata.tool : undefined
+    const decision = SafetyPolicy.decide({
+      mode: process.env["AX_CODE_AUTONOMOUS"] === "true" ? "autonomous" : "normal",
+      permission: request.permission,
+      tool,
+      path: request.patterns[0],
+      paths: request.patterns,
+    })
+    if (decision.action === "allow" && !decision.checkpointRequired) return
+    Recorder.emit(AgentControlEvents.safetyDecided({
+      sessionID: request.sessionID,
+      messageID: request.tool?.messageID,
+      action: decision.action,
+      risk: decision.risk,
+      reason: decision.reason,
+      permission: request.permission,
+      tool,
+      path: request.patterns[0],
+      checkpointRequired: decision.checkpointRequired,
+      matchedRule: decision.matchedRule,
+      shadow: true,
+    }))
+  }
+
   async function askPromise(input: z.infer<typeof AskInput>, options?: { signal?: AbortSignal }): Promise<void> {
     const { approved, pending } = await state()
     const { ruleset, ...request } = input
     let needsAsk = false
+    emitShadowSafetyDecision(request)
 
     for (const pattern of request.patterns) {
       const rule = evaluate(request.permission, pattern, ruleset, approved)
@@ -323,8 +352,43 @@ export namespace Permission {
       return
     }
 
-    existing.deferred.resolve(undefined)
-    if (input.reply === "once") return
+    if (input.reply === "once") {
+      existing.deferred.resolve(undefined)
+      return
+    }
+
+    const nextApproved = [
+      ...approved,
+      ...existing.info.always.map((pattern) => ({
+        permission: existing.info.permission,
+        pattern,
+        action: "allow" as const,
+      })),
+    ]
+
+    try {
+      await Database.use((db) =>
+        db
+          .insert(PermissionTable)
+          .values({
+            project_id: projectID,
+            data: nextApproved,
+            time_created: Date.now(),
+            time_updated: Date.now(),
+          })
+          .onConflictDoUpdate({
+            target: PermissionTable.project_id,
+            set: {
+              data: nextApproved,
+              time_updated: Date.now(),
+            },
+          })
+          .run(),
+      )
+    } catch (error) {
+      existing.deferred.reject(error)
+      throw error
+    }
 
     for (const pattern of existing.info.always) {
       approved.push({
@@ -333,25 +397,7 @@ export namespace Permission {
         action: "allow",
       })
     }
-
-    Database.use((db) =>
-      db
-        .insert(PermissionTable)
-        .values({
-          project_id: projectID,
-          data: approved,
-          time_created: Date.now(),
-          time_updated: Date.now(),
-        })
-        .onConflictDoUpdate({
-          target: PermissionTable.project_id,
-          set: {
-            data: approved,
-            time_updated: Date.now(),
-          },
-        })
-        .run(),
-    )
+    existing.deferred.resolve(undefined)
 
     for (const [id, item] of pending.entries()) {
       if (item.info.sessionID !== existing.info.sessionID) continue
@@ -414,7 +460,7 @@ export namespace Permission {
     if (pattern.startsWith("~/")) return os.homedir() + pattern.slice(1)
     if (pattern === "~") return os.homedir()
     if (pattern.startsWith("$HOME/")) return os.homedir() + pattern.slice(5)
-    if (pattern.startsWith("$HOME")) return os.homedir() + pattern.slice(5)
+    if (pattern === "$HOME") return os.homedir()
     return pattern
   }
 

@@ -8,10 +8,13 @@ import { LLM } from "../../src/session/llm"
 import { SessionPrompt } from "../../src/session/prompt"
 import { SessionStatus } from "../../src/session/status"
 import { SessionSummary } from "../../src/session/summary"
+import { Todo } from "../../src/session/todo"
 import { Snapshot } from "../../src/snapshot"
 import { Database } from "../../src/storage/db"
 import { CodeIntelligence } from "../../src/code-intelligence"
 import { AutoIndex } from "../../src/code-intelligence/auto-index"
+import { AutonomousCompletionGate } from "../../src/control-plane/autonomous-completion-gate"
+import { Bus } from "../../src/bus"
 import { tmpdir } from "../fixture/fixture"
 
 const model: Provider.Model = {
@@ -51,6 +54,7 @@ let patchSpy: ReturnType<typeof spyOn> | undefined
 let codeStatusSpy: ReturnType<typeof spyOn> | undefined
 let startWatcherSpy: ReturnType<typeof spyOn> | undefined
 let autoIndexSpy: ReturnType<typeof spyOn> | undefined
+let gateSpy: ReturnType<typeof spyOn> | undefined
 
 afterEach(async () => {
   streamSpy?.mockRestore()
@@ -69,6 +73,8 @@ afterEach(async () => {
   startWatcherSpy = undefined
   autoIndexSpy?.mockRestore()
   autoIndexSpy = undefined
+  gateSpy?.mockRestore()
+  gateSpy = undefined
 })
 
 describe("session.prompt flow", () => {
@@ -187,6 +193,91 @@ describe("session.prompt flow", () => {
         await Session.remove(session.id)
       },
     })
+  })
+
+  test("does not schedule todo auto-continuation after the agent step limit is reached", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      config: {
+        agent: {
+          build: {
+            steps: 1,
+          },
+        },
+      },
+    })
+
+    const previousAutonomous = process.env["AX_CODE_AUTONOMOUS"]
+    process.env["AX_CODE_AUTONOMOUS"] = "true"
+
+    try {
+      modelSpy = spyOn(Provider, "getModel").mockResolvedValue(model)
+      summarySpy = spyOn(SessionSummary, "summarize").mockResolvedValue()
+      streamSpy = spyOn(LLM, "stream").mockResolvedValue({
+        fullStream: (async function* () {
+          yield { type: "start" }
+          yield { type: "start-step" }
+          yield { type: "text-start", id: "text_1" }
+          yield { type: "text-delta", id: "text_1", text: "I still need to write the bug report." }
+          yield { type: "text-end", id: "text_1" }
+          yield {
+            type: "finish-step",
+            finishReason: "stop",
+            usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+          }
+          yield { type: "finish" }
+        })(),
+      } as any)
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const session = await Session.create({ title: "Todo Step Limit Test" })
+          Todo.update({
+            sessionID: session.id,
+            todos: [{ content: "Write bug reports to .internal/bugs/", status: "in_progress", priority: "high" }],
+          })
+
+          const msg = await SessionPrompt.prompt({
+            sessionID: session.id,
+            agent: "build",
+            parts: [{ type: "text", text: "continue the bug sweep" }],
+          })
+
+          expect(msg.info.role).toBe("assistant")
+          expect(streamSpy).toHaveBeenCalledTimes(1)
+
+          const messages = await Session.messages({ sessionID: session.id })
+          expect(messages).toHaveLength(2)
+          expect(messages.map((message) => message.info.role)).toEqual(["user", "assistant"])
+          const assistant = messages[1]?.info
+          expect(assistant?.role).toBe("assistant")
+          if (assistant?.role !== "assistant") throw new Error("expected assistant")
+          expect(assistant.error?.data.message).toContain("unfinished todo")
+          expect(
+            messages.some(
+              (message) =>
+                message.info.role === "user" &&
+                message.parts.some(
+                  (part) =>
+                    part.type === "text" &&
+                    part.text.includes("You stopped with 1 todo still pending") &&
+                    part.text.includes("auto-continuation"),
+                ),
+            ),
+          ).toBe(false)
+
+          expect(Todo.get(session.id)).toEqual([
+            { content: "Write bug reports to .internal/bugs/", status: "in_progress", priority: "high" },
+          ])
+
+          await Session.remove(session.id)
+        },
+      })
+    } finally {
+      if (previousAutonomous === undefined) delete process.env["AX_CODE_AUTONOMOUS"]
+      else process.env["AX_CODE_AUTONOMOUS"] = previousAutonomous
+    }
   })
 
   test("persists tool and patch parts for a tool-using step", async () => {
@@ -458,5 +549,143 @@ describe("session.prompt flow", () => {
         await Session.remove(session.id)
       },
     })
+  })
+
+  test("injects a continuation message when autonomous completion gate blocks on empty subagent result", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    const previousAutonomous = process.env["AX_CODE_AUTONOMOUS"]
+    process.env["AX_CODE_AUTONOMOUS"] = "true"
+
+    try {
+      modelSpy = spyOn(Provider, "getModel").mockResolvedValue(model)
+      summarySpy = spyOn(SessionSummary, "summarize").mockResolvedValue()
+
+      // Gate: blocked first two calls, then allow on third
+      let gateCallCount = 0
+      gateSpy = spyOn(AutonomousCompletionGate, "evaluate").mockImplementation(() => {
+        gateCallCount++
+        if (gateCallCount <= 2) {
+          return {
+            status: "blocked",
+            reason: "empty_subagent_result",
+            signature: `empty:call_1:ses_child:task`,
+            message: "Subagent ses_child completed without a usable final response.",
+            emptyResult: { callID: "call_1", taskID: "ses_child", description: "task" },
+          }
+        }
+        return { status: "allow" }
+      })
+
+      streamSpy = spyOn(LLM, "stream").mockImplementation(async () => ({
+        fullStream: (async function* () {
+          yield { type: "start" }
+          yield { type: "start-step" }
+          yield { type: "text-start", id: "text_1" }
+          yield { type: "text-delta", id: "text_1", text: "done" }
+          yield { type: "text-end", id: "text_1" }
+          yield { type: "finish-step", finishReason: "stop", usage: { inputTokens: 5, outputTokens: 2, totalTokens: 7 } }
+          yield { type: "finish" }
+        })(),
+      }) as any)
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const session = await Session.create({ title: "Completion Gate Test" })
+
+          const msg = await SessionPrompt.prompt({
+            sessionID: session.id,
+            agent: "build",
+            parts: [{ type: "text", text: "run a subagent task" }],
+          })
+
+          expect(msg.info.role).toBe("assistant")
+          // Gate blocked twice → two continuation user messages injected → three LLM calls total
+          expect(streamSpy).toHaveBeenCalledTimes(3)
+
+          const messages = await Session.messages({ sessionID: session.id })
+          const userMessages = messages.filter((m) => m.info.role === "user")
+          // Original user message + two gate-injected continuation messages
+          expect(userMessages).toHaveLength(3)
+          const gateMessages = userMessages.filter((m) =>
+            m.parts.some(
+              (p) => p.type === "text" && p.text.includes("completion gate"),
+            ),
+          )
+          expect(gateMessages).toHaveLength(2)
+
+          await Session.remove(session.id)
+        },
+      })
+    } finally {
+      if (previousAutonomous === undefined) delete process.env["AX_CODE_AUTONOMOUS"]
+      else process.env["AX_CODE_AUTONOMOUS"] = previousAutonomous
+    }
+  })
+
+  test("stops the session when autonomous completion gate retries are exhausted", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      config: { agent: { build: { steps: 10 } } },
+    })
+
+    const previousAutonomous = process.env["AX_CODE_AUTONOMOUS"]
+    process.env["AX_CODE_AUTONOMOUS"] = "true"
+
+    try {
+      modelSpy = spyOn(Provider, "getModel").mockResolvedValue(model)
+      summarySpy = spyOn(SessionSummary, "summarize").mockResolvedValue()
+
+      // Gate always blocks with the same signature (no new empty result between retries)
+      gateSpy = spyOn(AutonomousCompletionGate, "evaluate").mockReturnValue({
+        status: "blocked",
+        reason: "empty_subagent_result",
+        signature: "empty:call_1:ses_stuck:task",
+        message: "Subagent ses_stuck completed without a usable final response.",
+        emptyResult: { callID: "call_1", taskID: "ses_stuck", description: "task" },
+      })
+
+      streamSpy = spyOn(LLM, "stream").mockImplementation(async () => ({
+        fullStream: (async function* () {
+          yield { type: "start" }
+          yield { type: "start-step" }
+          yield { type: "text-start", id: "text_1" }
+          yield { type: "text-delta", id: "text_1", text: "still stuck" }
+          yield { type: "text-end", id: "text_1" }
+          yield { type: "finish-step", finishReason: "stop", usage: { inputTokens: 5, outputTokens: 2, totalTokens: 7 } }
+          yield { type: "finish" }
+        })(),
+      }) as any)
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          let errorPublished = false
+          const busUnsub = Bus.subscribe(Session.Event.Error, () => {
+            errorPublished = true
+          })
+
+          const session = await Session.create({ title: "Gate Exhausted Test" })
+
+          await SessionPrompt.prompt({
+            sessionID: session.id,
+            agent: "build",
+            parts: [{ type: "text", text: "run a subagent task" }],
+          })
+
+          busUnsub()
+
+          // maxCompletionGateRetries is 2, so after initial + 2 retries it stops (3 LLM calls max)
+          expect(streamSpy!.mock.calls.length).toBeLessThanOrEqual(4)
+          expect(errorPublished).toBe(true)
+
+          await Session.remove(session.id)
+        },
+      })
+    } finally {
+      if (previousAutonomous === undefined) delete process.env["AX_CODE_AUTONOMOUS"]
+      else process.env["AX_CODE_AUTONOMOUS"] = previousAutonomous
+    }
   })
 })

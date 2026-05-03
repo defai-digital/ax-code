@@ -13,6 +13,29 @@ import { notifyFileEdited, collectDiagnostics } from "./diagnostics"
 import { Isolation } from "@/isolation"
 import { BlastRadius } from "@/session/blast-radius"
 
+function validateInternalBugReport(filepath: string, content: string) {
+  const relative = path.relative(Instance.worktree, filepath).split(path.sep).join("/")
+  if (!relative.startsWith(".internal/bugs/") || !relative.endsWith(".md")) return
+
+  const missing: string[] = []
+  if (!/(^|\n)(?:\*\*)?Classification(?::\*\*|\*\*:|:)\s*(confirmed|suspected|false_positive|false positive)\b/i.test(content)) {
+    missing.push("`Classification: confirmed|suspected|false_positive`")
+  }
+  if (!/^## Evidence/im.test(content)) {
+    missing.push("`## Evidence`")
+  }
+  if (!/^## (Suggested Fix|Recommended Action|Closure)/im.test(content)) {
+    missing.push("`## Suggested Fix`, `## Recommended Action`, or `## Closure`")
+  }
+
+  if (missing.length > 0) {
+    throw new Error(
+      `Internal bug reports under .internal/bugs must include ${missing.join(", ")}. ` +
+        `Use Classification=confirmed only for repo-validated defects; use suspected for unproven findings; use false_positive with a Closure section when closing scanner noise.`,
+    )
+  }
+}
+
 export const WriteTool = Tool.define("write", {
   description: DESCRIPTION,
   parameters: z.object({
@@ -27,6 +50,7 @@ export const WriteTool = Tool.define("write", {
     const filepath = path.isAbsolute(params.filePath) ? params.filePath : path.join(Instance.directory, params.filePath)
     const bytes = Buffer.byteLength(params.content, "utf-8")
     if (bytes > 5 * 1024 * 1024) throw new Error(`Write content too large: ${bytes} bytes (max 5MB)`)
+    validateInternalBugReport(filepath, params.content)
     await assertExternalDirectory(ctx, filepath)
     Isolation.assertWrite(ctx.extra?.isolation, filepath, Instance.directory, Instance.worktree)
     BlastRadius.assertWritable(ctx.sessionID, path.relative(Instance.worktree, filepath))

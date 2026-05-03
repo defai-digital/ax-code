@@ -37,6 +37,17 @@ The setting persists across sessions in `ax-code.json`.
 
 ## Configuration
 
+### Source of Truth
+
+This page summarizes user-facing behavior. When behavior changes, verify the docs against:
+
+- `packages/ax-code/src/isolation/index.ts` for mode resolution, protected paths, network checks, write checks, bash checks, and `IsolationDeniedError`.
+- `packages/ax-code/src/config/schema.ts` for config shape, defaults, and descriptions.
+- `packages/ax-code/src/server/routes/isolation.ts` for runtime toggle behavior and persistence.
+- `packages/ax-code/test/isolation/isolation.test.ts` and `packages/ax-code/test/tool/bash.test.ts` for expected enforcement behavior.
+
+Keep duplicated claims in the root README brief and link back here for details.
+
 ### Toggle from the TUI
 
 Use `/sandbox` or the command palette (`Ctrl+P` → "Turn sandbox on/off"). The change takes effect immediately and is saved to your project's `ax-code.json`.

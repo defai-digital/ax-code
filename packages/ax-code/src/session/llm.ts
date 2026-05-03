@@ -24,8 +24,11 @@ import { Permission } from "@/permission"
 import { Isolation } from "@/isolation"
 import { DiagnosticLog } from "@/debug/diagnostic-log"
 import { withTimeout } from "@/util/timeout"
+import { Recorder } from "@/replay/recorder"
+import { AgentControl } from "@/control-plane/agent-control"
+import { AgentControlEvents } from "@/control-plane/agent-control-events"
 
-import { ReasoningPolicy } from "./reasoning-policy"
+import { ReasoningPolicy } from "@/control-plane/reasoning-policy"
 
 export namespace LLM {
   const log = Log.create({ service: "llm" })
@@ -93,6 +96,45 @@ export namespace LLM {
       .filter((x) => x)
       .join("\n")
     if (joined) system.push(joined)
+    const reasoningPolicyDecision = ReasoningPolicy.decide({
+      small: input.small,
+      autonomous: process.env["AX_CODE_AUTONOMOUS"] === "true",
+      userVariant: input.user.variant,
+      model: input.model,
+      agent: input.agent,
+      providerOptions: provider?.options,
+      messages: input.messages,
+    })
+    if (reasoningPolicyDecision.checkpoint) {
+      Recorder.emit(AgentControlEvents.reasoningSelected({
+        sessionID: input.sessionID,
+        depth: reasoningPolicyDecision.depth,
+        reason: reasoningPolicyDecision.reason ?? "policy_selected",
+        policyVersion: "v4-bridge",
+        checkpoint: reasoningPolicyDecision.checkpoint,
+      }))
+    }
+    if (input.agent.name === "plan") {
+      Recorder.emit(AgentControlEvents.phaseChanged({
+        sessionID: input.sessionID,
+        previousPhase: "assess",
+        phase: "plan",
+        reason: "plan_mode",
+        deterministic: false,
+      }))
+      Recorder.emit(AgentControlEvents.planCreated({
+        sessionID: input.sessionID,
+        deterministic: false,
+        plan: AgentControl.createShadowPlan({
+          id: `plan_${input.sessionID}`,
+          objective: ReasoningPolicy.objective(input.messages) || reasoningPolicyDecision.objective || "Plan mode session",
+          ownerAgent: input.agent.name,
+          reason: "plan_mode",
+        }),
+      }))
+    }
+    const reasoningPolicyReminder = ReasoningPolicy.systemReminder(reasoningPolicyDecision)
+    if (reasoningPolicyReminder) system.push(reasoningPolicyReminder)
 
     const header = system[0]
     const prePluginLength = system.length
@@ -112,17 +154,6 @@ export namespace LLM {
 
     const variant =
       !input.small && input.model.variants && input.user.variant ? input.model.variants[input.user.variant] : {}
-    const reasoningPolicyDecision = ReasoningPolicy.decide({
-      small: input.small,
-      autonomous: process.env["AX_CODE_AUTONOMOUS"] === "true",
-      userVariant: input.user.variant,
-      model: input.model,
-      agent: input.agent,
-      providerOptions: provider?.options,
-      messages: input.messages,
-    })
-    const reasoningPolicyReminder = ReasoningPolicy.systemReminder(reasoningPolicyDecision)
-    if (reasoningPolicyReminder) system.push(reasoningPolicyReminder)
     const base = input.small
       ? ProviderTransform.smallOptions(input.model)
       : ProviderTransform.options({

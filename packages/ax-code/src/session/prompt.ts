@@ -18,6 +18,8 @@ import {
   MAX_CONSECUTIVE_ERRORS as _MAX_CONSECUTIVE_ERRORS,
   GLOBAL_STEP_LIMIT as _GLOBAL_STEP_LIMIT,
 } from "@/constants/session"
+import { AgentControlEvents } from "../control-plane/agent-control-events"
+import { AutonomousCompletionGate } from "../control-plane/autonomous-completion-gate"
 import { Instance } from "../project/instance"
 import { Bus } from "../bus"
 import { ProviderTransform } from "../provider/transform"
@@ -570,7 +572,10 @@ export namespace SessionPrompt {
     const autonomous = process.env["AX_CODE_AUTONOMOUS"] === "true"
     const maxContinuations = cfg.session?.max_continuations ?? 3
     const maxTodoRetries = cfg.session?.max_todo_retries ?? 10
+    const maxCompletionGateRetries = Math.min(maxTodoRetries, 2)
     let todoRetries = 0
+    let completionGateRetries = 0
+    let lastCompletionGateSignature: string | undefined
     let lastPendingTodoSignature: string | undefined
     let stagnantTodoRetries = 0
     const cachedSystemPrompt: import("./prompt-helpers").SystemCache = {
@@ -581,6 +586,7 @@ export namespace SessionPrompt {
     // Cache agent/model info per loop to avoid repeated async lookups
     let cachedAgent: { key: string; value: Agent.Info } | undefined
     let cachedModel: { key: string; value: Provider.Model } | undefined
+    let fallbackModelOverride: MessageV2.User["model"] | undefined
     // Cache session history — only load from DB on first step, refresh on subsequent steps
     let cachedMsgs: MessageV2.WithParts[] | undefined
     while (true) {
@@ -676,6 +682,12 @@ export namespace SessionPrompt {
       let { lastUser, lastUserParts, lastAssistant, lastFinished, tasks } = scanLoopMessages(msgs)
 
       if (!lastUser) throw new Error("No user message found in stream. This should never happen.")
+      if (fallbackModelOverride) {
+        lastUser = {
+          ...lastUser,
+          model: fallbackModelOverride,
+        }
+      }
       if (
         lastAssistant?.finish &&
         !["tool-calls", "unknown"].includes(lastAssistant.finish) &&
@@ -994,9 +1006,9 @@ export namespace SessionPrompt {
         }
       }
 
-      if (result === "stop") {
-        reason = processor.message.error ? "error" : "completed"
-        break
+      const markAssistantIncomplete = async (message: string) => {
+        processor.message.error = new NamedError.Unknown({ message }).toObject()
+        await Session.updateMessage(processor.message)
       }
 
       // In autonomous mode, when the model ends a turn cleanly but leaves todos
@@ -1004,11 +1016,155 @@ export namespace SessionPrompt {
       // This is the runtime guarantee — complements the system-prompt reminder
       // injected per turn. Capped by maxTodoRetries to prevent infinite loops when
       // the model genuinely cannot finish a todo (blocked tool, missing data, etc.).
-      if (autonomous && modelFinished && !processor.message.error && todoRetries < maxTodoRetries) {
+      if (autonomous && !processor.message.error) {
+        const latestMessages = await Session.messages({ sessionID })
         const pendingTodos = Todo.get(sessionID).filter(
           (t) => t.status === "pending" || t.status === "in_progress",
         )
-        if (pendingTodos.length > 0) {
+        const completionGate = AutonomousCompletionGate.evaluate({
+          messages: latestMessages,
+          pendingTodos,
+        })
+        const shouldRecoverEmptySubagentResult =
+          completionGate.status === "blocked" && completionGate.reason === "empty_subagent_result"
+
+        if (modelFinished || shouldRecoverEmptySubagentResult) {
+          Recorder.emit(
+            AgentControlEvents.completionGateDecided({
+              sessionID,
+              messageID: processor.message.id,
+              stepIndex: step,
+              status: completionGate.status,
+              reason: completionGate.status === "allow" ? "none" : completionGate.reason,
+              message: completionGate.status === "allow" ? "Completion gate passed." : completionGate.message,
+              retryCount: completionGateRetries,
+              maxRetries: maxCompletionGateRetries,
+            }),
+          )
+        }
+
+        if (shouldRecoverEmptySubagentResult) {
+          if (completionGate.signature !== lastCompletionGateSignature) {
+            lastCompletionGateSignature = completionGate.signature
+            completionGateRetries = 0
+          }
+
+          if (isLastStep || completionGateRetries >= maxCompletionGateRetries) {
+            const incompleteMessage =
+              `Autonomous mode stopped because the control-plane completion gate found incomplete subagent evidence. ` +
+              `${completionGate.message} ` +
+              `The session is stopped, but the task should not be treated as complete.`
+            log.warn("autonomous completion gate stopped session", {
+              command: "session.prompt.loop",
+              status: "stopped",
+              errorCode: isLastStep ? "STEP_LIMIT" : "COMPLETION_GATE_BLOCKED",
+              sessionID,
+              reason: completionGate.reason,
+              message: completionGate.message,
+              attempts: completionGateRetries,
+              maxAttempts: maxCompletionGateRetries,
+            })
+            await markAssistantIncomplete(incompleteMessage)
+            Bus.publishDetached(Session.Event.Error, {
+              sessionID,
+              error: new NamedError.Unknown({
+                message: incompleteMessage,
+              }).toObject(),
+            })
+            reason = isLastStep ? "step_limit" : "stalled"
+            break
+          }
+
+          completionGateRetries++
+          log.info("autonomous completion gate continuation", {
+            command: "session.prompt.loop",
+            status: "ok",
+            sessionID,
+            reason: completionGate.reason,
+            message: completionGate.message,
+            attempt: completionGateRetries,
+            maxAttempts: maxCompletionGateRetries,
+          })
+          const lastUserInfo = latestMessages.filter((m) => m.info.role === "user").pop()?.info as
+            | MessageV2.User
+            | undefined
+          await createUserMessage({
+            sessionID,
+            agentRouting: "preserve",
+            parts: [
+              {
+                type: "text",
+                text:
+                  `Control-plane completion gate blocked completion: ${completionGate.message}\n` +
+                  `Retry the subagent task, resume the task_id if available, or explicitly explain why no usable result can be recovered. ` +
+                  `Do not mark the work complete until the missing subagent evidence is resolved. ` +
+                  `This is completion-gate auto-continuation ${completionGateRetries}/${maxCompletionGateRetries}.`,
+              },
+            ],
+            agent: lastUserInfo?.agent,
+            model: lastUserInfo?.model,
+          })
+          continue
+        }
+
+        if (completionGate.status === "allow") {
+          completionGateRetries = 0
+          lastCompletionGateSignature = undefined
+        }
+
+        if (modelFinished && pendingTodos.length > 0) {
+          if (isLastStep) {
+            const incompleteMessage =
+              `Autonomous mode reached the agent step limit with ${pendingTodos.length} unfinished todo` +
+              `${pendingTodos.length === 1 ? "" : "s"}. ` +
+              `No further todo auto-continuation was scheduled because the maximum-step reminder may disable tools. ` +
+              `Increase the agent/session step budget or resume the session to finish the remaining work.`
+            log.warn("autonomous todo continuation stopped at agent step limit", {
+              command: "session.prompt.loop",
+              status: "stopped",
+              errorCode: "STEP_LIMIT",
+              sessionID,
+              pendingCount: pendingTodos.length,
+              attempts: todoRetries,
+              maxAttempts: maxTodoRetries,
+              maxSteps,
+            })
+            await markAssistantIncomplete(incompleteMessage)
+            Bus.publishDetached(Session.Event.Error, {
+              sessionID,
+              error: new NamedError.Unknown({
+                message: incompleteMessage,
+              }).toObject(),
+            })
+            reason = "step_limit"
+            break
+          }
+
+          if (todoRetries >= maxTodoRetries) {
+            const incompleteMessage =
+              `Autonomous mode stopped because ${pendingTodos.length} todo` +
+              `${pendingTodos.length === 1 ? "" : "s"} remained unfinished after ${maxTodoRetries} ` +
+              `auto-continuation attempt${maxTodoRetries === 1 ? "" : "s"}. ` +
+              `The session is stopped, but the remaining todos are not complete.`
+            log.warn("autonomous todo continuation stopped after retry budget", {
+              command: "session.prompt.loop",
+              status: "stopped",
+              sessionID,
+              pendingCount: pendingTodos.length,
+              attempts: todoRetries,
+              maxAttempts: maxTodoRetries,
+            })
+            await markAssistantIncomplete(incompleteMessage)
+            Bus.publishDetached(Session.Event.Error, {
+              sessionID,
+              error: new NamedError.Unknown({
+                message: incompleteMessage,
+              }).toObject(),
+            })
+            reason = "stalled"
+            break
+          }
+
           const signature = pendingTodoSignature(pendingTodos)
           if (signature === lastPendingTodoSignature) {
             stagnantTodoRetries++
@@ -1018,6 +1174,10 @@ export namespace SessionPrompt {
           }
 
           if (stagnantTodoRetries >= MAX_STAGNANT_TODO_RETRIES) {
+            const incompleteMessage =
+              `Autonomous mode stopped because ${pendingTodos.length} todo${pendingTodos.length === 1 ? "" : "s"} ` +
+              `remained unchanged after ${stagnantTodoRetries} retry attempts. ` +
+              `The session is stopped, but the remaining todos are not complete.`
             log.warn("autonomous todo continuation stopped on unchanged pending todos", {
               command: "session.prompt.loop",
               status: "stopped",
@@ -1027,13 +1187,11 @@ export namespace SessionPrompt {
               stagnantAttempts: stagnantTodoRetries,
               maxStagnantAttempts: MAX_STAGNANT_TODO_RETRIES,
             })
+            await markAssistantIncomplete(incompleteMessage)
             Bus.publishDetached(Session.Event.Error, {
               sessionID,
               error: new NamedError.Unknown({
-                message:
-                  `Autonomous mode stopped because ${pendingTodos.length} todo${pendingTodos.length === 1 ? "" : "s"} ` +
-                  `remained unchanged after ${stagnantTodoRetries} retry attempts. ` +
-                  `The session is stopped, but the remaining todos are not complete.`,
+                message: incompleteMessage,
               }).toObject(),
             })
             reason = "stalled"
@@ -1050,8 +1208,7 @@ export namespace SessionPrompt {
             maxAttempts: maxTodoRetries,
             stagnantAttempts: stagnantTodoRetries,
           })
-          const lastMsgs = await Session.messages({ sessionID })
-          const lastUserInfo = lastMsgs.filter((m) => m.info.role === "user").pop()?.info as
+          const lastUserInfo = latestMessages.filter((m) => m.info.role === "user").pop()?.info as
             | MessageV2.User
             | undefined
           await createUserMessage({
@@ -1068,6 +1225,11 @@ export namespace SessionPrompt {
           })
           continue
         }
+      }
+
+      if (result === "stop") {
+        reason = processor.message.error ? "error" : "completed"
+        break
       }
 
       // Track consecutive errors — break if agent is stuck
@@ -1098,7 +1260,7 @@ export namespace SessionPrompt {
                 message: `Provider ${lastUser.model.providerID} failed: ${err.data?.message ?? "unknown error"}. Switching to ${fallback.providerID}/${fallback.modelID}.`,
               }).toObject(),
             })
-            lastUser.model = fallback
+            fallbackModelOverride = fallback
             cachedModel = undefined
             consecutiveErrors = 0
             continue
@@ -2541,10 +2703,26 @@ NOTE: At any point in time through this workflow you should feel free to ask the
       appendOutput(chunk)
       flush()
     })
+    proc.stdout?.on("error", (error) => {
+      log.warn("shell stdout stream error", {
+        command: "session.prompt.shell",
+        status: "error",
+        errorCode: "STDOUT_STREAM_ERROR",
+        error,
+      })
+    })
 
     proc.stderr?.on("data", (chunk) => {
       appendOutput(chunk)
       flush()
+    })
+    proc.stderr?.on("error", (error) => {
+      log.warn("shell stderr stream error", {
+        command: "session.prompt.shell",
+        status: "error",
+        errorCode: "STDERR_STREAM_ERROR",
+        error,
+      })
     })
 
     let aborted = false

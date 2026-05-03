@@ -2,16 +2,16 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-04-28
+Last reviewed: 2026-05-03
 Owner: ax-code runtime
 
 Auto-route controls two independent routing behaviors in ax-code:
 
-1. **Keyword routing** — always active. Switches the agent when a message matches a specialist's keywords or patterns. Fires in under 1ms and requires no configuration.
+1. **Keyword routing** — active by default. Switches the agent when a message matches a specialist's keywords or patterns. Fires in under 1ms and requires no LLM call. It is skipped when routing is explicitly disabled, the user explicitly names an agent, or the message is a synthetic continuation that preserves the current agent.
 
 2. **Complexity routing** — optional, enabled by the auto-route toggle. A lightweight LLM call classifies each message as `low`, `medium`, or `high` complexity. `low`-complexity messages are automatically served by the provider's small/fast model, reducing latency for simple questions.
 
-By default, auto-route is **off** — complexity routing is disabled. Keyword routing is always active regardless of this setting.
+By default, auto-route is **off** — complexity routing is disabled. Keyword routing is separate from this toggle and remains active by default unless disabled by config or bypassed by an explicit agent choice.
 
 ## Quick Start
 
@@ -30,9 +30,22 @@ The setting persists across sessions in `ax-code.json`.
 
 ## How It Works
 
-### Keyword Routing (always active, <1ms)
+### Source of Truth
 
-Every user message is matched against keyword and regex patterns for each specialist agent (security, architect, debug, perf, devops, test). If a match scores ≥ 0.4 confidence, the agent switches immediately — no LLM call is made. This is always on and unaffected by the auto-route toggle.
+This page summarizes user-facing behavior. When behavior changes, verify the docs against:
+
+- `packages/ax-code/src/agent/router.ts` for keyword routing rules and `classifyComplexity()`.
+- `packages/ax-code/src/session/prompt.ts` for when keyword routing is skipped and when complexity classification runs.
+- `packages/ax-code/src/server/routes/smart-llm.ts` for default, environment, config, and persistence behavior.
+- `packages/ax-code/src/config/schema.ts` for routing config fields and deprecation notes.
+- `packages/ax-code/src/cli/cmd/tui/app.tsx` for slash command names, aliases, labels, and status-bar actions.
+- `packages/ax-code/test/agent/router.test.ts` and TUI sync tests for expected activation behavior.
+
+Avoid describing keyword routing and fast-model complexity routing as one feature. They are intentionally separate.
+
+### Keyword Routing (active by default, <1ms)
+
+User messages are matched against keyword and regex patterns for each specialist agent (security, architect, debug, perf, devops, test). If a match scores ≥ 0.4 confidence, the agent can switch immediately — no LLM call is made. This path is independent of the auto-route toggle, but it is skipped when routing is disabled, the user explicitly names an agent, or the current turn is preserving an existing agent for synthetic continuation.
 
 ### Complexity Routing (auto-route only, ~200-500ms)
 

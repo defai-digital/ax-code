@@ -6,15 +6,15 @@ _  ___ |    |_/_____/ /___  / /_/ /_  /_/ /_  /___
 /_/  |_/_/|_|       \____/  \____/ /_____/ /_____/
 ```
 
-**AI coding runtime for teams that need control, auditability, and extensibility, not just code suggestions.**
+**AI coding runtime for teams that need controlled execution, durable context, and embeddable agent workflows, not just code suggestions.**
 
 AX Code is an AI execution runtime for software development. It combines agents, tool execution, provider routing, session state, and configurable isolation into one system that can run in the terminal, inside VS Code, through the SDK, or as a headless service.
 
-- Controlled execution with configurable sandbox and permissions
-- Provider flexibility across cloud and local model backends
-- Persistent sessions, replay, and project context through `AGENTS.md`
-- One runtime across TUI, CLI, SDK, VS Code, and server mode
-- Extensible with MCP servers, plugins, and custom integrations
+- Let agents work in real repositories with explicit tools, sandbox modes, and permission boundaries
+- Keep context alive with persistent sessions, replay, export, and project instructions in `AGENTS.md`
+- Move between hosted and local model providers without changing the developer workflow
+- Reuse one runtime across TUI, CLI, SDK, VS Code, headless server mode, and internal automation
+- Extend the runtime with MCP servers, plugins, and custom SDK tools instead of rebuilding orchestration
 
 Built by [DEFAI Digital](https://github.com/defai-digital).
 
@@ -86,7 +86,7 @@ git clone https://github.com/defai-digital/ax-code.git
 cd ax-code && pnpm install && pnpm run setup:cli
 ```
 
-Requires [pnpm](https://pnpm.io) v9.15.9+ and [Bun](https://bun.sh) v1.3.13+. `setup:cli` installs a launcher for the same bundled runtime used by npm and Homebrew. `ax-code doctor` should report `Runtime: Bun X.Y.Z (compiled)`.
+Requires [pnpm](https://pnpm.io) v9.15.9+ and [Bun](https://bun.sh) matching the root `package.json` engine (`^1.3.12` today). `setup:cli` installs a launcher for the same bundled runtime used by npm and Homebrew. `ax-code doctor` should report `Runtime: Bun X.Y.Z (compiled)`.
 
 Refresh the local bundled runtime after code changes:
 
@@ -108,11 +108,11 @@ pnpm run setup:cli -- --source
 
 Most AI coding tools optimize for a chat loop. AX Code is built as a runtime you can actually operate across repositories, teams, and integration surfaces.
 
-- Use explicit tools instead of opaque background behavior.
-- Put boundaries around execution with `full-access`, `workspace-write`, or `read-only`.
-- Switch providers or move to local inference without changing the workflow.
-- Resume, fork, compact, export, and audit sessions instead of losing work in a tab.
-- Reuse the same runtime in the terminal, VS Code, CI jobs, or internal platforms.
+- Control what the agent can do: every action goes through explicit tools, permission rules, and isolation modes such as `full-access`, `workspace-write`, or `read-only`.
+- Preserve work over time: sessions can be resumed, forked, compacted, exported, and replayed instead of disappearing with a chat tab.
+- Keep provider choice open: switch between cloud and local model backends without changing the surrounding workflow.
+- Share project knowledge with the repo: `AGENTS.md` keeps conventions, guardrails, and collaboration defaults close to the code.
+- Build on the same runtime everywhere: use the terminal, VS Code, one-shot CLI, SDK, CI jobs, or internal platforms without inventing separate agent stacks.
 
 AX Code is not just a chat UI. It is the runtime layer behind agent selection, tool orchestration, session persistence, and policy boundaries.
 
@@ -150,7 +150,7 @@ AX Code is a strong fit when you need one or more of these:
 - [Documentation Hub](docs/README.md): guides, architecture, specs, and reference docs
 - [Sandbox Mode](docs/sandbox.md): isolation modes, protected paths, and network controls
 - [Autonomous Mode](docs/autonomous.md): unattended execution behavior and safeguards
-- [Auto-Route](docs/auto-route.md): LLM-assisted agent routing and model selection
+- [Auto-Route](docs/auto-route.md): keyword-based specialist routing and optional fast-model complexity routing
 - [Semantic Layer](docs/semantic-layer.md): provenance and replay boundaries for graph and LSP-backed answers
 
 ## Common Commands

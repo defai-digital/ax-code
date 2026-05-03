@@ -2,7 +2,7 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-04-21
+Last reviewed: 2026-05-03
 Owner: ax-code runtime
 
 If the root [README](../README.md) is the fastest way to install AX Code, this page is the fastest way to understand it.
@@ -22,11 +22,11 @@ That matters because AI coding is only useful in real repositories when you can 
 
 ## Where the Value Comes From
 
-- Control. You can choose `full-access`, `workspace-write`, or `read-only`, and specialist agents carry different permission presets.
-- Portability. The same workflow can run on hosted providers or local runtimes without changing tools.
-- Continuity. Sessions can be resumed, forked, compacted, exported, and replayed.
-- Context. `AGENTS.md` gives the runtime repository-specific instructions that can live with the code.
-- Extensibility. The same runtime powers the TUI, CLI, VS Code extension, SDK, and headless server.
+- Control. Agents act through explicit tools, permission rules, and isolation modes such as `full-access`, `workspace-write`, or `read-only`.
+- Continuity. Sessions can be resumed, forked, compacted, exported, and replayed so long-running work does not disappear when a UI closes.
+- Context. `AGENTS.md` lets repository-specific conventions, safety rules, and collaboration defaults live with the code.
+- Portability. The same workflow can run against hosted providers or local runtimes without changing the tool surface.
+- Extensibility. The same runtime powers the TUI, CLI, VS Code extension, TypeScript SDK, headless server, MCP integrations, and custom tools.
 
 ## Mental Model
 
@@ -71,6 +71,17 @@ The rest of the documentation maps onto those layers.
 
 - Read the [Documentation Hub](README.md) for the rest of the public docs.
 - Read [CONTRIBUTING.md](../CONTRIBUTING.md) for the current external contribution policy.
+
+## When AX Code May Not Fit
+
+AX Code is intentionally more than autocomplete or a hosted chat box. It may be too much if:
+
+- You only need inline code suggestions and do not want agents executing tools.
+- You need a hosted SaaS-only experience with no local runtime.
+- You do not need session persistence, replay, SDK/server integration, or repository-level instructions.
+- You are working in an environment where no local CLI process is allowed.
+
+In those cases, a lighter editor assistant may be simpler. AX Code is strongest when the agent needs to operate inside real development workflows with control, continuity, and integration boundaries.
 
 ## Common First Commands
 

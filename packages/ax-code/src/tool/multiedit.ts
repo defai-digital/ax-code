@@ -131,6 +131,10 @@ export const MultiEditTool = Tool.define("multiedit", {
 
         await FileTime.withLock(file, async () => {
           await FileTime.assert(ctx.sessionID, file)
+          const latest = await Filesystem.readText(file)
+          if (latest !== prev) {
+            throw new Error(`multiedit conflict: ${file} was modified between read and write`)
+          }
           await Filesystem.write(file, next)
           writtenFiles.add(file)
           await notifyFileEdited(file, "change")
@@ -153,6 +157,10 @@ export const MultiEditTool = Tool.define("multiedit", {
           }
 
           return FileTime.withLock(file, async () => {
+            const latest = await Filesystem.readText(file)
+            if (latest !== next) {
+              throw new Error(`Cannot roll back multiedit: ${file} was modified externally`)
+            }
             await Filesystem.write(file, text)
             await FileTime.read(ctx.sessionID, file)
             await notifyFileEdited(file, "change")

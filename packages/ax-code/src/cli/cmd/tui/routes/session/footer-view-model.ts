@@ -1,5 +1,7 @@
 import { formatDuration } from "@/util/format"
 import { Locale } from "@/util/locale"
+import type { AgentControlSummary } from "@/control-plane/agent-control-summary"
+import type { ToolCallReplayQuery } from "@/replay/tool-call-query"
 
 export type FooterMcpStatus = "connected" | "failed" | "needs_auth" | "needs_client_registration" | string
 export type FooterSessionStatus =
@@ -32,6 +34,11 @@ export type FooterSessionStatusView = {
   tone: FooterSessionStatusTone
 }
 
+export type FooterAgentControlStatusView = {
+  label: string
+  tone: FooterSessionStatusTone
+}
+
 export type FooterTrustChip =
   | {
       type: "plans"
@@ -56,6 +63,12 @@ export function footerPermissionLabel(count: number): string | undefined {
 function footerToolLabel(tool: string) {
   const normalized = tool.replace(/[_-]+/g, " ").trim()
   return Locale.titlecase(normalized || "tool")
+}
+
+function shortFooterText(value: string, max = 32) {
+  const normalized = value.replace(/\s+/g, " ").trim()
+  if (normalized.length <= max) return normalized
+  return `${normalized.slice(0, max - 3)}...`
 }
 
 function footerTaskLabel(tool?: string) {
@@ -145,6 +158,55 @@ export function footerSessionStatusLabel(input: {
   stalledAfterMs?: number
 }): string | undefined {
   return footerSessionStatusView(input).label
+}
+
+export function footerAgentControlStatusView(
+  summary?: AgentControlSummary.Summary,
+  tools?: ToolCallReplayQuery.Summary,
+): FooterAgentControlStatusView | undefined {
+  if (tools && tools.openTaskCalls.length > 0) {
+    return {
+      label: `Agent waiting: ${tools.openTaskCalls.length} subagent${tools.openTaskCalls.length !== 1 ? "s" : ""}`,
+      tone: summary?.completed ? "warning" : "working",
+    }
+  }
+  if (tools && tools.openCalls.length > 0) {
+    return {
+      label: `Agent waiting: ${tools.openCalls.length} tool result${tools.openCalls.length !== 1 ? "s" : ""}`,
+      tone: summary?.completed ? "warning" : "working",
+    }
+  }
+  if (!summary) return
+  if (summary.completed) {
+    return {
+      label: "Agent complete",
+      tone: "success",
+    }
+  }
+  if (summary.blockedReason) {
+    return {
+      label: `Agent blocked: ${shortFooterText(summary.blockedReason, 28)}`,
+      tone: "warning",
+    }
+  }
+
+  const parts: string[] = []
+  if (summary.phase) parts.push(Locale.titlecase(summary.phase.replace(/_/g, " ")))
+  if (summary.reasoningDepth === "deep" || summary.reasoningDepth === "xdeep") {
+    parts.push(`${summary.reasoningDepth} reasoning`)
+  }
+  if (summary.plan) {
+    parts.push(`plan ${summary.plan.progress.completed}/${summary.plan.progress.total}`)
+  }
+  if (summary.safety.shadow > 0) {
+    parts.push(`shadow safety ${summary.safety.shadow}`)
+  }
+  if (parts.length === 0) return
+
+  return {
+    label: `Agent ${parts.join(" · ")}`,
+    tone: summary.safety.ask > 0 || summary.safety.deny > 0 ? "warning" : "working",
+  }
 }
 
 export function footerMcpView(statuses: FooterMcpStatus[]) {

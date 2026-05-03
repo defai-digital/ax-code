@@ -1,11 +1,130 @@
 import { describe, expect, test } from "bun:test"
 import {
+  footerAgentControlStatusView,
   footerTrustChip,
   footerSessionStatusLabel,
   footerSessionStatusView,
   SESSION_STATUS_STALE_AFTER_MS,
   SESSION_STATUS_TOOL_STALE_AFTER_MS,
 } from "../../src/cli/cmd/tui/routes/session/footer-view-model"
+
+describe("footerAgentControlStatusView", () => {
+  test("prioritizes open subagent calls over completion labels", () => {
+    expect(
+      footerAgentControlStatusView(
+        {
+          phase: "complete",
+          completed: true,
+          safety: {
+            shadow: 0,
+            ask: 0,
+            deny: 0,
+            checkpoint: 0,
+          },
+        },
+        {
+          totalCalls: 1,
+          totalResults: 0,
+          openCalls: [
+            {
+              callID: "call_task",
+              tool: "task",
+              sequence: 0,
+              event: {
+                type: "tool.call",
+                sessionID: "ses_test" as any,
+                tool: "task",
+                callID: "call_task",
+                input: {},
+              },
+            },
+          ],
+          openTaskCalls: [
+            {
+              callID: "call_task",
+              tool: "task",
+              sequence: 0,
+              event: {
+                type: "tool.call",
+                sessionID: "ses_test" as any,
+                tool: "task",
+                callID: "call_task",
+                input: {},
+              },
+            },
+          ],
+        },
+      ),
+    ).toEqual({
+      label: "Agent waiting: 1 subagent",
+      tone: "warning",
+    })
+  })
+
+  test("summarizes active control-plane state without full replay details", () => {
+    expect(
+      footerAgentControlStatusView({
+        phase: "plan",
+        reasoningDepth: "deep",
+        plan: {
+          id: "plan_01",
+          objective: "Implement v5 control plane",
+          approvalState: "not_required",
+          progress: {
+            total: 2,
+            completed: 1,
+            blocked: 0,
+            cancelled: 0,
+            open: 1,
+          },
+        },
+        safety: {
+          shadow: 1,
+          ask: 0,
+          deny: 0,
+          checkpoint: 1,
+        },
+      }),
+    ).toEqual({
+      label: "Agent Plan · deep reasoning · plan 1/2 · shadow safety 1",
+      tone: "working",
+    })
+  })
+
+  test("prioritizes blocked and completed states", () => {
+    expect(
+      footerAgentControlStatusView({
+        phase: "blocked",
+        blockedReason: "approval_pending_for_large_refactor",
+        safety: {
+          shadow: 0,
+          ask: 0,
+          deny: 0,
+          checkpoint: 0,
+        },
+      }),
+    ).toEqual({
+      label: "Agent blocked: approval_pending_for_larg...",
+      tone: "warning",
+    })
+
+    expect(
+      footerAgentControlStatusView({
+        phase: "complete",
+        completed: true,
+        safety: {
+          shadow: 0,
+          ask: 0,
+          deny: 0,
+          checkpoint: 0,
+        },
+      }),
+    ).toEqual({
+      label: "Agent complete",
+      tone: "success",
+    })
+  })
+})
 
 describe("footerSessionStatusView", () => {
   test("labels recent llm work without marking it stale", () => {

@@ -22,6 +22,16 @@ afterEach(async () => {
 })
 
 describe("tool.write", () => {
+  test("describes the internal bug report format before validation fails", async () => {
+    const write = await WriteTool.init()
+
+    expect(write.description).toContain(".internal/bugs/*.md")
+    expect(write.description).toContain("Classification: confirmed|suspected|false_positive")
+    expect(write.description).toContain("## Evidence")
+    expect(write.description).toContain("## Suggested Fix")
+    expect(write.description).toContain("## Closure")
+  })
+
   describe("new file creation", () => {
     test("writes content to new file", async () => {
       await using tmp = await tmpdir()
@@ -87,6 +97,107 @@ describe("tool.write", () => {
 
           const content = await fs.readFile(path.join(tmp.path, "relative.txt"), "utf-8")
           expect(content).toBe("relative content")
+        },
+      })
+    })
+
+    test("requires classification and evidence for internal bug reports", async () => {
+      await using tmp = await tmpdir()
+      const filepath = path.join(tmp.path, ".internal", "bugs", "bug.md")
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const write = await WriteTool.init()
+          await expect(
+            write.execute(
+              {
+                filePath: filepath,
+                content: "# Bug\n\n**Status:** Open\n",
+              },
+              ctx,
+            ),
+          ).rejects.toThrow("Internal bug reports under .internal/bugs must include")
+
+          await write.execute(
+            {
+              filePath: filepath,
+              content:
+                "# Bug\n\n" +
+                "**Classification:** suspected\n\n" +
+                "## Evidence\n\n" +
+                "Observed in a scanner result, pending repo-grounded validation.\n\n" +
+                "## Suggested Fix\n\n" +
+                "Validate the cited code path before editing.\n",
+            },
+            ctx,
+          )
+
+          const content = await fs.readFile(filepath, "utf-8")
+          expect(content).toContain("Classification")
+        },
+      })
+    })
+
+    test("bug report validation checks each missing section independently", async () => {
+      await using tmp = await tmpdir()
+      const filepath = path.join(tmp.path, ".internal", "bugs", "bug.md")
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const write = await WriteTool.init()
+
+          // Missing Evidence
+          await expect(
+            write.execute({
+              filePath: filepath,
+              content: "Classification: confirmed\n\n## Suggested Fix\nfix it\n",
+            }, ctx),
+          ).rejects.toThrow("Evidence")
+
+          // Missing fix section
+          await expect(
+            write.execute({
+              filePath: filepath,
+              content: "Classification: suspected\n\n## Evidence\nfound it\n",
+            }, ctx),
+          ).rejects.toThrow("Suggested Fix")
+
+          // ## Recommended Action is accepted instead of ## Suggested Fix
+          await write.execute({
+            filePath: filepath,
+            content: "Classification: confirmed\n\n## Evidence\nfound it\n\n## Recommended Action\ndo this\n",
+          }, ctx)
+
+          // ## Closure is accepted for false_positive
+          await write.execute({
+            filePath: filepath,
+            content: "Classification: false_positive\n\n## Evidence\nscanner noise\n\n## Closure\nnot a real bug\n",
+          }, ctx)
+        },
+      })
+    })
+
+    test("bug report validation only applies inside .internal/bugs/", async () => {
+      await using tmp = await tmpdir()
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const write = await WriteTool.init()
+
+          // Normal markdown file outside .internal/bugs/ — no validation
+          await write.execute({
+            filePath: path.join(tmp.path, "notes.md"),
+            content: "# Notes\n\nNo classification needed.\n",
+          }, ctx)
+
+          // .md file in a sibling directory — no validation
+          await write.execute({
+            filePath: path.join(tmp.path, ".internal", "adr", "decision.md"),
+            content: "# ADR\n\nNo classification needed.\n",
+          }, ctx)
         },
       })
     })

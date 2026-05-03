@@ -10,6 +10,7 @@ import z from "zod"
 import { BusEvent } from "@/bus/bus-event"
 import { Flag } from "../flag/flag"
 import { Log } from "../util/log"
+import { Ssrf } from "../util/ssrf"
 
 declare global {
   const AX_CODE_VERSION: string
@@ -297,10 +298,10 @@ export namespace Installation {
             const reg = r || "https://registry.npmjs.org"
             const registry = reg.endsWith("/") ? reg.slice(0, -1) : reg
             const channel = CHANNEL
+            const url = `${registry}/${CURRENT_NPM_PACKAGE_PATH}/${channel}`
+            yield* Effect.promise(() => Ssrf.assertPublicUrl(url, "installation"))
             const response = yield* httpOk.execute(
-              HttpClientRequest.get(`${registry}/${CURRENT_NPM_PACKAGE_PATH}/${channel}`).pipe(
-                HttpClientRequest.acceptJson,
-              ),
+              HttpClientRequest.get(url).pipe(HttpClientRequest.acceptJson),
             )
             const data = yield* HttpClientResponse.schemaBodyJson(NpmPackage)(response)
             return data.version

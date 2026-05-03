@@ -1,5 +1,8 @@
 import z from "zod"
 
+import { AgentControl } from "@/control-plane/agent-control"
+import { SafetyPolicy } from "@/control-plane/safety-policy"
+
 const Base = z.object({
   sessionID: z.string(),
   messageID: z.string().optional(),
@@ -171,6 +174,74 @@ export const QualityCriticFindingEvent = Base.extend({
   summary: z.string(),
 })
 
+export const AgentPhaseChangedEvent = Base.extend({
+  type: z.literal("agent.phase.changed"),
+  previousPhase: AgentControl.Phase.optional(),
+  phase: AgentControl.Phase,
+  reason: z.string(),
+})
+
+export const AgentReasoningSelectedEvent = Base.extend({
+  type: z.literal("agent.reasoning.selected"),
+  depth: AgentControl.ReasoningDepth,
+  reason: z.string(),
+  policyVersion: z.string().optional(),
+  checkpoint: z.boolean().optional(),
+})
+
+export const AgentPlanCreatedEvent = Base.extend({
+  type: z.literal("agent.plan.created"),
+  plan: AgentControl.PlanArtifact,
+})
+
+export const AgentPlanUpdatedEvent = Base.extend({
+  type: z.literal("agent.plan.updated"),
+  plan: AgentControl.PlanArtifact,
+  reason: z.string().optional(),
+})
+
+export const AgentValidationUpdatedEvent = Base.extend({
+  type: z.literal("agent.validation.updated"),
+  status: AgentControl.ValidationStatus,
+  reason: z.string().optional(),
+})
+
+export const AgentBlockedEvent = Base.extend({
+  type: z.literal("agent.blocked"),
+  phase: AgentControl.Phase,
+  reason: z.string(),
+  recoverable: z.boolean(),
+})
+
+export const AgentCompletionGateDecidedEvent = Base.extend({
+  type: z.literal("agent.completion_gate.decided"),
+  status: z.enum(["allow", "blocked"]),
+  reason: z.enum(["none", "empty_subagent_result", "unfinished_todos"]).optional(),
+  message: z.string().optional(),
+  retryCount: z.number().int().optional(),
+  maxRetries: z.number().int().optional(),
+})
+
+export const AgentCompletedEvent = Base.extend({
+  type: z.literal("agent.completed"),
+  phase: z.literal("complete"),
+  validationStatus: z.enum(["not_required", "passed"]),
+  summary: z.string().optional(),
+})
+
+export const AgentSafetyDecidedEvent = Base.extend({
+  type: z.literal("agent.safety.decided"),
+  action: SafetyPolicy.Action,
+  risk: SafetyPolicy.Risk,
+  reason: z.string(),
+  permission: z.string(),
+  tool: z.string().optional(),
+  path: z.string().optional(),
+  checkpointRequired: z.boolean(),
+  matchedRule: z.string().optional(),
+  shadow: z.boolean().optional(),
+})
+
 export const ReplayEvent = z.discriminatedUnion("type", [
   SessionStartEvent,
   SessionEndEvent,
@@ -190,5 +261,14 @@ export const ReplayEvent = z.discriminatedUnion("type", [
   AutonomousEscalationEvent,
   PlannerArchitectCallEvent,
   QualityCriticFindingEvent,
+  AgentPhaseChangedEvent,
+  AgentReasoningSelectedEvent,
+  AgentPlanCreatedEvent,
+  AgentPlanUpdatedEvent,
+  AgentValidationUpdatedEvent,
+  AgentBlockedEvent,
+  AgentCompletionGateDecidedEvent,
+  AgentCompletedEvent,
+  AgentSafetyDecidedEvent,
 ])
 export type ReplayEvent = z.infer<typeof ReplayEvent>

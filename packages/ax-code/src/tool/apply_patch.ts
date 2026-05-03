@@ -97,18 +97,6 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
 
       switch (hunk.type) {
         case "add": {
-          // Defense in depth against symlinked parent dirs: a fresh-add
-          // path doesn't exist yet so assertSymlinkInsideProject only
-          // walks ancestors; if a deep parent dir is itself a symlink
-          // pointing outside the project, realpath() resolves it and we
-          // must reject. (Mirrors the move_path branch in `update`.)
-          if (Filesystem.contains(Instance.directory, filePath)) {
-            const parentDir = path.dirname(filePath)
-            const realParent = await fs.realpath(parentDir).catch(() => parentDir)
-            if (!Filesystem.contains(Instance.directory, realParent)) {
-              throw new Error("Access denied: parent directory escapes project directory")
-            }
-          }
           const existed = await fs
             .stat(filePath)
             .then((stats) => {
@@ -185,6 +173,7 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
 
           const movePath = hunk.move_path ? path.resolve(Instance.directory, hunk.move_path) : undefined
           await assertExternalDirectory(ctx, movePath)
+          if (movePath) await assertSymlinkInsideProject(movePath)
           const moveExisted = movePath
             ? await fs
                 .stat(movePath)
@@ -200,20 +189,6 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
               moveOldContent = await fs.readFile(movePath!, "utf-8")
             } catch {
               throw new Error(`apply_patch verification failed: Failed to read move destination: ${movePath!}`)
-            }
-          }
-          if (movePath && Filesystem.contains(Instance.directory, movePath)) {
-            const moveStat = await fs.lstat(movePath).catch(() => null)
-            if (moveStat?.isSymbolicLink()) {
-              const realMove = await fs.realpath(movePath).catch(() => null)
-              if (!realMove || !Filesystem.contains(Instance.directory, realMove)) {
-                throw new Error("Access denied: move_path symlink target escapes project directory")
-              }
-            }
-            const parentDir = path.dirname(movePath)
-            const realParent = await fs.realpath(parentDir).catch(() => parentDir)
-            if (!Filesystem.contains(Instance.directory, realParent)) {
-              throw new Error("Access denied: move_path parent directory escapes project directory")
             }
           }
           if (movePath) Isolation.assertWrite(ctx.extra?.isolation, movePath, Instance.directory, Instance.worktree)

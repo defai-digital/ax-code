@@ -31,6 +31,9 @@ export namespace Risk {
     toolFailures: number
     totalTools: number
     diffState?: DiffState
+    sessionEndReason?: string | null
+    completionGateBlocked?: boolean
+    completionGateReason?: string | null
     semanticRisk?: SemanticRisk | null
     primaryChange?: SessionSemanticCore.Kind | null
   }
@@ -137,6 +140,9 @@ export namespace Risk {
       validationFailures: failures,
       validationCommands: [...new Set(input.validationCommands ?? [])],
       diffState,
+      sessionEndReason: input.sessionEndReason ?? null,
+      completionGateBlocked: input.completionGateBlocked ?? false,
+      completionGateReason: input.completionGateReason ?? null,
       semanticRisk: input.semanticRisk ?? null,
       primaryChange: input.primaryChange ?? null,
     }
@@ -159,6 +165,8 @@ export namespace Risk {
   }
 
   function readiness(signals: NormalizedSignals, conf: number): Readiness {
+    if (signals.completionGateBlocked) return "blocked"
+    if (signals.sessionEndReason === "step_limit" || signals.sessionEndReason === "stalled") return "blocked"
     if (signals.validationState === "failed") return "blocked"
     if (signals.filesChanged > 0 && signals.validationState === "not_run") return "needs_validation"
     if (conf < 0.45) return "needs_review"
@@ -246,6 +254,18 @@ export namespace Risk {
       next.toolFailures > 0 ? Math.min(15, 6 + next.toolFailures * 2) : 0,
       `${next.toolFailures}/${next.totalTools} tool calls failed`,
     )
+    push(
+      "tools",
+      "Control-plane completion",
+      next.completionGateBlocked
+        ? 25
+        : next.sessionEndReason === "step_limit" || next.sessionEndReason === "stalled"
+          ? 18
+          : 0,
+      next.completionGateBlocked
+        ? `completion gate blocked${next.completionGateReason ? `: ${next.completionGateReason}` : ""}`
+        : `session ended ${next.sessionEndReason}`,
+    )
 
     score = Math.min(score, 100)
     const level: Level = score >= 70 ? "CRITICAL" : score >= 45 ? "HIGH" : score >= 20 ? "MEDIUM" : "LOW"
@@ -260,6 +280,10 @@ export namespace Risk {
     if (next.apiEndpointsAffected > 0) parts.push(`${next.apiEndpointsAffected} API endpoints`)
     if (next.validationState === "failed") parts.push("validation failed")
     if (next.toolFailures > 0) parts.push(`${next.toolFailures} tool failures`)
+    if (next.completionGateBlocked) parts.push("completion gate blocked")
+    if (next.sessionEndReason === "step_limit" || next.sessionEndReason === "stalled") {
+      parts.push(`session ended ${next.sessionEndReason}`)
+    }
 
     const evidence = [
       next.diffState === "recorded"
@@ -274,6 +298,12 @@ export namespace Risk {
         : "",
       next.primaryChange ? `semantic change classified as ${SessionSemanticCore.format(next.primaryChange)}` : "",
       next.toolFailures > 0 ? `${next.toolFailures} tool failure${next.toolFailures === 1 ? "" : "s"} recorded` : "",
+      next.completionGateBlocked
+        ? `control-plane completion gate blocked${next.completionGateReason ? `: ${next.completionGateReason}` : ""}`
+        : "",
+      next.sessionEndReason === "step_limit" || next.sessionEndReason === "stalled"
+        ? `session ended with ${next.sessionEndReason}`
+        : "",
     ].filter(Boolean)
 
     const unknowns = [
@@ -283,6 +313,7 @@ export namespace Risk {
         ? "no validation command recorded for code changes"
         : "",
       next.validationState === "partial" ? "validation covered only part of the change" : "",
+      next.completionGateBlocked ? "missing autonomous completion evidence must be recovered before delivery" : "",
     ].filter(Boolean)
 
     const mitigations = [
@@ -293,6 +324,10 @@ export namespace Risk {
         : "",
       next.apiEndpointsAffected > 0 ? "exercise the touched routes with endpoint or contract checks" : "",
       next.securityRelated ? "review auth, session, or credential paths with an owner" : "",
+      next.completionGateBlocked ? "retry or resume the blocked autonomous subtask before accepting completion" : "",
+      next.sessionEndReason === "step_limit" || next.sessionEndReason === "stalled"
+        ? "resume the session or increase the step budget before treating the work as finished"
+        : "",
     ].filter(Boolean)
 
     return {
@@ -319,9 +354,26 @@ export namespace Risk {
     let totalTools = 0
     const validationMap = new Map<string, string>()
     const runs = [] as Array<{ command: string; failed: boolean }>
+    let sessionEndReason: string | null = null
+    let completionGateBlocked = false
+    let completionGateReason: string | null = null
 
     for (const event of events) {
       const e = event as Record<string, unknown>
+      if (e.type === "session.end") {
+        sessionEndReason = String(e.reason ?? "")
+      }
+      if (e.type === "agent.completion_gate.decided") {
+        const status = String(e.status ?? "")
+        if (status === "blocked") {
+          completionGateBlocked = true
+          completionGateReason = String(e.reason ?? "blocked")
+        }
+        if (status === "allow") {
+          completionGateBlocked = false
+          completionGateReason = null
+        }
+      }
       if (e.type === "tool.result") {
         totalTools++
         if (e.status === "error") toolFailures++
@@ -397,6 +449,9 @@ export namespace Risk {
       toolFailures,
       totalTools,
       diffState: diff ? "recorded" : fileList.length > 0 || linesChanged > 0 ? "derived" : "missing",
+      sessionEndReason,
+      completionGateBlocked,
+      completionGateReason,
       semanticRisk: semantic?.risk ?? null,
       primaryChange: semantic?.primary ?? null,
     })

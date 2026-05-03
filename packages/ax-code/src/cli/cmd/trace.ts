@@ -141,6 +141,17 @@ export const TraceCommand: CommandModule = {
               case "agent.route":
                 console.log(`  [${offset}] ROUTE  ${e.fromAgent} \u2192 ${e.toAgent} (confidence: ${e.confidence})`)
                 break
+              case "agent.completion_gate.decided": {
+                const status = e.status === "blocked" ? "\x1b[31mBLOCKED\x1b[0m" : "\x1b[32mALLOW\x1b[0m"
+                const reason = e.reason && e.reason !== "none" ? ` reason=${e.reason}` : ""
+                const retry =
+                  typeof e.retryCount === "number" && typeof e.maxRetries === "number"
+                    ? ` retry=${e.retryCount}/${e.maxRetries}`
+                    : ""
+                const message = e.message ? ` ${String(e.message).slice(0, 120)}` : ""
+                console.log(`  [${offset}] GATE   ${status}${reason}${retry}${message}`)
+                break
+              }
               case "tool.call":
                 console.log(`  [${offset}] TOOL   ${e.tool} ${formatTraceTarget(e)}`)
                 break

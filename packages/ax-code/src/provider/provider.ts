@@ -717,6 +717,12 @@ export namespace Provider {
       })
       const s = await state()
       const provider = s.providers[model.providerID]
+      if (!provider) {
+        throw new ModelNotFoundError({
+          providerID: model.providerID,
+          modelID: model.id,
+        })
+      }
       const options = { ...provider.options }
 
       if (model.api.npm.includes("@ai-sdk/openai-compatible") && options["includeUsage"] !== false) {
