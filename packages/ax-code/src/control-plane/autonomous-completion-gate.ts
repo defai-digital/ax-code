@@ -13,6 +13,7 @@ export namespace AutonomousCompletionGate {
     callID?: string
     taskID?: string
     description?: string
+    recoveredResultNeedsReview?: boolean
   }
 
   export type Decision =
@@ -39,13 +40,16 @@ export namespace AutonomousCompletionGate {
     if (emptyResult) {
       const subject = emptyResult.taskID ? `Subagent ${emptyResult.taskID}` : "A subagent"
       const description = emptyResult.description ? ` for "${emptyResult.description}"` : ""
+      const problem = emptyResult.recoveredResultNeedsReview
+        ? "returned recovered evidence that still needs review"
+        : "completed without a usable final response"
       return {
         status: "blocked",
         reason: "empty_subagent_result",
         signature: `empty-subagent:${emptyResult.callID ?? ""}:${emptyResult.taskID ?? ""}:${
           emptyResult.description ?? ""
         }`,
-        message: `${subject}${description} completed without a usable final response.`,
+        message: `${subject}${description} ${problem}.`,
         emptyResult,
       }
     }
@@ -77,8 +81,11 @@ export namespace AutonomousCompletionGate {
 
         const metadata = asRecord(state["metadata"])
         const output = typeof state["output"] === "string" ? state["output"] : ""
+        const recoveredResultNeedsReview = metadata?.["recoveredResultNeedsReview"] === true
         const emptyResult =
-          metadata?.["emptyResult"] === true || output.includes("Subagent completed without a final response.")
+          metadata?.["emptyResult"] === true ||
+          recoveredResultNeedsReview ||
+          output.includes("Subagent completed without a final response.")
 
         if (!emptyResult) {
           latest = undefined
@@ -90,6 +97,7 @@ export namespace AutonomousCompletionGate {
           callID: typeof record["callID"] === "string" ? record["callID"] : undefined,
           taskID: typeof metadata?.["sessionId"] === "string" ? metadata["sessionId"] : undefined,
           description: typeof input?.["description"] === "string" ? input["description"] : undefined,
+          recoveredResultNeedsReview,
         }
       }
     }

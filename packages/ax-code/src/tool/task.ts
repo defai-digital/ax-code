@@ -22,7 +22,24 @@ const MAX_DEPTH = 5
 // request and then never streams tokens would hang forever without
 // this timeout.
 const SUBAGENT_TIMEOUT_MS = 10 * 60 * 1000
+const SUBAGENT_FINALIZE_TIMEOUT_MS = 2 * 60 * 1000
 const log = Log.create({ service: "task-tool" })
+
+function assistantError(result: Awaited<ReturnType<typeof SessionPrompt.prompt>>) {
+  if (result.info.role !== "assistant") return undefined
+  return result.info.error
+}
+
+function assistantErrorMessage(error: NonNullable<MessageV2.Assistant["error"]>) {
+  const data = error.data as { message?: unknown } | undefined
+  return typeof data?.message === "string" ? data.message : error.name
+}
+
+function needsRecoveredResultReview(text: string) {
+  return /\b(?:incomplete|unresolved|insufficient|no usable|not enough evidence|unable to determine|could not verify|needs? validation|requires? validation)\b/i.test(
+    text,
+  )
+}
 
 const parameters = z.object({
   description: z.string().describe("A short (3-5 words) description of the task"),
@@ -176,7 +193,14 @@ export const TaskTool = Tool.define("task", async (ctx) => {
         providerID: msg.info.providerID,
       }
 
+      const taskTools = {
+        todowrite: false,
+        todoread: false,
+        ...(hasTaskPermission ? {} : { task: false }),
+        ...Object.fromEntries((config.experimental?.primary_tools ?? []).map((t) => [t, false])),
+      }
       let result: Awaited<ReturnType<typeof SessionPrompt.prompt>>
+      let finalizeAttempted = false
       try {
         ensureNotAborted()
         ctx.metadata({
@@ -200,17 +224,46 @@ export const TaskTool = Tool.define("task", async (ctx) => {
               providerID: model.providerID,
             },
             agent: agent.name,
-            tools: {
-              todowrite: false,
-              todoread: false,
-              ...(hasTaskPermission ? {} : { task: false }),
-              ...Object.fromEntries((config.experimental?.primary_tools ?? []).map((t) => [t, false])),
-            },
+            tools: taskTools,
             parts: promptParts,
           }),
           SUBAGENT_TIMEOUT_MS,
           `Subagent timed out after ${SUBAGENT_TIMEOUT_MS / 60_000} minutes — provider may be unresponsive`,
         )
+
+        let text = result.parts.findLast((x) => x.type === "text")?.text ?? ""
+        const firstError = assistantError(result)
+        if (text.trim().length === 0 && !firstError) {
+          finalizeAttempted = true
+          const finalizeMessageID = MessageID.ascending()
+          result = await withTimeout(
+            SessionPrompt.prompt({
+              messageID: finalizeMessageID,
+              sessionID: session.id,
+              model: {
+                modelID: model.modelID,
+              providerID: model.providerID,
+              },
+              agent: agent.name,
+              tools: {
+                ...taskTools,
+                task: false,
+              },
+              parts: [
+                {
+                  type: "text",
+                  text:
+                    `Your previous subagent turn ended without a usable final response. ` +
+                    `Produce the final result for this task now in plain text. ` +
+                    `Do not call more tools unless absolutely required. ` +
+                    `If the evidence is incomplete, explicitly say what was inspected and what remains unresolved.`,
+                },
+              ],
+            }),
+            SUBAGENT_FINALIZE_TIMEOUT_MS,
+            `Subagent finalization timed out after ${SUBAGENT_FINALIZE_TIMEOUT_MS / 60_000} minutes`,
+          )
+        }
       } catch (e) {
         // Cancel the in-flight processor before removing the session.
         // Without this, a timed-out subagent's processor continues
@@ -229,13 +282,28 @@ export const TaskTool = Tool.define("task", async (ctx) => {
       }
 
       const text = result.parts.findLast((x) => x.type === "text")?.text ?? ""
+      const error = assistantError(result)
       const emptyResult = text.trim().length === 0
+      const recoveredFromEmpty = finalizeAttempted && !emptyResult
+      const recoveredResultNeedsReview = recoveredFromEmpty && needsRecoveredResultReview(text)
       const taskResultText = emptyResult
-        ? [
-            "Subagent completed without a final response.",
-            "Treat this as incomplete evidence: retry the task, resume the task_id, or explain that no usable subagent result was returned.",
-          ].join("\n")
-        : text
+        ? error
+          ? [
+              `Subagent ended with ${error.name}: ${assistantErrorMessage(error)}.`,
+              "Treat this as incomplete evidence: retry the task, resume the task_id, or explain that no usable subagent result was returned.",
+            ].join("\n")
+          : [
+              "Subagent completed without a final response.",
+              "Treat this as incomplete evidence: retry the task, resume the task_id, or explain that no usable subagent result was returned.",
+            ].join("\n")
+        : [
+            recoveredFromEmpty
+              ? "Note: this result was recovered by asking the subagent to finalize after an initially empty response."
+              : "",
+            text,
+          ]
+            .filter(Boolean)
+            .join("\n\n")
 
       const output = [
         `task_id: ${session.id} (for resuming to continue this task if needed)`,
@@ -251,6 +319,12 @@ export const TaskTool = Tool.define("task", async (ctx) => {
           sessionId: session.id,
           model,
           emptyResult,
+          finalizeAttempted,
+          recoveredFromEmpty,
+          recoveredResultNeedsReview,
+          subagentError: !!error,
+          errorName: error?.name,
+          errorMessage: error ? assistantErrorMessage(error) : undefined,
         },
         output,
       }

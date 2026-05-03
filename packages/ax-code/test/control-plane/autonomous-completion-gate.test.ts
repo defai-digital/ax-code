@@ -70,6 +70,48 @@ describe("AutonomousCompletionGate", () => {
     expect(decision).toEqual({ status: "allow" })
   })
 
+  test("blocks recovered subagent results that still need review", () => {
+    const decision = AutonomousCompletionGate.evaluate({
+      pendingTodos: [],
+      messages: [
+        {
+          parts: [
+            {
+              type: "tool",
+              tool: "task",
+              callID: "call_recovered",
+              state: {
+                status: "completed",
+                input: { description: "review benchmark code" },
+                output: "Evidence remains incomplete and needs validation.",
+                metadata: {
+                  emptyResult: false,
+                  finalizeAttempted: true,
+                  recoveredFromEmpty: true,
+                  recoveredResultNeedsReview: true,
+                  sessionId: "ses_recovered",
+                },
+              },
+            },
+          ],
+        },
+      ],
+    })
+
+    expect(decision).toMatchObject({
+      status: "blocked",
+      reason: "empty_subagent_result",
+      emptyResult: {
+        callID: "call_recovered",
+        taskID: "ses_recovered",
+        description: "review benchmark code",
+        recoveredResultNeedsReview: true,
+      },
+    })
+    if (decision.status !== "blocked") throw new Error("unexpected allow")
+    expect(decision.message).toContain("returned recovered evidence that still needs review")
+  })
+
   test("blocks completion when todos are unfinished", () => {
     const decision = AutonomousCompletionGate.evaluate({
       messages: [],
