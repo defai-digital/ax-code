@@ -25,6 +25,8 @@ import { Isolation } from "@/isolation"
 import { DiagnosticLog } from "@/debug/diagnostic-log"
 import { withTimeout } from "@/util/timeout"
 
+import { ReasoningPolicy } from "./reasoning-policy"
+
 export namespace LLM {
   const log = Log.create({ service: "llm" })
   export const OUTPUT_TOKEN_MAX = ProviderTransform.OUTPUT_TOKEN_MAX
@@ -110,6 +112,17 @@ export namespace LLM {
 
     const variant =
       !input.small && input.model.variants && input.user.variant ? input.model.variants[input.user.variant] : {}
+    const reasoningPolicyDecision = ReasoningPolicy.decide({
+      small: input.small,
+      autonomous: process.env["AX_CODE_AUTONOMOUS"] === "true",
+      userVariant: input.user.variant,
+      model: input.model,
+      agent: input.agent,
+      providerOptions: provider?.options,
+      messages: input.messages,
+    })
+    const reasoningPolicyReminder = ReasoningPolicy.systemReminder(reasoningPolicyDecision)
+    if (reasoningPolicyReminder) system.push(reasoningPolicyReminder)
     const base = input.small
       ? ProviderTransform.smallOptions(input.model)
       : ProviderTransform.options({
@@ -122,6 +135,7 @@ export namespace LLM {
       mergeDeep(input.model.options),
       mergeDeep(input.agent.options),
       mergeDeep(variant),
+      mergeDeep(reasoningPolicyDecision.options),
     )
     const messages = [
       ...system.map(
