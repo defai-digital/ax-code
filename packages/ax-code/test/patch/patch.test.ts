@@ -291,14 +291,15 @@ PATCH`
       await expect(Patch.applyPatch(patchText)).rejects.toThrow()
     })
 
-    test("should throw error when deleting non-existent file", async () => {
+    test("silently succeeds when deleting a non-existent file", async () => {
       const nonExistent = path.join(tempDir, "does-not-exist.txt")
 
       const patchText = `*** Begin Patch
 *** Delete File: ${nonExistent}
 *** End Patch`
 
-      await expect(Patch.applyPatch(patchText)).rejects.toThrow()
+      const result = await Patch.applyPatch(patchText)
+      expect(result.deleted).toContain(nonExistent)
     })
   })
 

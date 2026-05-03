@@ -667,7 +667,7 @@ Nested agent prompt`,
   })
 })
 
-test("rejects invalid modes from .ax-code/modes", async () => {
+test("skips invalid modes from .ax-code/modes without throwing", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       const opencodeDir = path.join(dir, ".ax-code")
@@ -688,17 +688,8 @@ Broken mode prompt`,
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
-      let error: unknown
-      try {
-        await Config.get()
-      } catch (cause) {
-        error = cause
-      }
-
-      expect(Config.InvalidError.isInstance(error)).toBe(true)
-      if (Config.InvalidError.isInstance(error)) {
-        expect(error.data.path).toBe(path.join(tmp.path, ".ax-code", "modes", "broken.md"))
-      }
+      const config = await Config.get()
+      expect(config.modes).not.toHaveProperty("broken")
     },
   })
 })
