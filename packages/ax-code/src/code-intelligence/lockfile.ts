@@ -74,8 +74,22 @@ export namespace IndexLock {
     }
   }
 
+  async function readFileIfExists(target: string): Promise<string | undefined> {
+    return fs.readFile(target, "utf-8").catch((err: NodeJS.ErrnoException) => {
+      if (err?.code === "ENOENT") return undefined
+      throw err
+    })
+  }
+
+  async function unlinkIfExists(target: string): Promise<void> {
+    return fs.unlink(target).catch((err: NodeJS.ErrnoException) => {
+      if (err?.code === "ENOENT") return
+      throw err
+    })
+  }
+
   async function readLockBody(target: string): Promise<LockBody | undefined> {
-    const text = await fs.readFile(target, "utf-8").catch(() => undefined)
+    const text = await readFileIfExists(target)
     if (text === undefined) return undefined
     try {
       return JSON.parse(text) as LockBody
@@ -88,17 +102,17 @@ export namespace IndexLock {
   // is dead or the lock is stale). Returns false if the previous holder
   // is still alive and the lock is fresh.
   async function maybeSteal(target: string): Promise<boolean> {
-    const body = await readLockBody(target).catch(() => undefined)
+    const body = await readLockBody(target)
     if (!body) {
       // Corrupt or missing file — safe to steal.
-      await fs.unlink(target).catch(() => undefined)
+      await unlinkIfExists(target)
       return true
     }
     const sameHost = (process.env.HOSTNAME ?? "") === body.host
     const age = Date.now() - body.startedAt
     if (age > STALE_LOCK_MS) {
       log.warn("stealing stale index lock", { target, age, body })
-      await fs.unlink(target).catch(() => undefined)
+      await unlinkIfExists(target)
       return true
     }
     if (sameHost && body.pid !== process.pid) {
@@ -121,7 +135,7 @@ export namespace IndexLock {
       })
       if (!alive) {
         log.warn("stealing abandoned index lock", { target, body })
-        await fs.unlink(target).catch(() => undefined)
+        await unlinkIfExists(target)
         return true
       }
     }
@@ -214,6 +228,6 @@ export namespace IndexLock {
   // holder. Production code should never need this — tests use it to
   // reset between cases.
   export async function __reset(projectID: ProjectID): Promise<void> {
-    await fs.unlink(lockPath(projectID)).catch(() => undefined)
+    await unlinkIfExists(lockPath(projectID))
   }
 }

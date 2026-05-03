@@ -50,7 +50,14 @@ function detectPathTraversal(lines: string[], file: string, max: number): DebugE
     if (containmentRe.test(nearby)) continue
 
     // Skip if all arguments are string literals (no user input)
-    const argsStr = lines[i].slice(lines[i].indexOf("path."))
+    let argsStr = lines[i].slice(lines[i].indexOf("path."))
+    if (!argsStr.includes(")")) {
+      let j = i + 1
+      while (j < lines.length && j < i + 20 && !argsStr.includes(")")) {
+        argsStr += " " + lines[j]
+        j++
+      }
+    }
     const allLiterals = /path\.(?:join|resolve)\s*\(\s*(?:["'`][^"'`]*["'`]\s*,?\s*)*\)/.test(argsStr)
     if (allLiterals) continue
 

@@ -20,6 +20,13 @@ import { BlastRadius } from "@/session/blast-radius"
 
 const log = Log.create({ service: "tool.apply_patch" })
 
+async function readFileIfExists(filePath: string): Promise<string | undefined> {
+  return fs.readFile(filePath, "utf-8").catch((err: NodeJS.ErrnoException) => {
+    if (err?.code === "ENOENT") return undefined
+    throw err
+  })
+}
+
 const PatchParams = z.object({
   patchText: z
     .string()
@@ -374,7 +381,7 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
           case "add":
             await fs.mkdir(path.dirname(change.filePath), { recursive: true })
             await FileTime.withLock(change.filePath, async () => {
-              const current = await fs.readFile(change.filePath, "utf-8").catch(() => undefined)
+              const current = await readFileIfExists(change.filePath)
               if (!change.existed && current !== undefined) {
                 throw new Error(`apply_patch conflict: ${change.filePath} was created between verification and write`)
               }
@@ -390,7 +397,7 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
 
           case "update":
             await FileTime.withLock(change.filePath, async () => {
-              const current = await fs.readFile(change.filePath, "utf-8").catch(() => undefined)
+              const current = await readFileIfExists(change.filePath)
               if (current !== undefined && current !== change.oldContent)
                 throw new Error(`apply_patch conflict: ${change.filePath} was modified between verification and write`)
               activeDirty = true
@@ -407,7 +414,7 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
               const [first, second] = [change.filePath, dest].sort()
               if (first === second) {
                 await FileTime.withLock(first, async () => {
-                  const current = await fs.readFile(change.filePath, "utf-8").catch(() => undefined)
+                  const current = await readFileIfExists(change.filePath)
                   if (current !== change.oldContent) {
                     throw new Error(
                       `apply_patch conflict: ${change.filePath} was modified between verification and write`,
@@ -420,13 +427,13 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
               } else {
                 await FileTime.withLock(first, async () => {
                   await FileTime.withLock(second, async () => {
-                    const currentSource = await fs.readFile(change.filePath, "utf-8").catch(() => undefined)
+                    const currentSource = await readFileIfExists(change.filePath)
                     if (currentSource !== change.oldContent) {
                       throw new Error(
                         `apply_patch conflict: ${change.filePath} was modified between verification and write`,
                       )
                     }
-                    const currentDest = await fs.readFile(dest, "utf-8").catch(() => undefined)
+                    const currentDest = await readFileIfExists(dest)
                     if (!change.moveExisted && currentDest !== undefined) {
                       throw new Error(`apply_patch conflict: ${dest} was created between verification and write`)
                     }

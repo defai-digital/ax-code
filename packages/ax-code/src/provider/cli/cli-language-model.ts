@@ -9,6 +9,9 @@ import { Env } from "../../util/env"
 import { promptToText } from "./prompt"
 import type { CliOutputParser } from "./parser"
 import { buffer } from "node:stream/consumers"
+import { Log } from "@/util/log"
+
+const log = Log.create({ service: "provider.cli-language-model" })
 
 export interface CliLanguageModelConfig {
   providerID: string
@@ -105,7 +108,11 @@ export class CliLanguageModel implements LanguageModelV3 {
           killTimer = undefined
         }
       })
-      .catch(() => {})
+      .catch((err) => {
+        log.debug("cli process exited with error", {
+          error: err instanceof Error ? err.message : String(err),
+        })
+      })
     const timeout = new Promise<never>(
       (_, reject) =>
         (timeoutTimer = setTimeout(() => {
@@ -120,7 +127,12 @@ export class CliLanguageModel implements LanguageModelV3 {
         }, CLI_TIMEOUT_MS)),
     )
     const result = Promise.all([proc.exited, buffer(proc.stdout), buffer(proc.stderr)])
-    result.catch(() => {})
+    result.catch((err) => {
+      log.warn("cli language model result collection failed", {
+        error: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+      })
+    })
     const [code, stdout, stderr] = await Promise.race([result, timeout])
     clearTimeout(timeoutTimer!)
     if (code !== 0) {
@@ -211,10 +223,17 @@ export class CliLanguageModel implements LanguageModelV3 {
           })
           safeClose()
         }
-        proc.stderr!.on("data", (chunk: Buffer) => {
+        if (!proc.stdout || !proc.stderr) {
+          controller.enqueue({ type: "error", error: new Error("CLI process output not available") })
+          safeClose()
+          return
+        }
+        const stdout = proc.stdout
+        const stderr = proc.stderr
+        stderr.on("data", (chunk: Buffer) => {
           stderrRaw.push(chunk)
         })
-        proc.stdout!.on("data", (chunk: Buffer) => {
+        stdout.on("data", (chunk: Buffer) => {
           if (closed()) return
           const text = remainder + chunk.toString()
           raw.push(chunk.toString())
@@ -230,7 +249,7 @@ export class CliLanguageModel implements LanguageModelV3 {
           }
         })
 
-        proc.stdout!.on("end", () => {
+        stdout.on("end", () => {
           clearTimeout(timer)
           if (closed()) return
           stdoutEnded = true
@@ -238,7 +257,7 @@ export class CliLanguageModel implements LanguageModelV3 {
           finishSuccess()
         })
 
-        proc.stdout!.on("error", (err: Error) => {
+        stdout.on("error", (err: Error) => {
           clearTimeout(timer)
           proc.kill("SIGTERM")
           if (closed()) return

@@ -341,7 +341,14 @@ export namespace CodeGraphBuilder {
   const projectMutexes = new Map<string, Promise<unknown>>()
   async function withProjectLock<T>(projectID: ProjectID, fn: () => Promise<T>): Promise<T> {
     const prev = projectMutexes.get(projectID) ?? Promise.resolve()
-    const next = prev.then(fn, fn)
+    const next = prev.then(fn, (err) => {
+      log.warn("previous project lock operation failed before next index run", {
+        projectID,
+        error: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+      })
+      return fn()
+    })
     const sentinel = next.catch(() => {})
     projectMutexes.set(projectID, sentinel)
     // Clean up the entry when the chain settles and no newer

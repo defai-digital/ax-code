@@ -352,11 +352,16 @@ export namespace SessionProcessor {
                     BlastRadius.assertWithinCaps(input.sessionID)
                   }
 
+                  const toolInput =
+                    value.input && typeof value.input === "object" && !Array.isArray(value.input)
+                      ? (value.input as Record<string, unknown>)
+                      : {}
+
                   stepParts.push({
                     type: "tool_call",
                     callID: value.toolCallId,
                     tool: value.toolName,
-                    input: value.input as Record<string, unknown>,
+                    input: toolInput,
                   })
                   Recorder.emit({
                     type: "tool.call",
@@ -364,7 +369,7 @@ export namespace SessionProcessor {
                     messageID: input.assistantMessage.id,
                     tool: value.toolName,
                     callID: value.toolCallId,
-                    input: value.input as Record<string, unknown>,
+                    input: toolInput,
                     stepIndex: attempt,
                   })
                   const match = toolcalls[value.toolCallId]

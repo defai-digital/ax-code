@@ -281,13 +281,18 @@ async function scanFile(
     // closed on the same line. Anything after the unclosed opener
     // belongs to the block and must be stripped; we also flip the
     // state so subsequent lines know we're still inside.
-    const openIdx = remaining.indexOf("/*")
-    if (openIdx !== -1) {
+    let openIdx = remaining.indexOf("/*")
+    while (openIdx !== -1) {
       const closeIdx = remaining.indexOf("*/", openIdx + 2)
       if (closeIdx === -1) {
         remaining = remaining.slice(0, openIdx)
         inBlockComment = true
+        break
+      } else {
+        remaining =
+          remaining.slice(0, openIdx) + " ".repeat(closeIdx + 2 - openIdx) + remaining.slice(closeIdx + 2)
       }
+      openIdx = remaining.indexOf("/*", openIdx + 1)
     }
     if (remaining.trim().length === 0) continue
 

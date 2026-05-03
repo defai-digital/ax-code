@@ -969,11 +969,10 @@ export namespace Provider {
     const s = await state()
     const key = `${model.providerID}/${model.id}`
 
-    // Deduplicate concurrent loads before returning cached values to avoid TOCTOU
-    // gaps between a cache miss and concurrent promise creation.
+    const cached = s.models.get(key)
+    if (cached) return cached
     const pending = s.modelPending.get(key)
     if (pending) return pending
-    if (s.models.has(key)) return s.models.get(key)!
 
     const provider = s.providers[model.providerID]
     if (!provider) {

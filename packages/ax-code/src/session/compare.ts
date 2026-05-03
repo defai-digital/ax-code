@@ -312,11 +312,13 @@ export namespace SessionCompare {
   }
 
   export async function compare(input: { sessionID: SessionID; otherSessionID: SessionID; deep?: boolean }) {
-    const [session1, session2, semantic1, semantic2] = await Promise.all([
+    const [session1, session2] = await Promise.all([
       Session.get(input.sessionID),
       Session.get(input.otherSessionID),
-      SessionSemanticDiff.load(input.sessionID),
-      SessionSemanticDiff.load(input.otherSessionID),
+    ])
+    const [semantic1, semantic2] = await Promise.all([
+      SessionSemanticDiff.load(input.sessionID).catch(() => undefined),
+      SessionSemanticDiff.load(input.otherSessionID).catch(() => undefined),
     ])
     return detail({
       session1: { id: input.sessionID, title: session1.title },

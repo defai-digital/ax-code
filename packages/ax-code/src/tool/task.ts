@@ -121,6 +121,8 @@ export const TaskTool = Tool.define("task", async (ctx) => {
           })
         })
       }
+      ctx.abort.addEventListener("abort", cancelSubagent, { once: true })
+      using _cancelSubagent = defer(() => ctx.abort.removeEventListener("abort", cancelSubagent))
 
       const session = await iife(async () => {
         if (params.task_id) {
@@ -164,8 +166,6 @@ export const TaskTool = Tool.define("task", async (ctx) => {
         })
       })
       subagentSessionID = session.id
-      ctx.abort.addEventListener("abort", cancelSubagent, { once: true })
-      using _cancelSubagent = defer(() => ctx.abort.removeEventListener("abort", cancelSubagent))
       if (ctx.abort.aborted || aborted) cancelSubagent()
       const msg = await MessageV2.get({ sessionID: ctx.sessionID, messageID: ctx.messageID })
       ensureNotAborted()

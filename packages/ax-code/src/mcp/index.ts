@@ -709,7 +709,11 @@ export namespace MCP {
     const next = prev.then(fn, fn)
     const locked = next
       .catch((err) => {
-        log.warn(errorLabel, { name, error: err instanceof Error ? err.message : String(err) })
+        log.warn(errorLabel, {
+          name,
+          error: err instanceof Error ? err.message : String(err),
+          stack: err instanceof Error ? err.stack : undefined,
+        })
       })
       .finally(() => {
         if (connectLocks.get(name) === locked) connectLocks.delete(name)

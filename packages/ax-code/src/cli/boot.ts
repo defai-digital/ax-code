@@ -137,6 +137,13 @@ export function hooks() {
   process.on("uncaughtException", onUncaughtException)
 }
 
+export function removeHooks() {
+  if (!hooksInstalled) return
+  hooksInstalled = false
+  process.off("unhandledRejection", onUnhandledRejection)
+  process.off("uncaughtException", onUncaughtException)
+}
+
 export function cli(argv = hideBin(process.argv)) {
   let cli = yargs(argv)
     .parserConfiguration({ "populate--": true })

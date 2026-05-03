@@ -100,7 +100,13 @@ export namespace Bus {
   ) {
     const { payload, pending } = prepare(def, properties)
     emitGlobal(payload)
-    void Promise.all(pending).catch(() => {})
+    void Promise.all(pending).catch((err) => {
+      log.warn("subscriber failed during detached publish", {
+        event: def.type,
+        error: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+      })
+    })
   }
 
   export function subscribe<Definition extends BusEvent.Definition>(

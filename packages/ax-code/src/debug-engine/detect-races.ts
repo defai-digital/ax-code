@@ -208,6 +208,15 @@ function detectNonAtomicCounter(lines: LineInfo[], file: string, max: number): D
 function detectConflictingMutations(lines: LineInfo[], file: string, max: number): DebugEngine.RaceFinding[] {
   const findings: DebugEngine.RaceFinding[] = []
   const content = lines.map((l) => l.text).join("\n")
+  const isEscaped = (index: number) => {
+    let count = 0
+    let i = index - 1
+    while (i >= 0 && content[i] === "\\") {
+      count++
+      i--
+    }
+    return count % 2 === 1
+  }
 
   // Match Promise.all/allSettled blocks. This is a heuristic — we look
   // for the opening `Promise.all([` or `Promise.allSettled([` and scan
@@ -229,7 +238,7 @@ function detectConflictingMutations(lines: LineInfo[], file: string, max: number
     while (i < content.length && depth > 0) {
       const ch = content[i]
       if (inString) {
-        if (ch === inString && content[i - 1] !== "\\") inString = null
+        if (ch === inString && !isEscaped(i)) inString = null
       } else {
         if (ch === '"' || ch === "'" || ch === "`") inString = ch
         else if (ch === "[") depth++
