@@ -72,7 +72,7 @@ export namespace SessionRollback {
     })
   }
 
-  export function detail(input: { points: Point[]; graph: ExecutionGraph.Graph }) {
+  export function detail(input: { points: Point[]; graph: ExecutionGraph.Graph }): Point[] {
     const steps = new Map(
       input.graph.nodes.filter((node) => node.type === "step").map((node) => [node.stepIndex ?? -1, node]),
     )

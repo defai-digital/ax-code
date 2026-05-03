@@ -2593,7 +2593,7 @@ export const DreGraphRoutes = lazy(() =>
           SessionDre.snapshot(sid),
           SessionRisk.load(sid, { includeQuality: query.quality }),
           SessionBranchRank.family(sid).catch(() => undefined),
-          SessionRollback.points(sid).catch(() => undefined),
+          SessionRollback.points(sid).catch((): SessionRollback.Point[] => []),
         ])
 
         c.header("cache-control", "no-store")
@@ -2634,7 +2634,7 @@ export const DreGraphRoutes = lazy(() =>
           SessionDre.snapshot(sid),
           SessionRisk.load(sid, { includeQuality: query.quality }),
           SessionBranchRank.family(sid).catch(() => undefined),
-          SessionRollback.points(sid).catch(() => undefined),
+          SessionRollback.points(sid).catch((): SessionRollback.Point[] => []),
         ])
 
         c.header("cache-control", "no-store")
