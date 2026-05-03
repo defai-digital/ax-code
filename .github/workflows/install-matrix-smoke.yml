@@ -128,15 +128,18 @@ jobs:
           # release_published can fire before publish-npm/publish-source
           # finish (or before the npm registry has propagated the new
           # version). Poll npm until the version is visible, then install.
-          # Cap at ~10 minutes so a genuinely missing publish still fails.
+          # Cap at ~30 minutes so release_published events that arrive
+          # before the compiled npm/Homebrew channels finish publishing do
+          # not produce false failures. v5.0.1 compiled npm/Homebrew
+          # propagation took ~13 minutes after the release event.
           echo "Waiting for ${PACKAGE}@${VERSION} to be available on npm..."
-          for attempt in $(seq 1 60); do
+          for attempt in $(seq 1 180); do
             if npm view "${PACKAGE}@${VERSION}" version >/dev/null 2>&1; then
               echo "${PACKAGE}@${VERSION} is available (attempt ${attempt})"
               break
             fi
-            if [ "$attempt" = "60" ]; then
-              echo "FAIL: ${PACKAGE}@${VERSION} not visible on npm after 10 minutes"
+            if [ "$attempt" = "180" ]; then
+              echo "FAIL: ${PACKAGE}@${VERSION} not visible on npm after 30 minutes"
               exit 1
             fi
             sleep 10
@@ -251,7 +254,7 @@ jobs:
           echo "Waiting for Homebrew tap formula ax-code ${VERSION}..."
           # Initial update to bring local tap state up to date.
           brew update 2>&1 || true
-          for attempt in $(seq 1 60); do
+          for attempt in $(seq 1 180); do
             # Re-fetch the tap on each attempt so brew info reflects the
             # latest formula. brew tap on an already-tapped tap runs git pull;
             # suppress output but allow it to fail (broken-pipe on CI runners
@@ -264,8 +267,8 @@ jobs:
               echo "Homebrew formula ${VERSION} is available (attempt ${attempt})"
               break
             fi
-            if [ "$attempt" = "60" ]; then
-              echo "FAIL: Homebrew formula did not converge to ${VERSION} after 10 minutes"
+            if [ "$attempt" = "180" ]; then
+              echo "FAIL: Homebrew formula did not converge to ${VERSION} after 30 minutes"
               echo "$BREW_INFO"
               exit 1
             fi

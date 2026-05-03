@@ -689,7 +689,7 @@ Broken mode prompt`,
     directory: tmp.path,
     fn: async () => {
       const config = await Config.get()
-      expect(config.modes).not.toHaveProperty("broken")
+      expect(config.mode).not.toHaveProperty("broken")
     },
   })
 })

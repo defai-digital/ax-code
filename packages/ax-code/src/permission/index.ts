@@ -313,31 +313,36 @@ export namespace Permission {
     const existing = pending.get(input.requestID)
     if (!existing) return
 
-    pending.delete(input.requestID)
-    const publishReply = (reply: z.infer<typeof ReplyInput>["reply"]) => {
+    const publishReply = (entry: PendingEntry, reply: z.infer<typeof ReplyInput>["reply"]) => {
       Bus.publishDetached(Event.Replied, {
-        sessionID: existing.info.sessionID,
-        requestID: existing.info.id,
+        sessionID: entry.info.sessionID,
+        requestID: entry.info.id,
         reply,
       })
-      if (Recorder.active(existing.info.sessionID)) {
+      if (Recorder.active(entry.info.sessionID)) {
         Recorder.emit({
           type: "permission.reply",
-          sessionID: existing.info.sessionID,
-          permission: existing.info.permission,
+          sessionID: entry.info.sessionID,
+          permission: entry.info.permission,
           reply,
         })
       }
     }
 
     if (input.reply === "reject") {
-      publishReply(input.reply)
-      existing.deferred.reject(input.message ? new CorrectedError({ feedback: input.message }) : new RejectedError())
+      for (const [id, entry] of [...pending.entries()]) {
+        if (entry.info.sessionID !== existing.info.sessionID) continue
+        pending.delete(id)
+        publishReply(entry, input.reply)
+        entry.deferred.reject(input.message ? new CorrectedError({ feedback: input.message }) : new RejectedError())
+      }
       return
     }
 
+    pending.delete(input.requestID)
+
     if (input.reply === "once") {
-      publishReply(input.reply)
+      publishReply(existing, input.reply)
       existing.deferred.resolve(undefined)
       return
     }
@@ -374,7 +379,7 @@ export namespace Permission {
       existing.deferred.reject(error)
       throw error
     }
-    publishReply(input.reply)
+    publishReply(existing, input.reply)
 
     for (const pattern of existing.info.always) {
       approved.push({
