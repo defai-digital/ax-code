@@ -1,26 +1,37 @@
-export type RuntimeSyncEvent =
-  | { type: "mcp.tools.changed" }
-  | { type: "lsp.updated" }
-  | { type: "code.index.progress" }
-  | { type: "code.index.state" }
-  | { type: "vcs.branch.updated"; properties: { branch: string } }
+import type { HeadlessRuntimeProbeKey } from "@/runtime/headless/event"
 
-export interface RuntimeSyncEventHandlers {
+export interface RuntimeSyncProbeHandlers {
   syncMcpStatus: () => Promise<void> | void
   syncLspStatus: () => Promise<void> | void
   syncDebugEngine: () => Promise<void> | void
-  setVcsBranch: (branch: string) => void
   onWarn: (label: string, error: unknown) => void
-  scheduleProbe?: RuntimeSyncProbeScheduler["schedule"]
 }
 
-export type RuntimeSyncProbeKey = "mcp" | "lsp" | "debug-engine"
+export type RuntimeSyncProbeKey = HeadlessRuntimeProbeKey
 
 export interface RuntimeSyncProbeTask {
   key: RuntimeSyncProbeKey
   label: string
   run: () => Promise<void> | void
   onWarn: (label: string, error: unknown) => void
+}
+
+const RUNTIME_PROBE_LABEL: Record<RuntimeSyncProbeKey, string> = {
+  mcp: "mcp status sync failed",
+  lsp: "lsp status sync failed",
+  "debug-engine": "debug engine sync failed",
+}
+
+export function runtimeSyncProbeTask(
+  key: RuntimeSyncProbeKey,
+  handlers: RuntimeSyncProbeHandlers,
+): RuntimeSyncProbeTask {
+  return {
+    key,
+    label: RUNTIME_PROBE_LABEL[key],
+    run: runtimeProbeRunner(key, handlers),
+    onWarn: handlers.onWarn,
+  }
 }
 
 export const DEFAULT_RUNTIME_SYNC_PROBE_DELAY_MS = 750
@@ -113,54 +124,13 @@ async function runRuntimeSyncProbe(input: RuntimeSyncProbeTask) {
   }
 }
 
-function syncWithWarning(task: RuntimeSyncProbeTask, scheduleProbe: RuntimeSyncEventHandlers["scheduleProbe"]) {
-  if (scheduleProbe) {
-    scheduleProbe(task)
-    return
-  }
-  void runRuntimeSyncProbe(task)
-}
-
-export function handleRuntimeSyncEvent(event: RuntimeSyncEvent, handlers: RuntimeSyncEventHandlers) {
-  switch (event.type) {
-    case "mcp.tools.changed":
-      syncWithWarning(
-        { key: "mcp", label: "mcp status sync failed", run: handlers.syncMcpStatus, onWarn: handlers.onWarn },
-        handlers.scheduleProbe,
-      )
-      return true
-
-    case "lsp.updated":
-      syncWithWarning(
-        { key: "lsp", label: "lsp status sync failed", run: handlers.syncLspStatus, onWarn: handlers.onWarn },
-        handlers.scheduleProbe,
-      )
-      syncWithWarning(
-        {
-          key: "debug-engine",
-          label: "debug engine sync failed",
-          run: handlers.syncDebugEngine,
-          onWarn: handlers.onWarn,
-        },
-        handlers.scheduleProbe,
-      )
-      return true
-
-    case "code.index.progress":
-    case "code.index.state":
-      syncWithWarning(
-        {
-          key: "debug-engine",
-          label: "debug engine sync failed",
-          run: handlers.syncDebugEngine,
-          onWarn: handlers.onWarn,
-        },
-        handlers.scheduleProbe,
-      )
-      return true
-
-    case "vcs.branch.updated":
-      handlers.setVcsBranch(event.properties.branch)
-      return true
+function runtimeProbeRunner(key: RuntimeSyncProbeKey, handlers: RuntimeSyncProbeHandlers) {
+  switch (key) {
+    case "mcp":
+      return handlers.syncMcpStatus
+    case "lsp":
+      return handlers.syncLspStatus
+    case "debug-engine":
+      return handlers.syncDebugEngine
   }
 }

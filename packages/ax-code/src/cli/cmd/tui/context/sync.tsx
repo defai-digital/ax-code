@@ -41,7 +41,7 @@ import { createSyncContextValue } from "./sync-result"
 import { subscribeStoreBackedSyncEvents } from "./sync-subscription"
 import { registerSyncLifecycle } from "./sync-lifecycle"
 import { parseSyncedSessionRisk } from "./sync-session-risk"
-import { createRuntimeSyncProbeScheduler } from "./sync-runtime-event"
+import { createRuntimeSyncProbeScheduler } from "./sync-runtime-probe"
 import { DiagnosticLog } from "@/debug/diagnostic-log"
 
 const BOOTSTRAP_REQUEST_TIMEOUT_MS = 10_000

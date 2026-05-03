@@ -3,7 +3,7 @@ import {
   type DispatchStoreBackedSyncEventInput,
   type SyncEventStoreState,
 } from "./sync-store-event"
-import type { SyncEvent } from "./sync-event-router"
+import type { SyncEvent } from "./sync-event"
 
 interface SyncEventEnvelope<TDetails = unknown> {
   details: TDetails

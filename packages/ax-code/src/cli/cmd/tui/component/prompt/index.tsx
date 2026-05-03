@@ -60,7 +60,7 @@ import { Usage } from "../../routes/session/usage"
 import { Log } from "@/util/log"
 import { DiagnosticLog } from "@/debug/diagnostic-log"
 import { promptEscapeClearIntent, isPromptExitCommand, promptSubmissionView } from "./view-model"
-import { applySessionUpsertEvent } from "../../context/sync-event-dispatch"
+import { upsert } from "../../context/sync-util"
 import { summarizedPasteViews } from "./paste-view-model"
 import { withTimeout } from "@/util/timeout"
 import { footerSessionStatusView } from "../../routes/session/footer-view-model"
@@ -209,7 +209,7 @@ export function Prompt(props: PromptProps) {
     sync.set(
       "session",
       produce((draft) => {
-        applySessionUpsertEvent(draft, session)
+        upsert(draft, session)
       }),
     )
   }

@@ -20,6 +20,7 @@ import { ExportCommand } from "./cmd/export"
 import { GenerateCommand } from "./cmd/generate"
 import { GithubCommand } from "./cmd/github"
 import { GraphCommand } from "./cmd/graph"
+import { HeadlessRunCommand } from "./cmd/headless-run"
 import { RiskCommand } from "./cmd/risk"
 import { DreGraphCommand } from "./cmd/dre-graph"
 import { ImportCommand } from "./cmd/import"
@@ -58,6 +59,7 @@ const cmds = [
   TuiBackendCommand,
   TuiThreadCommand,
   AttachCommand,
+  HeadlessRunCommand,
   RunCommand,
   GenerateCommand,
   DebugCommand,
