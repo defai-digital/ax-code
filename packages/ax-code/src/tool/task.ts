@@ -35,6 +35,25 @@ function assistantErrorMessage(error: NonNullable<MessageV2.Assistant["error"]>)
   return typeof data?.message === "string" ? data.message : error.name
 }
 
+function errorDetails(error: unknown) {
+  if (error instanceof Error) {
+    return {
+      name: error.name || "Error",
+      message: error.message || error.name || "Unknown error",
+    }
+  }
+  if (typeof error === "string") {
+    return {
+      name: "Error",
+      message: error,
+    }
+  }
+  return {
+    name: "Error",
+    message: "Unknown error",
+  }
+}
+
 function needsRecoveredResultReview(text: string) {
   return /\b(?:incomplete|unresolved|insufficient|no usable|not enough evidence|unable to determine|could not verify|needs? validation|requires? validation)\b/i.test(
     text,
@@ -201,6 +220,7 @@ export const TaskTool = Tool.define("task", async (ctx) => {
       }
       let result: Awaited<ReturnType<typeof SessionPrompt.prompt>>
       let finalizeAttempted = false
+      let finalizeError: ReturnType<typeof errorDetails> | undefined
       try {
         ensureNotAborted()
         ctx.metadata({
@@ -236,33 +256,49 @@ export const TaskTool = Tool.define("task", async (ctx) => {
         if (text.trim().length === 0 && !firstError) {
           finalizeAttempted = true
           const finalizeMessageID = MessageID.ascending()
-          result = await withTimeout(
-            SessionPrompt.prompt({
-              messageID: finalizeMessageID,
-              sessionID: session.id,
-              model: {
-                modelID: model.modelID,
-              providerID: model.providerID,
-              },
-              agent: agent.name,
-              tools: {
-                ...taskTools,
-                task: false,
-              },
-              parts: [
-                {
-                  type: "text",
-                  text:
-                    `Your previous subagent turn ended without a usable final response. ` +
-                    `Produce the final result for this task now in plain text. ` +
-                    `Do not call more tools unless absolutely required. ` +
-                    `If the evidence is incomplete, explicitly say what was inspected and what remains unresolved.`,
+          try {
+            result = await withTimeout(
+              SessionPrompt.prompt({
+                messageID: finalizeMessageID,
+                sessionID: session.id,
+                model: {
+                  modelID: model.modelID,
+                  providerID: model.providerID,
                 },
-              ],
-            }),
-            SUBAGENT_FINALIZE_TIMEOUT_MS,
-            `Subagent finalization timed out after ${SUBAGENT_FINALIZE_TIMEOUT_MS / 60_000} minutes`,
-          )
+                agent: agent.name,
+                tools: {
+                  ...taskTools,
+                  task: false,
+                },
+                parts: [
+                  {
+                    type: "text",
+                    text:
+                      `Your previous subagent turn ended without a usable final response. ` +
+                      `Produce the final result for this task now in plain text. ` +
+                      `Do not call more tools unless absolutely required. ` +
+                      `If the evidence is incomplete, explicitly say what was inspected and what remains unresolved.`,
+                  },
+                ],
+              }),
+              SUBAGENT_FINALIZE_TIMEOUT_MS,
+              `Subagent finalization timed out after ${SUBAGENT_FINALIZE_TIMEOUT_MS / 60_000} minutes`,
+            )
+          } catch (error) {
+            if (ctx.abort.aborted || aborted) throw error
+            finalizeError = errorDetails(error)
+            log.warn("subagent finalization failed", {
+              sessionID: session.id,
+              errorCode: finalizeError.name,
+              errorMessage: finalizeError.message,
+            })
+            await SessionPrompt.cancel(session.id).catch((cancelError) => {
+              log.warn("failed to cancel subagent session after finalization error", {
+                sessionID: session.id,
+                error: cancelError,
+              })
+            })
+          }
         }
       } catch (e) {
         // Cancel the in-flight processor before removing the session.
@@ -286,6 +322,9 @@ export const TaskTool = Tool.define("task", async (ctx) => {
       const emptyResult = text.trim().length === 0
       const recoveredFromEmpty = finalizeAttempted && !emptyResult
       const recoveredResultNeedsReview = recoveredFromEmpty && needsRecoveredResultReview(text)
+      const finalizeErrorText = finalizeError
+        ? `Finalization failed with ${finalizeError.name}: ${finalizeError.message}.`
+        : undefined
       const taskResultText = emptyResult
         ? error
           ? [
@@ -294,11 +333,14 @@ export const TaskTool = Tool.define("task", async (ctx) => {
             ].join("\n")
           : [
               "Subagent completed without a final response.",
+              finalizeErrorText,
               "Treat this as incomplete evidence: retry the task, resume the task_id, or explain that no usable subagent result was returned.",
-            ].join("\n")
+            ]
+              .filter(Boolean)
+              .join("\n")
         : [
             recoveredFromEmpty
-              ? "Note: this result was recovered by asking the subagent to finalize after an initially empty response."
+              ? "Note: this result was recovered by asking the subagent to finalize after an initially empty response. Review it before treating it as normal subagent evidence."
               : "",
             text,
           ]
@@ -322,9 +364,12 @@ export const TaskTool = Tool.define("task", async (ctx) => {
           finalizeAttempted,
           recoveredFromEmpty,
           recoveredResultNeedsReview,
-          subagentError: !!error,
-          errorName: error?.name,
-          errorMessage: error ? assistantErrorMessage(error) : undefined,
+          subagentError: !!error || !!finalizeError,
+          errorName: error?.name ?? finalizeError?.name,
+          errorMessage: error ? assistantErrorMessage(error) : finalizeError?.message,
+          finalizeError: !!finalizeError,
+          finalizeErrorName: finalizeError?.name,
+          finalizeErrorMessage: finalizeError?.message,
         },
         output,
       }

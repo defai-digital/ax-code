@@ -137,7 +137,20 @@ export const ImportCommand = cmd({
           return
         }
 
-        const shareData: ShareData[] = await response.json()
+        let shareData: ShareData[]
+        try {
+          const data = await response.json()
+          if (!Array.isArray(data)) {
+            process.stdout.write("Failed to parse share data: server returned an invalid response")
+            process.stdout.write(EOL)
+            return
+          }
+          shareData = data as ShareData[]
+        } catch {
+          process.stdout.write("Failed to parse share data: server returned invalid JSON")
+          process.stdout.write(EOL)
+          return
+        }
         const transformed = transformShareData(shareData)
 
         if (!transformed) {

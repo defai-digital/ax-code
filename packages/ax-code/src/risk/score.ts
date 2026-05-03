@@ -30,6 +30,7 @@ export namespace Risk {
     validationCommands?: string[]
     toolFailures: number
     totalTools: number
+    recoveredSubagentResults?: number
     diffState?: DiffState
     sessionEndReason?: string | null
     completionGateBlocked?: boolean
@@ -40,12 +41,18 @@ export namespace Risk {
 
   export type NormalizedSignals = Omit<
     Signals,
-    "validationState" | "validationCount" | "validationFailures" | "validationCommands" | "diffState"
+    | "validationState"
+    | "validationCount"
+    | "validationFailures"
+    | "validationCommands"
+    | "recoveredSubagentResults"
+    | "diffState"
   > & {
     validationState: ValidationState
     validationCount: number
     validationFailures: number
     validationCommands: string[]
+    recoveredSubagentResults: number
     diffState: DiffState
     semanticRisk: SemanticRisk | null
     primaryChange: SessionSemanticCore.Kind | null
@@ -140,6 +147,7 @@ export namespace Risk {
       validationFailures: failures,
       validationCommands: [...new Set(input.validationCommands ?? [])],
       diffState,
+      recoveredSubagentResults: input.recoveredSubagentResults ?? 0,
       sessionEndReason: input.sessionEndReason ?? null,
       completionGateBlocked: input.completionGateBlocked ?? false,
       completionGateReason: input.completionGateReason ?? null,
@@ -160,7 +168,8 @@ export namespace Risk {
             ? 0.1
             : -0.05) +
       (signals.primaryChange && signals.diffState !== "missing" ? 0.08 : 0) -
-      Math.min(0.15, signals.toolFailures * 0.05)
+      Math.min(0.15, signals.toolFailures * 0.05) -
+      Math.min(0.1, (signals.recoveredSubagentResults ?? 0) * 0.04)
     return Math.max(0.1, Math.min(0.99, Number(base.toFixed(2))))
   }
 
@@ -169,6 +178,7 @@ export namespace Risk {
     if (signals.sessionEndReason === "step_limit" || signals.sessionEndReason === "stalled") return "blocked"
     if (signals.validationState === "failed") return "blocked"
     if (signals.filesChanged > 0 && signals.validationState === "not_run") return "needs_validation"
+    if ((signals.recoveredSubagentResults ?? 0) > 0) return "needs_review"
     if (conf < 0.45) return "needs_review"
     return "ready"
   }
@@ -266,6 +276,12 @@ export namespace Risk {
         ? `completion gate blocked${next.completionGateReason ? `: ${next.completionGateReason}` : ""}`
         : `session ended ${next.sessionEndReason}`,
     )
+    push(
+      "tools",
+      "Recovered subagent evidence",
+      next.recoveredSubagentResults > 0 ? Math.min(8, 3 + next.recoveredSubagentResults * 2) : 0,
+      `${next.recoveredSubagentResults} subagent result${next.recoveredSubagentResults === 1 ? "" : "s"} recovered after an initially empty response`,
+    )
 
     score = Math.min(score, 100)
     const level: Level = score >= 70 ? "CRITICAL" : score >= 45 ? "HIGH" : score >= 20 ? "MEDIUM" : "LOW"
@@ -280,6 +296,7 @@ export namespace Risk {
     if (next.apiEndpointsAffected > 0) parts.push(`${next.apiEndpointsAffected} API endpoints`)
     if (next.validationState === "failed") parts.push("validation failed")
     if (next.toolFailures > 0) parts.push(`${next.toolFailures} tool failures`)
+    if (next.recoveredSubagentResults > 0) parts.push(`${next.recoveredSubagentResults} recovered subagent results`)
     if (next.completionGateBlocked) parts.push("completion gate blocked")
     if (next.sessionEndReason === "step_limit" || next.sessionEndReason === "stalled") {
       parts.push(`session ended ${next.sessionEndReason}`)
@@ -298,6 +315,9 @@ export namespace Risk {
         : "",
       next.primaryChange ? `semantic change classified as ${SessionSemanticCore.format(next.primaryChange)}` : "",
       next.toolFailures > 0 ? `${next.toolFailures} tool failure${next.toolFailures === 1 ? "" : "s"} recorded` : "",
+      next.recoveredSubagentResults > 0
+        ? `${next.recoveredSubagentResults} subagent result${next.recoveredSubagentResults === 1 ? "" : "s"} recovered from an initially empty response`
+        : "",
       next.completionGateBlocked
         ? `control-plane completion gate blocked${next.completionGateReason ? `: ${next.completionGateReason}` : ""}`
         : "",
@@ -313,6 +333,7 @@ export namespace Risk {
         ? "no validation command recorded for code changes"
         : "",
       next.validationState === "partial" ? "validation covered only part of the change" : "",
+      next.recoveredSubagentResults > 0 ? "recovered subagent evidence should be reviewed before delivery" : "",
       next.completionGateBlocked ? "missing autonomous completion evidence must be recovered before delivery" : "",
     ].filter(Boolean)
 
@@ -324,6 +345,7 @@ export namespace Risk {
         : "",
       next.apiEndpointsAffected > 0 ? "exercise the touched routes with endpoint or contract checks" : "",
       next.securityRelated ? "review auth, session, or credential paths with an owner" : "",
+      next.recoveredSubagentResults > 0 ? "review the recovered subagent result against the inspected evidence" : "",
       next.completionGateBlocked ? "retry or resume the blocked autonomous subtask before accepting completion" : "",
       next.sessionEndReason === "step_limit" || next.sessionEndReason === "stalled"
         ? "resume the session or increase the step budget before treating the work as finished"
@@ -352,6 +374,7 @@ export namespace Risk {
     let deletions = 0
     let toolFailures = 0
     let totalTools = 0
+    let recoveredSubagentResults = 0
     const validationMap = new Map<string, string>()
     const runs = [] as Array<{ command: string; failed: boolean }>
     let sessionEndReason: string | null = null
@@ -378,6 +401,8 @@ export namespace Risk {
         totalTools++
         if (e.status === "error") toolFailures++
         const tool = e.tool as string
+        const metadata = (e.metadata as Record<string, unknown> | undefined) ?? {}
+        if (tool === "task" && metadata.recoveredFromEmpty === true) recoveredSubagentResults++
         const call = validationMap.get((e.callID as string) ?? "")
         if (tool === "bash" && call) {
           const output = (e.output as string) ?? ""
@@ -448,6 +473,7 @@ export namespace Risk {
       validationCommands: runs.map((item) => item.command),
       toolFailures,
       totalTools,
+      recoveredSubagentResults,
       diffState: diff ? "recorded" : fileList.length > 0 || linesChanged > 0 ? "derived" : "missing",
       sessionEndReason,
       completionGateBlocked,

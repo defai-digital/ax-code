@@ -201,6 +201,27 @@ describe("tool.write", () => {
         },
       })
     })
+
+    test("bug report validation does not apply to internal bugs index files", async () => {
+      await using tmp = await tmpdir()
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const write = await WriteTool.init()
+
+          await write.execute({
+            filePath: path.join(tmp.path, ".internal", "bugs", "README.md"),
+            content: "# Bug Reports\n\nThis folder tracks repo-grounded bug reports.\n",
+          }, ctx)
+
+          await write.execute({
+            filePath: path.join(tmp.path, ".internal", "bugs", "summary.md"),
+            content: "# Bug Summary\n\nNo report classification is required for this index file.\n",
+          }, ctx)
+        },
+      })
+    })
   })
 
   describe("existing file overwrite", () => {

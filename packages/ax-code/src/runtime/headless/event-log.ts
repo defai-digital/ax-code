@@ -28,7 +28,11 @@ export function decodeHeadlessEventLogLine<
 >(line: string): HeadlessRuntimeEvent<TSession, TTodo, TDiff, TStatus, TMessage, TPart> | undefined {
   const trimmed = line.trim()
   if (!trimmed) return undefined
-  return decodeHeadlessEventLogRecord<TSession, TTodo, TDiff, TStatus, TMessage, TPart>(JSON.parse(trimmed))
+  try {
+    return decodeHeadlessEventLogRecord<TSession, TTodo, TDiff, TStatus, TMessage, TPart>(JSON.parse(trimmed))
+  } catch {
+    return undefined
+  }
 }
 
 function eventCandidate(record: unknown) {

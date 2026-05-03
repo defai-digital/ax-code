@@ -243,7 +243,9 @@ export namespace Ripgrep {
         } finally {
           // Always close the reader — error paths previously leaked file
           // handles by throwing before reaching the close() call.
-          await zipFileReader.close()
+          try {
+            await zipFileReader.close()
+          } catch {}
         }
       }
       if (config.extension !== "tar.gz") await fs.unlink(archivePath)

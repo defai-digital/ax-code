@@ -210,14 +210,19 @@ export namespace QualityShadow {
     if (!configured) return
 
     const resolved = path.resolve(configured)
-    const stat = await fs.stat(resolved)
-    if (predictionCache && predictionCache.path === resolved && predictionCache.mtimeMs === stat.mtimeMs) {
-      return predictionCache.file
-    }
+    try {
+      const stat = await fs.stat(resolved)
+      if (predictionCache && predictionCache.path === resolved && predictionCache.mtimeMs === stat.mtimeMs) {
+        return predictionCache.file
+      }
 
-    const parsed = ProbabilisticRollout.PredictionFile.parse(JSON.parse(await fs.readFile(resolved, "utf8")))
-    predictionCache = { file: parsed, mtimeMs: stat.mtimeMs, path: resolved }
-    return parsed
+      const parsed = ProbabilisticRollout.PredictionFile.parse(JSON.parse(await fs.readFile(resolved, "utf8")))
+      predictionCache = { file: parsed, mtimeMs: stat.mtimeMs, path: resolved }
+      return parsed
+    } catch (err) {
+      log.warn("quality shadow prediction load failed", { path: resolved, err })
+      return
+    }
   }
 
   async function loadModelFile() {
@@ -226,14 +231,19 @@ export namespace QualityShadow {
     if (!configured) return
 
     const resolved = path.resolve(configured)
-    const stat = await fs.stat(resolved)
-    if (modelCache && modelCache.path === resolved && modelCache.mtimeMs === stat.mtimeMs) {
-      return modelCache.file
-    }
+    try {
+      const stat = await fs.stat(resolved)
+      if (modelCache && modelCache.path === resolved && modelCache.mtimeMs === stat.mtimeMs) {
+        return modelCache.file
+      }
 
-    const parsed = QualityCalibrationModel.ModelFile.parse(JSON.parse(await fs.readFile(resolved, "utf8")))
-    modelCache = { file: parsed, mtimeMs: stat.mtimeMs, path: resolved }
-    return parsed
+      const parsed = QualityCalibrationModel.ModelFile.parse(JSON.parse(await fs.readFile(resolved, "utf8")))
+      modelCache = { file: parsed, mtimeMs: stat.mtimeMs, path: resolved }
+      return parsed
+    } catch (err) {
+      log.warn("quality shadow model load failed", { path: resolved, err })
+      return
+    }
   }
 
   async function candidateFileForItem(item: ProbabilisticRollout.ReplayItem) {

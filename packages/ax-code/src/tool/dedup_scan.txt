@@ -1,5 +1,7 @@
 Find duplicate or near-duplicate functions and methods across the project. Uses normalized signature bucketing for structural duplicates and token-Jaccard similarity for near-matches. Deterministic, no LLM, no cloud calls.
 
+Rust/Python/Ruby coverage note: in Rust, Python, or Ruby workspaces this tool uses indexed symbols and signature heuristics. It can surface useful duplicate candidates, but a zero-cluster result is not a full language semantic duplication audit and should not replace bounded source review for critical paths.
+
 Input:
 - kinds: which node kinds to scan (default: function, method)
 - minSignatureLength: skip symbols with shorter signatures (default 20 characters — avoids matching trivial getters/setters)

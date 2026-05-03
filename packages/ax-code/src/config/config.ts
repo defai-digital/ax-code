@@ -38,6 +38,7 @@ import { Filesystem } from "@/util/filesystem"
 import { Ssrf } from "@/util/ssrf"
 import { Process } from "@/util/process"
 import { Lock } from "@/util/lock"
+import { FileLock } from "@/util/filelock"
 import { withTimeout } from "@/util/timeout"
 import * as ConfigSchema from "./schema"
 
@@ -584,7 +585,7 @@ export namespace Config {
         result[config.name] = parsed.data
         continue
       }
-      throw new InvalidError({ path: item, issues: parsed.error.issues }, { cause: parsed.error })
+      log.warn("invalid command definition, skipping", { path: item, issues: parsed.error.issues })
     }
     return result
   }
@@ -623,7 +624,7 @@ export namespace Config {
         result[config.name] = parsed.data
         continue
       }
-      throw new InvalidError({ path: item, issues: parsed.error.issues }, { cause: parsed.error })
+      log.warn("invalid agent definition, skipping", { path: item, issues: parsed.error.issues })
     }
     return result
   }
@@ -660,7 +661,7 @@ export namespace Config {
         }
         continue
       }
-      throw new InvalidError({ path: item, issues: parsed.error.issues }, { cause: parsed.error })
+      log.warn("invalid mode definition, skipping", { path: item, issues: parsed.error.issues })
     }
     return result
   }
@@ -922,9 +923,12 @@ export namespace Config {
 
   export async function update(config: Info) {
     const filepath = path.join(Instance.directory, "ax-code.json")
-    using _ = await Lock.write(filepath)
+    using _inProcess = await Lock.write(filepath)
+    using _crossProcess = await FileLock.acquire(filepath)
     const existing = await loadFile(filepath)
-    await Filesystem.writeJson(filepath, mergeConfigConcatArrays(existing, config))
+    const merged = mergeConfigConcatArrays(existing, config)
+    const parsed = parseConfig(JSON.stringify(merged), filepath)
+    await Filesystem.writeJson(filepath, parsed)
     await Instance.reload({
       directory: Instance.directory,
     })
@@ -997,7 +1001,8 @@ export namespace Config {
 
   export async function updateGlobal(config: Info) {
     const filepath = globalConfigFile()
-    using _ = await Lock.write(filepath)
+    using _inProcess = await Lock.write(filepath)
+    using _crossProcess = await FileLock.acquire(filepath)
     const before = await Filesystem.readText(filepath).catch((err: any) => {
       if (err.code === "ENOENT") return "{}"
       throw new JsonError({ path: filepath }, { cause: err })
@@ -1007,8 +1012,9 @@ export namespace Config {
       if (!filepath.endsWith(".jsonc")) {
         const existing = parseConfig(before, filepath)
         const merged = mergeDeep(existing, config)
-        await Filesystem.writeJson(filepath, merged)
-        return merged
+        const parsed = parseConfig(JSON.stringify(merged), filepath)
+        await Filesystem.writeJson(filepath, parsed)
+        return parsed
       }
 
       const updated = patchJsonc(before, config)

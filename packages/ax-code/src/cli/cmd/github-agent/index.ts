@@ -214,11 +214,17 @@ export const GithubInstallCommand = cmd({
             s.stop("Installed GitHub app")
 
             async function getInstallation() {
-              return await fetch(
-                `${requireOidcBaseUrl()}/get_github_app_installation?owner=${app.owner}&repo=${app.repo}`,
-              )
-                .then((res) => res.json())
-                .then((data) => data.installation)
+              try {
+                const response = await fetch(
+                  `${requireOidcBaseUrl()}/get_github_app_installation?owner=${app.owner}&repo=${app.repo}`,
+                )
+                if (!response.ok) return null
+
+                const data = (await response.json()) as { installation?: unknown }
+                return data.installation ?? null
+              } catch {
+                return null
+              }
             }
           }
 
@@ -919,13 +925,23 @@ export const GithubRunCommand = cmd({
             })
 
         if (!response.ok) {
-          const responseJson = (await response.json()) as { error?: string }
-          throw new Error(
-            `App token exchange failed: ${response.status} ${response.statusText} - ${responseJson.error}`,
-          )
+          let detail = response.statusText
+          try {
+            const responseJson = (await response.json()) as { error?: string }
+            detail = responseJson.error ?? detail
+          } catch {}
+          throw new Error(`App token exchange failed: ${response.status} ${response.statusText} - ${detail}`)
         }
 
-        const responseJson = (await response.json()) as { token: string }
+        let responseJson: { token?: unknown }
+        try {
+          responseJson = (await response.json()) as { token?: unknown }
+        } catch {
+          throw new Error("App token exchange returned invalid JSON")
+        }
+        if (typeof responseJson.token !== "string" || responseJson.token.length === 0) {
+          throw new Error("App token exchange returned an invalid token response")
+        }
         return responseJson.token
       }
 

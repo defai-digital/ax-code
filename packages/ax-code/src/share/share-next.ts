@@ -190,7 +190,16 @@ export namespace ShareNext {
       throw new Error(`Failed to create share (${response.status}): ${message || response.statusText}`)
     }
 
-    const result = (await response.json()) as { id: string; url: string; secret: string }
+    let result: { id: string; url: string; secret: string }
+    try {
+      const data = (await response.json()) as { id?: unknown; url?: unknown; secret?: unknown }
+      if (typeof data.id !== "string" || typeof data.url !== "string" || typeof data.secret !== "string") {
+        throw new Error("incomplete response")
+      }
+      result = { id: data.id, url: data.url, secret: data.secret }
+    } catch {
+      throw new Error("Share server returned invalid or incomplete JSON")
+    }
 
     Database.use((db) =>
       db

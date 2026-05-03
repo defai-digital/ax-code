@@ -106,7 +106,23 @@ export namespace Tool {
           if (result.metadata.truncated !== undefined) {
             return result
           }
-          const truncated = await Truncate.output(result.output, {}, initCtx?.agent)
+          let truncated: Awaited<ReturnType<typeof Truncate.output>>
+          try {
+            truncated = await Truncate.output(result.output, {}, initCtx?.agent)
+          } catch (err) {
+            log.warn("tool output truncation failed, returning untruncated output", {
+              toolName: id,
+              sessionId: ctx.sessionID,
+              ...errorMetadata(err),
+            })
+            return {
+              ...result,
+              metadata: {
+                ...result.metadata,
+                truncated: false,
+              },
+            }
+          }
           return {
             ...result,
             output: truncated.content,

@@ -138,3 +138,25 @@ manually reading multiple files to trace a bug:
 These tools are deterministic and cite their sources via an `explain` field.
 When they return a confidence or risk number, report it verbatim — do not
 round, inflate, or omit it.
+
+### Rust, Python, and Ruby repositories
+
+For Rust-heavy (`Cargo.toml`, `crates/**/*.rs`), Python-heavy (`pyproject.toml`,
+`requirements.txt`, `*.py`), or Ruby-heavy (`Gemfile`, `*.rb`) workspaces, treat
+the JavaScript/TypeScript scan tools as auxiliary only. If a scan only covers JS/TS
+files, do not leave the scan todo in progress while manually reading non-JS files;
+mark it completed if it produced useful scoped evidence, or cancel it as not
+applicable with a short reason.
+
+Use a language-aware workflow instead:
+
+- Inspect the relevant crate/package/module boundaries before broad reads.
+- Prefer targeted language-native checks when the user asked for validation or
+  when evidence from source inspection needs tool-backed confirmation:
+  `cargo check/test/clippy` for Rust, `pytest/ruff/mypy` for Python, and
+  `bundle exec ruby/rubocop/rspec` for Ruby.
+- Keep manual review bounded to the smallest crate/package/module that can
+  explain the symptom.
+- For `.internal/bugs` reporting, write a suspected or confirmed report as soon
+  as there is credible evidence, or cancel the report todo with the concrete
+  reason. Do not continue broad exploration just because more source files exist.

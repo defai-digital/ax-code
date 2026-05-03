@@ -29,7 +29,15 @@ async function checkClaudeAuth(binary: string): Promise<string | undefined> {
         if (event.type === "error" && event.error === "authentication_failed") {
           return "claude CLI is not logged in — run `claude login` first"
         }
-      } catch {}
+      } catch (error) {
+        log.debug("claude auth probe ignored non-JSON event line", {
+          command: "provider.cli.auth_probe",
+          status: "ignored",
+          binary,
+          line: trimmed.slice(0, 200),
+          error,
+        })
+      }
     }
 
     return

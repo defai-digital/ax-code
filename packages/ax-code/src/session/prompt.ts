@@ -84,9 +84,44 @@ import {
 globalThis.AI_SDK_LOG_WARNINGS = false
 
 const MAX_STAGNANT_TODO_RETRIES = 2
+const MAX_EMPTY_MODEL_TURN_RETRIES = 1
+const TODO_DEADLINE_MIN_STEP_BUFFER = 3
+const TODO_DEADLINE_MAX_STEP_BUFFER = 8
+const TODO_CONTEXT_CONVERGENCE_INPUT_TOKEN_THRESHOLD = 50_000
 
 function pendingTodoSignature(todos: { content: string; status: string; priority: string }[]) {
   return todos.map((todo) => `${todo.status}\u0000${todo.priority}\u0000${todo.content}`).join("\u0001")
+}
+
+function todoDeadlineStepBuffer(pendingTodoCount: number) {
+  return Math.min(TODO_DEADLINE_MAX_STEP_BUFFER, Math.max(TODO_DEADLINE_MIN_STEP_BUFFER, pendingTodoCount + 2))
+}
+
+function hasReportStyleTodo(todos: { content: string }[]) {
+  return todos.some((todo) => /\b(report|reports|bug|bugs)\b|\.internal\/bugs/i.test(todo.content))
+}
+
+function reportTodoClosureGuidance(mode: "deadline" | "continuation" | "context") {
+  if (mode === "context") {
+    return (
+      `\nThe context is already large. For report-style todos, write the .internal/bugs report now ` +
+      `when there is credible suspected or confirmed evidence. Otherwise cancel that report todo with the ` +
+      `concrete reason; do not read more files for broad exploration.`
+    )
+  }
+
+  if (mode === "deadline") {
+    return (
+      `\nFor report-style todos, create the required .internal/bugs report now if there is a credible suspected ` +
+      `or confirmed issue. If the evidence is not credible enough, cancel that report todo with the concrete ` +
+      `reason instead of continuing broad analysis.`
+    )
+  }
+
+  return (
+    `\nFor report-style todos, write the .internal/bugs report now when there is credible suspected or confirmed ` +
+    `evidence. Otherwise cancel that report todo with the concrete reason; do not keep doing broad exploration.`
+  )
 }
 
 const STRUCTURED_OUTPUT_DESCRIPTION = `Use this tool to return your final response in the requested structured format.
@@ -119,6 +154,7 @@ export namespace SessionPrompt {
         string,
         {
           abort: AbortController
+          running: boolean
           callbacks: {
             resolve(input: MessageV2.WithParts): void
             reject(reason?: unknown): void
@@ -266,9 +302,9 @@ export namespace SessionPrompt {
     )
     assistantMessage.finish = "tool-calls"
     assistantMessage.time.completed = Date.now()
-    await Session.updateMessage(assistantMessage)
+    const finalParts: MessageV2.Part[] = []
     if (result && part.state.status === "running") {
-      await Session.updatePart({
+      finalParts.push({
         ...part,
         state: {
           status: "completed",
@@ -285,7 +321,7 @@ export namespace SessionPrompt {
       } satisfies MessageV2.ToolPart)
     }
     if (!result) {
-      await Session.updatePart({
+      finalParts.push({
         ...part,
         state: {
           status: "error",
@@ -299,6 +335,7 @@ export namespace SessionPrompt {
         },
       } satisfies MessageV2.ToolPart)
     }
+    await Session.updateMessageWithParts(assistantMessage, finalParts)
 
     if (task.command) {
       const summaryUserMsg: MessageV2.User = {
@@ -436,18 +473,20 @@ export namespace SessionPrompt {
 
   function start(sessionID: SessionID) {
     const s = state()
-    if (s[sessionID]) return
+    const existing = s[sessionID]
+    if (existing?.running) return
     const controller = new AbortController()
     s[sessionID] = {
       abort: controller,
-      callbacks: [],
+      running: true,
+      callbacks: existing?.callbacks ?? [],
     }
     return controller.signal
   }
 
   function resume(sessionID: SessionID) {
     const s = state()
-    if (!s[sessionID]) return
+    if (!s[sessionID]?.running) return
 
     return s[sessionID].abort.signal
   }
@@ -477,7 +516,9 @@ export namespace SessionPrompt {
   export const loop = fn(LoopInput, async (input) => {
     const { sessionID, resume_existing } = input
 
-    const abort = resume_existing ? (resume(sessionID) ?? start(sessionID)) : start(sessionID)
+    const resumedAbort = resume_existing ? resume(sessionID) : undefined
+    const isResumingActiveLoop = resumedAbort !== undefined
+    const abort = isResumingActiveLoop ? undefined : start(sessionID)
     if (!abort) {
       return new Promise<MessageV2.WithParts>((resolve, reject) => {
         // Capture atomically: a concurrent cancel() may have deleted the
@@ -501,6 +542,8 @@ export namespace SessionPrompt {
       if (callbacks.length === 0) {
         return cancel(sessionID)
       }
+      const entry = state()[sessionID]
+      if (entry) entry.running = false
       // Queued messages are waiting — re-enter the loop to process them.
       // Mirrors the pattern in shell() at lines 1681-1692.
       loop({ sessionID, resume_existing: true }).catch((error) => {
@@ -515,7 +558,7 @@ export namespace SessionPrompt {
     })
     let sessionStarted = false
     await using _recorder = defer(async () => {
-      if (sessionStarted) {
+      if (sessionStarted && !isResumingActiveLoop) {
         Recorder.emit({
           type: "session.end",
           sessionID,
@@ -577,7 +620,10 @@ export namespace SessionPrompt {
     let completionGateRetries = 0
     let lastCompletionGateSignature: string | undefined
     let lastPendingTodoSignature: string | undefined
+    let lastTodoDeadlineSignature: string | undefined
+    let lastTodoContextSignature: string | undefined
     let stagnantTodoRetries = 0
+    let emptyModelTurnRetries = 0
     const cachedSystemPrompt: import("./prompt-helpers").SystemCache = {
       environment: undefined,
       environmentModelKey: undefined,
@@ -723,13 +769,15 @@ export namespace SessionPrompt {
         }).catch((error) => {
           log.debug("failed to ensure title", { sessionID, error })
         })
-        Recorder.emit({
-          type: "session.start",
-          sessionID,
-          agent: lastUser.agent,
-          model: `${lastUser.model.providerID}/${lastUser.model.modelID}`,
-          directory: Instance.directory,
-        })
+        if (!isResumingActiveLoop) {
+          Recorder.emit({
+            type: "session.start",
+            sessionID,
+            agent: lastUser.agent,
+            model: `${lastUser.model.providerID}/${lastUser.model.modelID}`,
+            directory: Instance.directory,
+          })
+        }
         // Snapshot the Code Intelligence graph state alongside session.start
         // so deterministic replay can see what the agent "knew" about the
         // code at the moment it began this session, and start the watcher
@@ -740,7 +788,7 @@ export namespace SessionPrompt {
         // Defensive: if the code_* tables are missing (e.g. an old DB
         // before v3) or the watcher fails to subscribe, swallow and
         // skip — we never want this to take down a session.
-        if (Flag.AX_CODE_EXPERIMENTAL_CODE_INTELLIGENCE) {
+        if (!isResumingActiveLoop && Flag.AX_CODE_EXPERIMENTAL_CODE_INTELLIGENCE) {
           try {
             const s = CodeIntelligence.status(Instance.project.id)
             Recorder.emit({
@@ -992,6 +1040,12 @@ export namespace SessionPrompt {
 
       // Check if model finished (finish reason is not "tool-calls" or "unknown")
       const modelFinished = processor.message.finish && !["tool-calls", "unknown"].includes(processor.message.finish)
+      const emptyModelTurn =
+        processor.message.finish === "other" &&
+        (processor.message.tokens.input ?? 0) === 0 &&
+        (processor.message.tokens.output ?? 0) === 0 &&
+        (processor.message.tokens.reasoning ?? 0) === 0
+      if (!emptyModelTurn) emptyModelTurnRetries = 0
 
       if (modelFinished && !processor.message.error) {
         if (format.type === "json_schema") {
@@ -1029,6 +1083,12 @@ export namespace SessionPrompt {
           completionGate.status === "blocked" && completionGate.reason === "empty_subagent_result"
 
         if (modelFinished || shouldRecoverEmptySubagentResult) {
+          const gateRetryCount = completionGate.status === "blocked" && completionGate.reason === "unfinished_todos"
+            ? todoRetries
+            : completionGateRetries
+          const gateMaxRetries = completionGate.status === "blocked" && completionGate.reason === "unfinished_todos"
+            ? maxTodoRetries
+            : maxCompletionGateRetries
           Recorder.emit(
             AgentControlEvents.completionGateDecided({
               sessionID,
@@ -1037,10 +1097,69 @@ export namespace SessionPrompt {
               status: completionGate.status,
               reason: completionGate.status === "allow" ? "none" : completionGate.reason,
               message: completionGate.status === "allow" ? "Completion gate passed." : completionGate.message,
-              retryCount: completionGateRetries,
-              maxRetries: maxCompletionGateRetries,
+              retryCount: gateRetryCount,
+              maxRetries: gateMaxRetries,
             }),
           )
+        }
+
+        if (emptyModelTurn) {
+          const incompleteMessage =
+            `Autonomous mode received an empty model turn: the provider returned finish=other with zero input, ` +
+            `output, and reasoning tokens. The session is stopped, but the work should not be treated as complete.`
+
+          if (emptyModelTurnRetries >= MAX_EMPTY_MODEL_TURN_RETRIES) {
+            log.warn("autonomous stopped after repeated empty model turn", {
+              command: "session.prompt.loop",
+              status: "stopped",
+              errorCode: "EMPTY_MODEL_TURN",
+              sessionID,
+              attempts: emptyModelTurnRetries,
+              maxAttempts: MAX_EMPTY_MODEL_TURN_RETRIES,
+              pendingCount: pendingTodos.length,
+            })
+            await markAssistantIncomplete(incompleteMessage)
+            Bus.publishDetached(Session.Event.Error, {
+              sessionID,
+              error: new NamedError.Unknown({
+                message: incompleteMessage,
+              }).toObject(),
+            })
+            reason = "stalled"
+            break
+          }
+
+          emptyModelTurnRetries++
+          todoRetries++
+          log.warn("autonomous empty model turn recovery", {
+            command: "session.prompt.loop",
+            status: "retry",
+            errorCode: "EMPTY_MODEL_TURN",
+            sessionID,
+            attempt: emptyModelTurnRetries,
+            maxAttempts: MAX_EMPTY_MODEL_TURN_RETRIES,
+            pendingCount: pendingTodos.length,
+          })
+          const lastUserInfo = latestMessages.filter((m) => m.info.role === "user").pop()?.info as
+            | MessageV2.User
+            | undefined
+          await createUserMessage({
+            sessionID,
+            agentRouting: "preserve",
+            parts: [
+              {
+                type: "text",
+                text:
+                  `The previous autonomous model turn returned no text and no tool calls. ` +
+                  `Do not repeat broad exploration. Continue from the current evidence, update the todo list, ` +
+                  `and either finish the remaining concrete work or explain what blocks completion. ` +
+                  `This is empty-turn recovery ${emptyModelTurnRetries}/${MAX_EMPTY_MODEL_TURN_RETRIES}.`,
+              },
+            ],
+            agent: lastUserInfo?.agent,
+            model: lastUserInfo?.model,
+          })
+          continue
         }
 
         if (shouldRecoverEmptySubagentResult) {
@@ -1110,6 +1229,95 @@ export namespace SessionPrompt {
         if (completionGate.status === "allow") {
           completionGateRetries = 0
           lastCompletionGateSignature = undefined
+        }
+
+        const remainingAgentSteps = Number.isFinite(maxSteps) ? Math.max(0, maxSteps - step) : Infinity
+        const shouldConvergeReportTodosBeforeContextOverflow =
+          !modelFinished &&
+          pendingTodos.length > 0 &&
+          hasReportStyleTodo(pendingTodos) &&
+          (processor.message.tokens.input ?? 0) >= TODO_CONTEXT_CONVERGENCE_INPUT_TOKEN_THRESHOLD
+        if (shouldConvergeReportTodosBeforeContextOverflow) {
+          const signature = pendingTodoSignature(pendingTodos)
+          if (signature !== lastTodoContextSignature) {
+            lastTodoContextSignature = signature
+            log.info("autonomous todo context convergence", {
+              command: "session.prompt.loop",
+              status: "ok",
+              sessionID,
+              pendingCount: pendingTodos.length,
+              inputTokens: processor.message.tokens.input ?? 0,
+              threshold: TODO_CONTEXT_CONVERGENCE_INPUT_TOKEN_THRESHOLD,
+            })
+            const lastUserInfo = latestMessages.filter((m) => m.info.role === "user").pop()?.info as
+              | MessageV2.User
+              | undefined
+            await createUserMessage({
+              sessionID,
+              agentRouting: "preserve",
+              parts: [
+                {
+                  type: "text",
+                  text:
+                    `Autonomous mode has reached a large context while ${pendingTodos.length} unfinished ` +
+                    `todo${pendingTodos.length === 1 ? "" : "s"} remain:\n` +
+                    `${pendingTodos.map((t) => `- [${t.status}] ${t.content}`).join("\n")}` +
+                    reportTodoClosureGuidance("context"),
+                },
+              ],
+              agent: lastUserInfo?.agent,
+              model: lastUserInfo?.model,
+            })
+            continue
+          }
+        }
+
+        const shouldConvergePendingTodosBeforeDeadline =
+          !modelFinished &&
+          pendingTodos.length > 0 &&
+          Number.isFinite(remainingAgentSteps) &&
+          remainingAgentSteps > 0 &&
+          remainingAgentSteps <= todoDeadlineStepBuffer(pendingTodos.length)
+        if (shouldConvergePendingTodosBeforeDeadline) {
+          const signature = pendingTodoSignature(pendingTodos)
+          if (signature !== lastTodoDeadlineSignature) {
+            lastTodoDeadlineSignature = signature
+            const reportClosureGuidance = hasReportStyleTodo(pendingTodos)
+              ? reportTodoClosureGuidance("deadline")
+              : ""
+            log.info("autonomous todo deadline convergence", {
+              command: "session.prompt.loop",
+              status: "ok",
+              sessionID,
+              pendingCount: pendingTodos.length,
+              remainingAgentSteps,
+              maxSteps,
+            })
+            const lastUserInfo = latestMessages.filter((m) => m.info.role === "user").pop()?.info as
+              | MessageV2.User
+              | undefined
+            await createUserMessage({
+              sessionID,
+              agentRouting: "preserve",
+              parts: [
+                {
+                  type: "text",
+                  text:
+                    `Autonomous mode is approaching the agent step limit with ${remainingAgentSteps} ` +
+                    `step${remainingAgentSteps === 1 ? "" : "s"} remaining and ${pendingTodos.length} unfinished ` +
+                    `todo${pendingTodos.length === 1 ? "" : "s"}:\n` +
+                    `${pendingTodos.map((t) => `- [${t.status}] ${t.content}`).join("\n")}\n` +
+                    `Stop broad exploration now. Finish the remaining concrete work, write any required reports, ` +
+                    `or cancel low-confidence todos with a short reason. Update the todo list after each completed ` +
+                    `or cancelled item before continuing.` +
+                    reportClosureGuidance,
+                },
+              ],
+              agent: lastUserInfo?.agent,
+              model: lastUserInfo?.model,
+            })
+            continue
+          }
         }
 
         if (modelFinished && pendingTodos.length > 0) {
@@ -1199,6 +1407,9 @@ export namespace SessionPrompt {
           }
 
           todoRetries++
+          const reportClosureGuidance = hasReportStyleTodo(pendingTodos)
+            ? reportTodoClosureGuidance("continuation")
+            : ""
           log.info("autonomous todo continuation", {
             command: "session.prompt.loop",
             status: "ok",
@@ -1217,7 +1428,12 @@ export namespace SessionPrompt {
             parts: [
               {
                 type: "text",
-                text: `You stopped with ${pendingTodos.length} todo${pendingTodos.length === 1 ? "" : "s"} still pending:\n${pendingTodos.map((t) => `- [${t.status}] ${t.content}`).join("\n")}\nContinue working until all todos are completed or cancelled. This is auto-continuation ${todoRetries}/${maxTodoRetries}.`,
+                text:
+                  `You stopped with ${pendingTodos.length} todo${pendingTodos.length === 1 ? "" : "s"} still pending:\n` +
+                  `${pendingTodos.map((t) => `- [${t.status}] ${t.content}`).join("\n")}\n` +
+                  `Continue working until all todos are completed or cancelled. ` +
+                  `This is auto-continuation ${todoRetries}/${maxTodoRetries}.` +
+                  reportClosureGuidance,
               },
             ],
             agent: lastUserInfo?.agent,
@@ -1464,8 +1680,8 @@ export namespace SessionPrompt {
               break
             } catch (e) {
               if (!(e instanceof Isolation.DeniedError)) throw e
-              if (ctx.extra?.isolation?.mode === "read-only")
-                throw new Error(`Tool denied in read-only mode: ${e.reason}`)
+          if (ctx.extra?.isolation?.mode === "read-only")
+            throw new Error(`Tool denied in read-only mode: ${e.reason}`, { cause: e })
               if (!e.path) {
                 if (unscopedBypass) {
                   lastError = e
@@ -1749,7 +1965,7 @@ export namespace SessionPrompt {
       id: part.id ? PartID.make(part.id) : PartID.ascending(),
     })
 
-    const parts = await Promise.all(
+    const resolvedParts = await Promise.allSettled(
       input.parts.map(async (part): Promise<Draft<MessageV2.Part>[]> => {
         if (part.type === "file") {
           // before checking the protocol we check if this is an mcp resource because it needs special handling
@@ -2201,7 +2417,29 @@ export namespace SessionPrompt {
           },
         ]
       }),
-    ).then((x) => x.flat().map(assign))
+    )
+    const parts = resolvedParts
+      .flatMap((result): Draft<MessageV2.Part>[] => {
+        if (result.status === "fulfilled") return result.value
+        const message = NamedError.message(result.reason)
+        log.warn("failed to resolve user message part", {
+          command: "session.prompt.resolvePart",
+          status: "error",
+          errorCode: "PART_RESOLVE",
+          sessionID: input.sessionID,
+          error: result.reason,
+        })
+        return [
+          {
+            messageID: info.id,
+            sessionID: input.sessionID,
+            type: "text",
+            synthetic: true,
+            text: `Failed to resolve attachment: ${message}`,
+          },
+        ]
+      })
+      .map(assign)
 
     await Plugin.trigger(
       "chat.message",
@@ -2262,25 +2500,7 @@ export namespace SessionPrompt {
       throw new Error(`Invalid user part(s) at index ${invalidParts.join(", ")} — see log for details`)
     }
 
-    await Session.updateMessage(info)
-    // Run updatePart calls in parallel — they are independent DB
-    // inserts with independent bus publishes. For messages with many
-    // file attachments (screenshots, paste images), sequential awaits
-    // added ~10-50ms per part.
-    const partFailures: string[] = []
-    await Promise.all(
-      parts.map(async (part) => {
-        try {
-          await Session.updatePart(part)
-        } catch (e) {
-          log.warn("failed to persist part", { partID: part.id, err: e })
-          partFailures.push(part.id)
-        }
-      }),
-    )
-    if (partFailures.length > 0) {
-      throw new Error(`Failed to persist ${partFailures.length} message part(s): ${partFailures.join(", ")}`)
-    }
+    await Session.updateMessageWithParts(info, parts)
 
     return {
       info,
@@ -2699,10 +2919,15 @@ NOTE: At any point in time through this workflow you should feel free to ask the
       pending = drainFlush()
     }
 
-    proc.stdout?.on("data", (chunk) => {
+    const onStdoutData = (chunk: Buffer | string) => {
       appendOutput(chunk)
       flush()
-    })
+    }
+    const onStderrData = (chunk: Buffer | string) => {
+      appendOutput(chunk)
+      flush()
+    }
+    proc.stdout?.on("data", onStdoutData)
     proc.stdout?.on("error", (error) => {
       log.warn("shell stdout stream error", {
         command: "session.prompt.shell",
@@ -2712,10 +2937,7 @@ NOTE: At any point in time through this workflow you should feel free to ask the
       })
     })
 
-    proc.stderr?.on("data", (chunk) => {
-      appendOutput(chunk)
-      flush()
-    })
+    proc.stderr?.on("data", onStderrData)
     proc.stderr?.on("error", (error) => {
       log.warn("shell stderr stream error", {
         command: "session.prompt.shell",
@@ -2775,6 +2997,8 @@ NOTE: At any point in time through this workflow you should feel free to ask the
         if (abortTimer) clearTimeout(abortTimer)
         abort.removeEventListener("abort", abortHandler)
         abort.removeEventListener("abort", abortTimeoutHandler)
+        proc.stdout?.off("data", onStdoutData)
+        proc.stderr?.off("data", onStderrData)
         resolve()
       })
       proc.once("error", (err) => {
@@ -2783,6 +3007,8 @@ NOTE: At any point in time through this workflow you should feel free to ask the
         if (abortTimer) clearTimeout(abortTimer)
         abort.removeEventListener("abort", abortHandler)
         abort.removeEventListener("abort", abortTimeoutHandler)
+        proc.stdout?.off("data", onStdoutData)
+        proc.stderr?.off("data", onStderrData)
         reject(err)
       })
       abort.addEventListener("abort", abortTimeoutHandler, { once: true })

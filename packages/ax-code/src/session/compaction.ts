@@ -130,7 +130,7 @@ export namespace SessionCompaction {
                 time_created: part.state.time?.start ?? Date.now(),
                 data,
               })
-              .onConflictDoUpdate({ target: PartTable.id, set: { data } })
+              .onConflictDoUpdate({ target: PartTable.id, set: { data, time_updated: Date.now() } })
               .run()
             Database.effect(() => Bus.publishDetached(MessageV2.Event.PartUpdated, { part: { ...part } }))
           }

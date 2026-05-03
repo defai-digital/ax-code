@@ -3,6 +3,7 @@ import { Tool } from "./tool"
 import DESCRIPTION from "./lifecycle_scan.txt"
 import { Instance } from "../project/instance"
 import { DebugEngine } from "../debug-engine"
+import { scanCoverageNotice } from "./scan-coverage"
 
 // Tool wrapper around DebugEngine.detectLifecycle. Read-only scan,
 // no file writes, no cloud calls. See PRD-debug-engine-enhancement §2.2.
@@ -42,6 +43,8 @@ export const LifecycleScanTool = Tool.define("lifecycle_scan", {
 
     const lines: string[] = []
     lines.push(`Scanned ${report.filesScanned} file${report.filesScanned === 1 ? "" : "s"}`)
+    const coverage = await scanCoverageNotice({ include: args.include })
+    lines.push(...coverage.lines)
     lines.push(`Findings: ${report.findings.length}`)
     if (report.truncated) lines.push("Warning: file cap was hit — results are partial")
     lines.push("")
@@ -63,6 +66,7 @@ export const LifecycleScanTool = Tool.define("lifecycle_scan", {
         filesScanned: report.filesScanned,
         findingCount: report.findings.length,
         truncated: report.truncated,
+        coverage: coverage.metadata,
         report,
       },
     }

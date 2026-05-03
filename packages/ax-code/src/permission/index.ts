@@ -314,45 +314,30 @@ export namespace Permission {
     if (!existing) return
 
     pending.delete(input.requestID)
-    Bus.publishDetached(Event.Replied, {
-      sessionID: existing.info.sessionID,
-      requestID: existing.info.id,
-      reply: input.reply,
-    })
-    if (Recorder.active(existing.info.sessionID)) {
-      Recorder.emit({
-        type: "permission.reply",
+    const publishReply = (reply: z.infer<typeof ReplyInput>["reply"]) => {
+      Bus.publishDetached(Event.Replied, {
         sessionID: existing.info.sessionID,
-        permission: existing.info.permission,
-        reply: input.reply,
+        requestID: existing.info.id,
+        reply,
       })
+      if (Recorder.active(existing.info.sessionID)) {
+        Recorder.emit({
+          type: "permission.reply",
+          sessionID: existing.info.sessionID,
+          permission: existing.info.permission,
+          reply,
+        })
+      }
     }
 
     if (input.reply === "reject") {
+      publishReply(input.reply)
       existing.deferred.reject(input.message ? new CorrectedError({ feedback: input.message }) : new RejectedError())
-
-      for (const [id, item] of pending.entries()) {
-        if (item.info.sessionID !== existing.info.sessionID) continue
-        pending.delete(id)
-        Bus.publishDetached(Event.Replied, {
-          sessionID: item.info.sessionID,
-          requestID: item.info.id,
-          reply: "reject",
-        })
-        if (Recorder.active(item.info.sessionID)) {
-          Recorder.emit({
-            type: "permission.reply",
-            sessionID: item.info.sessionID,
-            permission: item.info.permission,
-            reply: "reject",
-          })
-        }
-        item.deferred.reject(new RejectedError())
-      }
       return
     }
 
     if (input.reply === "once") {
+      publishReply(input.reply)
       existing.deferred.resolve(undefined)
       return
     }
@@ -389,6 +374,7 @@ export namespace Permission {
       existing.deferred.reject(error)
       throw error
     }
+    publishReply(input.reply)
 
     for (const pattern of existing.info.always) {
       approved.push({
@@ -528,7 +514,7 @@ export namespace Permission {
     }
   }
 
-  const EDIT_TOOLS = ["edit", "write", "apply_patch", "multiedit"]
+  const EDIT_TOOLS = ["edit", "write", "apply_patch", "multiedit", "refactor_apply"]
 
   export function disabled(tools: string[], ruleset: Ruleset): Set<string> {
     const result = new Set<string>()

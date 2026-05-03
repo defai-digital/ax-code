@@ -783,6 +783,7 @@ export namespace Session {
   export const updateMessage = fn(MessageV2.Info, async (msg) => {
     const time_created = msg.time.created
     const { id, sessionID, ...data } = msg
+    const time_updated = Date.now()
     Database.use((db) => {
       db.insert(MessageTable)
         .values({
@@ -791,7 +792,7 @@ export namespace Session {
           time_created,
           data,
         })
-        .onConflictDoUpdate({ target: MessageTable.id, set: { data } })
+        .onConflictDoUpdate({ target: MessageTable.id, set: { data, time_updated } })
         .run()
       Database.effect(() =>
         Bus.publishDetached(MessageV2.Event.Updated, {
@@ -867,7 +868,7 @@ export namespace Session {
           time_created: time,
           data,
         })
-        .onConflictDoUpdate({ target: PartTable.id, set: { data } })
+        .onConflictDoUpdate({ target: PartTable.id, set: { data, time_updated: time } })
         .run()
       Database.effect(() =>
         Bus.publishDetached(MessageV2.Event.PartUpdated, {
@@ -877,6 +878,43 @@ export namespace Session {
     })
     return part
   })
+
+  export async function updateMessageWithParts(info: MessageV2.Info, parts: MessageV2.Part[]) {
+    const messageTimeUpdated = Date.now()
+    const partTime = Date.now()
+    Database.transaction((db) => {
+      const { id, sessionID, ...data } = info
+      db.insert(MessageTable)
+        .values({
+          id,
+          session_id: sessionID,
+          time_created: info.time.created,
+          data,
+        })
+        .onConflictDoUpdate({ target: MessageTable.id, set: { data, time_updated: messageTimeUpdated } })
+        .run()
+
+      for (const part of parts) {
+        const { id, messageID, sessionID, ...data } = part
+        db.insert(PartTable)
+          .values({
+            id,
+            message_id: messageID,
+            session_id: sessionID,
+            time_created: partTime,
+            data,
+          })
+          .onConflictDoUpdate({ target: PartTable.id, set: { data, time_updated: partTime } })
+          .run()
+      }
+    })
+
+    await Bus.publish(MessageV2.Event.Updated, { info })
+    for (const part of parts) {
+      await Bus.publish(MessageV2.Event.PartUpdated, { part })
+    }
+    return { info, parts }
+  }
 
   export const updatePartDelta = fn(
     z.object({

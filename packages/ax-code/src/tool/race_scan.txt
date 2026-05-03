@@ -1,5 +1,7 @@
 Scan the project for common race condition patterns in async TypeScript code. Deterministic regex + structural heuristics, no LLM, no cloud calls.
 
+Rust/Python/Ruby coverage note: this scanner is JS/TS-oriented. In Rust, Python, or Ruby workspaces, use it only for JS/TS glue code unless non-JS files are explicitly included; do not treat a clean result as race-condition coverage for those languages. For language-native concurrency issues, use bounded source review plus cargo/pytest/ruff/mypy/bundle exec checks where appropriate.
+
 Input:
 - patterns: which detectors to run (default: all four)
   - "toctou": shared state read -> await -> write (TOCTOU)
@@ -32,4 +34,4 @@ When to use:
 When NOT to use:
 - For synchronous-only code (no async/await)
 - As a replacement for runtime race detection tools
-- For Rust code analysis (TypeScript only in Phase 1)
+- For Rust, Python, or Ruby code analysis as the primary signal (JS/TS-oriented only in this phase)

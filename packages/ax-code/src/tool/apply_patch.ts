@@ -397,7 +397,10 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
                   }
                   activeDirty = true
                   await Filesystem.write(dest, change.newContent)
-                  if (dest !== change.filePath) await fs.unlink(change.filePath)
+              if (dest !== change.filePath)
+                await fs.unlink(change.filePath).catch((error: any) => {
+                  if (error?.code !== "ENOENT") throw error
+                })
                 })
               } else {
                 await FileTime.withLock(first, async () => {
@@ -417,7 +420,10 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
                     }
                     activeDirty = true
                     await Filesystem.write(dest, change.newContent)
-                    if (dest !== change.filePath) await fs.unlink(change.filePath)
+              if (dest !== change.filePath)
+                await fs.unlink(change.filePath).catch((error: any) => {
+                  if (error?.code !== "ENOENT") throw error
+                })
                   })
                 })
               }
@@ -430,7 +436,9 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
           case "delete":
             await FileTime.withLock(change.filePath, async () => {
               activeDirty = true
-              await fs.unlink(change.filePath)
+              await fs.unlink(change.filePath).catch((error: any) => {
+                if (error?.code !== "ENOENT") throw error
+              })
             })
             updates.push({ file: change.filePath, event: "unlink" })
             break

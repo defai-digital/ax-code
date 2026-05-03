@@ -364,6 +364,7 @@ export namespace Project {
             projectID: result.id,
             error,
           })
+          throw error
         }
 
         yield* emitUpdated(result)
@@ -710,6 +711,7 @@ export namespace Project {
         projectID: result.id,
         error,
       })
+      throw error
     }
 
     emitUpdated(result)

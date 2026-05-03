@@ -1,5 +1,7 @@
 Scan the project for resource lifecycle issues: resources created but never cleaned up within the same function scope. Deterministic regex + structural heuristics, no LLM, no cloud calls.
 
+Rust/Python/Ruby coverage note: this scanner is JS/TS-oriented. In Rust, Python, or Ruby workspaces, use it only for JS/TS glue code unless non-JS files are explicitly included; do not treat a clean result as lifecycle coverage for those languages. For language-native resource lifecycle issues, use bounded source review plus cargo/pytest/ruff/mypy/bundle exec checks where appropriate.
+
 Input:
 - resourceTypes: which resource types to check (default: all six)
   - "event_listener": .on()/.addEventListener() without .off()/.removeEventListener()
@@ -34,4 +36,4 @@ When to use:
 When NOT to use:
 - For detecting race conditions — use race_scan
 - For runtime memory profiling
-- For analyzing Rust code (TypeScript only in Phase 1)
+- For analyzing Rust, Python, or Ruby code as the primary signal (JS/TS-oriented only in this phase)

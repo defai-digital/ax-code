@@ -332,9 +332,7 @@ export const fetchChecksumSha256 = async (input: {
   const response = await fetcher(input.url)
   if (!response.ok) return
 
-  const text =
-    (response.text && (await response.text())) ??
-    (response.arrayBuffer && Buffer.from(await response.arrayBuffer()).toString("utf8"))
+  const text = await response.text?.()
   if (!text) return
 
   return checksumManifestSha256(text, input.assetName)
@@ -359,7 +357,13 @@ export const fetchGitHubReleaseByTag = async (input: {
   const response = await fetcher(`https://api.github.com/repos/${input.repo}/releases/tags/${input.tag}`)
   if (!response.ok || !response.json) return
 
-  const release = (await response.json()) as GitHubRelease
+  let release: GitHubRelease
+  try {
+    release = (await response.json()) as GitHubRelease
+  } catch (error) {
+    log.warn("failed to parse GitHub release response as JSON", { repo: input.repo, tag: input.tag, error })
+    return
+  }
   if (!Array.isArray(release.assets)) return
   return release
 }
@@ -709,7 +713,9 @@ export const installReleaseBin = async (input: {
 
   const platform = input.platform ?? process.platform
   if (!input.skipChmod && platform !== "win32") {
-    await (input.chmod ?? fs.chmod)(input.bin, 0o755).catch(() => {})
+    await (input.chmod ?? fs.chmod)(input.bin, 0o755).catch((err) => {
+      log.warn(`chmod failed for ${input.id} binary`, { bin: input.bin, error: err })
+    })
   }
 
   log.info(`installed ${input.id}`, { bin: input.bin })

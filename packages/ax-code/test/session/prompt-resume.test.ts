@@ -7,6 +7,7 @@ import { MessageV2 } from "../../src/session/message-v2"
 import { SessionPrompt } from "../../src/session/prompt"
 import { SessionStatus } from "../../src/session/status"
 import { MessageID } from "../../src/session/schema"
+import { Recorder } from "../../src/replay/recorder"
 import { tmpdir } from "../fixture/fixture"
 
 const model: Provider.Model = {
@@ -91,6 +92,80 @@ describe("session.prompt resume_existing", () => {
         expect(await SessionStatus.get(session.id)).toEqual({ type: "idle" })
 
         await Session.remove(session.id)
+      },
+    })
+  })
+
+  test("does not emit duplicate session lifecycle events when resuming an active loop", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        modelSpy = spyOn(Provider, "getModel").mockResolvedValue(model)
+
+        let firstStreamReady: (() => void) | undefined
+        let releaseFirstStream: (() => void) | undefined
+        const firstStreamStarted = new Promise<void>((resolve) => {
+          firstStreamReady = resolve
+        })
+        const firstStreamCanFinish = new Promise<void>((resolve) => {
+          releaseFirstStream = resolve
+        })
+        let streams = 0
+        streamSpy = spyOn(LLM, "stream").mockImplementation((async () => {
+          streams++
+          const streamNumber = streams
+          if (streamNumber === 1) {
+            firstStreamReady?.()
+            await firstStreamCanFinish
+          }
+          return {
+            fullStream: (async function* () {
+              yield { type: "start" }
+              yield { type: "start-step" }
+              yield { type: "text-start", id: `text_${streamNumber}` }
+              yield { type: "text-delta", id: `text_${streamNumber}`, text: `response ${streamNumber}` }
+              yield { type: "text-end", id: `text_${streamNumber}` }
+              yield {
+                type: "finish-step",
+                finishReason: "stop",
+                usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+              }
+              yield { type: "finish" }
+            })(),
+          } as any
+        }) as any)
+
+        const emitSpy = spyOn(Recorder, "emit")
+        try {
+          const first = SessionPrompt.prompt({
+            sessionID: session.id,
+            agent: "build",
+            parts: [{ type: "text", text: "start work" }],
+          })
+
+          await firstStreamStarted
+          const second = SessionPrompt.loop({ sessionID: session.id, resume_existing: true })
+          releaseFirstStream?.()
+
+          await Promise.all([first, second])
+
+          const lifecycleEvents = emitSpy.mock.calls
+            .map((call) => call[0])
+            .filter(
+              (event) =>
+                event.sessionID === session.id && (event.type === "session.start" || event.type === "session.end"),
+            )
+
+          expect(lifecycleEvents.filter((event) => event.type === "session.start")).toHaveLength(1)
+          expect(lifecycleEvents.filter((event) => event.type === "session.end")).toHaveLength(1)
+          expect(await SessionStatus.get(session.id)).toEqual({ type: "idle" })
+        } finally {
+          emitSpy.mockRestore()
+          await Session.remove(session.id)
+        }
       },
     })
   })

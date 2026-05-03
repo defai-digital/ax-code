@@ -14,6 +14,7 @@ import path from "path"
 import { Global } from "../../global"
 import { modify, applyEdits } from "jsonc-parser"
 import { Filesystem } from "../../util/filesystem"
+import { FileLock } from "../../util/filelock"
 import { Bus } from "../../bus"
 import { available as discoverAvailable } from "../../mcp/discovery"
 import * as McpTemplates from "../../mcp/templates"
@@ -431,6 +432,7 @@ async function addMcpToConfig(name: string, mcpConfig: Config.Mcp, configPath: s
   await prev
 
   try {
+    using _crossProcess = await FileLock.acquire(configPath)
     let text = "{}"
     if (await Filesystem.exists(configPath)) {
       text = await Filesystem.readText(configPath)

@@ -99,7 +99,7 @@ export const ConfigRoutes = lazy(() =>
       async (c) => {
         const config = c.req.valid("json")
         await Config.update(config)
-        return c.json(config)
+        return c.json(redactConfig(await Config.get()))
       },
     )
     .get(

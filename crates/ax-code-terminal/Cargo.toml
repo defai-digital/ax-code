@@ -2,6 +2,7 @@
 name = "ax-code-terminal"
 edition.workspace = true
 license.workspace = true
+rust-version.workspace = true
 version.workspace = true
 
 [lib]
@@ -16,4 +17,3 @@ thiserror = { workspace = true }
 
 [build-dependencies]
 napi-build = { workspace = true }
-

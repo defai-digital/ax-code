@@ -286,7 +286,7 @@ export namespace Storage {
       // is both correct for the current contract and safe for any
       // future file type that enters the storage directory. See
       // BUG-67.
-      const result = await Glob.scan("**/*", {
+      const result = await Glob.scan("**/*.json", {
         cwd: path.join(dir, ...prefix),
         include: "file",
       }).then((results) => results.map((x) => [...prefix, ...x.replace(/\.json$/, "").split(path.sep)]))

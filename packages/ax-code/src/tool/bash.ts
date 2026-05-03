@@ -525,7 +525,7 @@ export const BashTool = Tool.define("bash", async () => {
         output += "\n\n<bash_metadata>\n" + resultMetadata.join("\n") + "\n</bash_metadata>"
       }
 
-      if (proc.exitCode === 0) {
+      if (proc.exitCode === 0 || proc.signalCode) {
         for (const filePath of redirectWritePaths) {
           if (Filesystem.contains(Instance.worktree, filePath)) {
             BlastRadius.recordWriteAndAssert(ctx.sessionID, filePath, 1)

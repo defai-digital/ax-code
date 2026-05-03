@@ -1,62 +1,68 @@
-use rusqlite::{params, OptionalExtension};
+use rusqlite::{OptionalExtension, params};
 use serde::{Deserialize, Serialize};
 
-use crate::store::{json_str, IndexStore};
+use crate::store::{IndexStore, json_str};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct FileRow {
-  pub id: String,
-  pub project_id: String,
-  pub path: String,
-  pub sha: String,
-  pub size: i64,
-  pub lang: String,
-  pub indexed_at: Option<i64>,
-  pub completeness: String,
-  pub time_created: Option<i64>,
-  pub time_updated: Option<i64>,
+    pub id: String,
+    pub project_id: String,
+    pub path: String,
+    pub sha: String,
+    pub size: i64,
+    pub lang: String,
+    pub indexed_at: Option<i64>,
+    pub completeness: String,
+    pub time_created: Option<i64>,
+    pub time_updated: Option<i64>,
 }
 
 fn row_to_file(row: &rusqlite::Row) -> rusqlite::Result<FileRow> {
-  Ok(FileRow {
-    id: row.get(0)?,
-    project_id: row.get(1)?,
-    path: row.get(2)?,
-    sha: row.get(3)?,
-    size: row.get(4)?,
-    lang: row.get(5)?,
-    indexed_at: row.get(6)?,
-    completeness: row.get(7)?,
-    time_created: row.get(8)?,
-    time_updated: row.get(9)?,
-  })
+    Ok(FileRow {
+        id: row.get(0)?,
+        project_id: row.get(1)?,
+        path: row.get(2)?,
+        sha: row.get(3)?,
+        size: row.get(4)?,
+        lang: row.get(5)?,
+        indexed_at: row.get(6)?,
+        completeness: row.get(7)?,
+        time_created: row.get(8)?,
+        time_updated: row.get(9)?,
+    })
 }
 
-const SELECT_COLS: &str = "id, project_id, path, sha, size, lang, indexed_at, completeness, time_created, time_updated";
+const SELECT_COLS: &str =
+    "id, project_id, path, sha, size, lang, indexed_at, completeness, time_created, time_updated";
 
-fn query_files(conn: &rusqlite::Connection, sql: &str, p: &[&dyn rusqlite::types::ToSql]) -> rusqlite::Result<Vec<FileRow>> {
-  let mut stmt = conn.prepare(sql)?;
-  let rows = stmt.query_map(p, row_to_file)?
-    .filter_map(|r| r.ok())
-    .collect();
-  Ok(rows)
+fn query_files(
+    conn: &rusqlite::Connection,
+    sql: &str,
+    p: &[&dyn rusqlite::types::ToSql],
+) -> rusqlite::Result<Vec<FileRow>> {
+    let mut stmt = conn.prepare(sql)?;
+    let rows = stmt
+        .query_map(p, row_to_file)?
+        .filter_map(|r| r.ok())
+        .collect();
+    Ok(rows)
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PruneResult {
-  pub files: u32,
-  pub nodes: u32,
-  pub edges: u32,
+    pub files: u32,
+    pub nodes: u32,
+    pub edges: u32,
 }
 
 #[napi]
 impl IndexStore {
-  #[napi]
-  pub fn upsert_file(&self, json: String) -> napi::Result<()> {
-    let row: FileRow = serde_json::from_str(&json)
-      .map_err(|e| napi::Error::from_reason(format!("invalid JSON: {e}")))?;
+    #[napi]
+    pub fn upsert_file(&self, json: String) -> napi::Result<()> {
+        let row: FileRow = serde_json::from_str(&json)
+            .map_err(|e| napi::Error::from_reason(format!("invalid JSON: {e}")))?;
 
-    self.with_conn(|conn| {
+        self.with_conn(|conn| {
       conn.execute(
         "INSERT INTO code_file (id, project_id, path, sha, size, lang, completeness) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
          ON CONFLICT (project_id, path) DO UPDATE SET sha = ?4, size = ?5, lang = ?6, completeness = ?7, indexed_at = (unixepoch('now', 'subsec') * 1000), time_updated = (unixepoch('now', 'subsec') * 1000)",
@@ -64,50 +70,59 @@ impl IndexStore {
       )?;
       Ok(())
     })
-  }
+    }
 
-  #[napi]
-  pub fn get_file(&self, project_id: String, path: String) -> napi::Result<Option<String>> {
-    self.with_conn(|conn| {
-      let sql = format!("SELECT {SELECT_COLS} FROM code_file WHERE project_id = ?1 AND path = ?2");
-      let mut stmt = conn.prepare(&sql)?;
-      let result = stmt.query_row(params![project_id, path], row_to_file).optional()?;
-      match result {
-        Some(r) => Ok(Some(json_str(&r)?)),
-        None => Ok(None),
-      }
-    })
-  }
+    #[napi]
+    pub fn get_file(&self, project_id: String, path: String) -> napi::Result<Option<String>> {
+        self.with_conn(|conn| {
+            let sql =
+                format!("SELECT {SELECT_COLS} FROM code_file WHERE project_id = ?1 AND path = ?2");
+            let mut stmt = conn.prepare(&sql)?;
+            let result = stmt
+                .query_row(params![project_id, path], row_to_file)
+                .optional()?;
+            match result {
+                Some(r) => Ok(Some(json_str(&r)?)),
+                None => Ok(None),
+            }
+        })
+    }
 
-  #[napi]
-  pub fn list_files(&self, project_id: String) -> napi::Result<String> {
-    self.with_conn(|conn| {
-      let sql = format!("SELECT {SELECT_COLS} FROM code_file WHERE project_id = ?1 ORDER BY path");
-      let rows = query_files(conn, &sql, &[&project_id as &dyn rusqlite::types::ToSql])?;
-      json_str(&rows)
-    })
-  }
+    #[napi]
+    pub fn list_files(&self, project_id: String) -> napi::Result<String> {
+        self.with_conn(|conn| {
+            let sql =
+                format!("SELECT {SELECT_COLS} FROM code_file WHERE project_id = ?1 ORDER BY path");
+            let rows = query_files(conn, &sql, &[&project_id as &dyn rusqlite::types::ToSql])?;
+            json_str(&rows)
+        })
+    }
 
-  #[napi]
-  pub fn delete_file(&self, project_id: String, path: String) -> napi::Result<()> {
-    self.with_conn(|conn| {
-      conn.execute(
-        "DELETE FROM code_file WHERE project_id = ?1 AND path = ?2",
-        params![project_id, path],
-      )?;
-      Ok(())
-    })
-  }
+    #[napi]
+    pub fn delete_file(&self, project_id: String, path: String) -> napi::Result<()> {
+        self.with_conn(|conn| {
+            conn.execute(
+                "DELETE FROM code_file WHERE project_id = ?1 AND path = ?2",
+                params![project_id, path],
+            )?;
+            Ok(())
+        })
+    }
 
-  /// Prune files (and their nodes/edges) that are NOT in the live set.
-  #[napi]
-  pub fn prune_orphan_files(&self, project_id: String, live_paths_json: String, scope_prefix: String) -> napi::Result<String> {
-    let live_paths: Vec<String> = serde_json::from_str(&live_paths_json)
-      .map_err(|e| napi::Error::from_reason(format!("invalid JSON: {e}")))?;
+    /// Prune files (and their nodes/edges) that are NOT in the live set.
+    #[napi]
+    pub fn prune_orphan_files(
+        &self,
+        project_id: String,
+        live_paths_json: String,
+        scope_prefix: String,
+    ) -> napi::Result<String> {
+        let live_paths: Vec<String> = serde_json::from_str(&live_paths_json)
+            .map_err(|e| napi::Error::from_reason(format!("invalid JSON: {e}")))?;
 
-    let live_set: std::collections::HashSet<String> = live_paths.into_iter().collect();
+        let live_set: std::collections::HashSet<String> = live_paths.into_iter().collect();
 
-    self.with_conn_mut(|conn| {
+        self.with_conn_mut(|conn| {
       // Get all files for this project first
       let all_files = {
         let sql = format!("SELECT {SELECT_COLS} FROM code_file WHERE project_id = ?1");
@@ -173,26 +188,26 @@ impl IndexStore {
       tx.commit()?;
       json_str(&PruneResult { files: total_files, nodes: total_nodes, edges: total_edges })
     })
-  }
+    }
 
-  /// Atomic ingest: delete old data for a file and insert new nodes/edges/file metadata.
-  #[napi]
-  pub fn ingest_file(
-    &self,
-    project_id: String,
-    file_path: String,
-    nodes_json: String,
-    edges_json: String,
-    file_meta_json: String,
-  ) -> napi::Result<()> {
-    let nodes: Vec<crate::node::NodeRow> = serde_json::from_str(&nodes_json)
-      .map_err(|e| napi::Error::from_reason(format!("invalid nodes JSON: {e}")))?;
-    let edges: Vec<crate::edge::EdgeRow> = serde_json::from_str(&edges_json)
-      .map_err(|e| napi::Error::from_reason(format!("invalid edges JSON: {e}")))?;
-    let file_meta: FileRow = serde_json::from_str(&file_meta_json)
-      .map_err(|e| napi::Error::from_reason(format!("invalid file meta JSON: {e}")))?;
+    /// Atomic ingest: delete old data for a file and insert new nodes/edges/file metadata.
+    #[napi]
+    pub fn ingest_file(
+        &self,
+        project_id: String,
+        file_path: String,
+        nodes_json: String,
+        edges_json: String,
+        file_meta_json: String,
+    ) -> napi::Result<()> {
+        let nodes: Vec<crate::node::NodeRow> = serde_json::from_str(&nodes_json)
+            .map_err(|e| napi::Error::from_reason(format!("invalid nodes JSON: {e}")))?;
+        let edges: Vec<crate::edge::EdgeRow> = serde_json::from_str(&edges_json)
+            .map_err(|e| napi::Error::from_reason(format!("invalid edges JSON: {e}")))?;
+        let file_meta: FileRow = serde_json::from_str(&file_meta_json)
+            .map_err(|e| napi::Error::from_reason(format!("invalid file meta JSON: {e}")))?;
 
-    self.with_conn_mut(|conn| {
+        self.with_conn_mut(|conn| {
       let tx = conn.transaction()?;
 
       // 1. Get node IDs for edge cleanup
@@ -261,5 +276,5 @@ impl IndexStore {
       tx.commit()?;
       Ok(())
     })
-  }
+    }
 }

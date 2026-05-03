@@ -112,7 +112,7 @@ export const GrepTool = Tool.define("grep", {
           output: outputLines.join("\n"),
         }
       } catch (e: any) {
-        if (e?.code === "MODULE_NOT_FOUND" || e?.code === "ERR_MODULE_NOT_FOUND") {
+        if (e?.code === "MODULE_NOT_FOUND" || e?.code === "ERR_MODULE_NOT_FOUND" || e instanceof SyntaxError) {
           /* fall through to ripgrep */
         } else throw e
       }

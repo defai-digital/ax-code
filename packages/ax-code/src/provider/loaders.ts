@@ -8,6 +8,9 @@ import { resolveCliModel } from "./cli/resolve"
 import { getCliProviderDefinition } from "./cli/config"
 import { checkCliProviderAuth } from "./cli/connect"
 import { URL } from "url"
+import { Log } from "@/util/log"
+
+const log = Log.create({ service: "provider.loaders" })
 
 export type CustomModelLoader = (sdk: any, modelID: string, options?: Record<string, any>) => Promise<any>
 export type CustomVarsLoader = (options: Record<string, any>) => Record<string, string>
@@ -65,28 +68,53 @@ function openAICompatibleLimit(item: OpenAICompatibleModelItem): Provider.Model[
 async function fetchOpenAICompatibleModels(fetcher: ModelListFetcher, host: string) {
   return fetcher(`${host}/v1/models`, { signal: AbortSignal.timeout(5000) })
     .then(async (r) => {
-      if (!r.ok) return null
+      if (!r.ok) {
+        log.debug("OpenAI-compatible model list fetch returned non-OK", { host, status: r.status })
+        return null
+      }
       return (await r.json()) as { data?: OpenAICompatibleModelItem[] }
     })
-    .catch(() => null)
+    .catch((error) => {
+      log.debug("OpenAI-compatible model list fetch failed", { host, error })
+      return null
+    })
+}
+
+function isLocalOllamaHost(hostname: string) {
+  if (hostname === "localhost" || hostname === "0.0.0.0" || hostname === "::1") return true
+  if (hostname.endsWith(".localhost")) return true
+  if (hostname.startsWith("127.")) return true
+  return false
 }
 
 function ollamaCompatibleLoader(providerID: string, envKey: string, defaultHost: string): CustomLoader {
   return async () => {
     const host = process.env[envKey] || defaultHost
     const url = new URL(host)
-    const local = ["localhost", "127.0.0.1", "::1"].includes(url.hostname)
+    const local = isLocalOllamaHost(url.hostname)
     const fetcher = local ? fetch : Ssrf.pinnedFetch
     const reachable = await fetcher(`${host}/api/tags`, { signal: AbortSignal.timeout(2000) })
-      .then((r) => r.ok)
-      .catch(() => false)
+      .then((r) => {
+        if (!r.ok) log.debug("Ollama-compatible reachability probe returned non-OK", { providerID, host, status: r.status })
+        return r.ok
+      })
+      .catch((error) => {
+        log.debug("Ollama-compatible reachability probe failed", { providerID, host, error })
+        return false
+      })
 
     return {
       autoload: reachable,
       options: reachable ? { baseURL: `${host}/v1` } : {},
       async discoverModels() {
-        const res = await fetcher(`${host}/api/tags`, { signal: AbortSignal.timeout(5000) }).catch(() => null)
-        if (!res?.ok) return {}
+        const res = await fetcher(`${host}/api/tags`, { signal: AbortSignal.timeout(5000) }).catch((error) => {
+          log.debug("Ollama-compatible model discovery failed", { providerID, host, error })
+          return null
+        })
+        if (!res?.ok) {
+          if (res) log.debug("Ollama-compatible model discovery returned non-OK", { providerID, host, status: res.status })
+          return {}
+        }
         const data = (await res.json()) as { models?: { name: string }[] }
         const models: Record<string, Provider.Model> = {}
         for (const m of data.models ?? []) {

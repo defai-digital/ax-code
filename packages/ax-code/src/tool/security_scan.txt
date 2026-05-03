@@ -1,5 +1,7 @@
 Scan the project for common security anti-patterns: path traversal, command injection, SSRF, missing request validation, and environment variable leaks. Deterministic regex + structural heuristics, no LLM, no cloud calls.
 
+Rust/Python/Ruby coverage note: this scanner is JS/TS-oriented. In Rust, Python, or Ruby workspaces, use it only for JS/TS glue code unless non-JS files are explicitly included, and verify language-native security evidence with bounded source review plus cargo/pytest/ruff/mypy/bundle exec checks where appropriate.
+
 Input:
 - patterns: which detectors to run (default: all five)
   - "path_traversal": path.join/resolve with variable input without containment check

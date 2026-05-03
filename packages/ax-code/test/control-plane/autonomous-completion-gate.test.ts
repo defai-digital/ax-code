@@ -36,7 +36,7 @@ describe("AutonomousCompletionGate", () => {
     })
   })
 
-  test("allows completion after a later non-empty task result", () => {
+  test("allows completion after the same subagent later returns a non-empty result", () => {
     const decision = AutonomousCompletionGate.evaluate({
       pendingTodos: [],
       messages: [
@@ -59,7 +59,7 @@ describe("AutonomousCompletionGate", () => {
               state: {
                 status: "completed",
                 output: "The child session found and fixed the issue.",
-                metadata: { emptyResult: false, sessionId: "ses_ok" },
+                metadata: { emptyResult: false, sessionId: "ses_empty" },
               },
             },
           ],
@@ -68,6 +68,50 @@ describe("AutonomousCompletionGate", () => {
     })
 
     expect(decision).toEqual({ status: "allow" })
+  })
+
+  test("does not let a different successful task clear an unresolved empty task", () => {
+    const decision = AutonomousCompletionGate.evaluate({
+      pendingTodos: [],
+      messages: [
+        {
+          parts: [
+            {
+              type: "tool",
+              tool: "task",
+              callID: "call_empty",
+              state: {
+                status: "completed",
+                input: { description: "review the session" },
+                output: "Subagent completed without a final response.",
+                metadata: { emptyResult: true, sessionId: "ses_empty" },
+              },
+            },
+            {
+              type: "tool",
+              tool: "task",
+              callID: "call_ok",
+              state: {
+                status: "completed",
+                input: { description: "review another area" },
+                output: "The child session found and fixed the issue.",
+                metadata: { emptyResult: false, sessionId: "ses_ok" },
+              },
+            },
+          ],
+        },
+      ],
+    })
+
+    expect(decision).toMatchObject({
+      status: "blocked",
+      reason: "empty_subagent_result",
+      emptyResult: {
+        callID: "call_empty",
+        taskID: "ses_empty",
+        description: "review the session",
+      },
+    })
   })
 
   test("blocks recovered subagent results that still need review", () => {
@@ -110,6 +154,41 @@ describe("AutonomousCompletionGate", () => {
     })
     if (decision.status !== "blocked") throw new Error("unexpected allow")
     expect(decision.message).toContain("returned recovered evidence that still needs review")
+  })
+
+  test("blocks completion when a task tool failed before returning evidence", () => {
+    const decision = AutonomousCompletionGate.evaluate({
+      pendingTodos: [],
+      messages: [
+        {
+          parts: [
+            {
+              type: "tool",
+              tool: "task",
+              callID: "call_failed",
+              state: {
+                status: "error",
+                input: { description: "review bug reports" },
+                errorMessage: "Subagent finalization timed out after 2 minutes",
+              },
+            },
+          ],
+        },
+      ],
+    })
+
+    expect(decision).toMatchObject({
+      status: "blocked",
+      reason: "empty_subagent_result",
+      emptyResult: {
+        callID: "call_failed",
+        description: "review bug reports",
+        failed: true,
+        errorMessage: "Subagent finalization timed out after 2 minutes",
+      },
+    })
+    if (decision.status !== "blocked") throw new Error("unexpected allow")
+    expect(decision.message).toContain("failed before returning usable evidence")
   })
 
   test("blocks completion when todos are unfinished", () => {
@@ -210,7 +289,7 @@ describe("AutonomousCompletionGate", () => {
     expect(decision).toEqual({ status: "allow" })
   })
 
-  test("clears empty result state across multiple messages when a good result follows", () => {
+  test("clears empty result state across multiple messages when the same subagent returns a good result", () => {
     const decision = AutonomousCompletionGate.evaluate({
       pendingTodos: [],
       messages: [
@@ -237,7 +316,7 @@ describe("AutonomousCompletionGate", () => {
               state: {
                 status: "completed",
                 output: "All issues resolved successfully.",
-                metadata: { emptyResult: false, sessionId: "ses_ok" },
+                metadata: { emptyResult: false, sessionId: "ses_empty" },
               },
             },
           ],

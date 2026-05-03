@@ -181,6 +181,7 @@ export namespace McpOAuthCallback {
 
       if (initGeneration !== generation) {
         server.stop()
+        server = undefined
         return
       }
 

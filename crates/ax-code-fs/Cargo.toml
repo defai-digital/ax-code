@@ -2,10 +2,15 @@
 name = "ax-code-fs"
 edition.workspace = true
 license.workspace = true
+rust-version.workspace = true
 version.workspace = true
 
 [lib]
 crate-type = ["cdylib", "rlib"]
+
+[[example]]
+name = "ax-code-fs-bench"
+path = "examples/bench.rs"
 
 [dependencies]
 napi = { workspace = true }

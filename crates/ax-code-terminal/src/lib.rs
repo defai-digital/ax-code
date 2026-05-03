@@ -173,7 +173,7 @@ fn parse_csi_key(input: &str) -> Option<(InputEvent, usize)> {
     }
 
     let rest = &input[2..];
-    let final_idx = rest.find(|ch: char| matches!(ch, 'A' | 'B' | 'C' | 'D' | 'F' | 'H' | '~'))?;
+    let final_idx = rest.find(['A', 'B', 'C', 'D', 'F', 'H', '~'])?;
     let final_ch = rest.as_bytes().get(final_idx).copied()? as char;
     let body = &rest[..final_idx];
     let consumed = 2 + final_idx + 1;

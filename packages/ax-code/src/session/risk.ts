@@ -119,7 +119,10 @@ export namespace SessionRisk {
       includeDecisionHints?: boolean
     },
   ) {
-    const [session, semantic] = await Promise.all([Session.get(sessionID), SessionSemanticDiff.load(sessionID)])
+    const [session, semantic] = await Promise.all([
+      Session.get(sessionID),
+      SessionSemanticDiff.load(sessionID).catch(() => undefined),
+    ])
     const assessment = Risk.fromSession(sessionID)
     void QualityShadow.captureSessionRisk({ session, assessment }).catch((err) => {
       log.warn("quality shadow capture failed", { sessionID, err })

@@ -4,6 +4,7 @@ import DESCRIPTION from "./dedup_scan.txt"
 import { Instance } from "../project/instance"
 import { DebugEngine } from "../debug-engine"
 import type { CodeNodeKind } from "../code-intelligence/schema.sql"
+import { dedupCoverageNotice } from "./scan-coverage"
 
 // Tool wrapper around DebugEngine.detectDuplicates. Read-only, no file
 // writes, no cloud calls. See PRD §4.3.1 and ADR-009.
@@ -51,6 +52,8 @@ export const DedupScanTool = Tool.define("dedup_scan", {
     const lines: string[] = []
     lines.push(`Found ${report.clusters.length} duplicate cluster${report.clusters.length === 1 ? "" : "s"}`)
     lines.push(`Estimated duplicate lines: ${report.totalDuplicateLines}`)
+    const coverage = await dedupCoverageNotice()
+    lines.push(...coverage.lines)
     if (report.truncated) lines.push("Warning: candidate pool was truncated at cap")
     lines.push("")
 
@@ -75,6 +78,7 @@ export const DedupScanTool = Tool.define("dedup_scan", {
         clusterCount: report.clusters.length,
         totalDuplicateLines: report.totalDuplicateLines,
         truncated: report.truncated,
+        coverage: coverage.metadata,
         report,
       },
     }

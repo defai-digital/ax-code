@@ -125,6 +125,9 @@ export namespace Isolation {
     if (!Filesystem.contains(dir, current) && !(tree !== "/" && Filesystem.contains(tree, current))) {
       throw new DeniedError("bash", `Bash working directory is outside workspace boundary: ${cwd}`)
     }
+    if (!isBypassed(state, current) && isProtected(state, current)) {
+      throw new DeniedError("bash", `Bash working directory is a protected path: ${cwd}`, current)
+    }
     // check all resolved paths from parsed commands
     for (const p of resolvedPaths) {
       const target = resolvePath(p)

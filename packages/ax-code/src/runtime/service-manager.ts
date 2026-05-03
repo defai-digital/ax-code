@@ -273,7 +273,14 @@ function createManager(state: ManagerState): ServiceManager.Manager {
           lastError: current.lastError ?? message,
         }))
 
-        if (aborted) {
+        if (timedOut) {
+          updateService(state, input.service, (current) => ({
+            ...current,
+            state: "failed",
+            startedAt: current.startedAt ?? startedAt,
+            lastError: current.lastError ?? message,
+          }))
+        } else if (aborted) {
           updateService(state, input.service, (current) => ({
             ...current,
             state: "stopped",

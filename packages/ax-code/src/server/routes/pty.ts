@@ -7,6 +7,9 @@ import { PtyID } from "@/pty/schema"
 import { NotFoundError } from "../../storage/db"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
+import { Log } from "@/util/log"
+
+const log = Log.create({ service: "server.pty" })
 
 export const PtyRoutes = lazy(() =>
   new Hono()
@@ -196,7 +199,8 @@ export const PtyRoutes = lazy(() =>
               ready = true
               for (const msg of pending) handler?.onMessage(msg)
               pending.length = 0
-            } catch {
+            } catch (error) {
+              log.error("PTY connection failed", { id, error })
               pending.length = 0
               ws.close()
             }

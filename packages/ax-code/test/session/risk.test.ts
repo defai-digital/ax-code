@@ -92,6 +92,63 @@ describe("session.risk", () => {
     })
   })
 
+  test("marks recovered subagent evidence as needs review instead of ready", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const sid = session.id
+
+        try {
+          Recorder.begin(sid)
+          Recorder.emit({
+            type: "session.start",
+            sessionID: sid,
+            agent: "build",
+            model: "test/model",
+            directory: tmp.path,
+          })
+          Recorder.emit({
+            type: "tool.result",
+            sessionID: sid,
+            tool: "task",
+            callID: "call_recovered",
+            status: "completed",
+            output: "Recovered subagent findings.",
+            metadata: {
+              sessionId: "ses_child",
+              emptyResult: false,
+              finalizeAttempted: true,
+              recoveredFromEmpty: true,
+              recoveredResultNeedsReview: false,
+            },
+            durationMs: 12,
+          } as any)
+          Recorder.emit({
+            type: "session.end",
+            sessionID: sid,
+            reason: "completed",
+            totalSteps: 1,
+          })
+          Recorder.end(sid)
+
+          await new Promise((resolve) => setTimeout(resolve, 50))
+
+          const assessment = Risk.fromSession(sid)
+          expect(assessment.readiness).toBe("needs_review")
+          expect(assessment.summary).toContain("1 recovered subagent results")
+          expect(assessment.evidence).toContain("1 subagent result recovered from an initially empty response")
+          expect(assessment.unknowns).toContain("recovered subagent evidence should be reviewed before delivery")
+          expect(assessment.mitigations).toContain("review the recovered subagent result against the inspected evidence")
+        } finally {
+          await Session.remove(sid)
+        }
+      },
+    })
+  })
+
   test("loads review replay readiness when requested", async () => {
     await using tmp = await tmpdir({ git: true })
 

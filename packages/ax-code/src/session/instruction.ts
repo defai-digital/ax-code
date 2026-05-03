@@ -186,7 +186,8 @@ export namespace InstructionPrompt {
             return ""
           }
           const contentLength = res.headers.get("content-length")
-          if (contentLength && parseInt(contentLength, 10) > INSTRUCTION_MAX_BYTES) {
+          const contentLengthBytes = contentLength ? Number(contentLength) : undefined
+          if (contentLengthBytes !== undefined && !Number.isNaN(contentLengthBytes) && contentLengthBytes > INSTRUCTION_MAX_BYTES) {
             log.warn("instruction URL response too large", { url, contentLength })
             return ""
           }

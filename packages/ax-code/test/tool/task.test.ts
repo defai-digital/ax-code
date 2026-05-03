@@ -394,12 +394,106 @@ describe("tool.task", () => {
           expect(promptSpy).toHaveBeenCalledTimes(2)
           expect((promptSpy.mock.calls[1]?.[0] as any).parts[0].text).toContain("ended without a usable final response")
           expect(result.output).toContain("Recovered subagent findings.")
+          expect(result.output).toContain("Review it before treating it as normal subagent evidence.")
           expect(result.metadata.emptyResult).toBe(false)
           expect(result.metadata.finalizeAttempted).toBe(true)
           expect(result.metadata.recoveredFromEmpty).toBe(true)
           expect(result.metadata.recoveredResultNeedsReview).toBe(false)
         } finally {
           promptSpy.mockRestore()
+        }
+      },
+    })
+  })
+
+  test("returns structured empty-result metadata when finalization fails", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({})
+        const user = await Session.updateMessage({
+          id: MessageID.ascending(),
+          sessionID: parent.id,
+          role: "user",
+          time: { created: Date.now() },
+          agent: "build",
+          model: { providerID: "test" as any, modelID: "test-model" as any },
+          tools: {},
+          mode: "build",
+        } as any)
+        const assistant = await Session.updateMessage({
+          id: MessageID.ascending(),
+          parentID: user.id,
+          sessionID: parent.id,
+          role: "assistant",
+          mode: "build",
+          agent: "build",
+          path: { cwd: tmp.path, root: tmp.path },
+          tokens: {
+            input: 0,
+            output: 0,
+            reasoning: 0,
+            cache: { read: 0, write: 0 },
+          },
+          modelID: "test-model",
+          providerID: "test",
+          time: { created: Date.now() },
+        } as MessageV2.Assistant)
+
+        let calls = 0
+        const promptSpy = spyOn(SessionPrompt, "prompt").mockImplementation((async (input: any) => {
+          calls++
+          if (calls === 1) {
+            return {
+              info: {
+                id: input.messageID,
+                sessionID: input.sessionID,
+                role: "assistant",
+                time: { created: Date.now(), completed: Date.now() },
+              },
+              parts: [],
+            } as any
+          }
+          throw new Error("Subagent finalization timed out after 2 minutes")
+        }) as any)
+        const cancelSpy = spyOn(SessionPrompt, "cancel").mockResolvedValue(undefined as never)
+
+        try {
+          const result = await (await TaskTool.init()).execute(
+            {
+              description: "review code",
+              prompt: "review the code",
+              subagent_type: "general",
+            },
+            {
+              sessionID: parent.id,
+              messageID: assistant.id,
+              callID: "",
+              agent: "build",
+              abort: AbortSignal.any([]),
+              messages: [],
+              metadata: () => {},
+              ask: async () => {},
+              extra: {},
+            } as any,
+          )
+
+          expect(promptSpy).toHaveBeenCalledTimes(2)
+          expect(cancelSpy).toHaveBeenCalledTimes(1)
+          expect(result.output).toContain("Subagent completed without a final response.")
+          expect(result.output).toContain("Finalization failed with Error: Subagent finalization timed out after 2 minutes.")
+          expect(result.metadata.emptyResult).toBe(true)
+          expect(result.metadata.finalizeAttempted).toBe(true)
+          expect(result.metadata.recoveredFromEmpty).toBe(false)
+          expect(result.metadata.subagentError).toBe(true)
+          expect(result.metadata.errorName).toBe("Error")
+          expect(result.metadata.errorMessage).toBe("Subagent finalization timed out after 2 minutes")
+          expect(result.metadata.finalizeError).toBe(true)
+        } finally {
+          promptSpy.mockRestore()
+          cancelSpy.mockRestore()
         }
       },
     })

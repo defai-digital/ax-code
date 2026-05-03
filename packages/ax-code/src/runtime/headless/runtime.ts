@@ -115,10 +115,18 @@ async function postJson(
   }
   if (response.status === 202) return { accepted: true, status: 202 }
   const text = await response.text()
+  let parsedBody: unknown = true
+  if (text) {
+    try {
+      parsedBody = JSON.parse(text)
+    } catch (error) {
+      throw new Error(`Headless runtime returned invalid JSON: ${text.slice(0, 200)}`, { cause: error })
+    }
+  }
   return {
     accepted: true,
     status: 200,
-    body: text ? JSON.parse(text) : true,
+    body: parsedBody,
   }
 }
 

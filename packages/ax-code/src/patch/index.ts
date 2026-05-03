@@ -591,7 +591,9 @@ export namespace Patch {
           break
 
         case "delete":
-          await fs.unlink(hunk.path)
+          await fs.unlink(hunk.path).catch((error: any) => {
+            if (error?.code !== "ENOENT") throw error
+          })
           deleted.push(hunk.path)
           log.info(`Deleted file: ${hunk.path}`)
           break
@@ -607,7 +609,9 @@ export namespace Patch {
             }
 
             await fs.writeFile(hunk.move_path, fileUpdate.content, "utf-8")
-            await fs.unlink(hunk.path)
+            await fs.unlink(hunk.path).catch((error: any) => {
+              if (error?.code !== "ENOENT") throw error
+            })
             modified.push(hunk.move_path)
             log.info(`Moved file: ${hunk.path} -> ${hunk.move_path}`)
           } else {

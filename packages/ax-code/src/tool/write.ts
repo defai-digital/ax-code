@@ -16,6 +16,7 @@ import { BlastRadius } from "@/session/blast-radius"
 function validateInternalBugReport(filepath: string, content: string) {
   const relative = path.relative(Instance.worktree, filepath).split(path.sep).join("/")
   if (!relative.startsWith(".internal/bugs/") || !relative.endsWith(".md")) return
+  if (relative === ".internal/bugs/README.md" || relative === ".internal/bugs/summary.md") return
 
   const missing: string[] = []
   if (!/(^|\n)(?:\*\*)?Classification(?::\*\*|\*\*:|:)\s*(confirmed|suspected|false_positive|false positive)\b/i.test(content)) {

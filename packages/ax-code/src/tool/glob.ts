@@ -52,21 +52,27 @@ export const GlobTool = Tool.define("glob", {
         entries.sort((a, b) => b.mtime - a.mtime)
 
         const output = []
+        const truncated = entries.length >= 100
         if (entries.length === 0) output.push("No files found")
         if (entries.length > 0) {
           output.push(...entries.map((f) => f.path))
+        }
+        if (truncated) {
+          output.push("")
+          output.push("(Results are truncated: showing first 100 results...)")
         }
 
         return {
           title: path.relative(Instance.worktree, search),
           metadata: {
             count: entries.length,
-            truncated: false,
+            truncated,
           },
           output: output.join("\n"),
         }
       } catch (e: any) {
-        if (e?.code !== "MODULE_NOT_FOUND" && e?.code !== "ERR_MODULE_NOT_FOUND") throw e
+        if (e?.code !== "MODULE_NOT_FOUND" && e?.code !== "ERR_MODULE_NOT_FOUND" && !(e instanceof SyntaxError))
+          throw e
       }
     }
 

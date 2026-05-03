@@ -13,6 +13,8 @@ export namespace AutonomousCompletionGate {
     callID?: string
     taskID?: string
     description?: string
+    failed?: boolean
+    errorMessage?: string
     recoveredResultNeedsReview?: boolean
   }
 
@@ -40,9 +42,11 @@ export namespace AutonomousCompletionGate {
     if (emptyResult) {
       const subject = emptyResult.taskID ? `Subagent ${emptyResult.taskID}` : "A subagent"
       const description = emptyResult.description ? ` for "${emptyResult.description}"` : ""
-      const problem = emptyResult.recoveredResultNeedsReview
-        ? "returned recovered evidence that still needs review"
-        : "completed without a usable final response"
+      const problem = emptyResult.failed
+        ? "failed before returning usable evidence"
+        : emptyResult.recoveredResultNeedsReview
+          ? "returned recovered evidence that still needs review"
+          : "completed without a usable final response"
       return {
         status: "blocked",
         reason: "empty_subagent_result",
@@ -69,7 +73,8 @@ export namespace AutonomousCompletionGate {
   }
 
   function latestEmptySubagentResult(messages: readonly Message[]): EmptySubagentResult | undefined {
-    let latest: EmptySubagentResult | undefined
+    const unresolved = new Map<string, EmptySubagentResult>()
+    let anonymousIndex = 0
 
     for (const message of messages) {
       for (const part of message.parts ?? []) {
@@ -77,10 +82,31 @@ export namespace AutonomousCompletionGate {
         if (!record || record["type"] !== "tool" || record["tool"] !== "task") continue
 
         const state = asRecord(record["state"])
-        if (!state || state["status"] !== "completed") continue
+        if (!state) continue
+        const status = state["status"]
+        if (status !== "completed" && status !== "error") continue
 
         const metadata = asRecord(state["metadata"])
         const output = typeof state["output"] === "string" ? state["output"] : ""
+        const input = asRecord(state["input"])
+        const callID = typeof record["callID"] === "string" ? record["callID"] : undefined
+        const taskID = typeof metadata?.["sessionId"] === "string" ? metadata["sessionId"] : undefined
+        const description = typeof input?.["description"] === "string" ? input["description"] : undefined
+        const key = taskID ? `task:${taskID}` : callID ? `call:${callID}` : `anonymous:${anonymousIndex++}`
+        if (status === "error") {
+          const errorMessage = typeof state["errorMessage"] === "string" ? state["errorMessage"] : output || undefined
+          const current = {
+            callID,
+            taskID,
+            description,
+            failed: true,
+            errorMessage,
+          }
+          unresolved.delete(key)
+          unresolved.set(key, current)
+          continue
+        }
+
         const recoveredResultNeedsReview = metadata?.["recoveredResultNeedsReview"] === true
         const emptyResult =
           metadata?.["emptyResult"] === true ||
@@ -88,20 +114,23 @@ export namespace AutonomousCompletionGate {
           output.includes("Subagent completed without a final response.")
 
         if (!emptyResult) {
-          latest = undefined
+          unresolved.delete(key)
           continue
         }
 
-        const input = asRecord(state["input"])
-        latest = {
-          callID: typeof record["callID"] === "string" ? record["callID"] : undefined,
-          taskID: typeof metadata?.["sessionId"] === "string" ? metadata["sessionId"] : undefined,
-          description: typeof input?.["description"] === "string" ? input["description"] : undefined,
+        const current = {
+          callID,
+          taskID,
+          description,
           recoveredResultNeedsReview,
         }
+        unresolved.delete(key)
+        unresolved.set(key, current)
       }
     }
 
+    let latest: EmptySubagentResult | undefined
+    for (const result of unresolved.values()) latest = result
     return latest
   }
 

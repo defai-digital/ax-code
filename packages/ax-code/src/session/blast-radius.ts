@@ -141,8 +141,8 @@ export namespace BlastRadius {
    * so both `*` and `**` patterns match nested segments.
    */
   export function isPathBlocked(sessionID: SessionID, filePath: string): { blocked: boolean; pattern?: string } {
-    const state = get(sessionID)
-    for (const pattern of state.caps.blockedPaths) {
+    const caps = sessions.get(sessionID)?.caps ?? defaultCaps()
+    for (const pattern of caps.blockedPaths) {
       if (Wildcard.match(filePath, pattern)) return { blocked: true, pattern }
     }
     return { blocked: false }

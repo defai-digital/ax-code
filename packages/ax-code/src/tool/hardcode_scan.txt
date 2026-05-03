@@ -1,5 +1,7 @@
 Scan the project for hardcoded values that belong in configuration: magic numbers, inline URLs, inline filesystem paths, and high-entropy strings that look like secrets. Deterministic regex + entropy heuristics, no LLM, no cloud calls.
 
+Rust/Python/Ruby coverage note: this scanner is JS/TS-oriented by default. In Rust, Python, or Ruby workspaces, do not treat a clean result as source coverage for those languages unless files for that language were explicitly included and manually verified.
+
 Input:
 - patterns: which detectors to run (default: all four)
 - excludeTests: skip test files by default (default true)

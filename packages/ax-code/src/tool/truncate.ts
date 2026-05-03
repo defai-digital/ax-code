@@ -145,13 +145,15 @@ export namespace Truncate {
         } as const
       })
 
+      yield* cleanup().pipe(Effect.catchCause(() => Effect.void))
+
       yield* cleanup().pipe(
         Effect.catchCause((cause) => {
           log.error("truncation cleanup failed", { cause: Cause.pretty(cause) })
           return Effect.void
         }),
         Effect.repeat(Schedule.spaced(Duration.hours(1))),
-        Effect.delay(Duration.minutes(1)),
+        Effect.delay(Duration.hours(1)),
         Effect.catchCause(() => Effect.void),
         Effect.forkScoped,
       )

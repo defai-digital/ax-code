@@ -849,11 +849,16 @@ export namespace MCP {
                 result[key] = tool
               })
               .catch((e) => {
+                const error = NamedError.message(e)
                 log.error("failed to convert MCP tool", {
                   clientName,
                   tool: mcpTool.name,
-                  error: NamedError.message(e),
+                  error,
                 })
+                s.status[clientName] = {
+                  status: "failed",
+                  error: `Failed to convert MCP tool ${mcpTool.name}: ${error}`,
+                }
               }),
           )
         }

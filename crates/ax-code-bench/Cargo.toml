@@ -2,6 +2,7 @@
 name = "ax-code-bench"
 edition.workspace = true
 license.workspace = true
+rust-version.workspace = true
 version.workspace = true
 
 [[bin]]

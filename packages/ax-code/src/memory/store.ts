@@ -132,7 +132,7 @@ const ProjectMemorySchema = z
 const parseProjectMemory = (text: string) => {
   const parsed = ProjectMemorySchema.safeParse(JSON.parse(text))
   if (!parsed.success) {
-    throw new Error(`memory store: invalid memory schema (${parsed.error.message})`)
+    throw new Error(`memory store: invalid memory schema (${parsed.error.message})`, { cause: parsed.error })
   }
   return parsed.data
 }

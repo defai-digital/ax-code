@@ -50,6 +50,7 @@ export namespace SessionStatus {
   }
 
   const state = Instance.state(() => new Map<SessionID, Info>())
+  const MAX_SESSIONS = 256
 
   export async function get(sessionID: SessionID) {
     return state().get(sessionID) ?? { type: "idle" as const }
@@ -71,6 +72,11 @@ export namespace SessionStatus {
     }
 
     data.set(sessionID, status)
+    while (data.size > MAX_SESSIONS) {
+      const oldest = data.keys().next().value
+      if (!oldest || oldest === sessionID) break
+      data.delete(oldest)
+    }
     Bus.publishDetached(Event.Status, { sessionID, status })
   }
 
