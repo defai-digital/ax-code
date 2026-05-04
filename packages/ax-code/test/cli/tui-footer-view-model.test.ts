@@ -162,7 +162,7 @@ describe("footerSessionStatusView", () => {
     expect(view.label).toContain("Still waiting for model")
     expect(view.shortLabel).toContain("Still waiting for model")
     expect(view.tone).toBe("warning")
-    expect(view.label).toContain("no model output")
+    expect(view.label).not.toContain("no model output")
     expect(view.label).not.toContain("stalled")
   })
 

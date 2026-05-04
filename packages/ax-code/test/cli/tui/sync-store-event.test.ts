@@ -61,7 +61,15 @@ describe("tui sync store event", () => {
     const [store, setStore] = createTestStore()
     const replies: string[] = []
 
-    const handled = dispatchStoreBackedSyncEvent({
+    const handled = dispatchStoreBackedSyncEvent<
+      Session,
+      Todo,
+      Diff,
+      Status,
+      Message,
+      Part,
+      SyncEventStoreState<Session, Todo, Diff, Status, Message, Part>
+    >({
       event: {
         type: "permission.asked",
         properties: {
@@ -108,7 +116,15 @@ describe("tui sync store event", () => {
     const [store, setStore] = createTestStore()
     const replies: unknown[] = []
 
-    const handled = dispatchStoreBackedSyncEvent({
+    const handled = dispatchStoreBackedSyncEvent<
+      Session,
+      Todo,
+      Diff,
+      Status,
+      Message,
+      Part,
+      SyncEventStoreState<Session, Todo, Diff, Status, Message, Part>
+    >({
       event: {
         type: "permission.asked",
         properties: {
@@ -238,6 +254,60 @@ describe("tui sync store event", () => {
 
     expect(handled).toBe(true)
     expect(store.session_status.ses_1).toEqual({ type: "idle" })
+  })
+
+  test("removes part buckets for messages trimmed by maxSessionMessages", () => {
+    const [store, setStore] = createTestStore()
+
+    setStore({
+      message: {
+        ses_1: [
+          { id: "msg_1", sessionID: "ses_1" },
+          { id: "msg_2", sessionID: "ses_1" },
+        ],
+      },
+      part: {
+        msg_1: [{ id: "part_1", messageID: "msg_1" }],
+        msg_2: [{ id: "part_2", messageID: "msg_2" }],
+      },
+    })
+
+    const handled = dispatchStoreBackedSyncEvent<
+      Session,
+      Todo,
+      Diff,
+      Status,
+      Message,
+      Part,
+      SyncEventStoreState<Session, Todo, Diff, Status, Message, Part>
+    >({
+      event: {
+        type: "message.updated",
+        properties: {
+          info: { id: "msg_3", sessionID: "ses_1" },
+        },
+      },
+      autonomous: false,
+      setStore,
+      clearSessionSyncState: () => undefined,
+      replyPermission: () => undefined,
+      replyQuestion: () => undefined,
+      syncMcpStatus: () => undefined,
+      syncLspStatus: () => undefined,
+      syncDebugEngine: () => undefined,
+      bootstrap: () => undefined,
+      onWarn: () => undefined,
+      maxSessionMessages: 2,
+    })
+
+    expect(handled).toBe(true)
+    expect(store.message.ses_1).toEqual([
+      { id: "msg_2", sessionID: "ses_1" },
+      { id: "msg_3", sessionID: "ses_1" },
+    ])
+    expect(store.part).toEqual({
+      msg_2: [{ id: "part_2", messageID: "msg_2" }],
+    })
   })
 
   test("applies runtime branch updates through the same store-backed dispatcher", () => {

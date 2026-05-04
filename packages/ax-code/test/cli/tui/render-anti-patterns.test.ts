@@ -620,6 +620,8 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(prompt).toContain("cancelPendingSubmit")
     expect(prompt).toContain("new AbortController()")
     expect(prompt).toContain("let submitInFlight = false")
+    expect(prompt).toContain("submitRunID++")
+    expect(prompt).toContain("routeHandoffTimer = undefined")
     expect(prompt).toContain("if (startingNewSession) sessionID = SessionID.descending()")
     expect(prompt).toContain("setSubmitPending(true)")
     expect(prompt).toContain('setSubmitStage("dispatching")')
@@ -688,6 +690,12 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(prompt.indexOf('path: "prompt_async"')).toBeLessThan(prompt.lastIndexOf("routeToSession(sessionID)"))
     expect(prompt).not.toContain("releaseSubmitAbort()")
     expect(prompt).not.toContain("await Promise.resolve()")
+  })
+
+  test("initializes session sdk before reactive workspace effects use it", async () => {
+    const session = await fs.readFile(SESSION_ROUTE_SRC, "utf8")
+
+    expect(session.indexOf("const sdk = useSDK()")).toBeLessThan(session.indexOf("sdk.setWorkspace(session()?.directory)"))
   })
 
   test("keeps animated spinners out of the compiled runtime render path", async () => {

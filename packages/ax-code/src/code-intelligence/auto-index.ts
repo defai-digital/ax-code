@@ -161,6 +161,14 @@ export namespace AutoIndex {
   // Process-lifetime — cleared on restart.
   const inFlight = new Set<string>()
 
+  // Projects for which auto-index has already been attempted this
+  // process lifetime. Prevents the /debug-engine/pending-plans endpoint
+  // (polled every ~750ms) from re-triggering a scan after auto-index
+  // finishes with zero nodes — which happens for projects with no LSP-
+  // indexable files or when all files fail to parse. Without this gate
+  // the endpoint would spin up a new ripgrep scan on every poll.
+  const triedProjects = new Set<string>()
+
   function isIndexable(file: string): boolean {
     const ext = path.extname(file)
     const lang = LANGUAGE_EXTENSIONS[ext]
@@ -204,6 +212,10 @@ export namespace AutoIndex {
       log.info("skipping: already in flight", { projectID })
       return
     }
+    if (triedProjects.has(key)) {
+      log.info("skipping: already attempted this session", { projectID })
+      return
+    }
 
     // Synchronous cheap live count. If the project has any nodes
     // at all, we assume a prior index run populated it and the
@@ -238,6 +250,7 @@ export namespace AutoIndex {
     const directory = Instance.directory
 
     inFlight.add(key)
+    triedProjects.add(key)
     log.info("starting background auto-index", {
       projectID,
       directory,

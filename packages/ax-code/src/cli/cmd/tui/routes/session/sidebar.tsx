@@ -15,10 +15,9 @@ import { Flag } from "@/flag/flag"
 import { EventQuery } from "@/replay/query"
 import { activityItems as items } from "./activity"
 import { SessionDreView } from "./dre"
-import { SessionBranch } from "./branch"
 import { SessionRollbackView } from "./rollback"
 import { SessionSemanticDiff } from "@/session/semantic-diff"
-import { type FooterSessionStatus } from "./footer-view-model"
+import { type FooterSessionStatus, isFooterSessionStatus } from "./footer-view-model"
 import { computeSidebarWidth } from "./layout"
 import type { McpStatus } from "@ax-code/sdk/v2"
 import type { SyncedSessionQualityReadiness } from "../../context/sync-session-risk"
@@ -86,19 +85,6 @@ function qualityColor(
   if (status === "warn") return theme.warning
   if (status === "fail") return theme.error
   return theme.textMuted
-}
-
-function isFooterSessionStatus(value: unknown): value is FooterSessionStatus {
-  if (!value || typeof value !== "object") return false
-
-  const status = value as Record<string, unknown>
-  if (status.type === "idle") return true
-  if (status.type === "retry") {
-    return typeof status.attempt === "number" && typeof status.message === "string" && typeof status.next === "number"
-  }
-  if (status.type === "busy") return true
-
-  return false
 }
 
 export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
@@ -197,24 +183,6 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
     status()
     const sid = props.sessionID as Parameters<typeof SessionDreView.load>[0]
     return SessionDreView.load(sid)
-  })
-
-  const branch = createMemo(() => {
-    messages()
-    const list = sync.data.session
-      .filter(
-        (item) =>
-          item.id === props.sessionID ||
-          item.parentID === props.sessionID ||
-          item.id === session()?.parentID ||
-          item.parentID === session()?.parentID,
-      )
-      .map((item) => ({ id: item.id, title: item.title }))
-    if (list.length <= 1) return
-    const semantic = Object.fromEntries(
-      list.map((item) => [item.id, SessionSemanticDiff.summarize(sync.data.session_diff[item.id] ?? []) ?? null]),
-    )
-    return SessionBranch.detail({ currentID: props.sessionID, sessions: list, semantic })
   })
 
   const rollback = createMemo(() => {
@@ -340,7 +308,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                                 <Match when={item.status === "failed" && item}>{(val) => <i>{val().error}</i>}</Match>
                                 <Match when={item.status === "disabled"}>Disabled</Match>
                                 <Match when={item.status === "needs_auth"}>Needs auth</Match>
-                                <Match when={item.status === "needs_client_registration"}>Needs client ID</Match>
+                                <Match when={item.status === "needs_client_registration" && item}>{(val) => <i>{val().error}</i>}</Match>
                               </Switch>
                             </span>
                           </text>
@@ -427,7 +395,9 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                         {sync.data.debugEngine.graph.state === "failed"
                           ? `index failed: ${sync.data.debugEngine.graph.error ?? "unknown error"}`
                           : sync.data.debugEngine.graph.state === "indexing"
-                            ? `indexing... (${sync.data.debugEngine.graph.completed.toLocaleString()}/${sync.data.debugEngine.graph.total.toLocaleString()})`
+                            ? sync.data.debugEngine.graph.total === 0
+                              ? "scanning files..."
+                              : `indexing... (${sync.data.debugEngine.graph.completed.toLocaleString()}/${sync.data.debugEngine.graph.total.toLocaleString()})`
                             : sync.data.debugEngine.graph.nodeCount > 0
                               ? `${sync.data.debugEngine.graph.nodeCount.toLocaleString()} symbols indexed`
                               : sync.data.debugEngine.graph.error
@@ -563,9 +533,9 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                   <box
                     flexDirection="row"
                     gap={1}
-                    onMouseDown={() => todo().length > 2 && setExpanded("todo", !expanded.todo)}
+                    onMouseDown={() => todoRemaining() > 2 && setExpanded("todo", !expanded.todo)}
                   >
-                    <Show when={todo().length > 2}>
+                    <Show when={todoRemaining() > 2}>
                       <text fg={theme.text}>{expanded.todo ? "−" : "+"}</text>
                     </Show>
                     <text fg={theme.text}>
@@ -576,7 +546,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                     </text>
                   </box>
                   <box border={["top"]} borderColor={theme.borderSubtle} />
-                  <Show when={todo().length <= 2 || expanded.todo}>
+                  <Show when={todoRemaining() <= 2 || expanded.todo}>
                     <For each={todo()}>{(item) => <TodoItem status={item.status} content={item.content} />}</For>
                   </Show>
                 </box>
@@ -740,6 +710,9 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                       <Show when={rollback().length > 0}>
                         <text
                           fg={theme.textMuted}
+                          onMouseDown={(e: any) => {
+                            e.stopPropagation()
+                          }}
                           onMouseUp={(e: any) => {
                             e.stopPropagation()
                             command.trigger("session.rollback")
@@ -781,7 +754,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                         </text>
                       </box>
                     </Show>
-                    <For each={diff() || []}>
+                    <For each={diff()}>
                       {(item) => {
                         const icon = item.status === "added" ? "+" : item.status === "deleted" ? "-" : "~"
                         const iconColor =
@@ -837,7 +810,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                     <text fg={theme.text}>
                       <b>Getting started</b>
                     </text>
-                    <text fg={theme.textMuted} onMouseDown={() => kv.set("dismissed_getting_started", true)}>
+                    <text fg={theme.textMuted} onMouseUp={() => kv.set("dismissed_getting_started", true)}>
                       ✕
                     </text>
                   </box>

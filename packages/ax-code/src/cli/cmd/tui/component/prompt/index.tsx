@@ -423,6 +423,11 @@ export function Prompt(props: PromptProps) {
 
   function cancelPendingSubmit(message = "Prompt submission cancelled") {
     if (!submitPending() && !submitInFlight) return false
+    submitRunID++
+    if (routeHandoffTimer) {
+      clearTimeout(routeHandoffTimer)
+      routeHandoffTimer = undefined
+    }
     const abort = submitAbort
     submitAbort = undefined
     submitInFlight = false

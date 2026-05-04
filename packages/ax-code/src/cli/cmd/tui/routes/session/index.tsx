@@ -308,12 +308,12 @@ export function Session() {
     return new CustomSpeedScroll(3)
   })
 
+  const toast = useToast()
+  const sdk = useSDK()
   createEffect(() => {
     sdk.setWorkspace(session()?.directory)
   })
 
-  const toast = useToast()
-  const sdk = useSDK()
   let sessionSyncGeneration = 0
   const sessionSyncRetryTimers = new Set<ReturnType<typeof setTimeout>>()
 

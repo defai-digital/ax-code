@@ -144,7 +144,7 @@ export function footerSessionStatusView(input: {
     status.waitState === "tool"
       ? `no tool update ${inactive}`
       : status.waitState === "llm"
-        ? `no model output ${inactive}`
+        ? undefined
         : `no activity ${inactive}`
   const waitingText =
     status.waitState === "tool"
@@ -153,10 +153,11 @@ export function footerSessionStatusView(input: {
         ? "Still waiting for model"
         : "Still working"
   const waiting = elapsed ? `${waitingText} · ${elapsed}` : waitingText
+  const labelWithHint = staleHint ? `${waiting} · ${staleHint}` : waiting
 
   return {
-    label: `${waiting} · ${staleHint}`,
-    shortLabel: `${waiting} · ${staleHint}`,
+    label: labelWithHint,
+    shortLabel: labelWithHint,
     stale,
     tone: "warning",
   }
