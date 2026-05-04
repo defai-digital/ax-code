@@ -57638,7 +57638,7 @@
         "open_weights": false,
         "limit": {
           "context": 128000,
-          "output": 8192
+          "output": 16384
         }
       },
       "glm-5": {
@@ -69136,7 +69136,7 @@
         "open_weights": false,
         "limit": {
           "context": 128000,
-          "output": 8192
+          "output": 16384
         }
       },
       "glm-5": {
@@ -89765,7 +89765,7 @@
     "npm": "@ai-sdk/openai-compatible",
     "api": "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
     "name": "Alibaba Token Plan",
-    "doc": "https://www.alibabacloud.com/help/en/model-studio/coding-plan",
+    "doc": "https://www.alibabacloud.com/help/en/model-studio/opencode-token-plan",
     "models": {
       "qwen3.6-plus": {
         "id": "qwen3.6-plus",
@@ -89815,7 +89815,7 @@
         "open_weights": false,
         "limit": {
           "context": 128000,
-          "output": 8192
+          "output": 16384
         }
       },
       "glm-5": {
@@ -89884,7 +89884,7 @@
     "npm": "@ai-sdk/openai-compatible",
     "api": "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
     "name": "Alibaba Token Plan (China)",
-    "doc": "https://help.aliyun.com/zh/model-studio/coding-plan",
+    "doc": "https://help.aliyun.com/zh/model-studio/opencode-token-plan",
     "models": {
       "qwen3.6-plus": {
         "id": "qwen3.6-plus",
@@ -89934,7 +89934,7 @@
         "open_weights": false,
         "limit": {
           "context": 128000,
-          "output": 8192
+          "output": 16384
         }
       },
       "glm-5": {

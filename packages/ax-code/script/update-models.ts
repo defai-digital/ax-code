@@ -223,6 +223,19 @@ for (const [id, api] of Object.entries(apiOverrides)) {
   if (fetched[id]) fetched[id].api = api
 }
 
+const docOverrides: Record<string, string> = {
+  "alibaba-token-plan": "https://www.alibabacloud.com/help/en/model-studio/opencode-token-plan",
+  "alibaba-token-plan-cn": "https://help.aliyun.com/zh/model-studio/opencode-token-plan",
+}
+for (const [id, doc] of Object.entries(docOverrides)) {
+  if (fetched[id]) fetched[id].doc = doc
+}
+
+for (const id of ["alibaba-coding-plan", "alibaba-coding-plan-cn", "alibaba-token-plan", "alibaba-token-plan-cn"]) {
+  const deepseek = fetched[id]?.models?.["deepseek-v3.2"] as { limit?: { context?: number; output?: number } } | undefined
+  if (deepseek?.limit) deepseek.limit.output = 16_384
+}
+
 const envOverrides: Record<string, string[]> = {
   "alibaba-coding-plan": ["ALIBABA_CODING_PLAN_INTL_API_KEY", "ALIBABA_CODING_PLAN_API_KEY"],
   "alibaba-coding-plan-cn": ["ALIBABA_CODING_PLAN_CN_API_KEY", "ALIBABA_CODING_PLAN_API_KEY"],

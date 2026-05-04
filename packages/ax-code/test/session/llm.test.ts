@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test"
 import path from "path"
+import fs from "fs/promises"
 import { tool, type ModelMessage } from "ai"
 import z from "zod"
 import { LLM } from "../../src/session/llm"
@@ -247,6 +248,24 @@ describe("session.llm.stream", () => {
 
     await using tmp = await tmpdir({
       init: async (dir) => {
+        const pluginDir = path.join(dir, ".ax-code", "plugin")
+        await fs.mkdir(pluginDir, { recursive: true })
+        await Bun.write(
+          path.join(pluginDir, "unsafe-token-plan-params.ts"),
+          [
+            "export default async () => ({",
+            '  "chat.params": async (_input, output) => {',
+            '    output.options.thinking = { type: "enabled", budgetTokens: 8192 }',
+            "    output.options.enable_thinking = true",
+            '    output.options.reasoning = { effort: "high" }',
+            '    output.options.reasoningEffort = "high"',
+            '    output.options.reasoning_effort = "high"',
+            '    output.options.thinkingConfig = { thinkingLevel: "high" }',
+            "  },",
+            "})",
+            "",
+          ].join("\n"),
+        )
         await Bun.write(
           path.join(dir, "ax-code.json"),
           JSON.stringify({
@@ -273,7 +292,14 @@ describe("session.llm.stream", () => {
         const agent = {
           name: "test",
           mode: "primary",
-          options: {},
+          options: {
+            thinking: { type: "enabled", budgetTokens: 8192 },
+            enable_thinking: true,
+            reasoning: { effort: "high" },
+            reasoningEffort: "high",
+            reasoning_effort: "high",
+            thinkingConfig: { thinkingLevel: "high" },
+          },
           permission: [{ permission: "*", pattern: "*", action: "allow" }],
           temperature: 0.4,
           topP: 0.8,
@@ -323,8 +349,10 @@ describe("session.llm.stream", () => {
 
         expect(body.thinking).toEqual({ type: "enabled", budgetTokens: 8192 })
         expect(body.enable_thinking).toBeUndefined()
+        expect(body.reasoning).toBeUndefined()
         expect(body.reasoningEffort).toBeUndefined()
         expect(body.reasoning_effort).toBeUndefined()
+        expect(body.thinkingConfig).toBeUndefined()
       },
     })
   })

@@ -6,6 +6,7 @@ import { Instance } from "../../src/project/instance"
 import { Provider } from "../../src/provider/provider"
 import { ProviderID, ModelID } from "../../src/provider/schema"
 import { Env } from "../../src/env"
+import bundledSnapshot from "../../src/provider/models-snapshot.json"
 
 test("provider loaded from env variable", async () => {
   await using tmp = await tmpdir({
@@ -1376,6 +1377,16 @@ test("Alibaba providers keep coding plan and token plan endpoints separate", asy
       expect(tokenPlanCn.models["qwen3.6-plus"].api.url).toBe(
         "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
       )
+      expect(tokenPlan.models["deepseek-v3.2"].limit.output).toBe(16_384)
+      expect(tokenPlanCn.models["deepseek-v3.2"].limit.output).toBe(16_384)
+
+      const snapshot = bundledSnapshot as Record<string, { doc?: string }>
+      expect(snapshot["alibaba-coding-plan"]?.doc).toBe("https://www.alibabacloud.com/help/en/model-studio/coding-plan")
+      expect(snapshot["alibaba-coding-plan-cn"]?.doc).toBe("https://help.aliyun.com/zh/model-studio/coding-plan")
+      expect(snapshot["alibaba-token-plan"]?.doc).toBe(
+        "https://www.alibabacloud.com/help/en/model-studio/opencode-token-plan",
+      )
+      expect(snapshot["alibaba-token-plan-cn"]?.doc).toBe("https://help.aliyun.com/zh/model-studio/opencode-token-plan")
     },
   })
 })

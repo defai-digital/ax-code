@@ -1033,13 +1033,47 @@ describe("ProviderTransform family matching", () => {
 describe("ProviderTransform.maxOutputTokens", () => {
   test("caps Alibaba token-plan requests to avoid over-allocating quota", () => {
     const model = {
+      id: "alibaba-token-plan/qwen3.6-plus",
       providerID: ProviderID.make("alibaba-token-plan"),
+      api: {
+        id: "qwen3.6-plus",
+      },
       limit: {
         output: 65_536,
       },
     } as any
 
     expect(ProviderTransform.maxOutputTokens(model)).toBe(8_192)
+  })
+
+  test("honors lower Alibaba token-plan model output limits", () => {
+    const model = {
+      id: "alibaba-token-plan/qwen3.6-plus",
+      providerID: ProviderID.make("alibaba-token-plan"),
+      api: {
+        id: "qwen3.6-plus",
+      },
+      limit: {
+        output: 512,
+      },
+    } as any
+
+    expect(ProviderTransform.maxOutputTokens(model)).toBe(512)
+  })
+
+  test("does not cap Alibaba token-plan models without thinking reservations", () => {
+    const model = {
+      id: "alibaba-token-plan/deepseek-v3.2",
+      providerID: ProviderID.make("alibaba-token-plan"),
+      api: {
+        id: "deepseek-v3.2",
+      },
+      limit: {
+        output: 65_536,
+      },
+    } as any
+
+    expect(ProviderTransform.maxOutputTokens(model)).toBe(OUTPUT_TOKEN_MAX)
   })
 
   test("keeps the global output cap for other providers", () => {
@@ -1055,17 +1089,22 @@ describe("ProviderTransform.maxOutputTokens", () => {
 })
 
 describe("ProviderTransform.options - Alibaba Token Plan Team Edition", () => {
-  function createModel(modelID: string, reasoning = true) {
+  function createModel(modelID: string, reasoning = true, providerID = "alibaba-token-plan") {
     return {
-      id: `alibaba-token-plan/${modelID}`,
-      providerID: ProviderID.make("alibaba-token-plan"),
+      id: `${providerID}/${modelID}`,
+      providerID: ProviderID.make(providerID),
       api: {
         id: modelID,
-        url: "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
+        url: providerID.endsWith("-cn")
+          ? "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1"
+          : "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
         npm: "@ai-sdk/openai-compatible",
       },
       capabilities: {
         reasoning,
+      },
+      limit: {
+        output: 65_536,
       },
     } as any
   }
@@ -1081,6 +1120,66 @@ describe("ProviderTransform.options - Alibaba Token Plan Team Edition", () => {
     expect(result.enable_thinking).toBeUndefined()
   })
 
+  test("keeps thinking budget at or below a lower configured output limit", () => {
+    const model = createModel("qwen3.6-plus")
+    model.limit.output = 512
+    const result = ProviderTransform.options({
+      model,
+      sessionID: "session-test",
+      providerOptions: {},
+    })
+
+    expect(result.thinking).toEqual({ type: "enabled", budgetTokens: 512 })
+    expect(ProviderTransform.maxOutputTokens(model)).toBe(512)
+  })
+
+  test("sanitizes merged options that would reintroduce unsupported Token Plan fields", () => {
+    const model = createModel("qwen3.6-plus")
+    const result = ProviderTransform.sanitizeOptions(model, {
+      thinking: { type: "enabled", budgetTokens: 8192 },
+      enable_thinking: true,
+      reasoning: { effort: "high" },
+      reasoningEffort: "high",
+      reasoning_effort: "high",
+      thinkingConfig: { thinkingLevel: "high" },
+      custom: "keep",
+    })
+
+    expect(result).toEqual({
+      thinking: { type: "enabled", budgetTokens: 8192 },
+      custom: "keep",
+    })
+  })
+
+  test("fills missing Token Plan thinking budget after config merges", () => {
+    const model = createModel("qwen3.6-plus")
+    const result = ProviderTransform.sanitizeOptions(model, {
+      thinking: { type: "enabled" },
+    })
+
+    expect(result.thinking).toEqual({ type: "enabled", budgetTokens: 8192 })
+  })
+
+  test("rebuilds invalid Token Plan thinking options after config merges", () => {
+    const model = createModel("qwen3.6-plus")
+    for (const thinking of ["bad", null, false, { type: "enabled", budgetTokens: -1 }, { budgetTokens: NaN }]) {
+      const result = ProviderTransform.sanitizeOptions(model, {
+        thinking,
+      })
+
+      expect(result.thinking).toEqual({ type: "enabled", budgetTokens: 8192 })
+    }
+  })
+
+  test("floors fractional Token Plan thinking budgets", () => {
+    const model = createModel("qwen3.6-plus")
+    const result = ProviderTransform.sanitizeOptions(model, {
+      thinking: { type: "enabled", budgetTokens: 511.9 },
+    })
+
+    expect(result.thinking).toEqual({ type: "enabled", budgetTokens: 511 })
+  })
+
   test("uses the documented bounded thinking config for glm-5", () => {
     const result = ProviderTransform.options({
       model: createModel("glm-5"),
@@ -1092,7 +1191,20 @@ describe("ProviderTransform.options - Alibaba Token Plan Team Edition", () => {
     expect(result.enable_thinking).toBeUndefined()
   })
 
-  test("does not add undocumented thinking config to other token-plan models", () => {
+  test("uses the documented bounded thinking config for China Token Plan MiniMax-M2.5", () => {
+    const model = createModel("MiniMax-M2.5", true, "alibaba-token-plan-cn")
+    const result = ProviderTransform.options({
+      model,
+      sessionID: "session-test",
+      providerOptions: {},
+    })
+
+    expect(result.thinking).toEqual({ type: "enabled", budgetTokens: 8192 })
+    expect(result.enable_thinking).toBeUndefined()
+    expect(ProviderTransform.maxOutputTokens(model)).toBe(OUTPUT_TOKEN_MAX)
+  })
+
+  test("does not add undocumented thinking config to international MiniMax-M2.5", () => {
     const result = ProviderTransform.options({
       model: createModel("MiniMax-M2.5"),
       sessionID: "session-test",

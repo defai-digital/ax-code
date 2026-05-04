@@ -107,7 +107,7 @@ export namespace ProviderError {
   }
 
   function alibabaTokenPlanQuotaMessage() {
-    return "Alibaba token-plan rejected the request as exceeding allocatable quota. This can happen when the request reserves too many output/thinking tokens or when the API key is not attached to the expected Token Plan seat. Details: https://www.alibabacloud.com/help/en/model-studio/error-code#token-limit"
+    return "Alibaba token-plan rejected the request as exceeding short-window allocatable token quota. This is usually a per-request or TPS/TPM reservation limit, not the total Token Plan usage percentage. ax-code keeps Token Plan output/thinking budgets conservative by default; wait briefly or lower the configured model output limit if it persists. Details: https://www.alibabacloud.com/help/en/model-studio/error-code#token-limit"
   }
 
   export type ParsedStreamError =

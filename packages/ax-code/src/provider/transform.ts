@@ -197,7 +197,24 @@ export namespace ProviderTransform {
 
   function isAlibabaTokenPlanThinkingModel(model: Provider.Model) {
     if (!model.providerID.startsWith("alibaba-token-plan")) return false
-    return model.api.id === "qwen3.6-plus" || model.api.id === "glm-5"
+    const id = model.api.id.toLowerCase()
+    return (
+      id === "qwen3.6-plus" ||
+      id === "glm-5" ||
+      (model.providerID === "alibaba-token-plan-cn" && id === "minimax-m2.5")
+    )
+  }
+
+  function isAlibabaTokenPlanOutputCappedModel(model: Provider.Model) {
+    if (!model.providerID.startsWith("alibaba-token-plan")) return false
+    const id = model.api.id.toLowerCase()
+    return id === "qwen3.6-plus" || id === "glm-5"
+  }
+
+  function alibabaTokenPlanThinkingBudget(model: Provider.Model, requested?: unknown) {
+    const max = maxOutputTokens(model)
+    const value = typeof requested === "number" && Number.isFinite(requested) && requested > 0 ? requested : max
+    return Math.min(Math.floor(value), max, ALIBABA_TOKEN_PLAN_THINKING_BUDGET_TOKENS)
   }
 
   export function variants(model: Provider.Model): Record<string, Record<string, any>> {
@@ -277,14 +294,14 @@ export namespace ProviderTransform {
       }
     }
 
-    // Alibaba Token Plan Team Edition's OpenCode reference uses the AI SDK
-    // OpenAI-compatible provider with a bounded `thinking` object instead of
-    // the generic OpenAI `reasoning_effort` field. Keep the budget explicit so
-    // the service does not over-allocate a large request before generation.
+    // Alibaba Token Plan Team Edition uses a documented `thinking` object
+    // for reasoning models. Keep reasoning enabled, but pair the documented
+    // 8k thinking budget with a bounded output cap so the request does not
+    // reserve the old 32k output budget before generation.
     if (isAlibabaTokenPlanThinkingModel(input.model)) {
       result["thinking"] = {
         type: "enabled",
-        budgetTokens: ALIBABA_TOKEN_PLAN_THINKING_BUDGET_TOKENS,
+        budgetTokens: alibabaTokenPlanThinkingBudget(input.model, ALIBABA_TOKEN_PLAN_THINKING_BUDGET_TOKENS),
       }
     }
 
@@ -308,8 +325,34 @@ export namespace ProviderTransform {
   }
 
   export function sanitizeOptions(model: Provider.Model, options: Record<string, any>): Record<string, any> {
-    if (model.api.npm !== "@ai-sdk/xai") return options
-    const { reasoningEffort: _reasoningEffort, reasoning_effort: _reasoning_effort, ...rest } = options
+    let result = options
+    if (isAlibabaTokenPlanThinkingModel(model)) {
+      const {
+        enable_thinking: _enable_thinking,
+        reasoning: _reasoning,
+        reasoningEffort: _reasoningEffort,
+        reasoning_effort: _reasoning_effort,
+        thinkingConfig: _thinkingConfig,
+        ...rest
+      } = result
+      result = rest
+
+      const thinking =
+        result.thinking && typeof result.thinking === "object" && !Array.isArray(result.thinking)
+          ? (result.thinking as Record<string, unknown>)
+          : {}
+      result = {
+        ...result,
+        thinking: {
+          ...thinking,
+          type: "enabled",
+          budgetTokens: alibabaTokenPlanThinkingBudget(model, thinking.budgetTokens),
+        },
+      }
+    }
+
+    if (model.api.npm !== "@ai-sdk/xai") return result
+    const { reasoningEffort: _reasoningEffort, reasoning_effort: _reasoning_effort, ...rest } = result
     return rest
   }
 
@@ -333,8 +376,9 @@ export namespace ProviderTransform {
     // If the model declares no output capability (0) or a missing limit,
     // fall back to OUTPUT_TOKEN_MAX. Math.min never returns nullish, so
     // the old `?? OUTPUT_TOKEN_MAX` was dead code.
-    if (model.providerID.startsWith("alibaba-token-plan")) {
-      return Math.min(model.limit.output || ALIBABA_TOKEN_PLAN_OUTPUT_TOKEN_MAX, ALIBABA_TOKEN_PLAN_OUTPUT_TOKEN_MAX)
+    if (isAlibabaTokenPlanOutputCappedModel(model)) {
+      const limit = model.limit.output > 0 ? model.limit.output : OUTPUT_TOKEN_MAX
+      return Math.min(limit, OUTPUT_TOKEN_MAX, ALIBABA_TOKEN_PLAN_OUTPUT_TOKEN_MAX)
     }
     const limit = model.limit.output
     return limit > 0 ? Math.min(limit, OUTPUT_TOKEN_MAX) : OUTPUT_TOKEN_MAX

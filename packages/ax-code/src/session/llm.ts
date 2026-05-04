@@ -199,6 +199,7 @@ export namespace LLM {
         options,
       },
     )
+    const paramsOptions = ProviderTransform.sanitizeOptions(input.model, params.options)
 
     const { headers } = await Plugin.trigger(
       "chat.headers",
@@ -270,7 +271,7 @@ export namespace LLM {
       temperature: params.temperature,
       topP: params.topP,
       topK: params.topK,
-      providerOptions: ProviderTransform.providerOptions(input.model, params.options),
+      providerOptions: ProviderTransform.providerOptions(input.model, paramsOptions),
       activeTools: Object.keys(tools).filter((x) => x !== "invalid"),
       tools,
       toolChoice: input.toolChoice,
