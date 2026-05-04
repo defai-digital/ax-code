@@ -52,7 +52,6 @@ describe("provider routes", () => {
         const body = (await response.json()) as { all: Array<{ id: string }> }
         const ids = body.all.map((provider) => provider.id)
         expect(ids).toContain("xai")
-        expect(ids).toContain("zai")
         expect(ids).toContain("zai-coding-plan")
       },
     })

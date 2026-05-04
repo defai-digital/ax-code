@@ -231,7 +231,7 @@ function createEventResponse(chunks: unknown[], includeDone = false) {
 
 describe("session.llm.stream", () => {
   test("sends temperature, tokens, and reasoning options for openai-compatible models", async () => {
-    const providerID = "alibaba"
+    const providerID = "alibaba-coding-plan"
     const modelID = "qwen3.6-plus"
     const fixture = await loadFixture(providerID, modelID)
     const provider = fixture.provider
@@ -328,7 +328,7 @@ describe("session.llm.stream", () => {
   })
 
   test("keeps tools enabled by prompt permissions", async () => {
-    const providerID = "alibaba"
+    const providerID = "alibaba-coding-plan"
     const modelID = "qwen3.6-plus"
     const fixture = await loadFixture(providerID, modelID)
     const model = fixture.model
@@ -412,7 +412,7 @@ describe("session.llm.stream", () => {
   })
 
   test("sends required StructuredOutput tool schema for json_schema output", async () => {
-    const providerID = "alibaba"
+    const providerID = "alibaba-coding-plan"
     const modelID = "qwen3.6-plus"
     const fixture = await loadFixture(providerID, modelID)
     const provider = fixture.provider
@@ -511,7 +511,7 @@ describe("session.llm.stream", () => {
   test.skipIf(!!process.env.CI)(
     "normalizes interleaved reasoning into provider request payload",
     async () => {
-      const providerID = "zai"
+      const providerID = "zhipuai"
       const modelID = "glm-5"
       const fixture = await loadFixture(providerID, modelID)
       const model = fixture.model
@@ -615,7 +615,7 @@ describe("session.llm.stream", () => {
   test.skipIf(!!process.env.CI)(
     "adds noop tool for LiteLLM-compatible histories with prior tool calls",
     async () => {
-      const providerID = "alibaba"
+      const providerID = "alibaba-coding-plan"
       const modelID = "qwen3.6-plus"
       const fixture = await loadFixture(providerID, modelID)
       const model = fixture.model
