@@ -8,6 +8,7 @@ const APP_SRC = path.join(TUI_ROOT, "app.tsx")
 const EVENT_SRC = path.join(TUI_ROOT, "event.ts")
 const HELPER_SRC = path.join(TUI_ROOT, "context/helper.tsx")
 const RENDERER_SRC = path.join(TUI_ROOT, "renderer.ts")
+const EXIT_CONTEXT_SRC = path.join(TUI_ROOT, "context/exit.tsx")
 const THREAD_SRC = path.join(TUI_ROOT, "thread.ts")
 const WORKER_SRC = path.join(TUI_ROOT, "worker.ts")
 const SESSION_ROUTE_SRC = path.join(TUI_ROOT, "routes/session/index.tsx")
@@ -48,7 +49,6 @@ const LINK_SRC = path.join(TUI_ROOT, "ui/link.tsx")
 const CLIPBOARD_SRC = path.join(TUI_ROOT, "util/clipboard.ts")
 const LOCAL_SRC = path.join(TUI_ROOT, "context/local.tsx")
 const ROUTE_SRC = path.join(TUI_ROOT, "context/route.tsx")
-const EXIT_CONTEXT_SRC = path.join(TUI_ROOT, "context/exit.tsx")
 const SYNC_SRC = path.join(TUI_ROOT, "context/sync.tsx")
 const THEME_SRC = path.join(TUI_ROOT, "context/theme.tsx")
 const SYNC_BOOTSTRAP_FLOW_SRC = path.join(TUI_ROOT, "context/sync-bootstrap-flow.ts")
@@ -101,6 +101,20 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(renderer).toContain("useKittyKeyboard: profile.useKittyKeyboard ? {} : null")
   })
 
+  test("flushes terminal cleanup before TUI process exit", async () => {
+    const renderer = await fs.readFile(RENDERER_SRC, "utf8")
+    const exitContext = await fs.readFile(EXIT_CONTEXT_SRC, "utf8")
+    const app = await fs.readFile(APP_SRC, "utf8")
+    const thread = await fs.readFile(THREAD_SRC, "utf8")
+
+    expect(renderer).toContain("disableTuiMouseTracking()")
+    expect(renderer).toContain("await flushTuiStdout()")
+    expect(exitContext).toContain("await destroyTuiRenderer(renderer)")
+    expect(app).toContain("await destroyTuiRenderer(renderer)")
+    expect(thread).toContain("await flushTuiStdout()")
+    expect(thread).toContain("process.exit(0)")
+  })
+
   test("keeps passthrough external output enabled in the app runtime", async () => {
     const app = await fs.readFile(APP_SRC, "utf8")
 
@@ -133,7 +147,7 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(renderer).toContain("clearTuiTerminalTitle")
     expect(app).toContain("setTuiTerminalTitle")
     expect(app).toContain("clearTuiTerminalTitle")
-    expect(exitContext).toContain("clearTuiTerminalTitle(renderer)")
+    expect(exitContext).toContain("await destroyTuiRenderer(renderer)")
   })
 
   test("does not eagerly import the heavy session route on app startup", async () => {

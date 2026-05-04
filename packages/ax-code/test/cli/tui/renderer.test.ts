@@ -2,9 +2,15 @@ import { describe, expect, test } from "bun:test"
 import {
   clearTuiTerminalTitle,
   createTuiRenderOptionsFromProfile,
+  destroyTuiRenderer,
   resolveTuiRenderProfile,
   setTuiTerminalTitle,
 } from "../../../src/cli/cmd/tui/renderer"
+import {
+  disableTuiMouseTracking,
+  flushTuiStdout,
+  TUI_MOUSE_TRACKING_DISABLE_SEQUENCE,
+} from "../../../src/cli/cmd/tui/terminal-cleanup"
 
 describe("tui renderer profile", () => {
   test("keeps the compatibility profile production-safe", () => {
@@ -73,5 +79,51 @@ describe("tui renderer profile", () => {
     expect(setTuiTerminalTitle(renderer, "ax-code", advanced)).toBeTrue()
     expect(clearTuiTerminalTitle(renderer, advanced)).toBeTrue()
     expect(calls).toEqual(["ax-code", ""])
+  })
+
+  test("writes mouse-disable sequences before flushing terminal output", async () => {
+    const writes: string[] = []
+    const stream = {
+      writable: true,
+      write(chunk: string, callback?: () => void) {
+        writes.push(chunk)
+        if (callback) queueMicrotask(callback)
+        return true
+      },
+    }
+
+    expect(disableTuiMouseTracking(stream)).toBeTrue()
+    await flushTuiStdout(stream)
+
+    expect(writes).toEqual([TUI_MOUSE_TRACKING_DISABLE_SEQUENCE, ""])
+  })
+
+  test("destroyTuiRenderer resets terminal state before resolving", async () => {
+    const calls: string[] = []
+    const renderer = {
+      setTerminalTitle(title: string) {
+        calls.push(`title:${title}`)
+      },
+      destroy() {
+        calls.push("destroy")
+      },
+    }
+    const originalWrite = process.stdout.write
+    process.stdout.write = ((chunk: string, callback?: () => void) => {
+      calls.push(chunk === "" ? "flush" : "mouse-disable")
+      if (callback) queueMicrotask(callback)
+      return true
+    }) as typeof process.stdout.write
+    try {
+      const profile = resolveTuiRenderProfile({
+        advancedTerminal: true,
+        terminalTitleDisabled: false,
+      })
+      await destroyTuiRenderer(renderer, profile)
+    } finally {
+      process.stdout.write = originalWrite
+    }
+
+    expect(calls).toEqual(["title:", "destroy", "mouse-disable", "flush"])
   })
 })

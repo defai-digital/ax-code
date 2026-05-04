@@ -46,7 +46,13 @@ import { TuiConfigProvider } from "./context/tui-config"
 import { TuiConfig } from "@/config/tui"
 import { DiagnosticLog } from "@/debug/diagnostic-log"
 import { Log } from "@/util/log"
-import { clearTuiTerminalTitle, getTuiRenderProfile, renderTui, setTuiTerminalTitle } from "./renderer"
+import {
+  clearTuiTerminalTitle,
+  destroyTuiRenderer,
+  getTuiRenderProfile,
+  renderTui,
+  setTuiTerminalTitle,
+} from "./renderer"
 import type { EventSource } from "./context/sdk"
 import { Installation } from "@/installation"
 import { installResizeInputGuard, useResizeInputRecovery } from "./input-mode"
@@ -1150,15 +1156,13 @@ function ErrorComponent(props: {
 }) {
   const term = useTerminalDimensions()
   const renderer = useRenderer()
-  const renderProfile = getTuiRenderProfile()
 
   createEffect(() => {
     DiagnosticLog.recordProcess("tui.errorBoundary", { error: props.error })
   })
 
   const handleExit = async () => {
-    clearTuiTerminalTitle(renderer, renderProfile)
-    renderer.destroy()
+    await destroyTuiRenderer(renderer)
     win32FlushInputBuffer()
     await props.onExit()
   }

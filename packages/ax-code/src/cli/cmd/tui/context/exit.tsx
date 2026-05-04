@@ -3,7 +3,7 @@ import { onCleanup } from "solid-js"
 import { createSimpleContext } from "./helper"
 import { FormatError, FormatUnknownError } from "@/cli/error"
 import { win32FlushInputBuffer } from "../win32"
-import { clearTuiTerminalTitle } from "../renderer"
+import { destroyTuiRenderer } from "../renderer"
 type Exit = ((reason?: unknown) => Promise<void>) & {
   message: {
     set: (value?: string) => () => void
@@ -35,9 +35,7 @@ export const { use: useExit, provider: ExitProvider } = createSimpleContext({
       (reason?: unknown) => {
         if (task) return task
         task = (async () => {
-          // Reset window title before destroying renderer
-          clearTuiTerminalTitle(renderer)
-          renderer.destroy()
+          await destroyTuiRenderer(renderer)
           win32FlushInputBuffer()
           if (reason) {
             const formatted = FormatError(reason) ?? FormatUnknownError(reason)

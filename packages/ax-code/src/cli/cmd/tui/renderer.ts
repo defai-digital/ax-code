@@ -3,6 +3,7 @@ import type { CliRendererConfig } from "@opentui/core"
 import { Clipboard } from "@tui/util/clipboard"
 import { Log } from "@/util/log"
 import { Flag } from "@/flag/flag"
+import { disableTuiMouseTracking, flushTuiStdout } from "./terminal-cleanup"
 
 const log = Log.create({ service: "tui.renderer" })
 
@@ -10,6 +11,9 @@ export type TuiRenderRoot = () => JSX.Element
 export type TuiRenderOptions = CliRendererConfig
 export type TuiTerminalTitleRenderer = {
   setTerminalTitle: (title: string) => void
+}
+export type TuiDestroyRenderer = TuiTerminalTitleRenderer & {
+  destroy: () => void
 }
 export type TuiRenderProfile = {
   advancedTerminal: boolean
@@ -115,6 +119,19 @@ export function clearTuiTerminalTitle(
   profile: TuiRenderProfile = getTuiRenderProfile(),
 ) {
   return setTuiTerminalTitle(renderer, "", profile)
+}
+
+export async function destroyTuiRenderer(
+  renderer: TuiDestroyRenderer,
+  profile: TuiRenderProfile = getTuiRenderProfile(),
+) {
+  try {
+    clearTuiTerminalTitle(renderer, profile)
+    renderer.destroy()
+  } finally {
+    disableTuiMouseTracking()
+    await flushTuiStdout()
+  }
 }
 
 export function renderTui(root: TuiRenderRoot, options?: Parameters<typeof createTuiRenderOptions>[0]) {

@@ -20,6 +20,7 @@ import { internalBaseUrl } from "@/util/internal-url"
 import type { StreamConnectionStatus } from "./util/resilient-stream"
 import { runtimeMode } from "@/installation/runtime-mode"
 import { spawn } from "node:child_process"
+import { flushTuiStdout } from "./terminal-cleanup"
 
 declare global {
   const AX_CODE_WORKER_PATH: string
@@ -702,6 +703,7 @@ export const TuiThreadCommand = cmd({
     } finally {
       unguard?.()
     }
+    await flushTuiStdout()
     process.exit(0)
   },
 })
