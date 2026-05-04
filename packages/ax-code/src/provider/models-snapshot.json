@@ -262,7 +262,7 @@
       },
       "glm-5v-turbo": {
         "id": "glm-5v-turbo",
-        "name": "glm-5v-turbo",
+        "name": "GLM-5V-Turbo",
         "family": "glm",
         "attachment": true,
         "reasoning": true,
@@ -16198,6 +16198,34 @@
           "output": 32000
         }
       },
+      "openai/gpt-5.5": {
+        "id": "openai/gpt-5.5",
+        "name": "GPT-5.5",
+        "family": "gpt",
+        "attachment": true,
+        "reasoning": true,
+        "tool_call": true,
+        "temperature": false,
+        "knowledge": "2025-12-01",
+        "release_date": "2026-04-23",
+        "last_updated": "2026-04-23",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1050000,
+          "input": 922000,
+          "output": 128000
+        }
+      },
       "openai/gpt-5-mini": {
         "id": "openai/gpt-5-mini",
         "name": "GPT-5 Mini",
@@ -16474,6 +16502,33 @@
         "limit": {
           "context": 200000,
           "output": 64000
+        }
+      },
+      "anthropic/claude-opus-4-7": {
+        "id": "anthropic/claude-opus-4-7",
+        "name": "Claude Opus 4.7",
+        "family": "claude-opus",
+        "attachment": true,
+        "reasoning": true,
+        "tool_call": true,
+        "temperature": false,
+        "knowledge": "2026-01-31",
+        "release_date": "2026-04-16",
+        "last_updated": "2026-04-16",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 128000
         }
       },
       "anthropic/claude-opus-4-5": {
@@ -48744,7 +48799,7 @@
     "models": {
       "glm-5v-turbo": {
         "id": "glm-5v-turbo",
-        "name": "glm-5v-turbo",
+        "name": "GLM-5V-Turbo",
         "family": "glm",
         "attachment": true,
         "reasoning": true,
@@ -57703,7 +57758,7 @@
       },
       "glm-5v-turbo": {
         "id": "glm-5v-turbo",
-        "name": "glm-5v-turbo",
+        "name": "GLM-5V-Turbo",
         "family": "glm",
         "attachment": true,
         "reasoning": true,
@@ -60446,6 +60501,36 @@
     "name": "Zhipu AI Coding Plan",
     "doc": "https://docs.bigmodel.cn/cn/coding-plan/overview",
     "models": {
+      "glm-5v-turbo": {
+        "id": "glm-5v-turbo",
+        "name": "GLM-5V-Turbo",
+        "family": "glm",
+        "attachment": true,
+        "reasoning": true,
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "temperature": true,
+        "release_date": "2026-04-01",
+        "last_updated": "2026-04-01",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 200000,
+          "output": 131072
+        }
+      },
       "glm-5.1": {
         "id": "glm-5.1",
         "name": "GLM-5.1",
@@ -95240,7 +95325,7 @@
     "models": {
       "glm-5v-turbo": {
         "id": "glm-5v-turbo",
-        "name": "glm-5v-turbo",
+        "name": "GLM-5V-Turbo",
         "family": "glm",
         "attachment": true,
         "reasoning": true,
