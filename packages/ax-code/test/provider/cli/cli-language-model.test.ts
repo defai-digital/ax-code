@@ -1,5 +1,6 @@
 import { test, expect, describe, spyOn } from "bun:test"
 import { buildCliCommand, CliLanguageModel } from "../../../src/provider/cli/cli-language-model"
+import { CLI_PROVIDER_DEFINITIONS } from "../../../src/provider/cli/config"
 import { claudeCodeParser, geminiCliParser, codexCliParser } from "../../../src/provider/cli/parser"
 import { Process } from "../../../src/util/process"
 
@@ -198,11 +199,47 @@ describe("CliLanguageModel", () => {
     }
 
     expect(parts.find((part) => part.type === "finish")).toBeUndefined()
-    expect(parts.find((part) => part.type === "text-end")).toBeUndefined()
+    expect(parts.find((part) => part.type === "text-end")).toBeDefined()
 
     const error = parts.find((part) => part.type === "error")
     expect(error).toBeDefined()
     expect(String(error.error)).toContain("CLI exited with code 9: partial output")
+  })
+
+  test("doStream preserves UTF-8 characters split across stdout chunks", async () => {
+    const model = makeModel({
+      binary: process.execPath,
+      args: [
+        "-e",
+        [
+          'const payload = Buffer.from(JSON.stringify({ type: "result", content: "trash 🗑️" }) + "\\n")',
+          'const split = payload.indexOf(Buffer.from("🗑️")) + 1',
+          "process.stdout.write(payload.subarray(0, split))",
+          "setTimeout(() => process.stdout.write(payload.subarray(split)), 5)",
+        ].join(";"),
+      ],
+      parser: geminiCliParser,
+      promptMode: "stdin",
+    })
+
+    const { stream } = await model.doStream({
+      prompt: [{ role: "user", content: [{ type: "text", text: "hi" }] }],
+    })
+
+    const parts: any[] = []
+    const reader = stream.getReader()
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      parts.push(value)
+    }
+
+    const text = parts
+      .filter((part) => part.type === "text-delta")
+      .map((part) => part.delta)
+      .join("")
+    expect(text).toBe("trash 🗑️")
+    expect(text).not.toContain("�")
   })
 
   test("doStream handles abort signal", async () => {
@@ -278,6 +315,10 @@ describe("CliLanguageModel", () => {
     } finally {
       restoreAutonomous()
     }
+  })
+
+  test("runs Gemini CLI headless without interactive workspace trust prompts", () => {
+    expect(CLI_PROVIDER_DEFINITIONS["gemini-cli"]?.args).toContain("--skip-trust")
   })
 
   test("does not add autonomous-only flags by default", () => {

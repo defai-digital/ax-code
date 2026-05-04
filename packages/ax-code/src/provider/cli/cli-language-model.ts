@@ -9,6 +9,7 @@ import { Env } from "../../util/env"
 import { promptToText } from "./prompt"
 import type { CliOutputParser } from "./parser"
 import { buffer } from "node:stream/consumers"
+import { StringDecoder } from "node:string_decoder"
 import { Log } from "@/util/log"
 
 const log = Log.create({ service: "provider.cli-language-model" })
@@ -24,11 +25,22 @@ export interface CliLanguageModelConfig {
   providerEnvKeys?: readonly string[]
 }
 
-function formatCliFailure(code: number, stdout: Buffer, stderr: Buffer) {
+function formatCliDetail(stdout: Buffer, stderr: Buffer) {
   const err = stderr.toString().trim()
   const out = stdout.toString().trim()
-  const detail = err || out
+  if (err && out) return `stderr: ${err}\nstdout: ${out}`
+  return err || out
+}
+
+function formatCliFailure(code: number, stdout: Buffer, stderr: Buffer) {
+  const detail = formatCliDetail(stdout, stderr)
   return detail ? `CLI exited with code ${code}: ${detail.slice(0, 500)}` : `CLI exited with code ${code}`
+}
+
+function formatCliTimeout(stdout: Buffer, stderr: Buffer) {
+  const base = `CLI process timed out after ${CLI_TIMEOUT_MS / 1000}s`
+  const detail = formatCliDetail(stdout, stderr)
+  return detail ? `${base}: ${detail.slice(0, 1000)}` : base
 }
 
 export function cliEnv(providerEnvKeys: readonly string[] = []) {
@@ -182,26 +194,51 @@ export class CliLanguageModel implements LanguageModelV3 {
           controller.close()
         }
 
+        let remainder = ""
+        let emitted = false
+        let textOpen = true
+        let stdoutEnded = false
+        let exitCode: number | undefined
+        const raw: string[] = []
+        const stderrRaw: Buffer[] = []
+        const stdoutDecoder = new StringDecoder("utf8")
+        const endText = () => {
+          if (!textOpen || closed()) return
+          controller.enqueue({ type: "text-end", id: textId })
+          textOpen = false
+        }
+        const fail = (error: unknown) => {
+          if (closed()) return
+          endText()
+          controller.enqueue({ type: "error", error })
+          safeClose()
+        }
+        const processStdoutText = (textChunk: string) => {
+          if (!textChunk || closed()) return
+          raw.push(textChunk)
+          const text = remainder + textChunk
+          const lines = text.split("\n")
+          remainder = lines.pop() ?? ""
+          for (const line of lines) {
+            if (!line.trim()) continue
+            const delta = parser.parseStreamLine(line)
+            if (delta) {
+              emitted = true
+              controller.enqueue({ type: "text-delta", id: textId, delta })
+            }
+          }
+        }
         timer = setTimeout(() => {
           proc.kill("SIGTERM")
           if (closed()) return
-          controller.enqueue({
-            type: "error",
-            error: new Error(`CLI process timed out after ${CLI_TIMEOUT_MS / 1000}s`),
-          })
-          safeClose()
+          fail(new Error(formatCliTimeout(Buffer.from(raw.join("")), Buffer.concat(stderrRaw))))
         }, CLI_TIMEOUT_MS)
 
         controller.enqueue({ type: "stream-start", warnings: [] })
         controller.enqueue({ type: "text-start", id: textId })
 
-        let remainder = ""
-        let emitted = false
-        let stdoutEnded = false
-        let exitCode: number | undefined
-        const raw: string[] = []
-        const stderrRaw: Buffer[] = []
         const flushOutput = () => {
+          processStdoutText(stdoutDecoder.end())
           if (remainder.trim()) {
             const delta = parser.parseStreamLine(remainder)
             if (delta) {
@@ -216,7 +253,7 @@ export class CliLanguageModel implements LanguageModelV3 {
         }
         const finishSuccess = () => {
           if (!stdoutEnded || exitCode === undefined || exitCode !== 0 || closed()) return
-          controller.enqueue({ type: "text-end", id: textId })
+          endText()
           controller.enqueue({
             type: "finish",
             usage: EMPTY_USAGE,
@@ -238,23 +275,11 @@ export class CliLanguageModel implements LanguageModelV3 {
           clearTimeout(timer)
           proc.kill("SIGTERM")
           if (closed()) return
-          controller.enqueue({ type: "error", error: err })
-          safeClose()
+          fail(err)
         })
         stdout.on("data", (chunk: Buffer) => {
           if (closed()) return
-          const text = remainder + chunk.toString()
-          raw.push(chunk.toString())
-          const lines = text.split("\n")
-          remainder = lines.pop() ?? ""
-          for (const line of lines) {
-            if (!line.trim()) continue
-            const delta = parser.parseStreamLine(line)
-            if (delta) {
-              emitted = true
-              controller.enqueue({ type: "text-delta", id: textId, delta })
-            }
-          }
+          processStdoutText(stdoutDecoder.write(chunk))
         })
 
         stdout.on("end", () => {
@@ -269,8 +294,7 @@ export class CliLanguageModel implements LanguageModelV3 {
           clearTimeout(timer)
           proc.kill("SIGTERM")
           if (closed()) return
-          controller.enqueue({ type: "error", error: err })
-          safeClose()
+          fail(err)
         })
 
         proc.exited
@@ -279,11 +303,7 @@ export class CliLanguageModel implements LanguageModelV3 {
             if (closed()) return
             exitCode = code
             if (code !== 0) {
-              controller.enqueue({
-                type: "error",
-                error: new Error(formatCliFailure(code, Buffer.from(raw.join("")), Buffer.concat(stderrRaw))),
-              })
-              safeClose()
+              fail(new Error(formatCliFailure(code, Buffer.from(raw.join("")), Buffer.concat(stderrRaw))))
               return
             }
             finishSuccess()
@@ -291,8 +311,7 @@ export class CliLanguageModel implements LanguageModelV3 {
           .catch((err) => {
             clearTimeout(timer)
             if (closed()) return
-            controller.enqueue({ type: "error", error: err ?? new Error("CLI process killed by signal") })
-            safeClose()
+            fail(err ?? new Error("CLI process killed by signal"))
           })
       },
       cancel() {

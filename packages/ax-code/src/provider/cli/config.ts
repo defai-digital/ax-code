@@ -17,7 +17,7 @@ export const CLI_PROVIDER_DEFINITIONS: Record<string, CliProviderDefinition> = {
   },
   "gemini-cli": {
     binary: "gemini",
-    args: ["--output-format", "stream-json"],
+    args: ["--output-format", "stream-json", "--skip-trust"],
     parser: geminiCliParser,
     promptMode: "arg",
     promptFlag: "-p",

@@ -37,6 +37,8 @@ import {
 
 const log = Log.create({ service: "tui.sidebar.queue" })
 
+const QUEUED_DELETE_ICON = "🗑️"
+const QUEUED_DELETE_ICON_WIDTH = 2
 const QUEUE_SNIPPET_MAX = 48
 
 function queuedSnippet(parts: { type: string; text?: string; synthetic?: boolean; ignored?: boolean }[]) {
@@ -501,15 +503,15 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                     <For each={queued()}>
                       {(message) => (
                         <box flexDirection="row" gap={1}>
-                          <text
+                          <box
                             flexShrink={0}
-                            style={{ fg: theme.warning }}
+                            width={QUEUED_DELETE_ICON_WIDTH}
                             onMouseUp={() => {
                               void dropQueued(message.id)
                             }}
                           >
-                            ✕
-                          </text>
+                            <text style={{ fg: theme.warning }}>{QUEUED_DELETE_ICON}</text>
+                          </box>
                           <text fg={theme.textMuted} wrapMode="word">
                             {queuedSnippet(sync.data.part[message.id] ?? [])}
                           </text>
