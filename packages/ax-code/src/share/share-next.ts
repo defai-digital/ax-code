@@ -77,6 +77,10 @@ export namespace ShareNext {
   const disableValue = process.env["AX_CODE_DISABLE_SHARE"]?.toLowerCase()
   const disabled = disableValue === "true" || disableValue === "1"
 
+  function isModelNotFoundError(error: unknown) {
+    return error instanceof Provider.ModelNotFoundError
+  }
+
   // Track active subscriptions so repeated init() calls do not stack up
   // duplicate listeners. Each entry is an unsubscribe function returned
   // by Bus.subscribe.
@@ -109,27 +113,35 @@ export namespace ShareNext {
     )
     activeUnsubs.push(
       Bus.subscribe(MessageV2.Event.Updated, async (evt) => {
+        const info = evt.properties.info
         await safeSync(
-          evt.properties.info.sessionID,
+          info.sessionID,
           [
             {
               type: "message",
-              data: evt.properties.info,
+              data: info,
             },
           ],
           "message.updated",
         )
-        if (evt.properties.info.role === "user") {
+        if (info.role === "user") {
+          const model = await Provider.getModel(info.model.providerID, info.model.modelID).catch((error) => {
+            if (!isModelNotFoundError(error)) throw error
+            log.warn("share model sync skipped", {
+              sessionID: info.sessionID,
+              providerID: info.model.providerID,
+              modelID: info.model.modelID,
+              error,
+            })
+            return undefined
+          })
+          if (!model) return
           await safeSync(
-            evt.properties.info.sessionID,
+            info.sessionID,
             [
               {
                 type: "model",
-                data: [
-                  await Provider.getModel(evt.properties.info.model.providerID, evt.properties.info.model.modelID).then(
-                    (m) => m,
-                  ),
-                ],
+                data: [model],
               },
             ],
             "message.updated.model",

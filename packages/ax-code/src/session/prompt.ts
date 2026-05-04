@@ -140,12 +140,17 @@ export namespace SessionPrompt {
   async function documentSymbolsForRangeExpansion(
     uri: string,
   ): Promise<Awaited<ReturnType<typeof LSP.documentSymbolEnvelope>>["data"]> {
-    return (
-      (
-        (await LSP.documentSymbolCachedEnvelope(uri).catch(() => undefined)) ??
-        (await LSP.documentSymbolEnvelope(uri, { cache: true }).catch(() => undefined))
-      )?.data ?? []
-    )
+    const cached = await LSP.documentSymbolCachedEnvelope(uri).catch((error) => {
+      log.debug("cached document symbols unavailable for range expansion", { uri, error })
+      return undefined
+    })
+    if (cached) return cached.data
+
+    const live = await LSP.documentSymbolEnvelope(uri, { cache: true }).catch((error) => {
+      log.debug("document symbols unavailable for range expansion", { uri, error })
+      return undefined
+    })
+    return live?.data ?? []
   }
 
   const state = Instance.state(

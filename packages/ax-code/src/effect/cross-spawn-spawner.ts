@@ -270,25 +270,37 @@ export const make = Effect.gen(function* () {
         on(event: "exit", listener: (code: number | null, signal: NodeJS.Signals | null) => void): void
         on(event: "close", listener: (code: number | null, signal: NodeJS.Signals | null) => void): void
         on(event: "spawn", listener: () => void): void
+        off(event: "error", listener: (err: Error) => void): void
+        off(event: "exit", listener: (code: number | null, signal: NodeJS.Signals | null) => void): void
+        off(event: "close", listener: (code: number | null, signal: NodeJS.Signals | null) => void): void
+        off(event: "spawn", listener: () => void): void
       }
       let end = false
       let exit: readonly [code: number | null, signal: NodeJS.Signals | null] | undefined
-      proc.on("error", (err) => {
+      const onError = (err: Error) => {
         resume(Effect.fail(toPlatformError("spawn", err, command)))
-      })
-      proc.on("exit", (code, signal2) => {
+      }
+      const onExit = (code: number | null, signal2: NodeJS.Signals | null) => {
         exit = [code, signal2]
-      })
-      proc.on("close", (code, signal2) => {
+      }
+      const onClose = (code: number | null, signal2: NodeJS.Signals | null) => {
         if (end) return
         end = true
         const finalExit: readonly [code: number | null, signal: NodeJS.Signals | null] = exit ?? [code, signal2]
         Deferred.doneUnsafe(signal, Exit.succeed(finalExit))
-      })
-      proc.on("spawn", () => {
+      }
+      const onSpawn = () => {
         resume(Effect.succeed([proc, signal]))
-      })
+      }
+      proc.on("error", onError)
+      proc.on("exit", onExit)
+      proc.on("close", onClose)
+      proc.on("spawn", onSpawn)
       return Effect.sync(() => {
+        proc.off("error", onError)
+        proc.off("exit", onExit)
+        proc.off("close", onClose)
+        proc.off("spawn", onSpawn)
         proc.kill("SIGTERM")
       })
     })

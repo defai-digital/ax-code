@@ -889,11 +889,15 @@ export namespace SessionProcessor {
                   if (input.abort.aborted) break
                   continue
                 }
-                input.assistantMessage.error = MessageV2.APIError.isInstance(error)
+                const apiErrorMessage =
+                  MessageV2.APIError.isInstance(error) && typeof error.data?.message === "string"
+                    ? error.data.message
+                    : retry
+                input.assistantMessage.error = MessageV2.APIError.isInstance(error) && error.data
                   ? new MessageV2.APIError({
                       ...error.data,
                       isRetryable: false,
-                      message: `${error.data.message} (stopped after ${SessionRetry.RETRY_MAX_ATTEMPTS} retries)`,
+                      message: `${apiErrorMessage} (stopped after ${SessionRetry.RETRY_MAX_ATTEMPTS} retries)`,
                     }).toObject()
                   : new NamedError.Unknown({
                       message: `${retry} (stopped after ${SessionRetry.RETRY_MAX_ATTEMPTS} retries)`,

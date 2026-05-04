@@ -76,7 +76,7 @@ import {
   pendingSubmitStatusText,
   type SubmitStage,
 } from "./submit-state"
-import { shouldUseTuiAnimations } from "../spinner-profile"
+import { footerLivenessIndicator, footerLivenessTextFrame } from "./liveness-view-model"
 
 const log = Log.create({ service: "tui.prompt" })
 
@@ -1406,6 +1406,12 @@ export function Prompt(props: PromptProps) {
       now: Date.now(),
     })
   })
+  const livenessIndicator = createMemo(() =>
+    footerLivenessIndicator({
+      tick: statusTick(),
+      userEnabled: kv.get("animations_enabled", true),
+    }),
+  )
 
   const finishedStatus = createMemo(() => {
     if (!props.sessionID) return false
@@ -1833,18 +1839,18 @@ export function Prompt(props: PromptProps) {
               justifyContent={status().type === "retry" ? "space-between" : "flex-start"}
             >
               <box flexShrink={0} flexDirection="row" gap={1}>
-                <box marginLeft={1}>
+                <box marginLeft={1} flexDirection="row" gap={1}>
                   <Show
-                    when={status().type === "busy" && busyStatus()?.stale}
+                    when={livenessIndicator().type === "native-spinner"}
                     fallback={
-                      <Show
-                        when={shouldUseTuiAnimations({ userEnabled: kv.get("animations_enabled", true) })}
-                        fallback={<text fg={theme.textMuted}>[⋯]</text>}
-                      >
-                        <spinner color={spinnerDef().color} frames={spinnerDef().frames} interval={40} />
-                      </Show>
+                      <text fg={busyStatus()?.stale ? theme.warning : theme.textMuted}>
+                        {footerLivenessTextFrame(livenessIndicator())}
+                      </text>
                     }
                   >
+                    <spinner color={spinnerDef().color} frames={spinnerDef().frames} interval={40} />
+                  </Show>
+                  <Show when={status().type === "busy" && busyStatus()?.stale}>
                     <text fg={theme.warning}>!</text>
                   </Show>
                 </box>

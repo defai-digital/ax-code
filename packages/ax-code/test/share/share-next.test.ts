@@ -7,6 +7,11 @@ import { Bus } from "../../src/bus"
 import { Instance } from "../../src/project/instance"
 import { Database } from "../../src/storage/db"
 import { SessionShareTable } from "../../src/share/share.sql"
+import { Provider } from "../../src/provider/provider"
+import { ProviderID, ModelID } from "../../src/provider/schema"
+import { MessageV2 } from "../../src/session/message-v2"
+import { MessageID } from "../../src/session/schema"
+import { Log } from "../../src/util/log"
 import path from "path"
 import dns from "dns/promises"
 import { Ssrf } from "../../src/util/ssrf"
@@ -148,6 +153,84 @@ test("ShareNext.request fails when org account has no token", async () => {
   } finally {
     Account.active = originalActive
     Account.token = originalToken
+  }
+})
+
+test("ShareNext skips missing user-message models without throwing from the bus subscriber", async () => {
+  const originalGetModel = Provider.getModel
+  const logs: string[] = []
+
+  Provider.getModel = mock(async (providerID: ProviderID, modelID: ModelID) => {
+    throw new Provider.ModelNotFoundError({ providerID, modelID })
+  }) as typeof Provider.getModel
+  await Log.init({ print: true, level: "DEBUG" }, { stderrWrite: (line) => logs.push(line) })
+
+  try {
+    await Instance.provide({
+      directory: projectRoot,
+      fn: async () => {
+        ShareNext.dispose()
+        await ShareNext.init()
+
+        await Bus.publish(MessageV2.Event.Updated, {
+          info: {
+            id: MessageID.ascending(),
+            sessionID: "ses_share_missing_model" as any,
+            role: "user",
+            time: { created: Date.now() },
+            agent: "test",
+            model: { providerID: ProviderID.make("missing"), modelID: ModelID.make("not-real") },
+            tools: {},
+          },
+        })
+
+        expect(logs.some((line) => line.includes("share model sync skipped"))).toBe(true)
+        expect(logs.some((line) => line.includes("subscriber threw"))).toBe(false)
+      },
+    })
+  } finally {
+    Provider.getModel = originalGetModel
+    ShareNext.dispose()
+    await Log.init({ print: false, dev: true, level: "DEBUG" })
+  }
+})
+
+test("ShareNext keeps unexpected model resolution failures visible to bus diagnostics", async () => {
+  const originalGetModel = Provider.getModel
+  const logs: string[] = []
+
+  Provider.getModel = mock(async () => {
+    throw new Error("provider exploded")
+  }) as typeof Provider.getModel
+  await Log.init({ print: true, level: "DEBUG" }, { stderrWrite: (line) => logs.push(line) })
+
+  try {
+    await Instance.provide({
+      directory: projectRoot,
+      fn: async () => {
+        ShareNext.dispose()
+        await ShareNext.init()
+
+        await Bus.publish(MessageV2.Event.Updated, {
+          info: {
+            id: MessageID.ascending(),
+            sessionID: "ses_share_unexpected_model_error" as any,
+            role: "user",
+            time: { created: Date.now() },
+            agent: "test",
+            model: { providerID: ProviderID.make("broken"), modelID: ModelID.make("boom") },
+            tools: {},
+          },
+        })
+
+        expect(logs.some((line) => line.includes("subscriber threw"))).toBe(true)
+        expect(logs.some((line) => line.includes("share model sync skipped"))).toBe(false)
+      },
+    })
+  } finally {
+    Provider.getModel = originalGetModel
+    ShareNext.dispose()
+    await Log.init({ print: false, dev: true, level: "DEBUG" })
   }
 })
 

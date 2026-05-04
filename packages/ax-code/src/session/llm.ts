@@ -161,12 +161,15 @@ export namespace LLM {
           sessionID: input.sessionID,
           providerOptions: provider?.options ?? {},
         })
-    const options: Record<string, any> = pipe(
-      base,
-      mergeDeep(input.model.options),
-      mergeDeep(input.agent.options),
-      mergeDeep(variant),
-      mergeDeep(reasoningPolicyDecision.options),
+    const options: Record<string, any> = ProviderTransform.sanitizeOptions(
+      input.model,
+      pipe(
+        base,
+        mergeDeep(input.model.options),
+        mergeDeep(input.agent.options),
+        mergeDeep(variant),
+        mergeDeep(reasoningPolicyDecision.options),
+      ),
     )
     const messages = [
       ...system.map(

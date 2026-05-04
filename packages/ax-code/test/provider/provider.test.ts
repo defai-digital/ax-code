@@ -1905,7 +1905,7 @@ test("custom model inherits api.url from models.dev provider", async () => {
   })
 })
 
-test("model variants are generated for reasoning models", async () => {
+test("xai reasoning models do not auto-generate reasoningEffort variants", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await Bun.write(
@@ -1927,7 +1927,7 @@ test("model variants are generated for reasoning models", async () => {
       const model = providers[ProviderID.xai].models["grok-4"]
       expect(model.capabilities.reasoning).toBe(true)
       expect(model.variants).toBeDefined()
-      expect(Object.keys(model.variants!).length).toBeGreaterThan(0)
+      expect(model.variants).toEqual({})
     },
   })
 })
@@ -1964,8 +1964,7 @@ test("model variants can be disabled via config", async () => {
       const model = providers[ProviderID.xai].models["grok-4"]
       expect(model.variants).toBeDefined()
       expect(model.variants!["high"]).toBeUndefined()
-      // medium variant should still exist
-      expect(model.variants!["medium"]).toBeDefined()
+      expect(model.variants!["medium"]).toBeUndefined()
     },
   })
 })
@@ -2087,7 +2086,7 @@ test("all variants can be disabled via config", async () => {
   })
 })
 
-test("variant config merges with generated variants", async () => {
+test("xai variant config stays explicit without generated reasoningEffort", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await Bun.write(
@@ -2120,8 +2119,7 @@ test("variant config merges with generated variants", async () => {
       const providers = await Provider.list()
       const model = providers[ProviderID.xai].models["grok-4"]
       expect(model.variants!["high"]).toBeDefined()
-      // Should have both the generated reasoning config and the custom option
-      expect(model.variants!["high"].reasoningEffort).toBeDefined()
+      expect(model.variants!["high"].reasoningEffort).toBeUndefined()
       expect(model.variants!["high"].extraOption).toBe("custom-value")
     },
   })
@@ -2159,8 +2157,7 @@ test("variants filtered in second pass for database models", async () => {
       const model = providers[ProviderID.xai].models["grok-4"]
       expect(model.variants).toBeDefined()
       expect(model.variants!["high"]).toBeUndefined()
-      // Other variants should still exist
-      expect(model.variants!["medium"]).toBeDefined()
+      expect(model.variants!["medium"]).toBeUndefined()
     },
   })
 })

@@ -205,15 +205,13 @@ export namespace ProviderTransform {
     )
       return {}
 
-    // XAI supports different effort sets across grok reasoning families.
+    // XAI rejects the AI SDK's top-level reasoningEffort parameter for Grok
+    // chat completions (for example grok-4-1-fast). Keep Grok reasoning
+    // capability metadata for output parsing and model selection, but do not
+    // auto-generate client-side reasoning-effort variants. Users can still
+    // provide explicit per-model variants in config if x.ai adds a supported
+    // option shape later.
     if (model.api.npm === "@ai-sdk/xai") {
-      if (id.includes("grok-4") || id.includes("grok-code")) {
-        return {
-          medium: { reasoningEffort: "medium" },
-          high: { reasoningEffort: "high" },
-          max: { reasoningEffort: "max" },
-        }
-      }
       return {}
     }
 
@@ -287,6 +285,12 @@ export namespace ProviderTransform {
     }
 
     return result
+  }
+
+  export function sanitizeOptions(model: Provider.Model, options: Record<string, any>): Record<string, any> {
+    if (model.api.npm !== "@ai-sdk/xai") return options
+    const { reasoningEffort: _reasoningEffort, reasoning_effort: _reasoning_effort, ...rest } = options
+    return rest
   }
 
   export function smallOptions(model: Provider.Model) {

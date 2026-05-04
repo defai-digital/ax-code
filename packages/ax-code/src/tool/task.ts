@@ -108,9 +108,22 @@ export const TaskTool = Tool.define("task", async (ctx) => {
       const ensureNotAborted = () => {
         if (ctx.abort.aborted || aborted) throw new DOMException("Aborted", "AbortError")
       }
+      let subagentSessionID: SessionID | undefined
+
+      function cancelSubagent() {
+        if (!subagentSessionID) return
+        void SessionPrompt.cancel(subagentSessionID).catch((error) => {
+          log.warn("failed to cancel aborted subagent session", {
+            sessionID: subagentSessionID,
+            error,
+          })
+        })
+      }
 
       ctx.abort.addEventListener("abort", markAborted, { once: true })
       using _ = defer(() => ctx.abort.removeEventListener("abort", markAborted))
+      ctx.abort.addEventListener("abort", cancelSubagent, { once: true })
+      using _cancelSubagent = defer(() => ctx.abort.removeEventListener("abort", cancelSubagent))
 
       const config = await Config.get()
       ensureNotAborted()
@@ -143,22 +156,10 @@ export const TaskTool = Tool.define("task", async (ctx) => {
       }
 
       const agent = await Agent.get(params.subagent_type)
+      ensureNotAborted()
       if (!agent) throw new Error(`Unknown agent type: ${params.subagent_type} is not a valid agent type`)
 
       const hasTaskPermission = agent.permission.some((rule) => rule.permission === "task")
-      let subagentSessionID: SessionID | undefined
-
-      function cancelSubagent() {
-        if (!subagentSessionID) return
-        void SessionPrompt.cancel(subagentSessionID).catch((error) => {
-          log.warn("failed to cancel aborted subagent session", {
-            sessionID: subagentSessionID,
-            error,
-          })
-        })
-      }
-      ctx.abort.addEventListener("abort", cancelSubagent, { once: true })
-      using _cancelSubagent = defer(() => ctx.abort.removeEventListener("abort", cancelSubagent))
 
       const session = await iife(async () => {
         if (params.task_id) {

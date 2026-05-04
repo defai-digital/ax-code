@@ -815,7 +815,7 @@ describe("ProviderTransform.variants", () => {
   })
 
   describe("@ai-sdk/xai", () => {
-    test("grok-4 returns medium, high, and max with reasoningEffort", () => {
+    test("grok-4 does not auto-generate reasoningEffort variants", () => {
       const model = createMockModel({
         id: "xai/grok-4",
         providerID: "xai",
@@ -826,10 +826,25 @@ describe("ProviderTransform.variants", () => {
         },
       })
       const result = ProviderTransform.variants(model)
-      expect(Object.keys(result)).toEqual(["medium", "high", "max"])
-      expect(result.medium).toEqual({ reasoningEffort: "medium" })
-      expect(result.high).toEqual({ reasoningEffort: "high" })
-      expect(result.max).toEqual({ reasoningEffort: "max" })
+      expect(result).toEqual({})
+    })
+
+    test("sanitizes unsupported reasoningEffort request options", () => {
+      const model = createMockModel({
+        id: "xai/grok-4-1-fast",
+        providerID: "xai",
+        api: {
+          id: "grok-4-1-fast",
+          url: "https://api.x.ai",
+          npm: "@ai-sdk/xai",
+        },
+      })
+      const result = ProviderTransform.sanitizeOptions(model, {
+        reasoningEffort: "high",
+        reasoning_effort: "high",
+        temperature: 0.2,
+      })
+      expect(result).toEqual({ temperature: 0.2 })
     })
   })
 
