@@ -71,6 +71,11 @@ function shortFooterText(value: string, max = 32) {
   return `${normalized.slice(0, max - 3)}...`
 }
 
+function lowerFirst(value: string) {
+  if (!value) return value
+  return `${value.charAt(0).toLowerCase()}${value.slice(1)}`
+}
+
 function footerTaskLabel(tool?: string) {
   if (!tool) return "Using tool"
 
@@ -141,12 +146,17 @@ export function footerSessionStatusView(input: {
       : status.waitState === "llm"
         ? `no model output ${inactive}`
         : `no activity ${inactive}`
-  const stalledText = `${label} stalled`
-  const stalled = elapsed ? `${stalledText} · ${elapsed}` : stalledText
+  const waitingText =
+    status.waitState === "tool"
+      ? `Still ${lowerFirst(label)}`
+      : status.waitState === "llm"
+        ? "Still waiting for model"
+        : "Still working"
+  const waiting = elapsed ? `${waitingText} · ${elapsed}` : waitingText
 
   return {
-    label: `${stalled} · ${staleHint}`,
-    shortLabel: `${stalled} · ${staleHint}`,
+    label: `${waiting} · ${staleHint}`,
+    shortLabel: `${waiting} · ${staleHint}`,
     stale,
     tone: "warning",
   }

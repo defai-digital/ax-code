@@ -146,7 +146,7 @@ describe("footerSessionStatusView", () => {
     expect(view.label).not.toContain("no model output")
   })
 
-  test("marks stalled llm work after prolonged inactivity", () => {
+  test("warns that llm work is taking longer after prolonged inactivity", () => {
     const now = 2_000_000
     const view = footerSessionStatusView({
       now,
@@ -159,10 +159,11 @@ describe("footerSessionStatusView", () => {
     })
 
     expect(view.stale).toBe(true)
-    expect(view.label).toContain("Thinking stalled")
-    expect(view.shortLabel).toContain("Thinking stalled")
+    expect(view.label).toContain("Still waiting for model")
+    expect(view.shortLabel).toContain("Still waiting for model")
     expect(view.tone).toBe("warning")
     expect(view.label).toContain("no model output")
+    expect(view.label).not.toContain("stalled")
   })
 
   test("gives tools a longer inactivity budget before warning", () => {
@@ -191,8 +192,9 @@ describe("footerSessionStatusView", () => {
     expect(recentTool.stale).toBe(false)
     expect(recentTool.label).toContain("Running command")
     expect(staleTool.stale).toBe(true)
-    expect(staleTool.label).toContain("Running command stalled")
+    expect(staleTool.label).toContain("Still running command")
     expect(staleTool.label).toContain("no tool update")
+    expect(staleTool.label).not.toContain("stalled")
   })
 
   test("describes file discovery tools as scanning files", () => {
