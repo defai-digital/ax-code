@@ -144,8 +144,23 @@ jobs:
             fi
             sleep 10
           done
+          # The main package may be visible on npm before its platform-specific
+          # optional dependency (e.g. @defai.digital/ax-code-darwin-arm64) has
+          # fully propagated. npm silently skips unavailable optional deps, which
+          # causes postinstall to fail when it cannot find the binary. Retry the
+          # install up to 5 times (each after a 30s pause) to ride out the gap.
           echo "Installing ${PACKAGE}@${VERSION} for channel ${CHANNEL}..."
-          npm install -g "${PACKAGE}@${VERSION}"
+          for install_attempt in $(seq 1 5); do
+            if npm install -g "${PACKAGE}@${VERSION}"; then
+              break
+            fi
+            if [ "$install_attempt" = "5" ]; then
+              echo "FAIL: npm install failed after 5 attempts"
+              exit 1
+            fi
+            echo "Install attempt ${install_attempt} failed, retrying in 30s..."
+            sleep 30
+          done
 
       - name: ax-code --version
         if: ${{ steps.channel.outputs.enabled == 'true' }}
