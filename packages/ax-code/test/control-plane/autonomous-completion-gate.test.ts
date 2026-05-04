@@ -191,6 +191,94 @@ describe("AutonomousCompletionGate", () => {
     expect(decision.message).toContain("failed before returning usable evidence")
   })
 
+  test("allows completion when the assistant explicitly resolves an unrecoverable failed subagent", () => {
+    const decision = AutonomousCompletionGate.evaluate({
+      pendingTodos: [],
+      messages: [
+        {
+          info: { role: "assistant" },
+          parts: [
+            {
+              type: "tool",
+              tool: "task",
+              callID: "call_failed",
+              state: {
+                status: "error",
+                input: { description: "Catalog all database tables" },
+                errorMessage: "Subagent failed before returning usable evidence.",
+              },
+            },
+          ],
+        },
+        {
+          info: { role: "user" },
+          parts: [
+            {
+              type: "text",
+              text:
+                "Control-plane completion gate blocked completion. Retry the subagent task, resume the task_id if available, or explicitly explain why no usable result can be recovered.",
+            },
+          ],
+        },
+        {
+          info: { role: "assistant" },
+          parts: [
+            {
+              type: "text",
+              text:
+                "Completion gate resolution: the failed subagent was for the Catalog all database tables task. I do not need that result to complete this document review because I verified the relevant claims directly against the repository.",
+            },
+          ],
+        },
+      ],
+    })
+
+    expect(decision).toEqual({ status: "allow" })
+  })
+
+  test("does not let the injected user continuation clear a failed subagent", () => {
+    const decision = AutonomousCompletionGate.evaluate({
+      pendingTodos: [],
+      messages: [
+        {
+          info: { role: "assistant" },
+          parts: [
+            {
+              type: "tool",
+              tool: "task",
+              callID: "call_failed",
+              state: {
+                status: "error",
+                input: { description: "Catalog all database tables" },
+                errorMessage: "Subagent failed before returning usable evidence.",
+              },
+            },
+          ],
+        },
+        {
+          info: { role: "user" },
+          parts: [
+            {
+              type: "text",
+              text:
+                "Control-plane completion gate blocked completion. Retry the subagent task, resume the task_id if available, or explicitly explain why no usable result can be recovered.",
+            },
+          ],
+        },
+      ],
+    })
+
+    expect(decision).toMatchObject({
+      status: "blocked",
+      reason: "empty_subagent_result",
+      emptyResult: {
+        callID: "call_failed",
+        description: "Catalog all database tables",
+        failed: true,
+      },
+    })
+  })
+
   test("blocks completion when todos are unfinished", () => {
     const decision = AutonomousCompletionGate.evaluate({
       messages: [],

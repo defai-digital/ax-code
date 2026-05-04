@@ -17,6 +17,8 @@ function mimeToModality(mime: string): Modality | undefined {
 
 export namespace ProviderTransform {
   export const OUTPUT_TOKEN_MAX = Flag.AX_CODE_EXPERIMENTAL_OUTPUT_TOKEN_MAX || 32_000
+  const ALIBABA_TOKEN_PLAN_OUTPUT_TOKEN_MAX = 8_192
+  const ALIBABA_TOKEN_PLAN_THINKING_BUDGET_TOKENS = 8_192
 
   // Maps npm package to the key the AI SDK expects for providerOptions.
   // The Vertex provider uses the same "google" key as the Gemini provider,
@@ -193,12 +195,18 @@ export namespace ProviderTransform {
     return families.some((family) => hasFamily(model, family))
   }
 
+  function isAlibabaTokenPlanThinkingModel(model: Provider.Model) {
+    if (!model.providerID.startsWith("alibaba-token-plan")) return false
+    return model.api.id === "qwen3.6-plus" || model.api.id === "glm-5"
+  }
+
   export function variants(model: Provider.Model): Record<string, Record<string, any>> {
     if (!model.capabilities.reasoning) return {}
 
     const id = model.id.toLowerCase()
     if (
       hasFamily(model, "deepseek") ||
+      model.providerID.startsWith("alibaba-token-plan") ||
       hasFamily(model, "minimax") ||
       hasFamily(model, "glm") ||
       hasFamily(model, "mistral")
@@ -269,11 +277,23 @@ export namespace ProviderTransform {
       }
     }
 
-    // Enable thinking for reasoning models on Alibaba Cloud (DashScope).
-    // DashScope's OpenAI-compatible API requires `enable_thinking: true` in the request body
-    // to return reasoning_content. Without it, reasoning models never output thinking tokens.
+    // Alibaba Token Plan Team Edition's OpenCode reference uses the AI SDK
+    // OpenAI-compatible provider with a bounded `thinking` object instead of
+    // the generic OpenAI `reasoning_effort` field. Keep the budget explicit so
+    // the service does not over-allocate a large request before generation.
+    if (isAlibabaTokenPlanThinkingModel(input.model)) {
+      result["thinking"] = {
+        type: "enabled",
+        budgetTokens: ALIBABA_TOKEN_PLAN_THINKING_BUDGET_TOKENS,
+      }
+    }
+
+    // Enable thinking for reasoning models on Alibaba Coding Plan (DashScope).
+    // Token Plan Team Edition is handled above because its published AI-tool
+    // configuration uses `thinking`, not `enable_thinking`.
     if (
       input.model.providerID.startsWith("alibaba") &&
+      !input.model.providerID.startsWith("alibaba-token-plan") &&
       input.model.capabilities.reasoning &&
       input.model.api.npm === "@ai-sdk/openai-compatible"
     ) {
@@ -313,6 +333,9 @@ export namespace ProviderTransform {
     // If the model declares no output capability (0) or a missing limit,
     // fall back to OUTPUT_TOKEN_MAX. Math.min never returns nullish, so
     // the old `?? OUTPUT_TOKEN_MAX` was dead code.
+    if (model.providerID.startsWith("alibaba-token-plan")) {
+      return Math.min(model.limit.output || ALIBABA_TOKEN_PLAN_OUTPUT_TOKEN_MAX, ALIBABA_TOKEN_PLAN_OUTPUT_TOKEN_MAX)
+    }
     const limit = model.limit.output
     return limit > 0 ? Math.min(limit, OUTPUT_TOKEN_MAX) : OUTPUT_TOKEN_MAX
   }

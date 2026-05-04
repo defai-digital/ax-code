@@ -75,9 +75,12 @@ export namespace SessionRetry {
   // some 429s are billing/quota exhaustion, not rate limits. Retrying
   // those wastes ~60s of backoff before the user sees the real error.
   const NON_RETRYABLE_PATTERNS = [
+    "allocated quota exceeded",
     "insufficient balance",
+    "increase your quota limit",
     "no resource package",
     "quota exceeded",
+    "token-limit",
     "billing",
     "payment required",
     "account suspended",

@@ -901,6 +901,72 @@ describe("session.message-v2.fromError", () => {
     expect(MessageV2.APIError.isInstance(result)).toBe(true)
   })
 
+  test("normalizes Alibaba token-plan quota exhaustion as non-retryable", () => {
+    const responseBody = JSON.stringify({
+      error: {
+        code: "AllocatedQuotaExceeded",
+        message:
+          "Allocated quota exceeded, please increase your quota limit. For details, see: https://www.alibabacloud.com/help/en/model-studio/error-code#token-limit",
+      },
+    })
+    const result = MessageV2.fromError(
+      new APICallError({
+        message: "Too Many Requests",
+        url: "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1/chat/completions",
+        requestBodyValues: {},
+        statusCode: 429,
+        responseHeaders: { "content-type": "application/json" },
+        responseBody,
+        isRetryable: true,
+      }),
+      { providerID: ProviderID.make("alibaba-token-plan") },
+    )
+
+    expect(result).toMatchObject({
+      name: "APIError",
+      data: {
+        message:
+          "Alibaba token-plan rejected the request as exceeding allocatable quota. This can happen when the request reserves too many output/thinking tokens or when the API key is not attached to the expected Token Plan seat. Details: https://www.alibabacloud.com/help/en/model-studio/error-code#token-limit",
+        isRetryable: false,
+        statusCode: 429,
+        responseBody,
+      },
+    })
+  })
+
+  test("normalizes legacy Alibaba provider requests routed to token-plan endpoint", () => {
+    const responseBody = JSON.stringify({
+      error: {
+        code: "insufficient_quota",
+        message:
+          "Allocated quota exceeded, please increase your quota limit. For details, see: https://www.alibabacloud.com/help/en/model-studio/error-code#token-limit",
+      },
+    })
+    const result = MessageV2.fromError(
+      new APICallError({
+        message: "Allocated quota exceeded",
+        url: "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1/chat/completions",
+        requestBodyValues: {},
+        statusCode: 429,
+        responseHeaders: { "content-type": "application/json" },
+        responseBody,
+        isRetryable: true,
+      }),
+      { providerID: ProviderID.make("alibaba") },
+    )
+
+    expect(result).toMatchObject({
+      name: "APIError",
+      data: {
+        message:
+          "Alibaba token-plan rejected the request as exceeding allocatable quota. This can happen when the request reserves too many output/thinking tokens or when the API key is not attached to the expected Token Plan seat. Details: https://www.alibabacloud.com/help/en/model-studio/error-code#token-limit",
+        isRetryable: false,
+        statusCode: 429,
+        responseBody,
+      },
+    })
+  })
+
   test("serializes unknown inputs", () => {
     const result = MessageV2.fromError(123, { providerID })
 

@@ -864,6 +864,35 @@ describe("ProviderTransform.variants", () => {
       expect(result.low).toEqual({ reasoningEffort: "low" })
       expect(result.high).toEqual({ reasoningEffort: "high" })
     })
+
+    test("does not apply generic reasoningEffort variants to Alibaba plans", () => {
+      const model = createMockModel({
+        id: "alibaba-token-plan/qwen3.6-plus",
+        providerID: "alibaba-token-plan",
+        api: {
+          id: "qwen3.6-plus",
+          url: "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
+          npm: "@ai-sdk/openai-compatible",
+        },
+      })
+      const result = ProviderTransform.variants(model)
+      expect(result).toEqual({})
+    })
+
+    test("keeps generic reasoningEffort variants for Alibaba coding plan", () => {
+      const model = createMockModel({
+        id: "alibaba-coding-plan/qwen3.6-plus",
+        providerID: "alibaba-coding-plan",
+        api: {
+          id: "qwen3.6-plus",
+          url: "https://coding-intl.dashscope.aliyuncs.com/v1",
+          npm: "@ai-sdk/openai-compatible",
+        },
+      })
+      const result = ProviderTransform.variants(model)
+      expect(Object.keys(result)).toEqual(["low", "medium", "high"])
+      expect(result.high).toEqual({ reasoningEffort: "high" })
+    })
   })
 
   describe("@ai-sdk/google", () => {
@@ -998,5 +1027,79 @@ describe("ProviderTransform family matching", () => {
     expect(ProviderTransform.temperature(qwen)).toBe(0.55)
     expect(ProviderTransform.topP(qwen)).toBe(1)
     expect(ProviderTransform.topK(gemini)).toBe(64)
+  })
+})
+
+describe("ProviderTransform.maxOutputTokens", () => {
+  test("caps Alibaba token-plan requests to avoid over-allocating quota", () => {
+    const model = {
+      providerID: ProviderID.make("alibaba-token-plan"),
+      limit: {
+        output: 65_536,
+      },
+    } as any
+
+    expect(ProviderTransform.maxOutputTokens(model)).toBe(8_192)
+  })
+
+  test("keeps the global output cap for other providers", () => {
+    const model = {
+      providerID: ProviderID.make("custom-provider"),
+      limit: {
+        output: 65_536,
+      },
+    } as any
+
+    expect(ProviderTransform.maxOutputTokens(model)).toBe(OUTPUT_TOKEN_MAX)
+  })
+})
+
+describe("ProviderTransform.options - Alibaba Token Plan Team Edition", () => {
+  function createModel(modelID: string, reasoning = true) {
+    return {
+      id: `alibaba-token-plan/${modelID}`,
+      providerID: ProviderID.make("alibaba-token-plan"),
+      api: {
+        id: modelID,
+        url: "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
+        npm: "@ai-sdk/openai-compatible",
+      },
+      capabilities: {
+        reasoning,
+      },
+    } as any
+  }
+
+  test("uses the documented bounded thinking config for qwen3.6-plus", () => {
+    const result = ProviderTransform.options({
+      model: createModel("qwen3.6-plus"),
+      sessionID: "session-test",
+      providerOptions: {},
+    })
+
+    expect(result.thinking).toEqual({ type: "enabled", budgetTokens: 8192 })
+    expect(result.enable_thinking).toBeUndefined()
+  })
+
+  test("uses the documented bounded thinking config for glm-5", () => {
+    const result = ProviderTransform.options({
+      model: createModel("glm-5"),
+      sessionID: "session-test",
+      providerOptions: {},
+    })
+
+    expect(result.thinking).toEqual({ type: "enabled", budgetTokens: 8192 })
+    expect(result.enable_thinking).toBeUndefined()
+  })
+
+  test("does not add undocumented thinking config to other token-plan models", () => {
+    const result = ProviderTransform.options({
+      model: createModel("MiniMax-M2.5"),
+      sessionID: "session-test",
+      providerOptions: {},
+    })
+
+    expect(result.thinking).toBeUndefined()
+    expect(result.enable_thinking).toBeUndefined()
   })
 })

@@ -137,6 +137,17 @@ describe("session.retry.retryable", () => {
 
     expect(SessionRetry.retryable(error)).toBeUndefined()
   })
+
+  test("does not retry Alibaba token-plan quota exhaustion", () => {
+    const error = new MessageV2.APIError({
+      message:
+        "Allocated quota exceeded, please increase your quota limit. For details, see: https://www.alibabacloud.com/help/en/model-studio/error-code#token-limit",
+      isRetryable: true,
+      responseBody: JSON.stringify({ error: { code: "AllocatedQuotaExceeded" } }),
+    }).toObject() as ReturnType<NamedError["toObject"]>
+
+    expect(SessionRetry.retryable(error)).toBeUndefined()
+  })
 })
 
 describe("session.message-v2.fromError", () => {

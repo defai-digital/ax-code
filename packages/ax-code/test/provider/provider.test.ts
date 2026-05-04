@@ -941,6 +941,31 @@ test("getSmallModel returns appropriate small model", async () => {
   })
 })
 
+test("getSmallModel uses a supported Alibaba plan model", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await Bun.write(
+        path.join(dir, "ax-code.json"),
+        JSON.stringify({
+          $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+        }),
+      )
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    init: async () => {
+      Env.set("ALIBABA_TOKEN_PLAN_API_KEY", "test-api-key")
+    },
+    fn: async () => {
+      const model = await Provider.getSmallModel(ProviderID.make("alibaba-token-plan"))
+      expect(model).toBeDefined()
+      if (!model) throw new Error("expected Alibaba token-plan small model")
+      expect(["deepseek-v3.2", "qwen3.6-plus", "glm-5", "MiniMax-M2.5"]).toContain(model.id)
+    },
+  })
+})
+
 test("getSmallModel respects config small_model override", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {

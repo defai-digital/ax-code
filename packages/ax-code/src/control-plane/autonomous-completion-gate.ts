@@ -6,6 +6,9 @@ export namespace AutonomousCompletionGate {
   }
 
   export type Message = {
+    info?: {
+      role?: string
+    }
     parts?: readonly unknown[]
   }
 
@@ -79,7 +82,14 @@ export namespace AutonomousCompletionGate {
     for (const message of messages) {
       for (const part of message.parts ?? []) {
         const record = asRecord(part)
-        if (!record || record["type"] !== "tool" || record["tool"] !== "task") continue
+        if (!record) continue
+
+        if (isAssistantMessage(message) && record["type"] === "text" && typeof record["text"] === "string") {
+          resolveWithAssistantText(unresolved, record["text"])
+          continue
+        }
+
+        if (record["type"] !== "tool" || record["tool"] !== "task") continue
 
         const state = asRecord(record["state"])
         if (!state) continue
@@ -132,6 +142,78 @@ export namespace AutonomousCompletionGate {
     let latest: EmptySubagentResult | undefined
     for (const result of unresolved.values()) latest = result
     return latest
+  }
+
+  function resolveWithAssistantText(unresolved: Map<string, EmptySubagentResult>, text: string) {
+    if (unresolved.size === 0 || !isExplicitResolution(text)) return
+
+    const matches = [...unresolved.entries()].filter(([, result]) => referencesResult(text, result))
+    if (matches.length > 0) {
+      for (const [key] of matches) unresolved.delete(key)
+      return
+    }
+
+    if (unresolved.size === 1) {
+      const [key] = unresolved.keys()
+      unresolved.delete(key)
+    }
+  }
+
+  function isExplicitResolution(text: string) {
+    const normalized = normalize(text)
+    if (!normalized.includes("subagent") && !normalized.includes("completion gate") && !normalized.includes("task")) {
+      return false
+    }
+
+    return [
+      "completion gate resolution",
+      "no usable result can be recovered",
+      "cannot recover a usable result",
+      "cant recover a usable result",
+      "can not recover a usable result",
+      "i do not need",
+      "i dont need",
+      "not needed",
+      "not required",
+      "not necessary",
+      "can verify directly",
+      "verified directly",
+      "validate directly",
+      "validated directly",
+      "handled directly",
+      "reviewed the recovered",
+      "validated the recovered",
+    ].some((phrase) => normalized.includes(phrase))
+  }
+
+  function referencesResult(text: string, result: EmptySubagentResult) {
+    const normalized = normalize(text)
+    if (result.taskID && normalized.includes(normalize(result.taskID))) return true
+    if (result.callID && normalized.includes(normalize(result.callID))) return true
+    if (!result.description) return false
+
+    const description = normalize(result.description)
+    if (description.length > 0 && normalized.includes(description)) return true
+
+    const descriptionWords = new Set(description.split(" ").filter((word) => word.length >= 4))
+    if (descriptionWords.size === 0) return false
+    let matched = 0
+    for (const word of descriptionWords) {
+      if (normalized.includes(word)) matched++
+    }
+    return matched >= Math.min(3, descriptionWords.size)
+  }
+
+  function isAssistantMessage(message: Message) {
+    return message.info?.role === "assistant"
+  }
+
+  function normalize(value: string) {
+    return value
+      .toLowerCase()
+      .replace(/['’]/g, "")
+      .replace(/[^a-z0-9]+/g, " ")
+      .trim()
   }
 
   function asRecord(value: unknown): Record<string, unknown> | undefined {

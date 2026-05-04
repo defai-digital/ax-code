@@ -92,6 +92,24 @@ export namespace ProviderError {
     return undefined
   }
 
+  function isAlibabaTokenPlanQuota(providerID: ProviderID, message: string, responseBody?: string, url?: string) {
+    const lowerUrl = url?.toLowerCase() ?? ""
+    const isTokenPlan =
+      providerID.startsWith("alibaba-token-plan") ||
+      (lowerUrl.includes("token-plan.") && lowerUrl.includes("aliyuncs.com"))
+    if (!isTokenPlan) return false
+    const text = `${message}\n${responseBody ?? ""}`.toLowerCase()
+    return (
+      text.includes("allocated quota exceeded") ||
+      text.includes("increase your quota limit") ||
+      text.includes("model-studio/error-code#token-limit")
+    )
+  }
+
+  function alibabaTokenPlanQuotaMessage() {
+    return "Alibaba token-plan rejected the request as exceeding allocatable quota. This can happen when the request reserves too many output/thinking tokens or when the API key is not attached to the expected Token Plan seat. Details: https://www.alibabacloud.com/help/en/model-studio/error-code#token-limit"
+  }
+
   export type ParsedStreamError =
     | {
         type: "context_overflow"
@@ -171,6 +189,18 @@ export namespace ProviderError {
     }
 
     const metadata = input.error.url ? { url: input.error.url } : undefined
+
+    if (isAlibabaTokenPlanQuota(input.providerID, m, input.error.responseBody, input.error.url)) {
+      return {
+        type: "api_error",
+        message: alibabaTokenPlanQuotaMessage(),
+        statusCode: input.error.statusCode,
+        isRetryable: false,
+        responseHeaders: input.error.responseHeaders,
+        responseBody: input.error.responseBody,
+        metadata,
+      }
+    }
 
     // OpenAI uses 404 for some temporary errors (model not found due to capacity/routing)
     const isRetryable = input.error.isRetryable || (input.providerID === "openai" && input.error.statusCode === 404)

@@ -1221,6 +1221,7 @@ export namespace SessionPrompt {
                 text:
                   `Control-plane completion gate blocked completion: ${completionGate.message}\n` +
                   `Retry the subagent task, resume the task_id if available, or explicitly explain why no usable result can be recovered. ` +
+                  `If the missing subagent result is genuinely unnecessary, include "Completion gate resolution:" and name the subagent task plus the direct evidence you used instead. ` +
                   `Do not mark the work complete until the missing subagent evidence is resolved. ` +
                   `This is completion-gate auto-continuation ${completionGateRetries}/${maxCompletionGateRetries}.`,
               },

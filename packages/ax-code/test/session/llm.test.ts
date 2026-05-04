@@ -230,8 +230,8 @@ function createEventResponse(chunks: unknown[], includeDone = false) {
 }
 
 describe("session.llm.stream", () => {
-  test("sends temperature, tokens, and reasoning options for openai-compatible models", async () => {
-    const providerID = "alibaba-coding-plan"
+  test("sends Alibaba token-plan-safe OpenAI-compatible parameters", async () => {
+    const providerID = "alibaba-token-plan"
     const modelID = "qwen3.6-plus"
     const fixture = await loadFixture(providerID, modelID)
     const provider = fixture.provider
@@ -321,8 +321,10 @@ describe("session.llm.stream", () => {
         const expectedMaxTokens = ProviderTransform.maxOutputTokens(resolved)
         expect(maxTokens).toBe(expectedMaxTokens)
 
-        const reasoning = (body.reasoningEffort as string | undefined) ?? (body.reasoning_effort as string | undefined)
-        expect(reasoning).toBe("high")
+        expect(body.thinking).toEqual({ type: "enabled", budgetTokens: 8192 })
+        expect(body.enable_thinking).toBeUndefined()
+        expect(body.reasoningEffort).toBeUndefined()
+        expect(body.reasoning_effort).toBeUndefined()
       },
     })
   })
