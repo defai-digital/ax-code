@@ -11,7 +11,20 @@ describe("session sidebar graph index status", () => {
         total: 12,
         error: null,
       }),
-    ).toBe("index complete · no symbols found")
+    ).toBe("index complete · no code symbols found in this scope")
+  })
+
+  test("keeps persisted empty index runs distinct after restart", () => {
+    expect(
+      sidebarGraphIndexStatusText({
+        nodeCount: 0,
+        lastIndexedAt: Date.now(),
+        state: "idle",
+        completed: 0,
+        total: 0,
+        error: null,
+      }),
+    ).toBe("index complete · no code symbols found in this scope")
   })
 
   test("still prompts manual indexing when no index run has completed", () => {

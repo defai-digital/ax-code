@@ -67,7 +67,7 @@ process.on("uncaughtException", (e) => {
     stack: error instanceof Error ? error.stack : undefined,
     code: error instanceof Error && "code" in error ? (error as NodeJS.ErrnoException).code : undefined,
   })
-  setTimeout(() => process.exit(1), 100).unref()
+  if (!shutdownPromise) setTimeout(() => process.exit(1), 100).unref()
 })
 
 const handleGlobalEvent = (event: GlobalEvent) => {
@@ -83,6 +83,7 @@ let shutdownPromise: Promise<void> | undefined
 const eventStream = {
   abort: undefined as AbortController | undefined,
   status: undefined as StreamConnectionStatus | undefined,
+  done: undefined as Promise<void> | undefined,
 }
 
 const startEventStream = (input: { directory?: string }) => {
@@ -110,7 +111,7 @@ const startEventStream = (input: { directory?: string }) => {
     Rpc.emit("event.status", status)
   }
 
-  void runResilientStream<OpencodeEvent>({
+  const done = runResilientStream<OpencodeEvent>({
     signal,
     subscribe: (connectionSignal) =>
       sdk.event.subscribe(
@@ -132,12 +133,20 @@ const startEventStream = (input: { directory?: string }) => {
         attempt: status.attempt,
       })
     },
-  }).catch((error) => {
-    DiagnosticLog.recordProcess("worker.eventStreamError", { error })
-    Log.Default.error("event stream error", {
-      error: error instanceof Error ? error.message : error,
-    })
   })
+    .catch((error) => {
+      DiagnosticLog.recordProcess("worker.eventStreamError", { error })
+      Log.Default.error("event stream error", {
+        error: error instanceof Error ? error.message : error,
+      })
+    })
+    .finally(() => {
+      if (eventStream.abort === abort) {
+        eventStream.abort = undefined
+        eventStream.done = undefined
+      }
+    })
+  eventStream.done = done
 }
 
 export function assertRpcFetchUrlAllowed(inputUrl: string) {
@@ -221,6 +230,9 @@ export const rpc = {
     shutdownPromise = (async () => {
       Log.Default.info("worker shutting down")
       if (eventStream.abort) eventStream.abort.abort()
+      await eventStream.done?.catch(() => {})
+      eventStream.abort = undefined
+      eventStream.done = undefined
       GlobalBus.off("event", handleGlobalEvent)
       await Instance.disposeAll()
       if (server) {

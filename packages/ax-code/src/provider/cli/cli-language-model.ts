@@ -52,7 +52,8 @@ function autonomousCliArgs(providerID: string): string[] {
 }
 
 export function buildCliCommand(config: CliLanguageModelConfig, prompt: string) {
-  const cmd = [config.binary, ...config.args, ...autonomousCliArgs(config.providerID), "--model", config.modelID]
+  const cmd = [config.binary, ...config.args, ...autonomousCliArgs(config.providerID)]
+  if (config.modelID !== config.providerID) cmd.push("--model", config.modelID)
   if (config.promptMode === "arg") cmd.push(config.promptFlag ?? "-p", prompt)
   return cmd
 }

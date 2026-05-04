@@ -182,7 +182,7 @@ test("model whitelist filters models for provider", async () => {
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
           provider: {
             xai: {
-              whitelist: ["grok-4"],
+              whitelist: ["grok-4-1-fast"],
             },
           },
         }),
@@ -198,7 +198,7 @@ test("model whitelist filters models for provider", async () => {
       const providers = await Provider.list()
       expect(providers[ProviderID.xai]).toBeDefined()
       const models = Object.keys(providers[ProviderID.xai].models)
-      expect(models).toContain("grok-4")
+      expect(models).toContain("grok-4-1-fast")
       expect(models.length).toBe(1)
     },
   })
@@ -213,7 +213,7 @@ test("model blacklist excludes specific models", async () => {
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
           provider: {
             xai: {
-              blacklist: ["grok-4"],
+              blacklist: ["grok-4-1-fast"],
             },
           },
         }),
@@ -229,7 +229,7 @@ test("model blacklist excludes specific models", async () => {
       const providers = await Provider.list()
       expect(providers[ProviderID.xai]).toBeDefined()
       const models = Object.keys(providers[ProviderID.xai].models)
-      expect(models).not.toContain("grok-4")
+      expect(models).not.toContain("grok-4-1-fast")
     },
   })
 })
@@ -245,7 +245,7 @@ test("custom model alias via config", async () => {
             xai: {
               models: {
                 "my-alias": {
-                  id: "grok-4",
+                  id: "grok-4-1-fast",
                   name: "My Custom Alias",
                 },
               },
@@ -363,10 +363,10 @@ test("getModel returns model for valid provider/model", async () => {
       Env.set("XAI_API_KEY", "test-api-key")
     },
     fn: async () => {
-      const model = await Provider.getModel(ProviderID.xai, ModelID.make("grok-4"))
+      const model = await Provider.getModel(ProviderID.xai, ModelID.make("grok-4-1-fast"))
       expect(model).toBeDefined()
       expect(String(model.providerID)).toBe("xai")
-      expect(String(model.id)).toBe("grok-4")
+      expect(String(model.id)).toBe("grok-4-1-fast")
       const language = await Provider.getLanguage(model)
       expect(language).toBeDefined()
     },
@@ -440,9 +440,9 @@ test("getLanguage throws ModelNotFoundError when the model provider is missing",
 })
 
 test("parseModel correctly parses provider/model string", () => {
-  const result = Provider.parseModel("xai/grok-4")
+  const result = Provider.parseModel("xai/grok-4-1-fast")
   expect(String(result.providerID)).toBe("xai")
-  expect(String(result.modelID)).toBe("grok-4")
+  expect(String(result.modelID)).toBe("grok-4-1-fast")
 })
 
 test("parseModel handles model IDs with slashes", () => {
@@ -482,7 +482,7 @@ test("defaultModel respects config model setting", async () => {
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
-          model: "xai/grok-4",
+          model: "xai/grok-4-1-fast",
         }),
       )
     },
@@ -495,7 +495,7 @@ test("defaultModel respects config model setting", async () => {
     fn: async () => {
       const model = await Provider.defaultModel()
       expect(String(model.providerID)).toBe("xai")
-      expect(String(model.modelID)).toBe("grok-4")
+      expect(String(model.modelID)).toBe("grok-4-1-fast")
     },
   })
 })
@@ -549,7 +549,7 @@ test("model options are merged from existing model", async () => {
           provider: {
             xai: {
               models: {
-                "grok-4": {
+                "grok-4-1-fast": {
                   options: {
                     customOption: "custom-value",
                   },
@@ -568,7 +568,7 @@ test("model options are merged from existing model", async () => {
     },
     fn: async () => {
       const providers = await Provider.list()
-      const model = providers[ProviderID.xai].models["grok-4"]
+      const model = providers[ProviderID.xai].models["grok-4-1-fast"]
       expect(model.options.customOption).toBe("custom-value")
     },
   })
@@ -619,10 +619,10 @@ test("closest finds model by partial match", async () => {
       Env.set("XAI_API_KEY", "test-api-key")
     },
     fn: async () => {
-      const result = await Provider.closest(ProviderID.xai, ["grok-4"])
+      const result = await Provider.closest(ProviderID.xai, ["grok-4-1-fast"])
       expect(result).toBeDefined()
       expect(String(result?.providerID)).toBe("xai")
-      expect(String(result?.modelID)).toContain("grok-4")
+      expect(String(result?.modelID)).toContain("grok-4-1-fast")
     },
   })
 })
@@ -658,7 +658,7 @@ test("getModel uses realIdByKey for aliased models", async () => {
             xai: {
               models: {
                 "my-gpt4o": {
-                  id: "grok-4",
+                  id: "grok-4-1-fast",
                   name: "My GPT-4o Alias",
                 },
               },
@@ -773,7 +773,7 @@ test("model inherits properties from existing database model", async () => {
           provider: {
             xai: {
               models: {
-                "grok-4": {
+                "grok-4-1-fast": {
                   name: "Custom Name for GPT-4o",
                 },
               },
@@ -790,7 +790,7 @@ test("model inherits properties from existing database model", async () => {
     },
     fn: async () => {
       const providers = await Provider.list()
-      const model = providers[ProviderID.xai].models["grok-4"]
+      const model = providers[ProviderID.xai].models["grok-4-1-fast"]
       expect(model.name).toBe("Custom Name for GPT-4o")
       expect(model.capabilities.toolcall).toBe(true)
       expect(model.limit.context).toBeGreaterThan(0)
@@ -856,7 +856,7 @@ test("whitelist and blacklist can be combined", async () => {
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
           provider: {
             xai: {
-              whitelist: ["grok-4", "grok-4-fast"],
+              whitelist: ["grok-4-1-fast", "grok-4-fast"],
               blacklist: ["grok-4-fast"],
             },
           },
@@ -873,7 +873,7 @@ test("whitelist and blacklist can be combined", async () => {
       const providers = await Provider.list()
       expect(providers[ProviderID.xai]).toBeDefined()
       const models = Object.keys(providers[ProviderID.xai].models)
-      expect(models).toContain("grok-4")
+      expect(models).toContain("grok-4-1-fast")
       expect(models).not.toContain("grok-4-fast")
       expect(models.length).toBe(1)
     },
@@ -948,7 +948,7 @@ test("getSmallModel respects config small_model override", async () => {
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
-          small_model: "xai/grok-4",
+          small_model: "xai/grok-4-1-fast",
         }),
       )
     },
@@ -962,21 +962,21 @@ test("getSmallModel respects config small_model override", async () => {
       const model = await Provider.getSmallModel(ProviderID.xai)
       expect(model).toBeDefined()
       expect(String(model?.providerID)).toBe("xai")
-      expect(String(model?.id)).toBe("grok-4")
+      expect(String(model?.id)).toBe("grok-4-1-fast")
     },
   })
 })
 
-test("config-defined zai models filter GLM <5 and keep GLM 5+", async () => {
+test("config-defined Z.AI Coding Plan models filter GLM <5 and keep GLM 5+", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await Bun.write(
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
-          enabled_providers: ["zai"],
+          enabled_providers: ["zai-coding-plan"],
           provider: {
-            zai: {
+            "zai-coding-plan": {
               models: {
                 "glm-4-plus": {
                   provider: { npm: "@ai-sdk/openai-compatible", api: "https://example.com" },
@@ -1001,7 +1001,7 @@ test("config-defined zai models filter GLM <5 and keep GLM 5+", async () => {
     directory: tmp.path,
     fn: async () => {
       const providers = await Provider.list()
-      const zai = providers[ProviderID.make("zai")]
+      const zai = providers[ProviderID.make("zai-coding-plan")]
       // Pre-5 SKUs are filtered.
       expect(zai.models["glm-4-plus"]).toBeUndefined()
       expect(zai.models["glm-4.5-flash"]).toBeUndefined()
@@ -1093,6 +1093,160 @@ test("openai provider only exposes GPT-4 or later models", async () => {
       const ids = Object.keys(openai.models)
       expect(ids.length).toBeGreaterThan(0)
       expect(ids.some((id) => id.includes("gpt-3"))).toBe(false)
+      expect(ids.some((id) => id.includes("gpt-5.5"))).toBe(false)
+    },
+  })
+})
+
+test("provider list filters GPT-5.5 from configured provider models", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await Bun.write(
+        path.join(dir, "ax-code.json"),
+        JSON.stringify({
+          $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+          provider: {
+            openai: {
+              options: {
+                apiKey: "test-openai-key",
+              },
+              models: {
+                "gpt-5.5": {
+                  id: "gpt-5.5",
+                  name: "GPT-5.5",
+                },
+                "my-gpt-alias": {
+                  id: "my-gpt-alias",
+                  name: "GPT-5.5",
+                },
+                "my-spaced-gpt-alias": {
+                  id: "my-spaced-gpt-alias",
+                  name: "GPT 5.5",
+                },
+                "my-separated-gpt-alias": {
+                  id: "my-separated-gpt-alias",
+                  name: "GPT 5 5",
+                },
+                "gpt-5": {
+                  id: "gpt-5",
+                  name: "GPT-5",
+                },
+              },
+            },
+            openrouter: {
+              options: {
+                apiKey: "test-openrouter-key",
+              },
+              models: {
+                "openai/gpt-5.5": {
+                  id: "openai/gpt-5.5",
+                  name: "GPT-5.5",
+                },
+              },
+            },
+            xai: {
+              options: {
+                apiKey: "test-xai-key",
+              },
+              models: {
+                "grok-4": {
+                  id: "grok-4",
+                  name: "Grok 4",
+                },
+                "my-old-grok-alias": {
+                  id: "my-old-grok-alias",
+                  name: "Grok 4 Fast",
+                  family: "grok",
+                },
+                "my-grok-alias": {
+                  id: "my-grok-alias",
+                  name: "Grok 4.1 Fast",
+                  family: "grok",
+                },
+                "grok-code-fast-1": {
+                  id: "grok-code-fast-1",
+                  name: "Grok Code Fast 1",
+                },
+                "grok-code-fast-1:optimized:free": {
+                  id: "grok-code-fast-1:optimized:free",
+                  name: "Grok Code Fast 1 Optimized Free",
+                },
+                "grok-4-1-fast": {
+                  id: "grok-4-1-fast",
+                  name: "Grok 4.1 Fast",
+                },
+              },
+            },
+            "zai-coding-plan": {
+              options: {
+                apiKey: "test-zai-key",
+              },
+              models: {
+                "glm-5v-turbo": {
+                  id: "glm-5v-turbo",
+                  name: "GLM-5V Turbo",
+                },
+                "my-glm-vision-alias": {
+                  id: "my-glm-vision-alias",
+                  name: "GLM 5V Turbo",
+                },
+                "my-spaced-glm-vision-alias": {
+                  id: "my-spaced-glm-vision-alias",
+                  name: "GLM 5 V Turbo",
+                },
+                "glm-5": {
+                  id: "glm-5",
+                  name: "GLM-5",
+                },
+              },
+            },
+          },
+        }),
+      )
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const providers = await Provider.list()
+      expect(providers[ProviderID.make("openai")]?.models["gpt-5.5"]).toBeUndefined()
+      expect(providers[ProviderID.make("openai")]?.models["my-gpt-alias"]).toBeUndefined()
+      expect(providers[ProviderID.make("openai")]?.models["my-spaced-gpt-alias"]).toBeUndefined()
+      expect(providers[ProviderID.make("openai")]?.models["my-separated-gpt-alias"]).toBeUndefined()
+      expect(providers[ProviderID.make("openai")]?.models["gpt-5"]).toBeDefined()
+      expect(providers[ProviderID.make("openrouter")]?.models["openai/gpt-5.5"]).toBeUndefined()
+      expect(providers[ProviderID.xai]?.models["grok-4"]).toBeUndefined()
+      expect(providers[ProviderID.xai]?.models["my-old-grok-alias"]).toBeUndefined()
+      expect(providers[ProviderID.xai]?.models["my-grok-alias"]).toBeDefined()
+      expect(providers[ProviderID.xai]?.models["grok-code-fast-1"]).toBeDefined()
+      expect(providers[ProviderID.xai]?.models["grok-code-fast-1:optimized:free"]).toBeUndefined()
+      expect(providers[ProviderID.xai]?.models["grok-4-1-fast"]).toBeDefined()
+      expect(providers[ProviderID.make("zai-coding-plan")]?.models["glm-5v-turbo"]).toBeUndefined()
+      expect(providers[ProviderID.make("zai-coding-plan")]?.models["my-glm-vision-alias"]).toBeUndefined()
+      expect(providers[ProviderID.make("zai-coding-plan")]?.models["my-spaced-glm-vision-alias"]).toBeUndefined()
+      expect(providers[ProviderID.make("zai-coding-plan")]?.models["glm-5"]).toBeDefined()
+    },
+  })
+})
+
+test("xai provider only exposes Grok 4.1 or later models plus grok-code-fast-1", async () => {
+  await using tmp = await tmpdir()
+  await Instance.provide({
+    directory: tmp.path,
+    init: async () => {
+      Env.set("XAI_API_KEY", "test-xai-key")
+    },
+    fn: async () => {
+      const providers = await Provider.list()
+      const xai = providers[ProviderID.xai]
+      expect(xai).toBeDefined()
+      const ids = Object.keys(xai.models)
+      expect(ids.length).toBeGreaterThan(0)
+      expect(ids).not.toContain("grok-4.1")
+      expect(ids).toContain("grok-4-1-fast")
+      expect(ids).toContain("grok-code-fast-1")
+      expect(ids).not.toContain("grok-4")
+      expect(ids).not.toContain("grok-4-fast")
     },
   })
 })
@@ -1109,7 +1263,7 @@ test("provider.sort prioritizes preferred models", () => {
   expect(sorted[0].id).toContain("gpt-5")
   expect(sorted[1].id).toContain("sonnet-4")
   expect(sorted[1].id).toContain("latest")
-  expect(sorted[sorted.length - 1].id).not.toContain("grok-4")
+  expect(sorted[sorted.length - 1].id).not.toContain("grok-4-1-fast")
   expect(sorted[sorted.length - 1].id).not.toContain("sonnet-4")
 })
 
@@ -1124,7 +1278,7 @@ test("multiple providers can be configured simultaneously", async () => {
             xai: {
               options: { timeout: 30000 },
             },
-            alibaba: {
+            "alibaba-coding-plan": {
               options: { timeout: 60000 },
             },
           },
@@ -1136,14 +1290,67 @@ test("multiple providers can be configured simultaneously", async () => {
     directory: tmp.path,
     init: async () => {
       Env.set("XAI_API_KEY", "test-openai-key")
-      Env.set("DASHSCOPE_API_KEY", "test-dashscope-key")
+      Env.set("ALIBABA_CODING_PLAN_API_KEY", "test-coding-plan-key")
     },
     fn: async () => {
       const providers = await Provider.list()
       expect(providers[ProviderID.xai]).toBeDefined()
-      expect(providers[ProviderID.make("alibaba")]).toBeDefined()
+      expect(providers[ProviderID.make("alibaba-coding-plan")]).toBeDefined()
       expect(providers[ProviderID.xai].options.timeout).toBe(30000)
-      expect(providers[ProviderID.make("alibaba")].options.timeout).toBe(60000)
+      expect(providers[ProviderID.make("alibaba-coding-plan")].options.timeout).toBe(60000)
+    },
+  })
+})
+
+test("Alibaba providers keep coding plan and token plan endpoints separate", async () => {
+  await using tmp = await tmpdir()
+  await Instance.provide({
+    directory: tmp.path,
+    init: async () => {
+      Env.set("ALIBABA_CODING_PLAN_API_KEY", "test-coding-plan-key")
+      Env.set("ALIBABA_CODING_PLAN_CN_API_KEY", "test-coding-plan-cn-key")
+      Env.set("ALIBABA_TOKEN_PLAN_API_KEY", "test-token-plan-key")
+      Env.set("ALIBABA_TOKEN_PLAN_CN_API_KEY", "test-token-plan-cn-key")
+    },
+    fn: async () => {
+      const providers = await Provider.list()
+      const codingPlan = providers[ProviderID.make("alibaba-coding-plan")]
+      const codingPlanCn = providers[ProviderID.make("alibaba-coding-plan-cn")]
+      const tokenPlan = providers[ProviderID.make("alibaba-token-plan")]
+      const tokenPlanCn = providers[ProviderID.make("alibaba-token-plan-cn")]
+
+      expect(providers[ProviderID.make("alibaba")]).toBeUndefined()
+      expect(providers[ProviderID.make("alibaba-cn")]).toBeUndefined()
+      expect(codingPlan.name).toBe("Alibaba Coding Plan")
+      expect(codingPlanCn.name).toBe("Alibaba Coding Plan (China)")
+      expect(tokenPlan.name).toBe("Alibaba Token Plan")
+      expect(tokenPlanCn.name).toBe("Alibaba Token Plan (China)")
+      expect(codingPlan.key).toBe("test-coding-plan-key")
+      expect(codingPlanCn.key).toBe("test-coding-plan-cn-key")
+      expect(tokenPlan.key).toBe("test-token-plan-key")
+      expect(tokenPlanCn.key).toBe("test-token-plan-cn-key")
+      expect(Object.keys(codingPlan.models).sort()).toEqual(["MiniMax-M2.5", "deepseek-v3.2", "glm-5", "qwen3.6-plus"])
+      expect(Object.keys(codingPlanCn.models).sort()).toEqual([
+        "MiniMax-M2.5",
+        "deepseek-v3.2",
+        "glm-5",
+        "qwen3.6-plus",
+      ])
+      expect(Object.keys(tokenPlan.models).sort()).toEqual(["MiniMax-M2.5", "deepseek-v3.2", "glm-5", "qwen3.6-plus"])
+      expect(Object.keys(tokenPlanCn.models).sort()).toEqual([
+        "MiniMax-M2.5",
+        "deepseek-v3.2",
+        "glm-5",
+        "qwen3.6-plus",
+      ])
+      expect(codingPlan.models["qwen3.6-plus"].api.url).toBe("https://coding-intl.dashscope.aliyuncs.com/v1")
+      expect(codingPlanCn.models["qwen3.6-plus"].api.url).toBe("https://coding.dashscope.aliyuncs.com/v1")
+      expect(tokenPlan.models["qwen3.6-plus"].api.url).toBe(
+        "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
+      )
+      expect(tokenPlanCn.models["qwen3.6-plus"].api.url).toBe(
+        "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+      )
     },
   })
 })
@@ -1201,7 +1408,7 @@ test("model alias name defaults to alias key when id differs", async () => {
             xai: {
               models: {
                 gpt4: {
-                  id: "grok-4",
+                  id: "grok-4-1-fast",
                   // no name specified - should default to "gpt4" (the key)
                 },
               },
@@ -1561,8 +1768,8 @@ test("getModel returns consistent results", async () => {
       Env.set("XAI_API_KEY", "test-api-key")
     },
     fn: async () => {
-      const model1 = await Provider.getModel(ProviderID.xai, ModelID.make("grok-4"))
-      const model2 = await Provider.getModel(ProviderID.xai, ModelID.make("grok-4"))
+      const model1 = await Provider.getModel(ProviderID.xai, ModelID.make("grok-4-1-fast"))
+      const model2 = await Provider.getModel(ProviderID.xai, ModelID.make("grok-4-1-fast"))
       expect(model1.providerID).toEqual(model2.providerID)
       expect(model1.id).toEqual(model2.id)
       expect(model1).toEqual(model2)
@@ -1651,7 +1858,7 @@ test("ModelNotFoundError for provider includes suggestions", async () => {
     },
     fn: async () => {
       try {
-        await Provider.getModel(ProviderID.make("xia"), ModelID.make("grok-4")) // typo: xia → xai
+        await Provider.getModel(ProviderID.make("xia"), ModelID.make("grok-4-1-fast")) // typo: xia → xai
         expect(true).toBe(false) // Should not reach here
       } catch (e: any) {
         expect(e.data.suggestions).toBeDefined()
@@ -1746,9 +1953,9 @@ test("closest checks multiple query terms in order", async () => {
     },
     fn: async () => {
       // First term won't match, second will
-      const result = await Provider.closest(ProviderID.xai, ["nonexistent", "grok-4"])
+      const result = await Provider.closest(ProviderID.xai, ["nonexistent", "grok-4-1-fast"])
       expect(result).toBeDefined()
-      expect(result?.modelID).toContain("grok-4")
+      expect(result?.modelID).toContain("grok-4-1-fast")
     },
   })
 })
@@ -1923,8 +2130,8 @@ test("xai reasoning models do not auto-generate reasoningEffort variants", async
     },
     fn: async () => {
       const providers = await Provider.list()
-      // grok-4 has reasoning capability
-      const model = providers[ProviderID.xai].models["grok-4"]
+      // grok-4-1-fast has reasoning capability
+      const model = providers[ProviderID.xai].models["grok-4-1-fast"]
       expect(model.capabilities.reasoning).toBe(true)
       expect(model.variants).toBeDefined()
       expect(model.variants).toEqual({})
@@ -1942,7 +2149,7 @@ test("model variants can be disabled via config", async () => {
           provider: {
             xai: {
               models: {
-                "grok-4": {
+                "grok-4-1-fast": {
                   variants: {
                     high: { disabled: true },
                   },
@@ -1961,7 +2168,7 @@ test("model variants can be disabled via config", async () => {
     },
     fn: async () => {
       const providers = await Provider.list()
-      const model = providers[ProviderID.xai].models["grok-4"]
+      const model = providers[ProviderID.xai].models["grok-4-1-fast"]
       expect(model.variants).toBeDefined()
       expect(model.variants!["high"]).toBeUndefined()
       expect(model.variants!["medium"]).toBeUndefined()
@@ -1979,7 +2186,7 @@ test("model variants can be customized via config", async () => {
           provider: {
             xai: {
               models: {
-                "grok-4": {
+                "grok-4-1-fast": {
                   variants: {
                     high: {
                       reasoningEffort: "high",
@@ -2001,7 +2208,7 @@ test("model variants can be customized via config", async () => {
     },
     fn: async () => {
       const providers = await Provider.list()
-      const model = providers[ProviderID.xai].models["grok-4"]
+      const model = providers[ProviderID.xai].models["grok-4-1-fast"]
       expect(model.variants!["high"]).toBeDefined()
       expect(model.variants!["high"].budgetTokens).toBe(20000)
     },
@@ -2018,7 +2225,7 @@ test("disabled key is stripped from variant config", async () => {
           provider: {
             xai: {
               models: {
-                "grok-4": {
+                "grok-4-1-fast": {
                   variants: {
                     max: {
                       disabled: false,
@@ -2040,7 +2247,7 @@ test("disabled key is stripped from variant config", async () => {
     },
     fn: async () => {
       const providers = await Provider.list()
-      const model = providers[ProviderID.xai].models["grok-4"]
+      const model = providers[ProviderID.xai].models["grok-4-1-fast"]
       expect(model.variants!["max"]).toBeDefined()
       expect(model.variants!["max"].disabled).toBeUndefined()
       expect(model.variants!["max"].customField).toBe("test")
@@ -2058,7 +2265,7 @@ test("all variants can be disabled via config", async () => {
           provider: {
             xai: {
               models: {
-                "grok-4": {
+                "grok-4-1-fast": {
                   variants: {
                     high: { disabled: true },
                     medium: { disabled: true },
@@ -2079,7 +2286,7 @@ test("all variants can be disabled via config", async () => {
     },
     fn: async () => {
       const providers = await Provider.list()
-      const model = providers[ProviderID.xai].models["grok-4"]
+      const model = providers[ProviderID.xai].models["grok-4-1-fast"]
       expect(model.variants).toBeDefined()
       expect(Object.keys(model.variants!).length).toBe(0)
     },
@@ -2096,7 +2303,7 @@ test("xai variant config stays explicit without generated reasoningEffort", asyn
           provider: {
             xai: {
               models: {
-                "grok-4": {
+                "grok-4-1-fast": {
                   variants: {
                     high: {
                       extraOption: "custom-value",
@@ -2117,7 +2324,7 @@ test("xai variant config stays explicit without generated reasoningEffort", asyn
     },
     fn: async () => {
       const providers = await Provider.list()
-      const model = providers[ProviderID.xai].models["grok-4"]
+      const model = providers[ProviderID.xai].models["grok-4-1-fast"]
       expect(model.variants!["high"]).toBeDefined()
       expect(model.variants!["high"].reasoningEffort).toBeUndefined()
       expect(model.variants!["high"].extraOption).toBe("custom-value")
@@ -2135,7 +2342,7 @@ test("variants filtered in second pass for database models", async () => {
           provider: {
             xai: {
               models: {
-                "grok-4": {
+                "grok-4-1-fast": {
                   variants: {
                     high: { disabled: true },
                   },
@@ -2154,7 +2361,7 @@ test("variants filtered in second pass for database models", async () => {
     },
     fn: async () => {
       const providers = await Provider.list()
-      const model = providers[ProviderID.xai].models["grok-4"]
+      const model = providers[ProviderID.xai].models["grok-4-1-fast"]
       expect(model.variants).toBeDefined()
       expect(model.variants!["high"]).toBeUndefined()
       expect(model.variants!["medium"]).toBeUndefined()

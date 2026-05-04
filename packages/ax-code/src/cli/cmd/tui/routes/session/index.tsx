@@ -672,9 +672,6 @@ export function Session() {
       category: "Debugging",
       enabled: Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE,
       hidden: !Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE,
-      slash: {
-        name: "debug",
-      },
       onSelect: (dialog) => {
         promptRef.current?.set({
           input:
@@ -691,9 +688,6 @@ export function Session() {
       category: "Debugging",
       enabled: Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE,
       hidden: !Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE,
-      slash: {
-        name: "blast-radius",
-      },
       onSelect: (dialog) => {
         promptRef.current?.set({
           input:
@@ -710,9 +704,6 @@ export function Session() {
       category: "Debugging",
       enabled: Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE,
       hidden: !Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE,
-      slash: {
-        name: "dedup",
-      },
       onSelect: (dialog) => {
         promptRef.current?.set({
           input: "Run dedup_scan on this project and report the top clusters ranked by extraction value.",
@@ -728,9 +719,6 @@ export function Session() {
       category: "Debugging",
       enabled: Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE,
       hidden: !Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE,
-      slash: {
-        name: "hardcode",
-      },
       onSelect: (dialog) => {
         promptRef.current?.set({
           input:
@@ -747,9 +735,6 @@ export function Session() {
       category: "Debugging",
       enabled: Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE,
       hidden: !Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE,
-      slash: {
-        name: "refactor",
-      },
       onSelect: (dialog) => {
         promptRef.current?.set({
           input:
@@ -766,9 +751,6 @@ export function Session() {
       category: "Debugging",
       enabled: Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE,
       hidden: !Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE,
-      slash: {
-        name: "plans",
-      },
       onSelect: (dialog) => {
         const plans = sync.data.debugEngine.plans
         if (plans.length === 0) {
@@ -805,9 +787,6 @@ export function Session() {
       keybind: "session_unshare",
       category: "Session",
       enabled: !!session()?.share?.url,
-      slash: {
-        name: "unshare",
-      },
       onSelect: async (dialog) => {
         await sdk.client.session
           .unshare({

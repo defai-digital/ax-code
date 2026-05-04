@@ -13,7 +13,6 @@ import { DialogModel } from "./dialog-model"
 import { useKeyboard } from "@opentui/solid"
 import { Clipboard } from "@tui/util/clipboard"
 import { useToast } from "../ui/toast"
-import { resolveCliModel } from "@/provider/cli/resolve"
 import { which } from "@/util/which"
 import { Log } from "@/util/log"
 
@@ -25,21 +24,35 @@ const CLI_BINARIES: Record<string, string> = {
 
 const OFFLINE_PROVIDERS = new Set(["ax-serving", "ollama", "lmstudio"])
 const CLI_PROVIDERS = new Set(["claude-code", "gemini-cli", "codex-cli"])
-const HIDDEN_PROVIDERS = new Set(["google", "github-copilot", "alibaba"])
+const HIDDEN_PROVIDERS = new Set(["google", "github-copilot"])
 
 const OFFLINE_PROVIDER_HOSTS: Record<string, { envVar: string; defaultHost: string }> = {
   "ax-serving": { envVar: "AX_SERVING_HOST", defaultHost: "http://localhost:18080" },
   ollama: { envVar: "OLLAMA_HOST", defaultHost: "http://localhost:11434" },
-  lmstudio: { envVar: "LMSTUDIO_HOST", defaultHost: "http://localhost:1234" },
+  lmstudio: { envVar: "LMSTUDIO_HOST", defaultHost: "http://127.0.0.1:1234" },
 }
 
-function offlineProviderHint(id: string): string {
-  const cfg = OFFLINE_PROVIDER_HOSTS[id]
-  if (!cfg) return "not running"
-  const host = process.env[cfg.envVar] ?? cfg.defaultHost
-  return `not running on ${host}`
+function offlineProviderHint() {
+  return "not running"
 }
 const log = Log.create({ service: "tui.dialog-provider" })
+
+function normalizeOfflineProviderBaseURL(input: string) {
+  const trimmed = input.trim()
+  if (!trimmed) throw new Error("Endpoint URL is required")
+  const withProtocol = /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed) ? trimmed : `http://${trimmed}`
+  const url = new URL(withProtocol)
+  const normalized = url.toString().replace(/\/+$/, "")
+  return normalized.endsWith("/v1") ? normalized : `${normalized}/v1`
+}
+
+function offlineProviderPreset(id: string, config: unknown) {
+  const cfg = OFFLINE_PROVIDER_HOSTS[id]
+  if (!cfg) return ""
+  const providerConfig = (config as { provider?: Record<string, { options?: { baseURL?: string } }> } | undefined)
+    ?.provider?.[id]
+  return providerConfig?.options?.baseURL ?? process.env[cfg.envVar] ?? cfg.defaultHost
+}
 
 function runProviderDialogAction(input: {
   providerID: string
@@ -83,7 +96,7 @@ export function createDialogProviderOptions() {
         return {
           title: provider.name,
           value: provider.id,
-          description: isConnected ? "Connected" : isOfflineKind ? offlineProviderHint(provider.id) : undefined,
+          description: isConnected ? "Connected" : isOfflineKind ? offlineProviderHint() : undefined,
           descriptionFg: isConnected ? theme.warning : isOfflineKind ? theme.textMuted : undefined,
           category: isOfflineKind ? "Offline" : CLI_PROVIDERS.has(provider.id) ? "Online - CLI" : "Online",
           onSelect() {
@@ -94,6 +107,85 @@ export function createDialogProviderOptions() {
               toast,
               run: async () => {
                 const isConnected = sync.data.provider_next.connected.includes(provider.id)
+
+                if (isOfflineKind) {
+                  const saveEndpoint = async (value: string) => {
+                    const baseURL = normalizeOfflineProviderBaseURL(value)
+                    await sdk.client.config.update({
+                      provider: {
+                        [provider.id]: {
+                          options: {
+                            baseURL,
+                          },
+                        },
+                      },
+                    } as any)
+                    await sdk.client.instance.dispose()
+                    await sync.bootstrap()
+                    toast.show({ variant: "success", message: `Updated ${provider.name} endpoint` })
+                    if (sync.data.provider_next.connected.includes(provider.id)) {
+                      dialog.replace(() => <DialogModel providerID={provider.id} />)
+                    } else {
+                      dialog.clear()
+                    }
+                  }
+
+                  const promptEndpoint = () =>
+                    dialog.replace(() => (
+                      <DialogPrompt
+                        title={`${provider.name} endpoint`}
+                        value={offlineProviderPreset(provider.id, sync.data.config)}
+                        placeholder="http://localhost:1234"
+                        description={() => (
+                          <box gap={1}>
+                            <text fg={theme.textMuted}>Press enter to use the preset, or edit the host and port.</text>
+                            <text fg={theme.textMuted}>You can include /v1, but ax-code will add it if omitted.</text>
+                          </box>
+                        )}
+                        onConfirm={(value) => {
+                          if (!value) return
+                          runProviderDialogAction({
+                            providerID: provider.id,
+                            action: "offline-endpoint-confirm",
+                            fallbackMessage: `Failed to update ${provider.name} endpoint`,
+                            toast,
+                            run: () => saveEndpoint(value),
+                          })
+                        }}
+                      />
+                    ))
+
+                  if (isConnected) {
+                    const action = await new Promise<"use" | "endpoint" | null>((resolve) => {
+                      dialog.replace(
+                        () => (
+                          <DialogSelect
+                            title={`${provider.name} — connected`}
+                            options={[
+                              {
+                                title: "Select a model",
+                                value: "use" as const,
+                                description: "Use discovered local models",
+                              },
+                              {
+                                title: "Change endpoint",
+                                value: "endpoint" as const,
+                                description: offlineProviderPreset(provider.id, sync.data.config),
+                              },
+                            ]}
+                            onSelect={(option) => resolve(option.value)}
+                          />
+                        ),
+                        () => resolve(null),
+                      )
+                    })
+                    if (action === "use") dialog.replace(() => <DialogModel providerID={provider.id} />)
+                    else if (action === "endpoint") promptEndpoint()
+                  } else {
+                    promptEndpoint()
+                  }
+                  return
+                }
 
                 // CLI providers — check binary availability, support connect/disconnect
                 if (CLI_PROVIDERS.has(provider.id)) {
@@ -119,15 +211,6 @@ export function createDialogProviderOptions() {
                     return
                   }
 
-                  const info = await resolveCliModel(provider.id).catch((error) => {
-                    toast.show({
-                      variant: "error",
-                      message: error instanceof Error ? error.message : `Failed to inspect ${provider.name}`,
-                    })
-                    return undefined
-                  })
-                  if (!info) return
-
                   if (isConnected) {
                     const action = await new Promise<"use" | "disconnect" | null>((resolve) => {
                       dialog.replace(
@@ -136,9 +219,9 @@ export function createDialogProviderOptions() {
                             title={`${provider.name} — connected`}
                             options={[
                               {
-                                title: "Select a model",
+                                title: "Use CLI default",
                                 value: "use" as const,
-                                description: `Current: ${info.model}`,
+                                description: "Uses your CLI configuration",
                               },
                               {
                                 title: "Disconnect",
@@ -153,7 +236,7 @@ export function createDialogProviderOptions() {
                       )
                     })
                     if (action === "use") {
-                      dialog.replace(() => <DialogModel providerID={provider.id} />)
+                      dialog.clear()
                     } else if (action === "disconnect") {
                       await sdk.client.auth.remove({ providerID: provider.id })
                       await sdk.client.instance.dispose()
@@ -170,7 +253,7 @@ export function createDialogProviderOptions() {
                     await sdk.client.instance.dispose()
                     await sync.bootstrap()
                     toast.show({ variant: "success", message: `Connected ${provider.name}` })
-                    dialog.replace(() => <DialogModel providerID={provider.id} />)
+                    dialog.clear()
                   }
                   return
                 }

@@ -374,9 +374,11 @@ export function Autocomplete(props: {
 
   const commands = createMemo((): AutocompleteOption[] => {
     const results: AutocompleteOption[] = [...command.slashes()]
+    const defaultCommandSlashAllowlist = new Set(["init", "review", "impact"])
 
     for (const serverCommand of sync.data.command) {
       if (serverCommand.source === "skill") continue
+      if (serverCommand.source === "command" && !defaultCommandSlashAllowlist.has(serverCommand.name)) continue
       const label = serverCommand.source === "mcp" ? ":mcp" : ""
       results.push({
         display: "/" + serverCommand.name + label,

@@ -230,6 +230,32 @@ export namespace AutoIndex {
       })
       return
     }
+
+    // A completed full-index pass can legitimately produce an empty
+    // graph: no indexable source files, no available semantic LSP, or
+    // a narrow scope with no code symbols. That state is persisted in
+    // code_index_cursor even when node_count is zero. Treat it as
+    // "indexed empty" instead of "never indexed" so entering the same
+    // project does not re-run the same background scan every time the
+    // process restarts. Manual `ax-code index` remains the explicit
+    // refresh path when the user wants to retry.
+    const cursor = CodeGraphQuery.getCursor(projectID)
+    if (cursor && cursor.node_count === 0 && cursor.edge_count === 0) {
+      log.info("skipping: graph already indexed empty", {
+        projectID,
+        lastIndexedAt: cursor.time_updated,
+      })
+      setState(projectID, {
+        state: "idle",
+        completed: 0,
+        total: 0,
+        startedAt: null,
+        finishedAt: cursor.time_updated,
+        error: null,
+      })
+      return
+    }
+
     if (Flag.AX_CODE_DISABLE_AUTO_INDEX) {
       setState(projectID, {
         state: "idle",

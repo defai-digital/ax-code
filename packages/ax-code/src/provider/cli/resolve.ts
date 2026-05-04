@@ -10,9 +10,9 @@ export interface CliModelInfo {
 const HOME = homedir()
 
 const DEFAULTS: Record<string, string> = {
-  "claude-code": "claude-sonnet-4-6",
-  "gemini-cli": "gemini-2.5-pro",
-  "codex-cli": "gpt-5.4",
+  "claude-code": "claude-code",
+  "gemini-cli": "gemini-cli",
+  "codex-cli": "codex-cli",
 }
 
 async function readJson(path: string): Promise<Record<string, any> | null> {

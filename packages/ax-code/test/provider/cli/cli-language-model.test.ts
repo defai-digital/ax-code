@@ -299,4 +299,21 @@ describe("CliLanguageModel", () => {
       restoreAutonomous()
     }
   })
+
+  test("omits --model when using a CLI provider default model", () => {
+    const cmd = buildCliCommand(
+      {
+        providerID: "gemini-cli",
+        modelID: "gemini-cli",
+        binary: "gemini",
+        args: ["--output-format", "stream-json"],
+        parser: geminiCliParser,
+        promptMode: "arg",
+        promptFlag: "-p",
+      },
+      "write file",
+    )
+    expect(cmd).not.toContain("--model")
+    expect(cmd.slice(-2)).toEqual(["-p", "write file"])
+  })
 })

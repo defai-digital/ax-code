@@ -17,6 +17,7 @@ import { Filesystem } from "@/util/filesystem"
 import { optionalStateErrorMessage, shouldSurfaceOptionalStateError } from "@tui/util/optional-state"
 import { resolveCurrentAgent } from "./local-util"
 import { Log } from "@/util/log"
+import { modelDisplayInfo } from "@tui/component/model-vision-label"
 
 const log = Log.create({ service: "tui.local" })
 
@@ -287,14 +288,17 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
               provider: "Connect a provider",
               model: "No provider selected",
               reasoning: false,
+              vision: false,
             }
           }
           const provider = sync.data.provider.find((x) => x.id === value.providerID)
           const info = provider?.models[value.modelID]
+          const display = modelDisplayInfo(value.modelID, info)
           return {
             provider: provider?.name ?? value.providerID,
-            model: info?.name ?? value.modelID,
+            model: display.label,
             reasoning: info?.capabilities?.reasoning ?? false,
+            vision: display.vision,
           }
         }),
         cycle(direction: 1 | -1) {

@@ -594,9 +594,6 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
             value: "workspace.list",
             category: "Workspace",
             suggested: true,
-            slash: {
-              name: "workspaces",
-            },
             onSelect: () => {
               void showWorkspaceListDialog()
             },
@@ -696,9 +693,6 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       title: "Toggle MCPs",
       value: "mcp.list",
       category: "Agent",
-      slash: {
-        name: "mcps",
-      },
       onSelect: () => {
         void showMcpDialog()
       },
@@ -749,9 +743,6 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       title: "View status",
       keybind: "status_view",
       value: "ax-code.status",
-      slash: {
-        name: "status",
-      },
       onSelect: () => {
         void showStatusDialog()
       },
@@ -761,9 +752,6 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       title: "Switch theme",
       value: "theme.switch",
       keybind: "theme_list",
-      slash: {
-        name: "themes",
-      },
       onSelect: () => {
         void showThemeListDialog()
       },
@@ -922,7 +910,6 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       title: sync.data.smartLlm ? "Turn fast-model routing off" : "Turn fast-model routing on",
       value: "app.toggle.smart_llm",
       category: "System",
-      slash: { name: "smart-llm", aliases: ["toggle-smart-llm", "fast-model"] },
       onSelect: (dialog) => {
         const previous = sync.data.smartLlm
         const next = !previous
@@ -948,7 +935,6 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       title: sync.data.autonomous ? "Turn autonomous off" : "Turn autonomous on",
       value: "app.toggle.autonomous",
       category: "System",
-      slash: { name: "autonomous", aliases: ["toggle-autonomous"] },
       onSelect: (dialog) => {
         const next = !sync.data.autonomous
         autonomousPutController?.abort()
@@ -973,7 +959,6 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       title: sync.data.isolation.mode === "full-access" ? "Turn sandbox on" : "Turn sandbox off",
       value: "app.toggle.sandbox",
       category: "System",
-      slash: { name: "sandbox", aliases: ["toggle-sandbox"] },
       onSelect: (dialog) => {
         const previousMode = sync.data.isolation.mode
         const previousNetwork = sync.data.isolation.network

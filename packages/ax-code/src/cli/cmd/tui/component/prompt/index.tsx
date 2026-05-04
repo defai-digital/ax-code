@@ -77,6 +77,7 @@ import {
   type SubmitStage,
 } from "./submit-state"
 import { footerLivenessIndicator, footerLivenessTextFrame } from "./liveness-view-model"
+import { parsePastedFilePath } from "./prompt-filepath"
 
 const log = Log.create({ service: "tui.prompt" })
 
@@ -1626,9 +1627,10 @@ export function Prompt(props: PromptProps) {
                   return
                 }
 
-                // trim ' from the beginning and end of the pasted content. just
-                // ' and nothing else
-                const filepath = pastedContent.replace(/^'+|'+$/g, "").replace(/\\ /g, " ")
+                // Drag/drop into terminal arrives as pasted text with shell-style
+                // backslash escapes (spaces, iCloud's com\~apple\~CloudDocs,
+                // parentheses, etc.). Decode those before filesystem access.
+                const filepath = parsePastedFilePath(pastedContent)
                 const isUrl = /^(https?):\/\//.test(filepath)
                 if (!isUrl) {
                   try {

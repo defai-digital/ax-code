@@ -40,7 +40,17 @@ for (const id of localProviderIDs) {
 }
 
 // Remove providers we don't support
-for (const id of ["groq", "azure", "azure-cognitive-services", "moonshotai", "moonshotai-cn", "kimi-for-coding"]) {
+for (const id of [
+  "groq",
+  "azure",
+  "azure-cognitive-services",
+  "moonshotai",
+  "moonshotai-cn",
+  "kimi-for-coding",
+  "alibaba",
+  "alibaba-cn",
+  "zai",
+]) {
   delete fetched[id]
 }
 
@@ -51,27 +61,61 @@ for (const id of ["groq", "azure", "azure-cognitive-services", "moonshotai", "mo
 // models.dev tags inconsistently across providers.
 //
 //   - Kimi (Moonshot): unsupported entirely.
-//   - Grok: only v4+ and grok-code-* (Grok 2/3 and unversioned betas
-//     drop). The grok-code line is xAI's coding model and is treated
-//     as v4-era for our purposes (transform.ts already groups them).
-//   - GLM (Z.AI): only v5+ (every glm-4.x / glm-3.x drops).
+//   - Grok: only v4.1+ plus the explicit grok-code-fast-1 coding model
+//     (Grok 4.0, other unversioned grok-code-* aliases, Grok 2/3, and
+//     unversioned betas drop).
+//   - GLM (Z.AI): only non-vision v5+ (glm-5v and every glm-4.x / glm-3.x drop).
+//   - Gemini: only v3+ (Gemini 1.x/2.x drops from ax-code's model picker).
+//   - GPT-5.5: hidden from API/provider model pickers; use Codex CLI default instead.
 //
 // To extend: add another entry to UNSUPPORTED_PROBES.
 type RawModel = { family?: string; id?: string; name?: string }
+function normalizeModelProbe(value: string): string {
+  return value.toLowerCase().trim().replace(/[\s_]+/g, "-")
+}
 function probesOf(m: RawModel): string[] {
-  return [m.family, m.id, m.name].filter((s): s is string => typeof s === "string").map((s) => s.toLowerCase())
+  return [m.family, m.id, m.name]
+    .filter((s): s is string => typeof s === "string")
+    .flatMap((s) => {
+      const lower = s.toLowerCase()
+      const normalized = normalizeModelProbe(lower)
+      return [lower, normalized, normalized.replaceAll("-", "")]
+    })
+}
+function isGrokProbe(probe: string): boolean {
+  return /(^|[^a-z0-9])grok([^a-z0-9]|$)/.test(probe) || probe.includes("grok-")
+}
+function isGrok41OrLaterProbe(probe: string): boolean {
+  const match = probe.match(/grok-(\d+)(?:[.-]?(\d+))?/)
+  if (!match) return false
+  const major = Number(match[1])
+  const minor = match[2] === undefined ? 0 : Number(match[2])
+  return major > 4 || (major === 4 && minor >= 1)
+}
+function isExactGrok41Probe(probe: string): boolean {
+  const finalSegment = probe.split("/").pop()
+  return finalSegment === "grok-4.1" || finalSegment === "grok-4-1"
+}
+function isAllowedGrokCodingProbe(probe: string): boolean {
+  return probe.split("/").pop() === "grok-code-fast-1"
 }
 function isUnsupportedModel(m: RawModel): boolean {
   const probes = probesOf(m)
   // Kimi: anything tagged kimi.
   if (probes.some((p) => p.includes("kimi"))) return true
-  // Grok: drop if any probe mentions grok and none mentions grok-4*/grok-code*.
-  if (probes.some((p) => /\bgrok\b|grok-/.test(p))) {
-    const supported = probes.some((p) => /grok-4|grok-code/.test(p))
+  // Grok: drop if any probe mentions grok and none has a 4.1+ version or explicit coding exception.
+  if (probes.some(isGrokProbe)) {
+    if (probes.some(isExactGrok41Probe)) return true
+    const supported = probes.some((p) => isGrok41OrLaterProbe(p) || isAllowedGrokCodingProbe(p))
     if (!supported) return true
   }
   // GLM: drop if any probe mentions glm-N where N < 5.
+  if (probes.some((p) => p.includes("glm-5v") || p.includes("glm5v"))) return true
   if (probes.some((p) => /\bglm-[0-4]\b/.test(p))) return true
+  // Gemini: drop any Gemini generation before 3.
+  if (probes.some((p) => /\bgemini-[12](?:\.|-)/.test(p))) return true
+  // GPT-5.5: do not expose via API/provider pickers; Codex CLI owns the default model choice.
+  if (probes.some((p) => p.includes("gpt-5.5") || p.includes("gpt-5-5") || p.includes("gpt55"))) return true
   return false
 }
 for (const provider of Object.values(fetched) as Array<{ models?: Record<string, RawModel> }>) {
@@ -81,18 +125,61 @@ for (const provider of Object.values(fetched) as Array<{ models?: Record<string,
   }
 }
 
-// Trim alibaba providers to supported models only
-const alibabaModels = ["qwen3.6-plus", "qwen3.5-flash"]
-for (const id of ["alibaba", "alibaba-cn", "alibaba-coding-plan", "alibaba-coding-plan-cn"]) {
+function cloneProvider(sourceID: string, targetID: string, overrides: { name: string; api: string; env: string[] }) {
+  const source = fetched[sourceID]
+  if (!source) return
+  fetched[targetID] = {
+    ...JSON.parse(JSON.stringify(source)),
+    id: targetID,
+    ...overrides,
+  }
+}
+
+cloneProvider("alibaba-coding-plan", "alibaba-token-plan", {
+  name: "Alibaba Token Plan",
+  api: "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
+  env: ["ALIBABA_TOKEN_PLAN_INTL_API_KEY", "ALIBABA_TOKEN_PLAN_API_KEY"],
+})
+cloneProvider("alibaba-coding-plan-cn", "alibaba-token-plan-cn", {
+  name: "Alibaba Token Plan (China)",
+  api: "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+  env: ["ALIBABA_TOKEN_PLAN_CN_API_KEY", "ALIBABA_TOKEN_PLAN_API_KEY"],
+})
+
+// Trim Alibaba plan providers to the text/reasoning models supported by the plan.
+// Image-only models (qwen-image-*, wan*) are intentionally omitted because ax-code
+// uses this provider list for chat/code LLM selection.
+const alibabaModels = ["qwen3.6-plus", "deepseek-v3.2", "glm-5", "MiniMax-M2.5"]
+const alibabaModelFallbackProviders: Record<string, string[]> = {
+  "deepseek-v3.2": ["302ai", "ollama-cloud", "cortecs", "llmgateway"],
+  "glm-5": ["tencent-coding-plan", "zhipuai", "302ai", "opencode"],
+  "MiniMax-M2.5": ["minimax-coding-plan", "minimax-cn-coding-plan", "minimax"],
+}
+for (const id of [
+  "alibaba-coding-plan",
+  "alibaba-coding-plan-cn",
+  "alibaba-token-plan",
+  "alibaba-token-plan-cn",
+]) {
   if (!fetched[id]) continue
   const models = fetched[id].models ?? {}
   const kept: Record<string, unknown> = {}
   for (const mid of alibabaModels) {
     if (models[mid]) kept[mid] = models[mid]
-  }
-  // If models.dev doesn't have a model for this region, copy from alibaba-cn
-  if (!kept["qwen3.5-flash"] && fetched["alibaba-cn"]?.models?.["qwen3.5-flash"]) {
-    kept["qwen3.5-flash"] = JSON.parse(JSON.stringify(fetched["alibaba-cn"].models["qwen3.5-flash"]))
+    if (kept[mid]) continue
+
+    const existingModel = existing[id]?.models?.[mid]
+    if (existingModel) {
+      kept[mid] = JSON.parse(JSON.stringify(existingModel))
+      continue
+    }
+
+    for (const fallbackID of alibabaModelFallbackProviders[mid] ?? []) {
+      const fallback = fetched[fallbackID]?.models?.[mid] ?? existing[fallbackID]?.models?.[mid]
+      if (!fallback) continue
+      kept[mid] = JSON.parse(JSON.stringify(fallback))
+      break
+    }
   }
   fetched[id].models = kept
 }
@@ -121,13 +208,29 @@ for (const provider of Object.values(fetched) as Array<{ models?: Record<string,
 }
 
 // Apply display name overrides
-const nameOverrides: Record<string, string> = {
-  alibaba: "Alibaba (Standard API)",
-  "alibaba-cn": "Alibaba (Standard API, China)",
-  zai: "Z.AI (Standard API)",
-}
+const nameOverrides: Record<string, string> = {}
 for (const [id, name] of Object.entries(nameOverrides)) {
   if (fetched[id]) fetched[id].name = name
+}
+
+const apiOverrides: Record<string, string> = {
+  "alibaba-coding-plan": "https://coding-intl.dashscope.aliyuncs.com/v1",
+  "alibaba-coding-plan-cn": "https://coding.dashscope.aliyuncs.com/v1",
+  "alibaba-token-plan": "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
+  "alibaba-token-plan-cn": "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+}
+for (const [id, api] of Object.entries(apiOverrides)) {
+  if (fetched[id]) fetched[id].api = api
+}
+
+const envOverrides: Record<string, string[]> = {
+  "alibaba-coding-plan": ["ALIBABA_CODING_PLAN_INTL_API_KEY", "ALIBABA_CODING_PLAN_API_KEY"],
+  "alibaba-coding-plan-cn": ["ALIBABA_CODING_PLAN_CN_API_KEY", "ALIBABA_CODING_PLAN_API_KEY"],
+  "alibaba-token-plan": ["ALIBABA_TOKEN_PLAN_INTL_API_KEY", "ALIBABA_TOKEN_PLAN_API_KEY"],
+  "alibaba-token-plan-cn": ["ALIBABA_TOKEN_PLAN_CN_API_KEY", "ALIBABA_TOKEN_PLAN_API_KEY"],
+}
+for (const [id, env] of Object.entries(envOverrides)) {
+  if (fetched[id]) fetched[id].env = env
 }
 
 // Rename ax-studio -> ax-serving if models.dev still uses old name

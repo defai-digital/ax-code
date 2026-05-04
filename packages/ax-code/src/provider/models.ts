@@ -14,44 +14,72 @@ export namespace ModelsDev {
     return id.toLowerCase().includes("gemini-3")
   }
 
-  function openai4(id: string) {
-    const lower = id.toLowerCase()
-    if (!lower.includes("gpt")) return true
-    if (lower.includes("gpt-oss")) return true
-    return lower.includes("gpt-4") || lower.includes("gpt-5")
+  function normalizeModelProbe(value: string) {
+    return value.toLowerCase().trim().replace(/[\s_]+/g, "-")
   }
 
-  function grok4(id: string) {
-    const lower = id.toLowerCase()
-    if (!lower.includes("grok")) return true
-    // Grok-code is xAI's coding line, contemporaneous with Grok 4.
-    if (lower.includes("grok-code")) return true
-    // Allow Grok 4 and any future Grok N≥4. Parsing the version digit
-    // (rather than substring matching "grok-4") so a future grok-5
-    // doesn't get accidentally filtered out.
-    const m = lower.match(/grok-(\d+)/)
-    if (!m) return false // grok-beta, grok-vision-beta — no version, drop
-    return parseInt(m[1], 10) >= 4
+  function modelProbes(modelID: string, model?: { id?: unknown; name?: unknown; family?: unknown }) {
+    return [modelID, model?.id, model?.name, model?.family]
+      .filter((value): value is string => typeof value === "string")
+      .flatMap((value) => {
+        const lower = value.toLowerCase()
+        const normalized = normalizeModelProbe(lower)
+        return [lower, normalized, normalized.replaceAll("-", "")]
+      })
   }
 
-  function glm5(id: string) {
-    const lower = id.toLowerCase()
-    if (!lower.includes("glm")) return true
-    // Allow GLM 5 and any future GLM N≥5. Drops glm-3.x / glm-4.x.
-    const m = lower.match(/glm-(\d+)/)
-    if (!m) return false
-    return parseInt(m[1], 10) >= 5
+  function openai4(probes: string[]) {
+    if (!probes.some((probe) => probe.includes("gpt"))) return true
+    if (probes.some((probe) => probe.includes("gpt-oss"))) return true
+    if (probes.some((probe) => probe.includes("gpt-5.5") || probe.includes("gpt-5-5") || probe.includes("gpt55")))
+      return false
+    return probes.some((probe) => probe.includes("gpt-4") || probe.includes("gpt-5"))
   }
 
-  function supported(providerID: string, modelID: string) {
-    if (providerID === "google" || providerID === "google-vertex") {
-      if (!modelID.toLowerCase().includes("gemini")) return true
-      return gemini3(modelID)
+  function grok41OrAllowedCodingModel(probes: string[]) {
+    if (!probes.some((probe) => probe.includes("grok"))) return true
+    if (probes.some((probe) => {
+      const finalSegment = probe.split("/").pop()
+      return finalSegment === "grok-4.1" || finalSegment === "grok-4-1"
+    }))
+      return false
+    if (probes.some((probe) => probe.split("/").pop() === "grok-code-fast-1")) return true
+    // Allow Grok 4.1 and any future Grok N>4. Parsing major/minor
+    // avoids keeping Grok 4.0 variants like grok-4, grok-4-fast, or
+    // other unversioned grok-code-* aliases.
+    for (const probe of probes) {
+      const m = probe.match(/grok-(\d+)(?:[.-]?(\d+))?/)
+      if (!m) continue
+      const major = Number(m[1])
+      const minor = m[2] === undefined ? 0 : Number(m[2])
+      if (major > 4 || (major === 4 && minor >= 1)) return true
     }
-    if (providerID === "openai") return openai4(modelID)
+    return false // grok-beta, grok-vision-beta — no 4.1+ version, drop
+  }
+
+  function glm5(probes: string[]) {
+    if (!probes.some((probe) => probe.includes("glm"))) return true
+    if (probes.some((probe) => probe.includes("glm-5v") || probe.includes("glm5v"))) return false
+    // Allow non-vision GLM 5 and any future GLM N≥5. Drops glm-5v and glm-3.x / glm-4.x.
+    for (const probe of probes) {
+      const m = probe.match(/glm-(\d+)/)
+      if (!m) continue
+      if (parseInt(m[1], 10) >= 5) return true
+    }
+    return false
+  }
+
+  function supported(providerID: string, modelID: string, model?: { id?: unknown; name?: unknown; family?: unknown }) {
+    const probes = modelProbes(modelID, model)
+    const lower = probes[0] ?? modelID.toLowerCase()
+    if (probes.some((probe) => probe.includes("gpt-5.5"))) return false
+    if (providerID === "google" || providerID === "google-vertex") {
+      if (!lower.includes("gemini")) return true
+      return gemini3(lower)
+    }
+    if (providerID === "openai") return openai4(probes)
     if (providerID === "xai") {
-      if (!modelID.toLowerCase().includes("grok")) return true
-      return grok4(modelID)
+      return grok41OrAllowedCodingModel(probes)
     }
     if (
       providerID === "zhipuai" ||
@@ -59,7 +87,7 @@ export namespace ModelsDev {
       providerID === "zai" ||
       providerID === "zai-coding-plan"
     )
-      return glm5(modelID)
+      return glm5(probes)
     return true
   }
 
@@ -69,7 +97,9 @@ export namespace ModelsDev {
         id,
         {
           ...provider,
-          models: Object.fromEntries(Object.entries(provider.models).filter(([modelID]) => supported(id, modelID))),
+          models: Object.fromEntries(
+            Object.entries(provider.models).filter(([modelID, model]) => supported(id, modelID, model)),
+          ),
         },
       ]),
     ) as Record<string, Provider>

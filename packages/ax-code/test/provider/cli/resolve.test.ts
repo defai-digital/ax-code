@@ -12,9 +12,9 @@ describe("resolveCliModel", () => {
     delete process.env.ANTHROPIC_MODEL
     try {
       const info = await resolveCliModel("claude-code")
-      // If no settings file and no env var, should return default
+      // If no settings file and no env var, defer to the CLI's own default model.
       if (info.source === "default") {
-        expect(info.model).toBe("claude-sonnet-4-6")
+        expect(info.model).toBe("claude-code")
       }
     } finally {
       if (original !== undefined) process.env.ANTHROPIC_MODEL = original
@@ -53,7 +53,7 @@ describe("resolveCliModel", () => {
     try {
       const info = await resolveCliModel("gemini-cli")
       if (info.source === "default") {
-        expect(info.model).toBe("gemini-2.5-pro")
+        expect(info.model).toBe("gemini-cli")
       }
     } finally {
       if (original !== undefined) process.env.GEMINI_MODEL = original
@@ -63,7 +63,7 @@ describe("resolveCliModel", () => {
   test("returns default for codex-cli when no config", async () => {
     const info = await resolveCliModel("codex-cli")
     if (info.source === "default") {
-      expect(info.model).toBe("gpt-5.4")
+      expect(info.model).toBe("codex-cli")
     }
   })
 

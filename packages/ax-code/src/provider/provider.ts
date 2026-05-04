@@ -39,8 +39,43 @@ import {
 
 export namespace Provider {
   const log = Log.create({ service: "provider" })
-  function supported(providerID: string, modelID: string) {
-    const lower = modelID.toLowerCase()
+  function normalizeModelProbe(value: string) {
+    return value.toLowerCase().trim().replace(/[\s_]+/g, "-")
+  }
+
+  function modelProbes(modelID: string, model?: { id?: unknown; name?: unknown; family?: unknown }) {
+    return [modelID, model?.id, model?.name, model?.family]
+      .filter((value): value is string => typeof value === "string")
+      .flatMap((value) => {
+        const lower = value.toLowerCase()
+        const normalized = normalizeModelProbe(lower)
+        return [lower, normalized, normalized.replaceAll("-", "")]
+      })
+  }
+
+  function supportsGrok41OrAllowedCodingModel(probes: string[]) {
+    if (!probes.some((probe) => probe.includes("grok"))) return true
+    if (probes.some((probe) => {
+      const finalSegment = probe.split("/").pop()
+      return finalSegment === "grok-4.1" || finalSegment === "grok-4-1"
+    }))
+      return false
+    if (probes.some((probe) => probe.split("/").pop() === "grok-code-fast-1")) return true
+    for (const probe of probes) {
+      const m = probe.match(/grok-(\d+)(?:[.-]?(\d+))?/)
+      if (!m) continue
+      const major = Number(m[1])
+      const minor = m[2] === undefined ? 0 : Number(m[2])
+      if (major > 4 || (major === 4 && minor >= 1)) return true
+    }
+    return false
+  }
+
+  function supported(providerID: string, modelID: string, model?: { id?: unknown; name?: unknown; family?: unknown }) {
+    const probes = modelProbes(modelID, model)
+    const lower = probes[0] ?? modelID.toLowerCase()
+    if (probes.some((probe) => probe.includes("gpt-5.5") || probe.includes("gpt-5-5") || probe.includes("gpt55")))
+      return false
     if (providerID === "google" || providerID === "google-vertex") {
       if (!lower.includes("gemini")) return true
       return lower.includes("gemini-3")
@@ -51,13 +86,7 @@ export namespace Provider {
       return lower.includes("gpt-4") || lower.includes("gpt-5")
     }
     if (providerID === "xai") {
-      if (!lower.includes("grok")) return true
-      if (lower.includes("grok-code")) return true
-      // Allow Grok 4+ (parse version so future grok-5+ pass; substring
-      // matching "grok-4" would block them).
-      const m = lower.match(/grok-(\d+)/)
-      if (!m) return false
-      return parseInt(m[1], 10) >= 4
+      return supportsGrok41OrAllowedCodingModel(probes)
     }
     if (
       providerID === "zhipuai" ||
@@ -65,11 +94,15 @@ export namespace Provider {
       providerID === "zai" ||
       providerID === "zai-coding-plan"
     ) {
-      if (!lower.includes("glm")) return true
-      // Allow GLM 5+ only — drops glm-3.x / glm-4.x SKUs.
-      const m = lower.match(/glm-(\d+)/)
-      if (!m) return false
-      return parseInt(m[1], 10) >= 5
+      if (!probes.some((probe) => probe.includes("glm"))) return true
+      if (probes.some((probe) => probe.includes("glm-5v") || probe.includes("glm5v"))) return false
+      // Allow non-vision GLM 5+ only — drops glm-5v and glm-3.x / glm-4.x SKUs.
+      for (const probe of probes) {
+        const m = probe.match(/glm-(\d+)/)
+        if (!m) continue
+        if (parseInt(m[1], 10) >= 5) return true
+      }
+      return false
     }
     return true
   }
@@ -418,7 +451,7 @@ export namespace Provider {
 
       for (const [modelID, model] of Object.entries(provider.models ?? {})) {
         const nextID = model.id ?? modelID
-        if (!supported(providerID, nextID)) continue
+        if (!supported(providerID, nextID, model)) continue
         const existingModel = parsed.models[model.id ?? modelID]
         const name = iife(() => {
           if (model.name) return model.name
@@ -596,7 +629,12 @@ export namespace Provider {
       const configProvider = config.provider?.[providerID]
 
       for (const [modelID, model] of Object.entries(provider.models)) {
-        model.api = { ...model.api, id: model.api.id ?? model.id ?? modelID }
+        const supportModelID = model.api.id ?? model.id ?? modelID
+        model.api = { ...model.api, id: supportModelID }
+        if (!supported(providerID, supportModelID, model)) {
+          delete provider.models[modelID]
+          continue
+        }
         if (modelID === "gpt-5-chat-latest") delete provider.models[modelID]
         if (model.status === "alpha" && !Flag.AX_CODE_ENABLE_EXPERIMENTAL_MODELS) delete provider.models[modelID]
         if (model.status === "deprecated") delete provider.models[modelID]
@@ -632,7 +670,7 @@ export namespace Provider {
         const providerID = ProviderID.make(id)
         if (!providers[providerID]) return
         await (async () => {
-          const discovered = await withTimeout(loader(), 10_000, `discovery loader '${id}' timed out`)
+          const discovered = await withTimeout(loader(providers[providerID]), 10_000, `discovery loader '${id}' timed out`)
           for (const [modelID, model] of Object.entries(discovered)) {
             providers[providerID].models[modelID] = model
           }
@@ -705,6 +743,7 @@ export namespace Provider {
   // auth-only change.
   export async function invalidate() {
     const currentState = await state()
+    currentState.models.clear()
     currentState.modelPending.clear()
     currentState.sdkPending.clear()
     await state.invalidate()

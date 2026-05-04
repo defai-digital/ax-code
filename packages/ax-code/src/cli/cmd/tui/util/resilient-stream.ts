@@ -12,6 +12,7 @@ export type StreamConnectionStatus = {
 
 type StreamSubscription<T> = {
   stream: AsyncIterable<T>
+  unsubscribe?: () => void | Promise<void>
 }
 
 export type ResilientStreamOptions<T> = {
@@ -65,6 +66,7 @@ export async function runResilientStream<T>(options: ResilientStreamOptions<T>) 
     let connectTimer: ReturnType<typeof setTimeout> | undefined
     let watchdog: ReturnType<typeof setTimeout> | undefined
     let abortReason: StreamDisconnectReason | undefined
+    let subscription: StreamSubscription<T> | undefined
 
     const abortConnection = (reason: StreamDisconnectReason) => {
       abortReason = reason
@@ -77,7 +79,7 @@ export async function runResilientStream<T>(options: ResilientStreamOptions<T>) 
 
     try {
       connectTimer = setTimeout(() => abortConnection("connect-timeout"), connectTimeoutMs)
-      const subscription = await options.subscribe(connectionAbort.signal)
+      subscription = await options.subscribe(connectionAbort.signal)
       if (connectTimer) clearTimeout(connectTimer)
 
       reconnectDelay = reconnectBaseMs
@@ -107,6 +109,13 @@ export async function runResilientStream<T>(options: ResilientStreamOptions<T>) 
         error: error instanceof Error ? error.message : String(error),
       })
     } finally {
+      if (subscription?.unsubscribe) {
+        try {
+          await subscription.unsubscribe()
+        } catch {
+          // Ignore best-effort unsubscribe failures during reconnect/shutdown.
+        }
+      }
       if (connectTimer) clearTimeout(connectTimer)
       if (watchdog) clearTimeout(watchdog)
       options.signal.removeEventListener("abort", forwardAbort)

@@ -14,7 +14,7 @@ const log = Log.create({ service: "provider.loaders" })
 
 export type CustomModelLoader = (sdk: any, modelID: string, options?: Record<string, any>) => Promise<any>
 export type CustomVarsLoader = (options: Record<string, any>) => Record<string, string>
-export type CustomDiscoverModels = () => Promise<Record<string, Provider.Model>>
+export type CustomDiscoverModels = (provider: Provider.Info) => Promise<Record<string, Provider.Model>>
 export type CustomLoader = (provider: Provider.Info) => Promise<{
   autoload: boolean
   getModel?: CustomModelLoader
@@ -65,54 +65,101 @@ function openAICompatibleLimit(item: OpenAICompatibleModelItem): Provider.Model[
   }
 }
 
-async function fetchOpenAICompatibleModels(fetcher: ModelListFetcher, host: string) {
-  return fetcher(`${host}/v1/models`, { signal: AbortSignal.timeout(5000) })
+async function fetchOpenAICompatibleModels(fetcher: ModelListFetcher, endpoint: LocalProviderEndpoint) {
+  return fetcher(`${endpoint.inferenceBaseURL}/models`, { signal: AbortSignal.timeout(5000) })
     .then(async (r) => {
       if (!r.ok) {
-        log.debug("OpenAI-compatible model list fetch returned non-OK", { host, status: r.status })
+        log.debug("OpenAI-compatible model list fetch returned non-OK", {
+          host: endpoint.discoveryHost,
+          status: r.status,
+        })
         return null
       }
       return (await r.json()) as { data?: OpenAICompatibleModelItem[] }
     })
     .catch((error) => {
-      log.debug("OpenAI-compatible model list fetch failed", { host, error })
+      log.debug("OpenAI-compatible model list fetch failed", { host: endpoint.discoveryHost, error })
       return null
     })
 }
 
-function isLocalOllamaHost(hostname: string) {
+type LocalProviderEndpoint = {
+  discoveryHost: string
+  inferenceBaseURL: string
+  local: boolean
+}
+
+function normalizeLocalProviderURL(input: string) {
+  const withProtocol = /^[a-z][a-z0-9+.-]*:\/\//i.test(input) ? input : `http://${input}`
+  return new URL(withProtocol)
+}
+
+function trimTrailingSlash(input: string) {
+  return input.replace(/\/+$/, "")
+}
+
+function isLocalProviderHost(hostname: string) {
   if (hostname === "localhost" || hostname === "0.0.0.0" || hostname === "::1") return true
   if (hostname.endsWith(".localhost")) return true
   if (hostname.startsWith("127.")) return true
   return false
 }
 
+function resolveLocalProviderEndpoint(input: {
+  provider: Provider.Info
+  envKey: string
+  defaultHost: string
+}): LocalProviderEndpoint {
+  const configured = typeof input.provider.options?.baseURL === "string" ? input.provider.options.baseURL : undefined
+  const raw = configured || process.env[input.envKey] || input.defaultHost
+  const url = normalizeLocalProviderURL(raw)
+  const normalized = trimTrailingSlash(url.toString())
+  const discoveryHost = normalized.endsWith("/v1") ? normalized.slice(0, -3) : normalized
+  return {
+    discoveryHost,
+    inferenceBaseURL: normalized.endsWith("/v1") ? normalized : `${normalized}/v1`,
+    local: isLocalProviderHost(url.hostname),
+  }
+}
+
 function ollamaCompatibleLoader(providerID: string, envKey: string, defaultHost: string): CustomLoader {
-  return async () => {
-    const host = process.env[envKey] || defaultHost
-    const url = new URL(host)
-    const local = isLocalOllamaHost(url.hostname)
-    const fetcher = local ? fetch : Ssrf.pinnedFetch
-    const reachable = await fetcher(`${host}/api/tags`, { signal: AbortSignal.timeout(2000) })
+  return async (provider) => {
+    const initialEndpoint = resolveLocalProviderEndpoint({ provider, envKey, defaultHost })
+    const initialFetcher = initialEndpoint.local ? fetch : Ssrf.pinnedFetch
+    const reachable = await initialFetcher(`${initialEndpoint.discoveryHost}/api/tags`, {
+      signal: AbortSignal.timeout(2000),
+    })
       .then((r) => {
-        if (!r.ok) log.debug("Ollama-compatible reachability probe returned non-OK", { providerID, host, status: r.status })
+        if (!r.ok)
+          log.debug("Ollama-compatible reachability probe returned non-OK", {
+            providerID,
+            host: initialEndpoint.discoveryHost,
+            status: r.status,
+          })
         return r.ok
       })
       .catch((error) => {
-        log.debug("Ollama-compatible reachability probe failed", { providerID, host, error })
+        log.debug("Ollama-compatible reachability probe failed", { providerID, host: initialEndpoint.discoveryHost, error })
         return false
       })
 
     return {
       autoload: reachable,
-      options: reachable ? { baseURL: `${host}/v1` } : {},
-      async discoverModels() {
-        const res = await fetcher(`${host}/api/tags`, { signal: AbortSignal.timeout(5000) }).catch((error) => {
-          log.debug("Ollama-compatible model discovery failed", { providerID, host, error })
+      options: reachable ? { baseURL: initialEndpoint.inferenceBaseURL } : {},
+      async discoverModels(provider) {
+        const endpoint = resolveLocalProviderEndpoint({ provider, envKey, defaultHost })
+        const fetcher = endpoint.local ? fetch : Ssrf.pinnedFetch
+        const res = await fetcher(`${endpoint.discoveryHost}/api/tags`, { signal: AbortSignal.timeout(5000) }).catch((error) => {
+          log.debug("Ollama-compatible model discovery failed", { providerID, host: endpoint.discoveryHost, error })
           return null
         })
         if (!res?.ok) {
-          if (res) log.debug("Ollama-compatible model discovery returned non-OK", { providerID, host, status: res.status })
+          if (res)
+            log.debug("Ollama-compatible model discovery returned non-OK", {
+              providerID,
+              host: endpoint.discoveryHost,
+              status: res.status,
+            })
           return {}
         }
         const data = (await res.json()) as { models?: { name: string }[] }
@@ -123,7 +170,7 @@ function ollamaCompatibleLoader(providerID: string, envKey: string, defaultHost:
             id,
             providerID: ProviderID.make(providerID),
             name: m.name,
-            api: { id: m.name, url: `${host}/v1`, npm: "@ai-sdk/openai-compatible" },
+            api: { id: m.name, url: endpoint.inferenceBaseURL, npm: "@ai-sdk/openai-compatible" },
             capabilities: {
               temperature: true,
               reasoning: false,
@@ -148,19 +195,19 @@ function ollamaCompatibleLoader(providerID: string, envKey: string, defaultHost:
 }
 
 function openAICompatibleLoader(providerID: string, envKey: string, defaultHost: string): CustomLoader {
-  return async () => {
-    const host = process.env[envKey] || defaultHost
-    const url = new URL(host)
-    const local = ["localhost", "127.0.0.1", "::1"].includes(url.hostname)
-    const fetcher = local ? fetch : Ssrf.pinnedFetch
-    const initial = await fetchOpenAICompatibleModels(fetcher, host)
+  return async (provider) => {
+    const initialEndpoint = resolveLocalProviderEndpoint({ provider, envKey, defaultHost })
+    const initialFetcher = initialEndpoint.local ? fetch : Ssrf.pinnedFetch
+    const initial = await fetchOpenAICompatibleModels(initialFetcher, initialEndpoint)
     const reachable = !!initial
 
     return {
       autoload: reachable,
-      options: reachable ? { baseURL: `${host}/v1` } : {},
-      async discoverModels() {
-        const discovered = await fetchOpenAICompatibleModels(fetcher, host)
+      options: reachable ? { baseURL: initialEndpoint.inferenceBaseURL } : {},
+      async discoverModels(provider) {
+        const endpoint = resolveLocalProviderEndpoint({ provider, envKey, defaultHost })
+        const fetcher = endpoint.local ? fetch : Ssrf.pinnedFetch
+        const discovered = await fetchOpenAICompatibleModels(fetcher, endpoint)
         if (!discovered) return {}
         const models: Record<string, Provider.Model> = {}
         for (const item of discovered.data ?? []) {
@@ -170,7 +217,7 @@ function openAICompatibleLoader(providerID: string, envKey: string, defaultHost:
             id,
             providerID: ProviderID.make(providerID),
             name: item.id,
-            api: { id: item.id, url: `${host}/v1`, npm: "@ai-sdk/openai-compatible" },
+            api: { id: item.id, url: endpoint.inferenceBaseURL, npm: "@ai-sdk/openai-compatible" },
             capabilities: openAICompatibleCapabilities(item),
             limit: openAICompatibleLimit(item),
             status: "active",
@@ -186,41 +233,24 @@ function openAICompatibleLoader(providerID: string, envKey: string, defaultHost:
   }
 }
 
-const CLI_MODELS: Record<string, { id: string; name: string; context: number; output: number }[]> = {
-  "claude-code": [
-    { id: "claude-opus-4-6", name: "Claude Opus 4.6", context: 200000, output: 16384 },
-    { id: "claude-sonnet-4-6", name: "Claude Sonnet 4.6", context: 200000, output: 16384 },
-    { id: "claude-haiku-4-5", name: "Claude Haiku 4.5", context: 200000, output: 8192 },
-  ],
-  "gemini-cli": [
-    { id: "gemini-3-pro-preview", name: "Gemini 3 Pro", context: 1000000, output: 65536 },
-    { id: "gemini-3-flash-preview", name: "Gemini 3 Flash", context: 1000000, output: 65536 },
-    { id: "gemini-2.5-pro", name: "Gemini 2.5 Pro", context: 1000000, output: 65536 },
-    { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash", context: 1000000, output: 65536 },
-  ],
-  "codex-cli": [
-    { id: "gpt-5.4", name: "GPT-5.4", context: 200000, output: 16384 },
-    { id: "gpt-5.4-mini", name: "GPT-5.4 Mini", context: 200000, output: 16384 },
-    { id: "gpt-5.3-codex", name: "GPT-5.3 Codex", context: 200000, output: 16384 },
-    { id: "gpt-5.3-codex-spark", name: "GPT-5.3 Codex Spark", context: 200000, output: 16384 },
-  ],
+const CLI_DEFAULT_MODEL_NAMES: Record<string, string> = {
+  "claude-code": "Claude Code default",
+  "gemini-cli": "Gemini CLI default",
+  "codex-cli": "Codex CLI default",
 }
 
-function cliModels(providerID: string, provider: Provider.Info, currentModel: string): Record<string, Provider.Model> {
+function cliModels(providerID: string, provider: Provider.Info): Record<string, Provider.Model> {
   const base = Object.values(provider.models)[0]
   if (!base) return {}
-  const list = CLI_MODELS[providerID] ?? []
+  const id = ModelID.make(providerID)
+  const name = CLI_DEFAULT_MODEL_NAMES[providerID] ?? "CLI default"
   const models: Record<string, Provider.Model> = {}
-  for (const m of list) {
-    const id = ModelID.make(m.id)
-    models[id] = {
-      ...base,
-      id,
-      providerID: ProviderID.make(providerID),
-      api: { ...base.api, id: m.id },
-      name: m.id === currentModel ? `${m.name} (active)` : m.name,
-      limit: { context: m.context, output: m.output },
-    }
+  models[id] = {
+    ...base,
+    id,
+    providerID: ProviderID.make(providerID),
+    api: { ...base.api, id: providerID },
+    name,
   }
   return models
 }
@@ -258,8 +288,8 @@ function cliLoader(opts: CliLoaderOpts): CustomLoader {
         if (!path) return {}
         const authError = await checkCliProviderAuth(opts.providerID, path)
         if (authError) return {}
-        const info = await resolveCliModel(opts.providerID)
-        return cliModels(opts.providerID, provider, info.model)
+        await resolveCliModel(opts.providerID)
+        return cliModels(opts.providerID, provider)
       },
     }
   }
@@ -280,6 +310,7 @@ export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
     }
   },
   ollama: ollamaCompatibleLoader("ollama", "OLLAMA_HOST", "http://localhost:11434"),
+  lmstudio: openAICompatibleLoader("lmstudio", "LMSTUDIO_HOST", "http://127.0.0.1:1234"),
   "ax-serving": openAICompatibleLoader("ax-serving", "AX_SERVING_HOST", "http://localhost:18080"),
   "claude-code": cliLoader({
     providerID: "claude-code",

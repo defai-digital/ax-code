@@ -815,12 +815,12 @@ describe("ProviderTransform.variants", () => {
   })
 
   describe("@ai-sdk/xai", () => {
-    test("grok-4 does not auto-generate reasoningEffort variants", () => {
+    test("grok-4-1-fast does not auto-generate reasoningEffort variants", () => {
       const model = createMockModel({
-        id: "xai/grok-4",
+        id: "xai/grok-4-1-fast",
         providerID: "xai",
         api: {
-          id: "grok-4",
+          id: "grok-4-1-fast",
           url: "https://api.x.ai",
           npm: "@ai-sdk/xai",
         },

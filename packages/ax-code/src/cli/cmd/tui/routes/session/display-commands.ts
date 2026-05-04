@@ -33,6 +33,20 @@ type Toast = {
   show: (input: { message: string; variant: "success" | "error" | "warning"; duration?: number }) => void
 }
 
+function resolveTranscriptExportPath(filename: string) {
+  const trimmed = filename.trim()
+  if (!trimmed) throw new Error("Export filename is required")
+  if (path.isAbsolute(trimmed)) throw new Error("Export filename must be relative to the current workspace")
+
+  const cwd = process.cwd()
+  const resolved = path.resolve(cwd, trimmed)
+  const relative = path.relative(cwd, resolved)
+  if (relative.startsWith("..") || path.isAbsolute(relative)) {
+    throw new Error("Export filename must stay inside the current workspace")
+  }
+  return resolved
+}
+
 export function displayCommands(input: {
   conceal: Accessor<boolean>
   currentModel: () => Model | undefined
@@ -157,19 +171,12 @@ export function displayCommands(input: {
       title: "View activity history",
       value: "session.activity",
       category: "Session",
-      slash: {
-        name: "activity",
-      },
       onSelect: (dialog: DialogContext) => input.dialogReplaceActivity(dialog),
     },
     {
       title: "View session trust (DRE)",
       value: "session.trust",
       category: "Session",
-      slash: {
-        name: "trust",
-        aliases: ["dre", "risk"],
-      },
       onSelect: (dialog: DialogContext) => input.dialogReplaceDre(dialog),
     },
     {
@@ -177,28 +184,18 @@ export function displayCommands(input: {
       value: "session.quality",
       category: "Session",
       enabled: input.hasQualityReadiness(),
-      slash: {
-        name: "quality",
-        aliases: ["readiness"],
-      },
       onSelect: (dialog: DialogContext) => input.dialogReplaceQuality(dialog),
     },
     {
       title: "View execution graph (DRE)",
       value: "session.dre.graph",
       category: "Session",
-      slash: {
-        name: "graph",
-      },
       onSelect: (dialog: DialogContext) => input.dialogReplaceDreGraph(dialog),
     },
     {
       title: "Open DRE dashboard in browser",
       value: "session.dre.web",
       category: "Session",
-      slash: {
-        name: "dre-dashboard",
-      },
       onSelect: async (dialog: DialogContext) => {
         await DreGraphServer.page({
           base: input.sdk.url,
@@ -220,10 +217,6 @@ export function displayCommands(input: {
       value: "session.branch",
       category: "Session",
       enabled: input.children().length > 1,
-      slash: {
-        name: "branches",
-        aliases: ["branch"],
-      },
       onSelect: (dialog: DialogContext) => input.dialogReplaceBranch(dialog),
     },
     {
@@ -231,18 +224,12 @@ export function displayCommands(input: {
       value: "session.compare",
       category: "Session",
       enabled: input.children().length > 1,
-      slash: {
-        name: "compare",
-      },
       onSelect: (dialog: DialogContext) => input.dialogReplaceCompare(dialog),
     },
     {
       title: "View rollback points",
       value: "session.rollback",
       category: "Session",
-      slash: {
-        name: "rollback",
-      },
       onSelect: (dialog: DialogContext) => input.dialogReplaceRollback(dialog),
     },
     {
@@ -332,9 +319,6 @@ export function displayCommands(input: {
       title: `Message metadata: ${metadataDensityLabel[input.metadataDensity()]}`,
       value: "session.toggle.metadata_density",
       category: "Session",
-      slash: {
-        name: "metadata",
-      },
       onSelect: (dialog: DialogContext) => {
         input.setMetadataDensity(nextMetadataDensity(input.metadataDensity()))
         dialog.clear()
@@ -344,10 +328,6 @@ export function displayCommands(input: {
       title: input.showTimestamps() ? "Hide timestamps" : "Show timestamps",
       value: "session.toggle.timestamps",
       category: "Session",
-      slash: {
-        name: "timestamps",
-        aliases: ["toggle-timestamps"],
-      },
       onSelect: (dialog: DialogContext) => {
         input.setTimestamps((prev) => (prev === "show" ? "hide" : "show"))
         dialog.clear()
@@ -358,10 +338,6 @@ export function displayCommands(input: {
       value: "session.toggle.thinking",
       keybind: "display_thinking",
       category: "Session",
-      slash: {
-        name: "thinking",
-        aliases: ["toggle-thinking"],
-      },
       onSelect: (dialog: DialogContext) => {
         input.setShowThinking((prev) => !prev)
         dialog.clear()
@@ -605,7 +581,7 @@ export function displayCommands(input: {
           if (options.openWithoutSaving) {
             await Editor.open({ value: transcript, renderer: input.renderer })
           } else {
-            const file = path.join(process.cwd(), options.filename.trim())
+            const file = resolveTranscriptExportPath(options.filename)
             await Filesystem.write(file, transcript)
             const result = await Editor.open({ value: transcript, renderer: input.renderer })
             if (result !== undefined) {

@@ -8,24 +8,9 @@ import { createDialogProviderOptions, DialogProvider } from "./dialog-provider"
 import { useKeybind } from "../context/keybind"
 import * as fuzzysort from "fuzzysort"
 import { useConnected } from "./provider-state"
+import { modelDisplayInfo } from "./model-vision-label"
 
-// Providers whose models are free to use (hosted free tier, local inference,
-// or flat-fee subscription plans). Drives the "Free" footer tag and whether
-// the picker considers the user "connected".
-const FREE_PROVIDERS = new Set([
-  "opencode",
-  "ax-code",
-  "ollama",
-  "lmstudio",
-  "ax-serving",
-  "zai-coding-plan",
-  "alibaba-coding-plan",
-  "claude-code",
-  "gemini-cli",
-  "codex-cli",
-])
 const CLI_PROVIDERS = new Set(["claude-code", "gemini-cli", "codex-cli"])
-const isFreeProvider = (id: string) => FREE_PROVIDERS.has(id)
 
 export function DialogModel(props: { providerID?: string }) {
   const local = useLocal()
@@ -52,15 +37,16 @@ export function DialogModel(props: { providerID?: string }) {
         if (!provider) return []
         const model = provider.models[item.modelID]
         if (!model) return []
+        const display = modelDisplayInfo(item.modelID, model)
         return [
           {
             key: item,
             value: { providerID: provider.id, modelID: model.id },
-            title: model.name ?? item.modelID,
+            title: display.label,
+            searchText: display.searchText,
             description: provider.name,
             category,
             disabled: provider.id === "opencode" && model.id.includes("-nano"),
-            footer: isFreeProvider(provider.id) ? "Free" : undefined,
             onSelect: () => {
               dialog.clear()
               local.model.set({ providerID: provider.id, modelID: model.id }, { recent: true })
@@ -91,20 +77,23 @@ export function DialogModel(props: { providerID?: string }) {
           filter(([_, info]) => info.status !== "deprecated"),
           filter(([_, info]) => info.capabilities.toolcall !== false || CLI_PROVIDERS.has(provider.id)),
           filter(([_, info]) => (props.providerID ? info.providerID === props.providerID : true)),
-          map(([model, info]) => ({
-            value: { providerID: provider.id, modelID: model },
-            title: info.name ?? model,
-            description: favorites.some((item) => item.providerID === provider.id && item.modelID === model)
-              ? "(Favorite)"
-              : undefined,
-            category: connected() ? provider.name : undefined,
-            disabled: provider.id === "opencode" && model.includes("-nano"),
-            footer: isFreeProvider(provider.id) ? "Free" : undefined,
-            onSelect() {
-              dialog.clear()
-              local.model.set({ providerID: provider.id, modelID: model }, { recent: true })
-            },
-          })),
+          map(([model, info]) => {
+            const display = modelDisplayInfo(model, info)
+            return {
+              value: { providerID: provider.id, modelID: model },
+              title: display.label,
+              searchText: display.searchText,
+              description: favorites.some((item) => item.providerID === provider.id && item.modelID === model)
+                ? "(Favorite)"
+                : undefined,
+              category: connected() ? provider.name : undefined,
+              disabled: provider.id === "opencode" && model.includes("-nano"),
+              onSelect() {
+                dialog.clear()
+                local.model.set({ providerID: provider.id, modelID: model }, { recent: true })
+              },
+            }
+          }),
           filter((x) => {
             if (!showSections) return true
             if (favorites.some((item) => item.providerID === x.value.providerID && item.modelID === x.value.modelID))
@@ -114,7 +103,6 @@ export function DialogModel(props: { providerID?: string }) {
             return true
           }),
           sortBy(
-            (x) => x.footer !== "Free",
             (x) => x.title,
           ),
         ),
@@ -134,7 +122,7 @@ export function DialogModel(props: { providerID?: string }) {
 
     if (needle) {
       return [
-        ...fuzzysort.go(needle, providerOptions, { keys: ["title", "category"] }).map((x) => x.obj),
+        ...fuzzysort.go(needle, providerOptions, { keys: ["searchText", "category"] }).map((x) => x.obj),
         ...fuzzysort.go(needle, popularProviders, { keys: ["title"] }).map((x) => x.obj),
       ]
     }
