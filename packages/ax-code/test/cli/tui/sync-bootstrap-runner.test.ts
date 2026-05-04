@@ -170,6 +170,26 @@ describe("tui sync bootstrap runner", () => {
     expect(events).toEqual(["core-task", "background-start", "background-finish", "background-after"])
   })
 
+  test("does not run delayed bootstrap tasks after abort", async () => {
+    const abort = new AbortController()
+    let ran = false
+    const pending = runBootstrapPhaseTasks({
+      delayMs: 50,
+      signal: abort.signal,
+      tasks: [
+        async () => {
+          ran = true
+        },
+      ],
+    })
+
+    abort.abort()
+    const summary = await pending
+
+    expect(summary).toEqual({ rejected: [] })
+    expect(ran).toBe(false)
+  })
+
   test("creates startup lifecycle spans and routes failures through a single helper", async () => {
     const created: string[] = []
     const spanPayloads = new Map<string, Array<Record<string, unknown> | undefined>>()

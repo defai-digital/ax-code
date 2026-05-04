@@ -157,6 +157,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
     const bootstrapController = createBootstrapController({
       run: bootstrapFlow.run,
     })
+    onCleanup(() => bootstrapFlow.stop())
     const bootstrap = bootstrapController.run
     const startupCoordinator = createSyncStartupCoordinator({
       runBootstrapInBackground: () => bootstrapController.runInBackground(),

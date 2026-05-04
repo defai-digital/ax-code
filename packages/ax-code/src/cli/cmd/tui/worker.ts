@@ -140,6 +140,14 @@ const startEventStream = (input: { directory?: string }) => {
   })
 }
 
+export function assertRpcFetchUrlAllowed(inputUrl: string) {
+  const requested = new URL(inputUrl)
+  const expected = new URL(internalBaseUrl())
+  if (requested.origin !== expected.origin) {
+    throw new Error(`RPC fetch denied for non-internal origin: ${requested.origin}`)
+  }
+}
+
 export const rpc = {
   health() {
     return {
@@ -150,6 +158,7 @@ export const rpc = {
     }
   },
   async fetch(input: { url: string; method: string; headers: Record<string, string>; body?: string }) {
+    assertRpcFetchUrlAllowed(input.url)
     const headers = { ...input.headers }
     const auth = getAuthorizationHeader()
     if (auth && !headers["authorization"] && !headers["Authorization"]) {

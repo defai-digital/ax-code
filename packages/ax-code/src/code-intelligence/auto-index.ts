@@ -264,6 +264,7 @@ export namespace AutoIndex {
     // is best-effort, it never propagates failures to the caller.
     ;(async () => {
       const start = Date.now()
+      let candidateFileCount = 0
       setState(projectID, {
         state: "indexing",
         completed: 0,
@@ -283,6 +284,7 @@ export namespace AutoIndex {
           if (!isIndexable(abs)) continue
           files.push(abs)
         }
+        candidateFileCount = files.length
 
         if (files.length === 0) {
           log.info("no indexable files found, skipping", { projectID, directory })
@@ -320,6 +322,18 @@ export namespace AutoIndex {
           failed: result.failed,
           elapsedMs: elapsed,
         })
+        const attempted = result.files + result.unchanged + result.skipped + result.failed
+        if (attempted > 0 && result.failed === attempted) {
+          setState(projectID, {
+            state: "failed",
+            completed: files.length,
+            total: files.length,
+            startedAt: start,
+            finishedAt: Date.now(),
+            error: `Indexing failed for all ${result.failed.toLocaleString()} file${result.failed === 1 ? "" : "s"}.`,
+          })
+          return
+        }
         setState(projectID, {
           state: "idle",
           completed: files.length,
@@ -336,17 +350,18 @@ export namespace AutoIndex {
         // concrete error instead of a silent "graph not indexed".
         //
         // LockHeldError is treated as benign: another process is
-        // already indexing, so we return to "idle" without a
-        // failure marker.
+        // already indexing, so we stop our own auto-index attempt but
+        // keep a visible sidebar hint instead of snapping back to the
+        // misleading "not indexed" empty state.
         if (err instanceof CodeGraphBuilder.LockHeldError) {
           log.info("auto-index skipped: another process holds the lock", { projectID })
           setState(projectID, {
             state: "idle",
-            completed: 0,
-            total: 0,
+            completed: candidateFileCount,
+            total: candidateFileCount,
             startedAt: start,
             finishedAt: Date.now(),
-            error: null,
+            error: "Indexing is already running in another ax-code process.",
           })
           return
         }

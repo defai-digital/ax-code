@@ -19,6 +19,7 @@ import { SessionRollbackView } from "./rollback"
 import { SessionSemanticDiff } from "@/session/semantic-diff"
 import { type FooterSessionStatus, isFooterSessionStatus } from "./footer-view-model"
 import { computeSidebarWidth } from "./layout"
+import { sidebarGraphIndexStatusText } from "./sidebar-index-view-model"
 import type { McpStatus } from "@ax-code/sdk/v2"
 import type { SyncedSessionQualityReadiness } from "../../context/sync-session-risk"
 import { countByWorkflow as countFindingsByWorkflow } from "@/quality/finding-counts"
@@ -392,17 +393,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                         •
                       </text>
                       <text fg={theme.textMuted}>
-                        {sync.data.debugEngine.graph.state === "failed"
-                          ? `index failed: ${sync.data.debugEngine.graph.error ?? "unknown error"}`
-                          : sync.data.debugEngine.graph.state === "indexing"
-                            ? sync.data.debugEngine.graph.total === 0
-                              ? "scanning files..."
-                              : `indexing... (${sync.data.debugEngine.graph.completed.toLocaleString()}/${sync.data.debugEngine.graph.total.toLocaleString()})`
-                            : sync.data.debugEngine.graph.nodeCount > 0
-                              ? `${sync.data.debugEngine.graph.nodeCount.toLocaleString()} symbols indexed`
-                              : sync.data.debugEngine.graph.error
-                                ? sync.data.debugEngine.graph.error
-                              : "not indexed · run ax-code index"}
+                        {sidebarGraphIndexStatusText(sync.data.debugEngine.graph)}
                       </text>
                     </box>
                     {/* Session trust signals — quality, changes, risk drivers, plan */}

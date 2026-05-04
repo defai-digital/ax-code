@@ -143,9 +143,13 @@ export function createSyncBootstrapFlow<TClient extends SyncBootstrapRequestClie
       input.recordStartup("tui.startup.bootstrapDeferredCoalesced")
     },
   })
+  let activeRunAbort: AbortController | undefined
 
   return {
     async run() {
+      activeRunAbort?.abort()
+      const runAbort = new AbortController()
+      activeRunAbort = runAbort
       const isStartupBootstrap = input.store.status === "loading"
       const bootstrapLifecycle = createBootstrapLifecycle({
         isStartupBootstrap,
@@ -194,10 +198,21 @@ export function createSyncBootstrapFlow<TClient extends SyncBootstrapRequestClie
           logError: input.logError,
           recordStartup: input.recordStartup,
         })
-        await runBootstrapPhaseSequence(sequence, { scheduleBackground })
+        await runBootstrapPhaseSequence(sequence, {
+          signal: runAbort.signal,
+          scheduleBackground,
+        })
       } catch (error) {
         await bootstrapLifecycle.fail(error, finishDeferredBootstrap, finishCoreBootstrap)
+      } finally {
+        if (activeRunAbort === runAbort) {
+          activeRunAbort = undefined
+        }
       }
+    },
+    stop() {
+      activeRunAbort?.abort()
+      activeRunAbort = undefined
     },
   }
 }
