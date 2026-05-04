@@ -27,6 +27,7 @@ const WORKSPACE_SESSION_LIST_DIALOG_SRC = path.join(TUI_ROOT, "component/workspa
 const SESSION_RENAME_DIALOG_SRC = path.join(TUI_ROOT, "component/dialog-session-rename.tsx")
 const SPINNER_SRC = path.join(TUI_ROOT, "component/spinner.tsx")
 const SPINNER_PROFILE_SRC = path.join(TUI_ROOT, "component/spinner-profile.ts")
+const LIVENESS_VIEW_MODEL_SRC = path.join(TUI_ROOT, "component/prompt/liveness-view-model.ts")
 const WORKSPACE_LIST_DIALOG_SRC = path.join(TUI_ROOT, "component/dialog-workspace-list.tsx")
 const DIALOG_COMMAND_SRC = path.join(TUI_ROOT, "component/dialog-command.tsx")
 const THEME_DIALOG_SRC = path.join(TUI_ROOT, "component/dialog-theme-list.tsx")
@@ -693,11 +694,15 @@ describe("tui OpenTUI stability guardrails", () => {
     const prompt = await fs.readFile(PROMPT_SRC, "utf8")
     const spinner = await fs.readFile(SPINNER_SRC, "utf8")
     const profile = await fs.readFile(SPINNER_PROFILE_SRC, "utf8")
+    const liveness = await fs.readFile(LIVENESS_VIEW_MODEL_SRC, "utf8")
 
     expect(profile).toContain('runtimeMode()) !== "compiled"')
     expect(spinner).toContain("shouldUseTuiAnimations")
-    expect(prompt).toContain("shouldUseTuiAnimations")
-    expect(prompt).toContain("fallback={<text fg={theme.textMuted}>[⋯]</text>}")
+    // prompt delegates animation gating to liveness-view-model rather than
+    // calling shouldUseTuiAnimations directly
+    expect(liveness).toContain("shouldUseTuiAnimations")
+    expect(prompt).toContain("footerLivenessIndicator")
+    expect(prompt).toContain('type === "native-spinner"')
   })
 
   test("keeps session route view namespaces distinct from core session namespaces", async () => {
