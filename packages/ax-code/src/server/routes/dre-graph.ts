@@ -714,10 +714,7 @@ function activitySection(graph: SessionGraph.Snapshot, dre: SessionDre.Snapshot,
   const detail = dre.detail
 
   // Rank steps by duration, top 3
-  const durations = parsed.steps.map((s) => {
-    const m = s.duration.match(/(?:(\d+)m\s*)?(\d+)s/)
-    return m ? (parseInt(m[1] ?? "0") * 60 + parseInt(m[2] ?? "0")) * 1000 : 0
-  })
+  const durations = parsed.steps.map((s) => parseTimelineDurationMs(s.duration))
   const maxDur = Math.max(...durations, 1)
   const allSameIndex = parsed.steps.every((s) => s.index === parsed.steps[0]?.index)
   const ranked = parsed.steps
@@ -1271,6 +1268,14 @@ function parseTimeline(lines: SessionDre.TimelineLine[]) {
   return { header, meta, steps }
 }
 
+function parseTimelineDurationMs(value: string): number {
+  const match = value.match(/(?:(\d+)m\s*)?(\d+)s/)
+  if (!match) return 0
+  const minutes = Number.parseInt(match[1] ?? "0", 10)
+  const seconds = Number.parseInt(match[2] ?? "0", 10)
+  return (minutes * 60 + seconds) * 1000
+}
+
 function timelineSection(dre: SessionDre.Snapshot, points: SessionRollback.Point[], detail?: SessionDre.Detail | null) {
   const parsed = parseTimeline(dre.timeline)
 
@@ -1278,10 +1283,7 @@ function timelineSection(dre: SessionDre.Snapshot, points: SessionRollback.Point
   const ganttHtml = parsed.steps.length
     ? (() => {
         // Compute max duration for proportional bars
-        const durations = parsed.steps.map((s) => {
-          const m = s.duration.match(/(?:(\d+)m\s*)?(\d+)s/)
-          return m ? (parseInt(m[1] ?? "0") * 60 + parseInt(m[2] ?? "0")) * 1000 : 0
-        })
+        const durations = parsed.steps.map((s) => parseTimelineDurationMs(s.duration))
         const maxDur = Math.max(...durations, 1)
 
         // Check if all steps have the same index (e.g., all "Step 0")
