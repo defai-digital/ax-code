@@ -144,6 +144,10 @@ async function parseSessionJSONInput<TBody>(c: SessionJSONRouteContext) {
   return { sessionID, body }
 }
 
+async function assertSessionExists(sessionID: SessionID) {
+  await Session.get(sessionID)
+}
+
 async function requireCurrentProjectSession(sessionID: SessionID) {
   const session = await Session.get(sessionID)
   if (Session.isCompatibleWithCurrentProject(session)) return session
@@ -352,7 +356,7 @@ export const SessionRoutes = lazy(() =>
       validator("param", z.object({ sessionID: SessionID.zod })),
       async (c) => {
         const sessionID = c.req.valid("param").sessionID
-        await Session.get(sessionID)
+        await assertSessionExists(sessionID)
         return c.json(await SessionDre.snapshot(sessionID))
       },
     )
@@ -378,7 +382,7 @@ export const SessionRoutes = lazy(() =>
       validator("param", z.object({ sessionID: SessionID.zod })),
       async (c) => {
         const sessionID = c.req.valid("param").sessionID
-        await Session.get(sessionID)
+        await assertSessionExists(sessionID)
         return c.json(SessionGraph.snapshot(sessionID))
       },
     )
@@ -465,7 +469,7 @@ export const SessionRoutes = lazy(() =>
       validator("param", z.object({ sessionID: SessionID.zod })),
       async (c) => {
         const sessionID = c.req.valid("param").sessionID
-        await Session.get(sessionID)
+        await assertSessionExists(sessionID)
         return c.json((await SessionSemanticDiff.load(sessionID)) ?? null)
       },
     )
@@ -540,7 +544,7 @@ export const SessionRoutes = lazy(() =>
       async (c) => {
         const sessionID = c.req.valid("param").sessionID
         const query = c.req.valid("query")
-        await Session.get(sessionID)
+        await assertSessionExists(sessionID)
         return c.json(SessionRollback.filter(await SessionRollback.points(sessionID), query.tool))
       },
     )
