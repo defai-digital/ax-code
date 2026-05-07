@@ -8,16 +8,7 @@ import { ProjectID } from "../../project/schema"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
 import { InstanceBootstrap } from "../../project/bootstrap"
-
-type ProjectRouteContext = {
-  req: {
-    valid: (input: "param") => { projectID: ProjectID }
-  }
-}
-
-function parseProjectID(c: ProjectRouteContext) {
-  return c.req.valid("param").projectID
-}
+import { parseRouteParam } from "./route-params"
 
 export const ProjectRoutes = lazy(() =>
   new Hono()
@@ -121,7 +112,7 @@ export const ProjectRoutes = lazy(() =>
       validator("param", z.object({ projectID: ProjectID.zod })),
       validator("json", Project.UpdateInput.omit({ projectID: true })),
       async (c) => {
-        const projectID = parseProjectID(c)
+        const projectID = parseRouteParam<"projectID", ProjectID>(c, "projectID")
         const body = c.req.valid("json")
         const project = await Project.update({ ...body, projectID })
         return c.json(project)

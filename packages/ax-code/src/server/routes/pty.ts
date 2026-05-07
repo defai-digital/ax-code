@@ -8,18 +8,9 @@ import { NotFoundError } from "../../storage/db"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
 import { Log } from "@/util/log"
+import { parseRouteParam } from "./route-params"
 
 const log = Log.create({ service: "server.pty" })
-
-type PtyRouteContext = {
-  req: {
-    valid: (input: "param") => { ptyID: PtyID }
-  }
-}
-
-function parsePtyID(c: PtyRouteContext) {
-  return c.req.valid("param").ptyID
-}
 
 export const PtyRoutes = lazy(() =>
   new Hono()
@@ -88,7 +79,7 @@ export const PtyRoutes = lazy(() =>
       }),
       validator("param", z.object({ ptyID: PtyID.zod })),
       async (c) => {
-        const ptyID = parsePtyID(c)
+        const ptyID = parseRouteParam<"ptyID", PtyID>(c, "ptyID")
         const info = await Pty.get(ptyID)
         if (!info) {
           throw new NotFoundError({ message: "Session not found" })
@@ -117,7 +108,7 @@ export const PtyRoutes = lazy(() =>
       validator("param", z.object({ ptyID: PtyID.zod })),
       validator("json", Pty.UpdateInput),
       async (c) => {
-        const ptyID = parsePtyID(c)
+        const ptyID = parseRouteParam<"ptyID", PtyID>(c, "ptyID")
         const info = await Pty.update(ptyID, c.req.valid("json"))
         return c.json(info)
       },
@@ -142,7 +133,8 @@ export const PtyRoutes = lazy(() =>
       }),
       validator("param", z.object({ ptyID: PtyID.zod })),
       async (c) => {
-        await Pty.remove(parsePtyID(c))
+        const ptyID = parseRouteParam<"ptyID", PtyID>(c, "ptyID")
+        await Pty.remove(ptyID)
         return c.json(true)
       },
     )

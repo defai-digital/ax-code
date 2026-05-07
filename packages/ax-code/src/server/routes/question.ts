@@ -6,16 +6,7 @@ import { Question } from "../../question"
 import z from "zod"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
-
-type QuestionRouteContext = {
-  req: {
-    valid: (input: "param") => { requestID: QuestionID }
-  }
-}
-
-function parseQuestionID(c: QuestionRouteContext) {
-  return c.req.valid("param").requestID
-}
+import { parseRouteParam } from "./route-params"
 
 export const QuestionRoutes = lazy(() =>
   new Hono()
@@ -68,10 +59,8 @@ export const QuestionRoutes = lazy(() =>
       validator("json", Question.Reply),
       async (c) => {
         const json = c.req.valid("json")
-        await Question.reply({
-          requestID: parseQuestionID(c),
-          answers: json.answers,
-        })
+        const requestID = parseRouteParam<"requestID", QuestionID>(c, "requestID")
+        await Question.reply({ requestID, answers: json.answers })
         return c.json(true)
       },
     )
@@ -100,7 +89,8 @@ export const QuestionRoutes = lazy(() =>
         }),
       ),
       async (c) => {
-        await Question.reject(parseQuestionID(c))
+        const requestID = parseRouteParam<"requestID", QuestionID>(c, "requestID")
+        await Question.reject(requestID)
         return c.json(true)
       },
     ),

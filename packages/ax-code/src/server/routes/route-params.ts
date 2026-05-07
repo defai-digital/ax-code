@@ -20,3 +20,13 @@ export type SessionRouteContext = {
 export function parseSessionID(c: SessionRouteContext) {
   return SessionID.make(c.req.valid("param").sessionID)
 }
+
+export type RouteParamContext<TKey extends string, TValue> = {
+  req: {
+    valid: (input: "param") => { [key in TKey]: TValue }
+  }
+}
+
+export function parseRouteParam<TKey extends string, TValue>(c: RouteParamContext<TKey, TValue>, key: TKey): TValue {
+  return c.req.valid("param")[key]
+}

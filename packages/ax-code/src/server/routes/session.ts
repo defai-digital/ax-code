@@ -132,7 +132,7 @@ function startAsyncSessionTask(input: {
   })
 }
 
-type SessionJSONRouteContext = {
+type SessionJSONRouteContext<TBody> = {
   req: {
     valid: (input: "param" | "json") => { sessionID: SessionID } | Record<string, unknown>
   }
@@ -200,7 +200,7 @@ async function parseSession(c: SessionPathContext) {
   return sessionID
 }
 
-async function parseSessionJSONInput<TBody>(c: SessionJSONRouteContext) {
+async function parseSessionJSONInput<TBody>(c: SessionJSONRouteContext<TBody>) {
   const sessionID = (c.req.valid("param") as { sessionID: SessionID }).sessionID
   const body = c.req.valid("json") as TBody
   await requireCurrentProjectSession(sessionID)
