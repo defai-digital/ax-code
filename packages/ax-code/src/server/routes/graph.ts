@@ -1,16 +1,12 @@
 import { Hono } from "hono"
 import { describeRoute, resolver, validator } from "hono-openapi"
 import { SessionID } from "@/session/schema"
-import { Session } from "../../session"
 import z from "zod"
 import { ExecutionGraph } from "../../graph"
 import { GraphFormat } from "../../graph/format"
 import { lazy } from "../../util/lazy"
 import { errors } from "../error"
-
-async function assertSessionExists(sessionID: SessionID) {
-  await Session.get(sessionID)
-}
+import { assertSessionExists } from "./session-lookup"
 
 export const GraphRoutes = lazy(() =>
   new Hono()

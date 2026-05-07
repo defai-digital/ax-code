@@ -29,6 +29,7 @@ import { errors } from "../error"
 import { lazy } from "../../util/lazy"
 import { NamedError } from "@ax-code/util/error"
 import { DiagnosticLog } from "@/debug/diagnostic-log"
+import { assertSessionExists } from "./session-lookup"
 
 const log = Log.create({ service: "server" })
 
@@ -142,10 +143,6 @@ async function parseSessionJSONInput<TBody>(c: SessionJSONRouteContext) {
   const body = c.req.valid("json") as TBody
   await requireCurrentProjectSession(sessionID)
   return { sessionID, body }
-}
-
-async function assertSessionExists(sessionID: SessionID) {
-  await Session.get(sessionID)
 }
 
 async function requireCurrentProjectSession(sessionID: SessionID) {
