@@ -557,6 +557,18 @@ export namespace Config {
     Session.publishError({ message })
   }
 
+  type ConfigLoadKind = "command" | "agent" | "mode"
+
+  async function loadMarkdownConfig(item: string, kind: ConfigLoadKind) {
+    return ConfigMarkdown.parse(item).catch(async (err) => {
+      const message =
+        ConfigMarkdown.FrontmatterError.isInstance(err) ? err.data.message : `Failed to parse ${kind} ${item}`
+      await publishConfigLoadError(message)
+      log.error(`failed to load ${kind}`, { [kind]: item, err })
+      return undefined
+    })
+  }
+
   async function loadCommand(dir: string) {
     const result: Record<string, Command> = {}
     for (const item of await Glob.scan("{command,commands}/**/*.md", {
@@ -565,14 +577,7 @@ export namespace Config {
       dot: true,
       symlink: true,
     })) {
-      const md = await ConfigMarkdown.parse(item).catch(async (err) => {
-        const message = ConfigMarkdown.FrontmatterError.isInstance(err)
-          ? err.data.message
-          : `Failed to parse command ${item}`
-        await publishConfigLoadError(message)
-        log.error("failed to load command", { command: item, err })
-        return undefined
-      })
+      const md = await loadMarkdownConfig(item, "command")
       if (!md) continue
 
       const patterns = ["/.ax-code/command/", "/.ax-code/commands/", "/command/", "/commands/"]
@@ -603,14 +608,7 @@ export namespace Config {
       dot: true,
       symlink: true,
     })) {
-      const md = await ConfigMarkdown.parse(item).catch(async (err) => {
-        const message = ConfigMarkdown.FrontmatterError.isInstance(err)
-          ? err.data.message
-          : `Failed to parse agent ${item}`
-        await publishConfigLoadError(message)
-        log.error("failed to load agent", { agent: item, err })
-        return undefined
-      })
+      const md = await loadMarkdownConfig(item, "agent")
       if (!md) continue
 
       const patterns = ["/.ax-code/agent/", "/.ax-code/agents/", "/agent/", "/agents/"]
@@ -640,14 +638,7 @@ export namespace Config {
       dot: true,
       symlink: true,
     })) {
-      const md = await ConfigMarkdown.parse(item).catch(async (err) => {
-        const message = ConfigMarkdown.FrontmatterError.isInstance(err)
-          ? err.data.message
-          : `Failed to parse mode ${item}`
-        await publishConfigLoadError(message)
-        log.error("failed to load mode", { mode: item, err })
-        return undefined
-      })
+      const md = await loadMarkdownConfig(item, "mode")
       if (!md) continue
 
       const config = {
