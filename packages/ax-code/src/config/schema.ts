@@ -1,4 +1,5 @@
 import z from "zod"
+import { isRecord } from "@/util/record"
 import { ModelsDev } from "../provider/models"
 import { Log } from "../util/log"
 import { LSPServer } from "../lsp/server"
@@ -92,7 +93,7 @@ export type PermissionRule = z.infer<typeof PermissionRule>
 
 // Capture original key order before zod reorders, then rebuild in original order
 const permissionPreprocess = (val: unknown) => {
-  if (typeof val === "object" && val !== null && !Array.isArray(val)) {
+  if (isRecord(val)) {
     return { __originalKeys: Object.keys(val), ...val }
   }
   return val

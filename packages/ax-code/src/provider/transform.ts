@@ -4,6 +4,7 @@ import type { JSONSchema } from "zod/v4/core"
 import type { Provider } from "./provider"
 import type { ModelsDev } from "./models"
 import { Flag } from "@/flag/flag"
+import { isRecord } from "@/util/record"
 
 type Modality = NonNullable<ModelsDev.Model["modalities"]>["input"][number]
 
@@ -338,7 +339,7 @@ export namespace ProviderTransform {
       result = rest
 
       const thinking =
-        result.thinking && typeof result.thinking === "object" && !Array.isArray(result.thinking)
+        result.thinking && isRecord(result.thinking)
           ? (result.thinking as Record<string, unknown>)
           : {}
       result = {
@@ -405,8 +406,7 @@ export namespace ProviderTransform {
 
     // Convert integer enums to string enums for Google/Gemini
     if (model.providerID === "google" || model.api.id.includes("gemini")) {
-      const isPlainObject = (node: unknown): node is Record<string, any> =>
-        typeof node === "object" && node !== null && !Array.isArray(node)
+      const isPlainObject = (node: unknown): node is Record<string, any> => isRecord(node)
       const hasCombiner = (node: unknown) =>
         isPlainObject(node) && (Array.isArray(node.anyOf) || Array.isArray(node.oneOf) || Array.isArray(node.allOf))
       const hasSchemaIntent = (node: unknown) => {
@@ -444,7 +444,7 @@ export namespace ProviderTransform {
           if (key === "enum" && Array.isArray(value)) {
             // Convert all enum values to strings
             result[key] = value.map((v) => String(v))
-          } else if (typeof value === "object" && value !== null) {
+          } else if (isRecord(value) || Array.isArray(value)) {
             result[key] = sanitizeGemini(value)
           } else {
             result[key] = value
