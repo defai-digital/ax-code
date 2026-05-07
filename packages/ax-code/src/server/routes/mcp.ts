@@ -223,9 +223,9 @@ export const McpRoutes = lazy(() =>
           },
         },
       }),
-      validator("param", z.object({ name: z.string() })),
+      validator("param", z.object({ name: MCP_NAME_PARAM })),
       async (c) => {
-        const { name } = c.req.valid("param")
+        const name = parseRouteParam<"name", string>(c, "name")
         await MCP.connect(name)
         return c.json(true)
       },
@@ -246,9 +246,9 @@ export const McpRoutes = lazy(() =>
           },
         },
       }),
-      validator("param", z.object({ name: z.string() })),
+      validator("param", z.object({ name: MCP_NAME_PARAM })),
       async (c) => {
-        const { name } = c.req.valid("param")
+        const name = parseRouteParam<"name", string>(c, "name")
         await MCP.disconnect(name)
         return c.json(true)
       },
