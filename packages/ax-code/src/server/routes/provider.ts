@@ -14,6 +14,10 @@ import { Log } from "../../util/log"
 
 const log = Log.create({ service: "server" })
 
+const PROVIDER_ID_PARAM = z.object({
+  providerID: ProviderID.zod.meta({ description: "Provider ID" }),
+})
+
 // Natively supported providers — shown by default when enabled_providers is not configured.
 // Users can expand this list via enabled_providers in ax-code.json.
 const NATIVE_PROVIDERS = new Set([
@@ -134,9 +138,7 @@ export const ProviderRoutes = lazy(() =>
       }),
       validator(
         "param",
-        z.object({
-          providerID: ProviderID.zod.meta({ description: "Provider ID" }),
-        }),
+        PROVIDER_ID_PARAM,
       ),
       validator(
         "json",
@@ -176,9 +178,7 @@ export const ProviderRoutes = lazy(() =>
       }),
       validator(
         "param",
-        z.object({
-          providerID: ProviderID.zod.meta({ description: "Provider ID" }),
-        }),
+        PROVIDER_ID_PARAM,
       ),
       validator(
         "json",
