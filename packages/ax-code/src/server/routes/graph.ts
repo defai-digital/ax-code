@@ -7,6 +7,7 @@ import { GraphFormat } from "../../graph/format"
 import { lazy } from "../../util/lazy"
 import { errors } from "../error"
 import { assertSessionExists } from "./session-lookup"
+import { parseSessionID as parseSessionIDFromRoute } from "./route-params"
 
 type GraphRouteContext = {
   req: {
@@ -15,7 +16,7 @@ type GraphRouteContext = {
 }
 
 async function parseSessionID(c: GraphRouteContext) {
-  const sessionID = c.req.valid("param").sessionID
+  const sessionID = parseSessionIDFromRoute(c)
   await assertSessionExists(sessionID)
   return sessionID
 }

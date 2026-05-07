@@ -1,24 +1,13 @@
 import { Hono } from "hono"
 import { describeRoute, validator } from "hono-openapi"
-import { SessionID } from "@/session/schema"
 import z from "zod"
 import { AuditExport } from "../../audit/export"
-import { EventQuery } from "../../replay/query"
 import { Replay } from "../../replay/replay"
 import { lazy } from "../../util/lazy"
 import { Log } from "../../util/log"
+import { parseSessionID as parseSessionIDFromRoute } from "./route-params"
 
 const log = Log.create({ service: "audit.routes" })
-
-type AuditRouteContext = {
-  req: {
-    valid: (input: "param") => { sessionID: string }
-  }
-}
-
-function parseSessionID(c: AuditRouteContext) {
-  return SessionID.make(c.req.valid("param").sessionID)
-}
 
 // Parse a JSON-Lines entry and return null on failure instead of throwing.
 // One corrupt line (partial write, truncation) previously blew up the
@@ -47,7 +36,7 @@ export const AuditRoutes = lazy(() =>
       }),
       validator("param", z.object({ sessionID: z.string() })),
       async (c) => {
-        const sessionID = parseSessionID(c)
+        const sessionID = parseSessionIDFromRoute(c)
         const lines = [...AuditExport.stream(sessionID)]
         return c.json({ data: lines.map(parseLine).filter((x) => x !== null) })
       },
@@ -109,7 +98,7 @@ export const AuditRoutes = lazy(() =>
       validator("param", z.object({ sessionID: z.string() })),
       validator("query", z.object({ fromStep: z.coerce.number().optional() })),
       async (c) => {
-        const sessionID = parseSessionID(c)
+        const sessionID = parseSessionIDFromRoute(c)
         const fromStep = c.req.valid("query").fromStep
         const { steps } = Replay.reconstructStream(sessionID, { fromStep })
         return c.json({ data: { steps } })
