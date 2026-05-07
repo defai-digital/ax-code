@@ -47,6 +47,7 @@ import { IsolationRoutes } from "./routes/isolation"
 import { AutonomousRoutes } from "./routes/autonomous"
 import { SmartLlmRoutes } from "./routes/smart-llm"
 import { GlobalRoutes } from "./routes/global"
+import { parseProviderID } from "./routes/route-params"
 import { ToolRegistry } from "../tool/registry"
 import { MDNS } from "./mdns"
 import { lazy } from "@/util/lazy"
@@ -443,16 +444,6 @@ export namespace Server {
   let warnedRequestIpFailure = false
 
   export const Default = lazy(() => createApp({ port: 4096 }))
-
-  type AuthRouteContext = {
-    req: {
-      valid: (input: "param") => { providerID: ProviderID }
-    }
-  }
-
-  function parseProviderID(c: AuthRouteContext) {
-    return c.req.valid("param").providerID
-  }
 
   function requestDirectory(c: Context): string | Response {
     const raw =

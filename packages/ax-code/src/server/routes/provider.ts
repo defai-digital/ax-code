@@ -9,6 +9,7 @@ import { ProviderID } from "../../provider/schema"
 import { mapValues } from "remeda"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
+import { parseProviderID } from "./route-params"
 import { Log } from "../../util/log"
 
 const log = Log.create({ service: "server" })
@@ -32,16 +33,6 @@ const NATIVE_PROVIDERS = new Set([
   "gemini-cli",
   "codex-cli",
 ])
-
-type ProviderRouteContext = {
-  req: {
-    valid: (input: "param") => { providerID: ProviderID }
-  }
-}
-
-function parseProviderID(c: ProviderRouteContext) {
-  return c.req.valid("param").providerID
-}
 
 export const ProviderRoutes = lazy(() =>
   new Hono()
