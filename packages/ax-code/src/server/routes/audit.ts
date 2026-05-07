@@ -10,6 +10,16 @@ import { Log } from "../../util/log"
 
 const log = Log.create({ service: "audit.routes" })
 
+type AuditRouteContext = {
+  req: {
+    valid: (input: "param") => { sessionID: string }
+  }
+}
+
+function parseSessionID(c: AuditRouteContext) {
+  return SessionID.make(c.req.valid("param").sessionID)
+}
+
 // Parse a JSON-Lines entry and return null on failure instead of throwing.
 // One corrupt line (partial write, truncation) previously blew up the
 // whole /audit export — callers now skip null entries so the rest of the
@@ -37,8 +47,8 @@ export const AuditRoutes = lazy(() =>
       }),
       validator("param", z.object({ sessionID: z.string() })),
       async (c) => {
-        const sid = SessionID.make(c.req.valid("param").sessionID)
-        const lines = [...AuditExport.stream(sid)]
+        const sessionID = parseSessionID(c)
+        const lines = [...AuditExport.stream(sessionID)]
         return c.json({ data: lines.map(parseLine).filter((x) => x !== null) })
       },
     )
@@ -99,9 +109,9 @@ export const AuditRoutes = lazy(() =>
       validator("param", z.object({ sessionID: z.string() })),
       validator("query", z.object({ fromStep: z.coerce.number().optional() })),
       async (c) => {
-        const sid = SessionID.make(c.req.valid("param").sessionID)
+        const sessionID = parseSessionID(c)
         const fromStep = c.req.valid("query").fromStep
-        const { steps } = Replay.reconstructStream(sid, { fromStep })
+        const { steps } = Replay.reconstructStream(sessionID, { fromStep })
         return c.json({ data: { steps } })
       },
     ),

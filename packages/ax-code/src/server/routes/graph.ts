@@ -8,6 +8,18 @@ import { lazy } from "../../util/lazy"
 import { errors } from "../error"
 import { assertSessionExists } from "./session-lookup"
 
+type GraphRouteContext = {
+  req: {
+    valid: (input: "param") => { sessionID: SessionID }
+  }
+}
+
+async function parseSessionID(c: GraphRouteContext) {
+  const sessionID = c.req.valid("param").sessionID
+  await assertSessionExists(sessionID)
+  return sessionID
+}
+
 export const GraphRoutes = lazy(() =>
   new Hono()
     .get(
@@ -30,9 +42,8 @@ export const GraphRoutes = lazy(() =>
       }),
       validator("param", z.object({ sessionID: SessionID.zod })),
       async (c) => {
-        const sid = c.req.valid("param").sessionID
-        await assertSessionExists(sid)
-        const graph = ExecutionGraph.build(sid)
+        const sessionID = await parseSessionID(c)
+        const graph = ExecutionGraph.build(sessionID)
         return c.json({ data: GraphFormat.topologyLines(graph) } satisfies GraphFormat.TopologyResponse)
       },
     )
@@ -67,10 +78,9 @@ export const GraphRoutes = lazy(() =>
         }),
       ),
       async (c) => {
-        const sid = c.req.valid("param").sessionID
+        const sessionID = await parseSessionID(c)
         const format = c.req.valid("query").format
-        await assertSessionExists(sid)
-        const graph = ExecutionGraph.build(sid)
+        const graph = ExecutionGraph.build(sessionID)
 
         if (format === "ascii") return c.text(GraphFormat.ascii(graph).join("\n"))
         if (format === "mermaid") return c.text(GraphFormat.mermaid(graph))

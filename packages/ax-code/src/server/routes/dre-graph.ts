@@ -1554,6 +1554,18 @@ async function loadSessionList(directory: string | undefined): Promise<Session.I
   return [...Session.list({ limit: 50, directory })]
 }
 
+type DreGraphRouteContext = {
+  req: {
+    valid: (input: "param" | "query") => { sessionID: SessionID } | { quality: boolean }
+  }
+}
+
+async function parseDreSessionContext(c: DreGraphRouteContext) {
+  const sessionID = (c.req.valid("param") as { sessionID: SessionID }).sessionID
+  const quality = (c.req.valid("query") as { quality: boolean }).quality
+  return { sessionID, context: await loadSessionGraphContext(sessionID, quality) }
+}
+
 function disableClientCache(
   c: {
     header: (name: string, value: string) => void
@@ -2616,9 +2628,7 @@ export const DreGraphRoutes = lazy(() =>
         }),
       ),
       async (c) => {
-        const sid = c.req.valid("param").sessionID
-        const query = c.req.valid("query")
-        const context = await loadSessionGraphContext(sid, query.quality)
+        const { context } = await parseDreSessionContext(c)
         const search = c.req.url.includes("?") ? c.req.url.slice(c.req.url.indexOf("?")) : ""
 
         disableClientCache(c)
@@ -2651,9 +2661,7 @@ export const DreGraphRoutes = lazy(() =>
         }),
       ),
       async (c) => {
-        const sid = c.req.valid("param").sessionID
-        const query = c.req.valid("query")
-        const context = await loadSessionGraphContext(sid, query.quality)
+        const { context } = await parseDreSessionContext(c)
 
         disableClientCache(c)
         return c.json(
