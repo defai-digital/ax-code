@@ -15,7 +15,7 @@ import { SessionID } from "../../session/schema"
 import type { ReplayEvent } from "../../replay/event"
 import path from "path"
 import fs from "fs/promises"
-import { resolveSession } from "./session-latest"
+import { printNoSessionFound, resolveSession } from "./session-latest"
 
 interface LogEntry {
   level: string
@@ -83,7 +83,7 @@ export const TraceCommand: CommandModule = {
           let sessionID: SessionID
           const resolvedSession = await resolveSession(args.sessionID as string | undefined)
           if (!resolvedSession) {
-            console.log("No sessions found. Run ax-code first.")
+            printNoSessionFound()
             return
           }
           sessionID = resolvedSession.id

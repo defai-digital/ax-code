@@ -4,7 +4,7 @@ import { EventQuery } from "../../replay/query"
 import { SessionID } from "../../session/schema"
 import { ExecutionGraph } from "../../graph"
 import { GraphFormat } from "../../graph/format"
-import { resolveSession } from "./session-latest"
+import { printNoSessionFound, resolveSession } from "./session-latest"
 
 export const GraphCommand = cmd({
   command: "graph [sessionID]",
@@ -32,7 +32,7 @@ export const GraphCommand = cmd({
         let sessionID: SessionID
         const session = await resolveSession(args.sessionID as string | undefined)
         if (!session) {
-          console.log("No sessions found. Run ax-code first.")
+          printNoSessionFound()
           return
         }
         sessionID = session.id

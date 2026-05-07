@@ -7,3 +7,7 @@ export async function resolveSession(id?: string) {
   }
   return [...Session.list({ limit: 1 })][0]
 }
+
+export function printNoSessionFound() {
+  console.log("No sessions found. Run ax-code first.")
+}

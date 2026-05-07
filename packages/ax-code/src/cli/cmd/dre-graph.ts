@@ -2,7 +2,7 @@ import open from "open"
 import { DreGraphServer } from "./dre-graph-server"
 import { Instance } from "../../project/instance"
 import { cmd } from "./cmd"
-import { resolveSession } from "./session-latest"
+import { printNoSessionFound, resolveSession } from "./session-latest"
 
 async function target(id?: string) {
   return Instance.provide({
@@ -43,7 +43,7 @@ export const DreGraphCommand = cmd({
   async handler(args) {
     const hit = args.index ? undefined : await target(args.sessionID as string | undefined)
     if (!args.index && !hit) {
-      console.log("No sessions found. Run ax-code first.")
+      printNoSessionFound()
       return
     }
 
