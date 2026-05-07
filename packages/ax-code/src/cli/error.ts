@@ -3,6 +3,7 @@ import { Config } from "../config/config"
 import { MCP } from "../mcp"
 import { Provider } from "../provider/provider"
 import { UI } from "./ui"
+import { isRecord } from "@/util/record"
 
 export function FormatError(input: unknown) {
   if (MCP.Failed.isInstance(input))
@@ -45,7 +46,7 @@ export function FormatUnknownError(input: unknown): string {
     return input.stack ?? `${input.name}: ${input.message}`
   }
 
-  if (typeof input === "object" && input !== null) {
+  if (isRecord(input)) {
     try {
       return JSON.stringify(input, null, 2)
     } catch {

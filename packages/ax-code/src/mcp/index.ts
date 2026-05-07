@@ -26,6 +26,7 @@ import { BusEvent } from "../bus/bus-event"
 import { Bus } from "@/bus"
 import { TuiEvent } from "@/cli/cmd/tui/event"
 import open from "open"
+import { isRecord } from "@/util/record"
 
 export namespace MCP {
   const log = Log.create({ service: "mcp" })
@@ -209,8 +210,8 @@ export namespace MCP {
 
   type ResourceInfo = Awaited<ReturnType<MCPClient["listResources"]>>["resources"][number]
   type McpEntry = NonNullable<Config.Info["mcp"]>[string]
-  function isMcpConfigured(entry: McpEntry): entry is Config.Mcp {
-    return typeof entry === "object" && entry !== null && "type" in entry
+  export function isConfigured(entry: McpEntry): entry is Config.Mcp {
+    return isRecord(entry) && "type" in entry
   }
 
   async function descendants(pid: number): Promise<number[]> {
@@ -245,7 +246,7 @@ export namespace MCP {
 
       await Promise.all(
         Object.entries(config).map(async ([key, mcp]) => {
-          if (!isMcpConfigured(mcp)) {
+          if (!isConfigured(mcp)) {
             log.error("Ignoring MCP config entry without type", { key })
             return
           }
@@ -422,7 +423,7 @@ export namespace MCP {
     if (mcp.type === "remote") {
       // OAuth is enabled by default for remote servers unless explicitly disabled with oauth: false
       const oauthDisabled = mcp.oauth === false
-      const oauthConfig = typeof mcp.oauth === "object" ? mcp.oauth : undefined
+      const oauthConfig = isRecord(mcp.oauth) ? mcp.oauth : undefined
       let authProvider: McpOAuthProvider | undefined
 
       if (!oauthDisabled) {
@@ -686,7 +687,7 @@ export namespace MCP {
 
     // Include all configured MCPs from config, not just connected ones
     for (const [key, mcp] of Object.entries(config)) {
-      if (!isMcpConfigured(mcp)) continue
+      if (!isConfigured(mcp)) continue
       result[key] = s.status[key] ?? { status: "disabled" }
     }
 
@@ -736,7 +737,7 @@ export namespace MCP {
       return
     }
 
-    if (!isMcpConfigured(mcp)) {
+    if (!isConfigured(mcp)) {
       log.error("Ignoring MCP connect request for config without type", { name })
       return
     }
@@ -839,7 +840,7 @@ export namespace MCP {
       for (const { clientName, client, toolsResult } of toolsResults) {
         if (!toolsResult || "_failed" in toolsResult) continue
         const mcpConfig = config[clientName]
-        const entry = isMcpConfigured(mcpConfig) ? mcpConfig : undefined
+        const entry = isConfigured(mcpConfig) ? mcpConfig : undefined
         const timeout = entry?.timeout ?? defaultTimeout
         for (const mcpTool of toolsResult.tools) {
           const key = sanitize(clientName) + "_" + sanitize(mcpTool.name)
@@ -1000,7 +1001,7 @@ export namespace MCP {
       throw new Error(`MCP server not found: ${mcpName}`)
     }
 
-    if (!isMcpConfigured(mcpConfig)) {
+    if (!isConfigured(mcpConfig)) {
       throw new Error(`MCP server ${mcpName} is disabled or missing configuration`)
     }
 
@@ -1027,7 +1028,7 @@ export namespace MCP {
 
     // Create a new auth provider for this flow
     // OAuth config is optional - if not provided, we'll use auto-discovery
-    const oauthConfig = typeof mcpConfig.oauth === "object" ? mcpConfig.oauth : undefined
+    const oauthConfig = isRecord(mcpConfig.oauth) ? mcpConfig.oauth : undefined
     let capturedUrl: URL | undefined
     const authProvider = new McpOAuthProvider(
       mcpName,
@@ -1169,7 +1170,7 @@ export namespace MCP {
         throw new Error(`MCP server not found: ${mcpName}`)
       }
 
-      if (!isMcpConfigured(mcpConfig)) {
+      if (!isConfigured(mcpConfig)) {
         throw new Error(`MCP server ${mcpName} is disabled or missing configuration`)
       }
 
@@ -1209,7 +1210,7 @@ export namespace MCP {
     const cfg = await Config.get()
     const mcpConfig = cfg.mcp?.[mcpName]
     if (!mcpConfig) return false
-    if (!isMcpConfigured(mcpConfig)) return false
+    if (!isConfigured(mcpConfig)) return false
     return mcpConfig.type === "remote" && mcpConfig.oauth !== false
   }
 

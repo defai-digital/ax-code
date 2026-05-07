@@ -14,6 +14,7 @@ import { Storage } from "@/storage/storage"
 import { ProviderError } from "@/provider/error"
 import { iife } from "@/util/iife"
 import { Log } from "@/util/log"
+import { isRecord } from "@/util/record"
 import type { SystemError } from "bun"
 import type { Provider } from "@/provider/provider"
 import { ModelID, ProviderID } from "@/provider/schema"
@@ -614,7 +615,7 @@ export namespace MessageV2 {
 
     const toModelOutput = (opts: { toolCallId: string; input: unknown; output: unknown } | unknown) => {
       // AI SDK v6 passes { toolCallId, input, output }, v5 passed output directly
-      const output = opts && typeof opts === "object" && "output" in opts ? (opts as any).output : opts
+      const output = isRecord(opts) && "output" in opts ? opts.output : opts
       if (typeof output === "string") {
         return { type: "text", value: output }
       }
@@ -623,7 +624,7 @@ export namespace MessageV2 {
       // would fall into this branch and produce a content part with
       // `text: undefined`. Explicitly exclude null so it falls
       // through to the JSON fallback below.
-      if (typeof output === "object" && output !== null) {
+      if (isRecord(output)) {
         const outputObject = output as {
           text: string
           attachments?: Array<{ mime: string; url: string }>

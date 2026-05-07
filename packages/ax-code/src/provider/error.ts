@@ -1,6 +1,7 @@
 import { APICallError } from "ai"
 import { STATUS_CODES } from "http"
 import { iife } from "@/util/iife"
+import { isRecord } from "@/util/record"
 import type { ProviderID } from "./schema"
 
 export namespace ProviderError {
@@ -80,13 +81,13 @@ export namespace ProviderError {
     if (typeof input === "string") {
       try {
         const result = JSON.parse(input)
-        if (result && typeof result === "object") return result
+        if (isRecord(result)) return result
         return undefined
       } catch {
         return undefined
       }
     }
-    if (typeof input === "object" && input !== null) {
+    if (isRecord(input)) {
       return input
     }
     return undefined
@@ -126,11 +127,12 @@ export namespace ProviderError {
   export function parseStreamError(input: unknown): ParsedStreamError | undefined {
     const body = json(input)
     if (!body) return
+    const bodyError = isRecord(body.error) ? body.error : undefined
 
     const responseBody = JSON.stringify(body)
     if (body.type !== "error") return
 
-    switch (body?.error?.code) {
+    switch (bodyError?.code) {
       case "context_length_exceeded":
         return {
           type: "context_overflow",
@@ -154,7 +156,7 @@ export namespace ProviderError {
       case "invalid_prompt":
         return {
           type: "api_error",
-          message: typeof body?.error?.message === "string" ? body?.error?.message : "Invalid prompt.",
+          message: typeof bodyError?.message === "string" ? bodyError.message : "Invalid prompt.",
           isRetryable: false,
           responseBody,
         }
@@ -180,7 +182,8 @@ export namespace ProviderError {
   export function parseAPICallError(input: { providerID: ProviderID; error: APICallError }): ParsedAPICallError {
     const m = message(input.providerID, input.error)
     const body = json(input.error.responseBody)
-    if (isOverflow(m) || input.error.statusCode === 413 || body?.error?.code === "context_length_exceeded") {
+    const bodyError = isRecord(body?.error) ? body.error : undefined
+    if (isOverflow(m) || input.error.statusCode === 413 || bodyError?.code === "context_length_exceeded") {
       return {
         type: "context_overflow",
         message: m,

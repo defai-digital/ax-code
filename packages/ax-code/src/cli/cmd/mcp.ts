@@ -16,6 +16,7 @@ import { modify, applyEdits } from "jsonc-parser"
 import { Filesystem } from "../../util/filesystem"
 import { FileLock } from "../../util/filelock"
 import { Bus } from "../../bus"
+import { isRecord } from "../../util/record"
 import { available as discoverAvailable } from "../../mcp/discovery"
 import * as McpTemplates from "../../mcp/templates"
 
@@ -44,13 +45,10 @@ function getAuthStatusText(status: MCP.AuthStatus): string {
 type McpEntry = NonNullable<Config.Info["mcp"]>[string]
 
 type McpConfigured = Config.Mcp
-function isMcpConfigured(config: McpEntry): config is McpConfigured {
-  return typeof config === "object" && config !== null && "type" in config
-}
 
 type McpRemote = Extract<McpConfigured, { type: "remote" }>
 function isMcpRemote(config: McpEntry): config is McpRemote {
-  return isMcpConfigured(config) && config.type === "remote"
+  return MCP.isConfigured(config) && config.type === "remote"
 }
 
 export const McpCommand = cmd({
@@ -89,7 +87,7 @@ export const McpListCommand = cmd({
         const statuses = await MCP.status()
 
         const servers = Object.entries(mcpServers).filter((entry): entry is [string, McpConfigured] =>
-          isMcpConfigured(entry[1]),
+          MCP.isConfigured(entry[1]),
         )
 
         if (servers.length === 0) {
@@ -766,7 +764,7 @@ export const McpDebugCommand = cmd({
             prompts.log.warn("Server returned 401 Unauthorized")
 
             // Try to discover OAuth metadata
-            const oauthConfig = typeof serverConfig.oauth === "object" ? serverConfig.oauth : undefined
+            const oauthConfig = isRecord(serverConfig.oauth) ? serverConfig.oauth : undefined
             const authProvider = new McpOAuthProvider(
               serverName,
               serverConfig.url,
