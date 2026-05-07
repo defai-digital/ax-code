@@ -8,6 +8,10 @@ import { GraphFormat } from "../../graph/format"
 import { lazy } from "../../util/lazy"
 import { errors } from "../error"
 
+async function assertSessionExists(sessionID: SessionID) {
+  await Session.get(sessionID)
+}
+
 export const GraphRoutes = lazy(() =>
   new Hono()
     .get(
@@ -31,7 +35,7 @@ export const GraphRoutes = lazy(() =>
       validator("param", z.object({ sessionID: SessionID.zod })),
       async (c) => {
         const sid = c.req.valid("param").sessionID
-        await Session.get(sid)
+        await assertSessionExists(sid)
         const graph = ExecutionGraph.build(sid)
         return c.json({ data: GraphFormat.topologyLines(graph) } satisfies GraphFormat.TopologyResponse)
       },
@@ -69,7 +73,7 @@ export const GraphRoutes = lazy(() =>
       async (c) => {
         const sid = c.req.valid("param").sessionID
         const format = c.req.valid("query").format
-        await Session.get(sid)
+        await assertSessionExists(sid)
         const graph = ExecutionGraph.build(sid)
 
         if (format === "ascii") return c.text(GraphFormat.ascii(graph).join("\n"))
