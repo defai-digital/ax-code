@@ -8,6 +8,7 @@ import path from "path"
 import type { ProjectMemory, MemorySection, WarmupOptions } from "./types"
 import * as store from "./store"
 import { computeContentHash } from "./hash"
+import { recordCount } from "@/util/record"
 
 const DEFAULT_MAX_TOKENS = 4000
 const DEFAULT_DEPTH = 3
@@ -117,7 +118,7 @@ async function scanConfig(root: string): Promise<MemorySection> {
       parts.push(`Scripts: ${Object.keys(pkg.scripts).join(", ")}`)
     }
     if (pkg.dependencies) {
-      parts.push(`Dependencies: ${Object.keys(pkg.dependencies).length} packages`)
+      parts.push(`Dependencies: ${recordCount(pkg.dependencies)} packages`)
     }
   } catch (e) {
     if (!isFileNotFound(e) && !(e instanceof SyntaxError)) throw e

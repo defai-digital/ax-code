@@ -14,7 +14,7 @@ import {
 import { NativePerf } from "../../../perf/native"
 import { buildIndexReport, groupFilesByLanguage, isIndexableFile, probeLspServers } from "../index-graph"
 import { cmd } from "../cmd"
-import { isNonEmptyRecord } from "@/util/record"
+import { isNonEmptyRecord, recordCount } from "@/util/record"
 
 export type IndexReport = ReturnType<typeof buildIndexReport>
 export type CacheMode = "cold" | "warm-cache"
@@ -441,7 +441,7 @@ const PerfIndexCommand = cmd({
           console.log(`  cache:    ${currentCacheMode}`)
           if (probeResult) {
             console.log(
-              `  probe:    ${probeResult.ready.length} ready, ${Object.keys(probeResult.missing).length} missing`,
+              `  probe:    ${probeResult.ready.length} ready, ${recordCount(probeResult.missing)} missing`,
             )
           }
           console.log("")

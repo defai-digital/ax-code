@@ -18,6 +18,7 @@ import { Log } from "../../util/log"
 import { Filesystem } from "../../util/filesystem"
 import { NativeAddon } from "../../native/addon"
 import { Database } from "../../storage/db"
+import { recordCount } from "@/util/record"
 import { getTuiPreloadCheck } from "./doctor-preload"
 import { getDoctorDatabaseCheck } from "./doctor-storage"
 import { getRecentLogsChecks, getRunningInstancesCheck } from "./doctor-health"
@@ -132,7 +133,7 @@ export const DoctorCommand: CommandModule = {
     // 5. Config
     try {
       const config = await Config.get()
-      const providerCount = Object.keys(config.provider ?? {}).length
+      const providerCount = recordCount(config.provider)
       checks.push({
         name: "Configuration",
         status: "ok",

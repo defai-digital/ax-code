@@ -19,7 +19,7 @@ import { Global } from "../global"
 import path from "path"
 import { Filesystem } from "../util/filesystem"
 import { withTimeout } from "../util/timeout"
-import { isNonEmptyRecord } from "@/util/record"
+import { isNonEmptyRecord, recordCount } from "@/util/record"
 
 // Direct imports for bundled providers
 import { createGoogleGenerativeAI } from "@ai-sdk/google"
@@ -689,7 +689,7 @@ export namespace Provider {
       }
     }
 
-    const providerCount = Object.keys(providers).length
+    const providerCount = recordCount(providers)
     if (initFailures.length > 0) {
       log.warn("provider init completed with failures", {
         command: "provider.init",

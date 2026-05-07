@@ -4,7 +4,7 @@ import { useTheme } from "../context/theme"
 import { useDialog } from "@tui/ui/dialog"
 import { useSync } from "@tui/context/sync"
 import { For, Match, Switch, Show, createMemo } from "solid-js"
-import { isNonEmptyRecord } from "@/util/record"
+import { isNonEmptyRecord, recordCount } from "@/util/record"
 
 export type DialogStatusProps = {}
 
@@ -53,7 +53,7 @@ export function DialogStatus() {
       </box>
       <Show when={hasMcp()} fallback={<text fg={theme.text}>No MCP Servers</text>}>
         <box>
-          <text fg={theme.text}>{Object.keys(sync.data.mcp).length} MCP Servers</text>
+          <text fg={theme.text}>{recordCount(sync.data.mcp)} MCP Servers</text>
           <For each={Object.entries(sync.data.mcp)}>
             {([key, item]) => (
               <box flexDirection="row" gap={1}>

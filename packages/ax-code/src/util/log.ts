@@ -7,6 +7,7 @@ import { Global } from "../global"
 import z from "zod"
 import { Glob } from "./glob"
 import { withTimeout } from "./timeout"
+import { recordCount } from "./record"
 
 // Pino instance — only active when logging to file (not stderr).
 // Avoids interleaving JSON and text on the same stream.
@@ -52,7 +53,7 @@ export namespace Log {
   const loggers = new Map<string, Logger>()
   function isCacheableTags(tags: Record<string, any>) {
     const service = tags["service"]
-    return typeof service === "string" && Object.keys(tags).length === 1
+    return typeof service === "string" && recordCount(tags) === 1
   }
 
   export const Default = create({ service: "default" })

@@ -9,6 +9,7 @@ import { scheduleDeferredStartupTask } from "@tui/util/startup-task"
 import { optionalStateErrorMessage, shouldSurfaceOptionalStateError } from "@tui/util/optional-state"
 import { useToast } from "../../ui/toast"
 import { Log } from "@/util/log"
+import { recordCount } from "@/util/record"
 
 function calculateFrecency(entry?: { frequency: number; lastOpen: number }): number {
   if (!entry) return 0
@@ -163,7 +164,7 @@ export const { use: useFrecency, provider: FrecencyProvider } = createSimpleCont
         })
 
       if (
-        Object.keys(store.data).length > MAX_FRECENCY_ENTRIES ||
+        recordCount(store.data) > MAX_FRECENCY_ENTRIES ||
         writesSinceCompact >= FRECENCY_COMPACT_WRITE_THRESHOLD
       ) {
         compact()

@@ -12,6 +12,7 @@ import { Flag } from "@/flag/flag"
 import { Global } from "@/global"
 import { Permission } from "@/permission"
 import { Filesystem } from "@/util/filesystem"
+import { recordCount } from "@/util/record"
 import { Config } from "../config/config"
 import { ConfigMarkdown } from "../config/markdown"
 import { Glob } from "../util/glob"
@@ -184,7 +185,7 @@ export namespace Skill {
             }
           }
 
-          log.info("init", { count: Object.keys(s.skills).length })
+          log.info("init", { count: recordCount(s.skills) })
           return s
         }),
       )
