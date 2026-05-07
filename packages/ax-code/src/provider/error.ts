@@ -107,7 +107,7 @@ export namespace ProviderError {
   }
 
   function alibabaTokenPlanQuotaMessage() {
-    return "Alibaba token-plan rejected the request as exceeding short-window allocatable token quota. This is usually a per-request or TPS/TPM reservation limit, not the total Token Plan usage percentage. ax-code keeps Token Plan output/thinking budgets conservative by default; wait briefly or lower the configured model output limit if it persists. Details: https://www.alibabacloud.com/help/en/model-studio/error-code#token-limit"
+    return "Alibaba token-plan rejected the request as exceeding short-window allocatable token quota. This is usually a per-request or TPS/TPM reservation limit, not the total Token Plan usage percentage. ax-code treats this as retryable short-window throttling; if it persists, wait briefly or lower the configured model output limit. Details: https://www.alibabacloud.com/help/en/model-studio/error-code#token-limit"
   }
 
   export type ParsedStreamError =
@@ -195,10 +195,13 @@ export namespace ProviderError {
         type: "api_error",
         message: alibabaTokenPlanQuotaMessage(),
         statusCode: input.error.statusCode,
-        isRetryable: false,
+        isRetryable: true,
         responseHeaders: input.error.responseHeaders,
         responseBody: input.error.responseBody,
-        metadata,
+        metadata: {
+          ...(metadata ?? {}),
+          errorCode: "alibaba_token_plan_short_window_quota",
+        },
       }
     }
 

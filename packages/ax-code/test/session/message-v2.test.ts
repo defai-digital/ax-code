@@ -901,7 +901,7 @@ describe("session.message-v2.fromError", () => {
     expect(MessageV2.APIError.isInstance(result)).toBe(true)
   })
 
-  test("normalizes Alibaba token-plan quota exhaustion as non-retryable", () => {
+  test("normalizes Alibaba token-plan quota exhaustion as retryable short-window throttling", () => {
     const responseBody = JSON.stringify({
       error: {
         code: "AllocatedQuotaExceeded",
@@ -926,10 +926,14 @@ describe("session.message-v2.fromError", () => {
       name: "APIError",
       data: {
         message:
-          "Alibaba token-plan rejected the request as exceeding short-window allocatable token quota. This is usually a per-request or TPS/TPM reservation limit, not the total Token Plan usage percentage. ax-code keeps Token Plan output/thinking budgets conservative by default; wait briefly or lower the configured model output limit if it persists. Details: https://www.alibabacloud.com/help/en/model-studio/error-code#token-limit",
-        isRetryable: false,
+          "Alibaba token-plan rejected the request as exceeding short-window allocatable token quota. This is usually a per-request or TPS/TPM reservation limit, not the total Token Plan usage percentage. ax-code treats this as retryable short-window throttling; if it persists, wait briefly or lower the configured model output limit. Details: https://www.alibabacloud.com/help/en/model-studio/error-code#token-limit",
+        isRetryable: true,
         statusCode: 429,
         responseBody,
+        metadata: {
+          errorCode: "alibaba_token_plan_short_window_quota",
+          url: "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1/chat/completions",
+        },
       },
     })
   })
@@ -959,10 +963,14 @@ describe("session.message-v2.fromError", () => {
       name: "APIError",
       data: {
         message:
-          "Alibaba token-plan rejected the request as exceeding short-window allocatable token quota. This is usually a per-request or TPS/TPM reservation limit, not the total Token Plan usage percentage. ax-code keeps Token Plan output/thinking budgets conservative by default; wait briefly or lower the configured model output limit if it persists. Details: https://www.alibabacloud.com/help/en/model-studio/error-code#token-limit",
-        isRetryable: false,
+          "Alibaba token-plan rejected the request as exceeding short-window allocatable token quota. This is usually a per-request or TPS/TPM reservation limit, not the total Token Plan usage percentage. ax-code treats this as retryable short-window throttling; if it persists, wait briefly or lower the configured model output limit. Details: https://www.alibabacloud.com/help/en/model-studio/error-code#token-limit",
+        isRetryable: true,
         statusCode: 429,
         responseBody,
+        metadata: {
+          errorCode: "alibaba_token_plan_short_window_quota",
+          url: "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1/chat/completions",
+        },
       },
     })
   })

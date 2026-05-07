@@ -8,6 +8,7 @@ export namespace SessionRetry {
   export const RETRY_MAX_DELAY_NO_HEADERS = 30_000 // 30 seconds
   export const RETRY_MAX_DELAY = 2_147_483_647 // max 32-bit signed integer for setTimeout
   export const RETRY_MAX_ATTEMPTS = 5
+  const ALIBABA_TOKEN_PLAN_QUOTA_RETRY_DELAY = 60_000
 
   export async function sleep(ms: number, signal: AbortSignal): Promise<void> {
     if (signal.aborted) throw new DOMException("Aborted", "AbortError")
@@ -27,9 +28,28 @@ export namespace SessionRetry {
     })
   }
 
+  function isAlibabaTokenPlanShortWindowQuota(error: MessageV2.APIError) {
+    return error.data.metadata?.errorCode === "alibaba_token_plan_short_window_quota"
+  }
+
   export function delay(attempt: number, error?: MessageV2.APIError) {
     if (error) {
       const headers = error.data.responseHeaders
+      if (isAlibabaTokenPlanShortWindowQuota(error)) {
+        const retryAfterMs = headers?.["retry-after-ms"]
+        if (retryAfterMs) {
+          const parsedMs = Number.parseFloat(retryAfterMs)
+          if (!Number.isNaN(parsedMs)) return Math.min(parsedMs, RETRY_MAX_DELAY)
+        }
+        const retryAfter = headers?.["retry-after"]
+        if (retryAfter) {
+          const parsedSeconds = Number.parseFloat(retryAfter)
+          if (!Number.isNaN(parsedSeconds)) return Math.min(Math.ceil(parsedSeconds * 1000), RETRY_MAX_DELAY)
+          const parsed = Date.parse(retryAfter) - Date.now()
+          if (!Number.isNaN(parsed) && parsed > 0) return Math.min(Math.ceil(parsed), RETRY_MAX_DELAY)
+        }
+        return jitter(ALIBABA_TOKEN_PLAN_QUOTA_RETRY_DELAY)
+      }
       if (headers) {
         const retryAfterMs = headers["retry-after-ms"]
         if (retryAfterMs) {
@@ -98,6 +118,7 @@ export namespace SessionRetry {
     if (MessageV2.APIError.isInstance(error)) {
       const message = typeof error.data?.message === "string" ? error.data.message : "Unknown API error"
       if (!error.data?.isRetryable) return undefined
+      if (isAlibabaTokenPlanShortWindowQuota(error)) return message
       // Billing / quota exhaustion — retrying won't change the account
       // balance. Surface the error immediately instead of burning 60s
       // of exponential backoff. This overrides the AI SDK's blanket
