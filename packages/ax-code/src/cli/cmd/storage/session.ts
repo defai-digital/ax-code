@@ -82,10 +82,22 @@ type CurrentProjectSessionContext = {
   duplicateProjectIdentities: DuplicateProjectIdentity[]
 }
 
+type ProjectCleanupSessionContext = CurrentProjectSessionContext & {
+  deletionRoots: Session.Info[]
+}
+
 async function getCurrentProjectSessionContext(): Promise<CurrentProjectSessionContext> {
   return {
     sessions: [...Session.list()],
     duplicateProjectIdentities: await getDuplicateProjectIdentities(),
+  }
+}
+
+async function getCurrentProjectCleanupContext(): Promise<ProjectCleanupSessionContext> {
+  const sessionsContext = await getCurrentProjectSessionContext()
+  return {
+    ...sessionsContext,
+    deletionRoots: sessionsContext.sessions.filter((session) => !session.parentID),
   }
 }
 
@@ -96,6 +108,11 @@ function printNoSessionsForCurrentProjectWarning(duplicateProjectIdentities: Dup
       `This worktree also has duplicate project identities: ${formatDuplicateProjectIdentities(duplicateProjectIdentities)}`,
     )
   }
+}
+
+function printDuplicateProjectIdentities(prefix: string, duplicateProjectIdentities: DuplicateProjectIdentity[]) {
+  if (duplicateProjectIdentities.length === 0) return
+  printWarning(`${prefix}: ${formatDuplicateProjectIdentities(duplicateProjectIdentities)}`)
 }
 
 async function backupSessions(input: {
@@ -194,8 +211,7 @@ export const SessionClearProjectCommand = cmd({
   },
   handler: async (args) => {
     await bootstrap(process.cwd(), async () => {
-      const { sessions, duplicateProjectIdentities } = await getCurrentProjectSessionContext()
-      const deletionRoots = sessions.filter((session) => !session.parentID)
+      const { sessions, duplicateProjectIdentities, deletionRoots } = await getCurrentProjectCleanupContext()
 
       if (sessions.length === 0) {
         printNoSessionsForCurrentProjectWarning(duplicateProjectIdentities)
@@ -210,13 +226,10 @@ export const SessionClearProjectCommand = cmd({
       })
       UI.println(`Backed up ${sessions.length} session${sessions.length === 1 ? "" : "s"} to ${backupPath}`)
       UI.println(`Backup scope: current project id only (${Instance.project.id})`)
-      if (duplicateProjectIdentities.length > 0) {
-        printWarning(
-          `Only sessions for the current project id will be deleted. Duplicate identities remain: ${formatDuplicateProjectIdentities(
-            duplicateProjectIdentities,
-          )}`,
-        )
-      }
+      printDuplicateProjectIdentities(
+        "Only sessions for the current project id will be deleted. Duplicate identities remain",
+        duplicateProjectIdentities,
+      )
 
       if (!args.yes) {
         UI.println("Dry run only. Re-run with --yes to delete these sessions.")
@@ -247,8 +260,7 @@ export const SessionBackupProjectCommand = cmd({
   },
   handler: async (args) => {
     await bootstrap(process.cwd(), async () => {
-      const { sessions, duplicateProjectIdentities } = await getCurrentProjectSessionContext()
-      const deletionRoots = sessions.filter((session) => !session.parentID)
+      const { sessions, duplicateProjectIdentities, deletionRoots } = await getCurrentProjectCleanupContext()
 
       if (sessions.length === 0) {
         printNoSessionsForCurrentProjectWarning(duplicateProjectIdentities)
@@ -263,9 +275,7 @@ export const SessionBackupProjectCommand = cmd({
       })
       UI.println(`Backed up ${sessions.length} session${sessions.length === 1 ? "" : "s"} to ${backupPath}`)
       UI.println(`Backup scope: current project id only (${Instance.project.id})`)
-      if (duplicateProjectIdentities.length > 0) {
-        printWarning(`Duplicate project identities detected: ${formatDuplicateProjectIdentities(duplicateProjectIdentities)}`)
-      }
+      printDuplicateProjectIdentities("Duplicate project identities detected", duplicateProjectIdentities)
     })
   },
 })
@@ -302,9 +312,7 @@ export const SessionProjectStatusCommand = cmd({
       UI.println(`Directory: ${payload.directory}`)
       UI.println(`Sessions: ${payload.sessions} (${payload.rootSessions} root, ${payload.childSessions} child)`)
       if (payload.duplicateProjectIdentities.length > 0) {
-        printWarning(
-          `Duplicate project identities detected: ${formatDuplicateProjectIdentities(payload.duplicateProjectIdentities)}`,
-        )
+        printDuplicateProjectIdentities("Duplicate project identities detected", payload.duplicateProjectIdentities)
       }
       if (payload.latest.length > 0) {
         UI.println("Latest:")
