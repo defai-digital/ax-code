@@ -1,6 +1,7 @@
 import { createStore } from "solid-js/store"
 import { createSimpleContext } from "./helper"
 import type { PromptInfo } from "../component/prompt/history"
+import { pickFirstEnvValue } from "../util/env"
 
 export type HomeRoute = {
   type: "home"
@@ -43,7 +44,7 @@ export const { use: useRoute, provider: RouteProvider } = createSimpleContext({
   name: "Route",
   init: () => {
     const [store, setStore] = createStore<Route>(
-      parseInitialRoute(process.env["AX_CODE_ROUTE"] || process.env["OPENCODE_ROUTE"]),
+      parseInitialRoute(pickFirstEnvValue({ env: process.env, names: ["AX_CODE_ROUTE", "OPENCODE_ROUTE"] })),
     )
 
     return {

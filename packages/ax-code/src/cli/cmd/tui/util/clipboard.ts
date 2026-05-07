@@ -9,6 +9,7 @@ import { Filesystem } from "../../../../util/filesystem"
 import { Process } from "../../../../util/process"
 import { which } from "../../../../util/which"
 import { Log } from "../../../../util/log"
+import { pickFirstEnvValue } from "./env"
 
 const log = Log.create({ service: "tui.clipboard" })
 
@@ -24,7 +25,7 @@ function writeOsc52(text: string): void {
   if (Buffer.byteLength(text, "utf8") > OSC52_MAX_BYTES) return
   const base64 = Buffer.from(text).toString("base64")
   const osc52 = `\x1b]52;c;${base64}\x07`
-  const passthrough = process.env["TMUX"] || process.env["STY"]
+  const passthrough = pickFirstEnvValue({ env: process.env, names: ["TMUX", "STY"] })
   const sequence = passthrough ? `\x1bPtmux;\x1b${osc52}\x1b\\` : osc52
   process.stdout.write(sequence)
 }

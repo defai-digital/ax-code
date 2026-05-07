@@ -5,6 +5,17 @@ export interface ParseIntegerEnvInput {
   min?: number
 }
 
+export function pickFirstEnvValue(input: {
+  env: Record<string, string | undefined>
+  names: readonly string[]
+}): string | undefined {
+  for (const name of input.names) {
+    const value = input.env[name]
+    if (value) return value
+  }
+  return undefined
+}
+
 export function parseIntegerEnv(input: ParseIntegerEnvInput): number {
   const value = input.env[input.name]
   if (!value) return input.fallback

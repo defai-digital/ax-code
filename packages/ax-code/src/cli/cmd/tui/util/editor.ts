@@ -5,6 +5,7 @@ import { join } from "node:path"
 import { CliRenderer } from "@opentui/core"
 import { Filesystem } from "@/util/filesystem"
 import { Process } from "@/util/process"
+import { pickFirstEnvValue } from "./env"
 
 export namespace Editor {
   function parseCommand(input: string) {
@@ -51,7 +52,7 @@ export namespace Editor {
   }
 
   export async function open(opts: { value: string; renderer: CliRenderer }): Promise<string | undefined> {
-    const editor = process.env["VISUAL"] || process.env["EDITOR"]
+    const editor = pickFirstEnvValue({ env: process.env, names: ["VISUAL", "EDITOR"] })
     if (!editor) return
 
     const filepath = join(tmpdir(), `${Date.now()}-${crypto.randomUUID()}.md`)
