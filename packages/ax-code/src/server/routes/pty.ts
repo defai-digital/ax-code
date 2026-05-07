@@ -11,6 +11,7 @@ import { Log } from "@/util/log"
 import { parseRouteParam } from "./route-params"
 
 const log = Log.create({ service: "server.pty" })
+const PTY_ID_PARAM = z.object({ ptyID: PtyID.zod })
 
 export const PtyRoutes = lazy(() =>
   new Hono()
@@ -77,7 +78,7 @@ export const PtyRoutes = lazy(() =>
           ...errors(404),
         },
       }),
-      validator("param", z.object({ ptyID: PtyID.zod })),
+      validator("param", PTY_ID_PARAM),
       async (c) => {
         const ptyID = parseRouteParam<"ptyID", PtyID>(c, "ptyID")
         const info = await Pty.get(ptyID)
@@ -105,7 +106,7 @@ export const PtyRoutes = lazy(() =>
           ...errors(400),
         },
       }),
-      validator("param", z.object({ ptyID: PtyID.zod })),
+      validator("param", PTY_ID_PARAM),
       validator("json", Pty.UpdateInput),
       async (c) => {
         const ptyID = parseRouteParam<"ptyID", PtyID>(c, "ptyID")
@@ -131,7 +132,7 @@ export const PtyRoutes = lazy(() =>
           ...errors(404),
         },
       }),
-      validator("param", z.object({ ptyID: PtyID.zod })),
+      validator("param", PTY_ID_PARAM),
       async (c) => {
         const ptyID = parseRouteParam<"ptyID", PtyID>(c, "ptyID")
         await Pty.remove(ptyID)
@@ -156,7 +157,7 @@ export const PtyRoutes = lazy(() =>
           ...errors(404),
         },
       }),
-      validator("param", z.object({ ptyID: PtyID.zod })),
+      validator("param", PTY_ID_PARAM),
       upgradeWebSocket(async (c) => {
         const id = PtyID.zod.parse(c.req.param("ptyID"))
         const cursor = (() => {

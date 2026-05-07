@@ -12,6 +12,9 @@ const MCP_NAME_PARAM = z
   .min(1)
   .max(64)
   .regex(/^[a-zA-Z0-9_-]+$/)
+const MCP_NAME_PARAM_OBJECT = z.object({
+  name: MCP_NAME_PARAM,
+})
 
 export const McpRoutes = lazy(() =>
   new Hono()
@@ -89,12 +92,7 @@ export const McpRoutes = lazy(() =>
           ...errors(400, 404),
         },
       }),
-      validator(
-        "param",
-        z.object({
-          name: MCP_NAME_PARAM,
-        }),
-      ),
+      validator("param", MCP_NAME_PARAM_OBJECT),
       async (c) => {
         const name = parseRouteParam<"name", string>(c, "name")
         const supportsOAuth = await MCP.supportsOAuth(name)
@@ -124,12 +122,7 @@ export const McpRoutes = lazy(() =>
           ...errors(400, 404),
         },
       }),
-      validator(
-        "param",
-        z.object({
-          name: MCP_NAME_PARAM,
-        }),
-      ),
+      validator("param", MCP_NAME_PARAM_OBJECT),
       validator(
         "json",
         z.object({
@@ -161,12 +154,7 @@ export const McpRoutes = lazy(() =>
           ...errors(400, 404),
         },
       }),
-      validator(
-        "param",
-        z.object({
-          name: MCP_NAME_PARAM,
-        }),
-      ),
+      validator("param", MCP_NAME_PARAM_OBJECT),
       async (c) => {
         const name = parseRouteParam<"name", string>(c, "name")
         const supportsOAuth = await MCP.supportsOAuth(name)
@@ -195,12 +183,7 @@ export const McpRoutes = lazy(() =>
           ...errors(404),
         },
       }),
-      validator(
-        "param",
-        z.object({
-          name: MCP_NAME_PARAM,
-        }),
-      ),
+      validator("param", MCP_NAME_PARAM_OBJECT),
       async (c) => {
         const name = parseRouteParam<"name", string>(c, "name")
         await MCP.removeAuth(name)
@@ -223,7 +206,7 @@ export const McpRoutes = lazy(() =>
           },
         },
       }),
-      validator("param", z.object({ name: MCP_NAME_PARAM })),
+      validator("param", MCP_NAME_PARAM_OBJECT),
       async (c) => {
         const name = parseRouteParam<"name", string>(c, "name")
         await MCP.connect(name)
@@ -246,7 +229,7 @@ export const McpRoutes = lazy(() =>
           },
         },
       }),
-      validator("param", z.object({ name: MCP_NAME_PARAM })),
+      validator("param", MCP_NAME_PARAM_OBJECT),
       async (c) => {
         const name = parseRouteParam<"name", string>(c, "name")
         await MCP.disconnect(name)
