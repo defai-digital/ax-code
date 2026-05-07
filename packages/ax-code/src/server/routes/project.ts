@@ -10,6 +10,8 @@ import { lazy } from "../../util/lazy"
 import { InstanceBootstrap } from "../../project/bootstrap"
 import { parseRouteParam } from "./route-params"
 
+const PROJECT_ID_PARAM = z.object({ projectID: ProjectID.zod })
+
 export const ProjectRoutes = lazy(() =>
   new Hono()
     .get(
@@ -109,7 +111,7 @@ export const ProjectRoutes = lazy(() =>
           ...errors(400, 404),
         },
       }),
-      validator("param", z.object({ projectID: ProjectID.zod })),
+      validator("param", PROJECT_ID_PARAM),
       validator("json", Project.UpdateInput.omit({ projectID: true })),
       async (c) => {
         const projectID = parseRouteParam<"projectID", ProjectID>(c, "projectID")
