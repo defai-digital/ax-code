@@ -2052,6 +2052,17 @@ export namespace SessionPrompt {
             return pieces
           }
           const url = new URL(part.url)
+          const createReadFailurePart = (options: { error: unknown; filepath: string }) => {
+            const message = options.error instanceof Error ? options.error.message : `${options.error}`
+            Session.publishError({ sessionID: input.sessionID, message })
+            return {
+              messageID: info.id,
+              sessionID: input.sessionID,
+              type: "text" as const,
+              synthetic: true,
+              text: `Read tool failed to read ${options.filepath} with the following error: ${message}`,
+            }
+          }
           switch (url.protocol) {
             case "data:":
               if (part.mime === "text/plain") {
@@ -2236,15 +2247,7 @@ export namespace SessionPrompt {
                       sessionID: input.sessionID,
                       error,
                     })
-                    const message = error instanceof Error ? error.message : error.toString()
-                    Session.publishError({ sessionID: input.sessionID, message })
-                    pieces.push({
-                      messageID: info.id,
-                      sessionID: input.sessionID,
-                      type: "text",
-                      synthetic: true,
-                      text: `Read tool failed to read ${filepath} with the following error: ${message}`,
-                    })
+                    pieces.push(createReadFailurePart({ error, filepath }))
                   })
 
                 return pieces
@@ -2295,17 +2298,7 @@ export namespace SessionPrompt {
                       sessionID: input.sessionID,
                       error,
                     })
-                    const message = error instanceof Error ? error.message : error.toString()
-                    Session.publishError({ sessionID: input.sessionID, message })
-                    return [
-                      {
-                        messageID: info.id,
-                        sessionID: input.sessionID,
-                        type: "text" as const,
-                        synthetic: true,
-                        text: `Read tool failed to read ${filepath} with the following error: ${message}`,
-                      },
-                    ]
+                    return [createReadFailurePart({ error, filepath })]
                   })
               }
 
@@ -2343,16 +2336,8 @@ export namespace SessionPrompt {
                   sessionID: input.sessionID,
                   error,
                 })
-                const message = error instanceof Error ? error.message : String(error)
-                Session.publishError({ sessionID: input.sessionID, message })
                 return [
-                  {
-                    messageID: info.id,
-                    sessionID: input.sessionID,
-                    type: "text" as const,
-                    synthetic: true,
-                    text: `Read tool failed to read ${filepath} with the following error: ${message}`,
-                  },
+                  createReadFailurePart({ error, filepath }),
                 ]
               }
             default:
