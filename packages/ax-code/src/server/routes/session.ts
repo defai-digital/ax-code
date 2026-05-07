@@ -144,8 +144,28 @@ type SessionPathContext = {
   }
 }
 
+type SessionMessagePathContext = {
+  req: {
+    valid: (input: "param") => { sessionID: SessionID; messageID: MessageID }
+  }
+}
+
+type SessionPartPathContext = {
+  req: {
+    valid: (input: "param") => { sessionID: SessionID; messageID: MessageID; partID: PartID }
+  }
+}
+
 function parseSessionID(c: SessionPathContext) {
   return c.req.valid("param").sessionID
+}
+
+function parseSessionMessageParams(c: SessionMessagePathContext) {
+  return c.req.valid("param")
+}
+
+function parseSessionPartParams(c: SessionPartPathContext) {
+  return c.req.valid("param")
 }
 
 async function parseProjectSession(c: SessionPathContext) {
@@ -1063,7 +1083,7 @@ export const SessionRoutes = lazy(() =>
         }),
       ),
       async (c) => {
-        const params = c.req.valid("param")
+        const params = parseSessionMessageParams(c)
         const message = await MessageV2.get({
           sessionID: params.sessionID,
           messageID: params.messageID,
@@ -1098,7 +1118,7 @@ export const SessionRoutes = lazy(() =>
         }),
       ),
       async (c) => {
-        const params = c.req.valid("param")
+        const params = parseSessionMessageParams(c)
         // The busy gate exists to stop concurrent edits from racing
         // in-flight reads/writes of the conversation. It can be safely
         // skipped when the delete cannot affect any in-flight state:
@@ -1150,7 +1170,7 @@ export const SessionRoutes = lazy(() =>
         }),
       ),
       async (c) => {
-        const params = c.req.valid("param")
+        const params = parseSessionPartParams(c)
         SessionPrompt.assertNotBusy(params.sessionID)
         await Session.removePart({
           sessionID: params.sessionID,
@@ -1187,7 +1207,7 @@ export const SessionRoutes = lazy(() =>
       ),
       validator("json", MessageV2.Part),
       async (c) => {
-        const params = c.req.valid("param")
+        const params = parseSessionPartParams(c)
         SessionPrompt.assertNotBusy(params.sessionID)
         const body = c.req.valid("json")
         if (body.id !== params.partID || body.messageID !== params.messageID || body.sessionID !== params.sessionID) {
