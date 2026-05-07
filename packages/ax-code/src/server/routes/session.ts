@@ -144,6 +144,18 @@ type SessionPathContext = {
   }
 }
 
+type SessionComparePathContext = {
+  req: {
+    valid: (input: "param") => { sessionID: SessionID; otherSessionID: SessionID }
+  }
+}
+
+type SessionPermissionPathContext = {
+  req: {
+    valid: (input: "param") => { sessionID: SessionID; permissionID: PermissionID }
+  }
+}
+
 type SessionMessagePathContext = {
   req: {
     valid: (input: "param") => { sessionID: SessionID; messageID: MessageID }
@@ -158,6 +170,14 @@ type SessionPartPathContext = {
 
 function parseSessionID(c: SessionPathContext) {
   return c.req.valid("param").sessionID
+}
+
+function parseSessionCompareParams(c: SessionComparePathContext) {
+  return c.req.valid("param")
+}
+
+function parseSessionPermissionParams(c: SessionPermissionPathContext) {
+  return c.req.valid("param")
 }
 
 function parseSessionMessageParams(c: SessionMessagePathContext) {
@@ -536,7 +556,7 @@ export const SessionRoutes = lazy(() =>
         }),
       ),
       async (c) => {
-        const params = c.req.valid("param")
+        const params = parseSessionCompareParams(c)
         const query = c.req.valid("query")
         const result = await SessionCompare.compare({
           sessionID: params.sessionID,
@@ -868,9 +888,9 @@ export const SessionRoutes = lazy(() =>
       ),
       async (c) => {
         const query = c.req.valid("query")
-        const params = c.req.valid("param")
+        const sessionID = parseSessionID(c)
         const result = await SessionSummary.diff({
-          sessionID: params.sessionID,
+          sessionID,
           messageID: query.messageID,
         })
         return c.json(result)
@@ -1515,7 +1535,7 @@ export const SessionRoutes = lazy(() =>
       ),
       validator("json", z.object({ response: Permission.Reply })),
       async (c) => {
-        const params = c.req.valid("param")
+        const params = parseSessionPermissionParams(c)
         await Permission.reply({
           requestID: params.permissionID,
           reply: c.req.valid("json").response,
