@@ -1,10 +1,10 @@
 import { cmd } from "./cmd"
 import { Instance } from "../../project/instance"
 import { EventQuery } from "../../replay/query"
-import { Session } from "../../session"
 import { SessionID } from "../../session/schema"
 import { ExecutionGraph } from "../../graph"
 import { GraphFormat } from "../../graph/format"
+import { getLatestSession } from "./session-latest"
 
 export const GraphCommand = cmd({
   command: "graph [sessionID]",
@@ -33,10 +33,7 @@ export const GraphCommand = cmd({
         if (args.sessionID) {
           sessionID = SessionID.make(args.sessionID as string)
         } else {
-          let latest: Awaited<ReturnType<typeof Session.get>> | undefined
-          for await (const s of Session.list({ limit: 1 })) {
-            latest = s
-          }
+          const latest = await getLatestSession()
           if (!latest) {
             console.log("No sessions found. Run ax-code first.")
             return

@@ -4,6 +4,7 @@ import { Instance } from "../../project/instance"
 import { Session } from "../../session"
 import { SessionID } from "../../session/schema"
 import { cmd } from "./cmd"
+import { getLatestSession } from "./session-latest"
 
 async function target(id?: string) {
   return Instance.provide({
@@ -15,8 +16,7 @@ async function target(id?: string) {
         return { sid, dir: session.directory }
       }
 
-      let latest: Awaited<ReturnType<typeof Session.get>> | undefined
-      for await (const item of Session.list({ limit: 1 })) latest = item
+      const latest = await getLatestSession()
       if (!latest) return
 
       return { sid: latest.id, dir: latest.directory }

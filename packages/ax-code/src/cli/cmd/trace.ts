@@ -16,6 +16,7 @@ import { SessionID } from "../../session/schema"
 import type { ReplayEvent } from "../../replay/event"
 import path from "path"
 import fs from "fs/promises"
+import { getLatestSession } from "./session-latest"
 
 interface LogEntry {
   level: string
@@ -84,10 +85,7 @@ export const TraceCommand: CommandModule = {
           if (args.sessionID) {
             sessionID = SessionID.make(args.sessionID as string)
           } else {
-            let latest: Awaited<ReturnType<typeof Session.get>> | undefined
-            for await (const s of Session.list({ limit: 1 })) {
-              latest = s
-            }
+            const latest = await getLatestSession()
             if (!latest) {
               console.log("No sessions found. Run ax-code first.")
               return
