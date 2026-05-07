@@ -1,3 +1,4 @@
+import { Locale } from "@/util/locale"
 import { asRecordOrUndefined } from "../util/record"
 export namespace AutonomousCompletionGate {
   export type Todo = {
@@ -68,7 +69,7 @@ export namespace AutonomousCompletionGate {
         status: "blocked",
         reason: "unfinished_todos",
         signature: `todos:${pendingTodos.map((todo) => `${todo.status}:${todo.content}`).join("|")}`,
-        message: `${pendingTodos.length} todo${pendingTodos.length === 1 ? "" : "s"} remain unfinished.`,
+        message: `${Locale.pluralize(pendingTodos.length, "{} todo remains", "{} todos remain")} unfinished.`,
         pendingTodos,
       }
     }

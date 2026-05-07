@@ -54,6 +54,7 @@ import { Isolation } from "@/isolation"
 import { SessionSummary } from "./summary"
 import { NamedError } from "@ax-code/util/error"
 import { fn } from "@/util/fn"
+import { Locale } from "@/util/locale"
 import { SessionProcessor } from "./processor"
 import { TaskTool } from "@/tool/task"
 import { Tool } from "@/tool/tool"
@@ -1265,8 +1266,11 @@ export namespace SessionPrompt {
                 {
                   type: "text",
                   text:
-                    `Autonomous mode has reached a large context while ${pendingTodos.length} unfinished ` +
-                    `todo${pendingTodos.length === 1 ? "" : "s"} remain:\n` +
+                    `Autonomous mode has reached a large context while ${Locale.pluralize(
+                      pendingTodos.length,
+                      "{} unfinished todo remains",
+                      "{} unfinished todos remain",
+                    )}:\n` +
                     `${pendingTodos.map((t) => `- [${t.status}] ${t.content}`).join("\n")}` +
                     reportTodoClosureGuidance("context"),
                 },
@@ -1309,9 +1313,15 @@ export namespace SessionPrompt {
                 {
                   type: "text",
                   text:
-                    `Autonomous mode is approaching the agent step limit with ${remainingAgentSteps} ` +
-                    `step${remainingAgentSteps === 1 ? "" : "s"} remaining and ${pendingTodos.length} unfinished ` +
-                    `todo${pendingTodos.length === 1 ? "" : "s"}:\n` +
+                    `Autonomous mode is approaching the agent step limit with ${Locale.pluralize(
+                      remainingAgentSteps,
+                      "{} step remaining",
+                      "{} steps remaining",
+                    )} and ${Locale.pluralize(
+                      pendingTodos.length,
+                      "{} unfinished todo",
+                      "{} unfinished todos",
+                    )}:\n` +
                     `${pendingTodos.map((t) => `- [${t.status}] ${t.content}`).join("\n")}\n` +
                     `Stop broad exploration now. Finish the remaining concrete work, write any required reports, ` +
                     `or cancel low-confidence todos with a short reason. Update the todo list after each completed ` +
@@ -1329,8 +1339,11 @@ export namespace SessionPrompt {
         if (modelFinished && pendingTodos.length > 0) {
           if (isLastStep) {
             const incompleteMessage =
-              `Autonomous mode reached the agent step limit with ${pendingTodos.length} unfinished todo` +
-              `${pendingTodos.length === 1 ? "" : "s"}. ` +
+              `Autonomous mode reached the agent step limit with ${Locale.pluralize(
+                pendingTodos.length,
+                "{} unfinished todo",
+                "{} unfinished todos",
+              )}. ` +
               `No further todo auto-continuation was scheduled because the maximum-step reminder may disable tools. ` +
               `Increase the agent/session step budget or resume the session to finish the remaining work.`
             log.warn("autonomous todo continuation stopped at agent step limit", {
@@ -1356,9 +1369,15 @@ export namespace SessionPrompt {
 
           if (todoRetries >= maxTodoRetries) {
             const incompleteMessage =
-              `Autonomous mode stopped because ${pendingTodos.length} todo` +
-              `${pendingTodos.length === 1 ? "" : "s"} remained unfinished after ${maxTodoRetries} ` +
-              `auto-continuation attempt${maxTodoRetries === 1 ? "" : "s"}. ` +
+              `Autonomous mode stopped because ${Locale.pluralize(
+                pendingTodos.length,
+                "{} todo",
+                "{} todos",
+              )} remained unfinished after ${Locale.pluralize(
+                maxTodoRetries,
+                "{} auto-continuation attempt",
+                "{} auto-continuation attempts",
+              )}. ` +
               `The session is stopped, but the remaining todos are not complete.`
             log.warn("autonomous todo continuation stopped after retry budget", {
               command: "session.prompt.loop",
@@ -1389,8 +1408,15 @@ export namespace SessionPrompt {
 
           if (stagnantTodoRetries >= MAX_STAGNANT_TODO_RETRIES) {
             const incompleteMessage =
-              `Autonomous mode stopped because ${pendingTodos.length} todo${pendingTodos.length === 1 ? "" : "s"} ` +
-              `remained unchanged after ${stagnantTodoRetries} retry attempts. ` +
+              `Autonomous mode stopped because ${Locale.pluralize(
+                pendingTodos.length,
+                "{} todo",
+                "{} todos",
+              )} remained unchanged after ${Locale.pluralize(
+                stagnantTodoRetries,
+                "{} retry attempt",
+                "{} retry attempts",
+              )}. ` +
               `The session is stopped, but the remaining todos are not complete.`
             log.warn("autonomous todo continuation stopped on unchanged pending todos", {
               command: "session.prompt.loop",
@@ -1435,7 +1461,11 @@ export namespace SessionPrompt {
               {
                 type: "text",
                 text:
-                  `You stopped with ${pendingTodos.length} todo${pendingTodos.length === 1 ? "" : "s"} still pending:\n` +
+                  `You stopped with ${Locale.pluralize(
+                    pendingTodos.length,
+                    "{} todo still pending",
+                    "{} todos still pending",
+                  )}:\n` +
                   `${pendingTodos.map((t) => `- [${t.status}] ${t.content}`).join("\n")}\n` +
                   `Continue working until all todos are completed or cancelled. ` +
                   `This is auto-continuation ${todoRetries}/${maxTodoRetries}.` +
