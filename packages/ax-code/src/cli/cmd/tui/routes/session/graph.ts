@@ -1,6 +1,7 @@
 import { ExecutionGraph } from "@/graph"
 import { GraphFormat } from "@/graph/format"
 import { EventQuery } from "@/replay/query"
+import { Locale } from "@/util/locale"
 import { duration as formatDuration } from "./format"
 
 export namespace SessionGraph {
@@ -10,10 +11,6 @@ export namespace SessionGraph {
     description?: string
     footer?: string
     category?: string
-  }
-
-  function stat(n: number, txt: string) {
-    return `${n} ${txt}${n === 1 ? "" : "s"}`
   }
 
   function label(type: ExecutionGraph.NodeType) {
@@ -106,9 +103,9 @@ export namespace SessionGraph {
         title: `${input.nodes.length} nodes · ${input.edges.length} edges`,
         description: [
           `Risk ${meta.risk.level.toLowerCase()} (${meta.risk.score}/100)`,
-          stat(meta.steps, "step"),
-          stat(meta.tools.length, "tool"),
-          stat(meta.errors, "error"),
+          Locale.pluralize(meta.steps, "{} step", "{} steps"),
+          Locale.pluralize(meta.tools.length, "{} tool", "{} tools"),
+          Locale.pluralize(meta.errors, "{} error", "{} errors"),
         ].join(" · "),
         footer: `${formatDuration(meta.duration)} · ${meta.tokens.input}/${meta.tokens.output} tokens`,
         category: "Overview",
@@ -124,7 +121,7 @@ export namespace SessionGraph {
       out.push({
         id: `node:${type}`,
         title: `${label(type)} ${count}`,
-        description: `${count} node${count === 1 ? "" : "s"}`,
+        description: Locale.pluralize(count, "{} node", "{} nodes"),
         category: "Nodes",
       })
     }
@@ -149,7 +146,7 @@ export namespace SessionGraph {
         out.push({
           id: `step:${item.stepIndex ?? item.id}`,
           title: `Step ${item.stepIndex ?? "?"}`,
-          description: `${list.length} child event${list.length === 1 ? "" : "s"}`,
+          description: Locale.pluralize(list.length, "{} child event", "{} child events"),
           footer: [
             formatDuration(item.duration),
             item.tokens ? `tokens ${item.tokens.input}/${item.tokens.output}` : undefined,

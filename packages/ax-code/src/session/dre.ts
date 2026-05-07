@@ -7,6 +7,7 @@ import { Risk } from "../risk/score"
 import { SessionBranchRank } from "./branch"
 import { SessionSemanticDiff } from "./semantic-diff"
 import type { SessionID } from "./schema"
+import { Locale } from "../util/locale"
 
 export namespace SessionDre {
   export const Summary = z
@@ -82,11 +83,11 @@ export namespace SessionDre {
     if (input.graph.nodes.length === 0) return
     const scorecard = ReplayCompare.score({ risk: input.risk, view: input.view, semantic: input.semantic })
     const stats = [
-      `${input.graph.metadata.steps} step${input.graph.metadata.steps === 1 ? "" : "s"}`,
-      `${input.view.routes.length} route${input.view.routes.length === 1 ? "" : "s"}`,
-      `${input.view.tools.length} tool call${input.view.tools.length === 1 ? "" : "s"}`,
+      Locale.pluralize(input.graph.metadata.steps, "{} step", "{} steps"),
+      Locale.pluralize(input.view.routes.length, "{} route", "{} routes"),
+      Locale.pluralize(input.view.tools.length, "{} tool call", "{} tool calls"),
       ...(input.graph.metadata.errors > 0
-        ? [`${input.graph.metadata.errors} error${input.graph.metadata.errors === 1 ? "" : "s"}`]
+        ? [Locale.pluralize(input.graph.metadata.errors, "{} error", "{} errors")]
         : []),
     ].join(" · ")
 

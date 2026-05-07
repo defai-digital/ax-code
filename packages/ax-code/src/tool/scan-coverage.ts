@@ -1,5 +1,6 @@
 import path from "path"
 import { Instance } from "../project/instance"
+import { Locale } from "../util/locale"
 
 type SourceCoverage = "not_applicable" | "not_covered" | "limited"
 
@@ -150,4 +151,8 @@ export async function scanCoverageNotice(input: { include?: string[] }): Promise
       languageScope: "js_ts_patterns",
     },
   }
+}
+
+export function scanFilesSummary(count: number): string {
+  return Locale.pluralize(count, "Scanned {} file", "Scanned {} files")
 }

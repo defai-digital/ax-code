@@ -3,7 +3,7 @@ import { Tool } from "./tool"
 import DESCRIPTION from "./hardcode_scan.txt"
 import { Instance } from "../project/instance"
 import { DebugEngine } from "../debug-engine"
-import { scanCoverageNotice } from "./scan-coverage"
+import { scanCoverageNotice, scanFilesSummary } from "./scan-coverage"
 
 // Tool wrapper around DebugEngine.detectHardcodes. Read-only scan,
 // no file writes, no cloud calls. See PRD §4.3.2 and ADR-002 / ADR-009.
@@ -33,7 +33,7 @@ export const HardcodeScanTool = Tool.define("hardcode_scan", {
     })
 
     const lines: string[] = []
-    lines.push(`Scanned ${report.filesScanned} file${report.filesScanned === 1 ? "" : "s"}`)
+    lines.push(scanFilesSummary(report.filesScanned))
     const coverage = await scanCoverageNotice({ include: args.include })
     lines.push(...coverage.lines)
     lines.push(`Findings: ${report.findings.length}`)

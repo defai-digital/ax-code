@@ -6,6 +6,7 @@ import { useDialog } from "../../ui/dialog"
 import { DialogConfirm } from "@tui/ui/dialog-confirm"
 import { useKeybind } from "@tui/context/keybind"
 import type { DiffFile } from "./revert"
+import { Locale } from "@/util/locale"
 
 export function RevertNotice(props: { count: number; files: DiffFile[] }) {
   const { theme } = useTheme()
@@ -40,9 +41,7 @@ export function RevertNotice(props: { count: number; files: DiffFile[] }) {
         paddingLeft={2}
         backgroundColor={hover() ? theme.backgroundElement : theme.backgroundPanel}
       >
-        <text fg={theme.textMuted}>
-          {props.count} message{props.count === 1 ? "" : "s"} reverted
-        </text>
+        <text fg={theme.textMuted}>{Locale.pluralize(props.count, "{} message reverted", "{} messages reverted")}</text>
         <text fg={theme.textMuted}>
           <span style={{ fg: theme.text }}>{keybind.print("messages_redo")}</span> or /redo to restore
         </text>
