@@ -2135,12 +2135,6 @@ export namespace SessionPrompt {
               if (s?.isDirectory()) {
                 part.mime = "application/x-directory"
               }
-              const publishReadError = (message: string) =>
-                Session.publishError({
-                  sessionID: input.sessionID,
-                  message,
-                })
-
               if (part.mime === "text/plain") {
                 let offset: number | undefined = undefined
                 let limit: number | undefined = undefined
@@ -2245,7 +2239,7 @@ export namespace SessionPrompt {
                       error,
                     })
                     const message = error instanceof Error ? error.message : error.toString()
-                    publishReadError(message)
+                    Session.publishError({ sessionID: input.sessionID, message })
                     pieces.push({
                       messageID: info.id,
                       sessionID: input.sessionID,
@@ -2304,7 +2298,7 @@ export namespace SessionPrompt {
                       error,
                     })
                     const message = error instanceof Error ? error.message : error.toString()
-                    publishReadError(message)
+                    Session.publishError({ sessionID: input.sessionID, message })
                     return [
                       {
                         messageID: info.id,
@@ -2352,7 +2346,7 @@ export namespace SessionPrompt {
                   error,
                 })
                 const message = error instanceof Error ? error.message : String(error)
-                publishReadError(message)
+                Session.publishError({ sessionID: input.sessionID, message })
                 return [
                   {
                     messageID: info.id,
