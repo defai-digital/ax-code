@@ -11,6 +11,11 @@ import { SessionRollback } from "../../session/rollback"
 import { SessionID } from "../../session/schema"
 import { lazy } from "../../util/lazy"
 import { Locale } from "../../util/locale"
+import { SESSION_ID_PARAM } from "./route-params"
+
+const DRE_GRAPH_QUALITY_QUERY = z.object({
+  quality: z.coerce.boolean().optional().default(false),
+})
 
 // Maps agent internal identifiers → human-readable display names
 const AGENT_DISPLAY: Record<string, string> = {
@@ -1556,13 +1561,13 @@ async function loadSessionList(directory: string | undefined): Promise<Session.I
 
 type DreGraphRouteContext = {
   req: {
-    valid: (input: "param" | "query") => { sessionID: SessionID } | { quality: boolean }
+    valid: ((input: "param") => { sessionID: SessionID }) & ((input: "query") => { quality: boolean })
   }
 }
 
 async function parseDreSessionContext(c: DreGraphRouteContext) {
-  const sessionID = (c.req.valid("param") as { sessionID: SessionID }).sessionID
-  const quality = (c.req.valid("query") as { quality: boolean }).quality
+  const sessionID = c.req.valid("param").sessionID
+  const quality = c.req.valid("query").quality
   return { sessionID, context: await loadSessionGraphContext(sessionID, quality) }
 }
 
@@ -2615,18 +2620,8 @@ export const DreGraphRoutes = lazy(() =>
     })
     .get(
       "/session/:sessionID",
-      validator(
-        "param",
-        z.object({
-          sessionID: SessionID.zod,
-        }),
-      ),
-      validator(
-        "query",
-        z.object({
-          quality: z.coerce.boolean().optional().default(false),
-        }),
-      ),
+      validator("param", SESSION_ID_PARAM),
+      validator("query", DRE_GRAPH_QUALITY_QUERY),
       async (c) => {
         const { context } = await parseDreSessionContext(c)
         const search = c.req.url.includes("?") ? c.req.url.slice(c.req.url.indexOf("?")) : ""
@@ -2648,18 +2643,8 @@ export const DreGraphRoutes = lazy(() =>
     )
     .get(
       "/session/:sessionID/fingerprint",
-      validator(
-        "param",
-        z.object({
-          sessionID: SessionID.zod,
-        }),
-      ),
-      validator(
-        "query",
-        z.object({
-          quality: z.coerce.boolean().optional().default(false),
-        }),
-      ),
+      validator("param", SESSION_ID_PARAM),
+      validator("query", DRE_GRAPH_QUALITY_QUERY),
       async (c) => {
         const { context } = await parseDreSessionContext(c)
 
