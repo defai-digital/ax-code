@@ -120,6 +120,17 @@ function createAsyncSessionErrorHandler(sessionID: SessionID, kind: "prompt" | "
   }
 }
 
+function startAsyncSessionTask(input: {
+  sessionID: SessionID
+  kind: "prompt" | "command" | "shell"
+  task: () => Promise<unknown>
+}) {
+  startObservedAsyncSessionTask({
+    ...input,
+    onError: createAsyncSessionErrorHandler(input.sessionID, input.kind),
+  })
+}
+
 async function requireCurrentProjectSession(sessionID: SessionID) {
   const session = await Session.get(sessionID)
   if (Session.isCompatibleWithCurrentProject(session)) return session
@@ -1235,11 +1246,10 @@ export const SessionRoutes = lazy(() =>
         const sessionID = c.req.valid("param").sessionID
         const body = c.req.valid("json")
         await requireCurrentProjectSession(sessionID)
-        startObservedAsyncSessionTask({
+        startAsyncSessionTask({
           sessionID,
           kind: "prompt",
           task: () => SessionPrompt.prompt({ ...body, sessionID }),
-          onError: createAsyncSessionErrorHandler(sessionID, "prompt"),
         })
         return c.body(null, 202)
       },
@@ -1268,11 +1278,10 @@ export const SessionRoutes = lazy(() =>
         const sessionID = c.req.valid("param").sessionID
         const body = c.req.valid("json")
         await requireCurrentProjectSession(sessionID)
-        startObservedAsyncSessionTask({
+        startAsyncSessionTask({
           sessionID,
           kind: "command",
           task: () => SessionPrompt.command({ ...body, sessionID }),
-          onError: createAsyncSessionErrorHandler(sessionID, "command"),
         })
         return c.body(null, 202)
       },
@@ -1339,11 +1348,10 @@ export const SessionRoutes = lazy(() =>
         const sessionID = c.req.valid("param").sessionID
         const body = c.req.valid("json")
         await requireCurrentProjectSession(sessionID)
-        startObservedAsyncSessionTask({
+        startAsyncSessionTask({
           sessionID,
           kind: "shell",
           task: () => SessionPrompt.shell({ ...body, sessionID }),
-          onError: createAsyncSessionErrorHandler(sessionID, "shell"),
         })
         return c.body(null, 202)
       },
