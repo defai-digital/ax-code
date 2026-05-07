@@ -113,6 +113,13 @@ function startObservedAsyncSessionTask(input: {
   })
 }
 
+function createAsyncSessionErrorHandler(sessionID: SessionID, kind: "prompt" | "command" | "shell") {
+  return (error: unknown) => {
+    log.error(`${kind}_async failed`, { sessionID, error })
+    Session.publishError({ sessionID, message: NamedError.message(error) })
+  }
+}
+
 async function requireCurrentProjectSession(sessionID: SessionID) {
   const session = await Session.get(sessionID)
   if (Session.isCompatibleWithCurrentProject(session)) return session
@@ -1232,10 +1239,7 @@ export const SessionRoutes = lazy(() =>
           sessionID,
           kind: "prompt",
           task: () => SessionPrompt.prompt({ ...body, sessionID }),
-          onError(error) {
-            log.error("prompt_async failed", { sessionID, error })
-            Session.publishError({ sessionID, message: NamedError.message(error) })
-          },
+          onError: createAsyncSessionErrorHandler(sessionID, "prompt"),
         })
         return c.body(null, 202)
       },
@@ -1268,10 +1272,7 @@ export const SessionRoutes = lazy(() =>
           sessionID,
           kind: "command",
           task: () => SessionPrompt.command({ ...body, sessionID }),
-          onError(error) {
-            log.error("command_async failed", { sessionID, error })
-            Session.publishError({ sessionID, message: NamedError.message(error) })
-          },
+          onError: createAsyncSessionErrorHandler(sessionID, "command"),
         })
         return c.body(null, 202)
       },
@@ -1342,10 +1343,7 @@ export const SessionRoutes = lazy(() =>
           sessionID,
           kind: "shell",
           task: () => SessionPrompt.shell({ ...body, sessionID }),
-          onError(error) {
-            log.error("shell_async failed", { sessionID, error })
-            Session.publishError({ sessionID, message: NamedError.message(error) })
-          },
+          onError: createAsyncSessionErrorHandler(sessionID, "shell"),
         })
         return c.body(null, 202)
       },
