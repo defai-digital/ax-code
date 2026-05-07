@@ -102,6 +102,10 @@ function hasReportStyleTodo(todos: { content: string }[]) {
   return todos.some((todo) => /\b(report|reports|bug|bugs)\b|\.internal\/bugs/i.test(todo.content))
 }
 
+function formatPendingTodoList(todos: { status: string; content: string }[]) {
+  return todos.map((todo) => `- [${todo.status}] ${todo.content}`).join("\n")
+}
+
 function reportTodoClosureGuidance(mode: "deadline" | "continuation" | "context") {
   if (mode === "context") {
     return (
@@ -1271,7 +1275,7 @@ export namespace SessionPrompt {
                       "{} unfinished todo remains",
                       "{} unfinished todos remain",
                     )}:\n` +
-                    `${pendingTodos.map((t) => `- [${t.status}] ${t.content}`).join("\n")}` +
+                    formatPendingTodoList(pendingTodos) +
                     reportTodoClosureGuidance("context"),
                 },
               ],
@@ -1322,7 +1326,7 @@ export namespace SessionPrompt {
                       "{} unfinished todo",
                       "{} unfinished todos",
                     )}:\n` +
-                    `${pendingTodos.map((t) => `- [${t.status}] ${t.content}`).join("\n")}\n` +
+                    `${formatPendingTodoList(pendingTodos)}\n` +
                     `Stop broad exploration now. Finish the remaining concrete work, write any required reports, ` +
                     `or cancel low-confidence todos with a short reason. Update the todo list after each completed ` +
                     `or cancelled item before continuing.` +
@@ -1466,7 +1470,7 @@ export namespace SessionPrompt {
                     "{} todo still pending",
                     "{} todos still pending",
                   )}:\n` +
-                  `${pendingTodos.map((t) => `- [${t.status}] ${t.content}`).join("\n")}\n` +
+                  `${formatPendingTodoList(pendingTodos)}\n` +
                   `Continue working until all todos are completed or cancelled. ` +
                   `This is auto-continuation ${todoRetries}/${maxTodoRetries}.` +
                   reportClosureGuidance,
