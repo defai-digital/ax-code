@@ -994,18 +994,16 @@ export const SessionRoutes = lazy(() =>
       async (c) => {
         const query = c.req.valid("query")
         const sessionID = c.req.valid("param").sessionID
+        await requireCurrentProjectSession(sessionID)
         if (query.limit === undefined) {
-          await requireCurrentProjectSession(sessionID)
           const messages = await Session.messages({ sessionID })
           return c.json(messages)
         }
 
         if (query.limit === 0) {
-          await requireCurrentProjectSession(sessionID)
           return c.json([])
         }
 
-        await requireCurrentProjectSession(sessionID)
         const page = await MessageV2.page({
           sessionID,
           limit: query.limit,
