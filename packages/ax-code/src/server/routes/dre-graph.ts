@@ -1251,10 +1251,10 @@ function parseTimeline(lines: SessionDre.TimelineLine[]) {
       // "read: README.md → ok (6ms)" or "tool_name → ok (6ms)"
       const m = line.text.match(/^(\S+?):\s*(.*?)\s*→\s*(\S+)\s*(?:\((\d+)ms\))?$/)
       if (m) {
-        current.tools.push({ name: m[1], args: m[2], status: m[3], durationMs: parseInt(m[4] ?? "0") })
+        current.tools.push({ name: m[1], args: m[2], status: m[3], durationMs: parseTimelineToolDurationMs(m[4]) })
       } else {
         const m2 = line.text.match(/^(\S+)\s*→\s*(\S+)\s*(?:\((\d+)ms\))?$/)
-        if (m2) current.tools.push({ name: m2[1], args: "", status: m2[2], durationMs: parseInt(m2[3] ?? "0") })
+        if (m2) current.tools.push({ name: m2[1], args: "", status: m2[2], durationMs: parseTimelineToolDurationMs(m2[3]) })
         else current.tools.push({ name: line.text, args: "", status: "ok", durationMs: 0 })
       }
     } else if (line.kind === "route" && current) {
@@ -1274,6 +1274,12 @@ function parseTimelineDurationMs(value: string): number {
   const minutes = Number.parseInt(match[1] ?? "0", 10)
   const seconds = Number.parseInt(match[2] ?? "0", 10)
   return (minutes * 60 + seconds) * 1000
+}
+
+function parseTimelineToolDurationMs(raw: string | undefined): number {
+  if (!raw) return 0
+  const parsed = Number.parseInt(raw, 10)
+  return Number.isNaN(parsed) ? 0 : Math.max(0, parsed)
 }
 
 function timelineSection(dre: SessionDre.Snapshot, points: SessionRollback.Point[], detail?: SessionDre.Detail | null) {
