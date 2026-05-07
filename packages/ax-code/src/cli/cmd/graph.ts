@@ -4,7 +4,7 @@ import { EventQuery } from "../../replay/query"
 import { SessionID } from "../../session/schema"
 import { ExecutionGraph } from "../../graph"
 import { GraphFormat } from "../../graph/format"
-import { getLatestSession } from "./session-latest"
+import { resolveSession } from "./session-latest"
 
 export const GraphCommand = cmd({
   command: "graph [sessionID]",
@@ -30,16 +30,12 @@ export const GraphCommand = cmd({
       directory: process.cwd(),
       fn: async () => {
         let sessionID: SessionID
-        if (args.sessionID) {
-          sessionID = SessionID.make(args.sessionID as string)
-        } else {
-          const latest = await getLatestSession()
-          if (!latest) {
-            console.log("No sessions found. Run ax-code first.")
-            return
-          }
-          sessionID = latest.id
+        const session = await resolveSession(args.sessionID as string | undefined)
+        if (!session) {
+          console.log("No sessions found. Run ax-code first.")
+          return
         }
+        sessionID = session.id
 
         const count = EventQuery.count(sessionID)
         if (count === 0) {

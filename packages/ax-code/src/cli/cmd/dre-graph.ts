@@ -1,25 +1,17 @@
 import open from "open"
 import { DreGraphServer } from "./dre-graph-server"
 import { Instance } from "../../project/instance"
-import { Session } from "../../session"
-import { SessionID } from "../../session/schema"
 import { cmd } from "./cmd"
-import { getLatestSession } from "./session-latest"
+import { resolveSession } from "./session-latest"
 
 async function target(id?: string) {
   return Instance.provide({
     directory: process.cwd(),
     fn: async () => {
-      if (id) {
-        const sid = SessionID.make(id)
-        const session = await Session.get(sid)
-        return { sid, dir: session.directory }
-      }
+      const session = await resolveSession(id)
+      if (!session) return
 
-      const latest = await getLatestSession()
-      if (!latest) return
-
-      return { sid: latest.id, dir: latest.directory }
+      return { sid: session.id, dir: session.directory }
     },
   })
 }

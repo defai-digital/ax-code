@@ -11,12 +11,11 @@ import { Global } from "../../global"
 import { Instance } from "../../project/instance"
 import { EventQuery } from "../../replay/query"
 import { Risk } from "../../risk/score"
-import { Session } from "../../session"
 import { SessionID } from "../../session/schema"
 import type { ReplayEvent } from "../../replay/event"
 import path from "path"
 import fs from "fs/promises"
-import { getLatestSession } from "./session-latest"
+import { resolveSession } from "./session-latest"
 
 interface LogEntry {
   level: string
@@ -82,16 +81,12 @@ export const TraceCommand: CommandModule = {
         directory: process.cwd(),
         fn: async () => {
           let sessionID: SessionID
-          if (args.sessionID) {
-            sessionID = SessionID.make(args.sessionID as string)
-          } else {
-            const latest = await getLatestSession()
-            if (!latest) {
-              console.log("No sessions found. Run ax-code first.")
-              return
-            }
-            sessionID = latest.id
+          const resolvedSession = await resolveSession(args.sessionID as string | undefined)
+          if (!resolvedSession) {
+            console.log("No sessions found. Run ax-code first.")
+            return
           }
+          sessionID = resolvedSession.id
 
           const events = EventQuery.bySessionWithTimestamp(sessionID)
           if (events.length === 0) {
@@ -99,7 +94,6 @@ export const TraceCommand: CommandModule = {
             return
           }
 
-          const session = await Session.get(sessionID)
           const risk = Risk.fromSession(sessionID)
 
           if (args.risk) {
@@ -112,7 +106,9 @@ export const TraceCommand: CommandModule = {
           }
 
           if (args.json) {
-            console.log(JSON.stringify({ sessionID, title: session.title, risk, eventCount: events.length }, null, 2))
+            console.log(
+              JSON.stringify({ sessionID, title: resolvedSession.title, risk, eventCount: events.length }, null, 2),
+            )
             return
           }
 
@@ -121,7 +117,7 @@ export const TraceCommand: CommandModule = {
           const duration = formatTraceDuration(endTime - startTime)
 
           console.log(`\n  Session: ${sessionID} (${duration})`)
-          console.log(`  Title: ${session.title}`)
+          console.log(`  Title: ${resolvedSession.title}`)
           console.log(`  Risk: ${risk.level} (${risk.score}/100) — ${risk.summary}`)
           console.log("")
 
