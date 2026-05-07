@@ -5,6 +5,13 @@ import { MCP } from "../../mcp"
 import { Config } from "../../config/config"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
+import { parseRouteParam } from "./route-params"
+
+const MCP_NAME_PARAM = z
+  .string()
+  .min(1)
+  .max(64)
+  .regex(/^[a-zA-Z0-9_-]+$/)
 
 export const McpRoutes = lazy(() =>
   new Hono()
@@ -85,15 +92,11 @@ export const McpRoutes = lazy(() =>
       validator(
         "param",
         z.object({
-          name: z
-            .string()
-            .min(1)
-            .max(64)
-            .regex(/^[a-zA-Z0-9_-]+$/),
+          name: MCP_NAME_PARAM,
         }),
       ),
       async (c) => {
-        const { name } = c.req.valid("param")
+        const name = parseRouteParam<"name", string>(c, "name")
         const supportsOAuth = await MCP.supportsOAuth(name)
         if (!supportsOAuth) {
           return c.json({ error: `MCP server ${name} does not support OAuth` }, 400)
@@ -124,11 +127,7 @@ export const McpRoutes = lazy(() =>
       validator(
         "param",
         z.object({
-          name: z
-            .string()
-            .min(1)
-            .max(64)
-            .regex(/^[a-zA-Z0-9_-]+$/),
+          name: MCP_NAME_PARAM,
         }),
       ),
       validator(
@@ -138,7 +137,7 @@ export const McpRoutes = lazy(() =>
         }),
       ),
       async (c) => {
-        const { name } = c.req.valid("param")
+        const name = parseRouteParam<"name", string>(c, "name")
         const { code } = c.req.valid("json")
         const status = await MCP.finishAuth(name, code)
         return c.json(status)
@@ -165,15 +164,11 @@ export const McpRoutes = lazy(() =>
       validator(
         "param",
         z.object({
-          name: z
-            .string()
-            .min(1)
-            .max(64)
-            .regex(/^[a-zA-Z0-9_-]+$/),
+          name: MCP_NAME_PARAM,
         }),
       ),
       async (c) => {
-        const { name } = c.req.valid("param")
+        const name = parseRouteParam<"name", string>(c, "name")
         const supportsOAuth = await MCP.supportsOAuth(name)
         if (!supportsOAuth) {
           return c.json({ error: `MCP server ${name} does not support OAuth` }, 400)
@@ -203,15 +198,11 @@ export const McpRoutes = lazy(() =>
       validator(
         "param",
         z.object({
-          name: z
-            .string()
-            .min(1)
-            .max(64)
-            .regex(/^[a-zA-Z0-9_-]+$/),
+          name: MCP_NAME_PARAM,
         }),
       ),
       async (c) => {
-        const { name } = c.req.valid("param")
+        const name = parseRouteParam<"name", string>(c, "name")
         await MCP.removeAuth(name)
         return c.json({ success: true as const })
       },
