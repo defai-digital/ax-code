@@ -1550,6 +1550,20 @@ async function loadSessionGraphContext(sessionID: SessionID, includeQuality: boo
   return { session, graph, dre, risk, rank, rollback }
 }
 
+async function loadSessionList(directory: string | undefined): Promise<Session.Info[]> {
+  const list: Session.Info[] = []
+  for await (const item of Session.list({ limit: 50, directory })) list.push(item)
+  return list
+}
+
+function disableClientCache(
+  c: {
+    header: (name: string, value: string) => void
+  },
+) {
+  c.header("cache-control", "no-store")
+}
+
 // Inline script in <head> — sets theme before first paint to prevent flash
 function themeScript() {
   return [
@@ -2578,17 +2592,15 @@ export const DreGraphRoutes = lazy(() =>
     .get("/", async (c) => {
       const search = c.req.url.includes("?") ? c.req.url.slice(c.req.url.indexOf("?")) : ""
       const directory = c.req.query("directory") ?? undefined
-      const list = [] as Session.Info[]
-      for await (const item of Session.list({ limit: 50, directory })) list.push(item)
-      c.header("cache-control", "no-store")
+      const list = await loadSessionList(directory)
+      disableClientCache(c)
       c.header("content-type", "text/html; charset=utf-8")
       return c.body(index({ list, search }))
     })
     .get("/fingerprint", async (c) => {
       const directory = c.req.query("directory") ?? undefined
-      const list = [] as Session.Info[]
-      for await (const item of Session.list({ limit: 50, directory })) list.push(item)
-      c.header("cache-control", "no-store")
+      const list = await loadSessionList(directory)
+      disableClientCache(c)
       return c.json(indexFingerprint(list))
     })
     .get(
@@ -2611,7 +2623,7 @@ export const DreGraphRoutes = lazy(() =>
         const context = await loadSessionGraphContext(sid, query.quality)
         const search = c.req.url.includes("?") ? c.req.url.slice(c.req.url.indexOf("?")) : ""
 
-        c.header("cache-control", "no-store")
+        disableClientCache(c)
         c.header("content-type", "text/html; charset=utf-8")
         return c.body(
           page({
@@ -2645,7 +2657,7 @@ export const DreGraphRoutes = lazy(() =>
         const query = c.req.valid("query")
         const context = await loadSessionGraphContext(sid, query.quality)
 
-        c.header("cache-control", "no-store")
+        disableClientCache(c)
         return c.json(
           sessionFingerprint({
             session: context.session,
