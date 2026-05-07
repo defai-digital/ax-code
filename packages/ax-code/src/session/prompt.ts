@@ -702,18 +702,15 @@ export namespace SessionPrompt {
             maxContinuations,
           })
           const lastMsgs = await Session.messages({ sessionID })
-          const lastUserInfo = getLastUserInfo(lastMsgs)
-          await createUserMessage({
+          await createAutonomousUserContinuation({
             sessionID,
-            agentRouting: "preserve",
+            messages: lastMsgs,
             parts: [
               {
                 type: "text",
                 text: `Continue from where you left off. You have used ${GLOBAL_STEP_LIMIT} steps. This is auto-continuation ${continuations}/${maxContinuations}. Prioritize completing the most important remaining work. Avoid over-engineering: prefer the simplest common-practice change that solves the task, avoid new abstractions unless there are 3+ concrete use cases, and verify before expanding scope.`,
               },
             ],
-            agent: lastUserInfo?.agent,
-            model: lastUserInfo?.model,
           })
           continue
         }
@@ -1156,10 +1153,9 @@ export namespace SessionPrompt {
             maxAttempts: MAX_EMPTY_MODEL_TURN_RETRIES,
             pendingCount: pendingTodos.length,
           })
-          const previousUserInfo = getLastUserInfo(latestMessages)
-          await createUserMessage({
+          await createAutonomousUserContinuation({
             sessionID,
-            agentRouting: "preserve",
+            messages: latestMessages,
             parts: [
               {
                 type: "text",
@@ -1170,8 +1166,6 @@ export namespace SessionPrompt {
                   `This is empty-turn recovery ${emptyModelTurnRetries}/${MAX_EMPTY_MODEL_TURN_RETRIES}.`,
               },
             ],
-            agent: previousUserInfo?.agent,
-            model: previousUserInfo?.model,
           })
           continue
         }
@@ -1218,10 +1212,9 @@ export namespace SessionPrompt {
             attempt: completionGateRetries,
             maxAttempts: maxCompletionGateRetries,
           })
-          const previousUserInfo = getLastUserInfo(latestMessages)
-          await createUserMessage({
+          await createAutonomousUserContinuation({
             sessionID,
-            agentRouting: "preserve",
+            messages: latestMessages,
             parts: [
               {
                 type: "text",
@@ -1233,8 +1226,6 @@ export namespace SessionPrompt {
                   `This is completion-gate auto-continuation ${completionGateRetries}/${maxCompletionGateRetries}.`,
               },
             ],
-            agent: previousUserInfo?.agent,
-            model: previousUserInfo?.model,
           })
           continue
         }
@@ -1262,10 +1253,9 @@ export namespace SessionPrompt {
               inputTokens: processor.message.tokens.input ?? 0,
               threshold: TODO_CONTEXT_CONVERGENCE_INPUT_TOKEN_THRESHOLD,
             })
-            const previousUserInfo = getLastUserInfo(latestMessages)
-            await createUserMessage({
+            await createAutonomousUserContinuation({
               sessionID,
-              agentRouting: "preserve",
+              messages: latestMessages,
               parts: [
                 {
                   type: "text",
@@ -1279,8 +1269,6 @@ export namespace SessionPrompt {
                     reportTodoClosureGuidance("context"),
                 },
               ],
-              agent: previousUserInfo?.agent,
-              model: previousUserInfo?.model,
             })
             continue
           }
@@ -1307,10 +1295,9 @@ export namespace SessionPrompt {
               remainingAgentSteps,
               maxSteps,
             })
-            const previousUserInfo = getLastUserInfo(latestMessages)
-            await createUserMessage({
+            await createAutonomousUserContinuation({
               sessionID,
-              agentRouting: "preserve",
+              messages: latestMessages,
               parts: [
                 {
                   type: "text",
@@ -1331,8 +1318,6 @@ export namespace SessionPrompt {
                     reportClosureGuidance,
                 },
               ],
-              agent: previousUserInfo?.agent,
-              model: previousUserInfo?.model,
             })
             continue
           }
@@ -1453,10 +1438,9 @@ export namespace SessionPrompt {
             maxAttempts: maxTodoRetries,
             stagnantAttempts: stagnantTodoRetries,
           })
-          const previousUserInfo = getLastUserInfo(latestMessages)
-          await createUserMessage({
+          await createAutonomousUserContinuation({
             sessionID,
-            agentRouting: "preserve",
+            messages: latestMessages,
             parts: [
               {
                 type: "text",
@@ -1472,8 +1456,6 @@ export namespace SessionPrompt {
                   reportClosureGuidance,
               },
             ],
-            agent: previousUserInfo?.agent,
-            model: previousUserInfo?.model,
           })
           continue
         }
@@ -1888,6 +1870,21 @@ export namespace SessionPrompt {
 
   /** @internal Exported for testing */
   export const createStructuredOutputTool = _createStructuredOutputTool
+
+  async function createAutonomousUserContinuation(args: {
+    sessionID: SessionID
+    messages: readonly MessageV2.WithParts[]
+    parts: PromptInput["parts"]
+  }) {
+    const lastUserInfo = getLastUserInfo(args.messages)
+    await createUserMessage({
+      sessionID: args.sessionID,
+      agentRouting: "preserve",
+      parts: args.parts,
+      agent: lastUserInfo?.agent,
+      model: lastUserInfo?.model,
+    })
+  }
 
   async function createUserMessage(input: PromptInput) {
     const messageID = input.messageID ?? MessageID.ascending()
