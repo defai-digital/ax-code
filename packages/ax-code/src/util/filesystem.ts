@@ -6,6 +6,7 @@ import { dirname, join, relative, resolve as pathResolve } from "path"
 import { Readable } from "stream"
 import { pipeline } from "stream/promises"
 import { Glob } from "./glob"
+import { isRecord } from "./record"
 
 export namespace Filesystem {
   export async function exists(p: string): Promise<boolean> {
@@ -56,7 +57,7 @@ export namespace Filesystem {
   }
 
   function isEnoent(e: unknown): e is { code: "ENOENT" } {
-    return typeof e === "object" && e !== null && "code" in e && (e as { code: string }).code === "ENOENT"
+    return isRecord(e) && e.code === "ENOENT"
   }
 
   export async function write(p: string, content: string | Buffer | Uint8Array, mode?: number): Promise<void> {
