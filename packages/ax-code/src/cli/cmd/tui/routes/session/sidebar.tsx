@@ -20,6 +20,7 @@ import { SessionSemanticDiff } from "@/session/semantic-diff"
 import { type FooterSessionStatus, isFooterSessionStatus } from "./footer-view-model"
 import { computeSidebarWidth } from "./layout"
 import { sidebarGraphIndexStatusText } from "./sidebar-index-view-model"
+import { Locale } from "@/util/locale"
 import type { McpStatus } from "@ax-code/sdk/v2"
 import type { SyncedSessionQualityReadiness } from "../../context/sync-session-risk"
 import { countByWorkflow as countFindingsByWorkflow } from "@/quality/finding-counts"
@@ -290,7 +291,8 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                         <span style={{ fg: theme.textMuted }}>
                           {" "}
                           ({connectedMcpCount()} active
-                          {errorMcpCount() > 0 ? `, ${errorMcpCount()} error${errorMcpCount() > 1 ? "s" : ""}` : ""})
+                          {errorMcpCount() > 0 ? `, ${Locale.pluralize(errorMcpCount(), "{} error", "{} errors")}` : ""}
+                          )
                         </span>
                       </Show>
                     </text>
@@ -311,7 +313,9 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                                 <Match when={item.status === "failed" && item}>{(val) => <i>{val().error}</i>}</Match>
                                 <Match when={item.status === "disabled"}>Disabled</Match>
                                 <Match when={item.status === "needs_auth"}>Needs auth</Match>
-                                <Match when={item.status === "needs_client_registration" && item}>{(val) => <i>{val().error}</i>}</Match>
+                                <Match when={item.status === "needs_client_registration" && item}>
+                                  {(val) => <i>{val().error}</i>}
+                                </Match>
                               </Switch>
                             </span>
                           </text>
@@ -394,9 +398,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                       >
                         •
                       </text>
-                      <text fg={theme.textMuted}>
-                        {sidebarGraphIndexStatusText(sync.data.debugEngine.graph)}
-                      </text>
+                      <text fg={theme.textMuted}>{sidebarGraphIndexStatusText(sync.data.debugEngine.graph)}</text>
                     </box>
                     {/* Session trust signals — quality, changes, risk drivers, plan */}
                     <Show when={dre()}>

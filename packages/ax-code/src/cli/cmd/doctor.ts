@@ -19,6 +19,7 @@ import { Filesystem } from "../../util/filesystem"
 import { NativeAddon } from "../../native/addon"
 import { Database } from "../../storage/db"
 import { recordCount } from "@/util/record"
+import { Locale } from "@/util/locale"
 import { getTuiPreloadCheck } from "./doctor-preload"
 import { getDoctorDatabaseCheck } from "./doctor-storage"
 import { getRecentLogsChecks, getRunningInstancesCheck } from "./doctor-health"
@@ -57,7 +58,7 @@ export async function getDuplicateProjectIdentityCheck(input: {
     const rows = await ProjectIdentity.listWorktreeIdentities({ worktree: input.worktree, useDatabase })
     if (rows.length <= 1) return
     const detail = rows
-      .map((row) => `${row.id} (${row.sessionCount} session${row.sessionCount === 1 ? "" : "s"})`)
+      .map((row) => `${row.id} (${Locale.pluralize(row.sessionCount, "{} session", "{} sessions")})`)
       .join(", ")
     return {
       name: "Project identity",
@@ -137,7 +138,7 @@ export const DoctorCommand: CommandModule = {
       checks.push({
         name: "Configuration",
         status: "ok",
-        detail: `Loaded (${providerCount} provider${providerCount !== 1 ? "s" : ""} configured)`,
+        detail: `Loaded (${Locale.pluralize(providerCount, "{} provider", "{} providers")} configured)`,
       })
     } catch {
       // Config.get() requires project instance which isn't available in standalone CLI mode
@@ -348,9 +349,9 @@ export const DoctorCommand: CommandModule = {
 
     console.log("")
     if (fails > 0) {
-      console.log(`  \x1b[31m${fails} issue${fails > 1 ? "s" : ""} found\x1b[0m`)
+      console.log(`  \x1b[31m${Locale.pluralize(fails, "{} issue", "{} issues")} found\x1b[0m`)
     } else if (warns > 0) {
-      console.log(`  \x1b[33m${warns} warning${warns > 1 ? "s" : ""}\x1b[0m — system is functional`)
+      console.log(`  \x1b[33m${Locale.pluralize(warns, "{} warning", "{} warnings")}\x1b[0m — system is functional`)
     } else {
       console.log("  \x1b[32mAll checks passed\x1b[0m")
     }

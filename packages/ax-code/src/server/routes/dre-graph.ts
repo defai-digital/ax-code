@@ -10,6 +10,7 @@ import { ProbabilisticRollout } from "../../quality/probabilistic-rollout"
 import { SessionRollback } from "../../session/rollback"
 import { SessionID } from "../../session/schema"
 import { lazy } from "../../util/lazy"
+import { Locale } from "../../util/locale"
 
 // Maps agent internal identifiers → human-readable display names
 const AGENT_DISPLAY: Record<string, string> = {
@@ -743,8 +744,8 @@ function activitySection(graph: SessionGraph.Snapshot, dre: SessionDre.Snapshot,
     if (edits.length)
       parts.push(edits.length <= 2 ? `edited ${edits.filter(Boolean).join(", ")}` : `edited ${edits.length} files`)
     if (searches) parts.push(`searched ${searches}×`)
-    if (shells) parts.push(`ran ${shells} command${shells > 1 ? "s" : ""}`)
-    if (webs) parts.push(`fetched ${webs} URL${webs > 1 ? "s" : ""}`)
+    if (shells) parts.push(Locale.pluralize(shells, "ran {} command", "ran {} commands"))
+    if (webs) parts.push(Locale.pluralize(webs, "fetched {} URL", "fetched {} URLs"))
     if (others) parts.push(`${others} misc`)
     return parts.join(" · ") || "no tool calls"
   }

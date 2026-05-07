@@ -1009,7 +1009,7 @@ export function Session() {
                   when={subagentTasks().running > 0}
                   fallback={
                     <text fg={theme.textMuted}>
-                      ◇ {subagentTasks().total} subagent{subagentTasks().total !== 1 ? "s" : ""}
+                      ◇ {Locale.pluralize(subagentTasks().total, "{} subagent", "{} subagents")}
                       {subagentTasks().done > 0 ? (
                         <span style={{ fg: theme.success }}> · {subagentTasks().done} done</span>
                       ) : null}
@@ -1018,14 +1018,18 @@ export function Session() {
                 >
                   <Spinner color={subagentTasks().items.some((item) => item.stale) ? theme.warning : theme.primary}>
                     <span>
-                      {subagentTasks().running} subagent{subagentTasks().running !== 1 ? "s" : ""} active
+                      {Locale.pluralize(subagentTasks().running, "{} subagent", "{} subagents")} active
                       {subagentTasks().done > 0 ? (
                         <span style={{ fg: theme.success }}> · {subagentTasks().done} done</span>
                       ) : null}
                     </span>
                   </Spinner>
                 </Show>
-                <For each={subagentTasks().items.filter((item) => item.active).slice(0, 2)}>
+                <For
+                  each={subagentTasks()
+                    .items.filter((item) => item.active)
+                    .slice(0, 2)}
+                >
                   {(item) => (
                     <text paddingLeft={3} fg={item.stale ? theme.warning : theme.textMuted}>
                       ↳ {item.label}
@@ -2322,9 +2326,7 @@ function ApplyPatch(props: ToolProps<typeof ApplyPatchTool>) {
               <Show
                 when={file.type !== "delete"}
                 fallback={
-                  <text fg={theme.diffRemoved}>
-                    -{file.deletions} line{file.deletions !== 1 ? "s" : ""}
-                  </text>
+                  <text fg={theme.diffRemoved}>- {Locale.pluralize(file.deletions, "{} line", "{} lines")}</text>
                 }
               >
                 <Diff diff={file.diff} filePath={file.filePath} />
@@ -2403,7 +2405,7 @@ function Question(props: ToolProps<typeof QuestionTool>) {
       </Match>
       <Match when={true}>
         <InlineTool icon="→" pending="Asking questions..." complete={count()} part={props.part}>
-          Asked {count()} question{count() !== 1 ? "s" : ""}
+          {Locale.pluralize(count(), "Asked {} question", "Asked {} questions")}
         </InlineTool>
       </Match>
     </Switch>

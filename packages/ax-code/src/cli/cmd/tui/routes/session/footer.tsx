@@ -11,6 +11,7 @@ import { useRoute } from "../../context/route"
 import { AgentControlReplayQuery } from "@/replay/agent-control-query"
 import { Installation } from "@/installation"
 import { Flag } from "@/flag/flag"
+import { Locale } from "@/util/locale"
 import {
   footerAgentControlStatusView,
   footerProgressBar,
@@ -67,7 +68,9 @@ export function Footer() {
   const showHints = createMemo(() => dimensions().width >= 100)
   const showLspChip = createMemo(() => dimensions().width >= 90 && lsp().length > 0)
   const showDreChip = createMemo(() => dimensions().width >= 80)
-  const progressBar = createMemo(() => footerProgressBar({ status: sessionStatus(), terminalWidth: dimensions().width }))
+  const progressBar = createMemo(() =>
+    footerProgressBar({ status: sessionStatus(), terminalWidth: dimensions().width }),
+  )
   const showDreStatus = createMemo(() => dreChipVisible() && showDreChip())
   const agentControlStatus = createMemo(() => {
     if (route.data.type !== "session") return undefined
@@ -173,8 +176,8 @@ export function Footer() {
           <Match when={connected()}>
             <Show when={permissions().length > 0}>
               <text fg={theme.warning}>
-                <span style={{ fg: theme.warning }}>▲</span> {permissions().length} Permission
-                {permissions().length > 1 ? "s" : ""}
+                <span style={{ fg: theme.warning }}>▲</span>{" "}
+                {Locale.pluralize(permissions().length, "{} Permission", "{} Permissions")}
               </text>
             </Show>
             <Show when={showDreStatus()}>
@@ -185,7 +188,7 @@ export function Footer() {
                         is the original v2.3.1 behavior, preserved so
                         users with active refactor work see the same
                         chip they already know. */}
-                    <span style={{ fg: theme.warning }}>◆</span> {drePending()} Plan{drePending() !== 1 ? "s" : ""}
+                    <span style={{ fg: theme.warning }}>◆</span> {Locale.pluralize(drePending(), "{} Plan", "{} Plans")}
                   </Match>
                   <Match when={true}>
                     {/* Ready state: success color + static label. New

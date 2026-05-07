@@ -1,3 +1,4 @@
+import { Locale } from "../util/locale"
 import type { Risk } from "../risk/score"
 import type { ReplayEvent } from "./event"
 import type { Replay } from "./replay"
@@ -78,10 +79,6 @@ export namespace ReplayCompare {
 
   function round(input: number) {
     return Number(input.toFixed(2))
-  }
-
-  function plural(value: number, unit: string) {
-    return `${value} ${unit}${value === 1 ? "" : "s"}`
   }
 
   function semanticRisk(input?: Semantic | null) {
@@ -228,7 +225,11 @@ export namespace ReplayCompare {
           key: "simplicity",
           label: "Scope",
           value: simplicity,
-          detail: `${plural(input.risk.signals.filesChanged, "file")}, ${input.risk.signals.linesChanged} lines, ${plural(toolCount, "tool call")}, ${plural(routeCount, "route")}${change}`,
+          detail: `${Locale.pluralize(input.risk.signals.filesChanged, "{} file", "{} files")}, ${Locale.pluralize(
+            input.risk.signals.linesChanged,
+            "{} line",
+            "{} lines",
+          )}, ${Locale.pluralize(toolCount, "{} tool call", "{} tool calls")}, ${Locale.pluralize(routeCount, "{} route", "{} routes")}${change}`,
         },
         {
           key: "validation",
