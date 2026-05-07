@@ -27,6 +27,7 @@ import { withTimeout } from "@/util/timeout"
 import { Recorder } from "@/replay/recorder"
 import { AgentControl } from "@/control-plane/agent-control"
 import { AgentControlEvents } from "@/control-plane/agent-control-events"
+import { isNonEmptyRecord } from "@/util/record"
 
 import { ReasoningPolicy } from "@/control-plane/reasoning-policy"
 
@@ -230,7 +231,7 @@ export namespace LLM {
       input.model.providerID.toLowerCase().includes("litellm") ||
       input.model.api.id.toLowerCase().includes("litellm")
 
-    if (isLiteLLMProxy && Object.keys(tools).length === 0 && hasToolCalls(input.messages)) {
+    if (isLiteLLMProxy && !isNonEmptyRecord(tools) && hasToolCalls(input.messages)) {
       tools["_noop"] = tool({
         description:
           "Placeholder for LiteLLM/Anthropic proxy compatibility - required when message history contains tool calls but no active tools are needed",

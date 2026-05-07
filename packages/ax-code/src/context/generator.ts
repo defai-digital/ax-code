@@ -124,7 +124,7 @@ function buildCommands(info: ProjectInfo): string {
     lines.push("```bash", ...cmds, "```")
   }
 
-  if (isNonEmptyRecord(scripts.custom)) {
+  if (scripts.custom && isNonEmptyRecord(scripts.custom)) {
     const entries = Object.entries(scripts.custom).slice(0, 5)
     if (entries.length > 0) {
       lines.push("\n**Additional scripts:**")
