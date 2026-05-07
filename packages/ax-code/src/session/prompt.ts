@@ -94,6 +94,16 @@ function pendingTodoSignature(todos: { content: string; status: string; priority
   return todos.map((todo) => `${todo.status}\u0000${todo.priority}\u0000${todo.content}`).join("\u0001")
 }
 
+function getLastUserInfo(messages: readonly MessageV2.WithParts[]): MessageV2.User | undefined {
+  for (let index = messages.length - 1; index >= 0; index--) {
+    const message = messages[index]
+    if (message.info.role === "user") {
+      return message.info
+    }
+  }
+  return undefined
+}
+
 function todoDeadlineStepBuffer(pendingTodoCount: number) {
   return Math.min(TODO_DEADLINE_MAX_STEP_BUFFER, Math.max(TODO_DEADLINE_MIN_STEP_BUFFER, pendingTodoCount + 2))
 }
@@ -692,7 +702,7 @@ export namespace SessionPrompt {
             maxContinuations,
           })
           const lastMsgs = await Session.messages({ sessionID })
-          const lastUserInfo = lastMsgs.filter((m) => m.info.role === "user").pop()?.info as MessageV2.User | undefined
+          const lastUserInfo = getLastUserInfo(lastMsgs)
           await createUserMessage({
             sessionID,
             agentRouting: "preserve",
@@ -1146,9 +1156,7 @@ export namespace SessionPrompt {
             maxAttempts: MAX_EMPTY_MODEL_TURN_RETRIES,
             pendingCount: pendingTodos.length,
           })
-          const lastUserInfo = latestMessages.filter((m) => m.info.role === "user").pop()?.info as
-            | MessageV2.User
-            | undefined
+          const previousUserInfo = getLastUserInfo(latestMessages)
           await createUserMessage({
             sessionID,
             agentRouting: "preserve",
@@ -1162,8 +1170,8 @@ export namespace SessionPrompt {
                   `This is empty-turn recovery ${emptyModelTurnRetries}/${MAX_EMPTY_MODEL_TURN_RETRIES}.`,
               },
             ],
-            agent: lastUserInfo?.agent,
-            model: lastUserInfo?.model,
+            agent: previousUserInfo?.agent,
+            model: previousUserInfo?.model,
           })
           continue
         }
@@ -1210,9 +1218,7 @@ export namespace SessionPrompt {
             attempt: completionGateRetries,
             maxAttempts: maxCompletionGateRetries,
           })
-          const lastUserInfo = latestMessages.filter((m) => m.info.role === "user").pop()?.info as
-            | MessageV2.User
-            | undefined
+          const previousUserInfo = getLastUserInfo(latestMessages)
           await createUserMessage({
             sessionID,
             agentRouting: "preserve",
@@ -1227,8 +1233,8 @@ export namespace SessionPrompt {
                   `This is completion-gate auto-continuation ${completionGateRetries}/${maxCompletionGateRetries}.`,
               },
             ],
-            agent: lastUserInfo?.agent,
-            model: lastUserInfo?.model,
+            agent: previousUserInfo?.agent,
+            model: previousUserInfo?.model,
           })
           continue
         }
@@ -1256,9 +1262,7 @@ export namespace SessionPrompt {
               inputTokens: processor.message.tokens.input ?? 0,
               threshold: TODO_CONTEXT_CONVERGENCE_INPUT_TOKEN_THRESHOLD,
             })
-            const lastUserInfo = latestMessages.filter((m) => m.info.role === "user").pop()?.info as
-              | MessageV2.User
-              | undefined
+            const previousUserInfo = getLastUserInfo(latestMessages)
             await createUserMessage({
               sessionID,
               agentRouting: "preserve",
@@ -1275,8 +1279,8 @@ export namespace SessionPrompt {
                     reportTodoClosureGuidance("context"),
                 },
               ],
-              agent: lastUserInfo?.agent,
-              model: lastUserInfo?.model,
+              agent: previousUserInfo?.agent,
+              model: previousUserInfo?.model,
             })
             continue
           }
@@ -1303,9 +1307,7 @@ export namespace SessionPrompt {
               remainingAgentSteps,
               maxSteps,
             })
-            const lastUserInfo = latestMessages.filter((m) => m.info.role === "user").pop()?.info as
-              | MessageV2.User
-              | undefined
+            const previousUserInfo = getLastUserInfo(latestMessages)
             await createUserMessage({
               sessionID,
               agentRouting: "preserve",
@@ -1329,8 +1331,8 @@ export namespace SessionPrompt {
                     reportClosureGuidance,
                 },
               ],
-              agent: lastUserInfo?.agent,
-              model: lastUserInfo?.model,
+              agent: previousUserInfo?.agent,
+              model: previousUserInfo?.model,
             })
             continue
           }
@@ -1451,9 +1453,7 @@ export namespace SessionPrompt {
             maxAttempts: maxTodoRetries,
             stagnantAttempts: stagnantTodoRetries,
           })
-          const lastUserInfo = latestMessages.filter((m) => m.info.role === "user").pop()?.info as
-            | MessageV2.User
-            | undefined
+          const previousUserInfo = getLastUserInfo(latestMessages)
           await createUserMessage({
             sessionID,
             agentRouting: "preserve",
@@ -1472,8 +1472,8 @@ export namespace SessionPrompt {
                   reportClosureGuidance,
               },
             ],
-            agent: lastUserInfo?.agent,
-            model: lastUserInfo?.model,
+            agent: previousUserInfo?.agent,
+            model: previousUserInfo?.model,
           })
           continue
         }
