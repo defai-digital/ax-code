@@ -138,6 +138,28 @@ type SessionJSONRouteContext = {
   }
 }
 
+type SessionPathContext = {
+  req: {
+    valid: (input: "param") => { sessionID: SessionID }
+  }
+}
+
+function parseSessionID(c: SessionPathContext) {
+  return c.req.valid("param").sessionID
+}
+
+async function parseProjectSession(c: SessionPathContext) {
+  const sessionID = parseSessionID(c)
+  const session = await requireCurrentProjectSession(sessionID)
+  return { sessionID, session }
+}
+
+async function parseSession(c: SessionPathContext) {
+  const sessionID = parseSessionID(c)
+  await assertSessionExists(sessionID)
+  return sessionID
+}
+
 async function parseSessionJSONInput<TBody>(c: SessionJSONRouteContext) {
   const sessionID = (c.req.valid("param") as { sessionID: SessionID }).sessionID
   const body = c.req.valid("json") as TBody
@@ -252,8 +274,7 @@ export const SessionRoutes = lazy(() =>
         }),
       ),
       async (c) => {
-        const sessionID = c.req.valid("param").sessionID
-        const session = await requireCurrentProjectSession(sessionID)
+        const { session } = await parseProjectSession(c)
         return c.json(session)
       },
     )
@@ -283,8 +304,7 @@ export const SessionRoutes = lazy(() =>
         }),
       ),
       async (c) => {
-        const sessionID = c.req.valid("param").sessionID
-        await requireCurrentProjectSession(sessionID)
+        const { sessionID } = await parseProjectSession(c)
         const session = await Session.children(sessionID)
         return c.json(session)
       },
@@ -321,7 +341,7 @@ export const SessionRoutes = lazy(() =>
         }),
       ),
       async (c) => {
-        const sessionID = c.req.valid("param").sessionID
+        const sessionID = await parseSession(c)
         const query = c.req.valid("query")
         const ranked = await SessionBranchRank.family(sessionID, { deep: query.deep })
         return c.json(ranked)
@@ -349,8 +369,7 @@ export const SessionRoutes = lazy(() =>
       }),
       validator("param", z.object({ sessionID: SessionID.zod })),
       async (c) => {
-        const sessionID = c.req.valid("param").sessionID
-        await assertSessionExists(sessionID)
+        const sessionID = await parseSession(c)
         return c.json(await SessionDre.snapshot(sessionID))
       },
     )
@@ -375,8 +394,7 @@ export const SessionRoutes = lazy(() =>
       }),
       validator("param", z.object({ sessionID: SessionID.zod })),
       async (c) => {
-        const sessionID = c.req.valid("param").sessionID
-        await assertSessionExists(sessionID)
+        const sessionID = await parseSession(c)
         return c.json(SessionGraph.snapshot(sessionID))
       },
     )
@@ -427,7 +445,7 @@ export const SessionRoutes = lazy(() =>
         }),
       ),
       async (c) => {
-        const sessionID = c.req.valid("param").sessionID
+        const sessionID = await parseSession(c)
         const query = c.req.valid("query")
         return c.json(
           await SessionRisk.load(sessionID, {
@@ -462,8 +480,7 @@ export const SessionRoutes = lazy(() =>
       }),
       validator("param", z.object({ sessionID: SessionID.zod })),
       async (c) => {
-        const sessionID = c.req.valid("param").sessionID
-        await assertSessionExists(sessionID)
+        const sessionID = await parseSession(c)
         return c.json((await SessionSemanticDiff.load(sessionID)) ?? null)
       },
     )
@@ -536,9 +553,8 @@ export const SessionRoutes = lazy(() =>
         }),
       ),
       async (c) => {
-        const sessionID = c.req.valid("param").sessionID
+        const sessionID = await parseSession(c)
         const query = c.req.valid("query")
-        await assertSessionExists(sessionID)
         return c.json(SessionRollback.filter(await SessionRollback.points(sessionID), query.tool))
       },
     )
@@ -567,8 +583,7 @@ export const SessionRoutes = lazy(() =>
         }),
       ),
       async (c) => {
-        const sessionID = c.req.valid("param").sessionID
-        await requireCurrentProjectSession(sessionID)
+        const { sessionID } = await parseProjectSession(c)
         const todos = await Todo.get(sessionID)
         return c.json(todos)
       },
@@ -623,7 +638,7 @@ export const SessionRoutes = lazy(() =>
         }),
       ),
       async (c) => {
-        const sessionID = c.req.valid("param").sessionID
+        const sessionID = parseSessionID(c)
         await Session.remove(sessionID)
         return c.json(true)
       },
@@ -664,7 +679,7 @@ export const SessionRoutes = lazy(() =>
         }),
       ),
       async (c) => {
-        const sessionID = c.req.valid("param").sessionID
+        const sessionID = parseSessionID(c)
         const updates = c.req.valid("json")
 
         let session = await Session.get(sessionID)
@@ -705,7 +720,7 @@ export const SessionRoutes = lazy(() =>
       ),
       validator("json", Session.initialize.schema.omit({ sessionID: true })),
       async (c) => {
-        const sessionID = c.req.valid("param").sessionID
+        const sessionID = parseSessionID(c)
         const body = c.req.valid("json")
         await Session.initialize({ ...body, sessionID })
         return c.json(true)
@@ -736,7 +751,7 @@ export const SessionRoutes = lazy(() =>
       ),
       validator("json", Session.fork.schema.omit({ sessionID: true })),
       async (c) => {
-        const sessionID = c.req.valid("param").sessionID
+        const sessionID = parseSessionID(c)
         const body = c.req.valid("json")
         const result = await Session.fork({ ...body, sessionID })
         return c.json(result)
@@ -767,7 +782,7 @@ export const SessionRoutes = lazy(() =>
         }),
       ),
       async (c) => {
-        await SessionPrompt.cancel(c.req.valid("param").sessionID)
+        await SessionPrompt.cancel(parseSessionID(c))
         return c.json(true)
       },
     )
@@ -796,7 +811,7 @@ export const SessionRoutes = lazy(() =>
         }),
       ),
       async (c) => {
-        const sessionID = c.req.valid("param").sessionID
+        const sessionID = parseSessionID(c)
         await Session.share(sessionID)
         const session = await Session.get(sessionID)
         return c.json(session)
@@ -866,7 +881,7 @@ export const SessionRoutes = lazy(() =>
         }),
       ),
       async (c) => {
-        const sessionID = c.req.valid("param").sessionID
+        const sessionID = parseSessionID(c)
         await Session.unshare(sessionID)
         const session = await Session.get(sessionID)
         return c.json(session)
@@ -905,7 +920,7 @@ export const SessionRoutes = lazy(() =>
         }),
       ),
       async (c) => {
-        const sessionID = c.req.valid("param").sessionID
+        const sessionID = parseSessionID(c)
         const body = c.req.valid("json")
         SessionPrompt.assertNotBusy(sessionID)
         const session = await Session.get(sessionID)
@@ -991,8 +1006,7 @@ export const SessionRoutes = lazy(() =>
       ),
       async (c) => {
         const query = c.req.valid("query")
-        const sessionID = c.req.valid("param").sessionID
-        await requireCurrentProjectSession(sessionID)
+        const { sessionID } = await parseProjectSession(c)
         if (query.limit === undefined) {
           const messages = await Session.messages({ sessionID })
           return c.json(messages)
@@ -1412,7 +1426,7 @@ export const SessionRoutes = lazy(() =>
       ),
       validator("json", SessionRevert.RevertInput.omit({ sessionID: true })),
       async (c) => {
-        const sessionID = c.req.valid("param").sessionID
+        const sessionID = parseSessionID(c)
         SessionPrompt.assertNotBusy(sessionID)
         log.info("revert", c.req.valid("json"))
         const session = await SessionRevert.revert({
@@ -1447,7 +1461,7 @@ export const SessionRoutes = lazy(() =>
         }),
       ),
       async (c) => {
-        const sessionID = c.req.valid("param").sessionID
+        const sessionID = parseSessionID(c)
         SessionPrompt.assertNotBusy(sessionID)
         const session = await SessionRevert.unrevert({ sessionID })
         return c.json(session)
