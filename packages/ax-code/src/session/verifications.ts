@@ -6,6 +6,7 @@ import {
 import { EventQuery } from "../replay/query"
 import { Log } from "../util/log"
 import type { SessionID } from "./schema"
+import { isRecord } from "./record"
 
 export namespace SessionVerifications {
   const log = Log.create({ service: "session-verifications" })
@@ -26,10 +27,6 @@ export namespace SessionVerifications {
     callID: string
     metadata?: Record<string, unknown>
     envelopes: LoadedEnvelope[]
-  }
-
-  function isRecord(value: unknown): value is Record<string, unknown> {
-    return typeof value === "object" && value !== null && !Array.isArray(value)
   }
 
   export function runPolicyFailed(run: Pick<LoadedEnvelopeRun, "metadata">): boolean {

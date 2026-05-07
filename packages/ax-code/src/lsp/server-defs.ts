@@ -8,7 +8,6 @@ import fs from "fs/promises"
 import { Filesystem } from "../util/filesystem"
 import { Instance } from "../project/instance"
 import { Flag } from "../flag/flag"
-import { Process } from "../util/process"
 import { which } from "../util/which"
 import { Module } from "@ax-code/util/module"
 import { spawn } from "./launch"
@@ -19,10 +18,8 @@ import {
   PINNED_DIRECT_LSP_RELEASES,
   PINNED_GITHUB_LSP_RELEASES,
   bunServer,
-  ensureTool,
   fetchGitHubReleaseByTag,
   globalBin,
-  globalTool,
   jdtlsAssetUrl,
   jdtlsChecksumUrl,
   installReleaseBin,
@@ -46,14 +43,12 @@ import {
   releaseAssetSha256,
   releaseVersion,
   run,
-  spawnInfo,
   terraformLsAsset,
   terraformLsAssetUrl,
   terraformLsChecksumUrl,
   texlabAsset,
   tinymistAsset,
   toolServer,
-  toolBin,
   venvBin,
   venvPython,
   zlsAsset,

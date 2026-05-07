@@ -1,6 +1,7 @@
 import type { MessageV2 } from "./message-v2"
 import type { ReplayEvent } from "@/replay/event"
 import z from "zod"
+import { isRecord } from "./record"
 
 export namespace DecisionHints {
   export const CategorySchema = z.enum(["missing_verification", "failed_validation", "missing_review_completion"])
@@ -490,10 +491,6 @@ export namespace DecisionHints {
   function changedFiles(action: ToolAction): string[] {
     const candidates = [action.input.filePath, action.input.file, action.input.path, action.input.targetPath]
     return candidates.filter((item): item is string => typeof item === "string" && item.length > 0)
-  }
-
-  function isRecord(input: unknown): input is Record<string, unknown> {
-    return typeof input === "object" && input !== null && !Array.isArray(input)
   }
 
   function safeText(text: string): string {
