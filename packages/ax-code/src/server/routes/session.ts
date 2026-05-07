@@ -30,8 +30,25 @@ import { lazy } from "../../util/lazy"
 import { NamedError } from "@ax-code/util/error"
 import { DiagnosticLog } from "@/debug/diagnostic-log"
 import { assertSessionExists } from "./session-lookup"
+import { parseSessionID, type SessionRouteContext } from "./route-params"
 
 const log = Log.create({ service: "server" })
+
+const SESSION_ID_PARAM = z.object({ sessionID: SessionID.zod })
+const SESSION_COMPARE_PARAM = z.object({ sessionID: SessionID.zod, otherSessionID: SessionID.zod })
+const SESSION_MESSAGE_PARAM = z.object({
+  sessionID: SessionID.zod,
+  messageID: MessageID.zod,
+})
+const SESSION_PART_PARAM = z.object({
+  sessionID: SessionID.zod,
+  messageID: MessageID.zod,
+  partID: PartID.zod,
+})
+const SESSION_PERMISSION_PARAM = z.object({
+  sessionID: SessionID.zod,
+  permissionID: PermissionID.zod,
+})
 
 function startDetachedSessionTask(task: () => Promise<void>) {
   // Async prompt routes return 202 before the model loop starts, but the
@@ -132,76 +149,26 @@ function startAsyncSessionTask(input: {
   })
 }
 
-type SessionJSONRouteContext<TBody> = {
+type SessionJSONRouteContext = {
   req: {
-    valid: (input: "param" | "json") => { sessionID: SessionID } | Record<string, unknown>
+    valid: ((input: "param") => { sessionID: string }) & ((input: "json") => Record<string, unknown>)
   }
 }
 
-type SessionPathContext = {
-  req: {
-    valid: (input: "param") => { sessionID: SessionID }
-  }
-}
-
-type SessionComparePathContext = {
-  req: {
-    valid: (input: "param") => { sessionID: SessionID; otherSessionID: SessionID }
-  }
-}
-
-type SessionPermissionPathContext = {
-  req: {
-    valid: (input: "param") => { sessionID: SessionID; permissionID: PermissionID }
-  }
-}
-
-type SessionMessagePathContext = {
-  req: {
-    valid: (input: "param") => { sessionID: SessionID; messageID: MessageID }
-  }
-}
-
-type SessionPartPathContext = {
-  req: {
-    valid: (input: "param") => { sessionID: SessionID; messageID: MessageID; partID: PartID }
-  }
-}
-
-function parseSessionID(c: SessionPathContext) {
-  return c.req.valid("param").sessionID
-}
-
-function parseSessionCompareParams(c: SessionComparePathContext) {
-  return c.req.valid("param")
-}
-
-function parseSessionPermissionParams(c: SessionPermissionPathContext) {
-  return c.req.valid("param")
-}
-
-function parseSessionMessageParams(c: SessionMessagePathContext) {
-  return c.req.valid("param")
-}
-
-function parseSessionPartParams(c: SessionPartPathContext) {
-  return c.req.valid("param")
-}
-
-async function parseProjectSession(c: SessionPathContext) {
+async function parseProjectSession(c: SessionRouteContext) {
   const sessionID = parseSessionID(c)
   const session = await requireCurrentProjectSession(sessionID)
   return { sessionID, session }
 }
 
-async function parseSession(c: SessionPathContext) {
+async function parseSession(c: SessionRouteContext) {
   const sessionID = parseSessionID(c)
   await assertSessionExists(sessionID)
   return sessionID
 }
 
-async function parseSessionJSONInput<TBody>(c: SessionJSONRouteContext<TBody>) {
-  const sessionID = (c.req.valid("param") as { sessionID: SessionID }).sessionID
+async function parseSessionJSONInput<TBody>(c: SessionJSONRouteContext) {
+  const sessionID = parseSessionID(c)
   const body = c.req.valid("json") as TBody
   await requireCurrentProjectSession(sessionID)
   return { sessionID, body }
@@ -369,7 +336,7 @@ export const SessionRoutes = lazy(() =>
           ...errors(400, 404),
         },
       }),
-      validator("param", z.object({ sessionID: SessionID.zod })),
+      validator("param", SESSION_ID_PARAM),
       validator(
         "query",
         z.object({
@@ -407,7 +374,7 @@ export const SessionRoutes = lazy(() =>
           ...errors(400, 404),
         },
       }),
-      validator("param", z.object({ sessionID: SessionID.zod })),
+      validator("param", SESSION_ID_PARAM),
       async (c) => {
         const sessionID = await parseSession(c)
         return c.json(await SessionDre.snapshot(sessionID))
@@ -432,7 +399,7 @@ export const SessionRoutes = lazy(() =>
           ...errors(400, 404),
         },
       }),
-      validator("param", z.object({ sessionID: SessionID.zod })),
+      validator("param", SESSION_ID_PARAM),
       async (c) => {
         const sessionID = await parseSession(c)
         return c.json(SessionGraph.snapshot(sessionID))
@@ -458,7 +425,7 @@ export const SessionRoutes = lazy(() =>
           ...errors(400, 404),
         },
       }),
-      validator("param", z.object({ sessionID: SessionID.zod })),
+      validator("param", SESSION_ID_PARAM),
       validator(
         "query",
         z.object({
@@ -518,7 +485,7 @@ export const SessionRoutes = lazy(() =>
           ...errors(400, 404),
         },
       }),
-      validator("param", z.object({ sessionID: SessionID.zod })),
+      validator("param", SESSION_ID_PARAM),
       async (c) => {
         const sessionID = await parseSession(c)
         return c.json((await SessionSemanticDiff.load(sessionID)) ?? null)
@@ -544,7 +511,7 @@ export const SessionRoutes = lazy(() =>
           ...errors(400, 404),
         },
       }),
-      validator("param", z.object({ sessionID: SessionID.zod, otherSessionID: SessionID.zod })),
+      validator("param", SESSION_COMPARE_PARAM),
       validator(
         "query",
         z.object({
@@ -556,7 +523,7 @@ export const SessionRoutes = lazy(() =>
         }),
       ),
       async (c) => {
-        const params = parseSessionCompareParams(c)
+        const params = c.req.valid("param")
         const query = c.req.valid("query")
         const result = await SessionCompare.compare({
           sessionID: params.sessionID,
@@ -585,7 +552,7 @@ export const SessionRoutes = lazy(() =>
           ...errors(400, 404),
         },
       }),
-      validator("param", z.object({ sessionID: SessionID.zod })),
+      validator("param", SESSION_ID_PARAM),
       validator(
         "query",
         z.object({
@@ -618,9 +585,7 @@ export const SessionRoutes = lazy(() =>
       }),
       validator(
         "param",
-        z.object({
-          sessionID: SessionID.zod,
-        }),
+        SESSION_ID_PARAM,
       ),
       async (c) => {
         const { sessionID } = await parseProjectSession(c)
@@ -703,9 +668,7 @@ export const SessionRoutes = lazy(() =>
       }),
       validator(
         "param",
-        z.object({
-          sessionID: SessionID.zod,
-        }),
+        SESSION_ID_PARAM,
       ),
       validator(
         "json",
@@ -754,9 +717,7 @@ export const SessionRoutes = lazy(() =>
       }),
       validator(
         "param",
-        z.object({
-          sessionID: SessionID.zod,
-        }),
+        SESSION_ID_PARAM,
       ),
       validator("json", Session.initialize.schema.omit({ sessionID: true })),
       async (c) => {
@@ -817,9 +778,7 @@ export const SessionRoutes = lazy(() =>
       }),
       validator(
         "param",
-        z.object({
-          sessionID: SessionID.zod,
-        }),
+        SESSION_ID_PARAM,
       ),
       async (c) => {
         await SessionPrompt.cancel(parseSessionID(c))
@@ -846,9 +805,7 @@ export const SessionRoutes = lazy(() =>
       }),
       validator(
         "param",
-        z.object({
-          sessionID: SessionID.zod,
-        }),
+        SESSION_ID_PARAM,
       ),
       async (c) => {
         const sessionID = parseSessionID(c)
@@ -947,9 +904,7 @@ export const SessionRoutes = lazy(() =>
       }),
       validator(
         "param",
-        z.object({
-          sessionID: SessionID.zod,
-        }),
+        SESSION_ID_PARAM,
       ),
       validator(
         "json",
@@ -1007,9 +962,7 @@ export const SessionRoutes = lazy(() =>
       }),
       validator(
         "param",
-        z.object({
-          sessionID: SessionID.zod,
-        }),
+        SESSION_ID_PARAM,
       ),
       validator(
         "query",
@@ -1097,13 +1050,10 @@ export const SessionRoutes = lazy(() =>
       }),
       validator(
         "param",
-        z.object({
-          sessionID: SessionID.zod,
-          messageID: MessageID.zod,
-        }),
+        SESSION_MESSAGE_PARAM,
       ),
       async (c) => {
-        const params = parseSessionMessageParams(c)
+        const params = c.req.valid("param")
         const message = await MessageV2.get({
           sessionID: params.sessionID,
           messageID: params.messageID,
@@ -1132,13 +1082,10 @@ export const SessionRoutes = lazy(() =>
       }),
       validator(
         "param",
-        z.object({
-          sessionID: SessionID.zod,
-          messageID: MessageID.zod,
-        }),
+        SESSION_MESSAGE_PARAM,
       ),
       async (c) => {
-        const params = parseSessionMessageParams(c)
+        const params = c.req.valid("param")
         // The busy gate exists to stop concurrent edits from racing
         // in-flight reads/writes of the conversation. It can be safely
         // skipped when the delete cannot affect any in-flight state:
@@ -1183,14 +1130,10 @@ export const SessionRoutes = lazy(() =>
       }),
       validator(
         "param",
-        z.object({
-          sessionID: SessionID.zod,
-          messageID: MessageID.zod,
-          partID: PartID.zod,
-        }),
+        SESSION_PART_PARAM,
       ),
       async (c) => {
-        const params = parseSessionPartParams(c)
+        const params = c.req.valid("param")
         SessionPrompt.assertNotBusy(params.sessionID)
         await Session.removePart({
           sessionID: params.sessionID,
@@ -1219,15 +1162,11 @@ export const SessionRoutes = lazy(() =>
       }),
       validator(
         "param",
-        z.object({
-          sessionID: SessionID.zod,
-          messageID: MessageID.zod,
-          partID: PartID.zod,
-        }),
+        SESSION_PART_PARAM,
       ),
       validator("json", MessageV2.Part),
       async (c) => {
-        const params = parseSessionPartParams(c)
+        const params = c.req.valid("param")
         SessionPrompt.assertNotBusy(params.sessionID)
         const body = c.req.valid("json")
         if (body.id !== params.partID || body.messageID !== params.messageID || body.sessionID !== params.sessionID) {
@@ -1262,9 +1201,7 @@ export const SessionRoutes = lazy(() =>
       }),
       validator(
         "param",
-        z.object({
-          sessionID: SessionID.zod,
-        }),
+        SESSION_ID_PARAM,
       ),
       validator("json", SessionPrompt.PromptInput.omit({ sessionID: true })),
       async (c) => {
@@ -1298,9 +1235,7 @@ export const SessionRoutes = lazy(() =>
       }),
       validator(
         "param",
-        z.object({
-          sessionID: SessionID.zod,
-        }),
+        SESSION_ID_PARAM,
       ),
       validator("json", SessionPrompt.PromptInput.omit({ sessionID: true })),
       async (c) => {
@@ -1328,9 +1263,7 @@ export const SessionRoutes = lazy(() =>
       }),
       validator(
         "param",
-        z.object({
-          sessionID: SessionID.zod,
-        }),
+        SESSION_ID_PARAM,
       ),
       validator("json", SessionPrompt.CommandInput.omit({ sessionID: true })),
       async (c) => {
@@ -1368,9 +1301,7 @@ export const SessionRoutes = lazy(() =>
       }),
       validator(
         "param",
-        z.object({
-          sessionID: SessionID.zod,
-        }),
+        SESSION_ID_PARAM,
       ),
       validator("json", SessionPrompt.CommandInput.omit({ sessionID: true })),
       async (c) => {
@@ -1394,9 +1325,7 @@ export const SessionRoutes = lazy(() =>
       }),
       validator(
         "param",
-        z.object({
-          sessionID: SessionID.zod,
-        }),
+        SESSION_ID_PARAM,
       ),
       validator("json", SessionPrompt.ShellInput.omit({ sessionID: true })),
       async (c) => {
@@ -1429,9 +1358,7 @@ export const SessionRoutes = lazy(() =>
       }),
       validator(
         "param",
-        z.object({
-          sessionID: SessionID.zod,
-        }),
+        SESSION_ID_PARAM,
       ),
       validator("json", SessionPrompt.ShellInput.omit({ sessionID: true })),
       async (c) => {
@@ -1528,14 +1455,11 @@ export const SessionRoutes = lazy(() =>
       }),
       validator(
         "param",
-        z.object({
-          sessionID: SessionID.zod,
-          permissionID: PermissionID.zod,
-        }),
+        SESSION_PERMISSION_PARAM,
       ),
       validator("json", z.object({ response: Permission.Reply })),
       async (c) => {
-        const params = parseSessionPermissionParams(c)
+        const params = c.req.valid("param")
         await Permission.reply({
           requestID: params.permissionID,
           reply: c.req.valid("json").response,
