@@ -8,6 +8,10 @@ import { errors } from "../error"
 import { lazy } from "../../util/lazy"
 import { parseRouteParam } from "./route-params"
 
+const QUESTION_REQUEST_ID_PARAM = z.object({
+  requestID: QuestionID.zod,
+})
+
 export const QuestionRoutes = lazy(() =>
   new Hono()
     .get(
@@ -50,12 +54,7 @@ export const QuestionRoutes = lazy(() =>
           ...errors(400, 404),
         },
       }),
-      validator(
-        "param",
-        z.object({
-          requestID: QuestionID.zod,
-        }),
-      ),
+      validator("param", QUESTION_REQUEST_ID_PARAM),
       validator("json", Question.Reply),
       async (c) => {
         const json = c.req.valid("json")
@@ -82,12 +81,7 @@ export const QuestionRoutes = lazy(() =>
           ...errors(400, 404),
         },
       }),
-      validator(
-        "param",
-        z.object({
-          requestID: QuestionID.zod,
-        }),
-      ),
+      validator("param", QUESTION_REQUEST_ID_PARAM),
       async (c) => {
         const requestID = parseRouteParam<"requestID", QuestionID>(c, "requestID")
         await Question.reject(requestID)
