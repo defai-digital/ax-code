@@ -1,25 +1,11 @@
 import { Hono } from "hono"
 import { describeRoute, resolver, validator } from "hono-openapi"
-import { SessionID } from "@/session/schema"
 import z from "zod"
 import { ExecutionGraph } from "../../graph"
 import { GraphFormat } from "../../graph/format"
 import { lazy } from "../../util/lazy"
 import { errors } from "../error"
-import { assertSessionExists } from "./session-lookup"
-import { parseSessionID as parseSessionIDFromRoute } from "./route-params"
-
-type GraphRouteContext = {
-  req: {
-    valid: (input: "param") => { sessionID: SessionID }
-  }
-}
-
-async function parseSessionID(c: GraphRouteContext) {
-  const sessionID = parseSessionIDFromRoute(c)
-  await assertSessionExists(sessionID)
-  return sessionID
-}
+import { SESSION_ID_PARAM, parseExistingSessionID } from "./route-params"
 
 export const GraphRoutes = lazy(() =>
   new Hono()
@@ -41,9 +27,9 @@ export const GraphRoutes = lazy(() =>
           ...errors(400, 404),
         },
       }),
-      validator("param", z.object({ sessionID: SessionID.zod })),
+      validator("param", SESSION_ID_PARAM),
       async (c) => {
-        const sessionID = await parseSessionID(c)
+        const sessionID = await parseExistingSessionID(c)
         const graph = ExecutionGraph.build(sessionID)
         return c.json({ data: GraphFormat.topologyLines(graph) } satisfies GraphFormat.TopologyResponse)
       },
@@ -69,7 +55,7 @@ export const GraphRoutes = lazy(() =>
           ...errors(400, 404),
         },
       }),
-      validator("param", z.object({ sessionID: SessionID.zod })),
+      validator("param", SESSION_ID_PARAM),
       validator(
         "query",
         z.object({
@@ -79,7 +65,7 @@ export const GraphRoutes = lazy(() =>
         }),
       ),
       async (c) => {
-        const sessionID = await parseSessionID(c)
+        const sessionID = await parseExistingSessionID(c)
         const format = c.req.valid("query").format
         const graph = ExecutionGraph.build(sessionID)
 

@@ -5,7 +5,7 @@ import { AuditExport } from "../../audit/export"
 import { Replay } from "../../replay/replay"
 import { lazy } from "../../util/lazy"
 import { Log } from "../../util/log"
-import { parseSessionID as parseSessionIDFromRoute } from "./route-params"
+import { SESSION_ID_PARAM, parseSessionID as parseSessionIDFromRoute } from "./route-params"
 
 const log = Log.create({ service: "audit.routes" })
 
@@ -34,7 +34,7 @@ export const AuditRoutes = lazy(() =>
           200: { description: "JSON Lines audit export" },
         },
       }),
-      validator("param", z.object({ sessionID: z.string() })),
+      validator("param", SESSION_ID_PARAM),
       async (c) => {
         const sessionID = parseSessionIDFromRoute(c)
         const lines = [...AuditExport.stream(sessionID)]
@@ -95,7 +95,7 @@ export const AuditRoutes = lazy(() =>
           200: { description: "Reconstructed replay steps" },
         },
       }),
-      validator("param", z.object({ sessionID: z.string() })),
+      validator("param", SESSION_ID_PARAM),
       validator("query", z.object({ fromStep: z.coerce.number().optional() })),
       async (c) => {
         const sessionID = parseSessionIDFromRoute(c)

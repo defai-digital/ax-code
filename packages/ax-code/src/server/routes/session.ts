@@ -29,12 +29,10 @@ import { errors } from "../error"
 import { lazy } from "../../util/lazy"
 import { NamedError } from "@ax-code/util/error"
 import { DiagnosticLog } from "@/debug/diagnostic-log"
-import { assertSessionExists } from "./session-lookup"
-import { parseSessionID, type SessionRouteContext } from "./route-params"
+import { parseExistingSessionID, parseSessionID, type SessionRouteContext, SESSION_ID_PARAM } from "./route-params"
 
 const log = Log.create({ service: "server" })
 
-const SESSION_ID_PARAM = z.object({ sessionID: SessionID.zod })
 const SESSION_COMPARE_PARAM = z.object({ sessionID: SessionID.zod, otherSessionID: SessionID.zod })
 const SESSION_MESSAGE_PARAM = z.object({
   sessionID: SessionID.zod,
@@ -162,9 +160,7 @@ async function parseProjectSession(c: SessionRouteContext) {
 }
 
 async function parseSession(c: SessionRouteContext) {
-  const sessionID = parseSessionID(c)
-  await assertSessionExists(sessionID)
-  return sessionID
+  return parseExistingSessionID(c)
 }
 
 async function parseSessionJSONInput<TBody>(c: SessionJSONRouteContext) {

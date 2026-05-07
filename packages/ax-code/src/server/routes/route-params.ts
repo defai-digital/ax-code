@@ -1,5 +1,8 @@
 import { ProviderID } from "@/provider/schema"
 import { SessionID } from "@/session/schema"
+import z from "zod"
+
+import { assertSessionExists } from "./session-lookup"
 
 export type ProviderRouteContext = {
   req: {
@@ -19,6 +22,14 @@ export type SessionRouteContext = {
 
 export function parseSessionID(c: SessionRouteContext) {
   return SessionID.make(c.req.valid("param").sessionID)
+}
+
+export const SESSION_ID_PARAM = z.object({ sessionID: SessionID.zod })
+
+export async function parseExistingSessionID(c: SessionRouteContext) {
+  const sessionID = parseSessionID(c)
+  await assertSessionExists(sessionID)
+  return sessionID
 }
 
 export type RouteParamContext<TKey extends string, TValue> = {
