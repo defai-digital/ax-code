@@ -1,4 +1,5 @@
 import z from "zod"
+import { Locale } from "../util/locale"
 import { Tool } from "./tool"
 import { Question } from "../question"
 import DESCRIPTION from "./question.txt"
@@ -79,7 +80,7 @@ export const QuestionTool = Tool.define("question", {
       : undefined
 
     return {
-      title: `Asked ${params.questions.length} question${params.questions.length > 1 ? "s" : ""}`,
+      title: Locale.pluralize(params.questions.length, "Asked {} question", "Asked {} questions"),
       output: `${actor} your questions: ${formatted}. You can now continue with these answers in mind.${reminder}`,
       metadata: {
         answers,

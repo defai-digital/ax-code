@@ -57,7 +57,7 @@ const MS_PER_SECOND = 1_000
 
 export function footerPermissionLabel(count: number): string | undefined {
   if (count <= 0) return
-  return `${count} Permission${count > 1 ? "s" : ""}`
+  return Locale.pluralize(count, "{} Permission", "{} Permissions")
 }
 
 function footerToolLabel(tool: string) {
@@ -177,13 +177,13 @@ export function footerAgentControlStatusView(
 ): FooterAgentControlStatusView | undefined {
   if (tools && tools.openTaskCalls.length > 0) {
     return {
-      label: `Agent waiting: ${tools.openTaskCalls.length} subagent${tools.openTaskCalls.length !== 1 ? "s" : ""}`,
+      label: `Agent waiting: ${Locale.pluralize(tools.openTaskCalls.length, "{} subagent", "{} subagents")}`,
       tone: summary?.completed ? "warning" : "working",
     }
   }
   if (tools && tools.openCalls.length > 0) {
     return {
-      label: `Agent waiting: ${tools.openCalls.length} tool result${tools.openCalls.length !== 1 ? "s" : ""}`,
+      label: `Agent waiting: ${Locale.pluralize(tools.openCalls.length, "{} tool result", "{} tool results")}`,
       tone: summary?.completed ? "warning" : "working",
     }
   }
@@ -235,7 +235,7 @@ export function footerTrustChip(input: {
   if (input.pendingPlans > 0) {
     return {
       type: "plans",
-      label: `${input.pendingPlans} Plan${input.pendingPlans !== 1 ? "s" : ""}`,
+      label: Locale.pluralize(input.pendingPlans, "{} Plan", "{} Plans"),
       count: input.pendingPlans,
     }
   }
