@@ -4,6 +4,7 @@ import { useTheme } from "../context/theme"
 import { useDialog } from "@tui/ui/dialog"
 import { useSync } from "@tui/context/sync"
 import { For, Match, Switch, Show, createMemo } from "solid-js"
+import { isNonEmptyRecord } from "@/util/record"
 
 export type DialogStatusProps = {}
 
@@ -11,6 +12,7 @@ export function DialogStatus() {
   const sync = useSync()
   const { theme } = useTheme()
   const dialog = useDialog()
+  const hasMcp = createMemo(() => isNonEmptyRecord(sync.data.mcp))
 
   const enabledFormatters = createMemo(() => (sync.data.formatter ?? []).filter((f) => f.enabled))
 
@@ -49,7 +51,7 @@ export function DialogStatus() {
           esc
         </text>
       </box>
-      <Show when={Object.keys(sync.data.mcp).length > 0} fallback={<text fg={theme.text}>No MCP Servers</text>}>
+      <Show when={hasMcp()} fallback={<text fg={theme.text}>No MCP Servers</text>}>
         <box>
           <text fg={theme.text}>{Object.keys(sync.data.mcp).length} MCP Servers</text>
           <For each={Object.entries(sync.data.mcp)}>

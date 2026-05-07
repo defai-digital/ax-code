@@ -19,6 +19,7 @@ import { Global } from "../global"
 import path from "path"
 import { Filesystem } from "../util/filesystem"
 import { withTimeout } from "../util/timeout"
+import { isNonEmptyRecord } from "@/util/record"
 
 // Direct imports for bundled providers
 import { createGoogleGenerativeAI } from "@ai-sdk/google"
@@ -657,7 +658,7 @@ export namespace Provider {
         }
       }
 
-      if (Object.keys(provider.models).length === 0 && !discoveryLoaders[providerID]) {
+      if (!isNonEmptyRecord(provider.models) && !discoveryLoaders[providerID]) {
         delete providers[providerID]
         continue
       }
@@ -683,7 +684,7 @@ export namespace Provider {
 
     for (const [id, provider] of Object.entries(providers)) {
       const providerID = ProviderID.make(id)
-      if (Object.keys(provider.models).length === 0) {
+      if (!isNonEmptyRecord(provider.models)) {
         delete providers[providerID]
       }
     }

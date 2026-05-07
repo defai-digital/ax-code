@@ -6,6 +6,7 @@
  */
 
 import type { ProjectInfo, DepthLevel, ComplexityLevel } from "./analyzer"
+import { isNonEmptyRecord } from "../util/record"
 
 interface GeneratorConfig {
   depth: DepthLevel
@@ -123,7 +124,7 @@ function buildCommands(info: ProjectInfo): string {
     lines.push("```bash", ...cmds, "```")
   }
 
-  if (scripts.custom && Object.keys(scripts.custom).length > 0) {
+  if (isNonEmptyRecord(scripts.custom)) {
     const entries = Object.entries(scripts.custom).slice(0, 5)
     if (entries.length > 0) {
       lines.push("\n**Additional scripts:**")

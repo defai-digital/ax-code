@@ -19,6 +19,7 @@ import type { LspCacheOperation } from "../code-intelligence/schema.sql"
 import { LspScheduler } from "./scheduler"
 import { BuiltinServerProfiles } from "./server-profile"
 import { LANGUAGE_EXTENSIONS } from "./language"
+import { isNonEmptyRecord } from "@/util/record"
 
 export namespace LSP {
   const log = Log.create({ service: "lsp" })
@@ -315,7 +316,7 @@ export namespace LSP {
       if (!hint) continue
       Object.assign(merged, hint)
     }
-    return Object.keys(merged).length > 0 ? merged : undefined
+    return isNonEmptyRecord(merged) ? merged : undefined
   }
 
   function sortClients(clients: LSPClient.Info[]): LSPClient.Info[] {

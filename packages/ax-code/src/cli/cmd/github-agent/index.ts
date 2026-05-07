@@ -32,6 +32,7 @@ import { SessionPrompt } from "@/session/prompt"
 import { setTimeout as sleep } from "node:timers/promises"
 import { Process } from "@/util/process"
 import { git } from "@/util/git"
+import { isNonEmptyRecord } from "@/util/record"
 import {
   type GitHubPullRequest,
   type GitHubIssue,
@@ -769,9 +770,10 @@ export const GithubRunCommand = cmd({
           if (part.type === "tool" && part.state.status === "completed") {
             const [tool, color] = TOOL[part.tool] ?? [part.tool, UI.Style.TEXT_INFO_BOLD]
             const title =
-              part.state.title || Object.keys(part.state.input).length > 0
+              part.state.title ||
+              (isNonEmptyRecord(part.state.input)
                 ? JSON.stringify(part.state.input)
-                : "Unknown"
+                : "Unknown")
             console.log()
             printEvent(color, tool, title)
           }

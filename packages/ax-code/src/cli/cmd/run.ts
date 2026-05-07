@@ -28,7 +28,7 @@ import { BashTool } from "../../tool/bash"
 import { TodoWriteTool } from "../../tool/todo"
 import { Locale } from "../../util/locale"
 import { internalBaseUrl, isInternalHostname } from "../../util/internal-url"
-import { isRecord } from "../../util/record"
+import { isNonEmptyRecord } from "../../util/record"
 
 type ToolProps<T extends Tool.Info> = {
   input: Tool.InferParameters<T>
@@ -69,7 +69,7 @@ function fallback(part: ToolPart) {
   const input = "input" in state ? state.input : undefined
   const title =
     ("title" in state && state.title ? state.title : undefined) ||
-    (isRecord(input) && Object.keys(input).length > 0 ? JSON.stringify(input) : "Unknown")
+    (isNonEmptyRecord(input) ? JSON.stringify(input) : "Unknown")
   inline({
     icon: "⚙",
     title: `${part.tool} ${title}`,

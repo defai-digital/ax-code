@@ -17,6 +17,7 @@ import { NativePerf } from "../../perf/native"
 import type { NativePerfSnapshot } from "../../perf/native"
 import { UI } from "../ui"
 import { cmd } from "./cmd"
+import { isNonEmptyRecord } from "@/util/record"
 
 // Initial population command for the v3 Code Intelligence graph.
 //
@@ -610,7 +611,7 @@ export const IndexCommand = cmd({
                 elapsedMs: elapsed,
                 probeResult,
                 native,
-                lspPerf: Object.keys(lspPerf).length > 0 ? lspPerf : undefined,
+                lspPerf: isNonEmptyRecord(lspPerf) ? lspPerf : undefined,
               }),
               null,
               2,

@@ -11,3 +11,7 @@ export function asRecord(value: unknown): Record<string, unknown> {
 export function asRecordOrUndefined(value: unknown): Record<string, unknown> | undefined {
   return isRecord(value) ? value : undefined
 }
+
+export function isNonEmptyRecord(value: unknown): value is Record<string, unknown> {
+  return isRecord(value) && Object.keys(value).length > 0
+}

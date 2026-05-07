@@ -9,6 +9,7 @@ import path from "path"
 import fs from "fs"
 import { readFile } from "node:fs/promises"
 import { Log } from "../util/log"
+import { isNonEmptyRecord } from "../util/record"
 
 export type ComplexityLevel = "small" | "medium" | "large" | "enterprise"
 export type DepthLevel = "basic" | "standard" | "full" | "security"
@@ -295,7 +296,7 @@ function detectScripts(pkg: PackageJson | null): ProjectScripts {
     lint: lint ? "lint" : undefined,
     dev: dev ? "dev" : undefined,
     typecheck: typecheck ? "typecheck" : undefined,
-    custom: Object.keys(custom).length > 0 ? custom : undefined,
+    custom: isNonEmptyRecord(custom) ? custom : undefined,
   }
 }
 

@@ -12,6 +12,7 @@ import { usePromptRef } from "../context/prompt"
 import { Installation } from "@/installation"
 import { useLocal } from "../context/local"
 import { recordTuiStartupOnce } from "@tui/util/startup-trace"
+import { isNonEmptyRecord } from "@/util/record"
 
 export function Home() {
   const sync = useSync()
@@ -20,7 +21,7 @@ export function Home() {
   const promptRef = usePromptRef()
   const args = useArgs()
   const local = useLocal()
-  const mcp = createMemo(() => Object.keys(sync.data.mcp).length > 0)
+  const mcp = createMemo(() => isNonEmptyRecord(sync.data.mcp))
   const mcpError = createMemo(() => {
     return Object.values(sync.data.mcp).some((x) => x.status === "failed")
   })

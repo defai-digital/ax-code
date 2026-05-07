@@ -1,4 +1,5 @@
 import { AgentControl } from "./agent-control"
+import { isNonEmptyRecord } from "../util/record"
 
 type ReasoningPolicyModel = {
   capabilities?: {
@@ -153,7 +154,7 @@ export namespace ReasoningPolicy {
   function usableVariant(candidate: Record<string, unknown> | undefined) {
     if (!candidate || candidate.disabled === true) return undefined
     const { disabled: _disabled, ...options } = candidate
-    if (Object.keys(options).length === 0) return undefined
+    if (!isNonEmptyRecord(options)) return undefined
     return options
   }
 

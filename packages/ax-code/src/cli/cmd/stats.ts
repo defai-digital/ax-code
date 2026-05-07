@@ -6,6 +6,7 @@ import { Database } from "../../storage/db"
 import { SessionTable } from "../../session/session.sql"
 import { Project } from "../../project/project"
 import { Instance } from "../../project/instance"
+import { isNonEmptyRecord } from "../../util/record"
 
 interface SessionStats {
   totalSessions: number
@@ -334,7 +335,7 @@ export function displayStats(stats: SessionStats, toolLimit?: number, modelLimit
   console.log()
 
   // Model Usage section
-  if (modelLimit !== undefined && Object.keys(stats.modelUsage).length > 0) {
+  if (modelLimit !== undefined && isNonEmptyRecord(stats.modelUsage)) {
     const sortedModels = Object.entries(stats.modelUsage).sort(([, a], [, b]) => b.messages - a.messages)
     const modelsToDisplay = modelLimit === Infinity ? sortedModels : sortedModels.slice(0, modelLimit)
 
@@ -358,7 +359,7 @@ export function displayStats(stats: SessionStats, toolLimit?: number, modelLimit
   console.log()
 
   // Tool Usage section
-  if (Object.keys(stats.toolUsage).length > 0) {
+  if (isNonEmptyRecord(stats.toolUsage)) {
     const sortedTools = Object.entries(stats.toolUsage).sort(([, a], [, b]) => b - a)
     const toolsToDisplay = toolLimit === undefined ? sortedTools : sortedTools.slice(0, toolLimit)
 

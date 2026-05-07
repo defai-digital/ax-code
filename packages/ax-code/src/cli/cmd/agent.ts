@@ -11,6 +11,7 @@ import matter from "gray-matter"
 import { Instance } from "../../project/instance"
 import { EOL } from "os"
 import type { Argv } from "yargs"
+import { isNonEmptyRecord } from "../../util/record"
 
 type AgentMode = "all" | "primary" | "subagent"
 
@@ -193,7 +194,7 @@ const AgentCreateCommand = cmd({
           description: generated.whenToUse,
           mode,
         }
-        if (Object.keys(tools).length > 0) {
+        if (isNonEmptyRecord(tools)) {
           frontmatter.tools = tools
         }
 

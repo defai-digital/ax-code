@@ -14,6 +14,7 @@ import {
 import { NativePerf } from "../../../perf/native"
 import { buildIndexReport, groupFilesByLanguage, isIndexableFile, probeLspServers } from "../index-graph"
 import { cmd } from "../cmd"
+import { isNonEmptyRecord } from "@/util/record"
 
 export type IndexReport = ReturnType<typeof buildIndexReport>
 export type CacheMode = "cold" | "warm-cache"
@@ -350,7 +351,7 @@ async function run(
     elapsedMs,
     probeResult,
     native,
-    lspPerf: Object.keys(lspPerf).length > 0 ? lspPerf : undefined,
+    lspPerf: isNonEmptyRecord(lspPerf) ? lspPerf : undefined,
   })
 }
 
@@ -541,7 +542,7 @@ const PerfIndexCommand = cmd({
           print("totalMs", summary.native.total.totalMs)
           print("inBytes", summary.native.total.inBytes, "B")
           print("outBytes", summary.native.total.outBytes, "B")
-          if (Object.keys(summary.native.rows).length > 0) {
+          if (isNonEmptyRecord(summary.native.rows)) {
             console.log("")
             console.log("  native rows:")
             for (const [name, value] of Object.entries(summary.native.rows)) {
