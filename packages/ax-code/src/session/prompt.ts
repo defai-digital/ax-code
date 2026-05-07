@@ -645,11 +645,6 @@ export namespace SessionPrompt {
       environmentModelKey: undefined,
       instructions: undefined,
     }
-    const publishSessionError = (message: string) =>
-      Bus.publishDetached(Session.Event.Error, {
-        sessionID,
-        error: new NamedError.Unknown({ message }).toObject(),
-      })
     // Cache agent/model info per loop to avoid repeated async lookups
     let cachedAgent: { key: string; value: Agent.Info } | undefined
     let cachedModel: { key: string; value: Provider.Model } | undefined
@@ -727,11 +722,13 @@ export namespace SessionPrompt {
           sessionID,
           continuations,
         })
-        publishSessionError(
-          `Agent reached maximum step limit (${GLOBAL_STEP_LIMIT} steps${continuations > 0 ? ` after ${continuations} auto-continuations` : ""}). ` +
+        Session.publishError({
+          sessionID,
+          message:
+            `Agent reached maximum step limit (${GLOBAL_STEP_LIMIT} steps${continuations > 0 ? ` after ${continuations} auto-continuations` : ""}). ` +
             `To increase, set "session.max_steps" in ax-code.json. ` +
             `Try breaking the task into smaller parts or increase the limit for complex autonomous tasks.`,
-        )
+        })
         reason = "step_limit"
         break
       }
@@ -1080,7 +1077,7 @@ export namespace SessionPrompt {
       }
       const publishAutonomousFailure = async (message: string) => {
         await markAssistantIncomplete(message)
-        publishSessionError(message)
+        Session.publishError({ sessionID, error: new NamedError.Unknown({ message }).toObject() })
       }
 
       // In autonomous mode, when the model ends a turn cleanly but leaves todos
@@ -1463,9 +1460,11 @@ export namespace SessionPrompt {
               to: `${fallback.providerID}/${fallback.modelID}`,
               reason: err.data?.message,
             })
-            publishSessionError(
-              `Provider ${lastUser.model.providerID} failed: ${err.data?.message ?? "unknown error"}. Switching to ${fallback.providerID}/${fallback.modelID}.`,
-            )
+            Session.publishError({
+              sessionID,
+              message:
+                `Provider ${lastUser.model.providerID} failed: ${err.data?.message ?? "unknown error"}. Switching to ${fallback.providerID}/${fallback.modelID}.`,
+            })
             fallbackModelOverride = fallback
             cachedModel = undefined
             consecutiveErrors = 0
@@ -1490,9 +1489,11 @@ export namespace SessionPrompt {
             consecutiveErrors,
             sessionID,
           })
-          publishSessionError(
-            `Agent encountered ${consecutiveErrors} consecutive errors at step ${step}. Stopping to prevent retry loop. Try rephrasing your request or breaking it into smaller tasks.`,
-          )
+          Session.publishError({
+            sessionID,
+            message:
+              `Agent encountered ${consecutiveErrors} consecutive errors at step ${step}. Stopping to prevent retry loop. Try rephrasing your request or breaking it into smaller tasks.`,
+          })
           reason = "error"
           break
         }
@@ -2135,9 +2136,9 @@ export namespace SessionPrompt {
                 part.mime = "application/x-directory"
               }
               const publishReadError = (message: string) =>
-                Bus.publishDetached(Session.Event.Error, {
+                Session.publishError({
                   sessionID: input.sessionID,
-                  error: new NamedError.Unknown({ message }).toObject(),
+                  message,
                 })
 
               if (part.mime === "text/plain") {
@@ -3083,17 +3084,12 @@ NOTE: At any point in time through this workflow you should feel free to ask the
       sessionID: input.sessionID,
       commandName: input.command,
     })
-    const publishCommandError = (message: string) =>
-      Bus.publishDetached(Session.Event.Error, {
-        sessionID: input.sessionID,
-        error: new NamedError.Unknown({ message }).toObject(),
-      })
     const command = await Command.get(input.command)
     if (!command) {
       const available = await Command.list().then((cmds) => cmds.map((c) => c.name))
       const hint = available.length ? ` Available commands: ${available.join(", ")}` : ""
       const error = new NamedError.Unknown({ message: `Command not found: "${input.command}".${hint}` })
-      publishCommandError(error.message)
+      Session.publishError({ sessionID: input.sessionID, error: error.toObject() })
       throw error
     }
     const prepared = await commandSetup({

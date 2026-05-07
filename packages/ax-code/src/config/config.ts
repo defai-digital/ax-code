@@ -26,7 +26,6 @@ import { BunProc } from "@/bun"
 import { Installation } from "@/installation"
 import { ConfigMarkdown } from "./markdown"
 import { constants, existsSync } from "fs"
-import { Bus } from "@/bus"
 import { GlobalBus } from "@/bus/global"
 import { Event } from "../server/event"
 import { Glob } from "../util/glob"
@@ -555,9 +554,7 @@ export namespace Config {
 
   async function publishConfigLoadError(message: string) {
     const { Session } = await import("@/session")
-    Bus.publishDetached(Session.Event.Error, {
-      error: new NamedError.Unknown({ message }).toObject(),
-    })
+    Session.publishError({ message })
   }
 
   async function loadCommand(dir: string) {

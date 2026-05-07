@@ -59,10 +59,6 @@ export namespace Plugin {
         },
         $: Bun.$.env(Env.sanitize(process.env)),
       }
-      const publishPluginError = (message: string) =>
-        Bus.publishDetached(Session.Event.Error, {
-          error: new NamedError.Unknown({ message }).toObject(),
-        })
 
       for (const plugin of INTERNAL_PLUGINS) {
         log.info("loading internal plugin", { name: plugin.name })
@@ -86,7 +82,9 @@ export namespace Plugin {
             const cause = err instanceof Error ? err.cause : err
             const detail = cause instanceof Error ? cause.message : String(cause ?? err)
             log.error("failed to install plugin", { pkg, version, error: detail })
-            publishPluginError(`Failed to install plugin ${pkg}@${version}: ${detail}`)
+            Session.publishError({
+              message: `Failed to install plugin ${pkg}@${version}: ${detail}`,
+            })
             return ""
           })
           if (!plugin) continue
@@ -99,7 +97,7 @@ export namespace Plugin {
           if (!allowed) {
             const message = `Refusing to load plugin outside trusted plugin directories: ${pluginPath}`
             log.error("blocked plugin outside trusted directories", { pluginPath })
-            publishPluginError(message)
+            Session.publishError({ message })
             continue
           }
         }
@@ -116,7 +114,7 @@ export namespace Plugin {
           .catch((err) => {
             const message = NamedError.message(err)
             log.error("failed to load plugin", { path: plugin, error: message })
-            publishPluginError(`Failed to load plugin ${plugin}: ${message}`)
+            Session.publishError({ message: `Failed to load plugin ${plugin}: ${message}` })
           })
       }
 

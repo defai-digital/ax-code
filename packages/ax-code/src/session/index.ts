@@ -32,6 +32,7 @@ import { Permission } from "@/permission"
 import { Global } from "@/global"
 import type { LanguageModelV2Usage } from "@ai-sdk/provider"
 import { Filesystem } from "@/util/filesystem"
+import { NamedError } from "@ax-code/util/error"
 
 export namespace Session {
   const log = Log.create({ service: "session" })
@@ -247,6 +248,17 @@ export namespace Session {
         error: MessageV2.Assistant.shape.error,
       }),
     ),
+  }
+
+  export function publishError(input: {
+    sessionID?: SessionID
+    error?: MessageV2.Assistant["error"]
+    message?: string
+  }) {
+    Bus.publishDetached(Event.Error, {
+      ...(input.sessionID ? { sessionID: input.sessionID } : {}),
+      error: input.error ?? new NamedError.Unknown({ message: input.message ?? "Unknown error" }).toObject(),
+    })
   }
 
   export const create = fn(

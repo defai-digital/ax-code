@@ -17,7 +17,6 @@ import { iife } from "@/util/iife"
 import { NotFoundError } from "@/storage/db"
 import { Log } from "../util/log"
 import { NamedError } from "@ax-code/util/error"
-import { Bus } from "../bus"
 import { Process } from "@/util/process"
 import { Shell } from "@/shell/shell"
 import { SystemPrompt } from "./system"
@@ -36,10 +35,7 @@ function publishAgentInfoError(input: {
     input.report(input.sessionID, error)
     return error
   }
-  Bus.publishDetached(Session.Event.Error, {
-    sessionID: input.sessionID,
-    error,
-  })
+  Session.publishError({ sessionID: input.sessionID, error })
   return error
 }
 

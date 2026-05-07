@@ -3,9 +3,7 @@ import path from "path"
 import { pathToFileURL } from "url"
 import z from "zod"
 import { Effect, Layer, ServiceMap } from "effect"
-import { NamedError } from "@ax-code/util/error"
 import type { Agent } from "@/agent/agent"
-import { Bus } from "@/bus"
 import { InstanceState } from "@/effect/instance-state"
 import { makeRunPromise } from "@/effect/run-service"
 import { Flag } from "@/flag/flag"
@@ -40,11 +38,6 @@ export namespace Skill {
     dirs: Set<string>
   }
 
-  async function publishSkillError(message: string) {
-    const { Session } = await import("@/session")
-    Bus.publishDetached(Session.Event.Error, { error: new NamedError.Unknown({ message }).toObject() })
-  }
-
   export interface Interface {
     readonly get: (name: string) => Effect.Effect<Info | undefined>
     readonly all: () => Effect.Effect<Info[]>
@@ -58,7 +51,8 @@ export namespace Skill {
         const message = ConfigMarkdown.FrontmatterError.isInstance(err)
           ? err.data.message
           : `Failed to parse skill ${match}`
-        await publishSkillError(message)
+        const { Session } = await import("@/session")
+        Session.publishError({ message })
         log.error("failed to load skill", { skill: match, err })
         return undefined
       })

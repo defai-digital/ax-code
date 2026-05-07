@@ -27,7 +27,6 @@ import { PermissionID } from "@/permission/schema"
 import { ModelID, ProviderID } from "@/provider/schema"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
-import { Bus } from "../../bus"
 import { NamedError } from "@ax-code/util/error"
 import { DiagnosticLog } from "@/debug/diagnostic-log"
 
@@ -119,13 +118,6 @@ async function requireCurrentProjectSession(sessionID: SessionID) {
   if (Session.isCompatibleWithCurrentProject(session)) return session
   throw new HTTPException(409, {
     message: `Session ${sessionID} belongs to a different project directory; start a new session from the current project instead.`,
-  })
-}
-
-function publishAsyncSessionError(sessionID: SessionID, error: unknown) {
-  Bus.publishDetached(Session.Event.Error, {
-    sessionID,
-    error: new NamedError.Unknown({ message: NamedError.message(error) }).toObject(),
   })
 }
 
@@ -1242,7 +1234,7 @@ export const SessionRoutes = lazy(() =>
           task: () => SessionPrompt.prompt({ ...body, sessionID }),
           onError(error) {
             log.error("prompt_async failed", { sessionID, error })
-            publishAsyncSessionError(sessionID, error)
+            Session.publishError({ sessionID, message: NamedError.message(error) })
           },
         })
         return c.body(null, 202)
@@ -1278,7 +1270,7 @@ export const SessionRoutes = lazy(() =>
           task: () => SessionPrompt.command({ ...body, sessionID }),
           onError(error) {
             log.error("command_async failed", { sessionID, error })
-            publishAsyncSessionError(sessionID, error)
+            Session.publishError({ sessionID, message: NamedError.message(error) })
           },
         })
         return c.body(null, 202)
@@ -1352,7 +1344,7 @@ export const SessionRoutes = lazy(() =>
           task: () => SessionPrompt.shell({ ...body, sessionID }),
           onError(error) {
             log.error("shell_async failed", { sessionID, error })
-            publishAsyncSessionError(sessionID, error)
+            Session.publishError({ sessionID, message: NamedError.message(error) })
           },
         })
         return c.body(null, 202)
