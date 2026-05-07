@@ -1071,13 +1071,11 @@ export namespace SessionPrompt {
         }
       }
 
-      const markAssistantIncomplete = async (message: string) => {
-        processor.message.error = new NamedError.Unknown({ message }).toObject()
-        await Session.updateMessage(processor.message)
-      }
       const publishAutonomousFailure = async (message: string) => {
-        await markAssistantIncomplete(message)
-        Session.publishError({ sessionID, error: new NamedError.Unknown({ message }).toObject() })
+        const error = new NamedError.Unknown({ message }).toObject()
+        processor.message.error = error
+        await Session.updateMessage(processor.message)
+        Session.publishError({ sessionID, error })
       }
 
       // In autonomous mode, when the model ends a turn cleanly but leaves todos
