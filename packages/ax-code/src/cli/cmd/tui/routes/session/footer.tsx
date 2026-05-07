@@ -11,8 +11,9 @@ import { useRoute } from "../../context/route"
 import { AgentControlReplayQuery } from "@/replay/agent-control-query"
 import { Installation } from "@/installation"
 import { Flag } from "@/flag/flag"
-import { Locale } from "@/util/locale"
 import {
+  footerPermissionLabel,
+  footerTrustChip,
   footerAgentControlStatusView,
   footerProgressBar,
   isFooterSessionStatus,
@@ -40,15 +41,19 @@ export function Footer() {
   // in the empty-graph case the sidebar already tells the user to run
   // `ax-code index`, and a second "DRE" chip in the footer without
   // that context would be actively misleading.
-  const drePending = createMemo(() => sync.data.debugEngine.pendingPlans)
-  const dreGraphIndexed = createMemo(
-    () => Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE && sync.data.debugEngine.graph.nodeCount > 0,
-  )
-  const dreChipVisible = createMemo(() => drePending() > 0 || dreGraphIndexed())
+  const trustChip = createMemo(() => {
+    if (route.data.type !== "session") return undefined
+    return footerTrustChip({
+      experimentalDebugEngine: Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE,
+      pendingPlans: sync.data.debugEngine.pendingPlans,
+      graphNodeCount: sync.data.debugEngine.graph.nodeCount,
+    })
+  })
   const permissions = createMemo(() => {
     if (route.data.type !== "session") return []
     return sync.data.permission[route.data.sessionID] ?? []
   })
+  const permissionLabel = createMemo(() => footerPermissionLabel(permissions().length))
   // Session step progress for the footer bar. Pure data-driven: re-renders
   // only when `step` or `maxSteps` advance via SessionStatus events. No
   // animation frames, no internal tick — see footerProgressBar() rationale.
@@ -71,7 +76,7 @@ export function Footer() {
   const progressBar = createMemo(() =>
     footerProgressBar({ status: sessionStatus(), terminalWidth: dimensions().width }),
   )
-  const showDreStatus = createMemo(() => dreChipVisible() && showDreChip())
+  const showDreStatus = createMemo(() => trustChip() !== undefined && showDreChip())
   const agentControlStatus = createMemo(() => {
     if (route.data.type !== "session") return undefined
     void sync.data.message[route.data.sessionID]
@@ -97,7 +102,7 @@ export function Footer() {
   })
   const showSecondaryStatus = createMemo(() => mcp() > 0 || showLspChip() || showHints())
   const showStatusSeparator = createMemo(
-    () => (permissions().length > 0 || showDreStatus() || showAgentControlStatus()) && showSecondaryStatus(),
+    () => (permissionLabel() || showDreStatus() || showAgentControlStatus()) && showSecondaryStatus(),
   )
 
   // Show "reconnecting" badge only after the first successful connection —
@@ -174,32 +179,19 @@ export function Footer() {
             </text>
           </Match>
           <Match when={connected()}>
-            <Show when={permissions().length > 0}>
+            <Show when={permissionLabel()}>
               <text fg={theme.warning}>
-                <span style={{ fg: theme.warning }}>▲</span>{" "}
-                {Locale.pluralize(permissions().length, "{} Permission", "{} Permissions")}
+                <span style={{ fg: theme.warning }}>▲</span> {permissionLabel()}
               </text>
             </Show>
             <Show when={showDreStatus()}>
-              <text fg={theme.text}>
-                <Switch>
-                  <Match when={drePending() > 0}>
-                    {/* Pending-plan state: warning color + count. This
-                        is the original v2.3.1 behavior, preserved so
-                        users with active refactor work see the same
-                        chip they already know. */}
-                    <span style={{ fg: theme.warning }}>◆</span> {Locale.pluralize(drePending(), "{} Plan", "{} Plans")}
-                  </Match>
-                  <Match when={true}>
-                    {/* Ready state: success color + static label. New
-                        in v2.3.8. Fires only when the graph is indexed
-                        (nodeCount > 0) so the chip never appears
-                        while `ax-code index` is still required — the
-                        sidebar owns that onboarding hint. */}
-                    <span style={{ fg: theme.success }}>◆</span> DRE ready
-                  </Match>
-                </Switch>
-              </text>
+              <Show when={trustChip()} keyed>
+                {(chip) => (
+                  <text fg={chip.type === "plans" ? theme.warning : theme.success}>
+                    <span style={{ fg: chip.type === "plans" ? theme.warning : theme.success }}>◆</span> {chip.label}
+                  </text>
+                )}
+              </Show>
             </Show>
             <Show when={showAgentControlStatus()}>
               <text fg={agentControlStatusColor()}>{agentControlStatus()?.label}</text>
