@@ -4,6 +4,7 @@ import path from "path"
 import os from "os"
 import type { ReplayEvent } from "@/replay/event"
 import { Log } from "@/util/log"
+import { asRecordOrUndefined } from "@/util/record"
 
 type ConfigureOptions = {
   enabled: boolean
@@ -324,10 +325,11 @@ function redactText(input?: string) {
 
 function redactValue(input: unknown) {
   const json = safeStringify(input)
+  const record = asRecordOrUndefined(input)
   return {
     redacted: true,
     type: Array.isArray(input) ? "array" : typeof input,
-    keys: input && typeof input === "object" && !Array.isArray(input) ? Object.keys(input).sort() : undefined,
+    keys: record ? Object.keys(record).sort() : undefined,
     bytes: json ? encoder.encode(json).byteLength : undefined,
   }
 }

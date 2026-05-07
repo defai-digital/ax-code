@@ -6,6 +6,7 @@ import { SessionID } from "../session/schema"
 import { Risk } from "../risk/score"
 import { Snapshot } from "../snapshot"
 import { FindingSchema, type Finding } from "./finding"
+import { asRecordOrUndefined } from "@/util/record"
 
 const REVIEW_TOOLS = new Set([
   "impact_analyze",
@@ -490,8 +491,7 @@ export namespace ProbabilisticRollout {
 
   function recordField(input: Record<string, unknown> | undefined, key: string) {
     const value = input?.[key]
-    if (!value || typeof value !== "object" || Array.isArray(value)) return undefined
-    return value as Record<string, unknown>
+    return asRecordOrUndefined(value)
   }
 
   function findingField(input: Record<string, unknown> | undefined, key: string) {

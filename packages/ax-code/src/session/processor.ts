@@ -23,6 +23,7 @@ import type { SessionID, MessageID } from "./schema"
 import { NamedError } from "@ax-code/util/error"
 import { Recorder } from "@/replay/recorder"
 import { Database } from "@/storage/db"
+import { asRecord } from "@/util/record"
 
 export namespace SessionProcessor {
   const DOOM_LOOP_THRESHOLD = _DOOM_LOOP_THRESHOLD
@@ -352,10 +353,7 @@ export namespace SessionProcessor {
                     BlastRadius.assertWithinCaps(input.sessionID)
                   }
 
-                  const toolInput =
-                    value.input && typeof value.input === "object" && !Array.isArray(value.input)
-                      ? (value.input as Record<string, unknown>)
-                      : {}
+                  const toolInput = asRecord(value.input)
 
                   stepParts.push({
                     type: "tool_call",

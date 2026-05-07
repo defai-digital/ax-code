@@ -10,6 +10,7 @@ import { Flag } from "@/flag/flag"
 import { Log } from "@/util/log"
 import { Global } from "@/global"
 import { Filesystem } from "@/util/filesystem"
+import { asRecord, asRecordOrUndefined, isRecord } from "@/util/record"
 
 export namespace TuiConfig {
   const log = Log.create({ service: "tui.config" })
@@ -98,18 +99,18 @@ export namespace TuiConfig {
 
   async function load(text: string, configFilepath: string, trusted?: boolean): Promise<Info> {
     const data = await ConfigPaths.parseText(text, configFilepath, { missing: "empty", trusted })
-    if (!data || typeof data !== "object" || Array.isArray(data)) return {}
+    if (!isRecord(data)) return {}
 
     // Flatten a nested "tui" key so users who wrote `{ "tui": { ... } }` inside tui.json
     // (mirroring the old opencode.json shape) still get their settings applied.
     const normalized = (() => {
-      const copy = { ...(data as Record<string, unknown>) }
+      const copy = { ...asRecord(data) }
       if (!("tui" in copy)) return copy
-      if (!copy.tui || typeof copy.tui !== "object" || Array.isArray(copy.tui)) {
+      const tui = asRecordOrUndefined(copy.tui)
+      if (!tui) {
         delete copy.tui
         return copy
       }
-      const tui = copy.tui as Record<string, unknown>
       delete copy.tui
       return {
         ...tui,

@@ -11,6 +11,7 @@ import { Permission } from "../../../permission"
 import { iife } from "../../../util/iife"
 import { bootstrap } from "../../bootstrap"
 import { cmd } from "../cmd"
+import { isRecord } from "@/util/record"
 
 export const AgentCommand = cmd({
   command: "agent <name>",
@@ -107,7 +108,7 @@ function parseToolParams(input?: string) {
     }
   })
 
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+  if (!isRecord(parsed)) {
     throw new Error("Tool params must be a JSON object.")
   }
   return parsed as Record<string, unknown>

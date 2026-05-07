@@ -11,6 +11,7 @@ import { Flag } from "@/flag/flag"
 import { Log } from "@/util/log"
 import { Filesystem } from "@/util/filesystem"
 import { Global } from "@/global"
+import { isRecord } from "@/util/record"
 
 const log = Log.create({ service: "tui.migrate" })
 
@@ -48,7 +49,7 @@ export async function migrateTuiConfig(input: MigrateInput) {
     if (!source) continue
     const errors: JsoncParseError[] = []
     const data = parseJsonc(source, errors, { allowTrailingComma: true })
-    if (errors.length || !data || typeof data !== "object" || Array.isArray(data)) continue
+    if (errors.length || !isRecord(data)) continue
 
     const theme = LegacyTheme.safeParse("theme" in data ? data.theme : undefined)
     const keybinds = LegacyRecord.safeParse("keybinds" in data ? data.keybinds : undefined)

@@ -853,8 +853,8 @@ export namespace Config {
     )
 
     const normalized = (() => {
-      if (!data || typeof data !== "object" || Array.isArray(data)) return data
-      const copy = { ...(data as Record<string, unknown>) }
+      if (!isRecord(data)) return data
+      const copy = { ...data }
       const hadLegacy = "theme" in copy || "keybinds" in copy || "tui" in copy
       if (!hadLegacy) return copy
       delete copy.theme
