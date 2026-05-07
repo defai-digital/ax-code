@@ -444,6 +444,16 @@ export namespace Server {
 
   export const Default = lazy(() => createApp({ port: 4096 }))
 
+  type AuthRouteContext = {
+    req: {
+      valid: (input: "param") => { providerID: ProviderID }
+    }
+  }
+
+  function parseProviderID(c: AuthRouteContext) {
+    return c.req.valid("param").providerID
+  }
+
   function requestDirectory(c: Context): string | Response {
     const raw =
       c.req.query("directory") ||
@@ -649,7 +659,7 @@ export namespace Server {
         ),
         validator("json", Auth.Info.zod),
         async (c) => {
-          const providerID = c.req.valid("param").providerID
+          const providerID = parseProviderID(c)
           const info = c.req.valid("json")
           const directory = requestDirectory(c)
           if (directory instanceof Response) return directory
@@ -686,7 +696,7 @@ export namespace Server {
           }),
         ),
         async (c) => {
-          const providerID = c.req.valid("param").providerID
+          const providerID = parseProviderID(c)
           const directory = requestDirectory(c)
           if (directory instanceof Response) return directory
           await Auth.remove(providerID)

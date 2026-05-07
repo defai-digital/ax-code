@@ -33,6 +33,16 @@ const NATIVE_PROVIDERS = new Set([
   "codex-cli",
 ])
 
+type ProviderRouteContext = {
+  req: {
+    valid: (input: "param") => { providerID: ProviderID }
+  }
+}
+
+function parseProviderID(c: ProviderRouteContext) {
+  return c.req.valid("param").providerID
+}
+
 export const ProviderRoutes = lazy(() =>
   new Hono()
     .get(
@@ -145,7 +155,7 @@ export const ProviderRoutes = lazy(() =>
         }),
       ),
       async (c) => {
-        const providerID = c.req.valid("param").providerID
+        const providerID = parseProviderID(c)
         const { method, inputs } = c.req.valid("json")
         const result = await ProviderAuth.authorize({
           providerID,
@@ -187,7 +197,7 @@ export const ProviderRoutes = lazy(() =>
         }),
       ),
       async (c) => {
-        const providerID = c.req.valid("param").providerID
+        const providerID = parseProviderID(c)
         const { method, code } = c.req.valid("json")
         await ProviderAuth.callback({
           providerID,
