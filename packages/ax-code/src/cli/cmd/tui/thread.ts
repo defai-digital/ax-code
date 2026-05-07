@@ -21,6 +21,7 @@ import type { StreamConnectionStatus } from "./util/resilient-stream"
 import { runtimeMode } from "@/installation/runtime-mode"
 import { spawn } from "node:child_process"
 import { flushTuiStdout } from "./terminal-cleanup"
+import { parseIntegerEnv } from "./util/env"
 
 declare global {
   const AX_CODE_WORKER_PATH: string
@@ -54,10 +55,12 @@ type BackendRuntime = {
 }
 
 export function tuiWorkerReadyTimeoutMs(env: Record<string, string | undefined> = process.env) {
-  const value = env.AX_CODE_TUI_WORKER_READY_TIMEOUT_MS
-  if (!value) return DEFAULT_TUI_WORKER_READY_TIMEOUT_MS
-  const parsed = Number(value)
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : DEFAULT_TUI_WORKER_READY_TIMEOUT_MS
+  return parseIntegerEnv({
+    env,
+    name: "AX_CODE_TUI_WORKER_READY_TIMEOUT_MS",
+    fallback: DEFAULT_TUI_WORKER_READY_TIMEOUT_MS,
+    min: 1,
+  })
 }
 
 function tuiBackendTransport(env: Record<string, string | undefined> = process.env): BackendTransport {
@@ -67,10 +70,12 @@ function tuiBackendTransport(env: Record<string, string | undefined> = process.e
 }
 
 export function tuiUpgradeCheckDelayMs(env: Record<string, string | undefined> = process.env) {
-  const value = env.AX_CODE_TUI_UPGRADE_CHECK_DELAY_MS
-  if (!value) return DEFAULT_TUI_UPGRADE_CHECK_DELAY_MS
-  const parsed = Number(value)
-  return Number.isInteger(parsed) && parsed >= 0 ? parsed : DEFAULT_TUI_UPGRADE_CHECK_DELAY_MS
+  return parseIntegerEnv({
+    env,
+    name: "AX_CODE_TUI_UPGRADE_CHECK_DELAY_MS",
+    fallback: DEFAULT_TUI_UPGRADE_CHECK_DELAY_MS,
+    min: 0,
+  })
 }
 
 function backendProcessCommand() {

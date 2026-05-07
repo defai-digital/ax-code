@@ -12,6 +12,7 @@ import {
   type BootstrapSpan,
 } from "./sync-bootstrap-runner"
 import type { BootstrapTask } from "./sync-bootstrap-task"
+import { parseIntegerEnv } from "../util/env"
 
 const BOOTSTRAP_SESSION_LIST_WINDOW_MS = 30 * 24 * 60 * 60 * 1000
 // Keep non-critical runtime status probes off the first interactive turn.
@@ -21,18 +22,6 @@ export const DEFAULT_DEFERRED_BOOTSTRAP_DELAY_MS = 2_000
 export const DEFAULT_DEFERRED_BOOTSTRAP_CONCURRENCY = 1
 export const AX_CODE_TUI_DEFERRED_BOOTSTRAP_DELAY_MS = "AX_CODE_TUI_DEFERRED_BOOTSTRAP_DELAY_MS"
 export const AX_CODE_TUI_DEFERRED_BOOTSTRAP_CONCURRENCY = "AX_CODE_TUI_DEFERRED_BOOTSTRAP_CONCURRENCY"
-
-function parseIntegerEnv(input: {
-  env: Record<string, string | undefined>
-  name: string
-  fallback: number
-  min: number
-}) {
-  const value = input.env[input.name]
-  if (!value) return input.fallback
-  const parsed = Number(value)
-  return Number.isInteger(parsed) && parsed >= input.min ? parsed : input.fallback
-}
 
 export function tuiDeferredBootstrapDelayMs(env: Record<string, string | undefined> = process.env) {
   return parseIntegerEnv({

@@ -1,4 +1,5 @@
 import type { HeadlessRuntimeProbeKey } from "@/runtime/headless/event"
+import { parseIntegerEnv } from "../util/env"
 
 export interface RuntimeSyncProbeHandlers {
   syncMcpStatus: () => Promise<void> | void
@@ -37,13 +38,6 @@ export function runtimeSyncProbeTask(
 export const DEFAULT_RUNTIME_SYNC_PROBE_DELAY_MS = 750
 export const AX_CODE_TUI_RUNTIME_SYNC_PROBE_DELAY_MS = "AX_CODE_TUI_RUNTIME_SYNC_PROBE_DELAY_MS"
 
-function parseRuntimeSyncProbeDelayMs(env: Record<string, string | undefined>) {
-  const value = env[AX_CODE_TUI_RUNTIME_SYNC_PROBE_DELAY_MS]
-  if (!value) return DEFAULT_RUNTIME_SYNC_PROBE_DELAY_MS
-  const parsed = Number(value)
-  return Number.isInteger(parsed) && parsed >= 0 ? parsed : DEFAULT_RUNTIME_SYNC_PROBE_DELAY_MS
-}
-
 export interface RuntimeSyncProbeScheduler {
   schedule: (task: RuntimeSyncProbeTask) => void
   dispose: () => void
@@ -58,7 +52,14 @@ export function createRuntimeSyncProbeScheduler(
     clearTimeoutFn?: (handle: ReturnType<typeof setTimeout>) => void
   } = {},
 ): RuntimeSyncProbeScheduler {
-  const delayMs = input.delayMs ?? parseRuntimeSyncProbeDelayMs(input.env ?? process.env)
+  const delayMs =
+    input.delayMs ??
+    parseIntegerEnv({
+      env: input.env ?? process.env,
+      name: AX_CODE_TUI_RUNTIME_SYNC_PROBE_DELAY_MS,
+      fallback: DEFAULT_RUNTIME_SYNC_PROBE_DELAY_MS,
+      min: 0,
+    })
   const setTimeoutFn = input.setTimeoutFn ?? setTimeout
   const clearTimeoutFn = input.clearTimeoutFn ?? clearTimeout
   const queued = new Map<RuntimeSyncProbeKey, RuntimeSyncProbeTask>()
