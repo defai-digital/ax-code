@@ -15,6 +15,18 @@ export namespace Todo {
     .meta({ ref: "Todo" })
   export type Info = z.infer<typeof Info>
 
+  export function formatLines(
+    todos: readonly { status: string; content: string }[],
+    options?: {
+      prefix?: string
+      statusTransform?: (status: string) => string
+    },
+  ) {
+    const prefix = options?.prefix ?? "- "
+    const statusTransform = options?.statusTransform ?? ((status: string) => status)
+    return todos.map((todo) => `${prefix}[${statusTransform(todo.status)}] ${todo.content}`)
+  }
+
   export const Event = {
     Updated: BusEvent.define(
       "todo.updated",

@@ -102,10 +102,6 @@ function hasReportStyleTodo(todos: { content: string }[]) {
   return todos.some((todo) => /\b(report|reports|bug|bugs)\b|\.internal\/bugs/i.test(todo.content))
 }
 
-function formatPendingTodoList(todos: { status: string; content: string }[]) {
-  return todos.map((todo) => `- [${todo.status}] ${todo.content}`).join("\n")
-}
-
 function reportTodoClosureGuidance(mode: "deadline" | "continuation" | "context") {
   if (mode === "context") {
     return (
@@ -1275,7 +1271,7 @@ export namespace SessionPrompt {
                       "{} unfinished todo remains",
                       "{} unfinished todos remain",
                     )}:\n` +
-                    formatPendingTodoList(pendingTodos) +
+                    Todo.formatLines(pendingTodos).join("\n") +
                     reportTodoClosureGuidance("context"),
                 },
               ],
@@ -1326,7 +1322,7 @@ export namespace SessionPrompt {
                       "{} unfinished todo",
                       "{} unfinished todos",
                     )}:\n` +
-                    `${formatPendingTodoList(pendingTodos)}\n` +
+                    `${Todo.formatLines(pendingTodos).join("\n")}\n` +
                     `Stop broad exploration now. Finish the remaining concrete work, write any required reports, ` +
                     `or cancel low-confidence todos with a short reason. Update the todo list after each completed ` +
                     `or cancelled item before continuing.` +
@@ -1470,7 +1466,7 @@ export namespace SessionPrompt {
                     "{} todo still pending",
                     "{} todos still pending",
                   )}:\n` +
-                  `${formatPendingTodoList(pendingTodos)}\n` +
+                  `${Todo.formatLines(pendingTodos).join("\n")}\n` +
                   `Continue working until all todos are completed or cancelled. ` +
                   `This is auto-continuation ${todoRetries}/${maxTodoRetries}.` +
                   reportClosureGuidance,

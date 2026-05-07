@@ -520,7 +520,10 @@ export async function systemPrompt(input: {
     pendingTodos.length > 0
       ? [
           `<pending_todos count="${pendingTodos.length}">`,
-          ...pendingTodos.map((t) => `  [${t.status.toUpperCase()}] ${t.content}`),
+          ...Todo.formatLines(pendingTodos, {
+            prefix: "  ",
+            statusTransform: (status) => status.toUpperCase(),
+          }),
           `  Complete all of these before ending your turn.`,
           `</pending_todos>`,
         ].join("\n")
