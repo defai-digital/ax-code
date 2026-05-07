@@ -1077,6 +1077,15 @@ export namespace SessionPrompt {
         processor.message.error = new NamedError.Unknown({ message }).toObject()
         await Session.updateMessage(processor.message)
       }
+      const publishAutonomousFailure = async (message: string) => {
+        await markAssistantIncomplete(message)
+        Bus.publishDetached(Session.Event.Error, {
+          sessionID,
+          error: new NamedError.Unknown({
+            message,
+          }).toObject(),
+        })
+      }
 
       // In autonomous mode, when the model ends a turn cleanly but leaves todos
       // pending, inject a continuation user message and keep the loop running.
@@ -1131,13 +1140,7 @@ export namespace SessionPrompt {
               maxAttempts: MAX_EMPTY_MODEL_TURN_RETRIES,
               pendingCount: pendingTodos.length,
             })
-            await markAssistantIncomplete(incompleteMessage)
-            Bus.publishDetached(Session.Event.Error, {
-              sessionID,
-              error: new NamedError.Unknown({
-                message: incompleteMessage,
-              }).toObject(),
-            })
+            await publishAutonomousFailure(incompleteMessage)
             reason = "stalled"
             break
           }
@@ -1191,13 +1194,7 @@ export namespace SessionPrompt {
               attempts: completionGateRetries,
               maxAttempts: maxCompletionGateRetries,
             })
-            await markAssistantIncomplete(incompleteMessage)
-            Bus.publishDetached(Session.Event.Error, {
-              sessionID,
-              error: new NamedError.Unknown({
-                message: incompleteMessage,
-              }).toObject(),
-            })
+            await publishAutonomousFailure(incompleteMessage)
             reason = isLastStep ? "step_limit" : "stalled"
             break
           }
@@ -1343,13 +1340,7 @@ export namespace SessionPrompt {
               maxAttempts: maxTodoRetries,
               maxSteps,
             })
-            await markAssistantIncomplete(incompleteMessage)
-            Bus.publishDetached(Session.Event.Error, {
-              sessionID,
-              error: new NamedError.Unknown({
-                message: incompleteMessage,
-              }).toObject(),
-            })
+            await publishAutonomousFailure(incompleteMessage)
             reason = "step_limit"
             break
           }
@@ -1374,13 +1365,7 @@ export namespace SessionPrompt {
               attempts: todoRetries,
               maxAttempts: maxTodoRetries,
             })
-            await markAssistantIncomplete(incompleteMessage)
-            Bus.publishDetached(Session.Event.Error, {
-              sessionID,
-              error: new NamedError.Unknown({
-                message: incompleteMessage,
-              }).toObject(),
-            })
+            await publishAutonomousFailure(incompleteMessage)
             reason = "stalled"
             break
           }
@@ -1414,13 +1399,7 @@ export namespace SessionPrompt {
               stagnantAttempts: stagnantTodoRetries,
               maxStagnantAttempts: MAX_STAGNANT_TODO_RETRIES,
             })
-            await markAssistantIncomplete(incompleteMessage)
-            Bus.publishDetached(Session.Event.Error, {
-              sessionID,
-              error: new NamedError.Unknown({
-                message: incompleteMessage,
-              }).toObject(),
-            })
+            await publishAutonomousFailure(incompleteMessage)
             reason = "stalled"
             break
           }
