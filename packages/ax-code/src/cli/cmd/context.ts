@@ -21,7 +21,7 @@ export const ContextCommand = cmd({
     prompts.intro("Context Stats")
 
     await bootstrap(process.cwd(), async () => {
-      const sessions = [...Session.list({ limit: 1000 })].sort((a, b) => b.time.updated - a.time.updated)
+      const sessions = [...Session.list({ limit: 1000 })]
 
       if (sessions.length === 0) {
         prompts.log.warn("No sessions found. Start a conversation first.")
