@@ -1551,9 +1551,7 @@ async function loadSessionGraphContext(sessionID: SessionID, includeQuality: boo
 }
 
 async function loadSessionList(directory: string | undefined): Promise<Session.Info[]> {
-  const list: Session.Info[] = []
-  for await (const item of Session.list({ limit: 50, directory })) list.push(item)
-  return list
+  return [...Session.list({ limit: 50, directory })]
 }
 
 function disableClientCache(
