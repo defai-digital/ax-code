@@ -77,6 +77,27 @@ function printWarning(message: string) {
   UI.println(`Warning: ${message}`)
 }
 
+type CurrentProjectSessionContext = {
+  sessions: Session.Info[]
+  duplicateProjectIdentities: DuplicateProjectIdentity[]
+}
+
+async function getCurrentProjectSessionContext(): Promise<CurrentProjectSessionContext> {
+  return {
+    sessions: [...Session.list()],
+    duplicateProjectIdentities: await getDuplicateProjectIdentities(),
+  }
+}
+
+function printNoSessionsForCurrentProjectWarning(duplicateProjectIdentities: DuplicateProjectIdentity[]) {
+  UI.println(`No sessions found for current project: ${Instance.worktree}`)
+  if (duplicateProjectIdentities.length > 0) {
+    printWarning(
+      `This worktree also has duplicate project identities: ${formatDuplicateProjectIdentities(duplicateProjectIdentities)}`,
+    )
+  }
+}
+
 async function backupSessions(input: {
   sessions: Session.Info[]
   deletionRoots: Session.Info[]
@@ -173,17 +194,11 @@ export const SessionClearProjectCommand = cmd({
   },
   handler: async (args) => {
     await bootstrap(process.cwd(), async () => {
-      const sessions = [...Session.list()]
-      const duplicateProjectIdentities = await getDuplicateProjectIdentities()
+      const { sessions, duplicateProjectIdentities } = await getCurrentProjectSessionContext()
       const deletionRoots = sessions.filter((session) => !session.parentID)
 
       if (sessions.length === 0) {
-        UI.println(`No sessions found for current project: ${Instance.worktree}`)
-        if (duplicateProjectIdentities.length > 0) {
-          printWarning(
-            `This worktree also has duplicate project identities: ${formatDuplicateProjectIdentities(duplicateProjectIdentities)}`,
-          )
-        }
+        printNoSessionsForCurrentProjectWarning(duplicateProjectIdentities)
         return
       }
 
@@ -232,17 +247,11 @@ export const SessionBackupProjectCommand = cmd({
   },
   handler: async (args) => {
     await bootstrap(process.cwd(), async () => {
-      const sessions = [...Session.list()]
-      const duplicateProjectIdentities = await getDuplicateProjectIdentities()
+      const { sessions, duplicateProjectIdentities } = await getCurrentProjectSessionContext()
       const deletionRoots = sessions.filter((session) => !session.parentID)
 
       if (sessions.length === 0) {
-        UI.println(`No sessions found for current project: ${Instance.worktree}`)
-        if (duplicateProjectIdentities.length > 0) {
-          printWarning(
-            `This worktree also has duplicate project identities: ${formatDuplicateProjectIdentities(duplicateProjectIdentities)}`,
-          )
-        }
+        printNoSessionsForCurrentProjectWarning(duplicateProjectIdentities)
         return
       }
 
@@ -274,13 +283,13 @@ export const SessionProjectStatusCommand = cmd({
   },
   handler: async (args) => {
     await bootstrap(process.cwd(), async () => {
-      const sessions = [...Session.list()]
+      const { sessions, duplicateProjectIdentities } = await getCurrentProjectSessionContext()
       const payload = sessionProjectStatusPayload({
         projectID: Instance.project.id,
         worktree: Instance.worktree,
         directory: Instance.directory,
         sessions,
-        duplicateProjectIdentities: await getDuplicateProjectIdentities(),
+        duplicateProjectIdentities,
       })
 
       if (args.format === "json") {
