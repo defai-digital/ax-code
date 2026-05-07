@@ -131,6 +131,19 @@ function startAsyncSessionTask(input: {
   })
 }
 
+type SessionJSONRouteContext = {
+  req: {
+    valid: (input: "param" | "json") => { sessionID: SessionID } | Record<string, unknown>
+  }
+}
+
+async function parseSessionJSONInput<TBody>(c: SessionJSONRouteContext) {
+  const sessionID = (c.req.valid("param") as { sessionID: SessionID }).sessionID
+  const body = c.req.valid("json") as TBody
+  await requireCurrentProjectSession(sessionID)
+  return { sessionID, body }
+}
+
 async function requireCurrentProjectSession(sessionID: SessionID) {
   const session = await Session.get(sessionID)
   if (Session.isCompatibleWithCurrentProject(session)) return session
@@ -1208,10 +1221,8 @@ export const SessionRoutes = lazy(() =>
         c.status(200)
         c.header("Content-Type", "application/json")
         return stream(c, async (stream) => {
-          const sessionID = c.req.valid("param").sessionID
-          const body = c.req.valid("json")
+          const { sessionID, body } = await parseSessionJSONInput<SessionPrompt.PromptInput>(c)
           try {
-            await requireCurrentProjectSession(sessionID)
             const msg = await SessionPrompt.prompt({ ...body, sessionID })
             stream.write(JSON.stringify(msg))
           } catch (err) {
@@ -1243,9 +1254,7 @@ export const SessionRoutes = lazy(() =>
       ),
       validator("json", SessionPrompt.PromptInput.omit({ sessionID: true })),
       async (c) => {
-        const sessionID = c.req.valid("param").sessionID
-        const body = c.req.valid("json")
-        await requireCurrentProjectSession(sessionID)
+        const { sessionID, body } = await parseSessionJSONInput<SessionPrompt.PromptInput>(c)
         startAsyncSessionTask({
           sessionID,
           kind: "prompt",
@@ -1275,9 +1284,7 @@ export const SessionRoutes = lazy(() =>
       ),
       validator("json", SessionPrompt.CommandInput.omit({ sessionID: true })),
       async (c) => {
-        const sessionID = c.req.valid("param").sessionID
-        const body = c.req.valid("json")
-        await requireCurrentProjectSession(sessionID)
+        const { sessionID, body } = await parseSessionJSONInput<SessionPrompt.CommandInput>(c)
         startAsyncSessionTask({
           sessionID,
           kind: "command",
@@ -1317,9 +1324,7 @@ export const SessionRoutes = lazy(() =>
       ),
       validator("json", SessionPrompt.CommandInput.omit({ sessionID: true })),
       async (c) => {
-        const sessionID = c.req.valid("param").sessionID
-        const body = c.req.valid("json")
-        await requireCurrentProjectSession(sessionID)
+        const { sessionID, body } = await parseSessionJSONInput<SessionPrompt.CommandInput>(c)
         const msg = await SessionPrompt.command({ ...body, sessionID })
         return c.json(msg)
       },
@@ -1345,9 +1350,7 @@ export const SessionRoutes = lazy(() =>
       ),
       validator("json", SessionPrompt.ShellInput.omit({ sessionID: true })),
       async (c) => {
-        const sessionID = c.req.valid("param").sessionID
-        const body = c.req.valid("json")
-        await requireCurrentProjectSession(sessionID)
+        const { sessionID, body } = await parseSessionJSONInput<SessionPrompt.ShellInput>(c)
         startAsyncSessionTask({
           sessionID,
           kind: "shell",
@@ -1382,9 +1385,7 @@ export const SessionRoutes = lazy(() =>
       ),
       validator("json", SessionPrompt.ShellInput.omit({ sessionID: true })),
       async (c) => {
-        const sessionID = c.req.valid("param").sessionID
-        const body = c.req.valid("json")
-        await requireCurrentProjectSession(sessionID)
+        const { sessionID, body } = await parseSessionJSONInput<SessionPrompt.ShellInput>(c)
         const msg = await SessionPrompt.shell({ ...body, sessionID })
         return c.json(msg)
       },
