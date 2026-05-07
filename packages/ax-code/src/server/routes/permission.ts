@@ -6,6 +6,16 @@ import { PermissionID } from "@/permission/schema"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
 
+type PermissionRouteContext = {
+  req: {
+    valid: (input: "param") => { requestID: PermissionID }
+  }
+}
+
+function parsePermissionID(c: PermissionRouteContext) {
+  return c.req.valid("param").requestID
+}
+
 export const PermissionRoutes = lazy(() =>
   new Hono()
     .post(
@@ -34,10 +44,9 @@ export const PermissionRoutes = lazy(() =>
       ),
       validator("json", z.object({ reply: Permission.Reply, message: z.string().optional() })),
       async (c) => {
-        const params = c.req.valid("param")
         const json = c.req.valid("json")
         await Permission.reply({
-          requestID: params.requestID,
+          requestID: parsePermissionID(c),
           reply: json.reply,
           message: json.message,
         })
