@@ -1529,6 +1529,27 @@ function sessionFingerprint(input: {
   }
 }
 
+type SessionGraphContext = {
+  session: Awaited<ReturnType<typeof Session.get>>
+  graph: SessionGraph.Snapshot
+  dre: SessionDre.Snapshot
+  risk: SessionRisk.Detail
+  rank: SessionBranchRank.Family | undefined
+  rollback: SessionRollback.Point[]
+}
+
+async function loadSessionGraphContext(sessionID: SessionID, includeQuality: boolean): Promise<SessionGraphContext> {
+  const session = await Session.get(sessionID)
+  const [graph, dre, risk, rank, rollback] = await Promise.all([
+    Promise.resolve(SessionGraph.snapshot(sessionID)),
+    SessionDre.snapshot(sessionID),
+    SessionRisk.load(sessionID, { includeQuality }),
+    SessionBranchRank.family(sessionID).catch(() => undefined),
+    SessionRollback.points(sessionID).catch((): SessionRollback.Point[] => []),
+  ])
+  return { session, graph, dre, risk, rank, rollback }
+}
+
 // Inline script in <head> — sets theme before first paint to prevent flash
 function themeScript() {
   return [
@@ -2587,26 +2608,19 @@ export const DreGraphRoutes = lazy(() =>
       async (c) => {
         const sid = c.req.valid("param").sessionID
         const query = c.req.valid("query")
-        const session = await Session.get(sid)
+        const context = await loadSessionGraphContext(sid, query.quality)
         const search = c.req.url.includes("?") ? c.req.url.slice(c.req.url.indexOf("?")) : ""
-        const [graphData, dre, riskData, rank, points] = await Promise.all([
-          Promise.resolve(SessionGraph.snapshot(sid)),
-          SessionDre.snapshot(sid),
-          SessionRisk.load(sid, { includeQuality: query.quality }),
-          SessionBranchRank.family(sid).catch(() => undefined),
-          SessionRollback.points(sid).catch((): SessionRollback.Point[] => []),
-        ])
 
         c.header("cache-control", "no-store")
         c.header("content-type", "text/html; charset=utf-8")
         return c.body(
           page({
-            session,
-            graph: graphData,
-            dre,
-            risk: riskData,
-            rank,
-            rollback: points,
+            session: context.session,
+            graph: context.graph,
+            dre: context.dre,
+            risk: context.risk,
+            rank: context.rank,
+            rollback: context.rollback,
             search,
           }),
         )
@@ -2629,24 +2643,17 @@ export const DreGraphRoutes = lazy(() =>
       async (c) => {
         const sid = c.req.valid("param").sessionID
         const query = c.req.valid("query")
-        const session = await Session.get(sid)
-        const [graphData, dre, riskData, rank, points] = await Promise.all([
-          Promise.resolve(SessionGraph.snapshot(sid)),
-          SessionDre.snapshot(sid),
-          SessionRisk.load(sid, { includeQuality: query.quality }),
-          SessionBranchRank.family(sid).catch(() => undefined),
-          SessionRollback.points(sid).catch((): SessionRollback.Point[] => []),
-        ])
+        const context = await loadSessionGraphContext(sid, query.quality)
 
         c.header("cache-control", "no-store")
         return c.json(
           sessionFingerprint({
-            session,
-            graph: graphData,
-            dre,
-            risk: riskData,
-            rank,
-            rollback: points,
+            session: context.session,
+            graph: context.graph,
+            dre: context.dre,
+            risk: context.risk,
+            rank: context.rank,
+            rollback: context.rollback,
           }),
         )
       },
