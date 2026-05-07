@@ -180,6 +180,11 @@ export namespace SessionProcessor {
         attempt = 0
         needsCompaction = false
         const autonomous = process.env["AX_CODE_AUTONOMOUS"] === "true"
+        const publishProcessorError = (error: MessageV2.Assistant["error"]) =>
+          Bus.publishDetached(Session.Event.Error, {
+            sessionID: input.assistantMessage.sessionID,
+            error,
+          })
         const shouldBreak = autonomous
           ? false
           : (cachedShouldBreak ??= (await Config.get()).experimental?.continue_loop_on_deny !== true)
@@ -858,10 +863,7 @@ export namespace SessionProcessor {
             const error = MessageV2.fromError(e, { providerID: input.model.providerID })
             if (MessageV2.ContextOverflowError.isInstance(error)) {
               needsCompaction = true
-              Bus.publishDetached(Session.Event.Error, {
-                sessionID: input.sessionID,
-                error,
-              })
+              publishProcessorError(error)
             } else {
               const retry = SessionRetry.retryable(error)
               if (retry !== undefined) {
@@ -903,10 +905,7 @@ export namespace SessionProcessor {
               } else {
                 input.assistantMessage.error ??= error
               }
-              Bus.publishDetached(Session.Event.Error, {
-                sessionID: input.assistantMessage.sessionID,
-                error: input.assistantMessage.error,
-              })
+              publishProcessorError(input.assistantMessage.error)
               await SessionStatus.set(input.sessionID, { type: "idle" })
             }
           }

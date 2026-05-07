@@ -122,6 +122,13 @@ async function requireCurrentProjectSession(sessionID: SessionID) {
   })
 }
 
+function publishAsyncSessionError(sessionID: SessionID, error: unknown) {
+  Bus.publishDetached(Session.Event.Error, {
+    sessionID,
+    error: new NamedError.Unknown({ message: NamedError.message(error) }).toObject(),
+  })
+}
+
 export const SessionRoutes = lazy(() =>
   new Hono()
     .get(
@@ -1235,10 +1242,7 @@ export const SessionRoutes = lazy(() =>
           task: () => SessionPrompt.prompt({ ...body, sessionID }),
           onError(error) {
             log.error("prompt_async failed", { sessionID, error })
-            Bus.publishDetached(Session.Event.Error, {
-              sessionID,
-              error: new NamedError.Unknown({ message: NamedError.message(error) }).toObject(),
-            })
+            publishAsyncSessionError(sessionID, error)
           },
         })
         return c.body(null, 202)
@@ -1274,10 +1278,7 @@ export const SessionRoutes = lazy(() =>
           task: () => SessionPrompt.command({ ...body, sessionID }),
           onError(error) {
             log.error("command_async failed", { sessionID, error })
-            Bus.publishDetached(Session.Event.Error, {
-              sessionID,
-              error: new NamedError.Unknown({ message: NamedError.message(error) }).toObject(),
-            })
+            publishAsyncSessionError(sessionID, error)
           },
         })
         return c.body(null, 202)
@@ -1351,10 +1352,7 @@ export const SessionRoutes = lazy(() =>
           task: () => SessionPrompt.shell({ ...body, sessionID }),
           onError(error) {
             log.error("shell_async failed", { sessionID, error })
-            Bus.publishDetached(Session.Event.Error, {
-              sessionID,
-              error: new NamedError.Unknown({ message: NamedError.message(error) }).toObject(),
-            })
+            publishAsyncSessionError(sessionID, error)
           },
         })
         return c.body(null, 202)

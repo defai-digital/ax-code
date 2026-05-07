@@ -26,6 +26,23 @@ import { DiagnosticLog } from "@/debug/diagnostic-log"
 import { Filesystem } from "@/util/filesystem"
 import { Todo } from "./todo"
 
+function publishAgentInfoError(input: {
+  sessionID: SessionID
+  message: string
+  report?: (sessionID: SessionID, error: Record<string, unknown>) => unknown
+}) {
+  const error = new NamedError.Unknown({ message: input.message }).toObject()
+  if (input.report) {
+    input.report(input.sessionID, error)
+    return error
+  }
+  Bus.publishDetached(Session.Event.Error, {
+    sessionID: input.sessionID,
+    error,
+  })
+  return error
+}
+
 const log = Log.create({ service: "session.prompt" })
 
 const STRUCTURED_OUTPUT_DESCRIPTION = `Use this tool to return your final response in the requested structured format.
@@ -270,14 +287,13 @@ export async function agentInfo<T extends AgentLike = AgentInfo>(input: {
     items.filter((item) => Agent.resolveTier(item) !== "internal").map((item) => item.name),
   )
   const hint = available.length ? ` Available agents: ${available.join(", ")}` : ""
-  const error = new NamedError.Unknown({ message: `Agent not found: "${input.name}".${hint}` })
-  if (input.report) input.report(input.sessionID, error.toObject())
-  if (!input.report)
-    Bus.publishDetached(Session.Event.Error, {
-      sessionID: input.sessionID,
-      error: error.toObject(),
-    })
-  throw error
+  const errorMessage = `Agent not found: "${input.name}".${hint}`
+  publishAgentInfoError({
+    sessionID: input.sessionID,
+    message: errorMessage,
+    report: input.report,
+  })
+  throw new NamedError.Unknown({ message: errorMessage })
 }
 
 export async function modelInfo<T = ModelInfo>(input: {
@@ -293,15 +309,11 @@ export async function modelInfo<T = ModelInfo>(input: {
     if (Provider.ModelNotFoundError.isInstance(error)) {
       const { providerID, modelID, suggestions } = error.data
       const hint = suggestions?.length ? ` Did you mean: ${suggestions.join(", ")}?` : ""
-      const payload = new NamedError.Unknown({
+      publishAgentInfoError({
+        sessionID: input.sessionID,
         message: `Model not found: ${providerID}/${modelID}.${hint}`,
-      }).toObject()
-      if (input.report) input.report(input.sessionID, payload)
-      if (!input.report)
-        Bus.publishDetached(Session.Event.Error, {
-          sessionID: input.sessionID,
-          error: payload,
-        })
+        report: input.report,
+      })
     }
     throw error
   }

@@ -40,6 +40,11 @@ export namespace Skill {
     dirs: Set<string>
   }
 
+  async function publishSkillError(message: string) {
+    const { Session } = await import("@/session")
+    Bus.publishDetached(Session.Event.Error, { error: new NamedError.Unknown({ message }).toObject() })
+  }
+
   export interface Interface {
     readonly get: (name: string) => Effect.Effect<Info | undefined>
     readonly all: () => Effect.Effect<Info[]>
@@ -53,8 +58,7 @@ export namespace Skill {
         const message = ConfigMarkdown.FrontmatterError.isInstance(err)
           ? err.data.message
           : `Failed to parse skill ${match}`
-        const { Session } = await import("@/session")
-        Bus.publishDetached(Session.Event.Error, { error: new NamedError.Unknown({ message }).toObject() })
+        await publishSkillError(message)
         log.error("failed to load skill", { skill: match, err })
         return undefined
       })

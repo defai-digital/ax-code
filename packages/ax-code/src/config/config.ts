@@ -553,6 +553,13 @@ export namespace Config {
     return ext.length ? file.slice(0, -ext.length) : file
   }
 
+  async function publishConfigLoadError(message: string) {
+    const { Session } = await import("@/session")
+    Bus.publishDetached(Session.Event.Error, {
+      error: new NamedError.Unknown({ message }).toObject(),
+    })
+  }
+
   async function loadCommand(dir: string) {
     const result: Record<string, Command> = {}
     for (const item of await Glob.scan("{command,commands}/**/*.md", {
@@ -565,8 +572,7 @@ export namespace Config {
         const message = ConfigMarkdown.FrontmatterError.isInstance(err)
           ? err.data.message
           : `Failed to parse command ${item}`
-        const { Session } = await import("@/session")
-        Bus.publishDetached(Session.Event.Error, { error: new NamedError.Unknown({ message }).toObject() })
+        await publishConfigLoadError(message)
         log.error("failed to load command", { command: item, err })
         return undefined
       })
@@ -604,8 +610,7 @@ export namespace Config {
         const message = ConfigMarkdown.FrontmatterError.isInstance(err)
           ? err.data.message
           : `Failed to parse agent ${item}`
-        const { Session } = await import("@/session")
-        Bus.publishDetached(Session.Event.Error, { error: new NamedError.Unknown({ message }).toObject() })
+        await publishConfigLoadError(message)
         log.error("failed to load agent", { agent: item, err })
         return undefined
       })
@@ -642,8 +647,7 @@ export namespace Config {
         const message = ConfigMarkdown.FrontmatterError.isInstance(err)
           ? err.data.message
           : `Failed to parse mode ${item}`
-        const { Session } = await import("@/session")
-        Bus.publishDetached(Session.Event.Error, { error: new NamedError.Unknown({ message }).toObject() })
+        await publishConfigLoadError(message)
         log.error("failed to load mode", { mode: item, err })
         return undefined
       })
