@@ -1,3 +1,4 @@
+import { asRecordOrUndefined } from "../util/record"
 export namespace AutonomousCompletionGate {
   export type Todo = {
     content: string
@@ -216,8 +217,5 @@ export namespace AutonomousCompletionGate {
       .trim()
   }
 
-  function asRecord(value: unknown): Record<string, unknown> | undefined {
-    if (!value || typeof value !== "object" || Array.isArray(value)) return undefined
-    return value as Record<string, unknown>
-  }
+  const asRecord = asRecordOrUndefined
 }

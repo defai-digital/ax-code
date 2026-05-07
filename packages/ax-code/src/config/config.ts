@@ -41,6 +41,7 @@ import { Lock } from "@/util/lock"
 import { FileLock } from "@/util/filelock"
 import { withTimeout } from "@/util/timeout"
 import * as ConfigSchema from "./schema"
+import { isRecord } from "../util/record"
 
 // Single source of truth for the public config schema URL. Written
 // into every user's ax-code.json on first load, into legacy-TOML
@@ -942,10 +943,6 @@ export namespace Config {
       if (existsSync(file)) return file
     }
     return candidates[0]
-  }
-
-  function isRecord(value: unknown): value is Record<string, unknown> {
-    return !!value && typeof value === "object" && !Array.isArray(value)
   }
 
   function patchJsonc(input: string, patch: unknown, path: string[] = []): string {

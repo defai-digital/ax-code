@@ -17,6 +17,7 @@ import path from "path"
 import type { Dirent } from "fs"
 import { Global } from "../../../global"
 import { cmd } from "../cmd"
+import { asRecordOrUndefined } from "../../../util/record"
 
 interface DiagnosticEntry {
   service: string
@@ -88,10 +89,7 @@ function formatDuration(ms: number): string {
   return seconds > 0 ? `${minutes}m ${seconds}s` : `${minutes}m`
 }
 
-function asRecord(input: unknown): Record<string, unknown> | undefined {
-  if (!input || typeof input !== "object" || Array.isArray(input)) return undefined
-  return input as Record<string, unknown>
-}
+const asRecord = asRecordOrUndefined
 
 function asString(input: unknown): string | undefined {
   return typeof input === "string" ? input : undefined

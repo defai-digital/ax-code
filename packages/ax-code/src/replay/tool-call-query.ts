@@ -1,3 +1,4 @@
+import { asRecord, asRecordOrUndefined } from "../util/record"
 import type { ReplayEvent } from "./event"
 
 type ToolCallEvent = Extract<ReplayEvent, { type: "tool.call" }>
@@ -82,15 +83,11 @@ export namespace ToolCallReplayQuery {
     }
   }
 
-  function asRecord(value: unknown): Record<string, unknown> {
-    return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {}
-  }
-
   function asString(value: unknown) {
     return typeof value === "string" && value.length > 0 ? value : undefined
   }
 
   function asInput(value: unknown) {
-    return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : undefined
+    return asRecordOrUndefined(value)
   }
 }

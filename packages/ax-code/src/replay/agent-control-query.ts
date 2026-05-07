@@ -3,6 +3,7 @@ import type { SessionID } from "@/session/schema"
 import type { ReplayEvent } from "./event"
 import { EventQuery } from "./query"
 import { ToolCallReplayQuery } from "./tool-call-query"
+import { asRecord } from "../util/record"
 
 export namespace AgentControlReplayQuery {
   const DETAIL_SEPARATOR = " \u00B7 "
@@ -284,10 +285,6 @@ export namespace AgentControlReplayQuery {
     const normalized = value.replace(/\s+/g, " ").trim()
     if (normalized.length <= length) return normalized
     return `${normalized.slice(0, length - 3)}...`
-  }
-
-  function asRecord(value: unknown): Record<string, unknown> {
-    return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {}
   }
 
   function isPlanArtifactLike(value: unknown) {
