@@ -30,7 +30,12 @@ import { ProviderTransform } from "./transform"
 import { Installation } from "../installation"
 import { ModelID, ProviderID } from "./schema"
 import { levenshtein } from "@/util/levenshtein"
-import { hasGlmMajorVersionAtLeastFive } from "./model-support"
+import {
+  buildModelProbes,
+  supportsGlmModels,
+  supportsOpenAIGptModels,
+  supportsGrok41OrAllowedCodingModel,
+} from "./model-support"
 import {
   CUSTOM_LOADERS,
   type CustomModelLoader,
@@ -41,40 +46,8 @@ import {
 
 export namespace Provider {
   const log = Log.create({ service: "provider" })
-  function normalizeModelProbe(value: string) {
-    return value.toLowerCase().trim().replace(/[\s_]+/g, "-")
-  }
-
-  function modelProbes(modelID: string, model?: { id?: unknown; name?: unknown; family?: unknown }) {
-    return [modelID, model?.id, model?.name, model?.family]
-      .filter((value): value is string => typeof value === "string")
-      .flatMap((value) => {
-        const lower = value.toLowerCase()
-        const normalized = normalizeModelProbe(lower)
-        return [lower, normalized, normalized.replaceAll("-", "")]
-      })
-  }
-
-  function supportsGrok41OrAllowedCodingModel(probes: string[]) {
-    if (!probes.some((probe) => probe.includes("grok"))) return true
-    if (probes.some((probe) => {
-      const finalSegment = probe.split("/").pop()
-      return finalSegment === "grok-4.1" || finalSegment === "grok-4-1"
-    }))
-      return false
-    if (probes.some((probe) => probe.split("/").pop() === "grok-code-fast-1")) return true
-    for (const probe of probes) {
-      const m = probe.match(/grok-(\d+)(?:[.-]?(\d+))?/)
-      if (!m) continue
-      const major = Number(m[1])
-      const minor = m[2] === undefined ? 0 : Number(m[2])
-      if (major > 4 || (major === 4 && minor >= 1)) return true
-    }
-    return false
-  }
-
   function supported(providerID: string, modelID: string, model?: { id?: unknown; name?: unknown; family?: unknown }) {
-    const probes = modelProbes(modelID, model)
+    const probes = buildModelProbes(modelID, model)
     const lower = probes[0] ?? modelID.toLowerCase()
     if (probes.some((probe) => probe.includes("gpt-5.5") || probe.includes("gpt-5-5") || probe.includes("gpt55")))
       return false
@@ -83,9 +56,7 @@ export namespace Provider {
       return lower.includes("gemini-3")
     }
     if (providerID === "openai") {
-      if (!lower.includes("gpt")) return true
-      if (lower.includes("gpt-oss")) return true
-      return lower.includes("gpt-4") || lower.includes("gpt-5")
+      return supportsOpenAIGptModels(probes)
     }
     if (providerID === "xai") {
       return supportsGrok41OrAllowedCodingModel(probes)
@@ -96,10 +67,7 @@ export namespace Provider {
       providerID === "zai" ||
       providerID === "zai-coding-plan"
     ) {
-      if (!probes.some((probe) => probe.includes("glm"))) return true
-      if (probes.some((probe) => probe.includes("glm-5v") || probe.includes("glm5v"))) return false
-      // Allow non-vision GLM 5+ only — drops glm-5v and glm-3.x / glm-4.x SKUs.
-      return hasGlmMajorVersionAtLeastFive(probes)
+      return supportsGlmModels(probes)
     }
     return true
   }

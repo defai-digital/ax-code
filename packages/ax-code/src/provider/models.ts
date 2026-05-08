@@ -5,7 +5,12 @@ import { Filesystem } from "../util/filesystem"
 import { Ssrf } from "../util/ssrf"
 import { Global } from "../global"
 import { Instance } from "../project/instance"
-import { hasGlmMajorVersionAtLeastFive } from "./model-support"
+import {
+  buildModelProbes,
+  supportsGlmModels,
+  supportsOpenAIGptModels,
+  supportsGrok41OrAllowedCodingModel,
+} from "./model-support"
 import bundledSnapshot from "./models-snapshot.json"
 
 export namespace ModelsDev {
@@ -15,67 +20,17 @@ export namespace ModelsDev {
     return id.toLowerCase().includes("gemini-3")
   }
 
-  function normalizeModelProbe(value: string) {
-    return value.toLowerCase().trim().replace(/[\s_]+/g, "-")
-  }
-
-  function modelProbes(modelID: string, model?: { id?: unknown; name?: unknown; family?: unknown }) {
-    return [modelID, model?.id, model?.name, model?.family]
-      .filter((value): value is string => typeof value === "string")
-      .flatMap((value) => {
-        const lower = value.toLowerCase()
-        const normalized = normalizeModelProbe(lower)
-        return [lower, normalized, normalized.replaceAll("-", "")]
-      })
-  }
-
-  function openai4(probes: string[]) {
-    if (!probes.some((probe) => probe.includes("gpt"))) return true
-    if (probes.some((probe) => probe.includes("gpt-oss"))) return true
-    if (probes.some((probe) => probe.includes("gpt-5.5") || probe.includes("gpt-5-5") || probe.includes("gpt55")))
-      return false
-    return probes.some((probe) => probe.includes("gpt-4") || probe.includes("gpt-5"))
-  }
-
-  function grok41OrAllowedCodingModel(probes: string[]) {
-    if (!probes.some((probe) => probe.includes("grok"))) return true
-    if (probes.some((probe) => {
-      const finalSegment = probe.split("/").pop()
-      return finalSegment === "grok-4.1" || finalSegment === "grok-4-1"
-    }))
-      return false
-    if (probes.some((probe) => probe.split("/").pop() === "grok-code-fast-1")) return true
-    // Allow Grok 4.1 and any future Grok N>4. Parsing major/minor
-    // avoids keeping Grok 4.0 variants like grok-4, grok-4-fast, or
-    // other unversioned grok-code-* aliases.
-    for (const probe of probes) {
-      const m = probe.match(/grok-(\d+)(?:[.-]?(\d+))?/)
-      if (!m) continue
-      const major = Number(m[1])
-      const minor = m[2] === undefined ? 0 : Number(m[2])
-      if (major > 4 || (major === 4 && minor >= 1)) return true
-    }
-    return false // grok-beta, grok-vision-beta — no 4.1+ version, drop
-  }
-
-  function glm5(probes: string[]) {
-    if (!probes.some((probe) => probe.includes("glm"))) return true
-    if (probes.some((probe) => probe.includes("glm-5v") || probe.includes("glm5v"))) return false
-    // Allow non-vision GLM 5 and any future GLM N≥5. Drops glm-5v and glm-3.x / glm-4.x.
-    return hasGlmMajorVersionAtLeastFive(probes)
-  }
-
   function supported(providerID: string, modelID: string, model?: { id?: unknown; name?: unknown; family?: unknown }) {
-    const probes = modelProbes(modelID, model)
+    const probes = buildModelProbes(modelID, model)
     const lower = probes[0] ?? modelID.toLowerCase()
     if (probes.some((probe) => probe.includes("gpt-5.5"))) return false
     if (providerID === "google" || providerID === "google-vertex") {
       if (!lower.includes("gemini")) return true
       return gemini3(lower)
     }
-    if (providerID === "openai") return openai4(probes)
+    if (providerID === "openai") return supportsOpenAIGptModels(probes)
     if (providerID === "xai") {
-      return grok41OrAllowedCodingModel(probes)
+      return supportsGrok41OrAllowedCodingModel(probes)
     }
     if (
       providerID === "zhipuai" ||
@@ -83,7 +38,7 @@ export namespace ModelsDev {
       providerID === "zai" ||
       providerID === "zai-coding-plan"
     )
-      return glm5(probes)
+      return supportsGlmModels(probes)
     return true
   }
 
