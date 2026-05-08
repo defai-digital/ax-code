@@ -1,16 +1,11 @@
 import { Hono } from "hono"
 import { describeRoute, validator } from "hono-openapi"
 import { resolver } from "hono-openapi"
-import { QuestionID } from "@/question/schema"
 import { Question } from "../../question"
 import z from "zod"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
-import { withRouteParam } from "./route-params"
-
-const QUESTION_REQUEST_ID_PARAM = z.object({
-  requestID: QuestionID.zod,
-})
+import { QUESTION_REQUEST_ID_PARAM, withQuestionRequestID } from "./route-params"
 
 export const QuestionRoutes = lazy(() =>
   new Hono()
@@ -56,7 +51,7 @@ export const QuestionRoutes = lazy(() =>
       }),
       validator("param", QUESTION_REQUEST_ID_PARAM),
       validator("json", Question.Reply),
-      withRouteParam<"requestID", QuestionID>("requestID", async (requestID, c) => {
+      withQuestionRequestID(async (requestID, c) => {
         const json = c.req.valid("json") as Question.Reply
         await Question.reply({ requestID, answers: json.answers })
         return c.json(true)
@@ -81,7 +76,7 @@ export const QuestionRoutes = lazy(() =>
         },
       }),
       validator("param", QUESTION_REQUEST_ID_PARAM),
-      withRouteParam<"requestID", QuestionID>("requestID", async (requestID, c) => {
+      withQuestionRequestID(async (requestID, c) => {
         await Question.reject(requestID)
         return c.json(true)
       }),
