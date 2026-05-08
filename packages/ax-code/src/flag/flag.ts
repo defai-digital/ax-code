@@ -49,6 +49,10 @@ export namespace Flag {
   export declare const AX_CODE_AUTONOMOUS: boolean
   export declare const AX_CODE_SMART_LLM: boolean
   export declare const AX_CODE_CALLER: string | undefined
+  export declare const AX_CODE_DEBUG: boolean
+  export declare const AX_CODE_DEBUG_DIR: string | undefined
+  export declare const AX_CODE_DEBUG_INCLUDE_CONTENT: boolean | undefined
+  export declare const AX_CODE_PRINT_LOGS: boolean
   export declare const AX_CODE_TEST_HOME: string | undefined
   export declare const AX_CODE_TEST_MANAGED_CONFIG_DIR: string | undefined
   export const AX_CODE_FAKE_VCS = process.env["AX_CODE_FAKE_VCS"]
@@ -214,6 +218,43 @@ Object.defineProperty(Flag, "AX_CODE_DISABLE_SHARE", {
 Object.defineProperty(Flag, "AX_CODE_CALLER", {
   get() {
     return process.env["AX_CODE_CALLER"]
+  },
+  enumerable: true,
+  configurable: false,
+})
+
+// Dynamic getter for AX_CODE_DEBUG
+// Keep evaluation lazy so debug settings injected by bootstrap stay effective.
+Object.defineProperty(Flag, "AX_CODE_DEBUG", {
+  get() {
+    return truthy("AX_CODE_DEBUG")
+  },
+  enumerable: true,
+  configurable: false,
+})
+
+// Dynamic getter for AX_CODE_DEBUG_DIR
+Object.defineProperty(Flag, "AX_CODE_DEBUG_DIR", {
+  get() {
+    return process.env["AX_CODE_DEBUG_DIR"]
+  },
+  enumerable: true,
+  configurable: false,
+})
+
+// Dynamic getter for AX_CODE_DEBUG_INCLUDE_CONTENT
+Object.defineProperty(Flag, "AX_CODE_DEBUG_INCLUDE_CONTENT", {
+  get() {
+    return truthy("AX_CODE_DEBUG_INCLUDE_CONTENT")
+  },
+  enumerable: true,
+  configurable: false,
+})
+
+// Dynamic getter for AX_CODE_PRINT_LOGS
+Object.defineProperty(Flag, "AX_CODE_PRINT_LOGS", {
+  get() {
+    return truthy("AX_CODE_PRINT_LOGS")
   },
   enumerable: true,
   configurable: false,

@@ -22,12 +22,12 @@ type GlobalEvent = {
   payload: unknown
 }
 
-const debugEnabled = process.env.AX_CODE_DEBUG === "1"
-const debugDir = debugEnabled ? (process.env.AX_CODE_DEBUG_DIR ?? path.join(tmpdir(), "ax-code-debug")) : undefined
+const debugEnabled = Flag.AX_CODE_DEBUG
+const debugDir = debugEnabled ? (Flag.AX_CODE_DEBUG_DIR ?? path.join(tmpdir(), "ax-code-debug")) : undefined
 await DiagnosticLog.configure({
   enabled: debugEnabled,
   dir: debugDir,
-  includeContent: process.env.AX_CODE_DEBUG_INCLUDE_CONTENT === "1",
+  includeContent: !!Flag.AX_CODE_DEBUG_INCLUDE_CONTENT,
   manifest: {
     component: "tui-worker",
     version: Installation.VERSION,
@@ -40,7 +40,7 @@ await DiagnosticLog.configure({
 if (debugDir) DiagnosticLog.installProcessDiagnostics()
 
 await Log.init({
-  print: process.argv.includes("--print-logs") || process.env.AX_CODE_PRINT_LOGS === "1",
+  print: process.argv.includes("--print-logs") || Flag.AX_CODE_PRINT_LOGS,
   dev: Installation.isLocal(),
   level: (() => {
     if (debugDir) return "DEBUG"

@@ -18,6 +18,7 @@ import type { Dirent } from "fs"
 import { Global } from "../../../global"
 import { cmd } from "../cmd"
 import { asRecordOrUndefined } from "../../../util/record"
+import { Flag } from "../../../flag/flag"
 
 interface DiagnosticEntry {
   service: string
@@ -1031,7 +1032,7 @@ async function latestDebugDirs(): Promise<string[]> {
     out.set(resolved, stat.mtimeMs)
   }
 
-  await addDir(process.env["AX_CODE_DEBUG_DIR"])
+  await addDir(Flag.AX_CODE_DEBUG_DIR)
 
   const defaultBase = path.join(os.tmpdir(), "ax-code-log")
   const entries = await fs.readdir(defaultBase, { withFileTypes: true }).catch(() => [] as Array<Dirent>)
@@ -1046,7 +1047,7 @@ async function latestDebugDirs(): Promise<string[]> {
 async function loadStandardLogs(session?: string): Promise<StandardLogScan> {
   const debugDirs = await latestDebugDirs()
   const logDirs = [
-    ...new Set([process.env["AX_CODE_DEBUG_DIR"], Global.Path.log, ...debugDirs].filter(Boolean) as string[]),
+    ...new Set([Flag.AX_CODE_DEBUG_DIR, Global.Path.log, ...debugDirs].filter(Boolean) as string[]),
   ]
   const logFile =
     (await latestFileInDirs(logDirs, (name) => name.endsWith(".json.log"))) ??
