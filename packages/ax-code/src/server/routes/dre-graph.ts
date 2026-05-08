@@ -11,7 +11,7 @@ import { SessionRollback } from "../../session/rollback"
 import { SessionID } from "../../session/schema"
 import { lazy } from "../../util/lazy"
 import { Locale } from "../../util/locale"
-import { SESSION_ID_PARAM } from "./route-params"
+import { SESSION_ID_PARAM, withRouteParam } from "./route-params"
 
 const DRE_GRAPH_QUALITY_QUERY = z.object({
   quality: z.coerce.boolean().optional().default(false),
@@ -1567,18 +1567,6 @@ async function loadSessionList(directory: string | undefined): Promise<Session.I
   return [...Session.list({ limit: 50, directory })]
 }
 
-type DreGraphRouteContext = {
-  req: {
-    valid: ((input: "param") => { sessionID: SessionID }) & ((input: "query") => { quality: boolean })
-  }
-}
-
-async function parseDreSessionContext(c: DreGraphRouteContext) {
-  const sessionID = c.req.valid("param").sessionID
-  const quality = c.req.valid("query").quality
-  return { sessionID, context: await loadSessionGraphContext(sessionID, quality) }
-}
-
 function disableClientCache(
   c: {
     header: (name: string, value: string) => void
@@ -2630,8 +2618,9 @@ export const DreGraphRoutes = lazy(() =>
       "/session/:sessionID",
       validator("param", SESSION_ID_PARAM),
       validator("query", DRE_GRAPH_QUALITY_QUERY),
-      async (c) => {
-        const { context } = await parseDreSessionContext(c)
+      withRouteParam<"sessionID", SessionID>("sessionID", async (sessionID, c) => {
+        const quality = c.req.valid("query").quality
+        const context = await loadSessionGraphContext(sessionID, quality)
         const search = c.req.url.includes("?") ? c.req.url.slice(c.req.url.indexOf("?")) : ""
 
         disableClientCache(c)
@@ -2647,14 +2636,15 @@ export const DreGraphRoutes = lazy(() =>
             search,
           }),
         )
-      },
+      }),
     )
     .get(
       "/session/:sessionID/fingerprint",
       validator("param", SESSION_ID_PARAM),
       validator("query", DRE_GRAPH_QUALITY_QUERY),
-      async (c) => {
-        const { context } = await parseDreSessionContext(c)
+      withRouteParam<"sessionID", SessionID>("sessionID", async (sessionID, c) => {
+        const quality = c.req.valid("query").quality
+        const context = await loadSessionGraphContext(sessionID, quality)
 
         disableClientCache(c)
         return c.json(
@@ -2667,6 +2657,6 @@ export const DreGraphRoutes = lazy(() =>
             rollback: context.rollback,
           }),
         )
-      },
+      }),
     ),
 )
