@@ -13,6 +13,13 @@ import { parseRouteParam } from "./route-params"
 const log = Log.create({ service: "server.pty" })
 const PTY_ID_PARAM = z.object({ ptyID: PtyID.zod })
 
+function withPtyID<T>(handler: (ptyID: PtyID, c: any) => Promise<T>) {
+  return async (c: any) => {
+    const ptyID = parseRouteParam<"ptyID", PtyID>(c, "ptyID")
+    return handler(ptyID, c)
+  }
+}
+
 export const PtyRoutes = lazy(() =>
   new Hono()
     .get(
@@ -79,14 +86,13 @@ export const PtyRoutes = lazy(() =>
         },
       }),
       validator("param", PTY_ID_PARAM),
-      async (c) => {
-        const ptyID = parseRouteParam<"ptyID", PtyID>(c, "ptyID")
+      withPtyID(async (ptyID, c) => {
         const info = await Pty.get(ptyID)
         if (!info) {
           throw new NotFoundError({ message: "Session not found" })
         }
         return c.json(info)
-      },
+      }),
     )
     .put(
       "/:ptyID",
@@ -108,11 +114,10 @@ export const PtyRoutes = lazy(() =>
       }),
       validator("param", PTY_ID_PARAM),
       validator("json", Pty.UpdateInput),
-      async (c) => {
-        const ptyID = parseRouteParam<"ptyID", PtyID>(c, "ptyID")
+      withPtyID(async (ptyID, c) => {
         const info = await Pty.update(ptyID, c.req.valid("json"))
         return c.json(info)
-      },
+      }),
     )
     .delete(
       "/:ptyID",
@@ -133,11 +138,10 @@ export const PtyRoutes = lazy(() =>
         },
       }),
       validator("param", PTY_ID_PARAM),
-      async (c) => {
-        const ptyID = parseRouteParam<"ptyID", PtyID>(c, "ptyID")
+      withPtyID(async (ptyID, c) => {
         await Pty.remove(ptyID)
         return c.json(true)
-      },
+      }),
     )
     .get(
       "/:ptyID/connect",
