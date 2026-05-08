@@ -1,4 +1,5 @@
 import path from "path"
+import z from "zod"
 import { Config } from "@/config/config"
 import { Instance } from "@/project/instance"
 import { Filesystem } from "@/util/filesystem"
@@ -10,6 +11,10 @@ import { FeatureFlag } from "@/util/feature-flags"
 const log = Log.create({ service: "project-config" })
 
 const PROJECT_CONFIG_PERSIST_ERROR = "Failed to persist configuration"
+
+export const BooleanFeatureState = z.object({
+  enabled: z.boolean(),
+})
 
 function coerceErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error)

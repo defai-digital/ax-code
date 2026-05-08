@@ -1,18 +1,16 @@
 import { Hono } from "hono"
 import { describeRoute, resolver, validator } from "hono-openapi"
-import z from "zod"
 import { Log } from "../../util/log"
 import { lazy } from "../../util/lazy"
-import { persistProjectConfigBooleanFeatureResponse, readProjectConfigFeatureState } from "./project-config"
+import {
+  BooleanFeatureState,
+  persistProjectConfigBooleanFeatureResponse,
+  readProjectConfigFeatureState,
+} from "./project-config"
 import { Flag } from "../../flag/flag"
 
 const log = Log.create({ service: "smart-llm" })
-
-const SmartLlmState = z
-  .object({
-    enabled: z.boolean(),
-  })
-  .meta({ ref: "SmartLlmState" })
+const SmartLlmState = BooleanFeatureState.meta({ ref: "SmartLlmState" })
 
 export const SmartLlmRoutes = lazy(() =>
   new Hono()
@@ -58,7 +56,7 @@ export const SmartLlmRoutes = lazy(() =>
           },
         },
       }),
-      validator("json", z.object({ enabled: z.boolean() })),
+      validator("json", BooleanFeatureState),
       async (c) => {
         const { enabled } = c.req.valid("json")
         const state = await persistProjectConfigBooleanFeatureResponse({

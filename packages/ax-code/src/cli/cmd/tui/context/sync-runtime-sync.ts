@@ -58,17 +58,21 @@ export function createRuntimeSyncActions(input: {
     try {
       const path = pathname.startsWith("/") ? pathname : `/${pathname}`
       const response = await input.fetch(`${input.url}${path}`, init)
-      if (!response.ok) return
-      return (await response.json()) as T
-    } catch {
-      return
-    }
+    if (!response.ok) return
+    return (await response.json()) as T
+  } catch {
+    return
+  }
   }
 
   async function syncRuntimeFlag(pathname: string, apply: (value: boolean) => void) {
     const body = await fetchOptionalRuntimeJson<RuntimeFlagPayload>(pathname)
     if (!body) return
     apply(normalizeRuntimeFlagState(body))
+  }
+
+  function createRuntimeFeatureSync(pathname: string, apply: (value: boolean) => void) {
+    return () => syncRuntimeFlag(pathname, apply)
   }
 
   return {
@@ -98,12 +102,8 @@ export function createRuntimeSyncActions(input: {
       if (!body) return
       input.applyDebugEngine(normalizeDebugEngineState(body))
     },
-    async syncAutonomous() {
-      await syncRuntimeFlag("/autonomous", input.applyAutonomous)
-    },
-    async syncSmartLlm() {
-      await syncRuntimeFlag("/smart-llm", input.applySmartLlm)
-    },
+    syncAutonomous: createRuntimeFeatureSync("/autonomous", input.applyAutonomous),
+    syncSmartLlm: createRuntimeFeatureSync("/smart-llm", input.applySmartLlm),
     async syncIsolation() {
       const body = await fetchOptionalRuntimeJson<IsolationPayload>("/isolation", {
         headers: directoryRequestHeaders({

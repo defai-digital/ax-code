@@ -22,6 +22,9 @@ export function createStoreBackedRuntimeSyncActions<TStore extends RuntimeStoreS
   setStore: SetStoreFunction<TStore>
 }): RuntimeSyncActions {
   const setStore = input.setStore as unknown as SetStoreFunction<RuntimeStoreState>
+  const applyBooleanFeature = (key: "autonomous" | "smartLlm") => (value: boolean) => {
+    setStore(key, value)
+  }
 
   return createRuntimeSyncActions({
     url: input.url,
@@ -41,12 +44,8 @@ export function createStoreBackedRuntimeSyncActions<TStore extends RuntimeStoreS
     applyDebugEngine(value: RuntimeStoreState["debugEngine"]) {
       setStore("debugEngine", reconcile(value))
     },
-    applyAutonomous(value: boolean) {
-      setStore("autonomous", value)
-    },
-    applySmartLlm(value: boolean) {
-      setStore("smartLlm", value)
-    },
+    applyAutonomous: applyBooleanFeature("autonomous"),
+    applySmartLlm: applyBooleanFeature("smartLlm"),
     applyIsolation(value: RuntimeStoreState["isolation"]) {
       setStore("isolation", reconcile(value))
     },

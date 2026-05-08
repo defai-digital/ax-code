@@ -1,17 +1,16 @@
 import { Hono } from "hono"
 import { describeRoute, resolver, validator } from "hono-openapi"
-import z from "zod"
 import { Log } from "../../util/log"
 import { lazy } from "../../util/lazy"
-import { persistProjectConfigBooleanFeatureResponse, readProjectConfigFeatureState } from "./project-config"
+import {
+  BooleanFeatureState,
+  persistProjectConfigBooleanFeatureResponse,
+  readProjectConfigFeatureState,
+} from "./project-config"
 
 const log = Log.create({ service: "autonomous" })
 
-const AutonomousState = z
-  .object({
-    enabled: z.boolean(),
-  })
-  .meta({ ref: "AutonomousState" })
+const AutonomousState = BooleanFeatureState.meta({ ref: "AutonomousState" })
 
 export const AutonomousRoutes = lazy(() =>
   new Hono()
@@ -62,7 +61,7 @@ export const AutonomousRoutes = lazy(() =>
           },
         },
       }),
-      validator("json", z.object({ enabled: z.boolean() })),
+      validator("json", BooleanFeatureState),
       async (c) => {
         const { enabled } = c.req.valid("json")
         // Persist first; only then update the in-process env. Writing
