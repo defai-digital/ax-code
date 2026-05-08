@@ -1,18 +1,7 @@
-import { ProviderID } from "@/provider/schema"
 import { SessionID } from "@/session/schema"
 import z from "zod"
 
 import { assertSessionExists } from "./session-lookup"
-
-export type ProviderRouteContext = {
-  req: {
-    valid: (input: "param") => { providerID: string }
-  }
-}
-
-export function parseProviderID(c: ProviderRouteContext) {
-  return ProviderID.make(c.req.valid("param").providerID)
-}
 
 export type SessionRouteContext = {
   req: {

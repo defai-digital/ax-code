@@ -47,7 +47,7 @@ import { IsolationRoutes } from "./routes/isolation"
 import { AutonomousRoutes } from "./routes/autonomous"
 import { SmartLlmRoutes } from "./routes/smart-llm"
 import { GlobalRoutes } from "./routes/global"
-import { parseProviderID } from "./routes/route-params"
+import { withRouteParam } from "./routes/route-params"
 import { ToolRegistry } from "../tool/registry"
 import { MDNS } from "./mdns"
 import { lazy } from "@/util/lazy"
@@ -649,8 +649,7 @@ export namespace Server {
           }),
         ),
         validator("json", Auth.Info.zod),
-        async (c) => {
-          const providerID = parseProviderID(c)
+        withRouteParam<"providerID", ProviderID>("providerID", async (providerID, c) => {
           const info = c.req.valid("json")
           const directory = requestDirectory(c)
           if (directory instanceof Response) return directory
@@ -660,7 +659,7 @@ export namespace Server {
           // without requiring a process restart. See issue #13.
           await invalidateProviderState(directory)
           return c.json(true)
-        },
+        }),
       )
       .delete(
         "/auth/:providerID",
@@ -686,8 +685,7 @@ export namespace Server {
             providerID: ProviderID.zod,
           }),
         ),
-        async (c) => {
-          const providerID = parseProviderID(c)
+        withRouteParam<"providerID", ProviderID>("providerID", async (providerID, c) => {
           const directory = requestDirectory(c)
           if (directory instanceof Response) return directory
           await Auth.remove(providerID)
@@ -696,7 +694,7 @@ export namespace Server {
           // See issue #13.
           await invalidateProviderState(directory)
           return c.json(true)
-        },
+        }),
       )
       .use(async (c, next) => {
         if (c.req.path === "/log") return next()

@@ -9,7 +9,7 @@ import { ProviderID } from "../../provider/schema"
 import { mapValues } from "remeda"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
-import { parseProviderID } from "./route-params"
+import { withRouteParam } from "./route-params"
 import { Log } from "../../util/log"
 
 const log = Log.create({ service: "server" })
@@ -147,8 +147,7 @@ export const ProviderRoutes = lazy(() =>
           inputs: z.record(z.string(), z.string()).optional().meta({ description: "Prompt inputs" }),
         }),
       ),
-      async (c) => {
-        const providerID = parseProviderID(c)
+      withRouteParam<"providerID", ProviderID>("providerID", async (providerID, c) => {
         const { method, inputs } = c.req.valid("json")
         const result = await ProviderAuth.authorize({
           providerID,
@@ -156,7 +155,7 @@ export const ProviderRoutes = lazy(() =>
           inputs,
         })
         return c.json(result)
-      },
+      }),
     )
     .post(
       "/:providerID/oauth/callback",
@@ -187,8 +186,7 @@ export const ProviderRoutes = lazy(() =>
           code: z.string().optional().meta({ description: "OAuth authorization code" }),
         }),
       ),
-      async (c) => {
-        const providerID = parseProviderID(c)
+      withRouteParam<"providerID", ProviderID>("providerID", async (providerID, c) => {
         const { method, code } = c.req.valid("json")
         await ProviderAuth.callback({
           providerID,
@@ -196,6 +194,6 @@ export const ProviderRoutes = lazy(() =>
           code,
         })
         return c.json(true)
-      },
+      }),
     ),
 )
