@@ -1,4 +1,4 @@
-import { Hono } from "hono"
+import { Hono, type Context } from "hono"
 import { describeRoute, validator, resolver } from "hono-openapi"
 import z from "zod"
 import { MCP } from "../../mcp"
@@ -15,6 +15,11 @@ const MCP_NAME_PARAM = z
 const MCP_NAME_PARAM_OBJECT = z.object({
   name: MCP_NAME_PARAM,
 })
+
+async function oauthNotSupportedResponse(c: Context, name: string) {
+  if (await MCP.supportsOAuth(name)) return undefined
+  return c.json({ error: `MCP server ${name} does not support OAuth` }, 400)
+}
 
 export const McpRoutes = lazy(() =>
   new Hono()
@@ -95,10 +100,8 @@ export const McpRoutes = lazy(() =>
       validator("param", MCP_NAME_PARAM_OBJECT),
       async (c) => {
         const name = parseRouteParam<"name", string>(c, "name")
-        const supportsOAuth = await MCP.supportsOAuth(name)
-        if (!supportsOAuth) {
-          return c.json({ error: `MCP server ${name} does not support OAuth` }, 400)
-        }
+        const unsupported = await oauthNotSupportedResponse(c, name)
+        if (unsupported) return unsupported
         const result = await MCP.startAuth(name)
         return c.json(result)
       },
@@ -157,10 +160,8 @@ export const McpRoutes = lazy(() =>
       validator("param", MCP_NAME_PARAM_OBJECT),
       async (c) => {
         const name = parseRouteParam<"name", string>(c, "name")
-        const supportsOAuth = await MCP.supportsOAuth(name)
-        if (!supportsOAuth) {
-          return c.json({ error: `MCP server ${name} does not support OAuth` }, 400)
-        }
+        const unsupported = await oauthNotSupportedResponse(c, name)
+        if (unsupported) return unsupported
         const status = await MCP.authenticate(name)
         return c.json(status)
       },
