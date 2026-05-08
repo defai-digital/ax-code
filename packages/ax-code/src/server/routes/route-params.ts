@@ -1,5 +1,7 @@
 import { SessionID } from "@/session/schema"
 import { ProviderID } from "@/provider/schema"
+import { ProjectID } from "@/project/schema"
+import { PtyID } from "@/pty/schema"
 import z from "zod"
 
 import { assertSessionExists } from "./session-lookup"
@@ -17,6 +19,12 @@ export function parseSessionID(c: SessionRouteContext) {
 export const SESSION_ID_PARAM = z.object({ sessionID: SessionID.zod })
 export const PROVIDER_ID_PARAM = z.object({
   providerID: ProviderID.zod.meta({ description: "Provider ID" }),
+})
+export const PROJECT_ID_PARAM = z.object({
+  projectID: ProjectID.zod,
+})
+export const PTY_ID_PARAM = z.object({
+  ptyID: PtyID.zod,
 })
 
 export async function parseExistingSessionID(c: SessionRouteContext) {
@@ -38,4 +46,12 @@ export function withRouteParam<TKey extends string, TValue>(
 
 export function withProviderID<T>(handler: (providerID: ProviderID, c: any) => T) {
   return withRouteParam<"providerID", ProviderID>("providerID", handler)
+}
+
+export function withProjectID<T>(handler: (projectID: ProjectID, c: any) => T) {
+  return withRouteParam<"projectID", ProjectID>("projectID", handler)
+}
+
+export function withPtyID<T>(handler: (ptyID: PtyID, c: any) => T) {
+  return withRouteParam<"ptyID", PtyID>("ptyID", handler)
 }

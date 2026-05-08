@@ -3,15 +3,13 @@ import { describeRoute, validator, resolver } from "hono-openapi"
 import { upgradeWebSocket } from "hono/bun"
 import z from "zod"
 import { Pty } from "@/pty"
-import { PtyID } from "@/pty/schema"
 import { NotFoundError } from "../../storage/db"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
 import { Log } from "@/util/log"
-import { withRouteParam } from "./route-params"
+import { PTY_ID_PARAM, withPtyID } from "./route-params"
 
 const log = Log.create({ service: "server.pty" })
-const PTY_ID_PARAM = z.object({ ptyID: PtyID.zod })
 
 export const PtyRoutes = lazy(() =>
   new Hono()
@@ -79,7 +77,7 @@ export const PtyRoutes = lazy(() =>
         },
       }),
       validator("param", PTY_ID_PARAM),
-      withRouteParam<"ptyID", PtyID>("ptyID", async (ptyID, c) => {
+      withPtyID(async (ptyID, c) => {
         const info = await Pty.get(ptyID)
         if (!info) {
           throw new NotFoundError({ message: "Session not found" })
@@ -107,7 +105,7 @@ export const PtyRoutes = lazy(() =>
       }),
       validator("param", PTY_ID_PARAM),
       validator("json", Pty.UpdateInput),
-      withRouteParam<"ptyID", PtyID>("ptyID", async (ptyID, c) => {
+      withPtyID(async (ptyID, c) => {
         const info = await Pty.update(ptyID, c.req.valid("json"))
         return c.json(info)
       }),
@@ -131,7 +129,7 @@ export const PtyRoutes = lazy(() =>
         },
       }),
       validator("param", PTY_ID_PARAM),
-      withRouteParam<"ptyID", PtyID>("ptyID", async (ptyID, c) => {
+      withPtyID(async (ptyID, c) => {
         await Pty.remove(ptyID)
         return c.json(true)
       }),
@@ -155,7 +153,7 @@ export const PtyRoutes = lazy(() =>
         },
       }),
       validator("param", PTY_ID_PARAM),
-      withRouteParam<"ptyID", PtyID>("ptyID", (id) =>
+      withPtyID((id) =>
         upgradeWebSocket(async (c) => {
           const cursor = (() => {
             const value = c.req.query("cursor")
