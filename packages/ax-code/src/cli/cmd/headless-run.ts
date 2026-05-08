@@ -2,6 +2,7 @@ import { cmd } from "./cmd"
 import { bootstrap } from "../bootstrap"
 import { Filesystem } from "@/util/filesystem"
 import { internalBaseUrl, isInternalHostname } from "@/util/internal-url"
+import { buildAttachAuthHeaders } from "../attach-auth"
 import { Server } from "@/server/server"
 import { Provider } from "@/provider/provider"
 import {
@@ -206,7 +207,7 @@ export const HeadlessRunCommand = cmd({
     }
 
     if (args.attach) {
-      const headers = attachAuthHeaders(args.password)
+      const headers = buildAttachAuthHeaders(args.password)
       const fetchFn = (async (input: RequestInfo | URL, init?: RequestInit) => {
         const request = new Request(input, init)
         if (headers) {
@@ -232,12 +233,3 @@ export const HeadlessRunCommand = cmd({
     })
   },
 })
-
-function attachAuthHeaders(password: string | undefined) {
-  const resolved = password ?? process.env.AX_CODE_SERVER_PASSWORD
-  if (!resolved) return undefined
-  const username = process.env.AX_CODE_SERVER_USERNAME ?? "ax-code"
-  return {
-    Authorization: `Basic ${Buffer.from(`${username}:${resolved}`).toString("base64")}`,
-  }
-}

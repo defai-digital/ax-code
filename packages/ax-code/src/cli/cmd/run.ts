@@ -5,6 +5,7 @@ import { UI } from "../ui"
 import { cmd } from "./cmd"
 import { Flag } from "../../flag/flag"
 import { bootstrap } from "../bootstrap"
+import { buildAttachAuthHeaders } from "../attach-auth"
 import { EOL } from "os"
 import { Filesystem } from "../../util/filesystem"
 import { createOpencodeClient, type Message, type OpencodeClient, type ToolPart } from "@ax-code/sdk/v2"
@@ -661,13 +662,7 @@ export const RunCommand = cmd({
     }
 
     if (args.attach) {
-      const headers = (() => {
-        const password = args.password ?? process.env.AX_CODE_SERVER_PASSWORD
-        if (!password) return undefined
-        const username = process.env.AX_CODE_SERVER_USERNAME ?? "ax-code"
-        const auth = `Basic ${Buffer.from(`${username}:${password}`).toString("base64")}`
-        return { Authorization: auth }
-      })()
+      const headers = buildAttachAuthHeaders(args.password)
       const sdk = createOpencodeClient({ baseUrl: args.attach, directory, headers })
       return await execute(sdk)
     }
