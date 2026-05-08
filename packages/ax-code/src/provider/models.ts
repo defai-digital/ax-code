@@ -5,6 +5,7 @@ import { Filesystem } from "../util/filesystem"
 import { Ssrf } from "../util/ssrf"
 import { Global } from "../global"
 import { Instance } from "../project/instance"
+import { hasGlmMajorVersionAtLeastFive } from "./model-support"
 import bundledSnapshot from "./models-snapshot.json"
 
 export namespace ModelsDev {
@@ -61,12 +62,7 @@ export namespace ModelsDev {
     if (!probes.some((probe) => probe.includes("glm"))) return true
     if (probes.some((probe) => probe.includes("glm-5v") || probe.includes("glm5v"))) return false
     // Allow non-vision GLM 5 and any future GLM N≥5. Drops glm-5v and glm-3.x / glm-4.x.
-    for (const probe of probes) {
-      const m = probe.match(/glm-(\d+)/)
-      if (!m) continue
-      if (parseInt(m[1], 10) >= 5) return true
-    }
-    return false
+    return hasGlmMajorVersionAtLeastFive(probes)
   }
 
   function supported(providerID: string, modelID: string, model?: { id?: unknown; name?: unknown; family?: unknown }) {

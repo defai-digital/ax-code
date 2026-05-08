@@ -30,6 +30,7 @@ import { ProviderTransform } from "./transform"
 import { Installation } from "../installation"
 import { ModelID, ProviderID } from "./schema"
 import { levenshtein } from "@/util/levenshtein"
+import { hasGlmMajorVersionAtLeastFive } from "./model-support"
 import {
   CUSTOM_LOADERS,
   type CustomModelLoader,
@@ -98,12 +99,7 @@ export namespace Provider {
       if (!probes.some((probe) => probe.includes("glm"))) return true
       if (probes.some((probe) => probe.includes("glm-5v") || probe.includes("glm5v"))) return false
       // Allow non-vision GLM 5+ only — drops glm-5v and glm-3.x / glm-4.x SKUs.
-      for (const probe of probes) {
-        const m = probe.match(/glm-(\d+)/)
-        if (!m) continue
-        if (parseInt(m[1], 10) >= 5) return true
-      }
-      return false
+      return hasGlmMajorVersionAtLeastFive(probes)
     }
     return true
   }
