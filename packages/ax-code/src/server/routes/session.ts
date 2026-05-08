@@ -297,9 +297,7 @@ export const SessionRoutes = lazy(() =>
       }),
       validator(
         "param",
-        z.object({
-          sessionID: Session.get.schema,
-        }),
+        SESSION_ID_PARAM,
       ),
       async (c) => {
         const { session } = await parseCurrentProjectSession(c)
@@ -327,9 +325,7 @@ export const SessionRoutes = lazy(() =>
       }),
       validator(
         "param",
-        z.object({
-          sessionID: Session.children.schema,
-        }),
+        SESSION_ID_PARAM,
       ),
       async (c) => {
         const sessionID = await parseCurrentProjectSessionID(c)
@@ -850,9 +846,7 @@ export const SessionRoutes = lazy(() =>
       }),
       validator(
         "param",
-        z.object({
-          sessionID: SessionSummary.diff.schema.shape.sessionID,
-        }),
+        SESSION_ID_PARAM,
       ),
       validator(
         "query",
