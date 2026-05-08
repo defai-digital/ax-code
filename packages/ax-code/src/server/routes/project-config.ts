@@ -47,3 +47,20 @@ export async function updateProjectConfig<T>(fn: (config: Config.Info) => T | Pr
   await Filesystem.writeJson(file, config)
   return result
 }
+
+type PersistProjectConfigOptions = {
+  onError?: (error: unknown) => void
+}
+
+export async function persistProjectConfig(
+  fn: (config: Config.Info) => void | Promise<void>,
+  options: PersistProjectConfigOptions = {},
+) {
+  try {
+    await updateProjectConfig(fn)
+    return true
+  } catch (error) {
+    options.onError?.(error)
+    return false
+  }
+}

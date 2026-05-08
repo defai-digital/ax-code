@@ -3,7 +3,7 @@ import { describeRoute, resolver, validator } from "hono-openapi"
 import z from "zod"
 import { Log } from "../../util/log"
 import { lazy } from "../../util/lazy"
-import { readProjectConfig, updateProjectConfig } from "./project-config"
+import { readProjectConfig, persistProjectConfig } from "./project-config"
 import { FeatureFlag } from "../../util/feature-flags"
 import { Flag } from "../../flag/flag"
 
@@ -61,13 +61,13 @@ export const SmartLlmRoutes = lazy(() =>
       validator("json", z.object({ enabled: z.boolean() })),
       async (c) => {
         const { enabled } = c.req.valid("json")
-        let persisted = true
-        await updateProjectConfig((config) => {
+        const persisted = await persistProjectConfig((config) => {
           config.routing ??= {}
           config.routing.llm = enabled
-        }).catch((err) => {
-          persisted = false
-          log.warn("failed to persist smart-llm config", { error: err instanceof Error ? err.message : String(err) })
+        }, {
+          onError: (err) => {
+            log.warn("failed to persist smart-llm config", { error: err instanceof Error ? err.message : String(err) })
+          },
         })
         log.info("smart LLM routing changed", { enabled, persisted })
         if (!persisted) return c.json({ error: "Failed to persist configuration" }, 500)
