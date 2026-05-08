@@ -500,6 +500,21 @@ export namespace Server {
     })
   }
 
+  async function updateProviderAuth(
+    c: Context,
+    providerID: ProviderID,
+    updater: (providerID: ProviderID) => Promise<void>,
+  ) {
+    const directory = requestDirectory(c)
+    if (directory instanceof Response) return directory
+    await updater(providerID)
+    // Invalidate the per-directory provider cache so the next
+    // `Provider.list()` re-reads auth and picks up this update
+    // without requiring a process restart. See issue #13.
+    await invalidateProviderState(directory)
+    return c.json(true)
+  }
+
   export const createApp = (opts: { port?: number; cors?: string[] }): Hono => {
     const app = new Hono()
     return app
@@ -653,14 +668,7 @@ export namespace Server {
         validator("json", Auth.Info.zod),
         withRouteParam<"providerID", ProviderID>("providerID", async (providerID, c) => {
           const info = c.req.valid("json")
-          const directory = requestDirectory(c)
-          if (directory instanceof Response) return directory
-          await Auth.set(providerID, info)
-          // Invalidate the per-directory provider cache so the next
-          // `Provider.list()` re-reads auth and shows the new key
-          // without requiring a process restart. See issue #13.
-          await invalidateProviderState(directory)
-          return c.json(true)
+          return updateProviderAuth(c, providerID, (nextProviderID) => Auth.set(nextProviderID, info))
         }),
       )
       .delete(
@@ -686,14 +694,7 @@ export namespace Server {
           AUTH_PROVIDER_ID_PARAM,
         ),
         withRouteParam<"providerID", ProviderID>("providerID", async (providerID, c) => {
-          const directory = requestDirectory(c)
-          if (directory instanceof Response) return directory
-          await Auth.remove(providerID)
-          // Same rationale as the PUT handler — a removed key must
-          // also disappear from the provider list without a restart.
-          // See issue #13.
-          await invalidateProviderState(directory)
-          return c.json(true)
+          return updateProviderAuth(c, providerID, Auth.remove)
         }),
       )
       .use(async (c, next) => {
