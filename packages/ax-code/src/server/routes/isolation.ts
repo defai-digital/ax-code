@@ -6,7 +6,7 @@ import { Isolation } from "../../isolation"
 import { Instance } from "../../project/instance"
 import { Log } from "../../util/log"
 import { lazy } from "../../util/lazy"
-import { PROJECT_CONFIG_PERSIST_ERROR, createPersistErrorLogger, persistProjectConfig } from "./project-config"
+import { persistProjectConfigResponse } from "./project-config"
 import { FeatureFlag } from "../../util/feature-flags"
 
 const log = Log.create({ service: "isolation" })
@@ -67,17 +67,14 @@ export const IsolationRoutes = lazy(() =>
       async (c) => {
         const { mode } = c.req.valid("json")
         const network = mode === "full-access"
-        const persisted = await persistProjectConfig(
-          (config) => {
+        const persistedFailed = await persistProjectConfigResponse({
+          log,
+          context: "isolation mode",
+          update: (config) => {
             config.isolation = { mode, network }
           },
-          {
-            onError: createPersistErrorLogger(log, "isolation mode"),
-          },
-        )
-        if (!persisted) {
-          return c.json({ error: PROJECT_CONFIG_PERSIST_ERROR }, 500)
-        }
+        })
+        if (persistedFailed) return c.json(persistedFailed, 500)
         FeatureFlag.set("AX_CODE_ISOLATION_MODE", mode)
         const state = Isolation.resolve({ mode, network }, Instance.directory, Instance.worktree)
         return c.json({ mode: state.mode, network: state.network })
