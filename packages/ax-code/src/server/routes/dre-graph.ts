@@ -11,7 +11,7 @@ import { SessionRollback } from "../../session/rollback"
 import { SessionID } from "../../session/schema"
 import { lazy } from "../../util/lazy"
 import { Locale } from "../../util/locale"
-import { SESSION_ID_PARAM, withRouteParam } from "./route-params"
+import { SESSION_ID_PARAM, withSessionID } from "./route-params"
 
 const DRE_GRAPH_QUALITY_QUERY = z.object({
   quality: z.coerce.boolean().optional().default(false),
@@ -2618,7 +2618,7 @@ export const DreGraphRoutes = lazy(() =>
       "/session/:sessionID",
       validator("param", SESSION_ID_PARAM),
       validator("query", DRE_GRAPH_QUALITY_QUERY),
-      withRouteParam<"sessionID", SessionID>("sessionID", async (sessionID, c) => {
+      withSessionID(async (sessionID, c) => {
         const quality = c.req.valid("query").quality
         const context = await loadSessionGraphContext(sessionID, quality)
         const search = c.req.url.includes("?") ? c.req.url.slice(c.req.url.indexOf("?")) : ""
@@ -2642,7 +2642,7 @@ export const DreGraphRoutes = lazy(() =>
       "/session/:sessionID/fingerprint",
       validator("param", SESSION_ID_PARAM),
       validator("query", DRE_GRAPH_QUALITY_QUERY),
-      withRouteParam<"sessionID", SessionID>("sessionID", async (sessionID, c) => {
+      withSessionID(async (sessionID, c) => {
         const quality = c.req.valid("query").quality
         const context = await loadSessionGraphContext(sessionID, quality)
 

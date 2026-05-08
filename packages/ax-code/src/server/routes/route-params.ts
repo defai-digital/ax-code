@@ -64,6 +64,10 @@ export function withPtyID<T>(handler: (ptyID: PtyID, c: any) => T) {
   return withRouteParam<"ptyID", PtyID>("ptyID", handler)
 }
 
+export function withSessionID<T>(handler: (sessionID: SessionID, c: any) => T) {
+  return withRouteParam<"sessionID", SessionID>("sessionID", handler)
+}
+
 export function withQuestionRequestID<T>(handler: (requestID: QuestionID, c: any) => T) {
   return withRouteParam<"requestID", QuestionID>("requestID", handler)
 }
