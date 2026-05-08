@@ -92,6 +92,10 @@ const AppContextCheck = z.object({
   source: z.enum(["root", "directory"]),
 })
 
+const AUTH_PROVIDER_ID_PARAM = z.object({
+  providerID: ProviderID.zod,
+})
+
 const AppContextInfo = z.object({
   directory: z.string(),
   worktree: z.string(),
@@ -644,9 +648,7 @@ export namespace Server {
         }),
         validator(
           "param",
-          z.object({
-            providerID: ProviderID.zod,
-          }),
+          AUTH_PROVIDER_ID_PARAM,
         ),
         validator("json", Auth.Info.zod),
         withRouteParam<"providerID", ProviderID>("providerID", async (providerID, c) => {
@@ -681,9 +683,7 @@ export namespace Server {
         }),
         validator(
           "param",
-          z.object({
-            providerID: ProviderID.zod,
-          }),
+          AUTH_PROVIDER_ID_PARAM,
         ),
         withRouteParam<"providerID", ProviderID>("providerID", async (providerID, c) => {
           const directory = requestDirectory(c)
