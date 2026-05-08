@@ -181,6 +181,14 @@ async function startAsyncSessionHandler<TBody>(
   return c.body(null, 202)
 }
 
+async function runSessionRequest<TBody>(
+  c: Context,
+  start: (input: TBody & { sessionID: SessionID }) => Promise<unknown>,
+) {
+  const { sessionID, body } = await parseSessionJSONInput<TBody>(c as SessionJSONRouteContext)
+  return start({ ...body, sessionID })
+}
+
 async function requireCurrentProjectSession(sessionID: SessionID) {
   const session = await Session.get(sessionID)
   if (Session.isCompatibleWithCurrentProject(session)) return session
@@ -1313,8 +1321,7 @@ export const SessionRoutes = lazy(() =>
       ),
       validator("json", SessionPrompt.CommandInput.omit({ sessionID: true })),
       async (c) => {
-        const { sessionID, body } = await parseSessionJSONInput<SessionPrompt.CommandInput>(c)
-        const msg = await SessionPrompt.command({ ...body, sessionID })
+        const msg = await runSessionRequest<SessionPrompt.CommandInput>(c, SessionPrompt.command)
         return c.json(msg)
       },
     )
@@ -1367,8 +1374,7 @@ export const SessionRoutes = lazy(() =>
       ),
       validator("json", SessionPrompt.ShellInput.omit({ sessionID: true })),
       async (c) => {
-        const { sessionID, body } = await parseSessionJSONInput<SessionPrompt.ShellInput>(c)
-        const msg = await SessionPrompt.shell({ ...body, sessionID })
+        const msg = await runSessionRequest<SessionPrompt.ShellInput>(c, SessionPrompt.shell)
         return c.json(msg)
       },
     )
