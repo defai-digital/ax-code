@@ -1,4 +1,4 @@
-import { Hono } from "hono"
+import { Hono, type Context } from "hono"
 import { stream } from "hono/streaming"
 import { describeRoute, validator, resolver } from "hono-openapi"
 import { HTTPException } from "hono/http-exception"
@@ -163,6 +163,22 @@ async function parseSessionJSONInput<TBody>(c: SessionJSONRouteContext) {
   const sessionID = await parseCurrentProjectSessionID(c)
   const body = c.req.valid("json") as TBody
   return { sessionID: sessionID, body }
+}
+
+async function startAsyncSessionHandler<TBody>(
+  c: Context,
+  input: {
+    kind: "prompt" | "command" | "shell"
+    start: (input: TBody & { sessionID: SessionID }) => Promise<unknown>
+  },
+) {
+  const { sessionID, body } = await parseSessionJSONInput<TBody>(c as SessionJSONRouteContext)
+  startAsyncSessionTask({
+    sessionID,
+    kind: input.kind,
+    task: () => input.start({ ...body, sessionID }),
+  })
+  return c.body(null, 202)
 }
 
 async function requireCurrentProjectSession(sessionID: SessionID) {
@@ -1237,13 +1253,10 @@ export const SessionRoutes = lazy(() =>
       ),
       validator("json", SessionPrompt.PromptInput.omit({ sessionID: true })),
       async (c) => {
-        const { sessionID, body } = await parseSessionJSONInput<SessionPrompt.PromptInput>(c)
-        startAsyncSessionTask({
-          sessionID,
+        return startAsyncSessionHandler(c, {
           kind: "prompt",
-          task: () => SessionPrompt.prompt({ ...body, sessionID }),
+          start: SessionPrompt.prompt,
         })
-        return c.body(null, 202)
       },
     )
     .post(
@@ -1265,13 +1278,10 @@ export const SessionRoutes = lazy(() =>
       ),
       validator("json", SessionPrompt.CommandInput.omit({ sessionID: true })),
       async (c) => {
-        const { sessionID, body } = await parseSessionJSONInput<SessionPrompt.CommandInput>(c)
-        startAsyncSessionTask({
-          sessionID,
+        return startAsyncSessionHandler(c, {
           kind: "command",
-          task: () => SessionPrompt.command({ ...body, sessionID }),
+          start: SessionPrompt.command,
         })
-        return c.body(null, 202)
       },
     )
     .post(
@@ -1327,13 +1337,10 @@ export const SessionRoutes = lazy(() =>
       ),
       validator("json", SessionPrompt.ShellInput.omit({ sessionID: true })),
       async (c) => {
-        const { sessionID, body } = await parseSessionJSONInput<SessionPrompt.ShellInput>(c)
-        startAsyncSessionTask({
-          sessionID,
+        return startAsyncSessionHandler(c, {
           kind: "shell",
-          task: () => SessionPrompt.shell({ ...body, sessionID }),
+          start: SessionPrompt.shell,
         })
-        return c.body(null, 202)
       },
     )
     .post(
