@@ -37,13 +37,21 @@ export type RuntimeFlagOptions = {
   preservePid?: boolean
 }
 
+function setEnvValue(
+  env: Record<string, string | undefined>,
+  key: string,
+  value: string | number | boolean | undefined,
+) {
+  env[key] = typeof value === "undefined" ? undefined : String(value)
+}
+
 export function seedRuntimeFlags(env: Record<string, string | undefined>, options: RuntimeFlagOptions = {}) {
   const pid = options.pid ?? process.pid
-  env.AGENT = "1"
-  env.AX_CODE = "1"
-  env.OPENCODE = "1"
+  setEnvValue(env, "AGENT", "1")
+  setEnvValue(env, "AX_CODE", "1")
+  setEnvValue(env, "OPENCODE", "1")
   if (options.preservePid) env.AX_CODE_PID ??= String(pid)
-  else env.AX_CODE_PID = String(pid)
+  else setEnvValue(env, "AX_CODE_PID", pid)
 }
 
 export function level(log?: string, _local = Installation.isLocal(), debug = false): Log.Level {
@@ -103,11 +111,11 @@ export function apply(
   debugDir?: string,
 ) {
   seedRuntimeFlags(env, { pid })
-  if (opts.sandbox) env.AX_CODE_ISOLATION_MODE = opts.sandbox
+  if (opts.sandbox) setEnvValue(env, "AX_CODE_ISOLATION_MODE", opts.sandbox)
   if (opts.debug) {
-    env.AX_CODE_DEBUG = "1"
-    env.AX_CODE_DEBUG_DIR = debugDir ?? debugOptions(opts).dir
-    env.AX_CODE_DEBUG_INCLUDE_CONTENT = opts.debugIncludeContent ? "1" : "0"
+    setEnvValue(env, "AX_CODE_DEBUG", "1")
+    setEnvValue(env, "AX_CODE_DEBUG_DIR", debugDir ?? debugOptions(opts).dir)
+    setEnvValue(env, "AX_CODE_DEBUG_INCLUDE_CONTENT", opts.debugIncludeContent ? "1" : "0")
   }
 }
 
