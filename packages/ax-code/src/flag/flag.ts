@@ -1,13 +1,19 @@
 import { Config } from "effect"
 
+function parseBooleanEnvValue(value: string | undefined) {
+  if (!value) return undefined
+  const normalized = value.toLowerCase()
+  if (normalized === "true" || normalized === "1") return true
+  if (normalized === "false" || normalized === "0") return false
+  return undefined
+}
+
 function truthy(key: string) {
-  const value = process.env[key]?.toLowerCase()
-  return value === "true" || value === "1"
+  return parseBooleanEnvValue(process.env[key]) === true
 }
 
 function falsy(key: string) {
-  const value = process.env[key]?.toLowerCase()
-  return value === "false" || value === "0"
+  return parseBooleanEnvValue(process.env[key]) === false
 }
 
 export namespace Flag {
@@ -81,10 +87,8 @@ export namespace Flag {
   //   unset                     → fall through to user kv preference
   // Resolved at runtime in src/cli/cmd/tui/ui/glyphs.ts.
   export const AX_CODE_NERD_FONT_ENV = (() => {
-    const value = process.env["AX_CODE_NERD_FONT"]?.toLowerCase()
-    if (value === "1" || value === "true") return true
-    if (value === "0" || value === "false") return false
-    return undefined
+    const value = parseBooleanEnvValue(process.env["AX_CODE_NERD_FONT"])
+    return value
   })()
 
   // Experimental
@@ -100,7 +104,7 @@ export namespace Flag {
 
   const copy = process.env["AX_CODE_EXPERIMENTAL_DISABLE_COPY_ON_SELECT"]
   export const AX_CODE_EXPERIMENTAL_DISABLE_COPY_ON_SELECT =
-    copy === undefined ? process.platform === "win32" : truthy("AX_CODE_EXPERIMENTAL_DISABLE_COPY_ON_SELECT")
+    copy === undefined ? process.platform === "win32" : parseBooleanEnvValue(copy) === true
   export const AX_CODE_ENABLE_EXA =
     truthy("AX_CODE_ENABLE_EXA") || AX_CODE_EXPERIMENTAL || truthy("AX_CODE_EXPERIMENTAL_EXA")
   export const AX_CODE_EXPERIMENTAL_BASH_DEFAULT_TIMEOUT_MS = number("AX_CODE_EXPERIMENTAL_BASH_DEFAULT_TIMEOUT_MS")
