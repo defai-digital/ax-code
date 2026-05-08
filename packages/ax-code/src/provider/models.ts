@@ -5,6 +5,7 @@ import { Filesystem } from "../util/filesystem"
 import { Ssrf } from "../util/ssrf"
 import { Global } from "../global"
 import { Instance } from "../project/instance"
+import { Flag } from "../flag/flag"
 import {
   buildModelProbes,
   supportsGlmModels,
@@ -144,7 +145,7 @@ export namespace ModelsDev {
       }
     }
 
-    const file = process.env["AX_CODE_MODELS_PATH"]
+    const file = Flag.AX_CODE_MODELS_PATH
     if (file) {
       if (!isAllowedModelPath(file)) {
         log.warn("AX_CODE_MODELS_PATH outside allowed directories; ignoring", {
@@ -158,7 +159,7 @@ export namespace ModelsDev {
       }
     }
 
-    const url = process.env["AX_CODE_MODELS_URL"]
+    const url = Flag.AX_CODE_MODELS_URL
     if (url) {
       log.info("loading model data from url", { url })
       try {

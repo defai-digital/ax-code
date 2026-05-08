@@ -11,6 +11,7 @@ import { SessionShareTable } from "./share.sql"
 import { Log } from "@/util/log"
 import { Ssrf } from "@/util/ssrf"
 import type * as SDK from "@ax-code/sdk/v2"
+import { Flag } from "../flag/flag"
 
 export namespace ShareNext {
   const log = Log.create({ service: "share-next" })
@@ -74,8 +75,9 @@ export namespace ShareNext {
     return { headers, api: consoleApi, baseUrl: active.url }
   }
 
-  const disableValue = process.env["AX_CODE_DISABLE_SHARE"]?.toLowerCase()
-  const disabled = disableValue === "true" || disableValue === "1"
+  function isShareDisabled() {
+    return Flag.AX_CODE_DISABLE_SHARE
+  }
 
   function isModelNotFoundError(error: unknown) {
     return error instanceof Provider.ModelNotFoundError
@@ -87,7 +89,7 @@ export namespace ShareNext {
   let activeUnsubs: Array<() => void> = []
 
   export async function init() {
-    if (disabled) return
+    if (isShareDisabled()) return
     // Idempotent: tear down any prior subscriptions before rewiring so a
     // second init() (bootstrap re-entry, tests) cannot accumulate
     // duplicate sync requests for every event.
@@ -188,7 +190,7 @@ export namespace ShareNext {
   }
 
   export async function create(sessionID: SessionID) {
-    if (disabled) return { id: "", url: "", secret: "" }
+    if (isShareDisabled()) return { id: "", url: "", secret: "" }
     log.info("creating share", { sessionID })
     const req = await request()
     const response = await fetchShare(req, req.api.create, {
@@ -292,7 +294,7 @@ export namespace ShareNext {
   // its flush until the in-flight one completes.
   const inflight = new Set<string>()
   async function sync(sessionID: SessionID, data: Data[]) {
-    if (disabled) return
+    if (isShareDisabled()) return
     const existing = queue.get(sessionID)
     if (existing) {
       for (const item of data) {
@@ -381,7 +383,7 @@ export namespace ShareNext {
   }
 
   export async function remove(sessionID: SessionID) {
-    if (disabled) return
+    if (isShareDisabled()) return
     log.info("removing share", { sessionID })
     const pending = queue.get(sessionID)
     if (pending) {

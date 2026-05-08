@@ -45,8 +45,10 @@ export namespace Flag {
   export const AX_CODE_DISABLE_EXTERNAL_SKILLS =
     AX_CODE_DISABLE_CLAUDE_CODE_SKILLS || truthy("AX_CODE_DISABLE_EXTERNAL_SKILLS")
   export declare const AX_CODE_DISABLE_PROJECT_CONFIG: boolean
+  export declare const AX_CODE_DISABLE_SHARE: boolean
   export declare const AX_CODE_AUTONOMOUS: boolean
   export declare const AX_CODE_SMART_LLM: boolean
+  export declare const AX_CODE_CALLER: string | undefined
   export const AX_CODE_FAKE_VCS = process.env["AX_CODE_FAKE_VCS"]
   export declare const AX_CODE_CLIENT: string
   export const AX_CODE_SERVER_PASSWORD = process.env["AX_CODE_SERVER_PASSWORD"]
@@ -187,6 +189,27 @@ Object.defineProperty(Flag, "AX_CODE_AUTONOMOUS", {
 Object.defineProperty(Flag, "AX_CODE_SMART_LLM", {
   get() {
     return truthy("AX_CODE_SMART_LLM")
+  },
+  enumerable: true,
+  configurable: false,
+})
+
+// Dynamic getter for AX_CODE_DISABLE_SHARE
+// Evaluate at access time so test/runtime overrides can be flipped
+// without requiring a module reload.
+Object.defineProperty(Flag, "AX_CODE_DISABLE_SHARE", {
+  get() {
+    return truthy("AX_CODE_DISABLE_SHARE")
+  },
+  enumerable: true,
+  configurable: false,
+})
+
+// Dynamic getter for AX_CODE_CALLER
+// Some IDE detection paths read this at request time.
+Object.defineProperty(Flag, "AX_CODE_CALLER", {
+  get() {
+    return process.env["AX_CODE_CALLER"]
   },
   enumerable: true,
   configurable: false,

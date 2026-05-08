@@ -4,6 +4,7 @@ import z from "zod"
 import { NamedError } from "@ax-code/util/error"
 import { Log } from "../util/log"
 import { Process } from "@/util/process"
+import { Flag } from "../flag/flag"
 
 const SUPPORTED_IDES = [
   { name: "Windsurf" as const, cmd: "windsurf" },
@@ -45,7 +46,7 @@ export namespace Ide {
   }
 
   export function alreadyInstalled() {
-    return process.env["AX_CODE_CALLER"] === "vscode" || process.env["AX_CODE_CALLER"] === "vscode-insiders"
+    return Flag.AX_CODE_CALLER === "vscode" || Flag.AX_CODE_CALLER === "vscode-insiders"
   }
 
   export async function install(ide: (typeof SUPPORTED_IDES)[number]["name"]) {
