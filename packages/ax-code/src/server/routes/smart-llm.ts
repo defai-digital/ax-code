@@ -3,7 +3,7 @@ import { describeRoute, resolver, validator } from "hono-openapi"
 import z from "zod"
 import { Log } from "../../util/log"
 import { lazy } from "../../util/lazy"
-import { persistProjectConfigResponse, readProjectConfig } from "./project-config"
+import { persistProjectConfigResponse, readProjectConfigFeatureState } from "./project-config"
 import { FeatureFlag } from "../../util/feature-flags"
 import { Flag } from "../../flag/flag"
 
@@ -35,10 +35,11 @@ export const SmartLlmRoutes = lazy(() =>
         },
       }),
       async (c) => {
-        const config = await readProjectConfig()
-        const enabled = config?.routing?.llm ?? Flag.AX_CODE_SMART_LLM
-        FeatureFlag.set("AX_CODE_SMART_LLM", enabled)
-        return c.json({ enabled })
+        const state = await readProjectConfigFeatureState({
+          featureFlag: "AX_CODE_SMART_LLM",
+          read: (config) => config?.routing?.llm ?? Flag.AX_CODE_SMART_LLM,
+        })
+        return c.json(state)
       },
     )
     .put(

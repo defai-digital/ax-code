@@ -3,7 +3,7 @@ import { describeRoute, resolver, validator } from "hono-openapi"
 import z from "zod"
 import { Log } from "../../util/log"
 import { lazy } from "../../util/lazy"
-import { persistProjectConfigResponse, readProjectConfig } from "./project-config"
+import { persistProjectConfigResponse, readProjectConfigFeatureState } from "./project-config"
 import { FeatureFlag } from "../../util/feature-flags"
 
 const log = Log.create({ service: "autonomous" })
@@ -39,10 +39,11 @@ export const AutonomousRoutes = lazy(() =>
         // is the runtime authority for in-process readers (Permission /
         // Session / Question), so keep it in sync — but never let a
         // stale env reading short-circuit the config read.
-        const config = await readProjectConfig()
-        const enabled = config?.autonomous !== false
-        FeatureFlag.set("AX_CODE_AUTONOMOUS", enabled)
-        return c.json({ enabled })
+        const state = await readProjectConfigFeatureState({
+          featureFlag: "AX_CODE_AUTONOMOUS",
+          read: (config) => config?.autonomous !== false,
+        })
+        return c.json(state)
       },
     )
     .put(

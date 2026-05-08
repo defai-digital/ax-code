@@ -5,6 +5,7 @@ import { Filesystem } from "@/util/filesystem"
 import { FileLock } from "@/util/filelock"
 import { Lock } from "@/util/lock"
 import { Log } from "@/util/log"
+import { FeatureFlag } from "@/util/feature-flags"
 
 const log = Log.create({ service: "project-config" })
 
@@ -34,6 +35,18 @@ export async function persistProjectConfigResponse(
   })
   if (!persisted) return { error: PROJECT_CONFIG_PERSIST_ERROR }
   return undefined
+}
+
+export async function readProjectConfigFeatureState(
+  options: {
+    featureFlag: string
+    read: (config: Config.Info | undefined) => boolean
+  },
+) {
+  const config = await readProjectConfig()
+  const enabled = options.read(config)
+  FeatureFlag.set(options.featureFlag, enabled)
+  return { enabled }
 }
 
 function filepath() {
