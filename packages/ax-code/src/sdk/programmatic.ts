@@ -13,6 +13,7 @@ import { Log } from "../util/log.js"
 import { bootstrap } from "../cli/bootstrap.js"
 import { Server } from "../server/server.js"
 import { Auth } from "../auth/index.js"
+import { seedRuntimeFlags } from "../cli/bootstrap/env.js"
 import { ToolRegistry } from "../tool/registry.js"
 import { Tool } from "../tool/tool.js"
 import { setLanguage, t } from "../i18n/index.js"
@@ -169,10 +170,7 @@ async function ensureLog() {
   if (logInitialized) return
   logInitialized = true
   await Log.init({ print: false, dev: false, level: "ERROR" })
-  process.env.AGENT = "1"
-  process.env.AX_CODE = "1"
-  process.env.OPENCODE = "1"
-  process.env.AX_CODE_PID ??= String(process.pid)
+  seedRuntimeFlags(process.env, { preservePid: true })
 }
 
 // ============================================================

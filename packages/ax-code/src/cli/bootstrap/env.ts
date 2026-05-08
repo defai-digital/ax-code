@@ -32,6 +32,20 @@ export type RestoreOriginalCwdDep = {
   chdir?: (dir: string) => void
 }
 
+export type RuntimeFlagOptions = {
+  pid?: number
+  preservePid?: boolean
+}
+
+export function seedRuntimeFlags(env: Record<string, string | undefined>, options: RuntimeFlagOptions = {}) {
+  const pid = options.pid ?? process.pid
+  env.AGENT = "1"
+  env.AX_CODE = "1"
+  env.OPENCODE = "1"
+  if (options.preservePid) env.AX_CODE_PID ??= String(pid)
+  else env.AX_CODE_PID = String(pid)
+}
+
 export function level(log?: string, _local = Installation.isLocal(), debug = false): Log.Level {
   if (debug) return "DEBUG"
   if (log) return log as Log.Level
@@ -88,10 +102,7 @@ export function apply(
   pid = process.pid,
   debugDir?: string,
 ) {
-  env.AGENT = "1"
-  env.AX_CODE = "1"
-  env.OPENCODE = "1"
-  env.AX_CODE_PID = String(pid)
+  seedRuntimeFlags(env, { pid })
   if (opts.sandbox) env.AX_CODE_ISOLATION_MODE = opts.sandbox
   if (opts.debug) {
     env.AX_CODE_DEBUG = "1"
