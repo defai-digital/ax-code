@@ -49,8 +49,12 @@ export namespace Flag {
   export declare const AX_CODE_AUTONOMOUS: boolean
   export declare const AX_CODE_SMART_LLM: boolean
   export declare const AX_CODE_CALLER: string | undefined
+  export declare const AX_CODE_TEST_HOME: string | undefined
+  export declare const AX_CODE_TEST_MANAGED_CONFIG_DIR: string | undefined
   export const AX_CODE_FAKE_VCS = process.env["AX_CODE_FAKE_VCS"]
   export declare const AX_CODE_CLIENT: string
+  export declare const AX_CODE_INTERNAL_BASE_URL: string | undefined
+  export declare const AX_CODE_OTLP_ENDPOINT: string | undefined
   export const AX_CODE_SERVER_PASSWORD = process.env["AX_CODE_SERVER_PASSWORD"]
   export const AX_CODE_SERVER_USERNAME = process.env["AX_CODE_SERVER_USERNAME"]
   export const AX_CODE_ENABLE_QUESTION_TOOL = truthy("AX_CODE_ENABLE_QUESTION_TOOL")
@@ -210,6 +214,44 @@ Object.defineProperty(Flag, "AX_CODE_DISABLE_SHARE", {
 Object.defineProperty(Flag, "AX_CODE_CALLER", {
   get() {
     return process.env["AX_CODE_CALLER"]
+  },
+  enumerable: true,
+  configurable: false,
+})
+
+// Dynamic getter for AX_CODE_TEST_HOME
+// Keep evaluation lazy so test-only overrides set during runtime remain effective.
+Object.defineProperty(Flag, "AX_CODE_TEST_HOME", {
+  get() {
+    return process.env["AX_CODE_TEST_HOME"]
+  },
+  enumerable: true,
+  configurable: false,
+})
+
+// Dynamic getter for AX_CODE_TEST_MANAGED_CONFIG_DIR
+// Keep evaluation lazy so tests and bootstrap paths can override this at runtime.
+Object.defineProperty(Flag, "AX_CODE_TEST_MANAGED_CONFIG_DIR", {
+  get() {
+    return process.env["AX_CODE_TEST_MANAGED_CONFIG_DIR"]
+  },
+  enumerable: true,
+  configurable: false,
+})
+
+// Dynamic getter for AX_CODE_INTERNAL_BASE_URL
+Object.defineProperty(Flag, "AX_CODE_INTERNAL_BASE_URL", {
+  get() {
+    return process.env["AX_CODE_INTERNAL_BASE_URL"]
+  },
+  enumerable: true,
+  configurable: false,
+})
+
+// Dynamic getter for AX_CODE_OTLP_ENDPOINT
+Object.defineProperty(Flag, "AX_CODE_OTLP_ENDPOINT", {
+  get() {
+    return process.env["AX_CODE_OTLP_ENDPOINT"]
   },
   enumerable: true,
   configurable: false,

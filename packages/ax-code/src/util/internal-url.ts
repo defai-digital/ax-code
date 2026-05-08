@@ -1,7 +1,9 @@
+import { Flag } from "../flag/flag"
+
 const DEFAULT_INTERNAL_BASE_URL = "http://opentui.internal"
 
 export function internalBaseUrl() {
-  return process.env.AX_CODE_INTERNAL_BASE_URL ?? DEFAULT_INTERNAL_BASE_URL
+  return Flag.AX_CODE_INTERNAL_BASE_URL ?? DEFAULT_INTERNAL_BASE_URL
 }
 
 export function isInternalHostname(hostname: string) {

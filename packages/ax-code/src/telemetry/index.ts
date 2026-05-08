@@ -3,6 +3,7 @@ import { EventQuery } from "@/replay/query"
 import type { ReplayEvent } from "@/replay/event"
 import type { SessionID } from "@/session/schema"
 import { Ssrf } from "@/util/ssrf"
+import { Flag } from "@/flag/flag"
 
 const log = Log.create({ service: "telemetry" })
 
@@ -21,7 +22,7 @@ export namespace Telemetry {
   let initPromise: Promise<void> | undefined
 
   export function endpoint(): string | undefined {
-    return process.env.AX_CODE_OTLP_ENDPOINT
+    return Flag.AX_CODE_OTLP_ENDPOINT
   }
 
   export function enabled(): boolean {

@@ -7,6 +7,7 @@ import fs from "fs/promises"
 import path from "path"
 import os from "os"
 import { Filesystem } from "../util/filesystem"
+import { Flag } from "../flag/flag"
 import type { ProjectMemory } from "./types"
 import z from "zod"
 
@@ -15,7 +16,7 @@ export function getMemoryPath(projectRoot: string): string {
 }
 
 export function getGlobalMemoryPath(): string {
-  return path.join(process.env.AX_CODE_TEST_HOME || os.homedir(), ".ax-code", "memory.json")
+  return path.join(Flag.AX_CODE_TEST_HOME || os.homedir(), ".ax-code", "memory.json")
 }
 
 const ProjectMemorySchema = z

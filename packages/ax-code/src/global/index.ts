@@ -3,6 +3,7 @@ import { xdgData, xdgCache, xdgConfig, xdgState } from "xdg-basedir"
 import path from "path"
 import os from "os"
 import { Filesystem } from "../util/filesystem"
+import { Flag } from "../flag/flag"
 
 const app = "ax-code"
 
@@ -13,7 +14,7 @@ const app = "ax-code"
 // AND the library can't derive defaults. The non-null assertions
 // `xdgData!` etc. would otherwise crash at startup with a cryptic
 // "path argument must be of type string" TypeError.
-const testHome = process.env.AX_CODE_TEST_HOME
+const testHome = Flag.AX_CODE_TEST_HOME
 const pathHome = testHome || os.homedir()
 const fallback = (dir: string | undefined, envName: string, sub: string) => {
   if (process.env[envName]) return dir ?? process.env[envName]
@@ -36,7 +37,7 @@ export namespace Global {
   export const Path = {
     // Allow override via AX_CODE_TEST_HOME for test isolation
     get home() {
-      return process.env.AX_CODE_TEST_HOME || os.homedir()
+      return Flag.AX_CODE_TEST_HOME || os.homedir()
     },
     data,
     bin: path.join(cache, "bin"),

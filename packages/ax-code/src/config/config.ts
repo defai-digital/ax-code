@@ -87,7 +87,7 @@ export namespace Config {
   }
 
   export function managedConfigDir() {
-    return process.env.AX_CODE_TEST_MANAGED_CONFIG_DIR || systemManagedConfigDir()
+    return Flag.AX_CODE_TEST_MANAGED_CONFIG_DIR || systemManagedConfigDir()
   }
 
   // Lazy — not cached at import time so tests that set
@@ -304,10 +304,10 @@ export namespace Config {
     }
 
     // Inline config content overrides all non-managed config sources.
-    if (process.env.AX_CODE_CONFIG_CONTENT) {
+    if (Flag.AX_CODE_CONFIG_CONTENT) {
       result = mergeConfigConcatArrays(
         result,
-        await load(process.env.AX_CODE_CONFIG_CONTENT, {
+        await load(Flag.AX_CODE_CONFIG_CONTENT, {
           dir: Instance.directory,
           source: "AX_CODE_CONFIG_CONTENT",
           trusted: false,
