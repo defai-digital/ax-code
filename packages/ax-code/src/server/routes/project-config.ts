@@ -47,7 +47,3 @@ export async function updateProjectConfig<T>(fn: (config: Config.Info) => T | Pr
   await Filesystem.writeJson(file, config)
   return result
 }
-
-export function syncFeatureFlagEnv(key: string, value: string | boolean) {
-  process.env[key] = String(value)
-}

@@ -3,7 +3,8 @@ import { describeRoute, resolver, validator } from "hono-openapi"
 import z from "zod"
 import { Log } from "../../util/log"
 import { lazy } from "../../util/lazy"
-import { readProjectConfig, syncFeatureFlagEnv, updateProjectConfig } from "./project-config"
+import { readProjectConfig, updateProjectConfig } from "./project-config"
+import { FeatureFlag } from "../../util/feature-flags"
 import { Flag } from "../../flag/flag"
 
 const log = Log.create({ service: "smart-llm" })
@@ -36,7 +37,7 @@ export const SmartLlmRoutes = lazy(() =>
       async (c) => {
         const config = await readProjectConfig()
         const enabled = config?.routing?.llm ?? Flag.AX_CODE_SMART_LLM
-        syncFeatureFlagEnv("AX_CODE_SMART_LLM", enabled)
+        FeatureFlag.set("AX_CODE_SMART_LLM", enabled)
         return c.json({ enabled })
       },
     )
@@ -70,7 +71,7 @@ export const SmartLlmRoutes = lazy(() =>
         })
         log.info("smart LLM routing changed", { enabled, persisted })
         if (!persisted) return c.json({ error: "Failed to persist configuration" }, 500)
-        syncFeatureFlagEnv("AX_CODE_SMART_LLM", enabled)
+        FeatureFlag.set("AX_CODE_SMART_LLM", enabled)
         return c.json({ enabled })
       },
     ),

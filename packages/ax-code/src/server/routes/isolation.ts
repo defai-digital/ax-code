@@ -6,7 +6,8 @@ import { Isolation } from "../../isolation"
 import { Instance } from "../../project/instance"
 import { Log } from "../../util/log"
 import { lazy } from "../../util/lazy"
-import { syncFeatureFlagEnv, updateProjectConfig } from "./project-config"
+import { updateProjectConfig } from "./project-config"
+import { FeatureFlag } from "../../util/feature-flags"
 
 const log = Log.create({ service: "isolation" })
 
@@ -74,7 +75,7 @@ export const IsolationRoutes = lazy(() =>
           log.warn("failed to persist isolation config", { error: err instanceof Error ? err.message : String(err) })
           return c.json({ error: "Failed to persist configuration" }, 500)
         }
-        syncFeatureFlagEnv("AX_CODE_ISOLATION_MODE", mode)
+        FeatureFlag.set("AX_CODE_ISOLATION_MODE", mode)
         const state = Isolation.resolve({ mode, network }, Instance.directory, Instance.worktree)
         return c.json({ mode: state.mode, network: state.network })
       },

@@ -6,6 +6,7 @@ import { ACP } from "@/acp/agent"
 import { Server } from "@/server/server"
 import { createOpencodeClient } from "@ax-code/sdk/v2"
 import { withNetworkOptions, resolveNetworkOptions } from "../network"
+import { FeatureFlag } from "@/util/feature-flags"
 
 const log = Log.create({ service: "acp-command" })
 
@@ -20,7 +21,7 @@ export const AcpCommand = cmd({
     })
   },
   handler: async (args) => {
-    process.env.AX_CODE_CLIENT = "acp"
+    FeatureFlag.set("AX_CODE_CLIENT", "acp")
     await bootstrap(process.cwd(), async () => {
       const opts = await resolveNetworkOptions(args)
       const server = Server.listen(opts)

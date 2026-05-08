@@ -1,4 +1,5 @@
 import { Flag } from "@/flag/flag"
+import { FeatureFlag } from "@/util/feature-flags"
 
 type Stat = {
   calls: number
@@ -157,7 +158,7 @@ export namespace NativePerf {
   }
 
   export function enable(write = (text: string) => process.stderr.write(text)) {
-    process.env.AX_CODE_PROFILE_NATIVE = "1"
+    FeatureFlag.set("AX_CODE_PROFILE_NATIVE", "1")
     install(write)
   }
 
