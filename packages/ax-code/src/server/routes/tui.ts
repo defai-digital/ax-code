@@ -10,6 +10,22 @@ import { Log } from "../../util/log"
 
 const log = Log.create({ service: "server.tui" })
 
+const TUI_COMMAND_MAPPINGS: Record<string, string> = {
+  session_new: "session.new",
+  session_share: "session.share",
+  session_interrupt: "session.interrupt",
+  session_compact: "session.compact",
+  messages_page_up: "session.page.up",
+  messages_page_down: "session.page.down",
+  messages_line_up: "session.line.up",
+  messages_line_down: "session.line.down",
+  messages_half_page_up: "session.half.page.up",
+  messages_half_page_down: "session.half.page.down",
+  messages_first: "session.first",
+  messages_last: "session.last",
+  agent_cycle: "agent.cycle",
+}
+
 const executeCommand = (command: string) => async (c: Context) => {
   await Bus.publish(TuiEvent.CommandExecute, { command })
   return c.json(true)
@@ -176,22 +192,7 @@ export const TuiRoutes = lazy(() =>
       validator("json", z.object({ command: z.string() })),
       async (c) => {
         const command = c.req.valid("json").command
-        const mapping: Record<string, string> = {
-          session_new: "session.new",
-          session_share: "session.share",
-          session_interrupt: "session.interrupt",
-          session_compact: "session.compact",
-          messages_page_up: "session.page.up",
-          messages_page_down: "session.page.down",
-          messages_line_up: "session.line.up",
-          messages_line_down: "session.line.down",
-          messages_half_page_up: "session.half.page.up",
-          messages_half_page_down: "session.half.page.down",
-          messages_first: "session.first",
-          messages_last: "session.last",
-          agent_cycle: "agent.cycle",
-        }
-        const mapped = mapping[command]
+        const mapped = TUI_COMMAND_MAPPINGS[command]
         if (!mapped) return c.json({ error: `Unknown command: ${command}` }, 400)
         await Bus.publish(TuiEvent.CommandExecute, { command: mapped })
         return c.json(true)
