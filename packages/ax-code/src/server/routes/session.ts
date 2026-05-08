@@ -159,10 +159,6 @@ async function parseProjectSession(c: SessionRouteContext) {
   return { sessionID, session }
 }
 
-async function parseSession(c: SessionRouteContext) {
-  return parseExistingSessionID(c)
-}
-
 async function parseSessionJSONInput<TBody>(c: SessionJSONRouteContext) {
   const sessionID = parseSessionID(c)
   const body = c.req.valid("json") as TBody
@@ -344,7 +340,7 @@ export const SessionRoutes = lazy(() =>
         }),
       ),
       async (c) => {
-        const sessionID = await parseSession(c)
+        const sessionID = await parseExistingSessionID(c)
         const query = c.req.valid("query")
         const ranked = await SessionBranchRank.family(sessionID, { deep: query.deep })
         return c.json(ranked)
@@ -372,7 +368,7 @@ export const SessionRoutes = lazy(() =>
       }),
       validator("param", SESSION_ID_PARAM),
       async (c) => {
-        const sessionID = await parseSession(c)
+        const sessionID = await parseExistingSessionID(c)
         return c.json(await SessionDre.snapshot(sessionID))
       },
     )
@@ -397,7 +393,7 @@ export const SessionRoutes = lazy(() =>
       }),
       validator("param", SESSION_ID_PARAM),
       async (c) => {
-        const sessionID = await parseSession(c)
+        const sessionID = await parseExistingSessionID(c)
         return c.json(SessionGraph.snapshot(sessionID))
       },
     )
@@ -448,7 +444,7 @@ export const SessionRoutes = lazy(() =>
         }),
       ),
       async (c) => {
-        const sessionID = await parseSession(c)
+        const sessionID = await parseExistingSessionID(c)
         const query = c.req.valid("query")
         return c.json(
           await SessionRisk.load(sessionID, {
@@ -483,7 +479,7 @@ export const SessionRoutes = lazy(() =>
       }),
       validator("param", SESSION_ID_PARAM),
       async (c) => {
-        const sessionID = await parseSession(c)
+        const sessionID = await parseExistingSessionID(c)
         return c.json((await SessionSemanticDiff.load(sessionID)) ?? null)
       },
     )
@@ -556,7 +552,7 @@ export const SessionRoutes = lazy(() =>
         }),
       ),
       async (c) => {
-        const sessionID = await parseSession(c)
+        const sessionID = await parseExistingSessionID(c)
         const query = c.req.valid("query")
         return c.json(SessionRollback.filter(await SessionRollback.points(sessionID), query.tool))
       },
