@@ -3,7 +3,7 @@ import { describeRoute, resolver, validator } from "hono-openapi"
 import z from "zod"
 import { Log } from "../../util/log"
 import { lazy } from "../../util/lazy"
-import { readProjectConfig, updateProjectConfig } from "./project-config"
+import { readProjectConfig, syncFeatureFlagEnv, updateProjectConfig } from "./project-config"
 
 const log = Log.create({ service: "autonomous" })
 
@@ -40,7 +40,7 @@ export const AutonomousRoutes = lazy(() =>
         // stale env reading short-circuit the config read.
         const config = await readProjectConfig()
         const enabled = config?.autonomous !== false
-        process.env["AX_CODE_AUTONOMOUS"] = String(enabled)
+        syncFeatureFlagEnv("AX_CODE_AUTONOMOUS", enabled)
         return c.json({ enabled })
       },
     )
@@ -77,7 +77,7 @@ export const AutonomousRoutes = lazy(() =>
         })
         log.info("autonomous mode changed", { enabled, persisted })
         if (!persisted) return c.json({ error: "Failed to persist configuration" }, 500)
-        process.env["AX_CODE_AUTONOMOUS"] = String(enabled)
+        syncFeatureFlagEnv("AX_CODE_AUTONOMOUS", enabled)
         return c.json({ enabled })
       },
     ),
