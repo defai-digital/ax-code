@@ -52,6 +52,22 @@ export async function persistProjectConfigFeatureResponse<FeatureValue extends s
   return options.responseState
 }
 
+export function persistProjectConfigBooleanFeatureResponse(
+  options: Omit<
+    PersistProjectConfigFeatureResponseOptions<boolean, { enabled: boolean }>,
+    "featureValue" | "responseState"
+  > & {
+    enabled: boolean
+  },
+) {
+  return persistProjectConfigFeatureResponse({
+    ...options,
+    featureFlag: options.featureFlag,
+    featureValue: options.enabled,
+    responseState: { enabled: options.enabled },
+  })
+}
+
 export async function readProjectConfigFeatureState(
   options: {
     featureFlag: string
