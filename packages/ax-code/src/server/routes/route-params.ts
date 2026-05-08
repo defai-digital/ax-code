@@ -21,22 +21,13 @@ export async function parseExistingSessionID(c: SessionRouteContext) {
   return sessionID
 }
 
-export type RouteParamContext<TKey extends string, TValue> = {
-  req: {
-    valid: (input: "param") => { [key in TKey]: TValue }
-  }
-}
-
-export function parseRouteParam<TKey extends string, TValue>(c: RouteParamContext<TKey, TValue>, key: TKey): TValue {
-  return c.req.valid("param")[key]
-}
-
 export function withRouteParam<TKey extends string, TValue>(
   key: TKey,
   handler: (value: TValue, c: any) => any,
 ) {
   return (c: any) => {
-    const value = parseRouteParam<TKey, TValue>(c, key)
+    const params = c.req.valid("param") as { [key in TKey]: TValue }
+    const value = params[key]
     return handler(value, c)
   }
 }
