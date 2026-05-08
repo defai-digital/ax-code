@@ -47,7 +47,7 @@ import { IsolationRoutes } from "./routes/isolation"
 import { AutonomousRoutes } from "./routes/autonomous"
 import { SmartLlmRoutes } from "./routes/smart-llm"
 import { GlobalRoutes } from "./routes/global"
-import { withRouteParam } from "./routes/route-params"
+import { PROVIDER_ID_PARAM, withProviderID } from "./routes/route-params"
 import { ToolRegistry } from "../tool/registry"
 import { MDNS } from "./mdns"
 import { lazy } from "@/util/lazy"
@@ -90,10 +90,6 @@ const AppContextCheck = z.object({
   command: z.string(),
   cwd: z.string(),
   source: z.enum(["root", "directory"]),
-})
-
-const AUTH_PROVIDER_ID_PARAM = z.object({
-  providerID: ProviderID.zod,
 })
 
 const AppContextInfo = z.object({
@@ -663,10 +659,10 @@ export namespace Server {
         }),
         validator(
           "param",
-          AUTH_PROVIDER_ID_PARAM,
+          PROVIDER_ID_PARAM,
         ),
         validator("json", Auth.Info.zod),
-        withRouteParam<"providerID", ProviderID>("providerID", async (providerID, c) => {
+        withProviderID(async (providerID, c) => {
           const info = c.req.valid("json")
           return updateProviderAuth(c, providerID, (nextProviderID) => Auth.set(nextProviderID, info))
         }),
@@ -691,9 +687,9 @@ export namespace Server {
         }),
         validator(
           "param",
-          AUTH_PROVIDER_ID_PARAM,
+          PROVIDER_ID_PARAM,
         ),
-        withRouteParam<"providerID", ProviderID>("providerID", async (providerID, c) => {
+        withProviderID(async (providerID, c) => {
           return updateProviderAuth(c, providerID, Auth.remove)
         }),
       )

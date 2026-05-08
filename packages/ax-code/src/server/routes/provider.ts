@@ -5,18 +5,13 @@ import { Config } from "../../config/config"
 import { Provider } from "../../provider/provider"
 import { ModelsDev } from "../../provider/models"
 import { ProviderAuth } from "../../provider/auth"
-import { ProviderID } from "../../provider/schema"
 import { mapValues } from "remeda"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
-import { withRouteParam } from "./route-params"
+import { PROVIDER_ID_PARAM, withProviderID } from "./route-params"
 import { Log } from "../../util/log"
 
 const log = Log.create({ service: "server" })
-
-const PROVIDER_ID_PARAM = z.object({
-  providerID: ProviderID.zod.meta({ description: "Provider ID" }),
-})
 
 // Natively supported providers — shown by default when enabled_providers is not configured.
 // Users can expand this list via enabled_providers in ax-code.json.
@@ -147,7 +142,7 @@ export const ProviderRoutes = lazy(() =>
           inputs: z.record(z.string(), z.string()).optional().meta({ description: "Prompt inputs" }),
         }),
       ),
-      withRouteParam<"providerID", ProviderID>("providerID", async (providerID, c) => {
+      withProviderID(async (providerID, c) => {
         const { method, inputs } = c.req.valid("json")
         const result = await ProviderAuth.authorize({
           providerID,
@@ -186,7 +181,7 @@ export const ProviderRoutes = lazy(() =>
           code: z.string().optional().meta({ description: "OAuth authorization code" }),
         }),
       ),
-      withRouteParam<"providerID", ProviderID>("providerID", async (providerID, c) => {
+      withProviderID(async (providerID, c) => {
         const { method, code } = c.req.valid("json")
         await ProviderAuth.callback({
           providerID,
