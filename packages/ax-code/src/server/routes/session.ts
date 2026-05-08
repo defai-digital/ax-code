@@ -160,9 +160,9 @@ async function parseCurrentProjectSession(c: SessionRouteContext) {
 }
 
 async function parseSessionJSONInput<TBody>(c: SessionJSONRouteContext) {
-  const { sessionID } = await parseCurrentProjectSession(c)
+  const sessionID = await parseCurrentProjectSessionID(c)
   const body = c.req.valid("json") as TBody
-  return { sessionID, body }
+  return { sessionID: sessionID, body }
 }
 
 async function requireCurrentProjectSession(sessionID: SessionID) {
@@ -171,6 +171,12 @@ async function requireCurrentProjectSession(sessionID: SessionID) {
   throw new HTTPException(409, {
     message: `Session ${sessionID} belongs to a different project directory; start a new session from the current project instead.`,
   })
+}
+
+async function parseCurrentProjectSessionID(c: SessionRouteContext) {
+  const sessionID = parseSessionID(c)
+  await requireCurrentProjectSession(sessionID)
+  return sessionID
 }
 
 export const SessionRoutes = lazy(() =>
@@ -302,7 +308,7 @@ export const SessionRoutes = lazy(() =>
         }),
       ),
       async (c) => {
-        const { sessionID } = await parseCurrentProjectSession(c)
+        const sessionID = await parseCurrentProjectSessionID(c)
         const session = await Session.children(sessionID)
         return c.json(session)
       },
@@ -579,7 +585,7 @@ export const SessionRoutes = lazy(() =>
         SESSION_ID_PARAM,
       ),
       async (c) => {
-        const { sessionID } = await parseCurrentProjectSession(c)
+        const sessionID = await parseCurrentProjectSessionID(c)
         const todos = await Todo.get(sessionID)
         return c.json(todos)
       },
@@ -920,6 +926,7 @@ export const SessionRoutes = lazy(() =>
             break
           }
         }
+
         await SessionCompaction.create({
           sessionID,
           agent: currentAgent,
@@ -990,7 +997,7 @@ export const SessionRoutes = lazy(() =>
       ),
       async (c) => {
         const query = c.req.valid("query")
-        const { sessionID } = await parseCurrentProjectSession(c)
+        const sessionID = await parseCurrentProjectSessionID(c)
         if (query.limit === undefined) {
           const messages = await Session.messages({ sessionID })
           return c.json(messages)
