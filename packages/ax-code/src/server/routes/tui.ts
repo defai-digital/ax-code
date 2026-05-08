@@ -1,4 +1,4 @@
-import { Hono } from "hono"
+import { Hono, type Context } from "hono"
 import { describeRoute, validator, resolver } from "hono-openapi"
 import z from "zod"
 import { Bus } from "../../bus"
@@ -9,6 +9,11 @@ import { lazy } from "../../util/lazy"
 import { Log } from "../../util/log"
 
 const log = Log.create({ service: "server.tui" })
+
+const executeCommand = (command: string) => async (c: Context) => {
+  await Bus.publish(TuiEvent.CommandExecute, { command })
+  return c.json(true)
+}
 
 export const TuiRoutes = lazy(() =>
   new Hono()
@@ -53,12 +58,7 @@ export const TuiRoutes = lazy(() =>
           },
         },
       }),
-      async (c) => {
-        await Bus.publish(TuiEvent.CommandExecute, {
-          command: "help.show",
-        })
-        return c.json(true)
-      },
+      executeCommand("help.show"),
     )
     .post(
       "/open-sessions",
@@ -77,12 +77,7 @@ export const TuiRoutes = lazy(() =>
           },
         },
       }),
-      async (c) => {
-        await Bus.publish(TuiEvent.CommandExecute, {
-          command: "session.list",
-        })
-        return c.json(true)
-      },
+      executeCommand("session.list"),
     )
     .post(
       "/open-themes",
@@ -101,12 +96,7 @@ export const TuiRoutes = lazy(() =>
           },
         },
       }),
-      async (c) => {
-        await Bus.publish(TuiEvent.CommandExecute, {
-          command: "theme.switch",
-        })
-        return c.json(true)
-      },
+      executeCommand("theme.switch"),
     )
     .post(
       "/open-models",
@@ -125,12 +115,7 @@ export const TuiRoutes = lazy(() =>
           },
         },
       }),
-      async (c) => {
-        await Bus.publish(TuiEvent.CommandExecute, {
-          command: "model.list",
-        })
-        return c.json(true)
-      },
+      executeCommand("model.list"),
     )
     .post(
       "/submit-prompt",
@@ -149,12 +134,7 @@ export const TuiRoutes = lazy(() =>
           },
         },
       }),
-      async (c) => {
-        await Bus.publish(TuiEvent.CommandExecute, {
-          command: "prompt.submit",
-        })
-        return c.json(true)
-      },
+      executeCommand("prompt.submit"),
     )
     .post(
       "/clear-prompt",
@@ -173,12 +153,7 @@ export const TuiRoutes = lazy(() =>
           },
         },
       }),
-      async (c) => {
-        await Bus.publish(TuiEvent.CommandExecute, {
-          command: "prompt.clear",
-        })
-        return c.json(true)
-      },
+      executeCommand("prompt.clear"),
     )
     .post(
       "/execute-command",
