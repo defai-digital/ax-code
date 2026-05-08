@@ -659,9 +659,7 @@ export const SessionRoutes = lazy(() =>
       }),
       validator(
         "param",
-        z.object({
-          sessionID: Session.remove.schema,
-        }),
+        SESSION_ID_PARAM,
       ),
       async (c) => {
         const sessionID = parseSessionID(c)
@@ -767,9 +765,7 @@ export const SessionRoutes = lazy(() =>
       }),
       validator(
         "param",
-        z.object({
-          sessionID: Session.fork.schema.shape.sessionID,
-        }),
+        SESSION_ID_PARAM,
       ),
       validator("json", Session.fork.schema.omit({ sessionID: true })),
       async (c) => {
@@ -894,9 +890,7 @@ export const SessionRoutes = lazy(() =>
       }),
       validator(
         "param",
-        z.object({
-          sessionID: Session.unshare.schema,
-        }),
+        SESSION_ID_PARAM,
       ),
       async (c) => {
         const sessionID = parseSessionID(c)
