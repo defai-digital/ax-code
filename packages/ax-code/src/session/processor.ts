@@ -8,6 +8,7 @@ import { Bus } from "@/bus"
 import { SessionRetry } from "./retry"
 import { SessionStatus } from "./status"
 import { Plugin } from "@/plugin"
+import { Flag } from "@/flag/flag"
 import { DOOM_LOOP_THRESHOLD as _DOOM_LOOP_THRESHOLD, AUTONOMOUS_MAX_CYCLE_LEN } from "@/constants/session"
 import { BlastRadius } from "./blast-radius"
 import { detectCycle } from "./cycle-detection"
@@ -179,7 +180,7 @@ export namespace SessionProcessor {
         log.info("process started", { sessionId: input.sessionID, command: "session.process", status: "started" })
         attempt = 0
         needsCompaction = false
-        const autonomous = process.env["AX_CODE_AUTONOMOUS"] === "true"
+        const autonomous = Flag.AX_CODE_AUTONOMOUS
         const shouldBreak = autonomous
           ? false
           : (cachedShouldBreak ??= (await Config.get()).experimental?.continue_loop_on_deny !== true)

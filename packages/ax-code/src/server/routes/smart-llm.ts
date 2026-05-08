@@ -4,6 +4,7 @@ import z from "zod"
 import { Log } from "../../util/log"
 import { lazy } from "../../util/lazy"
 import { readProjectConfig, updateProjectConfig } from "./project-config"
+import { Flag } from "../../flag/flag"
 
 const log = Log.create({ service: "smart-llm" })
 
@@ -12,14 +13,6 @@ const SmartLlmState = z
     enabled: z.boolean(),
   })
   .meta({ ref: "SmartLlmState" })
-
-/** Fast-model complexity routing defaults to OFF. Explicit config beats env beats default. */
-function resolveSmartLlmEnabled(configValue: boolean | undefined, envValue: string | undefined) {
-  if (typeof configValue === "boolean") return configValue
-  if (envValue === "true") return true
-  if (envValue === "false") return false
-  return false
-}
 
 export const SmartLlmRoutes = lazy(() =>
   new Hono()
@@ -42,7 +35,7 @@ export const SmartLlmRoutes = lazy(() =>
       }),
       async (c) => {
         const config = await readProjectConfig()
-        const enabled = resolveSmartLlmEnabled(config?.routing?.llm, process.env["AX_CODE_SMART_LLM"])
+        const enabled = config?.routing?.llm ?? Flag.AX_CODE_SMART_LLM
         process.env["AX_CODE_SMART_LLM"] = String(enabled)
         return c.json({ enabled })
       },

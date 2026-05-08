@@ -19,6 +19,7 @@ import { DecisionHints } from "./decision-hints"
 import { EventQuery } from "@/replay/query"
 import type { SessionID } from "./schema"
 import { Log } from "@/util/log"
+import { Flag } from "../flag/flag"
 
 export namespace SystemPrompt {
   const log = Log.create({ service: "session.system-prompt" })
@@ -40,7 +41,7 @@ export namespace SystemPrompt {
   export async function environment(model: Provider.Model) {
     const project = Instance.project
     const autonomousWorkflow =
-      process.env["AX_CODE_AUTONOMOUS"] === "true"
+      Flag.AX_CODE_AUTONOMOUS
         ? [
             `<autonomous_workflow>`,
             `  Autonomous mode is enabled.`,

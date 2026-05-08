@@ -45,6 +45,8 @@ export namespace Flag {
   export const AX_CODE_DISABLE_EXTERNAL_SKILLS =
     AX_CODE_DISABLE_CLAUDE_CODE_SKILLS || truthy("AX_CODE_DISABLE_EXTERNAL_SKILLS")
   export declare const AX_CODE_DISABLE_PROJECT_CONFIG: boolean
+  export declare const AX_CODE_AUTONOMOUS: boolean
+  export declare const AX_CODE_SMART_LLM: boolean
   export const AX_CODE_FAKE_VCS = process.env["AX_CODE_FAKE_VCS"]
   export declare const AX_CODE_CLIENT: string
   export const AX_CODE_SERVER_PASSWORD = process.env["AX_CODE_SERVER_PASSWORD"]
@@ -164,6 +166,27 @@ export namespace Flag {
 Object.defineProperty(Flag, "AX_CODE_DISABLE_PROJECT_CONFIG", {
   get() {
     return truthy("AX_CODE_DISABLE_PROJECT_CONFIG")
+  },
+  enumerable: true,
+  configurable: false,
+})
+
+// Dynamic getter for AX_CODE_AUTONOMOUS
+// This must be evaluated at access time so runtime toggles (server routes/tests)
+// remain immediately effective.
+Object.defineProperty(Flag, "AX_CODE_AUTONOMOUS", {
+  get() {
+    return truthy("AX_CODE_AUTONOMOUS")
+  },
+  enumerable: true,
+  configurable: false,
+})
+
+// Dynamic getter for AX_CODE_SMART_LLM
+// Evaluate each access so toggles and env overrides remain live.
+Object.defineProperty(Flag, "AX_CODE_SMART_LLM", {
+  get() {
+    return truthy("AX_CODE_SMART_LLM")
   },
   enumerable: true,
   configurable: false,

@@ -10,6 +10,7 @@ import z from "zod"
 import { AutonomousQuestion } from "./autonomous"
 import * as Clarify from "./clarify"
 import { QuestionID } from "./schema"
+import { Flag } from "@/flag/flag"
 
 export namespace Question {
   const log = Log.create({ service: "question" })
@@ -175,7 +176,7 @@ export namespace Question {
   }
 
   export async function ask(input: AskInput): Promise<Answer[]> {
-    if (process.env["AX_CODE_AUTONOMOUS"] === "true") {
+    if (Flag.AX_CODE_AUTONOMOUS) {
       const decisions = autonomousDecisions(input.questions)
       const escalateOnLow = (await Config.get()).experimental?.autonomous_escalate_low_confidence !== false
       // A question with <= 1 options is not ambiguous — escalating would

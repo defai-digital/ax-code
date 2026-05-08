@@ -11,6 +11,7 @@ import type { CliOutputParser } from "./parser"
 import { buffer } from "node:stream/consumers"
 import { StringDecoder } from "node:string_decoder"
 import { Log } from "@/util/log"
+import { Flag } from "@/flag/flag"
 
 const log = Log.create({ service: "provider.cli-language-model" })
 
@@ -57,7 +58,7 @@ export function cliEnv(providerEnvKeys: readonly string[] = []) {
 }
 
 function autonomousCliArgs(providerID: string): string[] {
-  if (process.env["AX_CODE_AUTONOMOUS"] !== "true") return []
+  if (!Flag.AX_CODE_AUTONOMOUS) return []
   if (providerID === "claude-code") return ["--dangerously-skip-permissions"]
   if (providerID === "gemini-cli") return ["--approval-mode", "yolo"]
   return []

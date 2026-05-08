@@ -19,6 +19,7 @@ import z from "zod"
 import { evaluate as evalRule } from "./evaluate"
 import { classify as classifyRisk } from "./risk-classes"
 import { PermissionID } from "./schema"
+import { Flag } from "@/flag/flag"
 
 export namespace Permission {
   const log = Log.create({ service: "permission" })
@@ -192,7 +193,7 @@ export namespace Permission {
     if (!Recorder.active(request.sessionID)) return
     const tool = typeof request.metadata?.tool === "string" ? request.metadata.tool : undefined
     const decision = SafetyPolicy.decide({
-      mode: process.env["AX_CODE_AUTONOMOUS"] === "true" ? "autonomous" : "normal",
+      mode: Flag.AX_CODE_AUTONOMOUS ? "autonomous" : "normal",
       permission: request.permission,
       tool,
       path: request.patterns[0],
@@ -244,7 +245,7 @@ export namespace Permission {
     //     matching legacy behavior. Set
     //     `experimental.autonomous_strict_permission: true` to ask
     //     instead.
-    if (process.env["AX_CODE_AUTONOMOUS"] === "true" && !INTERACTIVE_ONLY.has(request.permission)) {
+    if (Flag.AX_CODE_AUTONOMOUS && !INTERACTIVE_ONLY.has(request.permission)) {
       const riskClass = classifyRisk(request.permission)
       if (riskClass === "safe") {
         log.info("autonomous auto-approve (safe)", { permission: request.permission, patterns: request.patterns })

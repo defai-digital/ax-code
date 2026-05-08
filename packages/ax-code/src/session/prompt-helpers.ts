@@ -24,6 +24,7 @@ import { InstructionPrompt } from "./instruction"
 import { DiagnosticLog } from "@/debug/diagnostic-log"
 import { Filesystem } from "@/util/filesystem"
 import { Todo } from "./todo"
+import { Flag } from "../flag/flag"
 
 function publishAgentInfoError(input: {
   sessionID: SessionID
@@ -521,7 +522,7 @@ export async function systemPrompt(input: {
   // so the model always knows exactly what's left — not just an upfront instruction
   // but live state visible at the start of every reasoning cycle.
   const pendingTodos =
-    process.env["AX_CODE_AUTONOMOUS"] === "true" && input.sessionID
+    Flag.AX_CODE_AUTONOMOUS && input.sessionID
       ? Todo.get(input.sessionID).filter((t) => t.status === "pending" || t.status === "in_progress")
       : []
   const pendingTodosSection =

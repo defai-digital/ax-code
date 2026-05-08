@@ -3,6 +3,7 @@ import { Locale } from "../util/locale"
 import { Tool } from "./tool"
 import { Question } from "../question"
 import DESCRIPTION from "./question.txt"
+import { Flag } from "../flag/flag"
 
 const MAX_AUTONOMOUS_DECISION_TEXT = 500
 
@@ -47,7 +48,7 @@ export const QuestionTool = Tool.define("question", {
     const formatted = params.questions
       .map((q, i) => `"${escapePromptText(q.question)}"="${escapePromptText(format(answers[i]))}"`)
       .join(", ")
-    const autonomous = process.env["AX_CODE_AUTONOMOUS"] === "true"
+    const autonomous = Flag.AX_CODE_AUTONOMOUS
     const actor = autonomous ? "Autonomous mode selected answers for" : "User has answered"
     const reminder = autonomous ? " Record these autonomous decisions in your final response." : ""
     const recommendedDecisions = autonomous ? Question.autonomousDecisions(params.questions) : []

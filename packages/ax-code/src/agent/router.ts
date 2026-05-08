@@ -16,6 +16,7 @@
 import { generateObject } from "ai"
 import { Log } from "../util/log"
 import { Provider } from "../provider/provider"
+import { Flag } from "../flag/flag"
 import z from "zod"
 
 const log = Log.create({ service: "agent.router" })
@@ -276,7 +277,7 @@ export interface MessageAnalysis {
 }
 
 export async function classifyComplexity(message: string): Promise<MessageAnalysis> {
-  if (process.env["AX_CODE_SMART_LLM"] !== "true") return { complexity: null }
+  if (!Flag.AX_CODE_SMART_LLM) return { complexity: null }
   if (message.length < 30) return { complexity: "low" }
 
   const defaultModel = await Provider.defaultModel().catch(() => undefined)

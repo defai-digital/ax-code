@@ -99,7 +99,7 @@ export namespace LLM {
     if (joined) system.push(joined)
     const reasoningPolicyDecision = ReasoningPolicy.decide({
       small: input.small,
-      autonomous: process.env["AX_CODE_AUTONOMOUS"] === "true",
+      autonomous: Flag.AX_CODE_AUTONOMOUS,
       userVariant: input.user.variant,
       model: input.model,
       agent: input.agent,

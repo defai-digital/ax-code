@@ -628,7 +628,7 @@ export namespace SessionPrompt {
     // Pre-load expensive resources once before the loop
     const cfg = await Config.get()
     const GLOBAL_STEP_LIMIT = cfg.session?.max_steps ?? _GLOBAL_STEP_LIMIT
-    const autonomous = process.env["AX_CODE_AUTONOMOUS"] === "true"
+    const autonomous = Flag.AX_CODE_AUTONOMOUS
     const maxContinuations = cfg.session?.max_continuations ?? 3
     const maxTodoRetries = cfg.session?.max_todo_retries ?? 10
     const maxCompletionGateRetries = Math.min(maxTodoRetries, 2)
@@ -2483,8 +2483,7 @@ export namespace SessionPrompt {
     // Shallow-copy to avoid mutating cached message parts
     const userMessage = { ...userMsg, parts: [...userMsg.parts] }
     const messages = input.messages.map((m) => (m === userMsg ? userMessage : m))
-    const autonomousDecisionLedger =
-      process.env["AX_CODE_AUTONOMOUS"] === "true" ? autonomousDecisionLedgerReminder(input.messages) : undefined
+    const autonomousDecisionLedger = Flag.AX_CODE_AUTONOMOUS ? autonomousDecisionLedgerReminder(input.messages) : undefined
     if (autonomousDecisionLedger) {
       userMessage.parts.push({
         id: PartID.ascending(),
