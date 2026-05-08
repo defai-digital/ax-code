@@ -22,6 +22,7 @@ export namespace Flag {
   export const AX_CODE_CONFIG = process.env["AX_CODE_CONFIG"]
   export declare const AX_CODE_TUI_CONFIG: string | undefined
   export declare const AX_CODE_CONFIG_DIR: string | undefined
+  export declare const AX_CODE_SHARE_URL: string | undefined
   export const AX_CODE_CONFIG_CONTENT = process.env["AX_CODE_CONFIG_CONTENT"]
   export const AX_CODE_DISABLE_AUTOUPDATE = truthy("AX_CODE_DISABLE_AUTOUPDATE")
   export const AX_CODE_ALWAYS_NOTIFY_UPDATE = truthy("AX_CODE_ALWAYS_NOTIFY_UPDATE")
@@ -49,6 +50,8 @@ export namespace Flag {
   export declare const AX_CODE_AUTONOMOUS: boolean
   export declare const AX_CODE_SMART_LLM: boolean
   export declare const AX_CODE_CALLER: string | undefined
+  export declare const AX_CODE_ORIGINAL_CWD: string | undefined
+  export declare const AX_CODE_PROFILE_NATIVE: boolean
   export declare const AX_CODE_DEBUG: boolean
   export declare const AX_CODE_DEBUG_DIR: string | undefined
   export declare const AX_CODE_DEBUG_INCLUDE_CONTENT: boolean | undefined
@@ -223,6 +226,25 @@ Object.defineProperty(Flag, "AX_CODE_CALLER", {
   configurable: false,
 })
 
+// Dynamic getter for AX_CODE_ORIGINAL_CWD
+// Keep evaluation lazy so launch-time overrides remain effective.
+Object.defineProperty(Flag, "AX_CODE_ORIGINAL_CWD", {
+  get() {
+    return process.env["AX_CODE_ORIGINAL_CWD"]
+  },
+  enumerable: true,
+  configurable: false,
+})
+
+// Dynamic getter for AX_CODE_PROFILE_NATIVE
+Object.defineProperty(Flag, "AX_CODE_PROFILE_NATIVE", {
+  get() {
+    return truthy("AX_CODE_PROFILE_NATIVE")
+  },
+  enumerable: true,
+  configurable: false,
+})
+
 // Dynamic getter for AX_CODE_DEBUG
 // Keep evaluation lazy so debug settings injected by bootstrap stay effective.
 Object.defineProperty(Flag, "AX_CODE_DEBUG", {
@@ -304,6 +326,15 @@ Object.defineProperty(Flag, "AX_CODE_OTLP_ENDPOINT", {
 Object.defineProperty(Flag, "AX_CODE_TUI_CONFIG", {
   get() {
     return process.env["AX_CODE_TUI_CONFIG"]
+  },
+  enumerable: true,
+  configurable: false,
+})
+
+// Dynamic getter for AX_CODE_SHARE_URL
+Object.defineProperty(Flag, "AX_CODE_SHARE_URL", {
+  get() {
+    return process.env["AX_CODE_SHARE_URL"]
   },
   enumerable: true,
   configurable: false,

@@ -29,6 +29,7 @@ import { Provider } from "../../../provider/provider"
 import { Bus } from "../../../bus"
 import { MessageV2 } from "../../../session/message-v2"
 import { SessionPrompt } from "@/session/prompt"
+import { Flag } from "@/flag/flag"
 import { setTimeout as sleep } from "node:timers/promises"
 import { Process } from "@/util/process"
 import { git } from "@/util/git"
@@ -342,7 +343,7 @@ export const GithubRunCommand = cmd({
           ? (payload as IssueCommentEvent | IssuesEvent).issue.number
           : (payload as PullRequestEvent | PullRequestReviewCommentEvent).pull_request.number
       const runUrl = `/${owner}/${repo}/actions/runs/${runId}`
-      const shareBaseUrl = process.env["AX_CODE_SHARE_URL"] || "https://github.com/defai-digital/ax-code"
+      const shareBaseUrl = Flag.AX_CODE_SHARE_URL || "https://github.com/defai-digital/ax-code"
 
       let appToken: string
       let octoRest: Octokit

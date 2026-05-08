@@ -314,8 +314,7 @@ export const IndexCommand = cmd({
           if (!json) UI.println(line)
         }
         if (args.nativeProfile) {
-          process.env.AX_CODE_PROFILE_NATIVE = "1"
-          NativePerf.install()
+          NativePerf.enable()
         }
 
         out(`${UI.Style.TEXT_INFO_BOLD}Indexing code intelligence graph${UI.Style.TEXT_NORMAL}`)

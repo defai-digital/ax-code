@@ -5,6 +5,7 @@ import { realpathSync } from "fs"
 import { dirname, join, relative, resolve as pathResolve } from "path"
 import { Readable } from "stream"
 import { pipeline } from "stream/promises"
+import { Flag } from "../flag/flag"
 import { Glob } from "./glob"
 import { isRecord } from "./record"
 
@@ -149,7 +150,7 @@ export namespace Filesystem {
    * The global CLI wrapper sets AX_CODE_ORIGINAL_CWD before --cwd takes effect.
    */
   export function callerCwd(): string {
-    return process.env.AX_CODE_ORIGINAL_CWD || process.env.PWD || process.cwd()
+    return Flag.AX_CODE_ORIGINAL_CWD || process.env.PWD || process.cwd()
   }
 
   export function windowsPath(p: string): string {

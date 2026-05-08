@@ -1,3 +1,5 @@
+import { Flag } from "@/flag/flag"
+
 type Stat = {
   calls: number
   fails: number
@@ -26,11 +28,6 @@ export type NativePerfSnapshot = {
 const stats = new Map<string, Stat>()
 
 let ready = false
-
-function on(key: string) {
-  const value = process.env[key]?.toLowerCase()
-  return value === "1" || value === "true"
-}
 
 function bytes(value: unknown): number {
   if (value === undefined || value === null) return 0
@@ -76,7 +73,7 @@ function formatMs(value: number) {
 
 export namespace NativePerf {
   export function enabled() {
-    return on("AX_CODE_PROFILE_NATIVE")
+    return Flag.AX_CODE_PROFILE_NATIVE
   }
 
   export function run<T>(name: string, input: unknown, fn: () => T): T {
@@ -157,6 +154,11 @@ export namespace NativePerf {
     process.on("exit", () => {
       NativePerf.flush(write)
     })
+  }
+
+  export function enable(write = (text: string) => process.stderr.write(text)) {
+    process.env.AX_CODE_PROFILE_NATIVE = "1"
+    install(write)
   }
 
   export function reset() {

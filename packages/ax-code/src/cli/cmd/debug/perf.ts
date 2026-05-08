@@ -415,8 +415,7 @@ const PerfIndexCommand = cmd({
       directory: process.cwd(),
       async fn() {
         if (nativeProfile) {
-          process.env.AX_CODE_PROFILE_NATIVE = "1"
-          NativePerf.install()
+          NativePerf.enable()
         }
 
         const list = await files(limit)
