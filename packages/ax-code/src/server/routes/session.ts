@@ -153,16 +153,15 @@ type SessionJSONRouteContext = {
   }
 }
 
-async function parseProjectSession(c: SessionRouteContext) {
+async function parseCurrentProjectSession(c: SessionRouteContext) {
   const sessionID = parseSessionID(c)
   const session = await requireCurrentProjectSession(sessionID)
   return { sessionID, session }
 }
 
 async function parseSessionJSONInput<TBody>(c: SessionJSONRouteContext) {
-  const sessionID = parseSessionID(c)
+  const { sessionID } = await parseCurrentProjectSession(c)
   const body = c.req.valid("json") as TBody
-  await requireCurrentProjectSession(sessionID)
   return { sessionID, body }
 }
 
@@ -273,7 +272,7 @@ export const SessionRoutes = lazy(() =>
         }),
       ),
       async (c) => {
-        const { session } = await parseProjectSession(c)
+        const { session } = await parseCurrentProjectSession(c)
         return c.json(session)
       },
     )
@@ -303,7 +302,7 @@ export const SessionRoutes = lazy(() =>
         }),
       ),
       async (c) => {
-        const { sessionID } = await parseProjectSession(c)
+        const { sessionID } = await parseCurrentProjectSession(c)
         const session = await Session.children(sessionID)
         return c.json(session)
       },
@@ -580,7 +579,7 @@ export const SessionRoutes = lazy(() =>
         SESSION_ID_PARAM,
       ),
       async (c) => {
-        const { sessionID } = await parseProjectSession(c)
+        const { sessionID } = await parseCurrentProjectSession(c)
         const todos = await Todo.get(sessionID)
         return c.json(todos)
       },
@@ -991,7 +990,7 @@ export const SessionRoutes = lazy(() =>
       ),
       async (c) => {
         const query = c.req.valid("query")
-        const { sessionID } = await parseProjectSession(c)
+        const { sessionID } = await parseCurrentProjectSession(c)
         if (query.limit === undefined) {
           const messages = await Session.messages({ sessionID })
           return c.json(messages)
