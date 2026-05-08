@@ -41,3 +41,13 @@ export type RouteParamContext<TKey extends string, TValue> = {
 export function parseRouteParam<TKey extends string, TValue>(c: RouteParamContext<TKey, TValue>, key: TKey): TValue {
   return c.req.valid("param")[key]
 }
+
+export function withRouteParam<TKey extends string, TValue>(
+  key: TKey,
+  handler: (value: TValue, c: any) => any,
+) {
+  return (c: any) => {
+    const value = parseRouteParam<TKey, TValue>(c, key)
+    return handler(value, c)
+  }
+}

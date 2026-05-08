@@ -6,18 +6,11 @@ import { Question } from "../../question"
 import z from "zod"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
+import { withRouteParam } from "./route-params"
 
 const QUESTION_REQUEST_ID_PARAM = z.object({
   requestID: QuestionID.zod,
 })
-
-function withQuestionRequestID(handler: (requestID: QuestionID, c: any) => Promise<void>) {
-  return async (c: any) => {
-    const requestID = QuestionID.make(c.req.param("requestID") ?? "")
-    await handler(requestID, c)
-    return c.json(true)
-  }
-}
 
 export const QuestionRoutes = lazy(() =>
   new Hono()
@@ -63,9 +56,10 @@ export const QuestionRoutes = lazy(() =>
       }),
       validator("param", QUESTION_REQUEST_ID_PARAM),
       validator("json", Question.Reply),
-      withQuestionRequestID(async (requestID, c) => {
+      withRouteParam<"requestID", QuestionID>("requestID", async (requestID, c) => {
         const json = c.req.valid("json") as Question.Reply
         await Question.reply({ requestID, answers: json.answers })
+        return c.json(true)
       }),
     )
     .post(
@@ -87,8 +81,9 @@ export const QuestionRoutes = lazy(() =>
         },
       }),
       validator("param", QUESTION_REQUEST_ID_PARAM),
-      withQuestionRequestID(async (requestID) => {
+      withRouteParam<"requestID", QuestionID>("requestID", async (requestID, c) => {
         await Question.reject(requestID)
+        return c.json(true)
       }),
     ),
 )
