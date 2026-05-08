@@ -155,77 +155,78 @@ export const PtyRoutes = lazy(() =>
         },
       }),
       validator("param", PTY_ID_PARAM),
-      upgradeWebSocket(async (c) => {
-        const id = PtyID.zod.parse(c.req.param("ptyID"))
-        const cursor = (() => {
-          const value = c.req.query("cursor")
-          if (!value) return
-          const parsed = Number(value)
-          if (!Number.isSafeInteger(parsed) || parsed < -1) return
-          return parsed
-        })()
-        let handler: Awaited<ReturnType<typeof Pty.connect>>
-        if (!(await Pty.get(id))) throw new Error("Session not found")
+      withRouteParam<"ptyID", PtyID>("ptyID", (id) =>
+        upgradeWebSocket(async (c) => {
+          const cursor = (() => {
+            const value = c.req.query("cursor")
+            if (!value) return
+            const parsed = Number(value)
+            if (!Number.isSafeInteger(parsed) || parsed < -1) return
+            return parsed
+          })()
+          let handler: Awaited<ReturnType<typeof Pty.connect>>
+          if (!(await Pty.get(id))) throw new Error("Session not found")
 
-        type Socket = {
-          readyState: number
-          send: (data: string | Uint8Array | ArrayBuffer) => void
-          close: (code?: number, reason?: string) => void
-        }
+          type Socket = {
+            readyState: number
+            send: (data: string | Uint8Array | ArrayBuffer) => void
+            close: (code?: number, reason?: string) => void
+          }
 
-        const isSocket = (value: unknown): value is Socket => {
-          if (!value || typeof value !== "object") return false
-          if (!("readyState" in value)) return false
-          if (!("send" in value) || typeof (value as { send?: unknown }).send !== "function") return false
-          if (!("close" in value) || typeof (value as { close?: unknown }).close !== "function") return false
-          return typeof (value as { readyState?: unknown }).readyState === "number"
-        }
+          const isSocket = (value: unknown): value is Socket => {
+            if (!value || typeof value !== "object") return false
+            if (!("readyState" in value)) return false
+            if (!("send" in value) || typeof (value as { send?: unknown }).send !== "function") return false
+            if (!("close" in value) || typeof (value as { close?: unknown }).close !== "function") return false
+            return typeof (value as { readyState?: unknown }).readyState === "number"
+          }
 
-        const pending: string[] = []
-        let ready = false
-        let closed = false
+          const pending: string[] = []
+          let ready = false
+          let closed = false
 
-        return {
-          async onOpen(_event, ws) {
-            const socket = ws.raw
-            if (!isSocket(socket)) {
-              ws.close()
-              return
-            }
-            try {
-              handler = await Pty.connect(id, socket, cursor)
-              if (closed) {
-                handler?.onClose()
+          return {
+            async onOpen(_event, ws) {
+              const socket = ws.raw
+              if (!isSocket(socket)) {
+                ws.close()
                 return
               }
-              ready = true
-              for (const msg of pending) handler?.onMessage(msg)
-              pending.length = 0
-            } catch (error) {
-              log.error("PTY connection failed", { id, error })
-              pending.length = 0
-              ws.close()
-            }
-          },
-          onMessage(event) {
-            if (typeof event.data !== "string") return
-            if (!ready) {
-              pending.push(event.data)
-              return
-            }
-            handler?.onMessage(event.data)
-          },
-          onClose() {
-            if (closed) return
-            closed = true
-            handler?.onClose()
-          },
-          onError() {
-            if (closed) return
-            closed = true
-            handler?.onClose()
-          },
-        }
-      }),
+              try {
+                handler = await Pty.connect(id, socket, cursor)
+                if (closed) {
+                  handler?.onClose()
+                  return
+                }
+                ready = true
+                for (const msg of pending) handler?.onMessage(msg)
+                pending.length = 0
+              } catch (error) {
+                log.error("PTY connection failed", { id, error })
+                pending.length = 0
+                ws.close()
+              }
+            },
+            onMessage(event) {
+              if (typeof event.data !== "string") return
+              if (!ready) {
+                pending.push(event.data)
+                return
+              }
+              handler?.onMessage(event.data)
+            },
+            onClose() {
+              if (closed) return
+              closed = true
+              handler?.onClose()
+            },
+            onError() {
+              if (closed) return
+              closed = true
+              handler?.onClose()
+            },
+          }
+        }),
+      ),
     ),
 )
