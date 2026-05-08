@@ -21,6 +21,10 @@ async function oauthNotSupportedResponse(c: Context, name: string) {
   return c.json({ error: `MCP server ${name} does not support OAuth` }, 400)
 }
 
+function withMcpName<T>(handler: (name: string, c: any) => Promise<T>) {
+  return async (c: any) => handler(parseRouteParam<"name", string>(c, "name"), c)
+}
+
 export const McpRoutes = lazy(() =>
   new Hono()
     .get(
@@ -98,13 +102,12 @@ export const McpRoutes = lazy(() =>
         },
       }),
       validator("param", MCP_NAME_PARAM_OBJECT),
-      async (c) => {
-        const name = parseRouteParam<"name", string>(c, "name")
+      withMcpName(async (name, c) => {
         const unsupported = await oauthNotSupportedResponse(c, name)
         if (unsupported) return unsupported
         const result = await MCP.startAuth(name)
         return c.json(result)
-      },
+      }),
     )
     .post(
       "/:name/auth/callback",
@@ -132,12 +135,11 @@ export const McpRoutes = lazy(() =>
           code: z.string().describe("Authorization code from OAuth callback"),
         }),
       ),
-      async (c) => {
-        const name = parseRouteParam<"name", string>(c, "name")
+      withMcpName(async (name, c) => {
         const { code } = c.req.valid("json")
         const status = await MCP.finishAuth(name, code)
         return c.json(status)
-      },
+      }),
     )
     .post(
       "/:name/auth/authenticate",
@@ -158,13 +160,12 @@ export const McpRoutes = lazy(() =>
         },
       }),
       validator("param", MCP_NAME_PARAM_OBJECT),
-      async (c) => {
-        const name = parseRouteParam<"name", string>(c, "name")
+      withMcpName(async (name, c) => {
         const unsupported = await oauthNotSupportedResponse(c, name)
         if (unsupported) return unsupported
         const status = await MCP.authenticate(name)
         return c.json(status)
-      },
+      }),
     )
     .delete(
       "/:name/auth",
@@ -185,11 +186,10 @@ export const McpRoutes = lazy(() =>
         },
       }),
       validator("param", MCP_NAME_PARAM_OBJECT),
-      async (c) => {
-        const name = parseRouteParam<"name", string>(c, "name")
+      withMcpName(async (name, c) => {
         await MCP.removeAuth(name)
         return c.json({ success: true as const })
-      },
+      }),
     )
     .post(
       "/:name/connect",
@@ -208,11 +208,10 @@ export const McpRoutes = lazy(() =>
         },
       }),
       validator("param", MCP_NAME_PARAM_OBJECT),
-      async (c) => {
-        const name = parseRouteParam<"name", string>(c, "name")
+      withMcpName(async (name, c) => {
         await MCP.connect(name)
         return c.json(true)
-      },
+      }),
     )
     .post(
       "/:name/disconnect",
@@ -231,10 +230,9 @@ export const McpRoutes = lazy(() =>
         },
       }),
       validator("param", MCP_NAME_PARAM_OBJECT),
-      async (c) => {
-        const name = parseRouteParam<"name", string>(c, "name")
+      withMcpName(async (name, c) => {
         await MCP.disconnect(name)
         return c.json(true)
-      },
+      }),
     ),
 )
