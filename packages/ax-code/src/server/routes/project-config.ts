@@ -37,6 +37,21 @@ export async function persistProjectConfigResponse(
   return undefined
 }
 
+type PersistProjectConfigFeatureResponseOptions<FeatureValue extends string | boolean, ResponseState> = {
+  featureFlag: string
+  featureValue: FeatureValue
+  responseState: ResponseState
+} & PersistProjectConfigResponseOptions
+
+export async function persistProjectConfigFeatureResponse<FeatureValue extends string | boolean, ResponseState>(
+  options: PersistProjectConfigFeatureResponseOptions<FeatureValue, ResponseState>,
+): Promise<{ error: string } | ResponseState> {
+  const persisted = await persistProjectConfigResponse(options)
+  if (persisted) return persisted
+  FeatureFlag.set(options.featureFlag, options.featureValue)
+  return options.responseState
+}
+
 export async function readProjectConfigFeatureState(
   options: {
     featureFlag: string
