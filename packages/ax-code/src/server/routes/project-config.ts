@@ -8,6 +8,18 @@ import { Log } from "@/util/log"
 
 const log = Log.create({ service: "project-config" })
 
+export const PROJECT_CONFIG_PERSIST_ERROR = "Failed to persist configuration"
+
+export function coerceErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error)
+}
+
+export function createPersistErrorLogger(log: ReturnType<typeof Log.create>, context: string) {
+  return (error: unknown) => {
+    log.warn(`failed to persist ${context}`, { error: coerceErrorMessage(error) })
+  }
+}
+
 function filepath() {
   return path.join(Instance.directory, "ax-code.json")
 }

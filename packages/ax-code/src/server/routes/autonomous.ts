@@ -3,7 +3,12 @@ import { describeRoute, resolver, validator } from "hono-openapi"
 import z from "zod"
 import { Log } from "../../util/log"
 import { lazy } from "../../util/lazy"
-import { readProjectConfig, persistProjectConfig } from "./project-config"
+import {
+  PROJECT_CONFIG_PERSIST_ERROR,
+  createPersistErrorLogger,
+  readProjectConfig,
+  persistProjectConfig,
+} from "./project-config"
 import { FeatureFlag } from "../../util/feature-flags"
 
 const log = Log.create({ service: "autonomous" })
@@ -69,15 +74,16 @@ export const AutonomousRoutes = lazy(() =>
         // env before persistence created a window where in-process
         // readers (Permission, Session) saw a value the disk hadn't
         // committed, and a subsequent crash would silently revert.
-        const persisted = await persistProjectConfig((config) => {
-          config.autonomous = enabled
-        }, {
-          onError: (err) => {
-            log.warn("failed to persist autonomous config", { error: err instanceof Error ? err.message : String(err) })
+        const persisted = await persistProjectConfig(
+          (config) => {
+            config.autonomous = enabled
           },
-        })
+          {
+            onError: createPersistErrorLogger(log, "autonomous config"),
+          },
+        )
         log.info("autonomous mode changed", { enabled, persisted })
-        if (!persisted) return c.json({ error: "Failed to persist configuration" }, 500)
+        if (!persisted) return c.json({ error: PROJECT_CONFIG_PERSIST_ERROR }, 500)
         FeatureFlag.set("AX_CODE_AUTONOMOUS", enabled)
         return c.json({ enabled })
       },
