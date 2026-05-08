@@ -19,6 +19,13 @@ const log = Log.create({ service: "tui.clipboard" })
  * the terminal emulator handle the clipboard locally.
  */
 const OSC52_MAX_BYTES = 100_000
+const CLIPBOARD_PROC_TIMEOUT_MS = 5_000
+
+type ProcWithStdin = {
+  stdin: NodeJS.WritableStream | null | undefined
+  exited: Promise<unknown>
+  kill(): void
+}
 
 function writeOsc52(text: string): void {
   if (!process.stdout.isTTY) return
@@ -43,7 +50,7 @@ function createTimeout(ms: number) {
 }
 
 async function waitForExit(proc: { exited: Promise<unknown>; kill(): void }) {
-  const timeout = createTimeout(5_000)
+  const timeout = createTimeout(CLIPBOARD_PROC_TIMEOUT_MS)
   try {
     const result = await Promise.race([proc.exited.then(() => "done" as const), timeout.promise]).catch(
       () => "timeout" as const,
@@ -55,7 +62,7 @@ async function waitForExit(proc: { exited: Promise<unknown>; kill(): void }) {
 }
 
 async function waitForWrite(input: Promise<unknown>) {
-  const timeout = createTimeout(5_000)
+  const timeout = createTimeout(CLIPBOARD_PROC_TIMEOUT_MS)
   try {
     const result = await Promise.race([
       input.then(
@@ -70,6 +77,13 @@ async function waitForWrite(input: Promise<unknown>) {
   } finally {
     timeout.clear()
   }
+}
+
+async function writeViaProcessStdin(proc: ProcWithStdin, text: string) {
+  if (!proc.stdin) return
+  proc.stdin.write(text)
+  proc.stdin.end()
+  await waitForExit(proc)
 }
 
 export namespace Clipboard {
@@ -160,10 +174,7 @@ export namespace Clipboard {
       if (process.env["WAYLAND_DISPLAY"] && which("wl-copy")) {
         return async (text: string) => {
           const proc = Process.spawn(["wl-copy"], { stdin: "pipe", stdout: "ignore", stderr: "ignore" })
-          if (!proc.stdin) return
-          proc.stdin.write(text)
-          proc.stdin.end()
-          await waitForExit(proc)
+          await writeViaProcessStdin(proc, text)
         }
       }
       if (which("xclip")) {
@@ -173,10 +184,7 @@ export namespace Clipboard {
             stdout: "ignore",
             stderr: "ignore",
           })
-          if (!proc.stdin) return
-          proc.stdin.write(text)
-          proc.stdin.end()
-          await waitForExit(proc)
+          await writeViaProcessStdin(proc, text)
         }
       }
       if (which("xsel")) {
@@ -186,10 +194,7 @@ export namespace Clipboard {
             stdout: "ignore",
             stderr: "ignore",
           })
-          if (!proc.stdin) return
-          proc.stdin.write(text)
-          proc.stdin.end()
-          await waitForExit(proc)
+          await writeViaProcessStdin(proc, text)
         }
       }
       // Linux without any clipboard helper. Falling through to `clipboardy`
@@ -227,10 +232,7 @@ export namespace Clipboard {
           },
         )
 
-        if (!proc.stdin) return
-        proc.stdin.write(text)
-        proc.stdin.end()
-        await waitForExit(proc)
+        await writeViaProcessStdin(proc, text)
       }
     }
 
