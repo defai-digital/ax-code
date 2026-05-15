@@ -461,16 +461,69 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
   const MAX_SESSION_FORK_ATTEMPTS = 3
   const retryTimers = new Set<ReturnType<typeof setTimeout>>()
   let forkRetryDisposed = false
-  let smartLlmPutController: AbortController | undefined
-  let autonomousPutController: AbortController | undefined
   let sandboxPutController: AbortController | undefined
+
+  function createBooleanRuntimeToggle(input: {
+    endpoint: "/smart-llm" | "/autonomous"
+    label: {
+      warn: string
+      message: string
+    }
+    getCurrent: () => boolean
+    setCurrent: (value: boolean) => void
+  }) {
+    let putController: AbortController | undefined
+
+    const toggle = () => {
+      const previous = input.getCurrent()
+      const next = !previous
+      putController?.abort()
+      const controller = new AbortController()
+      putController = controller
+      input.setCurrent(next)
+      void putJsonWithTimeout(input.endpoint, { enabled: next }, undefined, { signal: controller.signal }).catch((error) => {
+        if (controller.signal.aborted || putController !== controller) return
+        Log.Default.warn(input.label.warn, { error, enabled: next })
+        if (input.getCurrent() === next) input.setCurrent(previous)
+        toast.show({
+          message: error instanceof Error ? error.message : input.label.message,
+          variant: "error",
+        })
+      })
+    }
+
+    const dispose = () => {
+      putController?.abort()
+    }
+
+    return { toggle, dispose }
+  }
+
+  const smartLlmToggle = createBooleanRuntimeToggle({
+    endpoint: "/smart-llm",
+    getCurrent: () => sync.data.smartLlm,
+    setCurrent: (value) => sync.set("smartLlm", value),
+    label: {
+      warn: "failed to update smart llm setting",
+      message: "Failed to save fast-model routing setting",
+    },
+  })
+  const autonomousToggle = createBooleanRuntimeToggle({
+    endpoint: "/autonomous",
+    getCurrent: () => sync.data.autonomous,
+    setCurrent: (value) => sync.set("autonomous", value),
+    label: {
+      warn: "failed to update autonomous setting",
+      message: "Failed to save autonomous setting",
+    },
+  })
 
   onCleanup(() => {
     forkRetryDisposed = true
     for (const timer of retryTimers) clearTimeout(timer)
     retryTimers.clear()
-    smartLlmPutController?.abort()
-    autonomousPutController?.abort()
+    smartLlmToggle.dispose()
+    autonomousToggle.dispose()
     sandboxPutController?.abort()
   })
 
@@ -917,23 +970,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       value: "app.toggle.smart_llm",
       category: "System",
       onSelect: (dialog) => {
-        const previous = sync.data.smartLlm
-        const next = !previous
-        smartLlmPutController?.abort()
-        const controller = new AbortController()
-        smartLlmPutController = controller
-        sync.set("smartLlm", next)
-        void putJsonWithTimeout("/smart-llm", { enabled: next }, undefined, { signal: controller.signal }).catch((error) => {
-          if (controller.signal.aborted || smartLlmPutController !== controller) return
-          Log.Default.warn("failed to update smart llm setting", { error, enabled: next })
-          // Only revert if no concurrent toggle has changed the state since we set it —
-          // otherwise we'd clobber a newer user action with our stale rollback.
-          if (sync.data.smartLlm === next) sync.set("smartLlm", previous)
-          toast.show({
-            message: error instanceof Error ? error.message : "Failed to save fast-model routing setting",
-            variant: "error",
-          })
-        })
+        smartLlmToggle.toggle()
         dialog.clear()
       },
     },
@@ -942,22 +979,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       value: "app.toggle.autonomous",
       category: "System",
       onSelect: (dialog) => {
-        const next = !sync.data.autonomous
-        autonomousPutController?.abort()
-        const controller = new AbortController()
-        autonomousPutController = controller
-        sync.set("autonomous", next)
-        void putJsonWithTimeout("/autonomous", { enabled: next }, undefined, { signal: controller.signal }).catch(
-          (error) => {
-            if (controller.signal.aborted || autonomousPutController !== controller) return
-            Log.Default.warn("failed to update autonomous setting", { error, enabled: next })
-            if (sync.data.autonomous === next) sync.set("autonomous", !next)
-            toast.show({
-              message: error instanceof Error ? error.message : "Failed to save autonomous setting",
-              variant: "error",
-            })
-          },
-        )
+        autonomousToggle.toggle()
         dialog.clear()
       },
     },
