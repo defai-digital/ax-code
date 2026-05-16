@@ -1,0 +1,71 @@
+import type { ChildProcessWithoutNullStreams } from "child_process"
+import * as _Defs from "./server-defs"
+
+export namespace LSPServer {
+  export type Method =
+    | "hover"
+    | "definition"
+    | "references"
+    | "implementation"
+    | "documentSymbol"
+    | "workspaceSymbol"
+    | "callHierarchy"
+
+  export type CapabilityHints = Partial<Record<Method, boolean>>
+
+  export interface Handle {
+    process: ChildProcessWithoutNullStreams
+    initialization?: Record<string, any>
+  }
+
+  export interface Info {
+    id: string
+    extensions: string[]
+    semantic?: boolean
+    priority?: number
+    concurrency?: number
+    capabilityHints?: CapabilityHints
+    global?: boolean
+    root: (file: string) => Promise<string | undefined>
+    spawn(root: string): Promise<Handle | undefined>
+  }
+
+  // Server definitions — see lsp/server-defs.ts for implementations
+  export const Deno = _Defs.Deno
+  export const Typescript = _Defs.Typescript
+  export const Vue = _Defs.Vue
+  export const ESLint = _Defs.ESLint
+  export const Oxlint = _Defs.Oxlint
+  export const Biome = _Defs.Biome
+  export const Gopls = _Defs.Gopls
+  export const Rubocop = _Defs.Rubocop
+  export const Ty = _Defs.Ty
+  export const Pyright = _Defs.Pyright
+  export const ElixirLS = _Defs.ElixirLS
+  export const Zls = _Defs.Zls
+  export const CSharp = _Defs.CSharp
+  export const FSharp = _Defs.FSharp
+  export const SourceKit = _Defs.SourceKit
+  export const RustAnalyzer = _Defs.RustAnalyzer
+  export const Clangd = _Defs.Clangd
+  export const Svelte = _Defs.Svelte
+  export const Astro = _Defs.Astro
+  export const JDTLS = _Defs.JDTLS
+  export const KotlinLS = _Defs.KotlinLS
+  export const YamlLS = _Defs.YamlLS
+  export const LuaLS = _Defs.LuaLS
+  export const PHPIntelephense = _Defs.PHPIntelephense
+  export const Prisma = _Defs.Prisma
+  export const Dart = _Defs.Dart
+  export const Ocaml = _Defs.Ocaml
+  export const BashLS = _Defs.BashLS
+  export const TerraformLS = _Defs.TerraformLS
+  export const TexLab = _Defs.TexLab
+  export const DockerfileLS = _Defs.DockerfileLS
+  export const Gleam = _Defs.Gleam
+  export const Clojure = _Defs.Clojure
+  export const Nixd = _Defs.Nixd
+  export const Tinymist = _Defs.Tinymist
+  export const HLS = _Defs.HLS
+  export const JuliaLS = _Defs.JuliaLS
+}

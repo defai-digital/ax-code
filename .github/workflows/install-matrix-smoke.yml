@@ -1,0 +1,328 @@
+name: Install Matrix Smoke
+
+# Validates that ax-code installs and runs end-to-end on every supported
+# platform × distribution channel after a release tag publishes. Both the
+# default package and the compatibility source alias must report the expected
+# runtime mode. The default package is compiled; ax-code-source is source+bun.
+#
+# Triggers:
+#   - `release_published`: each tag-driven release runs the matrix
+#   - `workflow_dispatch`: manual run for testing the workflow itself
+#     against an already-published version (provide `version` input).
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Already-published version to smoke-test (e.g. 4.0.15)"
+        required: true
+        type: string
+      channel:
+        description: "Which channels to smoke-test"
+        required: true
+        type: choice
+        default: both
+        options:
+          - both
+          - source
+          - latest
+
+jobs:
+  smoke:
+    name: ${{ matrix.os }} / ${{ matrix.channel }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - macos-latest # darwin arm64
+          - ubuntu-latest # linux x64 glibc
+          - ubuntu-24.04-arm # linux arm64 glibc
+          - windows-latest # windows x64
+        channel:
+          - source
+          - latest
+        include:
+          # Linux musl coverage via Alpine container. Windows arm64 keeps a
+          # source alias smoke in addition to the default compiled channel.
+          - os: ubuntu-latest
+            channel: source
+            container: alpine:3.20
+            label: linux-musl-x64
+          - os: windows-11-arm
+            channel: source
+            label: win32-arm64-source-only
+          - os: windows-11-arm
+            channel: latest
+            label: win32-arm64-compiled
+    runs-on: ${{ matrix.os }}
+    container: ${{ matrix.container || '' }}
+    env:
+      AX_CODE_DISABLE_AUTOUPDATE: "1"
+      AX_CODE_DISABLE_AUTO_INDEX: "1"
+      AX_CODE_DISABLE_LSP_DOWNLOAD: "1"
+      AX_CODE_DISABLE_MODELS_FETCH: "1"
+      AX_CODE_DISABLE_PROJECT_CONFIG: "1"
+    steps:
+      # MUST run before any `shell: bash` step. Alpine 3.20's base image
+      # ships only BusyBox `ash`; the very first action-step that declares
+      # `shell: bash` would otherwise fail with `bash: executable file not
+      # found in $PATH` before this step can install it. Default shell here
+      # is `sh` (POSIX), which Alpine has.
+      - name: Alpine prereqs
+        if: ${{ matrix.container == 'alpine:3.20' }}
+        run: |
+          apk add --no-cache bash nodejs npm curl
+
+      - name: Set isolated home paths
+        shell: bash
+        run: |
+          echo "AX_CODE_TEST_HOME=$RUNNER_TEMP/ax-code-install-matrix-home" >> "$GITHUB_ENV"
+          echo "XDG_CONFIG_HOME=$RUNNER_TEMP/ax-code-install-matrix-home/.config" >> "$GITHUB_ENV"
+          echo "XDG_CACHE_HOME=$RUNNER_TEMP/ax-code-install-matrix-home/.cache" >> "$GITHUB_ENV"
+          echo "XDG_DATA_HOME=$RUNNER_TEMP/ax-code-install-matrix-home/.local/share" >> "$GITHUB_ENV"
+          echo "XDG_STATE_HOME=$RUNNER_TEMP/ax-code-install-matrix-home/.local/state" >> "$GITHUB_ENV"
+
+      - name: Resolve version under test
+        id: version
+        shell: bash
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            echo "version=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+          else
+            VERSION="${GITHUB_REF_NAME#v}"
+            echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Filter dispatch channel
+        id: channel
+        shell: bash
+        run: |
+          REQUESTED="${{ inputs.channel }}"
+          if [ -z "$REQUESTED" ] || [ "$REQUESTED" = "both" ] || [ "$REQUESTED" = "${{ matrix.channel }}" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Skipping ${{ matrix.channel }} (workflow_dispatch requested ${REQUESTED} only)"
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install Node (host runner)
+        if: ${{ steps.channel.outputs.enabled == 'true' && matrix.container == '' }}
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - name: Install ax-code
+        if: ${{ steps.channel.outputs.enabled == 'true' }}
+        shell: bash
+        run: |
+          set -e
+          VERSION="${{ steps.version.outputs.version }}"
+          CHANNEL="${{ matrix.channel }}"
+          if [ "$CHANNEL" = "source" ]; then
+            PACKAGE="@defai.digital/ax-code-source"
+          else
+            PACKAGE="@defai.digital/ax-code"
+          fi
+          # release_published can fire before publish-npm/publish-source
+          # finish (or before the npm registry has propagated the new
+          # version). Poll npm until the version is visible, then install.
+          # Cap at ~30 minutes so release_published events that arrive
+          # before the compiled npm/Homebrew channels finish publishing do
+          # not produce false failures. v5.0.1 compiled npm/Homebrew
+          # propagation took ~13 minutes after the release event.
+          echo "Waiting for ${PACKAGE}@${VERSION} to be available on npm..."
+          for attempt in $(seq 1 180); do
+            if npm view "${PACKAGE}@${VERSION}" version >/dev/null 2>&1; then
+              echo "${PACKAGE}@${VERSION} is available (attempt ${attempt})"
+              break
+            fi
+            if [ "$attempt" = "180" ]; then
+              echo "FAIL: ${PACKAGE}@${VERSION} not visible on npm after 30 minutes"
+              exit 1
+            fi
+            sleep 10
+          done
+          # The main package may be visible on npm before its platform-specific
+          # optional dependency (e.g. @defai.digital/ax-code-darwin-arm64) has
+          # fully propagated. npm silently skips unavailable optional deps, which
+          # causes postinstall to fail when it cannot find the binary. Retry the
+          # install up to 5 times (each after a 30s pause) to ride out the gap.
+          echo "Installing ${PACKAGE}@${VERSION} for channel ${CHANNEL}..."
+          for install_attempt in $(seq 1 5); do
+            if npm install -g "${PACKAGE}@${VERSION}"; then
+              break
+            fi
+            if [ "$install_attempt" = "5" ]; then
+              echo "FAIL: npm install failed after 5 attempts"
+              exit 1
+            fi
+            echo "Install attempt ${install_attempt} failed, retrying in 30s..."
+            sleep 30
+          done
+
+      - name: ax-code --version
+        if: ${{ steps.channel.outputs.enabled == 'true' }}
+        shell: bash
+        run: |
+          set -e
+          VERSION="${{ steps.version.outputs.version }}"
+          OUTPUT="$(ax-code --version)"
+          echo "$OUTPUT"
+          if [ "$OUTPUT" != "$VERSION" ] && [ "$OUTPUT" != "v$VERSION" ]; then
+            echo "FAIL: expected ax-code --version to be ${VERSION}, got ${OUTPUT}"
+            exit 1
+          fi
+
+      - name: ax-code doctor — assert runtimeMode matches channel
+        if: ${{ steps.channel.outputs.enabled == 'true' }}
+        shell: bash
+        run: |
+          set -e
+          OUTPUT="$(ax-code doctor 2>&1)"
+          echo "$OUTPUT"
+          if [ "${{ matrix.channel }}" = "source" ]; then
+            RUNTIME_RE='(bun-bundled|source)'
+          else
+            RUNTIME_RE='compiled'
+          fi
+          echo "$OUTPUT" | grep -E "Runtime: Bun .* \(${RUNTIME_RE}\)" \
+            || (echo "FAIL: ${{ matrix.channel }} channel did not report ${RUNTIME_RE} runtimeMode" && exit 1)
+
+      - name: Smoke — installed backend stdio handshake
+        if: ${{ steps.channel.outputs.enabled == 'true' }}
+        shell: bash
+        timeout-minutes: 1
+        run: |
+          set -e
+          OUTPUT="$(printf '{"type":"rpc.request","method":"health","id":1}\n' | ax-code tui-backend --stdio 2>&1)"
+          echo "$OUTPUT"
+          echo "$OUTPUT" | grep -E '"type":"rpc.result".*"id":1' \
+            || (echo "FAIL: installed backend did not return rpc health result" && exit 1)
+          if [ "${{ matrix.channel }}" = "source" ]; then
+            RUNTIME_RE='(bun-bundled|source)'
+          else
+            RUNTIME_RE='compiled'
+          fi
+          echo "$OUTPUT" | grep -E "\"runtimeMode\":\"${RUNTIME_RE}\"" \
+            || (echo "FAIL: installed backend did not report ${RUNTIME_RE} runtimeMode" && exit 1)
+
+      - name: Smoke — non-interactive command
+        if: ${{ steps.channel.outputs.enabled == 'true' }}
+        shell: bash
+        timeout-minutes: 1
+        run: |
+          # Smallest non-interactive command that exercises CLI bootstrap
+          # without needing provider credentials. `debug config` reads
+          # config and exits.
+          ax-code debug config || true
+
+  homebrew:
+    name: macos-latest / homebrew
+    runs-on: macos-latest
+    env:
+      AX_CODE_DISABLE_AUTOUPDATE: "1"
+      AX_CODE_DISABLE_AUTO_INDEX: "1"
+      AX_CODE_DISABLE_LSP_DOWNLOAD: "1"
+      AX_CODE_DISABLE_MODELS_FETCH: "1"
+      AX_CODE_DISABLE_PROJECT_CONFIG: "1"
+    steps:
+      - name: Set isolated home paths
+        shell: bash
+        run: |
+          echo "AX_CODE_TEST_HOME=$RUNNER_TEMP/ax-code-homebrew-smoke-home" >> "$GITHUB_ENV"
+          echo "XDG_CONFIG_HOME=$RUNNER_TEMP/ax-code-homebrew-smoke-home/.config" >> "$GITHUB_ENV"
+          echo "XDG_CACHE_HOME=$RUNNER_TEMP/ax-code-homebrew-smoke-home/.cache" >> "$GITHUB_ENV"
+          echo "XDG_DATA_HOME=$RUNNER_TEMP/ax-code-homebrew-smoke-home/.local/share" >> "$GITHUB_ENV"
+          echo "XDG_STATE_HOME=$RUNNER_TEMP/ax-code-homebrew-smoke-home/.local/state" >> "$GITHUB_ENV"
+
+      - name: Resolve version under test
+        id: version
+        shell: bash
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            echo "version=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+          else
+            VERSION="${GITHUB_REF_NAME#v}"
+            echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Filter dispatch channel
+        id: channel
+        shell: bash
+        run: |
+          REQUESTED="${{ inputs.channel }}"
+          if [ -z "$REQUESTED" ] || [ "$REQUESTED" = "both" ] || [ "$REQUESTED" = "latest" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Skipping homebrew smoke (workflow_dispatch requested ${REQUESTED})"
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install ax-code from Homebrew tap
+        if: ${{ steps.channel.outputs.enabled == 'true' }}
+        shell: bash
+        run: |
+          set -e
+          VERSION="${{ steps.version.outputs.version }}"
+          echo "Waiting for Homebrew tap formula ax-code ${VERSION}..."
+          # Initial update to bring local tap state up to date.
+          brew update 2>&1 || true
+          for attempt in $(seq 1 180); do
+            # Re-fetch the tap on each attempt so brew info reflects the
+            # latest formula. brew tap on an already-tapped tap runs git pull;
+            # suppress output but allow it to fail (broken-pipe on CI runners
+            # can exit non-zero without affecting the formula state).
+            brew tap defai-digital/ax-code 2>&1 || true
+            # Avoid `grep -q` under pipefail; Homebrew can continue writing
+            # after grep matches, turning a real match into a SIGPIPE failure.
+            BREW_INFO="$(brew info defai-digital/ax-code/ax-code 2>&1 || true)"
+            if [[ "$BREW_INFO" == *"stable ${VERSION}"* ]]; then
+              echo "Homebrew formula ${VERSION} is available (attempt ${attempt})"
+              break
+            fi
+            if [ "$attempt" = "180" ]; then
+              echo "FAIL: Homebrew formula did not converge to ${VERSION} after 30 minutes"
+              echo "$BREW_INFO"
+              exit 1
+            fi
+            sleep 10
+          done
+          brew install defai-digital/ax-code/ax-code
+
+      - name: ax-code --version
+        if: ${{ steps.channel.outputs.enabled == 'true' }}
+        shell: bash
+        run: |
+          set -e
+          VERSION="${{ steps.version.outputs.version }}"
+          OUTPUT="$(ax-code --version)"
+          echo "$OUTPUT"
+          if [ "$OUTPUT" != "$VERSION" ] && [ "$OUTPUT" != "v$VERSION" ]; then
+            echo "FAIL: expected ax-code --version to be ${VERSION}, got ${OUTPUT}"
+            exit 1
+          fi
+
+      - name: ax-code doctor — assert Homebrew runtime is compiled
+        if: ${{ steps.channel.outputs.enabled == 'true' }}
+        shell: bash
+        run: |
+          set -e
+          OUTPUT="$(ax-code doctor 2>&1)"
+          echo "$OUTPUT"
+          echo "$OUTPUT" | grep -E "Runtime: Bun .* \(compiled\)" \
+            || (echo "FAIL: Homebrew formula did not report compiled runtimeMode" && exit 1)
+
+      - name: Smoke — installed backend stdio handshake
+        if: ${{ steps.channel.outputs.enabled == 'true' }}
+        shell: bash
+        timeout-minutes: 1
+        run: |
+          set -e
+          OUTPUT="$(printf '{"type":"rpc.request","method":"health","id":1}\n' | ax-code tui-backend --stdio 2>&1)"
+          echo "$OUTPUT"
+          echo "$OUTPUT" | grep -E '"type":"rpc.result".*"id":1' \
+            || (echo "FAIL: Homebrew installed backend did not return rpc health result" && exit 1)
+          echo "$OUTPUT" | grep -E '"runtimeMode":"compiled"' \
+            || (echo "FAIL: Homebrew installed backend did not report compiled runtimeMode" && exit 1)

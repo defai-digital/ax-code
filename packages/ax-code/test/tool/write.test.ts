@@ -1,0 +1,536 @@
+import { afterEach, describe, test, expect } from "bun:test"
+import path from "path"
+import fs from "fs/promises"
+import { WriteTool } from "../../src/tool/write"
+import { Instance } from "../../src/project/instance"
+import { tmpdir } from "../fixture/fixture"
+import { SessionID, MessageID } from "../../src/session/schema"
+
+const ctx = {
+  sessionID: SessionID.make("ses_test-write-session"),
+  messageID: MessageID.make(""),
+  callID: "",
+  agent: "build",
+  abort: AbortSignal.any([]),
+  messages: [],
+  metadata: () => {},
+  ask: async () => {},
+}
+
+afterEach(async () => {
+  await Instance.disposeAll()
+})
+
+describe("tool.write", () => {
+  test("describes the internal bug report format before validation fails", async () => {
+    const write = await WriteTool.init()
+
+    expect(write.description).toContain(".internal/bugs/*.md")
+    expect(write.description).toContain("Classification: confirmed|suspected|false_positive")
+    expect(write.description).toContain("## Evidence")
+    expect(write.description).toContain("## Suggested Fix")
+    expect(write.description).toContain("## Closure")
+  })
+
+  describe("new file creation", () => {
+    test("writes content to new file", async () => {
+      await using tmp = await tmpdir()
+      const filepath = path.join(tmp.path, "newfile.txt")
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const write = await WriteTool.init()
+          const result = await write.execute(
+            {
+              filePath: filepath,
+              content: "Hello, World!",
+            },
+            ctx,
+          )
+
+          expect(result.output).toContain("Wrote file successfully")
+          expect(result.metadata.exists).toBe(false)
+
+          const content = await fs.readFile(filepath, "utf-8")
+          expect(content).toBe("Hello, World!")
+        },
+      })
+    })
+
+    test("creates parent directories if needed", async () => {
+      await using tmp = await tmpdir()
+      const filepath = path.join(tmp.path, "nested", "deep", "file.txt")
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const write = await WriteTool.init()
+          await write.execute(
+            {
+              filePath: filepath,
+              content: "nested content",
+            },
+            ctx,
+          )
+
+          const content = await fs.readFile(filepath, "utf-8")
+          expect(content).toBe("nested content")
+        },
+      })
+    })
+
+    test("handles relative paths by resolving to instance directory", async () => {
+      await using tmp = await tmpdir()
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const write = await WriteTool.init()
+          await write.execute(
+            {
+              filePath: "relative.txt",
+              content: "relative content",
+            },
+            ctx,
+          )
+
+          const content = await fs.readFile(path.join(tmp.path, "relative.txt"), "utf-8")
+          expect(content).toBe("relative content")
+        },
+      })
+    })
+
+    test("requires classification and evidence for internal bug reports", async () => {
+      await using tmp = await tmpdir()
+      const filepath = path.join(tmp.path, ".internal", "bugs", "bug.md")
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const write = await WriteTool.init()
+          await expect(
+            write.execute(
+              {
+                filePath: filepath,
+                content: "# Bug\n\n**Status:** Open\n",
+              },
+              ctx,
+            ),
+          ).rejects.toThrow("Internal bug reports under .internal/bugs must include")
+
+          await write.execute(
+            {
+              filePath: filepath,
+              content:
+                "# Bug\n\n" +
+                "**Classification:** suspected\n\n" +
+                "## Evidence\n\n" +
+                "Observed in a scanner result, pending repo-grounded validation.\n\n" +
+                "## Suggested Fix\n\n" +
+                "Validate the cited code path before editing.\n",
+            },
+            ctx,
+          )
+
+          const content = await fs.readFile(filepath, "utf-8")
+          expect(content).toContain("Classification")
+        },
+      })
+    })
+
+    test("bug report validation checks each missing section independently", async () => {
+      await using tmp = await tmpdir()
+      const filepath = path.join(tmp.path, ".internal", "bugs", "bug.md")
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const write = await WriteTool.init()
+
+          // Missing Evidence
+          await expect(
+            write.execute({
+              filePath: filepath,
+              content: "Classification: confirmed\n\n## Suggested Fix\nfix it\n",
+            }, ctx),
+          ).rejects.toThrow("Evidence")
+
+          // Missing fix section
+          await expect(
+            write.execute({
+              filePath: filepath,
+              content: "Classification: suspected\n\n## Evidence\nfound it\n",
+            }, ctx),
+          ).rejects.toThrow("Suggested Fix")
+
+          // ## Recommended Action is accepted instead of ## Suggested Fix
+          await write.execute({
+            filePath: filepath,
+            content: "Classification: confirmed\n\n## Evidence\nfound it\n\n## Recommended Action\ndo this\n",
+          }, ctx)
+
+          // ## Closure is accepted for false_positive
+          await write.execute({
+            filePath: filepath,
+            content: "Classification: false_positive\n\n## Evidence\nscanner noise\n\n## Closure\nnot a real bug\n",
+          }, ctx)
+        },
+      })
+    })
+
+    test("bug report validation only applies inside .internal/bugs/", async () => {
+      await using tmp = await tmpdir()
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const write = await WriteTool.init()
+
+          // Normal markdown file outside .internal/bugs/ — no validation
+          await write.execute({
+            filePath: path.join(tmp.path, "notes.md"),
+            content: "# Notes\n\nNo classification needed.\n",
+          }, ctx)
+
+          // .md file in a sibling directory — no validation
+          await write.execute({
+            filePath: path.join(tmp.path, ".internal", "adr", "decision.md"),
+            content: "# ADR\n\nNo classification needed.\n",
+          }, ctx)
+        },
+      })
+    })
+
+    test("bug report validation does not apply to internal bugs index files", async () => {
+      await using tmp = await tmpdir()
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const write = await WriteTool.init()
+
+          await write.execute({
+            filePath: path.join(tmp.path, ".internal", "bugs", "README.md"),
+            content: "# Bug Reports\n\nThis folder tracks repo-grounded bug reports.\n",
+          }, ctx)
+
+          await write.execute({
+            filePath: path.join(tmp.path, ".internal", "bugs", "summary.md"),
+            content: "# Bug Summary\n\nNo report classification is required for this index file.\n",
+          }, ctx)
+        },
+      })
+    })
+  })
+
+  describe("existing file overwrite", () => {
+    test("overwrites existing file content", async () => {
+      await using tmp = await tmpdir()
+      const filepath = path.join(tmp.path, "existing.txt")
+      await fs.writeFile(filepath, "old content", "utf-8")
+
+      // First read the file to satisfy FileTime requirement
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const { FileTime } = await import("../../src/file/time")
+          await FileTime.read(ctx.sessionID, filepath)
+
+          const write = await WriteTool.init()
+          const result = await write.execute(
+            {
+              filePath: filepath,
+              content: "new content",
+            },
+            ctx,
+          )
+
+          expect(result.output).toContain("Wrote file successfully")
+          expect(result.metadata.exists).toBe(true)
+
+          const content = await fs.readFile(filepath, "utf-8")
+          expect(content).toBe("new content")
+        },
+      })
+    })
+
+    test("returns diff in metadata for existing files", async () => {
+      await using tmp = await tmpdir()
+      const filepath = path.join(tmp.path, "file.txt")
+      await fs.writeFile(filepath, "old", "utf-8")
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const { FileTime } = await import("../../src/file/time")
+          await FileTime.read(ctx.sessionID, filepath)
+
+          const write = await WriteTool.init()
+          const result = await write.execute(
+            {
+              filePath: filepath,
+              content: "new",
+            },
+            ctx,
+          )
+
+          // Diff should be in metadata
+          expect(result.metadata).toHaveProperty("filepath", filepath)
+          expect(result.metadata).toHaveProperty("exists", true)
+        },
+      })
+    })
+  })
+
+  describe("file permissions", () => {
+    test("sets file permissions when writing sensitive data", async () => {
+      await using tmp = await tmpdir()
+      const filepath = path.join(tmp.path, "sensitive.json")
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const write = await WriteTool.init()
+          await write.execute(
+            {
+              filePath: filepath,
+              content: JSON.stringify({ secret: "data" }),
+            },
+            ctx,
+          )
+
+          // On Unix systems, check permissions
+          if (process.platform !== "win32") {
+            const stats = await fs.stat(filepath)
+            expect(stats.mode & 0o777).toBe(0o644)
+          }
+        },
+      })
+    })
+  })
+
+  describe("content types", () => {
+    test("enforces the 5MB limit by UTF-8 byte length, not string length", async () => {
+      await using tmp = await tmpdir()
+      const filepath = path.join(tmp.path, "emoji.txt")
+      const content = "😀".repeat(1_400_000)
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const write = await WriteTool.init()
+          await expect(
+            write.execute(
+              {
+                filePath: filepath,
+                content,
+              },
+              ctx,
+            ),
+          ).rejects.toThrow("Write content too large")
+        },
+      })
+    })
+
+    test("writes JSON content", async () => {
+      await using tmp = await tmpdir()
+      const filepath = path.join(tmp.path, "data.json")
+      const data = { key: "value", nested: { array: [1, 2, 3] } }
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const write = await WriteTool.init()
+          await write.execute(
+            {
+              filePath: filepath,
+              content: JSON.stringify(data, null, 2),
+            },
+            ctx,
+          )
+
+          const content = await fs.readFile(filepath, "utf-8")
+          expect(JSON.parse(content)).toEqual(data)
+        },
+      })
+    })
+
+    test("writes binary-safe content", async () => {
+      await using tmp = await tmpdir()
+      const filepath = path.join(tmp.path, "binary.bin")
+      const content = "Hello\x00World\x01\x02\x03"
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const write = await WriteTool.init()
+          await write.execute(
+            {
+              filePath: filepath,
+              content,
+            },
+            ctx,
+          )
+
+          const buf = await fs.readFile(filepath)
+          expect(buf.toString()).toBe(content)
+        },
+      })
+    })
+
+    test("writes empty content", async () => {
+      await using tmp = await tmpdir()
+      const filepath = path.join(tmp.path, "empty.txt")
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const write = await WriteTool.init()
+          await write.execute(
+            {
+              filePath: filepath,
+              content: "",
+            },
+            ctx,
+          )
+
+          const content = await fs.readFile(filepath, "utf-8")
+          expect(content).toBe("")
+
+          const stats = await fs.stat(filepath)
+          expect(stats.size).toBe(0)
+        },
+      })
+    })
+
+    test("writes multi-line content", async () => {
+      await using tmp = await tmpdir()
+      const filepath = path.join(tmp.path, "multiline.txt")
+      const lines = ["Line 1", "Line 2", "Line 3", ""].join("\n")
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const write = await WriteTool.init()
+          await write.execute(
+            {
+              filePath: filepath,
+              content: lines,
+            },
+            ctx,
+          )
+
+          const content = await fs.readFile(filepath, "utf-8")
+          expect(content).toBe(lines)
+        },
+      })
+    })
+
+    test("handles different line endings", async () => {
+      await using tmp = await tmpdir()
+      const filepath = path.join(tmp.path, "crlf.txt")
+      const content = "Line 1\r\nLine 2\r\nLine 3"
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const write = await WriteTool.init()
+          await write.execute(
+            {
+              filePath: filepath,
+              content,
+            },
+            ctx,
+          )
+
+          const buf = await fs.readFile(filepath)
+          expect(buf.toString()).toBe(content)
+        },
+      })
+    })
+  })
+
+  describe("error handling", () => {
+    test("throws error when file path contains null byte", async () => {
+      await using tmp = await tmpdir()
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const write = await WriteTool.init()
+          await expect(
+            write.execute(
+              {
+                filePath: "null\x00path.txt",
+                content: "test",
+              },
+              ctx,
+            ),
+          ).rejects.toThrow("File path contains null byte")
+        },
+      })
+    })
+
+    test.skipIf(process.platform === "win32" || process.getuid?.() === 0 || !!process.env.CI)(
+      "throws error when OS denies write access",
+      async () => {
+        await using tmp = await tmpdir()
+        const readonlyPath = path.join(tmp.path, "readonly.txt")
+
+        // Write uses an atomic temp-file + rename flow, so the reliable
+        // denial point is the parent directory's write bit, not the
+        // target file mode.
+        await fs.writeFile(readonlyPath, "test", "utf-8")
+        await fs.chmod(tmp.path, 0o555)
+
+        try {
+          await Instance.provide({
+            directory: tmp.path,
+            fn: async () => {
+              const { FileTime } = await import("../../src/file/time")
+              await FileTime.read(ctx.sessionID, readonlyPath)
+
+              const write = await WriteTool.init()
+              await expect(
+                write.execute(
+                  {
+                    filePath: readonlyPath,
+                    content: "new content",
+                  },
+                  ctx,
+                ),
+              ).rejects.toThrow()
+            },
+          })
+        } finally {
+          await fs.chmod(tmp.path, 0o755)
+        }
+      },
+    )
+  })
+
+  describe("title generation", () => {
+    test("returns relative path as title", async () => {
+      await using tmp = await tmpdir()
+      const filepath = path.join(tmp.path, "src", "components", "Button.tsx")
+      await fs.mkdir(path.dirname(filepath), { recursive: true })
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const write = await WriteTool.init()
+          const result = await write.execute(
+            {
+              filePath: filepath,
+              content: "export const Button = () => {}",
+            },
+            ctx,
+          )
+
+          expect(result.title).toEndWith(path.join("src", "components", "Button.tsx"))
+        },
+      })
+    })
+  })
+})

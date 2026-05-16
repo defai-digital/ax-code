@@ -1,0 +1,30 @@
+{
+  "name": "@ax-code/fs",
+  "version": "0.1.0",
+  "description": "Rust-powered file scanning and ignore engine for ax-code",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "napi": {
+    "binaryName": "ax-code-fs",
+    "targets": [
+      "aarch64-apple-darwin",
+      "x86_64-apple-darwin",
+      "x86_64-unknown-linux-gnu",
+      "aarch64-unknown-linux-gnu",
+      "x86_64-pc-windows-msvc"
+    ]
+  },
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "*.node"
+  ],
+  "scripts": {
+    "build": "napi build --manifest-path ../../crates/ax-code-fs/Cargo.toml --release --js index.js --dts index.d.ts --output-dir .",
+    "build:debug": "napi build --manifest-path ../../crates/ax-code-fs/Cargo.toml --js index.js --dts index.d.ts --output-dir ."
+  },
+  "devDependencies": {
+    "@napi-rs/cli": "catalog:"
+  },
+  "license": "MIT"
+}

@@ -1,0 +1,12 @@
+{
+  "version": "1",
+  "name": "no-bash",
+  "rules": [
+    {
+      "agent": "*",
+      "tools": ["bash"],
+      "files": ["**"],
+      "action": "deny"
+    }
+  ]
+}

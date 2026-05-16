@@ -1,0 +1,85 @@
+import { Hono } from "hono"
+import { describeRoute, resolver, validator } from "hono-openapi"
+import { Log } from "../../util/log"
+import { lazy } from "../../util/lazy"
+import {
+  BooleanFeatureState,
+  persistProjectConfigBooleanFeatureResponse,
+  readProjectConfigFeatureState,
+} from "./project-config"
+
+const log = Log.create({ service: "autonomous" })
+
+const AutonomousState = BooleanFeatureState.meta({ ref: "AutonomousState" })
+
+export const AutonomousRoutes = lazy(() =>
+  new Hono()
+    .get(
+      "/",
+      describeRoute({
+        summary: "Get autonomous mode state",
+        description: "Returns whether autonomous mode is enabled.",
+        operationId: "autonomous.get",
+        responses: {
+          200: {
+            description: "Autonomous mode state",
+            content: {
+              "application/json": {
+                schema: resolver(AutonomousState),
+              },
+            },
+          },
+        },
+      }),
+      async (c) => {
+        // Always reconcile from persisted config so an external edit to
+        // ax-code.json propagates without a server restart. The env var
+        // is the runtime authority for in-process readers (Permission /
+        // Session / Question), so keep it in sync — but never let a
+        // stale env reading short-circuit the config read.
+        const state = await readProjectConfigFeatureState({
+          featureFlag: "AX_CODE_AUTONOMOUS",
+          read: (config) => config?.autonomous !== false,
+        })
+        return c.json(state)
+      },
+    )
+    .put(
+      "/",
+      describeRoute({
+        summary: "Set autonomous mode",
+        description: "Toggle autonomous mode on or off. Persists to ax-code.json.",
+        operationId: "autonomous.set",
+        responses: {
+          200: {
+            description: "Updated autonomous state",
+            content: {
+              "application/json": {
+                schema: resolver(AutonomousState),
+              },
+            },
+          },
+        },
+      }),
+      validator("json", BooleanFeatureState),
+      async (c) => {
+        const { enabled } = c.req.valid("json")
+        // Persist first; only then update the in-process env. Writing
+        // env before persistence created a window where in-process
+        // readers (Permission, Session) saw a value the disk hadn't
+        // committed, and a subsequent crash would silently revert.
+        const state = await persistProjectConfigBooleanFeatureResponse({
+          log,
+          context: "autonomous config",
+          featureFlag: "AX_CODE_AUTONOMOUS",
+          enabled,
+          update: (config) => {
+            config.autonomous = enabled
+          },
+        })
+        if ("error" in state) return c.json(state, 500)
+        log.info("autonomous mode changed", { enabled })
+        return c.json(state)
+      },
+    ),
+)

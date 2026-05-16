@@ -1,0 +1,35 @@
+Compute the transitive blast radius of a proposed change. BFS walks upstream from the seed symbols/files over the code graph's calls and references edges, returning every symbol that depends on the seeds up to a configurable depth. Deterministic, no LLM, no file reads.
+
+Use this tool before editing a symbol that might be widely used. It answers "will this break anything important" with a concrete list and a risk score.
+
+Input:
+- changes: array of change seeds. Each is one of:
+  - { kind: "symbol", id: "<CodeNodeID>" }  — a specific symbol (from findSymbol)
+  - { kind: "file", path: "<absolute path>" } — every symbol in the file
+  - { kind: "diff", patch: "<unified diff>" } — parsed for touched files
+- depth: BFS depth cap (default 3, max 6). Deeper = more transitive callers but slower.
+- maxVisited: hard cap on nodes visited (default 2000, max 10000). Truncates gracefully.
+
+Output:
+- seeds: resolved seed node IDs (phantom targets are dropped)
+- affectedSymbols: array of affected dependents, each with:
+  - symbol: the dependent symbol
+  - distance: BFS distance from the nearest seed (1 = direct caller)
+  - path: shortest-path chain from seed to dependent
+- affectedFiles: flat list of files touched by dependents
+- apiBoundariesHit: count of public symbols in the affected set
+- riskScore: 0..100
+- riskLabel: "low" | "medium" | "high"
+- truncated: true if depth cap or visit budget was hit — when truncated, riskLabel is forced to "high"
+- explain: heuristics applied and graph queries consulted
+
+Ranking: affectedSymbols is sorted by (distance ascending, qualified name ascending) for deterministic output.
+
+When to use:
+- Before proposing a change to a shared utility or public API
+- To answer "how much of the codebase calls X"
+- As a sanity check before running refactor_apply
+
+When NOT to use:
+- To find the definition of a symbol — use findSymbol
+- To find direct callers only — use findCallers (it's one graph query; impact_analyze does multiple)

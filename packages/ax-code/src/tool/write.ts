@@ -1,0 +1,119 @@
+import z from "zod"
+import * as fs from "fs"
+import { Tool } from "./tool"
+import { createTwoFilesPatch, diffLines } from "diff"
+import DESCRIPTION from "./write.txt"
+import { FileTime } from "../file/time"
+import { Filesystem } from "../util/filesystem"
+import { Instance } from "../project/instance"
+import { trimDiff } from "./edit"
+import { assertExternalDirectory, assertSymlinkInsideProject } from "./external-directory"
+import { notifyFileEdited, collectDiagnostics } from "./diagnostics"
+import { Isolation } from "@/isolation"
+import { BlastRadius } from "@/session/blast-radius"
+import { normalizeToWorkspacePath, resolveToolFilePath } from "./file-path"
+
+function validateInternalBugReport(filepath: string, content: string) {
+  const relative = normalizeToWorkspacePath(filepath, Instance.worktree)
+  if (!relative.startsWith(".internal/bugs/") || !relative.endsWith(".md")) return
+  if (relative === ".internal/bugs/README.md" || relative === ".internal/bugs/summary.md") return
+
+  const missing: string[] = []
+  if (!/(^|\n)(?:\*\*)?Classification(?::\*\*|\*\*:|:)\s*(confirmed|suspected|false_positive|false positive)\b/i.test(content)) {
+    missing.push("`Classification: confirmed|suspected|false_positive`")
+  }
+  if (!/^## Evidence/im.test(content)) {
+    missing.push("`## Evidence`")
+  }
+  if (!/^## (Suggested Fix|Recommended Action|Closure)/im.test(content)) {
+    missing.push("`## Suggested Fix`, `## Recommended Action`, or `## Closure`")
+  }
+
+  if (missing.length > 0) {
+    throw new Error(
+      `Internal bug reports under .internal/bugs must include ${missing.join(", ")}. ` +
+        `Use Classification=confirmed only for repo-validated defects; use suspected for unproven findings; use false_positive with a Closure section when closing scanner noise.`,
+    )
+  }
+}
+
+export const WriteTool = Tool.define("write", {
+  description: DESCRIPTION,
+  parameters: z.object({
+    content: z.string().describe("The content to write to the file"),
+    filePath: z.string().describe("The absolute path to the file to write (must be absolute, not relative)"),
+  }),
+  async execute(params, ctx) {
+    const filepath = resolveToolFilePath(params.filePath, Instance.directory)
+    const relativePath = normalizeToWorkspacePath(filepath, Instance.worktree)
+    const bytes = Buffer.byteLength(params.content, "utf-8")
+    if (bytes > 5 * 1024 * 1024) throw new Error(`Write content too large: ${bytes} bytes (max 5MB)`)
+    validateInternalBugReport(filepath, params.content)
+    await assertExternalDirectory(ctx, filepath)
+    Isolation.assertWrite(ctx.extra?.isolation, filepath, Instance.directory, Instance.worktree)
+    BlastRadius.assertWritable(ctx.sessionID, relativePath)
+
+    // Read + assert + diff computation must all happen inside the lock,
+    // otherwise a concurrent tool call or external process modifying
+    // the file between `Filesystem.readText` and `Filesystem.write`
+    // would make the diff shown to the user stale — they'd approve
+    // one change and see a different one applied. `edit.ts` already
+    // does all of this inside its lock; `write.ts` was inconsistent.
+    let exists = false
+    await FileTime.withLock(filepath, async () => {
+      // Keep the symlink and directory validation inside the same lock as
+      // the read/permission/write flow so the checked path cannot be
+      // swapped between validation and write.
+      await assertSymlinkInsideProject(filepath)
+
+      const stats = await fs.promises.stat(filepath).catch(() => null)
+      if (stats?.isDirectory()) throw new Error(`Path is a directory, not a file: ${filepath}`)
+
+      exists = await Filesystem.exists(filepath)
+      const contentOld = exists ? await Filesystem.readText(filepath) : ""
+      if (exists) await FileTime.assert(ctx.sessionID, filepath)
+
+      const diff = trimDiff(createTwoFilesPatch(filepath, filepath, contentOld, params.content))
+      await ctx.ask({
+        permission: "edit",
+        patterns: [relativePath],
+        always: ["*"],
+        metadata: {
+          filepath,
+          diff,
+        },
+      })
+
+      await Filesystem.write(filepath, params.content)
+      await notifyFileEdited(filepath, exists ? "change" : "add")
+      await FileTime.read(ctx.sessionID, filepath)
+      // Match edit/multiedit/apply_patch: feed BlastRadius the diff churn
+      // (additions + deletions), not raw line counts. Summing old + new
+      // line counts double-charged unchanged lines and inflated the cap
+      // by up to 2x for full overwrites of mostly-identical content
+      // (BUG-119).
+      let additions = 0
+      let deletions = 0
+      for (const change of diffLines(contentOld, params.content)) {
+        if (change.added) additions += change.count || 0
+        else if (change.removed) deletions += change.count || 0
+      }
+      BlastRadius.recordWriteAndAssert(ctx.sessionID, filepath, additions + deletions)
+    })
+
+    const { diagnostics, output: diagOutput } = await collectDiagnostics([filepath], {
+      includeProjectDiagnostics: true,
+    })
+    let output = "Wrote file successfully." + diagOutput
+
+    return {
+      title: relativePath,
+      metadata: {
+        diagnostics,
+        filepath,
+        exists: exists,
+      },
+      output,
+    }
+  },
+})

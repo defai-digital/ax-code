@@ -1,0 +1,299 @@
+name: ax-code
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/ax-code-ci.yml"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "turbo.json"
+      - "packages/ax-code/**"
+  push:
+    branches:
+      - dev
+    paths:
+      - ".github/workflows/ax-code-ci.yml"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "turbo.json"
+      - "packages/ax-code/**"
+  workflow_dispatch:
+    inputs:
+      live:
+        description: Run live ax-code tests
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  deterministic:
+    runs-on: ubuntu-latest
+    env:
+      AX_CODE_DISABLE_SHARE: "true"
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10.33.4
+          run_install: false
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Security scan
+        uses: google/osv-scanner-action/osv-scanner-action@v2.3.8
+        continue-on-error: true
+        with:
+          scan-args: |-
+            --lockfile=pnpm-lock.yaml
+            --format=table
+
+      - name: Typecheck ax-code
+        run: pnpm --dir packages/ax-code run typecheck
+
+      - name: Download coverage baseline
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          dest="packages/ax-code/.tmp/coverage-baseline"
+          mkdir -p "$dest"
+
+          run_id="$(
+            gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/ax-code-ci.yml/runs?branch=dev&event=push&status=completed&per_page=50" \
+              --jq '.workflow_runs[] | select(.conclusion=="success") | .id' \
+              | head -n1
+          )"
+
+          if [ -z "$run_id" ]; then
+            echo "No successful dev coverage baseline found."
+            exit 0
+          fi
+
+          gh run download "$run_id" -n ax-code-coverage-baseline-summary -D "$dest" || true
+          find "$dest" -maxdepth 2 -type f -print || true
+
+      - name: Run deterministic ax-code tests
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          cmd=(
+            pnpm
+            --dir
+            packages/ax-code
+            run
+            test:ci
+            --
+            deterministic
+            --rerun-on-fail
+            1
+            --coverage
+            --coverage-dir
+            .tmp/coverage
+            --coverage-summary-out
+            .tmp/coverage-summary.json
+            --coverage-report-out
+            .tmp/coverage-report.md
+          )
+
+          baseline="$(find packages/ax-code/.tmp/coverage-baseline -name '*.json' | head -n1 || true)"
+          if [ -n "$baseline" ]; then
+            cmd+=(--coverage-baseline "${baseline#packages/ax-code/}")
+          fi
+
+          "${cmd[@]}"
+
+      - name: Summarize ax-code risk map
+        if: always()
+        run: pnpm --dir packages/ax-code run test:risk
+
+      - name: Upload deterministic reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ax-code-deterministic-report
+          path: |
+            packages/ax-code/.tmp/test-report/*.xml
+            packages/ax-code/.tmp/test-risk.md
+          if-no-files-found: ignore
+
+      - name: Upload coverage artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ax-code-coverage-report
+          path: |
+            packages/ax-code/.tmp/coverage/lcov.info
+            packages/ax-code/.tmp/coverage-summary.json
+            packages/ax-code/.tmp/coverage-report.md
+          if-no-files-found: ignore
+
+      - name: Upload coverage baseline summary
+        if: always() && github.event_name == 'push' && github.ref == 'refs/heads/dev'
+        uses: actions/upload-artifact@v7
+        with:
+          name: ax-code-coverage-baseline-summary
+          path: packages/ax-code/.tmp/coverage-summary.json
+          if-no-files-found: ignore
+
+  # Validate the source-distribution bundle on every PR so a regression
+  # in build-source.ts or publish-source.ts surfaces here, not at release
+  # time. ADR-002 Phase 1 made this the default channel — keeping it
+  # buildable is now a first-class concern.
+  bundle-source:
+    runs-on: ubuntu-latest
+    env:
+      AX_CODE_DISABLE_SHARE: "true"
+      AX_CODE_DISABLE_AUTOUPDATE: "1"
+      AX_CODE_DISABLE_AUTO_INDEX: "1"
+      AX_CODE_DISABLE_LSP_DOWNLOAD: "1"
+      AX_CODE_DISABLE_MODELS_FETCH: "1"
+      AX_CODE_DISABLE_PROJECT_CONFIG: "1"
+    steps:
+      - name: Set isolated home paths
+        shell: bash
+        run: |
+          echo "AX_CODE_TEST_HOME=$RUNNER_TEMP/ax-code-source-bundle-home" >> "$GITHUB_ENV"
+          echo "XDG_CONFIG_HOME=$RUNNER_TEMP/ax-code-source-bundle-home/.config" >> "$GITHUB_ENV"
+          echo "XDG_CACHE_HOME=$RUNNER_TEMP/ax-code-source-bundle-home/.cache" >> "$GITHUB_ENV"
+          echo "XDG_DATA_HOME=$RUNNER_TEMP/ax-code-source-bundle-home/.local/share" >> "$GITHUB_ENV"
+          echo "XDG_STATE_HOME=$RUNNER_TEMP/ax-code-source-bundle-home/.local/state" >> "$GITHUB_ENV"
+
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10.33.4
+          run_install: false
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Build source bundle
+        working-directory: packages/ax-code
+        run: bun run bundle:source
+
+      - name: Smoke — bundle prints version
+        working-directory: packages/ax-code
+        run: |
+          set -e
+          OUTPUT="$(bun dist-source/bundle/index.js --version)"
+          echo "version output: $OUTPUT"
+          # Expect a semver-shaped string. Tag refs prefix with "v";
+          # local builds use the package.json version directly.
+          if ! echo "$OUTPUT" | grep -E '^v?[0-9]+\.[0-9]+\.[0-9]+' >/dev/null; then
+            echo "FAIL: --version did not emit a semver-shaped string"
+            exit 1
+          fi
+
+      - name: Smoke — bundle reports bun-bundled or source runtime mode
+        working-directory: packages/ax-code
+        run: |
+          set -e
+          # Doctor exits non-zero if anything fails; allow that, we only
+          # care about the Runtime line.
+          OUTPUT="$(bun dist-source/bundle/index.js doctor 2>&1 || true)"
+          echo "$OUTPUT"
+          # CI runner has bun on PATH (setup-bun action), so runtimeMode
+          # may be "source" or "bun-bundled" depending on what
+          # process.execPath resolves to. Both are valid for this bundle.
+          if ! echo "$OUTPUT" | grep -E "Runtime: Bun .* \\((bun-bundled|source)\\)" >/dev/null; then
+            echo "FAIL: doctor did not report bun-bundled or source runtimeMode"
+            exit 1
+          fi
+
+      - name: Smoke — bundle backend stdio handshake
+        working-directory: packages/ax-code
+        run: |
+          set -e
+          OUTPUT="$(printf '{"type":"rpc.request","method":"health","id":1}\n' | bun dist-source/bundle/index.js tui-backend --stdio)"
+          echo "$OUTPUT"
+          if ! echo "$OUTPUT" | grep -E '"type":"rpc.result".*"id":1' >/dev/null; then
+            echo "FAIL: bundled tui-backend did not return an RPC health result"
+            exit 1
+          fi
+          if ! echo "$OUTPUT" | grep -E '"runtimeMode":"(bun-bundled|source)"' >/dev/null; then
+            echo "FAIL: bundled tui-backend did not report bun-bundled or source runtimeMode"
+            exit 1
+          fi
+
+      - name: Pack — verify publish-source assembles a valid tarball
+        working-directory: packages/ax-code
+        env:
+          AX_CODE_DRY_RUN: "1"
+        run: bun run bundle:source:pack
+
+      - name: Upload bundle artifact for inspection
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ax-code-source-bundle
+          path: |
+            packages/ax-code/dist-source/package/*.tgz
+          if-no-files-found: warn
+          retention-days: 7
+
+  live:
+    if: github.event_name == 'workflow_dispatch' && inputs.live
+    runs-on: ubuntu-latest
+    env:
+      AX_CODE_DISABLE_SHARE: "true"
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10.33.4
+          run_install: false
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Run live ax-code tests
+        run: pnpm --dir packages/ax-code run test:ci -- live
+
+      - name: Upload live reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ax-code-live-report
+          path: packages/ax-code/.tmp/test-report/*.xml
+          if-no-files-found: ignore

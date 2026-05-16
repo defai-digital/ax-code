@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json.schemastore.org/package",
+  "name": "@ax-code/script",
+  "license": "MIT",
+  "dependencies": {
+    "semver": "catalog:"
+  },
+  "devDependencies": {
+    "@types/bun": "catalog:",
+    "@types/semver": "catalog:"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}

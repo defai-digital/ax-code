@@ -1,0 +1,21 @@
+#!/usr/bin/env sh
+
+# Secret scanning — abort commit if staged files contain API keys or tokens.
+# Patterns cover common AI provider keys, AWS, GCP, and generic token formats.
+SECRET_VALUE_PATTERNS='(sk-[a-zA-Z0-9]{20,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{35}|ghp_[a-zA-Z0-9]{36}|xoxb-[0-9]{10,}-[a-zA-Z0-9]{24,}|-----BEGIN (RSA |EC |DSA )?PRIVATE KEY-----)'
+SECRET_ASSIGNMENT_PATTERNS='(ANTHROPIC_API_KEY|OPENAI_API_KEY|GOOGLE_API_KEY)[[:space:]]*[=:][[:space:]]*["'\'']?[a-zA-Z0-9_/+=.-]{20,}'
+if git diff --cached --diff-filter=d -U0 |
+  grep -E '^\+' |
+  grep -vE '^\+\+\+' |
+  grep -qE "($SECRET_VALUE_PATTERNS|$SECRET_ASSIGNMENT_PATTERNS)"; then
+  echo "ERROR: Possible secret detected in staged changes."
+  echo "Review added lines in: git diff --cached -U0"
+  echo "If this is a false positive, commit with --no-verify."
+  exit 1
+fi
+
+# Update models snapshot before each commit
+bun run packages/ax-code/script/update-models.ts
+
+# Stage the snapshot if it changed
+git diff --quiet packages/ax-code/src/provider/models-snapshot.json || git add packages/ax-code/src/provider/models-snapshot.json

@@ -1,0 +1,35 @@
+Apply a persisted refactor plan safely: open a scratch git worktree, apply the supplied patch, run typecheck + lint + tests, and only if every check passes, apply the patch to the real worktree. On any check failure, nothing is written to the real worktree.
+
+This tool requires permission each time it runs (like edit or write) and NEVER bypasses typecheck, even in aggressive mode.
+
+Input:
+- planId: id returned by refactor_plan (required)
+- patch: unified diff to apply. Without a patch, the tool only runs its checks as a pre-flight sanity test and returns applied: false with abortReason "no-patch-supplied". (The agent constructs the patch from the plan's edit list.)
+- mode: "safe" (default) runs every check; "aggressive" allows skipLint and skipTests
+- skipLint: only honored when mode="aggressive"
+- skipTests: only honored when mode="aggressive"
+- commands: override the typecheck / lint / test commands (defaults infer from package.json scripts)
+
+Output:
+- applied: true if the patch was successfully applied to the real worktree
+- planId: echoed
+- checks: { typecheck, lint, tests } — each with ok + errors + (tests) ran/failed/failures/selection
+- filesChanged: files modified by the apply (empty when applied: false)
+- rolledBack: true if the pipeline had to roll back a partial real-worktree apply (shouldn't happen — git apply is atomic)
+- abortReason: null on success, or one of: plan-not-found, plan-stale, plan-status-*, not-a-git-worktree, shadow-*, patch-apply-failed, typecheck-failed, lint-failed, tests-failed, real-apply-failed, no-patch-supplied
+- explain: heuristics applied
+
+Hard guarantees:
+- The real worktree is byte-identical to its pre-call state if any check fails
+- The shadow worktree is cleaned up on every code path, including exceptions
+- Typecheck is never skipped
+- Plans in status other than "pending" are rejected — re-run refactor_plan to produce a fresh one
+- Stale plans (graph has moved since the plan was created) are marked stale and rejected
+
+When to use:
+- After refactor_plan produces a plan you've reviewed
+- After an agent or human has constructed a concrete patch for that plan
+
+When NOT to use:
+- For single-file cosmetic edits — use edit or write
+- Without an explicit plan — this tool does not synthesize patches, only validates and applies them

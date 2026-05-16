@@ -1,0 +1,467 @@
+// Ripgrep utility functions
+import path from "path"
+import { createHash } from "crypto"
+import { Global } from "../global"
+import fs from "fs/promises"
+import z from "zod"
+import { NamedError } from "@ax-code/util/error"
+import { lazy } from "../util/lazy"
+
+import { Filesystem } from "../util/filesystem"
+import { Process } from "../util/process"
+import { which } from "../util/which"
+import { text } from "node:stream/consumers"
+
+import { ZipReader, BlobReader, BlobWriter } from "@zip.js/zip.js"
+import { Log } from "@/util/log"
+import { NativePerf } from "../perf/native"
+import { NativeAddon } from "../native/addon"
+import { Ssrf } from "@/util/ssrf"
+import { Env } from "@/util/env"
+
+export namespace Ripgrep {
+  const log = Log.create({ service: "ripgrep" })
+  const Stats = z.object({
+    elapsed: z.object({
+      secs: z.number(),
+      nanos: z.number(),
+      human: z.string(),
+    }),
+    searches: z.number(),
+    searches_with_match: z.number(),
+    bytes_searched: z.number(),
+    bytes_printed: z.number(),
+    matched_lines: z.number(),
+    matches: z.number(),
+  })
+
+  const Begin = z.object({
+    type: z.literal("begin"),
+    data: z.object({
+      path: z.object({
+        text: z.string(),
+      }),
+    }),
+  })
+
+  export const Match = z.object({
+    type: z.literal("match"),
+    data: z.object({
+      path: z.object({
+        text: z.string(),
+      }),
+      lines: z.object({
+        text: z.string(),
+      }),
+      line_number: z.number(),
+      absolute_offset: z.number(),
+      submatches: z.array(
+        z.object({
+          match: z.object({
+            text: z.string(),
+          }),
+          start: z.number(),
+          end: z.number(),
+        }),
+      ),
+    }),
+  })
+
+  const End = z.object({
+    type: z.literal("end"),
+    data: z.object({
+      path: z.object({
+        text: z.string(),
+      }),
+      binary_offset: z.number().nullable(),
+      stats: Stats,
+    }),
+  })
+
+  const Summary = z.object({
+    type: z.literal("summary"),
+    data: z.object({
+      elapsed_total: z.object({
+        human: z.string(),
+        nanos: z.number(),
+        secs: z.number(),
+      }),
+      stats: Stats,
+    }),
+  })
+
+  const Result = z.union([Begin, Match, End, Summary])
+
+  export type Result = z.infer<typeof Result>
+  export type Match = z.infer<typeof Match>
+  export type Begin = z.infer<typeof Begin>
+  export type End = z.infer<typeof End>
+  export type Summary = z.infer<typeof Summary>
+  const PLATFORM = {
+    "arm64-darwin": { platform: "aarch64-apple-darwin", extension: "tar.gz" },
+    "arm64-linux": {
+      platform: "aarch64-unknown-linux-gnu",
+      extension: "tar.gz",
+    },
+    "x64-darwin": { platform: "x86_64-apple-darwin", extension: "tar.gz" },
+    "x64-linux": { platform: "x86_64-unknown-linux-musl", extension: "tar.gz" },
+    "arm64-win32": { platform: "aarch64-pc-windows-msvc", extension: "zip" },
+    "x64-win32": { platform: "x86_64-pc-windows-msvc", extension: "zip" },
+  } as const
+
+  export const ExtractionFailedError = NamedError.create(
+    "RipgrepExtractionFailedError",
+    z.object({
+      filepath: z.string(),
+      stderr: z.string(),
+    }),
+  )
+
+  export const UnsupportedPlatformError = NamedError.create(
+    "RipgrepUnsupportedPlatformError",
+    z.object({
+      platform: z.string(),
+    }),
+  )
+
+  export const DownloadFailedError = NamedError.create(
+    "RipgrepDownloadFailedError",
+    z.object({
+      url: z.string(),
+      status: z.number(),
+    }),
+  )
+
+  export const IntegrityError = NamedError.create(
+    "RipgrepIntegrityError",
+    z.object({
+      url: z.string(),
+      expected: z.string(),
+      actual: z.string(),
+    }),
+  )
+
+  export const ChecksumParseError = NamedError.create(
+    "RipgrepChecksumParseError",
+    z.object({
+      url: z.string(),
+    }),
+  )
+
+  async function fetchReleaseAsset(url: string) {
+    const response = await Ssrf.pinnedFetch(url, { label: "ripgrep" })
+    if (!response.ok) throw new DownloadFailedError({ url, status: response.status })
+    return Buffer.from(await response.arrayBuffer())
+  }
+
+  async function fetchExpectedSha256(url: string) {
+    const checksumUrl = `${url}.sha256`
+    const body = await fetchReleaseAsset(checksumUrl).then((buffer) => buffer.toString("utf8"))
+    const match = body.match(/\b[a-f0-9]{64}\b/i)
+    if (!match) throw new ChecksumParseError({ url: checksumUrl })
+    return match[0].toLowerCase()
+  }
+
+  const state = lazy(async () => {
+    const system = which("rg")
+    if (system) {
+      const stat = await fs.stat(system).catch(() => undefined)
+      if (stat?.isFile()) return { filepath: system }
+      log.warn("bun.which returned invalid rg path", { filepath: system })
+    }
+    const filepath = path.join(Global.Path.bin, "rg" + (process.platform === "win32" ? ".exe" : ""))
+
+    if (!(await Filesystem.exists(filepath))) {
+      const platformKey = `${process.arch}-${process.platform}` as keyof typeof PLATFORM
+      const config = PLATFORM[platformKey]
+      if (!config) throw new UnsupportedPlatformError({ platform: platformKey })
+
+      const version = "14.1.1"
+      const filename = `ripgrep-${version}-${config.platform}.${config.extension}`
+      const url = `https://github.com/BurntSushi/ripgrep/releases/download/${version}/${filename}`
+
+      const expectedHash = await fetchExpectedSha256(url)
+      const archive = await fetchReleaseAsset(url)
+      const actualHash = createHash("sha256").update(archive).digest("hex")
+      if (actualHash !== expectedHash) {
+        throw new IntegrityError({ url, expected: expectedHash, actual: actualHash })
+      }
+
+      const archivePath = path.join(Global.Path.bin, filename)
+      await Filesystem.write(archivePath, archive)
+      if (config.extension === "tar.gz") {
+        try {
+          const args = ["tar", "-xzf", archivePath, "--strip-components=1"]
+
+          if (platformKey.endsWith("-darwin")) args.push("--include=*/rg")
+          if (platformKey.endsWith("-linux")) args.push("--wildcards", "*/rg")
+
+          const proc = Process.spawn(args, {
+            cwd: Global.Path.bin,
+            stderr: "pipe",
+            stdout: "pipe",
+          })
+          const exit = await proc.exited
+          if (exit !== 0) {
+            const stderr = proc.stderr ? await text(proc.stderr) : ""
+            throw new ExtractionFailedError({
+              filepath,
+              stderr,
+            })
+          }
+        } finally {
+          await fs.unlink(archivePath).catch(() => {})
+        }
+      }
+      if (config.extension === "zip") {
+        const zipFileReader = new ZipReader(new BlobReader(new Blob([archive])))
+        try {
+          const entries = await zipFileReader.getEntries()
+          let rgEntry: any
+          for (const entry of entries) {
+            if (entry.filename.endsWith("rg.exe")) {
+              rgEntry = entry
+              break
+            }
+          }
+
+          if (!rgEntry) {
+            throw new ExtractionFailedError({
+              filepath: archivePath,
+              stderr: "rg.exe not found in zip archive",
+            })
+          }
+
+          const rgBlob = await rgEntry.getData(new BlobWriter())
+          if (!rgBlob) {
+            throw new ExtractionFailedError({
+              filepath: archivePath,
+              stderr: "Failed to extract rg.exe from zip archive",
+            })
+          }
+          await Filesystem.write(filepath, Buffer.from(await rgBlob.arrayBuffer()))
+        } finally {
+          // Always close the reader — error paths previously leaked file
+          // handles by throwing before reaching the close() call.
+          try {
+            await zipFileReader.close()
+          } catch {}
+        }
+      }
+      if (config.extension !== "tar.gz") await fs.unlink(archivePath)
+      if (!platformKey.endsWith("-win32")) await fs.chmod(filepath, 0o755)
+    }
+
+    return {
+      filepath,
+    }
+  })
+
+  export async function filepath() {
+    const { filepath } = await state()
+    return filepath
+  }
+
+  export async function* files(input: {
+    cwd: string
+    glob?: string[]
+    hidden?: boolean
+    follow?: boolean
+    maxDepth?: number
+    signal?: AbortSignal
+  }) {
+    input.signal?.throwIfAborted()
+
+    // Native fast-path: in-process file walker via Rust addon
+    const native = NativeAddon.fs()
+    if (native) {
+      try {
+        const results = NativePerf.run(
+          "fs.walkFiles",
+          {
+            cwd: input.cwd,
+            glob: input.glob?.length ?? 0,
+            hidden: input.hidden ?? true,
+            maxDepth: input.maxDepth,
+          },
+          () =>
+            native.walkFiles(
+              input.cwd,
+              JSON.stringify({
+                glob: input.glob,
+                hidden: input.hidden,
+                maxDepth: input.maxDepth,
+              }),
+            ),
+        )
+        for (const file of results) {
+          yield file
+        }
+        return
+      } catch (e: any) {
+        if (e?.code !== "MODULE_NOT_FOUND" && e?.code !== "ERR_MODULE_NOT_FOUND") throw e
+      }
+    }
+
+    const args = [await filepath(), "--files", "--glob=!.git/*"]
+    if (input.follow) args.push("--follow")
+    if (input.hidden !== false) args.push("--hidden")
+    if (input.maxDepth !== undefined) args.push(`--max-depth=${input.maxDepth}`)
+    if (input.glob) {
+      for (const g of input.glob) {
+        args.push(`--glob=${g}`)
+      }
+    }
+
+    // Guard against invalid cwd to provide a consistent ENOENT error.
+    if (!(await fs.stat(input.cwd).catch(() => undefined))?.isDirectory()) {
+      throw Object.assign(new Error(`No such file or directory: '${input.cwd}'`), {
+        code: "ENOENT",
+        errno: -2,
+        path: input.cwd,
+      })
+    }
+
+    const proc = Process.spawn(args, {
+      cwd: input.cwd,
+      stdout: "pipe",
+      stderr: "ignore",
+      abort: input.signal,
+      env: Env.sanitize(),
+    })
+
+    if (!proc.stdout) {
+      throw new Error("Process output not available")
+    }
+
+    let buffer = ""
+    const stream = proc.stdout as AsyncIterable<Buffer | string>
+    for await (const chunk of stream) {
+      input.signal?.throwIfAborted()
+
+      buffer += typeof chunk === "string" ? chunk : chunk.toString()
+      // Handle both Unix (\n) and Windows (\r\n) line endings
+      const lines = buffer.split(/\r?\n/)
+      buffer = lines.pop() || ""
+
+      for (const line of lines) {
+        if (line) yield line
+      }
+    }
+
+    if (buffer) yield buffer
+    await proc.exited
+
+    input.signal?.throwIfAborted()
+  }
+
+  export async function tree(input: { cwd: string; limit?: number; signal?: AbortSignal }) {
+    log.info("tree", input)
+    const files = await Array.fromAsync(Ripgrep.files({ cwd: input.cwd, signal: input.signal }))
+    interface Node {
+      name: string
+      children: Map<string, Node>
+    }
+
+    function dir(node: Node, name: string) {
+      const existing = node.children.get(name)
+      if (existing) return existing
+      const next = { name, children: new Map() }
+      node.children.set(name, next)
+      return next
+    }
+
+    const root: Node = { name: "", children: new Map() }
+    for (const file of files) {
+      if (file.includes(".ax-code")) continue
+      const parts = file.split(path.sep)
+      if (parts.length < 2) continue
+      let node = root
+      for (const part of parts.slice(0, -1)) {
+        node = dir(node, part)
+      }
+    }
+
+    function count(node: Node): number {
+      let total = 0
+      for (const child of node.children.values()) {
+        total += 1 + count(child)
+      }
+      return total
+    }
+
+    const total = count(root)
+    const limit = input.limit ?? total
+    const lines: string[] = []
+    const queue: { node: Node; path: string }[] = []
+    for (const child of Array.from(root.children.values()).sort((a, b) => a.name.localeCompare(b.name))) {
+      queue.push({ node: child, path: child.name })
+    }
+
+    let used = 0
+    for (let i = 0; i < queue.length && used < limit; i++) {
+      const { node, path } = queue[i]
+      lines.push(path)
+      used++
+      for (const child of Array.from(node.children.values()).sort((a, b) => a.name.localeCompare(b.name))) {
+        queue.push({ node: child, path: `${path}/${child.name}` })
+      }
+    }
+
+    if (total > used) lines.push(`[${total - used} truncated]`)
+
+    return lines.join("\n")
+  }
+
+  export async function search(input: {
+    cwd: string
+    pattern: string
+    glob?: string[]
+    limit?: number
+    follow?: boolean
+  }) {
+    const args = [`${await filepath()}`, "--json", "--hidden", "--glob=!.git/*"]
+    if (input.follow) args.push("--follow")
+
+    if (input.glob) {
+      for (const g of input.glob) {
+        args.push(`--glob=${g}`)
+      }
+    }
+
+    if (input.limit) {
+      args.push(`--max-count=${input.limit}`)
+    }
+
+    args.push("--")
+    args.push(input.pattern)
+
+    const result = await Process.text(args, {
+      cwd: input.cwd,
+      nothrow: true,
+    })
+    if (result.code === 2) {
+      log.warn("ripgrep error", { code: result.code, stderr: result.stderr })
+      return []
+    }
+    if (result.code !== 0) {
+      return []
+    }
+
+    // Handle both Unix (\n) and Windows (\r\n) line endings
+    const lines = result.text.trim().split(/\r?\n/).filter(Boolean)
+    // Parse JSON lines from ripgrep output
+
+    const matches = []
+    for (const line of lines) {
+      try {
+        const parsed = Result.parse(JSON.parse(line))
+        if (parsed.type === "match") matches.push(parsed.data)
+      } catch {
+        // Skip malformed JSON lines from ripgrep (e.g., truncated output)
+        continue
+      }
+    }
+    return matches
+  }
+}

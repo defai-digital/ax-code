@@ -1,0 +1,19 @@
+#!/bin/sh
+
+if [ ! -d ".git" ]; then
+    exit 0
+fi
+
+mkdir -p .git/hooks
+
+cat > .git/hooks/pre-push << 'EOF'
+#!/bin/sh
+# Ensure dependencies are installed before typecheck
+if command -v pnpm >/dev/null 2>&1; then
+  pnpm install >/dev/null 2>&1 || true
+fi
+pnpm run typecheck
+EOF
+
+chmod +x .git/hooks/pre-push
+echo "✅ Pre-push hook installed"

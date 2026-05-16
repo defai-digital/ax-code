@@ -1,0 +1,276 @@
+import path from "path"
+import os from "os"
+import { Global } from "../global"
+import { Filesystem } from "../util/filesystem"
+import { Config } from "../config/config"
+import { Instance } from "../project/instance"
+import { Flag } from "@/flag/flag"
+import { Log } from "../util/log"
+import { Glob } from "../util/glob"
+import { Ssrf } from "../util/ssrf"
+import type { MessageV2 } from "./message-v2"
+
+const log = Log.create({ service: "instruction" })
+
+const FILES = [
+  "AGENTS.md",
+  "CLAUDE.md",
+  "AX.md",
+  "CONTEXT.md", // deprecated
+]
+
+function resolveHomeInstructionPath(input: string) {
+  const resolved = path.resolve(os.homedir(), input.slice(2))
+  if (!Filesystem.contains(os.homedir(), resolved)) {
+    log.warn("instruction path escapes home directory", { path: input, resolved })
+    return
+  }
+  return resolved
+}
+
+function allowInstructionAbsolutePath(input: string) {
+  return Filesystem.contains(Instance.worktree, input) || Filesystem.contains(os.homedir(), input)
+}
+
+function globalFiles() {
+  const files = []
+  if (Flag.AX_CODE_CONFIG_DIR) {
+    files.push(path.join(Flag.AX_CODE_CONFIG_DIR, "AGENTS.md"))
+  }
+  files.push(path.join(Global.Path.config, "AGENTS.md"))
+  if (!Flag.AX_CODE_DISABLE_CLAUDE_CODE_PROMPT) {
+    files.push(path.join(os.homedir(), ".claude", "CLAUDE.md"))
+  }
+  return files
+}
+
+async function resolveRelative(instruction: string): Promise<string[]> {
+  if (!Flag.AX_CODE_DISABLE_PROJECT_CONFIG) {
+    return Filesystem.globUp(instruction, Instance.directory, Instance.worktree).catch(() => [])
+  }
+  if (!Flag.AX_CODE_CONFIG_DIR) {
+    log.warn(
+      `Skipping relative instruction "${instruction}" - no AX_CODE_CONFIG_DIR set while project config is disabled`,
+    )
+    return []
+  }
+  return Filesystem.globUp(instruction, Flag.AX_CODE_CONFIG_DIR, Flag.AX_CODE_CONFIG_DIR).catch(() => [])
+}
+
+export namespace InstructionPrompt {
+  const state = Instance.state(() => {
+    return {
+      claims: new Map<string, Set<string>>(),
+    }
+  })
+
+  function isClaimed(messageID: string, filepath: string) {
+    const claimed = state().claims.get(messageID)
+    if (!claimed) return false
+    return claimed.has(filepath)
+  }
+
+  function claim(messageID: string, filepath: string) {
+    const current = state()
+    let claimed = current.claims.get(messageID)
+    if (!claimed) {
+      claimed = new Set()
+      current.claims.set(messageID, claimed)
+    }
+    claimed.add(filepath)
+  }
+
+  export function clear(messageID: string) {
+    state().claims.delete(messageID)
+  }
+
+  export async function systemPaths() {
+    const config = await Config.get()
+    const paths = new Set<string>()
+
+    if (!Flag.AX_CODE_DISABLE_PROJECT_CONFIG) {
+      for (const file of FILES) {
+        const matches = await Filesystem.findUp(file, Instance.directory, Instance.worktree)
+        if (matches.length > 0) {
+          matches.forEach((p) => {
+            paths.add(path.resolve(p))
+          })
+          break
+        }
+      }
+    }
+
+    for (const file of globalFiles()) {
+      if (await Filesystem.exists(file)) {
+        paths.add(path.resolve(file))
+        break
+      }
+    }
+
+    if (config.instructions) {
+      for (let instruction of config.instructions) {
+        if (instruction.startsWith("https://") || instruction.startsWith("http://")) continue
+        if (instruction.startsWith("~/")) {
+          const resolved = resolveHomeInstructionPath(instruction)
+          if (!resolved) continue
+          instruction = resolved
+        }
+        if (path.isAbsolute(instruction)) {
+          instruction = path.resolve(instruction)
+          if (!allowInstructionAbsolutePath(instruction)) {
+            log.warn("instruction path escapes allowed roots", { path: instruction })
+            continue
+          }
+        }
+        const matches = path.isAbsolute(instruction)
+          ? await Glob.scan(path.basename(instruction), {
+              cwd: path.dirname(instruction),
+              absolute: true,
+              include: "file",
+            }).catch(() => [])
+          : await resolveRelative(instruction)
+        matches.forEach((p) => {
+          paths.add(path.resolve(p))
+        })
+      }
+    }
+
+    return paths
+  }
+
+  export async function system() {
+    const config = await Config.get()
+    const paths = await systemPaths()
+
+    const files = Array.from(paths).map(async (p) => {
+      // Log failures so the user sees why a listed instruction file
+      // silently produced no effect (permissions, corruption,
+      // symlink to a missing path). The previous `.catch(() => "")`
+      // made misconfigured paths invisible.
+      const content = await Filesystem.readText(p).catch((err) => {
+        log.warn("instruction file read failed", { path: p, err })
+        return ""
+      })
+      return content ? "Instructions from: " + p + "\n" + content : ""
+    })
+
+    const urls: string[] = []
+    if (config.instructions) {
+      for (const instruction of config.instructions) {
+        if (instruction.startsWith("https://") || instruction.startsWith("http://")) {
+          urls.push(instruction)
+        }
+      }
+    }
+    const fetches = urls.map(async (url) => {
+      // SSRF guard. A malicious project config can set
+      // instructions: ["http://169.254.169.254/latest/meta-data/iam/..."]
+      // and have the contents injected verbatim into the LLM system
+      // prompt as "Instructions from: ...", exfiltrating cloud
+      // metadata tokens through the next LLM response. Reject any
+      // URL whose resolved address is in a private/reserved range
+      // before touching the network. Failures are logged and return
+      // an empty string so one bad URL doesn't take down the whole
+      // instruction pipeline.
+      try {
+        await Ssrf.assertPublicUrl(url, "instruction-url")
+      } catch (err) {
+        log.warn("instruction URL rejected by SSRF guard", { url, err })
+        return ""
+      }
+      const INSTRUCTION_MAX_BYTES = 1024 * 1024 // 1MB
+      return Ssrf.pinnedFetch(url, { signal: AbortSignal.timeout(5000) })
+        .then(async (res) => {
+          if (!res.ok) {
+            log.warn("instruction URL returned non-ok", { url, status: res.status })
+            return ""
+          }
+          const contentLength = res.headers.get("content-length")
+          const contentLengthBytes = contentLength ? Number(contentLength) : undefined
+          if (contentLengthBytes !== undefined && !Number.isNaN(contentLengthBytes) && contentLengthBytes > INSTRUCTION_MAX_BYTES) {
+            log.warn("instruction URL response too large", { url, contentLength })
+            return ""
+          }
+          const reader = res.body?.getReader()
+          if (!reader) return res.text()
+          const chunks: Uint8Array[] = []
+          let total = 0
+          while (true) {
+            const { done, value } = await reader.read()
+            if (done) break
+            total += value.byteLength
+            if (total > INSTRUCTION_MAX_BYTES) {
+              await reader.cancel()
+              log.warn("instruction URL response exceeded size limit", { url, limit: INSTRUCTION_MAX_BYTES })
+              return ""
+            }
+            chunks.push(value)
+          }
+          return new TextDecoder().decode(
+            chunks.reduce((acc, c) => {
+              const merged = new Uint8Array(acc.byteLength + c.byteLength)
+              merged.set(acc)
+              merged.set(c, acc.byteLength)
+              return merged
+            }, new Uint8Array()),
+          )
+        })
+        .catch((err) => {
+          log.warn("instruction URL fetch failed", { url, err })
+          return ""
+        })
+        .then((x) => (x ? "Instructions from: " + url + "\n" + x : ""))
+    })
+
+    return Promise.all([...files, ...fetches]).then((result) => result.filter(Boolean))
+  }
+
+  export function loaded(messages: MessageV2.WithParts[]) {
+    const paths = new Set<string>()
+    for (const msg of messages) {
+      for (const part of msg.parts) {
+        if (part.type === "tool" && part.tool === "read" && part.state.status === "completed") {
+          if (part.state.time.compacted) continue
+          const loaded = part.state.metadata?.loaded
+          if (!loaded || !Array.isArray(loaded)) continue
+          for (const p of loaded) {
+            if (typeof p === "string") paths.add(p)
+          }
+        }
+      }
+    }
+    return paths
+  }
+
+  export async function find(dir: string) {
+    for (const file of FILES) {
+      const filepath = path.resolve(path.join(dir, file))
+      if (await Filesystem.exists(filepath)) return filepath
+    }
+  }
+
+  export async function resolve(messages: MessageV2.WithParts[], filepath: string, messageID: string) {
+    const system = await systemPaths()
+    const already = loaded(messages)
+    const results: { filepath: string; content: string }[] = []
+
+    const target = path.resolve(filepath)
+    let current = path.dirname(target)
+    const root = path.resolve(Instance.directory)
+
+    while (current.startsWith(root) && current !== root) {
+      const found = await find(current)
+
+      if (found && found !== target && !system.has(found) && !already.has(found) && !isClaimed(messageID, found)) {
+        claim(messageID, found)
+        const content = await Filesystem.readText(found).catch(() => undefined)
+        if (content) {
+          results.push({ filepath: found, content: "Instructions from: " + found + "\n" + content })
+        }
+      }
+      current = path.dirname(current)
+    }
+
+    return results
+  }
+}

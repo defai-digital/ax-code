@@ -1,0 +1,61 @@
+#!/usr/bin/env node
+
+import fs from "fs"
+import path from "path"
+import os from "os"
+import childProcess from "child_process"
+import { fileURLToPath } from "url"
+import { createRequire } from "module"
+
+const require = createRequire(import.meta.url)
+
+function run(target) {
+  const result = childProcess.spawnSync(target, process.argv.slice(2), {
+    stdio: "inherit",
+  })
+  if (result.error) {
+    console.error(result.error.message)
+    process.exit(1)
+  }
+  if (result.signal) {
+    const signals = os.constants.signals || {}
+    const signalCode = signals[result.signal]
+    process.exit(typeof signalCode === "number" ? 128 + signalCode : 1)
+  }
+  const code = typeof result.status === "number" ? result.status : 0
+  process.exit(code)
+}
+
+const envPath = process.env.AX_CODE_BIN_PATH || process.env.OPENCODE_BIN_PATH
+if (envPath) {
+  run(envPath)
+}
+
+const scriptPath = fs.realpathSync(fileURLToPath(import.meta.url))
+const scriptDir = path.dirname(scriptPath)
+const { candidatePackageNames, findBinary } = require("./binary-selection.cjs")
+
+//
+const cached = path.join(scriptDir, ".ax-code")
+if (fs.existsSync(cached)) {
+  run(cached)
+}
+
+const selection = candidatePackageNames()
+const { names } = selection
+
+const resolved = findBinary(scriptDir)
+if (!resolved) {
+  if (selection.unsupported) {
+    console.error(selection.unsupported)
+  } else {
+    console.error(
+      "It seems that your package manager failed to install the right version of the ax-code CLI for your platform. You can try manually installing " +
+        names.map((n) => `\"${n}\"`).join(" or ") +
+        " package",
+    )
+  }
+  process.exit(1)
+}
+
+run(resolved)

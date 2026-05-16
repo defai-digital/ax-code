@@ -1,0 +1,362 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+# Channel policy: stable semver tags (for example `v3.1.4`) publish to npm
+# `latest`, are marked as the GitHub "Latest" release, and update Homebrew.
+# Prerelease tags (for example `v3.2.0-beta.1`) stay on the `beta` channel.
+env:
+  AX_CODE_RELEASE_CHANNEL: ${{ contains(github.ref_name, '-') && 'beta' || 'latest' }}
+
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10.33.4
+          run_install: false
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Security scan
+        uses: google/osv-scanner-action/osv-scanner-action@v2.3.8
+        continue-on-error: true
+        with:
+          scan-args: |-
+            --lockfile=pnpm-lock.yaml
+            --format=table
+
+      - name: Typecheck
+        run: pnpm --dir packages/ax-code run typecheck
+
+      - name: Test
+        run: pnpm --dir packages/ax-code run test:ci -- deterministic
+        env:
+          AX_CODE_DISABLE_SHARE: "true"
+
+  build:
+    needs: typecheck
+    permissions:
+      contents: write
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            targets: linux-x64
+            build-args: --single --baseline --include-abi --skip-install
+            smoke-bin: dist/ax-code-linux-x64/bin/ax-code
+          - os: ubuntu-24.04-arm
+            targets: linux-arm64
+            build-args: --single --include-abi --skip-install
+            smoke-bin: dist/ax-code-linux-arm64/bin/ax-code
+          - os: macos-latest
+            targets: darwin-arm64
+            build-args: --single --skip-install
+            smoke-bin: dist/ax-code-darwin-arm64/bin/ax-code
+          - os: windows-latest
+            targets: win32-x64
+            build-args: --single --skip-install
+            smoke-bin: dist/ax-code-windows-x64/bin/ax-code.exe
+          - os: windows-11-arm
+            targets: win32-arm64
+            build-args: --single --skip-install
+            smoke-bin: dist/ax-code-windows-arm64/bin/ax-code.exe
+    runs-on: ${{ matrix.os }}
+    env:
+      AX_CODE_DISABLE_AUTOUPDATE: "1"
+      AX_CODE_DISABLE_AUTO_INDEX: "1"
+      AX_CODE_DISABLE_LSP_DOWNLOAD: "1"
+      AX_CODE_DISABLE_MODELS_FETCH: "1"
+      AX_CODE_DISABLE_PROJECT_CONFIG: "1"
+    steps:
+      - name: Set isolated home paths
+        shell: bash
+        run: |
+          echo "AX_CODE_TEST_HOME=$RUNNER_TEMP/ax-code-release-build-home" >> "$GITHUB_ENV"
+          echo "XDG_CONFIG_HOME=$RUNNER_TEMP/ax-code-release-build-home/.config" >> "$GITHUB_ENV"
+          echo "XDG_CACHE_HOME=$RUNNER_TEMP/ax-code-release-build-home/.cache" >> "$GITHUB_ENV"
+          echo "XDG_DATA_HOME=$RUNNER_TEMP/ax-code-release-build-home/.local/share" >> "$GITHUB_ENV"
+          echo "XDG_STATE_HOME=$RUNNER_TEMP/ax-code-release-build-home/.local/state" >> "$GITHUB_ENV"
+
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10.33.4
+          run_install: false
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build
+        working-directory: packages/ax-code
+        run: bun run script/build.ts ${{ matrix.build-args }}
+        env:
+          AX_CODE_VERSION: ${{ github.ref_name }}
+          AX_CODE_CHANNEL: ${{ env.AX_CODE_RELEASE_CHANNEL }}
+          AX_CODE_RELEASE: "true"
+
+      - name: Smoke — compiled backend stdio handshake
+        working-directory: packages/ax-code
+        shell: bash
+        run: |
+          set -e
+          BIN="${{ matrix.smoke-bin }}"
+          if [ -z "$BIN" ]; then
+            echo "FAIL: release matrix did not provide a compiled ax-code smoke binary"
+            exit 1
+          fi
+          if [ ! -f "$BIN" ]; then
+            echo "FAIL: compiled ax-code smoke binary not found: $BIN"
+            exit 1
+          fi
+          OUTPUT="$(printf '{"type":"rpc.request","method":"health","id":1}\n' | "$BIN" tui-backend --stdio)"
+          echo "$OUTPUT"
+          if ! echo "$OUTPUT" | grep -E '"type":"rpc.result".*"id":1' >/dev/null; then
+            echo "FAIL: compiled tui-backend did not return an RPC health result"
+            exit 1
+          fi
+          if ! echo "$OUTPUT" | grep -E '"runtimeMode":"compiled"' >/dev/null; then
+            echo "FAIL: compiled tui-backend did not report compiled runtimeMode"
+            exit 1
+          fi
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: dist-${{ matrix.targets }}
+          path: packages/ax-code/dist/
+          retention-days: 1
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: packages/ax-code/dist/
+          merge-multiple: true
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CHANNEL: ${{ env.AX_CODE_RELEASE_CHANNEL }}
+        run: |
+          TAG="${{ github.ref_name }}"
+          PRERELEASE_FLAG=""
+          if [ "$CHANNEL" != "latest" ]; then
+            PRERELEASE_FLAG="--prerelease"
+          fi
+          # Create a draft release so the install-matrix-smoke workflow (which
+          # triggers on release: [published]) does not fire before npm and
+          # Homebrew artifacts are ready. The finalize job un-drafts it after
+          # all publish jobs complete.
+          # Idempotent: skip if any release (draft or published) already exists.
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            VERSION="${TAG#v}"
+            NOTES_FILE="packages/ax-code/.internal/release/release-notes-v${VERSION}.md"
+            if [ -f "$NOTES_FILE" ]; then
+              NOTES_ARGS="--notes-file $NOTES_FILE"
+            else
+              NOTES_ARGS="--generate-notes"
+            fi
+            gh release create "$TAG" \
+              --title "$TAG" \
+              $NOTES_ARGS \
+              --verify-tag \
+              --draft \
+              $PRERELEASE_FLAG
+          fi
+
+      - name: Upload release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ github.ref_name }}"
+          for f in packages/ax-code/dist/*.tar.gz packages/ax-code/dist/*.zip; do
+            [ -f "$f" ] && gh release upload "$TAG" "$f" --clobber || true
+          done
+
+  # Compiled binary npm publish. This is the default npm artifact for
+  # @defai.digital/ax-code; platform packages are installed as optional
+  # dependencies by the meta package.
+  publish-npm:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10.33.4
+          run_install: false
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: packages/ax-code/dist/
+          merge-multiple: true
+
+      - name: Publish compiled npm packages
+        working-directory: packages/ax-code
+        run: bun run script/publish.ts
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          AX_CODE_COMPILED_TAG: ${{ env.AX_CODE_RELEASE_CHANNEL }}
+          AX_CODE_CHANNEL: ${{ env.AX_CODE_RELEASE_CHANNEL }}
+          AX_CODE_RELEASE: "true"
+
+  # Source distribution publish — bundled JS + bun runtime. This remains
+  # available as @defai.digital/ax-code-source for users who intentionally
+  # choose the compatibility source launcher.
+  publish-source:
+    needs: typecheck
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10.33.4
+          run_install: false
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build and publish source distribution
+        working-directory: packages/ax-code
+        run: bun run script/publish-source.ts
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          AX_CODE_VERSION: ${{ github.ref_name }}
+          AX_CODE_CHANNEL: ${{ env.AX_CODE_RELEASE_CHANNEL }}
+          AX_CODE_SOURCE_TAG: ${{ env.AX_CODE_RELEASE_CHANNEL }}
+          AX_CODE_SOURCE_PACKAGE_NAMES: "@defai.digital/ax-code-source"
+          AX_CODE_RELEASE: "true"
+
+  homebrew:
+    needs: publish
+    # Homebrew tracks stable releases only. Prerelease tags still publish to
+    # npm/GitHub, but they must not move brew users off the stable line.
+    if: ${{ !contains(github.ref_name, '-') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Update Homebrew formula
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAP_TOKEN: ${{ secrets.TAP_TOKEN }}
+        run: bash .github/scripts/update-homebrew.sh
+
+  # Publish the GitHub release (remove draft status) only after npm packages
+  # and Homebrew formulae are fully propagated. The install-matrix-smoke
+  # workflow triggers on release: [published], so this ordering guarantees
+  # the smoke starts after all distribution channels are ready.
+  finalize:
+    needs:
+      - publish-npm
+      - publish-source
+      - homebrew
+      - homebrew-source
+    # Run even when homebrew/homebrew-source are skipped (prerelease tags).
+    # Skip only if a required publish job failed or was cancelled.
+    if: >-
+      always() && !cancelled() &&
+      needs.publish-npm.result == 'success' &&
+      needs.publish-source.result == 'success' &&
+      (needs.homebrew.result == 'success' || needs.homebrew.result == 'skipped') &&
+      (needs.homebrew-source.result == 'success' || needs.homebrew-source.result == 'skipped')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release edit "${{ github.ref_name }}" --draft=false --repo "${{ github.repository }}"
+
+  # Compatibility Homebrew formula for users who installed ax-code-source
+  # during the transitional source-channel rollout.
+  homebrew-source:
+    needs:
+      - homebrew
+      - publish-source
+    if: ${{ !contains(github.ref_name, '-') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Update Homebrew source formula
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAP_TOKEN: ${{ secrets.TAP_TOKEN }}
+        run: bash .github/scripts/update-homebrew-source.sh

@@ -1,0 +1,299 @@
+import { Hono, type Context } from "hono"
+import { describeRoute, validator, resolver } from "hono-openapi"
+import z from "zod"
+import { Bus } from "../../bus"
+import { Session } from "../../session"
+import { TuiEvent } from "@/cli/cmd/tui/event"
+import { errors } from "../error"
+import { lazy } from "../../util/lazy"
+import { Log } from "../../util/log"
+
+const log = Log.create({ service: "server.tui" })
+
+const TUI_COMMAND_MAPPINGS: Record<string, string> = {
+  session_new: "session.new",
+  session_share: "session.share",
+  session_interrupt: "session.interrupt",
+  session_compact: "session.compact",
+  messages_page_up: "session.page.up",
+  messages_page_down: "session.page.down",
+  messages_line_up: "session.line.up",
+  messages_line_down: "session.line.down",
+  messages_half_page_up: "session.half.page.up",
+  messages_half_page_down: "session.half.page.down",
+  messages_first: "session.first",
+  messages_last: "session.last",
+  agent_cycle: "agent.cycle",
+}
+
+const executeCommand = (command: string) => async (c: Context) => {
+  await Bus.publish(TuiEvent.CommandExecute, { command })
+  return c.json(true)
+}
+
+export const TuiRoutes = lazy(() =>
+  new Hono()
+    .post(
+      "/append-prompt",
+      describeRoute({
+        summary: "Append TUI prompt",
+        description: "Append prompt to the TUI",
+        operationId: "tui.appendPrompt",
+        responses: {
+          200: {
+            description: "Prompt processed successfully",
+            content: {
+              "application/json": {
+                schema: resolver(z.boolean()),
+              },
+            },
+          },
+          ...errors(400),
+        },
+      }),
+      validator("json", TuiEvent.PromptAppend.properties),
+      async (c) => {
+        await Bus.publish(TuiEvent.PromptAppend, c.req.valid("json"))
+        return c.json(true)
+      },
+    )
+    .post(
+      "/open-help",
+      describeRoute({
+        summary: "Open help dialog",
+        description: "Open the help dialog in the TUI to display user assistance information.",
+        operationId: "tui.openHelp",
+        responses: {
+          200: {
+            description: "Help dialog opened successfully",
+            content: {
+              "application/json": {
+                schema: resolver(z.boolean()),
+              },
+            },
+          },
+        },
+      }),
+      executeCommand("help.show"),
+    )
+    .post(
+      "/open-sessions",
+      describeRoute({
+        summary: "Open sessions dialog",
+        description: "Open the session dialog",
+        operationId: "tui.openSessions",
+        responses: {
+          200: {
+            description: "Session dialog opened successfully",
+            content: {
+              "application/json": {
+                schema: resolver(z.boolean()),
+              },
+            },
+          },
+        },
+      }),
+      executeCommand("session.list"),
+    )
+    .post(
+      "/open-themes",
+      describeRoute({
+        summary: "Open themes dialog",
+        description: "Open the theme dialog",
+        operationId: "tui.openThemes",
+        responses: {
+          200: {
+            description: "Theme dialog opened successfully",
+            content: {
+              "application/json": {
+                schema: resolver(z.boolean()),
+              },
+            },
+          },
+        },
+      }),
+      executeCommand("theme.switch"),
+    )
+    .post(
+      "/open-models",
+      describeRoute({
+        summary: "Open models dialog",
+        description: "Open the model dialog",
+        operationId: "tui.openModels",
+        responses: {
+          200: {
+            description: "Model dialog opened successfully",
+            content: {
+              "application/json": {
+                schema: resolver(z.boolean()),
+              },
+            },
+          },
+        },
+      }),
+      executeCommand("model.list"),
+    )
+    .post(
+      "/submit-prompt",
+      describeRoute({
+        summary: "Submit TUI prompt",
+        description: "Submit the prompt",
+        operationId: "tui.submitPrompt",
+        responses: {
+          200: {
+            description: "Prompt submitted successfully",
+            content: {
+              "application/json": {
+                schema: resolver(z.boolean()),
+              },
+            },
+          },
+        },
+      }),
+      executeCommand("prompt.submit"),
+    )
+    .post(
+      "/clear-prompt",
+      describeRoute({
+        summary: "Clear TUI prompt",
+        description: "Clear the prompt",
+        operationId: "tui.clearPrompt",
+        responses: {
+          200: {
+            description: "Prompt cleared successfully",
+            content: {
+              "application/json": {
+                schema: resolver(z.boolean()),
+              },
+            },
+          },
+        },
+      }),
+      executeCommand("prompt.clear"),
+    )
+    .post(
+      "/execute-command",
+      describeRoute({
+        summary: "Execute TUI command",
+        description: "Execute a TUI command (e.g. agent_cycle)",
+        operationId: "tui.executeCommand",
+        responses: {
+          200: {
+            description: "Command executed successfully",
+            content: {
+              "application/json": {
+                schema: resolver(z.boolean()),
+              },
+            },
+          },
+          ...errors(400),
+        },
+      }),
+      validator("json", z.object({ command: z.string() })),
+      async (c) => {
+        const command = c.req.valid("json").command
+        const mapped = TUI_COMMAND_MAPPINGS[command]
+        if (!mapped) return c.json({ error: `Unknown command: ${command}` }, 400)
+        await Bus.publish(TuiEvent.CommandExecute, { command: mapped })
+        return c.json(true)
+      },
+    )
+    .post(
+      "/show-toast",
+      describeRoute({
+        summary: "Show TUI toast",
+        description: "Show a toast notification in the TUI",
+        operationId: "tui.showToast",
+        responses: {
+          200: {
+            description: "Toast notification shown successfully",
+            content: {
+              "application/json": {
+                schema: resolver(z.boolean()),
+              },
+            },
+          },
+        },
+      }),
+      validator("json", TuiEvent.ToastShow.properties),
+      async (c) => {
+        await Bus.publish(TuiEvent.ToastShow, c.req.valid("json"))
+        return c.json(true)
+      },
+    )
+    .post(
+      "/publish",
+      describeRoute({
+        summary: "Publish TUI event",
+        description: "Publish a TUI event",
+        operationId: "tui.publish",
+        responses: {
+          200: {
+            description: "Event published successfully",
+            content: {
+              "application/json": {
+                schema: resolver(z.boolean()),
+              },
+            },
+          },
+          ...errors(400),
+        },
+      }),
+      validator(
+        "json",
+        z.union(
+          Object.values(TuiEvent).map((def) => {
+            return z
+              .object({
+                type: z.literal(def.type),
+                properties: def.properties,
+              })
+              .meta({
+                ref: "Event" + "." + def.type,
+              })
+          }),
+        ),
+      ),
+      async (c) => {
+        const evt = c.req.valid("json")
+        // Guard the lookup — `.find()` can return undefined if the
+        // posted event type does not match any TuiEvent definition.
+        // Previously this used a non-null assertion and would pass
+        // `undefined` straight to Bus.publish, crashing there.
+        const def = Object.values(TuiEvent).find((d) => d.type === evt.type)
+        if (!def) {
+          log.warn("unknown tui event type", { type: evt.type })
+          return c.json({ error: `Unknown tui event type: ${evt.type}` }, 400)
+        }
+        await Bus.publish(def, evt.properties)
+        return c.json(true)
+      },
+    )
+    .post(
+      "/select-session",
+      describeRoute({
+        summary: "Select session",
+        description: "Navigate the TUI to display the specified session.",
+        operationId: "tui.selectSession",
+        responses: {
+          200: {
+            description: "Session selected successfully",
+            content: {
+              "application/json": {
+                schema: resolver(z.boolean()),
+              },
+            },
+          },
+          ...errors(400, 404),
+        },
+      }),
+      validator("json", TuiEvent.SessionSelect.properties),
+      async (c) => {
+        const { sessionID } = c.req.valid("json")
+        const session = await Session.get(sessionID)
+        if (!session) return c.json(false, 404)
+        await Bus.publish(TuiEvent.SessionSelect, { sessionID })
+        return c.json(true)
+      },
+    ),
+)

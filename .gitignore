@@ -1,0 +1,67 @@
+.DS_Store
+node_modules
+.worktrees
+.sst
+.env
+.idea
+.vscode
+.codex
+*~
+playground
+tmp
+dist
+dist-source
+ts-dist
+.turbo
+**/.serena
+.serena/
+/result
+refs
+Session.vim
+/ax-code.json
+a.out
+target
+
+# napi-rs build outputs
+packages/ax-code-*/index.js
+packages/ax-code-*/index.d.ts
+packages/ax-code-*/*.node
+crates/*/index.js
+crates/*/index.d.ts
+crates/*/*.node
+
+# VSCode extension build artifacts
+packages/*/*.vsix
+packages/integration-vscode/out/
+
+.scripts
+.direnv/
+debug-log/
+
+# Temp files
+~$*
+
+# Sensitive data
+auth.json
+*.db
+
+# Local config
+.ax-code/
+.ax-grok/
+.cursor/
+.gemini/
+.mcp.json
+
+# Claude Code
+.claude/
+CLAUDE.md
+AGENTS.md
+
+# Internal project docs (not for public)
+.internal/
+ADRS/
+PRDS/
+TODOS/
+planning/
+
+# Local dev files

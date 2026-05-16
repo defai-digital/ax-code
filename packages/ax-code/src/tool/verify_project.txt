@@ -1,0 +1,30 @@
+Run project verification and record the result as structured evidence. Use this after edits, during code review, or while debugging when you need typecheck/lint/test output that can be cited by register_finding or debug_propose_hypothesis.
+
+This tool runs configured project commands, so it requires bash permission for each non-skipped command.
+
+Input:
+- workflow: optional "review" | "debug" | "qa"; defaults to "qa"
+- paths: optional repo-relative files that define the verification scope and help test selection
+- scopeDescription: optional human-readable scope when paths alone are not enough
+- repairHandoff: optional boolean; when true, include localized repair handoff briefs for structured failures. This only records guidance; it does not edit files or start a repair loop.
+- commands: optional overrides for typecheck/lint/test. Omit a field to infer from package.json; set a field to null to skip that check; set it to a string to run exactly that command.
+  - In Rust workspaces without matching package.json scripts, omitted commands fall back to `cargo check`, `cargo clippy --all-targets --all-features -- -D warnings`, and `cargo test`.
+
+Output:
+- passed: true when every configured check passed or was skipped, unless review/QA policy requires a skipped check
+- envelopeIds: derived ids for the emitted VerificationEnvelopes
+- verificationEnvelopes: one envelope each for typecheck, lint, and tests
+- repairHandoff: when requested, candidate and rejected repair handoff decisions with brief text for candidates
+- policy: when workflow is "review" or "qa", `.ax-code/review.rules.json` / `.ax-code/qa.rules.json` may set `required_checks`; any required check that is skipped makes the run fail.
+- policyContext: when workflow is "review" or "qa", `.ax-code/review.md` / `.ax-code/qa.md` may be loaded as workflow-specific prose context. It is not loaded for debug or general prompts.
+
+When to use:
+- After a code edit to produce citable verification evidence
+- During review when you need to prove a finding is backed by a failing check
+- During debugging after a candidate fix, before marking a hypothesis confirmed
+- During Rust bug fixing when Cargo output should be captured as citable verification evidence
+
+When NOT to use:
+- To make edits; use edit/write/apply_patch for changes
+- To run arbitrary exploratory shell commands; use bash
+- To fabricate evidence ids; only cite envelopeIds returned by this tool or present in session verification history

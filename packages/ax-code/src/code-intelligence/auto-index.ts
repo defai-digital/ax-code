@@ -1,0 +1,409 @@
+import path from "path"
+import z from "zod"
+import { Log } from "../util/log"
+import { Ripgrep } from "../file/ripgrep"
+import { LANGUAGE_EXTENSIONS } from "../lsp/language"
+import { Flag } from "../flag/flag"
+import { Bus } from "../bus"
+import { BusEvent } from "../bus/bus-event"
+import { CodeIntelligence } from "./index"
+import { CodeGraphBuilder } from "./builder"
+import { CodeGraphQuery } from "./query"
+import { Instance } from "../project/instance"
+import type { ProjectID } from "../project/schema"
+import { NativeAddon } from "../native/addon"
+
+// Auto-index: fires a background code-intelligence index when a
+// session starts against an empty or missing graph, so users don't
+// need to run `ax-code index` manually before DRE tools produce
+// useful results.
+//
+// Design decisions:
+//
+// 1. Empty-graph trigger only (v2.3.9). We fire when the live
+//    node count for the project is zero. Stale-graph detection
+//    (comparing commit SHA to code_index_cursor.commit_sha) is a
+//    legitimate follow-up but adds real complexity because a
+//    "stale" index on a 10k-file project still reflects most of
+//    the truth, and re-indexing from scratch every time a branch
+//    switches would be disproportionate. The CodeGraphWatcher
+//    already handles per-file updates on save via LSP didChange
+//    events — auto-index is specifically for the "brand new
+//    project, graph is empty" bootstrap case.
+//
+// 2. Fire-and-forget. maybeStart() is a synchronous function that
+//    kicks off a background Promise and returns immediately. The
+//    caller never awaits it. Errors are logged and swallowed so a
+//    failed index never takes down the session it was triggered
+//    from.
+//
+// 3. Per-project in-flight gate. An in-module Set tracks projects
+//    currently being auto-indexed. A second call for the same
+//    project while one is running is a no-op. The set is process-
+//    lifetime — if ax-code restarts mid-index, the next session
+//    will see the partially-populated graph (node count > 0) and
+//    not re-trigger, which is the right behavior: the existing
+//    watcher will catch up any remaining files incrementally.
+//
+// 4. Opt-out via AX_CODE_DISABLE_AUTO_INDEX. Users who want
+//    explicit control (large projects, CI, debugging the indexer)
+//    set the env var and auto-index becomes a no-op. The manual
+//    `ax-code index` command still works the same way.
+//
+// 5. Respects AX_CODE_EXPERIMENTAL_CODE_INTELLIGENCE. When the
+//    code intelligence flag is off, auto-index is unreachable
+//    because the caller in session/prompt.ts already gates on
+//    that flag — but we double-check here as defense in depth.
+
+export namespace AutoIndex {
+  const log = Log.create({ service: "code-intelligence.auto-index" })
+
+  // Bus events. Defined here instead of in a shared module because
+  // auto-index is the only emitter right now (and the manual CLI
+  // command, which imports this namespace). Subscribers live in the
+  // server's /debug-engine/pending-plans endpoint and in the TUI's
+  // sync layer.
+  export const Event = {
+    Progress: BusEvent.define(
+      "code.index.progress",
+      z.object({
+        projectID: z.string(),
+        completed: z.number(),
+        total: z.number(),
+      }),
+    ),
+    State: BusEvent.define(
+      "code.index.state",
+      z.object({
+        projectID: z.string(),
+        state: z.union([z.literal("idle"), z.literal("indexing"), z.literal("failed")]),
+        error: z.string().optional(),
+      }),
+    ),
+  }
+
+  // Observable per-project indexing state. Both auto-index and the
+  // manual `ax-code index` command write here so the TUI sidebar can
+  // render a single, consistent "indexing in progress" / "indexing
+  // failed" signal regardless of which code path triggered it.
+  //
+  // Keyed by project id string. Process-lifetime — restarting ax-code
+  // resets all entries to implicit "idle" (absent entry).
+  export type IndexState = {
+    state: "idle" | "indexing" | "failed"
+    completed: number
+    total: number
+    startedAt: number | null
+    finishedAt: number | null
+    error: string | null
+  }
+
+  const stateByProject = new Map<string, IndexState>()
+  const MAX_STATE_ENTRIES = 64
+  const BACKGROUND_AUTO_INDEX_NATIVE_CONCURRENCY = 2
+  const BACKGROUND_AUTO_INDEX_FALLBACK_CONCURRENCY = 1
+  const MANUAL_INDEX_DISABLED_MESSAGE =
+    "Automatic indexing is disabled by AX_CODE_DISABLE_AUTO_INDEX. Run `ax-code index` when you want to build the graph."
+
+  export function getState(projectID: ProjectID): IndexState {
+    const key = projectID as unknown as string
+    return (
+      stateByProject.get(key) ?? {
+        state: "idle",
+        completed: 0,
+        total: 0,
+        startedAt: null,
+        finishedAt: null,
+        error: null,
+      }
+    )
+  }
+
+  // Helper used by both auto-index and the CLI command. Transitions
+  // the project's state, updates counters, and publishes the
+  // corresponding bus event so the TUI picks it up without waiting
+  // on the 10s poll.
+  export function setState(projectID: ProjectID, patch: Partial<IndexState> & { state: IndexState["state"] }): void {
+    const key = projectID as unknown as string
+    const prev = getState(projectID)
+    const next: IndexState = { ...prev, ...patch }
+    stateByProject.set(key, next)
+    // Cap the map to prevent unbounded growth in long-running
+    // processes that open many projects. Evict the oldest idle
+    // entry when the cap is exceeded (FIFO on insertion order).
+    if (stateByProject.size > MAX_STATE_ENTRIES) {
+      for (const [k, v] of stateByProject) {
+        if (v.state === "idle") {
+          stateByProject.delete(k)
+          break
+        }
+      }
+    }
+    // Fire-and-forget: an observability event must never affect the
+    // index run. Detached bus publishes still isolate subscriber
+    // errors and timeouts for this path.
+    Bus.publishDetached(Event.State, {
+      projectID: key,
+      state: next.state,
+      error: next.error ?? undefined,
+    })
+  }
+
+  export function reportProgress(projectID: ProjectID, completed: number, total: number): void {
+    const key = projectID as unknown as string
+    const prev = getState(projectID)
+    stateByProject.set(key, { ...prev, completed, total })
+    Bus.publishDetached(Event.Progress, { projectID: key, completed, total })
+  }
+
+  // Projects currently being auto-indexed. Keyed by project id as a
+  // string (ProjectID is a branded string so `as string` is safe).
+  // Process-lifetime — cleared on restart.
+  const inFlight = new Set<string>()
+
+  // Projects for which auto-index has already been attempted this
+  // process lifetime. Prevents the /debug-engine/pending-plans endpoint
+  // (polled every ~750ms) from re-triggering a scan after auto-index
+  // finishes with zero nodes — which happens for projects with no LSP-
+  // indexable files or when all files fail to parse. Without this gate
+  // the endpoint would spin up a new ripgrep scan on every poll.
+  const triedProjects = new Set<string>()
+
+  function isIndexable(file: string): boolean {
+    const ext = path.extname(file)
+    const lang = LANGUAGE_EXTENSIONS[ext]
+    return lang !== undefined && lang !== "plaintext"
+  }
+
+  // Standalone release binaries may not ship the code-intelligence native
+  // addon set. The pure TypeScript path is still valid, but it should be
+  // gentler when it runs in the background so it does not monopolize the
+  // same process the user is actively interacting with.
+  function automaticIndexConcurrency(): { concurrency: number; nativeIndexAvailable: boolean } {
+    const nativeIndexAvailable = NativeAddon.index() !== undefined
+    return {
+      concurrency: nativeIndexAvailable
+        ? BACKGROUND_AUTO_INDEX_NATIVE_CONCURRENCY
+        : BACKGROUND_AUTO_INDEX_FALLBACK_CONCURRENCY,
+      nativeIndexAvailable,
+    }
+  }
+
+  /**
+   * Start a background auto-index for the given project if:
+   *   - The code intelligence flag is on
+   *   - AX_CODE_DISABLE_AUTO_INDEX is NOT set
+   *   - The graph for this project currently has zero nodes
+   *   - No auto-index is already running for this project
+   *
+   * Returns immediately — the actual indexing runs asynchronously
+   * on a background Promise with all errors logged and swallowed.
+   * Safe to call multiple times; duplicate calls are no-ops.
+   */
+  export function maybeStart(projectID: ProjectID): void {
+    // Defense in depth — the session caller already gates on the
+    // code intelligence flag, but auto-index has multiple call
+    // sites planned for future releases and each should be safe
+    // on its own.
+    if (!Flag.AX_CODE_EXPERIMENTAL_CODE_INTELLIGENCE) return
+
+    const key = projectID as unknown as string
+    if (inFlight.has(key)) {
+      log.info("skipping: already in flight", { projectID })
+      return
+    }
+    if (triedProjects.has(key)) {
+      log.info("skipping: already attempted this session", { projectID })
+      return
+    }
+
+    // Synchronous cheap live count. If the project has any nodes
+    // at all, we assume a prior index run populated it and the
+    // watcher will keep it fresh. This is intentionally generous
+    // — we'd rather miss a stale index than re-index on every
+    // session start.
+    const currentNodes = CodeGraphQuery.countNodes(projectID)
+    if (currentNodes > 0) {
+      log.info("skipping: graph already populated", {
+        projectID,
+        nodeCount: currentNodes,
+      })
+      return
+    }
+
+    // A completed full-index pass can legitimately produce an empty
+    // graph: no indexable source files, no available semantic LSP, or
+    // a narrow scope with no code symbols. That state is persisted in
+    // code_index_cursor even when node_count is zero. Treat it as
+    // "indexed empty" instead of "never indexed" so entering the same
+    // project does not re-run the same background scan every time the
+    // process restarts. Manual `ax-code index` remains the explicit
+    // refresh path when the user wants to retry.
+    const cursor = CodeGraphQuery.getCursor(projectID)
+    if (cursor && cursor.node_count === 0 && cursor.edge_count === 0) {
+      log.info("skipping: graph already indexed empty", {
+        projectID,
+        lastIndexedAt: cursor.time_updated,
+      })
+      setState(projectID, {
+        state: "idle",
+        completed: 0,
+        total: 0,
+        startedAt: null,
+        finishedAt: cursor.time_updated,
+        error: null,
+      })
+      return
+    }
+
+    if (Flag.AX_CODE_DISABLE_AUTO_INDEX) {
+      setState(projectID, {
+        state: "idle",
+        completed: 0,
+        total: 0,
+        startedAt: null,
+        finishedAt: Date.now(),
+        error: MANUAL_INDEX_DISABLED_MESSAGE,
+      })
+      return
+    }
+
+    const indexer = automaticIndexConcurrency()
+
+    // Capture the instance directory snapshot for the background
+    // task. The background Promise runs outside the Instance
+    // context that called us, so we need the path explicitly.
+    const directory = Instance.directory
+
+    inFlight.add(key)
+    triedProjects.add(key)
+    log.info("starting background auto-index", {
+      projectID,
+      directory,
+      concurrency: indexer.concurrency,
+      nativeIndexAvailable: indexer.nativeIndexAvailable,
+    })
+
+    // Fire and forget. Wrapped in an IIFE so we can use async/await
+    // syntax while still returning from maybeStart synchronously.
+    // Any error inside the Promise is caught and logged — auto-index
+    // is best-effort, it never propagates failures to the caller.
+    ;(async () => {
+      const start = Date.now()
+      let candidateFileCount = 0
+      setState(projectID, {
+        state: "indexing",
+        completed: 0,
+        total: 0,
+        startedAt: start,
+        finishedAt: null,
+        error: null,
+      })
+      try {
+        // Walk eligible files via ripgrep (honors .gitignore),
+        // filter to LSP-supported languages. Same logic as the
+        // CLI command in cli/cmd/index-graph.ts, extracted here
+        // so auto-index doesn't depend on CLI internals.
+        const files: string[] = []
+        for await (const rel of Ripgrep.files({ cwd: directory })) {
+          const abs = path.join(directory, rel)
+          if (!isIndexable(abs)) continue
+          files.push(abs)
+        }
+        candidateFileCount = files.length
+
+        if (files.length === 0) {
+          log.info("no indexable files found, skipping", { projectID, directory })
+          setState(projectID, {
+            state: "idle",
+            completed: 0,
+            total: 0,
+            startedAt: start,
+            finishedAt: Date.now(),
+            error: null,
+          })
+          return
+        }
+
+        log.info("indexing files", { projectID, fileCount: files.length })
+        reportProgress(projectID, 0, files.length)
+        // `lock: "try"` — if another ax-code process (a second TUI,
+        // an `ax-code index` in another terminal) already holds the
+        // index lock, auto-index silently skips rather than queueing.
+        // The other process will populate the graph and our next
+        // session will see it via the empty-graph check.
+        const result = await CodeIntelligence.indexFiles(projectID, files, {
+          concurrency: indexer.concurrency,
+          lock: "try",
+          onProgress: (completed, total) => reportProgress(projectID, completed, total),
+        })
+        const elapsed = Date.now() - start
+        log.info("background auto-index complete", {
+          projectID,
+          nodes: result.nodes,
+          edges: result.edges,
+          files: result.files,
+          unchanged: result.unchanged,
+          skipped: result.skipped,
+          failed: result.failed,
+          elapsedMs: elapsed,
+        })
+        const attempted = result.files + result.unchanged + result.skipped + result.failed
+        if (attempted > 0 && result.failed === attempted) {
+          setState(projectID, {
+            state: "failed",
+            completed: files.length,
+            total: files.length,
+            startedAt: start,
+            finishedAt: Date.now(),
+            error: `Indexing failed for all ${result.failed.toLocaleString()} file${result.failed === 1 ? "" : "s"}.`,
+          })
+          return
+        }
+        setState(projectID, {
+          state: "idle",
+          completed: files.length,
+          total: files.length,
+          startedAt: start,
+          finishedAt: Date.now(),
+          error: null,
+        })
+      } catch (err) {
+        // Never crash the caller. An auto-index failure is a
+        // missing-feature condition, not a fatal error — the user
+        // can still run `ax-code index` manually. The "failed"
+        // state is surfaced to the TUI sidebar so the user sees a
+        // concrete error instead of a silent "graph not indexed".
+        //
+        // LockHeldError is treated as benign: another process is
+        // already indexing, so we stop our own auto-index attempt but
+        // keep a visible sidebar hint instead of snapping back to the
+        // misleading "not indexed" empty state.
+        if (err instanceof CodeGraphBuilder.LockHeldError) {
+          log.info("auto-index skipped: another process holds the lock", { projectID })
+          setState(projectID, {
+            state: "idle",
+            completed: candidateFileCount,
+            total: candidateFileCount,
+            startedAt: start,
+            finishedAt: Date.now(),
+            error: "Indexing is already running in another ax-code process.",
+          })
+          return
+        }
+        log.warn("background auto-index failed", {
+          projectID,
+          error: err instanceof Error ? err.message : String(err),
+        })
+        setState(projectID, {
+          state: "failed",
+          startedAt: start,
+          finishedAt: Date.now(),
+          error: err instanceof Error ? err.message : String(err),
+        })
+      } finally {
+        inFlight.delete(key)
+      }
+    })()
+  }
+}

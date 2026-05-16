@@ -1,0 +1,377 @@
+import { describe, expect, test, beforeEach } from "bun:test"
+import fs from "fs/promises"
+import path from "path"
+import { tmpdir } from "../fixture/fixture"
+import { LSPClient } from "../../src/lsp/client"
+import { LSPServer } from "../../src/lsp/server"
+import { Instance } from "../../src/project/instance"
+import { Log } from "../../src/util/log"
+
+// Minimal fake LSP server that speaks JSON-RPC over stdio
+function spawnFakeServer(env?: Record<string, string>) {
+  const { spawn } = require("child_process")
+  const serverPath = path.join(__dirname, "../fixture/lsp/fake-lsp-server.js")
+  return {
+    process: spawn(process.execPath, [serverPath], {
+      stdio: "pipe",
+      env: {
+        ...process.env,
+        ...env,
+      },
+    }),
+  }
+}
+
+describe("LSPClient interop", () => {
+  beforeEach(async () => {
+    await Log.init({ print: true })
+  })
+
+  test("handles workspace/workspaceFolders request", async () => {
+    const handle = spawnFakeServer() as any
+
+    const client = await Instance.provide({
+      directory: process.cwd(),
+      fn: () =>
+        LSPClient.create({
+          serverID: "fake",
+          server: handle as unknown as LSPServer.Handle,
+          root: process.cwd(),
+        }),
+    })
+
+    await client.connection.sendNotification("test/trigger", {
+      method: "workspace/workspaceFolders",
+    })
+
+    await new Promise((r) => setTimeout(r, 100))
+
+    expect(client.connection).toBeDefined()
+
+    await client.shutdown()
+  })
+
+  test("notify.open does not mutate caller input", async () => {
+    await using tmp = await tmpdir()
+    const file = "file.ts"
+    const input = { path: file }
+    await Bun.write(path.join(tmp.path, file), "export const x = 1\n")
+    const handle = spawnFakeServer() as any
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const client = await LSPClient.create({
+          serverID: "fake",
+          server: handle as unknown as LSPServer.Handle,
+          root: tmp.path,
+        })
+
+        await client.notify.open(input)
+        expect(input.path).toBe(file)
+
+        await client.shutdown()
+      },
+    })
+  })
+
+  test("handles client/registerCapability request", async () => {
+    const handle = spawnFakeServer() as any
+
+    const client = await Instance.provide({
+      directory: process.cwd(),
+      fn: () =>
+        LSPClient.create({
+          serverID: "fake",
+          server: handle as unknown as LSPServer.Handle,
+          root: process.cwd(),
+        }),
+    })
+
+    await client.connection.sendNotification("test/trigger", {
+      method: "client/registerCapability",
+    })
+
+    await new Promise((r) => setTimeout(r, 100))
+
+    expect(client.connection).toBeDefined()
+
+    await client.shutdown()
+  })
+
+  test("handles client/unregisterCapability request", async () => {
+    const handle = spawnFakeServer() as any
+
+    const client = await Instance.provide({
+      directory: process.cwd(),
+      fn: () =>
+        LSPClient.create({
+          serverID: "fake",
+          server: handle as unknown as LSPServer.Handle,
+          root: process.cwd(),
+        }),
+    })
+
+    await client.connection.sendNotification("test/trigger", {
+      method: "client/unregisterCapability",
+    })
+
+    await new Promise((r) => setTimeout(r, 100))
+
+    expect(client.connection).toBeDefined()
+
+    await client.shutdown()
+  })
+
+  test("captures initialize capabilities for method-aware routing", async () => {
+    const handle = spawnFakeServer({
+      FAKE_LSP_CAPABILITIES_JSON: JSON.stringify({
+        hoverProvider: true,
+        referencesProvider: true,
+        documentSymbolProvider: false,
+      }),
+    }) as any
+
+    const client = await Instance.provide({
+      directory: process.cwd(),
+      fn: () =>
+        LSPClient.create({
+          serverID: "fake",
+          server: handle as unknown as LSPServer.Handle,
+          root: process.cwd(),
+        }),
+    })
+
+    expect(client.methodSupport("hover")).toBe("supported")
+    expect(client.methodSupport("references")).toBe("supported")
+    expect(client.methodSupport("documentSymbol")).toBe("unsupported")
+    expect(client.methodSupport("workspaceSymbol")).toBe("unknown")
+
+    await client.shutdown()
+  })
+
+  test("skips diagnostics wait for unchanged file content", async () => {
+    await using tmp = await tmpdir()
+    const file = path.join(tmp.path, "file.ts")
+    await Bun.write(file, "export const x = 1\n")
+    const handle = spawnFakeServer() as any
+
+    const client = await Instance.provide({
+      directory: tmp.path,
+      fn: () =>
+        LSPClient.create({
+          serverID: "fake",
+          server: handle as unknown as LSPServer.Handle,
+          root: tmp.path,
+        }),
+    })
+
+    await client.notify.open({ path: file })
+
+    const start = Date.now()
+    const changed = await client.notify.open({ path: file, waitForDiagnostics: true })
+    const elapsed = Date.now() - start
+
+    expect(changed).toBe(false)
+    expect(elapsed).toBeLessThan(500)
+
+    await client.shutdown()
+  })
+
+  test("notify.close clears per-file state", async () => {
+    await using tmp = await tmpdir()
+    const file = path.join(tmp.path, "file.ts")
+    await Bun.write(file, "export const x = 1\n")
+    const handle = spawnFakeServer() as any
+
+    const client = await Instance.provide({
+      directory: tmp.path,
+      fn: () =>
+        LSPClient.create({
+          serverID: "fake",
+          server: handle as unknown as LSPServer.Handle,
+          root: tmp.path,
+        }),
+    })
+
+    // Open, then close, then open again — a fresh open after close should
+    // behave like a first open (didOpen, not didChange skipped by hash).
+    const firstOpen = await client.notify.open({ path: file })
+    expect(firstOpen).toBe(true)
+
+    const closed = await client.notify.close({ path: file })
+    expect(closed).toBe(true)
+
+    // Closing the same file twice is a no-op — it was never-opened after
+    // the first close cleared state.
+    const closedAgain = await client.notify.close({ path: file })
+    expect(closedAgain).toBe(false)
+
+    // Re-open goes through the "first open" path (state was cleared),
+    // which also succeeds.
+    const reopened = await client.notify.open({ path: file })
+    expect(reopened).toBe(true)
+
+    await client.shutdown()
+  })
+
+  test("notify.open short-circuits to close when file no longer exists", async () => {
+    await using tmp = await tmpdir()
+    const file = path.join(tmp.path, "transient.ts")
+    await Bun.write(file, "export const x = 1\n")
+    const handle = spawnFakeServer() as any
+
+    const client = await Instance.provide({
+      directory: tmp.path,
+      fn: () =>
+        LSPClient.create({
+          serverID: "fake",
+          server: handle as unknown as LSPServer.Handle,
+          root: tmp.path,
+        }),
+    })
+
+    // Open the file, then delete it, then touch it again. The second open
+    // should return false (nothing sent) and clean up local state.
+    const sent: { method: string; params: any }[] = []
+    const conn = client.connection as typeof client.connection & {
+      sendNotification: (method: string, params: any) => Promise<void>
+    }
+    const orig = conn.sendNotification.bind(conn)
+    conn.sendNotification = ((method: string, params: any) => {
+      sent.push({ method, params })
+      return orig(method, params)
+    }) as typeof conn.sendNotification
+
+    await client.notify.open({ path: file })
+    sent.length = 0
+    await fs.unlink(file)
+
+    const afterDelete = await client.notify.open({ path: file })
+    expect(afterDelete).toBe(false)
+    expect(sent.some((item) => item.method === "textDocument/didClose")).toBe(true)
+    expect(
+      sent.some(
+        (item) =>
+          item.method === "workspace/didChangeWatchedFiles" &&
+          item.params?.changes?.some((change: { type: number }) => change.type === 3),
+      ),
+    ).toBe(true)
+
+    await client.shutdown()
+  })
+
+  test("notify.open normalizes relative paths for incremental reopen", async () => {
+    await using tmp = await tmpdir()
+    const relativePath = path.join("src", "index.ts")
+    const absolutePath = path.join(tmp.path, relativePath)
+    await fs.mkdir(path.dirname(absolutePath), { recursive: true })
+    await Bun.write(absolutePath, "export const x = 1\n")
+
+    const handle = spawnFakeServer() as any
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const client = await LSPClient.create({
+          serverID: "fake",
+          server: handle as unknown as LSPServer.Handle,
+          root: tmp.path,
+        })
+
+        const sent: { method: string; params: any }[] = []
+        const conn = client.connection as typeof client.connection & {
+          sendNotification: (method: string, params: any) => Promise<void>
+        }
+        const originalSendNotification = conn.sendNotification.bind(conn)
+        conn.sendNotification = ((method: string, params: any) => {
+          sent.push({ method, params })
+          return originalSendNotification(method, params)
+        }) as typeof conn.sendNotification
+
+        await client.notify.open({ path: relativePath })
+        sent.length = 0
+
+        await Bun.write(absolutePath, "export const x = 1\nexport const y = 2\n")
+        const changed = await client.notify.open({ path: relativePath })
+        expect(changed).toBe(true)
+
+        const didChange = sent.find((entry) => entry.method === "textDocument/didChange")
+        expect(didChange).toBeDefined()
+        expect(didChange?.params?.contentChanges?.length).toBeGreaterThan(0)
+        const incremental = didChange?.params?.contentChanges?.some((change: { range?: object }) => "range" in change)
+        expect(incremental).toBe(true)
+
+        await client.shutdown()
+      },
+    })
+  })
+
+  test("notify.open resolves languageId for extensionless files", async () => {
+    await using tmp = await tmpdir()
+    const dockerfilePath = path.join(tmp.path, "Dockerfile")
+    const makefilePath = path.join(tmp.path, "Makefile")
+    await Bun.write(dockerfilePath, "FROM node:20-alpine\n")
+    await Bun.write(makefilePath, "all:\n\t@echo hi\n")
+
+    const handle = spawnFakeServer() as any
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const client = await LSPClient.create({
+          serverID: "fake",
+          server: handle as unknown as LSPServer.Handle,
+          root: tmp.path,
+        })
+
+        const sent: { method: string; params: any }[] = []
+        const conn = client.connection as typeof client.connection & {
+          sendNotification: (method: string, params: any) => Promise<void>
+        }
+        const originalSendNotification = conn.sendNotification.bind(conn)
+        conn.sendNotification = ((method: string, params: any) => {
+          sent.push({ method, params })
+          return originalSendNotification(method, params)
+        }) as typeof conn.sendNotification
+
+        await client.notify.open({ path: "Dockerfile" })
+        await client.notify.open({ path: "Makefile" })
+
+        const openEntries = sent.filter((entry) => entry.method === "textDocument/didOpen")
+        expect(openEntries.length).toBe(2)
+
+        expect(openEntries[0]?.params?.textDocument?.languageId).toBe("dockerfile")
+        expect(openEntries[1]?.params?.textDocument?.languageId).toBe("makefile")
+
+        await client.shutdown()
+      },
+    })
+  })
+
+  test("ping returns true for live process, false after process dies", async () => {
+    await using tmp = await tmpdir()
+    const handle = spawnFakeServer() as any
+
+    const client = await Instance.provide({
+      directory: tmp.path,
+      fn: () =>
+        LSPClient.create({
+          serverID: "fake",
+          server: handle as unknown as LSPServer.Handle,
+          root: tmp.path,
+        }),
+    })
+
+    // Alive immediately after spawn.
+    expect(client.ping()).toBe(true)
+
+    // Kill the process and wait a beat for the kernel to reap it.
+    handle.process.kill("SIGKILL")
+    await new Promise((r) => setTimeout(r, 100))
+
+    // ping() should now report dead.
+    expect(client.ping()).toBe(false)
+
+    // Cleanup (shutdown is safe to call on a dead process).
+    await client.shutdown().catch(() => {})
+  })
+})

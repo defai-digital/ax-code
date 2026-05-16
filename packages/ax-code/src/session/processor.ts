@@ -1,0 +1,968 @@
+import { MessageV2 } from "./message-v2"
+import { Log } from "@/util/log"
+import { Session } from "."
+import { Agent } from "@/agent/agent"
+import { Snapshot } from "@/snapshot"
+import { SessionSummary } from "./summary"
+import { Bus } from "@/bus"
+import { SessionRetry } from "./retry"
+import { SessionStatus } from "./status"
+import { Plugin } from "@/plugin"
+import { Flag } from "@/flag/flag"
+import { DOOM_LOOP_THRESHOLD as _DOOM_LOOP_THRESHOLD, AUTONOMOUS_MAX_CYCLE_LEN } from "@/constants/session"
+import { BlastRadius } from "./blast-radius"
+import { detectCycle } from "./cycle-detection"
+import type { Provider } from "@/provider/provider"
+import { LLM } from "./llm"
+import { Config } from "@/config/config"
+import { SessionCompaction } from "./compaction"
+import { Permission } from "@/permission"
+import { Question } from "@/question"
+import { SelfCorrection } from "./correction"
+import { PartID } from "./schema"
+import type { SessionID, MessageID } from "./schema"
+import { NamedError } from "@ax-code/util/error"
+import { Recorder } from "@/replay/recorder"
+import { Database } from "@/storage/db"
+import { asRecord } from "@/util/record"
+
+export namespace SessionProcessor {
+  const DOOM_LOOP_THRESHOLD = _DOOM_LOOP_THRESHOLD
+  const log = Log.create({ service: "session.processor" })
+
+  /** Strip XML tags that could escape a <system-reminder> wrapper and inject arbitrary LLM instructions. */
+  function sanitizeForXmlTag(input: string): string {
+    return input.replace(/<\/?system-reminder\b[^>]*>/gi, "[tag-stripped]")
+  }
+  const DELTA_BATCH_MS = 16
+
+  /** Batches delta events by time window to reduce event fan-out */
+  function createDeltaBatcher(sessionID: SessionID, messageID: MessageID) {
+    const pending = new Map<PartID, string[]>() // partID -> accumulated delta chunks
+    let timer: ReturnType<typeof setTimeout> | undefined
+
+    const flush = () => {
+      timer = undefined
+      for (const [partID, chunks] of pending) {
+        Bus.publishDetached(MessageV2.Event.PartDelta, {
+          sessionID,
+          messageID,
+          partID,
+          field: "text",
+          delta: chunks.join(""),
+        })
+      }
+      pending.clear()
+    }
+
+    return {
+      push(partID: PartID, delta: string) {
+        const existing = pending.get(partID)
+        if (existing) existing.push(delta)
+        else pending.set(partID, [delta])
+        if (!timer) timer = setTimeout(flush, DELTA_BATCH_MS)
+      },
+      flush() {
+        if (timer) clearTimeout(timer)
+        if (pending.size > 0) flush()
+      },
+    }
+  }
+
+  export type Info = Awaited<ReturnType<typeof create>>
+  export type Result = Awaited<ReturnType<Info["process"]>>
+
+  export function create(input: {
+    assistantMessage: MessageV2.Assistant
+    sessionID: SessionID
+    model: Provider.Model
+    abort: AbortSignal
+    messages?: MessageV2.WithParts[]
+  }) {
+    const toolcalls: Record<string, MessageV2.ToolPart> = {}
+    const toolInputCache: Record<string, string> = {}
+    const safeStringify = (value: unknown): string => {
+      try {
+        const serialized = JSON.stringify(value)
+        if (serialized === undefined) return String(value)
+        return serialized
+      } catch {
+        return String(value)
+      }
+    }
+    const canonicalize = (obj: unknown): string => {
+      const seen = new WeakSet<object>()
+      const visit = (value: unknown, depth: number): string => {
+        if (depth > 50) return safeStringify(value)
+        if (value === null || typeof value !== "object") return safeStringify(value)
+        if (seen.has(value)) return '"[circular]"'
+        seen.add(value)
+        if (Array.isArray(value)) {
+          return "[" + value.map((entry) => visit(entry, depth + 1)).join(",") + "]"
+        }
+        return (
+          "{" +
+          Object.keys(value as Record<string, unknown>)
+            .sort()
+            .map((key) => JSON.stringify(key) + ":" + visit((value as Record<string, unknown>)[key], depth + 1))
+            .join(",") +
+          "}"
+        )
+      }
+      return visit(obj, 0)
+    }
+    const recentToolRing: { tool: string; input: string }[] = []
+    // Per-session sliding-window rate limiter: max 30 tool calls per 10-second window.
+    // Prevents runaway agent loops from exhausting resources or burning LLM quota.
+    const RATE_LIMIT_WINDOW_MS = 10_000
+    const RATE_LIMIT_MAX_CALLS = 30
+    const toolCallTimestamps: number[] = []
+    const deltaBatcher = createDeltaBatcher(input.sessionID, input.assistantMessage.id)
+    const partBase = () => ({
+      id: PartID.ascending(),
+      messageID: input.assistantMessage.id,
+      sessionID: input.assistantMessage.sessionID,
+    })
+    let cachedShouldBreak: boolean | undefined
+    let snapshot: string | undefined
+    let blocked = false
+    let attempt = 0
+    let needsCompaction = false
+    let lastStatusWrite = 0
+    let lastWaitState: string | undefined
+    let lastActiveTool: string | undefined
+    let lastToolCallID: string | undefined
+    const STATUS_THROTTLE_MS = 1_000
+    const TOOL_LABEL_THROTTLE_MS = 1_500
+    const setBusyStatus = async (patch: Partial<Extract<SessionStatus.Info, { type: "busy" }>> = {}) => {
+      const now = Date.now()
+      // Throttle redundant writes. State transitions (llm<->tool) still
+      // publish immediately, but tool label churn is intentionally slower:
+      // rapid sequential tool calls can otherwise pressure the TUI with
+      // updates that are too fast for users to read.
+      const stateChanged = patch.waitState !== undefined && patch.waitState !== lastWaitState
+      const toolChanged =
+        ("activeTool" in patch && patch.activeTool !== lastActiveTool) ||
+        ("toolCallID" in patch && patch.toolCallID !== lastToolCallID)
+      const forced = patch.step !== undefined || patch.startedAt !== undefined
+      const throttleMs = toolChanged ? TOOL_LABEL_THROTTLE_MS : STATUS_THROTTLE_MS
+      if (!stateChanged && !forced && now - lastStatusWrite < throttleMs) return
+      lastStatusWrite = now
+      if (patch.waitState !== undefined) lastWaitState = patch.waitState
+      if ("activeTool" in patch) lastActiveTool = patch.activeTool
+      if ("toolCallID" in patch) lastToolCallID = patch.toolCallID
+      const current = await SessionStatus.get(input.sessionID)
+      const base: Extract<SessionStatus.Info, { type: "busy" }> =
+        current.type === "busy"
+          ? current
+          : {
+              type: "busy",
+              startedAt: now,
+              lastActivityAt: now,
+            }
+      await SessionStatus.set(input.sessionID, {
+        ...base,
+        ...patch,
+        type: "busy",
+        startedAt: patch.startedAt ?? base.startedAt ?? now,
+        lastActivityAt: patch.lastActivityAt ?? now,
+      })
+    }
+
+    const result = {
+      get message() {
+        return input.assistantMessage
+      },
+      partFromToolCall(toolCallID: string) {
+        return toolcalls[toolCallID]
+      },
+      async process(streamInput: LLM.StreamInput) {
+        log.info("process started", { sessionId: input.sessionID, command: "session.process", status: "started" })
+        attempt = 0
+        needsCompaction = false
+        const autonomous = Flag.AX_CODE_AUTONOMOUS
+        const shouldBreak = autonomous
+          ? false
+          : (cachedShouldBreak ??= (await Config.get()).experimental?.continue_loop_on_deny !== true)
+        if (autonomous) {
+          // Apply per-session cap overrides from config so users can widen
+          // limits for long refactors without code changes.
+          const caps = (await Config.get()).experimental?.autonomous_caps
+          if (caps) BlastRadius.get(input.sessionID, caps)
+          // Per-tool counters reset every turn — tool-call cap is meant
+          // to catch a single runaway loop, not the cumulative total
+          // across many user turns. Cumulative caps (steps/files/lines)
+          // intentionally do not reset.
+          BlastRadius.resetToolCalls(input.sessionID)
+        }
+        while (true) {
+          blocked = false
+          let currentText: MessageV2.TextPart | undefined
+          let reasoningMap: Record<string, MessageV2.ReasoningPart> = {}
+          try {
+            let usedTools = false
+            let receivedFinish = false
+            let stepStartTime = Date.now()
+            let stepParts: Array<
+              | { type: "text"; text: string }
+              | { type: "reasoning"; text: string }
+              | { type: "tool_call"; callID: string; tool: string; input: Record<string, unknown> }
+            > = []
+            Recorder.emit({
+              type: "llm.request",
+              sessionID: input.sessionID,
+              messageID: input.assistantMessage.id,
+              model: `${input.model.providerID}/${input.model.id}`,
+              messageCount: streamInput.messages.length,
+              stepIndex: attempt,
+            })
+            const stream = await LLM.stream(streamInput)
+
+            // Heartbeat: update lastActivityAt periodically during long
+            // streaming responses so the TUI doesn't show "no activity"
+            // while the model is actively generating text/reasoning.
+            let lastHeartbeat = Date.now()
+            const HEARTBEAT_INTERVAL_MS = 15_000
+
+            for await (const value of stream.fullStream) {
+              input.abort.throwIfAborted()
+
+              const now = Date.now()
+              if (now - lastHeartbeat >= HEARTBEAT_INTERVAL_MS) {
+                lastHeartbeat = now
+                await setBusyStatus({ lastActivityAt: now })
+              }
+
+              switch (value.type) {
+                case "start":
+                  await setBusyStatus({
+                    step: attempt,
+                    waitState: "llm",
+                    activeTool: undefined,
+                    toolCallID: undefined,
+                  })
+                  break
+
+                case "reasoning-start":
+                  if (value.id in reasoningMap) {
+                    continue
+                  }
+                  const reasoningPart = {
+                    ...partBase(),
+                    type: "reasoning" as const,
+                    text: "",
+                    time: {
+                      start: Date.now(),
+                    },
+                    metadata: value.providerMetadata,
+                  }
+                  reasoningMap[value.id] = reasoningPart
+                  await Session.updatePart.force(reasoningPart)
+                  break
+
+                case "reasoning-delta":
+                  if (value.id in reasoningMap) {
+                    const part = reasoningMap[value.id]
+                    part.text += value.text
+                    if (value.providerMetadata) part.metadata = value.providerMetadata
+                    deltaBatcher.push(part.id, value.text)
+                  }
+                  break
+
+                case "reasoning-end":
+                  if (value.id in reasoningMap) {
+                    deltaBatcher.flush()
+                    const part = reasoningMap[value.id]
+                    part.text = part.text.trimEnd()
+
+                    part.time = {
+                      ...part.time,
+                      end: Date.now(),
+                    }
+                    if (value.providerMetadata) part.metadata = value.providerMetadata
+                    stepParts.push({ type: "reasoning", text: part.text })
+                    await Session.updatePart.force(part)
+                    delete reasoningMap[value.id]
+                  }
+                  break
+
+                case "tool-input-start":
+                  usedTools = true
+                  await setBusyStatus({
+                    waitState: "tool",
+                    activeTool: value.toolName,
+                    toolCallID: value.id,
+                  })
+                  const base = partBase()
+                  const part = await Session.updatePart.force({
+                    ...base,
+                    id: toolcalls[value.id]?.id ?? base.id,
+                    type: "tool",
+                    tool: value.toolName,
+                    callID: value.id,
+                    state: {
+                      status: "pending",
+                      input: {},
+                      raw: "",
+                    },
+                  })
+                  toolcalls[value.id] = part as MessageV2.ToolPart
+                  break
+
+                case "tool-input-delta":
+                  break
+
+                case "tool-input-end":
+                  break
+
+                case "tool-call": {
+                  usedTools = true
+                  await setBusyStatus({
+                    waitState: "tool",
+                    activeTool: value.toolName,
+                    toolCallID: value.toolCallId,
+                  })
+                  // Rate limit: prune timestamps outside the window, then check
+                  const now = Date.now()
+                  while (toolCallTimestamps.length > 0 && toolCallTimestamps[0]! < now - RATE_LIMIT_WINDOW_MS) {
+                    toolCallTimestamps.shift()
+                  }
+                  if (toolCallTimestamps.length >= RATE_LIMIT_MAX_CALLS) {
+                    log.warn("tool call rate limit exceeded", {
+                      sessionID: input.sessionID,
+                      tool: value.toolName,
+                      callsInWindow: toolCallTimestamps.length,
+                    })
+                    throw new Error(
+                      `Tool call rate limit exceeded: ${RATE_LIMIT_MAX_CALLS} calls in ${RATE_LIMIT_WINDOW_MS / 1000}s. ` +
+                        "This may indicate a runaway agent loop.",
+                    )
+                  }
+                  toolCallTimestamps.push(now)
+
+                  // Autonomous step cap (ADR-004 / PRD v4.2.0). The
+                  // per-session step counter is incremented at every
+                  // tool call so that any branch that loops without
+                  // making progress eventually fails with a typed
+                  // error instead of an opaque rate-limit warning.
+                  // Also bump the per-tool counter (PRD v4.2.1 P2-3)
+                  // so that flooding one tool — bash spam, mass-edit
+                  // — trips before the aggregate session cap.
+                  if (autonomous) {
+                    BlastRadius.incrementStep(input.sessionID)
+                    BlastRadius.incrementToolCall(input.sessionID, value.toolName)
+                    BlastRadius.assertWithinCaps(input.sessionID)
+                  }
+
+                  const toolInput = asRecord(value.input)
+
+                  stepParts.push({
+                    type: "tool_call",
+                    callID: value.toolCallId,
+                    tool: value.toolName,
+                    input: toolInput,
+                  })
+                  Recorder.emit({
+                    type: "tool.call",
+                    sessionID: input.sessionID,
+                    messageID: input.assistantMessage.id,
+                    tool: value.toolName,
+                    callID: value.toolCallId,
+                    input: toolInput,
+                    stepIndex: attempt,
+                  })
+                  const match = toolcalls[value.toolCallId]
+                  if (match) {
+                    const part = await Session.updatePart.force({
+                      ...match,
+                      tool: value.toolName,
+                      state: {
+                        status: "running",
+                        input: value.input,
+                        time: {
+                          start: Date.now(),
+                        },
+                      },
+                      metadata: value.providerMetadata,
+                    })
+                    toolcalls[value.toolCallId] = part as MessageV2.ToolPart
+
+                    // Doom loop detection: cycle-aware. Looks for the
+                    // shortest repeating pattern in the recent ring + the
+                    // current call. k=1 matches the legacy "same call N
+                    // times" behavior; k>=2 catches A->B->A->B and longer
+                    // shapes that exact-repeat detection misses. Patterns
+                    // are required to repeat at least
+                    // DOOM_LOOP_THRESHOLD times for k=1 and 2 times for
+                    // k>=2 (a longer cycle is itself stronger evidence).
+                    const inputStr = canonicalize(value.input)
+                    toolInputCache[value.toolCallId] = inputStr
+                    const allRecent = [...recentToolRing, { tool: value.toolName, input: inputStr }]
+                    if (detectCycle(allRecent, AUTONOMOUS_MAX_CYCLE_LEN) !== null) {
+                      if (autonomous) {
+                        // In autonomous mode, skip Permission.ask() (which
+                        // would auto-approve and waste the detection). Clear
+                        // the ring buffer so the tool call proceeds this time
+                        // but the detector rearms for the next batch. The
+                        // model sees the identical results in its history
+                        // which should prompt a strategy change. Step limits
+                        // bound total damage if the model keeps repeating.
+                        log.warn("autonomous doom_loop detected, clearing ring buffer", {
+                          tool: value.toolName,
+                          sessionID: input.sessionID,
+                        })
+                        recentToolRing.length = 0
+                        break
+                      }
+                      // `Agent.get()` returns undefined if the agent
+                      // was removed or renamed mid-session (e.g. via
+                      // config reload). Accessing `.permission` on
+                      // undefined would crash the entire processor
+                      // pipeline mid-loop. An empty ruleset falls
+                      // through to the default "ask" behavior, which
+                      // is the same semantic the full ruleset would
+                      // have for a doom_loop permission that isn't
+                      // explicitly allowed — the user sees the prompt
+                      // either way. See BUG-68.
+                      const agent = await Agent.get(input.assistantMessage.agent)
+                      await Permission.ask({
+                        permission: "doom_loop",
+                        patterns: [value.toolName],
+                        sessionID: input.assistantMessage.sessionID,
+                        metadata: {
+                          tool: value.toolName,
+                          input: value.input,
+                        },
+                        always: [value.toolName],
+                        ruleset: agent?.permission ?? [],
+                      })
+                    }
+                  }
+                  break
+                }
+                case "tool-result": {
+                  usedTools = true
+                  await setBusyStatus({
+                    waitState: "llm",
+                    activeTool: undefined,
+                    toolCallID: undefined,
+                  })
+                  const match = toolcalls[value.toolCallId]
+                  if (match && match.state.status === "running") {
+                    const toolEndTime = Date.now()
+                    await Session.updatePart.force({
+                      ...match,
+                      state: {
+                        status: "completed",
+                        input: value.input ?? match.state.input,
+                        output: value.output.output,
+                        metadata: value.output.metadata,
+                        title: value.output.title,
+                        time: {
+                          start: match.state.time.start,
+                          end: toolEndTime,
+                        },
+                        attachments: value.output.attachments,
+                      },
+                    })
+                    Recorder.emit({
+                      type: "tool.result",
+                      sessionID: input.sessionID,
+                      messageID: input.assistantMessage.id,
+                      tool: match.tool,
+                      callID: value.toolCallId,
+                      status: "completed",
+                      output: typeof value.output.output === "string" ? value.output.output.slice(0, 1000) : undefined,
+                      metadata: value.output.metadata,
+                      durationMs: toolEndTime - match.state.time.start,
+                      stepIndex: attempt,
+                      deterministic: false,
+                    })
+
+                    // Self-correction: clear retry budget on success
+                    SelfCorrection.recordSuccess(input.sessionID, match.tool)
+
+                    recentToolRing.push({
+                      tool: match.tool,
+                      input:
+                        toolInputCache[value.toolCallId] ??
+                        (value.input ? safeStringify(value.input) : safeStringify(match.state.input)),
+                    })
+                    // Window large enough to evaluate the longest cycle
+                    // length (need 2*MAX_CYCLE_LEN entries) plus headroom.
+                    const RING_LIMIT = Math.max(DOOM_LOOP_THRESHOLD, AUTONOMOUS_MAX_CYCLE_LEN * 3)
+                    if (recentToolRing.length > RING_LIMIT) recentToolRing.shift()
+                    delete toolcalls[value.toolCallId]
+                    delete toolInputCache[value.toolCallId]
+                  }
+                  break
+                }
+
+                case "tool-error": {
+                  usedTools = true
+                  await setBusyStatus({
+                    waitState: "llm",
+                    activeTool: undefined,
+                    toolCallID: undefined,
+                  })
+                  const match = toolcalls[value.toolCallId]
+                  if (match && match.state.status === "running") {
+                    const errorMsg = value.error instanceof Error ? value.error.message : String(value.error)
+                    const errorCode = value.error instanceof Error ? value.error.name : "Unknown"
+                    const toolErrorEnd = Date.now()
+
+                    // Self-correction: analyze the failure BEFORE persisting
+                    // the tool error so we can append the reflection prompt
+                    // to the error message the LLM sees. Previously the
+                    // prompt was computed but discarded, making the whole
+                    // self-correction feature a no-op — the log showed
+                    // "self-correction active" but the model received no
+                    // guidance on its next turn.
+                    let annotatedError = errorMsg
+                    if (
+                      !(value.error instanceof Permission.RejectedError) &&
+                      !(value.error instanceof Question.RejectedError)
+                    ) {
+                      const correction = SelfCorrection.analyze(input.sessionID, match.tool, errorMsg)
+                      if (correction) {
+                        log.info("self-correction active", {
+                          tool: match.tool,
+                          strategy: correction.signal.strategy,
+                          attempt: correction.signal.attempt,
+                        })
+                        // Sanitize error message to prevent prompt injection via
+                        // tool output containing closing/opening system-reminder tags.
+                        annotatedError = `${sanitizeForXmlTag(errorMsg)}\n\n<system-reminder>\n${correction.prompt}\n</system-reminder>`
+                      }
+                    }
+
+                    await Session.updatePart.force({
+                      ...match,
+                      state: {
+                        status: "error",
+                        input: value.input ?? match.state.input,
+                        error: annotatedError,
+                        time: {
+                          start: match.state.time.start,
+                          end: toolErrorEnd,
+                        },
+                      },
+                    })
+                    Recorder.emit({
+                      type: "tool.result",
+                      sessionID: input.sessionID,
+                      messageID: input.assistantMessage.id,
+                      tool: match.tool,
+                      callID: value.toolCallId,
+                      status: "error",
+                      errorCode,
+                      errorMessage: errorMsg.slice(0, 1000),
+                      error: errorMsg.slice(0, 1000),
+                      durationMs: toolErrorEnd - match.state.time.start,
+                      stepIndex: attempt,
+                      deterministic: false,
+                    })
+
+                    if (
+                      value.error instanceof Permission.RejectedError ||
+                      value.error instanceof Question.RejectedError
+                    ) {
+                      blocked = shouldBreak
+                    }
+                    recentToolRing.push({
+                      tool: match.tool,
+                      input:
+                        toolInputCache[value.toolCallId] ??
+                        (value.input ? safeStringify(value.input) : safeStringify(match.state.input)),
+                    })
+                    const RING_LIMIT = Math.max(DOOM_LOOP_THRESHOLD, AUTONOMOUS_MAX_CYCLE_LEN * 3)
+                    if (recentToolRing.length > RING_LIMIT) recentToolRing.shift()
+                    delete toolcalls[value.toolCallId]
+                    delete toolInputCache[value.toolCallId]
+                  }
+                  break
+                }
+                case "error":
+                  throw value.error
+
+                case "start-step":
+                  usedTools = false
+                  receivedFinish = false
+                  snapshot = undefined
+                  stepStartTime = Date.now()
+                  stepParts = []
+                  await setBusyStatus({
+                    step: attempt,
+                    startedAt: stepStartTime,
+                    waitState: "llm",
+                    activeTool: undefined,
+                    toolCallID: undefined,
+                  })
+                  Recorder.emit({
+                    type: "step.start",
+                    sessionID: input.sessionID,
+                    messageID: input.assistantMessage.id,
+                    stepIndex: attempt,
+                  })
+                  await Session.updatePart.force({
+                    ...partBase(),
+                    snapshot,
+                    type: "step-start",
+                  })
+                  break
+
+                case "finish-step":
+                  await setBusyStatus({
+                    step: attempt,
+                    waitState: "llm",
+                    activeTool: undefined,
+                    toolCallID: undefined,
+                  })
+                  if (!value.usage || ((value.usage.inputTokens ?? 0) === 0 && (value.usage.outputTokens ?? 0) === 0))
+                    log.warn("provider returned no usage data", {
+                      provider: input.model.providerID,
+                      model: input.model.id,
+                    })
+                  const usage = Session.getUsage({
+                    model: input.model,
+                    usage: value.usage ?? { inputTokens: 0, outputTokens: 0 },
+                    metadata: value.providerMetadata,
+                  })
+                  const finishReason =
+                    typeof value.finishReason === "string"
+                      ? value.finishReason
+                      : ((value.finishReason as { type?: string })?.type ?? String(value.finishReason ?? "stop"))
+                  input.assistantMessage.finish = usedTools ? "tool-calls" : finishReason
+                  input.assistantMessage.tokens = {
+                    total: (usage.tokens.total ?? 0) + (input.assistantMessage.tokens.total ?? 0),
+                    input: usage.tokens.input + input.assistantMessage.tokens.input,
+                    output: usage.tokens.output + input.assistantMessage.tokens.output,
+                    reasoning: usage.tokens.reasoning + input.assistantMessage.tokens.reasoning,
+                    cache: {
+                      read: usage.tokens.cache.read + input.assistantMessage.tokens.cache.read,
+                      write: usage.tokens.cache.write + input.assistantMessage.tokens.cache.write,
+                    },
+                  }
+                  if (usedTools) snapshot = await Snapshot.track()
+                  // Resolve async snapshot patch before batching synchronous DB writes
+                  const stepSnapshot = snapshot
+                  let patchData: { hash: string; files: string[] } | undefined
+                  if (snapshot) {
+                    try {
+                      const patch = await Snapshot.patch(snapshot)
+                      if (patch.files.length) patchData = patch
+                    } catch (err) {
+                      log.warn("snapshot patch failed", { error: err })
+                    }
+                    snapshot = undefined
+                  }
+                  // Batch step-finish + message update + patch in one transaction
+                  Database.transaction(() => {
+                    Session.updatePart.force({
+                      id: PartID.ascending(),
+                      reason: usedTools ? "tool-calls" : finishReason,
+                      snapshot: stepSnapshot,
+                      messageID: input.assistantMessage.id,
+                      sessionID: input.assistantMessage.sessionID,
+                      type: "step-finish",
+                      tokens: usage.tokens,
+                    })
+                    Session.updateMessage.force(input.assistantMessage)
+                    if (patchData) {
+                      Session.updatePart.force({
+                        ...partBase(),
+                        type: "patch",
+                        hash: patchData.hash,
+                        files: patchData.files,
+                      })
+                    }
+                  })
+                  Recorder.emit({
+                    type: "step.finish",
+                    sessionID: input.sessionID,
+                    messageID: input.assistantMessage.id,
+                    stepIndex: attempt,
+                    finishReason: usedTools ? "tool-calls" : finishReason,
+                    tokens: {
+                      input: usage.tokens.input,
+                      output: usage.tokens.output,
+                      reasoning: usage.tokens.reasoning,
+                      cache: usage.tokens.cache,
+                    },
+                  })
+                  Recorder.emit({
+                    type: "llm.response",
+                    sessionID: input.sessionID,
+                    messageID: input.assistantMessage.id,
+                    finishReason: usedTools ? "tool-calls" : finishReason,
+                    tokens: {
+                      input: usage.tokens.input,
+                      output: usage.tokens.output,
+                      reasoning: usage.tokens.reasoning,
+                      cache: usage.tokens.cache,
+                    },
+                    latencyMs: Date.now() - stepStartTime,
+                    stepIndex: attempt,
+                  })
+                  if (stepParts.length > 0) {
+                    Recorder.emit({
+                      type: "llm.output",
+                      sessionID: input.sessionID,
+                      messageID: input.assistantMessage.id,
+                      stepIndex: attempt,
+                      parts: stepParts,
+                    })
+                  }
+                  SessionSummary.summarize(
+                    {
+                      sessionID: input.sessionID,
+                      messageID: input.assistantMessage.parentID,
+                    },
+                    input.messages,
+                  ).catch((e) => log.warn("summarize failed", { error: e }))
+                  if (
+                    !input.assistantMessage.summary &&
+                    (await SessionCompaction.isOverflow({ tokens: usage.tokens, model: input.model }))
+                  ) {
+                    needsCompaction = true
+                  }
+                  break
+
+                case "text-start":
+                  currentText = {
+                    ...partBase(),
+                    type: "text",
+                    text: "",
+                    time: {
+                      start: Date.now(),
+                    },
+                    metadata: value.providerMetadata,
+                  }
+                  await Session.updatePart.force(currentText)
+                  break
+
+                case "text-delta":
+                  if (currentText) {
+                    currentText.text += value.text
+                    if (value.providerMetadata) currentText.metadata = value.providerMetadata
+                    deltaBatcher.push(currentText.id, value.text)
+                  }
+                  break
+
+                case "text-end":
+                  if (currentText) {
+                    deltaBatcher.flush()
+                    currentText.text = currentText.text.trimEnd()
+                    const textOutput = await Plugin.trigger(
+                      "experimental.text.complete",
+                      {
+                        sessionID: input.sessionID,
+                        messageID: input.assistantMessage.id,
+                        partID: currentText.id,
+                      },
+                      { text: currentText.text },
+                    )
+                    currentText.text = textOutput.text
+                    currentText.time = {
+                      start: currentText.time?.start ?? Date.now(),
+                      end: Date.now(),
+                    }
+                    if (value.providerMetadata) currentText.metadata = value.providerMetadata
+                    stepParts.push({ type: "text", text: currentText.text })
+                    await Session.updatePart.force(currentText)
+                  }
+                  currentText = undefined
+                  break
+
+                case "finish":
+                  receivedFinish = true
+                  break
+
+                default:
+                  log.info("unhandled", {
+                    ...value,
+                  })
+                  continue
+              }
+              if (needsCompaction) {
+                // Finalize in-flight parts before breaking for compaction
+                if (currentText) {
+                  currentText.text = currentText.text.trimEnd()
+                  if (!currentText.time?.end)
+                    currentText.time = { start: currentText.time?.start ?? Date.now(), end: Date.now() }
+                }
+                for (const part of Object.values(reasoningMap)) {
+                  part.text = part.text.trimEnd()
+                  if (!part.time?.end) part.time = { start: part.time?.start ?? Date.now(), end: Date.now() }
+                }
+                // Persist finalized in-flight parts so they are not lost when
+                // compaction breaks the loop (the catch path handles errors
+                // separately; the break path previously skipped this).
+                const compactionParts = [...(currentText ? [currentText] : []), ...Object.values(reasoningMap)]
+                if (compactionParts.length > 0) {
+                  Database.transaction(() => {
+                    for (const p of compactionParts) Session.updatePart.force(p)
+                  })
+                }
+                break
+              }
+            }
+            // If the stream ended without a "finish" event and we're not
+            // doing compaction, the connection was likely severed by a
+            // network interruption. Throw so the catch path triggers retry.
+            if (!receivedFinish && !needsCompaction && !input.abort.aborted) {
+              throw new Error("Stream ended without finish event — possible network interruption")
+            }
+          } catch (e: unknown) {
+            deltaBatcher.flush()
+            for (const k of Object.keys(toolInputCache)) delete toolInputCache[k]
+            if (currentText) {
+              currentText.text = currentText.text.trimEnd()
+              currentText.time = {
+                start: currentText.time?.start ?? Date.now(),
+                end: Date.now(),
+              }
+            }
+            for (const part of Object.values(reasoningMap)) {
+              part.text = part.text.trimEnd()
+              part.time = {
+                start: part.time?.start ?? Date.now(),
+                end: Date.now(),
+              }
+            }
+            // Batch error-recovery writes in one transaction
+            const errorParts = [...(currentText ? [currentText] : []), ...Object.values(reasoningMap)]
+            if (errorParts.length > 0) {
+              Database.transaction(() => {
+                for (const p of errorParts) Session.updatePart.force(p)
+              })
+            }
+            const errStack = e instanceof Error ? e.stack : undefined
+            const errName = e instanceof Error ? e.name : (e as { constructor?: { name?: string } })?.constructor?.name
+            const errMessage = e instanceof Error ? e.message : String(e)
+            log.error("process failed", {
+              sessionId: input.sessionID,
+              command: "session.process",
+              status: "error",
+              errorCode: errName ?? "Unknown",
+              error: e,
+              stack: JSON.stringify(errStack),
+            })
+            Recorder.emit({
+              type: "error",
+              sessionID: input.sessionID,
+              messageID: input.assistantMessage.id,
+              errorType: errName ?? "Unknown",
+              message: errMessage.slice(0, 2000),
+              stepIndex: attempt,
+            })
+            const error = MessageV2.fromError(e, { providerID: input.model.providerID })
+            if (MessageV2.ContextOverflowError.isInstance(error)) {
+              needsCompaction = true
+              Session.publishError({
+                sessionID: input.assistantMessage.sessionID,
+                error,
+              })
+            } else {
+              const retry = SessionRetry.retryable(error)
+              if (retry !== undefined) {
+                attempt++
+                if (attempt <= SessionRetry.RETRY_MAX_ATTEMPTS) {
+                  const delay = SessionRetry.delay(attempt, error.name === "APIError" ? error : undefined)
+                  await SessionStatus.set(input.sessionID, {
+                    type: "retry",
+                    attempt,
+                    message: retry,
+                    next: Date.now() + delay,
+                  })
+                  await SessionRetry.sleep(delay, input.abort).catch((error) => {
+                    if (input.abort.aborted) return
+                    log.warn("retry sleep failed, retrying immediately", {
+                      command: "session.prompt.process",
+                      status: "error",
+                      error,
+                      attempt,
+                      sessionID: input.sessionID,
+                    })
+                  })
+                  if (input.abort.aborted) break
+                  continue
+                }
+                const apiErrorMessage =
+                  MessageV2.APIError.isInstance(error) && typeof error.data?.message === "string"
+                    ? error.data.message
+                    : retry
+                input.assistantMessage.error = MessageV2.APIError.isInstance(error) && error.data
+                  ? new MessageV2.APIError({
+                      ...error.data,
+                      isRetryable: false,
+                      message: `${apiErrorMessage} (stopped after ${SessionRetry.RETRY_MAX_ATTEMPTS} retries)`,
+                    }).toObject()
+                  : new NamedError.Unknown({
+                      message: `${retry} (stopped after ${SessionRetry.RETRY_MAX_ATTEMPTS} retries)`,
+                    }).toObject()
+              } else {
+                input.assistantMessage.error ??= error
+              }
+              Session.publishError({
+                sessionID: input.assistantMessage.sessionID,
+                error: input.assistantMessage.error,
+              })
+              await SessionStatus.set(input.sessionID, { type: "idle" })
+            }
+          }
+          // Resolve async snapshot before batching final DB writes
+          let finalPatch: { hash: string; files: string[] } | undefined
+          if (snapshot) {
+            try {
+              const patch = await Snapshot.patch(snapshot)
+              if (patch.files.length) finalPatch = patch
+            } catch (err) {
+              log.warn("snapshot patch failed", { error: err })
+            }
+            snapshot = undefined
+          }
+          // Batch final cleanup writes in one transaction
+          input.assistantMessage.time.completed = Date.now()
+          Database.transaction(() => {
+            if (finalPatch) {
+              Session.updatePart.force({
+                id: PartID.ascending(),
+                messageID: input.assistantMessage.id,
+                sessionID: input.sessionID,
+                type: "patch",
+                hash: finalPatch.hash,
+                files: finalPatch.files,
+              })
+            }
+            // Use local toolcalls record instead of DB query to find incomplete tools
+            for (const part of Object.values(toolcalls)) {
+              if (part.type === "tool" && part.state.status !== "completed" && part.state.status !== "error") {
+                Session.updatePart.force({
+                  ...part,
+                  state: {
+                    ...part.state,
+                    status: "error",
+                    error: "Tool execution aborted",
+                    time: {
+                      start:
+                        part.state.status === "running" && "time" in part.state ? part.state.time.start : Date.now(),
+                      end: Date.now(),
+                    },
+                  },
+                })
+              }
+            }
+            Session.updateMessage.force(input.assistantMessage)
+          })
+          deltaBatcher.flush()
+          if (needsCompaction) return "compact"
+          if (blocked) return "stop"
+          if (input.assistantMessage.error) return "stop"
+          return "continue"
+        }
+      },
+    }
+    return result
+  }
+}

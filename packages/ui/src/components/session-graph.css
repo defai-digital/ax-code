@@ -1,0 +1,19 @@
+[data-component="session-graph"] {
+  .session-graph-scroll {
+    max-height: 28rem;
+    border: 1px solid var(--border-primary);
+    border-radius: 8px;
+    background: color-mix(in oklab, var(--surface-secondary) 72%, transparent);
+  }
+
+  .session-graph-canvas {
+    display: block;
+    min-width: 100%;
+    background:
+      linear-gradient(to right, color-mix(in oklab, var(--border-secondary) 28%, transparent) 1px, transparent 1px) 0
+        0 / 88px 100%,
+      linear-gradient(to bottom, color-mix(in oklab, var(--border-secondary) 24%, transparent) 1px, transparent 1px) 0
+        0 / 100% 76px,
+      var(--surface-primary);
+  }
+}

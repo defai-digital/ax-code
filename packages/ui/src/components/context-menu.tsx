@@ -1,0 +1,22 @@
+export { ContextMenu } from "./overlay/context-menu"
+export type {
+  ContextMenuArrowProps,
+  ContextMenuCheckboxItemProps,
+  ContextMenuContentProps,
+  ContextMenuGroupLabelProps,
+  ContextMenuGroupProps,
+  ContextMenuIconProps,
+  ContextMenuItemDescriptionProps,
+  ContextMenuItemIndicatorProps,
+  ContextMenuItemLabelProps,
+  ContextMenuItemProps,
+  ContextMenuPortalProps,
+  ContextMenuProps,
+  ContextMenuRadioGroupProps,
+  ContextMenuRadioItemProps,
+  ContextMenuSeparatorProps,
+  ContextMenuSubContentProps,
+  ContextMenuSubProps,
+  ContextMenuSubTriggerProps,
+  ContextMenuTriggerProps,
+} from "./overlay/context-menu"

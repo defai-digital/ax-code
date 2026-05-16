@@ -1,0 +1,82 @@
+name: repo-structure
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/repo-structure.yml"
+      - ".internal/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "crates/**"
+      - "script/**"
+      - "scripts/**"
+      - "docs/**"
+      - "github/**"
+      - "packages/**"
+      - "sdks/**"
+      - "planning/**"
+      - "tools/**"
+  push:
+    branches:
+      - dev
+    paths:
+      - ".github/workflows/repo-structure.yml"
+      - ".internal/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "crates/**"
+      - "script/**"
+      - "scripts/**"
+      - "docs/**"
+      - "github/**"
+      - "packages/**"
+      - "sdks/**"
+      - "planning/**"
+      - "tools/**"
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10.33.4
+          run_install: false
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Check repo structure
+        run: pnpm run check:structure
+
+      - name: Ensure .internal is not tracked
+        run: |
+          tracked_internal="$(git ls-files .internal | tr '\n' ' ')"
+          if [ -n "$tracked_internal" ]; then
+            echo "Error: .internal is tracked and must stay local-only."
+            echo "Tracked files:"
+            git ls-files .internal
+            exit 1
+          fi
+
+      # ax-code intentionally does not track or display monetary cost for
+      # LLM calls. This guard prevents schema fields, identifiers, or slash
+      # commands from quietly reintroducing a cost meter.
+      - name: Check no cost meter
+        run: pnpm run check:no-cost
+
+      - name: Check OpenAPI snapshot
+        run: pnpm run check:openapi

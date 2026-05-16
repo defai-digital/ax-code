@@ -1,0 +1,216 @@
+import { describe, expect, test } from "bun:test"
+import type { NamedError } from "@ax-code/util/error"
+import { APICallError } from "ai"
+import { SessionRetry } from "../../src/session/retry"
+import { MessageV2 } from "../../src/session/message-v2"
+import { ProviderID } from "../../src/provider/schema"
+
+const providerID = ProviderID.make("test")
+
+function apiError(headers?: Record<string, string>): MessageV2.APIError {
+  return new MessageV2.APIError({
+    message: "boom",
+    isRetryable: true,
+    responseHeaders: headers,
+  }).toObject() as MessageV2.APIError
+}
+
+function wrap(message: unknown): ReturnType<NamedError["toObject"]> {
+  return { data: { message } } as ReturnType<NamedError["toObject"]>
+}
+
+describe("session.retry.delay", () => {
+  test("caps delay at 30 seconds when headers missing (with jitter)", () => {
+    const error = apiError()
+    // Jitter adds +/-25% variance, so check that each delay falls within
+    // the expected range around the base exponential value.
+    const bases = [2000, 4000, 8000, 16000, 30000, 30000, 30000, 30000, 30000, 30000]
+    const delays = Array.from({ length: 10 }, (_, index) => SessionRetry.delay(index + 1, error))
+    for (let i = 0; i < bases.length; i++) {
+      expect(delays[i]).toBeGreaterThanOrEqual(Math.round(bases[i] * 0.75))
+      expect(delays[i]).toBeLessThanOrEqual(Math.round(bases[i] * 1.25))
+    }
+  })
+
+  test("prefers retry-after-ms when shorter than exponential", () => {
+    const error = apiError({ "retry-after-ms": "1500" })
+    expect(SessionRetry.delay(4, error)).toBe(1500)
+  })
+
+  test("uses retry-after seconds when reasonable", () => {
+    const error = apiError({ "retry-after": "30" })
+    expect(SessionRetry.delay(3, error)).toBe(30000)
+  })
+
+  test("accepts http-date retry-after values", () => {
+    const date = new Date(Date.now() + 20000).toUTCString()
+    const error = apiError({ "retry-after": date })
+    const d = SessionRetry.delay(1, error)
+    expect(d).toBeGreaterThanOrEqual(19000)
+    expect(d).toBeLessThanOrEqual(20000)
+  })
+
+  test("ignores invalid retry hints", () => {
+    const error = apiError({ "retry-after": "not-a-number" })
+    const d = SessionRetry.delay(1, error)
+    // Falls through to exponential with jitter (+/-25% of 2000)
+    expect(d).toBeGreaterThanOrEqual(1500)
+    expect(d).toBeLessThanOrEqual(2500)
+  })
+
+  test("ignores malformed date retry hints", () => {
+    const error = apiError({ "retry-after": "Invalid Date String" })
+    const d = SessionRetry.delay(1, error)
+    expect(d).toBeGreaterThanOrEqual(1500)
+    expect(d).toBeLessThanOrEqual(2500)
+  })
+
+  test("ignores past date retry hints", () => {
+    const pastDate = new Date(Date.now() - 5000).toUTCString()
+    const error = apiError({ "retry-after": pastDate })
+    const d = SessionRetry.delay(1, error)
+    expect(d).toBeGreaterThanOrEqual(1500)
+    expect(d).toBeLessThanOrEqual(2500)
+  })
+
+  test("uses retry-after values even when exceeding 10 minutes with headers", () => {
+    const error = apiError({ "retry-after": "50" })
+    expect(SessionRetry.delay(1, error)).toBe(50000)
+
+    const longError = apiError({ "retry-after-ms": "700000" })
+    expect(SessionRetry.delay(1, longError)).toBe(700000)
+  })
+
+  test("sleep caps delay to max 32-bit signed integer to avoid TimeoutOverflowWarning", async () => {
+    const controller = new AbortController()
+
+    const warnings: string[] = []
+    const originalWarn = process.emitWarning
+    process.emitWarning = (warning: string | Error) => {
+      warnings.push(typeof warning === "string" ? warning : warning.message)
+    }
+
+    const promise = SessionRetry.sleep(2_560_914_000, controller.signal)
+    controller.abort()
+
+    try {
+      await promise
+    } catch {}
+
+    process.emitWarning = originalWarn
+    expect(warnings.some((w) => w.includes("TimeoutOverflowWarning"))).toBe(false)
+  })
+})
+
+describe("session.retry.retryable", () => {
+  test("maps too_many_requests json messages", () => {
+    const error = wrap(JSON.stringify({ type: "error", error: { type: "too_many_requests" } }))
+    expect(SessionRetry.retryable(error)).toBe("Too Many Requests")
+  })
+
+  test("maps overloaded provider codes", () => {
+    const error = wrap(JSON.stringify({ code: "resource_exhausted" }))
+    expect(SessionRetry.retryable(error)).toBe("Provider is overloaded")
+  })
+
+  test("does not retry on unrecognized json error", () => {
+    const error = wrap(JSON.stringify({ error: { message: "no_kv_space" } }))
+    expect(SessionRetry.retryable(error)).toBeUndefined()
+  })
+
+  test("does not throw on numeric error codes", () => {
+    const error = wrap(JSON.stringify({ type: "error", error: { code: 123 } }))
+    const result = SessionRetry.retryable(error)
+    expect(result).toBeUndefined()
+  })
+
+  test("returns undefined for non-json message", () => {
+    const error = wrap("not-json")
+    expect(SessionRetry.retryable(error)).toBeUndefined()
+  })
+
+  test("does not retry context overflow errors", () => {
+    const error = new MessageV2.ContextOverflowError({
+      message: "Input exceeds context window of this model",
+      responseBody: '{"error":{"code":"context_length_exceeded"}}',
+    }).toObject() as ReturnType<NamedError["toObject"]>
+
+    expect(SessionRetry.retryable(error)).toBeUndefined()
+  })
+
+  test("retries Alibaba token-plan short-window quota exhaustion", () => {
+    const message =
+      "Alibaba token-plan rejected the request as exceeding short-window allocatable token quota. This is usually a per-request or TPS/TPM reservation limit, not the total Token Plan usage percentage. ax-code treats this as retryable short-window throttling; if it persists, wait briefly or lower the configured model output limit. Details: https://www.alibabacloud.com/help/en/model-studio/error-code#token-limit"
+    const error = new MessageV2.APIError({
+      message,
+      isRetryable: true,
+      responseBody: JSON.stringify({ error: { code: "AllocatedQuotaExceeded" } }),
+      metadata: {
+        errorCode: "alibaba_token_plan_short_window_quota",
+      },
+    }).toObject() as ReturnType<NamedError["toObject"]>
+
+    expect(SessionRetry.retryable(error)).toBe(message)
+    const delay = SessionRetry.delay(1, error as MessageV2.APIError)
+    expect(delay).toBeGreaterThanOrEqual(45_000)
+    expect(delay).toBeLessThanOrEqual(75_000)
+  })
+
+  test("does not retry generic quota exhaustion without Alibaba token-plan metadata", () => {
+    const error = new MessageV2.APIError({
+      message:
+        "Allocated quota exceeded, please increase your quota limit. For details, see: https://www.alibabacloud.com/help/en/model-studio/error-code#token-limit",
+      isRetryable: true,
+      responseBody: JSON.stringify({ error: { code: "AllocatedQuotaExceeded" } }),
+    }).toObject() as ReturnType<NamedError["toObject"]>
+
+    expect(SessionRetry.retryable(error)).toBeUndefined()
+  })
+})
+
+describe("session.message-v2.fromError", () => {
+  test.concurrent(
+    "converts ECONNRESET socket errors to retryable APIError",
+    async () => {
+      const error = Object.assign(new Error("The socket connection was closed unexpectedly"), {
+        code: "ECONNRESET",
+        syscall: "read",
+      })
+
+      const result = MessageV2.fromError(error, { providerID })
+
+      expect(MessageV2.APIError.isInstance(result)).toBe(true)
+      expect((result as MessageV2.APIError).data.isRetryable).toBe(true)
+      expect((result as MessageV2.APIError).data.message).toBe("Connection reset by server")
+      expect((result as MessageV2.APIError).data.metadata?.code).toBe("ECONNRESET")
+      expect((result as MessageV2.APIError).data.metadata?.message).toInclude("socket connection")
+    },
+    15_000,
+  )
+
+  test("ECONNRESET socket error is retryable", () => {
+    const error = new MessageV2.APIError({
+      message: "Connection reset by server",
+      isRetryable: true,
+      metadata: { code: "ECONNRESET", message: "The socket connection was closed unexpectedly" },
+    }).toObject() as MessageV2.APIError
+
+    const retryable = SessionRetry.retryable(error)
+    expect(retryable).toBeDefined()
+    expect(retryable).toBe("Connection reset by server")
+  })
+
+  test("marks OpenAI 404 status codes as retryable", () => {
+    const error = new APICallError({
+      message: "boom",
+      url: "https://api.openai.com/v1/chat/completions",
+      requestBodyValues: {},
+      statusCode: 404,
+      responseHeaders: { "content-type": "application/json" },
+      responseBody: '{"error":"boom"}',
+      isRetryable: false,
+    })
+    const result = MessageV2.fromError(error, { providerID: ProviderID.make("openai") }) as MessageV2.APIError
+    expect(result.data.isRetryable).toBe(true)
+  })
+})

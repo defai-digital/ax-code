@@ -1,0 +1,69 @@
+name: ax-code-tui-renderer
+
+on:
+  workflow_dispatch:
+    inputs:
+      timeout_ms:
+        description: TUI startup timeout in milliseconds
+        required: false
+        type: string
+        default: "20000"
+      run_pty:
+        description: Run the installed package under a PTY until OpenTUI mounts
+        required: false
+        type: boolean
+        default: true
+      require_ready:
+        description: Fail the workflow when the source package TUI gate is not ready
+        required: false
+        type: boolean
+        default: true
+
+jobs:
+  source-package-tui:
+    runs-on: ubuntu-latest
+    env:
+      AX_CODE_DISABLE_SHARE: "true"
+      AX_CODE_INSTALL_SMOKE_TEMP_ROOT: .tmp/source-install-smoke
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10.33.4
+          run_install: false
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Evaluate source package TUI startup gate
+        id: source-package-tui
+        continue-on-error: ${{ !inputs.require_ready }}
+        shell: bash
+        working-directory: packages/ax-code
+        run: |
+          set -euo pipefail
+
+          if [ "${{ inputs.run_pty }}" = "true" ]; then
+            AX_CODE_INSTALL_SMOKE_TUI_TIMEOUT_MS="${{ inputs.timeout_ms }}" \
+              bun run script/source-install-smoke.ts --tui-startup-smoke --keep-temp
+          else
+            bun run script/source-install-smoke.ts --keep-temp
+          fi
+
+      - name: Upload source package TUI artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ax-code-source-package-tui
+          path: packages/ax-code/.tmp/source-install-smoke/
+          if-no-files-found: ignore

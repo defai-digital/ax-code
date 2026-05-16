@@ -1,0 +1,26 @@
+[package]
+name = "ax-code-diff"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[[example]]
+name = "ax-code-diff-bench"
+path = "examples/bench.rs"
+
+[dependencies]
+napi = { workspace = true }
+napi-derive = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+similar = { workspace = true }
+strsim = { workspace = true }
+unicode-normalization = { workspace = true }
+
+[build-dependencies]
+napi-build = { workspace = true }

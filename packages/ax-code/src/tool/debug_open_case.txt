@@ -1,0 +1,21 @@
+Open a runtime debug case — a session-scoped investigation of a runtime failure ("tests time out", "endpoint returns 500", "feature regressed"). Call this ONCE at the start of a debugging session before capturing evidence or proposing hypotheses. Subsequent tools (debug_capture_evidence, debug_propose_hypothesis) reference the caseId returned here.
+
+When to use:
+- The user describes a runtime problem and you need to investigate.
+- You're about to capture logs or instrumentation and need a case to attach them to.
+
+When NOT to use:
+- You're answering a static "how does X work" question — no runtime issue, no case.
+- You're doing a code review — that's the review workflow, not debug.
+- You already opened a case in this session for the same problem — reusing the existing caseId is correct (the deterministic id ensures you'll get the same case back on a duplicate call).
+
+Input:
+- problem: short user-facing description of what is broken (1–500 chars). Keep it concrete and falsifiable. Bad: "things are slow". Good: "GET /api/users takes >5s p95 since deploy 4a1b2c".
+
+Output:
+- caseId: 16-char hex id you'll cite in subsequent capture/propose calls.
+- A one-line confirmation suitable for chat output.
+
+Hard rules:
+- Do NOT open multiple cases for the same problem. The id is deterministic — if you call with the same `problem`, you'll get the same case back.
+- Do NOT use this tool to record a fix. Status moves through evidence and hypotheses, not directly via this tool.

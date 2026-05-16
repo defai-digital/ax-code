@@ -1,0 +1,236 @@
+import * as fs from "fs/promises"
+import { createWriteStream, statSync } from "fs"
+import { lookup } from "mime-types"
+import { realpathSync } from "fs"
+import { dirname, join, relative, resolve as pathResolve } from "path"
+import { Readable } from "stream"
+import { pipeline } from "stream/promises"
+import { Flag } from "../flag/flag"
+import { Glob } from "./glob"
+import { isRecord } from "./record"
+
+export namespace Filesystem {
+  export async function exists(p: string): Promise<boolean> {
+    return fs
+      .access(p)
+      .then(() => true)
+      .catch(() => false)
+  }
+
+  export async function isDir(p: string): Promise<boolean> {
+    return fs
+      .stat(p)
+      .then((stat) => stat.isDirectory())
+      .catch(() => false)
+  }
+
+  export function stat(p: string): ReturnType<typeof statSync> | undefined {
+    return statSync(p, { throwIfNoEntry: false }) ?? undefined
+  }
+
+  export async function size(p: string): Promise<number> {
+    const s = stat(p)?.size ?? 0
+    return typeof s === "bigint" ? Number(s) : s
+  }
+
+  export async function readText(p: string): Promise<string> {
+    return fs.readFile(p, "utf-8")
+  }
+
+  export async function readJson<T = any>(p: string): Promise<T> {
+    const text = await fs.readFile(p, "utf-8")
+    try {
+      return JSON.parse(text) as T
+    } catch (error) {
+      throw new Error(`Failed to parse JSON in ${p}: ${error instanceof Error ? error.message : String(error)}`, {
+        cause: error instanceof Error ? error : undefined,
+      })
+    }
+  }
+
+  export async function readBytes(p: string): Promise<Buffer> {
+    return fs.readFile(p)
+  }
+
+  export async function readArrayBuffer(p: string): Promise<ArrayBuffer> {
+    const buf = await fs.readFile(p)
+    return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer
+  }
+
+  function isEnoent(e: unknown): e is { code: "ENOENT" } {
+    return isRecord(e) && e.code === "ENOENT"
+  }
+
+  export async function write(p: string, content: string | Buffer | Uint8Array, mode?: number): Promise<void> {
+    const dir = dirname(p)
+    const tmp = join(dir, `.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`)
+    try {
+      await fs.mkdir(dir, { recursive: true })
+      await fs.writeFile(tmp, content, mode ? { mode } : undefined)
+      await fs.rename(tmp, p)
+    } catch (error) {
+      if (isEnoent(error)) {
+        try {
+          await fs.mkdir(dir, { recursive: true })
+          await fs.writeFile(tmp, content, mode ? { mode } : undefined)
+          await fs.rename(tmp, p)
+        } catch (retryError) {
+          await fs.unlink(tmp).catch(() => {})
+          throw retryError
+        }
+        return
+      }
+      await fs.unlink(tmp).catch(() => {})
+      throw error
+    }
+  }
+
+  export async function writeJson(p: string, data: unknown, mode?: number): Promise<void> {
+    return write(p, JSON.stringify(data, null, 2), mode)
+  }
+
+  export async function writeStream(
+    p: string,
+    stream: ReadableStream<Uint8Array> | Readable,
+    mode?: number,
+  ): Promise<void> {
+    const dir = dirname(p)
+    const tmp = join(dir, `.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`)
+    await fs.mkdir(dir, { recursive: true })
+
+    const nodeStream = stream instanceof ReadableStream ? Readable.fromWeb(stream as any) : stream
+    try {
+      // `createWriteStream(tmp, { mode })` opens the file with the requested
+      // mode at creation, so the previous follow-up `fs.chmod(tmp, mode)`
+      // was redundant and added a window between stream-close and rename
+      // where the tmp file existed without the rename being staged. Drop it.
+      const writeStream = createWriteStream(tmp, mode ? { mode } : undefined)
+      await pipeline(nodeStream, writeStream)
+      await fs.rename(tmp, p)
+    } catch (error) {
+      await fs.unlink(tmp).catch(() => {})
+      throw error
+    }
+  }
+
+  export function mimeType(p: string): string {
+    return lookup(p) || "application/octet-stream"
+  }
+
+  /**
+   * On Windows, normalize a path to its canonical casing using the filesystem.
+   * This is needed because Windows paths are case-insensitive but LSP servers
+   * may return paths with different casing than what we send them.
+   */
+  export function normalizePath(p: string): string {
+    if (process.platform !== "win32") return p
+    try {
+      return realpathSync.native(p)
+    } catch {
+      return p
+    }
+  }
+
+  // We cannot rely on path.resolve() here because git.exe may come from Git Bash, Cygwin, or MSYS2, so we need to translate these paths at the boundary.
+  // Also resolves symlinks so that callers using the result as a cache key
+  // always get the same canonical path for a given physical directory.
+  export function resolve(p: string): string {
+    const resolved = pathResolve(windowsPath(p))
+    try {
+      return normalizePath(realpathSync(resolved))
+    } catch (e) {
+      if (isEnoent(e)) return normalizePath(resolved)
+      throw e
+    }
+  }
+
+  /**
+   * Returns the caller's original working directory, even when the process
+   * was launched with --cwd pointing to the ax-code package root.
+   * The global CLI wrapper sets AX_CODE_ORIGINAL_CWD before --cwd takes effect.
+   */
+  export function callerCwd(): string {
+    return Flag.AX_CODE_ORIGINAL_CWD || process.env.PWD || process.cwd()
+  }
+
+  export function windowsPath(p: string): string {
+    if (process.platform !== "win32") return p
+    return (
+      p
+        .replace(/^\/([a-zA-Z]):(?:[\\/]|$)/, (_, drive) => `${drive.toUpperCase()}:/`)
+        // Git Bash for Windows paths are typically /<drive>/...
+        .replace(/^\/([a-zA-Z])(?:\/|$)/, (_, drive) => `${drive.toUpperCase()}:/`)
+        // Cygwin git paths are typically /cygdrive/<drive>/...
+        .replace(/^\/cygdrive\/([a-zA-Z])(?:\/|$)/, (_, drive) => `${drive.toUpperCase()}:/`)
+        // WSL paths are typically /mnt/<drive>/...
+        .replace(/^\/mnt\/([a-zA-Z])(?:\/|$)/, (_, drive) => `${drive.toUpperCase()}:/`)
+    )
+  }
+  export function overlaps(a: string, b: string) {
+    return contains(a, b) || contains(b, a)
+  }
+
+  export function contains(parent: string, child: string) {
+    // Resolve both paths before comparison so redundant segments
+    // (`//`, `./`, `../` anywhere in the input) don't cause false
+    // positives/negatives. `path.relative` on unnormalized inputs
+    // can return a path that starts with something other than `..`
+    // yet still escape the parent. Note: this stays synchronous and
+    // does NOT resolve symlinks — callers that need the stronger
+    // guarantee must realpath() first.
+    const rel = relative(pathResolve(parent), pathResolve(child))
+    return !rel.startsWith("..") && !rel.startsWith("/")
+  }
+
+  export async function findUp(target: string, start: string, stop?: string) {
+    let current = start
+    const result = []
+    while (true) {
+      const search = join(current, target)
+      if (await exists(search)) result.push(search)
+      if (stop === current) break
+      const parent = dirname(current)
+      if (parent === current) break
+      current = parent
+    }
+    return result
+  }
+
+  export async function* up(options: { targets: string[]; start: string; stop?: string }) {
+    const { targets, start, stop } = options
+    let current = start
+    while (true) {
+      for (const target of targets) {
+        const search = join(current, target)
+        if (await exists(search)) yield search
+      }
+      if (stop === current) break
+      const parent = dirname(current)
+      if (parent === current) break
+      current = parent
+    }
+  }
+
+  export async function globUp(pattern: string, start: string, stop?: string) {
+    let current = start
+    const result = []
+    while (true) {
+      try {
+        const matches = await Glob.scan(pattern, {
+          cwd: current,
+          absolute: true,
+          include: "file",
+          dot: true,
+        })
+        result.push(...matches)
+      } catch {
+        // Skip invalid glob patterns
+      }
+      if (stop === current) break
+      const parent = dirname(current)
+      if (parent === current) break
+      current = parent
+    }
+    return result
+  }
+}

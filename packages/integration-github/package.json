@@ -1,0 +1,25 @@
+{
+  "name": "github",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "license": "MIT",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/bun": "catalog:",
+    "typescript": "catalog:"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@actions/core": "catalog:",
+    "@actions/github": "catalog:",
+    "@octokit/webhooks-types": "catalog:",
+    "@octokit/graphql": "catalog:",
+    "@octokit/rest": "catalog:",
+    "@ax-code/sdk": "workspace:*"
+  }
+}
