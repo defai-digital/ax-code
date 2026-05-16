@@ -81,6 +81,7 @@ export namespace File {
   }
 
   const log = Log.create({ service: "file" })
+  const toRelativePath = (full: string) => path.relative(Instance.directory, full)
 
   const binary = new Set([
     "exe",
@@ -506,7 +507,7 @@ export namespace File {
       const full = path.isAbsolute(item.path) ? item.path : path.join(Instance.directory, item.path)
       return {
         ...item,
-        path: path.relative(Instance.directory, full),
+        path: toRelativePath(full),
       }
     })
   }
@@ -626,7 +627,7 @@ export namespace File {
     for (const entry of await fs.promises.readdir(resolved, { withFileTypes: true }).catch(() => [])) {
       if (exclude.includes(entry.name)) continue
       const absolute = path.join(resolved, entry.name)
-      const file = path.relative(Instance.directory, absolute)
+      const file = toRelativePath(absolute)
       const type = entry.isDirectory() ? "directory" : "file"
       nodes.push({
         name: entry.name,
