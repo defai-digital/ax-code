@@ -115,8 +115,7 @@ export const HeadlessRunCommand = cmd({
 
       if (!args.transportSmoke) {
         sessionID =
-          args.session ??
-          (await runtime.createSession({ title: message.trim().slice(0, 50) || undefined })).id
+          args.session ?? (await runtime.createSession({ title: message.trim().slice(0, 50) || undefined })).id
 
         command = args.commandSmoke
           ? {
@@ -124,27 +123,27 @@ export const HeadlessRunCommand = cmd({
               sessionID,
             }
           : args.command
-          ? {
-              type: "session.command",
-              mode: "async",
-              sessionID,
-              body: {
-                command: args.command,
-                arguments: message,
-                agent: args.agent,
-                model: args.model,
-              },
-            }
-          : {
-              type: "session.prompt",
-              mode: "async",
-              sessionID,
-              body: {
-                agent: args.agent,
-                model: args.model ? Provider.parseModel(args.model) : undefined,
-                parts: [{ type: "text", text: message }],
-              },
-            }
+            ? {
+                type: "session.command",
+                mode: "async",
+                sessionID,
+                body: {
+                  command: args.command,
+                  arguments: message,
+                  agent: args.agent,
+                  model: args.model,
+                },
+              }
+            : {
+                type: "session.prompt",
+                mode: "async",
+                sessionID,
+                body: {
+                  agent: args.agent,
+                  model: args.model ? Provider.parseModel(args.model) : undefined,
+                  parts: [{ type: "text", text: message }],
+                },
+              }
       }
 
       const abort = new AbortController()
@@ -154,7 +153,7 @@ export const HeadlessRunCommand = cmd({
           ? args.idleTimeoutMs
           : undefined
       let timedOut = false
-      const idleTimer = idleTimeoutMs
+      let idleTimer = idleTimeoutMs
         ? setTimeout(() => {
             timedOut = true
             abort.abort()
@@ -192,6 +191,10 @@ export const HeadlessRunCommand = cmd({
             return isHeadlessSessionIdleEvent(event, sessionID)
           },
         })
+        if (idleTimer) {
+          clearTimeout(idleTimer)
+          idleTimer = undefined
+        }
         if (timedOut) {
           const target = args.transportSmoke || args.commandSmoke ? "server.connected" : "session idle"
           process.stderr.write(`headless-run timed out after ${idleTimeoutMs}ms waiting for ${target}\n`)

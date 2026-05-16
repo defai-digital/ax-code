@@ -75,6 +75,23 @@ describe("isolation.assertWrite", () => {
       "Path is outside workspace boundary",
     )
   })
+
+  test.skipIf(process.platform === "win32")(
+    "denies writes through a workspace symlink that escapes the boundary",
+    async () => {
+      await using tmp = await tmpdir()
+      const dir = path.join(tmp.path, "project")
+      const outside = path.join(tmp.path, "outside")
+      await fs.mkdir(dir, { recursive: true })
+      await fs.mkdir(outside, { recursive: true })
+      await fs.symlink(outside, path.join(dir, "escape"))
+      const state = Isolation.resolve({ mode: "workspace-write", network: false }, dir)
+
+      expect(() => Isolation.assertWrite(state, path.join(dir, "escape", "new.txt"), dir, dir)).toThrow(
+        "Path is outside workspace boundary",
+      )
+    },
+  )
 })
 
 describe("isolation.assertNetwork", () => {

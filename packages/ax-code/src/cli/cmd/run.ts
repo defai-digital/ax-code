@@ -13,6 +13,7 @@ import { Server } from "../../server/server"
 import { Provider } from "../../provider/provider"
 import { Agent } from "../../agent/agent"
 import { Permission } from "../../permission"
+import { Log } from "../../util/log"
 import { Tool } from "../../tool/tool"
 import { GlobTool } from "../../tool/glob"
 import { GrepTool } from "../../tool/grep"
@@ -51,6 +52,8 @@ type Inline = {
   title: string
   description?: string
 }
+
+let pathDisplayRoot = process.cwd()
 
 function inline(info: Inline) {
   const suffix = info.description ? UI.Style.TEXT_DIM + ` ${info.description}` + UI.Style.TEXT_NORMAL : ""
@@ -221,7 +224,7 @@ function todo(info: ToolProps<typeof TodoWriteTool>) {
 
 function normalizePath(input?: string) {
   if (!input) return ""
-  if (path.isAbsolute(input)) return path.relative(process.cwd(), input) || "."
+  if (path.isAbsolute(input)) return path.relative(pathDisplayRoot, input) || "."
   return input
 }
 
@@ -332,6 +335,8 @@ export const RunCommand = cmd({
         exitEarly("Failed to change directory to " + args.dir)
       }
     })()
+    const previousPathDisplayRoot = pathDisplayRoot
+    pathDisplayRoot = directory && path.isAbsolute(directory) ? path.resolve(directory) : process.cwd()
 
     const files: { type: "file"; url: string; filename: string; mime: string }[] = []
     if (args.file) {
@@ -559,7 +564,9 @@ export const RunCommand = cmd({
           if (event.type === "permission.asked") {
             const permission = event.properties
             if (permission.sessionID !== sessionID) continue
-            warnPrefix(`permission requested: ${permission.permission} (${permission.patterns.join(", ")}); auto-rejecting`)
+            warnPrefix(
+              `permission requested: ${permission.permission} (${permission.patterns.join(", ")}); auto-rejecting`,
+            )
             await sdk.permission.reply({
               requestID: permission.id,
               reply: "reject",
@@ -606,7 +613,9 @@ export const RunCommand = cmd({
         }
         const entryTier = Agent.resolveTier(entry)
         if (entryTier === "subagent" || entryTier === "internal") {
-          warnPrefix(`agent "${args.agent}" is a ${entryTier} agent, not a primary agent. Falling back to default agent`)
+          warnPrefix(
+            `agent "${args.agent}" is a ${entryTier} agent, not a primary agent. Falling back to default agent`,
+          )
           return undefined
         }
         return args.agent
@@ -615,47 +624,69 @@ export const RunCommand = cmd({
       const sessionID = (await session(sdk)) ?? exitEarly("Session not found")
       await share(sdk, sessionID)
 
-      loop().catch((e) => {
-        console.error(e)
+      const closeEvents = async () => {
+        const stream = events.stream as AsyncIterator<unknown>
+        await (stream.return?.(undefined) ?? Promise.resolve()).catch(() => {})
+      }
+      const loopPromise = loop()
+
+      try {
+        if (args.command) {
+          await sdk.session.command({
+            sessionID,
+            agent,
+            model: args.model,
+            command: args.command,
+            arguments: message,
+            variant: args.variant,
+          })
+        } else {
+          const model = args.model ? Provider.parseModel(args.model) : undefined
+          await sdk.session.prompt({
+            sessionID,
+            agent,
+            model,
+            variant: args.variant,
+            parts: [...files, { type: "text", text: message }],
+          })
+        }
+      } catch (e) {
+        await closeEvents()
+        await loopPromise.catch(() => {})
+        throw e
+      }
+
+      await loopPromise.catch((e) => {
+        Log.Default.error("run event loop failed", {
+          sessionID,
+          error: e instanceof Error ? e.message : String(e),
+          stack: e instanceof Error ? e.stack : undefined,
+        })
+        UI.error(`Event stream error: ${e instanceof Error ? e.message : String(e)}`)
         process.exitCode = 1
       })
+      if (error) process.exitCode = 1
+    }
 
-      if (args.command) {
-        await sdk.session.command({
-          sessionID,
-          agent,
-          model: args.model,
-          command: args.command,
-          arguments: message,
-          variant: args.variant,
-        })
-      } else {
-        const model = args.model ? Provider.parseModel(args.model) : undefined
-        await sdk.session.prompt({
-          sessionID,
-          agent,
-          model,
-          variant: args.variant,
-          parts: [...files, { type: "text", text: message }],
-        })
+    try {
+      if (args.attach) {
+        const headers = buildAttachAuthHeaders(args.password)
+        const sdk = createOpencodeClient({ baseUrl: args.attach, directory, headers })
+        return await execute(sdk)
       }
-    }
 
-    if (args.attach) {
-      const headers = buildAttachAuthHeaders(args.password)
-      const sdk = createOpencodeClient({ baseUrl: args.attach, directory, headers })
-      return await execute(sdk)
+      await bootstrap(directory || Filesystem.callerCwd(), async () => {
+        const fetchFn = (async (input: RequestInfo | URL, init?: RequestInit) => {
+          const request = new Request(input, init)
+          const url = new URL(request.url)
+          if (!isInternalHostname(url.hostname)) throw new Error(`Internal fetch rejected: ${url.hostname}`)
+          return Server.Default().fetch(request)
+        }) as typeof globalThis.fetch
+        const sdk = createOpencodeClient({ baseUrl: internalBaseUrl(), fetch: fetchFn })
+        await execute(sdk)
+      })
+    } finally {
+      pathDisplayRoot = previousPathDisplayRoot
     }
-
-    await bootstrap(directory || Filesystem.callerCwd(), async () => {
-      const fetchFn = (async (input: RequestInfo | URL, init?: RequestInit) => {
-        const request = new Request(input, init)
-        const url = new URL(request.url)
-        if (!isInternalHostname(url.hostname)) throw new Error(`Internal fetch rejected: ${url.hostname}`)
-        return Server.Default().fetch(request)
-      }) as typeof globalThis.fetch
-      const sdk = createOpencodeClient({ baseUrl: internalBaseUrl(), fetch: fetchFn })
-      await execute(sdk)
-    })
   },
 })

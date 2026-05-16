@@ -413,19 +413,37 @@ export namespace Worktree {
       throw new CreateFailedError({ message: errorText(created) || "Failed to create git worktree" })
     }
 
-    // If the sandbox record fails to land (DB disk full, concurrent
-    // write conflict, corruption), the worktree exists on disk but
-    // has no tracking row — remove()/cleanup logic never finds it and
-    // it accumulates as an orphaned directory consuming the full
-    // project working copy. Can't cleanly roll back the git worktree
-    // without risking data loss on a partially-populated tree, so
-    // log loudly instead of silently swallowing. See BUG-75.
-    await Project.addSandbox(Instance.project.id, info.directory).catch((err) => {
-      log.warn("failed to record worktree in database; directory may become orphaned", {
+    try {
+      await Project.addSandbox(Instance.project.id, info.directory)
+    } catch (err) {
+      log.warn("failed to record worktree in database; rolling back git worktree", {
         directory: info.directory,
         error: err instanceof Error ? err.message : String(err),
       })
-    })
+      const removed = await git(["worktree", "remove", "--force", info.directory], { cwd: Instance.worktree })
+      if (removed.exitCode !== 0) {
+        log.error("failed to roll back untracked worktree", {
+          directory: info.directory,
+          message: errorText(removed) || "git worktree remove failed",
+        })
+      }
+      const deletedBranch = await git(["branch", "-D", info.branch], { cwd: Instance.worktree })
+      if (deletedBranch.exitCode !== 0) {
+        log.warn("failed to delete rolled-back worktree branch", {
+          branch: info.branch,
+          message: errorText(deletedBranch) || "git branch delete failed",
+        })
+      }
+      await fs.rm(info.directory, { recursive: true, force: true }).catch((removeError) => {
+        log.warn("failed to remove rolled-back worktree directory", {
+          directory: info.directory,
+          error: removeError instanceof Error ? removeError.message : String(removeError),
+        })
+      })
+      throw new CreateFailedError({
+        message: `Failed to record worktree in database: ${err instanceof Error ? err.message : String(err)}`,
+      })
+    }
 
     const projectID = Instance.project.id
     const extra = startCommand?.trim()

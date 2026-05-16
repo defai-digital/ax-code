@@ -79,6 +79,7 @@ GlobalBus.on("event", handleGlobalEvent)
 
 let server: Awaited<ReturnType<typeof Server.listen>> | undefined
 let shutdownPromise: Promise<void> | undefined
+let removeSignalHandlers: (() => void) | undefined
 
 const eventStream = {
   abort: undefined as AbortController | undefined,
@@ -229,6 +230,8 @@ export const rpc = {
     if (shutdownPromise) return shutdownPromise
     shutdownPromise = (async () => {
       Log.Default.info("worker shutting down")
+      removeSignalHandlers?.()
+      removeSignalHandlers = undefined
       if (eventStream.abort) eventStream.abort.abort()
       await eventStream.done?.catch(() => {})
       eventStream.abort = undefined
@@ -271,6 +274,10 @@ export async function startTuiBackend(transport: "worker" | "stdio" = "worker") 
     }
     process.once("SIGTERM", onSignal)
     process.once("SIGINT", onSignal)
+    removeSignalHandlers = () => {
+      process.off("SIGTERM", onSignal)
+      process.off("SIGINT", onSignal)
+    }
     await done
     // Awaited shutdown after stdin closes. Covers the parent-crash
     // path where the OS closes our stdin pipe but never delivers a
@@ -297,6 +304,10 @@ export async function startTuiBackend(transport: "worker" | "stdio" = "worker") 
   }
   process.once("SIGTERM", onSignal)
   process.once("SIGINT", onSignal)
+  removeSignalHandlers = () => {
+    process.off("SIGTERM", onSignal)
+    process.off("SIGINT", onSignal)
+  }
 }
 
 function isWorkerEntrypoint() {
