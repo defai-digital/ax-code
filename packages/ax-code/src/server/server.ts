@@ -177,7 +177,7 @@ function templateBody(input: { key: z.infer<typeof AppContextTemplateRequest>["k
       return [
         "# Directory Instructions",
         "",
-        `Scope: \`${path.relative(input.root, input.dir) || "."}\``,
+        `Scope: \`${relativeFromRoot(input.root, input.dir) || "."}\``,
         "",
         "## Focus",
         "- Keep changes in this directory aligned with the local patterns.",
@@ -242,6 +242,10 @@ function cleanExtra(value: unknown, depth = 0): unknown {
   return value
 }
 
+function relativeFromRoot(root: string, cwd: string) {
+  return path.relative(root, cwd)
+}
+
 async function packageManager(cwd: string, root: string) {
   for await (const file of Filesystem.up({
     targets: ["pnpm-lock.yaml", "bun.lockb", "bun.lock", "yarn.lock", "package-lock.json"],
@@ -279,7 +283,7 @@ function checkLabel(name: string) {
 }
 
 function checkCommand(input: { manager: "pnpm" | "bun" | "yarn" | "npm"; root: string; cwd: string; name: string }) {
-  const rel = path.relative(input.root, input.cwd)
+  const rel = relativeFromRoot(input.root, input.cwd)
   if (input.manager === "pnpm") {
     if (!rel) return `pnpm ${input.name}`
     return `pnpm --dir ${quote(rel)} ${input.name}`
@@ -297,13 +301,13 @@ function checkCommand(input: { manager: "pnpm" | "bun" | "yarn" | "npm"; root: s
 }
 
 function checkTitle(input: { root: string; cwd: string; name: string }) {
-  const rel = path.relative(input.root, input.cwd)
+  const rel = relativeFromRoot(input.root, input.cwd)
   if (!rel) return checkLabel(input.name)
   return `${rel} ${checkLabel(input.name).toLowerCase()}`
 }
 
 function inDir(root: string, cwd: string, command: string) {
-  const rel = path.relative(root, cwd)
+  const rel = relativeFromRoot(root, cwd)
   if (!rel) return command
   return `cd ${quote(rel)} && ${command}`
 }
@@ -317,7 +321,7 @@ function addCheck(
   if (!command || seen.has(command)) return false
   seen.add(command)
 
-  const rel = path.relative(input.root, input.cwd)
+  const rel = relativeFromRoot(input.root, input.cwd)
   out.push({
     id: `${rel || "."}:${input.name}:${out.length}`,
     title: checkTitle(input),
