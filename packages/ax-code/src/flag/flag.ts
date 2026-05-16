@@ -16,6 +16,26 @@ function falsy(key: string) {
   return parseBooleanEnvValue(process.env[key]) === false
 }
 
+function defineStringFlag(name: string, fallback?: string) {
+  Object.defineProperty(Flag, name, {
+    get() {
+      return process.env[name] ?? fallback
+    },
+    enumerable: true,
+    configurable: false,
+  })
+}
+
+function defineBooleanFlag(name: string) {
+  Object.defineProperty(Flag, name, {
+    get() {
+      return truthy(name)
+    },
+    enumerable: true,
+    configurable: false,
+  })
+}
+
 export namespace Flag {
   export const AX_CODE_AUTO_SHARE = truthy("AX_CODE_AUTO_SHARE")
   export const AX_CODE_GIT_BASH_PATH = process.env["AX_CODE_GIT_BASH_PATH"]
@@ -23,7 +43,7 @@ export namespace Flag {
   export declare const AX_CODE_TUI_CONFIG: string | undefined
   export declare const AX_CODE_CONFIG_DIR: string | undefined
   export declare const AX_CODE_SHARE_URL: string | undefined
-  export const AX_CODE_CONFIG_CONTENT = process.env["AX_CODE_CONFIG_CONTENT"]
+  export declare const AX_CODE_CONFIG_CONTENT: string | undefined
   export const AX_CODE_DISABLE_AUTOUPDATE = truthy("AX_CODE_DISABLE_AUTOUPDATE")
   export const AX_CODE_ALWAYS_NOTIFY_UPDATE = truthy("AX_CODE_ALWAYS_NOTIFY_UPDATE")
   export const AX_CODE_DISABLE_PRUNE = truthy("AX_CODE_DISABLE_PRUNE")
@@ -158,8 +178,8 @@ export namespace Flag {
   export const AX_CODE_EXPERIMENTAL_PLAN_MODE = AX_CODE_EXPERIMENTAL || truthy("AX_CODE_EXPERIMENTAL_PLAN_MODE")
   export const AX_CODE_EXPERIMENTAL_WORKSPACES = AX_CODE_EXPERIMENTAL || truthy("AX_CODE_EXPERIMENTAL_WORKSPACES")
   export const AX_CODE_EXPERIMENTAL_MARKDOWN = !falsy("AX_CODE_EXPERIMENTAL_MARKDOWN")
-  export const AX_CODE_MODELS_URL = process.env["AX_CODE_MODELS_URL"]
-  export const AX_CODE_MODELS_PATH = process.env["AX_CODE_MODELS_PATH"]
+  export declare const AX_CODE_MODELS_URL: string | undefined
+  export declare const AX_CODE_MODELS_PATH: string | undefined
   export const AX_CODE_DB = process.env["AX_CODE_DB"]
   export const AX_CODE_DISABLE_CHANNEL_DB = truthy("AX_CODE_DISABLE_CHANNEL_DB")
   export const AX_CODE_SKIP_MIGRATIONS = truthy("AX_CODE_SKIP_MIGRATIONS")
@@ -173,194 +193,73 @@ export namespace Flag {
   }
 }
 
-// Dynamic getter for AX_CODE_DISABLE_PROJECT_CONFIG
+// Dynamic getters for runtime-injected flags.
+// Keep these access-time rather than import-time so CLI middleware, test
+// harnesses, and wrappers can set process.env after modules are loaded.
+
 // This must be evaluated at access time, not module load time,
 // because external tooling may set this env var at runtime
-Object.defineProperty(Flag, "AX_CODE_DISABLE_PROJECT_CONFIG", {
-  get() {
-    return truthy("AX_CODE_DISABLE_PROJECT_CONFIG")
-  },
-  enumerable: true,
-  configurable: false,
-})
+defineBooleanFlag("AX_CODE_DISABLE_PROJECT_CONFIG")
 
-// Dynamic getter for AX_CODE_AUTONOMOUS
 // This must be evaluated at access time so runtime toggles (server routes/tests)
 // remain immediately effective.
-Object.defineProperty(Flag, "AX_CODE_AUTONOMOUS", {
-  get() {
-    return truthy("AX_CODE_AUTONOMOUS")
-  },
-  enumerable: true,
-  configurable: false,
-})
+defineBooleanFlag("AX_CODE_AUTONOMOUS")
 
-// Dynamic getter for AX_CODE_SMART_LLM
 // Evaluate each access so toggles and env overrides remain live.
-Object.defineProperty(Flag, "AX_CODE_SMART_LLM", {
-  get() {
-    return truthy("AX_CODE_SMART_LLM")
-  },
-  enumerable: true,
-  configurable: false,
-})
+defineBooleanFlag("AX_CODE_SMART_LLM")
 
-// Dynamic getter for AX_CODE_DISABLE_SHARE
 // Evaluate at access time so test/runtime overrides can be flipped
 // without requiring a module reload.
-Object.defineProperty(Flag, "AX_CODE_DISABLE_SHARE", {
-  get() {
-    return truthy("AX_CODE_DISABLE_SHARE")
-  },
-  enumerable: true,
-  configurable: false,
-})
+defineBooleanFlag("AX_CODE_DISABLE_SHARE")
 
-// Dynamic getter for AX_CODE_CALLER
 // Some IDE detection paths read this at request time.
-Object.defineProperty(Flag, "AX_CODE_CALLER", {
-  get() {
-    return process.env["AX_CODE_CALLER"]
-  },
-  enumerable: true,
-  configurable: false,
-})
+defineStringFlag("AX_CODE_CALLER")
 
-// Dynamic getter for AX_CODE_ORIGINAL_CWD
 // Keep evaluation lazy so launch-time overrides remain effective.
-Object.defineProperty(Flag, "AX_CODE_ORIGINAL_CWD", {
-  get() {
-    return process.env["AX_CODE_ORIGINAL_CWD"]
-  },
-  enumerable: true,
-  configurable: false,
-})
+defineStringFlag("AX_CODE_ORIGINAL_CWD")
 
-// Dynamic getter for AX_CODE_PROFILE_NATIVE
-Object.defineProperty(Flag, "AX_CODE_PROFILE_NATIVE", {
-  get() {
-    return truthy("AX_CODE_PROFILE_NATIVE")
-  },
-  enumerable: true,
-  configurable: false,
-})
+defineBooleanFlag("AX_CODE_PROFILE_NATIVE")
 
-// Dynamic getter for AX_CODE_DEBUG
 // Keep evaluation lazy so debug settings injected by bootstrap stay effective.
-Object.defineProperty(Flag, "AX_CODE_DEBUG", {
-  get() {
-    return truthy("AX_CODE_DEBUG")
-  },
-  enumerable: true,
-  configurable: false,
-})
+defineBooleanFlag("AX_CODE_DEBUG")
 
-// Dynamic getter for AX_CODE_DEBUG_DIR
-Object.defineProperty(Flag, "AX_CODE_DEBUG_DIR", {
-  get() {
-    return process.env["AX_CODE_DEBUG_DIR"]
-  },
-  enumerable: true,
-  configurable: false,
-})
+defineStringFlag("AX_CODE_DEBUG_DIR")
 
-// Dynamic getter for AX_CODE_DEBUG_INCLUDE_CONTENT
-Object.defineProperty(Flag, "AX_CODE_DEBUG_INCLUDE_CONTENT", {
-  get() {
-    return truthy("AX_CODE_DEBUG_INCLUDE_CONTENT")
-  },
-  enumerable: true,
-  configurable: false,
-})
+defineBooleanFlag("AX_CODE_DEBUG_INCLUDE_CONTENT")
 
-// Dynamic getter for AX_CODE_PRINT_LOGS
-Object.defineProperty(Flag, "AX_CODE_PRINT_LOGS", {
-  get() {
-    return truthy("AX_CODE_PRINT_LOGS")
-  },
-  enumerable: true,
-  configurable: false,
-})
+defineBooleanFlag("AX_CODE_PRINT_LOGS")
 
-// Dynamic getter for AX_CODE_TEST_HOME
 // Keep evaluation lazy so test-only overrides set during runtime remain effective.
-Object.defineProperty(Flag, "AX_CODE_TEST_HOME", {
-  get() {
-    return process.env["AX_CODE_TEST_HOME"]
-  },
-  enumerable: true,
-  configurable: false,
-})
+defineStringFlag("AX_CODE_TEST_HOME")
 
-// Dynamic getter for AX_CODE_TEST_MANAGED_CONFIG_DIR
 // Keep evaluation lazy so tests and bootstrap paths can override this at runtime.
-Object.defineProperty(Flag, "AX_CODE_TEST_MANAGED_CONFIG_DIR", {
-  get() {
-    return process.env["AX_CODE_TEST_MANAGED_CONFIG_DIR"]
-  },
-  enumerable: true,
-  configurable: false,
-})
+defineStringFlag("AX_CODE_TEST_MANAGED_CONFIG_DIR")
 
-// Dynamic getter for AX_CODE_INTERNAL_BASE_URL
-Object.defineProperty(Flag, "AX_CODE_INTERNAL_BASE_URL", {
-  get() {
-    return process.env["AX_CODE_INTERNAL_BASE_URL"]
-  },
-  enumerable: true,
-  configurable: false,
-})
+defineStringFlag("AX_CODE_INTERNAL_BASE_URL")
 
-// Dynamic getter for AX_CODE_OTLP_ENDPOINT
-Object.defineProperty(Flag, "AX_CODE_OTLP_ENDPOINT", {
-  get() {
-    return process.env["AX_CODE_OTLP_ENDPOINT"]
-  },
-  enumerable: true,
-  configurable: false,
-})
+defineStringFlag("AX_CODE_OTLP_ENDPOINT")
 
-// Dynamic getter for AX_CODE_TUI_CONFIG
 // This must be evaluated at access time, not module load time,
 // because tests and external tooling may set this env var at runtime
-Object.defineProperty(Flag, "AX_CODE_TUI_CONFIG", {
-  get() {
-    return process.env["AX_CODE_TUI_CONFIG"]
-  },
-  enumerable: true,
-  configurable: false,
-})
+defineStringFlag("AX_CODE_TUI_CONFIG")
 
-// Dynamic getter for AX_CODE_SHARE_URL
-Object.defineProperty(Flag, "AX_CODE_SHARE_URL", {
-  get() {
-    return process.env["AX_CODE_SHARE_URL"]
-  },
-  enumerable: true,
-  configurable: false,
-})
+defineStringFlag("AX_CODE_SHARE_URL")
 
-// Dynamic getter for AX_CODE_CONFIG_DIR
 // This must be evaluated at access time, not module load time,
 // because external tooling may set this env var at runtime
-Object.defineProperty(Flag, "AX_CODE_CONFIG_DIR", {
-  get() {
-    return process.env["AX_CODE_CONFIG_DIR"]
-  },
-  enumerable: true,
-  configurable: false,
-})
+defineStringFlag("AX_CODE_CONFIG_DIR")
 
-// Dynamic getter for AX_CODE_CLIENT
+// Inline config is commonly injected by test harnesses and wrappers after
+// module load, so read it at access time.
+defineStringFlag("AX_CODE_CONFIG_CONTENT")
+
+defineStringFlag("AX_CODE_MODELS_URL")
+
+defineStringFlag("AX_CODE_MODELS_PATH")
+
 // This must be evaluated at access time, not module load time,
 // because some commands override the client at runtime
-Object.defineProperty(Flag, "AX_CODE_CLIENT", {
-  get() {
-    return process.env["AX_CODE_CLIENT"] ?? "cli"
-  },
-  enumerable: true,
-  configurable: false,
-})
+defineStringFlag("AX_CODE_CLIENT", "cli")
 
 // Dynamic getter for AX_CODE_ISOLATION_MODE
 // Must be evaluated at access time because --sandbox CLI flag
@@ -387,35 +286,14 @@ Object.defineProperty(Flag, "AX_CODE_ISOLATION_NETWORK", {
   configurable: false,
 })
 
-// Dynamic getter for AX_CODE_EXPERIMENTAL_QUALITY_SHADOW
 // This must be evaluated at access time so tests and internal tools can
 // enable or disable live shadow logging without reloading the module graph.
-Object.defineProperty(Flag, "AX_CODE_EXPERIMENTAL_QUALITY_SHADOW", {
-  get() {
-    return truthy("AX_CODE_EXPERIMENTAL_QUALITY_SHADOW")
-  },
-  enumerable: true,
-  configurable: false,
-})
+defineBooleanFlag("AX_CODE_EXPERIMENTAL_QUALITY_SHADOW")
 
-// Dynamic getter for AX_CODE_EXPERIMENTAL_QUALITY_SHADOW_PREDICTIONS
 // The path is consumed by the runtime shadow logger and may be injected
 // by wrappers or tests after module load.
-Object.defineProperty(Flag, "AX_CODE_EXPERIMENTAL_QUALITY_SHADOW_MODEL", {
-  get() {
-    return process.env["AX_CODE_EXPERIMENTAL_QUALITY_SHADOW_MODEL"]
-  },
-  enumerable: true,
-  configurable: false,
-})
+defineStringFlag("AX_CODE_EXPERIMENTAL_QUALITY_SHADOW_MODEL")
 
-// Dynamic getter for AX_CODE_EXPERIMENTAL_QUALITY_SHADOW_PREDICTIONS
 // The path is consumed by the runtime shadow logger and may be injected
 // by wrappers or tests after module load.
-Object.defineProperty(Flag, "AX_CODE_EXPERIMENTAL_QUALITY_SHADOW_PREDICTIONS", {
-  get() {
-    return process.env["AX_CODE_EXPERIMENTAL_QUALITY_SHADOW_PREDICTIONS"]
-  },
-  enumerable: true,
-  configurable: false,
-})
+defineStringFlag("AX_CODE_EXPERIMENTAL_QUALITY_SHADOW_PREDICTIONS")
