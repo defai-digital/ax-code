@@ -30,6 +30,7 @@ import { readOnlyWithWeb, readOnlyNoWeb, denyAll } from "./permission-presets"
 import { Effect, ServiceMap, Layer } from "effect"
 import { InstanceState } from "@/effect/instance-state"
 import { makeRunPromise } from "@/effect/run-service"
+import { normalizeToWorkspacePath } from "../tool/file-path"
 
 export namespace Agent {
   export const Info = z
@@ -146,6 +147,7 @@ export namespace Agent {
             ),
           )
           const policy = (name: string) => policyMap.get(name) ?? []
+          const planDataGlob = normalizeToWorkspacePath(path.join(Global.Path.data, "plans", "*.md"), Instance.worktree)
 
           const agents: Record<string, Info> = {
             build: {
@@ -184,8 +186,7 @@ export namespace Agent {
                   edit: {
                     "*": "deny",
                     [path.join(".ax-code", "plans", "*.md")]: "allow",
-                    [path.relative(Instance.worktree, path.join(Global.Path.data, path.join("plans", "*.md")))]:
-                      "allow",
+                    [planDataGlob]: "allow",
                   },
                 }),
                 user,

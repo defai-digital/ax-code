@@ -77,7 +77,7 @@ export const PlanEnterTool = Tool.define("plan_enter", {
   parameters: z.object({}),
   async execute(_params, ctx) {
     const session = await Session.get(ctx.sessionID)
-    const plan = path.relative(Instance.worktree, Session.plan(session))
+    const plan = normalizeToWorkspacePath(Session.plan(session), Instance.worktree)
 
     const answers = await Question.ask({
       sessionID: ctx.sessionID,
