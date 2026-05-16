@@ -15,7 +15,9 @@ const DEFAULTS: Record<string, string> = {
   "codex-cli": "codex-cli",
 }
 
-async function readJson(path: string): Promise<Record<string, any> | null> {
+type JsonLike = Record<string, unknown>
+
+async function readJson(path: string): Promise<JsonLike | null> {
   try {
     return JSON.parse(await readFile(path, "utf-8"))
   } catch {
@@ -31,25 +33,55 @@ async function readText(path: string): Promise<string | null> {
   }
 }
 
+type ResolveCliModelOptions = {
+  envVar: string
+  settingsPath: string
+  sourceLabel: string
+  defaultModel: string
+  read: (settings: JsonLike) => string | undefined
+}
+
+async function resolveModelFromJsonSettings(options: ResolveCliModelOptions): Promise<CliModelInfo> {
+  const envModel = process.env[options.envVar]
+  if (envModel) return { model: envModel, source: options.envVar }
+
+  const settings = await readJson(join(HOME, options.settingsPath))
+  const model = settings ? options.read(settings) : undefined
+  if (model !== undefined) return { model, source: options.sourceLabel }
+
+  return { model: options.defaultModel, source: "default" }
+}
+
+function resolveJsonModelString(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined
+}
+
+function resolveModelFromObject(settings: JsonLike): string | undefined {
+  const directModel = resolveJsonModelString(settings.model)
+  if (directModel !== undefined) return directModel
+  const model = (settings as JsonLike).model
+  if (model && typeof model === "object" && "name" in model) return resolveJsonModelString((model as JsonLike).name)
+  return undefined
+}
+
 async function resolveClaudeModel(): Promise<CliModelInfo> {
-  // Check env var first (cheapest)
-  if (process.env.ANTHROPIC_MODEL) return { model: process.env.ANTHROPIC_MODEL, source: "ANTHROPIC_MODEL" }
-
-  const settings = await readJson(join(HOME, ".claude", "settings.json"))
-  if (typeof settings?.model === "string") return { model: settings.model, source: "~/.claude/settings.json" }
-
-  return { model: DEFAULTS["claude-code"]!, source: "default" }
+  return resolveModelFromJsonSettings({
+    envVar: "ANTHROPIC_MODEL",
+    settingsPath: ".claude/settings.json",
+    sourceLabel: "~/.claude/settings.json",
+    defaultModel: DEFAULTS["claude-code"]!,
+    read: resolveJsonModelString,
+  })
 }
 
 async function resolveGeminiModel(): Promise<CliModelInfo> {
-  if (process.env.GEMINI_MODEL) return { model: process.env.GEMINI_MODEL, source: "GEMINI_MODEL" }
-
-  const settings = await readJson(join(HOME, ".gemini", "settings.json"))
-  if (typeof settings?.model === "string") return { model: settings.model, source: "~/.gemini/settings.json" }
-  if (typeof settings?.model?.name === "string")
-    return { model: settings.model.name, source: "~/.gemini/settings.json" }
-
-  return { model: DEFAULTS["gemini-cli"]!, source: "default" }
+  return resolveModelFromJsonSettings({
+    envVar: "GEMINI_MODEL",
+    settingsPath: ".gemini/settings.json",
+    sourceLabel: "~/.gemini/settings.json",
+    defaultModel: DEFAULTS["gemini-cli"]!,
+    read: resolveModelFromObject,
+  })
 }
 
 async function resolveCodexModel(): Promise<CliModelInfo> {
