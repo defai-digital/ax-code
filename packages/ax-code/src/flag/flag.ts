@@ -26,10 +26,11 @@ function defineStringFlag(name: string, fallback?: string) {
   })
 }
 
-function defineBooleanFlag(name: string) {
+function defineBooleanFlag(name: string, fallback = false) {
   Object.defineProperty(Flag, name, {
     get() {
-      return truthy(name)
+      const parsed = parseBooleanEnvValue(process.env[name])
+      return parsed ?? fallback
     },
     enumerable: true,
     configurable: false,
@@ -203,7 +204,7 @@ defineBooleanFlag("AX_CODE_DISABLE_PROJECT_CONFIG")
 
 // This must be evaluated at access time so runtime toggles (server routes/tests)
 // remain immediately effective.
-defineBooleanFlag("AX_CODE_AUTONOMOUS")
+defineBooleanFlag("AX_CODE_AUTONOMOUS", true)
 
 // Evaluate each access so toggles and env overrides remain live.
 defineBooleanFlag("AX_CODE_SMART_LLM")

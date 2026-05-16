@@ -321,8 +321,28 @@ describe("CliLanguageModel", () => {
     expect(CLI_PROVIDER_DEFINITIONS["gemini-cli"]?.args).toContain("--skip-trust")
   })
 
-  test("does not add autonomous-only flags by default", () => {
+  test("adds autonomous-only flags by default", () => {
     delete process.env.AX_CODE_AUTONOMOUS
+    try {
+      const cmd = buildCliCommand(
+        {
+          providerID: "claude-code",
+          modelID: "claude-sonnet-4-6",
+          binary: "claude",
+          args: ["--print"],
+          parser: claudeCodeParser,
+          promptMode: "stdin",
+        },
+        "write file",
+      )
+      expect(cmd).toContain("--dangerously-skip-permissions")
+    } finally {
+      restoreAutonomous()
+    }
+  })
+
+  test("omits autonomous-only flags when explicitly disabled", () => {
+    process.env.AX_CODE_AUTONOMOUS = "false"
     try {
       const cmd = buildCliCommand(
         {

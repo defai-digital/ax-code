@@ -45532,32 +45532,6 @@
           "output": 2000000
         }
       },
-      "x-ai/grok-code-fast-1": {
-        "id": "x-ai/grok-code-fast-1",
-        "name": "Grok Code Fast 1",
-        "family": "grok",
-        "attachment": false,
-        "reasoning": true,
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": true,
-        "knowledge": "2025-09-30",
-        "release_date": "2025-08-26",
-        "last_updated": "2025-08-26",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 256000,
-          "output": 10000
-        }
-      },
       "x-ai/grok-4.20-multi-agent": {
         "id": "x-ai/grok-4.20-multi-agent",
         "name": "Grok 4.20 Multi-Agent",
@@ -45610,34 +45584,6 @@
         "limit": {
           "context": 1000000,
           "output": 1000000
-        }
-      },
-      "x-ai/grok-4.1-fast": {
-        "id": "x-ai/grok-4.1-fast",
-        "name": "Grok 4.1 Fast",
-        "family": "grok",
-        "attachment": true,
-        "reasoning": true,
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": true,
-        "knowledge": "2024-11",
-        "release_date": "2025-11-19",
-        "last_updated": "2025-11-19",
-        "modalities": {
-          "input": [
-            "text",
-            "image",
-            "pdf"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 2000000,
-          "output": 30000
         }
       },
       "kwaipilot/kat-coder-pro-v2": {
@@ -46418,14 +46364,14 @@
           "output": 128000
         }
       },
-      "inclusionai/ring-2.6-1t:free": {
-        "id": "inclusionai/ring-2.6-1t:free",
-        "name": "Ring-2.6-1T (free)",
+      "inclusionai/ring-2.6-1t": {
+        "id": "inclusionai/ring-2.6-1t",
+        "name": "Ring-2.6-1T",
         "family": "ring",
         "attachment": false,
         "reasoning": true,
         "tool_call": true,
-        "structured_output": false,
+        "structured_output": true,
         "temperature": true,
         "release_date": "2026-05-08",
         "last_updated": "2026-05-08",
@@ -48971,7 +48917,7 @@
         "attachment": false,
         "reasoning": false,
         "tool_call": false,
-        "structured_output": false,
+        "structured_output": true,
         "temperature": true,
         "knowledge": "2024-04-30",
         "release_date": "2024-04-16",
@@ -49232,7 +49178,7 @@
         "attachment": false,
         "reasoning": true,
         "tool_call": true,
-        "structured_output": false,
+        "structured_output": true,
         "temperature": true,
         "knowledge": "2024-07-31",
         "release_date": "2025-01-20",
@@ -49406,7 +49352,7 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 1048576,
+          "context": 1048575,
           "output": 131072
         }
       },
@@ -49859,7 +49805,7 @@
         "attachment": false,
         "reasoning": false,
         "tool_call": false,
-        "structured_output": false,
+        "structured_output": true,
         "temperature": true,
         "knowledge": "2023-12-31",
         "release_date": "2024-04-18",
@@ -49912,7 +49858,7 @@
         "attachment": false,
         "reasoning": false,
         "tool_call": false,
-        "structured_output": false,
+        "structured_output": true,
         "temperature": true,
         "knowledge": "2023-12-31",
         "release_date": "2024-04-18",
@@ -50699,7 +50645,7 @@
         "attachment": false,
         "reasoning": false,
         "tool_call": false,
-        "structured_output": false,
+        "structured_output": true,
         "temperature": true,
         "knowledge": "2025-03-31",
         "release_date": "2025-06-30",

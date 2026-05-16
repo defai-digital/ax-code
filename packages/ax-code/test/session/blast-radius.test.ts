@@ -88,6 +88,7 @@ describe("BlastRadius", () => {
   })
 
   test("assertWritable is a no-op when not autonomous", () => {
+    process.env["AX_CODE_AUTONOMOUS"] = "false"
     BlastRadius.get(SID, { blockedPaths: [".env"] })
     expect(() => BlastRadius.assertWritable(SID, ".env")).not.toThrow()
   })
@@ -99,6 +100,7 @@ describe("BlastRadius", () => {
   })
 
   test("recordWriteAndAssert no-ops when not autonomous", () => {
+    process.env["AX_CODE_AUTONOMOUS"] = "false"
     BlastRadius.get(SID, { steps: 1, files: 1, lines: 1 })
     expect(() => BlastRadius.recordWriteAndAssert(SID, "/a", 100)).not.toThrow()
     // No accounting when autonomous is off.

@@ -2,7 +2,9 @@ import { describe, expect, test } from "bun:test"
 import { chmod, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "path"
+import rootPkg from "../../../../package.json"
 import {
+  DEFAULT_BUN_DEPENDENCY_RANGE,
   OPENTUI_NATIVE_PACKAGES,
   buildChannelForVersion,
   sourceDistributionCmdShim,
@@ -18,7 +20,7 @@ const manifest = () =>
   sourcePackageManifest({
     packageName: "@defai.digital/ax-code-source",
     version: "4.5.5",
-    bunDependencyRange: "^1.3.12",
+    bunDependencyRange: DEFAULT_BUN_DEPENDENCY_RANGE,
     opentuiCoreVersion: "0.1.105",
     license: "MIT",
     sourceDistTag: "latest",
@@ -29,6 +31,10 @@ function shQuote(value: string) {
 }
 
 describe("script.publish-source", () => {
+  test("defaults the source bun dependency range from the root engine contract", () => {
+    expect(DEFAULT_BUN_DEPENDENCY_RANGE).toBe(rootPkg.engines.bun)
+  })
+
   test("uses --workspaces=false for npm pack and publish (matches other publish scripts)", async () => {
     const text = await Bun.file(publishSourcePath).text()
     expect(text).toContain("npm pack --workspaces=false")
@@ -59,7 +65,7 @@ describe("script.publish-source", () => {
     // the source distribution at runtime. ADR-002 explicitly requires bun
     // to be a hard dep.
     const pkg = manifest()
-    expect(pkg.dependencies).toEqual({ bun: "^1.3.12" })
+    expect(pkg.dependencies).toEqual({ bun: DEFAULT_BUN_DEPENDENCY_RANGE })
     expect(pkg.optionalDependencies).not.toHaveProperty("bun")
   })
 
@@ -212,7 +218,7 @@ printf '%s\\n' "$2" >> "$OUT"
     // bin entry maps the package to the shim
     expect(pkg.bin).toEqual({ "ax-code": "./bin/ax-code" })
     // engines.bun pins the runtime range
-    expect(pkg.engines).toEqual({ bun: "^1.3.12" })
+    expect(pkg.engines).toEqual({ bun: DEFAULT_BUN_DEPENDENCY_RANGE })
     expect(pkg.publishConfig.tag).toBe("latest")
   })
 

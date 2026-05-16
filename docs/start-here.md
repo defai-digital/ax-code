@@ -2,7 +2,7 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-05-03
+Last reviewed: 2026-05-16
 Owner: ax-code runtime
 
 If the root [README](../README.md) is the fastest way to install AX Code, this page is the fastest way to understand it.
@@ -55,6 +55,8 @@ The rest of the documentation maps onto those layers.
 
 ### I want to use it safely in a team or company repo
 
+- AX Code starts with autonomous mode on and sandbox mode on: `workspace-write` with network disabled by default.
+- Keep the default boundary for broad edits; use `--sandbox full-access` only when a trusted task intentionally needs unrestricted filesystem and network access.
 - Read [Sandbox Mode](sandbox.md) for execution boundaries.
 - Read [Autonomous Mode](autonomous.md) if the agent will run unattended.
 - Read [Security Policy](../SECURITY.md) for threat model and credential storage details.

@@ -27,7 +27,7 @@ import path from "path"
 import { ProjectIdentity } from "../../project/project-identity"
 import { isLoopbackHostname } from "../../server/listen-security"
 import type { Isolation as IsolationConfig } from "../../config/schema"
-import type { Isolation } from "../../isolation"
+import { Isolation } from "../../isolation"
 
 type DoctorCheck = { name: string; status: "ok" | "warn" | "fail"; detail: string }
 
@@ -56,7 +56,7 @@ export function getIsolationPolicyCheck(input: {
   envMode?: Isolation.Mode
   envNetwork?: boolean
 }): DoctorCheck {
-  const mode = input.envMode ?? input.config?.mode ?? "full-access"
+  const mode = input.envMode ?? input.config?.mode ?? Isolation.DEFAULT_MODE
   const modeSource = input.envMode ? "env" : input.config?.mode ? "config" : "default"
   const network =
     mode === "full-access" ? true : input.envNetwork !== undefined ? input.envNetwork : (input.config?.network ?? false)
@@ -65,11 +65,8 @@ export function getIsolationPolicyCheck(input: {
   const detail = `mode ${mode} (${modeSource}); network ${network ? "enabled" : "disabled"} (${networkSource})`
   return {
     name: "Isolation policy",
-    status: mode === "full-access" && modeSource === "default" ? "warn" : "ok",
-    detail:
-      mode === "full-access" && modeSource === "default"
-        ? `${detail}; using permissive default, set isolation.mode or AX_CODE_ISOLATION_MODE to make intent explicit`
-        : detail,
+    status: "ok",
+    detail,
   }
 }
 
