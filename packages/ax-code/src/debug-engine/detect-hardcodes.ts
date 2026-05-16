@@ -172,6 +172,17 @@ function looksLikeClassName(s: string): boolean {
 // SVG path data, common long identifiers, snake_case/kebab-case names.
 function isKnownNonSecret(s: string): boolean {
   if (looksLikeClassName(s)) return true
+  // Protocol method names and module paths are stable identifiers, not
+  // credentials. They can look high-entropy because they mix camelCase
+  // segments with `/`, e.g. `textDocument/publishDiagnostics`.
+  if (/^[A-Za-z][A-Za-z0-9_.-]*(\/[A-Za-z0-9_.-]+)+$/.test(s)) return true
+  // Common alphabet constants such as base62 character sets have high
+  // entropy by design but are not secret material.
+  if (/^[A-Za-z0-9]+$/.test(s) && new Set(s).size === s.length) {
+    if (s.includes("ABCDEFGHIJKLMNOPQRSTUVWXYZ")) return true
+    if (s.includes("abcdefghijklmnopqrstuvwxyz")) return true
+    if (s.includes("0123456789")) return true
+  }
   // snake_case identifiers (DB column names, error codes, event names)
   if (/^[a-z][a-z0-9]*(_[a-z0-9]+)+$/.test(s)) return true
   // kebab-case identifiers (CSS classes, npm package names, import paths)
@@ -289,8 +300,7 @@ async function scanFile(
         inBlockComment = true
         break
       } else {
-        remaining =
-          remaining.slice(0, openIdx) + " ".repeat(closeIdx + 2 - openIdx) + remaining.slice(closeIdx + 2)
+        remaining = remaining.slice(0, openIdx) + " ".repeat(closeIdx + 2 - openIdx) + remaining.slice(closeIdx + 2)
       }
       openIdx = remaining.indexOf("/*", openIdx + 1)
     }

@@ -675,6 +675,37 @@ describe("detectHardcodes — precision overhaul", () => {
       },
     })
   })
+
+  test("does not flag protocol identifiers or alphabet constants as secrets", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const file = path.join(tmp.path, "protocol.ts")
+    await fs.writeFile(
+      file,
+      [
+        'const diagnostic = "textDocument/publishDiagnostics"',
+        'const work = "window/workDoneProgress/create"',
+        'const spawner = "effect/unstable/process/ChildProcess"',
+        'const base62 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"',
+        'const real = "aB9cD8eF7gH6iJ5kL4mN3oP2qR1sT0uVwXyZ"',
+      ].join("\n"),
+    )
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        const report = await DebugEngine.detectHardcodes(projectID, {
+          patterns: ["inline_secret_shape"],
+          files: [file],
+        })
+        const values = report.findings.map((f) => f.value)
+        expect(values).not.toContain("textDocument/publishDiagnostics")
+        expect(values).not.toContain("window/workDoneProgress/create")
+        expect(values).not.toContain("effect/unstable/process/ChildProcess")
+        expect(values).not.toContain("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz")
+        expect(values.some((v) => v.startsWith("aB9cD8"))).toBe(true)
+      },
+    })
+  })
 })
 
 // ─── detectRaces ────────────────────────────────────────────────────
@@ -1079,6 +1110,37 @@ describe("detectSecurity", () => {
         const projectID = Instance.project.id
         const report = await DebugEngine.detectSecurity(projectID, { patterns: ["path_traversal"] })
         expect(report.findings.length).toBe(0)
+      },
+    })
+  })
+
+  test("does not flag trusted build scripts as path traversal", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const scriptDir = path.join(tmp.path, "script")
+    await fs.mkdir(scriptDir, { recursive: true })
+    const buildScript = path.join(scriptDir, "build.ts")
+    const drizzleConfig = path.join(tmp.path, "drizzle.config.ts")
+    await fs.writeFile(
+      buildScript,
+      [
+        "import path from 'path'",
+        "const out = path.resolve(process.cwd(), process.argv[2] ?? 'dist')",
+        "await Bun.write(path.join(out, 'bundle.js'), '')",
+      ].join("\n"),
+    )
+    await fs.writeFile(
+      drizzleConfig,
+      ["import path from 'path'", "export default { schema: path.join(process.cwd(), 'src/schema.ts') }"].join("\n"),
+    )
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        const report = await DebugEngine.detectSecurity(projectID, {
+          patterns: ["path_traversal"],
+          files: [buildScript, drizzleConfig],
+        })
+        expect(report.findings).toHaveLength(0)
       },
     })
   })
