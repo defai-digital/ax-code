@@ -1,5 +1,5 @@
 import { useSync } from "@tui/context/sync"
-import { createMemo, For, Match, Show, Switch } from "solid-js"
+import { createMemo, createSignal, For, Match, onCleanup, onMount, Show, Switch } from "solid-js"
 import { useTerminalDimensions } from "@opentui/solid"
 import { createStore } from "solid-js/store"
 import { useTheme } from "../../context/theme"
@@ -17,7 +17,7 @@ import { activityItems as items } from "./activity"
 import { SessionDreView } from "./dre"
 import { SessionRollbackView } from "./rollback"
 import { SessionSemanticDiff } from "@/session/semantic-diff"
-import { type FooterSessionStatus, isFooterSessionStatus } from "./footer-view-model"
+import { footerSessionStatusView, type FooterSessionStatus, isFooterSessionStatus } from "./footer-view-model"
 import { computeSidebarWidth } from "./layout"
 import { sidebarGraphIndexStatusText } from "./sidebar-index-view-model"
 import { Locale } from "@/util/locale"
@@ -107,6 +107,25 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
     const candidate = sync.data.session_status?.[props.sessionID]
     return isFooterSessionStatus(candidate) ? candidate : { type: "idle" }
   })
+  // 1Hz tick so the "Thinking · 2s" elapsed seconds keep counting up
+  // while the session is busy. Idle sessions skip the setState — no
+  // re-render churn when nothing is happening.
+  const [statusTick, setStatusTick] = createSignal(0)
+  onMount(() => {
+    const timer = setInterval(() => {
+      if (status().type === "idle") return
+      setStatusTick((value) => value + 1)
+    }, 1000)
+    onCleanup(() => clearInterval(timer))
+  })
+  const sidebarStatusView = createMemo(() => {
+    statusTick()
+    const current = status()
+    if (current.type === "idle") return undefined
+    return footerSessionStatusView({ status: current, now: Date.now() })
+  })
+  const sidebarStatusLabel = createMemo(() => sidebarStatusView()?.label)
+  const sidebarStatusStale = createMemo(() => sidebarStatusView()?.stale ?? false)
   const dimensions = useTerminalDimensions()
   const sidebarWidth = createMemo(() => computeSidebarWidth(dimensions().width))
 
@@ -273,10 +292,12 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                   <b>{session().title}</b>
                 </text>
                 <text fg={theme.textMuted}>{session().id}</text>
-                <Show when={directory()}>
-                  <text fg={theme.textMuted} wrapMode="none">
-                    {directory()}
-                  </text>
+                <Show when={sidebarStatusLabel()}>
+                  {(label) => (
+                    <text fg={sidebarStatusStale() ? theme.warning : theme.accent} wrapMode="none">
+                      {label()}
+                    </text>
+                  )}
                 </Show>
                 <Show when={session().share?.url}>{(url) => <text fg={theme.textMuted}>{url()}</text>}</Show>
               </box>
