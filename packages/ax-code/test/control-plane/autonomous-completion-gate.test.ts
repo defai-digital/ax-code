@@ -156,6 +156,40 @@ describe("AutonomousCompletionGate", () => {
     expect(decision.message).toContain("returned recovered evidence that still needs review")
   })
 
+  test("captures the canonical state.error field on a failed task tool", () => {
+    const decision = AutonomousCompletionGate.evaluate({
+      pendingTodos: [],
+      messages: [
+        {
+          info: { role: "assistant" },
+          parts: [
+            {
+              type: "tool",
+              tool: "task",
+              callID: "call_failed_canonical",
+              state: {
+                status: "error",
+                input: { description: "review bug reports" },
+                error: "Subagent timed out after 8 minutes — provider may be unresponsive",
+              },
+            },
+          ],
+        },
+      ],
+    })
+
+    expect(decision).toMatchObject({
+      status: "blocked",
+      reason: "empty_subagent_result",
+      emptyResult: {
+        callID: "call_failed_canonical",
+        description: "review bug reports",
+        failed: true,
+        errorMessage: "Subagent timed out after 8 minutes — provider may be unresponsive",
+      },
+    })
+  })
+
   test("blocks completion when a task tool failed before returning evidence", () => {
     const decision = AutonomousCompletionGate.evaluate({
       pendingTodos: [],

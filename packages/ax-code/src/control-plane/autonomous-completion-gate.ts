@@ -139,7 +139,16 @@ export namespace AutonomousCompletionGate {
         const description = typeof input?.["description"] === "string" ? input["description"] : undefined
         const key = taskID ? `task:${taskID}` : callID ? `call:${callID}` : `anonymous:${anonymousIndex++}`
         if (status === "error") {
-          const errorMessage = typeof state["errorMessage"] === "string" ? state["errorMessage"] : output || undefined
+          // ToolStateError carries the failure detail in `state.error` (see
+          // session/message-v2.ts ToolStateError schema). Some legacy/test
+          // fixtures use `errorMessage`; accept that as a fallback so we
+          // never silently drop the error text on either shape.
+          const errorMessage =
+            typeof state["error"] === "string"
+              ? state["error"]
+              : typeof state["errorMessage"] === "string"
+                ? state["errorMessage"]
+                : output || undefined
           const current = {
             callID,
             taskID,
