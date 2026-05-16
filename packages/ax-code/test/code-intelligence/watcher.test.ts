@@ -81,6 +81,26 @@ describe("CodeGraphWatcher.start / stop", () => {
     })
   })
 
+  test("instance dispose stops the project watcher", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        CodeGraphWatcher.start(projectID)
+        await Bus.publish(FileWatcher.Event.Updated, {
+          file: `${tmp.path}/pending.ts`,
+          event: "change",
+        })
+        expect(CodeGraphWatcher.__pendingCountForTests(projectID)).toBe(1)
+
+        await Instance.dispose()
+
+        expect(CodeGraphWatcher.__pendingCountForTests(projectID)).toBe(0)
+      },
+    })
+  })
+
   test("unlink events purge files from the graph", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({

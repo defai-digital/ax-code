@@ -1,4 +1,6 @@
 import path from "path"
+import fs from "fs/promises"
+import os from "os"
 import { afterEach, describe, expect, spyOn, test } from "bun:test"
 import { Instance } from "../../src/project/instance"
 import { Server } from "../../src/server/server"
@@ -176,5 +178,22 @@ describe("server route validation", () => {
         expect(res.status).toBe(400)
       },
     })
+  })
+
+  test("directory selection rejects sensitive home directories", async () => {
+    const home = path.join(root, ".test-home")
+    await fs.mkdir(path.join(home, ".ssh"), { recursive: true })
+    const homedir = spyOn(os, "homedir").mockReturnValue(home)
+
+    try {
+      const res = await Server.Default().request(
+        `/experimental/session?directory=${encodeURIComponent(path.join(home, ".ssh"))}`,
+      )
+      expect(res.status).toBe(400)
+      expect(await res.text()).toContain("directory is not allowed")
+    } finally {
+      homedir.mockRestore()
+      await fs.rm(home, { recursive: true, force: true })
+    }
   })
 })

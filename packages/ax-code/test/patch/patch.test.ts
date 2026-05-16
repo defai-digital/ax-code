@@ -133,6 +133,37 @@ PATCH`
     })
   })
 
+  describe("maybeParseApplyPatchVerified", () => {
+    test("rejects patch paths outside the working directory", async () => {
+      const outsidePath = path.join(path.dirname(tempDir), "outside.txt")
+      const patchText = `*** Begin Patch
+*** Add File: ${outsidePath}
++outside
+*** End Patch`
+
+      const result = await Patch.maybeParseApplyPatchVerified(["apply_patch", patchText], tempDir)
+
+      expect(result.type).toBe(Patch.MaybeApplyPatchVerified.CorrectnessError)
+      if (result.type === Patch.MaybeApplyPatchVerified.CorrectnessError) {
+        expect(result.error.message).toContain("escapes working directory")
+      }
+    })
+
+    test("accepts patch paths inside the working directory", async () => {
+      const patchText = `*** Begin Patch
+*** Add File: inside.txt
++inside
+*** End Patch`
+
+      const result = await Patch.maybeParseApplyPatchVerified(["apply_patch", patchText], tempDir)
+
+      expect(result.type).toBe(Patch.MaybeApplyPatchVerified.Body)
+      if (result.type === Patch.MaybeApplyPatchVerified.Body) {
+        expect([...result.action.changes.keys()]).toEqual([path.join(tempDir, "inside.txt")])
+      }
+    })
+  })
+
   describe("applyPatch", () => {
     test("should add a new file", async () => {
       const patchText = `*** Begin Patch

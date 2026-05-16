@@ -1,5 +1,6 @@
 import path from "path"
 import os from "os"
+import fs from "fs/promises"
 import { Global } from "../global"
 import { Filesystem } from "../util/filesystem"
 import { Config } from "../config/config"
@@ -19,17 +20,30 @@ const FILES = [
   "CONTEXT.md", // deprecated
 ]
 
-function resolveHomeInstructionPath(input: string) {
+async function realpathOrResolved(input: string) {
+  return fs.realpath(input).catch(() => input)
+}
+
+async function resolveHomeInstructionPath(input: string) {
   const resolved = path.resolve(os.homedir(), input.slice(2))
   if (!Filesystem.contains(os.homedir(), resolved)) {
     log.warn("instruction path escapes home directory", { path: input, resolved })
     return
   }
+  const real = await realpathOrResolved(resolved)
+  if (!Filesystem.contains(os.homedir(), real)) {
+    log.warn("instruction path symlink escapes home directory", { path: input, resolved, real })
+    return
+  }
   return resolved
 }
 
-function allowInstructionAbsolutePath(input: string) {
-  return Filesystem.contains(Instance.worktree, input) || Filesystem.contains(os.homedir(), input)
+async function allowInstructionAbsolutePath(input: string) {
+  const real = await realpathOrResolved(input)
+  return (
+    (Filesystem.contains(Instance.worktree, input) && Filesystem.contains(Instance.worktree, real)) ||
+    (Filesystem.contains(os.homedir(), input) && Filesystem.contains(os.homedir(), real))
+  )
 }
 
 function globalFiles() {
@@ -111,13 +125,13 @@ export namespace InstructionPrompt {
       for (let instruction of config.instructions) {
         if (instruction.startsWith("https://") || instruction.startsWith("http://")) continue
         if (instruction.startsWith("~/")) {
-          const resolved = resolveHomeInstructionPath(instruction)
+          const resolved = await resolveHomeInstructionPath(instruction)
           if (!resolved) continue
           instruction = resolved
         }
         if (path.isAbsolute(instruction)) {
           instruction = path.resolve(instruction)
-          if (!allowInstructionAbsolutePath(instruction)) {
+          if (!(await allowInstructionAbsolutePath(instruction))) {
             log.warn("instruction path escapes allowed roots", { path: instruction })
             continue
           }
@@ -129,9 +143,14 @@ export namespace InstructionPrompt {
               include: "file",
             }).catch(() => [])
           : await resolveRelative(instruction)
-        matches.forEach((p) => {
-          paths.add(path.resolve(p))
-        })
+        for (const match of matches) {
+          const resolved = path.resolve(match)
+          if (!(await allowInstructionAbsolutePath(resolved))) {
+            log.warn("instruction match escapes allowed roots", { path: resolved })
+            continue
+          }
+          paths.add(resolved)
+        }
       }
     }
 

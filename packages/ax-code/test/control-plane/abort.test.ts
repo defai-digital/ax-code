@@ -34,4 +34,24 @@ describe("control-plane/waitForAbortOrTimeout", () => {
     controller.abort()
     await expect(wait).resolves.toBeUndefined()
   })
+
+  test("rechecks aborted state before registering the listener", async () => {
+    let reads = 0
+    let listeners = 0
+    const signal = {
+      get aborted() {
+        reads++
+        return reads > 1
+      },
+      addEventListener() {
+        listeners++
+      },
+      removeEventListener() {},
+    } as unknown as AbortSignal
+
+    await waitForAbortOrTimeout(signal, 10_000)
+
+    expect(reads).toBe(2)
+    expect(listeners).toBe(0)
+  })
 })

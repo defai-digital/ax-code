@@ -4,7 +4,8 @@ import { Hono, type Context } from "hono"
 import { cors } from "hono/cors"
 import { basicAuth } from "hono/basic-auth"
 import path from "path"
-import { statSync } from "fs"
+import { realpathSync, statSync } from "fs"
+import os from "os"
 import z from "zod"
 import { Provider } from "../provider/provider"
 import { NamedError } from "@ax-code/util/error"
@@ -466,9 +467,16 @@ export namespace Server {
     if (decoded === process.cwd()) return Filesystem.resolve(decoded)
     if (!path.isAbsolute(decoded)) return c.json({ error: "directory must be absolute" }, 400)
     const directory = Filesystem.resolve(decoded)
+    const realDirectory = (() => {
+      try {
+        return realpathSync(directory)
+      } catch {
+        return directory
+      }
+    })()
     const stat = (() => {
       try {
-        return statSync(directory)
+        return statSync(realDirectory)
       } catch {
         return undefined
       }
@@ -489,7 +497,23 @@ export namespace Server {
       "/Library",
       "/Users/Shared",
     ])
-    if (DANGEROUS_ROOTS.has(directory)) return c.json({ error: "directory is not allowed" }, 400)
+    const home = Filesystem.resolve(os.homedir())
+    const sensitiveHomeDirectories = [
+      ".ssh",
+      ".gnupg",
+      ".aws",
+      ".azure",
+      ".config/gcloud",
+      ".docker",
+      ".kube",
+      ".npm",
+    ].map((entry) => path.join(home, entry))
+    const isSensitiveHomeDirectory = sensitiveHomeDirectories.some(
+      (blocked) => realDirectory === blocked || Filesystem.contains(blocked, realDirectory),
+    )
+    if (DANGEROUS_ROOTS.has(realDirectory) || isSensitiveHomeDirectory) {
+      return c.json({ error: "directory is not allowed" }, 400)
+    }
     return directory
   }
 

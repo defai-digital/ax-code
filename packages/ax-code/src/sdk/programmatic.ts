@@ -119,6 +119,10 @@ function requireSessionID(session: ApiSession | undefined, action: string) {
   return sessionID
 }
 
+type SessionLifecycle = {
+  register(sessionID: string): void
+}
+
 // Local `withTimeout` that wraps a promise so post-timeout rejections
 // don't become unhandled rejections and the timer is cleared as soon
 // as the inner promise settles. The previous implementation used
@@ -357,10 +361,13 @@ async function withRetry<T>(
           cleanup()
           reject(new Error("Operation aborted"))
         }
-        const timer = setTimeout(() => {
-          cleanup()
-          resolve()
-        }, Math.min(1000 * Math.pow(2, attempt), 8000))
+        const timer = setTimeout(
+          () => {
+            cleanup()
+            resolve()
+          },
+          Math.min(1000 * Math.pow(2, attempt), 8000),
+        )
         if (typeof timer === "object" && "unref" in timer) timer.unref()
         signal?.addEventListener("abort", abort, { once: true })
       })
@@ -721,6 +728,7 @@ function createSessionHandle(
   sessionID: string,
   opts: AgentOptions,
   isDisposed?: () => boolean,
+  lifecycle?: SessionLifecycle,
 ): SessionHandle {
   return {
     get id() {
@@ -759,14 +767,19 @@ function createSessionHandle(
       if (options?.signal?.aborted) abortOperation()
       else options?.signal?.addEventListener("abort", abortOperation, { once: true })
       const signal = abortController.signal
-      const resultPromise = opts.maxRetries ? withRetry(collect, opts.maxRetries, opts.hooks?.onRetry, signal) : collect()
+      const resultPromise = opts.maxRetries
+        ? withRetry(collect, opts.maxRetries, opts.hooks?.onRetry, signal)
+        : collect()
       const abortable = withAbort(resultPromise, signal, abortSession)
 
       if (options?.timeout) {
         const timeoutMs = options.timeout
-        return withSdkTimeout(abortable, timeoutMs, () => new TimeoutError(timeoutMs, "agent.run"), abortOperation).finally(
-          () => options?.signal?.removeEventListener("abort", abortOperation),
-        )
+        return withSdkTimeout(
+          abortable,
+          timeoutMs,
+          () => new TimeoutError(timeoutMs, "agent.run"),
+          abortOperation,
+        ).finally(() => options?.signal?.removeEventListener("abort", abortOperation))
       }
       return abortable.finally(() => options?.signal?.removeEventListener("abort", abortOperation))
     },
@@ -785,19 +798,18 @@ function createSessionHandle(
         }
         options?.signal?.addEventListener("abort", abort, { once: true })
         try {
-          await sdk.session.prompt({
-            sessionID,
-            agent: options?.agent ?? opts.agent,
-            model,
-            variant: options?.variant ?? opts.variant,
-            parts: [{ type: "text", text: message }],
-          })
-        } catch (err) {
-          await closeEvents(events)
-          yield { type: "error", error: err instanceof Error ? err : new Error(String(err)) } satisfies StreamEvent
-          return
-        }
-        try {
+          try {
+            await sdk.session.prompt({
+              sessionID,
+              agent: options?.agent ?? opts.agent,
+              model,
+              variant: options?.variant ?? opts.variant,
+              parts: [{ type: "text", text: message }],
+            })
+          } catch (err) {
+            yield { type: "error", error: err instanceof Error ? err : new Error(String(err)) } satisfies StreamEvent
+            return
+          }
           yield* streamEvents(sdk, events, sessionID, opts.hooks)
         } finally {
           options?.signal?.removeEventListener("abort", abort)
@@ -815,7 +827,13 @@ function createSessionHandle(
     async fork(): Promise<SessionHandle> {
       if (isDisposed?.()) throw new DisposedError()
       const result = await sdk.session.fork({ sessionID })
-      return createSessionHandle(sdk, requireSessionID(result.data, "fork"), opts, isDisposed)
+      const forkedSessionID = requireSessionID(result.data, "fork")
+      if (isDisposed?.()) {
+        await sdk.session.abort({ sessionID: forkedSessionID }).catch(() => {})
+        throw new DisposedError()
+      }
+      lifecycle?.register(forkedSessionID)
+      return createSessionHandle(sdk, forkedSessionID, opts, isDisposed, lifecycle)
     },
 
     async abort() {
@@ -857,6 +875,28 @@ export async function createAgent(options?: AgentOptions): Promise<Agent> {
 
   let sdk: OpencodeClient
   let disposed = false
+  const activeSessions = new Set<string>()
+  const lifecycle: SessionLifecycle = {
+    register(sessionID: string) {
+      activeSessions.add(sessionID)
+    },
+  }
+  const createTrackedSession = async (action: string) => {
+    if (disposed) throw new DisposedError()
+    const session = await sdk.session.create()
+    const sessionID = requireSessionID(session.data, action)
+    if (disposed) {
+      await sdk.session.abort({ sessionID }).catch(() => {})
+      throw new DisposedError()
+    }
+    activeSessions.add(sessionID)
+    return sessionID
+  }
+  const abortActiveSessions = async () => {
+    const sessionIDs = [...activeSessions]
+    activeSessions.clear()
+    await Promise.allSettled(sessionIDs.map((sessionID) => sdk.session.abort({ sessionID })))
+  }
   // `bootstrap()` wraps its callback in `Instance.provide(...)` which
   // tears down the Instance in a `finally` block. That means the
   // callback must not return until the user is done with the agent,
@@ -934,9 +974,12 @@ export async function createAgent(options?: AgentOptions): Promise<Agent> {
     async run(message: string, runOptions?: RunOptions): Promise<RunResult> {
       if (disposed) throw new DisposedError()
       const exec = async () => {
-        const session = await sdk.session.create()
-        const sessionID = requireSessionID(session.data, "create")
-        return createSessionHandle(sdk, sessionID, opts, () => disposed).run(message, runOptions)
+        const sessionID = await createTrackedSession("create")
+        try {
+          return await createSessionHandle(sdk, sessionID, opts, () => disposed, lifecycle).run(message, runOptions)
+        } finally {
+          activeSessions.delete(sessionID)
+        }
       }
       if (runOptions?.timeout) {
         const timeoutMs = runOptions.timeout
@@ -951,23 +994,38 @@ export async function createAgent(options?: AgentOptions): Promise<Agent> {
         [Symbol.asyncIterator]() {
           let gen: AsyncIterator<StreamEvent> | undefined
           let started = false
+          let sessionID: string | undefined
+          const releaseSession = () => {
+            if (!sessionID) return
+            activeSessions.delete(sessionID)
+            sessionID = undefined
+          }
           return {
             async next() {
               if (!started) {
                 started = true
-                const session = await sdk.session.create()
-                const sessionID = requireSessionID(session.data, "create")
-                gen = createSessionHandle(sdk, sessionID, opts, () => disposed)
+                sessionID = await createTrackedSession("create")
+                gen = createSessionHandle(sdk, sessionID, opts, () => disposed, lifecycle)
                   .stream(message, runOptions)
                   [Symbol.asyncIterator]()
               }
-              return gen!.next()
+              const result = await gen!.next()
+              if (result.done) releaseSession()
+              return result
             },
             async return(v?: unknown) {
-              return gen?.return?.(v) ?? { done: true as const, value: undefined }
+              try {
+                return (await gen?.return?.(v)) ?? { done: true as const, value: undefined }
+              } finally {
+                releaseSession()
+              }
             },
             async throw(e?: unknown) {
-              return gen?.throw?.(e) ?? { done: true as const, value: undefined }
+              try {
+                return (await gen?.throw?.(e)) ?? { done: true as const, value: undefined }
+              } finally {
+                releaseSession()
+              }
             },
           }
         },
@@ -977,9 +1035,8 @@ export async function createAgent(options?: AgentOptions): Promise<Agent> {
 
     async session(): Promise<SessionHandle> {
       if (disposed) throw new DisposedError()
-      const session = await sdk.session.create()
-      const sessionID = requireSessionID(session.data, "create")
-      return createSessionHandle(sdk, sessionID, opts, () => disposed)
+      const sessionID = await createTrackedSession("create")
+      return createSessionHandle(sdk, sessionID, opts, () => disposed, lifecycle)
     },
 
     async tool(name: string, input: Record<string, unknown>): Promise<unknown> {
@@ -989,8 +1046,7 @@ export async function createAgent(options?: AgentOptions): Promise<Agent> {
       if (!available.includes(name)) {
         throw new ToolError(name, `Not found. Available: ${available.join(", ")}`)
       }
-      const session = await sdk.session.create()
-      const sessionID = requireSessionID(session.data, "create")
+      const sessionID = await createTrackedSession("create")
       const events = await sdk.event.subscribe()
       const resultPromise = collectResult(sdk, events, sessionID, opts.hooks)
       try {
@@ -1008,9 +1064,13 @@ export async function createAgent(options?: AgentOptions): Promise<Agent> {
         await closeEvents(events)
         throw err instanceof Error ? err : new Error(String(err))
       }
-      const result = await resultPromise
-      const toolResult = result.toolCalls.find((t) => t.tool === name)
-      return toolResult?.output ?? result.text
+      try {
+        const result = await resultPromise
+        const toolResult = result.toolCalls.find((t) => t.tool === name)
+        return toolResult?.output ?? result.text
+      } finally {
+        activeSessions.delete(sessionID)
+      }
     },
 
     // Enhancement #7: Discovery methods
@@ -1036,6 +1096,7 @@ export async function createAgent(options?: AgentOptions): Promise<Agent> {
     async dispose() {
       if (disposed) return
       disposed = true
+      await abortActiveSessions()
       // Unblock the keep-alive promise so bootstrap()'s callback
       // returns and `Instance.provide` runs its finally-block
       // teardown (LSP shutdown, DB close, watcher cleanup, etc.).
