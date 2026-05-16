@@ -28,6 +28,20 @@ const DEFAULT_TIMEOUT = Flag.AX_CODE_EXPERIMENTAL_BASH_DEFAULT_TIMEOUT_MS || 2 *
 
 const log = Log.create({ service: "bash-tool" })
 
+function hasDynamicShellExpansion(value: string) {
+  return /\$\(|\$\{|`/.test(value)
+}
+
+function assertStaticRedirectTarget(target: string) {
+  if (hasDynamicShellExpansion(target)) {
+    throw new Error("Dynamic redirection targets are not allowed")
+  }
+}
+
+function hasDynamicRedirection(command: string) {
+  return /(?:^|[\s&;])\d*>>?\s*(?:\$\(|\$\{|`)/.test(command)
+}
+
 // Track detached process groups so we can clean them up if the parent
 // process exits unexpectedly (crash, SIGKILL, etc.). Without this,
 // detached child processes become orphans that keep running.
@@ -98,6 +112,7 @@ export const BashTool = Tool.define("bash", async () => {
         resolveToolFilePath(params.workdir, Instance.directory)
       }
       if (params.command.includes("\x00")) throw new Error("Command contains null byte")
+      if (hasDynamicRedirection(params.command)) throw new Error("Dynamic redirection targets are not allowed")
       const requestedCwd = params.workdir ? resolveToolFilePath(params.workdir, Instance.directory) : Instance.directory
       await assertSymlinkInsideProject(requestedCwd)
       const cwd = params.workdir
@@ -195,7 +210,7 @@ export const BashTool = Tool.define("bash", async () => {
                   for (const innerArg of innerParts.slice(1)) {
                     if (innerArg.startsWith("-") || (innerParts[0] === "chmod" && innerArg.startsWith("+"))) continue
                     // Skip args with command substitution — can't resolve
-                    if (/\$\(|\$\{|`/.test(innerArg)) continue
+                    if (hasDynamicShellExpansion(innerArg)) continue
                     const resolved = await fs
                       .realpath(path.resolve(cwd, innerArg))
                       .catch(() => path.resolve(cwd, innerArg))
@@ -223,7 +238,8 @@ export const BashTool = Tool.define("bash", async () => {
                   if (!c) continue
                   if (!["word", "string", "raw_string", "concatenation"].includes(c.type)) continue
                   const target = c.text.replace(/^"(.*)"$|^'(.*)'$/s, "$1$2")
-                  if (!target || /\$\(|\$\{|`|^&/.test(target)) continue
+                  if (!target || /^&/.test(target)) continue
+                  assertStaticRedirectTarget(target)
                   const resolved = await fs.realpath(path.resolve(cwd, target)).catch(() => path.resolve(cwd, target))
                   if (!resolved) continue
                   const normalized =
@@ -295,7 +311,8 @@ export const BashTool = Tool.define("bash", async () => {
           if (!["word", "string", "raw_string", "concatenation"].includes(child.type)) continue
           const target = child.text.replace(/^"(.*)"$|^'(.*)'$/s, "$1$2")
           // Skip command substitution / fd dup (&1 etc.) — opaque or non-path.
-          if (!target || /\$\(|\$\{|`|^&/.test(target)) continue
+          if (!target || /^&/.test(target)) continue
+          assertStaticRedirectTarget(target)
           const resolved = await fs.realpath(path.resolve(cwd, target)).catch(() => path.resolve(cwd, target))
           if (!resolved) continue
           const normalized =

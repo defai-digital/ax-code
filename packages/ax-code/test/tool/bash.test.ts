@@ -520,4 +520,56 @@ describe("tool.bash isolation", () => {
       },
     })
   })
+
+  test("rejects dynamic command substitution redirection target", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const bash = await BashTool.init()
+        const isolation = Isolation.resolve({ mode: "workspace-write", network: false }, tmp.path, tmp.path)
+        const testCtx = {
+          ...ctx,
+          ask: async () => {},
+          extra: { isolation },
+        }
+
+        await expect(
+          bash.execute(
+            {
+              command: "echo pwned > $(echo /tmp/exfil.txt)",
+              description: "Attempt dynamic redirect",
+            },
+            testCtx,
+          ),
+        ).rejects.toThrow(/Dynamic redirection targets/)
+      },
+    })
+  })
+
+  test("rejects dynamic command substitution redirection target inside `bash -c`", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const bash = await BashTool.init()
+        const isolation = Isolation.resolve({ mode: "workspace-write", network: false }, tmp.path, tmp.path)
+        const testCtx = {
+          ...ctx,
+          ask: async () => {},
+          extra: { isolation },
+        }
+
+        await expect(
+          bash.execute(
+            {
+              command: 'bash -c "echo pwned > $(echo /tmp/exfil.txt)"',
+              description: "Attempt inner dynamic redirect",
+            },
+            testCtx,
+          ),
+        ).rejects.toThrow(/Dynamic redirection targets/)
+      },
+    })
+  })
 })

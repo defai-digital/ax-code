@@ -492,7 +492,10 @@ export namespace Worktree {
 
   export const create = fn(CreateInput.optional(), async (input) => {
     const info = await makeWorktreeInfo(input?.name)
-    const bootstrap = await createFromInfo(info, input?.startCommand)
+    const bootstrap = await createFromInfo(info, input?.startCommand).catch(async (error) => {
+      await fs.rmdir(info.directory).catch(() => undefined)
+      throw error
+    })
     // Defer bootstrap to the next microtask so callers see the
     // worktree info synchronously before post-create hooks run.
     // Tracked via startScriptTimers so cancelPendingStartScripts()

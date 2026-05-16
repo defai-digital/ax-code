@@ -75,6 +75,12 @@ export namespace SessionStatus {
     while (data.size > MAX_SESSIONS) {
       const oldest = data.keys().next().value
       if (!oldest || oldest === sessionID) break
+      const oldestStatus = data.get(oldest)
+      if (oldestStatus?.type === "busy" || oldestStatus?.type === "retry") {
+        data.delete(oldest)
+        data.set(oldest, oldestStatus)
+        continue
+      }
       data.delete(oldest)
     }
     Bus.publishDetached(Event.Status, { sessionID, status })

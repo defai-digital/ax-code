@@ -144,4 +144,22 @@ describe("SessionStatus", () => {
       },
     })
   })
+
+  test("does not evict active sessions when trimming old status entries", async () => {
+    await using tmp = await tmpdir()
+    const activeSession = SessionID.descending()
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await SessionStatus.set(activeSession, { type: "busy", startedAt: 123 })
+
+        for (let i = 0; i < 260; i++) {
+          await SessionStatus.set(SessionID.descending(), { type: "busy", startedAt: i })
+        }
+
+        expect(await SessionStatus.get(activeSession)).toEqual({ type: "busy", startedAt: 123 })
+      },
+    })
+  })
 })
