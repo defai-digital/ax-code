@@ -9,6 +9,7 @@ import { assertExternalDirectory, assertSymlinkInsideProject } from "./external-
 import { Filesystem } from "../util/filesystem"
 import { AuditSemanticCall } from "../audit/semantic-call"
 import type { LSPServer } from "../lsp/server"
+import { resolveToolFilePath } from "./file-path"
 
 // Synthesize a minimal envelope for operations that don't yet have an
 // envelope-returning LSP variant. Lets us audit every tool call
@@ -80,7 +81,7 @@ export const LspTool = Tool.define("lsp", {
     character: z.number().int().min(1).optional().describe("The character offset (1-based, as shown in editors)"),
   }),
   execute: async (args, ctx) => {
-    if (args.filePath?.includes("\x00")) throw new Error("File path contains null byte")
+    if (args.filePath !== undefined) resolveToolFilePath(args.filePath, Instance.directory)
 
     // Audit helper bound to this tool invocation. On success or
     // failure we write one row — audit is load-bearing, not opt-in.
@@ -164,7 +165,7 @@ export const LspTool = Tool.define("lsp", {
     if (args.operation === "diagnosticsAggregated") {
       let file: string | undefined
       if (args.filePath) {
-        file = path.isAbsolute(args.filePath) ? args.filePath : path.join(Instance.directory, args.filePath)
+        file = resolveToolFilePath(args.filePath, Instance.directory)
         await assertExternalDirectory(ctx, file)
         await assertSymlinkInsideProject(file)
         const exists = await Filesystem.exists(file)
@@ -237,7 +238,7 @@ export const LspTool = Tool.define("lsp", {
       throw new Error(`${args.operation} requires \`character\``)
     }
 
-    const file = path.isAbsolute(args.filePath) ? args.filePath : path.join(Instance.directory, args.filePath)
+    const file = resolveToolFilePath(args.filePath, Instance.directory)
     await assertExternalDirectory(ctx, file)
     await assertSymlinkInsideProject(file)
 

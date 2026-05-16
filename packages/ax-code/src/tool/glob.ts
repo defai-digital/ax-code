@@ -8,6 +8,7 @@ import { Instance } from "../project/instance"
 import { assertExternalDirectory, assertSymlinkInsideProject } from "./external-directory"
 import { NativePerf } from "../perf/native"
 import { NativeAddon } from "../native/addon"
+import { resolveToolFilePath } from "./file-path"
 
 export const GlobTool = Tool.define("glob", {
   description: DESCRIPTION,
@@ -21,7 +22,7 @@ export const GlobTool = Tool.define("glob", {
       ),
   }),
   async execute(params, ctx) {
-    if (params.path?.includes("\x00")) throw new Error("File path contains null byte")
+    if (params.path !== undefined) resolveToolFilePath(params.path, Instance.directory)
     if (params.pattern.includes("\x00")) throw new Error("Glob pattern contains null byte")
     await ctx.ask({
       permission: "glob",
@@ -34,7 +35,7 @@ export const GlobTool = Tool.define("glob", {
     })
 
     let search = params.path ?? Instance.directory
-    search = path.isAbsolute(search) ? search : path.resolve(Instance.directory, search)
+    search = resolveToolFilePath(search, Instance.directory)
     await assertExternalDirectory(ctx, search, { kind: "directory" })
     await assertSymlinkInsideProject(search)
 

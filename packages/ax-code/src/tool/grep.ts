@@ -7,12 +7,12 @@ import { Process } from "../util/process"
 
 import DESCRIPTION from "./grep.txt"
 import { Instance } from "../project/instance"
-import path from "path"
 import { assertExternalDirectory, assertSymlinkInsideProject } from "./external-directory"
 import { MAX_LINE_LENGTH } from "@/constants/tool"
 import { NativePerf } from "../perf/native"
 import { NativeAddon } from "../native/addon"
 import { Env } from "@/util/env"
+import { resolveToolFilePath } from "./file-path"
 
 export const GrepTool = Tool.define("grep", {
   description: DESCRIPTION,
@@ -25,7 +25,7 @@ export const GrepTool = Tool.define("grep", {
     if (!params.pattern) {
       throw new Error("pattern is required")
     }
-    if (params.path?.includes("\x00")) throw new Error("File path contains null byte")
+    if (params.path !== undefined) resolveToolFilePath(params.path, Instance.directory)
     if (params.pattern.includes("\x00")) throw new Error("Pattern contains null byte")
     if (params.include?.includes("\x00")) throw new Error("Include pattern contains null byte")
 
@@ -41,7 +41,7 @@ export const GrepTool = Tool.define("grep", {
     })
 
     let searchPath = params.path ?? Instance.directory
-    searchPath = path.isAbsolute(searchPath) ? searchPath : path.resolve(Instance.directory, searchPath)
+    searchPath = resolveToolFilePath(searchPath, Instance.directory)
     await assertExternalDirectory(ctx, searchPath, { kind: "directory" })
     await assertSymlinkInsideProject(searchPath)
 
