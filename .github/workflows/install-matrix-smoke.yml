@@ -94,13 +94,7 @@ jobs:
       - name: Resolve version under test
         id: version
         shell: bash
-        run: |
-          if [ -n "${{ inputs.version }}" ]; then
-            echo "version=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
-          else
-            VERSION="${GITHUB_REF_NAME#v}"
-            echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          fi
+        run: bash .github/scripts/resolve-version-for-workflow.sh "$GITHUB_OUTPUT" "${{ inputs.version }}"
 
       - name: Filter dispatch channel
         id: channel
@@ -252,13 +246,7 @@ jobs:
       - name: Resolve version under test
         id: version
         shell: bash
-        run: |
-          if [ -n "${{ inputs.version }}" ]; then
-            echo "version=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
-          else
-            VERSION="${GITHUB_REF_NAME#v}"
-            echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          fi
+        run: bash .github/scripts/resolve-version-for-workflow.sh "$GITHUB_OUTPUT" "${{ inputs.version }}"
 
       - name: Filter dispatch channel
         id: channel
