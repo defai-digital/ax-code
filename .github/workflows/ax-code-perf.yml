@@ -94,6 +94,9 @@ on:
         type: string
         default: ""
 
+permissions:
+  contents: read
+
 jobs:
   perf:
     runs-on: ubuntu-latest
