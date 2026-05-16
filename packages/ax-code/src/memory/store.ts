@@ -155,7 +155,7 @@ const READ_CACHE_MAX_ENTRIES = 32
 // both pass the cache-miss check don't issue duplicate fs.readFile calls and
 // race to populate the cache (BUG-108). Entries live only for the duration of
 // the in-flight read; the cache itself remains the long-lived store.
-const inFlightReads = new Map<string, Promise<string | null>>()
+const inFlightReads = new Map<string, { mtimeMs: number; size: number; promise: Promise<string | null> }>()
 
 function cacheSet(filePath: string, entry: CacheEntry) {
   // Promote to MRU on every set. Map iteration order is insertion order,
@@ -230,11 +230,12 @@ async function readWithCache(filePath: string): Promise<string | null> {
     return cached.text
   }
   const pending = inFlightReads.get(filePath)
-  if (pending) return pending
+  if (pending && pending.mtimeMs === stat.mtimeMs && pending.size === stat.size) return pending.promise
   const promise = readFresh(filePath).finally(() => {
-    inFlightReads.delete(filePath)
+    const current = inFlightReads.get(filePath)
+    if (current?.promise === promise) inFlightReads.delete(filePath)
   })
-  inFlightReads.set(filePath, promise)
+  inFlightReads.set(filePath, { mtimeMs: stat.mtimeMs, size: stat.size, promise })
   return promise
 }
 

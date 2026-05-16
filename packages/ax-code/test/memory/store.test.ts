@@ -87,6 +87,54 @@ describe("memory.store cache", () => {
     }
   })
 
+  test("concurrent load does not reuse an in-flight read after the file changes", async () => {
+    await using tmp = await tmpdir()
+    const memoryPath = path.join(tmp.path, ".ax-code", "memory.json")
+    const initial = sampleMemory({ contentHash: "initial" })
+    const updated = sampleMemory({ contentHash: "updated-after-pending-read", totalTokens: 123 })
+
+    await store.save(tmp.path, initial)
+    store._resetReadCache()
+
+    const realReadFile = fs.readFile.bind(fs)
+    const readFileSpy = spyOn(fs, "readFile")
+    let readCount = 0
+    let firstReadStarted!: () => void
+    let releaseFirstRead!: () => void
+    const firstReadStartedPromise = new Promise<void>((resolve) => {
+      firstReadStarted = resolve
+    })
+    const releaseFirstReadPromise = new Promise<void>((resolve) => {
+      releaseFirstRead = resolve
+    })
+
+    readFileSpy.mockImplementation((async (...args: Parameters<typeof realReadFile>) => {
+      readCount++
+      if (readCount === 1) {
+        firstReadStarted()
+        await releaseFirstReadPromise
+        return JSON.stringify(initial)
+      }
+      return realReadFile(...args)
+    }) as any)
+
+    try {
+      const first = store.load(tmp.path)
+      await firstReadStartedPromise
+
+      await fs.writeFile(memoryPath, JSON.stringify(updated))
+
+      const second = store.load(tmp.path)
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      releaseFirstRead()
+
+      expect((await first)?.contentHash).toBe("initial")
+      expect((await second)?.contentHash).toBe("updated-after-pending-read")
+    } finally {
+      readFileSpy.mockRestore()
+    }
+  })
+
   test("load returns null after clear()", async () => {
     await using tmp = await tmpdir()
     await store.save(tmp.path, sampleMemory())
