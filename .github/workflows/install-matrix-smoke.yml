@@ -176,13 +176,7 @@ jobs:
           set -e
           OUTPUT="$(ax-code doctor 2>&1)"
           echo "$OUTPUT"
-          if [ "${{ matrix.channel }}" = "source" ]; then
-            RUNTIME_RE='(bun-bundled|source)'
-          else
-            RUNTIME_RE='compiled'
-          fi
-          echo "$OUTPUT" | grep -E "Runtime: Bun .* \(${RUNTIME_RE}\)" \
-            || (echo "FAIL: ${{ matrix.channel }} channel did not report ${RUNTIME_RE} runtimeMode" && exit 1)
+          echo "$OUTPUT" | bash .github/scripts/assert-runtime-mode.sh "${{ matrix.channel }}" doctor
 
       - name: Smoke — installed backend stdio handshake
         if: ${{ steps.channel.outputs.enabled == 'true' }}
@@ -194,13 +188,7 @@ jobs:
           echo "$OUTPUT"
           echo "$OUTPUT" | grep -E '"type":"rpc.result".*"id":1' \
             || (echo "FAIL: installed backend did not return rpc health result" && exit 1)
-          if [ "${{ matrix.channel }}" = "source" ]; then
-            RUNTIME_RE='(bun-bundled|source)'
-          else
-            RUNTIME_RE='compiled'
-          fi
-          echo "$OUTPUT" | grep -E "\"runtimeMode\":\"${RUNTIME_RE}\"" \
-            || (echo "FAIL: installed backend did not report ${RUNTIME_RE} runtimeMode" && exit 1)
+          echo "$OUTPUT" | bash .github/scripts/assert-runtime-mode.sh "${{ matrix.channel }}" backend
 
       - name: Smoke — non-interactive command
         if: ${{ steps.channel.outputs.enabled == 'true' }}
