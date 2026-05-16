@@ -19,21 +19,8 @@ jobs:
   typecheck:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
-
-      - uses: pnpm/action-setup@v6
-        with:
-          version: 10.33.4
-          run_install: false
-
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 22
-          cache: pnpm
-
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: 1.3.14
+      - name: Setup Ax-code JS toolchain
+        uses: ./.github/actions/setup-ax-code-toolchain
 
       - run: pnpm install --frozen-lockfile
 
@@ -97,21 +84,8 @@ jobs:
           echo "XDG_DATA_HOME=$RUNNER_TEMP/ax-code-release-build-home/.local/share" >> "$GITHUB_ENV"
           echo "XDG_STATE_HOME=$RUNNER_TEMP/ax-code-release-build-home/.local/state" >> "$GITHUB_ENV"
 
-      - uses: actions/checkout@v6
-
-      - uses: pnpm/action-setup@v6
-        with:
-          version: 10.33.4
-          run_install: false
-
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 22
-          cache: pnpm
-
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: 1.3.14
+      - name: Setup Ax-code JS toolchain
+        uses: ./.github/actions/setup-ax-code-toolchain
 
       - run: pnpm install --frozen-lockfile
 
