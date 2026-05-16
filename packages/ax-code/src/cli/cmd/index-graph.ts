@@ -313,6 +313,7 @@ export const IndexCommand = cmd({
         const out = (line = "") => {
           if (!json) UI.println(line)
         }
+        const warningLine = (message: string) => `${UI.Style.TEXT_WARNING}${message}${UI.Style.TEXT_NORMAL}`
         if (args.nativeProfile) {
           NativePerf.enable()
         }
@@ -343,7 +344,7 @@ export const IndexCommand = cmd({
         // but continue into the indexer so the prune runs.
         if (files.length === 0) {
           out("")
-          out(`${UI.Style.TEXT_WARNING}No indexable source files found.${UI.Style.TEXT_NORMAL}`)
+          out(warningLine("No indexable source files found."))
           // If there are also no stored rows to clean up, there's
           // genuinely nothing to do — bail here to match the old
           // behavior for pristine projects.
@@ -430,16 +431,12 @@ export const IndexCommand = cmd({
                 )
               } else {
                 const hint = INSTALL_HINTS[lang] ?? "check ~/.local/share/ax-code/log/ for spawn errors"
-                out(
-                  `  ${UI.Style.TEXT_WARNING}✗${UI.Style.TEXT_NORMAL} ${lang} (${count} file${count === 1 ? "" : "s"}) — ${hint}`,
-                )
+                out(`  ${warningLine("✗")} ${lang} (${count} file${count === 1 ? "" : "s"}) — ${hint}`)
               }
             }
             if (probe.ready.size === 0) {
               out("")
-              out(
-                `${UI.Style.TEXT_WARNING}No LSP servers are available for any language in this project.${UI.Style.TEXT_NORMAL}`,
-              )
+              out(warningLine("No LSP servers are available for any language in this project."))
               out(`Indexing will run but is very likely to produce zero symbols. Install at least one of`)
               out(`the language servers listed above, or run with --no-probe to bypass this warning.`)
             }
@@ -535,9 +532,7 @@ export const IndexCommand = cmd({
             lock: "acquire",
             lockTimeoutMs: 30 * 60 * 1000,
             onLockWait: () => {
-              out(
-                `${UI.Style.TEXT_WARNING}Another ax-code process is currently indexing this project. Waiting...${UI.Style.TEXT_NORMAL}`,
-              )
+              out(warningLine("Another ax-code process is currently indexing this project. Waiting..."))
             },
             onProgress: (completed, total) => {
               latestCompleted = completed
@@ -564,9 +559,7 @@ export const IndexCommand = cmd({
           })
           if (err instanceof CodeGraphBuilder.LockHeldError) {
             out("")
-            out(
-              `${UI.Style.TEXT_WARNING}Timed out waiting for another ax-code process to finish indexing.${UI.Style.TEXT_NORMAL}`,
-            )
+            out(warningLine("Timed out waiting for another ax-code process to finish indexing."))
             out(
               `Retry after the other process completes, or investigate a stale lockfile under ~/.local/share/ax-code/locks/.`,
             )
@@ -625,7 +618,7 @@ export const IndexCommand = cmd({
         // symbols or LSP failed silently on every file. Distinguish
         // the empty outcome explicitly.
         if (status.nodeCount === 0) {
-          out(`${UI.Style.TEXT_WARNING}Indexing finished but produced no symbols${UI.Style.TEXT_NORMAL}`)
+          out(warningLine("Indexing finished but produced no symbols"))
         } else {
           out(`${UI.Style.TEXT_SUCCESS_BOLD}Indexing complete${UI.Style.TEXT_NORMAL}`)
         }
@@ -644,7 +637,7 @@ export const IndexCommand = cmd({
         if (result.failed > 0) {
           out("")
           out(
-            `${UI.Style.TEXT_WARNING}${result.failed} file(s) failed to index.${UI.Style.TEXT_NORMAL} Check the log file for details.`,
+            `${warningLine(`${result.failed} file(s) failed to index.`)} Check the log file for details.`,
           )
         }
         if (status.nodeCount === 0 && files.length > 0) {
@@ -653,7 +646,7 @@ export const IndexCommand = cmd({
           // language runtime, unsupported language version) or
           // returning no document symbols. Point users at the log.
           out("")
-          out(`${UI.Style.TEXT_WARNING}No symbols were extracted.${UI.Style.TEXT_NORMAL} Common causes:`)
+          out(`${warningLine("No symbols were extracted.")} Common causes:`)
           out(`  • LSP server for the project's language failed to spawn (check the log)`)
           out(`  • Project contains only unsupported file types`)
           out(`  • Files are empty or contain no top-level symbols`)
