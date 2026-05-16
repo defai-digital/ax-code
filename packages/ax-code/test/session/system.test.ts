@@ -141,7 +141,7 @@ paths:
           ] as any
 
           const result = await SystemPrompt.skills(build!, messages)
-          expect(result).toContain(`auto_activated="true"`)
+          expect(result).toContain(`recommended="true"`)
           expect(result).toContain("ts-skill")
           expect(result).toContain("recommended for loading")
         },

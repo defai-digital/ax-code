@@ -36,6 +36,7 @@ import { RestartCommand } from "./cmd/restart"
 import { RunCommand } from "./cmd/run"
 import { ServeCommand } from "./cmd/serve"
 import { SessionCommand } from "./cmd/session"
+import { SkillCommand } from "./cmd/skill"
 import { StatsCommand } from "./cmd/stats"
 import { TuiBackendCommand } from "./cmd/tui/backend"
 import { TuiThreadCommand } from "./cmd/tui/thread"
@@ -90,6 +91,7 @@ const cmds = [
   SessionCommand,
   DbCommand,
   MemoryCommand,
+  SkillCommand,
   DesignCheckCommand,
   ContextCommand,
 ]

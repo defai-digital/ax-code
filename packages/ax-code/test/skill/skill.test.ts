@@ -391,6 +391,82 @@ paths: "**/*.css, **/*.scss"
   })
 })
 
+test("parses portable Agent Skills metadata without requiring it", async () => {
+  await using tmp = await tmpdir({
+    git: true,
+    init: async (dir) => {
+      const skillDir = path.join(dir, ".ax-code", "skill", "release-notes")
+      await Bun.write(
+        path.join(skillDir, "SKILL.md"),
+        `---
+name: release-notes
+description: Draft release notes from merged pull requests. Use when preparing a release.
+license: MIT
+compatibility: Requires git and gh.
+allowed-tools: Bash(git:*) Bash(gh:*) Read
+argument-hint: "[target-version]"
+metadata:
+  owner: platform
+  version: "1.0"
+---
+
+# Release Notes
+`,
+      )
+    },
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const skills = await Skill.all()
+      expect(skills.length).toBe(1)
+      expect(skills[0].license).toBe("MIT")
+      expect(skills[0].compatibility).toBe("Requires git and gh.")
+      expect(skills[0].allowedTools).toEqual(["Bash(git:*)", "Bash(gh:*)", "Read"])
+      expect(skills[0].argumentHint).toBe("[target-version]")
+      expect(skills[0].metadata).toEqual({ owner: "platform", version: "1.0" })
+      expect(skills[0].standardIssues).toBeUndefined()
+    },
+  })
+})
+
+test("keeps non-standard skills available while surfacing standard issues", async () => {
+  await using tmp = await tmpdir({
+    git: true,
+    init: async (dir) => {
+      const skillDir = path.join(dir, ".ax-code", "skill", "different-name")
+      await Bun.write(
+        path.join(skillDir, "SKILL.md"),
+        `---
+name: Bad_Name
+description: Non-standard but still loadable for backwards compatibility.
+metadata:
+  numeric: 1
+---
+
+# Non-standard Skill
+`,
+      )
+    },
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const skills = await Skill.all()
+      expect(skills.length).toBe(1)
+      expect(skills[0].name).toBe("Bad_Name")
+      expect(skills[0].metadata).toBeUndefined()
+      expect(skills[0].standardIssues).toContain(
+        "name should use lowercase letters, numbers, and single hyphen separators",
+      )
+      expect(skills[0].standardIssues).toContain("name should match the parent directory name")
+      expect(skills[0].standardIssues).toContain("metadata should be a string-to-string map")
+    },
+  })
+})
+
 test("skills without paths have no paths field", async () => {
   await using tmp = await tmpdir({
     git: true,
@@ -450,11 +526,11 @@ test("fmt marks recommended skills in verbose mode", () => {
   const recommended = new Set(["beta"])
   const output = Skill.fmt(skills, { verbose: true, recommended })
 
-  expect(output).toContain(`<skill auto_activated="true">`)
+  expect(output).toContain(`<skill recommended="true">`)
   expect(output).toContain("<name>beta</name>")
   expect(output).toContain("This skill matches files in the current context")
-  // alpha should NOT be auto-activated
-  expect(output).not.toContain(`<skill auto_activated="true">\n    <name>alpha</name>`)
+  // alpha should NOT be recommended
+  expect(output).not.toContain(`<skill recommended="true">\n    <name>alpha</name>`)
 })
 
 test("fmt marks recommended skills in non-verbose mode", () => {

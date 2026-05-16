@@ -23,6 +23,7 @@ export namespace Skill {
   const EXTERNAL_SKILL_PATTERN = "skills/**/SKILL.md"
   const AX_CODE_SKILL_PATTERN = "{skill,skills}/**/SKILL.md"
   const SKILL_PATTERN = "**/SKILL.md"
+  const STANDARD_SKILL_NAME = /^[a-z0-9]+(-[a-z0-9]+)*$/
 
   export const Info = z.object({
     name: z.string(),
@@ -30,6 +31,12 @@ export namespace Skill {
     location: z.string(),
     content: z.string(),
     paths: z.array(z.string()).optional(),
+    license: z.string().optional(),
+    compatibility: z.string().optional(),
+    metadata: z.record(z.string(), z.string()).optional(),
+    allowedTools: z.array(z.string()).optional(),
+    argumentHint: z.string().optional(),
+    standardIssues: z.array(z.string()).optional(),
   })
   export type Info = z.infer<typeof Info>
 
@@ -59,7 +66,8 @@ export namespace Skill {
 
       if (!md) return
 
-      const parsed = Info.pick({ name: true, description: true }).safeParse(md.data)
+      const data = md.data as Record<string, unknown>
+      const parsed = Info.pick({ name: true, description: true }).safeParse(data)
       if (!parsed.success) return
 
       if (state.skills[parsed.data.name]) {
@@ -70,7 +78,7 @@ export namespace Skill {
         })
       }
 
-      const raw = md.data.paths
+      const raw = data.paths
       const paths = Array.isArray(raw)
         ? raw.filter((p: unknown) => typeof p === "string")
         : typeof raw === "string"
@@ -79,6 +87,24 @@ export namespace Skill {
               .map((s: string) => s.trim())
               .filter(Boolean)
           : undefined
+      const license = typeof data.license === "string" ? data.license : undefined
+      const compatibility = typeof data.compatibility === "string" ? data.compatibility : undefined
+      const metadata = z.record(z.string(), z.string()).safeParse(data.metadata)
+      const allowedTools =
+        typeof data["allowed-tools"] === "string"
+          ? data["allowed-tools"]
+              .split(/\s+/)
+              .map((s: string) => s.trim())
+              .filter(Boolean)
+          : undefined
+      const argumentHint = typeof data["argument-hint"] === "string" ? data["argument-hint"] : undefined
+      const standardIssues = validateStandardSkill({
+        name: parsed.data.name,
+        description: parsed.data.description,
+        location: match,
+        compatibility,
+        hasInvalidMetadata: data.metadata !== undefined && !metadata.success,
+      })
 
       state.dirs.add(path.dirname(match))
       state.skills[parsed.data.name] = {
@@ -87,6 +113,12 @@ export namespace Skill {
         location: match,
         content: md.content,
         ...(paths?.length ? { paths } : {}),
+        ...(license ? { license } : {}),
+        ...(compatibility ? { compatibility } : {}),
+        ...(metadata.success ? { metadata: metadata.data } : {}),
+        ...(allowedTools?.length ? { allowedTools } : {}),
+        ...(argumentHint ? { argumentHint } : {}),
+        ...(standardIssues.length ? { standardIssues } : {}),
       }
     })
 
@@ -234,13 +266,15 @@ export namespace Skill {
       return [
         "<available_skills>",
         ...list.flatMap((skill) => {
-          const auto = opts.recommended?.has(skill.name)
+          const recommended = opts.recommended?.has(skill.name)
           return [
-            auto ? `  <skill auto_activated="true">` : "  <skill>",
+            recommended ? `  <skill recommended="true">` : "  <skill>",
             `    <name>${escapeMetadata(skill.name)}</name>`,
             `    <description>${escapeMetadata(skill.description)}</description>`,
             `    <location>${pathToFileURL(skill.location).href}</location>`,
-            ...(auto ? [`    <note>This skill matches files in the current context. Consider loading it.</note>`] : []),
+            ...(recommended
+              ? [`    <note>This skill matches files in the current context. Consider loading it.</note>`]
+              : []),
             "  </skill>",
           ]
         }),
@@ -263,6 +297,31 @@ export namespace Skill {
       if (!skill.paths?.length) return false
       return skill.paths.some((pattern) => filePaths.some((fp) => Glob.match(pattern, fp)))
     })
+  }
+
+  function validateStandardSkill(input: {
+    name: string
+    description: string
+    location: string
+    compatibility?: string
+    hasInvalidMetadata: boolean
+  }) {
+    const issues: string[] = []
+    const dir = path.basename(path.dirname(input.location))
+
+    if (input.name.length > 64) issues.push("name exceeds 64 characters")
+    if (!STANDARD_SKILL_NAME.test(input.name)) {
+      issues.push("name should use lowercase letters, numbers, and single hyphen separators")
+    }
+    if (dir !== input.name) issues.push("name should match the parent directory name")
+    if (input.description.length === 0) issues.push("description is empty")
+    if (input.description.length > 1024) issues.push("description exceeds 1024 characters")
+    if (input.compatibility !== undefined && input.compatibility.length > 500) {
+      issues.push("compatibility exceeds 500 characters")
+    }
+    if (input.hasInvalidMetadata) issues.push("metadata should be a string-to-string map")
+
+    return issues
   }
 
   const runPromise = makeRunPromise(Service, defaultLayer)
