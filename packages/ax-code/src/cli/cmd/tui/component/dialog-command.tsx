@@ -91,10 +91,15 @@ function init() {
   const recentOptions = createMemo<CommandOption[]>(() => {
     const map = kv.get(SLASH_FRECENCY_KV_KEY) as SlashFrecencyMap | undefined
     if (!map) return []
-    const available = new Set(visibleOptions().map((option) => option.value))
+    // Only options with a slash field are eligible — sidebar buttons and
+    // other programmatic triggers (sidebar `dashboard`, `view all`) go
+    // through the same trigger() path and would otherwise pollute the
+    // Recent section with actions the user never invoked from the picker.
+    const slashOptions = visibleOptions().filter((option) => option.slash)
+    const available = new Set(slashOptions.map((option) => option.value))
     const top = topSlashRecents(map, available, RECENT_LIMIT)
     if (top.length < RECENT_MIN_ENTRIES) return []
-    const byValue = new Map(visibleOptions().map((option) => [option.value, option]))
+    const byValue = new Map(slashOptions.map((option) => [option.value, option]))
     const out: CommandOption[] = []
     for (const value of top) {
       const option = byValue.get(value)
@@ -106,6 +111,10 @@ function init() {
   const suspended = () => suspendCount() > 0
 
   function recordUsage(option: CommandOption) {
+    // Only options surfaceable as slash commands count toward frecency —
+    // sidebar buttons (e.g. session.quality "view all") also flow through
+    // trigger() and would otherwise grow the map with non-pickable values.
+    if (!option.slash) return
     try {
       const current = kv.get(SLASH_FRECENCY_KV_KEY) as SlashFrecencyMap | undefined
       kv.set(SLASH_FRECENCY_KV_KEY, recordSlashUse(current, option.value))

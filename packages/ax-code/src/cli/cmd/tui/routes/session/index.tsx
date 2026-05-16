@@ -1457,6 +1457,18 @@ function AssistantMessage(props: { message: AssistantMessage; parts: Part[]; las
   const hasParts = createMemo(() => props.parts.length > 0)
   const isThinking = createMemo(() => !props.message.error && !hasParts() && !final() && props.last)
   const displayParts = createMemo(() => coalesceParts(props.parts))
+  // Coalesced-group expand state lives at message scope because coalesceParts()
+  // returns fresh entries on every change; per-row state inside CoalescedTool
+  // would reset every time a new tool call streamed in. Keyed by the run's
+  // first callID so a growing run keeps its expanded/collapsed state.
+  const [expandedGroups, setExpandedGroups] = createSignal<Set<string>>(new Set())
+  const toggleGroup = (key: string, next: boolean) => {
+    const current = expandedGroups()
+    const updated = new Set(current)
+    if (next) updated.add(key)
+    else updated.delete(key)
+    setExpandedGroups(updated)
+  }
 
   return (
     <>
@@ -1471,7 +1483,14 @@ function AssistantMessage(props: { message: AssistantMessage; parts: Part[]; las
           return (
             <Switch>
               <Match when={entry.kind === "coalesced" && entry}>
-                {(group) => <CoalescedTool group={group()} message={props.message} />}
+                {(group) => (
+                  <CoalescedTool
+                    group={group()}
+                    message={props.message}
+                    expanded={expandedGroups().has(group().key)}
+                    onToggle={(next) => toggleGroup(group().key, next)}
+                  />
+                )}
               </Match>
               <Match when={entry.kind === "single" && entry}>
                 {(single) => {
@@ -1763,9 +1782,10 @@ function ToolPart(props: { last: boolean; part: ToolPart; message: AssistantMess
 function CoalescedTool(props: {
   group: { tool: string; parts: ToolPart[]; key: string }
   message: AssistantMessage
+  expanded: boolean
+  onToggle: (next: boolean) => void
 }) {
   const { theme } = useTheme()
-  const [expanded, setExpanded] = createSignal(false)
   const label = createMemo(() => {
     // Tool-specific noun for the count: read/list use "file", glob/grep use "search"
     const tool = props.group.tool
@@ -1777,13 +1797,13 @@ function CoalescedTool(props: {
   })
   return (
     <Show
-      when={expanded()}
+      when={props.expanded}
       fallback={
         <box paddingLeft={3}>
           <text
             paddingLeft={3}
             fg={theme.textMuted}
-            onMouseUp={() => setExpanded(true)}
+            onMouseUp={() => props.onToggle(true)}
           >
             <span style={{ bold: true }}>→</span> {label()} <span style={{ fg: theme.borderSubtle }}>▸</span>
           </text>
@@ -1796,7 +1816,7 @@ function CoalescedTool(props: {
         )}
       </For>
       <box paddingLeft={3}>
-        <text paddingLeft={3} fg={theme.borderSubtle} onMouseUp={() => setExpanded(false)}>
+        <text paddingLeft={3} fg={theme.borderSubtle} onMouseUp={() => props.onToggle(false)}>
           ▾ collapse
         </text>
       </box>
@@ -2306,12 +2326,12 @@ function Edit(props: ToolProps<typeof EditTool>) {
           part={props.part}
           onClick={overflow() ? () => setExpanded((prev) => !prev) : undefined}
         >
-          <Show when={summary()} keyed>
+          <Show when={summary()}>
             {(s) => (
               <text paddingLeft={1} fg={theme.textMuted}>
-                {s.hunks} {s.hunks === 1 ? "hunk" : "hunks"} ·{" "}
-                <span style={{ fg: theme.success }}>+{s.added}</span>{" "}
-                <span style={{ fg: theme.error }}>−{s.removed}</span>
+                {s().hunks} {s().hunks === 1 ? "hunk" : "hunks"} ·{" "}
+                <span style={{ fg: theme.success }}>+{s().added}</span>{" "}
+                <span style={{ fg: theme.error }}>−{s().removed}</span>
               </text>
             )}
           </Show>
@@ -2410,12 +2430,12 @@ function ApplyPatch(props: ToolProps<typeof ApplyPatchTool>) {
                     <text fg={theme.diffRemoved}>- {Locale.pluralize(file.deletions, "{} line", "{} lines")}</text>
                   }
                 >
-                  <Show when={fileSummary()} keyed>
+                  <Show when={fileSummary()}>
                     {(s) => (
                       <text paddingLeft={1} fg={theme.textMuted}>
-                        {s.hunks} {s.hunks === 1 ? "hunk" : "hunks"} ·{" "}
-                        <span style={{ fg: theme.success }}>+{s.added}</span>{" "}
-                        <span style={{ fg: theme.error }}>−{s.removed}</span>
+                        {s().hunks} {s().hunks === 1 ? "hunk" : "hunks"} ·{" "}
+                        <span style={{ fg: theme.success }}>+{s().added}</span>{" "}
+                        <span style={{ fg: theme.error }}>−{s().removed}</span>
                       </text>
                     )}
                   </Show>
