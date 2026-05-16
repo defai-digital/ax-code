@@ -17,28 +17,32 @@ import { EventQuery } from "../../../replay/query"
 import { buildTransfer } from "./transfer"
 import { ProjectIdentity } from "../../../project/project-identity"
 
+const lessPagerOptions = ["-R", "-S"]
+
+function resolveLessPager(cmd: string | undefined) {
+  if (!cmd || !Filesystem.stat(cmd)?.size) {
+    return undefined
+  }
+  return [cmd, ...lessPagerOptions]
+}
+
 function pagerCmd(): string[] {
-  const lessOptions = ["-R", "-S"]
   if (process.platform !== "win32") {
-    return ["less", ...lessOptions]
+    return ["less", ...lessPagerOptions]
   }
 
   // user could have less installed via other options
-  const lessOnPath = which("less")
-  if (lessOnPath) {
-    if (Filesystem.stat(lessOnPath)?.size) return [lessOnPath, ...lessOptions]
-  }
+  const lessFromPath = resolveLessPager(which("less"))
+  if (lessFromPath) return lessFromPath
 
   if (Flag.AX_CODE_GIT_BASH_PATH) {
-    const less = path.join(Flag.AX_CODE_GIT_BASH_PATH, "..", "..", "usr", "bin", "less.exe")
-    if (Filesystem.stat(less)?.size) return [less, ...lessOptions]
+    const lessFromGitBash = resolveLessPager(path.join(Flag.AX_CODE_GIT_BASH_PATH, "..", "..", "usr", "bin", "less.exe"))
+    if (lessFromGitBash) return lessFromGitBash
   }
 
   const git = which("git")
-  if (git) {
-    const less = path.join(git, "..", "..", "usr", "bin", "less.exe")
-    if (Filesystem.stat(less)?.size) return [less, ...lessOptions]
-  }
+  const lessFromGit = resolveLessPager(git ? path.join(git, "..", "..", "usr", "bin", "less.exe") : undefined)
+  if (lessFromGit) return lessFromGit
 
   // Fall back to Windows built-in more (via cmd.exe)
   return ["cmd", "/c", "more"]
