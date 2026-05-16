@@ -8,3 +8,10 @@ export function resolveToolFilePath(filePath: string, baseDirectory: string) {
   }
   return path.isAbsolute(filePath) ? filePath : path.resolve(baseDirectory, filePath)
 }
+
+export function normalizeToWorkspacePath(filePath: string, worktree: string) {
+  if (path.isAbsolute(filePath)) {
+    return path.relative(worktree, filePath).replaceAll("\\", "/")
+  }
+  return filePath.replaceAll("\\", "/")
+}

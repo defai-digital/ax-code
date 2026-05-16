@@ -17,7 +17,7 @@ import DESCRIPTION from "./apply_patch.txt"
 import { collectDiagnostics } from "./diagnostics"
 import { Log } from "../util/log"
 import { BlastRadius } from "@/session/blast-radius"
-import { resolveToolFilePath } from "./file-path"
+import { normalizeToWorkspacePath, resolveToolFilePath } from "./file-path"
 
 const log = Log.create({ service: "tool.apply_patch" })
 
@@ -261,7 +261,7 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
     // Build per-file metadata for UI rendering (used for both permission and result)
     const files = fileChanges.map((change) => ({
       filePath: change.filePath,
-      relativePath: path.relative(Instance.worktree, change.movePath ?? change.filePath).replaceAll("\\", "/"),
+      relativePath: normalizeToWorkspacePath(change.movePath ?? change.filePath, Instance.worktree),
       type: change.type,
       diff: change.diff,
       before: change.oldContent,
@@ -272,7 +272,7 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
     }))
 
     // Check permissions if needed
-    const relativePaths = fileChanges.map((c) => path.relative(Instance.worktree, c.filePath).replaceAll("\\", "/"))
+    const relativePaths = fileChanges.map((c) => normalizeToWorkspacePath(c.filePath, Instance.worktree))
     await ctx.ask({
       permission: "edit",
       patterns: relativePaths,
@@ -489,13 +489,13 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
     // Generate output summary
     const summaryLines = fileChanges.map((change) => {
       if (change.type === "add") {
-        return `A ${path.relative(Instance.worktree, change.filePath).replaceAll("\\", "/")}`
+        return `A ${normalizeToWorkspacePath(change.filePath, Instance.worktree)}`
       }
       if (change.type === "delete") {
-        return `D ${path.relative(Instance.worktree, change.filePath).replaceAll("\\", "/")}`
+        return `D ${normalizeToWorkspacePath(change.filePath, Instance.worktree)}`
       }
       const target = change.movePath ?? change.filePath
-      return `M ${path.relative(Instance.worktree, target).replaceAll("\\", "/")}`
+      return `M ${normalizeToWorkspacePath(target, Instance.worktree)}`
     })
 
     const changedFiles = fileChanges.filter((c) => c.type !== "delete").map((c) => c.movePath ?? c.filePath)

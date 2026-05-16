@@ -1,5 +1,4 @@
 import z from "zod"
-import path from "path"
 import { Tool } from "./tool"
 import DESCRIPTION from "./refactor_apply.txt"
 import { Instance } from "../project/instance"
@@ -7,6 +6,7 @@ import { DebugEngine } from "../debug-engine"
 import { RefactorPlanID } from "../debug-engine/id"
 import { extractFilesFromDiff } from "../debug-engine/analyze-impact"
 import { fromRefactorApplyResult } from "../quality/verification-envelope-builder"
+import { normalizeToWorkspacePath } from "./file-path"
 
 // Tool wrapper around DebugEngine.applySafeRefactor. This is the ONLY
 // DRE tool that writes files. It goes through the permission system
@@ -41,7 +41,7 @@ export const RefactorApplyTool = Tool.define("refactor_apply", {
     const patternFiles = args.patch ? extractFilesFromDiff(args.patch) : []
     const relativePatterns =
       patternFiles.length > 0
-        ? patternFiles.map((f) => (path.isAbsolute(f) ? path.relative(Instance.worktree, f).replaceAll("\\", "/") : f))
+        ? patternFiles.map((f) => normalizeToWorkspacePath(f, Instance.worktree))
         : ["*"]
     await ctx.ask({
       permission: "edit",

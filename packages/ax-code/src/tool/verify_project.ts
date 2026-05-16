@@ -1,4 +1,3 @@
-import path from "path"
 import z from "zod"
 import { Instance } from "../project/instance"
 import {
@@ -19,6 +18,7 @@ import {
 import { fromVerificationCommandResult } from "../quality/verification-envelope-builder"
 import { Tool } from "./tool"
 import DESCRIPTION from "./verify_project.txt"
+import { normalizeToWorkspacePath } from "./file-path"
 
 const POLICY_CONTEXT_MAX_CHARS = 4_000
 
@@ -34,8 +34,7 @@ type Timed<T> = T & { duration: number }
 
 function normalizePaths(paths: readonly string[] | undefined): string[] {
   return (paths ?? []).map((file) => {
-    if (!path.isAbsolute(file)) return file.replaceAll("\\", "/")
-    return path.relative(Instance.worktree, file).replaceAll("\\", "/")
+    return normalizeToWorkspacePath(file, Instance.worktree)
   })
 }
 
