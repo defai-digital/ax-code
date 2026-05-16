@@ -54,6 +54,49 @@ describe("script.test-ci", () => {
     expect(result.ignored).toBe(1)
   })
 
+  test("falls back to testcase count when junit root tests attr is missing", async () => {
+    await using tmp = await tmpdir()
+    const junit = path.join(tmp.path, "report.xml")
+    await Bun.write(
+      junit,
+      [
+        "<testsuite skipped=\"1\" time=\"0.50\">",
+        "<testcase classname=\"x\" name=\"ok\">",
+        "</testcase>",
+        "<testcase classname=\"x\" name=\"also-ok\">",
+        "</testcase>",
+        "</testsuite>",
+      ].join("\n"),
+    )
+
+    const result = await parseJUnit(junit)
+
+    expect(result.tests).toBe(2)
+    expect(result.skipped).toBe(1)
+    expect(result.failures).toBe(0)
+  })
+
+  test("keeps non-harmless failures from being ignored", async () => {
+    await using tmp = await tmpdir()
+    const junit = path.join(tmp.path, "report.xml")
+    await Bun.write(
+      junit,
+      [
+        `<testsuite tests=\"1\" failures=\"0\" errors=\"1\" skipped=\"0\" time=\"0.50\">`,
+        `<testcase classname=\"x\" name=\"a\">`,
+        `<error message=\"boom\">stack trace</error>`,
+        "</testcase>",
+        "</testsuite>",
+      ].join("\n"),
+    )
+
+    const result = await parseJUnit(junit, "boom")
+
+    expect(result.tests).toBe(1)
+    expect(result.failures).toBe(1)
+    expect(result.ignored).toBe(0)
+  })
+
   test("renders one-run summary output without rerun sections", () => {
     const summary = renderSummaryText("deterministic", [
       {
