@@ -159,8 +159,64 @@ describe("script.test-ci", () => {
     expect(resolveTestCIGroup(["--dir", ".tmp/test-report"])).toBe("deterministic")
   })
 
+  test("defaults to deterministic when positional group is empty", () => {
+    expect(resolveTestCIGroup(["", "recovery"])).toBe("deterministic")
+  })
+
   test("uses the first positional group when provided", () => {
     expect(resolveTestCIGroup(["deterministic"])).toBe("deterministic")
     expect(resolveTestCIGroup(["recovery", "--rerun-on-fail", "1"])).toBe("recovery")
+  })
+
+  test("falls back to failure tag counts when failures attribute is invalid", async () => {
+    await using tmp = await tmpdir()
+    const junit = path.join(tmp.path, "report.xml")
+    await Bun.write(
+      junit,
+      [
+        `<testsuite tests=\"1\" failures=\"oops\" errors=\"0\" skipped=\"0\" time=\"0.10\">`,
+        `<testcase classname=\"x\" name=\"a\">`,
+        `<failure message=\"assertion failed\">expected</failure>`,
+        "</testcase>",
+        "</testsuite>",
+      ].join("\n"),
+    )
+
+    const result = await parseJUnit(junit)
+
+    expect(result.failures).toBe(1)
+    expect(result.tests).toBe(1)
+  })
+
+  test("handles testsuites root tag while rendering skip maxima", () => {
+    const summary = renderSummaryText("native", [
+      {
+        code: 1,
+        file: "/tmp/native-1.xml",
+        ignored: 0,
+        stats: {
+          tests: 4,
+          failures: 1,
+          skipped: 1,
+          time: 0.75,
+        },
+      },
+      {
+        code: 1,
+        file: "/tmp/native-2.xml",
+        ignored: 0,
+        stats: {
+          tests: 4,
+          failures: 2,
+          skipped: 0,
+          time: 0.45,
+        },
+      },
+    ])
+
+    expect(summary).toContain("- reruns: 1")
+    expect(summary).toContain("- likely flaky: no")
+    expect(summary).toContain("- max skipped across runs: 1")
+    expect(summary).toContain("- native-2.xml (failed)")
   })
 })
