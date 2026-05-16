@@ -10,13 +10,14 @@ Input:
 
 Output:
 - chain: an array of stack frames, each with a role (failure/intermediate/entry) and a resolved CodeIntelligence symbol (or null if the frame couldn't be resolved to the graph)
-- rootCauseHypothesis: null in Phase 1; agents layer their own constrained LLM reasoning on top and MUST validate every cited frame index against the chain before surfacing it
+- rootCauseHypothesis: a conservative deterministic draft when a resolved frame exists; every cited frame index must exist in the returned chain
 - confidence: 0..0.95 (never 1.0) derived from the fraction of stack frames that resolved to real graph nodes
 - truncated: true when the caller-walk hit the depth cap
 - explain: which graph queries were consulted and which heuristics applied
 
 Guidance for using the result:
 - Treat the chain as ground truth — the symbols are real.
+- Treat rootCauseHypothesis as a draft, not proof. Turn it into a debug_propose_hypothesis claim only after opening a debug case and preserving its cited staticAnalysis metadata.
 - Do NOT invent function names in your reply. If you reference a frame, cite it by index.
 - If confidence is below 0.5, say so explicitly in your response instead of guessing.
 - If truncated is true, there may be additional callers beyond what was walked.

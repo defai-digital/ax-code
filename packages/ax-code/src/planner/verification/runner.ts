@@ -41,8 +41,36 @@ export type TimedTestResult = DebugEngine.TestResult & {
   exitCode?: number
 }
 
+async function fileExists(file: string): Promise<boolean> {
+  return fs
+    .access(file)
+    .then(() => true)
+    .catch(() => false)
+}
+
+async function findCargoRoot(cwd: string): Promise<string | null> {
+  let dir = path.resolve(cwd)
+  while (true) {
+    if (await fileExists(path.join(dir, "Cargo.toml"))) return dir
+    const parent = path.dirname(dir)
+    if (parent === dir) return null
+    dir = parent
+  }
+}
+
+async function cargoCommands(cwd: string): Promise<CommandSet | null> {
+  const cargoRoot = await findCargoRoot(cwd)
+  if (!cargoRoot) return null
+  return {
+    typecheck: "cargo check",
+    lint: "cargo clippy --all-targets --all-features -- -D warnings",
+    test: "cargo test",
+  }
+}
+
 // Resolve the typecheck/lint/test commands for a project. Defaults pick up
-// `bun run <script>` when package.json defines the matching script;
+// `bun run <script>` when package.json defines the matching script, then fall
+// back to Cargo checks when the directory belongs to a Rust workspace;
 // `override` lets callers force a specific command (or null to skip).
 export async function resolveCommands(cwd: string, override?: CommandOverride): Promise<CommandSet> {
   const pkgPath = path.join(cwd, "package.json")
@@ -60,7 +88,12 @@ export async function resolveCommands(cwd: string, override?: CommandOverride): 
   const lint = override?.lint !== undefined ? override.lint : scripts.lint ? "bun run lint" : null
   const test = override?.test !== undefined ? override.test : scripts.test ? "bun test" : null
 
-  return { typecheck, lint, test }
+  const cargo = await cargoCommands(cwd)
+  return {
+    typecheck: typecheck ?? (override?.typecheck === undefined ? cargo?.typecheck ?? null : null),
+    lint: lint ?? (override?.lint === undefined ? cargo?.lint ?? null : null),
+    test: test ?? (override?.test === undefined ? cargo?.test ?? null : null),
+  }
 }
 
 // Hard cap on subprocess runtime. Typecheck/lint/test commands can hang

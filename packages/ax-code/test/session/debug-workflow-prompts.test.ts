@@ -39,4 +39,11 @@ describe("runtime debug prompt guidance", () => {
       expect(text).toMatch(/whole\s+verification set/)
     })
   }
+
+  test("beast prompt does not call absent DRE tools mandatory", async () => {
+    const text = await Bun.file(promptPath("src/session/prompt/beast.txt")).text()
+
+    expect(text).toContain("When these tools are present in the active tool list")
+    expect(text).toContain("Do not call DRE tools that are absent from the active tool list")
+  })
 })

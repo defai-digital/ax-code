@@ -17,6 +17,13 @@ import { normalizeToWorkspacePath } from "./file-path"
 // tools. NOT added to read-only permission presets (ADR-010).
 
 const MODES = ["safe", "aggressive"] as const
+const CommandOverrides = z
+  .object({
+    typecheck: z.string().min(1).nullable().optional(),
+    lint: z.string().min(1).nullable().optional(),
+    test: z.string().min(1).nullable().optional(),
+  })
+  .strict()
 
 export const RefactorApplyTool = Tool.define("refactor_apply", {
   description: DESCRIPTION,
@@ -29,6 +36,9 @@ export const RefactorApplyTool = Tool.define("refactor_apply", {
       .describe("'safe' runs every check (default); 'aggressive' allows skipLint/skipTests"),
     skipLint: z.boolean().optional().describe("Aggressive mode only: skip lint"),
     skipTests: z.boolean().optional().describe("Aggressive mode only: skip tests"),
+    commands: CommandOverrides.optional().describe(
+      "Optional command overrides. Omit a field to infer defaults, set it to null to skip, or set it to a command string to run exactly that command.",
+    ),
   }),
   execute: async (args, ctx) => {
     const projectID = Instance.project.id
@@ -64,6 +74,7 @@ export const RefactorApplyTool = Tool.define("refactor_apply", {
       mode: args.mode,
       skipLint: args.skipLint,
       skipTests: args.skipTests,
+      commands: args.commands,
     })
 
     const lines: string[] = []

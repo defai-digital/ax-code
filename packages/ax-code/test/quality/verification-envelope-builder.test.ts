@@ -466,4 +466,184 @@ describe("fromVerificationCommandResult", () => {
     expect(envs[0].result.status).toBe("timeout")
     expect(envs[0].result.passed).toBe(false)
   })
+
+  test("parses rustc diagnostics into typecheck structured failures", () => {
+    const envs = fromVerificationCommandResult({
+      workflow: "debug",
+      sessionID: "ses_rustc",
+      cwd: "/tmp/rust",
+      sourceTool: "verify_project",
+      scope: { kind: "workspace" },
+      commands: { typecheck: "cargo check", lint: null, test: null },
+      checks: {
+        typecheck: {
+          ok: false,
+          skipped: false,
+          errors: [
+            "error[E0308]: mismatched types",
+            "  --> src/lib.rs:12:9",
+            "   |",
+            "12 |     value",
+            "   |     ^^^^^ expected `usize`, found `String`",
+          ],
+        },
+        lint: { ok: true, skipped: true, errors: [] },
+        tests: {
+          ok: true,
+          skipped: true,
+          errors: [],
+          ran: 0,
+          failed: 0,
+          failures: [],
+          selection: "skipped",
+        },
+      },
+    })
+
+    const typecheck = envs.find((env) => env.result.name === "typecheck")!
+    expect(typecheck.structuredFailures).toEqual([
+      {
+        kind: "typecheck",
+        file: "src/lib.rs",
+        line: 12,
+        column: 9,
+        code: "E0308",
+        message: "mismatched types",
+      },
+    ])
+  })
+
+  test("parses clippy deny diagnostics into lint structured failures", () => {
+    const envs = fromVerificationCommandResult({
+      workflow: "qa",
+      sessionID: "ses_clippy",
+      cwd: "/tmp/rust",
+      sourceTool: "verify_project",
+      scope: { kind: "workspace" },
+      commands: { typecheck: null, lint: "cargo clippy --all-targets --all-features -- -D warnings", test: null },
+      checks: {
+        typecheck: { ok: true, skipped: true, errors: [] },
+        lint: {
+          ok: false,
+          skipped: false,
+          errors: [
+            "error: this `if` statement can be collapsed",
+            "  --> src/lib.rs:4:5",
+            "   |",
+            "   = note: `#[deny(clippy::collapsible_if)]` implied by `-D warnings`",
+          ],
+        },
+        tests: {
+          ok: true,
+          skipped: true,
+          errors: [],
+          ran: 0,
+          failed: 0,
+          failures: [],
+          selection: "skipped",
+        },
+      },
+    })
+
+    const lint = envs.find((env) => env.result.name === "lint")!
+    expect(lint.structuredFailures).toEqual([
+      {
+        kind: "lint",
+        file: "src/lib.rs",
+        line: 4,
+        rule: "clippy::collapsible_if",
+        severity: "error",
+        message: "this `if` statement can be collapsed",
+      },
+    ])
+  })
+
+  test("parses clippy -D lint names when no attribute note is present", () => {
+    const envs = fromVerificationCommandResult({
+      workflow: "qa",
+      sessionID: "ses_clippy_d_flag",
+      cwd: "/tmp/rust",
+      sourceTool: "verify_project",
+      scope: { kind: "workspace" },
+      commands: { typecheck: null, lint: "cargo clippy --all-targets --all-features -- -D warnings", test: null },
+      checks: {
+        typecheck: { ok: true, skipped: true, errors: [] },
+        lint: {
+          ok: false,
+          skipped: false,
+          errors: [
+            "error: unneeded `return` statement",
+            "  --> src/lib.rs:9:5",
+            "   |",
+            "   = note: `-D clippy::needless-return` implied by `-D warnings`",
+          ],
+        },
+        tests: {
+          ok: true,
+          skipped: true,
+          errors: [],
+          ran: 0,
+          failed: 0,
+          failures: [],
+          selection: "skipped",
+        },
+      },
+    })
+
+    const lint = envs.find((env) => env.result.name === "lint")!
+    expect(lint.structuredFailures).toEqual([
+      {
+        kind: "lint",
+        file: "src/lib.rs",
+        line: 9,
+        rule: "clippy::needless_return",
+        severity: "error",
+        message: "unneeded `return` statement",
+      },
+    ])
+  })
+
+  test("parses cargo test panic blocks into test structured failures", () => {
+    const envs = fromVerificationCommandResult({
+      workflow: "debug",
+      sessionID: "ses_cargo_test",
+      cwd: "/tmp/rust",
+      sourceTool: "verify_project",
+      scope: { kind: "workspace" },
+      commands: { typecheck: null, lint: null, test: "cargo test" },
+      checks: {
+        typecheck: { ok: true, skipped: true, errors: [] },
+        lint: { ok: true, skipped: true, errors: [] },
+        tests: {
+          ok: false,
+          skipped: false,
+          errors: [],
+          ran: 1,
+          failed: 1,
+          failures: [
+            "---- tests::adds_numbers stdout ----",
+            "thread 'tests::adds_numbers' panicked at src/lib.rs:7:5:",
+            "assertion `left == right` failed",
+            "  left: 1",
+            " right: 2",
+            "",
+            "failures:",
+            "    tests::adds_numbers",
+          ],
+          selection: "full-fallback",
+        },
+      },
+    })
+
+    const tests = envs.find((env) => env.result.name === "tests")!
+    expect(tests.structuredFailures).toEqual([
+      {
+        kind: "test",
+        framework: "cargo test",
+        testName: "tests::adds_numbers",
+        file: "src/lib.rs",
+        assertion: "assertion `left == right` failed",
+      },
+    ])
+  })
 })

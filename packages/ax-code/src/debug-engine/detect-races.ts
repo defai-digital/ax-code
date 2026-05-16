@@ -252,7 +252,7 @@ function detectConflictingMutations(lines: LineInfo[], file: string, max: number
     // Look for repeated identifiers being mutated inside the block
     const mutatedIds = new Map<string, number[]>()
     const mutationRe =
-      /(\w+)\s*(?:\.(?:set|delete|push|pop|shift|unshift|splice|write|append)\s*\(|\s*(?:\+\+|--|(?<!=)=(?![=>])))/g
+      /(\w+)\s*(?:\.(?:set|delete|push|pop|shift|unshift|splice|write|append)\s*\(|\s*(?:\+\+|--|(?:\*\*|>>>|<<|>>|&&|\|\||\?\?|[+\-*/%&|^])=|(?<![=!<>])=(?![=>])))/g
     let mMatch: RegExpExecArray | null
     while ((mMatch = mutationRe.exec(block)) !== null) {
       const name = mMatch[1]

@@ -194,9 +194,15 @@ describe("analyzeBug — end-to-end", () => {
 
         expect(result.confidence).toBeGreaterThan(0)
         expect(result.confidence).toBeLessThanOrEqual(0.95)
+        expect(result.rootCauseHypothesis).toMatchObject({
+          citedFrames: [0],
+        })
+        expect(result.rootCauseHypothesis?.summary).toContain("processPayment")
+        expect(result.fixSuggestion).toContain('verify_project with workflow="debug"')
         expect(result.explain.source).toBe("debug-engine")
         expect(result.explain.tool).toBe("analyze-bug")
         expect(result.explain.heuristicsApplied).toContain("ts-stack-regex")
+        expect(result.explain.heuristicsApplied).toContain("deterministic-hypothesis-draft")
         expect(result.explain.graphQueries.length).toBeGreaterThan(0)
 
         CodeIntelligence.__clearProject(projectID)
@@ -224,6 +230,8 @@ describe("analyzeBug — end-to-end", () => {
         expect(result.chain[0].symbol).toBeNull()
         // Confidence drops to 0 when nothing resolved.
         expect(result.confidence).toBe(0)
+        expect(result.rootCauseHypothesis).toBeNull()
+        expect(result.fixSuggestion).toBeNull()
 
         CodeIntelligence.__clearProject(projectID)
       },

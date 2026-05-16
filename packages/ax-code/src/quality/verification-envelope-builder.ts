@@ -71,6 +71,10 @@ function joinErrors(errors: readonly string[]): string | undefined {
 // envelope builds shared the module-scope RegExp object — each iteration
 // here gets its own independent iterator.
 const TS_ERROR_PATTERN = /^(.+)\((\d+),(\d+)\):\s+(?:error|warning)\s+(TS\d+):\s+(.+)$/gm
+const RUST_DIAGNOSTIC_PATTERN =
+  /^(error|warning)(?:\[([A-Za-z0-9_-]+)\])?:\s+(.+?)\n\s+-->\s+(.+?):(\d+):(\d+)/gm
+const RUST_CLIPPY_ATTR_RULE_PATTERN = /#\[(?:warn|deny|allow|forbid)\(clippy::([A-Za-z0-9_-]+)\)\]/
+const RUST_CLIPPY_DENY_RULE_PATTERN = /(?:^|[\s`'"])-D\s+clippy::([A-Za-z0-9_-]+)/m
 
 function parseTypecheckFailures(text: string | undefined): StructuredFailure[] {
   if (!text) return []
@@ -84,6 +88,18 @@ function parseTypecheckFailures(text: string | undefined): StructuredFailure[] {
       column: Number.parseInt(column, 10),
       code,
       message,
+    })
+  }
+  for (const match of text.matchAll(RUST_DIAGNOSTIC_PATTERN)) {
+    const [, severity, code, message, file, line, column] = match
+    if (severity !== "error") continue
+    failures.push({
+      kind: "typecheck",
+      file,
+      line: Number.parseInt(line, 10),
+      column: Number.parseInt(column, 10),
+      code: code ?? "rustc",
+      message: message.trim(),
     })
   }
   return failures
@@ -111,7 +127,33 @@ function parseLintFailures(text: string | undefined): StructuredFailure[] {
       message: message.trim(),
     })
   }
+  for (const match of text.matchAll(RUST_DIAGNOSTIC_PATTERN)) {
+    const [, severity, code, message, file, line] = match
+    const blockStart = match.index ?? 0
+    const nextMatch = text.slice(blockStart + match[0].length).match(/\n(?:error|warning)(?:\[[A-Za-z0-9_-]+\])?:/)
+    const blockEnd = nextMatch?.index === undefined ? text.length : blockStart + match[0].length + nextMatch.index
+    const block = text.slice(blockStart, blockEnd)
+    const clippyRule = rustClippyRule(block)
+    failures.push({
+      kind: "lint",
+      file,
+      line: Number.parseInt(line, 10),
+      rule: clippyRule ?? code ?? "rustc",
+      severity: severity === "warning" ? "warning" : "error",
+      message: message.trim(),
+    })
+  }
   return failures
+}
+
+function rustClippyRule(block: string): string | undefined {
+  const attrRule = block.match(RUST_CLIPPY_ATTR_RULE_PATTERN)?.[1]
+  if (attrRule) return `clippy::${attrRule.replaceAll("-", "_")}`
+
+  const denyRule = block.match(RUST_CLIPPY_DENY_RULE_PATTERN)?.[1]
+  if (denyRule) return `clippy::${denyRule.replaceAll("-", "_")}`
+
+  return undefined
 }
 
 // bun:test failure header: `(fail) <describe path> > <test name> [<duration>]`.
@@ -120,6 +162,8 @@ function parseLintFailures(text: string | undefined): StructuredFailure[] {
 // test name; everything before it is the describe chain. Other frameworks
 // (jest, vitest, mocha, pytest) are not parsed — same rationale as lint.
 const BUN_TEST_FAIL_PATTERN = /^\(fail\)\s+(.+?)\s*\[\d+(?:\.\d+)?(?:ms|s)\]\s*$/gm
+const CARGO_TEST_PANIC_PATTERN =
+  /^----\s+(.+?)\s+stdout\s+----[\s\S]*?thread\s+'.+?'\s+panicked at\s+(.+?):(\d+):(\d+):\n?([\s\S]*?)(?=\n----|\nfailures:|\ntest result:|$)/gm
 
 function parseTestFailures(text: string | undefined): StructuredFailure[] {
   if (!text) return []
@@ -130,6 +174,20 @@ function parseTestFailures(text: string | undefined): StructuredFailure[] {
       kind: "test",
       framework: "bun:test",
       testName: fullPath,
+    })
+  }
+  for (const match of text.matchAll(CARGO_TEST_PANIC_PATTERN)) {
+    const [, testName, file, , , body] = match
+    const assertion = body
+      .split("\n")
+      .map((line) => line.trim())
+      .find((line) => line.length > 0)
+    failures.push({
+      kind: "test",
+      framework: "cargo test",
+      testName: testName.trim(),
+      file,
+      ...(assertion ? { assertion } : {}),
     })
   }
   return failures

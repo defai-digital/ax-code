@@ -71,6 +71,36 @@ export namespace Provider {
     }
     return true
   }
+
+  function addLegacyXaiModelAliases(providerID: ProviderID, models: Record<string, Model>) {
+    if (providerID !== ProviderID.xai) return
+
+    const isLegacyGrok = (modelID: string) => {
+      return /^grok-4[.-]20(?:-|\.|-|$)/i.test(modelID)
+    }
+
+    const addLegacyAlias = (aliasID: string) => {
+      if (models[aliasID]) return
+      const legacyTargets = Object.entries(models).filter(
+        ([modelID]) =>
+          isLegacyGrok(modelID) &&
+          (modelID.includes("-reasoning") || modelID.includes("-non-reasoning") || modelID.includes("-0309-")),
+      )
+      if (legacyTargets.length === 0) return
+      const reasoningModel = legacyTargets.find(([modelID]) => modelID.includes("-reasoning"))
+      const baseModel = reasoningModel ?? legacyTargets[0]
+      if (!baseModel) return
+      const [modelID, sourceModel] = baseModel
+      models[aliasID] = {
+        ...sourceModel,
+        id: ModelID.make(aliasID),
+        api: { ...sourceModel.api, id: modelID },
+      }
+    }
+
+    addLegacyAlias("grok-4-1-fast")
+    addLegacyAlias("grok-code-fast-1")
+  }
   type Lang = Exclude<LanguageModel, string>
   type SDK = {
     languageModel(modelID: string): unknown
@@ -403,7 +433,8 @@ export namespace Provider {
     }
 
     // extend database from config
-    for (const [providerID, provider] of configProviders) {
+    for (const [rawProviderID, provider] of configProviders) {
+      const providerID = ProviderID.make(rawProviderID)
       const existing = database[providerID]
       const parsed: Info = {
         id: ProviderID.make(providerID),
@@ -413,6 +444,7 @@ export namespace Provider {
         source: "config",
         models: existing?.models ?? {},
       }
+      addLegacyXaiModelAliases(providerID, parsed.models)
 
       for (const [modelID, model] of Object.entries(provider.models ?? {})) {
         const nextID = model.id ?? modelID
@@ -592,6 +624,7 @@ export namespace Provider {
       }
 
       const configProvider = config.provider?.[providerID]
+      addLegacyXaiModelAliases(providerID, provider.models)
 
       for (const [modelID, model] of Object.entries(provider.models)) {
         const supportModelID = model.api.id ?? model.id ?? modelID

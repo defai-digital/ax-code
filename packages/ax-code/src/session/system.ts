@@ -54,6 +54,19 @@ export namespace SystemPrompt {
             `</autonomous_workflow>`,
           ]
         : []
+    const debugEngineWorkflow = Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE
+      ? [
+          `<debug_engine_workflow>`,
+          `  Debugging & Refactoring Engine tools are enabled in this session.`,
+          `  Prefer debug_analyze, impact_analyze, verify_project, and debug_apply_verification when they match the task and are available in the tool list.`,
+          `</debug_engine_workflow>`,
+        ]
+      : [
+          `<debug_engine_workflow>`,
+          `  Debugging & Refactoring Engine tools are not enabled in this session.`,
+          `  Do not call DRE-only tools unless they are present in the active tool list; use read, grep, bash, edit/write/apply_patch, and verify_project instead.`,
+          `</debug_engine_workflow>`,
+        ]
     return [
       [
         `You are powered by the model named ${model.api.id}. The exact model ID is ${model.providerID}/${model.api.id}`,
@@ -76,6 +89,7 @@ export namespace SystemPrompt {
         }`,
         `</directories>`,
         ...autonomousWorkflow,
+        ...debugEngineWorkflow,
       ].join("\n"),
     ]
   }

@@ -46,6 +46,7 @@ import { DebugCaptureEvidenceTool } from "./debug_capture_evidence"
 import { DebugPlanInstrumentationTool } from "./debug_plan_instrumentation"
 import { DebugProposeHypothesisTool } from "./debug_propose_hypothesis"
 import { DebugApplyVerificationTool } from "./debug_apply_verification"
+import { DebugRepairFromEnvelopeTool } from "./debug_repair_from_envelope"
 import { Glob } from "../util/glob"
 import { pathToFileURL } from "url"
 import { Effect, Layer, ServiceMap } from "effect"
@@ -186,6 +187,7 @@ export namespace ToolRegistry {
           DebugPlanInstrumentationTool,
           DebugProposeHypothesisTool,
           DebugApplyVerificationTool,
+          DebugRepairFromEnvelopeTool,
           ...(Flag.AX_CODE_EXPERIMENTAL_LSP_TOOL ? [LspTool] : []),
           ...(Flag.AX_CODE_EXPERIMENTAL_CODE_INTELLIGENCE ? [CodeIntelligenceTool] : []),
           ...(Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE ? [...DEBUG_ENGINE_TOOLS] : []),

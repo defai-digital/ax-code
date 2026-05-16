@@ -758,6 +758,32 @@ describe("detectRaces", () => {
     })
   })
 
+  test("detects conflicting compound assignments inside Promise.all", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await fs.writeFile(
+      path.join(tmp.path, "parallel-counter.ts"),
+      [
+        "let total = 0",
+        "async function run() {",
+        "  await Promise.all([",
+        "    fetchA().then(val => total += val.length),",
+        "    fetchB().then(val => total += val.length),",
+        "  ])",
+        "}",
+      ].join("\n"),
+    )
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        const report = await DebugEngine.detectRaces(projectID, { patterns: ["conflicting_mutation"] })
+        expect(report.findings.length).toBeGreaterThan(0)
+        expect(report.findings[0].pattern).toBe("conflicting_mutation")
+        expect(report.findings[0].description).toContain("total")
+      },
+    })
+  })
+
   test("detects event listener registered after await", async () => {
     await using tmp = await tmpdir({ git: true })
     await fs.writeFile(

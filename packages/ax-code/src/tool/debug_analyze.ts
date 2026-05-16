@@ -65,6 +65,14 @@ export const DebugAnalyzeTool = Tool.define("debug_analyze", {
     if (result.truncated) lines.push("Warning: caller walk was truncated at chain depth cap")
     lines.push(`Heuristics: ${result.explain.heuristicsApplied.join(", ") || "(none)"}`)
     lines.push(`Graph queries consulted: ${result.explain.graphQueries.length}`)
+    if (result.rootCauseHypothesis) {
+      lines.push("")
+      lines.push("Hypothesis draft:")
+      lines.push(`  Summary: ${result.rootCauseHypothesis.summary}`)
+      lines.push(`  Broken invariant: ${result.rootCauseHypothesis.brokenInvariant}`)
+      lines.push(`  Cited frames: ${result.rootCauseHypothesis.citedFrames.join(", ")}`)
+      if (result.fixSuggestion) lines.push(`  Next step: ${result.fixSuggestion}`)
+    }
 
     const session = await Session.get(ctx.sessionID).catch((err) => {
       log.warn("debug_analyze session lookup failed", { sessionID: ctx.sessionID, err })

@@ -255,6 +255,23 @@ function walkCallers(
   return { chain, truncated }
 }
 
+function deterministicHypothesisDraft(chain: DebugEngine.StackFrame[]): DebugEngine.RootCauseHypothesis | null {
+  const failure = chain.find((frame) => frame.role === "failure" && frame.symbol)
+  const fallback = chain.find((frame) => frame.symbol)
+  const anchor = failure ?? fallback
+  if (!anchor?.symbol) return null
+
+  const symbolName = anchor.symbol.qualifiedName
+  return validateHypothesisCitations(
+    {
+      summary: `Failure is anchored at ${symbolName} in ${anchor.file}:${anchor.line}.`,
+      brokenInvariant: `The behavior around ${symbolName} violates the reported failure condition; inspect the cited frame before editing callers or wider state.`,
+      citedFrames: [anchor.frame],
+    },
+    chain,
+  )
+}
+
 export async function analyzeBugImpl(
   projectID: ProjectID,
   input: AnalyzeBugInput,
@@ -356,13 +373,11 @@ export async function analyzeBugImpl(
   const resolvedRatio = totalCount > 0 ? resolvedCount / totalCount : 0
   const confidence = Math.min(0.95, resolvedRatio)
 
-  // Phase 1: DRE does not invoke an LLM. Agents that want a narrative
-  // hypothesis pass the resolved chain to their own model at the tool
-  // layer. Tests exercise `validateHypothesisCitations` below to prove
-  // the cite-or-drop rule is enforceable on LLM output before it's
-  // merged into a DRE result.
-  const rootCauseHypothesis: DebugEngine.RootCauseHypothesis | null = null
-  const fixSuggestion: string | null = null
+  const rootCauseHypothesis = deterministicHypothesisDraft(chain)
+  if (rootCauseHypothesis) heuristics.push("deterministic-hypothesis-draft")
+  const fixSuggestion = rootCauseHypothesis
+    ? 'Use the cited frame as the first edit/read target, write or identify a focused regression check, then run verify_project with workflow="debug" before confirming the hypothesis.'
+    : null
 
   return {
     chain,
