@@ -135,7 +135,7 @@ function fmt(ms: number) {
   return `${ms.toFixed(2)}s`
 }
 
-async function summary(group: string, runs: Result[]) {
+export function renderSummaryText(group: string, runs: Result[]) {
   const out = [] as string[]
   const first = runs[0]
   const retry = runs.slice(1)
@@ -164,7 +164,11 @@ async function summary(group: string, runs: Result[]) {
     out.push(`- ${path.basename(run.file)} (${run.code === 0 ? "passed" : "failed"})`)
   }
   out.push("")
-  const text = out.join("\n")
+  return out.join("\n")
+}
+
+async function summary(group: string, runs: Result[]) {
+  const text = renderSummaryText(group, runs)
   console.log(text)
   const file = process.env["GITHUB_STEP_SUMMARY"]
   if (file) {
