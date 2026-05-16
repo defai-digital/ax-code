@@ -1,16 +1,18 @@
 import { type Accessor, createMemo, createSignal, For, Match, Show, Switch } from "solid-js"
 import { useRouteData } from "@tui/context/route"
 import { useSync } from "@tui/context/sync"
-import { useTheme } from "@tui/context/theme"
+import { tint, useTheme } from "@tui/context/theme"
 import { SplitBorder } from "@tui/component/border"
 import type { Session } from "@ax-code/sdk/v2"
 import { useCommandDialog } from "@tui/component/dialog-command"
 import { useKeybind } from "../../context/keybind"
+import { useKV } from "../../context/kv"
 import { Flag } from "@/flag/flag"
 import { useTerminalDimensions } from "@opentui/solid"
 import { collapseSessionBreadcrumbs, sessionBreadcrumbs } from "./header-view-model"
 import { computeSidebarWidth } from "./layout"
 import { autonomousActiveView } from "./autonomous-active"
+import { useAutonomousPulse } from "./autonomous-pulse"
 import { isFooterSessionStatus, type FooterSessionStatus } from "./footer-view-model"
 import { Spinner } from "../../component/spinner"
 
@@ -59,6 +61,7 @@ export function Header() {
   const { theme } = useTheme()
   const keybind = useKeybind()
   const command = useCommandDialog()
+  const kv = useKV()
   const [hover, setHover] = createSignal<"parent" | "prev" | "next" | null>(null)
   let lastSubagentHeaderClickAt = 0
   const dimensions = useTerminalDimensions()
@@ -78,6 +81,20 @@ export function Header() {
     const candidate = sync.data.session_status?.[route.sessionID]
     const status: FooterSessionStatus = isFooterSessionStatus(candidate) ? candidate : { type: "idle" }
     return autonomousActiveView(status)
+  })
+  // Breathing pulse for the AUTONOMOUS chip — same driver as the
+  // transcript outer border and the assistant text bubble so all three
+  // breathe in lockstep. We only modulate the accent's brightness;
+  // hue stays put so the chip remains recognisably the autonomous
+  // colour rather than fading toward the warning palette.
+  const chipPulse = useAutonomousPulse(() => autonomous().active, {
+    animationsEnabled: () => kv.get("animations_enabled", true),
+  })
+  const chipColor = createMemo(() => {
+    const MIN_ALPHA = 0.55
+    const MAX_ALPHA = 1.0
+    const alpha = MIN_ALPHA + (MAX_ALPHA - MIN_ALPHA) * chipPulse()
+    return tint(theme.background, theme.accent, alpha)
   })
   function handleSubagentHeaderMouseUp() {
     const now = Date.now()
@@ -184,8 +201,8 @@ export function Header() {
               </box>
               <Show when={autonomous().active}>
                 <box flexDirection="row" gap={1} paddingLeft={1} paddingRight={1} flexShrink={0}>
-                  <Spinner color={theme.accent}>
-                    <span style={{ fg: theme.accent, bold: true }}>◆ AUTONOMOUS</span>
+                  <Spinner color={chipColor()}>
+                    <span style={{ fg: chipColor(), bold: true }}>◆ AUTONOMOUS</span>
                     <span style={{ fg: theme.textMuted }}>
                       {" "}
                       · step {autonomous().step}/{autonomous().maxSteps}
