@@ -83,24 +83,36 @@ export function Footer() {
     }, 1000)
     onCleanup(() => clearInterval(timer))
   })
-  // Per-turn token counter — surfaces an in-flight signal while the
-  // assistant is streaming so runaway turns don't only show up in the
-  // step bar. Anchored on the LAST assistant message specifically (not
-  // Usage.last which filters by hasUsage and would return the previous
-  // turn during the first-step gap), with rate computed against the
-  // message's own time.created. SessionStatus.startedAt resets on every
-  // step inside an autonomous turn, so it would divide accumulated
-  // tokens by a tiny window — message.time.created is the stable anchor.
+  // Per-turn token counter. Two subtle requirements compete:
+  //
+  // 1. Picking the in-flight assistant message gives us the freshest
+  //    timestamp, but its tokens stay 0 until each step-finish lands —
+  //    so the chip's "show only when tokens > 0" gate hides everything
+  //    during streaming.
+  // 2. Picking the last message WITH tokens (Usage.last) keeps the chip
+  //    visible, but earlier I made the mistake of pairing those tokens
+  //    with SessionStatus.startedAt — which resets per step — producing
+  //    garbage rates.
+  //
+  // Fix: pick the last message with non-zero tokens AND pair them with
+  // THAT message's own time.created. The two move together, so the rate
+  // is always the correct window over the correct token count. During
+  // the first-step gap of a new turn we display the previous turn's
+  // final totals (which freezes its rate using time.completed), then
+  // jump to the new turn the moment its first step lands.
   const tokenChip = createMemo(() => {
     if (route.data.type !== "session") return undefined
     if (dimensions().width < 100) return undefined
     tokenTick()
     const messages = sync.data.message[route.data.sessionID] ?? []
-    const last = messages.findLast((m) => m.role === "assistant")
+    const last = messages.findLast(
+      (m): m is Extract<typeof m, { role: "assistant" }> =>
+        m.role === "assistant" && (m.tokens.input > 0 || m.tokens.output > 0),
+    )
     if (!last) return undefined
-    const completed = last.time?.completed
+    const completed = last.time.completed
     const now = completed ?? Date.now()
-    return footerTokenChip({ tokens: last.tokens, startedAt: last.time?.created, now })
+    return footerTokenChip({ tokens: last.tokens, startedAt: last.time.created, now })
   })
   const tokenChipStreaming = createMemo(() => sessionStatus().type === "busy")
   const showLspChip = createMemo(() => dimensions().width >= 90 && lsp().length > 0)
