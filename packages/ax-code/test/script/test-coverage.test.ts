@@ -248,4 +248,106 @@ describe("script.test-coverage", () => {
     expect(trend.files.lineRegressions[0]?.path).toBe("src/example.ts")
     expect(trend.files.branchRegressions[0]?.path).toBe("src/example.ts")
   })
+
+  test("handles BRDA-only coverage entries without BRF/BRH totals", () => {
+    const files = parseLCOV(
+      [
+        "TN:",
+        "SF:/repo/src/branch-only.ts",
+        "DA:1,1",
+        "DA:2,0",
+        "BRDA:10,0,0,0",
+        "BRDA:10,0,1,1",
+        "BRDA:11,0,0,2",
+        "end_of_record",
+      ].join("\n"),
+    )
+
+    expect(files).toHaveLength(1)
+    expect(files[0]?.branches).toMatchObject({ covered: 2, total: 3, available: true, pct: 66.66666666666666 })
+  })
+
+  test("ignores malformed DA values without breaking parser", () => {
+    const files = parseLCOV(
+      ["TN:", "SF:/repo/src/malformed.ts", "DA:1,abc", "DA:2,3", "DA:3,0", "end_of_record"].join("\n"),
+    )
+
+    expect(files).toHaveLength(1)
+    expect(files[0]?.lines).toMatchObject({ covered: 1, total: 2, available: true, pct: 50 })
+  })
+
+  test("records baseline mismatch warning when coverage groups differ", async () => {
+    await using tmp = await tmpdir()
+    const cwd = process.cwd()
+    const savedWorkspace = process.env["GITHUB_WORKSPACE"]
+    delete process.env["GITHUB_WORKSPACE"]
+    process.chdir(tmp.path)
+
+    try {
+      const lcovFile = path.join(tmp.path, "coverage", "lcov.info")
+      const summaryFile = path.join(tmp.path, "coverage-summary.json")
+      const reportFile = path.join(tmp.path, "coverage-report.md")
+      const baselineFile = path.join(tmp.path, "coverage-baseline-summary.json")
+
+      await Bun.write(
+        lcovFile,
+        [
+          "TN:",
+          `SF:${path.join(tmp.path, "src", "only.ts")}`,
+          "FNF:1",
+          "FNH:1",
+          "DA:1,1",
+          "end_of_record",
+        ].join("\n"),
+      )
+
+      const baseline: CoverageSummary = {
+        schemaVersion: 1,
+        kind: "ax-code-coverage-summary",
+        group: "recovery",
+        fileCount: 1,
+        metrics: {
+          lines: { covered: 1, total: 1, pct: 100, available: true },
+          functions: { covered: 1, total: 1, pct: 100, available: true },
+          branches: { covered: 0, total: 0, available: false },
+        },
+        files: [
+          {
+            path: path.join("src", "only.ts"),
+            lines: { covered: 1, total: 1, pct: 100, available: true },
+            functions: { covered: 1, total: 1, pct: 100, available: true },
+            branches: { covered: 0, total: 0, available: false },
+          },
+        ],
+        artifacts: {
+          lcov: "coverage/lcov.info",
+          summary: "coverage-baseline-summary.json",
+          report: "coverage-baseline-report.md",
+        },
+        notes: [],
+        meta: {
+          createdAt: "2026-04-18T00:00:00.000Z",
+          runtime: { bun: "1.3.12", platform: "linux", arch: "x64" },
+          git: {},
+          ci: {},
+        },
+      }
+      await Bun.write(baselineFile, JSON.stringify(baseline, null, 2) + "\n")
+
+      const summary = await createCoverageSummary({
+        group: "deterministic",
+        lcovFile,
+        summaryFile,
+        reportFile,
+        baselineFile,
+      })
+
+      expect(summary.trend).toBeUndefined()
+      expect(summary.notes.some((line) => line.includes("baseline summary at coverage-baseline-summary.json did not match group deterministic")))
+        .toBeTrue()
+    } finally {
+      process.chdir(cwd)
+      if (savedWorkspace !== undefined) process.env["GITHUB_WORKSPACE"] = savedWorkspace
+    }
+  })
 })
