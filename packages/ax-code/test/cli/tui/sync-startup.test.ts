@@ -122,4 +122,38 @@ describe("tui sync startup coordinator", () => {
     expect(created).toEqual([1, 2])
     expect(disposed).toEqual(["gate:1", "gate:2"])
   })
+
+  test("ignores late connection changes after stop until restart", () => {
+    const forwarded: string[] = []
+    const disposed: string[] = []
+    let gateID = 0
+
+    const coordinator = createSyncStartupCoordinator({
+      runBootstrapInBackground: () => undefined,
+      debugEngineEnabled: false,
+      pollDebugEngine: () => undefined,
+      recoverBootstrap: () => undefined,
+      createReconnectGate() {
+        const id = ++gateID
+        return {
+          onConnectionChange(connected) {
+            forwarded.push(`${id}:${connected}`)
+          },
+          dispose() {
+            disposed.push(`gate:${id}`)
+          },
+        }
+      },
+    })
+
+    coordinator.start()
+    coordinator.onConnectionChange(true)
+    coordinator.stop()
+    coordinator.onConnectionChange(false)
+    coordinator.start()
+    coordinator.onConnectionChange(true)
+
+    expect(forwarded).toEqual(["1:true", "2:true"])
+    expect(disposed).toEqual(["gate:1"])
+  })
 })

@@ -31,6 +31,7 @@ export function createSyncStartupCoordinator(input: {
   let debugEnginePoll: IntervalHandle | undefined
   let reconnectGate: ReconnectGate | undefined
   let started = false
+  let stopped = false
 
   function ensureReconnectGate() {
     reconnectGate ??= createReconnectGate({ recover: input.recoverBootstrap })
@@ -41,6 +42,7 @@ export function createSyncStartupCoordinator(input: {
     start() {
       if (started) return
       started = true
+      stopped = false
       ensureReconnectGate()
       input.runBootstrapInBackground()
       if (!input.debugEngineEnabled) return
@@ -50,13 +52,15 @@ export function createSyncStartupCoordinator(input: {
     },
     stop() {
       started = false
+      stopped = true
       reconnectGate?.dispose?.()
       reconnectGate = undefined
-      if (!debugEnginePoll) return
+      if (debugEnginePoll === undefined) return
       clearIntervalFn(debugEnginePoll)
       debugEnginePoll = undefined
     },
     onConnectionChange(connected) {
+      if (stopped) return
       ensureReconnectGate().onConnectionChange(connected)
     },
   }
