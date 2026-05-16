@@ -12,6 +12,12 @@ describe("diffSummary", () => {
     expect(diffSummary("Binary files differ\n")).toBeUndefined()
   })
 
+  test("returns undefined for context-only patch (hunks but no +/- content)", () => {
+    // Hunk header present, only context lines — no real change to surface
+    const diff = ["--- a/x.ts", "+++ b/x.ts", "@@ -1,2 +1,2 @@", " line a", " line b"].join("\n")
+    expect(diffSummary(diff)).toBeUndefined()
+  })
+
   test("counts a single hunk with adds and removes", () => {
     const diff = [
       "--- a/foo.ts",

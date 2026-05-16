@@ -69,7 +69,9 @@ export const diffSummary = (diff?: string): DiffSummary | undefined => {
     else if (line.startsWith("+")) added++
     else if (line.startsWith("-")) removed++
   }
-  if (hunks === 0 && added === 0 && removed === 0) return undefined
+  // A context-only or empty patch (hunk headers but no +/- content) carries
+  // no signal worth surfacing — suppress so we don't render "1 hunks · +0 −0".
+  if (added === 0 && removed === 0) return undefined
   return { hunks, added, removed }
 }
 

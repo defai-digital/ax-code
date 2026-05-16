@@ -13,10 +13,14 @@ export const SLASH_FRECENCY_CAP = 20
 // Bias score toward recently-used commands. `count` is the long-horizon
 // signal; the time decay (hours since last use) keeps abandoned commands
 // from dominating just because they were spammed once. Matches the
-// existing prompt-history frecency feel.
+// existing prompt-history frecency feel. Guards against corrupted entries
+// (missing/NaN fields from a hand-edited or partial-write kv.json) so a
+// single bad row can't poison sort ordering across the whole list.
 export function slashScore(entry: SlashFrecencyEntry, now: number = Date.now()): number {
-  const hoursSinceUse = Math.max(0, (now - entry.lastUsed) / 3_600_000)
-  return entry.count / (1 + hoursSinceUse)
+  const count = Number.isFinite(entry.count) ? entry.count : 0
+  const lastUsed = Number.isFinite(entry.lastUsed) ? entry.lastUsed : 0
+  const hoursSinceUse = Math.max(0, (now - lastUsed) / 3_600_000)
+  return count / (1 + hoursSinceUse)
 }
 
 // Insert/update an entry, then evict the lowest-score command if we're

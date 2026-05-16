@@ -25,6 +25,18 @@ describe("slashScore", () => {
   test("future timestamps clamp to zero hours (no negative aging)", () => {
     expect(slashScore({ count: 3, lastUsed: NOW + HOUR }, NOW)).toBe(3)
   })
+
+  test("corrupted entry (NaN count or lastUsed) does not poison ordering", () => {
+    // A hand-edited or partial-write kv.json could leave non-finite values;
+    // without the guard, sort comparison becomes undefined. We only require
+    // the score is finite — exact value doesn't matter, the entry just
+    // needs to compare cleanly so sort doesn't blow up.
+    expect(Number.isFinite(slashScore({ count: NaN as any, lastUsed: NOW }, NOW))).toBe(true)
+    expect(Number.isFinite(slashScore({ count: 5, lastUsed: NaN as any }, NOW))).toBe(true)
+    expect(Number.isFinite(slashScore({ count: undefined as any, lastUsed: undefined as any }, NOW))).toBe(true)
+    // NaN-count specifically falls back to 0
+    expect(slashScore({ count: NaN as any, lastUsed: NOW }, NOW)).toBe(0)
+  })
 })
 
 describe("recordSlashUse", () => {

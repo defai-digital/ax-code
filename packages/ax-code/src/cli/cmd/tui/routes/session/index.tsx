@@ -1795,18 +1795,32 @@ function CoalescedTool(props: {
     if (tool === "grep") return `Grep · ${props.group.parts.length} searches`
     return `${tool} · ${props.group.parts.length}`
   })
+  // Any in-flight part means the group is still mid-stream — without
+  // a spinner the collapsed row reads as "done" even when reads are
+  // still landing one-by-one.
+  const isRunning = createMemo(() =>
+    props.group.parts.some((p) => p.state.status === "running" || p.state.status === "pending"),
+  )
   return (
     <Show
       when={props.expanded}
       fallback={
         <box paddingLeft={3}>
-          <text
-            paddingLeft={3}
-            fg={theme.textMuted}
-            onMouseUp={() => props.onToggle(true)}
+          <Show
+            when={isRunning()}
+            fallback={
+              <text paddingLeft={3} fg={theme.textMuted} onMouseUp={() => props.onToggle(true)}>
+                <span style={{ bold: true }}>→</span> {label()}{" "}
+                <span style={{ fg: theme.borderSubtle }}>▸</span>
+              </text>
+            }
           >
-            <span style={{ bold: true }}>→</span> {label()} <span style={{ fg: theme.borderSubtle }}>▸</span>
-          </text>
+            <box paddingLeft={3} onMouseUp={() => props.onToggle(true)}>
+              <Spinner color={theme.textMuted}>
+                {label()} <span style={{ fg: theme.borderSubtle }}>▸</span>
+              </Spinner>
+            </box>
+          </Show>
         </box>
       }
     >
