@@ -4,7 +4,6 @@
 // https://github.com/cline/cline/blob/main/evals/diff-edits/diff-apply/diff-06-26-25.ts
 
 import z from "zod"
-import * as path from "path"
 import * as fs from "fs/promises"
 import { Tool } from "./tool"
 import { createTwoFilesPatch, diffLines } from "diff"
@@ -19,7 +18,7 @@ import { Isolation } from "@/isolation"
 import { BlastRadius } from "@/session/blast-radius"
 import { NativePerf } from "../perf/native"
 import { NativeAddon } from "../native/addon"
-import { resolveToolFilePath } from "./file-path"
+import { normalizeToWorkspacePath, resolveToolFilePath } from "./file-path"
 
 function normalizeLineEndings(text: string): string {
   return text.replaceAll("\r\n", "\n")
@@ -106,7 +105,8 @@ export const EditTool = Tool.define("edit", {
     const filePath = resolveToolFilePath(params.filePath, Instance.directory)
     await assertExternalDirectory(ctx, filePath)
     Isolation.assertWrite(ctx.extra?.isolation, filePath, Instance.directory, Instance.worktree)
-    BlastRadius.assertWritable(ctx.sessionID, path.relative(Instance.worktree, filePath))
+    const relativePath = normalizeToWorkspacePath(filePath, Instance.worktree)
+    BlastRadius.assertWritable(ctx.sessionID, relativePath)
 
     let diff = ""
     let contentOld = ""
@@ -132,7 +132,7 @@ export const EditTool = Tool.define("edit", {
         diff = trimDiff(createTwoFilesPatch(filePath, filePath, contentOld, contentNew))
         await ctx.ask({
           permission: "edit",
-          patterns: [path.relative(Instance.worktree, filePath)],
+          patterns: [relativePath],
           always: ["*"],
           metadata: {
             filepath: filePath,
@@ -181,7 +181,7 @@ export const EditTool = Tool.define("edit", {
       )
       await ctx.ask({
         permission: "edit",
-        patterns: [path.relative(Instance.worktree, filePath)],
+        patterns: [relativePath],
         always: ["*"],
         metadata: {
           filepath: filePath,
@@ -247,7 +247,7 @@ export const EditTool = Tool.define("edit", {
         diff,
         filediff,
       },
-      title: `${path.relative(Instance.worktree, filePath)}`,
+      title: `${relativePath}`,
       output,
     }
   },

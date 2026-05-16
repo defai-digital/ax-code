@@ -1,5 +1,4 @@
 import { createTwoFilesPatch, diffLines } from "diff"
-import path from "path"
 import z from "zod"
 import { FileTime } from "../file/time"
 import { Instance } from "../project/instance"
@@ -13,7 +12,7 @@ import { Isolation } from "@/isolation"
 import DESCRIPTION from "./multiedit.txt"
 import { Log } from "@/util/log"
 import { BlastRadius } from "@/session/blast-radius"
-import { resolveToolFilePath } from "./file-path"
+import { normalizeToWorkspacePath, resolveToolFilePath } from "./file-path"
 
 const log = Log.create({ service: "multiedit-tool" })
 
@@ -35,7 +34,9 @@ export const MultiEditTool = Tool.define("multiedit", {
   }),
   async execute(params, ctx) {
     const resolveFilePath = (filePath: string) => resolveToolFilePath(filePath, Instance.directory)
+    const relativePath = (filePath: string) => normalizeToWorkspacePath(filePath, Instance.worktree)
     const files = Array.from(new Set(params.edits.map((edit) => resolveFilePath(edit.filePath ?? params.filePath)))).sort()
+    const titlePath = files[0] ?? resolveFilePath(params.filePath)
     const original = new Map<string, string>()
     const current = new Map<string, string>()
     const writeDeltas = new Map<string, { additions: number; deletions: number }>()
@@ -56,7 +57,7 @@ export const MultiEditTool = Tool.define("multiedit", {
       // (edit, write, apply_patch) gate writes on BlastRadius; this
       // path was missing the hook so a multiedit could touch
       // blocked dotenv/secrets paths even in autonomous mode.
-      BlastRadius.assertWritable(ctx.sessionID, path.relative(Instance.worktree, file))
+      BlastRadius.assertWritable(ctx.sessionID, relativePath(file))
     }
 
     for (const file of files) {
@@ -85,7 +86,7 @@ export const MultiEditTool = Tool.define("multiedit", {
         )
         await ctx.ask({
           permission: "edit",
-          patterns: [path.relative(Instance.worktree, file)],
+          patterns: [relativePath(file)],
           always: ["*"],
           metadata: {
             filepath: file,
@@ -180,7 +181,7 @@ export const MultiEditTool = Tool.define("multiedit", {
     const { diagnostics } = await collectDiagnostics(changed)
 
     return {
-      title: path.relative(Instance.worktree, params.filePath),
+      title: relativePath(titlePath),
       metadata: {
         diagnostics,
         results: results.map((r) => r.metadata),

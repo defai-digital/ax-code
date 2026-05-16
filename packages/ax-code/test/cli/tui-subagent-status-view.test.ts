@@ -122,6 +122,30 @@ describe("buildSubagentStatusView", () => {
     expect(view.items[0]?.label).toBe("reviewer: Starting · 5s")
   })
 
+  test("keeps child session activity visible before a task part is bound", () => {
+    const view = buildSubagentStatusView({
+      now: 40_000,
+      parentSessionID: "parent",
+      childSessions: [{ id: "child", parentID: "parent", title: "Investigate startup" }],
+      tasks: [],
+      statuses: {
+        child: {
+          type: "busy",
+          startedAt: 20_000,
+          lastActivityAt: 35_000,
+          waitState: "llm",
+        },
+      },
+    })
+
+    expect(view.running).toBe(1)
+    expect(view.done).toBe(0)
+    expect(view.total).toBe(1)
+    expect(view.items[0]?.active).toBe(true)
+    expect(view.items[0]?.title).toBe("Investigate startup")
+    expect(view.items[0]?.label).toBe("Thinking · 20s")
+  })
+
   test("keeps completed subagents visible without treating them as active", () => {
     const view = buildSubagentStatusView({
       now: 80_000,

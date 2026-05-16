@@ -1,5 +1,4 @@
 import z from "zod"
-import * as path from "path"
 import * as fs from "fs"
 import { Tool } from "./tool"
 import { createTwoFilesPatch, diffLines } from "diff"
@@ -12,10 +11,10 @@ import { assertExternalDirectory, assertSymlinkInsideProject } from "./external-
 import { notifyFileEdited, collectDiagnostics } from "./diagnostics"
 import { Isolation } from "@/isolation"
 import { BlastRadius } from "@/session/blast-radius"
-import { resolveToolFilePath } from "./file-path"
+import { normalizeToWorkspacePath, resolveToolFilePath } from "./file-path"
 
 function validateInternalBugReport(filepath: string, content: string) {
-  const relative = path.relative(Instance.worktree, filepath).split(path.sep).join("/")
+  const relative = normalizeToWorkspacePath(filepath, Instance.worktree)
   if (!relative.startsWith(".internal/bugs/") || !relative.endsWith(".md")) return
   if (relative === ".internal/bugs/README.md" || relative === ".internal/bugs/summary.md") return
 
@@ -46,12 +45,13 @@ export const WriteTool = Tool.define("write", {
   }),
   async execute(params, ctx) {
     const filepath = resolveToolFilePath(params.filePath, Instance.directory)
+    const relativePath = normalizeToWorkspacePath(filepath, Instance.worktree)
     const bytes = Buffer.byteLength(params.content, "utf-8")
     if (bytes > 5 * 1024 * 1024) throw new Error(`Write content too large: ${bytes} bytes (max 5MB)`)
     validateInternalBugReport(filepath, params.content)
     await assertExternalDirectory(ctx, filepath)
     Isolation.assertWrite(ctx.extra?.isolation, filepath, Instance.directory, Instance.worktree)
-    BlastRadius.assertWritable(ctx.sessionID, path.relative(Instance.worktree, filepath))
+    BlastRadius.assertWritable(ctx.sessionID, relativePath)
 
     // Read + assert + diff computation must all happen inside the lock,
     // otherwise a concurrent tool call or external process modifying
@@ -76,7 +76,7 @@ export const WriteTool = Tool.define("write", {
       const diff = trimDiff(createTwoFilesPatch(filepath, filepath, contentOld, params.content))
       await ctx.ask({
         permission: "edit",
-        patterns: [path.relative(Instance.worktree, filepath)],
+        patterns: [relativePath],
         always: ["*"],
         metadata: {
           filepath,
@@ -107,7 +107,7 @@ export const WriteTool = Tool.define("write", {
     let output = "Wrote file successfully." + diagOutput
 
     return {
-      title: path.relative(Instance.worktree, filepath),
+      title: relativePath,
       metadata: {
         diagnostics,
         filepath,

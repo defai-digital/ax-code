@@ -93,12 +93,8 @@ export function buildSubagentStatusView(input: {
   const staleAfterMs = input.staleAfterMs ?? DEFAULT_STALE_AFTER_MS
   const taskBySessionID = new Map<string, SubagentRollupTask>()
   const unboundTasks: SubagentRollupTask[] = []
-  let running = 0
-  let done = 0
 
   for (const task of input.tasks) {
-    if (task.status === "running" || task.status === "pending") running++
-    else if (task.status === "completed") done++
     if (task.sessionID) taskBySessionID.set(task.sessionID, task)
     else unboundTasks.push(task)
   }
@@ -162,6 +158,8 @@ export function buildSubagentStatusView(input: {
       if (a.active !== b.active) return a.active ? -1 : 1
       return b.lastActivityAt - a.lastActivityAt
     })
+  const running = items.filter((item) => item.active).length
+  const done = items.filter((item) => item.done).length
 
   return { running, done, total: running + done, items }
 }
