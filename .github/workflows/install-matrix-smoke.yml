@@ -85,11 +85,7 @@ jobs:
       - name: Set isolated home paths
         shell: bash
         run: |
-          echo "AX_CODE_TEST_HOME=$RUNNER_TEMP/ax-code-install-matrix-home" >> "$GITHUB_ENV"
-          echo "XDG_CONFIG_HOME=$RUNNER_TEMP/ax-code-install-matrix-home/.config" >> "$GITHUB_ENV"
-          echo "XDG_CACHE_HOME=$RUNNER_TEMP/ax-code-install-matrix-home/.cache" >> "$GITHUB_ENV"
-          echo "XDG_DATA_HOME=$RUNNER_TEMP/ax-code-install-matrix-home/.local/share" >> "$GITHUB_ENV"
-          echo "XDG_STATE_HOME=$RUNNER_TEMP/ax-code-install-matrix-home/.local/state" >> "$GITHUB_ENV"
+          bash .github/scripts/set-isolated-home-env.sh "$RUNNER_TEMP/ax-code-install-matrix-home"
 
       - name: Resolve version under test
         id: version
@@ -218,11 +214,7 @@ jobs:
       - name: Set isolated home paths
         shell: bash
         run: |
-          echo "AX_CODE_TEST_HOME=$RUNNER_TEMP/ax-code-homebrew-smoke-home" >> "$GITHUB_ENV"
-          echo "XDG_CONFIG_HOME=$RUNNER_TEMP/ax-code-homebrew-smoke-home/.config" >> "$GITHUB_ENV"
-          echo "XDG_CACHE_HOME=$RUNNER_TEMP/ax-code-homebrew-smoke-home/.cache" >> "$GITHUB_ENV"
-          echo "XDG_DATA_HOME=$RUNNER_TEMP/ax-code-homebrew-smoke-home/.local/share" >> "$GITHUB_ENV"
-          echo "XDG_STATE_HOME=$RUNNER_TEMP/ax-code-homebrew-smoke-home/.local/state" >> "$GITHUB_ENV"
+          bash .github/scripts/set-isolated-home-env.sh "$RUNNER_TEMP/ax-code-homebrew-smoke-home"
 
       - name: Resolve version under test
         id: version
