@@ -174,17 +174,19 @@ export namespace SystemPrompt {
   export function extractFilePaths(messages: MessageV2.WithParts[]): string[] {
     const worktree = Instance.worktree
     const result = new Set<string>()
+    const addRelativePath = (filePath: string) => result.add(path.relative(worktree, filePath))
+
     for (const msg of messages) {
       for (const part of msg.parts) {
         if (part.type !== "tool") continue
         if (!FILE_TOOLS.has(part.tool)) continue
         const input = part.state.input
-        if (typeof input?.file_path === "string") result.add(path.relative(worktree, input.file_path))
-        if (typeof input?.filePath === "string") result.add(path.relative(worktree, input.filePath))
+        if (typeof input?.file_path === "string") addRelativePath(input.file_path)
+        if (typeof input?.filePath === "string") addRelativePath(input.filePath)
         if (Array.isArray(input?.edits)) {
           for (const edit of input.edits) {
-            if (typeof edit?.filePath === "string") result.add(path.relative(worktree, edit.filePath))
-            if (typeof edit?.file_path === "string") result.add(path.relative(worktree, edit.file_path))
+            if (typeof edit?.filePath === "string") addRelativePath(edit.filePath)
+            if (typeof edit?.file_path === "string") addRelativePath(edit.file_path)
           }
         }
       }
