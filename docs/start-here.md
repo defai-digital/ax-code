@@ -48,7 +48,7 @@ The rest of the documentation maps onto those layers.
 - The default package-manager install path uses the compiled runtime:
   - `brew install defai-digital/ax-code/ax-code`
   - `npm i -g @defai.digital/ax-code`
-- Use `ax-code-source` only when you intentionally need the source+bun compatibility launcher.
+- Use `ax-code-source` only when you intentionally need the source+bun compatibility launcher. See [Installation and Runtime Channels](install-runtime.md) for the runtime labels and local launcher matrix.
 - Use `/connect` or `ax-code providers login` to set a model.
 - Run `ax-code init` after opening a real project so `AGENTS.md` captures local conventions.
 - If you want tighter safety boundaries, enable [Sandbox Mode](sandbox.md) before broader edits.
@@ -98,13 +98,14 @@ ax-code doctor
 
 ## Doc Map
 
-| Topic                   | Start here                                                      |
-| ----------------------- | --------------------------------------------------------------- |
-| Product overview        | [Start Here](start-here.md)                                     |
-| Sandbox and permissions | [Sandbox Mode](sandbox.md)                                      |
-| Unattended execution    | [Autonomous Mode](autonomous.md)                                |
-| Routing and model tier  | [Auto-Route](auto-route.md)                                     |
-| SDK embedding           | [`@ax-code/sdk`](../packages/sdk/js/README.md)                  |
-| HTTP/OpenAPI clients    | [HTTP and OpenAPI SDKs](sdk-http-openapi.md)                    |
-| VS Code integration     | [VS Code integration](../packages/integration-vscode/README.md) |
-| Architecture            | [Semantic Layer](semantic-layer.md)                             |
+| Topic                    | Start here                                                      |
+| ------------------------ | --------------------------------------------------------------- |
+| Product overview         | [Start Here](start-here.md)                                     |
+| Install/runtime channels | [Installation and Runtime Channels](install-runtime.md)         |
+| Sandbox and permissions  | [Sandbox Mode](sandbox.md)                                      |
+| Unattended execution     | [Autonomous Mode](autonomous.md)                                |
+| Routing and model tier   | [Auto-Route](auto-route.md)                                     |
+| SDK embedding            | [`@ax-code/sdk`](../packages/sdk/js/README.md)                  |
+| HTTP/OpenAPI clients     | [HTTP and OpenAPI SDKs](sdk-http-openapi.md)                    |
+| VS Code integration      | [VS Code integration](../packages/integration-vscode/README.md) |
+| Architecture             | [Semantic Layer](semantic-layer.md)                             |

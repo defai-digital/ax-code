@@ -44,11 +44,11 @@ ax-code doctor
 
 Look for the `Runtime` line:
 
-| Output                              | Meaning                                        |
-| ----------------------------------- | ---------------------------------------------- |
-| `Runtime: Bun X.Y.Z (compiled)`     | Default Homebrew/npm install — compiled binary |
-| `Runtime: Bun X.Y.Z (bun-bundled)`  | `ax-code-source` compatibility package         |
-| `Runtime: Bun X.Y.Z (source)`       | Local checkout via `pnpm setup:cli`            |
+| Output                             | Meaning                                           |
+| ---------------------------------- | ------------------------------------------------- |
+| `Runtime: Bun X.Y.Z (compiled)`    | Default package install or local bundled launcher |
+| `Runtime: Bun X.Y.Z (bun-bundled)` | `ax-code-source` compatibility package            |
+| `Runtime: Bun X.Y.Z (source)`      | Contributor source launcher or `bun run`          |
 
 ### Run
 
@@ -63,7 +63,7 @@ export OPENAI_API_KEY="your-key"                 # GPT
 ax-code
 ```
 
-That's it. No project setup or config file is required. Run `ax-code`, then use `/connect` inside the TUI to add or switch providers.
+That is it. No project setup or config file is required. Run `ax-code`, then use `/connect` inside the TUI to add or switch providers.
 
 ### Update
 
@@ -78,6 +78,8 @@ npm update -g @defai.digital/ax-code   # follows your installed dist-tag
 ### Distribution note
 
 The supported user install path now ships the compiled binary under the normal `ax-code` package/formula. The source+bun launcher remains available as the `ax-code-source` compatibility channel for diagnosis or fallback.
+
+See [Installation and Runtime Channels](docs/install-runtime.md) for the full package, runtime-label, and local launcher matrix.
 
 ### From Source (contributors)
 
@@ -101,6 +103,8 @@ For contributor-only source debugging, install the checkout-bound launcher expli
 ```bash
 pnpm run setup:cli -- --source
 ```
+
+That source launcher should report `Runtime: Bun X.Y.Z (source)` and is intentionally separate from the default compiled/bundled launcher.
 
 ---
 
