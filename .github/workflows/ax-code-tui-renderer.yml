@@ -29,6 +29,31 @@ jobs:
       AX_CODE_DISABLE_SHARE: "true"
       AX_CODE_INSTALL_SMOKE_TEMP_ROOT: .tmp/source-install-smoke
     steps:
+      - name: Validate workflow_dispatch inputs
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        run: |
+          if ! [[ "${{ inputs.timeout_ms }}" =~ ^[1-9][0-9]*$ ]]; then
+            echo "FAIL: timeout_ms must be a positive integer milliseconds value, got '${{ inputs.timeout_ms }}'"
+            exit 1
+          fi
+
+          case "${{ inputs.run_pty }}" in
+            true|false) ;;
+            *)
+              echo "FAIL: run_pty must be true or false"
+              exit 1
+              ;;
+          esac
+
+          case "${{ inputs.require_ready }}" in
+            true|false) ;;
+            *)
+              echo "FAIL: require_ready must be true or false"
+              exit 1
+              ;;
+          esac
+
       - uses: actions/checkout@v6
 
       - uses: pnpm/action-setup@v6

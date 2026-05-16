@@ -37,6 +37,18 @@ jobs:
     env:
       AX_CODE_DISABLE_SHARE: "true"
     steps:
+      - name: Validate workflow_dispatch inputs
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        run: |
+          case "${{ inputs.live }}" in
+            true|false) ;;
+            *)
+              echo "FAIL: live must be true or false"
+              exit 1
+              ;;
+          esac
+
       - uses: actions/checkout@v6
 
       - uses: pnpm/action-setup@v6
