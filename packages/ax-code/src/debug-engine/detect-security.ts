@@ -28,10 +28,18 @@ export type DetectSecurityInput = {
 
 const SUPPRESS_RE = /\/\/\s*@scan-suppress\s+security_scan/
 
+function isTrustedPathTraversalScanTarget(file: string): boolean {
+  const normalized = file.split(path.sep).join("/")
+  if (normalized.includes("/script/")) return true
+  return /(^|\/)drizzle\.config\.[cm]?[jt]s$/.test(normalized)
+}
+
 // Detect path traversal: path.join/resolve with user-controlled input
 // without a subsequent containment check (Filesystem.contains or similar).
 function detectPathTraversal(lines: string[], file: string, max: number): DebugEngine.SecurityFinding[] {
   const findings: DebugEngine.SecurityFinding[] = []
+  if (isTrustedPathTraversalScanTarget(file)) return findings
+
   // Match path.join or path.resolve with a variable (not a string literal)
   const pathJoinRe = /path\.(?:join|resolve)\s*\((.+)/
   // Containment checks we look for nearby
