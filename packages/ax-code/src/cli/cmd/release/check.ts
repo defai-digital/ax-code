@@ -427,6 +427,7 @@ async function checkPhantomImports(ctx: CheckContext): Promise<CheckResult> {
     const sourceFiles = [...tracked].filter((p) => scanDirs.some((d) => p.startsWith(d)) && /\.(ts|tsx)$/.test(p))
     const phantoms: { file: string; importPath: string; resolved: string }[] = []
     const importRe = /(?:^|\s)(?:import|export)\s+(?:[^'"`;]+?\s+from\s+)?['"](\.\.?\/[^'"`]+)['"]/g
+    const relativeToRepo = (file: string) => path.relative(ctx.repoRoot, file)
 
     for (const file of sourceFiles) {
       const raw = await readFile(file, "utf8").catch(() => "")
@@ -462,9 +463,9 @@ async function checkPhantomImports(ctx: CheckContext): Promise<CheckResult> {
         for (const c of candidates) {
           if (await Filesystem.exists(c)) {
             phantoms.push({
-              file: path.relative(ctx.repoRoot, file),
+              file: relativeToRepo(file),
               importPath: raw,
-              resolved: path.relative(ctx.repoRoot, c),
+              resolved: relativeToRepo(c),
             })
             break
           }
