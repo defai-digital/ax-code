@@ -50,13 +50,14 @@ export const ModelsCommand = cmd({
         }
 
         if (args.provider) {
-          const provider = providers[ProviderID.make(args.provider)]
+          const requestedProviderID = ProviderID.make(args.provider)
+          const provider = providers[requestedProviderID]
           if (!provider) {
             UI.error(`Provider not found: ${args.provider}`)
             return
           }
 
-          printModels(ProviderID.make(args.provider), args.verbose)
+          printModels(requestedProviderID, args.verbose)
           return
         }
 
