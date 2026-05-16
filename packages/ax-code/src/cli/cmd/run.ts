@@ -57,6 +57,10 @@ function inline(info: Inline) {
   UI.println(UI.Style.TEXT_NORMAL + info.icon, UI.Style.TEXT_NORMAL + info.title + suffix)
 }
 
+function warnPrefix(message: string) {
+  UI.println(UI.Style.TEXT_WARNING_BOLD + "!", UI.Style.TEXT_NORMAL, message)
+}
+
 function block(info: Inline, output?: string) {
   UI.empty()
   inline(info)
@@ -555,11 +559,7 @@ export const RunCommand = cmd({
           if (event.type === "permission.asked") {
             const permission = event.properties
             if (permission.sessionID !== sessionID) continue
-            UI.println(
-              UI.Style.TEXT_WARNING_BOLD + "!",
-              UI.Style.TEXT_NORMAL +
-                `permission requested: ${permission.permission} (${permission.patterns.join(", ")}); auto-rejecting`,
-            )
+            warnPrefix(`permission requested: ${permission.permission} (${permission.patterns.join(", ")}); auto-rejecting`)
             await sdk.permission.reply({
               requestID: permission.id,
               reply: "reject",
@@ -580,31 +580,19 @@ export const RunCommand = cmd({
             .catch(() => undefined)
 
           if (!modes) {
-            UI.println(
-              UI.Style.TEXT_WARNING_BOLD + "!",
-              UI.Style.TEXT_NORMAL,
-              `failed to list agents from ${args.attach}. Falling back to default agent`,
-            )
+            warnPrefix(`failed to list agents from ${args.attach}. Falling back to default agent`)
             return undefined
           }
 
           const agent = modes.find((a) => a.name === args.agent)
           if (!agent) {
-            UI.println(
-              UI.Style.TEXT_WARNING_BOLD + "!",
-              UI.Style.TEXT_NORMAL,
-              `agent "${args.agent}" not found. Falling back to default agent`,
-            )
+            warnPrefix(`agent "${args.agent}" not found. Falling back to default agent`)
             return undefined
           }
 
           const tier = Agent.resolveTier(agent)
           if (tier === "subagent" || tier === "internal") {
-            UI.println(
-              UI.Style.TEXT_WARNING_BOLD + "!",
-              UI.Style.TEXT_NORMAL,
-              `agent "${args.agent}" is a ${tier} agent, not a primary agent. Falling back to default agent`,
-            )
+            warnPrefix(`agent "${args.agent}" is a ${tier} agent, not a primary agent. Falling back to default agent`)
             return undefined
           }
 
@@ -613,20 +601,12 @@ export const RunCommand = cmd({
 
         const entry = await Agent.get(args.agent)
         if (!entry) {
-          UI.println(
-            UI.Style.TEXT_WARNING_BOLD + "!",
-            UI.Style.TEXT_NORMAL,
-            `agent "${args.agent}" not found. Falling back to default agent`,
-          )
+          warnPrefix(`agent "${args.agent}" not found. Falling back to default agent`)
           return undefined
         }
         const entryTier = Agent.resolveTier(entry)
         if (entryTier === "subagent" || entryTier === "internal") {
-          UI.println(
-            UI.Style.TEXT_WARNING_BOLD + "!",
-            UI.Style.TEXT_NORMAL,
-            `agent "${args.agent}" is a ${entryTier} agent, not a primary agent. Falling back to default agent`,
-          )
+          warnPrefix(`agent "${args.agent}" is a ${entryTier} agent, not a primary agent. Falling back to default agent`)
           return undefined
         }
         return args.agent
