@@ -13,6 +13,7 @@ import { Isolation } from "@/isolation"
 import DESCRIPTION from "./multiedit.txt"
 import { Log } from "@/util/log"
 import { BlastRadius } from "@/session/blast-radius"
+import { resolveToolFilePath } from "./file-path"
 
 const log = Log.create({ service: "multiedit-tool" })
 
@@ -33,10 +34,7 @@ export const MultiEditTool = Tool.define("multiedit", {
       .describe("Array of edit operations to perform sequentially on the file"),
   }),
   async execute(params, ctx) {
-    const resolveFilePath = (filePath: string) => {
-      if (filePath.includes("\x00")) throw new Error("File path contains null byte")
-      return path.isAbsolute(filePath) ? filePath : path.resolve(Instance.directory, filePath)
-    }
+    const resolveFilePath = (filePath: string) => resolveToolFilePath(filePath, Instance.directory)
     const files = Array.from(new Set(params.edits.map((edit) => resolveFilePath(edit.filePath ?? params.filePath)))).sort()
     const original = new Map<string, string>()
     const current = new Map<string, string>()

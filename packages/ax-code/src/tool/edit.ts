@@ -19,6 +19,7 @@ import { Isolation } from "@/isolation"
 import { BlastRadius } from "@/session/blast-radius"
 import { NativePerf } from "../perf/native"
 import { NativeAddon } from "../native/addon"
+import { resolveToolFilePath } from "./file-path"
 
 function normalizeLineEndings(text: string): string {
   return text.replaceAll("\r\n", "\n")
@@ -94,10 +95,6 @@ export const EditTool = Tool.define("edit", {
     replaceAll: z.boolean().optional().describe("Replace all occurrences of oldString (default false)"),
   }),
   async execute(params, ctx) {
-    if (params.filePath.includes("\x00")) {
-      throw new Error("File path contains null byte")
-    }
-
     if (!params.filePath) {
       throw new Error("filePath is required")
     }
@@ -106,7 +103,7 @@ export const EditTool = Tool.define("edit", {
       throw new Error("No changes to apply: oldString and newString are identical.")
     }
 
-    const filePath = path.isAbsolute(params.filePath) ? params.filePath : path.join(Instance.directory, params.filePath)
+    const filePath = resolveToolFilePath(params.filePath, Instance.directory)
     await assertExternalDirectory(ctx, filePath)
     Isolation.assertWrite(ctx.extra?.isolation, filePath, Instance.directory, Instance.worktree)
     BlastRadius.assertWritable(ctx.sessionID, path.relative(Instance.worktree, filePath))
