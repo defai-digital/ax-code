@@ -26,6 +26,10 @@ function resolveLessPager(cmd: string | undefined) {
   return [cmd, ...lessPagerOptions]
 }
 
+function printSuccess(message: string) {
+  UI.println(`${UI.Style.TEXT_SUCCESS_BOLD}${message}${UI.Style.TEXT_NORMAL}`)
+}
+
 function pagerCmd(): string[] {
   if (process.platform !== "win32") {
     return ["less", ...lessPagerOptions]
@@ -244,11 +248,7 @@ export const SessionClearProjectCommand = cmd({
         await Session.remove(session.id)
       }
 
-      UI.println(
-        UI.Style.TEXT_SUCCESS_BOLD +
-          `Deleted ${sessions.length} session${sessions.length === 1 ? "" : "s"} for ${Instance.worktree}` +
-          UI.Style.TEXT_NORMAL,
-      )
+      printSuccess(`Deleted ${sessions.length} session${sessions.length === 1 ? "" : "s"} for ${Instance.worktree}`)
     })
   },
 })
@@ -349,11 +349,7 @@ export const SessionPruneCommand = cmd({
         return
       }
 
-      UI.println(
-        UI.Style.TEXT_SUCCESS_BOLD +
-          `Pruned ${pruned} session${pruned === 1 ? "" : "s"} older than ${days} days` +
-          UI.Style.TEXT_NORMAL,
-      )
+      printSuccess(`Pruned ${pruned} session${pruned === 1 ? "" : "s"} older than ${days} days`)
     })
   },
 })
@@ -378,7 +374,7 @@ export const SessionDeleteCommand = cmd({
         process.exit(1)
       }
       await Session.remove(sessionID)
-      UI.println(UI.Style.TEXT_SUCCESS_BOLD + `Session ${args.sessionID} deleted` + UI.Style.TEXT_NORMAL)
+      printSuccess(`Session ${args.sessionID} deleted`)
     })
   },
 })
