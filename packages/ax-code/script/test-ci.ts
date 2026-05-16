@@ -34,7 +34,7 @@ export function resolveTestCIGroup(argv = process.argv.slice(2)) {
   return group
 }
 
-function num(name: string, fallback = 0) {
+export function num(name: string, fallback = 0) {
   const value = arg(name)
   if (!value) return fallback
   const parsed = Number.parseInt(value, 10)
@@ -46,7 +46,7 @@ function attrs(text: string) {
   return Object.fromEntries(Array.from(text.matchAll(/(\w+)="([^"]*)"/g)).map((part) => [part[1], part[2]]))
 }
 
-async function parse(file: string, output = "") {
+export async function parseJUnit(file: string, output = "") {
   if (!(await Bun.file(file).exists())) {
     return { tests: 0, failures: 0, skipped: 0, time: 0, ignored: 0 }
   }
@@ -121,7 +121,7 @@ async function run(group: string, files: string[], dir: string, run: number) {
     tee(proc.stderr, process.stderr),
     proc.exited,
   ])
-  const stats = await parse(file, `${stdout}\n${stderr}`)
+  const stats = await parseJUnit(file, `${stdout}\n${stderr}`)
   return {
     code: code !== 0 && stats.failures === 0 && stats.ignored > 0 ? 0 : code,
     file,
