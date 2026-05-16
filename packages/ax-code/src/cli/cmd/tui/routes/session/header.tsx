@@ -10,6 +10,9 @@ import { Flag } from "@/flag/flag"
 import { useTerminalDimensions } from "@opentui/solid"
 import { collapseSessionBreadcrumbs, sessionBreadcrumbs } from "./header-view-model"
 import { computeSidebarWidth } from "./layout"
+import { autonomousActiveView } from "./autonomous-active"
+import { isFooterSessionStatus, type FooterSessionStatus } from "./footer-view-model"
+import { Spinner } from "../../component/spinner"
 
 const SUBAGENT_PARENT_DOUBLE_CLICK_MS = 400
 
@@ -68,6 +71,14 @@ export function Header() {
       narrow: narrow(),
     }),
   )
+  // Live autonomous indicator. Pulls from the same SessionStatus.busy
+  // event the footer progress bar uses so the header chip, the bar, and
+  // the transcript border tint all share one truth.
+  const autonomous = createMemo(() => {
+    const candidate = sync.data.session_status?.[route.sessionID]
+    const status: FooterSessionStatus = isFooterSessionStatus(candidate) ? candidate : { type: "idle" }
+    return autonomousActiveView(status)
+  })
   function handleSubagentHeaderMouseUp() {
     const now = Date.now()
     if (now - lastSubagentHeaderClickAt <= SUBAGENT_PARENT_DOUBLE_CLICK_MS) {
@@ -171,6 +182,17 @@ export function Header() {
                   <WorkspaceInfo workspace={workspace} />
                 </Show>
               </box>
+              <Show when={autonomous().active}>
+                <box flexDirection="row" gap={1} paddingLeft={1} paddingRight={1} flexShrink={0}>
+                  <Spinner color={theme.accent}>
+                    <span style={{ fg: theme.accent, bold: true }}>◆ AUTONOMOUS</span>
+                    <span style={{ fg: theme.textMuted }}>
+                      {" "}
+                      · step {autonomous().step}/{autonomous().maxSteps}
+                    </span>
+                  </Spinner>
+                </box>
+              </Show>
             </box>
           </Match>
         </Switch>

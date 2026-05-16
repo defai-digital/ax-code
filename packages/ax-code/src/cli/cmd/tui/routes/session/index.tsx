@@ -88,6 +88,8 @@ import { UI } from "@/cli/ui.ts"
 import { useTuiConfig } from "../../context/tui-config"
 import { detail, diagnostics, diffSummary, normalize, workdir } from "./format"
 import { coalesceParts } from "./coalesce"
+import { autonomousActiveView } from "./autonomous-active"
+import { isFooterSessionStatus, type FooterSessionStatus } from "./footer-view-model"
 import { childAction, firstChildID, nextChildID } from "./child"
 import { lastUserMessageID, promptState, redoMessageID, undoMessageID } from "./messages"
 import { messageScroll, messageTarget, nextVisibleMessage } from "./navigation"
@@ -182,6 +184,13 @@ export function Session() {
   const promptRef = usePromptRef()
   const session = createMemo(() => sync.session.get(route.sessionID))
   const risk = createMemo(() => sync.session.risk(route.sessionID))
+  // Mirror of the header's autonomous chip — same SessionStatus source —
+  // so the transcript outer border and the header chip flip together.
+  const autonomous = createMemo(() => {
+    const candidate = sync.data.session_status?.[route.sessionID]
+    const status: FooterSessionStatus = isFooterSessionStatus(candidate) ? candidate : { type: "idle" }
+    return autonomousActiveView(status)
+  })
   const qualityActions = createMemo(() =>
     sessionQualityActions({
       sessionID: route.sessionID,
@@ -996,9 +1005,9 @@ export function Session() {
           paddingLeft={2}
           paddingRight={2}
           gap={1}
-          border={session()?.parentID ? ["left"] : undefined}
+          border={autonomous().active || session()?.parentID ? ["left"] : undefined}
           customBorderChars={SplitBorder.customBorderChars}
-          borderColor={theme.primary}
+          borderColor={autonomous().active ? theme.accent : theme.primary}
         >
           <Show when={session()}>
             <Show when={showHeader() && (!sidebarVisible() || !wide())}>
