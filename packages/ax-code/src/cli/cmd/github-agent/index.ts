@@ -67,6 +67,12 @@ function requireOidcBaseUrl(): string {
   return value.replace(/\/+$/, "")
 }
 
+function browserOpenCommand(url: string): { command: string; args: string[] } {
+  if (process.platform === "win32") return { command: "start", args: ["", url] }
+  if (process.platform === "darwin") return { command: "open", args: [url] }
+  return { command: "xdg-open", args: [url] }
+}
+
 export const GithubInstallCommand = cmd({
   command: "install",
   describe: "install the GitHub agent",
@@ -186,9 +192,8 @@ export const GithubInstallCommand = cmd({
 
             // Open browser
             const url = "https://github.com/apps/ax-code-agent"
-            const open = process.platform === "darwin" ? "open" : process.platform === "win32" ? "start" : "xdg-open"
-            const args = process.platform === "win32" ? ["", url] : [url]
-            execFile(open, args, (error) => {
+            const { command, args } = browserOpenCommand(url)
+            execFile(command, args, (error) => {
               if (error) {
                 prompts.log.warn(`Could not open browser. Please visit: ${url}`)
               }
