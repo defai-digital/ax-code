@@ -262,11 +262,9 @@ jobs:
         if: ${{ steps.channel.outputs.enabled == 'true' }}
         shell: bash
         run: |
-          set -e
           OUTPUT="$(ax-code doctor 2>&1)"
           echo "$OUTPUT"
-          echo "$OUTPUT" | grep -E "Runtime: Bun .* \(compiled\)" \
-            || (echo "FAIL: Homebrew formula did not report compiled runtimeMode" && exit 1)
+          echo "$OUTPUT" | bash .github/scripts/assert-runtime-mode.sh "latest" doctor homebrew
 
       - name: Smoke — installed backend stdio handshake
         if: ${{ steps.channel.outputs.enabled == 'true' }}
@@ -278,5 +276,4 @@ jobs:
           echo "$OUTPUT"
           echo "$OUTPUT" | grep -E '"type":"rpc.result".*"id":1' \
             || (echo "FAIL: Homebrew installed backend did not return rpc health result" && exit 1)
-          echo "$OUTPUT" | grep -E '"runtimeMode":"compiled"' \
-            || (echo "FAIL: Homebrew installed backend did not report compiled runtimeMode" && exit 1)
+          echo "$OUTPUT" | bash .github/scripts/assert-runtime-mode.sh "latest" backend homebrew

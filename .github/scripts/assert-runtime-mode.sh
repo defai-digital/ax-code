@@ -9,6 +9,9 @@ if [ -z "$CHANNEL" ] || [ -z "$MODE" ]; then
   exit 1
 fi
 
+LABEL="${3:-$CHANNEL}"
+CHECK_LABEL="${LABEL}"
+
 if [ "$CHANNEL" = "source" ]; then
   RUNTIME_RE='(bun-bundled|source)'
 else
@@ -18,11 +21,11 @@ fi
 case "$MODE" in
   doctor)
     PATTERN="Runtime: Bun .* \\(${RUNTIME_RE}\\)"
-    LABEL="runtimeMode"
+    CHECK_LABEL="runtimeMode"
     ;;
   backend)
     PATTERN="\"runtimeMode\":\"${RUNTIME_RE}\""
-    LABEL="backend runtimeMode"
+    CHECK_LABEL="backend runtimeMode"
     ;;
   *)
     echo "FAIL: unknown mode '${MODE}'"
@@ -37,6 +40,6 @@ if [ -z "$OUTPUT" ]; then
 fi
 
 if ! echo "$OUTPUT" | grep -E "$PATTERN" >/dev/null 2>&1; then
-  echo "FAIL: ${CHANNEL} channel did not report ${RUNTIME_RE} ${LABEL}"
+  echo "FAIL: ${LABEL} did not report ${RUNTIME_RE} ${CHECK_LABEL}"
   exit 1
 fi
