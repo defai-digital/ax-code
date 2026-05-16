@@ -5,7 +5,7 @@ import DESCRIPTION from "./ls.txt"
 import { Instance } from "../project/instance"
 import { Ripgrep } from "../file/ripgrep"
 import { assertExternalDirectory, assertSymlinkInsideProject } from "./external-directory"
-import { resolveToolFilePath } from "./file-path"
+import { normalizeToWorkspacePath, resolveToolFilePath } from "./file-path"
 
 export const IGNORE_PATTERNS = [
   "node_modules/",
@@ -110,8 +110,10 @@ export const ListTool = Tool.define("list", {
 
     const output = `${searchPath}/\n` + renderDir(".", 0)
 
+    const title = normalizeToWorkspacePath(searchPath, Instance.worktree)
+
     return {
-      title: path.relative(Instance.worktree, searchPath),
+      title,
       metadata: {
         count: files.length,
         truncated: files.length >= LIMIT,

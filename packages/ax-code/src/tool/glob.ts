@@ -8,7 +8,7 @@ import { Instance } from "../project/instance"
 import { assertExternalDirectory, assertSymlinkInsideProject } from "./external-directory"
 import { NativePerf } from "../perf/native"
 import { NativeAddon } from "../native/addon"
-import { resolveToolFilePath } from "./file-path"
+import { normalizeToWorkspacePath, resolveToolFilePath } from "./file-path"
 
 export const GlobTool = Tool.define("glob", {
   description: DESCRIPTION,
@@ -38,6 +38,7 @@ export const GlobTool = Tool.define("glob", {
     search = resolveToolFilePath(search, Instance.directory)
     await assertExternalDirectory(ctx, search, { kind: "directory" })
     await assertSymlinkInsideProject(search)
+    const title = normalizeToWorkspacePath(search, Instance.worktree)
 
     // Native fast-path: in-process glob via Rust addon
     const native = NativeAddon.fs()
@@ -64,7 +65,7 @@ export const GlobTool = Tool.define("glob", {
         }
 
         return {
-          title: path.relative(Instance.worktree, search),
+          title,
           metadata: {
             count: entries.length,
             truncated,
@@ -111,7 +112,7 @@ export const GlobTool = Tool.define("glob", {
     }
 
     return {
-      title: path.relative(Instance.worktree, search),
+      title,
       metadata: {
         count: files.length,
         truncated,

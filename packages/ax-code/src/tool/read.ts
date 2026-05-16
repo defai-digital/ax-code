@@ -14,7 +14,7 @@ import { Filesystem } from "../util/filesystem"
 import { DEFAULT_READ_LIMIT, MAX_LINE_LENGTH, MAX_LINE_SUFFIX, MAX_BYTES, MAX_BYTES_LABEL } from "@/constants/tool"
 import { Log } from "@/util/log"
 import { isHarmlessEffectInterrupt } from "@/effect/interrupt"
-import { NULL_BYTE_PATH_ERROR, resolveToolFilePath } from "./file-path"
+import { NULL_BYTE_PATH_ERROR, normalizeToWorkspacePath, resolveToolFilePath } from "./file-path"
 
 const log = Log.create({ service: "tool.read" })
 
@@ -82,7 +82,7 @@ export const ReadTool = Tool.define("read", {
       throw readError("ReadInvalidOffsetError", "offset must be greater than or equal to 1")
     }
     const filepath = resolveToolFilePath(params.filePath, Instance.directory)
-    const title = path.relative(Instance.worktree, filepath)
+    const title = normalizeToWorkspacePath(filepath, Instance.worktree)
     try {
       const stat = Filesystem.stat(filepath)
 

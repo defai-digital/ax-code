@@ -9,7 +9,7 @@ import { assertExternalDirectory, assertSymlinkInsideProject } from "./external-
 import { Filesystem } from "../util/filesystem"
 import { AuditSemanticCall } from "../audit/semantic-call"
 import type { LSPServer } from "../lsp/server"
-import { resolveToolFilePath } from "./file-path"
+import { normalizeToWorkspacePath, resolveToolFilePath } from "./file-path"
 
 // Synthesize a minimal envelope for operations that don't yet have an
 // envelope-returning LSP variant. Lets us audit every tool call
@@ -211,10 +211,10 @@ export const LspTool = Tool.define("lsp", {
       audit({ operation: "diagnosticsAggregated", args, envelope })
       const output =
         envelope.data.length === 0
-          ? `No aggregated diagnostics found${file ? ` for ${path.relative(Instance.worktree, file)}` : ""}`
+          ? `No aggregated diagnostics found${file ? ` for ${normalizeToWorkspacePath(file, Instance.worktree)}` : ""}`
           : JSON.stringify(envelope, null, 2)
       return {
-        title: file ? `diagnosticsAggregated ${path.relative(Instance.worktree, file)}` : "diagnosticsAggregated",
+        title: file ? `diagnosticsAggregated ${normalizeToWorkspacePath(file, Instance.worktree)}` : "diagnosticsAggregated",
         metadata: { envelope },
         output,
       }
@@ -261,7 +261,7 @@ export const LspTool = Tool.define("lsp", {
       character: args.character - 1,
     }
 
-    const relPath = path.relative(Instance.worktree, file)
+    const relPath = normalizeToWorkspacePath(file, Instance.worktree)
     const title = `${args.operation} ${relPath}:${args.line}:${args.character}`
 
     const method = semanticMethodByOperation[args.operation]
