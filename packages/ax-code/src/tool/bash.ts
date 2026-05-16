@@ -21,6 +21,7 @@ import { Plugin } from "@/plugin"
 import { Isolation } from "@/isolation"
 import { BlastRadius } from "@/session/blast-radius"
 import { assertSymlinkInsideProject } from "./external-directory"
+import { resolveToolFilePath } from "./file-path"
 
 import { BASH_MAX_METADATA_LENGTH as MAX_METADATA_LENGTH } from "@/constants/network"
 const DEFAULT_TIMEOUT = Flag.AX_CODE_EXPERIMENTAL_BASH_DEFAULT_TIMEOUT_MS || 2 * 60 * 1000
@@ -93,9 +94,11 @@ export const BashTool = Tool.define("bash", async () => {
         ),
     }),
     async execute(params, ctx) {
-      if (params.workdir?.includes("\x00")) throw new Error("Working directory contains null byte")
+      if (params.workdir !== undefined) {
+        resolveToolFilePath(params.workdir, Instance.directory)
+      }
       if (params.command.includes("\x00")) throw new Error("Command contains null byte")
-      const requestedCwd = params.workdir ? path.resolve(Instance.directory, params.workdir) : Instance.directory
+      const requestedCwd = params.workdir ? resolveToolFilePath(params.workdir, Instance.directory) : Instance.directory
       await assertSymlinkInsideProject(requestedCwd)
       const cwd = params.workdir
         ? await fs.realpath(requestedCwd).catch(() => {

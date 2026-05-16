@@ -14,6 +14,7 @@ import { Filesystem } from "../util/filesystem"
 import { DEFAULT_READ_LIMIT, MAX_LINE_LENGTH, MAX_LINE_SUFFIX, MAX_BYTES, MAX_BYTES_LABEL } from "@/constants/tool"
 import { Log } from "@/util/log"
 import { isHarmlessEffectInterrupt } from "@/effect/interrupt"
+import { NULL_BYTE_PATH_ERROR, resolveToolFilePath } from "./file-path"
 
 const log = Log.create({ service: "tool.read" })
 
@@ -76,14 +77,11 @@ export const ReadTool = Tool.define("read", {
     limit: z.coerce.number().max(10000).describe("The maximum number of lines to read (defaults to 2000)").optional(),
   }),
   async execute(params, ctx) {
-    if (params.filePath.includes("\x00")) throw readError("ReadInvalidPathError", "File path contains null byte")
+    if (params.filePath.includes("\x00")) throw readError("ReadInvalidPathError", NULL_BYTE_PATH_ERROR)
     if (params.offset !== undefined && params.offset < 1) {
       throw readError("ReadInvalidOffsetError", "offset must be greater than or equal to 1")
     }
-    let filepath = params.filePath
-    if (!path.isAbsolute(filepath)) {
-      filepath = path.resolve(Instance.directory, filepath)
-    }
+    const filepath = resolveToolFilePath(params.filePath, Instance.directory)
     const title = path.relative(Instance.worktree, filepath)
     try {
       const stat = Filesystem.stat(filepath)
