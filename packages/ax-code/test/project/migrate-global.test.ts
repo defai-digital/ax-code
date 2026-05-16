@@ -8,6 +8,7 @@ import { SessionID } from "../../src/session/schema"
 import { Log } from "../../src/util/log"
 import { $ } from "bun"
 import { tmpdir } from "../fixture/fixture"
+import path from "path"
 
 Log.init({ print: false })
 
@@ -94,6 +95,30 @@ describe("migrateFromGlobal", () => {
     // 4. Call fromDirectory again — project row already exists,
     //    so the current code skips migration entirely. This is the bug.
     await Project.fromDirectory(tmp.path)
+
+    const row = Database.use((db) => db.select().from(SessionTable).where(eq(SessionTable.id, id)).get())
+    expect(row).toBeDefined()
+    expect(row!.project_id).toBe(project.id)
+  })
+
+  test("migrates global sessions created from a repository subdirectory", async () => {
+    await using tmp = await tmpdir()
+    await $`git init`.cwd(tmp.path).quiet()
+    await $`git config user.name "Test"`.cwd(tmp.path).quiet()
+    await $`git config user.email "test@opencode.test"`.cwd(tmp.path).quiet()
+    await $`mkdir -p packages/app`.cwd(tmp.path).quiet()
+    const subdir = path.join(tmp.path, "packages", "app")
+
+    const { project: pre } = await Project.fromDirectory(subdir)
+    expect(pre.id).toBe(ProjectID.global)
+
+    ensureGlobal()
+    const id = uid()
+    seed({ id, dir: subdir, project: ProjectID.global })
+
+    await $`git commit --allow-empty -m "root"`.cwd(tmp.path).quiet()
+    const { project } = await Project.fromDirectory(tmp.path)
+    expect(project.id).not.toBe(ProjectID.global)
 
     const row = Database.use((db) => db.select().from(SessionTable).where(eq(SessionTable.id, id)).get())
     expect(row).toBeDefined()

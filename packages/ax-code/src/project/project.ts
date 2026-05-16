@@ -145,6 +145,27 @@ export namespace Project {
     return ProjectID.make(`dir-${hash}`)
   }
 
+  function shouldClaimGlobalSessionDirectory(worktree: string, directory: string) {
+    if (!directory) return false
+    return Filesystem.contains(worktree, directory)
+  }
+
+  function migrateGlobalSessionsToProject(db: Database.TxOrDb, projectID: ProjectID, worktree: string) {
+    const rows = db
+      .select({ id: SessionTable.id, directory: SessionTable.directory })
+      .from(SessionTable)
+      .where(eq(SessionTable.project_id, ProjectID.global))
+      .all()
+
+    for (const row of rows) {
+      if (!shouldClaimGlobalSessionDirectory(worktree, row.directory)) continue
+      db.update(SessionTable)
+        .set({ project_id: projectID })
+        .where(and(eq(SessionTable.project_id, ProjectID.global), eq(SessionTable.id, row.id)))
+        .run()
+    }
+  }
+
   export const layer: Layer.Layer<
     Service,
     never,
@@ -351,13 +372,7 @@ export namespace Project {
           )
 
           if (data.id !== ProjectID.global) {
-            yield* db((d) =>
-              d
-                .update(SessionTable)
-                .set({ project_id: data.id })
-                .where(and(eq(SessionTable.project_id, ProjectID.global), eq(SessionTable.directory, data.worktree)))
-                .run(),
-            )
+            yield* db((d) => migrateGlobalSessionsToProject(d, data.id, data.worktree))
           }
         } catch (error) {
           log.warn("failed to persist discovered project", {
@@ -698,13 +713,7 @@ export namespace Project {
       )
 
       if (data.id !== ProjectID.global) {
-        Database.use((d) =>
-          d
-            .update(SessionTable)
-            .set({ project_id: data.id })
-            .where(and(eq(SessionTable.project_id, ProjectID.global), eq(SessionTable.directory, data.worktree)))
-            .run(),
-        )
+        Database.use((d) => migrateGlobalSessionsToProject(d, data.id, data.worktree))
       }
     } catch (error) {
       log.warn("failed to persist discovered project", {
