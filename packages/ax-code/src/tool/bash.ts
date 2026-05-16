@@ -50,6 +50,12 @@ function absolutePathLiterals(value: string) {
   return Array.from(value.matchAll(/["'](\/[^"']+)["']/g), (match) => match[1]).filter(Boolean)
 }
 
+async function estimateFileLineDelta(filePath: string) {
+  const stat = await fs.stat(filePath).catch(() => undefined)
+  if (!stat?.isFile()) return 1
+  return Math.max(1, Math.ceil(stat.size / 80))
+}
+
 // Track detached process groups so we can clean them up if the parent
 // process exits unexpectedly (crash, SIGKILL, etc.). Without this,
 // detached child processes become orphans that keep running.
@@ -621,10 +627,10 @@ export const BashTool = Tool.define("bash", async () => {
         output += "\n\n<bash_metadata>\n" + resultMetadata.join("\n") + "\n</bash_metadata>"
       }
 
-      if (proc.exitCode === 0 || proc.signalCode) {
+      if (proc.exitCode === 0) {
         for (const filePath of redirectWritePaths) {
           if (Filesystem.contains(Instance.worktree, filePath)) {
-            BlastRadius.recordWriteAndAssert(ctx.sessionID, filePath, 1)
+            BlastRadius.recordWriteAndAssert(ctx.sessionID, filePath, await estimateFileLineDelta(filePath))
           }
         }
       }

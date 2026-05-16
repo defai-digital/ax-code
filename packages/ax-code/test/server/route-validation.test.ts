@@ -113,6 +113,27 @@ describe("server route validation", () => {
     })
   })
 
+  test("mcp add rejects unsafe server names", async () => {
+    await Instance.provide({
+      directory: root,
+      fn: async () => {
+        const res = await Server.Default().request("/mcp", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            name: "../bad/name",
+            config: {
+              type: "local",
+              command: ["node", "server.js"],
+              enabled: true,
+            },
+          }),
+        })
+        expect(res.status).toBe(400)
+      },
+    })
+  })
+
   test("pty websocket route closes failed connects instead of leaving an unhandled async open", async () => {
     const src = await Bun.file(path.join(import.meta.dir, "../../src/server/routes/pty.ts")).text()
     expect(src).toContain("try {")

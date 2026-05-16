@@ -970,8 +970,8 @@ export const GithubRunCommand = cmd({
         const newCredentials = Buffer.from(`x-access-token:${appToken}`, "utf8").toString("base64")
 
         await gitRun(["config", "--local", config, `AUTHORIZATION: basic ${newCredentials}`])
-        await gitRun(["config", "--global", "user.name", AGENT_USERNAME])
-        await gitRun(["config", "--global", "user.email", `${AGENT_USERNAME}@users.noreply.github.com`])
+        await gitRun(["config", "--local", "user.name", AGENT_USERNAME])
+        await gitRun(["config", "--local", "user.email", `${AGENT_USERNAME}@users.noreply.github.com`])
       }
 
       async function restoreGitConfig() {

@@ -696,8 +696,8 @@ async function configureGit(appToken: string) {
 
   await $`git config --local --unset-all ${config}`
   await $`git config --local ${config} "AUTHORIZATION: basic ${newCredentials}"`
-  await $`git config --global user.name "ax-code-agent[bot]"`
-  await $`git config --global user.email "ax-code-agent[bot]@users.noreply.github.com"`
+  await $`git config --local user.name "ax-code-agent[bot]"`
+  await $`git config --local user.email "ax-code-agent[bot]@users.noreply.github.com"`
 }
 
 async function restoreGitConfig() {

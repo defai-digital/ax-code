@@ -69,7 +69,7 @@ export const McpRoutes = lazy(() =>
       validator(
         "json",
         z.object({
-          name: z.string(),
+          name: MCP_NAME_PARAM,
           config: Config.Mcp,
         }),
       ),

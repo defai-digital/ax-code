@@ -374,6 +374,19 @@ describe("tool.bash permissions", () => {
 })
 
 describe("tool.bash truncation", () => {
+  test("redirect blast radius uses file-size estimate instead of a constant", async () => {
+    const src = await Bun.file(path.join(import.meta.dir, "../../src/tool/bash.ts")).text()
+    expect(src).toContain("async function estimateFileLineDelta")
+    expect(src).toContain("Math.ceil(stat.size / 80)")
+    expect(src).not.toContain("recordWriteAndAssert(ctx.sessionID, filePath, 1)")
+  })
+
+  test("redirect blast radius ignores signal-killed commands", async () => {
+    const src = await Bun.file(path.join(import.meta.dir, "../../src/tool/bash.ts")).text()
+    expect(src).toContain("if (proc.exitCode === 0)")
+    expect(src).not.toContain("proc.exitCode === 0 || proc.signalCode")
+  })
+
   test("truncates output exceeding line limit", async () => {
     await Instance.provide({
       directory: projectRoot,

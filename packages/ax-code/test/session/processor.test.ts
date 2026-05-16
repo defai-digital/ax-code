@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, spyOn, test } from "bun:test"
+import path from "path"
 import { Agent } from "../../src/agent/agent"
 import type { Provider } from "../../src/provider/provider"
 import { Instance } from "../../src/project/instance"
@@ -51,6 +52,16 @@ afterEach(() => {
 })
 
 describe("session.processor", () => {
+  test("flushes pending deltas before breaking for compaction", async () => {
+    const src = await Bun.file(path.join(import.meta.dir, "../../src/session/processor.ts")).text()
+    const start = src.indexOf("if (needsCompaction) {")
+    const end = src.indexOf("\n                break", start)
+    expect(start).toBeGreaterThan(-1)
+    expect(end).toBeGreaterThan(start)
+
+    expect(src.slice(start, end)).toContain("deltaBatcher.flush()")
+  })
+
   test("marks tool-using steps as tool-calls even when provider finish reason is stop", async () => {
     await using tmp = await tmpdir({ git: true })
 
