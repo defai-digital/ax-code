@@ -22,10 +22,19 @@ async function rejectAll(message?: string) {
 }
 
 async function waitForPending(count: number) {
-  for (let i = 0; i < 200; i++) {
+  // Wall-clock budget rather than iteration count: in autonomous-mode
+  // tests `Permission.ask` awaits `Config.get()` before adding the
+  // pending entry, and Config.get's first call inside a fresh
+  // Instance.provide may do filesystem reads or wellknown fetches that
+  // exceed 200 microtask yields. Polling by elapsed time keeps the
+  // helper robust regardless of how much async work happens upstream
+  // of pending.set, without changing observable behavior for tests
+  // whose ask path is short.
+  const deadline = Date.now() + 5000
+  while (Date.now() < deadline) {
     const list = await Permission.list()
     if (list.length === count) return list
-    await Bun.sleep(0)
+    await Bun.sleep(5)
   }
   return Permission.list()
 }
