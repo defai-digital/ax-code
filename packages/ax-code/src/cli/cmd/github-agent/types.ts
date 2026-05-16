@@ -104,19 +104,30 @@ export type GitHubIssue = {
 /** Check all connection fields for truncation and return warnings. */
 export function checkTruncation(data: GitHubPullRequest | GitHubIssue): string[] {
   const warnings: string[] = []
-  if (data.comments?.pageInfo?.hasNextPage) {
+  const hasNextPage = (value?: { pageInfo?: PageInfo }) => value?.pageInfo?.hasNextPage === true
+
+  if (hasNextPage(data.comments)) {
     warnings.push("comments (>100)")
   }
   if ("commits" in data) {
     const pr = data as GitHubPullRequest
-    if (pr.commits?.pageInfo?.hasNextPage) warnings.push("commits (>100)")
-    if (pr.files?.pageInfo?.hasNextPage) warnings.push("files (>100)")
-    if (pr.reviews?.pageInfo?.hasNextPage) warnings.push("reviews (>100)")
-    for (const review of pr.reviews?.nodes ?? []) {
-      if (review.comments?.pageInfo?.hasNextPage) {
-        warnings.push(`review comments in review by ${review.author?.login ?? "unknown"} (>100)`)
-        break
+    const truncatedSections: Array<{ value?: { pageInfo?: PageInfo }; label: string }> = [
+      { value: pr.commits, label: "commits (>100)" },
+      { value: pr.files, label: "files (>100)" },
+      { value: pr.reviews, label: "reviews (>100)" },
+    ]
+
+    for (const section of truncatedSections) {
+      if (hasNextPage(section.value)) {
+        warnings.push(section.label)
       }
+    }
+
+    const truncatedReviewComment = pr.reviews.nodes.find(
+      (review) => hasNextPage(review.comments),
+    )
+    if (truncatedReviewComment) {
+      warnings.push(`review comments in review by ${truncatedReviewComment.author?.login ?? "unknown"} (>100)`)
     }
   }
   return warnings
