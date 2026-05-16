@@ -87,7 +87,9 @@ export namespace Provider {
           (modelID.includes("-reasoning") || modelID.includes("-non-reasoning") || modelID.includes("-0309-")),
       )
       if (legacyTargets.length === 0) return
-      const reasoningModel = legacyTargets.find(([modelID]) => modelID.includes("-reasoning"))
+      const reasoningModel = legacyTargets.find(
+        ([modelID]) => modelID.includes("-reasoning") && !modelID.includes("-non-reasoning"),
+      )
       const baseModel = reasoningModel ?? legacyTargets[0]
       if (!baseModel) return
       const [modelID, sourceModel] = baseModel
