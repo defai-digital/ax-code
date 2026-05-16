@@ -88,6 +88,7 @@ import { useTuiConfig } from "../../context/tui-config"
 import { detail, diagnostics, diffSummary, normalize, workdir } from "./format"
 import { coalesceParts } from "./coalesce"
 import { autonomousActiveView, isAutonomousProducedMessage, isLiveAutonomousText } from "./autonomous-active"
+import { useAutonomousPulse } from "./autonomous-pulse"
 import { isFooterSessionStatus, type FooterSessionStatus } from "./footer-view-model"
 import { childAction, firstChildID, nextChildID } from "./child"
 import { lastUserMessageID, promptState, redoMessageID, undoMessageID } from "./messages"
@@ -190,6 +191,21 @@ export function Session() {
     const status: FooterSessionStatus = isFooterSessionStatus(candidate) ? candidate : { type: "idle" }
     return autonomousActiveView(status)
   })
+  // Breathing pulse for the transcript's outer border while the
+  // autonomous turn is running. Same driver as the assistant text
+  // bubble and the header chip, so the three visual cues breathe
+  // together. Border color is interpolated between a dim and full
+  // theme.accent so the existing "this is autonomous" hue is
+  // preserved — we only modulate brightness.
+  const autonomousBorderPulse = useAutonomousPulse(() => autonomous().active, {
+    animationsEnabled: () => kv.get("animations_enabled", true),
+  })
+  const autonomousBorderColor = createMemo(() => {
+    const MIN_ALPHA = 0.45
+    const MAX_ALPHA = 1.0
+    const alpha = MIN_ALPHA + (MAX_ALPHA - MIN_ALPHA) * autonomousBorderPulse()
+    return tint(theme.background, theme.accent, alpha)
+  })
   const qualityActions = createMemo(() =>
     sessionQualityActions({
       sessionID: route.sessionID,
@@ -279,6 +295,7 @@ export function Session() {
   const [diffWrapMode] = kv.signal<"word" | "none">("diff_wrap_mode", "word")
   const [animationsEnabled, setAnimationsEnabled] = kv.signal("animations_enabled", true)
   const [showGenericToolOutput, setShowGenericToolOutput] = kv.signal("generic_tool_output_visibility", false)
+  const [statusTick, setStatusTick] = createSignal(0)
 
   const wide = createMemo(() => dimensions().width > 120)
   const sidebarVisible = createMemo(() => {
@@ -303,6 +320,12 @@ export function Session() {
 
   onMount(() => {
     recordTuiStartupOnce("tui.startup.sessionMounted")
+    const timer = setInterval(() => {
+      const candidate = sync.data.session_status?.[route.sessionID]
+      if (!isFooterSessionStatus(candidate) || candidate.type === "idle") return
+      setStatusTick((value) => value + 1)
+    }, 1000)
+    onCleanup(() => clearInterval(timer))
   })
 
   const scrollAcceleration = createMemo(() => {
@@ -1027,7 +1050,7 @@ export function Session() {
           gap={1}
           border={autonomous().active || session()?.parentID ? ["left"] : undefined}
           customBorderChars={SplitBorder.customBorderChars}
-          borderColor={autonomous().active ? theme.accent : theme.primary}
+          borderColor={autonomous().active ? autonomousBorderColor() : theme.primary}
           onMouseUp={handleSubagentBodyMouseUp}
         >
           <Show when={session()}>
@@ -1162,6 +1185,7 @@ export function Session() {
               </Show>
               <Prompt
                 sidebarVisible={sidebarPanelVisible}
+                statusTick={statusTick}
                 visible={!session()?.parentID && permissions().length === 0 && questions().length === 0}
                 ref={(r) => {
                   prompt = r
@@ -1184,7 +1208,7 @@ export function Session() {
         <Show when={sidebarVisible()}>
           <Switch>
             <Match when={wide()}>
-              <Sidebar sessionID={route.sessionID} />
+              <Sidebar sessionID={route.sessionID} statusTick={statusTick} />
             </Match>
             <Match when={!wide()}>
               <box
@@ -1204,7 +1228,7 @@ export function Session() {
                   setSidebarOpen(false)
                 }}
               >
-                <Sidebar sessionID={route.sessionID} overlay />
+                <Sidebar sessionID={route.sessionID} overlay statusTick={statusTick} />
               </box>
             </Match>
           </Switch>
@@ -1657,6 +1681,7 @@ function ReasoningPart(props: { last: boolean; part: ReasoningPart; message: Ass
 function TextPart(props: { last: boolean; part: TextPart; message: AssistantMessage }) {
   const ctx = use()
   const { theme, syntax } = useTheme()
+  const kv = useKV()
   const [expanded, setExpanded] = createSignal(false)
   const trimmed = createMemo(() => props.part.text.trim())
   const lines = createMemo(() => trimmed().split("\n"))
@@ -1690,12 +1715,23 @@ function TextPart(props: { last: boolean; part: TextPart; message: AssistantMess
   })
   // Mutually exclusive — live wins while the turn is still running.
   const showStripe = createMemo(() => !isLiveAutonomous() && isAutonomousProduced())
-  // Dark-yellow autonomous tint, computed per-theme by tinting theme.warning
-  // (= yellow on every shipped theme, dark/light alike) onto the live
-  // background at the same alpha diffAddedBg uses. This way the highlight
-  // adapts to dark/light/high-contrast themes without forcing 33 theme
-  // JSON files to declare a dedicated key.
-  const autonomousBg = createMemo(() => tint(theme.background, theme.warning, 0.22))
+  // Breathing pulse while the autonomous step is in flight. We blend
+  // theme.warning onto theme.background at an alpha that oscillates
+  // between PULSE_MIN_ALPHA and PULSE_MAX_ALPHA, so the highlight
+  // brightens and dims rather than staying flat. The midpoint matches
+  // the old static 0.22 so themes that worked before still read the
+  // same on average. When animations are disabled the hook returns a
+  // constant phase of 0.5 → midpoint alpha → behaves as the old static
+  // tint.
+  const pulsePhase = useAutonomousPulse(isLiveAutonomous, {
+    animationsEnabled: () => kv.get("animations_enabled", true),
+  })
+  const PULSE_MIN_ALPHA = 0.14
+  const PULSE_MAX_ALPHA = 0.30
+  const autonomousBg = createMemo(() => {
+    const alpha = PULSE_MIN_ALPHA + (PULSE_MAX_ALPHA - PULSE_MIN_ALPHA) * pulsePhase()
+    return tint(theme.background, theme.warning, alpha)
+  })
 
   return (
     <Show when={trimmed()}>
