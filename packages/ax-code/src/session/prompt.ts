@@ -651,6 +651,44 @@ export namespace SessionPrompt {
     let fallbackModelOverride: MessageV2.User["model"] | undefined
     // Cache session history — only load from DB on first step, refresh on subsequent steps
     let cachedMsgs: MessageV2.WithParts[] | undefined
+
+    async function continueAutonomousLoop({
+      text,
+      event,
+      logExtras = {},
+      resetTodoDeadlineSignature = false,
+    }: {
+      text: string
+      event: string
+      logExtras?: Record<string, unknown>
+      resetTodoDeadlineSignature?: boolean
+    }) {
+      continuations += 1
+      step = 0
+      consecutiveErrors = 0
+      cachedMsgs = undefined
+      cachedAgent = undefined
+      cachedModel = undefined
+      if (resetTodoDeadlineSignature) {
+        lastTodoDeadlineSignature = undefined
+      }
+
+      log.info(event, {
+        command: "session.prompt.loop",
+        status: "ok",
+        sessionID,
+        continuation: continuations,
+        maxContinuations,
+        ...logExtras,
+      })
+      const latestMessages = await Session.messages({ sessionID })
+      await createAutonomousUserContinuation({
+        sessionID,
+        messages: latestMessages,
+        parts: [{ type: "text", text }],
+      })
+    }
+
     while (true) {
       // Reset structured output state at the start of each iteration so
       // a stale value from a prior step cannot cause the loop to save
@@ -688,29 +726,9 @@ export namespace SessionPrompt {
         // continuation message so the model picks up where it left off.
         // Capped by maxContinuations to prevent truly infinite runs.
         if (autonomous && continuations < maxContinuations) {
-          continuations++
-          step = 0
-          consecutiveErrors = 0
-          cachedMsgs = undefined
-          cachedAgent = undefined
-          cachedModel = undefined
-          log.info("autonomous auto-continue", {
-            command: "session.prompt.loop",
-            status: "ok",
-            sessionID,
-            continuation: continuations,
-            maxContinuations,
-          })
-          const lastMsgs = await Session.messages({ sessionID })
-          await createAutonomousUserContinuation({
-            sessionID,
-            messages: lastMsgs,
-            parts: [
-              {
-                type: "text",
-                text: `Continue from where you left off. You have used ${GLOBAL_STEP_LIMIT} steps. This is auto-continuation ${continuations}/${maxContinuations}. Prioritize completing the most important remaining work. Avoid over-engineering: prefer the simplest common-practice change that solves the task, avoid new abstractions unless there are 3+ concrete use cases, and verify before expanding scope.`,
-              },
-            ],
+          await continueAutonomousLoop({
+            event: "autonomous auto-continue",
+            text: `Continue from where you left off. You have used ${GLOBAL_STEP_LIMIT} steps. This is auto-continuation ${continuations + 1}/${maxContinuations}. Prioritize completing the most important remaining work. Avoid over-engineering: prefer the simplest common-practice change that solves the task, avoid new abstractions unless there are 3+ concrete use cases, and verify before expanding scope.`,
           })
           continue
         }
@@ -909,6 +927,19 @@ export namespace SessionPrompt {
             })
       cachedAgent = { key: lastUser.agent, value: agent }
       const maxSteps = agent.steps ?? Infinity
+      if (autonomous && Number.isFinite(maxSteps) && step >= maxSteps && continuations < maxContinuations) {
+        await continueAutonomousLoop({
+          event: "autonomous agent step-limit auto-continue",
+          resetTodoDeadlineSignature: true,
+          text:
+            `Autonomous mode reached the ${agent.name} agent step limit (${maxSteps} steps). ` +
+            `Continue from where you left off with the same agent. Do not summarize the task as complete ` +
+            `unless the work is actually complete; use tools to finish the remaining work and verify it. ` +
+            `This is agent step-limit auto-continuation ${continuations + 1}/${maxContinuations}.`,
+          logExtras: { agent: agent.name, maxSteps },
+        })
+        continue
+      }
       const isLastStep = step >= maxSteps
       msgs = await insertReminders({
         messages: msgs,
@@ -1370,35 +1401,29 @@ export namespace SessionPrompt {
           }
 
           if (stagnantTodoRetries >= MAX_STAGNANT_TODO_RETRIES) {
-            const incompleteMessage =
-              `Autonomous mode stopped because ${Locale.pluralize(
-                pendingTodos.length,
-                "{} todo",
-                "{} todos",
-              )} remained unchanged after ${Locale.pluralize(
-                stagnantTodoRetries,
-                "{} retry attempt",
-                "{} retry attempts",
-              )}. ` +
-              `The session is stopped, but the remaining todos are not complete.`
-            log.warn("autonomous todo continuation stopped on unchanged pending todos", {
+            log.warn("autonomous todo continuation is stagnant", {
               command: "session.prompt.loop",
-              status: "stopped",
+              status: "retry",
               sessionID,
               pendingCount: pendingTodos.length,
               attempts: todoRetries,
               stagnantAttempts: stagnantTodoRetries,
               maxStagnantAttempts: MAX_STAGNANT_TODO_RETRIES,
             })
-            await publishAutonomousFailure(incompleteMessage)
-            reason = "stalled"
-            break
           }
 
           todoRetries++
           const reportClosureGuidance = hasReportStyleTodo(pendingTodos)
             ? reportTodoClosureGuidance("continuation")
             : ""
+          const stagnantTodoGuidance =
+            stagnantTodoRetries >= MAX_STAGNANT_TODO_RETRIES
+              ? `\nThe pending todo list has not changed for ${Locale.pluralize(
+                  stagnantTodoRetries,
+                  "{} retry",
+                  "{} retries",
+                )}. Do not repeat the same summary. Complete a concrete todo, cancel a blocked todo with the reason, or use a tool to make progress before stopping.`
+              : ""
           log.info("autonomous todo continuation", {
             command: "session.prompt.loop",
             status: "ok",
@@ -1423,7 +1448,8 @@ export namespace SessionPrompt {
                   `${Todo.formatLines(pendingTodos).join("\n")}\n` +
                   `Continue working until all todos are completed or cancelled. ` +
                   `This is auto-continuation ${todoRetries}/${maxTodoRetries}.` +
-                  reportClosureGuidance,
+                  reportClosureGuidance +
+                  stagnantTodoGuidance,
               },
             ],
           })

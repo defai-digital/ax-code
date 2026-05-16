@@ -204,6 +204,9 @@ describe("session.prompt flow", () => {
             steps: 1,
           },
         },
+        session: {
+          max_continuations: 0,
+        },
       },
     })
 
@@ -269,6 +272,179 @@ describe("session.prompt flow", () => {
 
           expect(Todo.get(session.id)).toEqual([
             { content: "Write bug reports to .internal/bugs/", status: "in_progress", priority: "high" },
+          ])
+
+          await Session.remove(session.id)
+        },
+      })
+    } finally {
+      if (previousAutonomous === undefined) delete process.env["AX_CODE_AUTONOMOUS"]
+      else process.env["AX_CODE_AUTONOMOUS"] = previousAutonomous
+    }
+  })
+
+  test("auto-continues before autonomous agent step limit disables tools", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      config: {
+        agent: {
+          build: {
+            steps: 2,
+          },
+        },
+        session: {
+          max_continuations: 1,
+          max_todo_retries: 3,
+        },
+      },
+    })
+
+    const previousAutonomous = process.env["AX_CODE_AUTONOMOUS"]
+    process.env["AX_CODE_AUTONOMOUS"] = "true"
+
+    try {
+      let sessionID: string | undefined
+      let call = 0
+      modelSpy = spyOn(Provider, "getModel").mockResolvedValue(model)
+      summarySpy = spyOn(SessionSummary, "summarize").mockResolvedValue()
+      streamSpy = spyOn(LLM, "stream").mockImplementation(async () => {
+        call++
+        if (call === 2 && sessionID) {
+          Todo.update({
+            sessionID,
+            todos: [{ content: "Finish the autonomous task", status: "completed", priority: "high" }],
+          })
+        }
+        return {
+          fullStream: (async function* () {
+            yield { type: "start" }
+            yield { type: "start-step" }
+            yield { type: "text-start", id: `text_${call}` }
+            yield { type: "text-delta", id: `text_${call}`, text: call === 1 ? "still working" : "done" }
+            yield { type: "text-end", id: `text_${call}` }
+            yield {
+              type: "finish-step",
+              finishReason: "stop",
+              usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+            }
+            yield { type: "finish" }
+          })(),
+        } as any
+      })
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const session = await Session.create({ title: "Agent Step Limit Continuation Test" })
+          sessionID = session.id
+          Todo.update({
+            sessionID: session.id,
+            todos: [{ content: "Finish the autonomous task", status: "in_progress", priority: "high" }],
+          })
+
+          await SessionPrompt.prompt({
+            sessionID: session.id,
+            agent: "build",
+            parts: [{ type: "text", text: "finish this task autonomously" }],
+          })
+
+          expect(streamSpy).toHaveBeenCalledTimes(2)
+          const messages = await Session.messages({ sessionID: session.id })
+          expect(
+            messages.some(
+              (message) =>
+                message.info.role === "user" &&
+                message.parts.some(
+                  (part) =>
+                    part.type === "text" &&
+                    part.text.includes("Autonomous mode reached the build agent step limit") &&
+                    part.text.includes("agent step-limit auto-continuation"),
+                ),
+            ),
+          ).toBe(true)
+          expect(Todo.get(session.id)).toEqual([
+            { content: "Finish the autonomous task", status: "completed", priority: "high" },
+          ])
+
+          await Session.remove(session.id)
+        },
+      })
+    } finally {
+      if (previousAutonomous === undefined) delete process.env["AX_CODE_AUTONOMOUS"]
+      else process.env["AX_CODE_AUTONOMOUS"] = previousAutonomous
+    }
+  })
+
+  test("does not stop unchanged autonomous todos before max_todo_retries is exhausted", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      config: {
+        agent: {
+          build: {
+            steps: 20,
+          },
+        },
+        session: {
+          max_todo_retries: 4,
+        },
+      },
+    })
+
+    const previousAutonomous = process.env["AX_CODE_AUTONOMOUS"]
+    process.env["AX_CODE_AUTONOMOUS"] = "true"
+
+    try {
+      let sessionID: string | undefined
+      let call = 0
+      modelSpy = spyOn(Provider, "getModel").mockResolvedValue(model)
+      summarySpy = spyOn(SessionSummary, "summarize").mockResolvedValue()
+      streamSpy = spyOn(LLM, "stream").mockImplementation(async () => {
+        call++
+        if (call === 4 && sessionID) {
+          Todo.update({
+            sessionID,
+            todos: [{ content: "Write bug report", status: "completed", priority: "high" }],
+          })
+        }
+        return {
+          fullStream: (async function* () {
+            yield { type: "start" }
+            yield { type: "start-step" }
+            yield { type: "text-start", id: `text_${call}` }
+            yield { type: "text-delta", id: `text_${call}`, text: call === 4 ? "report finished" : "still pending" }
+            yield { type: "text-end", id: `text_${call}` }
+            yield {
+              type: "finish-step",
+              finishReason: "stop",
+              usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+            }
+            yield { type: "finish" }
+          })(),
+        } as any
+      })
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const session = await Session.create({ title: "Todo Retry Budget Test" })
+          sessionID = session.id
+          Todo.update({
+            sessionID: session.id,
+            todos: [{ content: "Write bug report", status: "in_progress", priority: "high" }],
+          })
+
+          const msg = await SessionPrompt.prompt({
+            sessionID: session.id,
+            agent: "build",
+            parts: [{ type: "text", text: "write the bug report" }],
+          })
+
+          expect(streamSpy).toHaveBeenCalledTimes(4)
+          expect(msg.info.role).toBe("assistant")
+          if (msg.info.role !== "assistant") throw new Error("expected assistant")
+          expect(msg.info.error).toBeUndefined()
+          expect(Todo.get(session.id)).toEqual([
+            { content: "Write bug report", status: "completed", priority: "high" },
           ])
 
           await Session.remove(session.id)
