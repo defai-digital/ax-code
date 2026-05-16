@@ -1352,9 +1352,7 @@ query($owner: String!, $repo: String!, $number: Int!) {
         if (!issue) throw new Error(`Issue #${issueId} not found`)
 
         const truncated = checkTruncation(issue)
-        if (truncated.length > 0) {
-          console.warn(`Warning: Issue #${issueId} data truncated for: ${truncated.join(", ")}`)
-        }
+        warnOnTruncation("Issue", issueId, truncated)
 
         return issue
       }
@@ -1497,11 +1495,15 @@ query($owner: String!, $repo: String!, $number: Int!) {
         if (!pr) throw new Error(`PR #${issueId} not found`)
 
         const truncated = checkTruncation(pr)
-        if (truncated.length > 0) {
-          console.warn(`Warning: PR #${issueId} data truncated for: ${truncated.join(", ")}`)
-        }
+        warnOnTruncation("PR", issueId, truncated)
 
         return pr
+      }
+
+      function warnOnTruncation(resourceType: "Issue" | "PR", resourceId: number, truncated: string[]) {
+        if (truncated.length > 0) {
+          console.warn(`Warning: ${resourceType} #${resourceId} data truncated for: ${truncated.join(", ")}`)
+        }
       }
 
       function buildPromptDataForPR(pr: GitHubPullRequest) {
