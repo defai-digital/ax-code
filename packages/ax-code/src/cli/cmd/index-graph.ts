@@ -314,6 +314,7 @@ export const IndexCommand = cmd({
           if (!json) UI.println(line)
         }
         const warningLine = (message: string) => `${UI.Style.TEXT_WARNING}${message}${UI.Style.TEXT_NORMAL}`
+        const fileSuffix = (count: number) => (count === 1 ? "" : "s")
         if (args.nativeProfile) {
           NativePerf.enable()
         }
@@ -427,11 +428,11 @@ export const IndexCommand = cmd({
               const count = langFiles.length
               if (probe.ready.has(lang)) {
                 out(
-                  `  ${UI.Style.TEXT_SUCCESS}✓${UI.Style.TEXT_NORMAL} ${lang} (${count} file${count === 1 ? "" : "s"})`,
+                  `  ${UI.Style.TEXT_SUCCESS}✓${UI.Style.TEXT_NORMAL} ${lang} (${count} file${fileSuffix(count)})`,
                 )
               } else {
                 const hint = INSTALL_HINTS[lang] ?? "check ~/.local/share/ax-code/log/ for spawn errors"
-                out(`  ${warningLine("✗")} ${lang} (${count} file${count === 1 ? "" : "s"}) — ${hint}`)
+                out(`  ${warningLine("✗")} ${lang} (${count} file${fileSuffix(count)}) — ${hint}`)
               }
             }
             if (probe.ready.size === 0) {
@@ -444,7 +445,7 @@ export const IndexCommand = cmd({
               const missingFiles = [...probe.missing.values()].reduce((a, b) => a + b, 0)
               out("")
               out(
-                `${UI.Style.TEXT_DIM}${missingFiles.toLocaleString()} file(s) across ${probe.missing.size} language(s) will be skipped due to missing LSP servers.${UI.Style.TEXT_NORMAL}`,
+                `${UI.Style.TEXT_DIM}${missingFiles.toLocaleString()} file${fileSuffix(missingFiles)} across ${probe.missing.size} language${fileSuffix(probe.missing.size)} will be skipped due to missing LSP servers.${UI.Style.TEXT_NORMAL}`,
               )
             }
           }
@@ -629,7 +630,7 @@ export const IndexCommand = cmd({
         )
         if (result.pruned.files > 0) {
           out(
-            `  pruned:    ${result.pruned.files.toLocaleString()} file(s) removed (${result.pruned.nodes.toLocaleString()} nodes, ${result.pruned.edges.toLocaleString()} edges)`,
+            `  pruned:    ${result.pruned.files.toLocaleString()} file${fileSuffix(result.pruned.files)} removed (${result.pruned.nodes.toLocaleString()} nodes, ${result.pruned.edges.toLocaleString()} edges)`,
           )
         }
         out(`  elapsed:   ${elapsed.toLocaleString()}ms`)
@@ -637,7 +638,7 @@ export const IndexCommand = cmd({
         if (result.failed > 0) {
           out("")
           out(
-            `${warningLine(`${result.failed} file(s) failed to index.`)} Check the log file for details.`,
+            `${warningLine(`${result.failed} file${fileSuffix(result.failed)} failed to index.`)} Check the log file for details.`,
           )
         }
         if (status.nodeCount === 0 && files.length > 0) {
