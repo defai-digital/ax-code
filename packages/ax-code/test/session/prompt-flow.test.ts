@@ -1103,6 +1103,122 @@ describe("session.prompt flow", () => {
     }
   })
 
+  test("renudges large-context report todos after autonomous step-limit continuation", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      config: {
+        agent: {
+          build: {
+            steps: 2,
+          },
+        },
+        session: {
+          max_continuations: 2,
+          max_todo_retries: 3,
+        },
+      },
+    })
+
+    const previousAutonomous = process.env["AX_CODE_AUTONOMOUS"]
+    process.env["AX_CODE_AUTONOMOUS"] = "true"
+
+    try {
+      let sessionID: SessionID | undefined
+      modelSpy = spyOn(Provider, "getModel").mockResolvedValue(model)
+      summarySpy = spyOn(SessionSummary, "summarize").mockResolvedValue()
+      trackSpy = spyOn(Snapshot, "track").mockResolvedValue("snap-1")
+      patchSpy = spyOn(Snapshot, "patch").mockResolvedValue({
+        hash: "snap-1",
+        files: [path.join(tmp.path, "src/file.ts")],
+      })
+
+      let call = 0
+      streamSpy = spyOn(LLM, "stream").mockImplementation(async () => {
+        call++
+        if (call === 3 && sessionID) {
+          Todo.update({
+            sessionID,
+            todos: [{ content: "Report confirmed bugs to .internal/bugs/", status: "completed", priority: "high" }],
+          })
+        }
+
+        return {
+          fullStream: (async function* () {
+            yield { type: "start" }
+            yield { type: "start-step" }
+            if (call < 3) {
+              yield { type: "tool-input-start", id: `call_${call}`, toolName: "read" }
+              yield { type: "tool-call", toolCallId: `call_${call}`, toolName: "read", input: { file: "src/file.ts" } }
+              yield {
+                type: "tool-result",
+                toolCallId: `call_${call}`,
+                input: { file: "src/file.ts" },
+                output: {
+                  output: "large file body",
+                  title: "Read src/file.ts",
+                  metadata: {},
+                  attachments: [],
+                },
+              }
+              yield {
+                type: "finish-step",
+                finishReason: "tool-calls",
+                usage: { inputTokens: 55_000, outputTokens: 8, totalTokens: 55_008 },
+              }
+            } else {
+              yield { type: "text-start", id: "text_3" }
+              yield { type: "text-delta", id: "text_3", text: "report todo completed" }
+              yield { type: "text-end", id: "text_3" }
+              yield {
+                type: "finish-step",
+                finishReason: "stop",
+                usage: { inputTokens: 12, outputTokens: 4, totalTokens: 16 },
+              }
+            }
+            yield { type: "finish" }
+          })(),
+        } as any
+      })
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const session = await Session.create({ title: "Report Context Step Continuation Test" })
+          sessionID = session.id
+          Todo.update({
+            sessionID: session.id,
+            todos: [{ content: "Report confirmed bugs to .internal/bugs/", status: "in_progress", priority: "high" }],
+          })
+
+          await SessionPrompt.prompt({
+            sessionID: session.id,
+            agent: "build",
+            parts: [{ type: "text", text: "continue bug reporting" }],
+          })
+
+          expect(streamSpy).toHaveBeenCalledTimes(3)
+          const messages = await Session.messages({ sessionID: session.id })
+          const convergenceMessages = messages.filter(
+            (message) =>
+              message.info.role === "user" &&
+              message.parts.some(
+                (part) =>
+                  part.type === "text" &&
+                  part.text.includes("Autonomous mode has reached a large context") &&
+                  part.text.includes("Report confirmed bugs to .internal/bugs/"),
+              ),
+          )
+          expect(convergenceMessages).toHaveLength(2)
+
+          await Session.remove(session.id)
+        },
+      })
+    } finally {
+      if (previousAutonomous === undefined) delete process.env["AX_CODE_AUTONOMOUS"]
+      else process.env["AX_CODE_AUTONOMOUS"] = previousAutonomous
+    }
+  })
+
   test("stops autonomous mode with a diagnostic after repeated empty model turns", async () => {
     await using tmp = await tmpdir({
       git: true,

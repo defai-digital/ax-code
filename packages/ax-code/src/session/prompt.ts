@@ -677,6 +677,7 @@ export namespace SessionPrompt {
       if (resetTodoProgressTracking) {
         lastPendingTodoSignature = undefined
         stagnantTodoRetries = 0
+        lastTodoContextSignature = undefined
       }
 
       log.info(event, {

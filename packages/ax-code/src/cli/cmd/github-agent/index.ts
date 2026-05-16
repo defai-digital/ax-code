@@ -1352,7 +1352,7 @@ query($owner: String!, $repo: String!, $number: Int!) {
         if (!issue) throw new Error(`Issue #${issueId} not found`)
 
         const truncated = checkTruncation(issue)
-        warnOnTruncation("Issue", issueId, truncated)
+        warnOnTruncation("Issue", issueId!, truncated)
 
         return issue
       }
@@ -1484,7 +1484,7 @@ query($owner: String!, $repo: String!, $number: Int!) {
         if (!pr) throw new Error(`PR #${issueId} not found`)
 
         const truncated = checkTruncation(pr)
-        warnOnTruncation("PR", issueId, truncated)
+        warnOnTruncation("PR", issueId!, truncated)
 
         return pr
       }
