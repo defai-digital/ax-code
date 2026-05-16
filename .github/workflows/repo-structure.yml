@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - ".github/workflows/repo-structure.yml"
+      - ".internal/**"
       - "package.json"
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
@@ -21,6 +22,7 @@ on:
       - dev
     paths:
       - ".github/workflows/repo-structure.yml"
+      - ".internal/**"
       - "package.json"
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
@@ -59,6 +61,16 @@ jobs:
 
       - name: Check repo structure
         run: pnpm run check:structure
+
+      - name: Ensure .internal is not tracked
+        run: |
+          tracked_internal="$(git ls-files .internal | tr '\n' ' ')"
+          if [ -n "$tracked_internal" ]; then
+            echo "Error: .internal is tracked and must stay local-only."
+            echo "Tracked files:"
+            git ls-files .internal
+            exit 1
+          fi
 
       # ax-code intentionally does not track or display monetary cost for
       # LLM calls. This guard prevents schema fields, identifiers, or slash
