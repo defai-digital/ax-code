@@ -12,7 +12,7 @@ import { Session } from "."
 import { Agent } from "../agent/agent"
 import { Provider } from "../provider/provider"
 import { ModelID, ProviderID } from "../provider/schema"
-import { type Tool as AITool, tool, jsonSchema, type ToolCallOptions, asSchema } from "ai"
+import { type Tool as AITool, tool, jsonSchema, type ToolCallOptions, asSchema, type ModelMessage } from "ai"
 import { SessionCompaction } from "./compaction"
 import {
   MAX_CONSECUTIVE_ERRORS as _MAX_CONSECUTIVE_ERRORS,
@@ -65,6 +65,7 @@ import { iife } from "@/util/iife"
 import { Shell } from "@/shell/shell"
 import { Truncate } from "@/tool/truncate"
 import { decodeDataUrl } from "@/util/data-url"
+import { Token } from "@/util/token"
 import {
   commandSetup,
   shellArgs,
@@ -92,6 +93,18 @@ const TODO_CONTEXT_CONVERGENCE_INPUT_TOKEN_THRESHOLD = 50_000
 
 function pendingTodoSignature(todos: { content: string; status: string; priority: string }[]) {
   return todos.map((todo) => `${todo.status}\u0000${todo.priority}\u0000${todo.content}`).join("\u0001")
+}
+
+function estimateRequestTokens(input: { system: string[]; messages: ModelMessage[] }) {
+  let total = 0
+  for (const item of input.system) {
+    total += Token.estimate(item) + 4
+  }
+  for (const message of input.messages) {
+    const content = typeof message.content === "string" ? message.content : JSON.stringify(message.content)
+    total += Token.estimate(content) + 4
+  }
+  return total
 }
 
 function getLastUserInfo(messages: readonly MessageV2.WithParts[]): MessageV2.User | undefined {
@@ -920,6 +933,7 @@ export namespace SessionPrompt {
           agent: lastUser.agent,
           model: lastUser.model,
           auto: true,
+          triggerReason: "provider_usage",
         })
         cachedMsgs = undefined // invalidate cache after compaction
         continue
@@ -955,6 +969,88 @@ export namespace SessionPrompt {
         agent,
         session,
       })
+
+      if (step === 1 && continuations === 0) {
+        SessionSummary.summarize(
+          {
+            sessionID: sessionID,
+            messageID: lastUser.id,
+          },
+          msgs,
+        ).catch(async (e) => {
+          log.warn("summarize failed, setting fallback title", {
+            command: "session.prompt.summarize",
+            status: "error",
+            sessionID,
+            error: e,
+          })
+          await Session.setTitle({ sessionID, title: "Untitled session" }).catch((e) => {
+            log.warn("fallback setTitle also failed", { sessionID, error: e })
+          })
+        })
+      }
+
+      // Ephemerally wrap queued user messages with a reminder to stay on track
+      if (step > 1) msgs = remindQueuedMessages(msgs, lastFinished)
+
+      await Plugin.trigger("experimental.chat.messages.transform", {}, { messages: msgs })
+
+      // Build system prompt and convert messages to model format in parallel —
+      // both walk the same msgs/model independently with no side effects on
+      // each other, so awaiting them sequentially wastes wall-clock time on
+      // long sessions where toModelMessages can run 10-30ms.
+      const format = lastUser.format ?? { type: "text" }
+      const [system, modelMessages] = await Promise.all([
+        getSystemPrompt({
+          agent,
+          model,
+          format,
+          cache: cachedSystemPrompt,
+          messages: msgs,
+          sessionID,
+          structuredPrompt: STRUCTURED_OUTPUT_SYSTEM_PROMPT,
+        }),
+        MessageV2.toModelMessages(msgs, model),
+      ])
+      const requestMessages: ModelMessage[] = [
+        ...modelMessages,
+        ...(isLastStep
+          ? [
+              {
+                role: "assistant" as const,
+                content: MAX_STEPS,
+              },
+            ]
+          : []),
+      ]
+      const tokenBudget = await SessionCompaction.budget(model)
+      const currentUserParts = lastUserParts ?? []
+      const syntheticContinuation =
+        currentUserParts.length > 0 &&
+        currentUserParts.every((part) => (part as { synthetic?: boolean }).synthetic === true)
+      if (tokenBudget && !syntheticContinuation) {
+        const estimatedTokens = estimateRequestTokens({ system, messages: requestMessages })
+        if (estimatedTokens >= tokenBudget.usable) {
+          log.info("prompt preflight scheduled compaction", {
+            command: "session.prompt.preflight",
+            status: "ok",
+            sessionID,
+            estimatedTokens,
+            usableTokens: tokenBudget.usable,
+            modelID: model.id,
+            providerID: model.providerID,
+          })
+          await SessionCompaction.create({
+            sessionID,
+            agent: lastUser.agent,
+            model: lastUser.model,
+            auto: true,
+            triggerReason: "prompt_preflight",
+          })
+          cachedMsgs = undefined
+          continue
+        }
+      }
 
       const processor = SessionProcessor.create({
         assistantMessage: (await Session.updateMessage({
@@ -1012,49 +1108,6 @@ export namespace SessionPrompt {
         })
       }
 
-      if (step === 1 && continuations === 0) {
-        SessionSummary.summarize(
-          {
-            sessionID: sessionID,
-            messageID: lastUser.id,
-          },
-          msgs,
-        ).catch(async (e) => {
-          log.warn("summarize failed, setting fallback title", {
-            command: "session.prompt.summarize",
-            status: "error",
-            sessionID,
-            error: e,
-          })
-          await Session.setTitle({ sessionID, title: "Untitled session" }).catch((e) => {
-            log.warn("fallback setTitle also failed", { sessionID, error: e })
-          })
-        })
-      }
-
-      // Ephemerally wrap queued user messages with a reminder to stay on track
-      if (step > 1) msgs = remindQueuedMessages(msgs, lastFinished)
-
-      await Plugin.trigger("experimental.chat.messages.transform", {}, { messages: msgs })
-
-      // Build system prompt and convert messages to model format in parallel —
-      // both walk the same msgs/model independently with no side effects on
-      // each other, so awaiting them sequentially wastes wall-clock time on
-      // long sessions where toModelMessages can run 10-30ms.
-      const format = lastUser.format ?? { type: "text" }
-      const [system, modelMessages] = await Promise.all([
-        getSystemPrompt({
-          agent,
-          model,
-          format,
-          cache: cachedSystemPrompt,
-          messages: msgs,
-          sessionID,
-          structuredPrompt: STRUCTURED_OUTPUT_SYSTEM_PROMPT,
-        }),
-        MessageV2.toModelMessages(msgs, model),
-      ])
-
       const result = await processor.process({
         user: lastUser,
         agent,
@@ -1062,17 +1115,7 @@ export namespace SessionPrompt {
         abort,
         sessionID,
         system,
-        messages: [
-          ...modelMessages,
-          ...(isLastStep
-            ? [
-                {
-                  role: "assistant" as const,
-                  content: MAX_STEPS,
-                },
-              ]
-            : []),
-        ],
+        messages: requestMessages,
         tools,
         model,
         toolChoice: format.type === "json_schema" ? "required" : undefined,
@@ -1541,6 +1584,7 @@ export namespace SessionPrompt {
           model: lastUser.model,
           auto: true,
           overflow: !processor.message.finish,
+          triggerReason: processor.message.finish ? "provider_usage" : "context_overflow_error",
         })
       }
       continue

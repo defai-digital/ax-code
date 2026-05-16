@@ -139,6 +139,63 @@ describe("session.prompt flow", () => {
     })
   })
 
+  test("preflights clearly over-budget prompt and compacts before normal provider call", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const tinyModel: Provider.Model = {
+      ...model,
+      limit: {
+        context: 5_000,
+        output: 20,
+      },
+    }
+    const agents: string[] = []
+
+    modelSpy = spyOn(Provider, "getModel").mockResolvedValue(tinyModel)
+    summarySpy = spyOn(SessionSummary, "summarize").mockResolvedValue()
+    streamSpy = spyOn(LLM, "stream").mockImplementation(async (input) => {
+      agents.push(input.agent.name)
+      const text = input.agent.name === "compaction" ? "compact summary" : "after compact"
+      return {
+        fullStream: (async function* () {
+          yield { type: "start" }
+          yield { type: "start-step" }
+          yield { type: "text-start", id: `text_${agents.length}` }
+          yield { type: "text-delta", id: `text_${agents.length}`, text }
+          yield { type: "text-end", id: `text_${agents.length}` }
+          yield {
+            type: "finish-step",
+            finishReason: "stop",
+            usage: { inputTokens: 10, outputTokens: 2, totalTokens: 12 },
+          }
+          yield { type: "finish" }
+        })(),
+      } as any
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ title: "Prompt Preflight Test" })
+        await SessionPrompt.prompt({
+          sessionID: session.id,
+          agent: "build",
+          parts: [{ type: "text", text: "x".repeat(30_000) }],
+        })
+
+        expect(agents[0]).toBe("compaction")
+        expect(agents).toContain("build")
+
+        const messages = await Session.messages({ sessionID: session.id })
+        expect(
+          messages.some(
+            (message) => message.info.role === "user" && message.parts.some((part) => part.type === "compaction"),
+          ),
+        ).toBe(true)
+        await Session.remove(session.id)
+      },
+    })
+  })
+
   test("defers automatic indexing until after the prompt completes", async () => {
     await using tmp = await tmpdir({ git: true })
 
