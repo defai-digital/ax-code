@@ -493,6 +493,86 @@ describe("AutonomousCompletionGate", () => {
     })
   })
 
+  test("does not treat a synthetic assistant text as resolution", () => {
+    const decision = AutonomousCompletionGate.evaluate({
+      pendingTodos: [],
+      messages: [
+        {
+          info: { role: "assistant" },
+          parts: [
+            {
+              type: "tool",
+              tool: "task",
+              callID: "call_failed",
+              state: {
+                status: "error",
+                input: { description: "review benchmark code" },
+                error: "Subagent finalization timed out",
+              },
+            },
+          ],
+        },
+        {
+          info: { role: "assistant" },
+          parts: [
+            {
+              type: "text",
+              synthetic: true,
+              text:
+                "Completion gate resolution: the failed subagent for review benchmark code was handled directly — no further action required.",
+            },
+          ],
+        },
+      ],
+    })
+
+    expect(decision).toMatchObject({
+      status: "blocked",
+      reason: "empty_subagent_result",
+      emptyResult: { callID: "call_failed", failed: true },
+    })
+  })
+
+  test("does not treat an ignored assistant text as resolution", () => {
+    const decision = AutonomousCompletionGate.evaluate({
+      pendingTodos: [],
+      messages: [
+        {
+          info: { role: "assistant" },
+          parts: [
+            {
+              type: "tool",
+              tool: "task",
+              callID: "call_failed",
+              state: {
+                status: "error",
+                input: { description: "review benchmark code" },
+                error: "Subagent finalization timed out",
+              },
+            },
+          ],
+        },
+        {
+          info: { role: "assistant" },
+          parts: [
+            {
+              type: "text",
+              ignored: true,
+              text:
+                "Completion gate resolution: review benchmark code task handled directly.",
+            },
+          ],
+        },
+      ],
+    })
+
+    expect(decision).toMatchObject({
+      status: "blocked",
+      reason: "empty_subagent_result",
+      emptyResult: { callID: "call_failed", failed: true },
+    })
+  })
+
   test("does not treat a future-intent statement as resolution", () => {
     const decision = AutonomousCompletionGate.evaluate({
       pendingTodos: [],
