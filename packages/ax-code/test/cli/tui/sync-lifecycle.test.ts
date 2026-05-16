@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { registerSyncLifecycle } from "../../../src/cli/cmd/tui/context/sync-lifecycle"
 
 describe("tui sync lifecycle", () => {
-  test("registers root cleanup, starts on mount, and stops through mount cleanup", () => {
+  test("registers cleanup, starts on mount, and stops only once on unmount", () => {
     const rootCleanups: Array<() => void> = []
     const mountCleanups: Array<() => void> = []
     const calls: string[] = []
@@ -38,18 +38,16 @@ describe("tui sync lifecycle", () => {
     expect(rootCleanups).toHaveLength(1)
     expect(mountCleanups).toHaveLength(0)
 
-    rootCleanups[0]?.()
-    expect(calls).toEqual(["stop", "unsubscribe"])
-
     inMount = true
     mountCallback?.()
     inMount = false
 
-    expect(calls).toEqual(["stop", "unsubscribe", "start"])
+    expect(calls).toEqual(["start"])
     expect(mountCleanups).toHaveLength(1)
 
     mountCleanups[0]?.()
-    expect(calls).toEqual(["stop", "unsubscribe", "start", "stop"])
+    rootCleanups[0]?.()
+    expect(calls).toEqual(["start", "stop", "unsubscribe"])
   })
 
   test("stops startup coordination from root cleanup even when mount never runs", () => {

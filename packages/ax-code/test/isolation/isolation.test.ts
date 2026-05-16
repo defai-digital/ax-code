@@ -69,6 +69,18 @@ describe("isolation.assertWrite", () => {
     )
   })
 
+  test("canWrite checks protected paths with the original input path", async () => {
+    const src = await Bun.file(path.join(import.meta.dir, "../../src/isolation/index.ts")).text()
+    const start = src.indexOf("export function canWrite(")
+    const end = src.indexOf("export function assertWrite(", start)
+    expect(start).toBeGreaterThan(-1)
+    expect(end).toBeGreaterThan(start)
+    const body = src.slice(start, end)
+
+    expect(body).toContain("if (isProtected(state, filepath)) return false")
+    expect(body).not.toContain("if (isProtected(state, resolved)) return false")
+  })
+
   test("denies writes outside workspace boundary", () => {
     const state = Isolation.resolve({ mode: "workspace-write", network: false }, root)
     expect(() => Isolation.assertWrite(state, "/tmp/other/file.txt", root, worktree)).toThrow(

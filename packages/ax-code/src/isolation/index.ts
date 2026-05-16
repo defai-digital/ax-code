@@ -108,7 +108,7 @@ export namespace Isolation {
     const targetPaths = securityPaths(filepath)
     const writeRoots = securityPaths(directory)
     if (worktree !== "/") writeRoots.push(...securityPaths(worktree))
-    if (isProtected(state, resolved)) return false
+    if (isProtected(state, filepath)) return false
     return isInsideAnyRoot(Array.from(new Set(writeRoots)), targetPaths)
   }
 

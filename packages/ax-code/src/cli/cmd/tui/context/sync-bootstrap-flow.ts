@@ -133,71 +133,82 @@ export function createSyncBootstrapFlow<TClient extends SyncBootstrapRequestClie
     },
   })
   let activeRunAbort: AbortController | undefined
+  let runTail: Promise<void> = Promise.resolve()
 
   return {
     async run() {
       activeRunAbort?.abort()
       const runAbort = new AbortController()
       activeRunAbort = runAbort
-      const isStartupBootstrap = input.store.status === "loading"
-      const bootstrapLifecycle = createBootstrapLifecycle({
-        isStartupBootstrap,
-        createSpan: input.createSpan,
-        onFailure: input.onFailure,
-      })
-      let finishCoreBootstrap = bootstrapLifecycle.createCoreSpan()
-      let finishDeferredBootstrap = bootstrapLifecycle.createDeferredSpan()
 
-      try {
-        input.resetSessionSync()
-        input.setSessionLoaded(false)
+      const run = runTail
+        .catch(() => undefined)
+        .then(async () => {
+          if (activeRunAbort !== runAbort || runAbort.signal.aborted) return
+          const isStartupBootstrap = input.store.status === "loading"
+          const bootstrapLifecycle = createBootstrapLifecycle({
+            isStartupBootstrap,
+            createSpan: input.createSpan,
+            onFailure: input.onFailure,
+          })
+          let finishCoreBootstrap = bootstrapLifecycle.createCoreSpan()
+          let finishDeferredBootstrap = bootstrapLifecycle.createDeferredSpan()
 
-        const requests = createSyncBootstrapRequests({
-          wrap: input.wrap,
-          client: input.client,
-          sessionListStart: now() - BOOTSTRAP_SESSION_LIST_WINDOW_MS,
-          onSessionListSettled() {
-            input.setSessionLoaded(true)
-            input.recordStartup("tui.startup.sessionListReady")
-          },
-          syncIsolation: input.syncIsolation,
-          syncAutonomous: input.syncAutonomous,
-          syncWorkspaces: input.syncWorkspaces,
-          syncDebugEngine: input.syncDebugEngine,
-          syncSmartLlm: input.syncSmartLlm,
+          try {
+            input.resetSessionSync()
+            input.setSessionLoaded(false)
+
+            const requests = createSyncBootstrapRequests({
+              wrap: input.wrap,
+              client: input.client,
+              sessionListStart: now() - BOOTSTRAP_SESSION_LIST_WINDOW_MS,
+              onSessionListSettled() {
+                input.setSessionLoaded(true)
+                input.recordStartup("tui.startup.sessionListReady")
+              },
+              syncIsolation: input.syncIsolation,
+              syncAutonomous: input.syncAutonomous,
+              syncWorkspaces: input.syncWorkspaces,
+              syncDebugEngine: input.syncDebugEngine,
+              syncSmartLlm: input.syncSmartLlm,
+            })
+
+            const { blockingTasks, coreTasks, deferredTasks } = input.createTasks(requests, (failed) => {
+              input.recordStartup("tui.startup.providersReady", { failed })
+            })
+
+            const sequence = createPhaseSequence({
+              blockingTasks,
+              coreTasks,
+              deferredTasks,
+              deferredDelayMs: isStartupBootstrap ? (input.deferredDelayMs ?? tuiDeferredBootstrapDelayMs()) : 0,
+              deferredConcurrency: input.deferredConcurrency ?? tuiDeferredBootstrapConcurrency(),
+              deferredBackground: input.deferredBackground ?? true,
+              getStatus: () => input.store.status,
+              setStatus: input.setStatus,
+              finishCoreSpan: finishCoreBootstrap,
+              finishDeferredSpan: finishDeferredBootstrap,
+              finishStartup: () => bootstrapLifecycle.finishStartup(),
+              logWarn: input.logWarn,
+              logError: input.logError,
+              recordStartup: input.recordStartup,
+            })
+            await runBootstrapPhaseSequence(sequence, {
+              signal: runAbort.signal,
+              scheduleBackground,
+            })
+          } catch (error) {
+            if (runAbort.signal.aborted) return
+            await bootstrapLifecycle.fail(error, finishDeferredBootstrap, finishCoreBootstrap)
+          } finally {
+            if (activeRunAbort === runAbort) {
+              activeRunAbort = undefined
+            }
+          }
         })
 
-        const { blockingTasks, coreTasks, deferredTasks } = input.createTasks(requests, (failed) => {
-          input.recordStartup("tui.startup.providersReady", { failed })
-        })
-
-        const sequence = createPhaseSequence({
-          blockingTasks,
-          coreTasks,
-          deferredTasks,
-          deferredDelayMs: isStartupBootstrap ? (input.deferredDelayMs ?? tuiDeferredBootstrapDelayMs()) : 0,
-          deferredConcurrency: input.deferredConcurrency ?? tuiDeferredBootstrapConcurrency(),
-          deferredBackground: input.deferredBackground ?? true,
-          getStatus: () => input.store.status,
-          setStatus: input.setStatus,
-          finishCoreSpan: finishCoreBootstrap,
-          finishDeferredSpan: finishDeferredBootstrap,
-          finishStartup: () => bootstrapLifecycle.finishStartup(),
-          logWarn: input.logWarn,
-          logError: input.logError,
-          recordStartup: input.recordStartup,
-        })
-        await runBootstrapPhaseSequence(sequence, {
-          signal: runAbort.signal,
-          scheduleBackground,
-        })
-      } catch (error) {
-        await bootstrapLifecycle.fail(error, finishDeferredBootstrap, finishCoreBootstrap)
-      } finally {
-        if (activeRunAbort === runAbort) {
-          activeRunAbort = undefined
-        }
-      }
+      runTail = run
+      await run
     },
     stop() {
       activeRunAbort?.abort()

@@ -1,5 +1,10 @@
-import { describe, expect, test } from "bun:test"
+import { afterEach, describe, expect, test } from "bun:test"
 import { createInitialSyncState } from "../../../src/cli/cmd/tui/context/sync-state"
+
+afterEach(() => {
+  delete process.env.AX_CODE_ISOLATION_MODE
+  delete process.env.AX_CODE_ISOLATION_NETWORK
+})
 
 describe("tui sync state", () => {
   test("creates the expected initial sync store defaults", () => {
@@ -52,6 +57,24 @@ describe("tui sync state", () => {
       vcs: undefined,
       path: { state: "", config: "", worktree: "", directory: "" },
       workspaceList: [],
+    })
+  })
+
+  test("seeds initial isolation from inherited sandbox flags", () => {
+    process.env.AX_CODE_ISOLATION_MODE = "read-only"
+    process.env.AX_CODE_ISOLATION_NETWORK = "false"
+
+    expect(createInitialSyncState().isolation).toEqual({
+      mode: "read-only",
+      network: false,
+    })
+
+    process.env.AX_CODE_ISOLATION_MODE = "full-access"
+    process.env.AX_CODE_ISOLATION_NETWORK = "true"
+
+    expect(createInitialSyncState().isolation).toEqual({
+      mode: "full-access",
+      network: true,
     })
   })
 })

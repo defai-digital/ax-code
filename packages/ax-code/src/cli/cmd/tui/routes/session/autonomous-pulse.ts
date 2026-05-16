@@ -38,6 +38,7 @@ function start() {
   startTime = Date.now()
   tick()
   timer = setInterval(tick, TICK_MS)
+  timer.unref?.()
 }
 
 function stop() {

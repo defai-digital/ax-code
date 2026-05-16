@@ -20,6 +20,7 @@ import type {
 } from "@ax-code/sdk/v2"
 import type { Path } from "@ax-code/sdk"
 import type { Snapshot } from "@/snapshot"
+import { Flag } from "@/flag/flag"
 import type { SyncedSessionRisk } from "./sync-session-risk"
 
 export interface SyncStoreState {
@@ -121,7 +122,10 @@ export function createInitialSyncState(): SyncStoreState {
         error: null,
       },
     },
-    isolation: { mode: "workspace-write", network: false },
+    isolation: {
+      mode: Flag.AX_CODE_ISOLATION_MODE ?? "workspace-write",
+      network: Flag.AX_CODE_ISOLATION_NETWORK ?? false,
+    },
     autonomous: true,
     smartLlm: false,
     mcp: {},

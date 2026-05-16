@@ -190,6 +190,40 @@ describe("tui sync bootstrap runner", () => {
     expect(ran).toBe(false)
   })
 
+  test("does not publish phase hooks after aborting during task settlement", async () => {
+    const abort = new AbortController()
+    let release = () => {}
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const events: string[] = []
+
+    const pending = runBootstrapPhaseTasks({
+      signal: abort.signal,
+      tasks: [
+        async () => {
+          events.push("task:start")
+          await gate
+          events.push("task:finish")
+        },
+      ],
+      onSettled() {
+        events.push("settled")
+      },
+      finishSpan() {
+        events.push("span")
+      },
+    })
+
+    await nextTick()
+    abort.abort()
+    release()
+    const summary = await pending
+
+    expect(summary).toEqual({ rejected: [] })
+    expect(events).toEqual(["task:start", "task:finish"])
+  })
+
   test("creates startup lifecycle spans and routes failures through a single helper", async () => {
     const created: string[] = []
     const spanPayloads = new Map<string, Array<Record<string, unknown> | undefined>>()

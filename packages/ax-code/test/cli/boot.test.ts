@@ -43,6 +43,15 @@ describe("cli.boot.apply", () => {
     expect(env.OPENCODE).toBe("1")
     expect(env.AX_CODE_PID).toBe("42")
     expect(env.AX_CODE_ISOLATION_MODE).toBe("workspace-write")
+    expect(env.AX_CODE_ISOLATION_NETWORK).toBe("false")
+  })
+
+  test("maps full-access sandbox to network-enabled child isolation", () => {
+    const env: Record<string, string> = {}
+    apply({ sandbox: "full-access" }, env, 42)
+
+    expect(env.AX_CODE_ISOLATION_MODE).toBe("full-access")
+    expect(env.AX_CODE_ISOLATION_NETWORK).toBe("true")
   })
 
   test("sets debug env vars for child processes", () => {
