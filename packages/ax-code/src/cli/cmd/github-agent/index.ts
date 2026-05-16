@@ -1359,12 +1359,7 @@ query($owner: String!, $repo: String!, $number: Int!) {
 
       function buildPromptDataForIssue(issue: GitHubIssue) {
         // Only called for non-schedule events, so payload is defined
-        const comments = (issue.comments?.nodes || [])
-          .filter((c) => {
-            const id = parseInt(c.databaseId, 10)
-            return !Number.isNaN(id) && id !== triggerCommentId
-          })
-          .map((c) => `  - ${c.author.login} at ${c.createdAt}: ${c.body}`)
+        const comments = buildComments(issue.comments?.nodes, (c) => `  - ${c.author.login} at ${c.createdAt}: ${c.body}`)
 
         return [
           ...githubActionContext(),
@@ -1502,12 +1497,7 @@ query($owner: String!, $repo: String!, $number: Int!) {
 
       function buildPromptDataForPR(pr: GitHubPullRequest) {
         // Only called for non-schedule events, so payload is defined
-        const comments = (pr.comments?.nodes || [])
-          .filter((c) => {
-            const id = parseInt(c.databaseId, 10)
-            return !Number.isNaN(id) && id !== triggerCommentId
-          })
-          .map((c) => `- ${c.author.login} at ${c.createdAt}: ${c.body}`)
+        const comments = buildComments(pr.comments?.nodes, (c) => `- ${c.author.login} at ${c.createdAt}: ${c.body}`)
 
         const files = (pr.files.nodes || []).map((f) => `- ${f.path} (${f.changeType}) +${f.additions}/-${f.deletions}`)
         const reviewData = (pr.reviews.nodes || []).map((r) => {
@@ -1552,6 +1542,18 @@ query($owner: String!, $repo: String!, $number: Int!) {
           "- Focus only on the code changes and your analysis/response",
           "</github_action_context>",
         ] as const
+      }
+
+      function buildComments(
+        comments: GitHubComment[] | undefined,
+        format: (comment: GitHubComment) => string,
+      ) {
+        return (comments || [])
+          .filter((comment) => {
+            const id = parseInt(comment.databaseId, 10)
+            return !Number.isNaN(id) && id !== triggerCommentId
+          })
+          .map(format)
       }
 
       async function revokeAppToken() {
