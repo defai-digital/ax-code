@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test"
-import { autonomousActiveView } from "@/cli/cmd/tui/routes/session/autonomous-active"
+import {
+  autonomousActiveView,
+  isAutonomousProducedMessage,
+  isLiveAutonomousText,
+} from "@/cli/cmd/tui/routes/session/autonomous-active"
 
 describe("autonomousActiveView", () => {
   test("idle status is not active", () => {
@@ -32,5 +36,57 @@ describe("autonomousActiveView", () => {
       step: 5,
       maxSteps: 50,
     })
+  })
+})
+
+describe("isLiveAutonomousText", () => {
+  test("not last → not live (older messages never get the live bg)", () => {
+    expect(
+      isLiveAutonomousText({ last: false, message: { finish: undefined }, autonomousActive: true }),
+    ).toBe(false)
+  })
+
+  test("not autonomous active → not live (single-turn chat stays plain)", () => {
+    expect(
+      isLiveAutonomousText({ last: true, message: { finish: undefined }, autonomousActive: false }),
+    ).toBe(false)
+  })
+
+  test("autonomous + last + still streaming → live", () => {
+    expect(
+      isLiveAutonomousText({ last: true, message: { finish: undefined }, autonomousActive: true }),
+    ).toBe(true)
+    // tool-calls is a continuation marker — the loop is still mid-flight
+    expect(
+      isLiveAutonomousText({ last: true, message: { finish: "tool-calls" }, autonomousActive: true }),
+    ).toBe(true)
+  })
+
+  test("autonomous + last + settled (finish=stop) → not live", () => {
+    expect(
+      isLiveAutonomousText({ last: true, message: { finish: "stop" }, autonomousActive: true }),
+    ).toBe(false)
+  })
+})
+
+describe("isAutonomousProducedMessage", () => {
+  test("no step-finish parts → not autonomous", () => {
+    expect(isAutonomousProducedMessage([])).toBe(false)
+    expect(isAutonomousProducedMessage([{ type: "text" }, { type: "tool" }])).toBe(false)
+  })
+
+  test("single step-finish (normal single-turn) → not autonomous", () => {
+    expect(isAutonomousProducedMessage([{ type: "text" }, { type: "step-finish" }])).toBe(false)
+  })
+
+  test("two or more step-finish parts → autonomous", () => {
+    expect(
+      isAutonomousProducedMessage([
+        { type: "text" },
+        { type: "step-finish" },
+        { type: "tool" },
+        { type: "step-finish" },
+      ]),
+    ).toBe(true)
   })
 })

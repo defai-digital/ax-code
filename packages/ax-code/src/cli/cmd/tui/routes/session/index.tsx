@@ -88,7 +88,7 @@ import { UI } from "@/cli/ui.ts"
 import { useTuiConfig } from "../../context/tui-config"
 import { detail, diagnostics, diffSummary, normalize, workdir } from "./format"
 import { coalesceParts } from "./coalesce"
-import { autonomousActiveView } from "./autonomous-active"
+import { autonomousActiveView, isAutonomousProducedMessage, isLiveAutonomousText } from "./autonomous-active"
 import { isFooterSessionStatus, type FooterSessionStatus } from "./footer-view-model"
 import { childAction, firstChildID, nextChildID } from "./child"
 import { lastUserMessageID, promptState, redoMessageID, undoMessageID } from "./messages"
@@ -1647,9 +1647,41 @@ function TextPart(props: { last: boolean; part: TextPart; message: AssistantMess
     return lines().slice(0, 50).join("\n") + "\n…"
   })
 
+  // Autonomous-mode visual: in-flight text inside an active loop gets a
+  // diff-add green background (max signal that the run is producing
+  // output right now); once the turn settles, the background drops and
+  // a thin green left-border stripe stays as a permanent "this answer
+  // was autonomous-produced" marker. Both signals derive from a single
+  // source (SessionStatus + the message's own step-finish-part count),
+  // so they can't desync from the header chip or transcript border.
+  const isLiveAutonomous = createMemo(() => {
+    const candidate = ctx.sync.data.session_status?.[ctx.sessionID]
+    const status: FooterSessionStatus = isFooterSessionStatus(candidate) ? candidate : { type: "idle" }
+    return isLiveAutonomousText({
+      last: props.last,
+      message: props.message,
+      autonomousActive: autonomousActiveView(status).active,
+    })
+  })
+  const isAutonomousProduced = createMemo(() => {
+    const parts = ctx.sync.data.part[props.message.id] ?? []
+    return isAutonomousProducedMessage(parts)
+  })
+  // Mutually exclusive — live wins while the turn is still running.
+  const showStripe = createMemo(() => !isLiveAutonomous() && isAutonomousProduced())
+
   return (
     <Show when={trimmed()}>
-      <box id={"text-" + props.part.id} paddingLeft={3} marginTop={1} flexShrink={0}>
+      <box
+        id={"text-" + props.part.id}
+        paddingLeft={3}
+        marginTop={1}
+        flexShrink={0}
+        backgroundColor={isLiveAutonomous() ? theme.diffAddedBg : undefined}
+        border={showStripe() ? ["left"] : undefined}
+        customBorderChars={SplitBorder.customBorderChars}
+        borderColor={showStripe() ? theme.diffAdded : undefined}
+      >
         <Switch>
           <Match when={Flag.AX_CODE_EXPERIMENTAL_MARKDOWN}>
             <markdown
@@ -1658,7 +1690,7 @@ function TextPart(props: { last: boolean; part: TextPart; message: AssistantMess
               content={visibleText()}
               conceal={ctx.conceal()}
               fg={theme.markdownText}
-              bg={theme.background}
+              bg={isLiveAutonomous() ? theme.diffAddedBg : theme.background}
             />
           </Match>
           <Match when={!Flag.AX_CODE_EXPERIMENTAL_MARKDOWN}>
