@@ -880,6 +880,50 @@ export namespace MCP {
     }
   }
 
+  // The key under which a single MCP tool is registered for the LLM tool
+  // surface AND the key the Permission system evaluates against. Users
+  // can target MCP tools from `permission` in `ax-code.json` using this
+  // exact shape, including wildcards (e.g. "github_*": "deny"). Keep this
+  // helper as the ONLY public source of the key derivation rule so the
+  // CLI and tests cannot drift from the runtime in session/prompt.ts.
+  export function permissionKey(server: string, tool: string): string {
+    return sanitize(server) + "_" + sanitize(tool)
+  }
+
+  export type ToolListing = {
+    server: string
+    name: string
+    description?: string
+    permissionKey: string
+  }
+
+  // Enumerate every tool exposed by every CONNECTED MCP server. Unlike
+  // `tools()`, this does not convert to AI SDK tool objects, does not
+  // cache, and surfaces servers individually so the CLI / tests can
+  // group by server. Disconnected / disabled / failed servers are
+  // omitted; callers can cross-reference `status()` to surface those.
+  export async function listAllTools(): Promise<ToolListing[]> {
+    const s = await state()
+    const clientsSnapshot = await clients()
+    const results = await Promise.all(
+      Object.entries(clientsSnapshot).map(async ([server, client]) => {
+        if (s.status[server]?.status !== "connected") return []
+        const listed = await client.listTools().catch((e) => {
+          log.error("failed to list tools", { server, error: NamedError.message(e) })
+          return undefined
+        })
+        if (!listed) return []
+        return listed.tools.map((t) => ({
+          server,
+          name: t.name,
+          description: t.description,
+          permissionKey: permissionKey(server, t.name),
+        }))
+      }),
+    )
+    return results.flat()
+  }
+
   export async function prompts() {
     const s = await state()
     const clientsSnapshot = await clients()

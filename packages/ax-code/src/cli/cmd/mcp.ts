@@ -19,6 +19,13 @@ import { Bus } from "../../bus"
 import { isRecord } from "../../util/record"
 import { available as discoverAvailable } from "../../mcp/discovery"
 import * as McpTemplates from "../../mcp/templates"
+import { Permission } from "../../permission"
+
+// Above this many MCP tools, LLM tool-selection accuracy degrades and the
+// extra schema overhead noticeably eats context. Mirrors the empirical
+// ceiling Cursor users hit (~40 across all servers) — we warn earlier to
+// give users room to deny rules before hitting it.
+const TOOL_COUNT_WARN_THRESHOLD = 30
 
 function getAuthStatusIcon(status: MCP.AuthStatus): string {
   switch (status) {
@@ -70,11 +77,17 @@ export const McpListCommand = cmd({
   aliases: ["ls"],
   describe: "list MCP servers and their status",
   builder: (yargs) =>
-    yargs.option("discover", {
-      describe: "detect available MCP servers not yet configured",
-      type: "boolean",
-      default: false,
-    }),
+    yargs
+      .option("discover", {
+        describe: "detect available MCP servers not yet configured",
+        type: "boolean",
+        default: false,
+      })
+      .option("tools", {
+        describe: "expand each server's tools and their current permission action",
+        type: "boolean",
+        default: false,
+      }),
   async handler(args) {
     await Instance.provide({
       directory: process.cwd(),
@@ -94,6 +107,25 @@ export const McpListCommand = cmd({
           prompts.log.warn("No MCP servers configured")
           prompts.outro("Add servers with: ax-code mcp add")
           return
+        }
+
+        // Evaluating per-tool permission requires a ruleset; we use only
+        // the user's config-level rules (not session/agent overrides) so
+        // the CLI shows what someone reading `ax-code.json` would expect.
+        // Tool execution at runtime can still narrow further via
+        // agent.permission / session approvals.
+        const ruleset = config.permission ? Permission.fromConfig(config.permission) : []
+
+        // Pre-compute tool listings once so we can both render per-server
+        // and total the count. listAllTools() only returns connected
+        // servers, which is the only case we have a tool list anyway.
+        const toolsByServer = new Map<string, MCP.ToolListing[]>()
+        if (args.tools) {
+          for (const t of await MCP.listAllTools()) {
+            const arr = toolsByServer.get(t.server) ?? []
+            arr.push(t)
+            toolsByServer.set(t.server, arr)
+          }
         }
 
         for (const [name, serverConfig] of servers) {
@@ -131,12 +163,48 @@ export const McpListCommand = cmd({
           }
 
           const typeHint = serverConfig.type === "remote" ? serverConfig.url : serverConfig.command.join(" ")
+          const serverTools = toolsByServer.get(name) ?? []
+          const toolCountHint = args.tools && status?.status === "connected" ? ` ${UI.Style.TEXT_DIM}(${serverTools.length} tool${serverTools.length === 1 ? "" : "s"})` : ""
+
           prompts.log.info(
-            `${statusIcon} ${name} ${UI.Style.TEXT_DIM}${statusText}${hint}\n    ${UI.Style.TEXT_DIM}${typeHint}`,
+            `${statusIcon} ${name}${toolCountHint} ${UI.Style.TEXT_DIM}${statusText}${hint}\n    ${UI.Style.TEXT_DIM}${typeHint}`,
           )
+
+          if (args.tools && serverTools.length > 0) {
+            for (const tool of serverTools) {
+              // Evaluate against the user's ruleset; pattern is "*" since
+              // MCP tool calls register `patterns: ["*"]` at runtime.
+              const rule = Permission.evaluate(tool.permissionKey, "*", ruleset)
+              const actionLabel =
+                rule.action === "deny" ? "deny" : rule.action === "allow" ? "allow" : "ask"
+              prompts.log.info(
+                `    ${UI.Style.TEXT_DIM}· ${tool.name}  [${actionLabel}]`,
+              )
+            }
+          }
         }
 
-        prompts.outro(`${servers.length} server(s)`)
+        // Aggregate tool count across all connected servers. Many users
+        // chain three or four MCP servers without realising each one
+        // adds ~10 tools to the LLM's surface; once you cross ~30 the
+        // model starts mis-selecting and the JSON schema overhead is
+        // measurable. We warn rather than enforce — power users may
+        // know exactly what they are doing.
+        const totalTools = args.tools
+          ? Array.from(toolsByServer.values()).reduce((sum, arr) => sum + arr.length, 0)
+          : 0
+
+        prompts.outro(`${servers.length} server(s)${args.tools ? `, ${totalTools} tool(s)` : ""}`)
+
+        if (args.tools && totalTools > TOOL_COUNT_WARN_THRESHOLD) {
+          UI.empty()
+          prompts.log.warn(
+            `${totalTools} MCP tools exposed (threshold ${TOOL_COUNT_WARN_THRESHOLD}). LLM tool-selection accuracy degrades and context usage grows past this point.`,
+          )
+          prompts.log.info(
+            `Consider denying unused tools in ax-code.json, e.g.:\n  "permission": { "${servers[0]?.[0] ?? "server"}_*": "deny" }`,
+          )
+        }
 
         // Show auto-discovered servers not yet configured (opt-in)
         if (!args.discover) return

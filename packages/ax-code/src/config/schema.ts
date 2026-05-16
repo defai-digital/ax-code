@@ -73,7 +73,16 @@ export const McpRemote = z
     ref: "McpRemoteConfig",
   })
 
-export const Mcp = z.discriminatedUnion("type", [McpLocal, McpRemote])
+export const Mcp = z.discriminatedUnion("type", [McpLocal, McpRemote]).describe(
+  // The permission system identifies each MCP tool by `<server>_<tool>`
+  // (non-alphanumeric chars in either are replaced with `_`). Use that
+  // form — with wildcards if you like — in the top-level `permission`
+  // map to allow / deny MCP tools, e.g.
+  //   { "permission": { "github_*": "deny", "github_search_repos": "allow" } }
+  // The same rule shape works inside `agent.<name>.permission` to scope
+  // MCP tools per agent.
+  "MCP server config. Tools surface as permission keys `<server>_<tool>` — use the top-level `permission` map (with wildcards) to allow / deny them, or scope them per agent via `agent.<name>.permission`.",
+)
 export type Mcp = z.infer<typeof Mcp>
 
 export const PermissionAction = z.enum(["ask", "allow", "deny"]).meta({
