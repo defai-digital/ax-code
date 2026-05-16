@@ -63,7 +63,7 @@ import { promptEscapeClearIntent, isPromptExitCommand, promptSubmissionView } fr
 import { upsert } from "../../context/sync-util"
 import { summarizedPasteViews } from "./paste-view-model"
 import { withTimeout } from "@/util/timeout"
-import { footerSessionStatusView } from "../../routes/session/footer-view-model"
+import { footerSessionStatusView, footerTokenChip } from "../../routes/session/footer-view-model"
 import { selectedForeground } from "@tui/context/theme"
 import { footerToggleLabel } from "./footer-toggle"
 import { footerHintWidth, promptFooterLayout } from "./footer-layout"
@@ -1412,6 +1412,23 @@ export function Prompt(props: PromptProps) {
       now: Date.now(),
     })
   })
+  // Live token totals + t/s rate for the prompt's busy row. Same
+  // helper the (currently dead) Footer used. Anchored on the last
+  // assistant message that has tokens, paired with that message's own
+  // time.created so the rate window matches the token count.
+  const tokenChipView = createMemo(() => {
+    statusTick()
+    if (!props.sessionID) return undefined
+    const messages = sync.data.message[props.sessionID] ?? []
+    const last = messages.findLast(
+      (m): m is Extract<typeof m, { role: "assistant" }> =>
+        m.role === "assistant" && (m.tokens.input > 0 || m.tokens.output > 0),
+    )
+    if (!last) return undefined
+    const completed = last.time.completed
+    const now = completed ?? Date.now()
+    return footerTokenChip({ tokens: last.tokens, startedAt: last.time.created, now })
+  })
   const livenessIndicator = createMemo(() =>
     footerLivenessIndicator({
       tick: statusTick(),
@@ -1864,6 +1881,16 @@ export function Prompt(props: PromptProps) {
                 <box flexDirection="row" gap={1} flexShrink={0}>
                   <Show when={busyStatus()?.label}>
                     <text fg={theme.warning}>{busyStatus()?.label}</text>
+                  </Show>
+                  <Show when={tokenChipView()} keyed>
+                    {(chip) => (
+                      <text fg={theme.textMuted}>
+                        ↑{chip.input} ↓{chip.output}
+                        <Show when={chip.rate}>
+                          <span style={{ fg: theme.textMuted }}> · {chip.rate}</span>
+                        </Show>
+                      </text>
+                    )}
                   </Show>
                   {(() => {
                     const retry = createMemo(() => {
