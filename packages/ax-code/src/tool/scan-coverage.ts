@@ -1,6 +1,6 @@
-import path from "path"
 import { Instance } from "../project/instance"
 import { Locale } from "../util/locale"
+import { resolveToolFilePath } from "./file-path"
 
 type SourceCoverage = "not_applicable" | "not_covered" | "limited"
 
@@ -23,7 +23,7 @@ function includesExtensionGlob(include: string[] | undefined, extension: string)
 
 async function anyExists(candidates: string[]) {
   for (const candidate of candidates) {
-    if (await Bun.file(path.join(Instance.directory, candidate)).exists()) return true
+    if (await Bun.file(resolveToolFilePath(candidate, Instance.directory)).exists()) return true
   }
   return false
 }
@@ -42,7 +42,7 @@ function hasSourceFile(patterns: string[]) {
 
 async function detectedWorkspaces() {
   const rustWorkspace =
-    (await Bun.file(path.join(Instance.directory, "Cargo.toml")).exists()) ||
+    (await Bun.file(resolveToolFilePath("Cargo.toml", Instance.directory)).exists()) ||
     hasSourceFile(["src/**/*.rs", "crates/**/*.rs"])
   const pythonWorkspace =
     (await anyExists(["pyproject.toml", "setup.py", "setup.cfg", "requirements.txt", "Pipfile"])) ||
