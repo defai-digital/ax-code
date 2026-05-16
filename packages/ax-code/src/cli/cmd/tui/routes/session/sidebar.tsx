@@ -273,6 +273,11 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                   <b>{session().title}</b>
                 </text>
                 <text fg={theme.textMuted}>{session().id}</text>
+                <Show when={directory()}>
+                  <text fg={theme.textMuted} wrapMode="none">
+                    {directory()}
+                  </text>
+                </Show>
                 <Show when={session().share?.url}>{(url) => <text fg={theme.textMuted}>{url()}</text>}</Show>
               </box>
               <Show when={mcpEntries().length > 0}>
