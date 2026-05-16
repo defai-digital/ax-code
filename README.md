@@ -86,7 +86,7 @@ git clone https://github.com/defai-digital/ax-code.git
 cd ax-code && pnpm install && pnpm run setup:cli
 ```
 
-Requires [pnpm](https://pnpm.io) v9.15.9+ and [Bun](https://bun.sh) matching the root `package.json` engine (`^1.3.12` today). `setup:cli` installs a launcher for the same bundled runtime used by npm and Homebrew. `ax-code doctor` should report `Runtime: Bun X.Y.Z (compiled)`.
+Requires [pnpm](https://pnpm.io) v10.33.4+ and [Bun](https://bun.sh) matching the root `package.json` engine (`^1.3.14` today). `setup:cli` installs a launcher for the same bundled runtime used by npm and Homebrew. `ax-code doctor` should report `Runtime: Bun X.Y.Z (compiled)`.
 
 Refresh the local bundled runtime after code changes:
 

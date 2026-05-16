@@ -1,5 +1,4 @@
 import { Hono, type Context } from "hono"
-import { stream } from "hono/streaming"
 import { describeRoute, validator, resolver } from "hono-openapi"
 import { HTTPException } from "hono/http-exception"
 import { SessionID, MessageID, PartID } from "@/session/schema"
@@ -1190,7 +1189,7 @@ export const SessionRoutes = lazy(() =>
       "/:sessionID/message",
       describeRoute({
         summary: "Send message",
-        description: "Create and send a new message to a session, streaming the AI response.",
+        description: "Create and send a new message to a session, returning the final assistant response.",
         operationId: "session.prompt",
         responses: {
           200: {
@@ -1215,18 +1214,8 @@ export const SessionRoutes = lazy(() =>
       ),
       validator("json", SessionPrompt.PromptInput.omit({ sessionID: true })),
       async (c) => {
-        c.status(200)
-        c.header("Content-Type", "application/json")
-        return stream(c, async (stream) => {
-          const { sessionID, body } = await parseSessionJSONInput<SessionPrompt.PromptInput>(c)
-          try {
-            const msg = await SessionPrompt.prompt({ ...body, sessionID })
-            stream.write(JSON.stringify(msg))
-          } catch (err) {
-            const message = err instanceof NamedError ? err.message : "Internal server error"
-            stream.write(JSON.stringify({ error: message }))
-          }
-        })
+        const msg = await runSessionRequest<SessionPrompt.PromptInput>(c, SessionPrompt.prompt)
+        return c.json(msg)
       },
     )
     .post(

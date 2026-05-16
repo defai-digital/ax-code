@@ -23,6 +23,7 @@ describe("tui spinner", () => {
 
   test("does not mutate a shared RGBA default color", () => {
     const shared = RGBA.fromValues(0, 0, 0, 0.75)
+    const alphaBefore = shared.a
     const spinner = createColors({
       width: 4,
       holdStart: 2,
@@ -32,7 +33,7 @@ describe("tui spinner", () => {
     })
 
     spinner(3, 3, 0, 4)
-    expect(shared.a).toBe(0.75)
+    expect(shared.a).toBe(alphaBefore)
   })
 
   test("accepts numeric default colors", () => {

@@ -16,7 +16,7 @@ afterEach(async () => {
 })
 
 describe("server route validation", () => {
-  test("session prompt stream returns a JSON error body when prompt fails", async () => {
+  test("session prompt returns a non-2xx JSON error when prompt fails", async () => {
     await Instance.provide({
       directory: root,
       fn: async () => {
@@ -32,8 +32,10 @@ describe("server route validation", () => {
             }),
           })
 
-          expect(res.status).toBe(200)
-          expect(await res.json()).toEqual({ error: "Internal server error" })
+          expect(res.status).toBe(500)
+          const text = await res.text()
+          expect(text).toContain("Internal server error")
+          expect(text).not.toContain("prompt failed")
         } finally {
           promptSpy.mockRestore()
           await Session.remove(session.id)
