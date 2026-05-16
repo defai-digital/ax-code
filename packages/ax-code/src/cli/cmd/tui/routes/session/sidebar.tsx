@@ -1,5 +1,5 @@
 import { useSync } from "@tui/context/sync"
-import { createMemo, createSignal, For, Match, onCleanup, onMount, Show, Switch } from "solid-js"
+import { createMemo, For, Match, Show, Switch } from "solid-js"
 import { useTerminalDimensions } from "@opentui/solid"
 import { createStore } from "solid-js/store"
 import { useTheme } from "../../context/theme"
@@ -107,22 +107,10 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
     const candidate = sync.data.session_status?.[props.sessionID]
     return isFooterSessionStatus(candidate) ? candidate : { type: "idle" }
   })
-  // 1Hz tick so the "Thinking · 2s" elapsed seconds keep counting up
-  // while the session is busy. Idle sessions skip the setState — no
-  // re-render churn when nothing is happening.
-  const [statusTick, setStatusTick] = createSignal(0)
-  onMount(() => {
-    const timer = setInterval(() => {
-      if (status().type === "idle") return
-      setStatusTick((value) => value + 1)
-    }, 1000)
-    onCleanup(() => clearInterval(timer))
-  })
   const sidebarStatusView = createMemo(() => {
-    statusTick()
     const current = status()
     if (current.type === "idle") return undefined
-    return footerSessionStatusView({ status: current, now: Date.now() })
+    return footerSessionStatusView({ status: current })
   })
   const sidebarStatusLabel = createMemo(() => sidebarStatusView()?.label)
   const dimensions = useTerminalDimensions()
