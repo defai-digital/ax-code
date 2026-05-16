@@ -18,7 +18,6 @@ import { SessionDreView } from "./dre"
 import { SessionRollbackView } from "./rollback"
 import { SessionSemanticDiff } from "@/session/semantic-diff"
 import { footerSessionStatusView, type FooterSessionStatus, isFooterSessionStatus } from "./footer-view-model"
-import { SidebarStatusSpinner } from "../../component/sidebar-status-spinner"
 import { computeSidebarWidth } from "./layout"
 import { sidebarGraphIndexStatusText } from "./sidebar-index-view-model"
 import { Locale } from "@/util/locale"
@@ -283,12 +282,9 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
                 <text fg={theme.textMuted}>{session().id}</text>
                 <Show when={sidebarStatusLabel()}>
                   {(label) => (
-                    // Knight Rider scanner + status label, both visible
-                    // from the sidebar at a glance. Uses a Solid-signal
-                    // driver instead of opentui's native <spinner> — the
-                    // native element does not repaint inside a
-                    // <scrollbox> parent (see component comment).
-                    <SidebarStatusSpinner color={theme.warning}>{label()}</SidebarStatusSpinner>
+                    <text fg={theme.warning} wrapMode="none">
+                      {label()}
+                    </text>
                   )}
                 </Show>
                 <Show when={session().share?.url}>{(url) => <text fg={theme.textMuted}>{url()}</text>}</Show>
