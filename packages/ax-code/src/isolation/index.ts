@@ -1,4 +1,5 @@
 import path from "path"
+import fs from "fs"
 import { Filesystem } from "@/util/filesystem"
 import { Flag } from "@/flag/flag"
 import type { Isolation as IsolationConfig } from "@/config/schema"
@@ -25,6 +26,32 @@ export namespace Isolation {
 
   function resolvePath(filepath: string) {
     return Filesystem.resolve(filepath)
+  }
+
+  function resolveClosestExistingPath(filepath: string) {
+    const resolved = resolvePath(filepath)
+    const suffix: string[] = []
+    let current = resolved
+
+    while (true) {
+      try {
+        return path.join(fs.realpathSync(current), ...suffix.slice().reverse())
+      } catch (error) {
+        if (!error || typeof error !== "object" || (error as NodeJS.ErrnoException).code !== "ENOENT") return resolved
+        const parent = path.dirname(current)
+        if (parent === current) return resolved
+        suffix.push(path.basename(current))
+        current = parent
+      }
+    }
+  }
+
+  function securityPaths(filepath: string) {
+    return Array.from(new Set([resolvePath(filepath), resolveClosestExistingPath(filepath)]))
+  }
+
+  function isInsideAnyRoot(roots: string[], targets: string[]) {
+    return targets.every((target) => roots.some((root) => Filesystem.contains(root, target)))
   }
 
   function roots(directory: string, worktree: string) {
@@ -64,8 +91,8 @@ export namespace Isolation {
 
   export function isProtected(state: State, filepath: string): boolean {
     if (state.mode === "full-access") return false
-    const resolved = resolvePath(filepath)
-    return state.protected.some((p) => Filesystem.contains(p, resolved))
+    const targets = securityPaths(filepath)
+    return targets.some((target) => state.protected.some((p) => Filesystem.contains(p, target)))
   }
 
   function isBypassed(state: State, resolved: string): boolean {
@@ -78,12 +105,11 @@ export namespace Isolation {
     const resolved = resolvePath(filepath)
     if (isBypassed(state, resolved)) return true
     if (state.mode === "read-only") return false
-    const dir = resolvePath(directory)
-    const tree = worktree !== "/" ? resolvePath(worktree) : worktree
+    const targetPaths = securityPaths(filepath)
+    const writeRoots = securityPaths(directory)
+    if (worktree !== "/") writeRoots.push(...securityPaths(worktree))
     if (isProtected(state, resolved)) return false
-    if (Filesystem.contains(dir, resolved)) return true
-    if (tree !== "/" && Filesystem.contains(tree, resolved)) return true
-    return false
+    return isInsideAnyRoot(Array.from(new Set(writeRoots)), targetPaths)
   }
 
   export function assertWrite(state: State | undefined, filepath: string, directory: string, worktree: string) {
@@ -120,11 +146,12 @@ export namespace Isolation {
     if (state.mode === "read-only") {
       throw new DeniedError("bash", "Isolation mode is read-only. Bash commands are not allowed.")
     }
-    const dir = resolvePath(directory)
-    const tree = worktree !== "/" ? resolvePath(worktree) : worktree
+    const roots = securityPaths(directory)
+    if (worktree !== "/") roots.push(...securityPaths(worktree))
     const current = resolvePath(cwd)
+    const currentPaths = securityPaths(cwd)
     // workspace-write: check cwd is within workspace
-    if (!Filesystem.contains(dir, current) && !(tree !== "/" && Filesystem.contains(tree, current))) {
+    if (!isInsideAnyRoot(Array.from(new Set(roots)), currentPaths)) {
       throw new DeniedError("bash", `Bash working directory is outside workspace boundary: ${cwd}`)
     }
     if (!isBypassed(state, current) && isProtected(state, current)) {
@@ -137,7 +164,7 @@ export namespace Isolation {
       if (isProtected(state, target)) {
         throw new DeniedError("bash", `Bash command targets protected path: ${p}`, target)
       }
-      if (!Filesystem.contains(dir, target) && !(tree !== "/" && Filesystem.contains(tree, target))) {
+      if (!isInsideAnyRoot(Array.from(new Set(roots)), securityPaths(p))) {
         throw new DeniedError("bash", `Bash command targets path outside workspace boundary: ${p}`, target)
       }
     }

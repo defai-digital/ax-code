@@ -1,9 +1,10 @@
 import { $ } from "bun"
-import { afterEach, expect, test } from "bun:test"
+import { afterEach, expect, spyOn, test } from "bun:test"
 import fs from "fs/promises"
 import path from "path"
 import { Global } from "../../src/global"
 import { Instance } from "../../src/project/instance"
+import { Project } from "../../src/project/project"
 import { Worktree } from "../../src/worktree"
 import { tmpdir } from "../fixture/fixture"
 
@@ -22,6 +23,31 @@ test("create removes the preallocated directory when git worktree add fails", as
 
       const projectRoot = path.join(Global.Path.data, "worktree", Instance.project.id)
       await expect(fs.stat(path.join(projectRoot, "orphan-cleanup"))).rejects.toThrow()
+    },
+  })
+})
+
+test("create rolls back the git worktree when sandbox recording fails", async () => {
+  await using tmp = await tmpdir({ git: true })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const addSandbox = spyOn(Project, "addSandbox").mockRejectedValue(new Error("db unavailable"))
+
+      try {
+        await expect(Worktree.create({ name: "db-fail" })).rejects.toThrow("WorktreeCreateFailedError")
+
+        const projectRoot = path.join(Global.Path.data, "worktree", Instance.project.id)
+        await expect(fs.stat(path.join(projectRoot, "db-fail"))).rejects.toThrow()
+
+        const list = await $`git worktree list --porcelain`.cwd(tmp.path).text()
+        expect(list).not.toContain("db-fail")
+        const branches = await $`git branch --list`.cwd(tmp.path).text()
+        expect(branches).not.toContain("db-fail")
+      } finally {
+        addSandbox.mockRestore()
+      }
     },
   })
 })
