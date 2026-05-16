@@ -126,10 +126,13 @@ export namespace ModelsDev {
     const allowedDirs: string[] = [Global.Path.config, Global.Path.data, Global.Path.home]
     try {
       if (Instance.worktree && Instance.worktree !== "/") allowedDirs.push(Instance.worktree)
+    } catch {
+      // Instance context is optional for this loader in bootstrap paths.
+    }
+    try {
       allowedDirs.push(Instance.directory)
     } catch {
-      // Instance context is not guaranteed to be active when this data loader
-      // runs in some test/bootstrap paths.
+      // Instance directory may be unavailable if called outside a provisioned context.
     }
 
     return allowedDirs.some((root) => Filesystem.contains(root, resolved))

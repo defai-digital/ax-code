@@ -311,7 +311,9 @@ export namespace Config {
         await load(Flag.AX_CODE_CONFIG_CONTENT, {
           dir: Instance.directory,
           source: "AX_CODE_CONFIG_CONTENT",
-          trusted: false,
+          // AX_CODE_CONFIG_CONTENT is intentionally explicit config text from the caller,
+          // so token expansion should behave like a trusted source.
+          trusted: true,
         }),
       )
       log.debug("loaded custom config from AX_CODE_CONFIG_CONTENT", { command: "config.load", status: "ok" })
