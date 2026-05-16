@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createSignal, Match, onCleanup, onMount, Show, Switch } from "solid-js"
+import { createEffect, createMemo, createSignal, Match, onCleanup, Show, Switch } from "solid-js"
 import { useTerminalDimensions } from "@opentui/solid"
 import { useTheme } from "../../context/theme"
 import { useSync } from "../../context/sync"
@@ -13,7 +13,6 @@ import { Installation } from "@/installation"
 import { Flag } from "@/flag/flag"
 import {
   footerPermissionLabel,
-  footerTokenChip,
   footerTrustChip,
   footerAgentControlStatusView,
   footerProgressBar,
@@ -72,49 +71,6 @@ export function Footer() {
   // terminals so critical signals (permissions, reconnecting, sandbox-off,
   // version) always survive.
   const showHints = createMemo(() => dimensions().width >= 100)
-  // 1Hz tick — needed so the t/s rate suffix updates every second
-  // during a stream. Idle/non-busy ticks skip the setState so a quiet
-  // session has no re-render churn (same pattern as prompt/sidebar).
-  const [tokenTick, setTokenTick] = createSignal(0)
-  onMount(() => {
-    const timer = setInterval(() => {
-      if (sessionStatus().type !== "busy") return
-      setTokenTick((value) => value + 1)
-    }, 1000)
-    onCleanup(() => clearInterval(timer))
-  })
-  // Per-turn token counter. Two subtle requirements compete:
-  //
-  // 1. Picking the in-flight assistant message gives us the freshest
-  //    timestamp, but its tokens stay 0 until each step-finish lands —
-  //    so the chip's "show only when tokens > 0" gate hides everything
-  //    during streaming.
-  // 2. Picking the last message WITH tokens (Usage.last) keeps the chip
-  //    visible, but earlier I made the mistake of pairing those tokens
-  //    with SessionStatus.startedAt — which resets per step — producing
-  //    garbage rates.
-  //
-  // Fix: pick the last message with non-zero tokens AND pair them with
-  // THAT message's own time.created. The two move together, so the rate
-  // is always the correct window over the correct token count. During
-  // the first-step gap of a new turn we display the previous turn's
-  // final totals (which freezes its rate using time.completed), then
-  // jump to the new turn the moment its first step lands.
-  const tokenChip = createMemo(() => {
-    if (route.data.type !== "session") return undefined
-    if (dimensions().width < 100) return undefined
-    tokenTick()
-    const messages = sync.data.message[route.data.sessionID] ?? []
-    const last = messages.findLast(
-      (m): m is Extract<typeof m, { role: "assistant" }> =>
-        m.role === "assistant" && (m.tokens.input > 0 || m.tokens.output > 0),
-    )
-    if (!last) return undefined
-    const completed = last.time.completed
-    const now = completed ?? Date.now()
-    return footerTokenChip({ tokens: last.tokens, startedAt: last.time.created, now })
-  })
-  const tokenChipStreaming = createMemo(() => sessionStatus().type === "busy")
   const showLspChip = createMemo(() => dimensions().width >= 90 && lsp().length > 0)
   const showDreChip = createMemo(() => dimensions().width >= 80)
   const progressBar = createMemo(() =>
@@ -144,7 +100,7 @@ export function Footer() {
         return theme.textMuted
     }
   })
-  const showSecondaryStatus = createMemo(() => mcp() > 0 || showLspChip() || showHints() || !!tokenChip())
+  const showSecondaryStatus = createMemo(() => mcp() > 0 || showLspChip() || showHints())
   const showStatusSeparator = createMemo(
     () => (permissionLabel() || showDreStatus() || showAgentControlStatus()) && showSecondaryStatus(),
   )
@@ -260,16 +216,6 @@ export function Footer() {
               <text fg={theme.text}>
                 <span style={{ fg: lsp().length > 0 ? theme.success : theme.textMuted }}>•</span> {lsp().length} LSP
               </text>
-            </Show>
-            <Show when={tokenChip()} keyed>
-              {(chip) => (
-                <text fg={tokenChipStreaming() ? theme.accent : theme.textMuted}>
-                  ↑{chip.input} ↓{chip.output}
-                  <Show when={chip.rate}>
-                    <span style={{ fg: theme.textMuted }}> · {chip.rate}</span>
-                  </Show>
-                </text>
-              )}
             </Show>
             <Show when={showHints()}>
               <text fg={theme.textMuted}>/help · /status</text>
