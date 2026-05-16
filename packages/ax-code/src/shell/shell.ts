@@ -66,14 +66,19 @@ export namespace Shell {
   }
 
   export const preferred = lazy(() => {
-    const s = process.env.SHELL
-    if (s) return s
-    return fallback()
+    return resolveShellFromEnv((shell) => shell.length > 0)
   })
 
   export const acceptable = lazy(() => {
-    const s = process.env.SHELL
-    if (s && !BLACKLIST.has(process.platform === "win32" ? path.win32.basename(s) : path.basename(s))) return s
-    return fallback()
+    return resolveShellFromEnv((shell) => {
+      const base = process.platform === "win32" ? path.win32.basename(shell) : path.basename(shell)
+      return !BLACKLIST.has(base)
+    })
   })
+
+  function resolveShellFromEnv(accept: (value: string) => boolean): string {
+    const shell = process.env.SHELL
+    if (shell && accept(shell)) return shell
+    return fallback()
+  }
 }
