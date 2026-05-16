@@ -122,6 +122,56 @@ jobs:
       - name: Install deps
         run: pnpm install --frozen-lockfile
 
+      - name: Validate workflow_dispatch inputs
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          require_positive_int() {
+            local name="$1"
+            local value="$2"
+            if ! [[ "$value" =~ ^[1-9][0-9]*$ ]]; then
+              echo "FAIL: ${name} must be a positive integer, got '${value}'"
+              exit 1
+            fi
+          }
+
+          require_positive_int "limit" "${{ inputs.limit }}"
+          require_positive_int "repeat" "${{ inputs.repeat }}"
+          require_positive_int "warmup" "${{ inputs.warmup }}"
+          require_positive_int "concurrency" "${{ inputs.concurrency }}"
+
+          case "${{ inputs.probe }}" in
+            true|false) ;;
+            *)
+              echo "FAIL: probe must be true or false"
+              exit 1
+              ;;
+          esac
+
+          case "${{ inputs.native_profile }}" in
+            true|false) ;;
+            *)
+              echo "FAIL: native_profile must be true or false"
+              exit 1
+              ;;
+          esac
+
+          for value in "${{ inputs.max_elapsed_median_ms }}" "${{ inputs.max_total_median_ms }}" "${{ inputs.max_elapsed_regression_pct }}" "${{ inputs.max_total_regression_pct }}"; do
+            if [ -n "$value" ] && ! [[ "$value" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
+              echo "FAIL: numeric input expected, got '$value'"
+              exit 1
+            fi
+          done
+
+          for value in "${{ inputs.baseline }}" "${{ inputs.baseline_summary }}" "${{ inputs.baseline_out }}" "${{ inputs.baseline_summary_out }}" "${{ inputs.summary_out }}"; do
+            if [ -n "$value" ] && [[ "$value" == *$'\n'* ]]; then
+              echo "FAIL: path input must not include newlines, got '$value'"
+              exit 1
+            fi
+          done
+
       - name: Run perf benchmark
         shell: bash
         run: |
