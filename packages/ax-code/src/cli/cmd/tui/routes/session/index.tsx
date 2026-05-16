@@ -17,7 +17,7 @@ import { useRoute, useRouteData } from "@tui/context/route"
 import { useSync } from "@tui/context/sync"
 import { SplitBorder } from "@tui/component/border"
 import { Spinner } from "@tui/component/spinner"
-import { selectedForeground, useTheme } from "@tui/context/theme"
+import { selectedForeground, tint, useTheme } from "@tui/context/theme"
 import {
   BoxRenderable,
   ScrollBoxRenderable,
@@ -1690,6 +1690,12 @@ function TextPart(props: { last: boolean; part: TextPart; message: AssistantMess
   })
   // Mutually exclusive — live wins while the turn is still running.
   const showStripe = createMemo(() => !isLiveAutonomous() && isAutonomousProduced())
+  // Dark-yellow autonomous tint, computed per-theme by tinting theme.warning
+  // (= yellow on every shipped theme, dark/light alike) onto the live
+  // background at the same alpha diffAddedBg uses. This way the highlight
+  // adapts to dark/light/high-contrast themes without forcing 33 theme
+  // JSON files to declare a dedicated key.
+  const autonomousBg = createMemo(() => tint(theme.background, theme.warning, 0.22))
 
   return (
     <Show when={trimmed()}>
@@ -1698,10 +1704,10 @@ function TextPart(props: { last: boolean; part: TextPart; message: AssistantMess
         paddingLeft={3}
         marginTop={1}
         flexShrink={0}
-        backgroundColor={isLiveAutonomous() ? theme.diffAddedBg : undefined}
+        backgroundColor={isLiveAutonomous() ? autonomousBg() : undefined}
         border={showStripe() ? ["left"] : undefined}
         customBorderChars={SplitBorder.customBorderChars}
-        borderColor={showStripe() ? theme.diffAdded : undefined}
+        borderColor={showStripe() ? theme.warning : undefined}
       >
         <Switch>
           <Match when={Flag.AX_CODE_EXPERIMENTAL_MARKDOWN}>
@@ -1711,7 +1717,7 @@ function TextPart(props: { last: boolean; part: TextPart; message: AssistantMess
               content={visibleText()}
               conceal={ctx.conceal()}
               fg={theme.markdownText}
-              bg={isLiveAutonomous() ? theme.diffAddedBg : theme.background}
+              bg={isLiveAutonomous() ? autonomousBg() : theme.background}
             />
           </Match>
           <Match when={!Flag.AX_CODE_EXPERIMENTAL_MARKDOWN}>
