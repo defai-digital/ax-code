@@ -74,30 +74,26 @@ export namespace Lock {
     return `Lock.${kind}: timed out after ${ms}ms waiting for ${JSON.stringify(key)}`
   }
 
-  export async function read(key: string, opts?: { timeoutMs?: number }): Promise<Disposable> {
-    const lock = get(key)
-    const timeoutMs = opts?.timeoutMs ?? DEFAULT_TIMEOUT_MS
+  type LockKind = "read" | "write"
 
+  function waitWithTimeout(
+    key: string,
+    lock: ReturnType<typeof get>,
+    queue: Waiter[],
+    kind: LockKind,
+    timeoutMs: number,
+    onGrant: () => void,
+    onRelease: () => void,
+  ): Promise<Disposable> {
     return new Promise((resolve, reject) => {
-      if (!lock.writer && lock.waitingWriters.length === 0) {
-        lock.readers++
-        resolve({
-          [Symbol.dispose]: () => {
-            lock.readers--
-            process(key)
-          },
-        })
-        return
-      }
-
       const waiter: Waiter = {
         settled: false,
         fire: () => {
           clearTimeout(timer)
-          lock.readers++
+          onGrant()
           resolve({
             [Symbol.dispose]: () => {
-              lock.readers--
+              onRelease()
               process(key)
             },
           })
@@ -106,56 +102,73 @@ export namespace Lock {
       const timer = setTimeout(() => {
         if (waiter.settled) return
         waiter.settled = true
-        dropWaiter(lock.waitingReaders, waiter)
+        dropWaiter(queue, waiter)
         maybeDelete(lock, key)
-        reject(new Error(timeoutMessage("read", key, timeoutMs)))
+        reject(new Error(timeoutMessage(kind, key, timeoutMs)))
       }, timeoutMs)
-      // unref so a stuck waiter cannot keep the process alive past
-      // intended shutdown — we still reject with a clear error if the
-      // event loop is otherwise idle and the timer fires.
       if (typeof timer === "object" && "unref" in timer) timer.unref()
-      lock.waitingReaders.push(waiter)
+      queue.push(waiter)
     })
   }
 
-  export async function write(key: string, opts?: { timeoutMs?: number }): Promise<Disposable> {
+  function takeRead(key: string, opts?: { timeoutMs?: number }): Promise<Disposable> {
     const lock = get(key)
     const timeoutMs = opts?.timeoutMs ?? DEFAULT_TIMEOUT_MS
 
-    return new Promise((resolve, reject) => {
-      if (!lock.writer && lock.readers === 0) {
-        lock.writer = true
-        resolve({
-          [Symbol.dispose]: () => {
-            lock.writer = false
-            process(key)
-          },
-        })
-        return
-      }
-
-      const waiter: Waiter = {
-        settled: false,
-        fire: () => {
-          clearTimeout(timer)
-          lock.writer = true
-          resolve({
-            [Symbol.dispose]: () => {
-              lock.writer = false
-              process(key)
-            },
-          })
+    if (!lock.writer && lock.waitingWriters.length === 0) {
+      lock.readers++
+      return Promise.resolve({
+        [Symbol.dispose]: () => {
+          lock.readers--
+          process(key)
         },
-      }
-      const timer = setTimeout(() => {
-        if (waiter.settled) return
-        waiter.settled = true
-        dropWaiter(lock.waitingWriters, waiter)
-        maybeDelete(lock, key)
-        reject(new Error(timeoutMessage("write", key, timeoutMs)))
-      }, timeoutMs)
-      if (typeof timer === "object" && "unref" in timer) timer.unref()
-      lock.waitingWriters.push(waiter)
-    })
+      })
+    }
+
+    return waitWithTimeout(
+      key,
+      lock,
+      lock.waitingReaders,
+      "read",
+      timeoutMs,
+      () => {
+        lock.readers++
+      },
+      () => {
+        lock.readers--
+      },
+    )
+  }
+
+  export async function write(key: string, opts?: { timeoutMs?: number }): Promise<Disposable> {
+    const timeoutMs = opts?.timeoutMs ?? DEFAULT_TIMEOUT_MS
+    const lock = get(key)
+    if (!lock.writer && lock.readers === 0) {
+      lock.writer = true
+      return Promise.resolve({
+        [Symbol.dispose]: () => {
+          lock.writer = false
+          process(key)
+        },
+      })
+    }
+
+    return waitWithTimeout(
+      key,
+      lock,
+      lock.waitingWriters,
+      "write",
+      timeoutMs,
+      () => {
+        lock.writer = true
+      },
+      () => {
+        lock.writer = false
+      },
+    )
+  }
+
+  export async function read(key: string, opts?: { timeoutMs?: number }): Promise<Disposable> {
+    return takeRead(key, opts)
   }
 }
