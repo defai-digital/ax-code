@@ -10,6 +10,12 @@ import { Filesystem } from "../util/filesystem"
 import { encryptField, decryptField, createCanary, verifyCanary } from "./encryption"
 import { Lock } from "../util/lock"
 import { Log } from "../util/log"
+import {
+  createProcessLockBody,
+  isSameProcessLockHost,
+  parseProcessLockBody,
+  type ProcessLockBody,
+} from "../util/process-lock"
 
 const log = Log.create({ service: "auth" })
 
@@ -21,10 +27,7 @@ const LOCK_TIMEOUT_MS = 5_000
 const LOCK_POLL_MS = 20
 const LOCK_STALE_MS = 60 * 60 * 1000
 
-type AuthLockBody = {
-  host: string
-  pid: number
-  startedAt: number
+type AuthLockBody = ProcessLockBody & {
   token: string
 }
 
@@ -51,8 +54,8 @@ function makeAuthLockDisposable(ownToken: string): Disposable {
       disposed = true
       try {
         const text = readFileSync(lockFile, "utf-8")
-        const parsed = JSON.parse(text) as Partial<AuthLockBody>
-        if (parsed.token !== ownToken) return
+        const parsed = parseProcessLockBody<AuthLockBody>(text)
+        if (!parsed || parsed.token !== ownToken) return
       } catch (err) {
         if ((err as NodeJS.ErrnoException)?.code === "ENOENT") return
         // Unreadable / corrupt lockfile: someone else's problem to clean
@@ -71,12 +74,7 @@ function makeAuthLockDisposable(ownToken: string): Disposable {
 }
 
 async function acquireFileLock(): Promise<Disposable> {
-  const body: AuthLockBody = {
-    host: process.env.HOSTNAME ?? "",
-    pid: process.pid,
-    startedAt: Date.now(),
-    token: randomUUID(),
-  }
+  const body: AuthLockBody = { ...createProcessLockBody(), token: randomUUID() }
 
   async function tryCreate() {
     const fd = await fsPromises.open(lockFile, "wx")
@@ -91,20 +89,9 @@ async function acquireFileLock(): Promise<Disposable> {
   async function readBody() {
     const text = await fsPromises.readFile(lockFile, "utf-8").catch(() => undefined)
     if (!text) return undefined
-    try {
-      const parsed = JSON.parse(text) as Partial<AuthLockBody>
-      if (
-        typeof parsed.pid !== "number" ||
-        typeof parsed.startedAt !== "number" ||
-        typeof parsed.host !== "string" ||
-        typeof parsed.token !== "string"
-      ) {
-        return undefined
-      }
-      return parsed as AuthLockBody
-    } catch {
-      return undefined
-    }
+    const parsed = parseProcessLockBody<AuthLockBody>(text)
+    if (!parsed || typeof parsed.token !== "string") return undefined
+    return parsed
   }
 
   async function maybeSteal() {
@@ -114,7 +101,7 @@ async function acquireFileLock(): Promise<Disposable> {
       return true
     }
 
-    const sameHost = holder.host === body.host
+    const sameHost = isSameProcessLockHost(holder)
     if (sameHost && holder.pid !== process.pid) {
       let alive = true
       try {

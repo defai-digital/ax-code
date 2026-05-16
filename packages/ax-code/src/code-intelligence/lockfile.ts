@@ -4,6 +4,7 @@ import { Global } from "../global"
 import { Log } from "../util/log"
 import { Flag } from "../flag/flag"
 import { NativeStore } from "./native-store"
+import { createProcessLockBody, isSameProcessLockHost, parseProcessLockBody, type ProcessLockBody } from "../util/process-lock"
 import type { ProjectID } from "../project/schema"
 
 // Cross-process advisory lock for code-graph indexing runs.
@@ -48,23 +49,13 @@ const STALE_LOCK_MS = 8 * 60 * 60 * 1000
 // takeover against wasted syscalls on a long-running batch.
 const POLL_INTERVAL_MS = 500
 
-type LockBody = {
-  pid: number
-  startedAt: number
-  host: string
-}
-
 export namespace IndexLock {
   function lockPath(projectID: ProjectID): string {
     return path.join(Global.Path.data, "locks", `code-index-${projectID}.lock`)
   }
 
   async function writeLockFile(target: string): Promise<void> {
-    const body: LockBody = {
-      pid: process.pid,
-      startedAt: Date.now(),
-      host: process.env.HOSTNAME ?? "",
-    }
+    const body: ProcessLockBody = createProcessLockBody()
     // wx = create+exclusive. Throws EEXIST if the file exists.
     const handle = await fs.open(target, "wx")
     try {
@@ -88,14 +79,10 @@ export namespace IndexLock {
     })
   }
 
-  async function readLockBody(target: string): Promise<LockBody | undefined> {
+  async function readLockBody(target: string): Promise<ProcessLockBody | undefined> {
     const text = await readFileIfExists(target)
     if (text === undefined) return undefined
-    try {
-      return JSON.parse(text) as LockBody
-    } catch {
-      return undefined
-    }
+    return parseProcessLockBody(text)
   }
 
   // Returns true if the lockfile was stolen (i.e. the previous holder
@@ -108,7 +95,7 @@ export namespace IndexLock {
       await unlinkIfExists(target)
       return true
     }
-    const sameHost = (process.env.HOSTNAME ?? "") === body.host
+    const sameHost = isSameProcessLockHost(body)
     const age = Date.now() - body.startedAt
     if (age > STALE_LOCK_MS) {
       log.warn("stealing stale index lock", { target, age, body })

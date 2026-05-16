@@ -2,6 +2,7 @@ import fs from "fs/promises"
 import { unlinkSync } from "fs"
 import path from "path"
 import { Log } from "./log"
+import { createProcessLockBody, isSameProcessLockHost, parseProcessLockBody, type ProcessLockBody } from "./process-lock"
 
 // Cross-process advisory file lock.
 //
@@ -19,19 +20,9 @@ const log = Log.create({ service: "filelock" })
 const DEFAULT_STALE_MS = 5 * 60 * 1000 // 5 minutes
 const POLL_INTERVAL_MS = 50
 
-type LockBody = {
-  pid: number
-  startedAt: number
-  host: string
-}
-
 export namespace FileLock {
   async function writeLockFile(target: string): Promise<void> {
-    const body: LockBody = {
-      pid: process.pid,
-      startedAt: Date.now(),
-      host: process.env.HOSTNAME ?? "",
-    }
+    const body: ProcessLockBody = createProcessLockBody()
     const handle = await fs.open(target, "wx")
     try {
       await handle.writeFile(JSON.stringify(body))
@@ -40,14 +31,10 @@ export namespace FileLock {
     }
   }
 
-  async function readLockBody(target: string): Promise<LockBody | undefined> {
+  async function readLockBody(target: string): Promise<ProcessLockBody | undefined> {
     const text = await fs.readFile(target, "utf-8").catch(() => undefined)
     if (!text) return undefined
-    try {
-      return JSON.parse(text) as LockBody
-    } catch {
-      return undefined
-    }
+    return parseProcessLockBody(text)
   }
 
   async function maybeSteal(target: string, staleMs: number): Promise<boolean> {
@@ -62,7 +49,7 @@ export namespace FileLock {
       await fs.unlink(target).catch(() => undefined)
       return true
     }
-    const sameHost = (process.env.HOSTNAME ?? "") === body.host
+    const sameHost = isSameProcessLockHost(body)
     if (sameHost && body.pid !== process.pid) {
       try {
         process.kill(body.pid, 0)
