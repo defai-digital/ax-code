@@ -31,6 +31,18 @@ type AuthLockBody = ProcessLockBody & {
   token: string
 }
 
+function normalizeProviderID(providerID: string) {
+  return providerID.replace(/[^\w\-.:/]/g, "").replace(/\/+$/, "")
+}
+
+function readAuthData() {
+  return Filesystem.readJson<Record<string, unknown>>(file).catch(() => ({} as Record<string, unknown>))
+}
+
+async function cleanupAuthLockFile() {
+  await fsPromises.unlink(lockFile).catch(() => {})
+}
+
 // Cross-process advisory lock using exclusive file creation.
 // Prevents two concurrent ax-code processes (e.g. CLI + desktop app)
 // from racing on auth.json. Falls back to in-process Lock.write("auth")
@@ -97,7 +109,7 @@ async function acquireFileLock(): Promise<Disposable> {
   async function maybeSteal() {
     const holder = await readBody()
     if (!holder) {
-      await fsPromises.unlink(lockFile).catch(() => {})
+      await cleanupAuthLockFile()
       return true
     }
 
@@ -110,14 +122,14 @@ async function acquireFileLock(): Promise<Disposable> {
         alive = (error as NodeJS.ErrnoException)?.code !== "ESRCH"
       }
       if (!alive) {
-        await fsPromises.unlink(lockFile).catch(() => {})
+        await cleanupAuthLockFile()
         return true
       }
       return false
     }
 
     if (!sameHost && Date.now() - holder.startedAt > LOCK_STALE_MS) {
-      await fsPromises.unlink(lockFile).catch(() => {})
+      await cleanupAuthLockFile()
       return true
     }
 
@@ -299,13 +311,13 @@ export namespace Auth {
       })
 
       const set = Effect.fn("Auth.set")(function* (key: string, info: Info) {
-        const norm = key.replace(/[^\w\-.:/]/g, "").replace(/\/+$/, "")
+        const norm = normalizeProviderID(key)
         if (!norm || norm.includes("..")) return yield* new AuthError({ message: "Invalid provider ID" })
         yield* Effect.tryPromise({
           try: async () => {
             using _crossProcess = await acquireFileLock()
             using _inProcess = await Lock.write("auth")
-            const data = await Filesystem.readJson<Record<string, any>>(file).catch(() => ({}) as Record<string, any>)
+            const data = await readAuthData()
             if (norm !== key) delete data[key]
             delete data[norm + "/"]
             if (!data.__canary || !verifyCanary(data.__canary)) data.__canary = createCanary()
@@ -316,12 +328,12 @@ export namespace Auth {
       })
 
       const remove = Effect.fn("Auth.remove")(function* (key: string) {
-        const norm = key.replace(/[^\w\-.:/]/g, "").replace(/\/+$/, "")
+        const norm = normalizeProviderID(key)
         yield* Effect.tryPromise({
           try: async () => {
             using _crossProcess = await acquireFileLock()
             using _inProcess = await Lock.write("auth")
-            const data = await Filesystem.readJson<Record<string, any>>(file).catch(() => ({}) as Record<string, any>)
+            const data = await readAuthData()
             delete data[key]
             delete data[norm]
             delete data[norm + "/"]
