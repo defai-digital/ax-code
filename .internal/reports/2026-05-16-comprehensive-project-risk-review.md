@@ -1,7 +1,7 @@
 ---
 title: "Comprehensive Project Risk Review"
 date: "2026-05-16"
-status: "first-slice-implemented"
+status: "second-slice-implemented"
 author: "Codex"
 scope: "ax-code monorepo, with emphasis on packages/ax-code, SDK, integrations, and repo guardrails"
 ---
@@ -12,13 +12,13 @@ scope: "ax-code monorepo, with emphasis on packages/ax-code, SDK, integrations, 
 
 This review found one high-confidence implementation weakness that should be treated as security/control-plane debt, plus several structural fragility risks that make future regressions likely.
 
-Follow-up implementation status: the first recommended slice has been implemented. `Permission.ask()` now asks by default for autonomous unknown permissions, matching `SafetyPolicy.decide()`. The legacy permissive behavior is retained only when `experimental.autonomous_strict_permission` is explicitly set to `false`.
+Follow-up implementation status: the first two recommended slices have been implemented. `Permission.ask()` now asks by default for autonomous unknown permissions, matching `SafetyPolicy.decide()`. The workspace event server now shares the main server's non-loopback authentication invariant, and doctor reports effective server exposure.
 
 The next largest risk class is complexity concentration: `session/prompt.ts`, TUI session rendering, LSP orchestration, server session routes, provider logic, and several quality modules are all very large, stateful files. The repo has guardrails that report this, but the size signal is not a blocking policy. The risk is not file size alone; it is file size combined with timers, abort propagation, streamed state, permission decisions, and cross-process lifecycle management.
 
-Initial findings were based on static repository inspection only. The follow-up implementation was validated with targeted permission/control-plane tests plus package typecheck; no TUI startup or browser checks were needed for this slice.
+Initial findings were based on static repository inspection only. The follow-up implementations were validated with targeted permission/control-plane/server/doctor tests plus package typecheck; no TUI startup or browser checks were needed for these slices.
 
-## Implementation update: 2026-05-16
+## Implementation update 1: 2026-05-16
 
 Implemented slice: **Permission policy authority**.
 
@@ -38,6 +38,29 @@ Outcome:
 
 - Original P1 autonomous unknown-permission enforcement split: **fixed for default behavior**.
 - Remaining follow-up: shadow safety events are still emitted as shadow telemetry. Because default enforcement now matches `SafetyPolicy.decide()` for unknown autonomous permissions, the highest-risk disagreement is removed. A later observability cleanup can still add explicit `shadowDecision` / `enforcedDecision` fields if downstream reporting needs drift diagnostics.
+
+## Implementation update 2: 2026-05-16
+
+Implemented slice: **Server exposure invariant**.
+
+Changes made:
+
+- Added `packages/ax-code/src/server/listen-security.ts` as the shared server-layer bind-security helper.
+- Switched `packages/ax-code/src/server/server.ts` to use the shared helper for non-loopback authentication enforcement and loopback mDNS checks.
+- Added the same enforcement to `WorkspaceServer.Listen()` so direct callers cannot bypass the CLI wrapper's network-auth guard.
+- Added a doctor `Server exposure` check that reports hostname, loopback/network exposure, and auth configuration.
+- Added tests covering workspace-server non-loopback rejection and doctor exposure reporting.
+
+Validation run:
+
+- `bun test test/control-plane/workspace-server-sse.test.ts test/server/server.test.ts test/cli/doctor.test.ts`
+- `bun run typecheck`
+
+Outcome:
+
+- Original P1 workspace-server exposure invariant: **fixed**.
+- Main server and workspace server now share the same server-layer non-loopback password guard.
+- Doctor now reports effective server exposure for the configured server hostname and auth state.
 
 ## Methodology
 
@@ -387,19 +410,22 @@ No tests, typecheck, builds, startup smoke, or browser checks were run.
 
 ### P1: Workspace server can run unauthenticated if exposed directly
 
+**Status: fixed in follow-up implementation.**
+
 **Evidence**
 
-- `packages/ax-code/src/control-plane/workspace-server/server.ts:13` applies Basic Auth only when `AX_CODE_SERVER_PASSWORD` is set.
-- `packages/ax-code/src/control-plane/workspace-server/server.ts:88` exposes `Listen(input: { hostname; port })` without the non-loopback password guard present in the main server.
-- Main server `packages/ax-code/src/server/server.ts:1336` rejects non-loopback binds unless `AX_CODE_SERVER_PASSWORD` is set.
+- `packages/ax-code/src/control-plane/workspace-server/server.ts` applies Basic Auth only when `AX_CODE_SERVER_PASSWORD` is set.
+- Before the follow-up fix, `WorkspaceServer.Listen(input: { hostname; port })` did not enforce the non-loopback password guard present in the main server.
+- After the follow-up fix, both `WorkspaceServer.Listen()` and `Server.listen()` call `assertAuthenticatedNetworkBind(...)` from `packages/ax-code/src/server/listen-security.ts`.
+- `packages/ax-code/src/cli/cmd/doctor.ts` now includes a `Server exposure` check for configured hostname and auth state.
 
 **Why this is fragile**
 
-The main server has a strong bind-time safety contract, but the workspace server does not appear to enforce the same invariant. If a caller binds the workspace server to a non-loopback hostname without a password, event streaming can be exposed without authentication. Even if today all callers bind it safely, best practice is to enforce the invariant at the server boundary, not at each caller.
+Before the follow-up fix, the main server had a strong bind-time safety contract, but the workspace server did not enforce the same invariant. If a caller bound the workspace server to a non-loopback hostname without a password, event streaming could be exposed without authentication. The invariant now lives at the server boundary for both server types.
 
 **Recommendation**
 
-Move the non-loopback password guard into `WorkspaceServer.Listen()` or a shared server-bind helper used by both servers. Add a test that non-loopback workspace-server listen fails without `AX_CODE_SERVER_PASSWORD`.
+Move the non-loopback password guard into `WorkspaceServer.Listen()` or a shared server-bind helper used by both servers. Add a test that non-loopback workspace-server listen fails without `AX_CODE_SERVER_PASSWORD`. **Done.**
 
 ### P1: Runtime isolation defaults to `full-access`
 
@@ -558,7 +584,7 @@ These should be preserved while fixing the risks above:
 ## Updated recommended implementation order
 
 1. Fix autonomous unknown-permission enforcement so `SafetyPolicy` and `Permission.ask()` cannot disagree by default. **Done in follow-up implementation.**
-2. Add shared non-loopback password enforcement to workspace server listen paths.
+2. Add shared non-loopback password enforcement to workspace server listen paths. **Done in follow-up implementation.**
 3. Decide whether runtime isolation should default to `workspace-write`; if not, make `full-access` provenance explicit in doctor/startup diagnostics.
 4. Narrow isolation escalation so network bypass does not construct a full-access override.
 5. Clarify `/session/:sessionID/message` as final-result JSON or split a true progressive stream endpoint.
@@ -586,10 +612,12 @@ Acceptance criteria:
 
 ### Slice 2: Server exposure invariant
 
+**Status: implemented.**
+
 Goal: ensure no server surface can bind publicly without authentication.
 
 Acceptance criteria:
 
-- Main server and workspace server share the same bind-security helper.
-- Non-loopback hostname without `AX_CODE_SERVER_PASSWORD` fails at listen time for both server types.
-- Doctor reports whether server auth is configured and whether the current bind target is loopback-only.
+- Main server and workspace server share the same bind-security helper. **Done.**
+- Non-loopback hostname without `AX_CODE_SERVER_PASSWORD` fails at listen time for both server types. **Done.**
+- Doctor reports whether server auth is configured and whether the current bind target is loopback-only. **Done.**

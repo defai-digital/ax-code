@@ -25,6 +25,31 @@ import { getDoctorDatabaseCheck } from "./doctor-storage"
 import { getRecentLogsChecks, getRunningInstancesCheck } from "./doctor-health"
 import path from "path"
 import { ProjectIdentity } from "../../project/project-identity"
+import { isLoopbackHostname } from "../../server/listen-security"
+
+export function getServerExposureCheck(input: {
+  hostname?: string
+  mdns?: boolean
+  password?: string
+}): { name: string; status: "ok" | "warn" | "fail"; detail: string } {
+  const hostname = input.hostname ?? (input.mdns ? "0.0.0.0" : "127.0.0.1")
+  const loopbackOnly = isLoopbackHostname(hostname)
+  const authConfigured = !!input.password
+  if (!loopbackOnly && !authConfigured) {
+    return {
+      name: "Server exposure",
+      status: "fail",
+      detail: `hostname ${hostname} is network-accessible and AX_CODE_SERVER_PASSWORD is not set`,
+    }
+  }
+  return {
+    name: "Server exposure",
+    status: "ok",
+    detail: `hostname ${hostname}; ${loopbackOnly ? "loopback-only" : "network-accessible"}; auth ${
+      authConfigured ? "configured" : "not configured"
+    }`,
+  }
+}
 
 async function exists(file: string) {
   return Bun.file(file).exists()
@@ -237,6 +262,23 @@ export const DoctorCommand: CommandModule = {
 
     const duplicateProjectIdentity = await getDuplicateProjectIdentityCheck({ worktree: project.projectRoot })
     if (duplicateProjectIdentity) checks.push(duplicateProjectIdentity)
+
+    try {
+      const globalConfig = await Config.global()
+      checks.push(
+        getServerExposureCheck({
+          hostname: globalConfig?.server?.hostname,
+          mdns: globalConfig?.server?.mdns,
+          password: Flag.AX_CODE_SERVER_PASSWORD,
+        }),
+      )
+    } catch {
+      checks.push(
+        getServerExposureCheck({
+          password: Flag.AX_CODE_SERVER_PASSWORD,
+        }),
+      )
+    }
 
     // 9. Native Rust addons — routed through the central NativeAddon registry
     // so the doctor reflects the exact same load semantics (flag gating +

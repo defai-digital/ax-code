@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { mkdir } from "fs/promises"
 import path from "path"
-import { doctorProjectContext, getDuplicateProjectIdentityCheck } from "../../src/cli/cmd/doctor"
+import { doctorProjectContext, getDuplicateProjectIdentityCheck, getServerExposureCheck } from "../../src/cli/cmd/doctor"
 import { ProjectIdentity } from "../../src/project/project-identity"
 import { ProjectTable } from "../../src/project/project.sql"
 import { Database } from "../../src/storage/db"
@@ -70,5 +70,25 @@ describe("cli doctor", () => {
     expect(check?.detail).toContain("Duplicate project ids")
     expect(check?.detail).toContain("project-one")
     expect(check?.detail).toContain("project-two")
+  })
+
+  test("reports server exposure policy from hostname and auth state", () => {
+    expect(getServerExposureCheck({ hostname: "127.0.0.1" })).toMatchObject({
+      name: "Server exposure",
+      status: "ok",
+      detail: expect.stringContaining("loopback-only"),
+    })
+
+    expect(getServerExposureCheck({ hostname: "0.0.0.0" })).toMatchObject({
+      name: "Server exposure",
+      status: "fail",
+      detail: expect.stringContaining("AX_CODE_SERVER_PASSWORD is not set"),
+    })
+
+    expect(getServerExposureCheck({ hostname: "0.0.0.0", password: "secret" })).toMatchObject({
+      name: "Server exposure",
+      status: "ok",
+      detail: expect.stringContaining("auth configured"),
+    })
   })
 })

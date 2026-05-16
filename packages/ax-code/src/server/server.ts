@@ -56,6 +56,7 @@ import { InstructionPrompt } from "@/session/instruction"
 import * as MemoryStore from "@/memory/store"
 import { getMetadata as getMemoryMetadata } from "@/memory/injector"
 import { generate as generateMemory } from "@/memory/generator"
+import { assertAuthenticatedNetworkBind, isLoopbackHostname } from "./listen-security"
 
 // @ts-ignore This global is needed to prevent ai-sdk from logging warnings to stdout https://github.com/vercel/ai/blob/2dc67e0ef538307f21368db32d5a12345d98831b/packages/ai/src/logger/log-warnings.ts#L85
 globalThis.AI_SDK_LOG_WARNINGS = false
@@ -1333,13 +1334,7 @@ export namespace Server {
     mdnsDomain?: string
     cors?: string[]
   }) {
-    const loopback = ["127.0.0.1", "localhost", "::1"].includes(opts.hostname)
-    if (!loopback && !Flag.AX_CODE_SERVER_PASSWORD) {
-      throw new Error(
-        "AX_CODE_SERVER_PASSWORD is required when binding to a non-loopback address. " +
-          "Set the environment variable to secure the server.",
-      )
-    }
+    assertAuthenticatedNetworkBind(opts.hostname)
     const app = createApp(opts)
     const args = {
       hostname: opts.hostname,
@@ -1366,9 +1361,7 @@ export namespace Server {
     const shouldPublishMDNS =
       opts.mdns &&
       server.port &&
-      opts.hostname !== "127.0.0.1" &&
-      opts.hostname !== "localhost" &&
-      opts.hostname !== "::1"
+      !isLoopbackHostname(opts.hostname)
     if (shouldPublishMDNS) {
       MDNS.publish(server.port!, opts.mdnsDomain)
     } else if (opts.mdns) {
