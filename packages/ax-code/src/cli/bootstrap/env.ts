@@ -111,7 +111,10 @@ export function apply(
   debugDir?: string,
 ) {
   seedRuntimeFlags(env, { pid })
-  if (opts.sandbox) setEnvValue(env, "AX_CODE_ISOLATION_MODE", opts.sandbox)
+  if (opts.sandbox) {
+    setEnvValue(env, "AX_CODE_ISOLATION_MODE", opts.sandbox)
+    setEnvValue(env, "AX_CODE_ISOLATION_NETWORK", opts.sandbox === "full-access")
+  }
   if (opts.debug) {
     setEnvValue(env, "AX_CODE_DEBUG", "1")
     setEnvValue(env, "AX_CODE_DEBUG_DIR", debugDir ?? debugOptions(opts).dir)

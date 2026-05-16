@@ -12,14 +12,22 @@ export function registerSyncLifecycle(input: {
   sseConnected: () => boolean
   startupCoordinator: SyncLifecycleCoordinator
 }) {
-  input.onCleanup(() => {
+  let stopped = false
+  const stopOnce = () => {
+    if (stopped) return
+    stopped = true
     input.startupCoordinator.stop()
+  }
+
+  input.onCleanup(() => {
+    stopOnce()
     input.unsubscribeEvents()
   })
   input.onMount(() => {
+    stopped = false
     input.startupCoordinator.start()
     input.onCleanup(() => {
-      input.startupCoordinator.stop()
+      stopOnce()
     })
   })
   input.watchConnection(input.sseConnected, (connected) => {

@@ -153,8 +153,9 @@ export const HeadlessRunCommand = cmd({
           ? args.idleTimeoutMs
           : undefined
       let timedOut = false
-      let idleTimer = idleTimeoutMs
+      let idleTimer: ReturnType<typeof setTimeout> | undefined = idleTimeoutMs
         ? setTimeout(() => {
+            idleTimer = undefined
             timedOut = true
             abort.abort()
           }, idleTimeoutMs)
@@ -171,8 +172,8 @@ export const HeadlessRunCommand = cmd({
       }
       const eventSink = createHeadlessCompositeEventSink(eventSinks)
       let sessionError: string | undefined
-      process.once("SIGINT", onSignal)
-      process.once("SIGTERM", onSignal)
+      process.on("SIGINT", onSignal)
+      process.on("SIGTERM", onSignal)
       try {
         await runHeadlessSession({
           baseUrl: input.baseUrl,

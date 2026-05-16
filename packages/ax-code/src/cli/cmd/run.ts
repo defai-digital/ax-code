@@ -1,4 +1,5 @@
 import type { Argv } from "yargs"
+import { AsyncLocalStorage } from "node:async_hooks"
 import path from "path"
 import { pathToFileURL } from "url"
 import { UI } from "../ui"
@@ -53,7 +54,7 @@ type Inline = {
   description?: string
 }
 
-let pathDisplayRoot = process.cwd()
+const pathDisplayRootContext = new AsyncLocalStorage<string>()
 
 function inline(info: Inline) {
   const suffix = info.description ? UI.Style.TEXT_DIM + ` ${info.description}` + UI.Style.TEXT_NORMAL : ""
@@ -224,7 +225,8 @@ function todo(info: ToolProps<typeof TodoWriteTool>) {
 
 function normalizePath(input?: string) {
   if (!input) return ""
-  if (path.isAbsolute(input)) return path.relative(pathDisplayRoot, input) || "."
+  const displayRoot = pathDisplayRootContext.getStore() ?? process.cwd()
+  if (path.isAbsolute(input)) return path.relative(displayRoot, input) || "."
   return input
 }
 
@@ -320,6 +322,7 @@ export const RunCommand = cmd({
       throw new UI.CancelledError()
     }
     const callerCwd = Filesystem.callerCwd()
+    const previousCwd = process.cwd()
 
     let message = [...args.message, ...(args["--"] || [])]
       .map((arg) => (arg.includes(" ") ? `"${arg.replace(/"/g, '\\"')}"` : arg))
@@ -335,8 +338,7 @@ export const RunCommand = cmd({
         exitEarly("Failed to change directory to " + args.dir)
       }
     })()
-    const previousPathDisplayRoot = pathDisplayRoot
-    pathDisplayRoot = directory && path.isAbsolute(directory) ? path.resolve(directory) : process.cwd()
+    const pathDisplayRoot = directory && path.isAbsolute(directory) ? path.resolve(directory) : process.cwd()
 
     const files: { type: "file"; url: string; filename: string; mime: string }[] = []
     if (args.file) {
@@ -670,23 +672,32 @@ export const RunCommand = cmd({
 
     try {
       if (args.attach) {
-        const headers = buildAttachAuthHeaders(args.password)
-        const sdk = createOpencodeClient({ baseUrl: args.attach, directory, headers })
-        return await execute(sdk)
+        await pathDisplayRootContext.run(pathDisplayRoot, async () => {
+          const headers = buildAttachAuthHeaders(args.password)
+          const sdk = createOpencodeClient({ baseUrl: args.attach, directory, headers })
+          await execute(sdk)
+        })
+        return
       }
 
-      await bootstrap(directory || Filesystem.callerCwd(), async () => {
-        const fetchFn = (async (input: RequestInfo | URL, init?: RequestInit) => {
-          const request = new Request(input, init)
-          const url = new URL(request.url)
-          if (!isInternalHostname(url.hostname)) throw new Error(`Internal fetch rejected: ${url.hostname}`)
-          return Server.Default().fetch(request)
-        }) as typeof globalThis.fetch
-        const sdk = createOpencodeClient({ baseUrl: internalBaseUrl(), fetch: fetchFn })
-        await execute(sdk)
+      await pathDisplayRootContext.run(pathDisplayRoot, async () => {
+        await bootstrap(directory || Filesystem.callerCwd(), async () => {
+          const fetchFn = (async (input: RequestInfo | URL, init?: RequestInit) => {
+            const request = new Request(input, init)
+            const url = new URL(request.url)
+            if (!isInternalHostname(url.hostname)) throw new Error(`Internal fetch rejected: ${url.hostname}`)
+            return Server.Default().fetch(request)
+          }) as typeof globalThis.fetch
+          const sdk = createOpencodeClient({ baseUrl: internalBaseUrl(), fetch: fetchFn })
+          await execute(sdk)
+        })
       })
     } finally {
-      pathDisplayRoot = previousPathDisplayRoot
+      if (process.cwd() !== previousCwd) {
+        try {
+          process.chdir(previousCwd)
+        } catch {}
+      }
     }
   },
 })

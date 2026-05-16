@@ -251,4 +251,74 @@ describe("tui sync bootstrap flow", () => {
     await expect(flow.run()).rejects.toThrow("bootstrap flow failed")
     expect(failures).toEqual(["Error: bootstrap flow failed"])
   })
+
+  test("serializes overlapping bootstrap runs so only one mutates the store at a time", async () => {
+    const [store, setStore] = createStore(createInitialSyncState())
+    const events: string[] = []
+    let runID = 0
+    let activeTasks = 0
+    let maxActiveTasks = 0
+    let releaseFirst = () => {}
+    const firstGate = new Promise<void>((resolve) => {
+      releaseFirst = resolve
+    })
+
+    const flow = createSyncBootstrapFlow({
+      store,
+      setStatus(status) {
+        setStore("status", status)
+      },
+      setSessionLoaded(loaded) {
+        setStore("session_loaded", loaded)
+      },
+      resetSessionSync() {
+        events.push("reset")
+      },
+      wrap: async (_label, promise) => promise,
+      client: createClient() as never,
+      syncIsolation: async () => undefined,
+      syncAutonomous: async () => undefined,
+      syncWorkspaces: async () => undefined,
+      syncDebugEngine: async () => undefined,
+      syncSmartLlm: async () => undefined,
+      createTasks() {
+        const current = ++runID
+        return {
+          blockingTasks: [
+            async () => {
+              activeTasks++
+              maxActiveTasks = Math.max(maxActiveTasks, activeTasks)
+              events.push(`task:${current}:start`)
+              if (current === 1) await firstGate
+              events.push(`task:${current}:finish`)
+              activeTasks--
+            },
+          ],
+          coreTasks: [],
+          deferredTasks: [],
+        }
+      },
+      createSpan() {
+        return () => undefined
+      },
+      recordStartup: () => undefined,
+      logWarn: () => undefined,
+      logError: () => undefined,
+      onFailure: () => undefined,
+      deferredDelayMs: 0,
+      deferredBackground: false,
+    })
+
+    const first = flow.run()
+    await nextTick()
+    const second = flow.run()
+    await nextTick()
+
+    expect(events).toEqual(["reset", "task:1:start"])
+    releaseFirst()
+    await Promise.all([first, second])
+
+    expect(events).toEqual(["reset", "task:1:start", "task:1:finish", "reset", "task:2:start", "task:2:finish"])
+    expect(maxActiveTasks).toBe(1)
+  })
 })

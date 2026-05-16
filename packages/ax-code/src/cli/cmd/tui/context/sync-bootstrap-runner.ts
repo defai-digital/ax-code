@@ -47,6 +47,9 @@ export async function runBootstrapPhaseTasks(input: BootstrapPhaseTaskInput) {
     onRejected: input.onRejected,
     concurrency: input.concurrency,
   })
+  if (input.signal?.aborted) {
+    return emptyBootstrapPhaseSummary()
+  }
   input.onSettled?.(summary)
   input.finishSpan?.({ rejected: summary.rejected.length })
   return summary
