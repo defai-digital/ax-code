@@ -17,6 +17,7 @@ import DESCRIPTION from "./apply_patch.txt"
 import { collectDiagnostics } from "./diagnostics"
 import { Log } from "../util/log"
 import { BlastRadius } from "@/session/blast-radius"
+import { resolveToolFilePath } from "./file-path"
 
 const log = Log.create({ service: "tool.apply_patch" })
 
@@ -82,10 +83,11 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
 
     let totalDiff = ""
 
+    const resolvePatchPath = (filePath: string) => resolveToolFilePath(filePath, Instance.directory)
+
     for (const hunk of hunks) {
-      if (hunk.path.includes("\x00")) throw new Error("File path contains null byte")
-      if (hunk.type === "update" && hunk.move_path?.includes("\x00")) throw new Error("Move path contains null byte")
-      const filePath = path.resolve(Instance.directory, hunk.path)
+      const filePath = resolvePatchPath(hunk.path)
+      if (hunk.type === "update" && hunk.move_path) resolvePatchPath(hunk.move_path)
       await assertExternalDirectory(ctx, filePath)
       // BUG-293 DEFERRED: The symlink check and subsequent file write
       // are not atomic (TOCTOU). A true atomic fix requires OS-level
@@ -171,7 +173,7 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
             if (change.removed) deletions += change.count || 0
           }
 
-          const movePath = hunk.move_path ? path.resolve(Instance.directory, hunk.move_path) : undefined
+          const movePath = hunk.move_path ? resolvePatchPath(hunk.move_path) : undefined
           await assertExternalDirectory(ctx, movePath)
           if (movePath) await assertSymlinkInsideProject(movePath)
           const moveExisted = movePath

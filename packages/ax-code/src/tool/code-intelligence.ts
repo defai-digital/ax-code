@@ -8,6 +8,7 @@ import { CodeNodeID } from "../code-intelligence/id"
 import { assertSymlinkInsideProject } from "./external-directory"
 import { Filesystem } from "../util/filesystem"
 import type { CodeNodeKind } from "../code-intelligence/schema.sql"
+import { resolveToolFilePath } from "./file-path"
 
 // Semantic Trust v2 §S4: every operation returns an envelope stamped
 // with graph provenance (source, timestamp, degraded). The `output`
@@ -120,8 +121,7 @@ export const CodeIntelligenceTool = Tool.define("code_intelligence", {
       }
       if (args.operation === "symbolsInFile") {
         if (!args.file) throw new Error("symbolsInFile requires `file`")
-        if (args.file.includes("\x00")) throw new Error("File path contains null byte")
-        const file = path.isAbsolute(args.file) ? args.file : path.join(Instance.directory, args.file)
+        const file = resolveToolFilePath(args.file, Instance.directory)
         if (!Filesystem.contains(Instance.directory, file)) {
           throw new Error("symbolsInFile requires a file inside the project")
         }

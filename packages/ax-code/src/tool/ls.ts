@@ -5,6 +5,7 @@ import DESCRIPTION from "./ls.txt"
 import { Instance } from "../project/instance"
 import { Ripgrep } from "../file/ripgrep"
 import { assertExternalDirectory, assertSymlinkInsideProject } from "./external-directory"
+import { resolveToolFilePath } from "./file-path"
 
 export const IGNORE_PATTERNS = [
   "node_modules/",
@@ -41,11 +42,7 @@ export const ListTool = Tool.define("list", {
     ignore: z.array(z.string()).describe("List of glob patterns to ignore").optional(),
   }),
   async execute(params, ctx) {
-    if (params.path?.includes("\x00")) {
-      throw new Error("File path contains null byte")
-    }
-
-    const searchPath = path.resolve(Instance.directory, params.path || ".")
+    const searchPath = resolveToolFilePath(params.path ?? Instance.directory, Instance.directory)
     await assertExternalDirectory(ctx, searchPath, { kind: "directory" })
     await assertSymlinkInsideProject(searchPath)
 
