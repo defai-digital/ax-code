@@ -31,6 +31,13 @@ on:
 
 permissions: {}
 
+env:
+  AX_CODE_DISABLE_AUTOUPDATE: "1"
+  AX_CODE_DISABLE_AUTO_INDEX: "1"
+  AX_CODE_DISABLE_LSP_DOWNLOAD: "1"
+  AX_CODE_DISABLE_MODELS_FETCH: "1"
+  AX_CODE_DISABLE_PROJECT_CONFIG: "1"
+
 jobs:
   smoke:
     name: ${{ matrix.os }} / ${{ matrix.channel }}
@@ -60,12 +67,6 @@ jobs:
             label: win32-arm64-compiled
     runs-on: ${{ matrix.os }}
     container: ${{ matrix.container || '' }}
-    env:
-      AX_CODE_DISABLE_AUTOUPDATE: "1"
-      AX_CODE_DISABLE_AUTO_INDEX: "1"
-      AX_CODE_DISABLE_LSP_DOWNLOAD: "1"
-      AX_CODE_DISABLE_MODELS_FETCH: "1"
-      AX_CODE_DISABLE_PROJECT_CONFIG: "1"
     steps:
       - name: Validate manual dispatch inputs
         if: github.event_name == 'workflow_dispatch'
@@ -193,12 +194,6 @@ jobs:
   homebrew:
     name: macos-latest / homebrew
     runs-on: macos-latest
-    env:
-      AX_CODE_DISABLE_AUTOUPDATE: "1"
-      AX_CODE_DISABLE_AUTO_INDEX: "1"
-      AX_CODE_DISABLE_LSP_DOWNLOAD: "1"
-      AX_CODE_DISABLE_MODELS_FETCH: "1"
-      AX_CODE_DISABLE_PROJECT_CONFIG: "1"
     steps:
       - name: Validate manual dispatch inputs
         if: github.event_name == 'workflow_dispatch'
