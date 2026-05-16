@@ -91,6 +91,7 @@ export type PromptProps = {
   hint?: JSX.Element
   showPlaceholder?: boolean
   sidebarVisible?: Accessor<boolean>
+  statusTick?: Accessor<number>
 }
 
 export type PromptRef = {
@@ -191,7 +192,8 @@ export function Prompt(props: PromptProps) {
   const [draftSessionID, setDraftSessionID] = createSignal<string | undefined>()
   const [expandedPastes, setExpandedPastes] = createSignal<Set<number>>(new Set<number>())
   const inputBlocked = createMemo(() => props.disabled || submitPending())
-  const [statusTick, setStatusTick] = createSignal(0)
+  const [localStatusTick, setLocalStatusTick] = createSignal(0)
+  const statusTick = () => props.statusTick?.() ?? localStatusTick()
   const pendingCancelHint = createMemo(() => {
     const hints = new Set<string>()
     const sessionInterrupt = keybind.print("session_interrupt")
@@ -380,9 +382,10 @@ export function Prompt(props: PromptProps) {
   })
 
   onMount(() => {
+    if (props.statusTick) return
     const timer = setInterval(() => {
       if (status().type === "idle") return
-      setStatusTick((value) => value + 1)
+      setLocalStatusTick((value) => value + 1)
     }, 1000)
     onCleanup(() => clearInterval(timer))
   })

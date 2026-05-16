@@ -1,5 +1,5 @@
 import { useSync } from "@tui/context/sync"
-import { createMemo, For, Match, Show, Switch } from "solid-js"
+import { createMemo, type Accessor, For, Match, Show, Switch } from "solid-js"
 import { useTerminalDimensions } from "@opentui/solid"
 import { createStore } from "solid-js/store"
 import { useTheme } from "../../context/theme"
@@ -18,6 +18,7 @@ import { SessionDreView } from "./dre"
 import { SessionRollbackView } from "./rollback"
 import { SessionSemanticDiff } from "@/session/semantic-diff"
 import { footerSessionStatusView, type FooterSessionStatus, isFooterSessionStatus } from "./footer-view-model"
+import { SidebarStatusSpinner } from "../../component/sidebar-status-spinner"
 import { computeSidebarWidth } from "./layout"
 import { sidebarGraphIndexStatusText } from "./sidebar-index-view-model"
 import { Locale } from "@/util/locale"
@@ -91,7 +92,7 @@ function qualityColor(
   return theme.textMuted
 }
 
-export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
+export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTick?: Accessor<number> }) {
   const sync = useSync()
   const sdk = useSDK()
   const toast = useToast()
@@ -108,9 +109,10 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
     return isFooterSessionStatus(candidate) ? candidate : { type: "idle" }
   })
   const sidebarStatusView = createMemo(() => {
+    props.statusTick?.()
     const current = status()
     if (current.type === "idle") return undefined
-    return footerSessionStatusView({ status: current })
+    return footerSessionStatusView({ status: current, now: Date.now() })
   })
   const sidebarStatusLabel = createMemo(() => sidebarStatusView()?.label)
   const dimensions = useTerminalDimensions()
@@ -281,9 +283,12 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                 <text fg={theme.textMuted}>{session().id}</text>
                 <Show when={sidebarStatusLabel()}>
                   {(label) => (
-                    <text fg={theme.warning} wrapMode="none">
-                      {label()}
-                    </text>
+                    // Knight Rider scanner + status label, both visible
+                    // from the sidebar at a glance. Uses a Solid-signal
+                    // driver instead of opentui's native <spinner> — the
+                    // native element does not repaint inside a
+                    // <scrollbox> parent (see component comment).
+                    <SidebarStatusSpinner color={theme.warning}>{label()}</SidebarStatusSpinner>
                   )}
                 </Show>
                 <Show when={session().share?.url}>{(url) => <text fg={theme.textMuted}>{url()}</text>}</Show>
