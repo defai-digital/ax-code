@@ -20,7 +20,6 @@ import {
   isFooterSessionStatus,
   type FooterSessionStatus,
 } from "./footer-view-model"
-import { Usage } from "./usage"
 
 const RECONNECT_DEBOUNCE_MS = 3_000
 
@@ -86,20 +85,22 @@ export function Footer() {
   })
   // Per-turn token counter — surfaces an in-flight signal while the
   // assistant is streaming so runaway turns don't only show up in the
-  // step bar. Reads the same message data Usage.last() relies on, so no
-  // new sync surface and the memo invalidates on every token update.
-  // When the session is busy we additionally pass startedAt so the
-  // helper computes a t/s rate; once busy clears we drop the rate and
-  // the chip keeps the final token counts.
+  // step bar. Anchored on the LAST assistant message specifically (not
+  // Usage.last which filters by hasUsage and would return the previous
+  // turn during the first-step gap), with rate computed against the
+  // message's own time.created. SessionStatus.startedAt resets on every
+  // step inside an autonomous turn, so it would divide accumulated
+  // tokens by a tiny window — message.time.created is the stable anchor.
   const tokenChip = createMemo(() => {
     if (route.data.type !== "session") return undefined
     if (dimensions().width < 100) return undefined
     tokenTick()
     const messages = sync.data.message[route.data.sessionID] ?? []
-    const last = Usage.last(messages)
-    const status = sessionStatus()
-    const startedAt = status.type === "busy" ? status.startedAt : undefined
-    return footerTokenChip({ tokens: last?.tokens, startedAt, now: Date.now() })
+    const last = messages.findLast((m) => m.role === "assistant")
+    if (!last) return undefined
+    const completed = last.time?.completed
+    const now = completed ?? Date.now()
+    return footerTokenChip({ tokens: last.tokens, startedAt: last.time?.created, now })
   })
   const tokenChipStreaming = createMemo(() => sessionStatus().type === "busy")
   const showLspChip = createMemo(() => dimensions().width >= 90 && lsp().length > 0)
