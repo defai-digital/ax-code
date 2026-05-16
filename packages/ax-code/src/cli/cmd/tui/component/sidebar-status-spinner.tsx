@@ -10,18 +10,53 @@ import { createColors, createFrames } from "../ui/spinner"
 // createFrames/createColors backend, same "blocks" style) so the two
 // liveness cues feel like one design language.
 //
-// IMPORTANT: this component does NOT use the opentui native <spinner>
-// element. opentui spinners manage their own framebuffer and rely on
-// the parent compositor polling them every frame — that polling does
-// not happen for native children of a <scrollbox>, so the sidebar
-// status spinner painted exactly one frame and then froze (verified
-// in manual testing against the original Spinner). Driving frame
-// updates from a Solid signal forces a real re-render of the parent
-// <text> on every tick, which the scrollbox does observe, so this
-// indicator is guaranteed to actually animate inside the sidebar.
+// Why this is a bespoke component and not just `<Spinner>` from
+// component/spinner.tsx:
 //
-// Cost: one Solid signal write per 40 ms while the spinner is mounted.
-// Cheap compared to the painted output.
+// opentui's native <spinner> element manages its own framebuffer and
+// per-tick invalidation via requestRender(). That path works fine
+// under regular <box> parents — see prompt's bottom-left scanner and
+// the header AUTONOMOUS chip, both happy. It does NOT paint inside
+// the sidebar's <scrollbox>: the spinner ticks and calls
+// requestRender() but the frame never lands on screen (the renderer's
+// dirty-region / culling pass through ContentRenderable does not pick
+// it up). Verified manually — the first <Spinner> attempt painted
+// exactly one frame and then froze.
+//
+// The opentui-side knob that does fix it is `Renderable.live = true`,
+// which bumps the renderer's liveRequestCounter and forces continuous
+// auto-render. We considered unifying on that and explicitly rejected
+// it for THREE reasons, all rooted in source — recording them so the
+// next person eyeing this code does not redo the spike:
+//
+//   1. opentui-spinner's SpinnerOptions explicitly Omits "live" from
+//      RenderableOptions (see opentui-spinner/dist/index-9Y5uiGLf.d.mts
+//      ~line 32). JSX `<spinner live={true}>` is a type error. That
+//      omission is the upstream author's deliberate API choice, not
+//      a gap to paper over.
+//
+//   2. Working around the Omit with `ref={(r) => r.live = true}`
+//      compiles, but Renderable.destroy() does not decrement
+//      _liveCount. Every busy→idle→busy cycle would leak one unit
+//      of liveCount and eventually pin the entire renderer in
+//      permanent auto-render. Manual onCleanup before unmount works
+//      in theory; in practice it is the kind of invariant that gets
+//      dropped on the next refactor.
+//
+//   3. `live` is by design an APP-WIDE switch — it puts the whole
+//      tree into auto_started mode and defeats opentui's diff-based
+//      paint strategy for every other renderable on screen while
+//      the sidebar status is showing.
+//
+// The Solid-signal approach below avoids all three: it only dirties
+// the <text> we own, it cleans up via standard onCleanup, and the
+// cost is one signal write per 40 ms while the spinner is mounted —
+// strictly less work than `live=true` would do.
+//
+// Revisit ONLY if opentui ships a scoped "force-redraw-this-element"
+// prop. Until then, this is the right tool for in-scrollbox spinners
+// and Spinner / opentui native <spinner> is the right tool everywhere
+// else.
 const SCANNER_WIDTH = 6
 const SCANNER_INTERVAL_MS = 40
 
