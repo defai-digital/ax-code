@@ -79,6 +79,11 @@ export namespace AutonomousCompletionGate {
 
   function latestEmptySubagentResult(messages: readonly Message[]): EmptySubagentResult | undefined {
     const unresolved = new Map<string, EmptySubagentResult>()
+    // Counts substantive direct-work tool calls by the parent assistant that
+    // occur AFTER each unresolved entry was recorded. Once a counter reaches
+    // IMPLICIT_RESOLUTION_THRESHOLD, the parent has demonstrated it took over
+    // the work itself and the entry is removed.
+    const substantiveCallsAfter = new Map<string, number>()
     let anonymousIndex = 0
 
     for (const message of messages) {
@@ -88,10 +93,38 @@ export namespace AutonomousCompletionGate {
 
         if (isAssistantMessage(message) && record["type"] === "text" && typeof record["text"] === "string") {
           resolveWithAssistantText(unresolved, record["text"])
+          for (const key of [...substantiveCallsAfter.keys()]) {
+            if (!unresolved.has(key)) substantiveCallsAfter.delete(key)
+          }
           continue
         }
 
-        if (record["type"] !== "tool" || record["tool"] !== "task") continue
+        if (record["type"] !== "tool") continue
+
+        const tool = record["tool"]
+
+        if (
+          isAssistantMessage(message) &&
+          typeof tool === "string" &&
+          tool !== "task" &&
+          isSubstantiveTool(tool)
+        ) {
+          const state = asRecord(record["state"])
+          if (state?.["status"] === "completed" && unresolved.size > 0) {
+            for (const key of unresolved.keys()) {
+              substantiveCallsAfter.set(key, (substantiveCallsAfter.get(key) ?? 0) + 1)
+            }
+            for (const [key, count] of [...substantiveCallsAfter.entries()]) {
+              if (count >= IMPLICIT_RESOLUTION_THRESHOLD) {
+                unresolved.delete(key)
+                substantiveCallsAfter.delete(key)
+              }
+            }
+          }
+          continue
+        }
+
+        if (tool !== "task") continue
 
         const state = asRecord(record["state"])
         if (!state) continue
@@ -116,6 +149,7 @@ export namespace AutonomousCompletionGate {
           }
           unresolved.delete(key)
           unresolved.set(key, current)
+          substantiveCallsAfter.set(key, 0)
           continue
         }
 
@@ -127,6 +161,7 @@ export namespace AutonomousCompletionGate {
 
         if (!emptyResult) {
           unresolved.delete(key)
+          substantiveCallsAfter.delete(key)
           continue
         }
 
@@ -138,12 +173,40 @@ export namespace AutonomousCompletionGate {
         }
         unresolved.delete(key)
         unresolved.set(key, current)
+        substantiveCallsAfter.set(key, 0)
       }
     }
 
     let latest: EmptySubagentResult | undefined
     for (const result of unresolved.values()) latest = result
     return latest
+  }
+
+  // K substantive direct-work tool calls by the parent after a subagent
+  // failure is treated as the parent having taken over the work. The
+  // screenshot trigger (3 Read calls on the three failed-subagent target
+  // modules) lands exactly here.
+  const IMPLICIT_RESOLUTION_THRESHOLD = 3
+
+  // Tools that do NOT count as substantive direct work — they are state-only,
+  // workflow markers, or the subagent itself. Anything else is treated as
+  // real work for the purpose of implicit resolution.
+  const NON_SUBSTANTIVE_TOOLS = new Set([
+    "task",
+    "todowrite",
+    "todoread",
+    "question",
+    "plan_enter",
+    "plan_exit",
+    "register_finding",
+    "review_complete",
+    "memory_save",
+    "skill",
+    "invalid",
+  ])
+
+  function isSubstantiveTool(tool: string) {
+    return !NON_SUBSTANTIVE_TOOLS.has(tool)
   }
 
   function resolveWithAssistantText(unresolved: Map<string, EmptySubagentResult>, text: string) {
@@ -161,13 +224,20 @@ export namespace AutonomousCompletionGate {
     }
   }
 
+  // Past-tense and gerund/noun forms only — bare infinitives ("verify", "read",
+  // "check") would also match future-intent phrasing ("I will verify this
+  // directly") which is not a resolution. Existing canonical phrases like
+  // "validate directly" remain covered by the explicit-phrase list below.
+  const RESOLUTION_PATTERN =
+    /\b(investigating|investigated|investigation|verifying|verified|validating|validated|checking|checked|reviewing|reviewed|examining|examined|inspecting|inspected|handling|handled|reading|resolving|resolved|addressing|addressed|covering|covered|auditing|audited)\b[ a-z0-9]{0,120}\b(directly|myself|ourselves)\b/
+
   function isExplicitResolution(text: string) {
     const normalized = normalize(text)
     if (!normalized.includes("subagent") && !normalized.includes("completion gate") && !normalized.includes("task")) {
       return false
     }
 
-    return [
+    const explicitPhrases = [
       "completion gate resolution",
       "no usable result can be recovered",
       "cannot recover a usable result",
@@ -185,8 +255,22 @@ export namespace AutonomousCompletionGate {
       "handled directly",
       "reviewed the recovered",
       "validated the recovered",
-    ].some((phrase) => normalized.includes(phrase))
+    ]
+    if (explicitPhrases.some((phrase) => normalized.includes(phrase))) return true
+
+    // Natural-language fallback: model says it did the work itself / directly.
+    // The prefilter above (subagent/task/completion gate) keeps this in the
+    // resolution conversational context, so a past/in-progress work verb
+    // followed by "directly" or "myself" is a reasonable resolution signal.
+    return RESOLUTION_PATTERN.test(normalized)
   }
+
+  const DESCRIPTION_STOPWORDS = new Set([
+    "the", "and", "for", "with", "from", "all", "any", "this", "that", "you",
+    "are", "was", "were", "have", "has", "had", "but", "not", "out", "use",
+    "via", "per", "into", "onto", "over", "than", "then", "when",
+    "what", "which", "who", "how", "why",
+  ])
 
   function referencesResult(text: string, result: EmptySubagentResult) {
     const normalized = normalize(text)
@@ -197,7 +281,11 @@ export namespace AutonomousCompletionGate {
     const description = normalize(result.description)
     if (description.length > 0 && normalized.includes(description)) return true
 
-    const descriptionWords = new Set(description.split(" ").filter((word) => word.length >= 4))
+    const descriptionWords = new Set(
+      description
+        .split(" ")
+        .filter((word) => word.length >= 3 && !DESCRIPTION_STOPWORDS.has(word)),
+    )
     if (descriptionWords.size === 0) return false
     let matched = 0
     for (const word of descriptionWords) {

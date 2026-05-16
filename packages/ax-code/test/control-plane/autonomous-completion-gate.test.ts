@@ -236,6 +236,268 @@ describe("AutonomousCompletionGate", () => {
     expect(decision).toEqual({ status: "allow" })
   })
 
+  test("allows completion when the assistant says it did the investigation directly itself", () => {
+    const decision = AutonomousCompletionGate.evaluate({
+      pendingTodos: [],
+      messages: [
+        {
+          info: { role: "assistant" },
+          parts: [
+            {
+              type: "tool",
+              tool: "task",
+              callID: "call_failed",
+              state: {
+                status: "error",
+                input: { description: "Deep bug hunt: mcp, lsp, code-intelligence" },
+                errorMessage: "Subagent finalization timed out after 2 minutes",
+              },
+            },
+          ],
+        },
+        {
+          info: { role: "assistant" },
+          parts: [
+            {
+              type: "text",
+              text:
+                "The subagent timed out twice. I'll resolve this by doing the investigation directly — reading the key files in the mcp, lsp, and code-intelligence modules myself.",
+            },
+          ],
+        },
+      ],
+    })
+
+    expect(decision).toEqual({ status: "allow" })
+  })
+
+  test("allows completion when the assistant audits the modules itself after the subagent times out", () => {
+    const decision = AutonomousCompletionGate.evaluate({
+      pendingTodos: [],
+      messages: [
+        {
+          info: { role: "assistant" },
+          parts: [
+            {
+              type: "tool",
+              tool: "task",
+              callID: "call_a",
+              state: {
+                status: "error",
+                input: { description: "Deep bug hunt: mcp, lsp, code-intelligence" },
+                errorMessage: "Subagent finalization timed out",
+              },
+            },
+            {
+              type: "tool",
+              tool: "task",
+              callID: "call_b",
+              state: {
+                status: "error",
+                input: { description: "Deep bug hunt: mcp, lsp, code-intelligence" },
+                errorMessage: "Subagent finalization timed out",
+              },
+            },
+          ],
+        },
+        {
+          info: { role: "assistant" },
+          parts: [
+            {
+              type: "text",
+              text:
+                "Both task attempts timed out. I audited the mcp, lsp, and code-intelligence modules directly and have enough evidence to file the bug reports.",
+            },
+          ],
+        },
+      ],
+    })
+
+    expect(decision).toEqual({ status: "allow" })
+  })
+
+  test("implicitly resolves a failed subagent after three substantive direct tool calls", () => {
+    const decision = AutonomousCompletionGate.evaluate({
+      pendingTodos: [],
+      messages: [
+        {
+          info: { role: "assistant" },
+          parts: [
+            {
+              type: "tool",
+              tool: "task",
+              callID: "call_failed",
+              state: {
+                status: "error",
+                input: { description: "Deep bug hunt: mcp, lsp, code-intelligence" },
+                errorMessage: "Subagent finalization timed out",
+              },
+            },
+            {
+              type: "tool",
+              tool: "read",
+              callID: "call_r1",
+              state: { status: "completed", input: { filePath: "src/mcp/index.ts" } },
+            },
+            {
+              type: "tool",
+              tool: "read",
+              callID: "call_r2",
+              state: { status: "completed", input: { filePath: "src/lsp/index.ts" } },
+            },
+            {
+              type: "tool",
+              tool: "read",
+              callID: "call_r3",
+              state: { status: "completed", input: { filePath: "src/code-intelligence/index.ts" } },
+            },
+          ],
+        },
+      ],
+    })
+
+    expect(decision).toEqual({ status: "allow" })
+  })
+
+  test("still blocks when only one substantive call followed the failure", () => {
+    const decision = AutonomousCompletionGate.evaluate({
+      pendingTodos: [],
+      messages: [
+        {
+          info: { role: "assistant" },
+          parts: [
+            {
+              type: "tool",
+              tool: "task",
+              callID: "call_failed",
+              state: {
+                status: "error",
+                input: { description: "Deep bug hunt: mcp, lsp, code-intelligence" },
+                errorMessage: "Subagent finalization timed out",
+              },
+            },
+            {
+              type: "tool",
+              tool: "read",
+              callID: "call_r1",
+              state: { status: "completed", input: { filePath: "src/mcp/index.ts" } },
+            },
+          ],
+        },
+      ],
+    })
+
+    expect(decision).toMatchObject({
+      status: "blocked",
+      reason: "empty_subagent_result",
+      emptyResult: { callID: "call_failed", failed: true },
+    })
+  })
+
+  test("does not let todowrite or skill calls count as substantive work", () => {
+    const decision = AutonomousCompletionGate.evaluate({
+      pendingTodos: [],
+      messages: [
+        {
+          info: { role: "assistant" },
+          parts: [
+            {
+              type: "tool",
+              tool: "task",
+              callID: "call_failed",
+              state: {
+                status: "error",
+                input: { description: "review benchmark code" },
+                errorMessage: "Subagent finalization timed out",
+              },
+            },
+            { type: "tool", tool: "todowrite", callID: "tw1", state: { status: "completed" } },
+            { type: "tool", tool: "todowrite", callID: "tw2", state: { status: "completed" } },
+            { type: "tool", tool: "todoread", callID: "tr1", state: { status: "completed" } },
+            { type: "tool", tool: "skill", callID: "sk1", state: { status: "completed" } },
+          ],
+        },
+      ],
+    })
+
+    expect(decision).toMatchObject({
+      status: "blocked",
+      reason: "empty_subagent_result",
+      emptyResult: { callID: "call_failed", failed: true },
+    })
+  })
+
+  test("does not count substantive calls that preceded the failure", () => {
+    const decision = AutonomousCompletionGate.evaluate({
+      pendingTodos: [],
+      messages: [
+        {
+          info: { role: "assistant" },
+          parts: [
+            { type: "tool", tool: "read", callID: "r1", state: { status: "completed" } },
+            { type: "tool", tool: "read", callID: "r2", state: { status: "completed" } },
+            { type: "tool", tool: "read", callID: "r3", state: { status: "completed" } },
+            {
+              type: "tool",
+              tool: "task",
+              callID: "call_failed",
+              state: {
+                status: "error",
+                input: { description: "review benchmark code" },
+                errorMessage: "Subagent finalization timed out",
+              },
+            },
+          ],
+        },
+      ],
+    })
+
+    expect(decision).toMatchObject({
+      status: "blocked",
+      reason: "empty_subagent_result",
+      emptyResult: { callID: "call_failed", failed: true },
+    })
+  })
+
+  test("does not treat a future-intent statement as resolution", () => {
+    const decision = AutonomousCompletionGate.evaluate({
+      pendingTodos: [],
+      messages: [
+        {
+          info: { role: "assistant" },
+          parts: [
+            {
+              type: "tool",
+              tool: "task",
+              callID: "call_failed",
+              state: {
+                status: "error",
+                input: { description: "Deep bug hunt: mcp, lsp, code-intelligence" },
+                errorMessage: "Subagent finalization timed out",
+              },
+            },
+          ],
+        },
+        {
+          info: { role: "assistant" },
+          parts: [
+            {
+              type: "text",
+              text:
+                "Next, I will investigate the mcp, lsp, and code-intelligence modules directly. The task is still pending.",
+            },
+          ],
+        },
+      ],
+    })
+
+    expect(decision).toMatchObject({
+      status: "blocked",
+      reason: "empty_subagent_result",
+      emptyResult: { callID: "call_failed", failed: true },
+    })
+  })
+
   test("does not let the injected user continuation clear a failed subagent", () => {
     const decision = AutonomousCompletionGate.evaluate({
       pendingTodos: [],
