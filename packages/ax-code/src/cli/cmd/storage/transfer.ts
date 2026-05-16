@@ -84,11 +84,11 @@ export function writeTransfer(data: SessionTransfer) {
 
       for (const part of msg.parts) {
         const partInfo = MessageV2.Part.parse(part)
-        const { id: partID, sessionID: _partSid, messageID, ...partData } = partInfo
+        const { id: partID, sessionID: _partSid, messageID: _messageID, ...partData } = partInfo
         db.insert(PartTable)
           .values({
             id: partID,
-            message_id: messageID,
+            message_id: id,
             session_id: row.id,
             data: partData,
           })

@@ -73,4 +73,59 @@ describe("storage transfer", () => {
       },
     })
   })
+
+  test("imports nested parts under their transfer message when part metadata is stale", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      config: {
+        agent: {
+          build: {
+            model: "openai/gpt-5.2",
+          },
+        },
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+
+        await SessionPrompt.prompt({
+          sessionID: session.id,
+          agent: "build",
+          noReply: true,
+          parts: [{ type: "text", text: "preserve nested transfer parent" }],
+        })
+
+        const info = await Session.get(session.id)
+        const messages = await Session.messages({ sessionID: session.id })
+        const data = buildTransfer({
+          info,
+          messages: messages.map((msg) => ({
+            info: msg.info,
+            parts: msg.parts,
+          })),
+          events: [],
+        })
+
+        const firstMessage = data.messages[0]
+        const firstTextPart = firstMessage?.parts.find((part) => part.type === "text")
+        if (!firstMessage || !firstTextPart) throw new Error("expected exported text part")
+
+        firstTextPart.messageID = "msg_stale_transfer_parent"
+
+        await Session.remove(session.id)
+        writeTransfer(data)
+
+        const imported = await Session.messages({ sessionID: session.id })
+        const importedTextPart = imported[0]?.parts.find((part) => part.id === firstTextPart.id)
+
+        expect(String(imported[0]?.info.id)).toBe(String(firstMessage.info.id))
+        expect(String(importedTextPart?.messageID)).toBe(String(firstMessage.info.id))
+
+        await Session.remove(session.id)
+      },
+    })
+  })
 })
