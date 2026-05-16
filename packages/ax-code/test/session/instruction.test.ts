@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test"
+import fs from "fs/promises"
 import os from "os"
 import path from "path"
 import { InstructionPrompt } from "../../src/session/instruction"
@@ -212,6 +213,35 @@ describe("InstructionPrompt.systemPaths AX_CODE_CONFIG_DIR", () => {
         fn: async () => {
           const paths = await InstructionPrompt.systemPaths()
           expect(paths.has(path.join(fakeHome, "rules.md"))).toBe(true)
+        },
+      })
+    } finally {
+      homedir.mockRestore()
+    }
+  })
+
+  test("rejects ~/ instruction paths that resolve through symlinks outside the home directory", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      config: {
+        instructions: ["~/escape/AGENTS.md"],
+      },
+      init: async (dir) => {
+        await fs.mkdir(path.join(dir, "outside"), { recursive: true })
+        await Bun.write(path.join(dir, "outside", "AGENTS.md"), "# outside")
+      },
+    })
+    const fakeHome = path.join(tmp.path, "home")
+    await fs.mkdir(fakeHome, { recursive: true })
+    await fs.symlink(path.join(tmp.path, "outside"), path.join(fakeHome, "escape"))
+    const homedir = spyOn(os, "homedir").mockReturnValue(fakeHome)
+
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const paths = await InstructionPrompt.systemPaths()
+          expect(paths.has(path.join(tmp.path, "outside", "AGENTS.md"))).toBe(false)
         },
       })
     } finally {

@@ -2,6 +2,11 @@ export async function waitForAbortOrTimeout(signal: AbortSignal, ms: number): Pr
   if (signal.aborted) return
 
   await new Promise<void>((resolve) => {
+    if (signal.aborted) {
+      resolve()
+      return
+    }
+
     let settled = false
     const timer = setTimeout(() => {
       if (settled) return

@@ -480,14 +480,19 @@ describe("tui OpenTUI stability guardrails", () => {
 
   test("keeps the session sidebar timer fan-out bounded", async () => {
     const sidebar = await fs.readFile(SIDEBAR_SRC, "utf8")
+    const sessionRoute = await fs.readFile(SESSION_ROUTE_SRC, "utf8")
+    const prompt = await fs.readFile(PROMPT_SRC, "utf8")
     const matches = sidebar.match(/setInterval\(/g) ?? []
 
-    // Sidebar must not introduce its own timers — busy/stall messaging
-    // lives in the prompt area and the footer progress bar, both of
-    // which are event-driven and re-render only on session status
-    // changes. A sidebar setInterval was the v2.x render-amplification
-    // pattern we explicitly removed.
+    // Sidebar must not introduce its own timers. The session route owns
+    // one shared status tick and passes it into both the prompt and
+    // sidebar, so busy labels can update without duplicating timer
+    // fan-out in the sidebar tree.
     expect(matches.length).toBe(0)
+    expect(sessionRoute).toContain("const [statusTick, setStatusTick] = createSignal(0)")
+    expect(sessionRoute).toContain("statusTick={statusTick}")
+    expect(sidebar).toContain("props.statusTick?.()")
+    expect(prompt).toContain("props.statusTick?.() ?? localStatusTick()")
     expect(sidebar).not.toContain("1_000")
     expect(sidebar).not.toContain("clockId")
     expect(sidebar).not.toContain("clockTick")

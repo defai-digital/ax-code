@@ -54,6 +54,11 @@ export namespace CodeGraphWatcher {
   // again for the new instance.
   const instances = new Map<ProjectID, State>()
 
+  Instance.onLifecycle((event) => {
+    if (event.kind !== "dispose.start" || !event.projectID) return
+    stop(event.projectID as ProjectID)
+  })
+
   function shouldIndex(file: string): boolean {
     const ext = path.extname(file)
     return LANGUAGE_EXTENSIONS[ext] !== undefined && LANGUAGE_EXTENSIONS[ext] !== "plaintext"

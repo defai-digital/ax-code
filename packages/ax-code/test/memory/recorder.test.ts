@@ -32,6 +32,23 @@ describe("memory.recorder", () => {
     expect(all).toHaveLength(2)
   })
 
+  test("serializes concurrent writes to the same memory file", async () => {
+    await using tmp = await tmpdir()
+
+    const names = Array.from({ length: 8 }, (_, i) => `concurrent-${i}`)
+    await Promise.all(
+      names.map((name) =>
+        recordEntry(tmp.path, "feedback", {
+          name,
+          body: `body for ${name}`,
+        }),
+      ),
+    )
+
+    const entries = await listEntries(tmp.path, "feedback")
+    expect(new Set(entries.map((entry) => entry.name))).toEqual(new Set(names))
+  })
+
   test("records recall metadata fields", async () => {
     await using tmp = await tmpdir()
 

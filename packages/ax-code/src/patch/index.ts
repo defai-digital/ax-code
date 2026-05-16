@@ -5,6 +5,7 @@ import { readFileSync } from "fs"
 import { Log } from "../util/log"
 import { NativePerf } from "../perf/native"
 import { NativeAddon } from "../native/addon"
+import { Filesystem } from "../util/filesystem"
 
 export namespace Patch {
   const log = Log.create({ service: "patch" })
@@ -71,6 +72,19 @@ export namespace Patch {
     ShellParseError = "ShellParseError",
     CorrectnessError = "CorrectnessError",
     NotApplyPatch = "NotApplyPatch",
+  }
+
+  function assertNoNullByte(value: string, label: string) {
+    if (value.includes("\0")) throw new Error(`${label} contains a null byte`)
+  }
+
+  function resolvePatchPath(root: string, base: string, filePath: string) {
+    assertNoNullByte(filePath, "patch path")
+    const resolved = path.resolve(base, filePath)
+    if (!Filesystem.contains(root, resolved)) {
+      throw new Error(`Patch path escapes working directory: ${filePath}`)
+    }
+    return resolved
   }
 
   // Parser implementation
@@ -660,14 +674,30 @@ export namespace Patch {
     switch (result.type) {
       case MaybeApplyPatch.Body:
         const { args } = result
+        if (args.workdir) assertNoNullByte(args.workdir, "workdir")
         const effectiveCwd = args.workdir ? path.resolve(cwd, args.workdir) : cwd
+        if (!Filesystem.contains(cwd, effectiveCwd)) {
+          return {
+            type: MaybeApplyPatchVerified.CorrectnessError,
+            error: new Error(`Patch workdir escapes working directory: ${args.workdir}`),
+          }
+        }
         const changes = new Map<string, ApplyPatchFileChange>()
 
         for (const hunk of args.hunks) {
-          const resolvedPath = path.resolve(
-            effectiveCwd,
-            hunk.type === "update" && hunk.move_path ? hunk.move_path : hunk.path,
-          )
+          let resolvedPath: string
+          try {
+            resolvedPath = resolvePatchPath(
+              cwd,
+              effectiveCwd,
+              hunk.type === "update" && hunk.move_path ? hunk.move_path : hunk.path,
+            )
+          } catch (error) {
+            return {
+              type: MaybeApplyPatchVerified.CorrectnessError,
+              error: error as Error,
+            }
+          }
 
           switch (hunk.type) {
             case "add":
@@ -679,8 +709,8 @@ export namespace Patch {
 
             case "delete":
               // For delete, we need to read the current content
-              const deletePath = path.resolve(effectiveCwd, hunk.path)
               try {
+                const deletePath = resolvePatchPath(cwd, effectiveCwd, hunk.path)
                 const content = await fs.readFile(deletePath, "utf-8")
                 changes.set(resolvedPath, {
                   type: "delete",
@@ -689,19 +719,19 @@ export namespace Patch {
               } catch (error) {
                 return {
                   type: MaybeApplyPatchVerified.CorrectnessError,
-                  error: new Error(`Failed to read file for deletion: ${deletePath}`),
+                  error: error instanceof Error ? error : new Error(String(error)),
                 }
               }
               break
 
             case "update":
-              const updatePath = path.resolve(effectiveCwd, hunk.path)
+              const updatePath = resolvePatchPath(cwd, effectiveCwd, hunk.path)
               try {
                 const fileUpdate = deriveNewContentsFromChunks(updatePath, hunk.chunks)
                 changes.set(resolvedPath, {
                   type: "update",
                   unified_diff: fileUpdate.unified_diff,
-                  move_path: hunk.move_path ? path.resolve(effectiveCwd, hunk.move_path) : undefined,
+                  move_path: hunk.move_path ? resolvePatchPath(cwd, effectiveCwd, hunk.move_path) : undefined,
                   new_content: fileUpdate.content,
                 })
               } catch (error) {
