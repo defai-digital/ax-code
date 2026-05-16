@@ -29,6 +29,8 @@ on:
           - source
           - latest
 
+permissions: {}
+
 jobs:
   smoke:
     name: ${{ matrix.os }} / ${{ matrix.channel }}
