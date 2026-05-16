@@ -10,17 +10,49 @@ import { Log } from "@/util/log"
 
 const log = Log.create({ service: "workspace-router-middleware" })
 const WORKSPACE_PROXY_BASE_URL = "http://workspace.test"
+const MAX_FORWARDED_HEADERS = 50
+const MAX_FORWARDED_HEADER_BYTES = 8 * 1024
+const MAX_FORWARDED_HEADERS_TOTAL_BYTES = 64 * 1024
+const BLOCKED_FORWARDED_HEADERS = new Set([
+  "authorization",
+  "connection",
+  "content-length",
+  "cookie",
+  "forwarded",
+  "host",
+  "keep-alive",
+  "proxy-authenticate",
+  "proxy-authorization",
+  "te",
+  "trailer",
+  "transfer-encoding",
+  "upgrade",
+  "via",
+  "x-forwarded-for",
+  "x-forwarded-host",
+  "x-forwarded-port",
+  "x-forwarded-proto",
+  "x-original-url",
+  "x-real-ip",
+  "x-rewrite-url",
+])
+const textEncoder = new TextEncoder()
 
 function sanitizeForwardedHeaders(input: Headers): Headers {
   const headers = new Headers()
+  let count = 0
+  let totalBytes = 0
   for (const [name, value] of input.entries()) {
     const lower = name.toLowerCase()
-    if (lower === "authorization" || lower === "cookie") continue
-    if (lower === "host" || lower === "connection" || lower === "content-length" || lower === "transfer-encoding") {
-      continue
-    }
+    if (BLOCKED_FORWARDED_HEADERS.has(lower)) continue
     if (lower.startsWith("x-opencode-")) continue
+    const bytes = textEncoder.encode(name).byteLength + textEncoder.encode(value).byteLength
+    if (bytes > MAX_FORWARDED_HEADER_BYTES) continue
+    if (count >= MAX_FORWARDED_HEADERS) continue
+    if (totalBytes + bytes > MAX_FORWARDED_HEADERS_TOTAL_BYTES) continue
     headers.set(name, value)
+    count++
+    totalBytes += bytes
   }
   return headers
 }

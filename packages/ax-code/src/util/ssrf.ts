@@ -206,7 +206,11 @@ export namespace Ssrf {
 
       const location = response.headers.get("location")
       if (!location) return response
-      currentUrl = new URL(location, currentUrl).toString()
+      const redirectUrl = new URL(location, currentUrl)
+      if (redirectUrl.protocol !== "http:" && redirectUrl.protocol !== "https:") {
+        throw new Error(`${label}: redirect to unsupported URL scheme: ${redirectUrl.protocol}`)
+      }
+      currentUrl = redirectUrl.toString()
       currentInit = redirectInit(currentInit, response.status)
     }
 

@@ -8,6 +8,13 @@ test("JDTLS cleanup is attached via process exit promise", async () => {
   expect(src).not.toMatch(/spawnJdtls[\s\S]*?proc\.once\(\"exit\"/)
 })
 
+test("JDTLS stderr logging is attached during process launch", async () => {
+  const src = await Bun.file(path.join(import.meta.dir, "../../src/lsp/server-defs.ts")).text()
+
+  expect(src).toMatch(/spawnJdtls[\s\S]*?onStderr: \(chunk: Buffer \| string\) =>/)
+  expect(src).not.toMatch(/spawnJdtls[\s\S]*?proc\.stderr\.on\(\"data\"/)
+})
+
 test("Oxlint LSP detection caches --lsp support check", async () => {
   const src = await Bun.file(path.join(import.meta.dir, "../../src/lsp/server-defs.ts")).text()
 

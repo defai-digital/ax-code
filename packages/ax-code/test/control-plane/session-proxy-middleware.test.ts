@@ -269,6 +269,78 @@ describe("control-plane/session-proxy-middleware", () => {
     ])
   })
 
+  test("strips proxy identity headers and caps forwarded header volume", async () => {
+    const state: State = {
+      workspace: "first",
+      calls: [],
+      headers: [],
+    }
+
+    const ctx = await setup(state)
+    const headers: Record<string, string> = {
+      accept: "application/json",
+      forwarded: "for=203.0.113.10",
+      "x-forwarded-for": "203.0.113.10",
+      "x-forwarded-host": "attacker.example",
+      "x-forwarded-proto": "https",
+      "x-real-ip": "203.0.113.10",
+      "x-original-url": "/admin",
+      "x-rewrite-url": "/admin",
+      "x-large": "x".repeat(9 * 1024),
+    }
+    for (let i = 0; i < 80; i++) {
+      headers[`x-extra-${String(i).padStart(2, "0")}`] = "ok"
+    }
+
+    await ctx.request("http://workspace.test/session/foo", {
+      method: "POST",
+      body: "payload",
+      headers,
+    })
+
+    const forwarded = state.headers[0]
+    expect(forwarded).toBeDefined()
+    expect(forwarded!["accept"]).toBe("application/json")
+    expect(forwarded!["forwarded"]).toBeUndefined()
+    expect(forwarded!["x-forwarded-for"]).toBeUndefined()
+    expect(forwarded!["x-forwarded-host"]).toBeUndefined()
+    expect(forwarded!["x-forwarded-proto"]).toBeUndefined()
+    expect(forwarded!["x-real-ip"]).toBeUndefined()
+    expect(forwarded!["x-original-url"]).toBeUndefined()
+    expect(forwarded!["x-rewrite-url"]).toBeUndefined()
+    expect(forwarded!["x-large"]).toBeUndefined()
+    expect(Object.keys(forwarded!).length).toBeLessThanOrEqual(50)
+  })
+
+  test("applies forwarded header byte limits without dropping normal metadata", async () => {
+    const state: State = {
+      workspace: "first",
+      calls: [],
+      headers: [],
+    }
+
+    const ctx = await setup(state)
+    const headers: Record<string, string> = {
+      accept: "application/json",
+      "x-normal-metadata": "x".repeat(12 * 1024),
+      "x-small-00": "ok",
+      "x-small-01": "ok",
+    }
+
+    await ctx.request("http://workspace.test/session/foo", {
+      method: "POST",
+      body: "payload",
+      headers,
+    })
+
+    const forwarded = state.headers[0]
+    expect(forwarded).toBeDefined()
+    expect(forwarded!["accept"]).toBe("application/json")
+    expect(forwarded!["x-small-00"]).toBe("ok")
+    expect(forwarded!["x-small-01"]).toBe("ok")
+    expect(forwarded!["x-normal-metadata"]).toBeUndefined()
+  })
+
   // It will behave this way when we have syncing
   //
   // test("does not forward GET requests", async () => {

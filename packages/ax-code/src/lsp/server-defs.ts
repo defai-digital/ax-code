@@ -958,13 +958,13 @@ const spawnJdtls = async (java: string, root: string, distPath: string, launcher
       ],
       {
         cwd: root,
+        onStderr: (chunk: Buffer | string) => {
+          const message = chunk.toString().trim()
+          if (!message) return
+          log.debug("jdtls stderr", { root, message: message.slice(0, 500) })
+        },
       },
     )
-    proc.stderr.on("data", (chunk: Buffer | string) => {
-      const message = chunk.toString().trim()
-      if (!message) return
-      log.debug("jdtls stderr", { root, message: message.slice(0, 500) })
-    })
   } catch (err) {
     // Avoid leaking temp dirs when spawn fails synchronously.
     await fs.rm(dataDir, { recursive: true, force: true }).catch(() => {})
