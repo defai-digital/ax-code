@@ -40,8 +40,9 @@ download_asset() {
     --repo "${SOURCE_REPO}" \
     --pattern "${asset}" \
     --dir /tmp \
-    --clobber >/dev/null 2>&1; do
+    --clobber; do
     attempts=$((attempts + 1))
+    echo "::warning::Attempt ${attempts}/${max_attempts} failed for ${asset}; retrying in 5 seconds"
     if [ "$attempts" -ge "$max_attempts" ]; then
       echo "::error::release asset ${asset} not available from ${SOURCE_REPO}@${TAG} after ${max_attempts} attempts"
       exit 1
