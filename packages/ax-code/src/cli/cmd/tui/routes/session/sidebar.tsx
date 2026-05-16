@@ -125,7 +125,6 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
     return footerSessionStatusView({ status: current, now: Date.now() })
   })
   const sidebarStatusLabel = createMemo(() => sidebarStatusView()?.label)
-  const sidebarStatusStale = createMemo(() => sidebarStatusView()?.stale ?? false)
   const dimensions = useTerminalDimensions()
   const sidebarWidth = createMemo(() => computeSidebarWidth(dimensions().width))
 
@@ -294,7 +293,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                 <text fg={theme.textMuted}>{session().id}</text>
                 <Show when={sidebarStatusLabel()}>
                   {(label) => (
-                    <text fg={sidebarStatusStale() ? theme.warning : theme.accent} wrapMode="none">
+                    <text fg={theme.warning} wrapMode="none">
                       {label()}
                     </text>
                   )}
