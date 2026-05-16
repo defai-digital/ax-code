@@ -22,7 +22,7 @@ async function rejectAll(message?: string) {
 }
 
 async function waitForPending(count: number) {
-  for (let i = 0; i < 20; i++) {
+  for (let i = 0; i < 200; i++) {
     const list = await Permission.list()
     if (list.length === count) return list
     await Bun.sleep(0)
@@ -654,6 +654,80 @@ test("ask - publishes asked event", async () => {
       await ask.catch(() => {})
     },
   })
+})
+
+test("ask - autonomous unknown permission asks by default", async () => {
+  await using tmp = await tmpdir({ git: true })
+  const previousAutonomous = process.env["AX_CODE_AUTONOMOUS"]
+  process.env["AX_CODE_AUTONOMOUS"] = "true"
+
+  try {
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const ask = Permission.ask({
+          id: PermissionID.make("per_autonomous_unknown_default"),
+          sessionID: SessionID.make("session_autonomous_unknown"),
+          permission: "custom_unknown_tool",
+          patterns: ["*"],
+          metadata: {},
+          always: ["*"],
+          ruleset: [],
+        })
+
+        const pending = await waitForPending(1)
+        expect(pending[0]).toMatchObject({
+          id: PermissionID.make("per_autonomous_unknown_default"),
+          permission: "custom_unknown_tool",
+        })
+
+        await Permission.reply({
+          requestID: PermissionID.make("per_autonomous_unknown_default"),
+          reply: "reject",
+        })
+        await expect(ask).rejects.toBeInstanceOf(Permission.RejectedError)
+      },
+    })
+  } finally {
+    if (previousAutonomous === undefined) delete process.env["AX_CODE_AUTONOMOUS"]
+    else process.env["AX_CODE_AUTONOMOUS"] = previousAutonomous
+  }
+})
+
+test("ask - autonomous unknown permission can use explicit legacy allow compatibility", async () => {
+  await using tmp = await tmpdir({
+    git: true,
+    config: {
+      experimental: {
+        autonomous_strict_permission: false,
+      },
+    },
+  })
+  const previousAutonomous = process.env["AX_CODE_AUTONOMOUS"]
+  process.env["AX_CODE_AUTONOMOUS"] = "true"
+
+  try {
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await expect(
+          Permission.ask({
+            id: PermissionID.make("per_autonomous_unknown_compat"),
+            sessionID: SessionID.make("session_autonomous_unknown_compat"),
+            permission: "custom_unknown_tool",
+            patterns: ["*"],
+            metadata: {},
+            always: ["*"],
+            ruleset: [],
+          }),
+        ).resolves.toBeUndefined()
+        expect(await Permission.list()).toHaveLength(0)
+      },
+    })
+  } finally {
+    if (previousAutonomous === undefined) delete process.env["AX_CODE_AUTONOMOUS"]
+    else process.env["AX_CODE_AUTONOMOUS"] = previousAutonomous
+  }
 })
 
 // reply tests

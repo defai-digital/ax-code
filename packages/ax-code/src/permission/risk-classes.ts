@@ -4,8 +4,9 @@
  * Replaces the legacy "all-or-nothing" autonomous bypass with a hybrid
  * model: SAFE permissions auto-approve as before, RISK permissions fall
  * back to the configured ruleset (the user can still pre-approve via
- * `always` rules), and unknown permissions follow `autonomous_strict_permission`
- * config (default: allow, log a warning).
+ * `always` rules), and unknown permissions ask by default. Setting
+ * `autonomous_strict_permission: false` explicitly preserves the legacy
+ * allow behavior.
  *
  * The names below MUST match the strings actually emitted by tool runtimes
  * via `Permission.ask({ permission: ... })`. Edit-class tools (write,

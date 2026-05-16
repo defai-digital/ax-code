@@ -241,10 +241,10 @@ export namespace Permission {
     //   - RISK permissions (edit/write/apply_patch/bash/network/...)
     //     fall through to the existing ruleset/ask path so user-defined
     //     deny rules still apply and pre-approved patterns still match.
-    //   - Unknown permissions log a warning and default to allow,
-    //     matching legacy behavior. Set
-    //     `experimental.autonomous_strict_permission: true` to ask
-    //     instead.
+    //   - Unknown permissions ask by default so enforcement matches
+    //     SafetyPolicy.decide(). Set
+    //     `experimental.autonomous_strict_permission: false` only as an
+    //     explicit compatibility escape hatch for the legacy allow behavior.
     if (Flag.AX_CODE_AUTONOMOUS && !INTERACTIVE_ONLY.has(request.permission)) {
       const riskClass = classifyRisk(request.permission)
       if (riskClass === "safe") {
@@ -252,14 +252,14 @@ export namespace Permission {
         return
       }
       if (riskClass === "unknown") {
-        const strict = (await Config.get()).experimental?.autonomous_strict_permission === true
+        const strict = (await Config.get()).experimental?.autonomous_strict_permission !== false
         if (!strict) {
-          log.warn("autonomous: unknown permission risk class, defaulting to allow", {
+          log.warn("autonomous: unknown permission risk class allowed by compatibility config", {
             permission: request.permission,
           })
           return
         }
-        log.info("autonomous strict mode: prompting unknown permission", { permission: request.permission })
+        log.info("autonomous: prompting unknown permission", { permission: request.permission })
         // fall through to ask path below
       } else {
         log.info("autonomous risk-class: falling through to ruleset", {

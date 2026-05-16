@@ -779,7 +779,7 @@ export const Info = z
           .boolean()
           .optional()
           .describe(
-            "When autonomous mode encounters a permission whose risk class is unknown, prompt instead of auto-approving. Default: false.",
+            "When autonomous mode encounters a permission whose risk class is unknown, prompt instead of auto-approving. Default: true. Set false only to preserve legacy compatibility.",
           ),
         autonomous_caps: z
           .object({
