@@ -60,7 +60,7 @@ export function footerPermissionLabel(count: number): string | undefined {
   return Locale.pluralize(count, "{} Permission", "{} Permissions")
 }
 
-export type FooterTokenChip = { input: string; output: string }
+export type FooterTokenChip = { input: string; output: string; rate?: string }
 
 // Render token counts as "1.2k" / "480" depending on size. Tight format
 // because the chip lives in the right-rail next to MCP / LSP and we
@@ -71,17 +71,38 @@ function formatTokenCount(n: number): string {
   return `${Math.round(n / 1000)}k`
 }
 
+// Sub-second rates are noisy and meaningless ("inf t/s" right after the
+// first token lands) — gate rate calc on a real elapsed window. Anything
+// shorter than this returns no rate; the caller hides the suffix.
+const RATE_MIN_ELAPSED_SECONDS = 0.5
+
 // Build the per-turn token chip view from the most-recent assistant
-// message. Caller is responsible for picking the right message (typically
-// last assistant in sync.data.message[sessionID]) — keeping this helper
-// pure makes it trivial to test.
+// message plus the current turn's start timestamp. Rate is OUTPUT
+// tokens per second — that's what the user sees "happening" during a
+// stream. Returns `rate` undefined when the turn is settled (startedAt
+// not supplied), when there's no meaningful elapsed window yet, or
+// when there are no output tokens to report against.
 export function footerTokenChip(input: {
   tokens?: { input?: number; output?: number }
+  startedAt?: number
+  now?: number
 }): FooterTokenChip | undefined {
   const inTok = input.tokens?.input ?? 0
   const outTok = input.tokens?.output ?? 0
   if (inTok <= 0 && outTok <= 0) return undefined
-  return { input: formatTokenCount(inTok), output: formatTokenCount(outTok) }
+  const view: FooterTokenChip = {
+    input: formatTokenCount(inTok),
+    output: formatTokenCount(outTok),
+  }
+  if (input.startedAt !== undefined && outTok > 0) {
+    const now = input.now ?? Date.now()
+    const elapsed = Math.max(0, (now - input.startedAt) / 1000)
+    if (elapsed >= RATE_MIN_ELAPSED_SECONDS) {
+      const rate = outTok / elapsed
+      view.rate = rate >= 100 ? `${Math.round(rate)} t/s` : `${rate.toFixed(1)} t/s`
+    }
+  }
+  return view
 }
 
 function footerToolLabel(tool: string) {

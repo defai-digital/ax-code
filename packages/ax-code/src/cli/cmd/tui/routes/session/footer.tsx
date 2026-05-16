@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createSignal, Match, onCleanup, Show, Switch } from "solid-js"
+import { createEffect, createMemo, createSignal, Match, onCleanup, onMount, Show, Switch } from "solid-js"
 import { useTerminalDimensions } from "@opentui/solid"
 import { useTheme } from "../../context/theme"
 import { useSync } from "../../context/sync"
@@ -73,16 +73,33 @@ export function Footer() {
   // terminals so critical signals (permissions, reconnecting, sandbox-off,
   // version) always survive.
   const showHints = createMemo(() => dimensions().width >= 100)
+  // 1Hz tick — needed so the t/s rate suffix updates every second
+  // during a stream. Idle/non-busy ticks skip the setState so a quiet
+  // session has no re-render churn (same pattern as prompt/sidebar).
+  const [tokenTick, setTokenTick] = createSignal(0)
+  onMount(() => {
+    const timer = setInterval(() => {
+      if (sessionStatus().type !== "busy") return
+      setTokenTick((value) => value + 1)
+    }, 1000)
+    onCleanup(() => clearInterval(timer))
+  })
   // Per-turn token counter — surfaces an in-flight signal while the
   // assistant is streaming so runaway turns don't only show up in the
   // step bar. Reads the same message data Usage.last() relies on, so no
   // new sync surface and the memo invalidates on every token update.
+  // When the session is busy we additionally pass startedAt so the
+  // helper computes a t/s rate; once busy clears we drop the rate and
+  // the chip keeps the final token counts.
   const tokenChip = createMemo(() => {
     if (route.data.type !== "session") return undefined
     if (dimensions().width < 100) return undefined
+    tokenTick()
     const messages = sync.data.message[route.data.sessionID] ?? []
     const last = Usage.last(messages)
-    return footerTokenChip({ tokens: last?.tokens })
+    const status = sessionStatus()
+    const startedAt = status.type === "busy" ? status.startedAt : undefined
+    return footerTokenChip({ tokens: last?.tokens, startedAt, now: Date.now() })
   })
   const tokenChipStreaming = createMemo(() => sessionStatus().type === "busy")
   const showLspChip = createMemo(() => dimensions().width >= 90 && lsp().length > 0)
@@ -235,6 +252,9 @@ export function Footer() {
               {(chip) => (
                 <text fg={tokenChipStreaming() ? theme.accent : theme.textMuted}>
                   ↑{chip.input} ↓{chip.output}
+                  <Show when={chip.rate}>
+                    <span style={{ fg: theme.textMuted }}> · {chip.rate}</span>
+                  </Show>
                 </text>
               )}
             </Show>
