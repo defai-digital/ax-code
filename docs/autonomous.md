@@ -115,7 +115,7 @@ Environment variable > config file > default (on)
 ## When to Turn Autonomous Off
 
 - **Learning ax-code** — see what the agent does at each step
-- **Sensitive operations** — review each file change before it's applied
+- **Sensitive operations** — review each file change before it is applied
 - **Debugging agent behavior** — understand why the agent makes certain decisions
 - **Untrusted code** — review tool calls when working with unfamiliar repositories
 
