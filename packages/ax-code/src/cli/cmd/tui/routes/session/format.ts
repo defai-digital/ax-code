@@ -8,7 +8,7 @@ export const diagnostics = (input: Record<string, Record<string, any>[]> | undef
   return list.filter((item) => item.severity === 1).slice(0, 3)
 }
 
-export const normalize = (input?: string) => {
+export const normalize = (input?: string, home?: string) => {
   if (!input) return ""
 
   const cwd = process.cwd()
@@ -17,6 +17,9 @@ export const normalize = (input?: string) => {
 
   if (!relative) return "."
   if (!relative.startsWith("..")) return relative
+  if (home && (absolute === home || absolute.startsWith(home + path.sep))) {
+    return absolute.replace(home, "~")
+  }
   return absolute
 }
 
