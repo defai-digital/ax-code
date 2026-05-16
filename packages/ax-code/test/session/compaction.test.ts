@@ -6,6 +6,8 @@ import { Instance } from "../../src/project/instance"
 import { Log } from "../../src/util/log"
 import { tmpdir } from "../fixture/fixture"
 import { Session } from "../../src/session"
+import { markEstimatedUsage } from "../../src/provider/usage"
+import { ModelID, ProviderID } from "../../src/provider/schema"
 import type { Provider } from "../../src/provider/provider"
 
 Log.init({ print: false })
@@ -70,6 +72,28 @@ describe("session.compaction.isOverflow", () => {
         // cap = 100k → usable = 90k. Total = 75k input + 10k output + 10k cache = 95k.
         const model = createModel({ context: 100_000, output: 32_000 })
         const tokens = { input: 75_000, output: 10_000, reasoning: 0, cache: { read: 10_000, write: 0 } }
+        expect(await SessionCompaction.isOverflow({ tokens, model })).toBe(true)
+      },
+    })
+  })
+
+  test("includes reasoning tokens when total is missing or lower than components", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        // cap = 100k -> usable = 90k. Reported total is stale/low, but
+        // component total is 95k once reasoning is included.
+        const model = createModel({ context: 100_000, output: 32_000 })
+        const tokens = {
+          total: 80_000,
+          input: 80_000,
+          output: 0,
+          reasoning: 15_000,
+          cache: { read: 0, write: 0 },
+        }
+        expect(SessionCompaction.componentTotal(tokens)).toBe(95_000)
+        expect(SessionCompaction.effectiveTotal(tokens)).toBe(95_000)
         expect(await SessionCompaction.isOverflow({ tokens, model })).toBe(true)
       },
     })
@@ -302,6 +326,94 @@ describe("util.token.estimate", () => {
   })
 })
 
+describe("session.compaction.estimateToolPartTokens", () => {
+  function completedToolPart(input: Record<string, unknown>, output = "ok") {
+    return {
+      id: "part",
+      messageID: "message",
+      sessionID: "session",
+      type: "tool",
+      callID: "call",
+      tool: "read",
+      state: {
+        status: "completed",
+        input,
+        output,
+        title: "Read file",
+        metadata: {},
+        time: { start: 1, end: 2 },
+      },
+    } as any
+  }
+
+  test("counts serialized tool input, not only output", () => {
+    const small = completedToolPart({ filePath: "README.md" }, "same")
+    const largeInput = completedToolPart({ filePath: "README.md", pattern: "x".repeat(4000) }, "same")
+
+    expect(SessionCompaction.estimateToolPartTokens(largeInput)).toBeGreaterThan(
+      SessionCompaction.estimateToolPartTokens(small) + 900,
+    )
+  })
+
+  test("counts attachment placeholders", () => {
+    const plain = completedToolPart({ filePath: "image.png" }, "same")
+    const withAttachment = {
+      ...plain,
+      state: {
+        ...plain.state,
+        attachments: [
+          {
+            id: "file",
+            messageID: "message",
+            sessionID: "session",
+            type: "file",
+            mime: "image/png",
+            filename: "screenshot.png",
+            url: "data:image/png;base64,AA==",
+          },
+        ],
+      },
+    } as any
+
+    expect(SessionCompaction.estimateToolPartTokens(withAttachment)).toBeGreaterThan(
+      SessionCompaction.estimateToolPartTokens(plain),
+    )
+  })
+})
+
+describe("session.compaction observability", () => {
+  test("logs compaction trigger reason without prompt content", async () => {
+    const lines: string[] = []
+    await Log.init({ print: true, level: "INFO" }, { stderrWrite: (line) => lines.push(line) })
+    try {
+      await using tmp = await tmpdir()
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const session = await Session.create({})
+          await SessionCompaction.create({
+            sessionID: session.id,
+            agent: "build",
+            model: {
+              providerID: ProviderID.make("test"),
+              modelID: ModelID.make("test-model"),
+            },
+            auto: true,
+            triggerReason: "prompt_preflight",
+          })
+        },
+      })
+
+      const output = lines.join("")
+      expect(output).toContain("command=session.compaction.create")
+      expect(output).toContain("triggerReason=prompt_preflight")
+      expect(output).not.toContain("secret prompt")
+    } finally {
+      await Log.init({ print: false })
+    }
+  })
+})
+
 describe("session.getUsage", () => {
   test("normalizes standard usage to token format", () => {
     const model = createModel({ context: 100_000, output: 32_000 })
@@ -319,6 +431,25 @@ describe("session.getUsage", () => {
     expect(result.tokens.reasoning).toBe(0)
     expect(result.tokens.cache.read).toBe(0)
     expect(result.tokens.cache.write).toBe(0)
+    expect(result.source).toBe("exact")
+  })
+
+  test("classifies estimated and missing usage sources", () => {
+    const model = createModel({ context: 100_000, output: 32_000 })
+    const estimated = Session.getUsage({
+      model,
+      usage: markEstimatedUsage({
+        inputTokens: { total: 100, noCache: 100, cacheRead: 0, cacheWrite: 0 },
+        outputTokens: { total: 20, text: 20, reasoning: 0 },
+      } as any),
+    })
+    const missing = Session.getUsage({
+      model,
+      usage: { inputTokens: 0, outputTokens: 0 } as any,
+    })
+
+    expect(estimated.source).toBe("estimated")
+    expect(missing.source).toBe("missing")
   })
 
   test("extracts cached tokens to cache.read", () => {
@@ -388,6 +519,24 @@ describe("session.getUsage", () => {
     })
 
     expect(result.tokens.reasoning).toBe(100)
+    expect(result.tokens.total).toBe(1600)
+  })
+
+  test("computes conservative total when totalTokens is missing", () => {
+    const model = createModel({ context: 100_000, output: 32_000 })
+    const result = Session.getUsage({
+      model,
+      usage: {
+        inputTokens: 1000,
+        outputTokens: 500,
+        reasoningTokens: 100,
+      } as any,
+    })
+
+    expect(result.tokens.input).toBe(1000)
+    expect(result.tokens.output).toBe(500)
+    expect(result.tokens.reasoning).toBe(100)
+    expect(result.tokens.total).toBe(1600)
   })
 
   test("handles undefined optional values gracefully", () => {

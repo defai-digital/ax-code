@@ -17,9 +17,44 @@ import {
   shellArgs,
   shellKey,
   systemPrompt,
+  titleContextMessages,
 } from "../../src/session/prompt-helpers"
 
 describe("session.prompt helpers", () => {
+  test("bounds large first-turn title context", () => {
+    const result = titleContextMessages([
+      {
+        info: { id: "user-1", role: "user" },
+        parts: [{ type: "text", text: "x".repeat(20_000) }],
+      } as any,
+    ])
+
+    expect(result).toHaveLength(1)
+    expect(result[0].content).toContain("[Title context truncated]")
+    expect(String(result[0].content).length).toBeLessThan(13_000)
+  })
+
+  test("summarizes file parts for title context", () => {
+    const result = titleContextMessages([
+      {
+        info: { id: "user-1", role: "user" },
+        parts: [
+          { type: "text", text: "x".repeat(20_000) },
+          {
+            type: "file",
+            mime: "image/png",
+            filename: "screenshot.png",
+            url: "data:image/png;base64,AA==",
+          },
+        ],
+      } as any,
+    ])
+
+    expect(result).toHaveLength(1)
+    expect(result[0].content).toContain("[Attached image/png: screenshot.png]")
+    expect(result[0].content).toContain("[Title context truncated]")
+  })
+
   test("splits quoted and image arguments", () => {
     expect(commandArgs(`alpha "two words" 'three words' [Image 2] tail`)).toEqual([
       "alpha",

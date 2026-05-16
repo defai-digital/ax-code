@@ -1,7 +1,7 @@
 import path from "path"
 import os from "os"
 import fs from "fs/promises"
-import { type Tool as AITool, tool, jsonSchema } from "ai"
+import { type ModelMessage, type Tool as AITool, tool, jsonSchema } from "ai"
 import { pathToFileURL } from "url"
 import { Agent } from "../agent/agent"
 import { Command } from "../command"
@@ -25,6 +25,7 @@ import { DiagnosticLog } from "@/debug/diagnostic-log"
 import { Filesystem } from "@/util/filesystem"
 import { Todo } from "./todo"
 import { Flag } from "../flag/flag"
+import { Token } from "../util/token"
 
 function publishAgentInfoError(input: {
   sessionID: SessionID
@@ -54,6 +55,8 @@ const argsRegex = /(?:\[Image\s+\d+\]|"[^"]*"|'[^']*'|[^\s"']+)/gi
 const placeholderRegex = /\$(\d+)/g
 const quoteTrimRegex = /^["']|["']$/g
 const bashRegex = /!`([^`]+)`/g
+const TITLE_CONTEXT_MAX_TOKENS = 3_000
+const TITLE_CONTEXT_MAX_CHARS = TITLE_CONTEXT_MAX_TOKENS * 4
 
 type AgentLike = {
   hidden?: boolean
@@ -62,6 +65,42 @@ type AgentLike = {
 
 type AgentInfo = NonNullable<Awaited<ReturnType<typeof Agent.get>>>
 type ModelInfo = Awaited<ReturnType<typeof Provider.getModel>>
+
+function titleFilePlaceholder(part: MessageV2.FilePart) {
+  const filename = part.filename ?? "file"
+  return `[Attached ${part.mime}: ${filename}]`
+}
+
+function truncateTitleContext(text: string) {
+  if (Token.estimate(text) <= TITLE_CONTEXT_MAX_TOKENS) return text
+  return `${text.slice(0, TITLE_CONTEXT_MAX_CHARS)}\n\n[Title context truncated]`
+}
+
+export function titleContextMessages(contextMessages: MessageV2.WithParts[]): ModelMessage[] {
+  const summaryChunks: string[] = []
+  const textChunks: string[] = []
+  for (const message of contextMessages) {
+    if (message.info.role !== "user") continue
+    for (const part of message.parts) {
+      if (part.type === "text" && !part.ignored) {
+        textChunks.push(part.text)
+        continue
+      }
+      if (part.type === "file") {
+        summaryChunks.push(titleFilePlaceholder(part))
+        continue
+      }
+      if (part.type === "subtask") {
+        textChunks.push(part.prompt)
+      }
+    }
+  }
+
+  const chunks = [...summaryChunks, ...textChunks]
+  const content = truncateTitleContext(chunks.join("\n\n").trim())
+  if (!content) return []
+  return [{ role: "user", content }]
+}
 
 export function shellKey(shell: string, platform = process.platform) {
   const name = platform === "win32" ? path.win32.basename(shell, ".exe") : path.basename(shell)
@@ -725,7 +764,7 @@ export async function ensureTitle(input: {
       },
       ...(hasOnlySubtaskParts
         ? [{ role: "user" as const, content: subtaskParts.map((p) => p.prompt).join("\n") }]
-        : await MessageV2.toModelMessages(contextMessages, model)),
+        : titleContextMessages(contextMessages)),
     ],
   })
   // Return undefined explicitly on failure — the previous code relied

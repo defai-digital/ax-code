@@ -25,6 +25,7 @@ import { NamedError } from "@ax-code/util/error"
 import { Recorder } from "@/replay/recorder"
 import { Database } from "@/storage/db"
 import { asRecord } from "@/util/record"
+import { usageSource } from "@/provider/usage"
 
 export namespace SessionProcessor {
   const DOOM_LOOP_THRESHOLD = _DOOM_LOOP_THRESHOLD
@@ -618,16 +619,27 @@ export namespace SessionProcessor {
                     activeTool: undefined,
                     toolCallID: undefined,
                   })
-                  if (!value.usage || ((value.usage.inputTokens ?? 0) === 0 && (value.usage.outputTokens ?? 0) === 0))
-                    log.warn("provider returned no usage data", {
-                      provider: input.model.providerID,
-                      model: input.model.id,
-                    })
+                  const source = usageSource(value.usage)
                   const usage = Session.getUsage({
                     model: input.model,
                     usage: value.usage ?? { inputTokens: 0, outputTokens: 0 },
                     metadata: value.providerMetadata,
                   })
+                  const usageLog = {
+                    command: "session.processor.usage",
+                    status: source === "missing" ? "missing" : "ok",
+                    usageSource: usage.source,
+                    providerID: input.model.providerID,
+                    modelID: input.model.id,
+                    inputTokens: usage.tokens.input,
+                    outputTokens: usage.tokens.output,
+                    reasoningTokens: usage.tokens.reasoning,
+                    cacheReadTokens: usage.tokens.cache.read,
+                    cacheWriteTokens: usage.tokens.cache.write,
+                    totalTokens: usage.tokens.total,
+                  }
+                  if (source === "missing") log.warn("provider usage missing", usageLog)
+                  else log.info("provider usage normalized", usageLog)
                   const finishReason =
                     typeof value.finishReason === "string"
                       ? value.finishReason

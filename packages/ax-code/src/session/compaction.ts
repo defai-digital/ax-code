@@ -22,6 +22,9 @@ export namespace SessionCompaction {
   const log = Log.create({ service: "session.compaction" })
   const inFlight = new Set<string>()
 
+  export const TriggerReason = z.enum(["provider_usage", "context_overflow_error", "prompt_preflight", "manual"])
+  export type TriggerReason = z.infer<typeof TriggerReason>
+
   export const Event = {
     Compacted: BusEvent.define(
       "session.compacted",
@@ -40,34 +43,74 @@ export namespace SessionCompaction {
   // in ax-code.json.
   const DEFAULT_RESERVED_FRACTION = 0.1
 
-  export async function isOverflow(input: { tokens: MessageV2.Assistant["tokens"]; model: Provider.Model }) {
-    const config = await Config.get()
-    if (config.compaction?.auto === false) return false
-    const context = input.model.limit.context
-    if (context === 0) return false
+  export function componentTotal(tokens: MessageV2.Assistant["tokens"]) {
+    return tokens.input + tokens.output + tokens.reasoning + tokens.cache.read + tokens.cache.write
+  }
 
-    const count =
-      input.tokens.total ||
-      input.tokens.input + input.tokens.output + input.tokens.cache.read + input.tokens.cache.write
+  export function effectiveTotal(tokens: MessageV2.Assistant["tokens"]) {
+    const total = typeof tokens.total === "number" && Number.isFinite(tokens.total) ? tokens.total : 0
+    return Math.max(total, componentTotal(tokens))
+  }
+
+  export async function budget(model: Provider.Model) {
+    const config = await Config.get()
+    if (config.compaction?.auto === false) return undefined
+    const context = model.limit.context
+    if (context === 0) return undefined
 
     // For prompt-cached providers (Claude) limit.input is the input cap and
     // is smaller than limit.context; otherwise context is the cap. Use `||`
     // so a stray `limit.input: 0` falls through to context — `??` would
     // treat 0 as a valid cap and never compact.
-    const cap = input.model.limit.input || context
+    const cap = model.limit.input || context
     const reserved = config.compaction?.reserved ?? Math.ceil(cap * DEFAULT_RESERVED_FRACTION)
     // Clamp to 0: if reserved >= cap (config misuse on tiny models),
     // the raw subtraction goes negative and `count >= usable` fires on
     // every step, causing an infinite compaction loop.
     const usable = Math.max(0, cap - reserved)
-    if (usable === 0) return false
-    return count >= usable
+    if (usable === 0) return undefined
+    return { cap, reserved, usable }
+  }
+
+  export async function isOverflow(input: { tokens: MessageV2.Assistant["tokens"]; model: Provider.Model }) {
+    const tokenBudget = await budget(input.model)
+    if (!tokenBudget) return false
+    return effectiveTotal(input.tokens) >= tokenBudget.usable
   }
 
   export const PRUNE_MINIMUM = _PRUNE_MINIMUM
   export const PRUNE_PROTECT = _PRUNE_PROTECT
 
   const PRUNE_PROTECTED_TOOLS = ["skill"]
+  const TOOL_RESULT_WRAPPER_TOKENS = 16
+
+  function stringifyForEstimate(value: unknown) {
+    try {
+      return JSON.stringify(value) ?? ""
+    } catch {
+      return String(value)
+    }
+  }
+
+  function attachmentPlaceholder(attachment: MessageV2.FilePart) {
+    const filename = attachment.filename ?? "file"
+    return `[Attachment ${attachment.mime}: ${filename}]`
+  }
+
+  export function estimateToolPartTokens(part: MessageV2.ToolPart) {
+    if (part.state.status !== "completed") return 0
+
+    const attachmentSummary = (part.state.attachments ?? []).map(attachmentPlaceholder).join("\n")
+    return (
+      TOOL_RESULT_WRAPPER_TOKENS +
+      Token.estimate(part.tool) +
+      Token.estimate(part.state.title) +
+      Token.estimate(stringifyForEstimate(part.state.input)) +
+      Token.estimate(part.state.output) +
+      Token.estimate(stringifyForEstimate(part.state.metadata)) +
+      Token.estimate(attachmentSummary)
+    )
+  }
 
   // goes backwards through parts until there are 40_000 tokens worth of tool
   // calls. then erases output of previous tool calls. idea is to throw away old
@@ -94,7 +137,7 @@ export namespace SessionCompaction {
             if (PRUNE_PROTECTED_TOOLS.includes(part.tool)) continue
 
             if (part.state.time.compacted) break loop
-            const estimate = Token.estimate(part.state.output)
+            const estimate = estimateToolPartTokens(part)
             total += estimate
             if (total > PRUNE_PROTECT) {
               pruned += estimate
@@ -417,8 +460,20 @@ When constructing the summary, try to stick to this template:
       }),
       auto: z.boolean(),
       overflow: z.boolean().optional(),
+      triggerReason: TriggerReason.optional(),
     }),
     async (input) => {
+      log.info("compaction scheduled", {
+        command: "session.compaction.create",
+        status: "ok",
+        sessionID: input.sessionID,
+        triggerReason: input.triggerReason ?? (input.auto ? "provider_usage" : "manual"),
+        auto: input.auto,
+        overflow: input.overflow,
+        agent: input.agent,
+        providerID: input.model.providerID,
+        modelID: input.model.modelID,
+      })
       const msg = await Session.updateMessage({
         id: MessageID.ascending(),
         role: "user",

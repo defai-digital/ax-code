@@ -12,6 +12,8 @@ import { buffer } from "node:stream/consumers"
 import { StringDecoder } from "node:string_decoder"
 import { Log } from "@/util/log"
 import { Flag } from "@/flag/flag"
+import { Token } from "@/util/token"
+import { markEstimatedUsage } from "../usage"
 
 const log = Log.create({ service: "provider.cli-language-model" })
 
@@ -72,9 +74,13 @@ export function buildCliCommand(config: CliLanguageModelConfig, prompt: string) 
 }
 const CLI_TIMEOUT_MS = 300_000 // 5 minutes
 
-const EMPTY_USAGE: LanguageModelV3Usage = {
-  inputTokens: { total: undefined, noCache: undefined, cacheRead: undefined, cacheWrite: undefined },
-  outputTokens: { total: undefined, text: undefined, reasoning: undefined },
+function estimatedUsage(input: string, output: string): LanguageModelV3Usage {
+  const inputTokens = Token.estimate(input)
+  const outputTokens = Token.estimate(output)
+  return markEstimatedUsage({
+    inputTokens: { total: inputTokens, noCache: inputTokens, cacheRead: 0, cacheWrite: 0 },
+    outputTokens: { total: outputTokens, text: outputTokens, reasoning: 0 },
+  })
 }
 
 export class CliLanguageModel implements LanguageModelV3 {
@@ -158,7 +164,7 @@ export class CliLanguageModel implements LanguageModelV3 {
     return {
       content: [{ type: "text" as const, text: parsed.text }],
       finishReason: { unified: "stop" as const, raw: undefined },
-      usage: EMPTY_USAGE,
+      usage: estimatedUsage(text, parsed.text),
       warnings: [],
     }
   }
@@ -201,6 +207,7 @@ export class CliLanguageModel implements LanguageModelV3 {
         let stdoutEnded = false
         let exitCode: number | undefined
         const raw: string[] = []
+        const output: string[] = []
         const stderrRaw: Buffer[] = []
         const stdoutDecoder = new StringDecoder("utf8")
         const endText = () => {
@@ -225,6 +232,7 @@ export class CliLanguageModel implements LanguageModelV3 {
             const delta = parser.parseStreamLine(line)
             if (delta) {
               emitted = true
+              output.push(delta)
               controller.enqueue({ type: "text-delta", id: textId, delta })
             }
           }
@@ -244,12 +252,16 @@ export class CliLanguageModel implements LanguageModelV3 {
             const delta = parser.parseStreamLine(remainder)
             if (delta) {
               emitted = true
+              output.push(delta)
               controller.enqueue({ type: "text-delta", id: textId, delta })
             }
           }
           if (!emitted) {
             const fallback = raw.join("").trim()
-            if (fallback) controller.enqueue({ type: "text-delta", id: textId, delta: fallback })
+            if (fallback) {
+              output.push(fallback)
+              controller.enqueue({ type: "text-delta", id: textId, delta: fallback })
+            }
           }
         }
         const finishSuccess = () => {
@@ -257,7 +269,7 @@ export class CliLanguageModel implements LanguageModelV3 {
           endText()
           controller.enqueue({
             type: "finish",
-            usage: EMPTY_USAGE,
+            usage: estimatedUsage(text, output.join("")),
             finishReason: { unified: "stop", raw: undefined },
           })
           safeClose()

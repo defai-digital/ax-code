@@ -28,6 +28,7 @@ import { SessionID, MessageID, PartID } from "./schema"
 
 import type { Provider } from "@/provider/provider"
 import { ModelID, ProviderID } from "@/provider/schema"
+import { usageSource } from "@/provider/usage"
 import { Permission } from "@/permission"
 import { Global } from "@/global"
 import type { LanguageModelV2Usage } from "@ai-sdk/provider"
@@ -967,11 +968,14 @@ export namespace Session {
         if (value && typeof value === "object" && "total" in value) return safe((value as { total: unknown }).total)
         return 0
       }
-      const inputTokens = safe(input.usage?.inputTokens ?? 0)
-      const outputTokens = safe(input.usage?.outputTokens ?? 0)
-      const reasoningTokens = safe(input.usage?.reasoningTokens ?? 0)
+      const usage = input.usage as Record<string, unknown>
+      const inputTokenDetails = usage.inputTokens as Record<string, unknown> | undefined
+      const outputTokenDetails = usage.outputTokens as Record<string, unknown> | undefined
+      const inputTokens = safe(usage.inputTokens ?? 0)
+      const outputTokens = safe(usage.outputTokens ?? 0)
+      const reasoningTokens = safe(usage.reasoningTokens ?? outputTokenDetails?.reasoning ?? 0)
 
-      const cacheReadInputTokens = safe(input.usage?.cachedInputTokens ?? 0)
+      const cacheReadInputTokens = safe(usage.cachedInputTokens ?? inputTokenDetails?.cacheRead ?? 0)
 
       const anthropicMeta = (input.metadata as Record<string, unknown>)?.["anthropic"] as
         | Record<string, number>
@@ -980,6 +984,7 @@ export namespace Session {
         (anthropicMeta?.["cacheCreationInputTokens"] ??
           // @ts-expect-error
           input.metadata?.["venice"]?.["usage"]?.["cacheCreationInputTokens"] ??
+          inputTokenDetails?.cacheWrite ??
           0) as number,
       )
 
@@ -991,9 +996,12 @@ export namespace Session {
         : Math.max(0, safe(inputTokens - cacheReadInputTokens - cacheWriteInputTokens))
 
       const rawTotal = anthropicMeta
-        ? (input.usage.totalTokens ?? 0) + cacheReadInputTokens + cacheWriteInputTokens
-        : input.usage.totalTokens
-      const total = rawTotal != null && Number.isFinite(rawTotal) ? rawTotal : undefined
+        ? safe(usage.totalTokens ?? 0) + cacheReadInputTokens + cacheWriteInputTokens
+        : usage.totalTokens
+      const reportedTotal = rawTotal != null ? safe(rawTotal) : undefined
+      const componentTotal =
+        adjustedInputTokens + outputTokens + reasoningTokens + cacheReadInputTokens + cacheWriteInputTokens
+      const total = Math.max(reportedTotal ?? 0, componentTotal)
 
       const tokens = {
         total,
@@ -1006,7 +1014,7 @@ export namespace Session {
         },
       }
 
-      return { tokens }
+      return { tokens, source: usageSource(input.usage) }
     },
   )
 

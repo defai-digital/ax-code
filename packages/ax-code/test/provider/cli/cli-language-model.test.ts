@@ -2,6 +2,7 @@ import { test, expect, describe, spyOn } from "bun:test"
 import { buildCliCommand, CliLanguageModel } from "../../../src/provider/cli/cli-language-model"
 import { CLI_PROVIDER_DEFINITIONS } from "../../../src/provider/cli/config"
 import { claudeCodeParser, geminiCliParser, codexCliParser } from "../../../src/provider/cli/parser"
+import { usageSource } from "../../../src/provider/usage"
 import { Process } from "../../../src/util/process"
 
 function makeModel(overrides?: Partial<ConstructorParameters<typeof CliLanguageModel>[0]>) {
@@ -52,9 +53,10 @@ describe("CliLanguageModel", () => {
     expect(result.content).toEqual([{ type: "text", text: "hello" }])
     expect(result.finishReason).toEqual({ unified: "stop", raw: undefined })
     expect(result.usage).toEqual({
-      inputTokens: { total: undefined, noCache: undefined, cacheRead: undefined, cacheWrite: undefined },
-      outputTokens: { total: undefined, text: undefined, reasoning: undefined },
+      inputTokens: { total: 1, noCache: 1, cacheRead: 0, cacheWrite: 0 },
+      outputTokens: { total: 1, text: 1, reasoning: 0 },
     })
+    expect(usageSource(result.usage)).toBe("estimated")
     expect(result.warnings).toEqual([])
   })
 
@@ -95,10 +97,11 @@ describe("CliLanguageModel", () => {
     const finish = parts.find((p) => p.type === "finish")
     expect(finish).toBeDefined()
     expect(finish.finishReason).toEqual({ unified: "stop", raw: undefined })
-    expect(finish.usage).toEqual({
-      inputTokens: { total: undefined, noCache: undefined, cacheRead: undefined, cacheWrite: undefined },
-      outputTokens: { total: undefined, text: undefined, reasoning: undefined },
-    })
+    expect(finish.usage.inputTokens).toEqual({ total: 1, noCache: 1, cacheRead: 0, cacheWrite: 0 })
+    expect(finish.usage.outputTokens.total).toBeGreaterThan(0)
+    expect(finish.usage.outputTokens.text).toBe(finish.usage.outputTokens.total)
+    expect(finish.usage.outputTokens.reasoning).toBe(0)
+    expect(usageSource(finish.usage)).toBe("estimated")
   })
 
   test("doGenerate throws on non-zero exit with no output", async () => {
