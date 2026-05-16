@@ -426,6 +426,27 @@ export function Session() {
   // Allow exit when in child session (prompt is hidden)
   const exit = useExit()
 
+  // Double-click anywhere in a subagent transcript jumps back to the
+  // parent session — mirrors the existing header double-click but
+  // covers the full screen so users don't have to drag focus back up
+  // to the title row. Matches the same SUBAGENT_PARENT_DOUBLE_CLICK_MS
+  // window the header uses. Skipped while a text selection is active so
+  // a user finishing a drag-select isn't bounced out unexpectedly.
+  const SUBAGENT_BODY_DOUBLE_CLICK_MS = 400
+  let lastSubagentBodyClickAt = 0
+  function handleSubagentBodyMouseUp() {
+    if (!session()?.parentID) return
+    if (renderer.getSelection()?.getSelectedText()) return
+    const now = Date.now()
+    if (now - lastSubagentBodyClickAt <= SUBAGENT_BODY_DOUBLE_CLICK_MS) {
+      lastSubagentBodyClickAt = 0
+      const parentID = session()?.parentID
+      if (parentID) navigate({ type: "session", sessionID: parentID })
+      return
+    }
+    lastSubagentBodyClickAt = now
+  }
+
   createEffect(() => {
     const title = Locale.truncate(session()?.title ?? "", 50)
     const pad = (text: string) => text.padEnd(10, " ")
@@ -1008,6 +1029,7 @@ export function Session() {
           border={autonomous().active || session()?.parentID ? ["left"] : undefined}
           customBorderChars={SplitBorder.customBorderChars}
           borderColor={autonomous().active ? theme.accent : theme.primary}
+          onMouseUp={handleSubagentBodyMouseUp}
         >
           <Show when={session()}>
             <Show when={showHeader() && (!sidebarVisible() || !wide())}>
