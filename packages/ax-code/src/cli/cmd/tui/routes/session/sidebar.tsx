@@ -276,7 +276,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                 <Show when={session().share?.url}>{(url) => <text fg={theme.textMuted}>{url()}</text>}</Show>
               </box>
               <Show when={mcpEntries().length > 0}>
-                <box>
+                <box backgroundColor={theme.backgroundElement} paddingLeft={1} paddingRight={1}>
                   <box
                     flexDirection="row"
                     gap={1}
@@ -486,7 +486,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                 </box>
               </Show>
               <Show when={queued().length > 0}>
-                <box>
+                <box backgroundColor={theme.backgroundElement} paddingLeft={1} paddingRight={1}>
                   <box
                     flexDirection="row"
                     gap={1}
@@ -524,7 +524,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                 </box>
               </Show>
               <Show when={todo().length > 0 && todo().some((t) => t.status !== "completed")}>
-                <box>
+                <box backgroundColor={theme.backgroundElement} paddingLeft={1} paddingRight={1}>
                   <box
                     flexDirection="row"
                     gap={1}

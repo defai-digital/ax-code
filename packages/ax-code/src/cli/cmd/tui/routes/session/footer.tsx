@@ -13,12 +13,14 @@ import { Installation } from "@/installation"
 import { Flag } from "@/flag/flag"
 import {
   footerPermissionLabel,
+  footerTokenChip,
   footerTrustChip,
   footerAgentControlStatusView,
   footerProgressBar,
   isFooterSessionStatus,
   type FooterSessionStatus,
 } from "./footer-view-model"
+import { Usage } from "./usage"
 
 const RECONNECT_DEBOUNCE_MS = 3_000
 
@@ -71,6 +73,18 @@ export function Footer() {
   // terminals so critical signals (permissions, reconnecting, sandbox-off,
   // version) always survive.
   const showHints = createMemo(() => dimensions().width >= 100)
+  // Per-turn token counter — surfaces an in-flight signal while the
+  // assistant is streaming so runaway turns don't only show up in the
+  // step bar. Reads the same message data Usage.last() relies on, so no
+  // new sync surface and the memo invalidates on every token update.
+  const tokenChip = createMemo(() => {
+    if (route.data.type !== "session") return undefined
+    if (dimensions().width < 100) return undefined
+    const messages = sync.data.message[route.data.sessionID] ?? []
+    const last = Usage.last(messages)
+    return footerTokenChip({ tokens: last?.tokens })
+  })
+  const tokenChipStreaming = createMemo(() => sessionStatus().type === "busy")
   const showLspChip = createMemo(() => dimensions().width >= 90 && lsp().length > 0)
   const showDreChip = createMemo(() => dimensions().width >= 80)
   const progressBar = createMemo(() =>
@@ -100,7 +114,7 @@ export function Footer() {
         return theme.textMuted
     }
   })
-  const showSecondaryStatus = createMemo(() => mcp() > 0 || showLspChip() || showHints())
+  const showSecondaryStatus = createMemo(() => mcp() > 0 || showLspChip() || showHints() || !!tokenChip())
   const showStatusSeparator = createMemo(
     () => (permissionLabel() || showDreStatus() || showAgentControlStatus()) && showSecondaryStatus(),
   )
@@ -216,6 +230,13 @@ export function Footer() {
               <text fg={theme.text}>
                 <span style={{ fg: lsp().length > 0 ? theme.success : theme.textMuted }}>•</span> {lsp().length} LSP
               </text>
+            </Show>
+            <Show when={tokenChip()} keyed>
+              {(chip) => (
+                <text fg={tokenChipStreaming() ? theme.accent : theme.textMuted}>
+                  ↑{chip.input} ↓{chip.output}
+                </text>
+              )}
             </Show>
             <Show when={showHints()}>
               <text fg={theme.textMuted}>/help · /status</text>

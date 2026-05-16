@@ -60,6 +60,30 @@ export function footerPermissionLabel(count: number): string | undefined {
   return Locale.pluralize(count, "{} Permission", "{} Permissions")
 }
 
+export type FooterTokenChip = { input: string; output: string }
+
+// Render token counts as "1.2k" / "480" depending on size. Tight format
+// because the chip lives in the right-rail next to MCP / LSP and we
+// don't want it eating multiple columns at every assistant tick.
+function formatTokenCount(n: number): string {
+  if (n < 1000) return String(n)
+  if (n < 10_000) return `${(n / 1000).toFixed(1)}k`
+  return `${Math.round(n / 1000)}k`
+}
+
+// Build the per-turn token chip view from the most-recent assistant
+// message. Caller is responsible for picking the right message (typically
+// last assistant in sync.data.message[sessionID]) — keeping this helper
+// pure makes it trivial to test.
+export function footerTokenChip(input: {
+  tokens?: { input?: number; output?: number }
+}): FooterTokenChip | undefined {
+  const inTok = input.tokens?.input ?? 0
+  const outTok = input.tokens?.output ?? 0
+  if (inTok <= 0 && outTok <= 0) return undefined
+  return { input: formatTokenCount(inTok), output: formatTokenCount(outTok) }
+}
+
 function footerToolLabel(tool: string) {
   const normalized = tool.replace(/[_-]+/g, " ").trim()
   return Locale.titlecase(normalized || "tool")

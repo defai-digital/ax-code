@@ -1,9 +1,33 @@
 import { describe, expect, test } from "bun:test"
 import {
   footerProgressBar,
+  footerTokenChip,
   isFooterSessionStatus,
   PROGRESS_SOFT_MAX,
 } from "@/cli/cmd/tui/routes/session/footer-view-model"
+
+describe("footerTokenChip", () => {
+  test("returns undefined when no tokens", () => {
+    expect(footerTokenChip({})).toBeUndefined()
+    expect(footerTokenChip({ tokens: { input: 0, output: 0 } })).toBeUndefined()
+  })
+
+  test("formats small counts without suffix", () => {
+    expect(footerTokenChip({ tokens: { input: 480, output: 120 } })).toEqual({ input: "480", output: "120" })
+  })
+
+  test("uses 1-decimal k for 1k-10k range", () => {
+    expect(footerTokenChip({ tokens: { input: 2100, output: 480 } })).toEqual({ input: "2.1k", output: "480" })
+  })
+
+  test("rounds to whole k above 10k", () => {
+    expect(footerTokenChip({ tokens: { input: 12_500, output: 31_900 } })).toEqual({ input: "13k", output: "32k" })
+  })
+
+  test("renders even when only one side is non-zero", () => {
+    expect(footerTokenChip({ tokens: { input: 0, output: 100 } })).toEqual({ input: "0", output: "100" })
+  })
+})
 
 describe("footerProgressBar", () => {
   test("returns undefined when idle", () => {

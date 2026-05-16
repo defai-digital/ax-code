@@ -27113,29 +27113,6 @@
           "output": 32768
         }
       },
-      "alpindale/goliath-120b": {
-        "id": "alpindale/goliath-120b",
-        "name": "Goliath 120B",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": false,
-        "temperature": true,
-        "release_date": "2023-11-10",
-        "last_updated": "2026-03-15",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 6144,
-          "output": 1024
-        }
-      },
       "openrouter/pareto-code": {
         "id": "openrouter/pareto-code",
         "name": "Pareto Code Router",
@@ -27683,29 +27660,6 @@
           "output": 2000000
         }
       },
-      "x-ai/grok-code-fast-1": {
-        "id": "x-ai/grok-code-fast-1",
-        "name": "xAI: Grok Code Fast 1",
-        "attachment": false,
-        "reasoning": true,
-        "tool_call": true,
-        "temperature": true,
-        "release_date": "2025-08-26",
-        "last_updated": "2025-08-26",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 256000,
-          "output": 10000
-        }
-      },
       "x-ai/grok-4.20-multi-agent": {
         "id": "x-ai/grok-4.20-multi-agent",
         "name": "xAI: Grok 4.20 Multi-Agent",
@@ -27754,30 +27708,6 @@
         "limit": {
           "context": 1000000,
           "output": 4096
-        }
-      },
-      "x-ai/grok-4.1-fast": {
-        "id": "x-ai/grok-4.1-fast",
-        "name": "xAI: Grok 4.1 Fast",
-        "attachment": true,
-        "reasoning": true,
-        "tool_call": true,
-        "temperature": true,
-        "release_date": "2025-11-19",
-        "last_updated": "2025-11-19",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 2000000,
-          "output": 30000
         }
       },
       "kwaipilot/kat-coder-pro-v2": {
@@ -27941,29 +27871,6 @@
           "output": 26215
         }
       },
-      "nvidia/llama-3.1-nemotron-70b-instruct": {
-        "id": "nvidia/llama-3.1-nemotron-70b-instruct",
-        "name": "NVIDIA: Llama 3.1 Nemotron 70B Instruct",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": true,
-        "temperature": true,
-        "release_date": "2024-10-12",
-        "last_updated": "2024-10-12",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 131072,
-          "output": 16384
-        }
-      },
       "nvidia/nemotron-3-super-120b-a12b:free": {
         "id": "nvidia/nemotron-3-super-120b-a12b:free",
         "name": "NVIDIA: Nemotron 3 Super (free)",
@@ -28082,31 +27989,6 @@
           "output": 52429
         }
       },
-      "anthropic/claude-3.7-sonnet": {
-        "id": "anthropic/claude-3.7-sonnet",
-        "name": "Anthropic: Claude 3.7 Sonnet",
-        "attachment": true,
-        "reasoning": true,
-        "tool_call": true,
-        "temperature": true,
-        "release_date": "2025-02-19",
-        "last_updated": "2026-03-15",
-        "modalities": {
-          "input": [
-            "image",
-            "pdf",
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 200000,
-          "output": 64000
-        }
-      },
       "anthropic/claude-sonnet-4.6": {
         "id": "anthropic/claude-sonnet-4.6",
         "name": "Anthropic: Claude Sonnet 4.6",
@@ -28206,6 +28088,31 @@
           "output": 64000
         }
       },
+      "anthropic/claude-opus-4.7-fast": {
+        "id": "anthropic/claude-opus-4.7-fast",
+        "name": "Anthropic: Claude Opus 4.7 (Fast)",
+        "attachment": true,
+        "reasoning": true,
+        "tool_call": true,
+        "temperature": false,
+        "release_date": "2026-05-12",
+        "last_updated": "2026-05-16",
+        "modalities": {
+          "input": [
+            "image",
+            "pdf",
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        }
+      },
       "anthropic/claude-opus-4.6": {
         "id": "anthropic/claude-opus-4.6",
         "name": "Anthropic: Claude Opus 4.6",
@@ -28279,31 +28186,6 @@
         "limit": {
           "context": 200000,
           "output": 32000
-        }
-      },
-      "anthropic/claude-3.7-sonnet:thinking": {
-        "id": "anthropic/claude-3.7-sonnet:thinking",
-        "name": "Anthropic: Claude 3.7 Sonnet (thinking)",
-        "attachment": true,
-        "reasoning": true,
-        "tool_call": true,
-        "temperature": true,
-        "release_date": "2025-02-19",
-        "last_updated": "2026-03-15",
-        "modalities": {
-          "input": [
-            "image",
-            "pdf",
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 200000,
-          "output": 64000
         }
       },
       "anthropic/claude-haiku-4.5": {
@@ -28429,15 +28311,38 @@
           "output": 128000
         }
       },
-      "inclusionai/ling-2.6-1t:free": {
-        "id": "inclusionai/ling-2.6-1t:free",
-        "name": "inclusionAI: Ling-2.6-1T (free)",
+      "inclusionai/ring-2.6-1t": {
+        "id": "inclusionai/ring-2.6-1t",
+        "name": "inclusionAI: Ring-2.6-1T",
+        "attachment": false,
+        "reasoning": true,
+        "tool_call": true,
+        "temperature": true,
+        "release_date": "2026-05-08",
+        "last_updated": "2026-05-16",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 262144,
+          "output": 65536
+        }
+      },
+      "inclusionai/ling-2.6-1t": {
+        "id": "inclusionai/ling-2.6-1t",
+        "name": "inclusionAI: Ling-2.6-1T",
         "attachment": false,
         "reasoning": false,
         "tool_call": true,
         "temperature": true,
         "release_date": "2026-04-23",
-        "last_updated": "2026-05-01",
+        "last_updated": "2026-05-16",
         "modalities": {
           "input": [
             "text"
@@ -28543,29 +28448,6 @@
         "limit": {
           "context": 131072,
           "output": 26215
-        }
-      },
-      "mistralai/mixtral-8x7b-instruct": {
-        "id": "mistralai/mixtral-8x7b-instruct",
-        "name": "Mistral: Mixtral 8x7B Instruct",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": true,
-        "temperature": true,
-        "release_date": "2023-12-10",
-        "last_updated": "2026-03-15",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 32768,
-          "output": 16384
         }
       },
       "mistralai/mistral-saba": {
@@ -29491,29 +29373,6 @@
           "output": 8192
         }
       },
-      "qwen/qwen-turbo": {
-        "id": "qwen/qwen-turbo",
-        "name": "Qwen: Qwen-Turbo",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": true,
-        "temperature": true,
-        "release_date": "2024-11-01",
-        "last_updated": "2026-03-15",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 131072,
-          "output": 8192
-        }
-      },
       "qwen/qwen3.5-9b": {
         "id": "qwen/qwen3.5-9b",
         "name": "Qwen: Qwen3.5-9B",
@@ -29560,29 +29419,6 @@
         "limit": {
           "context": 262144,
           "output": 65536
-        }
-      },
-      "qwen/qwen-max": {
-        "id": "qwen/qwen-max",
-        "name": "Qwen: Qwen-Max ",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": true,
-        "temperature": true,
-        "release_date": "2024-04-03",
-        "last_updated": "2026-03-15",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 32768,
-          "output": 8192
         }
       },
       "qwen/qwen3-coder": {
@@ -29770,30 +29606,6 @@
         "limit": {
           "context": 40960,
           "output": 40960
-        }
-      },
-      "qwen/qwen-vl-plus": {
-        "id": "qwen/qwen-vl-plus",
-        "name": "Qwen: Qwen VL Plus",
-        "attachment": true,
-        "reasoning": false,
-        "tool_call": false,
-        "temperature": true,
-        "release_date": "2024-01-25",
-        "last_updated": "2026-03-15",
-        "modalities": {
-          "input": [
-            "image",
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 131072,
-          "output": 8192
         }
       },
       "qwen/qwen3-vl-30b-a3b-thinking": {
@@ -30083,30 +29895,6 @@
           "output": 32768
         }
       },
-      "qwen/qwen-vl-max": {
-        "id": "qwen/qwen-vl-max",
-        "name": "Qwen: Qwen VL Max",
-        "attachment": true,
-        "reasoning": false,
-        "tool_call": true,
-        "temperature": true,
-        "release_date": "2024-04-08",
-        "last_updated": "2025-08-13",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 131072,
-          "output": 32768
-        }
-      },
       "qwen/qwen-plus": {
         "id": "qwen/qwen-plus",
         "name": "Qwen: Qwen-Plus",
@@ -30223,6 +30011,29 @@
           "output": 32768
         }
       },
+      "tencent/hy3-preview": {
+        "id": "tencent/hy3-preview",
+        "name": "Tencent: Hy3 Preview",
+        "attachment": false,
+        "reasoning": true,
+        "tool_call": true,
+        "temperature": true,
+        "release_date": "2026-04-22",
+        "last_updated": "2026-05-16",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 262144,
+          "output": 262144
+        }
+      },
       "tencent/hunyuan-a13b-instruct": {
         "id": "tencent/hunyuan-a13b-instruct",
         "name": "Tencent: Hunyuan A13B Instruct",
@@ -30244,29 +30055,6 @@
         "limit": {
           "context": 131072,
           "output": 131072
-        }
-      },
-      "tencent/hy3-preview:free": {
-        "id": "tencent/hy3-preview:free",
-        "name": "Tencent: Hy3 Preview (free)",
-        "attachment": false,
-        "reasoning": true,
-        "tool_call": true,
-        "temperature": true,
-        "release_date": "2026-04-22",
-        "last_updated": "2026-05-01",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 262144,
-          "output": 262144
         }
       },
       "google/gemini-3-pro-image-preview": {
@@ -30317,6 +30105,33 @@
         "limit": {
           "context": 262144,
           "output": 262144
+        }
+      },
+      "google/gemini-3.1-flash-lite": {
+        "id": "google/gemini-3.1-flash-lite",
+        "name": "Google: Gemini 3.1 Flash Lite",
+        "attachment": true,
+        "reasoning": true,
+        "tool_call": true,
+        "temperature": true,
+        "release_date": "2026-05-07",
+        "last_updated": "2026-05-16",
+        "modalities": {
+          "input": [
+            "audio",
+            "image",
+            "pdf",
+            "text",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1048576,
+          "output": 65536
         }
       },
       "google/gemma-3-27b-it": {
@@ -31020,6 +30835,29 @@
         "limit": {
           "context": 163840,
           "output": 65536
+        }
+      },
+      "deepseek/deepseek-v4-flash:free": {
+        "id": "deepseek/deepseek-v4-flash:free",
+        "name": "DeepSeek: DeepSeek V4 Flash (free)",
+        "attachment": false,
+        "reasoning": true,
+        "tool_call": true,
+        "temperature": false,
+        "release_date": "2026-04-24",
+        "last_updated": "2026-05-16",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1048576,
+          "output": 384000
         }
       },
       "deepseek/deepseek-v4-flash": {
@@ -31930,6 +31768,31 @@
           "output": 262144
         }
       },
+      "perceptron/perceptron-mk1": {
+        "id": "perceptron/perceptron-mk1",
+        "name": "Perceptron: Perceptron Mk1",
+        "attachment": true,
+        "reasoning": true,
+        "tool_call": false,
+        "temperature": true,
+        "release_date": "2026-05-12",
+        "last_updated": "2026-05-16",
+        "modalities": {
+          "input": [
+            "image",
+            "text",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 32768,
+          "output": 8192
+        }
+      },
       "allenai/olmo-3-32b-think": {
         "id": "allenai/olmo-3-32b-think",
         "name": "AllenAI: Olmo 3 32B Think",
@@ -31999,6 +31862,30 @@
         "limit": {
           "context": 16384,
           "output": 16384
+        }
+      },
+      "baidu/qianfan-ocr-fast": {
+        "id": "baidu/qianfan-ocr-fast",
+        "name": "Baidu: Qianfan-OCR-Fast",
+        "attachment": true,
+        "reasoning": true,
+        "tool_call": false,
+        "temperature": true,
+        "release_date": "2026-04-20",
+        "last_updated": "2026-05-16",
+        "modalities": {
+          "input": [
+            "image",
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 65536,
+          "output": 28672
         }
       },
       "baidu/ernie-4.5-vl-424b-a47b": {
@@ -32094,30 +31981,6 @@
           "output": 65536
         }
       },
-      "baidu/qianfan-ocr-fast:free": {
-        "id": "baidu/qianfan-ocr-fast:free",
-        "name": "Baidu: Qianfan-OCR-Fast (free)",
-        "attachment": true,
-        "reasoning": true,
-        "tool_call": false,
-        "temperature": true,
-        "release_date": "2026-04-20",
-        "last_updated": "2026-05-01",
-        "modalities": {
-          "input": [
-            "image",
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 65536,
-          "output": 28672
-        }
-      },
       "baidu/cobuddy:free": {
         "id": "baidu/cobuddy:free",
         "name": "Baidu: CoBuddy (free)",
@@ -32209,29 +32072,6 @@
         "limit": {
           "context": 131072,
           "output": 8192
-        }
-      },
-      "tngtech/deepseek-r1t2-chimera": {
-        "id": "tngtech/deepseek-r1t2-chimera",
-        "name": "TNG: DeepSeek R1T2 Chimera",
-        "attachment": false,
-        "reasoning": true,
-        "tool_call": true,
-        "temperature": true,
-        "release_date": "2025-07-08",
-        "last_updated": "2025-07-08",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 163840,
-          "output": 163840
         }
       },
       "xiaomi/mimo-v2-omni": {
@@ -55502,32 +55342,6 @@
           "output": 32768
         }
       },
-      "grok-4-1-fast": {
-        "id": "grok-4-1-fast",
-        "name": "Grok 4.1 Fast",
-        "family": "grok",
-        "attachment": true,
-        "reasoning": true,
-        "tool_call": true,
-        "temperature": true,
-        "knowledge": "2025-07",
-        "release_date": "2025-11-19",
-        "last_updated": "2025-11-19",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 2000000,
-          "output": 30000
-        }
-      },
       "gpt-5.2": {
         "id": "gpt-5.2",
         "name": "GPT-5.2",
@@ -55886,32 +55700,6 @@
           "output": 384000
         }
       },
-      "grok-4-1-fast-non-reasoning": {
-        "id": "grok-4-1-fast-non-reasoning",
-        "name": "Grok 4.1 Fast (Non-Reasoning)",
-        "family": "grok",
-        "attachment": true,
-        "reasoning": false,
-        "tool_call": true,
-        "temperature": true,
-        "knowledge": "2025-07",
-        "release_date": "2025-11-19",
-        "last_updated": "2025-11-19",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 2000000,
-          "output": 30000
-        }
-      },
       "sonar": {
         "id": "sonar",
         "name": "Sonar",
@@ -55962,31 +55750,6 @@
         "limit": {
           "context": 200000,
           "output": 64000
-        }
-      },
-      "grok-code-fast-1": {
-        "id": "grok-code-fast-1",
-        "name": "Grok Code Fast 1",
-        "family": "grok",
-        "attachment": false,
-        "reasoning": true,
-        "tool_call": true,
-        "temperature": true,
-        "knowledge": "2023-10",
-        "release_date": "2025-08-28",
-        "last_updated": "2025-08-28",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 256000,
-          "output": 10000
         }
       },
       "qwen35-397b-a17b": {
@@ -76521,7 +76284,8 @@
         "modalities": {
           "input": [
             "text",
-            "image"
+            "image",
+            "pdf"
           ],
           "output": [
             "text"
@@ -76575,7 +76339,8 @@
         "modalities": {
           "input": [
             "text",
-            "image"
+            "image",
+            "pdf"
           ],
           "output": [
             "text"
@@ -76636,6 +76401,7 @@
         "open_weights": false,
         "limit": {
           "context": 400000,
+          "input": 272000,
           "output": 128000
         }
       },
@@ -76717,6 +76483,7 @@
         "open_weights": false,
         "limit": {
           "context": 400000,
+          "input": 272000,
           "output": 128000
         }
       },
@@ -76800,6 +76567,33 @@
           "output": 8192
         }
       },
+      "anthropic--claude-4.7-opus": {
+        "id": "anthropic--claude-4.7-opus",
+        "name": "anthropic--claude-4.7-opus",
+        "family": "claude-opus",
+        "attachment": true,
+        "reasoning": true,
+        "tool_call": true,
+        "temperature": false,
+        "knowledge": "2026-01-31",
+        "release_date": "2026-04-16",
+        "last_updated": "2026-04-16",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        }
+      },
       "anthropic--claude-4-opus": {
         "id": "anthropic--claude-4-opus",
         "name": "anthropic--claude-4-opus",
@@ -76851,6 +76645,7 @@
         "open_weights": false,
         "limit": {
           "context": 400000,
+          "input": 272000,
           "output": 128000
         }
       }
@@ -89845,31 +89640,6 @@
           "output": 2000000
         }
       },
-      "xai/grok-code-fast-1": {
-        "id": "xai/grok-code-fast-1",
-        "name": "Grok Code Fast 1",
-        "family": "grok",
-        "attachment": false,
-        "reasoning": true,
-        "tool_call": true,
-        "temperature": true,
-        "knowledge": "2023-10",
-        "release_date": "2025-08-28",
-        "last_updated": "2025-08-28",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 256000,
-          "output": 10000
-        }
-      },
       "interfaze/interfaze-beta": {
         "id": "interfaze/interfaze-beta",
         "name": "Interfaze Beta",
@@ -95223,9 +94993,9 @@
       "XPERSONA_API_KEY"
     ],
     "npm": "@ai-sdk/openai-compatible",
-    "api": "https://xpersona.co/v1",
+    "api": "https://www.xpersona.co/v1",
     "name": "Xpersona",
-    "doc": "https://xpersona.co/docs",
+    "doc": "https://www.xpersona.co/docs",
     "models": {
       "xpersona-frieren-coder": {
         "id": "xpersona-frieren-coder",
@@ -95400,32 +95170,6 @@
           "output": 30000
         }
       },
-      "grok-4-1-fast": {
-        "id": "grok-4-1-fast",
-        "name": "Grok 4.1 Fast",
-        "family": "grok",
-        "attachment": true,
-        "reasoning": true,
-        "tool_call": true,
-        "temperature": true,
-        "knowledge": "2025-07",
-        "release_date": "2025-11-19",
-        "last_updated": "2025-11-19",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 2000000,
-          "output": 30000
-        }
-      },
       "grok-4.20-0309-reasoning": {
         "id": "grok-4.20-0309-reasoning",
         "name": "Grok 4.20 (Reasoning)",
@@ -95449,57 +95193,6 @@
         "limit": {
           "context": 2000000,
           "output": 30000
-        }
-      },
-      "grok-4-1-fast-non-reasoning": {
-        "id": "grok-4-1-fast-non-reasoning",
-        "name": "Grok 4.1 Fast (Non-Reasoning)",
-        "family": "grok",
-        "attachment": true,
-        "reasoning": false,
-        "tool_call": true,
-        "temperature": true,
-        "knowledge": "2025-07",
-        "release_date": "2025-11-19",
-        "last_updated": "2025-11-19",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 2000000,
-          "output": 30000
-        }
-      },
-      "grok-code-fast-1": {
-        "id": "grok-code-fast-1",
-        "name": "Grok Code Fast 1",
-        "family": "grok",
-        "attachment": false,
-        "reasoning": true,
-        "tool_call": true,
-        "temperature": true,
-        "knowledge": "2023-10",
-        "release_date": "2025-08-28",
-        "last_updated": "2025-08-28",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 256000,
-          "output": 10000
         }
       },
       "grok-4.3": {

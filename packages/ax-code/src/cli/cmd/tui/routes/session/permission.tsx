@@ -18,7 +18,7 @@ import { useTuiConfig } from "../../context/tui-config"
 import { diffDisplayView } from "./view-model"
 import { SessionDiffRenderer } from "./render-adapter"
 import { Log } from "@/util/log"
-import { normalize as normalizePathValue } from "./format"
+import { normalize as normalizePathValue, diffSummary } from "./format"
 import { Global } from "@/global"
 
 const log = Log.create({ service: "tui.permission" })
@@ -38,6 +38,7 @@ function EditBody(props: { request: PermissionRequest }) {
 
   const filepath = createMemo(() => (props.request.metadata?.filepath as string) ?? "")
   const diff = createMemo(() => (props.request.metadata?.diff as string) ?? "")
+  const summary = createMemo(() => diffSummary(diff()))
 
   const view = createMemo(() =>
     diffDisplayView({
@@ -50,6 +51,15 @@ function EditBody(props: { request: PermissionRequest }) {
 
   return (
     <box flexDirection="column" gap={1}>
+      <Show when={summary()} keyed>
+        {(s) => (
+          <text paddingLeft={1} fg={theme.textMuted}>
+            {s.hunks} {s.hunks === 1 ? "hunk" : "hunks"} ·{" "}
+            <span style={{ fg: theme.success }}>+{s.added}</span>{" "}
+            <span style={{ fg: theme.error }}>−{s.removed}</span>
+          </text>
+        )}
+      </Show>
       <Show when={diff()}>
         <scrollbox
           height="100%"

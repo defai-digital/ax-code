@@ -86,7 +86,8 @@ import { PermissionPrompt } from "./permission"
 import { QuestionPrompt } from "./question"
 import { UI } from "@/cli/ui.ts"
 import { useTuiConfig } from "../../context/tui-config"
-import { detail, diagnostics, normalize, workdir } from "./format"
+import { detail, diagnostics, diffSummary, normalize, workdir } from "./format"
+import { coalesceParts } from "./coalesce"
 import { childAction, firstChildID, nextChildID } from "./child"
 import { lastUserMessageID, promptState, redoMessageID, undoMessageID } from "./messages"
 import { messageScroll, messageTarget, nextVisibleMessage } from "./navigation"
@@ -1455,6 +1456,7 @@ function AssistantMessage(props: { message: AssistantMessage; parts: Part[]; las
 
   const hasParts = createMemo(() => props.parts.length > 0)
   const isThinking = createMemo(() => !props.message.error && !hasParts() && !final() && props.last)
+  const displayParts = createMemo(() => coalesceParts(props.parts))
 
   return (
     <>
@@ -1463,18 +1465,32 @@ function AssistantMessage(props: { message: AssistantMessage; parts: Part[]; las
           <Spinner color={theme.textMuted}>Thinking</Spinner>
         </box>
       </Show>
-      <For each={props.parts}>
-        {(part, index) => {
-          const component = createMemo(() => PART_MAPPING[part.type as keyof typeof PART_MAPPING])
+      <For each={displayParts()}>
+        {(entry, index) => {
+          const isLast = createMemo(() => index() === displayParts().length - 1)
           return (
-            <Show when={component()}>
-              <Dynamic
-                last={index() === props.parts.length - 1}
-                component={component()}
-                part={part as any}
-                message={props.message}
-              />
-            </Show>
+            <Switch>
+              <Match when={entry.kind === "coalesced" && entry}>
+                {(group) => <CoalescedTool group={group()} message={props.message} />}
+              </Match>
+              <Match when={entry.kind === "single" && entry}>
+                {(single) => {
+                  const component = createMemo(
+                    () => PART_MAPPING[single().part.type as keyof typeof PART_MAPPING],
+                  )
+                  return (
+                    <Show when={component()}>
+                      <Dynamic
+                        last={isLast()}
+                        component={component()}
+                        part={single().part as any}
+                        message={props.message}
+                      />
+                    </Show>
+                  )
+                }}
+              </Match>
+            </Switch>
           )
         }}
       </For>
@@ -1744,6 +1760,50 @@ function ToolPart(props: { last: boolean; part: ToolPart; message: AssistantMess
   )
 }
 
+function CoalescedTool(props: {
+  group: { tool: string; parts: ToolPart[]; key: string }
+  message: AssistantMessage
+}) {
+  const { theme } = useTheme()
+  const [expanded, setExpanded] = createSignal(false)
+  const label = createMemo(() => {
+    // Tool-specific noun for the count: read/list use "file", glob/grep use "search"
+    const tool = props.group.tool
+    if (tool === "read") return `Read · ${props.group.parts.length} files`
+    if (tool === "list") return `List · ${props.group.parts.length} directories`
+    if (tool === "glob") return `Glob · ${props.group.parts.length} searches`
+    if (tool === "grep") return `Grep · ${props.group.parts.length} searches`
+    return `${tool} · ${props.group.parts.length}`
+  })
+  return (
+    <Show
+      when={expanded()}
+      fallback={
+        <box paddingLeft={3}>
+          <text
+            paddingLeft={3}
+            fg={theme.textMuted}
+            onMouseUp={() => setExpanded(true)}
+          >
+            <span style={{ bold: true }}>→</span> {label()} <span style={{ fg: theme.borderSubtle }}>▸</span>
+          </text>
+        </box>
+      }
+    >
+      <For each={props.group.parts}>
+        {(part) => (
+          <ToolPart last={false} part={part} message={props.message} />
+        )}
+      </For>
+      <box paddingLeft={3}>
+        <text paddingLeft={3} fg={theme.borderSubtle} onMouseUp={() => setExpanded(false)}>
+          ▾ collapse
+        </text>
+      </box>
+    </Show>
+  )
+}
+
 type ToolProps<T extends Tool.Info> = {
   input: Partial<Tool.InferParameters<T>>
   metadata: Partial<Tool.InferMetadata<T>>
@@ -1904,6 +1964,15 @@ function BlockTool(props: {
   const renderer = useRenderer()
   const [hover, setHover] = createSignal(false)
   const error = createMemo(() => (props.part?.state.status === "error" ? props.part.state.error : undefined))
+  // Title color tracks the tool state so completed blocks recede and the
+  // running/erroring one in the transcript pops. Matches InlineTool's
+  // existing fg() rule — keeps the two block kinds visually consistent.
+  const titleFg = createMemo(() => {
+    const status = props.part?.state.status
+    if (status === "error") return theme.error
+    if (status === "completed") return theme.textMuted
+    return theme.text
+  })
   return (
     <box
       border={["left"]}
@@ -1925,12 +1994,12 @@ function BlockTool(props: {
       <Show
         when={props.spinner}
         fallback={
-          <text paddingLeft={3} fg={theme.textMuted}>
+          <text paddingLeft={3} fg={titleFg()}>
             {props.title}
           </text>
         }
       >
-        <Spinner color={theme.textMuted}>{props.title.replace(/^# /, "")}</Spinner>
+        <Spinner color={titleFg()}>{props.title.replace(/^# /, "")}</Spinner>
       </Show>
       {props.children}
       <Show when={error()}>
@@ -2227,6 +2296,7 @@ function Edit(props: ToolProps<typeof EditTool>) {
     if (expanded() || !overflow()) return rawDiff()
     return diffLines().slice(0, 30).join("\n") + "\n…"
   })
+  const summary = createMemo(() => diffSummary(rawDiff()))
 
   return (
     <Switch>
@@ -2236,6 +2306,15 @@ function Edit(props: ToolProps<typeof EditTool>) {
           part={props.part}
           onClick={overflow() ? () => setExpanded((prev) => !prev) : undefined}
         >
+          <Show when={summary()} keyed>
+            {(s) => (
+              <text paddingLeft={1} fg={theme.textMuted}>
+                {s.hunks} {s.hunks === 1 ? "hunk" : "hunks"} ·{" "}
+                <span style={{ fg: theme.success }}>+{s.added}</span>{" "}
+                <span style={{ fg: theme.error }}>−{s.removed}</span>
+              </text>
+            )}
+          </Show>
           <box paddingLeft={1}>
             <SessionDiffRenderer
               diff={diffContent()}
@@ -2321,19 +2400,31 @@ function ApplyPatch(props: ToolProps<typeof ApplyPatchTool>) {
     <Switch>
       <Match when={files().length > 0}>
         <For each={files()}>
-          {(file) => (
-            <BlockTool title={title(file)} part={props.part}>
-              <Show
-                when={file.type !== "delete"}
-                fallback={
-                  <text fg={theme.diffRemoved}>- {Locale.pluralize(file.deletions, "{} line", "{} lines")}</text>
-                }
-              >
-                <Diff diff={file.diff} filePath={file.filePath} />
-                <Diagnostics diagnostics={props.metadata.diagnostics} filePath={file.movePath ?? file.filePath} />
-              </Show>
-            </BlockTool>
-          )}
+          {(file) => {
+            const fileSummary = createMemo(() => diffSummary(file.diff))
+            return (
+              <BlockTool title={title(file)} part={props.part}>
+                <Show
+                  when={file.type !== "delete"}
+                  fallback={
+                    <text fg={theme.diffRemoved}>- {Locale.pluralize(file.deletions, "{} line", "{} lines")}</text>
+                  }
+                >
+                  <Show when={fileSummary()} keyed>
+                    {(s) => (
+                      <text paddingLeft={1} fg={theme.textMuted}>
+                        {s.hunks} {s.hunks === 1 ? "hunk" : "hunks"} ·{" "}
+                        <span style={{ fg: theme.success }}>+{s.added}</span>{" "}
+                        <span style={{ fg: theme.error }}>−{s.removed}</span>
+                      </text>
+                    )}
+                  </Show>
+                  <Diff diff={file.diff} filePath={file.filePath} />
+                  <Diagnostics diagnostics={props.metadata.diagnostics} filePath={file.movePath ?? file.filePath} />
+                </Show>
+              </BlockTool>
+            )
+          }}
         </For>
       </Match>
       <Match when={true}>

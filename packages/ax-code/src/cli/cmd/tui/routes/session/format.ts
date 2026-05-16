@@ -51,6 +51,28 @@ export const workdir = (base: string | undefined, home: string | undefined, inpu
   return match ? absolute.replace(home, "~") : absolute
 }
 
+// Parse a unified-diff string and return hunk/added/removed counts.
+// Returns undefined when the input is empty or contains no hunks so
+// callers can `<Show when={summary()}>` without rendering a noisy chip
+// on binary/empty patches. Lines starting with `+++` / `---` are file
+// headers, not content, and are excluded from the +/− tallies.
+export type DiffSummary = { hunks: number; added: number; removed: number }
+export const diffSummary = (diff?: string): DiffSummary | undefined => {
+  if (!diff) return undefined
+  let hunks = 0
+  let added = 0
+  let removed = 0
+  for (const line of diff.split("\n")) {
+    if (line.startsWith("@@")) hunks++
+    else if (line.startsWith("+++")) continue
+    else if (line.startsWith("---")) continue
+    else if (line.startsWith("+")) added++
+    else if (line.startsWith("-")) removed++
+  }
+  if (hunks === 0 && added === 0 && removed === 0) return undefined
+  return { hunks, added, removed }
+}
+
 // Format a millisecond duration as "Xs" or "Xm Ys". Used by the
 // session graph/rollback/dre helpers — the existing util/format
 // formatDuration takes seconds, drops trailing "0s" / "0m", and adds
