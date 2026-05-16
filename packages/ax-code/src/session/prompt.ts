@@ -1564,6 +1564,21 @@ export namespace SessionPrompt {
   let _schemaCache: Map<string, any> | undefined
 
   /** @internal Exported for testing */
+  export function isolationRetryState(input: {
+    isolation: Isolation.State | undefined
+    pathBypass: string[]
+    networkBypass: boolean
+  }): Isolation.State | undefined {
+    if (!input.isolation) return undefined
+    const bypass = Array.from(new Set([...(input.isolation.bypass ?? []), ...input.pathBypass]))
+    return {
+      ...input.isolation,
+      network: input.networkBypass ? true : input.isolation.network,
+      ...(bypass.length ? { bypass } : {}),
+    }
+  }
+
+  /** @internal Exported for testing */
   export async function resolveTools(input: {
     agent: Agent.Info
     model: Provider.Model
@@ -1677,34 +1692,34 @@ export namespace SessionPrompt {
           // the loop in the rare case the tool is non-deterministic about
           // which path it touches first.
           //
-          // Unscoped denials (network — `assertNetwork` has no `e.path`)
-          // fall back to the legacy ask-once + full-bypass semantics so
-          // tools like webfetch can still be escalated.
+          // Network denials have no path, so retry by enabling only network
+          // access while preserving the active write/protected-path policy.
           const bypass: string[] = []
-          let unscopedBypass = false
+          let networkBypass = false
           let lastError: Isolation.DeniedError | undefined
           for (let attempt = 0; attempt < 16; attempt++) {
             let attemptCtx = ctx
-            if (attempt > 0) {
-              if (unscopedBypass) {
-                attemptCtx = context(args, options, {
-                  mode: "full-access",
-                  network: true,
-                  protected: [],
-                })
-              } else if (ctx.extra?.isolation) {
-                attemptCtx = context(args, options, { ...ctx.extra.isolation, bypass: [...bypass] })
-              }
+            if (attempt > 0 && ctx.extra?.isolation) {
+              attemptCtx = context(
+                args,
+                options,
+                isolationRetryState({
+                  isolation: ctx.extra.isolation,
+                  pathBypass: bypass,
+                  networkBypass,
+                }),
+              )
             }
             try {
               result = await item.execute(args, attemptCtx)
               break
             } catch (e) {
               if (!(e instanceof Isolation.DeniedError)) throw e
-          if (ctx.extra?.isolation?.mode === "read-only")
-            throw new Error(`Tool denied in read-only mode: ${e.reason}`, { cause: e })
+              if (ctx.extra?.isolation?.mode === "read-only")
+                throw new Error(`Tool denied in read-only mode: ${e.reason}`, { cause: e })
               if (!e.path) {
-                if (unscopedBypass) {
+                if (e.reason !== "network") throw e
+                if (networkBypass) {
                   lastError = e
                   throw e
                 }
@@ -1714,7 +1729,7 @@ export namespace SessionPrompt {
                   always: [],
                   metadata: { reason: e.reason, requireInteractive: true },
                 })
-                unscopedBypass = true
+                networkBypass = true
                 lastError = e
                 continue
               }

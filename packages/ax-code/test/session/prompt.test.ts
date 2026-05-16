@@ -15,8 +15,47 @@ import { Log } from "../../src/util/log"
 import { tmpdir } from "../fixture/fixture"
 import { LSP } from "../../src/lsp"
 import { CodeGraphQuery } from "../../src/code-intelligence/query"
+import { Isolation } from "../../src/isolation"
 
 Log.init({ print: false })
+
+describe("session.prompt isolation retry state", () => {
+  test("network escalation preserves the active write isolation policy", () => {
+    const isolation: Isolation.State = {
+      ...Isolation.resolve({ mode: "workspace-write", network: false, protected: ["secrets"] }, "/tmp/project"),
+      bypass: ["/tmp/already-approved"],
+    }
+
+    const retry = SessionPrompt.isolationRetryState({
+      isolation,
+      pathBypass: ["/tmp/newly-approved"],
+      networkBypass: true,
+    })
+
+    expect(retry).toMatchObject({
+      mode: "workspace-write",
+      network: true,
+    })
+    expect(retry?.protected).toEqual(isolation.protected)
+    expect(retry?.bypass).toEqual(["/tmp/already-approved", "/tmp/newly-approved"])
+  })
+
+  test("path-only escalation does not enable network", () => {
+    const isolation = Isolation.resolve({ mode: "workspace-write", network: false }, "/tmp/project")
+
+    const retry = SessionPrompt.isolationRetryState({
+      isolation,
+      pathBypass: ["/tmp/approved"],
+      networkBypass: false,
+    })
+
+    expect(retry).toMatchObject({
+      mode: "workspace-write",
+      network: false,
+      bypass: ["/tmp/approved"],
+    })
+  })
+})
 
 describe("session.prompt autonomous decision ledger", () => {
   test("builds a prompt-safe session ledger from question tool metadata", () => {

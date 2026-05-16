@@ -1,7 +1,7 @@
 ---
 title: "Comprehensive Project Risk Review"
 date: "2026-05-16"
-status: "third-slice-implemented"
+status: "fourth-slice-implemented"
 author: "Codex"
 scope: "ax-code monorepo, with emphasis on packages/ax-code, SDK, integrations, and repo guardrails"
 ---
@@ -12,11 +12,11 @@ scope: "ax-code monorepo, with emphasis on packages/ax-code, SDK, integrations, 
 
 This review found one high-confidence implementation weakness that should be treated as security/control-plane debt, plus several structural fragility risks that make future regressions likely.
 
-Follow-up implementation status: the first three recommended slices have been implemented. `Permission.ask()` now asks by default for autonomous unknown permissions, matching `SafetyPolicy.decide()`. The workspace event server now shares the main server's non-loopback authentication invariant, and doctor reports effective server exposure plus isolation-policy provenance.
+Follow-up implementation status: the first four recommended slices have been implemented. `Permission.ask()` now asks by default for autonomous unknown permissions, matching `SafetyPolicy.decide()`. The workspace event server now shares the main server's non-loopback authentication invariant, doctor reports effective server exposure plus isolation-policy provenance, and network-only isolation escalation no longer disables write/protected-path isolation.
 
 The next largest risk class is complexity concentration: `session/prompt.ts`, TUI session rendering, LSP orchestration, server session routes, provider logic, and several quality modules are all very large, stateful files. The repo has guardrails that report this, but the size signal is not a blocking policy. The risk is not file size alone; it is file size combined with timers, abort propagation, streamed state, permission decisions, and cross-process lifecycle management.
 
-Initial findings were based on static repository inspection only. The follow-up implementations were validated with targeted permission/control-plane/server/doctor tests plus package typecheck; no TUI startup or browser checks were needed for these slices.
+Initial findings were based on static repository inspection only. The follow-up implementations were validated with targeted permission/control-plane/server/doctor/session/isolation tests plus package typecheck; no TUI startup or browser checks were needed for these slices.
 
 ## Implementation update 1: 2026-05-16
 
@@ -81,6 +81,28 @@ Outcome:
 
 - Original P1 runtime isolation default risk: **mitigated through operator visibility, behavior unchanged**.
 - This intentionally avoids changing the runtime default in the same slice. The next product decision remains whether to change the default to `workspace-write` or keep `full-access` as an explicit compatibility posture.
+
+## Implementation update 4: 2026-05-16
+
+Implemented slice: **Scoped isolation escalation**.
+
+Changes made:
+
+- Replaced the legacy unscoped isolation retry override that constructed `full-access` with a narrow retry state helper.
+- Network escalation now enables only `network: true` while preserving the active isolation mode, protected paths, and any approved path bypasses.
+- Path-only escalation remains path-scoped and does not enable network.
+- Non-network unscoped denials no longer receive an implicit full-access retry.
+
+Validation run:
+
+- `bun test test/session/prompt.test.ts`
+- `bun test test/isolation/isolation.test.ts`
+- `bun run typecheck`
+
+Outcome:
+
+- Original P2 isolation escalation risk: **fixed for network retries**.
+- The runtime still supports explicit `full-access` mode through config/env/user-controlled policy, but approving a network-only retry no longer disables workspace-write or protected-path enforcement for that tool invocation.
 
 ## Methodology
 
@@ -508,23 +530,25 @@ For best-practice hardening, add a lightweight local capability token generated 
 
 ### P2: Isolation escalation can switch unscoped denials to full-access for a tool retry
 
+**Status: fixed in follow-up implementation for network-only retries.**
+
 **Evidence**
 
 - `packages/ax-code/src/session/prompt.ts:1672` implements per-path isolation bypass for path-scoped denials.
-- For unscoped denials, such as network, `packages/ax-code/src/session/prompt.ts:1691` creates an override with `mode: "full-access", network: true, protected: []`.
-- The comment says this preserves legacy ask-once + full-bypass semantics for tools like `webfetch`.
+- Before the follow-up fix, unscoped denials such as network created an override with `mode: "full-access", network: true, protected: []`.
+- After the follow-up fix, `SessionPrompt.isolationRetryState()` preserves the original isolation mode and protected paths, merges approved path bypasses, and only flips `network` to `true` when the approved retry is network-scoped.
 
 **Why this is fragile**
 
-For path denials, the design is precise. For unscoped denials, the override is broader than the reason: enabling network also sets `mode: full-access` and clears protected paths for that retry. A pure network tool may not exploit write access, but the mechanism itself violates least privilege.
+For path denials, the design is precise. Before the follow-up fix, unscoped network denials were broader than the reason: enabling network also set `mode: full-access` and cleared protected paths for that retry. A pure network tool may not exploit write access, but the mechanism itself violated least privilege.
 
 **Recommendation**
 
 Represent bypass dimensions independently:
 
-- `networkBypass: true` for network-only escalations.
-- `pathBypass: string[]` for file/path escalations.
-- Avoid constructing `full-access` unless the user explicitly approves full sandbox disablement.
+- `networkBypass: true` for network-only escalations. **Done.**
+- `pathBypass: string[]` for file/path escalations. **Done.**
+- Avoid constructing `full-access` unless the user explicitly approves full sandbox disablement. **Done for network-only retries.**
 
 ### P2: Remote config trust boundaries are thoughtful but still high-impact
 
@@ -609,7 +633,7 @@ These should be preserved while fixing the risks above:
 1. Fix autonomous unknown-permission enforcement so `SafetyPolicy` and `Permission.ask()` cannot disagree by default. **Done in follow-up implementation.**
 2. Add shared non-loopback password enforcement to workspace server listen paths. **Done in follow-up implementation.**
 3. Decide whether runtime isolation should default to `workspace-write`; if not, make `full-access` provenance explicit in doctor/startup diagnostics. **Doctor provenance done; startup diagnostics/default-change decision deferred.**
-4. Narrow isolation escalation so network bypass does not construct a full-access override.
+4. Narrow isolation escalation so network bypass does not construct a full-access override. **Done in follow-up implementation.**
 5. Clarify `/session/:sessionID/message` as final-result JSON or split a true progressive stream endpoint.
 6. Add command-scoped CLI shutdown policy instead of unconditional forced exit.
 7. Treat `bash` as an always-high-risk capability in docs, policy, and telemetry; use path extraction only as supporting evidence.
