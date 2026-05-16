@@ -26,12 +26,12 @@ import { getRecentLogsChecks, getRunningInstancesCheck } from "./doctor-health"
 import path from "path"
 import { ProjectIdentity } from "../../project/project-identity"
 import { isLoopbackHostname } from "../../server/listen-security"
+import type { Isolation as IsolationConfig } from "../../config/schema"
+import type { Isolation } from "../../isolation"
 
-export function getServerExposureCheck(input: {
-  hostname?: string
-  mdns?: boolean
-  password?: string
-}): { name: string; status: "ok" | "warn" | "fail"; detail: string } {
+type DoctorCheck = { name: string; status: "ok" | "warn" | "fail"; detail: string }
+
+export function getServerExposureCheck(input: { hostname?: string; mdns?: boolean; password?: string }): DoctorCheck {
   const hostname = input.hostname ?? (input.mdns ? "0.0.0.0" : "127.0.0.1")
   const loopbackOnly = isLoopbackHostname(hostname)
   const authConfigured = !!input.password
@@ -48,6 +48,28 @@ export function getServerExposureCheck(input: {
     detail: `hostname ${hostname}; ${loopbackOnly ? "loopback-only" : "network-accessible"}; auth ${
       authConfigured ? "configured" : "not configured"
     }`,
+  }
+}
+
+export function getIsolationPolicyCheck(input: {
+  config?: IsolationConfig
+  envMode?: Isolation.Mode
+  envNetwork?: boolean
+}): DoctorCheck {
+  const mode = input.envMode ?? input.config?.mode ?? "full-access"
+  const modeSource = input.envMode ? "env" : input.config?.mode ? "config" : "default"
+  const network =
+    mode === "full-access" ? true : input.envNetwork !== undefined ? input.envNetwork : (input.config?.network ?? false)
+  const networkSource =
+    mode === "full-access" ? "full-access" : input.envNetwork !== undefined ? "env" : input.config ? "config" : "default"
+  const detail = `mode ${mode} (${modeSource}); network ${network ? "enabled" : "disabled"} (${networkSource})`
+  return {
+    name: "Isolation policy",
+    status: mode === "full-access" && modeSource === "default" ? "warn" : "ok",
+    detail:
+      mode === "full-access" && modeSource === "default"
+        ? `${detail}; using permissive default, set isolation.mode or AX_CODE_ISOLATION_MODE to make intent explicit`
+        : detail,
   }
 }
 
@@ -128,7 +150,7 @@ export const DoctorCommand: CommandModule = {
   command: "doctor",
   describe: "check system health and diagnose issues",
   handler: async () => {
-    const checks: { name: string; status: "ok" | "warn" | "fail"; detail: string }[] = []
+    const checks: DoctorCheck[] = []
     const project = await doctorProjectContext()
     const tuiPort = await getConfiguredTuiPort()
 
@@ -276,6 +298,24 @@ export const DoctorCommand: CommandModule = {
       checks.push(
         getServerExposureCheck({
           password: Flag.AX_CODE_SERVER_PASSWORD,
+        }),
+      )
+    }
+
+    try {
+      const config = await Config.get().catch(() => Config.global())
+      checks.push(
+        getIsolationPolicyCheck({
+          config: config?.isolation,
+          envMode: Flag.AX_CODE_ISOLATION_MODE,
+          envNetwork: Flag.AX_CODE_ISOLATION_NETWORK,
+        }),
+      )
+    } catch {
+      checks.push(
+        getIsolationPolicyCheck({
+          envMode: Flag.AX_CODE_ISOLATION_MODE,
+          envNetwork: Flag.AX_CODE_ISOLATION_NETWORK,
         }),
       )
     }

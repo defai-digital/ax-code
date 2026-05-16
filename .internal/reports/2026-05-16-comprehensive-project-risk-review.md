@@ -1,7 +1,7 @@
 ---
 title: "Comprehensive Project Risk Review"
 date: "2026-05-16"
-status: "second-slice-implemented"
+status: "third-slice-implemented"
 author: "Codex"
 scope: "ax-code monorepo, with emphasis on packages/ax-code, SDK, integrations, and repo guardrails"
 ---
@@ -12,7 +12,7 @@ scope: "ax-code monorepo, with emphasis on packages/ax-code, SDK, integrations, 
 
 This review found one high-confidence implementation weakness that should be treated as security/control-plane debt, plus several structural fragility risks that make future regressions likely.
 
-Follow-up implementation status: the first two recommended slices have been implemented. `Permission.ask()` now asks by default for autonomous unknown permissions, matching `SafetyPolicy.decide()`. The workspace event server now shares the main server's non-loopback authentication invariant, and doctor reports effective server exposure.
+Follow-up implementation status: the first three recommended slices have been implemented. `Permission.ask()` now asks by default for autonomous unknown permissions, matching `SafetyPolicy.decide()`. The workspace event server now shares the main server's non-loopback authentication invariant, and doctor reports effective server exposure plus isolation-policy provenance.
 
 The next largest risk class is complexity concentration: `session/prompt.ts`, TUI session rendering, LSP orchestration, server session routes, provider logic, and several quality modules are all very large, stateful files. The repo has guardrails that report this, but the size signal is not a blocking policy. The risk is not file size alone; it is file size combined with timers, abort propagation, streamed state, permission decisions, and cross-process lifecycle management.
 
@@ -61,6 +61,26 @@ Outcome:
 - Original P1 workspace-server exposure invariant: **fixed**.
 - Main server and workspace server now share the same server-layer non-loopback password guard.
 - Doctor now reports effective server exposure for the configured server hostname and auth state.
+
+## Implementation update 3: 2026-05-16
+
+Implemented slice: **Isolation policy visibility**.
+
+Changes made:
+
+- Added a doctor `Isolation policy` check that reports effective isolation mode, network access, and provenance for both.
+- The check warns when runtime isolation is using the permissive `full-access` default without an explicit env/config source.
+- Added tests covering default `full-access`, config-provided `workspace-write`, and env-overridden `full-access`.
+
+Validation run:
+
+- `bun test test/cli/doctor.test.ts`
+- `bun run typecheck`
+
+Outcome:
+
+- Original P1 runtime isolation default risk: **mitigated through operator visibility, behavior unchanged**.
+- This intentionally avoids changing the runtime default in the same slice. The next product decision remains whether to change the default to `workspace-write` or keep `full-access` as an explicit compatibility posture.
 
 ## Methodology
 
@@ -429,19 +449,22 @@ Move the non-loopback password guard into `WorkspaceServer.Listen()` or a shared
 
 ### P1: Runtime isolation defaults to `full-access`
 
+**Status: mitigated in follow-up implementation through doctor visibility; runtime behavior unchanged.**
+
 **Evidence**
 
 - `packages/ax-code/src/isolation/index.ts:40` resolves mode as `Flag.AX_CODE_ISOLATION_MODE ?? config?.mode ?? "full-access"`.
 - `packages/ax-code/src/config/schema.ts` describes `full-access` as disabling isolation.
 - TUI state defaults to workspace-write in some client-side bootstrap state, but the runtime authority in `Isolation.resolve()` is still full-access unless config/flag says otherwise.
+- After the follow-up visibility slice, `packages/ax-code/src/cli/cmd/doctor.ts` reports the effective isolation mode, network access, and whether each came from env, config, `full-access`, or default.
 
 **Why this is fragile**
 
-The tool layer is well-instrumented for isolation once isolation is enabled, but the runtime default is permissive. That makes sandbox safety depend on product entrypoint behavior, user config, or UI toggles rather than a single runtime default. For best practices, the enforcement layer should be conservative by default and allow UX layers to explicitly opt out.
+The tool layer is well-instrumented for isolation once isolation is enabled, but the runtime default is permissive. That makes sandbox safety depend on product entrypoint behavior, user config, or UI toggles rather than a single runtime default. The follow-up doctor check makes this visible, but it does not change the underlying enforcement default.
 
 **Recommendation**
 
-Consider changing the runtime default to `workspace-write` with `network: false`, while preserving an explicit `--sandbox full-access` / config escape hatch. If this is too disruptive, add a startup diagnostic that clearly records why the effective mode is `full-access` and whether it came from default, CLI flag, env, or config.
+Consider changing the runtime default to `workspace-write` with `network: false`, while preserving an explicit `--sandbox full-access` / config escape hatch. If this is too disruptive, add a startup diagnostic that clearly records why the effective mode is `full-access` and whether it came from default, CLI flag, env, or config. **Doctor visibility is done; startup trace visibility remains a possible follow-up.**
 
 ### P1: Bash remains a high-risk capability despite improved path scanning
 
@@ -562,8 +585,8 @@ Doctor is the right operator surface. It already solves similar visibility probl
 
 Add doctor checks for:
 
-- Isolation mode and source: default/env/CLI/config/project/managed.
-- Network enabled/disabled and source.
+- Isolation mode and source: default/env/CLI/config/project/managed. **Partially done: doctor reports default/env/config.**
+- Network enabled/disabled and source. **Done in doctor.**
 - Autonomous mode and unknown-permission behavior.
 - Server exposure: hostname, auth enabled, CORS allowlist.
 - Remote config sources and trust class.
@@ -585,7 +608,7 @@ These should be preserved while fixing the risks above:
 
 1. Fix autonomous unknown-permission enforcement so `SafetyPolicy` and `Permission.ask()` cannot disagree by default. **Done in follow-up implementation.**
 2. Add shared non-loopback password enforcement to workspace server listen paths. **Done in follow-up implementation.**
-3. Decide whether runtime isolation should default to `workspace-write`; if not, make `full-access` provenance explicit in doctor/startup diagnostics.
+3. Decide whether runtime isolation should default to `workspace-write`; if not, make `full-access` provenance explicit in doctor/startup diagnostics. **Doctor provenance done; startup diagnostics/default-change decision deferred.**
 4. Narrow isolation escalation so network bypass does not construct a full-access override.
 5. Clarify `/session/:sessionID/message` as final-result JSON or split a true progressive stream endpoint.
 6. Add command-scoped CLI shutdown policy instead of unconditional forced exit.

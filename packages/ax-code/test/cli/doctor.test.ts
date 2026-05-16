@@ -1,7 +1,12 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { mkdir } from "fs/promises"
 import path from "path"
-import { doctorProjectContext, getDuplicateProjectIdentityCheck, getServerExposureCheck } from "../../src/cli/cmd/doctor"
+import {
+  doctorProjectContext,
+  getDuplicateProjectIdentityCheck,
+  getIsolationPolicyCheck,
+  getServerExposureCheck,
+} from "../../src/cli/cmd/doctor"
 import { ProjectIdentity } from "../../src/project/project-identity"
 import { ProjectTable } from "../../src/project/project.sql"
 import { Database } from "../../src/storage/db"
@@ -89,6 +94,32 @@ describe("cli doctor", () => {
       name: "Server exposure",
       status: "ok",
       detail: expect.stringContaining("auth configured"),
+    })
+  })
+
+  test("reports effective isolation policy and provenance", () => {
+    expect(getIsolationPolicyCheck({})).toMatchObject({
+      name: "Isolation policy",
+      status: "warn",
+      detail: expect.stringContaining("mode full-access (default)"),
+    })
+
+    expect(getIsolationPolicyCheck({ config: { mode: "workspace-write", network: false } })).toMatchObject({
+      name: "Isolation policy",
+      status: "ok",
+      detail: "mode workspace-write (config); network disabled (config)",
+    })
+
+    expect(
+      getIsolationPolicyCheck({
+        config: { mode: "read-only", network: false },
+        envMode: "full-access",
+        envNetwork: true,
+      }),
+    ).toMatchObject({
+      name: "Isolation policy",
+      status: "ok",
+      detail: "mode full-access (env); network enabled (full-access)",
     })
   })
 })
