@@ -38,8 +38,16 @@ function assertStaticRedirectTarget(target: string) {
   }
 }
 
+function stripShellQuotes(value: string) {
+  return value.replace(/^"(.*)"$|^'(.*)'$/s, "$1$2")
+}
+
 function hasDynamicRedirection(command: string) {
   return /(?:^|[\s&;])\d*>>?\s*(?:\$\(|\$\{|`)/.test(command)
+}
+
+function absolutePathLiterals(value: string) {
+  return Array.from(value.matchAll(/["'](\/[^"']+)["']/g), (match) => match[1]).filter(Boolean)
 }
 
 // Track detached process groups so we can clean them up if the parent
@@ -141,6 +149,92 @@ export const BashTool = Tool.define("bash", async () => {
       const always = new Set<string>()
       let foundCommands = false
 
+      const recordResolvedPath = async (raw: string) => {
+        const arg = stripShellQuotes(raw)
+        if (!arg || hasDynamicShellExpansion(arg)) return
+        const resolved = await fs.realpath(path.resolve(cwd, arg)).catch(() => path.resolve(cwd, arg))
+        const normalized =
+          process.platform === "win32" ? Filesystem.windowsPath(resolved).replace(/\//g, "\\") : resolved
+        resolvedPaths.add(normalized)
+        if (!Instance.containsPath(normalized)) {
+          const dir = (await Filesystem.isDir(normalized)) ? normalized : path.dirname(normalized)
+          directories.add(dir)
+        }
+      }
+
+      const recordInnerCommandPaths = async (parts: string[]) => {
+        const name = parts[0]
+        if (!name) return
+        const args = parts.slice(1)
+
+        if (["cd", "rm", "cp", "mv", "mkdir", "touch", "chmod", "chown", "cat", "tee", "install"].includes(name)) {
+          for (const arg of args) {
+            if (arg.startsWith("-") || (name === "chmod" && arg.startsWith("+"))) continue
+            await recordResolvedPath(arg)
+          }
+          return
+        }
+
+        if (["curl", "wget"].includes(name)) {
+          for (let i = 0; i < args.length; i++) {
+            const arg = args[i]
+            if (!arg) continue
+            if (arg === "-o" || arg === "--output" || arg === "--output-document") {
+              const next = args[i + 1]
+              if (next) await recordResolvedPath(next)
+              i++
+              continue
+            }
+            const inline = arg.match(/^--(?:output|output-document)=(.+)$/)?.[1]
+            if (inline) await recordResolvedPath(inline)
+          }
+          return
+        }
+
+        if (name === "dd") {
+          for (const arg of args) {
+            const output = arg.match(/^of=(.+)$/)?.[1]
+            if (output) await recordResolvedPath(output)
+          }
+          return
+        }
+
+        if (["rsync", "scp"].includes(name)) {
+          for (const arg of args) {
+            if (arg.startsWith("-") || /^[^/][^:]*:/.test(arg)) continue
+            await recordResolvedPath(arg)
+          }
+          return
+        }
+
+        if (["python", "python3", "node", "ruby", "perl"].includes(name)) {
+          for (let i = 0; i < args.length; i++) {
+            const arg = args[i]
+            if (!arg) continue
+            if (arg === "-c" || arg === "-e") {
+              const code = args[i + 1]
+              if (code) {
+                for (const literal of absolutePathLiterals(stripShellQuotes(code))) {
+                  await recordResolvedPath(literal)
+                }
+              }
+              i++
+              continue
+            }
+            if (arg.startsWith("-")) continue
+            await recordResolvedPath(arg)
+            break
+          }
+          return
+        }
+
+        for (const arg of args) {
+          if (arg.startsWith("-")) continue
+          const unquoted = stripShellQuotes(arg)
+          if (path.isAbsolute(unquoted)) await recordResolvedPath(unquoted)
+        }
+      }
+
       for (const node of tree.rootNode.descendantsOfType("command")) {
         if (!node) continue
 
@@ -178,11 +272,11 @@ export const BashTool = Tool.define("bash", async () => {
             const cIdx = command.indexOf("-c")
             if (cIdx >= 0 && cIdx + 1 < command.length) {
               // Strip surrounding quotes that tree-sitter may preserve
-              innerCmd = command[cIdx + 1].replace(/^"(.*)"$|^'(.*)'$/s, "$1$2")
+              innerCmd = stripShellQuotes(command[cIdx + 1])
             }
           } else if (isEval) {
             // eval concatenates all its arguments into a single command
-            const evalArgs = command.slice(1).map((a) => a.replace(/^"(.*)"$|^'(.*)'$/s, "$1$2"))
+            const evalArgs = command.slice(1).map(stripShellQuotes)
             if (evalArgs.length > 0) innerCmd = evalArgs.join(" ")
           }
 
@@ -206,25 +300,7 @@ export const BashTool = Tool.define("bash", async () => {
                     innerParts.push(c.text)
                   }
                 }
-                if (["cd", "rm", "cp", "mv", "mkdir", "touch", "chmod", "chown", "cat"].includes(innerParts[0])) {
-                  for (const innerArg of innerParts.slice(1)) {
-                    if (innerArg.startsWith("-") || (innerParts[0] === "chmod" && innerArg.startsWith("+"))) continue
-                    // Skip args with command substitution — can't resolve
-                    if (hasDynamicShellExpansion(innerArg)) continue
-                    const resolved = await fs
-                      .realpath(path.resolve(cwd, innerArg))
-                      .catch(() => path.resolve(cwd, innerArg))
-                    if (resolved) {
-                      const normalized =
-                        process.platform === "win32" ? Filesystem.windowsPath(resolved).replace(/\//g, "\\") : resolved
-                      resolvedPaths.add(normalized)
-                      if (!Instance.containsPath(normalized)) {
-                        const dir = (await Filesystem.isDir(normalized)) ? normalized : path.dirname(normalized)
-                        directories.add(dir)
-                      }
-                    }
-                  }
-                }
+                await recordInnerCommandPaths(innerParts)
               }
               // Inner-tree redirect targets: `bash -c "echo > /etc/x"` and
               // `eval "echo >> /etc/x"` would otherwise bypass the outer
@@ -237,7 +313,7 @@ export const BashTool = Tool.define("bash", async () => {
                   const c = innerRedirect.child(j)
                   if (!c) continue
                   if (!["word", "string", "raw_string", "concatenation"].includes(c.type)) continue
-                  const target = c.text.replace(/^"(.*)"$|^'(.*)'$/s, "$1$2")
+                  const target = stripShellQuotes(c.text)
                   if (!target || /^&/.test(target)) continue
                   assertStaticRedirectTarget(target)
                   const resolved = await fs.realpath(path.resolve(cwd, target)).catch(() => path.resolve(cwd, target))
@@ -309,7 +385,7 @@ export const BashTool = Tool.define("bash", async () => {
           const child = redirect.child(i)
           if (!child) continue
           if (!["word", "string", "raw_string", "concatenation"].includes(child.type)) continue
-          const target = child.text.replace(/^"(.*)"$|^'(.*)'$/s, "$1$2")
+          const target = stripShellQuotes(child.text)
           // Skip command substitution / fd dup (&1 etc.) — opaque or non-path.
           if (!target || /^&/.test(target)) continue
           assertStaticRedirectTarget(target)

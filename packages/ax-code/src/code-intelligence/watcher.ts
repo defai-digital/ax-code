@@ -97,7 +97,11 @@ export namespace CodeGraphWatcher {
         return
       }
       log.info("reindexing file", { file, event })
-      await CodeGraphBuilder.indexFile(state.projectID, file)
+      await CodeGraphBuilder.indexFiles(state.projectID, [file], {
+        concurrency: 1,
+        lock: "none",
+        pruneOrphans: false,
+      })
     })
     runNext(state)
   }

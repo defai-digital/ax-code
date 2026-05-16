@@ -521,6 +521,60 @@ describe("tool.bash isolation", () => {
     })
   })
 
+  test("rejects curl output target inside `bash -c` inner command", async () => {
+    await using outerTmp = await tmpdir()
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const bash = await BashTool.init()
+        const isolation = Isolation.resolve({ mode: "workspace-write", network: false }, tmp.path, tmp.path)
+        const testCtx = {
+          ...ctx,
+          ask: async () => {},
+          extra: { isolation },
+        }
+        const outsideFile = path.join(outerTmp.path, "payload.txt")
+        await expect(
+          bash.execute(
+            {
+              command: `bash -c "curl -o ${outsideFile} https://example.invalid/payload"`,
+              description: "Attempt curl outside workspace",
+            },
+            testCtx,
+          ),
+        ).rejects.toThrow(/outside workspace boundary|protected/)
+      },
+    })
+  })
+
+  test("rejects interpreter inline absolute path inside `eval`", async () => {
+    await using outerTmp = await tmpdir()
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const bash = await BashTool.init()
+        const isolation = Isolation.resolve({ mode: "workspace-write", network: false }, tmp.path, tmp.path)
+        const testCtx = {
+          ...ctx,
+          ask: async () => {},
+          extra: { isolation },
+        }
+        const outsideFile = path.join(outerTmp.path, "inline.txt")
+        await expect(
+          bash.execute(
+            {
+              command: `eval "python3 -c 'open(\\\"${outsideFile}\\\", \\\"w\\\").write(\\\"x\\\")'"`,
+              description: "Attempt python outside workspace",
+            },
+            testCtx,
+          ),
+        ).rejects.toThrow(/outside workspace boundary|protected/)
+      },
+    })
+  })
+
   test("rejects dynamic command substitution redirection target", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({

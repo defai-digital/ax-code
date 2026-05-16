@@ -32,6 +32,7 @@ export namespace Snapshot {
 
   const log = Log.create({ service: "snapshot" })
   const prune = "7.days"
+  const pruneMs = 7 * 24 * 60 * 60 * 1000
   const maxFileSize = 1024 * 1024
   const core = ["-c", "core.longpaths=true", "-c", "core.symlinks=true"]
   const cfg = ["-c", "core.autocrlf=false", ...core]
@@ -43,6 +44,7 @@ export namespace Snapshot {
     gitdir: string
     vcs: Shape["project"]["vcs"]
     prevHash?: string
+    operation?: Promise<unknown>
     cleanupDelay?: ReturnType<typeof setTimeout>
     cleanupInterval?: ReturnType<typeof setInterval>
   }
@@ -53,6 +55,15 @@ export namespace Snapshot {
 
   function snapshotRef(hash: string) {
     return `refs/snapshots/${hash}`
+  }
+
+  function snapshotRefPath(current: State, ref: string) {
+    if (!ref.startsWith("refs/snapshots/")) return
+    return path.join(current.gitdir, ...ref.split("/"))
+  }
+
+  function snapshotMetaPath(current: State, hash: string) {
+    return path.join(current.gitdir, "ax-code", "snapshots", hash)
   }
 
   function decode(file: string) {
@@ -102,10 +113,10 @@ export namespace Snapshot {
 
       const scheduleCleanup = () => {
         next.cleanupDelay = setTimeout(() => {
-          void cleanupFor(next)
+          void withOperationLock(next, () => cleanupFor(next))
           next.cleanupInterval = setInterval(
             () => {
-              void cleanupFor(next)
+              void withOperationLock(next, () => cleanupFor(next))
             },
             60 * 60 * 1000,
           )
@@ -137,6 +148,36 @@ export namespace Snapshot {
 
   async function remove(file: string) {
     await fs.rm(file, { recursive: true, force: true }).catch(() => undefined)
+  }
+
+  async function writeSnapshotMeta(current: State, hash: string) {
+    const file = snapshotMetaPath(current, hash)
+    await fs.mkdir(path.dirname(file), { recursive: true })
+    await Filesystem.write(file, `${Date.now()}\n`)
+  }
+
+  async function removeSnapshotMeta(current: State, hash: string) {
+    await fs.rm(snapshotMetaPath(current, hash), { force: true }).catch(() => undefined)
+  }
+
+  async function snapshotTimestamp(current: State, ref: string, hash: string) {
+    const meta = await fs.stat(snapshotMetaPath(current, hash)).catch(() => undefined)
+    if (meta) return meta.mtimeMs
+    const looseRef = snapshotRefPath(current, ref)
+    const loose = looseRef ? await fs.stat(looseRef).catch(() => undefined) : undefined
+    if (loose) return loose.mtimeMs
+    return (await fs.stat(path.join(current.gitdir, "packed-refs")).catch(() => undefined))?.mtimeMs
+  }
+
+  async function withOperationLock<T>(current: State, fn: () => Promise<T>): Promise<T> {
+    const prev = current.operation ?? Promise.resolve()
+    const next = prev.then(fn, fn)
+    const sentinel = next.catch(() => undefined)
+    current.operation = sentinel
+    sentinel.then(() => {
+      if (current.operation === sentinel) current.operation = undefined
+    })
+    return next
   }
 
   async function size(current: State, hash: string, file: string) {
@@ -198,6 +239,41 @@ export namespace Snapshot {
   async function cleanupFor(current: State) {
     if (!(await enabled(current))) return
     if (!(await exists(current.gitdir))) return
+    const cutoff = Date.now() - pruneMs
+    const refs = await runGit(
+      [...core, ...args(current, ["for-each-ref", "--format=%(refname) %(objectname)", "refs/snapshots"])],
+      {
+        cwd: current.directory,
+      },
+    )
+    if (refs.code !== 0) {
+      log.warn("failed to list snapshot refs", {
+        exitCode: refs.code,
+        stderr: refs.stderr,
+      })
+    } else {
+      let deletedRefs = 0
+      for (const line of refs.text.trim().split("\n")) {
+        if (!line) continue
+        const [ref, hash] = line.trim().split(/\s+/, 2)
+        if (!ref || !hash) continue
+        if (hash === current.prevHash) continue
+        const timestamp = await snapshotTimestamp(current, ref, hash)
+        if (!timestamp || timestamp >= cutoff) continue
+        const deleted = await runGit([...core, ...args(current, ["update-ref", "-d", ref])], { cwd: current.directory })
+        if (deleted.code !== 0) {
+          log.warn("failed to delete expired snapshot ref", {
+            ref,
+            exitCode: deleted.code,
+            stderr: deleted.stderr,
+          })
+          continue
+        }
+        await removeSnapshotMeta(current, hash)
+        deletedRefs++
+      }
+      if (deletedRefs > 0) log.info("deleted expired snapshot refs", { deletedRefs, prune })
+    }
     const result = await runGit(args(current, ["gc", `--prune=${prune}`]), { cwd: current.directory })
     if (result.code !== 0) {
       log.warn("cleanup failed", {
@@ -230,163 +306,175 @@ export namespace Snapshot {
   }
 
   export async function cleanup() {
-    await cleanupFor(await state())
+    const current = await state()
+    await withOperationLock(current, () => cleanupFor(current))
   }
 
   export async function track() {
     const current = await state()
-    if (!(await enabled(current))) return
+    return withOperationLock(current, async () => {
+      if (!(await enabled(current))) return
 
-    await ensureRepo(current)
+      await ensureRepo(current)
 
-    if (current.prevHash) {
-      const status = await runGit([...cfg, ...args(current, ["status", "--porcelain"])], { cwd: current.directory })
-      if (status.text.trim() === "") {
-        log.info("tracking (unchanged)", { hash: current.prevHash })
+      if (current.prevHash) {
+        const status = await runGit([...cfg, ...args(current, ["status", "--porcelain"])], { cwd: current.directory })
+        if (status.text.trim() === "") {
+          log.info("tracking (unchanged)", { hash: current.prevHash })
+          return current.prevHash
+        }
+      }
+
+      await add(current)
+      const result = await runGit(args(current, ["write-tree"]), { cwd: current.directory })
+      if (result.code !== 0) {
+        log.error("failed to write snapshot tree", {
+          cwd: current.directory,
+          exitCode: result.code,
+          stderr: result.stderr,
+        })
         return current.prevHash
       }
-    }
-
-    await add(current)
-    const result = await runGit(args(current, ["write-tree"]), { cwd: current.directory })
-    if (result.code !== 0) {
-      log.error("failed to write snapshot tree", {
+      const hash = result.text.trim()
+      if (!valid(hash)) {
+        log.error("failed to validate snapshot tree hash", { hash })
+        return current.prevHash
+      }
+      const updateRef = await runGit([...core, ...args(current, ["update-ref", snapshotRef(hash), hash])], {
         cwd: current.directory,
-        exitCode: result.code,
-        stderr: result.stderr,
       })
-      return current.prevHash
-    }
-    const hash = result.text.trim()
-    if (!valid(hash)) {
-      log.error("failed to validate snapshot tree hash", { hash })
-      return current.prevHash
-    }
-    const updateRef = await runGit([...core, ...args(current, ["update-ref", snapshotRef(hash), hash])], {
-      cwd: current.directory,
+      if (updateRef.code !== 0) {
+        log.error("failed to update snapshot ref", {
+          hash,
+          gitdir: current.gitdir,
+          exitCode: updateRef.code,
+          stderr: updateRef.stderr,
+        })
+        return current.prevHash
+      }
+      await writeSnapshotMeta(current, hash)
+      current.prevHash = hash
+      log.info("tracking", { hash, cwd: current.directory, git: current.gitdir })
+      return hash
     })
-    if (updateRef.code !== 0) {
-      log.error("failed to update snapshot ref", {
-        hash,
-        gitdir: current.gitdir,
-        exitCode: updateRef.code,
-        stderr: updateRef.stderr,
-      })
-      return current.prevHash
-    }
-    current.prevHash = hash
-    log.info("tracking", { hash, cwd: current.directory, git: current.gitdir })
-    return hash
   }
 
   export async function patch(hash: string) {
     const current = await state()
-    if (!valid(hash)) {
-      log.warn("failed to get diff", { hash, error: "invalid snapshot hash" })
-      return { hash, files: [] }
-    }
-    await add(current)
-    const result = await runGit(
-      [...quote, ...args(current, ["diff", "--no-ext-diff", "--name-only", hash, "--", "."])],
-      {
-        cwd: current.directory,
-      },
-    )
-    if (result.code !== 0) {
-      log.warn("failed to get diff", { hash, exitCode: result.code })
-      return { hash, files: [] }
-    }
-    return {
-      hash,
-      files: result.text
-        .trim()
-        .split("\n")
-        .map((item) => item.trim())
-        .filter(Boolean)
-        .map((item) => path.join(current.worktree, item).replaceAll("\\", "/")),
-    }
+    return withOperationLock(current, async () => {
+      if (!valid(hash)) {
+        log.warn("failed to get diff", { hash, error: "invalid snapshot hash" })
+        return { hash, files: [] }
+      }
+      await add(current)
+      const result = await runGit(
+        [...quote, ...args(current, ["diff", "--no-ext-diff", "--name-only", hash, "--", "."])],
+        {
+          cwd: current.directory,
+        },
+      )
+      if (result.code !== 0) {
+        log.warn("failed to get diff", { hash, exitCode: result.code })
+        return { hash, files: [] }
+      }
+      return {
+        hash,
+        files: result.text
+          .trim()
+          .split("\n")
+          .map((item) => item.trim())
+          .filter(Boolean)
+          .map((item) => path.join(current.worktree, item).replaceAll("\\", "/")),
+      }
+    })
   }
 
   export async function restore(snapshot: string) {
     const current = await state()
-    if (!valid(snapshot)) {
+    return withOperationLock(current, async () => {
+      if (!valid(snapshot)) {
+        log.error("failed to restore snapshot", {
+          snapshot,
+          stderr: "invalid snapshot hash",
+        })
+        return
+      }
+      log.info("restore", { commit: snapshot })
+      const result = await runGit([...core, ...args(current, ["read-tree", snapshot])], { cwd: current.worktree })
+      if (result.code === 0) {
+        const checkout = await runGit([...core, ...args(current, ["checkout-index", "-a", "-f"])], {
+          cwd: current.worktree,
+        })
+        if (checkout.code === 0) return
+        log.error("failed to restore snapshot", {
+          snapshot,
+          exitCode: checkout.code,
+          stderr: checkout.stderr,
+        })
+        throw new Error(`Snapshot restore failed: checkout-index exited with code ${checkout.code}`)
+      }
       log.error("failed to restore snapshot", {
         snapshot,
-        stderr: "invalid snapshot hash",
+        exitCode: result.code,
+        stderr: result.stderr,
       })
-      return
-    }
-    log.info("restore", { commit: snapshot })
-    const result = await runGit([...core, ...args(current, ["read-tree", snapshot])], { cwd: current.worktree })
-    if (result.code === 0) {
-      const checkout = await runGit([...core, ...args(current, ["checkout-index", "-a", "-f"])], {
-        cwd: current.worktree,
-      })
-      if (checkout.code === 0) return
-      log.error("failed to restore snapshot", {
-        snapshot,
-        exitCode: checkout.code,
-        stderr: checkout.stderr,
-      })
-      throw new Error(`Snapshot restore failed: checkout-index exited with code ${checkout.code}`)
-    }
-    log.error("failed to restore snapshot", {
-      snapshot,
-      exitCode: result.code,
-      stderr: result.stderr,
     })
   }
 
   export async function revert(patches: Patch[]) {
     const current = await state()
-    const seen = new Set<string>()
-    for (const item of patches) {
-      if (!valid(item.hash)) continue
-      for (const file of item.files) {
-        if (seen.has(file)) continue
-        seen.add(file)
-        log.info("reverting", { file, hash: item.hash })
-        const rel = path.relative(current.worktree, file)
-        const result = await runGit([...core, ...args(current, ["checkout", item.hash, "--", rel])], {
-          cwd: current.worktree,
-        })
-        if (result.code !== 0) {
-          const tree = await runGit([...core, ...args(current, ["ls-tree", item.hash, "--", rel])], {
+    return withOperationLock(current, async () => {
+      const seen = new Set<string>()
+      for (const item of patches) {
+        if (!valid(item.hash)) continue
+        for (const file of item.files) {
+          if (seen.has(file)) continue
+          seen.add(file)
+          log.info("reverting", { file, hash: item.hash })
+          const rel = path.relative(current.worktree, file)
+          const result = await runGit([...core, ...args(current, ["checkout", item.hash, "--", rel])], {
             cwd: current.worktree,
           })
-          if (tree.code === 0 && tree.text.trim()) {
-            log.info("file existed in snapshot but checkout failed, keeping", { file })
-          } else {
-            log.info("file did not exist in snapshot, deleting", { file })
-            await remove(file)
+          if (result.code !== 0) {
+            const tree = await runGit([...core, ...args(current, ["ls-tree", item.hash, "--", rel])], {
+              cwd: current.worktree,
+            })
+            if (tree.code === 0 && tree.text.trim()) {
+              log.info("file existed in snapshot but checkout failed, keeping", { file })
+            } else {
+              log.info("file did not exist in snapshot, deleting", { file })
+              await remove(file)
+            }
           }
         }
       }
-    }
+    })
   }
 
   export async function diff(hash: string) {
     const current = await state()
-    if (!valid(hash)) {
-      log.warn("failed to get diff", {
-        hash,
-        stderr: "invalid snapshot hash",
+    return withOperationLock(current, async () => {
+      if (!valid(hash)) {
+        log.warn("failed to get diff", {
+          hash,
+          stderr: "invalid snapshot hash",
+        })
+        return ""
+      }
+      await add(current)
+      const result = await runGit([...quote, ...args(current, ["diff", "--no-ext-diff", hash, "--", "."])], {
+        cwd: current.worktree,
       })
-      return ""
-    }
-    await add(current)
-    const result = await runGit([...quote, ...args(current, ["diff", "--no-ext-diff", hash, "--", "."])], {
-      cwd: current.worktree,
+      if (result.code !== 0) {
+        log.warn("failed to get diff", {
+          hash,
+          exitCode: result.code,
+          stderr: result.stderr,
+        })
+        return ""
+      }
+      return result.text.trim()
     })
-    if (result.code !== 0) {
-      log.warn("failed to get diff", {
-        hash,
-        exitCode: result.code,
-        stderr: result.stderr,
-      })
-      return ""
-    }
-    return result.text.trim()
   }
 
   export async function diffFull(from: string, to: string) {

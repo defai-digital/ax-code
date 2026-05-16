@@ -288,6 +288,35 @@ test("track keeps snapshot trees reachable through refs", async () => {
   })
 })
 
+test("cleanup deletes expired snapshot refs before pruning", async () => {
+  await using tmp = await bootstrap()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const first = await Snapshot.track()
+      expect(first).toBeTruthy()
+
+      await Filesystem.write(`${tmp.path}/a.txt`, "changed")
+      const second = await Snapshot.track()
+      expect(second).toBeTruthy()
+      expect(second).not.toBe(first)
+
+      const gitdir = path.join(Global.Path.data, "snapshot", Instance.project.id)
+      await $`git --git-dir=${gitdir} pack-refs --all`.quiet()
+      const firstRefPath = path.join(gitdir, "ax-code", "snapshots", first!)
+      const expired = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000)
+      await fs.utimes(firstRefPath, expired, expired)
+
+      await Snapshot.cleanup()
+
+      const expiredRef = await $`git --git-dir=${gitdir} show-ref --verify refs/snapshots/${first!}`.quiet().nothrow()
+      expect(expiredRef.exitCode).not.toBe(0)
+      const currentRef = await $`git --git-dir=${gitdir} show-ref --verify refs/snapshots/${second!}`.quiet().nothrow()
+      expect(currentRef.exitCode).toBe(0)
+    },
+  })
+})
+
 test("revert non-existent file", async () => {
   await using tmp = await bootstrap()
   await Instance.provide({

@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, spyOn, test } from "bun:test"
 import { tmpdir } from "../fixture/fixture"
 import { Instance } from "../../src/project/instance"
 import { Log } from "../../src/util/log"
@@ -6,6 +6,7 @@ import { Bus } from "../../src/bus"
 import { FileWatcher } from "../../src/file/watcher"
 import { CodeGraphWatcher } from "../../src/code-intelligence/watcher"
 import { CodeIntelligence } from "../../src/code-intelligence"
+import { CodeGraphBuilder } from "../../src/code-intelligence/builder"
 import { CodeGraphQuery } from "../../src/code-intelligence/query"
 import { CodeNodeID, CodeFileID } from "../../src/code-intelligence/id"
 import type { ProjectID } from "../../src/project/schema"
@@ -170,6 +171,57 @@ describe("CodeGraphWatcher.start / stop", () => {
 
         CodeGraphWatcher.stop(projectID)
         CodeIntelligence.__clearProject(projectID)
+      },
+    })
+  })
+
+  test("change events use the batch index path without a cross-process lock", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        CodeIntelligence.__clearProject(projectID)
+        const file = `${tmp.path}/changed.ts`
+        await Bun.write(file, "export const changed = 1\n")
+        const indexFiles = spyOn(CodeGraphBuilder, "indexFiles").mockResolvedValue({
+          nodes: 0,
+          edges: 0,
+          files: 0,
+          unchanged: 1,
+          skipped: 0,
+          failed: 0,
+          pruned: { files: 0, nodes: 0, edges: 0 },
+          timings: {
+            readFile: 0,
+            lspTouch: 0,
+            lspDocumentSymbol: 0,
+            symbolWalk: 0,
+            lspReferences: 0,
+            edgeResolve: 0,
+            dbTransaction: 0,
+            total: 0,
+          },
+        })
+
+        try {
+          CodeGraphWatcher.start(projectID)
+          await Bus.publish(FileWatcher.Event.Updated, { file, event: "change" })
+          await CodeGraphWatcher.__drainForTests(projectID)
+
+          expect(indexFiles).toHaveBeenCalledTimes(1)
+          expect(indexFiles.mock.calls[0]?.[0]).toBe(projectID)
+          expect(indexFiles.mock.calls[0]?.[1]).toEqual([file])
+          expect(indexFiles.mock.calls[0]?.[2]).toMatchObject({
+            concurrency: 1,
+            lock: "none",
+            pruneOrphans: false,
+          })
+        } finally {
+          CodeGraphWatcher.stop(projectID)
+          indexFiles.mockRestore()
+          CodeIntelligence.__clearProject(projectID)
+        }
       },
     })
   })
