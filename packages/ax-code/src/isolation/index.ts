@@ -21,6 +21,8 @@ export namespace Isolation {
     bypass?: string[]
   }
 
+  export const DEFAULT_MODE: Mode = "workspace-write"
+
   function resolvePath(filepath: string) {
     return Filesystem.resolve(filepath)
   }
@@ -43,7 +45,7 @@ export namespace Isolation {
   }
 
   export function resolve(config: IsolationConfig | undefined, directory: string, worktree = directory): State {
-    const mode = Flag.AX_CODE_ISOLATION_MODE ?? config?.mode ?? "full-access"
+    const mode = Flag.AX_CODE_ISOLATION_MODE ?? config?.mode ?? DEFAULT_MODE
     const network = Flag.AX_CODE_ISOLATION_NETWORK ?? config?.network
     const protectedPaths = roots(directory, worktree).flatMap((root) =>
       DEFAULT_PROTECTED.map((item) => path.resolve(root, item)),

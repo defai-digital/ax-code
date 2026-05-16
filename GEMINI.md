@@ -28,19 +28,19 @@ The project is a **pnpm workspace** monorepo:
 
 ### Prerequisites
 
-- **Bun**: v1.3.13+
-- **pnpm**: v9.15.9+
+- **Bun**: ^1.3.14
+- **pnpm**: v10.33.4+
 - **Rust/Cargo**: For native component builds.
 
 ### Key Commands
 
 - **Install Dependencies**: `pnpm install`
-- **Setup Local CLI**: `pnpm run setup:cli` (Links the `ax-code` command to your local source).
+- **Setup Local CLI**: `pnpm run setup:cli` (Installs the local bundled `ax-code` launcher; use `-- --source` for a checkout-bound Bun source launcher).
 - **Build Native Components**: `pnpm run build:native`
 - **Run in Development**: `pnpm dev` or `bun packages/ax-code/src/index.ts`
 - **Typecheck**: `pnpm run typecheck`
 - **Run Tests**:
-  - Root: `pnpm -r test` (though root `package.json` suggests running from packages).
+  - Root: do not run `pnpm test`; the root script intentionally fails.
   - Core: `cd packages/ax-code && bun test`
   - Grouped tests: `bun run test:unit`, `bun run test:e2e`, `bun run test:deterministic`.
 

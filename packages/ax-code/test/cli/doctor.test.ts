@@ -100,8 +100,8 @@ describe("cli doctor", () => {
   test("reports effective isolation policy and provenance", () => {
     expect(getIsolationPolicyCheck({})).toMatchObject({
       name: "Isolation policy",
-      status: "warn",
-      detail: expect.stringContaining("mode full-access (default)"),
+      status: "ok",
+      detail: "mode workspace-write (default); network disabled (default)",
     })
 
     expect(getIsolationPolicyCheck({ config: { mode: "workspace-write", network: false } })).toMatchObject({

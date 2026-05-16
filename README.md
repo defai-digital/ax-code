@@ -141,7 +141,7 @@ AX Code is a strong fit when you need one or more of these:
 1. Connect a provider with environment variables or `ax-code providers login`.
 2. Launch `ax-code` and use `/connect` if you want to switch models from the TUI.
 3. Run `ax-code init` so `AGENTS.md` captures project-specific instructions and conventions.
-4. Turn on sandboxing with `--sandbox workspace-write` or `/sandbox` when you want bounded execution.
+4. Keep the default sandbox on for bounded execution, or use `/sandbox` / `--sandbox full-access` only when you intentionally need unrestricted access.
 5. Run `ax-code index` on larger repos for faster semantic and code-intelligence workflows.
 
 ## Documentation
@@ -169,7 +169,7 @@ ax-code doctor
 
 ## Security and Operations
 
-AX Code includes configurable isolation modes, protected paths for `.git` and `.ax-code` in sandboxed runs, encrypted provider and MCP credentials at rest, and localhost-only server defaults. See [SECURITY.md](SECURITY.md) for the threat model and [docs/sandbox.md](docs/sandbox.md) for isolation behavior and configuration.
+AX Code starts with autonomous mode on and runtime isolation in `workspace-write` by default: writes are confined to the workspace, network is disabled unless enabled explicitly, and `.git` / `.ax-code` stay protected. Use `/sandbox`, `--sandbox full-access`, `AX_CODE_ISOLATION_MODE`, or project config only when you intentionally need a different boundary. Provider and MCP credentials are encrypted at rest, and server mode is localhost-only by default. See [SECURITY.md](SECURITY.md) for the threat model and [docs/sandbox.md](docs/sandbox.md) for isolation behavior and configuration.
 
 ## Project Notes
 

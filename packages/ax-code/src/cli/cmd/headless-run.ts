@@ -63,7 +63,7 @@ export const HeadlessRunCommand = cmd({
       .option("autonomous", {
         describe: "auto-answer permission/question prompts through the headless effect policy",
         type: "boolean",
-        default: false,
+        default: true,
       })
       .option("idleTimeoutMs", {
         alias: ["idle-timeout-ms"],

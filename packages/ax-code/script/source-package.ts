@@ -1,4 +1,11 @@
-export const DEFAULT_BUN_DEPENDENCY_RANGE = "^1.3.12"
+import rootPkg from "../../../package.json"
+
+const rootBunDependencyRange = (rootPkg as { engines?: { bun?: string } }).engines?.bun
+if (!rootBunDependencyRange) {
+  throw new Error("root package.json must declare engines.bun for source package runtime alignment")
+}
+
+export const DEFAULT_BUN_DEPENDENCY_RANGE = rootBunDependencyRange
 
 export const OPENTUI_NATIVE_PACKAGES = [
   "@opentui/core-darwin-arm64",
