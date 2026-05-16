@@ -4,6 +4,7 @@ import { Instance } from "../../src/project/instance"
 import { Permission } from "../../src/permission"
 import { Provider } from "../../src/provider/provider"
 import { Session } from "../../src/session"
+import type { SessionID } from "../../src/session/schema"
 import { LLM } from "../../src/session/llm"
 import { SessionPrompt } from "../../src/session/prompt"
 import { SessionStatus } from "../../src/session/status"
@@ -303,7 +304,7 @@ describe("session.prompt flow", () => {
     process.env["AX_CODE_AUTONOMOUS"] = "true"
 
     try {
-      let sessionID: string | undefined
+      let sessionID: SessionID | undefined
       let call = 0
       modelSpy = spyOn(Provider, "getModel").mockResolvedValue(model)
       summarySpy = spyOn(SessionSummary, "summarize").mockResolvedValue()
@@ -394,7 +395,7 @@ describe("session.prompt flow", () => {
     process.env["AX_CODE_AUTONOMOUS"] = "true"
 
     try {
-      let sessionID: string | undefined
+      let sessionID: SessionID | undefined
       let call = 0
       modelSpy = spyOn(Provider, "getModel").mockResolvedValue(model)
       summarySpy = spyOn(SessionSummary, "summarize").mockResolvedValue()

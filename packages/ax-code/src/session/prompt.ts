@@ -657,11 +657,13 @@ export namespace SessionPrompt {
       event,
       logExtras = {},
       resetTodoDeadlineSignature = false,
+      resetTodoProgressTracking = false,
     }: {
       text: string
       event: string
       logExtras?: Record<string, unknown>
       resetTodoDeadlineSignature?: boolean
+      resetTodoProgressTracking?: boolean
     }) {
       continuations += 1
       step = 0
@@ -671,6 +673,10 @@ export namespace SessionPrompt {
       cachedModel = undefined
       if (resetTodoDeadlineSignature) {
         lastTodoDeadlineSignature = undefined
+      }
+      if (resetTodoProgressTracking) {
+        lastPendingTodoSignature = undefined
+        stagnantTodoRetries = 0
       }
 
       log.info(event, {
@@ -728,6 +734,7 @@ export namespace SessionPrompt {
         if (autonomous && continuations < maxContinuations) {
           await continueAutonomousLoop({
             event: "autonomous auto-continue",
+            resetTodoProgressTracking: true,
             text: `Continue from where you left off. You have used ${GLOBAL_STEP_LIMIT} steps. This is auto-continuation ${continuations + 1}/${maxContinuations}. Prioritize completing the most important remaining work. Avoid over-engineering: prefer the simplest common-practice change that solves the task, avoid new abstractions unless there are 3+ concrete use cases, and verify before expanding scope.`,
           })
           continue
@@ -931,6 +938,7 @@ export namespace SessionPrompt {
         await continueAutonomousLoop({
           event: "autonomous agent step-limit auto-continue",
           resetTodoDeadlineSignature: true,
+          resetTodoProgressTracking: true,
           text:
             `Autonomous mode reached the ${agent.name} agent step limit (${maxSteps} steps). ` +
             `Continue from where you left off with the same agent. Do not summarize the task as complete ` +

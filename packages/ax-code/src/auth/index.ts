@@ -66,7 +66,7 @@ function makeAuthLockDisposable(ownToken: string): Disposable {
       disposed = true
       try {
         const text = readFileSync(lockFile, "utf-8")
-        const parsed = parseProcessLockBody<AuthLockBody>(text)
+        const parsed = parseProcessLockBody<{ token: string }>(text)
         if (!parsed || parsed.token !== ownToken) return
       } catch (err) {
         if ((err as NodeJS.ErrnoException)?.code === "ENOENT") return
@@ -101,7 +101,7 @@ async function acquireFileLock(): Promise<Disposable> {
   async function readBody() {
     const text = await fsPromises.readFile(lockFile, "utf-8").catch(() => undefined)
     if (!text) return undefined
-    const parsed = parseProcessLockBody<AuthLockBody>(text)
+    const parsed = parseProcessLockBody<{ token: string }>(text)
     if (!parsed || typeof parsed.token !== "string") return undefined
     return parsed
   }

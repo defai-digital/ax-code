@@ -19,7 +19,7 @@ import { ProjectIdentity } from "../../../project/project-identity"
 
 const lessPagerOptions = ["-R", "-S"]
 
-function resolveLessPager(cmd: string | undefined) {
+function resolveLessPager(cmd: string | null | undefined) {
   if (!cmd || !Filesystem.stat(cmd)?.size) {
     return undefined
   }
