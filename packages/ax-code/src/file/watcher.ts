@@ -48,6 +48,7 @@ export namespace FileWatcher {
   }
 
   const overrides = new Map<string, InitOptions>()
+  const relativeToDir = (dir: string, target: string) => path.relative(dir, target)
 
   const watcher = lazy((): typeof import("@parcel/watcher") | undefined => {
     try {
@@ -63,13 +64,13 @@ export namespace FileWatcher {
 
   function protecteds(dir: string) {
     return Protected.paths().filter((item) => {
-      const rel = path.relative(dir, item)
+      const rel = relativeToDir(dir, item)
       return rel !== "" && !rel.startsWith("..") && !path.isAbsolute(rel)
     })
   }
 
   function ignored(dir: string, ignore: string[], file: string) {
-    const rel = path.relative(dir, file)
+    const rel = relativeToDir(dir, file)
     if (rel === "") return false
 
     for (const item of ignore) {
