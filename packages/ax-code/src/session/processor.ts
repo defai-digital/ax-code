@@ -804,6 +804,7 @@ export namespace SessionProcessor {
                     for (const p of compactionParts) Session.updatePart.force(p)
                   })
                 }
+                deltaBatcher.flush()
                 break
               }
             }
