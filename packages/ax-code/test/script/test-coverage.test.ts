@@ -34,6 +34,31 @@ describe("script.test-coverage", () => {
     expect(files[0]?.branches).toMatchObject({ covered: 1, total: 2, available: true, pct: 50 })
   })
 
+  test("ignores lcov records without SF before parsing others", () => {
+    const files = parseLCOV(
+      [
+        "TN:",
+        "FNF:2",
+        "FNH:1",
+        "DA:1,1",
+        "BRF:1",
+        "BRH:0",
+        "end_of_record",
+        "TN:",
+        "SF:/repo/src/valid.ts",
+        "FNF:1",
+        "FNH:1",
+        "DA:1,1",
+        "end_of_record",
+      ].join("\n"),
+    )
+
+    expect(files).toHaveLength(1)
+    expect(files[0]?.path).toBe(path.relative(process.cwd(), "/repo/src/valid.ts"))
+    expect(files[0]?.lines).toMatchObject({ covered: 1, total: 1, available: true })
+    expect(files[0]?.functions).toMatchObject({ covered: 1, total: 1, available: true })
+  })
+
   test("creates summaries with baseline trend comparisons and branch-unavailable notes", async () => {
     await using tmp = await tmpdir()
     const cwd = process.cwd()
@@ -349,5 +374,46 @@ describe("script.test-coverage", () => {
       process.chdir(cwd)
       if (savedWorkspace !== undefined) process.env["GITHUB_WORKSPACE"] = savedWorkspace
     }
+  })
+
+  test("renders lowest branch coverage when branch data is available", () => {
+    const summary: CoverageSummary = {
+      schemaVersion: 1,
+      kind: "ax-code-coverage-summary",
+      group: "deterministic",
+      fileCount: 2,
+      metrics: {
+        lines: { covered: 2, total: 4, pct: 50, available: true },
+        functions: { covered: 2, total: 3, pct: 66.66666666666666, available: true },
+        branches: { covered: 1, total: 3, pct: 33.3333333333, available: true },
+      },
+      files: [
+        {
+          path: "src/one.ts",
+          lines: { covered: 1, total: 2, pct: 50, available: true },
+          functions: { covered: 1, total: 1, pct: 100, available: true },
+          branches: { covered: 1, total: 3, pct: 33.3333333333, available: true },
+        },
+        {
+          path: "src/two.ts",
+          lines: { covered: 1, total: 2, pct: 50, available: true },
+          functions: { covered: 1, total: 2, pct: 50, available: true },
+          branches: { covered: 0, total: 1, pct: 0, available: true },
+        },
+      ],
+      artifacts: { lcov: "coverage/lcov.info", summary: "coverage-summary.json", report: "coverage-report.md" },
+      notes: [],
+      meta: {
+        createdAt: "2026-04-18T00:00:00.000Z",
+        runtime: { bun: "1.3.12", platform: "linux", arch: "x64" },
+        git: {},
+        ci: {},
+      },
+    }
+
+    const report = renderCoverageReport(summary)
+
+    expect(report).toContain("Lowest branch coverage:")
+    expect(report).toContain("src/two.ts: 0.00%")
   })
 })
