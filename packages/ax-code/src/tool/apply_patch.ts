@@ -95,7 +95,8 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
       // defense-in-depth and sufficient for the threat model.
       await assertSymlinkInsideProject(filePath)
       Isolation.assertWrite(ctx.extra?.isolation, filePath, Instance.directory, Instance.worktree)
-      BlastRadius.assertWritable(ctx.sessionID, path.relative(Instance.worktree, filePath))
+      const fileRelativePath = normalizeToWorkspacePath(filePath, Instance.worktree)
+      BlastRadius.assertWritable(ctx.sessionID, fileRelativePath)
 
       switch (hunk.type) {
         case "add": {
@@ -194,7 +195,10 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
             }
           }
           if (movePath) Isolation.assertWrite(ctx.extra?.isolation, movePath, Instance.directory, Instance.worktree)
-          if (movePath) BlastRadius.assertWritable(ctx.sessionID, path.relative(Instance.worktree, movePath))
+          if (movePath) {
+            const moveRelativePath = normalizeToWorkspacePath(movePath, Instance.worktree)
+            BlastRadius.assertWritable(ctx.sessionID, moveRelativePath)
+          }
 
           fileChanges.push({
             filePath,

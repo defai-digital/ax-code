@@ -21,7 +21,7 @@ import { Plugin } from "@/plugin"
 import { Isolation } from "@/isolation"
 import { BlastRadius } from "@/session/blast-radius"
 import { assertSymlinkInsideProject } from "./external-directory"
-import { resolveToolFilePath } from "./file-path"
+import { normalizeToWorkspacePath, resolveToolFilePath } from "./file-path"
 
 import { BASH_MAX_METADATA_LENGTH as MAX_METADATA_LENGTH } from "@/constants/network"
 const DEFAULT_TIMEOUT = Flag.AX_CODE_EXPERIMENTAL_BASH_DEFAULT_TIMEOUT_MS || 2 * 60 * 1000
@@ -311,7 +311,7 @@ export const BashTool = Tool.define("bash", async () => {
 
       for (const filePath of redirectWritePaths) {
         if (Filesystem.contains(Instance.worktree, filePath)) {
-          BlastRadius.assertWritable(ctx.sessionID, path.relative(Instance.worktree, filePath))
+          BlastRadius.assertWritable(ctx.sessionID, normalizeToWorkspacePath(filePath, Instance.worktree))
         }
       }
 
