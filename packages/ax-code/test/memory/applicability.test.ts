@@ -24,6 +24,18 @@ describe("memory.applicability", () => {
     ])
   })
 
+  test("does not match project path globs against paths outside the project root", () => {
+    const projectRoot = "/repo"
+    const entry = memoryEntry({
+      pathGlobs: ["README.md", "src/**/*.ts"],
+    })
+
+    expect(matchesPath(projectRoot, entry, ["/outside/README.md"])).toBe(false)
+    expect(matchesPath(projectRoot, entry, ["/outside/src/memory/recall.ts"])).toBe(false)
+    expect(matchesPath(projectRoot, entry, ["../README.md"])).toBe(false)
+    expect(normalizePathForMatch(projectRoot, "/outside/README.md")).toEqual([])
+  })
+
   test("entryApplies composes agent, tag, path, and expiry checks", () => {
     const entry = memoryEntry({
       agents: ["build"],

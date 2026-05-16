@@ -36,8 +36,14 @@ export function matchesTags(entry: MemoryEntry, wantedTags: string[]): boolean {
 
 export function normalizePathForMatch(projectRoot: string, targetPath: string): string[] {
   const normalized = targetPath.replace(/\\/g, "/")
+  if (isParentRelativePath(normalized)) return []
   const relative = path.isAbsolute(targetPath) ? path.relative(projectRoot, targetPath).replace(/\\/g, "/") : normalized
+  if (path.isAbsolute(targetPath) && isParentRelativePath(relative)) return []
   return Array.from(new Set([normalized, relative, path.basename(normalized)].filter(Boolean)))
+}
+
+function isParentRelativePath(value: string): boolean {
+  return value === ".." || value.startsWith("../")
 }
 
 export function matchesPath(projectRoot: string, entry: MemoryEntry, targetPaths: string[] | undefined): boolean {
