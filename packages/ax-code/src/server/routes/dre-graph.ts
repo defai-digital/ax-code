@@ -12,6 +12,7 @@ import { changesSection } from "../../quality/dre-graph-changes-section"
 import { style } from "../../quality/dre-graph-style"
 import { summary } from "../../quality/dre-graph-summary-section"
 import { dreGraphActivityToolLabels, summarizeDreGraphActivityTools } from "../../quality/dre-graph-activity"
+import { timelineSection } from "../../quality/dre-graph-timeline-section"
 import { parseDreGraphTimeline, parseDreGraphTimelineStepDurationMs } from "../../quality/dre-graph-timeline"
 import { indexFingerprint, sessionFingerprint } from "../../quality/dre-graph-fingerprint"
 import { riskSection } from "../../quality/dre-graph-risk-section"
@@ -371,140 +372,6 @@ function graphSection(input: SessionGraph.Snapshot, dre: SessionDre.Snapshot) {
           `</div></div>`,
         ].join("")
       : "",
-    `</div>`,
-    `</section>`,
-  ].join("")
-}
-
-// ── Section 5: Timeline + Rollback ─────────────────────────────────
-
-function timelineSection(dre: SessionDre.Snapshot, points: SessionRollback.Point[], detail?: SessionDre.Detail | null) {
-  const parsed = parseDreGraphTimeline(dre.timeline)
-
-  // Build Gantt-style step bars
-  const ganttHtml = parsed.steps.length
-    ? (() => {
-        // Compute max duration for proportional bars
-        const durations = parsed.steps.map((s) => parseDreGraphTimelineStepDurationMs(s.duration))
-        const maxDur = Math.max(...durations, 1)
-
-        // Check if all steps have the same index (e.g., all "Step 0")
-        const allSameIndex = parsed.steps.every((s) => s.index === parsed.steps[0].index)
-
-        return [
-          `<div class="gantt">`,
-          parsed.steps
-            .map((step, idx) => {
-              const dur = durations[idx]
-              const pct = Math.max(2, (dur / maxDur) * 100)
-              const hasErrors = step.errors.length > 0
-              const barColor = hasErrors ? "var(--high)" : dur > maxDur * 0.5 ? "var(--warn)" : "var(--accent)"
-
-              // Group tools by name for compact summary
-              const counts = new Map<string, { count: number; totalMs: number; errors: number }>()
-              for (const t of step.tools) {
-                const entry = counts.get(t.name) ?? { count: 0, totalMs: 0, errors: 0 }
-                entry.count++
-                entry.totalMs += t.durationMs
-                if (t.status === "ERR") entry.errors++
-                counts.set(t.name, entry)
-              }
-              const sorted = [...counts.entries()].sort((a, b) => b[1].totalMs - a[1].totalMs)
-              const toolMaxMs = Math.max(...sorted.map((s) => s[1].totalMs), 1)
-
-              // Build a short tool signature for the header (e.g., "read ×12, edit ×3")
-              const topTools = sorted
-                .slice(0, 3)
-                .map(([n, info]) => (info.count > 1 ? `${n} ×${info.count}` : n))
-                .join(", ")
-              // Use sequential "Turn N" label when all steps share the same index
-              const label = allSameIndex ? `Turn ${idx + 1}` : step.index
-
-              return [
-                `<div class="gantt-step">`,
-                // Step header with duration bar
-                `<div class="gantt-header">`,
-                `<span class="gantt-label">${esc(label)}</span>`,
-                `<div class="gantt-bar-wrap">`,
-                `<div class="gantt-bar" style="width:${pct.toFixed(1)}%;background:${barColor}"></div>`,
-                `</div>`,
-                `<span class="gantt-dur">${esc(step.duration)}</span>`,
-                `</div>`,
-                // Tool signature + route — visible without expanding
-                `<div class="gantt-meta">`,
-                topTools ? `<span class="gantt-tools-sig">${esc(topTools)}</span>` : "",
-                step.routes.length
-                  ? `<span class="gantt-route">${step.routes.map((r) => esc(r)).join(", ")}</span>`
-                  : "",
-                `</div>`,
-                // Collapsible tool details
-                step.tools.length > 0
-                  ? [
-                      `<details class="gantt-details">`,
-                      `<summary class="gantt-summary">${step.tools.length} tool call${step.tools.length === 1 ? "" : "s"}${hasErrors ? ` · <span class="gantt-err">${step.errors.length} error${step.errors.length === 1 ? "" : "s"}</span>` : ""}${step.tokens ? ` · ${esc(step.tokens)}` : ""}</summary>`,
-                      `<div class="gantt-tools">`,
-                      sorted
-                        .slice(0, 10)
-                        .map(([name, info]) => {
-                          const timePct = Math.max(2, (info.totalMs / toolMaxMs) * 100)
-                          const color =
-                            info.errors > 0 ? "var(--high)" : info.totalMs > 5000 ? "var(--warn)" : "var(--low)"
-                          return [
-                            `<div class="gantt-tool-row">`,
-                            `<span class="gantt-tool-name">${esc(name)}${info.count > 1 ? ` <span class="gantt-tool-count">×${info.count}</span>` : ""}</span>`,
-                            `<div class="gantt-tool-bar-wrap"><div class="gantt-tool-bar" style="width:${timePct.toFixed(0)}%;background:${color}"></div></div>`,
-                            `<span class="gantt-tool-ms">${info.totalMs >= 1000 ? `${(info.totalMs / 1000).toFixed(1)}s` : `${info.totalMs}ms`}</span>`,
-                            `</div>`,
-                          ].join("")
-                        })
-                        .join(""),
-                      sorted.length > 10
-                        ? `<span class="muted" style="font-size:11px;padding:4px 0">+${sorted.length - 10} more tools</span>`
-                        : "",
-                      `</div>`,
-                      `</details>`,
-                    ].join("")
-                  : "",
-                // Errors inline (always visible)
-                step.errors.length > 0
-                  ? step.errors.map((e) => `<div class="gantt-error">${esc(e)}</div>`).join("")
-                  : "",
-                `</div>`,
-              ].join("")
-            })
-            .join(""),
-          `</div>`,
-        ].join("")
-      })()
-    : `<p class="empty">No timeline recorded.</p>`
-
-  return [
-    `<section class="band" id="timeline">`,
-    `<div class="wrap">`,
-    `<div class="section-head"><h2>Timeline</h2><p>Execution trace — click a step to expand tool details</p></div>`,
-    `<div class="grid">`,
-    // Gantt timeline
-    `<div class="panel">`,
-    `<h3>Execution Trace</h3>`,
-    parsed.header ? `<p class="muted" style="margin-bottom:14px">${esc(parsed.header.text)}</p>` : "",
-    ganttHtml,
-    detail?.notes.length
-      ? [
-          `<div style="margin-top:20px"><h3>Notes</h3>`,
-          `<div class="driver-list">`,
-          detail.notes
-            .map((item) => `<div class="driver-item"><span class="driver-icon">·</span><span>${esc(item)}</span></div>`)
-            .join(""),
-          `</div></div>`,
-        ].join("")
-      : "",
-    `</div>`,
-    // Rollback — horizontal bar list
-    `<div class="panel" id="rollback">`,
-    `<h3>Rollback Points <span class="rb-count">${points.length}</span></h3>`,
-    renderDreGraphRollbackBars(points, "Run a session with assistant steps to populate rollback points."),
-    `</div>`,
-    `</div>`,
     `</div>`,
     `</section>`,
   ].join("")
