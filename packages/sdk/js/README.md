@@ -26,6 +26,8 @@ For cross-language clients, see [HTTP and OpenAPI SDKs](../../../docs/sdk-http-o
 pnpm add @ax-code/sdk
 ```
 
+The in-process `createAgent()` entry point loads the `ax-code` runtime from the host project at call time. Keep a compatible `ax-code` runtime installed or use `@ax-code/sdk/http` with `ax-code serve` when the runtime is provided as a separate service.
+
 ## Quick start
 
 ```ts

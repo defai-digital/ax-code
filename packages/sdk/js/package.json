@@ -32,8 +32,5 @@
     "typescript": "catalog:",
     "@typescript/native-preview": "catalog:",
     "zod": "catalog:"
-  },
-  "dependencies": {
-    "ax-code": "workspace:*"
   }
 }
