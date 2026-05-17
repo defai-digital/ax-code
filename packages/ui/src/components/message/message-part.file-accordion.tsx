@@ -1,9 +1,9 @@
 import { createMemo, Show, type JSX } from "solid-js"
 import { getFilename } from "@ax-code/util/path"
-import { Accordion } from "./accordion"
-import { StickyAccordionHeader } from "./sticky-accordion-header"
-import { FileIcon } from "./file-icon"
-import { Icon } from "./icon"
+import { Accordion } from "../accordion"
+import { StickyAccordionHeader } from "../sticky-accordion-header"
+import { FileIcon } from "../file-icon"
+import { Icon } from "../icon"
 
 export function ToolFileAccordion(props: {
   path: string

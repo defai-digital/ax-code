@@ -37,12 +37,12 @@
 @import "../components/file-icon.css" layer(components);
 @import "../components/content/image-preview.css" layer(components);
 @import "../components/content/markdown.css" layer(components);
-@import "../components/message-nav.css" layer(components);
-@import "../components/message-part.css" layer(components);
+@import "../components/message/message-nav.css" layer(components);
+@import "../components/message/message-part.css" layer(components);
 @import "../components/scroll-view.css" layer(components);
 @import "../components/session-review.css" layer(components);
 @import "../components/session-turn.css" layer(components);
-@import "../components/shell-submessage.css" layer(components);
+@import "../components/message/shell-submessage.css" layer(components);
 
 /* Status */
 @import "../components/status/animated-number.css" layer(components);

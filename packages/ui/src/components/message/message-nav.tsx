@@ -1,8 +1,8 @@
 import { UserMessage } from "@ax-code/sdk/v2"
 import { ComponentProps, For, Match, Show, splitProps, Switch } from "solid-js"
-import { DiffChanges } from "./content/diff-changes"
-import { Tooltip } from "./tooltip"
-import { useI18n } from "../context/i18n"
+import { DiffChanges } from "../content/diff-changes"
+import { Tooltip } from "../tooltip"
+import { useI18n } from "../../context/i18n"
 
 export function MessageNav(
   props: ComponentProps<"ul"> & {

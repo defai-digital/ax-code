@@ -1,6 +1,6 @@
 import type { ToolPart } from "@ax-code/sdk/v2"
 import { getFilename } from "@ax-code/util/path"
-import type { IconProps } from "./icon"
+import type { IconProps } from "../icon"
 
 type ToolText = (key: string, params?: Record<string, string | number>) => string
 
