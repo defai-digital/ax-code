@@ -135,10 +135,19 @@ Implemented another section-level extraction:
 - Added focused coverage in `packages/ax-code/test/quality/dre-graph-risk-section.test.ts` for status indicators, signal classification, flags, bar chart sections, empty driver fallback, evidence lists, unknown lists, mitigation lists, and HTML escaping.
 - Removed now-unused route imports after moving the risk presentation boundary into `quality`.
 
+### 2026-05-17 - Phase 3 DRE Graph Activity Helper Extraction Slice
+
+Implemented another pure-helper extraction:
+
+- Extracted plain-English DRE graph activity summaries and top-tool label aggregation into `packages/ax-code/src/quality/dre-graph-activity.ts`.
+- `packages/ax-code/src/server/routes/dre-graph.ts` now imports activity summarization instead of keeping nested tool-classification logic inside the HTML route.
+- Added focused coverage in `packages/ax-code/test/quality/dre-graph-activity.test.ts` for read/edit grouping, search/shell/web/misc summary text, stable top-tool labels, and empty activity.
+- Existing DRE graph route tests still cover rendered page behavior after the extraction.
+
 Still pending:
 
 - UI component grouping.
-- Further DRE graph route domain extraction beyond timeline, fingerprint shaping, display formatting helpers, widget helpers, client asset scripts, CSS asset extraction, quality readiness section rendering, validation section rendering, changes section rendering, verdict section rendering, summary section rendering, and risk section rendering.
+- Further DRE graph route domain extraction beyond timeline, fingerprint shaping, display formatting helpers, widget helpers, client asset scripts, CSS asset extraction, quality readiness section rendering, validation section rendering, changes section rendering, verdict section rendering, summary section rendering, risk section rendering, and activity helper extraction.
 - TUI session route and session prompt hotspot reduction.
 - LSP surface cleanup.
 - Workspace package manifest dependency-cycle cleanup.
