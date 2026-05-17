@@ -3,7 +3,7 @@ import type { SessionStatus } from "@ax-code/sdk/v2/client"
 import { useI18n } from "../context/i18n"
 import { Card } from "./card"
 import { Tooltip } from "./tooltip"
-import { Spinner } from "./spinner"
+import { Spinner } from "./status/spinner"
 
 export function SessionRetry(props: { status: SessionStatus; show?: boolean }) {
   const i18n = useI18n()

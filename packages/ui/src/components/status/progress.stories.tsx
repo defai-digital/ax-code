@@ -1,6 +1,6 @@
 // @ts-nocheck
 import * as mod from "./progress"
-import { create } from "../storybook/scaffold"
+import { create } from "../../storybook/scaffold"
 
 const docs = `### Overview
 Linear progress indicator with optional label and value display.

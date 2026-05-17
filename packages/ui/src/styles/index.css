@@ -45,13 +45,13 @@
 @import "../components/shell-submessage.css" layer(components);
 
 /* Status */
-@import "../components/animated-number.css" layer(components);
+@import "../components/status/animated-number.css" layer(components);
 @import "../components/basic-tool.css" layer(components);
 @import "../components/diff-changes.css" layer(components);
-@import "../components/progress.css" layer(components);
-@import "../components/progress-circle.css" layer(components);
-@import "../components/spinner.css" layer(components);
-@import "../components/tag.css" layer(components);
+@import "../components/status/progress.css" layer(components);
+@import "../components/status/progress-circle.css" layer(components);
+@import "../components/status/spinner.css" layer(components);
+@import "../components/status/tag.css" layer(components);
 @import "../components/tool-count-label.css" layer(components);
 @import "../components/tool-count-summary.css" layer(components);
 @import "../components/tool-error-card.css" layer(components);
