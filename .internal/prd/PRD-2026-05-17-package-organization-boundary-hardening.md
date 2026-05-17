@@ -144,10 +144,19 @@ Implemented another pure-helper extraction:
 - Added focused coverage in `packages/ax-code/test/quality/dre-graph-activity.test.ts` for read/edit grouping, search/shell/web/misc summary text, stable top-tool labels, and empty activity.
 - Existing DRE graph route tests still cover rendered page behavior after the extraction.
 
+### 2026-05-17 - Phase 3 DRE Graph Rollback Helper Extraction Slice
+
+Implemented another shared presentation-helper extraction:
+
+- Extracted rollback bar rendering and tool-kind summary aggregation into `packages/ax-code/src/quality/dre-graph-rollback.ts`.
+- `packages/ax-code/src/server/routes/dre-graph.ts` now reuses the same rollback renderer from both Activity and Timeline instead of carrying duplicate HTML generation.
+- Added focused coverage in `packages/ax-code/test/quality/dre-graph-rollback.test.ts` for duration bars, warn/accent coloring, kind aggregation, HTML escaping, and empty state output.
+- Preserved the two existing empty-state messages by passing them as helper input from the route.
+
 Still pending:
 
 - UI component grouping.
-- Further DRE graph route domain extraction beyond timeline, fingerprint shaping, display formatting helpers, widget helpers, client asset scripts, CSS asset extraction, quality readiness section rendering, validation section rendering, changes section rendering, verdict section rendering, summary section rendering, risk section rendering, and activity helper extraction.
+- Further DRE graph route domain extraction beyond timeline, fingerprint shaping, display formatting helpers, widget helpers, client asset scripts, CSS asset extraction, quality readiness section rendering, validation section rendering, changes section rendering, verdict section rendering, summary section rendering, risk section rendering, activity helper extraction, and rollback helper extraction.
 - TUI session route and session prompt hotspot reduction.
 - LSP surface cleanup.
 - Workspace package manifest dependency-cycle cleanup.
