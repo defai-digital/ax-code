@@ -4,7 +4,7 @@ import type {
   SessionDreTimelineLine,
   SessionRollbackPoint,
 } from "@ax-code/sdk/v2"
-import type { CardProps } from "./card"
+import type { CardProps } from "../card"
 
 type Level = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL"
 

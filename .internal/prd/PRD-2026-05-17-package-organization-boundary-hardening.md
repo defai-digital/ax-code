@@ -1,7 +1,7 @@
 # PRD: Package Organization Boundary Hardening
 
 **Date:** 2026-05-17
-**Status:** Active - guardrails, SDK cleanup, DRE graph extraction, manifest-cycle cleanup, and four UI grouping slices implemented
+**Status:** Active - guardrails, SDK cleanup, DRE graph extraction, manifest-cycle cleanup, and five UI grouping slices implemented
 **Author:** ax-code agent
 
 ---
@@ -29,7 +29,7 @@ Verified against the current checkout on 2026-05-17:
 - Structure guardrails report no raw cross-package `src` imports.
 - Structure guardrails report `SDK Runtime Source Imports` as OK.
 - Structure guardrails report no workspace package manifest cycles.
-- Structure guardrails report `packages/ui/src/components` with 98 direct source files, 12 child folders, and 163 total source files.
+- Structure guardrails report `packages/ui/src/components` with 86 direct source files, 13 child folders, and 163 total source files.
 - Structure guardrails report 73 files above 500 lines and 32 files above 800 lines.
 - Current largest package-boundary hotspots include:
   - `packages/ax-code/src/session/prompt.ts`: about 3,200 lines.
@@ -72,6 +72,12 @@ Verified against the current checkout on 2026-05-17:
 - Added the new grouped public path `@ax-code/ui/file/*` while leaving file icons in the existing icon-only root and generated `file-icons` folder.
 - Updated the TUI render anti-pattern guardrail to follow the new `file-ssr` path.
 - Verified `pnpm --dir packages/ui run typecheck`, `cd packages/ax-code && bun test test/cli/tui/render-anti-patterns.test.ts`, package export resolution, and `bun run script/structure.ts` after the file batch.
+- Moved the session UI batch under `packages/ui/src/components/session/`.
+- Preserved old public imports such as `@ax-code/ui/session-turn`, `@ax-code/ui/session-review`, `@ax-code/ui/session-insights`, `@ax-code/ui/session-graph`, and related session entry points through exact package exports.
+- Added the new grouped public path `@ax-code/ui/session/*` for session UI components.
+- Kept session-local graph and insight logic colocated with the components that consume it without exporting those implementation helpers as package-level API.
+- Updated the TUI render anti-pattern guardrail to follow the new `session-turn` path.
+- Verified `pnpm --dir packages/ui run typecheck`, `cd packages/ax-code && bun test test/cli/tui/render-anti-patterns.test.ts`, package export resolution, and `bun run script/structure.ts` after the session batch.
 
 ### Completed: Phase 3 DRE Graph Route Extraction
 
@@ -280,8 +286,9 @@ Exit state:
 - [x] Move a content batch with compatibility package exports.
 - [x] Move message-specific files in a separate batch.
 - [x] Move file-specific display, media, search, and SSR files after the target folder contract is clear.
-- [ ] Move provider/session-specific files only after the target folder contract is clear.
-- [x] Preserve existing `@ax-code/ui/*` import paths for the moved status, content, message, and file batches.
+- [x] Move session-specific UI files after the target folder contract is clear.
+- [ ] Move provider/icon-adjacent files only after the target folder contract is clear.
+- [x] Preserve existing `@ax-code/ui/*` import paths for the moved status, content, message, file, and session batches.
 - [x] Run `pnpm --dir packages/ui run typecheck` after completed batches.
 
 Exit criteria:
@@ -467,11 +474,11 @@ This PRD is complete when:
 
 ## Next Best Slice
 
-The next best implementation slice is the fifth Phase 2 UI grouping batch. The status, content, message, and file batches reduced the direct source-file count from 140 to 98, but `packages/ui/src/components` still has a large flat direct-file surface.
+The next best implementation slice is either the final small Phase 2 provider/icon-adjacent grouping batch or the first Phase 4 TUI/session hotspot extraction. The status, content, message, file, and session batches reduced the direct source-file count from 140 to 86, so another UI grouping batch should stay small and avoid inventing a competing taxonomy.
 
 Recommended first task:
 
-1. Pick either the session batch (`session-*`) or a provider/icon-adjacent batch after checking internal relative imports.
+1. Pick the provider/icon-adjacent batch only if `provider-icon` can move into the existing `provider-icons` taxonomy without mixing generated assets and component API awkwardly.
 2. Move a small low-risk batch with compatibility package exports.
 3. Run `pnpm --dir packages/ui run typecheck`.
 4. Update this PRD with the direct-file count after the batch.

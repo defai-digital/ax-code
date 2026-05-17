@@ -68,7 +68,7 @@ const DOCTOR_PRELOAD_SRC = path.resolve(import.meta.dir, "../../../src/cli/cmd/d
 const DEBUG_EXPLAIN_SRC = path.resolve(import.meta.dir, "../../../src/cli/cmd/debug/explain.ts")
 const RESIZE_HANDLE_SRC = path.join(UI_ROOT, "components/layout/resize-handle.tsx")
 const TEXT_FIELD_SRC = path.join(UI_ROOT, "components/text-field.tsx")
-const SESSION_TURN_SRC = path.join(UI_ROOT, "components/session-turn.tsx")
+const SESSION_TURN_SRC = path.join(UI_ROOT, "components/session/session-turn.tsx")
 const FILE_SSR_SRC = path.join(UI_ROOT, "components/file/file-ssr.tsx")
 
 describe("tui OpenTUI stability guardrails", () => {
