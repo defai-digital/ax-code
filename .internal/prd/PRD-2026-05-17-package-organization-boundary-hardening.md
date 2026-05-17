@@ -1,516 +1,445 @@
 # PRD: Package Organization Boundary Hardening
 
 **Date:** 2026-05-17
-**Status:** Partially Implemented - Phase 1 visibility slice
+**Status:** Active - guardrails, SDK source-import cleanup, and DRE graph route extraction implemented
 **Author:** ax-code agent
 
 ---
 
-## Implementation Notes
-
-### 2026-05-17 - Phase 1 Visibility Slice
-
-Implemented the first low-risk guardrail slice:
-
-- `script/structure.ts` now reports runtime imports that reach directly into SDK source files.
-- `script/structure.ts` now reports workspace package manifest dependency cycles.
-- `script/structure.ts` now separates hotspot threshold reporting from the general hotspot summary.
-- Existing SDK/runtime source imports, workspace package cycles, and 800+ line files are reported as warnings so known debt is visible without breaking unrelated CI.
-- `packages/ax-code/test/script/root-structure-script.test.ts` verifies that the root structure script emits the new boundary-hardening sections and exits successfully with current known warnings.
-
-### 2026-05-17 - Phase 6 SDK Source Import Cleanup Slice
-
-Implemented the first SDK/runtime contract cleanup:
-
-- `packages/ax-code/src/sdk/programmatic.ts` now imports API types through `@ax-code/sdk/v2/client`.
-- Programmatic SDK types and error classes now come from `@ax-code/sdk/programmatic`.
-- `script/structure.ts` now reports `SDK Runtime Source Imports` as OK for the current checkout.
-- The broader workspace manifest dependency cycle remains visible as a warning and is intentionally left for a separate package-boundary slice.
-
-### 2026-05-17 - Phase 3 DRE Graph Timeline Extraction Slice
-
-Implemented the first route/domain extraction:
-
-- Extracted DRE graph timeline parsing into `packages/ax-code/src/quality/dre-graph-timeline.ts`.
-- `packages/ax-code/src/server/routes/dre-graph.ts` now consumes parsed timeline data instead of owning that parser inline.
-- Added focused coverage in `packages/ax-code/test/quality/dre-graph-timeline.test.ts` for headings, metadata, step parsing, tool parsing, route/LLM/error capture, and duration parsing.
-- Existing DRE graph route tests still cover page/fingerprint behavior after the extraction.
-
-### 2026-05-17 - Phase 3 DRE Graph Fingerprint Extraction Slice
-
-Implemented the second route/domain extraction:
-
-- Extracted DRE graph index/session fingerprint shaping into `packages/ax-code/src/quality/dre-graph-fingerprint.ts`.
-- `packages/ax-code/src/server/routes/dre-graph.ts` now delegates fingerprint JSON shaping instead of owning it inline.
-- Added focused coverage in `packages/ax-code/test/quality/dre-graph-fingerprint.test.ts` for session-list fingerprints, graph/DRE/risk summaries, quality readiness rollups, branch rank summaries, and rollback counts.
-- Existing DRE graph route tests still cover fingerprint endpoints after the extraction.
-
-### 2026-05-17 - Phase 3 DRE Graph Format Helper Extraction Slice
-
-Implemented another pure-helper extraction:
-
-- Extracted DRE graph display formatting, escaping, safe JSON, risk tone, readiness tone, validation labels, timestamps, and number/duration formatting into `packages/ax-code/src/quality/dre-graph-format.ts`.
-- `packages/ax-code/src/server/routes/dre-graph.ts` now imports these pure helpers instead of owning them inline.
-- Added focused coverage in `packages/ax-code/test/quality/dre-graph-format.test.ts` for HTML escaping, script-safe JSON escaping, agent labels, timestamps, duration formatting, and tone/readiness/validation classification.
-- Existing DRE graph route tests still cover page behavior after the extraction.
-
-### 2026-05-17 - Phase 3 DRE Graph Widget Helper Extraction Slice
-
-Implemented a follow-up display-helper extraction:
-
-- Extracted DRE graph chip, stat, flow, step summary, gauge, bar chart, and donut HTML helpers into `packages/ax-code/src/quality/dre-graph-widgets.ts`.
-- `packages/ax-code/src/server/routes/dre-graph.ts` now imports reusable widget helpers instead of owning route-local visual primitives.
-- Added focused coverage in `packages/ax-code/test/quality/dre-graph-widgets.test.ts` for HTML escaping, flow compression/truncation, step summary filtering, gauge tone color, bar chart output, and donut percentages.
-- Existing DRE graph route tests remain the route-level regression boundary after the extraction.
-
-### 2026-05-17 - Phase 3 DRE Graph Asset Helper Extraction Slice
-
-Implemented a client-asset extraction:
-
-- Extracted DRE graph theme bootstrap, theme toggle, live-refresh, and Mermaid graph loader scripts into `packages/ax-code/src/quality/dre-graph-assets.ts`.
-- `packages/ax-code/src/server/routes/dre-graph.ts` now imports client-side asset helpers instead of owning those scripts inline.
-- Added focused coverage in `packages/ax-code/test/quality/dre-graph-assets.test.ts` for theme wiring, live polling config generation, directory URL encoding, EventSource setup, Mermaid graph fetch wiring, and script-safe session id escaping.
-- Left the large CSS helper in the route for a separate mechanical extraction slice so this commit stays reviewable.
-
-### 2026-05-17 - Phase 3 DRE Graph Style Asset Extraction Slice
-
-Implemented the CSS asset extraction:
-
-- Extracted the DRE graph page stylesheet helper into `packages/ax-code/src/quality/dre-graph-style.ts`.
-- `packages/ax-code/src/server/routes/dre-graph.ts` now imports the stylesheet helper instead of owning the large CSS template inline.
-- Added focused coverage in `packages/ax-code/test/quality/dre-graph-style.test.ts` for theme variables, core page selectors, widget selectors, graph visualization selectors, and responsive CSS.
-- Kept the new style module below the 800-line hotspot threshold while reducing the route file to page composition and request glue.
-
-### 2026-05-17 - Phase 3 DRE Graph Quality Readiness Section Extraction Slice
-
-Implemented a section-level domain extraction:
-
-- Extracted the quality readiness section renderer into `packages/ax-code/src/quality/dre-graph-quality-readiness.ts`.
-- `packages/ax-code/src/server/routes/dre-graph.ts` now imports quality readiness rendering instead of coupling the route directly to replay readiness labels and targeted-test recommendation formatting.
-- Added focused coverage in `packages/ax-code/test/quality/dre-graph-quality-readiness.test.ts` for absent quality data, ready workflow summaries, status chips, targeted QA recommendations, next-action rendering, and HTML escaping.
-- Kept the slice narrow so broader risk/activity/timeline section extraction can proceed independently.
-
-### 2026-05-17 - Phase 3 DRE Graph Validation Section Extraction Slice
-
-Implemented another section-level extraction:
-
-- Extracted the validation section renderer into `packages/ax-code/src/quality/dre-graph-validation-section.ts`.
-- `packages/ax-code/src/server/routes/dre-graph.ts` now imports validation section rendering instead of owning command-list, status-chip, and no-validation warning markup inline.
-- Added focused coverage in `packages/ax-code/test/quality/dre-graph-validation-section.test.ts` for empty validation state, passed command rendering, failed command rendering, no-test warning output, and command HTML escaping.
-- Kept route behavior covered by the existing DRE graph server tests while moving another small presentation boundary into `quality`.
-
-### 2026-05-17 - Phase 3 DRE Graph Changes Section Extraction Slice
-
-Implemented another section-level extraction:
-
-- Extracted the semantic changes section renderer into `packages/ax-code/src/quality/dre-graph-changes-section.ts`.
-- `packages/ax-code/src/server/routes/dre-graph.ts` now imports changes section rendering instead of owning semantic-diff row markup inline.
-- Added focused coverage in `packages/ax-code/test/quality/dre-graph-changes-section.test.ts` for empty semantic diff output, single/plural file counts, risk chips, diff stats, no-signal placeholders, and HTML escaping for file paths and signals.
-- Kept the route-level DRE graph tests as the integration boundary while moving another independent presentation section into `quality`.
-
-### 2026-05-17 - Phase 3 DRE Graph Verdict Section Extraction Slice
-
-Implemented another section-level extraction:
-
-- Extracted the verdict section renderer into `packages/ax-code/src/quality/dre-graph-verdict-section.ts`.
-- `packages/ax-code/src/server/routes/dre-graph.ts` now imports verdict rendering instead of owning acceptance headline, confidence/risk/validation/decision stat markup, semantic summary, unknown, and mitigation callouts inline.
-- Added focused coverage in `packages/ax-code/test/quality/dre-graph-verdict-section.test.ts` for absent DRE details, readiness headline/tone mapping, core stat rendering, validation command summarization, semantic summary output, callout output, and HTML escaping.
-- Kept larger risk/activity/timeline sections untouched so later extractions can remain independently reviewable.
-
-### 2026-05-17 - Phase 3 DRE Graph Summary Section Extraction Slice
-
-Implemented another section-level extraction:
-
-- Extracted the summary banner renderer into `packages/ax-code/src/quality/dre-graph-summary-section.ts`.
-- `packages/ax-code/src/server/routes/dre-graph.ts` now imports summary rendering instead of owning risk gauge, key metrics, token donut, no-detail fallback, and semantic banner markup inline.
-- Added focused coverage in `packages/ax-code/test/quality/dre-graph-summary-section.test.ts` for no-detail risk fallback, detail metric rendering, token donut output, semantic banner output, signal limiting, and HTML escaping.
-- Removed now-unused widget imports from the route after the extraction.
-
-### 2026-05-17 - Phase 3 DRE Graph Risk Section Extraction Slice
-
-Implemented another section-level extraction:
-
-- Extracted the risk analysis section renderer into `packages/ax-code/src/quality/dre-graph-risk-section.ts`.
-- `packages/ax-code/src/server/routes/dre-graph.ts` now imports risk section rendering instead of owning risk status indicators, signal grid, flags, risk factor bars, scorecard bars, drivers, evidence, unknowns, and mitigation markup inline.
-- Added focused coverage in `packages/ax-code/test/quality/dre-graph-risk-section.test.ts` for status indicators, signal classification, flags, bar chart sections, empty driver fallback, evidence lists, unknown lists, mitigation lists, and HTML escaping.
-- Removed now-unused route imports after moving the risk presentation boundary into `quality`.
-
-### 2026-05-17 - Phase 3 DRE Graph Activity Helper Extraction Slice
-
-Implemented another pure-helper extraction:
-
-- Extracted plain-English DRE graph activity summaries and top-tool label aggregation into `packages/ax-code/src/quality/dre-graph-activity.ts`.
-- `packages/ax-code/src/server/routes/dre-graph.ts` now imports activity summarization instead of keeping nested tool-classification logic inside the HTML route.
-- Added focused coverage in `packages/ax-code/test/quality/dre-graph-activity.test.ts` for read/edit grouping, search/shell/web/misc summary text, stable top-tool labels, and empty activity.
-- Existing DRE graph route tests still cover rendered page behavior after the extraction.
-
-### 2026-05-17 - Phase 3 DRE Graph Rollback Helper Extraction Slice
-
-Implemented another shared presentation-helper extraction:
-
-- Extracted rollback bar rendering and tool-kind summary aggregation into `packages/ax-code/src/quality/dre-graph-rollback.ts`.
-- `packages/ax-code/src/server/routes/dre-graph.ts` now reuses the same rollback renderer from both Activity and Timeline instead of carrying duplicate HTML generation.
-- Added focused coverage in `packages/ax-code/test/quality/dre-graph-rollback.test.ts` for duration bars, warn/accent coloring, kind aggregation, HTML escaping, and empty state output.
-- Preserved the two existing empty-state messages by passing them as helper input from the route.
-
-### 2026-05-17 - Phase 3 DRE Graph Branch Section Extraction Slice
-
-Implemented another section-level extraction:
-
-- Extracted branch ranking section rendering into `packages/ax-code/src/quality/dre-graph-branch-section.ts`.
-- `packages/ax-code/src/server/routes/dre-graph.ts` now imports branch section rendering instead of owning readiness labels, branch cards, scorecard bars, evidence trimming, and semantic summary markup inline.
-- Added focused coverage in `packages/ax-code/test/quality/dre-graph-branch-section.test.ts` for absent branch data, switching versus current-branch summary text, badges, readiness status, scorecard details, evidence limiting, semantic summaries, and HTML escaping.
-- Kept branch data loading in the route context boundary while moving branch presentation behavior into `quality`.
-
-### 2026-05-17 - Phase 3 DRE Graph Timeline Section Extraction Slice
-
-Implemented another section-level extraction:
-
-- Extracted timeline and rollback panel rendering into `packages/ax-code/src/quality/dre-graph-timeline-section.ts`.
-- `packages/ax-code/src/server/routes/dre-graph.ts` now imports timeline section rendering instead of owning Gantt row rendering, tool timing aggregation, timeline notes, inline errors, route labels, and rollback panel composition inline.
-- Added focused coverage in `packages/ax-code/test/quality/dre-graph-timeline-section.test.ts` for Gantt output, tool timing rollups, note rendering, route/error HTML escaping, empty timeline output, rollback empty state, and repeated-step turn labels.
-- Kept timeline parsing and rollback bar helpers as reusable lower-level modules consumed by the new section renderer.
-
-### 2026-05-17 - Phase 3 DRE Graph Activity Section Extraction Slice
-
-Implemented another section-level extraction:
-
-- Extracted activity section rendering into `packages/ax-code/src/quality/dre-graph-activity-section.ts`.
-- `packages/ax-code/src/server/routes/dre-graph.ts` now imports activity section rendering instead of owning ranked activity card rendering, agent roster output, tool usage bars, notes, and rollback panel composition inline.
-- Added focused coverage in `packages/ax-code/test/quality/dre-graph-activity-section.test.ts` for ranked steps, error cards, file read/edit summaries, routed-agent labels, tool usage counts, note escaping, rollback output, and empty states.
-- Kept lower-level activity summary, timeline parsing, and rollback bar helpers reusable beneath the new section renderer.
-
-### 2026-05-17 - Phase 3 DRE Graph Legacy Execution Cleanup Slice
-
-Removed behavior-neutral legacy presentation code:
-
-- Removed the unused `graphSection` renderer from `packages/ax-code/src/server/routes/dre-graph.ts`; the route has historically rendered the live Mermaid graph surface and activity sections, not this legacy execution section.
-- Removed the unused timeline-section module and its focused test because no route or production code consumed that renderer.
-- Removed now-unused route imports for graph/timeline presentation helpers.
-- Kept the lower-level timeline parser tests and activity-section rendering coverage in place because those helpers remain used by rendered sections.
-
-### 2026-05-17 - Phase 3 DRE Graph Index Page Extraction Slice
-
-Implemented another route presentation extraction:
-
-- Extracted the DRE graph session-list page renderer into `packages/ax-code/src/quality/dre-graph-index-page.ts`.
-- `packages/ax-code/src/server/routes/dre-graph.ts` now keeps only request parsing, session loading, cache headers, and response writing for the index route.
-- Added focused coverage in `packages/ax-code/test/quality/dre-graph-index-page.test.ts` for escaped session titles, root/fork chips, query preservation on session links, live-refresh directory polling, and empty list output.
-- Kept existing DRE graph server tests as the route-level integration check.
-
-Still pending:
-
-- UI component grouping.
-- Further DRE graph route domain extraction beyond timeline parsing, fingerprint shaping, display formatting helpers, widget helpers, client asset scripts, CSS asset extraction, quality readiness section rendering, validation section rendering, changes section rendering, verdict section rendering, summary section rendering, risk section rendering, activity helper extraction, rollback helper extraction, branch section rendering, activity section rendering, legacy execution cleanup, and index page rendering.
-- TUI session route and session prompt hotspot reduction.
-- LSP surface cleanup.
-- Workspace package manifest dependency-cycle cleanup.
+## Executive Summary
+
+The workspace package layout is directionally correct and does not need a broad package split in the next implementation wave. The current risk is internal boundary erosion: large interface-heavy files, a flat shared UI component surface, and workspace package manifest cycles that make ownership harder to reason about.
+
+This PRD hardens package organization in small, reviewable slices:
+
+1. Keep package boundaries visible through structure guardrails.
+2. Reduce large interface surfaces by extracting domain and view-model logic.
+3. Group shared UI components by concern while preserving compatibility exports.
+4. Replace runtime imports from SDK source paths with stable package exports.
+5. Resolve or document workspace manifest dependency cycles.
+
+Several slices are already complete. The remaining work should focus on UI component grouping, TUI/session prompt hotspot reduction, LSP surface cleanup, and the workspace package dependency cycle.
+
+## Current Evidence
+
+Verified against the current checkout on 2026-05-17:
+
+- `bun run script/structure.ts` exits successfully.
+- Structure guardrails report no `@ax-code/ui` runtime dependency violations.
+- Structure guardrails report no raw cross-package `src` imports.
+- Structure guardrails report `SDK Runtime Source Imports` as OK.
+- Structure guardrails still warn about workspace package manifest cycles:
+  - `@ax-code/plugin -> @ax-code/sdk -> ax-code -> @ax-code/plugin`
+  - `@ax-code/sdk -> ax-code -> @ax-code/sdk`
+- Structure guardrails report `packages/ui/src/components` with 140 direct source files, 9 child folders, and 168 total source files.
+- Structure guardrails report 73 files above 500 lines and 32 files above 800 lines.
+- Current largest package-boundary hotspots include:
+  - `packages/ax-code/src/session/prompt.ts`: about 3,200 lines.
+  - `packages/ax-code/src/cli/cmd/tui/routes/session/index.tsx`: about 3,000 lines.
+  - `packages/ax-code/src/lsp/index.ts`: about 2,100 lines.
+  - `packages/ax-code/src/quality/model-registry.ts`: about 2,700 lines.
+- `packages/ax-code/src/server/routes/dre-graph.ts` has already been reduced to request/response glue and page composition, about 212 lines.
+
+## Implementation Snapshot
+
+### Completed: Phase 1 Structure Visibility
+
+- `script/structure.ts` reports runtime imports that reach directly into SDK source files.
+- `script/structure.ts` reports workspace package manifest dependency cycles.
+- `script/structure.ts` separates hotspot threshold reporting from the general hotspot summary.
+- Existing package cycles and 800+ line files are warnings so known debt is visible without blocking unrelated CI.
+- `packages/ax-code/test/script/root-structure-script.test.ts` verifies that the root structure script emits boundary-hardening sections and exits successfully with known warnings.
+
+### Completed: Phase 3 DRE Graph Route Extraction
+
+The original DRE graph route hotspot has been materially reduced. Route-heavy parsing, formatting, page sections, scripts, styles, widgets, fingerprints, activity summaries, rollback rendering, and index rendering now live under `packages/ax-code/src/quality/`.
+
+The completed extraction includes focused tests for:
+
+- `dre-graph-activity-section`
+- `dre-graph-activity`
+- `dre-graph-assets`
+- `dre-graph-branch-section`
+- `dre-graph-changes-section`
+- `dre-graph-fingerprint`
+- `dre-graph-format`
+- `dre-graph-index-page`
+- `dre-graph-quality-readiness`
+- `dre-graph-risk-section`
+- `dre-graph-rollback`
+- `dre-graph-style`
+- `dre-graph-summary-section`
+- `dre-graph-timeline`
+- `dre-graph-validation-section`
+- `dre-graph-verdict-section`
+- `dre-graph-widgets`
+
+The route now owns:
+
+- HTTP route registration.
+- Query and parameter validation.
+- Session context loading.
+- Cache and content-type headers.
+- Response body selection.
+
+Remaining DRE work is optional and should be triggered only if the route grows again or route-level composition becomes hard to review.
+
+### Completed: Phase 6 SDK Source-Import Cleanup
+
+- `packages/ax-code/src/sdk/programmatic.ts` imports generated API types through `@ax-code/sdk/v2/client`.
+- Programmatic SDK types and errors come from `@ax-code/sdk/programmatic`.
+- Runtime code no longer imports SDK source files through relative `packages/sdk/js/src` paths.
+- The package manifest dependency cycle remains unresolved and is tracked separately.
 
 ## Problem Statement
 
-The current workspace package layout is broadly correct, but several package-internal files and folders have grown large enough to weaken boundaries and maintainability.
+The current workspace package roles are broadly correct, but several package-internal surfaces have grown large enough to weaken ownership boundaries and reviewability.
 
-The current structure guardrail passes and validates that runtime packages do not import `@ax-code/ui`, raw cross-package `src` imports are absent, and required architecture notes exist. That means a broad workspace package split is not the best first move.
+The package-level boundary is not the immediate problem. Current structure checks already confirm that runtime packages do not import `@ax-code/ui` and that raw cross-package `src` imports are absent. The remaining debt is concentrated in package-internal organization:
 
-The real debt is concentrated in large runtime and UI surfaces:
-
-- `packages/ax-code/src/session/prompt.ts` is over 3,000 lines.
-- `packages/ax-code/src/cli/cmd/tui/routes/session/index.tsx` is over 3,000 lines.
-- `packages/ax-code/src/server/routes/dre-graph.ts` is over 2,600 lines.
-- `packages/ax-code/src/lsp/index.ts` is over 2,000 lines.
-- `packages/ui/src/components` still has a large flat direct-file surface.
-- `ax-code` and `@ax-code/sdk` have a package-manifest dependency cycle smell, and runtime code still imports SDK source types through relative deep paths.
+- Large runtime files mix multiple concerns.
+- TUI route files still combine rendering, state projection, and display transformations.
+- LSP behavior is centralized in a large module that spans lifecycle, cache, query, permission, and status policy.
+- `packages/ui/src/components` still has a large flat direct-file surface despite existing grouped folders.
+- Workspace package manifests still contain dependency cycles.
 
 Without a phased boundary-hardening plan, future feature work will keep landing in interface-heavy files and make eventual package splits more expensive.
 
 ## Goals
 
-- Goal 1: Preserve the current workspace package roles while improving internal ownership boundaries.
-- Goal 2: Move domain-heavy behavior out of server routes, CLI commands, and TUI components into domain or view-model modules.
-- Goal 3: Group shared UI components by concern without breaking public exports.
-- Goal 4: Remove or formally contain SDK/runtime deep source imports.
-- Goal 5: Add structure guardrails that make hotspot growth and dependency cycles visible.
-- Non-goal: Do not perform a broad multi-package split in the first implementation wave.
-- Non-goal: Do not move terminal-specific OpenTUI code into `packages/ui`.
-- Non-goal: Do not change public SDK APIs unless a compatibility-preserving export is required.
+- Preserve the current workspace package roles while improving internal ownership boundaries.
+- Move domain-heavy behavior out of server routes, CLI commands, and TUI components into domain or view-model modules.
+- Group shared UI components by concern without breaking public exports.
+- Keep SDK/runtime contracts on stable package exports.
+- Make hotspot growth and package dependency cycles visible in guardrail output.
+- Resolve or explicitly document any remaining workspace package manifest cycles.
 
-## Current State
+## Non-Goals
 
-### Package Roles
+- Do not perform a broad split of `packages/ax-code` into many workspace packages in this PRD.
+- Do not move terminal-specific OpenTUI code into `packages/ui`.
+- Do not change public SDK APIs except for compatibility-preserving exports.
+- Do not rewrite the LSP layer in Rust without measurement.
+- Do not treat internal planning files as product-facing docs.
 
-- `packages/ax-code` contains runtime, CLI, TUI, server, session engine, tool orchestration, storage, and provider integration.
-- `packages/ui` contains shared UI components, content rendering, icons, styles, and UI-only helpers.
-- `packages/sdk/js` contains the JavaScript SDK and generated OpenAPI clients.
-- `packages/plugin`, `packages/util`, integration packages, and native addon packages remain narrower supporting surfaces.
+## Package Roles
 
-### Existing Guardrails
+- `packages/ax-code`: runtime, CLI, TUI, server, session engine, tool orchestration, storage, providers, and runtime logic.
+- `packages/ui`: shared visual components, content rendering, icons, styles, and UI-only helpers.
+- `packages/sdk/js`: JavaScript SDK and generated OpenAPI clients.
+- `packages/plugin`: plugin contracts and plugin-facing helpers.
+- `packages/util`: narrow shared helpers.
+- Integration packages and native addon packages remain supporting surfaces.
 
-- `script/structure.ts` checks required architecture notes, `@ax-code/ui` dependency violations, raw cross-package `src` imports, V4 guarded directory imports, hotspot summaries, legacy root folders, and unexpected root folders.
-- `packages/ax-code/script/check-tui-layering.ts` checks selected TUI view-model and pure-helper files for Solid/OpenTUI renderer imports.
-- `packages/ax-code/ARCHITECTURE.md` already says domain logic belongs in domain folders and interface layers should stay in `cli`, server routes, and other entry surfaces.
-- `packages/ui/ARCHITECTURE.md` already says new components should be grouped by concern and primitive controls should stay separate from session/file/content-specific components.
+## Technical Design
 
-### Observed Hotspots
+### Structure Guardrails
 
-- `packages/ax-code/src/cli` contains the largest source count under `packages/ax-code/src`, with TUI as the largest sub-surface.
-- `packages/ax-code/src/quality` contains many promotion and rollout modules, with several large policy files.
-- `packages/ax-code/src/server/routes/dre-graph.ts` carries too much DRE graph behavior in an HTTP route.
-- `packages/ax-code/src/lsp/index.ts` centralizes too many LSP concerns.
-- `packages/ui/src/components` still has many direct files even though grouped folders already exist.
+Keep `script/structure.ts` as the first visibility surface. It should continue to report:
 
-## Proposed Solution
+- File-size thresholds above 500 and 800 lines.
+- Hotspot direct-file counts.
+- Workspace package dependency cycles.
+- Runtime imports from SDK source paths.
+- Raw cross-package `src` imports.
+- Runtime imports of `@ax-code/ui`.
+- Unexpected root folders and legacy root folders.
 
-### Overview
+Current known hotspots should remain warnings until each phase introduces a stricter, phase-specific guardrail. New guardrails should avoid blocking unrelated work because of existing debt.
 
-Implement a phased internal reorganization that hardens boundaries before any package split:
+### UI Component Grouping
 
-1. Add better visibility and guardrails.
-2. Group UI files while preserving exports.
-3. Extract the clearest route/domain seam first.
-4. Reduce TUI and prompt hotspots through pure helper and view-model extraction.
-5. Clean up SDK/runtime contract imports.
+Use the existing `packages/ui/src/components` grouping scheme as the default taxonomy instead of introducing a competing folder model.
 
-### Technical Design
+Existing folders to extend:
 
-#### Structure Guardrails
+- `actions`
+- `forms`
+- `layout`
+- `navigation`
+- `overlay`
+- `status`
+- `app-icons`
+- `file-icons`
+- `provider-icons`
 
-Extend `script/structure.ts` or add a supporting script to report:
+Additional folders may be introduced only when they reduce ambiguity:
 
-- new files above 500 lines,
-- new or expanded files above 800 lines,
-- direct-file count under `packages/ui/src/components`,
-- package manifest dependency cycles,
-- runtime imports from SDK source paths.
+- `content`: markdown, diff, line comments, media previews.
+- `message`: message parts, message files, message navigation.
+- `session`: session review, session graph, session insights, rollback, retry, and compare UI.
+- `file`: file search, file media, file SSR, and file display helpers that do not belong under icon-only folders.
 
-Known existing hotspots should initially be warnings or explicitly allowlisted so the guardrail prevents growth without blocking unrelated work.
+Compatibility rules:
 
-#### UI Grouping
+- Preserve `@ax-code/ui/*` direct import paths through existing files or compatibility re-exports.
+- Update `packages/ui/package.json` exports only when a new grouped path must be public.
+- Keep component-local CSS and stories with the moved component.
+- Move small batches and run `pnpm --dir packages/ui run typecheck` after each batch.
 
-Move shared UI components from `packages/ui/src/components` into concern-based folders while preserving current package exports:
+### TUI Session Route and Prompt Extraction
 
-- `primitives/`: button, checkbox, input, dialog primitives, popover, menus.
-- `content/`: markdown, diff, line comments, media previews.
-- `message/`: message parts, message files, message navigation.
-- `session/`: session review, session graph, session insights, rollback/retry/compare.
-- `file/`: file icon, file media, file search, file SSR.
-- `provider/`: provider icons and provider-specific display helpers.
+Continue the existing route view-model direction:
 
-Update `packages/ui/package.json` exports only when necessary and preserve old export paths through compatibility re-exports.
+- Pure session display transformations belong in route-local view-model modules.
+- Rendering components should consume precomputed models.
+- State reducers and event projection should stay in the headless runtime boundary when they are not renderer-specific.
+- Prompt input helpers, history/frecency behavior, footer layout, and liveness rendering should stay split by concern.
 
-#### DRE Graph Route Extraction
+Candidate seams:
 
-Extract domain-heavy logic from `packages/ax-code/src/server/routes/dre-graph.ts` into a domain module under `packages/ax-code/src/quality/` or `packages/ax-code/src/graph/`.
+- Message grouping and coalescing.
+- Tool-part display classification.
+- Usage and compaction summaries.
+- Permission and question display models.
+- Autonomous activity and liveness summaries.
+- Prompt history and frecency helpers.
 
-The route should own:
+### Session Prompt Runtime Extraction
 
-- HTTP request parsing,
-- authentication/context binding,
-- response shaping,
-- route-specific errors.
+Extract from `packages/ax-code/src/session/prompt.ts` only when a narrow behavior-preserving seam is available.
 
-The domain service should own:
+Candidate seams:
 
-- DRE graph assembly,
-- quality snapshot composition,
-- graph topology and summary calculations,
-- reusable testable pure helpers.
-
-#### TUI Session Route and Prompt Extraction
-
-Continue the existing layering direction:
-
-- Pure session display transformations go into route-local view-model modules.
-- Rendering components stay thin and consume precomputed models.
-- State reducers and event projection stay in the headless runtime boundary where applicable.
-- Prompt input helpers, history/frecency behavior, footer layout, and liveness rendering stay split by concern.
-
-#### Session Prompt Runtime Extraction
-
-Extract from `packages/ax-code/src/session/prompt.ts` only when a narrow behavior-preserving seam is available:
-
-- prompt input normalization,
-- autonomous continuation policy,
-- tool result classification,
-- lifecycle status transitions,
-- provider response normalization.
+- Prompt input normalization.
+- Autonomous continuation policy.
+- Tool result classification.
+- Lifecycle status transitions.
+- Provider response normalization.
+- Retry and repair envelope shaping.
 
 Each extraction must keep existing tests passing before moving to the next seam.
 
-#### LSP Surface Extraction
+### LSP Surface Cleanup
 
 Split `packages/ax-code/src/lsp/index.ts` by concern:
 
-- client lifecycle,
-- server definition and launch policy,
-- query/cache orchestration,
-- permission and missing-server behavior,
-- status and prewarm reporting.
+- Client lifecycle.
+- Server definition and launch policy.
+- Query and cache orchestration.
+- Permission and missing-server behavior.
+- Status and prewarm reporting.
 
-Existing behavior for cache fallback must remain: cache failures should fall back to live LSP behavior rather than aborting operations.
+Preserve the existing reliability rule: cache failures in `tool.lsp` should fall back to live LSP behavior rather than aborting the operation.
 
-#### SDK / Runtime Contract Cleanup
+### SDK and Runtime Contract Cleanup
 
-Replace relative imports from `packages/ax-code/src/sdk/programmatic.ts` into `packages/sdk/js/src/...` with explicit SDK exports or a small shared contract surface.
+Runtime code should import SDK contracts through package exports, not relative paths into `packages/sdk/js/src`.
 
-Preferred order:
-
-1. Export required programmatic SDK types from `@ax-code/sdk/programmatic`.
-2. Export required generated API types from stable SDK entry points.
-3. Update runtime imports to package exports.
-4. Re-evaluate whether the package manifest dependency cycle is still needed.
-
-### API / Interface Changes
-
-No user-facing API changes are intended.
-
-No CLI command behavior changes are intended.
-
-Any `@ax-code/ui` export moves must preserve existing import paths or provide compatibility re-exports.
-
-SDK export additions are allowed only to remove deep source imports and should be semver-compatible.
-
-## Alternatives Considered
-
-### Alternative 1: Split `packages/ax-code` Into Many Workspace Packages
-
-- Description: Create new packages such as `@ax-code/runtime`, `@ax-code/quality`, `@ax-code/lsp`, or `@ax-code/server`.
-- Pros: Strong package-level ownership and dependency enforcement.
-- Cons: High import churn, packaging risk, release complexity, and unclear seams while large files still mix concerns.
-- Why not chosen: Current package-level guardrails pass; internal boundary hardening is lower risk and more immediately useful.
-
-### Alternative 2: Only Add Guardrails, No Reorganization
-
-- Description: Keep files in place and only prevent future growth.
-- Pros: Lowest short-term risk.
-- Cons: Does not reduce existing large-file maintenance cost or interface-layer domain drift.
-- Why not chosen: Existing hotspots are already large enough to slow reviews and changes.
-
-### Alternative 3: Move More UI Into `packages/ui`
-
-- Description: Shift TUI components or terminal UI state into the shared UI package.
-- Pros: Could reduce `packages/ax-code/src/cli/cmd/tui` size.
-- Cons: Violates the current runtime/UI separation and risks tying shared UI to OpenTUI-specific runtime behavior.
-- Why not chosen: `packages/ui` should remain shared visual infrastructure, not runtime agent state.
+The SDK source-import cleanup is complete for the current checkout. The remaining contract issue is the workspace package manifest cycle. That cycle should be resolved only after confirming whether each dependency is runtime, build-time, test-time, or type-only.
 
 ## Implementation Plan
 
-### Phase 1: Structure Metrics and Guardrails
+### Phase 1: Structure Metrics and Guardrails - Complete
 
-- [ ] Add or extend structure reporting for file-size thresholds and hotspot growth.
-- [ ] Add workspace package dependency cycle reporting.
-- [ ] Add detection for runtime imports from SDK source paths.
-- [ ] Keep existing debt as warnings or allowlisted entries.
-- [ ] Verify with `bun run script/structure.ts`.
+- [x] Add or extend structure reporting for file-size thresholds and hotspot growth.
+- [x] Add workspace package dependency cycle reporting.
+- [x] Add detection for runtime imports from SDK source paths.
+- [x] Keep existing debt as warnings or allowlisted entries.
+- [x] Verify with `bun run script/structure.ts`.
 
-### Phase 2: UI Component Grouping
+Exit state:
 
-- [ ] Define target folders under `packages/ui/src/components`.
-- [ ] Move a small first batch of primitive components with compatibility re-exports.
-- [ ] Move message/session/file-specific components in separate small batches.
-- [ ] Update exports only when necessary.
-- [ ] Run `pnpm --dir packages/ui run typecheck`.
+- Structure script exits successfully.
+- Known debt is visible as warnings.
+- No package boundary violation is hidden behind the broader hotspot report.
 
-### Phase 3: DRE Graph Route Domain Extraction
+### Phase 2: UI Component Grouping - Pending
 
-- [ ] Extract pure graph and quality summary helpers from `server/routes/dre-graph.ts`.
-- [ ] Keep the route as request/response glue.
-- [ ] Add focused unit tests for extracted helpers.
-- [ ] Verify server route tests that cover DRE graph behavior.
+- [ ] Classify current direct component files into existing UI folders before creating new folders.
+- [ ] Move a first low-risk batch of primitives/forms/actions with compatibility re-exports.
+- [ ] Move content and message-specific files in separate batches.
+- [ ] Move file/provider/session-specific files only after the target folder contract is clear.
+- [ ] Preserve existing `@ax-code/ui/*` import paths.
+- [ ] Run `pnpm --dir packages/ui run typecheck` after each batch.
 
-### Phase 4: TUI Session Route and Prompt Hotspot Reduction
+Exit criteria:
 
-- [ ] Extract remaining pure display transformations from the TUI session route.
+- `packages/ui/src/components` direct source-file count is materially lower than the current 140.
+- Existing public imports continue to typecheck.
+- Moved CSS and stories stay colocated with their components.
+
+### Phase 3: DRE Graph Route Domain Extraction - Complete
+
+- [x] Extract pure graph, formatting, activity, risk, verdict, validation, branch, rollback, style, asset, and index helpers from `server/routes/dre-graph.ts`.
+- [x] Keep the route focused on request parsing, context loading, headers, and response writing.
+- [x] Add focused unit tests for extracted helpers.
+- [x] Preserve route-level integration coverage for DRE graph behavior.
+
+Exit state:
+
+- `packages/ax-code/src/server/routes/dre-graph.ts` is no longer a large hotspot.
+- DRE graph behavior is covered primarily through `packages/ax-code/test/quality/dre-graph*.test.ts`.
+
+### Phase 4: TUI Session Route and Prompt Hotspot Reduction - Pending
+
+- [ ] Extract one renderer-free display/view-model seam from the TUI session route.
 - [ ] Add or extend route view-model tests.
+- [ ] Run `cd packages/ax-code && bun run check:tui-layering`.
 - [ ] Extract one behavior-preserving seam from `session/prompt.ts`.
-- [ ] Verify targeted session and TUI tests before any second extraction.
+- [ ] Run targeted session and prompt tests before any second extraction.
 
-### Phase 5: LSP Surface Cleanup
+Exit criteria:
+
+- At least one TUI session route concern moves out of the 3,000-line route file.
+- At least one session prompt concern moves out of `session/prompt.ts`.
+- New modules have focused tests and do not import Solid or OpenTUI unless they are renderer modules.
+
+### Phase 5: LSP Surface Cleanup - Pending
 
 - [ ] Extract query/cache orchestration from `lsp/index.ts`.
-- [ ] Extract lifecycle/status policy only if tests can pin behavior.
+- [ ] Extract lifecycle/status policy only after tests pin behavior.
 - [ ] Preserve live fallback behavior on cache failures.
 - [ ] Run targeted LSP tests.
 
-### Phase 6: SDK / Runtime Contract Cleanup
+Exit criteria:
 
-- [ ] Export required programmatic and generated types from stable SDK entry points.
-- [ ] Replace runtime relative imports into SDK source paths.
-- [ ] Re-run SDK OpenAPI validation and package typechecks.
-- [ ] Decide whether the manifest dependency cycle remains necessary.
+- `lsp/index.ts` delegates at least one major concern to a named module.
+- Cache failure fallback remains covered by tests.
+- Missing-server and no-server conditions remain checked before prompting for LSP permission.
+
+### Phase 6: SDK Source Import Cleanup - Complete
+
+- [x] Export required programmatic SDK types from stable SDK entry points.
+- [x] Export required generated API types from stable SDK entry points.
+- [x] Replace runtime relative imports into SDK source paths.
+- [x] Verify `script/structure.ts` reports SDK runtime source imports as OK.
+
+Exit state:
+
+- Runtime code imports SDK contracts through package exports.
+- No transitional exception is required for SDK source imports in the current checkout.
+
+### Phase 7: Workspace Manifest Dependency Cycle Cleanup - Pending
+
+- [ ] Classify each edge in `@ax-code/plugin -> @ax-code/sdk -> ax-code -> @ax-code/plugin`.
+- [ ] Classify each edge in `@ax-code/sdk -> ax-code -> @ax-code/sdk`.
+- [ ] Move type-only contracts to a stable package export or narrower contract module if needed.
+- [ ] Remove unnecessary runtime dependencies.
+- [ ] If a cycle is intentionally retained, document the owner, reason, and removal trigger in this PRD or a follow-up ADR.
+- [ ] Verify with `bun run script/structure.ts`.
+
+Exit criteria:
+
+- Structure output reports no workspace manifest cycles, or each remaining cycle has an explicit owner, reason, and removal target.
 
 ## Risk Assessment
 
 | Risk | Likelihood | Impact | Mitigation |
 |------|------------|--------|------------|
-| Import churn breaks package consumers | Medium | Medium | Preserve exports and move in small batches |
-| Guardrails block unrelated work because of existing debt | Medium | Medium | Start with warnings or explicit allowlists for known hotspots |
-| UI grouping breaks Storybook or package exports | Medium | Medium | Use compatibility re-exports and run UI typecheck |
-| Route extraction changes DRE graph behavior | Medium | High | Extract pure helpers first and add snapshot/contract tests |
+| Import churn breaks package consumers | Medium | Medium | Preserve exports and use compatibility re-exports |
+| Guardrails block unrelated work because of existing debt | Medium | Medium | Start with warnings and make stricter checks phase-specific |
+| UI grouping creates competing taxonomies | Medium | Medium | Extend existing folders first and introduce new folders only with clear contracts |
+| TUI extraction changes rendering behavior | Medium | High | Extract renderer-free view models first and keep route tests targeted |
 | Session prompt extraction changes agent loop behavior | Medium | High | Extract one narrow seam at a time and run targeted session tests |
-| SDK contract cleanup creates circular import/runtime load issues | Medium | High | Prefer type-only exports and stable SDK entry points |
+| LSP extraction breaks fallback behavior | Medium | High | Pin cache-failure fallback before moving orchestration |
+| Manifest-cycle cleanup creates runtime loading issues | Medium | High | Classify dependency edges before changing manifests |
 
-## Testing Strategy (TDD)
+## Testing Strategy
 
-### Test Cases (write these first)
-
-| # | Test Name | Input | Expected Output | Type |
-|---|-----------|-------|-----------------|------|
-| 1 | structure reports package cycles | package manifests with a cycle | report includes the cycle path | unit |
-| 2 | structure reports direct SDK source imports | source file importing `../../../sdk/js/src/...` | report includes the offending import | unit |
-| 3 | structure keeps existing boundary checks | current repository | no `@ax-code/ui` runtime violation | integration |
-| 4 | UI compatibility export remains stable | existing import path | resolves to moved component | typecheck |
-| 5 | DRE graph helper preserves output | representative DRE graph inputs | same graph summary as current route path | unit |
-| 6 | TUI session view model is renderer-free | view-model imports | no Solid/OpenTUI imports | guardrail |
-| 7 | LSP cache failure fallback remains live | cache query failure with available server | operation falls back instead of aborting | unit/integration |
-| 8 | SDK runtime imports use public exports | runtime SDK entry file | no relative SDK source imports | guardrail |
-
-### Test Files to Create
-
-- `script/structure.test.ts` or an equivalent script test harness for new structure checks.
-- `packages/ui/src/components/<group>/compat.test.ts` if compatibility re-exports need runtime checks.
-- `packages/ax-code/test/server/dre-graph-domain.test.ts` for extracted DRE graph helpers.
-- `packages/ax-code/test/cli/tui-session-view-model.test.ts` for extracted TUI session models.
-- `packages/ax-code/test/lsp/index.test.ts` or narrower LSP module tests for fallback behavior.
-- `packages/ax-code/test/sdk/programmatic-contract.test.ts` for public SDK contract import behavior if needed.
-
-### Coverage Goals
-
-- Guardrail coverage for dependency and import boundary checks.
-- Focused pure-helper coverage for DRE graph and TUI session transformations.
-- Regression coverage for LSP fallback behavior.
-- Typecheck coverage for UI export compatibility and SDK contract exports.
-
-### Existing Tests to Verify
+### Guardrail Tests
 
 - `bun run script/structure.ts`
-- `cd packages/ax-code && bun run check:tui-layering`
-- `cd packages/ax-code && bun run typecheck`
-- `cd packages/ax-code && bun test <targeted session/tui/server/lsp tests>`
+- `packages/ax-code/test/script/root-structure-script.test.ts`
+
+Expected behavior:
+
+- The script exits successfully.
+- Boundary sections are present.
+- SDK runtime source imports are OK.
+- Package cycles remain visible until Phase 7 closes them.
+
+### UI Grouping Tests
+
 - `pnpm --dir packages/ui run typecheck`
+- Optional compatibility tests for moved public components when a re-export is non-trivial.
+
+Expected behavior:
+
+- Existing public import paths continue to resolve.
+- Grouped component paths typecheck.
+- Stories and CSS imports stay valid.
+
+### DRE Graph Tests
+
+- `cd packages/ax-code && bun test test/quality/dre-graph*.test.ts`
+- Existing route-level DRE graph tests, when touched.
+
+Expected behavior:
+
+- Extracted helpers preserve escaping, formatting, summaries, fingerprints, and section rendering behavior.
+- Route-level tests continue to cover request/response integration.
+
+### TUI and Prompt Tests
+
+- `cd packages/ax-code && bun run check:tui-layering`
+- Targeted tests under `packages/ax-code/test/cli/tui/**`.
+- Targeted tests under `packages/ax-code/test/session/**`.
+
+Expected behavior:
+
+- View-model modules stay renderer-free.
+- Prompt behavior remains unchanged for the extracted seam.
+
+### LSP Tests
+
+- Targeted tests under `packages/ax-code/test/lsp/**`.
+- Add or extend fallback tests before moving query/cache orchestration.
+
+Expected behavior:
+
+- Cache failure falls back to live LSP behavior.
+- Missing-file and no-server conditions do not prompt for permission prematurely.
+
+### SDK and Manifest Tests
+
 - `pnpm --dir packages/sdk/js run validate:openapi`
+- `cd packages/ax-code && bun run typecheck`
+- `bun run script/structure.ts`
+
+Expected behavior:
+
+- SDK contract exports remain stable.
+- Runtime SDK source imports stay absent.
+- Manifest cycles are removed or documented.
 
 ## Dependencies
 
-- No new external packages are expected.
-- Internal modules affected:
-  - `script/structure.ts`
-  - `packages/ui/src/components/**`
-  - `packages/ui/package.json`
-  - `packages/ax-code/src/server/routes/dre-graph.ts`
-  - `packages/ax-code/src/quality/**`
-  - `packages/ax-code/src/cli/cmd/tui/routes/session/**`
-  - `packages/ax-code/src/session/prompt.ts`
-  - `packages/ax-code/src/lsp/**`
-  - `packages/ax-code/src/sdk/programmatic.ts`
-  - `packages/sdk/js/src/**`
-- Breaking changes to existing APIs are not planned.
+No new external packages are expected.
+
+Internal modules affected:
+
+- `script/structure.ts`
+- `packages/ui/src/components/**`
+- `packages/ui/package.json`
+- `packages/ax-code/src/cli/cmd/tui/routes/session/**`
+- `packages/ax-code/src/session/prompt.ts`
+- `packages/ax-code/src/lsp/**`
+- `packages/ax-code/src/sdk/programmatic.ts`
+- `packages/sdk/js/src/**`
+- Workspace package manifests that participate in the remaining cycles.
 
 ## Success Criteria
 
-- The structure report passes with no package boundary violations.
-- New guardrail output identifies hotspot growth and SDK/runtime source-import violations.
-- `packages/ui/src/components` has fewer direct files and stable compatibility exports.
-- `server/routes/dre-graph.ts` is materially smaller and routes domain work through a reusable service/helper module.
-- TUI session route and prompt hotspots shrink through behavior-preserving extractions.
-- Runtime code no longer imports SDK source files through relative `../../../sdk/js/src/...` paths, or a documented transitional exception exists with an owner and removal target.
-- Targeted typecheck and tests pass for each phase before the next phase begins.
+This PRD is complete when:
+
+- `bun run script/structure.ts` exits successfully.
+- Runtime package boundary violations remain absent.
+- SDK runtime source imports remain absent.
+- Workspace package manifest cycles are resolved or documented with owner, reason, and removal trigger.
+- `packages/ui/src/components` direct source-file count is materially reduced from the current 140 while preserving public import compatibility.
+- `packages/ax-code/src/server/routes/dre-graph.ts` remains below hotspot thresholds and owns only route-level responsibilities.
+- TUI session route, session prompt, and LSP hotspots each shrink through at least one behavior-preserving extraction.
+- Each completed phase records the targeted validation command that passed.
+
+## Next Best Slice
+
+The next best implementation slice is Phase 7 manifest-cycle classification. It is higher leverage than more DRE graph cleanup because DRE graph is no longer a large route hotspot, while the package cycle warning still appears in every structure report.
+
+Recommended first task:
+
+1. Inspect `packages/plugin/package.json`, `packages/sdk/js/package.json`, and `packages/ax-code/package.json`.
+2. Classify the cycle edges as runtime, build-time, test-time, or type-only.
+3. Remove or narrow one dependency edge if safe.
+4. Re-run `bun run script/structure.ts`.
+5. Update this PRD with the result.
