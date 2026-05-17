@@ -21,6 +21,12 @@ export type SessionTaskSummary = {
   total: number
 }
 
+export type AssistantToolSummaryItem = {
+  name: string
+  count: number
+  label: string
+}
+
 export type UserMetadataPreference = "auto" | "full" | "compact"
 export type UserMetadataDensity = "full" | "compact"
 
@@ -116,6 +122,44 @@ export function assistantMessageDuration(
   const user = messages.find((item) => item.role === "user" && item.id === message.parentID)
   if (!user?.time?.created) return 0
   return message.time.completed - user.time.created
+}
+
+const TOOL_SUMMARY_LABELS: Record<string, [string, string]> = {
+  read: ["read", "reads"],
+  edit: ["edit", "edits"],
+  write: ["write", "writes"],
+  bash: ["cmd", "cmds"],
+  glob: ["glob", "globs"],
+  grep: ["grep", "greps"],
+  list: ["list", "lists"],
+  task: ["delegation", "delegations"],
+  webfetch: ["fetch", "fetches"],
+  websearch: ["search", "searches"],
+  codesearch: ["search", "searches"],
+  todowrite: ["todo", "todos"],
+}
+
+export function assistantToolSummaryLabel(name: string, count: number): string {
+  const pair = TOOL_SUMMARY_LABELS[name]
+  if (pair) return pair[count === 1 ? 0 : 1]
+  return name
+}
+
+export function assistantToolSummary(parts: Part[], limit = 3): AssistantToolSummaryItem[] {
+  const counts = new Map<string, number>()
+  for (const part of parts) {
+    if (part.type !== "tool") continue
+    counts.set(part.tool, (counts.get(part.tool) ?? 0) + 1)
+  }
+
+  return Array.from(counts.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, limit)
+    .map(([name, count]) => ({
+      name,
+      count,
+      label: assistantToolSummaryLabel(name, count),
+    }))
 }
 
 export function userMessageView(input: {

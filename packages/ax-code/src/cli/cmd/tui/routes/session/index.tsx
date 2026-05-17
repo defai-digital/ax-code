@@ -100,6 +100,8 @@ import { userRoute } from "../../util/transcript"
 import { EventQuery } from "@/replay/query"
 import { routeEvent } from "./route"
 import {
+  assistantMessageDuration,
+  assistantToolSummary,
   codeDisplayView,
   compactDelegatedLabel,
   diffDisplayView,
@@ -122,27 +124,6 @@ import { buildSubagentStatusView, type SubagentRollupTask } from "./subagent-sta
 addDefaultParsers(parsers.parsers)
 
 const log = Log.create({ service: "tui.session" })
-
-const TOOL_SUMMARY_LABELS: Record<string, [string, string]> = {
-  read: ["read", "reads"],
-  edit: ["edit", "edits"],
-  write: ["write", "writes"],
-  bash: ["cmd", "cmds"],
-  glob: ["glob", "globs"],
-  grep: ["grep", "greps"],
-  list: ["list", "lists"],
-  task: ["delegation", "delegations"],
-  webfetch: ["fetch", "fetches"],
-  websearch: ["search", "searches"],
-  codesearch: ["search", "searches"],
-  todowrite: ["todo", "todos"],
-}
-
-function toolSummaryLabel(name: string, count: number): string {
-  const pair = TOOL_SUMMARY_LABELS[name]
-  if (pair) return pair[count === 1 ? 0 : 1]
-  return name
-}
 
 class CustomSpeedScroll implements ScrollAcceleration {
   constructor(private speed: number) {}
@@ -1488,23 +1469,9 @@ function AssistantMessage(props: { message: AssistantMessage; parts: Part[]; las
 
   const duration = createMemo(() => {
     if (!final()) return 0
-    if (!props.message.time.completed) return 0
-    const user = messages().find((x) => x.role === "user" && x.id === props.message.parentID)
-    if (!user || !user.time) return 0
-    return props.message.time.completed - user.time.created
+    return assistantMessageDuration(props.message, messages())
   })
-
-  const toolSummary = createMemo<Array<[string, number]>>(() => {
-    const counts = new Map<string, number>()
-    for (const p of props.parts) {
-      if (p.type !== "tool") continue
-      const tool = (p as ToolPart).tool
-      counts.set(tool, (counts.get(tool) ?? 0) + 1)
-    }
-    return Array.from(counts.entries())
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 3)
-  })
+  const toolSummary = createMemo(() => assistantToolSummary(props.parts))
 
   const keybind = useKeybind()
 
@@ -1612,10 +1579,10 @@ function AssistantMessage(props: { message: AssistantMessage; parts: Part[]; las
                 <span style={{ fg: theme.textMuted }}> · {Locale.duration(duration())}</span>
               </Show>
               <For each={toolSummary()}>
-                {([name, count]) => (
+                {(item) => (
                   <span style={{ fg: theme.textMuted }}>
                     {" "}
-                    · {count} {toolSummaryLabel(name, count)}
+                    · {item.count} {item.label}
                   </span>
                 )}
               </For>

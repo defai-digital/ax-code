@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test"
 import {
   assistantMessageDuration,
+  assistantToolSummary,
+  assistantToolSummaryLabel,
   compactDelegatedLabel,
   codeDisplayView,
   diffDisplayView,
@@ -127,6 +129,30 @@ describe("tui session view model", () => {
 
     expect(assistantMessageDuration(message, messages)).toBe(150)
     expect(assistantMessageDuration({ ...message, finish: "tool-calls" }, messages)).toBe(0)
+  })
+
+  test("summarizes assistant tool usage without renderer state", () => {
+    const summary = assistantToolSummary(
+      [
+        { type: "tool", tool: "read", state: { status: "completed" } },
+        { type: "tool", tool: "bash", state: { status: "completed" } },
+        { type: "tool", tool: "read", state: { status: "completed" } },
+        { type: "tool", tool: "task", state: { status: "running" } },
+        { type: "tool", tool: "task", state: { status: "completed" } },
+        { type: "tool", tool: "task", state: { status: "completed" } },
+        { type: "text", text: "ignored" },
+      ] as any,
+    )
+
+    expect(summary).toEqual([
+      { name: "task", count: 3, label: "delegations" },
+      { name: "read", count: 2, label: "reads" },
+      { name: "bash", count: 1, label: "cmd" },
+    ])
+  })
+
+  test("uses tool names as fallback summary labels", () => {
+    expect(assistantToolSummaryLabel("custom_tool", 2)).toBe("custom_tool")
   })
 
   test("uses todo metadata over input when rendering a completed todo write", () => {
