@@ -50,6 +50,8 @@ const rule = [
 ]
 
 const hot = ["packages/ax-code/src/cli/cmd", "packages/ui/src/components"]
+const workspacePackageRoots = ["packages", "packages/sdk/js"]
+const dependencyFields = ["dependencies", "devDependencies", "peerDependencies", "optionalDependencies"] as const
 
 const ext = new Set([".ts", ".tsx", ".js", ".jsx", ".mts", ".cts"])
 const old = ["ADRS", "PRDS", "BUGS", "TODOS", "specs", "sdks", "github", "scripts"]
@@ -103,6 +105,10 @@ function spec(text: string) {
   for (const match of text.matchAll(/from\s+["']([^"']+)["']/g)) out.push(match[1])
   for (const match of text.matchAll(/import\s+["']([^"']+)["']/g)) out.push(match[1])
   return out
+}
+
+function readJSON(file: string) {
+  return JSON.parse(fs.readFileSync(file, "utf8")) as Record<string, unknown>
 }
 
 async function docs() {
@@ -168,6 +174,24 @@ async function deep() {
   return out
 }
 
+async function sdkSourceImports() {
+  const out = [] as { file: string; spec: string }[]
+  const seen = new Set<string>()
+  for (const file of await list("packages/ax-code/src")) {
+    const text = await Bun.file(file).text()
+    for (const name of spec(text)) {
+      if (name.includes("sdk/js/src/") || name.includes("@ax-code/sdk/src/")) {
+        const item = { file: rel(file), spec: name }
+        const key = `${item.file}\0${item.spec}`
+        if (seen.has(key)) continue
+        seen.add(key)
+        out.push(item)
+      }
+    }
+  }
+  return out
+}
+
 async function lines(dir: string) {
   const out = [] as { file: string; lines: number }[]
   for (const file of await list(dir)) {
@@ -196,6 +220,81 @@ async function count(dir: string) {
     sum++
   }
   return sum
+}
+
+function workspacePackages() {
+  const packages = [] as { name: string; dir: string; manifest: string; dependencies: string[] }[]
+  const seen = new Set<string>()
+
+  for (const rootDir of workspacePackageRoots) {
+    const abs = path.join(root, rootDir)
+    if (!fs.existsSync(abs)) continue
+
+    const candidates = rootDir === "packages" ? fs.readdirSync(abs).map((name) => path.join(abs, name)) : [abs]
+    for (const candidate of candidates) {
+      const manifest = path.join(candidate, "package.json")
+      if (seen.has(manifest) || !fs.existsSync(manifest)) continue
+      seen.add(manifest)
+
+      const json = readJSON(manifest)
+      if (typeof json.name !== "string") continue
+      const deps = new Set<string>()
+      for (const field of dependencyFields) {
+        const value = json[field]
+        if (!value || typeof value !== "object" || Array.isArray(value)) continue
+        for (const name of Object.keys(value)) deps.add(name)
+      }
+
+      packages.push({
+        name: json.name,
+        dir: rel(candidate),
+        manifest: rel(manifest),
+        dependencies: [...deps].sort(),
+      })
+    }
+  }
+
+  return packages.sort((a, b) => a.name.localeCompare(b.name))
+}
+
+function dependencyCycles() {
+  const packages = workspacePackages()
+  const names = new Set(packages.map((item) => item.name))
+  const graph = new Map<string, string[]>()
+  for (const item of packages) {
+    graph.set(item.name, item.dependencies.filter((name) => names.has(name)).sort())
+  }
+
+  const cycles = new Set<string>()
+  const pathStack = [] as string[]
+  const visiting = new Set<string>()
+
+  function canonical(cycle: string[]) {
+    const body = cycle.slice(0, -1)
+    let best = body
+    for (let i = 1; i < body.length; i++) {
+      const rotated = body.slice(i).concat(body.slice(0, i))
+      if (rotated.join("\0") < best.join("\0")) best = rotated
+    }
+    return best.concat(best[0]!).join(" -> ")
+  }
+
+  function visit(name: string) {
+    if (visiting.has(name)) {
+      const start = pathStack.indexOf(name)
+      if (start >= 0) cycles.add(canonical(pathStack.slice(start).concat(name)))
+      return
+    }
+
+    visiting.add(name)
+    pathStack.push(name)
+    for (const dep of graph.get(name) ?? []) visit(dep)
+    pathStack.pop()
+    visiting.delete(name)
+  }
+
+  for (const item of packages) visit(item.name)
+  return [...cycles].sort()
 }
 
 function shape(dir: string) {
@@ -242,6 +341,8 @@ async function main() {
   const miss = await docs()
   const hit = await deps()
   const raw = await deep()
+  const sdkRaw = await sdkSourceImports()
+  const cycles = dependencyCycles()
   const v4 = await V4Guardrails.check(path.join(root, "packages/ax-code"))
   const all = await size()
   const top10 = all.slice(0, 10)
@@ -270,6 +371,22 @@ async function main() {
     out.push("- ok: no raw src imports across package boundaries found")
   }
   out.push("")
+  out.push("## SDK Runtime Source Imports")
+  if (sdkRaw.length) {
+    out.push("- warning: runtime imports SDK source files directly; replace with stable SDK exports")
+    for (const row of sdkRaw) out.push(`- ${row.file} imports ${row.spec}`)
+  } else {
+    out.push("- ok: runtime imports SDK contracts through package exports")
+  }
+  out.push("")
+  out.push("## Workspace Dependency Cycles")
+  if (cycles.length) {
+    out.push("- warning: workspace package manifest cycles found")
+    for (const cycle of cycles) out.push(`- ${cycle}`)
+  } else {
+    out.push("- ok: no workspace package manifest cycles found")
+  }
+  out.push("")
   out.push("## V4 Guardrails")
   if (v4.length) {
     for (const row of v4) out.push(`- ${V4Guardrails.format(row)}`)
@@ -282,8 +399,14 @@ async function main() {
     out.push(`- ${row.dir}: ${row.direct} direct files, ${row.group} child folders, ${row.files} total source files`)
   }
   out.push("")
+  out.push("## Hotspot Thresholds")
   out.push(`- 500+ line files: ${warm}`)
   out.push(`- 800+ line files: ${big.length}`)
+  if (big.length) {
+    out.push(
+      "- warning: existing 800+ line files should shrink through scoped extraction before new large surfaces are added",
+    )
+  }
   out.push("")
   out.push("## Largest Files")
   for (const row of top10) out.push(`- ${row.lines}: ${row.file}`)
