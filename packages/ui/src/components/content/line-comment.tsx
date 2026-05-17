@@ -1,8 +1,8 @@
 import { createEffect, createSignal, onMount, Show, splitProps, type JSX } from "solid-js"
-import { Button } from "./button"
-import { Icon } from "./icon"
+import { Button } from "../button"
+import { Icon } from "../icon"
 import { installLineCommentStyles } from "./line-comment-styles"
-import { useI18n } from "../context/i18n"
+import { useI18n } from "../../context/i18n"
 
 installLineCommentStyles()
 

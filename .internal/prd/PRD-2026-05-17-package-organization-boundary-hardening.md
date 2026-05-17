@@ -1,7 +1,7 @@
 # PRD: Package Organization Boundary Hardening
 
 **Date:** 2026-05-17
-**Status:** Active - guardrails, SDK cleanup, DRE graph extraction, manifest-cycle cleanup, and first UI grouping slice implemented
+**Status:** Active - guardrails, SDK cleanup, DRE graph extraction, manifest-cycle cleanup, and two UI grouping slices implemented
 **Author:** ax-code agent
 
 ---
@@ -29,7 +29,7 @@ Verified against the current checkout on 2026-05-17:
 - Structure guardrails report no raw cross-package `src` imports.
 - Structure guardrails report `SDK Runtime Source Imports` as OK.
 - Structure guardrails report no workspace package manifest cycles.
-- Structure guardrails report `packages/ui/src/components` with 131 direct source files, 9 child folders, and 163 total source files.
+- Structure guardrails report `packages/ui/src/components` with 121 direct source files, 10 child folders, and 163 total source files.
 - Structure guardrails report 73 files above 500 lines and 32 files above 800 lines.
 - Current largest package-boundary hotspots include:
   - `packages/ax-code/src/session/prompt.ts`: about 3,200 lines.
@@ -57,6 +57,11 @@ Verified against the current checkout on 2026-05-17:
 - Updated internal relative imports to use `./status/*`.
 - Verified `pnpm --dir packages/ui run typecheck`.
 - Verified package export resolution from the `@ax-code/ui` package context with `import.meta.resolve()`.
+- Moved the content batch under `packages/ui/src/components/content/`.
+- Preserved old public imports such as `@ax-code/ui/markdown`, `@ax-code/ui/diff-changes`, `@ax-code/ui/image-preview`, `@ax-code/ui/line-comment`, and `@ax-code/ui/line-comment-annotations` through exact package exports.
+- Moved matching content stories, CSS, line-comment styles, and annotation helpers next to their grouped components.
+- Verified `pnpm --dir packages/ui run typecheck` after the content batch.
+- Verified content package export resolution from the `@ax-code/ui` package context with `import.meta.resolve()`.
 
 ### Completed: Phase 3 DRE Graph Route Extraction
 
@@ -262,10 +267,11 @@ Exit state:
 
 - [x] Classify current direct component files into existing UI folders before creating new folders.
 - [x] Move a first low-risk status batch with compatibility package exports.
-- [ ] Move content and message-specific files in separate batches.
+- [x] Move a content batch with compatibility package exports.
+- [ ] Move message-specific files in a separate batch.
 - [ ] Move file/provider/session-specific files only after the target folder contract is clear.
-- [x] Preserve existing `@ax-code/ui/*` import paths for the moved status batch.
-- [x] Run `pnpm --dir packages/ui run typecheck` after the first batch.
+- [x] Preserve existing `@ax-code/ui/*` import paths for the moved status and content batches.
+- [x] Run `pnpm --dir packages/ui run typecheck` after completed batches.
 
 Exit criteria:
 
@@ -450,11 +456,11 @@ This PRD is complete when:
 
 ## Next Best Slice
 
-The next best implementation slice is the second Phase 2 UI grouping batch. The status batch reduced the direct source-file count from 140 to 131, but `packages/ui/src/components` still has a large flat direct-file surface.
+The next best implementation slice is the third Phase 2 UI grouping batch. The status and content batches reduced the direct source-file count from 140 to 121, but `packages/ui/src/components` still has a large flat direct-file surface.
 
 Recommended first task:
 
-1. Pick either the content batch (`markdown`, `diff-changes`, `line-comment`, `image-preview`) or the message batch (`message-*`) after checking internal relative imports.
+1. Pick the message batch (`message-*`) after checking internal relative imports.
 2. Move a small low-risk batch with compatibility package exports.
 3. Run `pnpm --dir packages/ui run typecheck`.
 4. Update this PRD with the direct-file count after the batch.

@@ -1,7 +1,7 @@
 // @ts-nocheck
 import * as mod from "./markdown"
-import { create } from "../storybook/scaffold"
-import { markdown } from "../storybook/fixtures"
+import { create } from "../../storybook/scaffold"
+import { markdown } from "../../storybook/fixtures"
 
 const docs = `### Overview
 Render sanitized Markdown with code blocks, inline code, and safe links.
