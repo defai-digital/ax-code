@@ -1,7 +1,7 @@
 import type { Component, JSX } from "solid-js"
 import { createMemo, splitProps } from "solid-js"
-import sprite from "./provider-icons/sprite.svg"
-import { iconNames, type IconName } from "./provider-icons/types"
+import sprite from "./sprite.svg"
+import { iconNames, type IconName } from "./types"
 
 export type ProviderIconProps = JSX.SVGElementTags["svg"] & {
   id: string

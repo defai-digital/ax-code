@@ -70,7 +70,7 @@
 @import "../components/avatar.css" layer(components);
 @import "../components/icon.css" layer(components);
 @import "../components/logo.css" layer(components);
-@import "../components/provider-icon.css" layer(components);
+@import "../components/provider-icons/provider-icon.css" layer(components);
 
 /* Effects */
 @import "../components/text-reveal.css" layer(components);
