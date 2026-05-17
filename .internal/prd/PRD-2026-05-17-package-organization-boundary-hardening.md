@@ -171,10 +171,19 @@ Implemented another section-level extraction:
 - Added focused coverage in `packages/ax-code/test/quality/dre-graph-timeline-section.test.ts` for Gantt output, tool timing rollups, note rendering, route/error HTML escaping, empty timeline output, rollback empty state, and repeated-step turn labels.
 - Kept timeline parsing and rollback bar helpers as reusable lower-level modules consumed by the new section renderer.
 
+### 2026-05-17 - Phase 3 DRE Graph Activity Section Extraction Slice
+
+Implemented another section-level extraction:
+
+- Extracted activity section rendering into `packages/ax-code/src/quality/dre-graph-activity-section.ts`.
+- `packages/ax-code/src/server/routes/dre-graph.ts` now imports activity section rendering instead of owning ranked activity card rendering, agent roster output, tool usage bars, notes, and rollback panel composition inline.
+- Added focused coverage in `packages/ax-code/test/quality/dre-graph-activity-section.test.ts` for ranked steps, error cards, file read/edit summaries, routed-agent labels, tool usage counts, note escaping, rollback output, and empty states.
+- Kept lower-level activity summary, timeline parsing, and rollback bar helpers reusable beneath the new section renderer.
+
 Still pending:
 
 - UI component grouping.
-- Further DRE graph route domain extraction beyond timeline, fingerprint shaping, display formatting helpers, widget helpers, client asset scripts, CSS asset extraction, quality readiness section rendering, validation section rendering, changes section rendering, verdict section rendering, summary section rendering, risk section rendering, activity helper extraction, rollback helper extraction, branch section rendering, and timeline section rendering.
+- Further DRE graph route domain extraction beyond timeline, fingerprint shaping, display formatting helpers, widget helpers, client asset scripts, CSS asset extraction, quality readiness section rendering, validation section rendering, changes section rendering, verdict section rendering, summary section rendering, risk section rendering, activity helper extraction, rollback helper extraction, branch section rendering, timeline section rendering, and activity section rendering.
 - TUI session route and session prompt hotspot reduction.
 - LSP surface cleanup.
 - Workspace package manifest dependency-cycle cleanup.
