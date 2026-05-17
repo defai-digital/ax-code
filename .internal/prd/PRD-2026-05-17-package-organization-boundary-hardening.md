@@ -81,10 +81,19 @@ Implemented the CSS asset extraction:
 - Added focused coverage in `packages/ax-code/test/quality/dre-graph-style.test.ts` for theme variables, core page selectors, widget selectors, graph visualization selectors, and responsive CSS.
 - Kept the new style module below the 800-line hotspot threshold while reducing the route file to page composition and request glue.
 
+### 2026-05-17 - Phase 3 DRE Graph Quality Readiness Section Extraction Slice
+
+Implemented a section-level domain extraction:
+
+- Extracted the quality readiness section renderer into `packages/ax-code/src/quality/dre-graph-quality-readiness.ts`.
+- `packages/ax-code/src/server/routes/dre-graph.ts` now imports quality readiness rendering instead of coupling the route directly to replay readiness labels and targeted-test recommendation formatting.
+- Added focused coverage in `packages/ax-code/test/quality/dre-graph-quality-readiness.test.ts` for absent quality data, ready workflow summaries, status chips, targeted QA recommendations, next-action rendering, and HTML escaping.
+- Kept the slice narrow so broader risk/activity/timeline section extraction can proceed independently.
+
 Still pending:
 
 - UI component grouping.
-- Further DRE graph route domain extraction beyond timeline, fingerprint shaping, display formatting helpers, widget helpers, client asset scripts, and CSS asset extraction.
+- Further DRE graph route domain extraction beyond timeline, fingerprint shaping, display formatting helpers, widget helpers, client asset scripts, CSS asset extraction, and quality readiness section rendering.
 - TUI session route and session prompt hotspot reduction.
 - LSP surface cleanup.
 - Workspace package manifest dependency-cycle cleanup.
