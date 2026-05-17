@@ -10,6 +10,7 @@ import { live, mermaidScript, themeScript, themeToggle } from "../../quality/dre
 import { changesSection } from "../../quality/dre-graph-changes-section"
 import { style } from "../../quality/dre-graph-style"
 import { summary } from "../../quality/dre-graph-summary-section"
+import { dreGraphActivityToolLabels, summarizeDreGraphActivityTools } from "../../quality/dre-graph-activity"
 import { parseDreGraphTimeline, parseDreGraphTimelineStepDurationMs } from "../../quality/dre-graph-timeline"
 import { indexFingerprint, sessionFingerprint } from "../../quality/dre-graph-fingerprint"
 import { riskSection } from "../../quality/dre-graph-risk-section"
@@ -20,7 +21,6 @@ import { barChart, chip, flow, stepSummary } from "../../quality/dre-graph-widge
 import { SessionRollback } from "../../session/rollback"
 import { SessionID } from "../../session/schema"
 import { lazy } from "../../util/lazy"
-import { Locale } from "../../util/locale"
 import { SESSION_ID_PARAM, withSessionID } from "./route-params"
 
 const DRE_GRAPH_QUALITY_QUERY = z.object({
@@ -42,46 +42,6 @@ function activitySection(graph: SessionGraph.Snapshot, dre: SessionDre.Snapshot,
     .map((s, i) => ({ step: s, dur: durations[i], seq: i }))
     .sort((a, b) => b.dur - a.dur || b.step.tools.length - a.step.tools.length)
     .slice(0, 3)
-
-  // Plain-English summary of what a step actually did
-  function activitySummary(tools: { name: string; args: string; status: string }[]): string {
-    const reads: string[] = []
-    const edits: string[] = []
-    let searches = 0,
-      shells = 0,
-      webs = 0,
-      others = 0
-    for (const t of tools) {
-      const n = t.name.toLowerCase()
-      const arg = t.args ? (t.args.split("/").pop()?.split("\\").pop() ?? t.args) : ""
-      if (/^(read|view|cat)$/.test(n)) reads.push(arg || t.name)
-      else if (/^(edit|write|apply_patch|multiedit|patch)$/.test(n)) edits.push(arg || t.name)
-      else if (/^(grep|glob|search|find|code_intelligence|semantic)/.test(n)) searches++
-      else if (/^(bash|run|exec|shell|command)$/.test(n)) shells++
-      else if (/^(web_fetch|web_search|fetch|browse)/.test(n)) webs++
-      else others++
-    }
-    const parts: string[] = []
-    if (reads.length)
-      parts.push(reads.length <= 2 ? `read ${reads.filter(Boolean).join(", ")}` : `read ${reads.length} files`)
-    if (edits.length)
-      parts.push(edits.length <= 2 ? `edited ${edits.filter(Boolean).join(", ")}` : `edited ${edits.length} files`)
-    if (searches) parts.push(`searched ${searches}×`)
-    if (shells) parts.push(Locale.pluralize(shells, "ran {} command", "ran {} commands"))
-    if (webs) parts.push(Locale.pluralize(webs, "fetched {} URL", "fetched {} URLs"))
-    if (others) parts.push(`${others} misc`)
-    return parts.join(" · ") || "no tool calls"
-  }
-
-  function toolChips(tools: { name: string }[]): string {
-    const counts = new Map<string, number>()
-    for (const t of tools) counts.set(t.name, (counts.get(t.name) ?? 0) + 1)
-    return [...counts.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5)
-      .map(([name, count]) => chip({ label: count > 1 ? `${name} ×${count}` : name }))
-      .join("")
-  }
 
   const topStepsHtml = ranked.length
     ? ranked
@@ -160,8 +120,10 @@ function activitySection(graph: SessionGraph.Snapshot, dre: SessionDre.Snapshot,
             `<span class="act-dur">${esc(step.duration)}</span>`,
             hasErrors ? `<span class="act-err-badge">${step.errors.length} err</span>` : "",
             `</div>`,
-            `<div class="act-summary">${esc(activitySummary(step.tools))}</div>`,
-            `<div class="act-chips">${toolChips(step.tools)}</div>`,
+            `<div class="act-summary">${esc(summarizeDreGraphActivityTools(step.tools))}</div>`,
+            `<div class="act-chips">${dreGraphActivityToolLabels(step.tools)
+              .map((label) => chip({ label }))
+              .join("")}</div>`,
             `</summary>`,
             `<div class="act-expand">`,
             toolTimingHtml,
