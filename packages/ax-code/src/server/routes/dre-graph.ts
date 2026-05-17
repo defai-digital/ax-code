@@ -9,6 +9,19 @@ import { SessionRisk } from "../../session/risk"
 import { ProbabilisticRollout } from "../../quality/probabilistic-rollout"
 import { parseDreGraphTimeline, parseDreGraphTimelineStepDurationMs } from "../../quality/dre-graph-timeline"
 import { indexFingerprint, sessionFingerprint } from "../../quality/dre-graph-fingerprint"
+import {
+  agentDisplay,
+  confidenceTone,
+  esc,
+  json,
+  num,
+  readiness,
+  readinessTone,
+  stamp,
+  time,
+  tone,
+  validation,
+} from "../../quality/dre-graph-format"
 import { SessionRollback } from "../../session/rollback"
 import { SessionID } from "../../session/schema"
 import { lazy } from "../../util/lazy"
@@ -18,93 +31,6 @@ import { SESSION_ID_PARAM, withSessionID } from "./route-params"
 const DRE_GRAPH_QUALITY_QUERY = z.object({
   quality: z.coerce.boolean().optional().default(false),
 })
-
-// Maps agent internal identifiers → human-readable display names
-const AGENT_DISPLAY: Record<string, string> = {
-  build: "Dev",
-  plan: "Planner",
-  react: "Reasoner",
-  general: "Assistant",
-  explore: "Researcher",
-  security: "Security",
-  architect: "Architect",
-  debug: "Debugger",
-  perf: "Perf",
-  devops: "DevOps",
-  test: "Tester",
-}
-
-function agentDisplay(name: string): string {
-  return AGENT_DISPLAY[name] ?? name.charAt(0).toUpperCase() + name.slice(1)
-}
-
-function esc(input: string) {
-  return input
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;")
-}
-
-function json(value: unknown) {
-  const text = JSON.stringify(value) ?? "null"
-  return text
-    .replaceAll("<", "\\u003c")
-    .replaceAll(">", "\\u003e")
-    .replaceAll("&", "\\u0026")
-    .replaceAll("\u2028", "\\u2028")
-    .replaceAll("\u2029", "\\u2029")
-}
-
-function time(ms?: number) {
-  if (ms == null) return "0s"
-  const sec = Math.floor(ms / 1000)
-  if (sec < 60) return `${sec}s`
-  const min = Math.floor(sec / 60)
-  return `${min}m ${sec % 60}s`
-}
-
-function stamp(ms?: number) {
-  if (ms == null) return "unknown"
-  return new Date(ms).toISOString().replace("T", " ").slice(0, 19)
-}
-
-function num(value?: number) {
-  return (value ?? 0).toLocaleString()
-}
-
-function tone(value?: string | null) {
-  const text = (value ?? "").toLowerCase()
-  if (text.includes("critical")) return "critical"
-  if (text.includes("high")) return "high"
-  if (text.includes("medium")) return "medium"
-  return "low"
-}
-
-function confidenceTone(value: number) {
-  if (value >= 0.8) return "low"
-  if (value >= 0.6) return "medium"
-  return "high"
-}
-
-function readinessTone(value: string) {
-  if (value === "ready") return "low"
-  if (value === "needs_validation") return "medium"
-  if (value === "needs_review") return "high"
-  return "critical"
-}
-
-function readiness(value: string) {
-  return value.replaceAll("_", " ")
-}
-
-function validation(input: SessionRisk.Detail["assessment"]["signals"]) {
-  if (input.validationState === "passed") return "validation passed"
-  if (input.validationState === "failed") return "validation failed"
-  if (input.validationState === "partial") return "partial validation"
-  return "validation not recorded"
-}
 
 function chip(input: { label: string; kind?: string }) {
   return `<span class="chip ${esc(input.kind ?? "neutral")}">${esc(input.label)}</span>`
