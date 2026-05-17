@@ -14,9 +14,10 @@ import { dreGraphActivityToolLabels, summarizeDreGraphActivityTools } from "../.
 import { parseDreGraphTimeline, parseDreGraphTimelineStepDurationMs } from "../../quality/dre-graph-timeline"
 import { indexFingerprint, sessionFingerprint } from "../../quality/dre-graph-fingerprint"
 import { riskSection } from "../../quality/dre-graph-risk-section"
+import { renderDreGraphRollbackBars } from "../../quality/dre-graph-rollback"
 import { validationSection } from "../../quality/dre-graph-validation-section"
 import { verdictSection } from "../../quality/dre-graph-verdict-section"
-import { agentDisplay, esc, readinessTone, stamp, time, tone } from "../../quality/dre-graph-format"
+import { agentDisplay, esc, readinessTone, stamp, tone } from "../../quality/dre-graph-format"
 import { barChart, chip, flow, stepSummary } from "../../quality/dre-graph-widgets"
 import { SessionRollback } from "../../session/rollback"
 import { SessionID } from "../../session/schema"
@@ -178,37 +179,7 @@ function activitySection(graph: SessionGraph.Snapshot, dre: SessionDre.Snapshot,
     : `<p class="empty">No tool data.</p>`
 
   // Rollback points
-  const rbHtml = points.length
-    ? (() => {
-        const maxRbDur = Math.max(...points.map((p) => p.duration ?? 0), 1)
-        return [
-          `<div class="rb-bars-list">`,
-          points
-            .map((item, idx) => {
-              const dur = item.duration ?? 0
-              const durPct = Math.max(3, (dur / maxRbDur) * 100)
-              const barColor = dur > maxRbDur * 0.6 ? "var(--warn)" : "var(--accent)"
-              const uniq = new Map<string, number>()
-              for (const t of item.kinds) uniq.set(t, (uniq.get(t) ?? 0) + 1)
-              const toolSummary = [...uniq.entries()].map(([k, v]) => (v > 1 ? `${k} ×${v}` : k)).join(", ")
-              return [
-                `<div class="rb-row">`,
-                `<span class="rb-idx">${idx + 1}</span>`,
-                `<div class="rb-content">`,
-                `<div class="rb-bar-line">`,
-                `<div class="rb-bar-track"><div class="rb-bar-fill" style="width:${durPct.toFixed(0)}%;background:${barColor}"></div></div>`,
-                `<span class="rb-dur">${time(dur)}</span>`,
-                `</div>`,
-                toolSummary ? `<span class="rb-tools-text">${esc(toolSummary)}</span>` : "",
-                `</div>`,
-                `</div>`,
-              ].join("")
-            })
-            .join(""),
-          `</div>`,
-        ].join("")
-      })()
-    : `<p class="empty">No rollback points recorded.</p>`
+  const rbHtml = renderDreGraphRollbackBars(points, "No rollback points recorded.")
 
   return [
     `<section class="band" id="activity">`,
@@ -624,40 +595,7 @@ function timelineSection(dre: SessionDre.Snapshot, points: SessionRollback.Point
     // Rollback — horizontal bar list
     `<div class="panel" id="rollback">`,
     `<h3>Rollback Points <span class="rb-count">${points.length}</span></h3>`,
-    points.length
-      ? (() => {
-          const maxDur = Math.max(...points.map((p) => p.duration ?? 0), 1)
-          // Deduplicate tool names (strip args) and count unique tools per point
-          const toolName = (t: string) => t.split(":")[0].trim()
-          return [
-            `<div class="rb-bars-list">`,
-            points
-              .map((item, idx) => {
-                const dur = item.duration ?? 0
-                const durPct = Math.max(3, (dur / maxDur) * 100)
-                const barColor = dur > maxDur * 0.6 ? "var(--warn)" : "var(--accent)"
-                // Count unique tool types
-                const uniq = new Map<string, number>()
-                for (const t of item.kinds) uniq.set(t, (uniq.get(t) ?? 0) + 1)
-                const toolSummary = [...uniq.entries()].map(([k, v]) => (v > 1 ? `${k} ×${v}` : k)).join(", ")
-                return [
-                  `<div class="rb-row">`,
-                  `<span class="rb-idx">${idx + 1}</span>`,
-                  `<div class="rb-content">`,
-                  `<div class="rb-bar-line">`,
-                  `<div class="rb-bar-track"><div class="rb-bar-fill" style="width:${durPct.toFixed(0)}%;background:${barColor}"></div></div>`,
-                  `<span class="rb-dur">${time(dur)}</span>`,
-                  `</div>`,
-                  toolSummary ? `<span class="rb-tools-text">${esc(toolSummary)}</span>` : "",
-                  `</div>`,
-                  `</div>`,
-                ].join("")
-              })
-              .join(""),
-            `</div>`,
-          ].join("")
-        })()
-      : `<p class="empty">Run a session with assistant steps to populate rollback points.</p>`,
+    renderDreGraphRollbackBars(points, "Run a session with assistant steps to populate rollback points."),
     `</div>`,
     `</div>`,
     `</div>`,
