@@ -45,10 +45,19 @@ Implemented the second route/domain extraction:
 - Added focused coverage in `packages/ax-code/test/quality/dre-graph-fingerprint.test.ts` for session-list fingerprints, graph/DRE/risk summaries, quality readiness rollups, branch rank summaries, and rollback counts.
 - Existing DRE graph route tests still cover fingerprint endpoints after the extraction.
 
+### 2026-05-17 - Phase 3 DRE Graph Format Helper Extraction Slice
+
+Implemented another pure-helper extraction:
+
+- Extracted DRE graph display formatting, escaping, safe JSON, risk tone, readiness tone, validation labels, timestamps, and number/duration formatting into `packages/ax-code/src/quality/dre-graph-format.ts`.
+- `packages/ax-code/src/server/routes/dre-graph.ts` now imports these pure helpers instead of owning them inline.
+- Added focused coverage in `packages/ax-code/test/quality/dre-graph-format.test.ts` for HTML escaping, script-safe JSON escaping, agent labels, timestamps, duration formatting, and tone/readiness/validation classification.
+- Existing DRE graph route tests still cover page behavior after the extraction.
+
 Still pending:
 
 - UI component grouping.
-- Further DRE graph route domain extraction beyond timeline and fingerprint shaping.
+- Further DRE graph route domain extraction beyond timeline, fingerprint shaping, and display formatting helpers.
 - TUI session route and session prompt hotspot reduction.
 - LSP surface cleanup.
 - Workspace package manifest dependency-cycle cleanup.
