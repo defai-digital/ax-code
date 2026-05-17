@@ -180,10 +180,19 @@ Implemented another section-level extraction:
 - Added focused coverage in `packages/ax-code/test/quality/dre-graph-activity-section.test.ts` for ranked steps, error cards, file read/edit summaries, routed-agent labels, tool usage counts, note escaping, rollback output, and empty states.
 - Kept lower-level activity summary, timeline parsing, and rollback bar helpers reusable beneath the new section renderer.
 
+### 2026-05-17 - Phase 3 DRE Graph Legacy Execution Cleanup Slice
+
+Removed behavior-neutral legacy presentation code:
+
+- Removed the unused `graphSection` renderer from `packages/ax-code/src/server/routes/dre-graph.ts`; the route has historically rendered the live Mermaid graph surface and activity sections, not this legacy execution section.
+- Removed the unused timeline-section module and its focused test because no route or production code consumed that renderer.
+- Removed now-unused route imports for graph/timeline presentation helpers.
+- Kept the lower-level timeline parser tests and activity-section rendering coverage in place because those helpers remain used by rendered sections.
+
 Still pending:
 
 - UI component grouping.
-- Further DRE graph route domain extraction beyond timeline, fingerprint shaping, display formatting helpers, widget helpers, client asset scripts, CSS asset extraction, quality readiness section rendering, validation section rendering, changes section rendering, verdict section rendering, summary section rendering, risk section rendering, activity helper extraction, rollback helper extraction, branch section rendering, timeline section rendering, and activity section rendering.
+- Further DRE graph route domain extraction beyond timeline parsing, fingerprint shaping, display formatting helpers, widget helpers, client asset scripts, CSS asset extraction, quality readiness section rendering, validation section rendering, changes section rendering, verdict section rendering, summary section rendering, risk section rendering, activity helper extraction, rollback helper extraction, branch section rendering, activity section rendering, and legacy execution cleanup.
 - TUI session route and session prompt hotspot reduction.
 - LSP surface cleanup.
 - Workspace package manifest dependency-cycle cleanup.
