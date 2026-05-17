@@ -7,6 +7,7 @@ import { SessionDre } from "../../session/dre"
 import { SessionGraph } from "../../session/graph"
 import { SessionRisk } from "../../session/risk"
 import { ProbabilisticRollout } from "../../quality/probabilistic-rollout"
+import { parseDreGraphTimeline, parseDreGraphTimelineStepDurationMs } from "../../quality/dre-graph-timeline"
 import { SessionRollback } from "../../session/rollback"
 import { SessionID } from "../../session/schema"
 import { lazy } from "../../util/lazy"
@@ -710,11 +711,11 @@ function riskSection(input: SessionRisk.Detail, dre: SessionDre.Snapshot) {
 
 // ── Section 3: Execution Graph ─────────────────────────────────────
 function activitySection(graph: SessionGraph.Snapshot, dre: SessionDre.Snapshot, points: SessionRollback.Point[]) {
-  const parsed = parseTimeline(dre.timeline)
+  const parsed = parseDreGraphTimeline(dre.timeline)
   const detail = dre.detail
 
   // Rank steps by duration, top 3
-  const durations = parsed.steps.map((s) => parseTimelineDurationMs(s.duration))
+  const durations = parsed.steps.map((s) => parseDreGraphTimelineStepDurationMs(s.duration))
   const maxDur = Math.max(...durations, 1)
   const allSameIndex = parsed.steps.every((s) => s.index === parsed.steps[0]?.index)
   const ranked = parsed.steps
@@ -1217,79 +1218,14 @@ function branchSection(input?: SessionBranchRank.Family) {
 
 // ── Section 5: Timeline + Rollback ─────────────────────────────────
 
-// Parse timeline into structured steps for Gantt-style rendering
-function parseTimeline(lines: SessionDre.TimelineLine[]) {
-  type ToolEntry = { name: string; args: string; status: string; durationMs: number }
-  type Step = {
-    index: string
-    duration: string
-    tokens: string
-    tools: ToolEntry[]
-    routes: string[]
-    errors: string[]
-    llms: string[]
-  }
-  const header = lines.find((l) => l.kind === "heading")
-  const meta = lines.filter((l) => l.kind === "meta")
-  const steps: Step[] = []
-  let current: Step | undefined
-  for (const line of lines) {
-    if (line.kind === "step") {
-      // "Step 0 · 2s · tokens 2/193"
-      const parts = line.text.split(" · ")
-      current = {
-        index: parts[0] ?? "",
-        duration: parts[1] ?? "",
-        tokens: parts[2] ?? "",
-        tools: [],
-        routes: [],
-        errors: [],
-        llms: [],
-      }
-      steps.push(current)
-    } else if (line.kind === "tool" && current) {
-      // "read: README.md → ok (6ms)" or "tool_name → ok (6ms)"
-      const m = line.text.match(/^(\S+?):\s*(.*?)\s*→\s*(\S+)\s*(?:\((\d+)ms\))?$/)
-      if (m) {
-        current.tools.push({ name: m[1], args: m[2], status: m[3], durationMs: parseTimelineToolDurationMs(m[4]) })
-      } else {
-        const m2 = line.text.match(/^(\S+)\s*→\s*(\S+)\s*(?:\((\d+)ms\))?$/)
-        if (m2) current.tools.push({ name: m2[1], args: "", status: m2[2], durationMs: parseTimelineToolDurationMs(m2[3]) })
-        else current.tools.push({ name: line.text, args: "", status: "ok", durationMs: 0 })
-      }
-    } else if (line.kind === "route" && current) {
-      current.routes.push(line.text)
-    } else if (line.kind === "error" && current) {
-      current.errors.push(line.text)
-    } else if (line.kind === "llm" && current) {
-      current.llms.push(line.text)
-    }
-  }
-  return { header, meta, steps }
-}
-
-function parseTimelineDurationMs(value: string): number {
-  const match = value.match(/(?:(\d+)m\s*)?(\d+)s/)
-  if (!match) return 0
-  const minutes = Number.parseInt(match[1] ?? "0", 10)
-  const seconds = Number.parseInt(match[2] ?? "0", 10)
-  return (minutes * 60 + seconds) * 1000
-}
-
-function parseTimelineToolDurationMs(raw: string | undefined): number {
-  if (!raw) return 0
-  const parsed = Number.parseInt(raw, 10)
-  return Number.isNaN(parsed) ? 0 : Math.max(0, parsed)
-}
-
 function timelineSection(dre: SessionDre.Snapshot, points: SessionRollback.Point[], detail?: SessionDre.Detail | null) {
-  const parsed = parseTimeline(dre.timeline)
+  const parsed = parseDreGraphTimeline(dre.timeline)
 
   // Build Gantt-style step bars
   const ganttHtml = parsed.steps.length
     ? (() => {
         // Compute max duration for proportional bars
-        const durations = parsed.steps.map((s) => parseTimelineDurationMs(s.duration))
+        const durations = parsed.steps.map((s) => parseDreGraphTimelineStepDurationMs(s.duration))
         const maxDur = Math.max(...durations, 1)
 
         // Check if all steps have the same index (e.g., all "Step 0")
@@ -1567,11 +1503,7 @@ async function loadSessionList(directory: string | undefined): Promise<Session.I
   return [...Session.list({ limit: 50, directory })]
 }
 
-function disableClientCache(
-  c: {
-    header: (name: string, value: string) => void
-  },
-) {
+function disableClientCache(c: { header: (name: string, value: string) => void }) {
   c.header("cache-control", "no-store")
 }
 

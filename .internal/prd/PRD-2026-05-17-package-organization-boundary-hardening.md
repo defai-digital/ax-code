@@ -27,10 +27,19 @@ Implemented the first SDK/runtime contract cleanup:
 - `script/structure.ts` now reports `SDK Runtime Source Imports` as OK for the current checkout.
 - The broader workspace manifest dependency cycle remains visible as a warning and is intentionally left for a separate package-boundary slice.
 
+### 2026-05-17 - Phase 3 DRE Graph Timeline Extraction Slice
+
+Implemented the first route/domain extraction:
+
+- Extracted DRE graph timeline parsing into `packages/ax-code/src/quality/dre-graph-timeline.ts`.
+- `packages/ax-code/src/server/routes/dre-graph.ts` now consumes parsed timeline data instead of owning that parser inline.
+- Added focused coverage in `packages/ax-code/test/quality/dre-graph-timeline.test.ts` for headings, metadata, step parsing, tool parsing, route/LLM/error capture, and duration parsing.
+- Existing DRE graph route tests still cover page/fingerprint behavior after the extraction.
+
 Still pending:
 
 - UI component grouping.
-- DRE graph route domain extraction.
+- Further DRE graph route domain extraction beyond timeline parsing.
 - TUI session route and session prompt hotspot reduction.
 - LSP surface cleanup.
 - Workspace package manifest dependency-cycle cleanup.
