@@ -7,6 +7,7 @@ import { SessionDre } from "../../session/dre"
 import { SessionGraph } from "../../session/graph"
 import { SessionRisk } from "../../session/risk"
 import { live, mermaidScript, themeScript, themeToggle } from "../../quality/dre-graph-assets"
+import { branchSection } from "../../quality/dre-graph-branch-section"
 import { changesSection } from "../../quality/dre-graph-changes-section"
 import { style } from "../../quality/dre-graph-style"
 import { summary } from "../../quality/dre-graph-summary-section"
@@ -17,7 +18,7 @@ import { riskSection } from "../../quality/dre-graph-risk-section"
 import { renderDreGraphRollbackBars } from "../../quality/dre-graph-rollback"
 import { validationSection } from "../../quality/dre-graph-validation-section"
 import { verdictSection } from "../../quality/dre-graph-verdict-section"
-import { agentDisplay, esc, readinessTone, stamp, tone } from "../../quality/dre-graph-format"
+import { agentDisplay, esc, stamp, tone } from "../../quality/dre-graph-format"
 import { barChart, chip, flow, stepSummary } from "../../quality/dre-graph-widgets"
 import { SessionRollback } from "../../session/rollback"
 import { SessionID } from "../../session/schema"
@@ -370,100 +371,6 @@ function graphSection(input: SessionGraph.Snapshot, dre: SessionDre.Snapshot) {
           `</div></div>`,
         ].join("")
       : "",
-    `</div>`,
-    `</section>`,
-  ].join("")
-}
-
-// ── Section 4: Branches ────────────────────────────────────────────
-function branchSection(input?: SessionBranchRank.Family) {
-  if (!input) return ""
-
-  const readinessLabel: Record<string, string> = {
-    ready: "Ready to accept",
-    needs_validation: "Needs validation",
-    needs_review: "Needs review",
-    blocked: "Blocked",
-  }
-  const readinessIcon: Record<string, string> = {
-    ready: "✓",
-    needs_validation: "⚠",
-    needs_review: "⊙",
-    blocked: "✗",
-  }
-
-  const isSwitching = input.current.id !== input.recommended.id
-  const topReason = input.reasons[0] ?? ""
-
-  function branchCard(item: SessionBranchRank.Item) {
-    const ready = item.risk.readiness
-    const readyTone = readinessTone(ready)
-    const scoreTotal = Math.round(item.decision.total * 100)
-
-    return [
-      `<div class="branch-card ${item.recommended ? "recommended" : ""}${item.current ? " current" : ""}">`,
-      // Header: title + badges
-      `<div class="branch-head">`,
-      `<strong class="branch-title">${esc(item.title)}</strong>`,
-      `<div class="tag-row">`,
-      item.current ? chip({ label: "current" }) : "",
-      item.recommended ? chip({ label: "recommended", kind: "low" }) : "",
-      `</div>`,
-      `</div>`,
-      // Readiness — most actionable signal, shown prominently
-      `<div class="branch-readiness ${readyTone}">`,
-      `<span class="branch-readiness-icon">${readinessIcon[ready] ?? "?"}</span>`,
-      `<span>${esc(readinessLabel[ready] ?? ready)}</span>`,
-      `<span class="branch-score-chip">${scoreTotal}/100</span>`,
-      `</div>`,
-      // What this branch actually did
-      `<p class="branch-headline">${esc(item.headline)}</p>`,
-      // Decision breakdown with explanations — the "why"
-      `<div class="branch-scorecard">`,
-      item.decision.breakdown
-        .map((part) => {
-          const pct = Math.round(part.value * 100)
-          const color = part.value >= 0.7 ? "var(--low)" : part.value >= 0.4 ? "var(--warn)" : "var(--high)"
-          return [
-            `<div class="branch-score-row">`,
-            `<span class="branch-score-label">${esc(part.label)}</span>`,
-            `<div class="branch-score-track"><div class="branch-score-fill" style="width:${pct}%;background:${color}"></div></div>`,
-            `<span class="branch-score-val" style="color:${color}">${pct}%</span>`,
-            `</div>`,
-            part.detail ? `<div class="branch-score-detail">${esc(part.detail)}</div>` : "",
-          ].join("")
-        })
-        .join(""),
-      `</div>`,
-      // Top evidence — specific reasons behind the risk score
-      item.risk.evidence.length
-        ? [
-            `<div class="branch-evidence">`,
-            item.risk.evidence
-              .slice(0, 2)
-              .map((e) => `<div class="branch-ev-item"><span class="ev-dot">·</span><span>${esc(e)}</span></div>`)
-              .join(""),
-            `</div>`,
-          ].join("")
-        : "",
-      // Semantic diff summary if available
-      item.semantic
-        ? `<div class="branch-semantic">${esc(item.semantic.headline)} <span class="muted">(+${item.semantic.additions} / -${item.semantic.deletions})</span></div>`
-        : "",
-      `</div>`,
-    ].join("")
-  }
-
-  return [
-    `<section class="band" id="branches">`,
-    `<div class="wrap">`,
-    `<div class="section-head">`,
-    `<h2>Branches</h2>`,
-    `<p>${isSwitching ? `Switch to <strong>${esc(input.recommended.title)}</strong> — ${esc(topReason)}` : `You're on the recommended branch · ${esc(topReason)}`}</p>`,
-    `</div>`,
-    `<div class="branch-list ${input.items.length === 2 ? "branch-compare" : ""}">`,
-    input.items.map(branchCard).join(""),
-    `</div>`,
     `</div>`,
     `</section>`,
   ].join("")

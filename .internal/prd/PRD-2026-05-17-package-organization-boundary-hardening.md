@@ -153,10 +153,19 @@ Implemented another shared presentation-helper extraction:
 - Added focused coverage in `packages/ax-code/test/quality/dre-graph-rollback.test.ts` for duration bars, warn/accent coloring, kind aggregation, HTML escaping, and empty state output.
 - Preserved the two existing empty-state messages by passing them as helper input from the route.
 
+### 2026-05-17 - Phase 3 DRE Graph Branch Section Extraction Slice
+
+Implemented another section-level extraction:
+
+- Extracted branch ranking section rendering into `packages/ax-code/src/quality/dre-graph-branch-section.ts`.
+- `packages/ax-code/src/server/routes/dre-graph.ts` now imports branch section rendering instead of owning readiness labels, branch cards, scorecard bars, evidence trimming, and semantic summary markup inline.
+- Added focused coverage in `packages/ax-code/test/quality/dre-graph-branch-section.test.ts` for absent branch data, switching versus current-branch summary text, badges, readiness status, scorecard details, evidence limiting, semantic summaries, and HTML escaping.
+- Kept branch data loading in the route context boundary while moving branch presentation behavior into `quality`.
+
 Still pending:
 
 - UI component grouping.
-- Further DRE graph route domain extraction beyond timeline, fingerprint shaping, display formatting helpers, widget helpers, client asset scripts, CSS asset extraction, quality readiness section rendering, validation section rendering, changes section rendering, verdict section rendering, summary section rendering, risk section rendering, activity helper extraction, and rollback helper extraction.
+- Further DRE graph route domain extraction beyond timeline, fingerprint shaping, display formatting helpers, widget helpers, client asset scripts, CSS asset extraction, quality readiness section rendering, validation section rendering, changes section rendering, verdict section rendering, summary section rendering, risk section rendering, activity helper extraction, rollback helper extraction, and branch section rendering.
 - TUI session route and session prompt hotspot reduction.
 - LSP surface cleanup.
 - Workspace package manifest dependency-cycle cleanup.
