@@ -72,10 +72,19 @@ Implemented a client-asset extraction:
 - Added focused coverage in `packages/ax-code/test/quality/dre-graph-assets.test.ts` for theme wiring, live polling config generation, directory URL encoding, EventSource setup, Mermaid graph fetch wiring, and script-safe session id escaping.
 - Left the large CSS helper in the route for a separate mechanical extraction slice so this commit stays reviewable.
 
+### 2026-05-17 - Phase 3 DRE Graph Style Asset Extraction Slice
+
+Implemented the CSS asset extraction:
+
+- Extracted the DRE graph page stylesheet helper into `packages/ax-code/src/quality/dre-graph-style.ts`.
+- `packages/ax-code/src/server/routes/dre-graph.ts` now imports the stylesheet helper instead of owning the large CSS template inline.
+- Added focused coverage in `packages/ax-code/test/quality/dre-graph-style.test.ts` for theme variables, core page selectors, widget selectors, graph visualization selectors, and responsive CSS.
+- Kept the new style module below the 800-line hotspot threshold while reducing the route file to page composition and request glue.
+
 Still pending:
 
 - UI component grouping.
-- Further DRE graph route domain extraction beyond timeline, fingerprint shaping, display formatting helpers, widget helpers, and client asset scripts.
+- Further DRE graph route domain extraction beyond timeline, fingerprint shaping, display formatting helpers, widget helpers, client asset scripts, and CSS asset extraction.
 - TUI session route and session prompt hotspot reduction.
 - LSP surface cleanup.
 - Workspace package manifest dependency-cycle cleanup.
