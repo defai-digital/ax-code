@@ -1,7 +1,7 @@
 import path from "path"
 import fsPromises from "fs/promises"
 import { unlinkSync, readFileSync } from "fs"
-import { randomUUID } from "crypto"
+import { createHash, randomUUID } from "crypto"
 import { Effect, Layer, Record, Result, Schema, ServiceMap } from "effect"
 import { makeRunPromise } from "@/effect/run-service"
 import { zod } from "@/util/effect-zod"
@@ -41,6 +41,11 @@ function readAuthData() {
 
 async function cleanupAuthLockFile() {
   await fsPromises.unlink(lockFile).catch(() => {})
+}
+
+function staleLockClaimFile(text: string) {
+  const digest = createHash("sha256").update(text).digest("hex").slice(0, 16)
+  return `${lockFile}.stale-${digest}`
 }
 
 // Cross-process advisory lock using exclusive file creation.
@@ -98,19 +103,44 @@ async function acquireFileLock(): Promise<Disposable> {
     }
   }
 
-  async function readBody() {
+  async function readSnapshot() {
     const text = await fsPromises.readFile(lockFile, "utf-8").catch(() => undefined)
     if (!text) return undefined
-    const parsed = parseProcessLockBody<{ token: string }>(text)
-    if (!parsed || typeof parsed.token !== "string") return undefined
-    return parsed
+    return {
+      text,
+      holder: parseProcessLockBody<{ token: string }>(text),
+    }
+  }
+
+  async function removeStaleSnapshot(snapshot: { text: string }) {
+    const claimFile = staleLockClaimFile(snapshot.text)
+    let fd: fsPromises.FileHandle | undefined
+    try {
+      fd = await fsPromises.open(claimFile, "wx")
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException)?.code === "EEXIST") return false
+      throw error
+    } finally {
+      await fd?.close()
+    }
+
+    try {
+      const current = await fsPromises.readFile(lockFile, "utf-8").catch(() => undefined)
+      if (current === undefined) return true
+      if (current !== snapshot.text) return false
+      await cleanupAuthLockFile()
+      return true
+    } finally {
+      await fsPromises.unlink(claimFile).catch(() => {})
+    }
   }
 
   async function maybeSteal() {
-    const holder = await readBody()
+    const snapshot = await readSnapshot()
+    if (!snapshot) return true
+    const holder = snapshot.holder
     if (!holder) {
-      await cleanupAuthLockFile()
-      return true
+      return removeStaleSnapshot(snapshot)
     }
 
     const sameHost = isSameProcessLockHost(holder)
@@ -122,15 +152,13 @@ async function acquireFileLock(): Promise<Disposable> {
         alive = (error as NodeJS.ErrnoException)?.code !== "ESRCH"
       }
       if (!alive) {
-        await cleanupAuthLockFile()
-        return true
+        return removeStaleSnapshot(snapshot)
       }
       return false
     }
 
     if (!sameHost && Date.now() - holder.startedAt > LOCK_STALE_MS) {
-      await cleanupAuthLockFile()
-      return true
+      return removeStaleSnapshot(snapshot)
     }
 
     return false

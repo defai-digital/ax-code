@@ -67,7 +67,7 @@ process.on("uncaughtException", (e) => {
     stack: error instanceof Error ? error.stack : undefined,
     code: error instanceof Error && "code" in error ? (error as NodeJS.ErrnoException).code : undefined,
   })
-  if (!shutdownPromise) setTimeout(() => process.exit(1), 100).unref()
+  setTimeout(() => process.exit(1), 100).unref()
 })
 
 const handleGlobalEvent = (event: GlobalEvent) => {
