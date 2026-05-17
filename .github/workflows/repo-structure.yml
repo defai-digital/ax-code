@@ -36,6 +36,13 @@ on:
       - "planning/**"
       - "tools/**"
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
 jobs:
   audit:
     runs-on: ubuntu-latest

@@ -1031,7 +1031,7 @@ describe("ProviderTransform family matching", () => {
 })
 
 describe("ProviderTransform.maxOutputTokens", () => {
-  test("caps Alibaba token-plan requests to avoid over-allocating quota", () => {
+  test("caps Alibaba Token Plan requests to avoid over-allocating short-window quota", () => {
     const model = {
       id: "alibaba-token-plan/qwen3.6-plus",
       providerID: ProviderID.make("alibaba-token-plan"),
@@ -1043,10 +1043,25 @@ describe("ProviderTransform.maxOutputTokens", () => {
       },
     } as any
 
-    expect(ProviderTransform.maxOutputTokens(model)).toBe(8_192)
+    expect(ProviderTransform.maxOutputTokens(model)).toBe(4_096)
   })
 
-  test("honors lower Alibaba token-plan model output limits", () => {
+  test("caps Alibaba Coding Plan (DashScope) requests at the same short-window ceiling", () => {
+    const model = {
+      id: "alibaba-coding-plan/qwen3.6-plus",
+      providerID: ProviderID.make("alibaba-coding-plan"),
+      api: {
+        id: "qwen3.6-plus",
+      },
+      limit: {
+        output: 65_536,
+      },
+    } as any
+
+    expect(ProviderTransform.maxOutputTokens(model)).toBe(4_096)
+  })
+
+  test("honors lower Alibaba model output limits below the short-window cap", () => {
     const model = {
       id: "alibaba-token-plan/qwen3.6-plus",
       providerID: ProviderID.make("alibaba-token-plan"),
@@ -1061,7 +1076,7 @@ describe("ProviderTransform.maxOutputTokens", () => {
     expect(ProviderTransform.maxOutputTokens(model)).toBe(512)
   })
 
-  test("does not cap Alibaba token-plan models without thinking reservations", () => {
+  test("caps every Alibaba-backed model regardless of family — reservation is platform-level", () => {
     const model = {
       id: "alibaba-token-plan/deepseek-v3.2",
       providerID: ProviderID.make("alibaba-token-plan"),
@@ -1073,7 +1088,7 @@ describe("ProviderTransform.maxOutputTokens", () => {
       },
     } as any
 
-    expect(ProviderTransform.maxOutputTokens(model)).toBe(OUTPUT_TOKEN_MAX)
+    expect(ProviderTransform.maxOutputTokens(model)).toBe(4_096)
   })
 
   test("keeps the global output cap for other providers", () => {
@@ -1116,7 +1131,9 @@ describe("ProviderTransform.options - Alibaba Token Plan Team Edition", () => {
       providerOptions: {},
     })
 
-    expect(result.thinking).toEqual({ type: "enabled", budgetTokens: 8192 })
+    // thinking budget is clamped to maxOutputTokens (4096 — the Alibaba
+    // short-window cap), which is below the 8192 documented ceiling.
+    expect(result.thinking).toEqual({ type: "enabled", budgetTokens: 4096 })
     expect(result.enable_thinking).toBeUndefined()
   })
 
@@ -1145,8 +1162,10 @@ describe("ProviderTransform.options - Alibaba Token Plan Team Edition", () => {
       custom: "keep",
     })
 
+    // Input asked for 8192, but the Alibaba short-window cap clamps the
+    // sanitized budget down to maxOutputTokens (4096).
     expect(result).toEqual({
-      thinking: { type: "enabled", budgetTokens: 8192 },
+      thinking: { type: "enabled", budgetTokens: 4096 },
       custom: "keep",
     })
   })
@@ -1157,7 +1176,7 @@ describe("ProviderTransform.options - Alibaba Token Plan Team Edition", () => {
       thinking: { type: "enabled" },
     })
 
-    expect(result.thinking).toEqual({ type: "enabled", budgetTokens: 8192 })
+    expect(result.thinking).toEqual({ type: "enabled", budgetTokens: 4096 })
   })
 
   test("rebuilds invalid Token Plan thinking options after config merges", () => {
@@ -1167,7 +1186,7 @@ describe("ProviderTransform.options - Alibaba Token Plan Team Edition", () => {
         thinking,
       })
 
-      expect(result.thinking).toEqual({ type: "enabled", budgetTokens: 8192 })
+      expect(result.thinking).toEqual({ type: "enabled", budgetTokens: 4096 })
     }
   })
 
@@ -1187,7 +1206,7 @@ describe("ProviderTransform.options - Alibaba Token Plan Team Edition", () => {
       providerOptions: {},
     })
 
-    expect(result.thinking).toEqual({ type: "enabled", budgetTokens: 8192 })
+    expect(result.thinking).toEqual({ type: "enabled", budgetTokens: 4096 })
     expect(result.enable_thinking).toBeUndefined()
   })
 
@@ -1199,9 +1218,11 @@ describe("ProviderTransform.options - Alibaba Token Plan Team Edition", () => {
       providerOptions: {},
     })
 
-    expect(result.thinking).toEqual({ type: "enabled", budgetTokens: 8192 })
+    expect(result.thinking).toEqual({ type: "enabled", budgetTokens: 4096 })
     expect(result.enable_thinking).toBeUndefined()
-    expect(ProviderTransform.maxOutputTokens(model)).toBe(OUTPUT_TOKEN_MAX)
+    // alibaba-token-plan-cn is subject to the same short-window cap as every
+    // other Alibaba-backed provider.
+    expect(ProviderTransform.maxOutputTokens(model)).toBe(4_096)
   })
 
   test("does not add undocumented thinking config to international MiniMax-M2.5", () => {

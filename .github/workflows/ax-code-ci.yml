@@ -27,6 +27,10 @@ on:
         type: boolean
         default: false
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
   actions: read
@@ -172,11 +176,13 @@ jobs:
       - name: Set isolated home paths
         shell: bash
         run: |
-          echo "AX_CODE_TEST_HOME=$RUNNER_TEMP/ax-code-source-bundle-home" >> "$GITHUB_ENV"
-          echo "XDG_CONFIG_HOME=$RUNNER_TEMP/ax-code-source-bundle-home/.config" >> "$GITHUB_ENV"
-          echo "XDG_CACHE_HOME=$RUNNER_TEMP/ax-code-source-bundle-home/.cache" >> "$GITHUB_ENV"
-          echo "XDG_DATA_HOME=$RUNNER_TEMP/ax-code-source-bundle-home/.local/share" >> "$GITHUB_ENV"
-          echo "XDG_STATE_HOME=$RUNNER_TEMP/ax-code-source-bundle-home/.local/state" >> "$GITHUB_ENV"
+          {
+            echo "AX_CODE_TEST_HOME=$RUNNER_TEMP/ax-code-source-bundle-home"
+            echo "XDG_CONFIG_HOME=$RUNNER_TEMP/ax-code-source-bundle-home/.config"
+            echo "XDG_CACHE_HOME=$RUNNER_TEMP/ax-code-source-bundle-home/.cache"
+            echo "XDG_DATA_HOME=$RUNNER_TEMP/ax-code-source-bundle-home/.local/share"
+            echo "XDG_STATE_HOME=$RUNNER_TEMP/ax-code-source-bundle-home/.local/state"
+          } >> "$GITHUB_ENV"
 
       - name: Setup Ax-code JS toolchain
         uses: ./.github/actions/setup-ax-code-toolchain

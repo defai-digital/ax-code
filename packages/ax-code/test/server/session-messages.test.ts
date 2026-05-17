@@ -147,10 +147,13 @@ describe("session.prompt_async error handling", () => {
   test("shared async session helper records failures and publishes session errors", async () => {
     const helper = await extractSourceBlock("function startObservedAsyncSessionTask", "function startAsyncSessionTask")
     expect(helper).toContain("recordAsyncSessionTask({")
-    expect(helper).toContain("event: \"server.sessionAsyncFailed\"")
+    expect(helper).toContain('event: "server.sessionAsyncFailed"')
     expect(helper).toContain("input.onError(error)")
 
-    const handler = await extractSourceBlock("function createAsyncSessionErrorHandler", "function startAsyncSessionTask")
+    const handler = await extractSourceBlock(
+      "function createAsyncSessionErrorHandler",
+      "function startAsyncSessionTask",
+    )
     expect(handler).toContain("Session.publishError")
     expect(handler).toContain("NamedError.message(error)")
   })
@@ -174,6 +177,21 @@ describe("session.prompt_async error handling", () => {
     expect(route).toContain("startAsyncSessionHandler(c, {")
     expect(route).toContain('kind: "shell"')
     expect(route).toContain("start: SessionPrompt.shell")
+  })
+
+  test("destructive session routes require current project ownership", async () => {
+    const src = await Bun.file(path.join(import.meta.dir, "../../src/server/routes/session.ts")).text()
+    const deleteStart = src.indexOf('.delete(\n      "/:sessionID"')
+    const deleteEnd = src.indexOf(".patch(", deleteStart)
+    expect(deleteStart).toBeGreaterThan(-1)
+    expect(deleteEnd).toBeGreaterThan(deleteStart)
+    const deleteRoute = src.slice(deleteStart, deleteEnd)
+    expect(deleteRoute).toContain("const sessionID = await parseCurrentProjectSessionID(c)")
+    expect(deleteRoute).not.toContain("const sessionID = parseSessionID(c)")
+
+    const abortRoute = await extractRoute('"/:sessionID/abort"', '"/:sessionID/share"')
+    expect(abortRoute).toContain("SessionPrompt.cancel(await parseCurrentProjectSessionID(c))")
+    expect(abortRoute).not.toContain("SessionPrompt.cancel(parseSessionID(c))")
   })
 })
 

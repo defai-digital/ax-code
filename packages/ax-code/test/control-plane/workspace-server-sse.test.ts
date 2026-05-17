@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test"
+import path from "path"
 import { Log } from "../../src/util/log"
 import { WorkspaceServer } from "../../src/control-plane/workspace-server/server"
 import { parseSSE } from "../../src/control-plane/sse"
@@ -83,5 +84,16 @@ describe("control-plane/workspace-server SSE", () => {
     } finally {
       stop.abort()
     }
+  })
+
+  test("heartbeat respects the workspace SSE queue cap", async () => {
+    const src = await Bun.file(path.join(import.meta.dir, "../../src/control-plane/workspace-server/server.ts")).text()
+    const start = src.indexOf("const heartbeat = setInterval")
+    const end = src.indexOf("}, 10_000)", start)
+    expect(start).toBeGreaterThan(-1)
+    expect(end).toBeGreaterThan(start)
+    const block = src.slice(start, end)
+
+    expect(block).toContain("if (q.size >= SSE_MAX_QUEUE) return")
   })
 })

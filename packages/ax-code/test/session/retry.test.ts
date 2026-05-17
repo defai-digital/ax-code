@@ -138,9 +138,9 @@ describe("session.retry.retryable", () => {
     expect(SessionRetry.retryable(error)).toBeUndefined()
   })
 
-  test("retries Alibaba token-plan short-window quota exhaustion", () => {
+  test("retries Alibaba short-window quota exhaustion", () => {
     const message =
-      "Alibaba token-plan rejected the request as exceeding short-window allocatable token quota. This is usually a per-request or TPS/TPM reservation limit, not the total Token Plan usage percentage. ax-code treats this as retryable short-window throttling; if it persists, wait briefly or lower the configured model output limit. Details: https://www.alibabacloud.com/help/en/model-studio/error-code#token-limit"
+      "Alibaba rejected the request as exceeding short-window allocatable token quota. This is a per-request or TPS/TPM reservation limit, not total plan usage. ax-code treats this as retryable short-window throttling; if it persists, wait briefly or lower the per-request output cap via AX_CODE_ALIBABA_OUTPUT_TOKEN_MAX (e.g. 2048 or 1024). Details: https://www.alibabacloud.com/help/en/model-studio/error-code#token-limit"
     const error = new MessageV2.APIError({
       message,
       isRetryable: true,
@@ -156,7 +156,7 @@ describe("session.retry.retryable", () => {
     expect(delay).toBeLessThanOrEqual(75_000)
   })
 
-  test("does not retry generic quota exhaustion without Alibaba token-plan metadata", () => {
+  test("does not retry generic quota exhaustion without Alibaba short-window metadata", () => {
     const error = new MessageV2.APIError({
       message:
         "Allocated quota exceeded, please increase your quota limit. For details, see: https://www.alibabacloud.com/help/en/model-studio/error-code#token-limit",

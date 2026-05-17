@@ -34,6 +34,39 @@ test("provider loaded from env variable", async () => {
   })
 })
 
+test("Provider.invalidate clears SDK cache as well as pending loads", async () => {
+  const src = await Bun.file(path.join(import.meta.dir, "../../src/provider/provider.ts")).text()
+  const start = src.indexOf("export async function invalidate()")
+  const end = src.indexOf("async function getSDK", start)
+  expect(start).toBeGreaterThan(-1)
+  expect(end).toBeGreaterThan(start)
+  const body = src.slice(start, end)
+
+  expect(body).toContain("currentState.models.clear()")
+  expect(body).toContain("currentState.modelPending.clear()")
+  expect(body).toContain("currentState.sdkPending.clear()")
+  expect(body).toContain("currentState.sdk.clear()")
+})
+
+test("getLanguage registers pending model loads before awaiting them", async () => {
+  const src = await Bun.file(path.join(import.meta.dir, "../../src/provider/provider.ts")).text()
+  const start = src.indexOf("export async function getLanguage(")
+  const end = src.indexOf("export async function closest(", start)
+  expect(start).toBeGreaterThan(-1)
+  expect(end).toBeGreaterThan(start)
+  const body = src.slice(start, end)
+
+  const pendingCheck = body.indexOf("const pending = s.modelPending.get(key)")
+  const promiseCreate = body.indexOf("const promise = Promise.resolve().then")
+  const pendingSet = body.indexOf("s.modelPending.set(key, promise)")
+  const promiseAwait = body.indexOf("return await promise")
+
+  expect(pendingCheck).toBeGreaterThan(-1)
+  expect(promiseCreate).toBeGreaterThan(pendingCheck)
+  expect(pendingSet).toBeGreaterThan(promiseCreate)
+  expect(pendingSet).toBeLessThan(promiseAwait)
+})
+
 test("wrapSSE cancels the underlying reader when the outer abort signal fires", async () => {
   let cancelReason: unknown
   let cancelResolve!: () => void
@@ -1271,8 +1304,16 @@ test("xai provider only exposes Grok 4.1 or later models plus grok-code-fast-1",
       expect(ids).not.toContain("grok-4.1")
       expect(ids).toContain("grok-4-1-fast")
       expect(ids).toContain("grok-code-fast-1")
+      expect(ids).toContain("grok-4.3")
       expect(ids).not.toContain("grok-4")
       expect(ids).not.toContain("grok-4-fast")
+
+      // grok-code-fast-1 must be a first-class entry, not a legacy alias that
+      // silently routes to grok-4.20-0309-reasoning on the wire — the alias
+      // would mislabel a different model. api.id is what gets sent to xAI.
+      const grokCodeFast = xai.models["grok-code-fast-1"]
+      expect(grokCodeFast.api.id).toBe("grok-code-fast-1")
+      expect(grokCodeFast.capabilities.toolcall).toBe(true)
     },
   })
 })
@@ -1363,12 +1404,7 @@ test("Alibaba providers keep coding plan and token plan endpoints separate", asy
         "qwen3.6-plus",
       ])
       expect(Object.keys(tokenPlan.models).sort()).toEqual(["MiniMax-M2.5", "deepseek-v3.2", "glm-5", "qwen3.6-plus"])
-      expect(Object.keys(tokenPlanCn.models).sort()).toEqual([
-        "MiniMax-M2.5",
-        "deepseek-v3.2",
-        "glm-5",
-        "qwen3.6-plus",
-      ])
+      expect(Object.keys(tokenPlanCn.models).sort()).toEqual(["MiniMax-M2.5", "deepseek-v3.2", "glm-5", "qwen3.6-plus"])
       expect(codingPlan.models["qwen3.6-plus"].api.url).toBe("https://coding-intl.dashscope.aliyuncs.com/v1")
       expect(codingPlanCn.models["qwen3.6-plus"].api.url).toBe("https://coding.dashscope.aliyuncs.com/v1")
       expect(tokenPlan.models["qwen3.6-plus"].api.url).toBe(

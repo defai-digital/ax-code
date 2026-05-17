@@ -101,7 +101,10 @@ export namespace Provider {
     }
 
     addLegacyAlias("grok-4-1-fast")
-    addLegacyAlias("grok-code-fast-1")
+    // grok-code-fast-1 is now a first-class entry in the xai snapshot block
+    // (update-models.ts re-injects it from a reseller fallback if upstream
+    // drops it). An alias here would silently route to grok-4.20-0309-reasoning
+    // on the wire, which is a different model — deceptive UX.
   }
   type Lang = Exclude<LanguageModel, string>
   type SDK = {
@@ -670,7 +673,11 @@ export namespace Provider {
         const providerID = ProviderID.make(id)
         if (!providers[providerID]) return
         await (async () => {
-          const discovered = await withTimeout(loader(providers[providerID]), 10_000, `discovery loader '${id}' timed out`)
+          const discovered = await withTimeout(
+            loader(providers[providerID]),
+            10_000,
+            `discovery loader '${id}' timed out`,
+          )
           for (const [modelID, model] of Object.entries(discovered)) {
             providers[providerID].models[modelID] = model
           }
@@ -746,6 +753,7 @@ export namespace Provider {
     currentState.models.clear()
     currentState.modelPending.clear()
     currentState.sdkPending.clear()
+    currentState.sdk.clear()
     await state.invalidate()
   }
 

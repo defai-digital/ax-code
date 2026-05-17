@@ -347,7 +347,9 @@ describe("session.llm.stream", () => {
         const expectedMaxTokens = ProviderTransform.maxOutputTokens(resolved)
         expect(maxTokens).toBe(expectedMaxTokens)
 
-        expect(body.thinking).toEqual({ type: "enabled", budgetTokens: 8192 })
+        // Sanitized down to maxOutputTokens (4096 — the Alibaba short-window cap)
+        // even though the agent config requested 8192.
+        expect(body.thinking).toEqual({ type: "enabled", budgetTokens: 4096 })
         expect(body.enable_thinking).toBeUndefined()
         expect(body.reasoning).toBeUndefined()
         expect(body.reasoningEffort).toBeUndefined()

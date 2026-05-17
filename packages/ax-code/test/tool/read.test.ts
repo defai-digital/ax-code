@@ -346,6 +346,11 @@ describe("tool.read truncation", () => {
     })
   })
 
+  test("does not report byte-capped reads as offset-out-of-range", async () => {
+    const src = await Bun.file(path.join(import.meta.dir, "../../src/tool/read.ts")).text()
+    expect(src).toContain("if (!truncatedByBytes && lines < offset")
+  })
+
   test("strips a UTF-8 BOM from the first line", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {

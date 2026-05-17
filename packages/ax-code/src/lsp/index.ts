@@ -607,6 +607,14 @@ export namespace LSP {
         semantic: server.semantic,
         priority: server.priority,
         capabilityHints: server.capabilityHints,
+        onClose: () => {
+          log.warn("lsp connection closed unexpectedly", { serverID: server.id, root })
+          markBroken(s.broken, key)
+          const idx = s.clients.findIndex((item) => item.root === root && item.serverID === server.id)
+          if (idx >= 0) s.clients.splice(idx, 1)
+          void Process.stop(handle.process).catch(() => {})
+          Bus.publishDetached(Event.Updated, {})
+        },
       })
       finishPerfPhase("client.initialize", initializeStarted, true)
     } catch (err) {

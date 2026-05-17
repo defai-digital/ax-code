@@ -184,6 +184,32 @@ for (const id of [
   fetched[id].models = kept
 }
 
+// xAI ships grok-code-fast-1 as a permanent coding model, but models.dev
+// intermittently omits it from the xai provider block (it shows up only on
+// resellers like helicone and github-copilot). Re-inject from the existing
+// local snapshot or, failing that, from a known-good reseller — otherwise
+// regenerating the snapshot can silently drop xAI's coding model from the
+// picker between releases.
+const xaiInjectedModels = ["grok-code-fast-1"]
+const xaiInjectFallbackProviders = ["helicone", "github-copilot"]
+if (fetched["xai"]?.models) {
+  const xaiModels = fetched["xai"].models as Record<string, RawModel>
+  for (const mid of xaiInjectedModels) {
+    if (xaiModels[mid]) continue
+    const fromExisting = existing["xai"]?.models?.[mid]
+    if (fromExisting) {
+      xaiModels[mid] = JSON.parse(JSON.stringify(fromExisting))
+      continue
+    }
+    for (const fbID of xaiInjectFallbackProviders) {
+      const fb = fetched[fbID]?.models?.[mid] ?? existing[fbID]?.models?.[mid]
+      if (!fb) continue
+      xaiModels[mid] = JSON.parse(JSON.stringify(fb))
+      break
+    }
+  }
+}
+
 // Strip cost fields from every model — cost telemetry is removed from
 // ax-code, and zod will silently drop these on parse anyway. Removing them
 // here keeps the snapshot small and prevents the pre-commit hook from

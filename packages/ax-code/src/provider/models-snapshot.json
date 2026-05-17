@@ -40176,8 +40176,8 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 262144,
-          "output": 262144
+          "context": 262128,
+          "output": 262128
         }
       },
       "glm-5-fast": {
@@ -40200,8 +40200,8 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 200000,
-          "output": 200000
+          "context": 202736,
+          "output": 202736
         }
       },
       "glm-5.1-fast": {
@@ -40224,8 +40224,8 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 200000,
-          "output": 200000
+          "context": 202736,
+          "output": 202736
         }
       },
       "qwen3.6-35b-fast": {
@@ -40249,8 +40249,8 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 131072,
-          "output": 131072
+          "context": 131056,
+          "output": 131056
         }
       },
       "openai/gpt-oss-20b": {
@@ -40273,8 +40273,8 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 16384,
-          "output": 16384
+          "context": 16368,
+          "output": 16368
         }
       },
       "zai-org/GLM-5.1-FP8": {
@@ -40300,8 +40300,8 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 200000,
-          "output": 200000
+          "context": 202736,
+          "output": 202736
         }
       },
       "mistralai/Devstral-Small-2-24B-Instruct-2512": {
@@ -40325,8 +40325,8 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 262144,
-          "output": 262144
+          "context": 262128,
+          "output": 262128
         }
       },
       "MiniMaxAI/MiniMax-M2.5": {
@@ -40352,8 +40352,8 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 196608,
-          "output": 196608
+          "context": 196592,
+          "output": 196592
         }
       },
       "Qwen/Qwen3.5-397B-A17B-FP8": {
@@ -40379,8 +40379,8 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 262144,
-          "output": 262144
+          "context": 262128,
+          "output": 262128
         }
       },
       "Qwen/Qwen3.6-35B-A3B": {
@@ -40407,8 +40407,8 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 131072,
-          "output": 131072
+          "context": 131056,
+          "output": 131056
         }
       }
     }

@@ -18,7 +18,16 @@ function mimeToModality(mime: string): Modality | undefined {
 
 export namespace ProviderTransform {
   export const OUTPUT_TOKEN_MAX = Flag.AX_CODE_EXPERIMENTAL_OUTPUT_TOKEN_MAX || 32_000
-  const ALIBABA_TOKEN_PLAN_OUTPUT_TOKEN_MAX = 8_192
+  // DashScope and Token Plan both reserve `prompt + max_tokens` against a
+  // sliding short-window quota *before* generation. Defaulting to 4k keeps
+  // headroom for parallel agents and long-context requests while still letting
+  // a single edit fit comfortably; users with tighter accounts can drop this
+  // to 2048 / 1024 via AX_CODE_ALIBABA_OUTPUT_TOKEN_MAX.
+  const ALIBABA_OUTPUT_TOKEN_MAX_DEFAULT = 4_096
+  const ALIBABA_OUTPUT_TOKEN_MAX = Flag.AX_CODE_ALIBABA_OUTPUT_TOKEN_MAX || ALIBABA_OUTPUT_TOKEN_MAX_DEFAULT
+  // The documented `thinking` budget for Token Plan reasoning models. Kept
+  // narrow because it is paired with the Token Plan API contract, not a
+  // general short-window concern.
   const ALIBABA_TOKEN_PLAN_THINKING_BUDGET_TOKENS = 8_192
 
   // Maps npm package to the key the AI SDK expects for providerOptions.
@@ -206,10 +215,12 @@ export namespace ProviderTransform {
     )
   }
 
-  function isAlibabaTokenPlanOutputCappedModel(model: Provider.Model) {
-    if (!model.providerID.startsWith("alibaba-token-plan")) return false
-    const id = model.api.id.toLowerCase()
-    return id === "qwen3.6-plus" || id === "glm-5"
+  // Any Alibaba-backed provider (Token Plan or Coding Plan / DashScope) is
+  // subject to short-window token reservation throttling. The cap applies
+  // regardless of model family because reservation is computed by the
+  // platform, not the model.
+  function isAlibabaShortWindowProvider(model: Provider.Model) {
+    return model.providerID.startsWith("alibaba-")
   }
 
   function alibabaTokenPlanThinkingBudget(model: Provider.Model, requested?: unknown) {
@@ -377,9 +388,9 @@ export namespace ProviderTransform {
     // If the model declares no output capability (0) or a missing limit,
     // fall back to OUTPUT_TOKEN_MAX. Math.min never returns nullish, so
     // the old `?? OUTPUT_TOKEN_MAX` was dead code.
-    if (isAlibabaTokenPlanOutputCappedModel(model)) {
+    if (isAlibabaShortWindowProvider(model)) {
       const limit = model.limit.output > 0 ? model.limit.output : OUTPUT_TOKEN_MAX
-      return Math.min(limit, OUTPUT_TOKEN_MAX, ALIBABA_TOKEN_PLAN_OUTPUT_TOKEN_MAX)
+      return Math.min(limit, OUTPUT_TOKEN_MAX, ALIBABA_OUTPUT_TOKEN_MAX)
     }
     const limit = model.limit.output
     return limit > 0 ? Math.min(limit, OUTPUT_TOKEN_MAX) : OUTPUT_TOKEN_MAX

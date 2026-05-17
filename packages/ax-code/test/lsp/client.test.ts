@@ -27,6 +27,18 @@ describe("LSPClient interop", () => {
     await Log.init({ print: true })
   })
 
+  test("registers close and error handlers for dead LSP connections", async () => {
+    const clientSrc = await Bun.file(path.join(import.meta.dir, "../../src/lsp/client.ts")).text()
+    expect(clientSrc).toContain("connection.onClose")
+    expect(clientSrc).toContain("connection.onError")
+    expect(clientSrc).toContain("input.onClose?.")
+
+    const indexSrc = await Bun.file(path.join(import.meta.dir, "../../src/lsp/index.ts")).text()
+    expect(indexSrc).toContain("onClose: () => {")
+    expect(indexSrc).toContain("markBroken(s.broken, key)")
+    expect(indexSrc).toContain("s.clients.splice(idx, 1)")
+  })
+
   test("handles workspace/workspaceFolders request", async () => {
     const handle = spawnFakeServer() as any
 

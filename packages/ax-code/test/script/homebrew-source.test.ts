@@ -7,6 +7,8 @@ const homebrewSourceScript = path.join(repoRoot, ".github/scripts/update-homebre
 const homebrewDefaultScript = path.join(repoRoot, ".github/scripts/update-homebrew.sh")
 const releaseWorkflow = path.join(repoRoot, ".github/workflows/release.yml")
 const installMatrixWorkflow = path.join(repoRoot, ".github/workflows/install-matrix-smoke.yml")
+const isolatedHomeScript = path.join(repoRoot, ".github/scripts/set-isolated-home-env.sh")
+const filterDispatchChannelScript = path.join(repoRoot, ".github/scripts/filter-dispatch-channel.sh")
 
 describe("homebrew source formula generator", () => {
   test("script exists and is executable", () => {
@@ -74,7 +76,7 @@ describe("homebrew source formula generator", () => {
     expect(text).toContain("github.com/defai-digital/ax-code/releases/download")
     expect(text).toContain('gh release download "${TAG}"')
     expect(text).toContain('--repo "${SOURCE_REPO}"')
-    expect(text).toContain('gh repo clone defai-digital/homebrew-ax-code')
+    expect(text).toContain("gh repo clone defai-digital/homebrew-ax-code")
     expect(text).toContain("gh auth setup-git")
     expect(text).toContain("mktemp -d")
     expect(text).not.toContain("x-access-token:${TAP_AUTH_TOKEN}")
@@ -87,10 +89,24 @@ describe("homebrew source formula generator", () => {
     expect(text).not.toContain("bundle/index.js")
   })
 
+  test("default homebrew update separates release-read and tap-write tokens", async () => {
+    const text = await Bun.file(homebrewDefaultScript).text()
+    expect(text).toContain('RELEASE_READ_TOKEN="${GH_TOKEN:-}"')
+    expect(text).toContain('TAP_AUTH_TOKEN="${TAP_TOKEN:-${GH_TOKEN:-}}"')
+    expect(text).toContain('export GH_TOKEN="${RELEASE_READ_TOKEN}"')
+    expect(text).toContain('export GH_TOKEN="${TAP_AUTH_TOKEN}"')
+    expect(text.indexOf('export GH_TOKEN="${RELEASE_READ_TOKEN}"')).toBeLessThan(
+      text.indexOf('DARWIN_ARM64_SHA="$(download_asset "${DARWIN_ARM64_ASSET}")"'),
+    )
+    expect(text.indexOf('export GH_TOKEN="${TAP_AUTH_TOKEN}"')).toBeGreaterThan(
+      text.indexOf('LINUX_X64_SHA="$(download_asset "${LINUX_X64_ASSET}")"'),
+    )
+  })
+
   test("homebrew jobs separate source release and tap credentials", async () => {
     const text = await Bun.file(releaseWorkflow).text()
     const sourceScript = await Bun.file(homebrewSourceScript).text()
-    expect(sourceScript).toContain('gh repo clone defai-digital/homebrew-ax-code')
+    expect(sourceScript).toContain("gh repo clone defai-digital/homebrew-ax-code")
     expect(sourceScript).toContain("gh auth setup-git")
     expect(sourceScript).toContain("mktemp -d")
     expect(sourceScript).not.toContain("x-access-token:${TAP_AUTH_TOKEN}")
@@ -140,44 +156,71 @@ describe("homebrew source formula generator", () => {
     expect(finalizeJob![0]).toContain("- homebrew")
     expect(finalizeJob![0]).toContain("- homebrew-source")
     expect(finalizeJob![0]).toContain("always() && !cancelled()")
+    expect(finalizeJob![0]).toContain("actions: write")
     expect(finalizeJob![0]).toContain('gh release edit "${{ github.ref_name }}" --draft=false')
+    expect(finalizeJob![0]).toContain("gh workflow run install-matrix-smoke.yml")
+    expect(finalizeJob![0]).toContain('--field "version=${VERSION}"')
+    expect(finalizeJob![0]).toContain('--field "channel=both"')
+  })
+
+  test("npm publish jobs request OIDC and publish provenance", async () => {
+    const text = await Bun.file(releaseWorkflow).text()
+    const publishNpmJob = text.match(/publish-npm:[\s\S]*?(?=\n  publish-source:|\n  homebrew:|$)/)
+    expect(publishNpmJob).not.toBeNull()
+    expect(publishNpmJob![0]).toContain("id-token: write")
+    expect(publishNpmJob![0]).toContain('NPM_CONFIG_PROVENANCE: "true"')
+
+    const publishSourceJob = text.match(/publish-source:[\s\S]*?(?=\n  homebrew:|\n  finalize:|$)/)
+    expect(publishSourceJob).not.toBeNull()
+    expect(publishSourceJob![0]).toContain("id-token: write")
+    expect(publishSourceJob![0]).toContain('NPM_CONFIG_PROVENANCE: "true"')
+  })
+
+  test("install matrix is dispatch-only so release.published cannot race package publication", async () => {
+    const text = await Bun.file(installMatrixWorkflow).text()
+    expect(text).toContain("permissions:")
+    expect(text).toContain("contents: read")
+    expect(text).toContain("uses: actions/checkout@v6")
+    expect(text).toContain("workflow_dispatch:")
+    expect(text).not.toContain("types: [published]")
+    expect(text).not.toMatch(/\n  release:\n/)
   })
 
   test("install matrix installs exact package versions, not stale dist-tags", async () => {
     const text = await Bun.file(installMatrixWorkflow).text()
+    const filterDispatchChannel = await Bun.file(filterDispatchChannelScript).text()
     expect(text).toContain('PACKAGE="@defai.digital/ax-code-source"')
     expect(text).toContain('PACKAGE="@defai.digital/ax-code"')
     expect(text).toContain('npm install -g "${PACKAGE}@${VERSION}"')
-    expect(text).toContain('OUTPUT="$(ax-code --version)"')
-    expect(text).toContain("expected ax-code --version to be ${VERSION}")
+    expect(text).toContain('bash .github/scripts/assert-ax-code-version.sh "$VERSION"')
     expect(text).toContain("Smoke — installed backend stdio handshake")
     expect(text).toContain("tui-backend --stdio")
     expect(text).toContain("id: channel")
-    expect(text).toContain("enabled=false")
+    expect(filterDispatchChannel).toContain("enabled=false")
     expect(text).toContain("steps.channel.outputs.enabled == 'true'")
-    expect(text).toContain("RUNTIME_RE='(bun-bundled|source)'")
-    expect(text).toContain('\\"runtimeMode\\":\\"${RUNTIME_RE}\\"')
-    expect(text).toContain("RUNTIME_RE='compiled'")
+    expect(text).toContain('bash .github/scripts/assert-runtime-mode.sh "${{ matrix.channel }}" doctor')
+    expect(text).toContain('bash .github/scripts/assert-runtime-mode.sh "${{ matrix.channel }}" backend')
+    expect(text).toContain('bash .github/scripts/assert-runtime-mode.sh "latest" doctor homebrew')
+    expect(text).toContain('bash .github/scripts/assert-runtime-mode.sh "latest" backend homebrew')
     expect(text).not.toContain("@defai.digital/ax-code@$CHANNEL")
   })
 
   test("install matrix smokes installed packages with isolated runtime homes", async () => {
     const text = await Bun.file(installMatrixWorkflow).text()
+    const isolatedHome = await Bun.file(isolatedHomeScript).text()
     const smokeJob = text.match(/smoke:[\s\S]*?(?=\n  homebrew:|$)/)
     expect(smokeJob).not.toBeNull()
-    expect(smokeJob![0]).toContain("AX_CODE_TEST_HOME")
-    expect(smokeJob![0]).toContain("XDG_CONFIG_HOME")
-    expect(smokeJob![0]).toContain("XDG_DATA_HOME")
-    expect(smokeJob![0]).toContain("AX_CODE_DISABLE_PROJECT_CONFIG")
-    expect(smokeJob![0]).toContain("AX_CODE_DISABLE_MODELS_FETCH")
+    expect(smokeJob![0]).toContain("set-isolated-home-env.sh")
 
     const homebrewJob = text.match(/homebrew:[\s\S]*$/)
     expect(homebrewJob).not.toBeNull()
-    expect(homebrewJob![0]).toContain("AX_CODE_TEST_HOME")
-    expect(homebrewJob![0]).toContain("XDG_CONFIG_HOME")
-    expect(homebrewJob![0]).toContain("XDG_DATA_HOME")
-    expect(homebrewJob![0]).toContain("AX_CODE_DISABLE_PROJECT_CONFIG")
-    expect(homebrewJob![0]).toContain("AX_CODE_DISABLE_MODELS_FETCH")
+    expect(homebrewJob![0]).toContain("set-isolated-home-env.sh")
+
+    expect(isolatedHome).toContain("AX_CODE_TEST_HOME")
+    expect(isolatedHome).toContain("XDG_CONFIG_HOME")
+    expect(isolatedHome).toContain("XDG_DATA_HOME")
+    expect(text).toContain("AX_CODE_DISABLE_PROJECT_CONFIG")
+    expect(text).toContain("AX_CODE_DISABLE_MODELS_FETCH")
   })
 
   test("install matrix refreshes the Homebrew tap while waiting for formula propagation", async () => {

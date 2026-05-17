@@ -495,7 +495,7 @@ async function addMcpToConfig(name: string, mcpConfig: Config.Mcp, configPath: s
     resolve = r
   })
   configLocks.set(configPath, next)
-  await prev
+  await prev.catch(() => {})
 
   try {
     using _crossProcess = await FileLock.acquire(configPath)
