@@ -40,8 +40,8 @@
 @import "../components/message/message-nav.css" layer(components);
 @import "../components/message/message-part.css" layer(components);
 @import "../components/scroll-view.css" layer(components);
-@import "../components/session-review.css" layer(components);
-@import "../components/session-turn.css" layer(components);
+@import "../components/session/session-review.css" layer(components);
+@import "../components/session/session-turn.css" layer(components);
 @import "../components/message/shell-submessage.css" layer(components);
 
 /* Status */

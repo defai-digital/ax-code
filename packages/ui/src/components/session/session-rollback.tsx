@@ -1,8 +1,8 @@
 import type { SessionRollbackPoint } from "@ax-code/sdk/v2"
 import { For, Show, splitProps, type ComponentProps, type JSX } from "solid-js"
-import { Card, CardDescription, CardTitle } from "./card"
-import { ScrollView } from "./scroll-view"
-import { Tag } from "./status/tag"
+import { Card, CardDescription, CardTitle } from "../card"
+import { ScrollView } from "../scroll-view"
+import { Tag } from "../status/tag"
 import { sessionRollbackFacts, sessionRollbackLead, sessionRollbackToolLead } from "./session-insight.logic"
 
 export interface SessionRollbackProps
