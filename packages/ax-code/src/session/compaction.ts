@@ -150,50 +150,29 @@ export namespace SessionCompaction {
     log.info("found", { pruned, total })
     if (pruned > PRUNE_MINIMUM) {
       const timestamp = Date.now()
-      const prevTimes = new Map<string, number | undefined>()
-      const hadStateTime = new Map<string, boolean>()
-      for (const part of toPrune) {
-        if (part.state.status !== "completed") continue
-        hadStateTime.set(part.id, !!part.state.time)
-        if (!part.state.time) {
-          part.state.time = { start: Date.now(), end: Date.now() }
-        }
-        prevTimes.set(part.id, part.state.time.compacted)
-        part.state.time.compacted = timestamp
-      }
+      const compactedParts = toPrune.flatMap((part) => {
+        if (part.state.status !== "completed") return []
+        return [
+          {
+            ...part,
+            state: {
+              ...part.state,
+              time: {
+                ...(part.state.time ?? { start: timestamp, end: timestamp }),
+                compacted: timestamp,
+              },
+            },
+          },
+        ]
+      })
       try {
-        Database.transaction((db) => {
-          for (const part of toPrune) {
-            if (part.state.status !== "completed") continue
-            const { id, messageID, sessionID, ...data } = part
-            db.insert(PartTable)
-              .values({
-                id,
-                message_id: messageID,
-                session_id: sessionID,
-                time_created: part.state.time?.start ?? Date.now(),
-                data,
-              })
-              .onConflictDoUpdate({ target: PartTable.id, set: { data, time_updated: Date.now() } })
-              .run()
-            Database.effect(() => Bus.publishDetached(MessageV2.Event.PartUpdated, { part: { ...part } }))
-          }
-        })
-      } catch (e) {
-        for (const part of toPrune) {
-          if (part.state.status !== "completed") continue
-          const prev = prevTimes.get(part.id)
-          if (!hadStateTime.get(part.id)) {
-            delete (part.state as { time?: unknown }).time
-          } else if (prev === undefined) {
-            delete part.state.time.compacted
-          } else {
-            part.state.time.compacted = prev
-          }
+        for (const part of compactedParts) {
+          await Session.updatePart.force(part)
         }
-        log.warn("failed to compact parts", { count: toPrune.length, err: e })
+      } catch (e) {
+        log.warn("failed to compact parts", { count: compactedParts.length, err: e })
       }
-      log.info("pruned", { count: toPrune.length })
+      log.info("pruned", { count: compactedParts.length })
     }
   }
 
