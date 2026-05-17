@@ -1327,3 +1327,53 @@ describe("ProviderTransform.options - Alibaba Coding Plan (DashScope)", () => {
     expect(result.thinking).toBeUndefined()
   })
 })
+
+describe("ProviderTransform.smallOptions - Alibaba thinking models", () => {
+  function createModel(providerID: string, modelID = "qwen3.6-plus", reasoning = true) {
+    return {
+      id: `${providerID}/${modelID}`,
+      providerID: ProviderID.make(providerID),
+      api: {
+        id: modelID,
+        url: "https://example.invalid/v1",
+        npm: "@ai-sdk/openai-compatible",
+      },
+      capabilities: {
+        reasoning,
+      },
+      limit: {
+        output: 65_536,
+      },
+    } as any
+  }
+
+  test("disables thinking for auxiliary calls on Token Plan", () => {
+    const result = ProviderTransform.smallOptions(createModel("alibaba-token-plan"))
+    expect(result).toEqual({ enable_thinking: false })
+  })
+
+  test("disables thinking for auxiliary calls on Coding Plan", () => {
+    const result = ProviderTransform.smallOptions(createModel("alibaba-coding-plan"))
+    expect(result).toEqual({ enable_thinking: false })
+  })
+
+  test("returns no thinking override for non-reasoning Alibaba models", () => {
+    const result = ProviderTransform.smallOptions(createModel("alibaba-token-plan", "deepseek-v3.2", false))
+    expect(result).toEqual({})
+  })
+
+  test("sanitizeOptions preserves an explicit enable_thinking=false and drops budget", () => {
+    const model = createModel("alibaba-coding-plan")
+    const result = ProviderTransform.sanitizeOptions(model, {
+      enable_thinking: false,
+      thinking_budget: 8192,
+      thinking: { type: "enabled", budgetTokens: 8192 },
+      custom: "keep",
+    })
+
+    expect(result).toEqual({
+      enable_thinking: false,
+      custom: "keep",
+    })
+  })
+})
