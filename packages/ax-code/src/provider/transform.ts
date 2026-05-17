@@ -208,14 +208,14 @@ export namespace ProviderTransform {
     return families.some((family) => hasFamily(model, family))
   }
 
-  // Token Plan reasoning models go through the Anthropic-shaped `thinking`
-  // block (not DashScope's `enable_thinking`). The check is capability-driven
-  // so newly added reasoning models on Token Plan pick up thinking
-  // automatically — previously the model id had to be added to a hand-kept
-  // whitelist. The npm guard keeps a future Anthropic-SDK Token Plan endpoint
-  // from accidentally matching this OpenAI-compat path.
-  function isAlibabaTokenPlanThinkingModel(model: Provider.Model) {
-    if (!model.providerID.startsWith("alibaba-token-plan")) return false
+  // Any reasoning-capable Alibaba model on an OpenAI-compat endpoint goes
+  // through DashScope's documented `enable_thinking` + `thinking_budget`
+  // params. Capability-driven so newly added reasoning models pick up
+  // thinking automatically. The npm guard keeps a future Anthropic-SDK
+  // Alibaba endpoint from accidentally matching this path — that endpoint
+  // would need the Anthropic `thinking` block instead.
+  function isAlibabaThinkingModel(model: Provider.Model) {
+    if (!model.providerID.startsWith("alibaba")) return false
     if (model.api.npm !== "@ai-sdk/openai-compatible") return false
     return Boolean(model.capabilities.reasoning)
   }
@@ -311,28 +311,12 @@ export namespace ProviderTransform {
       }
     }
 
-    // Alibaba Token Plan Team Edition uses a documented `thinking` object
-    // for reasoning models. Keep reasoning enabled, but pair the documented
-    // 8k thinking budget with a bounded output cap so the request does not
-    // reserve the old 32k output budget before generation.
-    if (isAlibabaTokenPlanThinkingModel(input.model)) {
-      result["thinking"] = {
-        type: "enabled",
-        budgetTokens: alibabaThinkingBudget(input.model, ALIBABA_THINKING_BUDGET_TOKENS),
-      }
-    }
-
-    // Enable thinking for reasoning models on Alibaba Coding Plan (DashScope).
-    // Token Plan Team Edition is handled above because its published AI-tool
-    // configuration uses `thinking`, not `enable_thinking`. Pair the flag with
-    // an explicit `thinking_budget` so DashScope doesn't fall back to its
-    // unbounded default — same clamp as Token Plan keeps both plans aligned.
-    if (
-      input.model.providerID.startsWith("alibaba") &&
-      !input.model.providerID.startsWith("alibaba-token-plan") &&
-      input.model.capabilities.reasoning &&
-      input.model.api.npm === "@ai-sdk/openai-compatible"
-    ) {
+    // Alibaba reasoning models — both Token Plan and Coding Plan run on
+    // DashScope's OpenAI-compat endpoint, so both take the documented
+    // `enable_thinking` + `thinking_budget` params. The Anthropic-shaped
+    // `thinking` block belongs to the separate `/apps/anthropic/v1`
+    // endpoint, which this provider does not target.
+    if (isAlibabaThinkingModel(input.model)) {
       result["enable_thinking"] = true
       result["thinking_budget"] = alibabaThinkingBudget(input.model, ALIBABA_THINKING_BUDGET_TOKENS)
     }
@@ -346,28 +330,25 @@ export namespace ProviderTransform {
 
   export function sanitizeOptions(model: Provider.Model, options: Record<string, any>): Record<string, any> {
     let result = options
-    if (isAlibabaTokenPlanThinkingModel(model)) {
+    if (isAlibabaThinkingModel(model)) {
+      // Strip incompatible thinking shapes (Anthropic block, reasoning-effort
+      // variants) that user config or other transforms may have layered in,
+      // then re-establish the documented DashScope pair with a clamped
+      // budget — covers the case where user config bumps `thinking_budget`
+      // above the per-account ceiling.
       const {
-        enable_thinking: _enable_thinking,
+        thinking: _thinking,
         reasoning: _reasoning,
         reasoningEffort: _reasoningEffort,
         reasoning_effort: _reasoning_effort,
         thinkingConfig: _thinkingConfig,
+        thinking_budget: requestedBudget,
         ...rest
       } = result
-      result = rest
-
-      const thinking =
-        result.thinking && isRecord(result.thinking)
-          ? (result.thinking as Record<string, unknown>)
-          : {}
       result = {
-        ...result,
-        thinking: {
-          ...thinking,
-          type: "enabled",
-          budgetTokens: alibabaThinkingBudget(model, thinking.budgetTokens),
-        },
+        ...rest,
+        enable_thinking: true,
+        thinking_budget: alibabaThinkingBudget(model, requestedBudget),
       }
     }
 
