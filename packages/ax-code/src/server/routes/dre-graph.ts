@@ -6,17 +6,15 @@ import { SessionBranchRank } from "../../session/branch"
 import { SessionDre } from "../../session/dre"
 import { SessionGraph } from "../../session/graph"
 import { SessionRisk } from "../../session/risk"
+import { activitySection } from "../../quality/dre-graph-activity-section"
 import { live, mermaidScript, themeScript, themeToggle } from "../../quality/dre-graph-assets"
 import { branchSection } from "../../quality/dre-graph-branch-section"
 import { changesSection } from "../../quality/dre-graph-changes-section"
 import { style } from "../../quality/dre-graph-style"
 import { summary } from "../../quality/dre-graph-summary-section"
-import { dreGraphActivityToolLabels, summarizeDreGraphActivityTools } from "../../quality/dre-graph-activity"
 import { timelineSection } from "../../quality/dre-graph-timeline-section"
-import { parseDreGraphTimeline, parseDreGraphTimelineStepDurationMs } from "../../quality/dre-graph-timeline"
 import { indexFingerprint, sessionFingerprint } from "../../quality/dre-graph-fingerprint"
 import { riskSection } from "../../quality/dre-graph-risk-section"
-import { renderDreGraphRollbackBars } from "../../quality/dre-graph-rollback"
 import { validationSection } from "../../quality/dre-graph-validation-section"
 import { verdictSection } from "../../quality/dre-graph-verdict-section"
 import { agentDisplay, esc, stamp, tone } from "../../quality/dre-graph-format"
@@ -29,197 +27,6 @@ import { SESSION_ID_PARAM, withSessionID } from "./route-params"
 const DRE_GRAPH_QUALITY_QUERY = z.object({
   quality: z.coerce.boolean().optional().default(false),
 })
-
-// ── Section 2: Risk Analysis ───────────────────────────────────────
-
-// ── Section 3: Execution Graph ─────────────────────────────────────
-function activitySection(graph: SessionGraph.Snapshot, dre: SessionDre.Snapshot, points: SessionRollback.Point[]) {
-  const parsed = parseDreGraphTimeline(dre.timeline)
-  const detail = dre.detail
-
-  // Rank steps by duration, top 3
-  const durations = parsed.steps.map((s) => parseDreGraphTimelineStepDurationMs(s.duration))
-  const maxDur = Math.max(...durations, 1)
-  const allSameIndex = parsed.steps.every((s) => s.index === parsed.steps[0]?.index)
-  const ranked = parsed.steps
-    .map((s, i) => ({ step: s, dur: durations[i], seq: i }))
-    .sort((a, b) => b.dur - a.dur || b.step.tools.length - a.step.tools.length)
-    .slice(0, 3)
-
-  const topStepsHtml = ranked.length
-    ? ranked
-        .map(({ step, dur, seq }) => {
-          const label = allSameIndex ? `Turn ${seq + 1}` : step.index
-          const pct = Math.max(4, (dur / maxDur) * 100)
-          const hasErrors = step.errors.length > 0
-          const barColor = hasErrors ? "var(--high)" : dur === maxDur ? "var(--warn)" : "var(--accent)"
-          const agentLabel = step.routes.length ? step.routes[step.routes.length - 1] : ""
-
-          // Tool timing breakdown — sorted slowest first, answers "why so long?"
-          const toolTiming = [...step.tools].filter((t) => t.durationMs > 0).sort((a, b) => b.durationMs - a.durationMs)
-          const slowestMs = toolTiming[0]?.durationMs ?? 1
-          const toolTimingHtml = toolTiming.length
-            ? [
-                `<div class="act-timing">`,
-                `<div class="act-timing-label">Time breakdown</div>`,
-                toolTiming
-                  .slice(0, 8)
-                  .map((t) => {
-                    const tpct = Math.max(3, (t.durationMs / slowestMs) * 100)
-                    const tcolor =
-                      t.status === "ERR" ? "var(--high)" : t.durationMs > 5000 ? "var(--warn)" : "var(--low)"
-                    const ms = t.durationMs >= 1000 ? `${(t.durationMs / 1000).toFixed(1)}s` : `${t.durationMs}ms`
-                    const argLabel = t.args
-                      ? ` ${t.args.split("/").pop()?.split("\\").pop() ?? t.args}`.slice(0, 28)
-                      : ""
-                    return [
-                      `<div class="act-timing-row">`,
-                      `<span class="act-timing-name">${esc(t.name)}${argLabel ? `<span class="act-timing-arg">${esc(argLabel)}</span>` : ""}${t.status === "ERR" ? ` <span class="act-err-badge">ERR</span>` : ""}</span>`,
-                      `<div class="act-timing-track"><div class="act-timing-bar" style="width:${tpct.toFixed(0)}%;background:${tcolor}"></div></div>`,
-                      `<span class="act-timing-ms">${ms}</span>`,
-                      `</div>`,
-                    ].join("")
-                  })
-                  .join(""),
-                toolTiming.length > 8
-                  ? `<span class="muted" style="font-size:11px">+${toolTiming.length - 8} more tools (no timing)</span>`
-                  : "",
-                `</div>`,
-              ].join("")
-            : ""
-
-          // Files read and edited
-          const filesRead = step.tools
-            .filter((t) => /^(read|view|cat)$/.test(t.name.toLowerCase()) && t.args)
-            .map((t) => t.args.split("/").pop() ?? t.args)
-          const filesEdited = step.tools
-            .filter((t) => /^(edit|write|apply_patch|multiedit|patch)$/.test(t.name.toLowerCase()) && t.args)
-            .map((t) => t.args.split("/").pop() ?? t.args)
-          const filesHtml =
-            filesRead.length || filesEdited.length
-              ? [
-                  `<div class="act-files">`,
-                  filesRead.length
-                    ? `<div class="act-files-row"><span class="act-files-label">Read</span><span class="act-files-list">${esc(filesRead.slice(0, 5).join(", "))}${filesRead.length > 5 ? ` +${filesRead.length - 5}` : ""}</span></div>`
-                    : "",
-                  filesEdited.length
-                    ? `<div class="act-files-row"><span class="act-files-label">Edited</span><span class="act-files-list act-files-edited">${esc(filesEdited.slice(0, 5).join(", "))}${filesEdited.length > 5 ? ` +${filesEdited.length - 5}` : ""}</span></div>`
-                    : "",
-                  `</div>`,
-                ].join("")
-              : ""
-
-          const errorsHtml = step.errors.length
-            ? `<div class="act-error-list">${step.errors.map((e) => `<div class="gantt-error">${esc(e)}</div>`).join("")}</div>`
-            : ""
-
-          return [
-            `<details class="act-card${hasErrors ? " act-card-err" : ""}">`,
-            `<summary class="act-card-summary">`,
-            `<div class="act-card-head">`,
-            `<span class="act-label">${esc(label)}</span>`,
-            agentLabel ? `<span class="act-agent">${esc(agentDisplay(agentLabel))}</span>` : "",
-            `<div class="act-bar-wrap"><div class="act-bar" style="width:${pct.toFixed(0)}%;background:${barColor}"></div></div>`,
-            `<span class="act-dur">${esc(step.duration)}</span>`,
-            hasErrors ? `<span class="act-err-badge">${step.errors.length} err</span>` : "",
-            `</div>`,
-            `<div class="act-summary">${esc(summarizeDreGraphActivityTools(step.tools))}</div>`,
-            `<div class="act-chips">${dreGraphActivityToolLabels(step.tools)
-              .map((label) => chip({ label }))
-              .join("")}</div>`,
-            `</summary>`,
-            `<div class="act-expand">`,
-            toolTimingHtml,
-            filesHtml,
-            errorsHtml,
-            `</div>`,
-            `</details>`,
-          ].join("")
-        })
-        .join("")
-    : `<p class="empty">No steps recorded yet.</p>`
-
-  // Agent roster — which agents were involved and their role
-  const agentMeta = graph.graph.metadata.agents
-  const routedTargets = new Set((detail?.routes ?? []).map((r) => r.to))
-  const routeConf = new Map((detail?.routes ?? []).map((r) => [r.to, r.confidence]))
-  const agentsHtml = agentMeta.length
-    ? [
-        `<div class="agent-roster">`,
-        agentMeta
-          .map((a, i) => {
-            const isRouted = routedTargets.has(a)
-            const conf = routeConf.get(a)
-            const role =
-              i === 0 && !isRouted
-                ? "primary"
-                : isRouted
-                  ? `routed · ${conf != null ? (conf * 100).toFixed(0) + "% conf" : ""}`
-                  : "active"
-            return `<div class="agent-item"><span class="agent-dot"></span><span class="agent-name">${esc(agentDisplay(a))}</span><span class="agent-tag">${esc(role)}</span></div>`
-          })
-          .join(""),
-        `</div>`,
-      ].join("")
-    : `<p class="empty">No agent data.</p>`
-
-  // Tool usage — aggregate counts
-  const toolUsageHtml = detail?.tools.length
-    ? (() => {
-        const counts = new Map<string, number>()
-        for (const t of detail.tools) counts.set(t, (counts.get(t) ?? 0) + 1)
-        const median = [...counts.values()].sort((a, b) => a - b)[Math.floor(counts.size / 2)] ?? 1
-        return barChart({
-          items: [...counts.entries()]
-            .sort((a, b) => b[1] - a[1])
-            .slice(0, 10)
-            .map(([label, value]) => ({ label, value })),
-          unit: "×",
-          colorFn: (v) => (v > median * 4 ? "var(--warn)" : v > median * 2 ? "var(--accent)" : "var(--low)"),
-        })
-      })()
-    : `<p class="empty">No tool data.</p>`
-
-  // Rollback points
-  const rbHtml = renderDreGraphRollbackBars(points, "No rollback points recorded.")
-
-  return [
-    `<section class="band" id="activity">`,
-    `<div class="wrap">`,
-    `<div class="section-head"><h2>Activity</h2><p>Top steps by duration — what the agent actually worked on</p></div>`,
-    `<div class="grid">`,
-    // Left: key steps (top 3 by duration)
-    `<div class="panel">`,
-    `<h3>Key Steps</h3>`,
-    topStepsHtml,
-    parsed.steps.length > 3
-      ? `<p class="muted" style="font-size:12px;margin-top:12px">Showing top 3 of ${parsed.steps.length} steps — full breakdown in the execution graph above</p>`
-      : "",
-    detail?.notes.length
-      ? [
-          `<div style="margin-top:20px"><h3>Notes</h3>`,
-          `<div class="driver-list">`,
-          detail.notes
-            .map((item) => `<div class="driver-item"><span class="driver-icon">·</span><span>${esc(item)}</span></div>`)
-            .join(""),
-          `</div></div>`,
-        ].join("")
-      : "",
-    `</div>`,
-    // Right: agents + tool usage + rollback
-    `<div class="panel">`,
-    `<h3>Agents Involved</h3>`,
-    agentsHtml,
-    `<h3 style="margin-top:20px">Tool Usage</h3>`,
-    toolUsageHtml,
-    `<h3 style="margin-top:20px">Rollback Points <span class="rb-count">${points.length}</span></h3>`,
-    rbHtml,
-    `</div>`,
-    `</div>`,
-    `</div>`,
-    `</section>`,
-  ].join("")
-}
 
 // ── (legacy retained for reference — replaced by activitySection) ──
 function graphSection(input: SessionGraph.Snapshot, dre: SessionDre.Snapshot) {
