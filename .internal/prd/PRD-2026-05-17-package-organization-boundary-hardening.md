@@ -36,10 +36,19 @@ Implemented the first route/domain extraction:
 - Added focused coverage in `packages/ax-code/test/quality/dre-graph-timeline.test.ts` for headings, metadata, step parsing, tool parsing, route/LLM/error capture, and duration parsing.
 - Existing DRE graph route tests still cover page/fingerprint behavior after the extraction.
 
+### 2026-05-17 - Phase 3 DRE Graph Fingerprint Extraction Slice
+
+Implemented the second route/domain extraction:
+
+- Extracted DRE graph index/session fingerprint shaping into `packages/ax-code/src/quality/dre-graph-fingerprint.ts`.
+- `packages/ax-code/src/server/routes/dre-graph.ts` now delegates fingerprint JSON shaping instead of owning it inline.
+- Added focused coverage in `packages/ax-code/test/quality/dre-graph-fingerprint.test.ts` for session-list fingerprints, graph/DRE/risk summaries, quality readiness rollups, branch rank summaries, and rollback counts.
+- Existing DRE graph route tests still cover fingerprint endpoints after the extraction.
+
 Still pending:
 
 - UI component grouping.
-- Further DRE graph route domain extraction beyond timeline parsing.
+- Further DRE graph route domain extraction beyond timeline and fingerprint shaping.
 - TUI session route and session prompt hotspot reduction.
 - LSP surface cleanup.
 - Workspace package manifest dependency-cycle cleanup.
