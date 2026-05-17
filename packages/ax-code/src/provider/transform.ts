@@ -25,10 +25,14 @@ export namespace ProviderTransform {
   // to 2048 / 1024 via AX_CODE_ALIBABA_OUTPUT_TOKEN_MAX.
   const ALIBABA_OUTPUT_TOKEN_MAX_DEFAULT = 4_096
   const ALIBABA_OUTPUT_TOKEN_MAX = Flag.AX_CODE_ALIBABA_OUTPUT_TOKEN_MAX || ALIBABA_OUTPUT_TOKEN_MAX_DEFAULT
-  // The documented `thinking` budget for Token Plan reasoning models. Kept
-  // narrow because it is paired with the Token Plan API contract, not a
-  // general short-window concern.
-  const ALIBABA_TOKEN_PLAN_THINKING_BUDGET_TOKENS = 8_192
+  // Cap for `budgetTokens` (Token Plan) and `thinking_budget` (Coding Plan)
+  // on Alibaba reasoning models. 8192 is the value the upstream OpenCode
+  // example uses; raise via AX_CODE_ALIBABA_THINKING_BUDGET_TOKENS if the
+  // account allows it (qwen3.5-plus / qwen3-max accept up to 81920, GLM
+  // models up to 32768).
+  const ALIBABA_THINKING_BUDGET_DEFAULT = 8_192
+  const ALIBABA_THINKING_BUDGET_TOKENS =
+    Flag.AX_CODE_ALIBABA_THINKING_BUDGET_TOKENS || ALIBABA_THINKING_BUDGET_DEFAULT
 
   // Maps npm package to the key the AI SDK expects for providerOptions.
   // The Vertex provider uses the same "google" key as the Gemini provider,
@@ -223,10 +227,10 @@ export namespace ProviderTransform {
     return model.providerID.startsWith("alibaba-")
   }
 
-  function alibabaTokenPlanThinkingBudget(model: Provider.Model, requested?: unknown) {
+  function alibabaThinkingBudget(model: Provider.Model, requested?: unknown) {
     const max = maxOutputTokens(model)
     const value = typeof requested === "number" && Number.isFinite(requested) && requested > 0 ? requested : max
-    return Math.min(Math.floor(value), max, ALIBABA_TOKEN_PLAN_THINKING_BUDGET_TOKENS)
+    return Math.min(Math.floor(value), max, ALIBABA_THINKING_BUDGET_TOKENS)
   }
 
   export function variants(model: Provider.Model): Record<string, Record<string, any>> {
@@ -313,13 +317,15 @@ export namespace ProviderTransform {
     if (isAlibabaTokenPlanThinkingModel(input.model)) {
       result["thinking"] = {
         type: "enabled",
-        budgetTokens: alibabaTokenPlanThinkingBudget(input.model, ALIBABA_TOKEN_PLAN_THINKING_BUDGET_TOKENS),
+        budgetTokens: alibabaThinkingBudget(input.model, ALIBABA_THINKING_BUDGET_TOKENS),
       }
     }
 
     // Enable thinking for reasoning models on Alibaba Coding Plan (DashScope).
     // Token Plan Team Edition is handled above because its published AI-tool
-    // configuration uses `thinking`, not `enable_thinking`.
+    // configuration uses `thinking`, not `enable_thinking`. Pair the flag with
+    // an explicit `thinking_budget` so DashScope doesn't fall back to its
+    // unbounded default — same clamp as Token Plan keeps both plans aligned.
     if (
       input.model.providerID.startsWith("alibaba") &&
       !input.model.providerID.startsWith("alibaba-token-plan") &&
@@ -327,6 +333,7 @@ export namespace ProviderTransform {
       input.model.api.npm === "@ai-sdk/openai-compatible"
     ) {
       result["enable_thinking"] = true
+      result["thinking_budget"] = alibabaThinkingBudget(input.model, ALIBABA_THINKING_BUDGET_TOKENS)
     }
 
     if (input.model.providerID === "venice") {
@@ -358,7 +365,7 @@ export namespace ProviderTransform {
         thinking: {
           ...thinking,
           type: "enabled",
-          budgetTokens: alibabaTokenPlanThinkingBudget(model, thinking.budgetTokens),
+          budgetTokens: alibabaThinkingBudget(model, thinking.budgetTokens),
         },
       }
     }

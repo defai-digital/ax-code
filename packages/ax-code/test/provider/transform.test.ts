@@ -1236,3 +1236,74 @@ describe("ProviderTransform.options - Alibaba Token Plan Team Edition", () => {
     expect(result.enable_thinking).toBeUndefined()
   })
 })
+
+describe("ProviderTransform.options - Alibaba Coding Plan (DashScope)", () => {
+  function createModel(modelID: string, reasoning = true, providerID = "alibaba-coding-plan") {
+    return {
+      id: `${providerID}/${modelID}`,
+      providerID: ProviderID.make(providerID),
+      api: {
+        id: modelID,
+        url: providerID.endsWith("-cn")
+          ? "https://coding.dashscope.aliyuncs.com/v1"
+          : "https://coding-intl.dashscope.aliyuncs.com/v1",
+        npm: "@ai-sdk/openai-compatible",
+      },
+      capabilities: {
+        reasoning,
+      },
+      limit: {
+        output: 65_536,
+      },
+    } as any
+  }
+
+  test("pairs enable_thinking with a bounded thinking_budget for qwen3.6-plus", () => {
+    const result = ProviderTransform.options({
+      model: createModel("qwen3.6-plus"),
+      sessionID: "session-test",
+      providerOptions: {},
+    })
+
+    // thinking_budget is clamped to maxOutputTokens (4096 — the Alibaba
+    // short-window cap), which is below the 8192 documented ceiling.
+    expect(result.enable_thinking).toBe(true)
+    expect(result.thinking_budget).toBe(4096)
+    expect(result.thinking).toBeUndefined()
+  })
+
+  test("pairs enable_thinking with a bounded thinking_budget for glm-5", () => {
+    const result = ProviderTransform.options({
+      model: createModel("glm-5"),
+      sessionID: "session-test",
+      providerOptions: {},
+    })
+
+    expect(result.enable_thinking).toBe(true)
+    expect(result.thinking_budget).toBe(4096)
+    expect(result.thinking).toBeUndefined()
+  })
+
+  test("pairs enable_thinking with a bounded thinking_budget on the China Coding Plan", () => {
+    const result = ProviderTransform.options({
+      model: createModel("qwen3.6-plus", true, "alibaba-coding-plan-cn"),
+      sessionID: "session-test",
+      providerOptions: {},
+    })
+
+    expect(result.enable_thinking).toBe(true)
+    expect(result.thinking_budget).toBe(4096)
+  })
+
+  test("does not enable thinking for non-reasoning Coding Plan models", () => {
+    const result = ProviderTransform.options({
+      model: createModel("deepseek-v3.2", false),
+      sessionID: "session-test",
+      providerOptions: {},
+    })
+
+    expect(result.enable_thinking).toBeUndefined()
+    expect(result.thinking_budget).toBeUndefined()
+    expect(result.thinking).toBeUndefined()
+  })
+})
