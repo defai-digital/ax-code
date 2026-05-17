@@ -905,15 +905,16 @@ export namespace SessionProcessor {
                   MessageV2.APIError.isInstance(error) && typeof error.data?.message === "string"
                     ? error.data.message
                     : retry
-                input.assistantMessage.error = MessageV2.APIError.isInstance(error) && error.data
-                  ? new MessageV2.APIError({
-                      ...error.data,
-                      isRetryable: false,
-                      message: `${apiErrorMessage} (stopped after ${SessionRetry.RETRY_MAX_ATTEMPTS} retries)`,
-                    }).toObject()
-                  : new NamedError.Unknown({
-                      message: `${retry} (stopped after ${SessionRetry.RETRY_MAX_ATTEMPTS} retries)`,
-                    }).toObject()
+                input.assistantMessage.error =
+                  MessageV2.APIError.isInstance(error) && error.data
+                    ? new MessageV2.APIError({
+                        ...error.data,
+                        isRetryable: false,
+                        message: `${apiErrorMessage} (stopped after ${SessionRetry.RETRY_MAX_ATTEMPTS} retries)`,
+                      }).toObject()
+                    : new NamedError.Unknown({
+                        message: `${retry} (stopped after ${SessionRetry.RETRY_MAX_ATTEMPTS} retries)`,
+                      }).toObject()
               } else {
                 input.assistantMessage.error ??= error
               }

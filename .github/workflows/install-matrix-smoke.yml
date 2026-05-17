@@ -1,18 +1,16 @@
 name: Install Matrix Smoke
 
 # Validates that ax-code installs and runs end-to-end on every supported
-# platform × distribution channel after a release tag publishes. Both the
+# platform × distribution channel after the release workflow finishes. Both the
 # default package and the compatibility source alias must report the expected
 # runtime mode. The default package is compiled; ax-code-source is source+bun.
 #
 # Triggers:
-#   - `release_published`: each tag-driven release runs the matrix
-#   - `workflow_dispatch`: manual run for testing the workflow itself
-#     against an already-published version (provide `version` input).
+#   - `workflow_dispatch`: the release workflow dispatches this only after
+#     npm packages and Homebrew formulae are published. Maintainers can also
+#     run it manually against an already-published version.
 
 on:
-  release:
-    types: [published]
   workflow_dispatch:
     inputs:
       version:
@@ -29,7 +27,8 @@ on:
           - source
           - latest
 
-permissions: {}
+permissions:
+  contents: read
 
 env:
   AX_CODE_DISABLE_AUTOUPDATE: "1"
@@ -68,20 +67,22 @@ jobs:
     runs-on: ${{ matrix.os }}
     container: ${{ matrix.container || '' }}
     steps:
-      - name: Validate manual dispatch inputs
-        if: github.event_name == 'workflow_dispatch'
-        shell: bash
-        run: bash .github/scripts/validate-install-matrix-inputs.sh "${{ inputs.version }}" "${{ inputs.channel }}"
-
       # MUST run before any `shell: bash` step. Alpine 3.20's base image
       # ships only BusyBox `ash`; the very first action-step that declares
       # `shell: bash` would otherwise fail with `bash: executable file not
-      # found in $PATH` before this step can install it. Default shell here
-      # is `sh` (POSIX), which Alpine has.
+      # found in $PATH`. Default shell here is `sh` (POSIX), which Alpine has.
       - name: Alpine prereqs
         if: ${{ matrix.container == 'alpine:3.20' }}
         run: |
           apk add --no-cache bash nodejs npm curl
+
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Validate manual dispatch inputs
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        run: bash .github/scripts/validate-install-matrix-inputs.sh "${{ inputs.version }}" "${{ inputs.channel }}"
 
       - name: Set isolated home paths
         shell: bash
@@ -116,13 +117,9 @@ jobs:
           else
             PACKAGE="@defai.digital/ax-code"
           fi
-          # release_published can fire before publish-npm/publish-source
-          # finish (or before the npm registry has propagated the new
-          # version). Poll npm until the version is visible, then install.
-          # Cap at ~30 minutes so release_published events that arrive
-          # before the compiled npm/Homebrew channels finish publishing do
-          # not produce false failures. v5.0.1 compiled npm/Homebrew
-          # propagation took ~13 minutes after the release event.
+          # The release workflow dispatches this only after publish jobs
+          # succeed, but npm registry propagation can still lag briefly.
+          # Poll npm until the exact version is visible, then install.
           echo "Waiting for ${PACKAGE}@${VERSION} to be available on npm..."
           for attempt in $(seq 1 180); do
             if npm view "${PACKAGE}@${VERSION}" version >/dev/null 2>&1; then
@@ -195,6 +192,9 @@ jobs:
     name: macos-latest / homebrew
     runs-on: macos-latest
     steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
       - name: Validate manual dispatch inputs
         if: github.event_name == 'workflow_dispatch'
         shell: bash

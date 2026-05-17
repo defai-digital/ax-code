@@ -145,6 +145,11 @@ export namespace Flag {
     truthy("AX_CODE_ENABLE_EXA") || AX_CODE_EXPERIMENTAL || truthy("AX_CODE_EXPERIMENTAL_EXA")
   export const AX_CODE_EXPERIMENTAL_BASH_DEFAULT_TIMEOUT_MS = number("AX_CODE_EXPERIMENTAL_BASH_DEFAULT_TIMEOUT_MS")
   export const AX_CODE_EXPERIMENTAL_OUTPUT_TOKEN_MAX = number("AX_CODE_EXPERIMENTAL_OUTPUT_TOKEN_MAX")
+  // Alibaba (DashScope + Token Plan) reserves `prompt + max_tokens` against a
+  // sliding short-window quota *before* generation. Set this to lower the
+  // per-request output cap below the built-in default — e.g. 2048 for noisy
+  // accounts, 1024 for very aggressive throttling.
+  export const AX_CODE_ALIBABA_OUTPUT_TOKEN_MAX = number("AX_CODE_ALIBABA_OUTPUT_TOKEN_MAX")
   export const AX_CODE_EXPERIMENTAL_OXFMT = AX_CODE_EXPERIMENTAL || truthy("AX_CODE_EXPERIMENTAL_OXFMT")
   export const AX_CODE_EXPERIMENTAL_LSP_TY = truthy("AX_CODE_EXPERIMENTAL_LSP_TY")
   export const AX_CODE_EXPERIMENTAL_LSP_TOOL = AX_CODE_EXPERIMENTAL || truthy("AX_CODE_EXPERIMENTAL_LSP_TOOL")

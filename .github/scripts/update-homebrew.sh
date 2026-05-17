@@ -4,22 +4,32 @@
 # The primary `ax-code` formula tracks the GitHub release assets produced by
 # the tag-driven release workflow. The compatibility `ax-code-source` formula
 # remains available for users who intentionally want the source+bun launcher.
+#
+# Inputs (env):
+#   GITHUB_REF_NAME — release tag (e.g. v5.2.3)
+#   GH_TOKEN        — read access to the ax-code release assets
+#   TAP_TOKEN       — write access to the Homebrew tap repo
 set -euo pipefail
 
 VERSION="${GITHUB_REF_NAME#v}"
 TAG="v${VERSION}"
 RELEASE_BASE="https://github.com/defai-digital/ax-code/releases/download/${TAG}"
 SOURCE_REPO="${GITHUB_REPOSITORY:-defai-digital/ax-code}"
+RELEASE_READ_TOKEN="${GH_TOKEN:-}"
 TAP_AUTH_TOKEN="${TAP_TOKEN:-${GH_TOKEN:-}}"
 
+if [ -z "${RELEASE_READ_TOKEN}" ]; then
+  echo "::error::GH_TOKEN is required to read release assets from ${SOURCE_REPO}"
+  exit 1
+fi
 if [ -z "${TAP_AUTH_TOKEN}" ]; then
   echo "::error::TAP_TOKEN or GH_TOKEN is required to update the Homebrew tap"
   exit 1
 fi
-# Override GH_TOKEN for all subsequent commands (gh clone, git push via
-# credential helper) so they use the tap write token, not the default
-# github-actions read-only GITHUB_TOKEN from the workflow env.
-export GH_TOKEN="${TAP_AUTH_TOKEN}"
+# Keep release downloads on the source-repo token. The tap write token may be
+# scoped only to defai-digital/homebrew-ax-code and can fail release reads with
+# "Resource not accessible by personal access token".
+export GH_TOKEN="${RELEASE_READ_TOKEN}"
 
 sha256_file() {
   if command -v sha256sum >/dev/null 2>&1; then
@@ -112,6 +122,9 @@ cat /tmp/ax-code.rb
 
 TAP_DIR="$(mktemp -d)"
 trap 'rm -rf "${TAP_DIR}"' EXIT
+# Switch to the tap write token only after all source-repo release assets have
+# been downloaded and hashed.
+export GH_TOKEN="${TAP_AUTH_TOKEN}"
 gh auth setup-git
 gh repo clone defai-digital/homebrew-ax-code "${TAP_DIR}" -- --depth 1
 cp /tmp/ax-code.rb "${TAP_DIR}/ax-code.rb"

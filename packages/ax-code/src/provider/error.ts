@@ -93,12 +93,16 @@ export namespace ProviderError {
     return undefined
   }
 
-  function isAlibabaTokenPlanQuota(providerID: ProviderID, message: string, responseBody?: string, url?: string) {
+  // DashScope (Coding Plan) and Token Plan both throttle on a sliding
+  // short-window allocatable-token reservation. Same error class, same
+  // mitigation — recognize either backend so retry/backoff applies uniformly.
+  function isAlibabaShortWindowQuota(providerID: ProviderID, message: string, responseBody?: string, url?: string) {
     const lowerUrl = url?.toLowerCase() ?? ""
-    const isTokenPlan =
-      providerID.startsWith("alibaba-token-plan") ||
-      (lowerUrl.includes("token-plan.") && lowerUrl.includes("aliyuncs.com"))
-    if (!isTokenPlan) return false
+    const urlIsAlibaba =
+      lowerUrl.includes("aliyuncs.com") &&
+      (lowerUrl.includes("token-plan.") || lowerUrl.includes("dashscope."))
+    const isAlibaba = providerID.startsWith("alibaba-") || urlIsAlibaba
+    if (!isAlibaba) return false
     const text = `${message}\n${responseBody ?? ""}`.toLowerCase()
     return (
       text.includes("allocated quota exceeded") ||
@@ -107,8 +111,8 @@ export namespace ProviderError {
     )
   }
 
-  function alibabaTokenPlanQuotaMessage() {
-    return "Alibaba token-plan rejected the request as exceeding short-window allocatable token quota. This is usually a per-request or TPS/TPM reservation limit, not the total Token Plan usage percentage. ax-code treats this as retryable short-window throttling; if it persists, wait briefly or lower the configured model output limit. Details: https://www.alibabacloud.com/help/en/model-studio/error-code#token-limit"
+  function alibabaShortWindowQuotaMessage() {
+    return "Alibaba rejected the request as exceeding short-window allocatable token quota. This is a per-request or TPS/TPM reservation limit, not total plan usage. ax-code treats this as retryable short-window throttling; if it persists, wait briefly or lower the per-request output cap via AX_CODE_ALIBABA_OUTPUT_TOKEN_MAX (e.g. 2048 or 1024). Details: https://www.alibabacloud.com/help/en/model-studio/error-code#token-limit"
   }
 
   export type ParsedStreamError =
@@ -193,16 +197,18 @@ export namespace ProviderError {
 
     const metadata = input.error.url ? { url: input.error.url } : undefined
 
-    if (isAlibabaTokenPlanQuota(input.providerID, m, input.error.responseBody, input.error.url)) {
+    if (isAlibabaShortWindowQuota(input.providerID, m, input.error.responseBody, input.error.url)) {
       return {
         type: "api_error",
-        message: alibabaTokenPlanQuotaMessage(),
+        message: alibabaShortWindowQuotaMessage(),
         statusCode: input.error.statusCode,
         isRetryable: true,
         responseHeaders: input.error.responseHeaders,
         responseBody: input.error.responseBody,
         metadata: {
           ...(metadata ?? {}),
+          // Keep historical error-code value so any downstream telemetry that
+          // already pivots on it (dashboards, session retry) keeps matching.
           errorCode: "alibaba_token_plan_short_window_quota",
         },
       }

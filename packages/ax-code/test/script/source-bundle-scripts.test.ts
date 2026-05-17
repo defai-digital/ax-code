@@ -5,6 +5,7 @@ import fs from "fs"
 const repoRoot = path.resolve(import.meta.dir, "../../../..")
 const packageJsonPath = path.resolve(import.meta.dir, "../../package.json")
 const ciWorkflowPath = path.join(repoRoot, ".github/workflows/ax-code-ci.yml")
+const repoStructureWorkflowPath = path.join(repoRoot, ".github/workflows/repo-structure.yml")
 const tuiRendererWorkflowPath = path.join(repoRoot, ".github/workflows/ax-code-tui-renderer.yml")
 
 describe("source-bundle package.json scripts", () => {
@@ -101,6 +102,13 @@ describe("PR CI bundle-source job", () => {
     expect(text).toContain("bundle-source:")
   })
 
+  test("ax-code-ci.yml cancels superseded PR/dev runs", async () => {
+    const text = await Bun.file(ciWorkflowPath).text()
+    expect(text).toContain("concurrency:")
+    expect(text).toContain("github.event.pull_request.number || github.ref")
+    expect(text).toContain("cancel-in-progress: true")
+  })
+
   test("bundle-source job runs bundle:source script (catches build regressions)", async () => {
     const text = await Bun.file(ciWorkflowPath).text()
     const jobMatch = text.match(/bundle-source:[\s\S]*?(?=\n  \w+:|$)/)
@@ -149,6 +157,17 @@ describe("PR CI bundle-source job", () => {
     // would still hit dev if the PR check didn't run.
     const text = await Bun.file(ciWorkflowPath).text()
     expect(text).toContain("pull_request:")
+  })
+})
+
+describe("repo structure workflow", () => {
+  test("uses least-privilege permissions and cancels superseded runs", async () => {
+    const text = await Bun.file(repoStructureWorkflowPath).text()
+    expect(text).toContain("permissions:")
+    expect(text).toContain("contents: read")
+    expect(text).toContain("concurrency:")
+    expect(text).toContain("github.event.pull_request.number || github.ref")
+    expect(text).toContain("cancel-in-progress: true")
   })
 })
 

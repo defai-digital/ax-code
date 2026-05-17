@@ -35,7 +35,7 @@ function warmSemanticLsp(filepath: string, signal?: AbortSignal) {
     log.warn("opportunistic lsp warmup failed", {
       filepath,
       error: err instanceof Error ? err.message : String(err),
-      })
+    })
   }
 
   const task = Instance.bind(async () => {
@@ -263,7 +263,7 @@ export const ReadTool = Tool.define("read", {
         stream.destroy()
       }
 
-      if (lines < offset && !(lines === 0 && offset === 1)) {
+      if (!truncatedByBytes && lines < offset && !(lines === 0 && offset === 1)) {
         throw readError("ReadOffsetOutOfRangeError", `Offset ${offset} is out of range for this file (${lines} lines)`)
       }
 

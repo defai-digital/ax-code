@@ -60,6 +60,7 @@ export namespace WorkspaceServer {
 
           const heartbeat = setInterval(() => {
             if (done) return
+            if (q.size >= SSE_MAX_QUEUE) return
             q.push(JSON.stringify({ type: "server.heartbeat", properties: {} }))
           }, 10_000)
 

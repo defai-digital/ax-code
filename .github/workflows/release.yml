@@ -78,11 +78,13 @@ jobs:
       - name: Set isolated home paths
         shell: bash
         run: |
-          echo "AX_CODE_TEST_HOME=$RUNNER_TEMP/ax-code-release-build-home" >> "$GITHUB_ENV"
-          echo "XDG_CONFIG_HOME=$RUNNER_TEMP/ax-code-release-build-home/.config" >> "$GITHUB_ENV"
-          echo "XDG_CACHE_HOME=$RUNNER_TEMP/ax-code-release-build-home/.cache" >> "$GITHUB_ENV"
-          echo "XDG_DATA_HOME=$RUNNER_TEMP/ax-code-release-build-home/.local/share" >> "$GITHUB_ENV"
-          echo "XDG_STATE_HOME=$RUNNER_TEMP/ax-code-release-build-home/.local/state" >> "$GITHUB_ENV"
+          {
+            echo "AX_CODE_TEST_HOME=$RUNNER_TEMP/ax-code-release-build-home"
+            echo "XDG_CONFIG_HOME=$RUNNER_TEMP/ax-code-release-build-home/.config"
+            echo "XDG_CACHE_HOME=$RUNNER_TEMP/ax-code-release-build-home/.cache"
+            echo "XDG_DATA_HOME=$RUNNER_TEMP/ax-code-release-build-home/.local/share"
+            echo "XDG_STATE_HOME=$RUNNER_TEMP/ax-code-release-build-home/.local/state"
+          } >> "$GITHUB_ENV"
 
       - name: Setup Ax-code JS toolchain
         uses: ./.github/actions/setup-ax-code-toolchain
@@ -151,29 +153,29 @@ jobs:
           CHANNEL: ${{ env.AX_CODE_RELEASE_CHANNEL }}
         run: |
           TAG="${{ github.ref_name }}"
-          PRERELEASE_FLAG=""
+          PRERELEASE_ARGS=()
           if [ "$CHANNEL" != "latest" ]; then
-            PRERELEASE_FLAG="--prerelease"
+            PRERELEASE_ARGS=(--prerelease)
           fi
-          # Create a draft release so the install-matrix-smoke workflow (which
-          # triggers on release: [published]) does not fire before npm and
-          # Homebrew artifacts are ready. The finalize job un-drafts it after
-          # all publish jobs complete.
+          # Create a draft release so public consumers do not see the release
+          # before npm and Homebrew artifacts are ready. The finalize job
+          # un-drafts it and dispatches install-matrix-smoke after all publish
+          # jobs complete.
           # Idempotent: skip if any release (draft or published) already exists.
           if ! gh release view "$TAG" >/dev/null 2>&1; then
             VERSION="${TAG#v}"
             NOTES_FILE="packages/ax-code/.internal/release/release-notes-v${VERSION}.md"
             if [ -f "$NOTES_FILE" ]; then
-              NOTES_ARGS="--notes-file $NOTES_FILE"
+              NOTES_ARGS=(--notes-file "$NOTES_FILE")
             else
-              NOTES_ARGS="--generate-notes"
+              NOTES_ARGS=(--generate-notes)
             fi
             gh release create "$TAG" \
               --title "$TAG" \
-              $NOTES_ARGS \
+              "${NOTES_ARGS[@]}" \
               --verify-tag \
               --draft \
-              $PRERELEASE_FLAG
+              "${PRERELEASE_ARGS[@]}"
           fi
 
       - name: Upload release assets
@@ -193,6 +195,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      id-token: write
       packages: write
     steps:
       - name: Setup Ax-code JS toolchain
@@ -212,6 +215,7 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_CONFIG_PROVENANCE: "true"
           AX_CODE_COMPILED_TAG: ${{ env.AX_CODE_RELEASE_CHANNEL }}
           AX_CODE_CHANNEL: ${{ env.AX_CODE_RELEASE_CHANNEL }}
           AX_CODE_RELEASE: "true"
@@ -224,6 +228,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      id-token: write
       packages: write
     steps:
       - name: Setup Ax-code JS toolchain
@@ -237,6 +242,7 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_CONFIG_PROVENANCE: "true"
           AX_CODE_VERSION: ${{ github.ref_name }}
           AX_CODE_CHANNEL: ${{ env.AX_CODE_RELEASE_CHANNEL }}
           AX_CODE_SOURCE_TAG: ${{ env.AX_CODE_RELEASE_CHANNEL }}
@@ -261,9 +267,8 @@ jobs:
         run: bash .github/scripts/update-homebrew.sh
 
   # Publish the GitHub release (remove draft status) only after npm packages
-  # and Homebrew formulae are fully propagated. The install-matrix-smoke
-  # workflow triggers on release: [published], so this ordering guarantees
-  # the smoke starts after all distribution channels are ready.
+  # and Homebrew formulae are fully propagated, then explicitly dispatch the
+  # install matrix so it cannot race release publication.
   finalize:
     needs:
       - publish-npm
@@ -280,6 +285,7 @@ jobs:
       (needs.homebrew-source.result == 'success' || needs.homebrew-source.result == 'skipped')
     runs-on: ubuntu-latest
     permissions:
+      actions: write
       contents: write
     steps:
       - name: Publish GitHub release
@@ -287,6 +293,17 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release edit "${{ github.ref_name }}" --draft=false --repo "${{ github.repository }}"
+
+      - name: Dispatch install matrix smoke
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          gh workflow run install-matrix-smoke.yml \
+            --repo "${{ github.repository }}" \
+            --ref "${{ github.ref_name }}" \
+            --field "version=${VERSION}" \
+            --field "channel=both"
 
   # Compatibility Homebrew formula for users who installed ax-code-source
   # during the transitional source-channel rollout.

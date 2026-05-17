@@ -776,10 +776,7 @@ export const GithubRunCommand = cmd({
           if (part.type === "tool" && part.state.status === "completed") {
             const [tool, color] = TOOL[part.tool] ?? [part.tool, UI.Style.TEXT_INFO_BOLD]
             const title =
-              part.state.title ||
-              (isNonEmptyRecord(part.state.input)
-                ? JSON.stringify(part.state.input)
-                : "Unknown")
+              part.state.title || (isNonEmptyRecord(part.state.input) ? JSON.stringify(part.state.input) : "Unknown")
             console.log()
             printEvent(color, tool, title)
           }
@@ -1359,7 +1356,10 @@ query($owner: String!, $repo: String!, $number: Int!) {
 
       function buildPromptDataForIssue(issue: GitHubIssue) {
         // Only called for non-schedule events, so payload is defined
-        const comments = buildComments(issue.comments?.nodes, (c) => `  - ${c.author.login} at ${c.createdAt}: ${c.body}`)
+        const comments = buildComments(
+          issue.comments?.nodes,
+          (c) => `  - ${c.author.login} at ${c.createdAt}: ${c.body}`,
+        )
 
         return [
           ...githubActionContext(),
@@ -1544,10 +1544,7 @@ query($owner: String!, $repo: String!, $number: Int!) {
         ] as const
       }
 
-      function buildComments(
-        comments: GitHubComment[] | undefined,
-        format: (comment: GitHubComment) => string,
-      ) {
+      function buildComments(comments: GitHubComment[] | undefined, format: (comment: GitHubComment) => string) {
         return (comments || [])
           .filter((comment) => {
             const id = parseInt(comment.databaseId, 10)

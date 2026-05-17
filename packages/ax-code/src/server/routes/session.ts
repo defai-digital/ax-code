@@ -242,13 +242,15 @@ export const SessionRoutes = lazy(() =>
       ),
       async (c) => {
         const query = c.req.valid("query")
-        const sessions = [...Session.list({
-          directory: query.directory,
-          roots: query.roots,
-          start: query.start,
-          search: query.search,
-          limit: query.limit,
-        })]
+        const sessions = [
+          ...Session.list({
+            directory: query.directory,
+            roots: query.roots,
+            start: query.start,
+            search: query.search,
+            limit: query.limit,
+          }),
+        ]
         return c.json(sessions)
       },
     )
@@ -294,10 +296,7 @@ export const SessionRoutes = lazy(() =>
           ...errors(400, 404),
         },
       }),
-      validator(
-        "param",
-        SESSION_ID_PARAM,
-      ),
+      validator("param", SESSION_ID_PARAM),
       async (c) => {
         const { session } = await parseCurrentProjectSession(c)
         return c.json(session)
@@ -322,10 +321,7 @@ export const SessionRoutes = lazy(() =>
           ...errors(400, 404),
         },
       }),
-      validator(
-        "param",
-        SESSION_ID_PARAM,
-      ),
+      validator("param", SESSION_ID_PARAM),
       async (c) => {
         const sessionID = await parseCurrentProjectSessionID(c)
         const session = await Session.children(sessionID)
@@ -599,10 +595,7 @@ export const SessionRoutes = lazy(() =>
           ...errors(400, 404),
         },
       }),
-      validator(
-        "param",
-        SESSION_ID_PARAM,
-      ),
+      validator("param", SESSION_ID_PARAM),
       async (c) => {
         const sessionID = await parseCurrentProjectSessionID(c)
         const todos = await Todo.get(sessionID)
@@ -652,12 +645,9 @@ export const SessionRoutes = lazy(() =>
           ...errors(400, 404),
         },
       }),
-      validator(
-        "param",
-        SESSION_ID_PARAM,
-      ),
+      validator("param", SESSION_ID_PARAM),
       async (c) => {
-        const sessionID = parseSessionID(c)
+        const sessionID = await parseCurrentProjectSessionID(c)
         await Session.remove(sessionID)
         return c.json(true)
       },
@@ -680,10 +670,7 @@ export const SessionRoutes = lazy(() =>
           ...errors(400, 404),
         },
       }),
-      validator(
-        "param",
-        SESSION_ID_PARAM,
-      ),
+      validator("param", SESSION_ID_PARAM),
       validator(
         "json",
         z.object({
@@ -729,10 +716,7 @@ export const SessionRoutes = lazy(() =>
           ...errors(400, 404),
         },
       }),
-      validator(
-        "param",
-        SESSION_ID_PARAM,
-      ),
+      validator("param", SESSION_ID_PARAM),
       validator("json", Session.initialize.schema.omit({ sessionID: true })),
       async (c) => {
         const sessionID = parseSessionID(c)
@@ -758,10 +742,7 @@ export const SessionRoutes = lazy(() =>
           },
         },
       }),
-      validator(
-        "param",
-        SESSION_ID_PARAM,
-      ),
+      validator("param", SESSION_ID_PARAM),
       validator("json", Session.fork.schema.omit({ sessionID: true })),
       async (c) => {
         const sessionID = parseSessionID(c)
@@ -788,12 +769,9 @@ export const SessionRoutes = lazy(() =>
           ...errors(400, 404),
         },
       }),
-      validator(
-        "param",
-        SESSION_ID_PARAM,
-      ),
+      validator("param", SESSION_ID_PARAM),
       async (c) => {
-        await SessionPrompt.cancel(parseSessionID(c))
+        await SessionPrompt.cancel(await parseCurrentProjectSessionID(c))
         return c.json(true)
       },
     )
@@ -815,10 +793,7 @@ export const SessionRoutes = lazy(() =>
           ...errors(400, 404),
         },
       }),
-      validator(
-        "param",
-        SESSION_ID_PARAM,
-      ),
+      validator("param", SESSION_ID_PARAM),
       async (c) => {
         const sessionID = parseSessionID(c)
         await Session.share(sessionID)
@@ -843,10 +818,7 @@ export const SessionRoutes = lazy(() =>
           },
         },
       }),
-      validator(
-        "param",
-        SESSION_ID_PARAM,
-      ),
+      validator("param", SESSION_ID_PARAM),
       validator(
         "query",
         z.object({
@@ -881,10 +853,7 @@ export const SessionRoutes = lazy(() =>
           ...errors(400, 404),
         },
       }),
-      validator(
-        "param",
-        SESSION_ID_PARAM,
-      ),
+      validator("param", SESSION_ID_PARAM),
       async (c) => {
         const sessionID = parseSessionID(c)
         await Session.unshare(sessionID)
@@ -910,10 +879,7 @@ export const SessionRoutes = lazy(() =>
           ...errors(400, 404),
         },
       }),
-      validator(
-        "param",
-        SESSION_ID_PARAM,
-      ),
+      validator("param", SESSION_ID_PARAM),
       validator(
         "json",
         z.object({
@@ -946,6 +912,7 @@ export const SessionRoutes = lazy(() =>
             modelID: body.modelID,
           },
           auto: body.auto,
+          triggerReason: "manual",
         })
         await SessionPrompt.loop({ sessionID })
         return c.json(true)
@@ -969,10 +936,7 @@ export const SessionRoutes = lazy(() =>
           ...errors(400, 404),
         },
       }),
-      validator(
-        "param",
-        SESSION_ID_PARAM,
-      ),
+      validator("param", SESSION_ID_PARAM),
       validator(
         "query",
         z
@@ -1057,10 +1021,7 @@ export const SessionRoutes = lazy(() =>
           ...errors(400, 404),
         },
       }),
-      validator(
-        "param",
-        SESSION_MESSAGE_PARAM,
-      ),
+      validator("param", SESSION_MESSAGE_PARAM),
       async (c) => {
         const params = c.req.valid("param")
         const message = await MessageV2.get({
@@ -1089,10 +1050,7 @@ export const SessionRoutes = lazy(() =>
           ...errors(400, 404),
         },
       }),
-      validator(
-        "param",
-        SESSION_MESSAGE_PARAM,
-      ),
+      validator("param", SESSION_MESSAGE_PARAM),
       async (c) => {
         const params = c.req.valid("param")
         // The busy gate exists to stop concurrent edits from racing
@@ -1137,10 +1095,7 @@ export const SessionRoutes = lazy(() =>
           ...errors(400, 404),
         },
       }),
-      validator(
-        "param",
-        SESSION_PART_PARAM,
-      ),
+      validator("param", SESSION_PART_PARAM),
       async (c) => {
         const params = c.req.valid("param")
         SessionPrompt.assertNotBusy(params.sessionID)
@@ -1169,10 +1124,7 @@ export const SessionRoutes = lazy(() =>
           ...errors(400, 404),
         },
       }),
-      validator(
-        "param",
-        SESSION_PART_PARAM,
-      ),
+      validator("param", SESSION_PART_PARAM),
       validator("json", MessageV2.Part),
       async (c) => {
         const params = c.req.valid("param")
@@ -1208,10 +1160,7 @@ export const SessionRoutes = lazy(() =>
           ...errors(400, 404),
         },
       }),
-      validator(
-        "param",
-        SESSION_ID_PARAM,
-      ),
+      validator("param", SESSION_ID_PARAM),
       validator("json", SessionPrompt.PromptInput.omit({ sessionID: true })),
       async (c) => {
         const msg = await runSessionRequest<SessionPrompt.PromptInput>(c, SessionPrompt.prompt)
@@ -1232,10 +1181,7 @@ export const SessionRoutes = lazy(() =>
           ...errors(400, 404),
         },
       }),
-      validator(
-        "param",
-        SESSION_ID_PARAM,
-      ),
+      validator("param", SESSION_ID_PARAM),
       validator("json", SessionPrompt.PromptInput.omit({ sessionID: true })),
       async (c) => {
         return startAsyncSessionHandler(c, {
@@ -1257,10 +1203,7 @@ export const SessionRoutes = lazy(() =>
           ...errors(400, 404),
         },
       }),
-      validator(
-        "param",
-        SESSION_ID_PARAM,
-      ),
+      validator("param", SESSION_ID_PARAM),
       validator("json", SessionPrompt.CommandInput.omit({ sessionID: true })),
       async (c) => {
         return startAsyncSessionHandler(c, {
@@ -1292,10 +1235,7 @@ export const SessionRoutes = lazy(() =>
           ...errors(400, 404),
         },
       }),
-      validator(
-        "param",
-        SESSION_ID_PARAM,
-      ),
+      validator("param", SESSION_ID_PARAM),
       validator("json", SessionPrompt.CommandInput.omit({ sessionID: true })),
       async (c) => {
         const msg = await runSessionRequest<SessionPrompt.CommandInput>(c, SessionPrompt.command)
@@ -1315,10 +1255,7 @@ export const SessionRoutes = lazy(() =>
           ...errors(400, 404),
         },
       }),
-      validator(
-        "param",
-        SESSION_ID_PARAM,
-      ),
+      validator("param", SESSION_ID_PARAM),
       validator("json", SessionPrompt.ShellInput.omit({ sessionID: true })),
       async (c) => {
         return startAsyncSessionHandler(c, {
@@ -1345,10 +1282,7 @@ export const SessionRoutes = lazy(() =>
           ...errors(400, 404),
         },
       }),
-      validator(
-        "param",
-        SESSION_ID_PARAM,
-      ),
+      validator("param", SESSION_ID_PARAM),
       validator("json", SessionPrompt.ShellInput.omit({ sessionID: true })),
       async (c) => {
         const msg = await runSessionRequest<SessionPrompt.ShellInput>(c, SessionPrompt.shell)
@@ -1441,10 +1375,7 @@ export const SessionRoutes = lazy(() =>
           ...errors(400, 404),
         },
       }),
-      validator(
-        "param",
-        SESSION_PERMISSION_PARAM,
-      ),
+      validator("param", SESSION_PERMISSION_PARAM),
       validator("json", z.object({ response: Permission.Reply })),
       async (c) => {
         const params = c.req.valid("param")

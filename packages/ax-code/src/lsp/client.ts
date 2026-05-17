@@ -195,6 +195,7 @@ export namespace LSPClient {
     semantic?: boolean
     priority?: number
     capabilityHints?: LSPServer.CapabilityHints
+    onClose?: (event: { error?: unknown }) => void
   }) {
     const l = log.clone().tag("serverID", input.serverID)
     l.info("starting client")
@@ -205,6 +206,23 @@ export namespace LSPClient {
     )
 
     const diagnostics = new Map<string, Diagnostic[]>()
+    let closing = false
+    let closeNotified = false
+
+    function notifyClosed(error?: unknown) {
+      if (closing || closeNotified) return
+      closeNotified = true
+      input.onClose?.({ error })
+    }
+
+    connection.onClose(() => {
+      l.warn("connection closed unexpectedly")
+      notifyClosed()
+    })
+    connection.onError((error) => {
+      l.warn("connection error", { error })
+      notifyClosed(error)
+    })
 
     function setDiagnostics(filePath: string, diags: Diagnostic[]) {
       // Move-to-end LRU: if we already have an entry, delete it before
@@ -629,6 +647,7 @@ export namespace LSPClient {
       },
       async shutdown() {
         l.info("shutting down")
+        closing = true
         // Wrap end() and dispose() so a broken-stream throw from
         // either one cannot prevent us from reaching Process.stop().
         // Without this, a crashed LSP server leaves its child process
