@@ -117,10 +117,19 @@ Implemented another section-level extraction:
 - Added focused coverage in `packages/ax-code/test/quality/dre-graph-verdict-section.test.ts` for absent DRE details, readiness headline/tone mapping, core stat rendering, validation command summarization, semantic summary output, callout output, and HTML escaping.
 - Kept larger risk/activity/timeline sections untouched so later extractions can remain independently reviewable.
 
+### 2026-05-17 - Phase 3 DRE Graph Summary Section Extraction Slice
+
+Implemented another section-level extraction:
+
+- Extracted the summary banner renderer into `packages/ax-code/src/quality/dre-graph-summary-section.ts`.
+- `packages/ax-code/src/server/routes/dre-graph.ts` now imports summary rendering instead of owning risk gauge, key metrics, token donut, no-detail fallback, and semantic banner markup inline.
+- Added focused coverage in `packages/ax-code/test/quality/dre-graph-summary-section.test.ts` for no-detail risk fallback, detail metric rendering, token donut output, semantic banner output, signal limiting, and HTML escaping.
+- Removed now-unused widget imports from the route after the extraction.
+
 Still pending:
 
 - UI component grouping.
-- Further DRE graph route domain extraction beyond timeline, fingerprint shaping, display formatting helpers, widget helpers, client asset scripts, CSS asset extraction, quality readiness section rendering, validation section rendering, changes section rendering, and verdict section rendering.
+- Further DRE graph route domain extraction beyond timeline, fingerprint shaping, display formatting helpers, widget helpers, client asset scripts, CSS asset extraction, quality readiness section rendering, validation section rendering, changes section rendering, verdict section rendering, and summary section rendering.
 - TUI session route and session prompt hotspot reduction.
 - LSP surface cleanup.
 - Workspace package manifest dependency-cycle cleanup.
