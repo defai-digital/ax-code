@@ -6,9 +6,11 @@ import { Instance } from "../../src/project/instance"
 import { Log } from "../../src/util/log"
 import { tmpdir } from "../fixture/fixture"
 import { Session } from "../../src/session"
+import { MessageV2 } from "../../src/session/message-v2"
 import { markEstimatedUsage } from "../../src/provider/usage"
 import { ModelID, ProviderID } from "../../src/provider/schema"
 import type { Provider } from "../../src/provider/provider"
+import { MessageID, PartID } from "../../src/session/schema"
 
 Log.init({ print: false })
 
@@ -401,6 +403,76 @@ describe("session.compaction.estimateToolPartTokens", () => {
     expect(SessionCompaction.estimateToolPartTokens(withAttachment)).toBeGreaterThan(
       SessionCompaction.estimateToolPartTokens(plain),
     )
+  })
+
+  test("prune uses compacted clones without mutating caller-owned message parts", async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await Bun.write(path.join(dir, "ax-code.json"), JSON.stringify({ compaction: { prune: true } }))
+      },
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const user = await Session.updateMessage({
+          id: MessageID.ascending(),
+          sessionID: session.id,
+          role: "user",
+          time: { created: Date.now() },
+          agent: "build",
+          model: { providerID: ProviderID.make("test"), modelID: ModelID.make("test-model") },
+          tools: {},
+          mode: "build",
+        } as MessageV2.User)
+        const assistant = await Session.updateMessage({
+          id: MessageID.ascending(),
+          parentID: user.id,
+          sessionID: session.id,
+          role: "assistant",
+          mode: "build",
+          agent: "build",
+          path: { cwd: tmp.path, root: tmp.path },
+          tokens: {
+            input: 0,
+            output: 0,
+            reasoning: 0,
+            cache: { read: 0, write: 0 },
+          },
+          modelID: ModelID.make("test-model"),
+          providerID: ProviderID.make("test"),
+          time: { created: Date.now() },
+        } as MessageV2.Assistant)
+        await Session.updatePart({
+          id: PartID.ascending(),
+          messageID: assistant.id,
+          sessionID: session.id,
+          type: "tool",
+          callID: "call",
+          tool: "read",
+          state: {
+            status: "completed",
+            input: { filePath: "large.txt" },
+            output: "x".repeat(260_000),
+            title: "Read file",
+            metadata: {},
+            time: { start: 1, end: 2 },
+          },
+        })
+
+        const messages = await Session.messages({ sessionID: session.id })
+        const part = messages
+          .flatMap((message) => message.parts)
+          .find((item): item is MessageV2.ToolPart => item.type === "tool")
+        expect(part?.state.status).toBe("completed")
+        if (!part || part.state.status !== "completed") throw new Error("expected completed tool part")
+        expect(SessionCompaction.estimateToolPartTokens(part)).toBeGreaterThan(SessionCompaction.PRUNE_PROTECT)
+
+        await SessionCompaction.prune({ sessionID: session.id, messages })
+
+        expect(part.state.time.compacted).toBeUndefined()
+      },
+    })
   })
 })
 
