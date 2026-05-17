@@ -150,11 +150,6 @@ export namespace Flag {
   // per-request output cap below the built-in default — e.g. 2048 for noisy
   // accounts, 1024 for very aggressive throttling.
   export const AX_CODE_ALIBABA_OUTPUT_TOKEN_MAX = number("AX_CODE_ALIBABA_OUTPUT_TOKEN_MAX")
-  // Cap for `budgetTokens` / `thinking_budget` on Alibaba reasoning models
-  // across Token Plan and Coding Plan. Defaults to 8192 (the documented
-  // OpenCode value). Raise it (e.g. 32768 for GLM, 81920 for qwen3.5-plus /
-  // qwen3-max-2026-01-23) if your account allows it, or drop it to throttle.
-  export const AX_CODE_ALIBABA_THINKING_BUDGET_TOKENS = number("AX_CODE_ALIBABA_THINKING_BUDGET_TOKENS")
   export const AX_CODE_EXPERIMENTAL_OXFMT = AX_CODE_EXPERIMENTAL || truthy("AX_CODE_EXPERIMENTAL_OXFMT")
   export const AX_CODE_EXPERIMENTAL_LSP_TY = truthy("AX_CODE_EXPERIMENTAL_LSP_TY")
   export const AX_CODE_EXPERIMENTAL_LSP_TOOL = AX_CODE_EXPERIMENTAL || truthy("AX_CODE_EXPERIMENTAL_LSP_TOOL")
