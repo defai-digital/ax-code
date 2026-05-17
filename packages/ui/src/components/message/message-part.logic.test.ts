@@ -75,9 +75,9 @@ function text(text: string): TextPart {
 
 describe("message-part.logic", () => {
   test("relativizes project paths and trims the shared prefix", () => {
-    expect(relativizeProjectPath("/repo/src/file.ts", "/repo")).toBe("/src/file.ts")
+    expect(relativizeProjectPath("/repo/src/file.ts", "/repo")).toBe("src/file.ts")
     expect(relativizeProjectPath("/repo", "/repo")).toBe("")
-    expect(relativizeProjectPath("C:\\repo\\src\\file.ts", "C:\\repo")).toBe("\\src\\file.ts")
+    expect(relativizeProjectPath("C:\\repo\\src\\file.ts", "C:\\repo")).toBe("src\\file.ts")
   })
 
   test("extracts unique URLs without trailing punctuation", () => {

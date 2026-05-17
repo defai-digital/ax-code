@@ -1,7 +1,7 @@
 # PRD: Package Organization Boundary Hardening
 
 **Date:** 2026-05-17
-**Status:** Active - guardrails, SDK cleanup, DRE graph extraction, manifest-cycle cleanup, and two UI grouping slices implemented
+**Status:** Active - guardrails, SDK cleanup, DRE graph extraction, manifest-cycle cleanup, and three UI grouping slices implemented
 **Author:** ax-code agent
 
 ---
@@ -29,7 +29,7 @@ Verified against the current checkout on 2026-05-17:
 - Structure guardrails report no raw cross-package `src` imports.
 - Structure guardrails report `SDK Runtime Source Imports` as OK.
 - Structure guardrails report no workspace package manifest cycles.
-- Structure guardrails report `packages/ui/src/components` with 121 direct source files, 10 child folders, and 163 total source files.
+- Structure guardrails report `packages/ui/src/components` with 102 direct source files, 11 child folders, and 163 total source files.
 - Structure guardrails report 73 files above 500 lines and 32 files above 800 lines.
 - Current largest package-boundary hotspots include:
   - `packages/ax-code/src/session/prompt.ts`: about 3,200 lines.
@@ -62,6 +62,11 @@ Verified against the current checkout on 2026-05-17:
 - Moved matching content stories, CSS, line-comment styles, and annotation helpers next to their grouped components.
 - Verified `pnpm --dir packages/ui run typecheck` after the content batch.
 - Verified content package export resolution from the `@ax-code/ui` package context with `import.meta.resolve()`.
+- Moved the message batch under `packages/ui/src/components/message/`.
+- Preserved old public imports such as `@ax-code/ui/message-part`, `@ax-code/ui/message-nav`, and message-part subcomponent paths through exact package exports.
+- Moved matching message CSS, stories, shell-submessage assets, and message helper tests next to their grouped components.
+- Verified targeted message helper tests with `pnpm --dir packages/ui exec bun test src/components/message/message-file.test.ts src/components/message/message-part.highlight.test.ts src/components/message/message-part.logic.test.ts src/components/message/message-part.tools.test.ts`.
+- Verified `pnpm --dir packages/ui run typecheck` after the message batch.
 
 ### Completed: Phase 3 DRE Graph Route Extraction
 
@@ -268,9 +273,9 @@ Exit state:
 - [x] Classify current direct component files into existing UI folders before creating new folders.
 - [x] Move a first low-risk status batch with compatibility package exports.
 - [x] Move a content batch with compatibility package exports.
-- [ ] Move message-specific files in a separate batch.
+- [x] Move message-specific files in a separate batch.
 - [ ] Move file/provider/session-specific files only after the target folder contract is clear.
-- [x] Preserve existing `@ax-code/ui/*` import paths for the moved status and content batches.
+- [x] Preserve existing `@ax-code/ui/*` import paths for the moved status, content, and message batches.
 - [x] Run `pnpm --dir packages/ui run typecheck` after completed batches.
 
 Exit criteria:
@@ -456,11 +461,11 @@ This PRD is complete when:
 
 ## Next Best Slice
 
-The next best implementation slice is the third Phase 2 UI grouping batch. The status and content batches reduced the direct source-file count from 140 to 121, but `packages/ui/src/components` still has a large flat direct-file surface.
+The next best implementation slice is the fourth Phase 2 UI grouping batch. The status, content, and message batches reduced the direct source-file count from 140 to 102, but `packages/ui/src/components` still has a large flat direct-file surface.
 
 Recommended first task:
 
-1. Pick the message batch (`message-*`) after checking internal relative imports.
+1. Pick either the file batch (`file-*`) or session batch (`session-*`) after checking internal relative imports.
 2. Move a small low-risk batch with compatibility package exports.
 3. Run `pnpm --dir packages/ui run typecheck`.
 4. Update this PRD with the direct-file count after the batch.

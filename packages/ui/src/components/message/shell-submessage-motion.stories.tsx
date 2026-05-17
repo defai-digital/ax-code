@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { createEffect, onCleanup } from "solid-js"
 import { createStore } from "solid-js/store"
-import { BasicTool } from "./basic-tool"
+import { BasicTool } from "../basic-tool"
 import { animate } from "motion"
 
 export default {

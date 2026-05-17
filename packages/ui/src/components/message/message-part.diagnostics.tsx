@@ -1,5 +1,5 @@
 import { For, Show, type JSX } from "solid-js"
-import { useI18n } from "../context/i18n"
+import { useI18n } from "../../context/i18n"
 
 export interface Diagnostic {
   range: {
