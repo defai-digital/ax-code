@@ -189,10 +189,19 @@ Removed behavior-neutral legacy presentation code:
 - Removed now-unused route imports for graph/timeline presentation helpers.
 - Kept the lower-level timeline parser tests and activity-section rendering coverage in place because those helpers remain used by rendered sections.
 
+### 2026-05-17 - Phase 3 DRE Graph Index Page Extraction Slice
+
+Implemented another route presentation extraction:
+
+- Extracted the DRE graph session-list page renderer into `packages/ax-code/src/quality/dre-graph-index-page.ts`.
+- `packages/ax-code/src/server/routes/dre-graph.ts` now keeps only request parsing, session loading, cache headers, and response writing for the index route.
+- Added focused coverage in `packages/ax-code/test/quality/dre-graph-index-page.test.ts` for escaped session titles, root/fork chips, query preservation on session links, live-refresh directory polling, and empty list output.
+- Kept existing DRE graph server tests as the route-level integration check.
+
 Still pending:
 
 - UI component grouping.
-- Further DRE graph route domain extraction beyond timeline parsing, fingerprint shaping, display formatting helpers, widget helpers, client asset scripts, CSS asset extraction, quality readiness section rendering, validation section rendering, changes section rendering, verdict section rendering, summary section rendering, risk section rendering, activity helper extraction, rollback helper extraction, branch section rendering, activity section rendering, and legacy execution cleanup.
+- Further DRE graph route domain extraction beyond timeline parsing, fingerprint shaping, display formatting helpers, widget helpers, client asset scripts, CSS asset extraction, quality readiness section rendering, validation section rendering, changes section rendering, verdict section rendering, summary section rendering, risk section rendering, activity helper extraction, rollback helper extraction, branch section rendering, activity section rendering, legacy execution cleanup, and index page rendering.
 - TUI session route and session prompt hotspot reduction.
 - LSP surface cleanup.
 - Workspace package manifest dependency-cycle cleanup.
