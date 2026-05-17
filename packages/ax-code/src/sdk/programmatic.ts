@@ -18,16 +18,16 @@ import { ToolRegistry } from "../tool/registry.js"
 import { Tool } from "../tool/tool.js"
 import { setLanguage, t } from "../i18n/index.js"
 import { createOpencodeClient } from "@ax-code/sdk/v2/client"
-import type { OpencodeClient } from "@ax-code/sdk/v2/client"
-import { internalBaseUrl } from "../util/internal-url.js"
 import type {
   ApiError,
   Message as ApiMessage,
+  OpencodeClient,
   Part as ApiPart,
   Provider as ApiProvider,
   Session as ApiSession,
   SessionMessagesResponse,
-} from "../../../sdk/js/src/v2/gen/types.gen.js"
+} from "@ax-code/sdk/v2/client"
+import { internalBaseUrl } from "../util/internal-url.js"
 import type {
   Agent,
   AgentOptions,
@@ -38,14 +38,8 @@ import type {
   SessionHandle,
   ToolCallInfo,
   SdkTool,
-} from "../../../sdk/js/src/programmatic/types.js"
-import {
-  DisposedError,
-  TimeoutError,
-  AgentNotFoundError,
-  ProviderError,
-  ToolError,
-} from "../../../sdk/js/src/programmatic/types.js"
+} from "@ax-code/sdk/programmatic"
+import { DisposedError, TimeoutError, AgentNotFoundError, ProviderError, ToolError } from "@ax-code/sdk/programmatic"
 
 // Re-export error classes so they can be imported from this module
 export {
@@ -56,7 +50,7 @@ export {
   PermissionError,
   AgentNotFoundError,
   DisposedError,
-} from "../../../sdk/js/src/programmatic/types.js"
+} from "@ax-code/sdk/programmatic"
 
 function last<T, S extends T>(list: T[], test: (item: T) => item is S): S | undefined
 function last<T>(list: T[], test: (item: T) => boolean): T | undefined {
