@@ -7,6 +7,7 @@ import { SessionDre } from "../../session/dre"
 import { SessionGraph } from "../../session/graph"
 import { SessionRisk } from "../../session/risk"
 import { live, mermaidScript, themeScript, themeToggle } from "../../quality/dre-graph-assets"
+import { changesSection } from "../../quality/dre-graph-changes-section"
 import { style } from "../../quality/dre-graph-style"
 import { parseDreGraphTimeline, parseDreGraphTimelineStepDurationMs } from "../../quality/dre-graph-timeline"
 import { indexFingerprint, sessionFingerprint } from "../../quality/dre-graph-fingerprint"
@@ -168,44 +169,6 @@ function verdictSection(input: { dre: SessionDre.Snapshot; risk: SessionRisk.Det
     input.risk.assessment.mitigations.length > 0
       ? `<div class="verdict-callout"><span class="verdict-callout-icon" style="color:var(--low)">\u2192</span> ${esc(input.risk.assessment.mitigations[0])}</div>`
       : "",
-    `</div>`,
-    `</section>`,
-  ].join("")
-}
-
-// ── Section 1c: Changes — "what files changed and how risky?" ─────
-function changesSection(input: { dre: SessionDre.Snapshot }) {
-  const changes = input.dre.detail?.semantic?.changes
-  if (!changes || changes.length === 0)
-    return [
-      `<section class="band" id="changes">`,
-      `<div class="wrap">`,
-      `<div class="section-head"><h2>Changes</h2><p>No semantic diff recorded</p></div>`,
-      `</div>`,
-      `</section>`,
-    ].join("")
-  const kindLabel = (k: string) => k.replace(/_/g, " ")
-  return [
-    `<section class="band" id="changes">`,
-    `<div class="wrap">`,
-    `<div class="section-head"><h2>Changes</h2><p>${changes.length} file${changes.length === 1 ? "" : "s"} changed</p></div>`,
-    `<div class="panel">`,
-    changes
-      .map((c) =>
-        [
-          `<div class="changes-row">`,
-          `<span class="risk-dot ${esc(c.risk)}"></span>`,
-          `<span class="file-path" title="${esc(c.file)}">${esc(c.file)}</span>`,
-          chip({ label: kindLabel(c.kind), kind: tone(c.risk) }),
-          `<span class="diff-stat"><span class="diff-add">+${c.additions}</span> <span class="diff-del">-${c.deletions}</span></span>`,
-          c.signals[0]
-            ? `<span class="change-signal" title="${esc(c.signals.join(" \u00b7 "))}">${esc(c.signals[0])}</span>`
-            : `<span class="change-signal"></span>`,
-          `</div>`,
-        ].join(""),
-      )
-      .join(""),
-    `</div>`,
     `</div>`,
     `</section>`,
   ].join("")
