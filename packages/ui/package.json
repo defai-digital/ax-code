@@ -35,6 +35,8 @@
     "./message-part.highlight": "./src/components/message/message-part.highlight.tsx",
     "./message-part.shell-submessage": "./src/components/message/message-part.shell-submessage.tsx",
     "./message-part.user-message": "./src/components/message/message-part.user-message.tsx",
+    "./provider-icon": "./src/components/provider-icons/provider-icon.tsx",
+    "./provider-icons/provider-icon": "./src/components/provider-icons/provider-icon.tsx",
     "./session-compare": "./src/components/session/session-compare.tsx",
     "./session-dre": "./src/components/session/session-dre.tsx",
     "./session-graph": "./src/components/session/session-graph.tsx",

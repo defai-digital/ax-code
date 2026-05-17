@@ -1,7 +1,7 @@
 // @ts-nocheck
-import { iconNames } from "./provider-icons/types"
+import { iconNames } from "./types"
 import * as mod from "./provider-icon"
-import { create } from "../storybook/scaffold"
+import { create } from "../../storybook/scaffold"
 
 const docs = `### Overview
 Provider icon sprite renderer for model/provider badges.
