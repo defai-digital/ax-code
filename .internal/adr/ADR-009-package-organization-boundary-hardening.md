@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed
+Accepted - implemented by `.internal/prd/PRD-2026-05-17-package-organization-boundary-hardening.md` on 2026-05-17
 
 ## Date
 
@@ -14,7 +14,7 @@ To be filled by team
 
 ## Related
 
-- PRD: Package Organization Boundary Hardening
+- `.internal/prd/PRD-2026-05-17-package-organization-boundary-hardening.md`
 - `script/structure.ts`
 - `packages/ax-code/ARCHITECTURE.md`
 - `packages/ui/ARCHITECTURE.md`
@@ -99,6 +99,19 @@ The repository should grow guardrails before broad file movement:
 - Keeping `packages/ax-code` as the runtime package means the package is still broad by design.
 - SDK/runtime contract cleanup may require careful export compatibility work.
 
+## Implementation Outcome
+
+The related PRD completed the decision in bounded, behavior-preserving slices:
+
+- Structure guardrails now report hotspot thresholds, SDK runtime source imports, and workspace manifest dependency cycles.
+- Shared UI components were grouped by concern while preserving existing public import paths.
+- DRE graph route behavior moved out of the server route and into quality-domain helpers.
+- TUI session route and session prompt hotspots each gained a focused renderer-free or pure-helper extraction.
+- LSP cache orchestration moved into a named `lsp/cache.ts` module while preserving live fallback behavior on cache failures.
+- Runtime SDK imports now use stable package exports, and workspace package manifest cycles are absent in structure output.
+
+The decision remains to harden package-internal boundaries before considering broader workspace package splits. Future lifecycle/status cleanup in LSP should be tracked as a separate PRD only after behavior-specific tests identify a narrow seam.
+
 ## Alternatives Considered
 
 ### Split `packages/ax-code` Into Many Workspace Packages Now
@@ -113,15 +126,15 @@ This avoids churn, but it lets large files and interface-layer drift continue. T
 
 This would blur the distinction between shared product UI and terminal/runtime-specific TUI behavior. `packages/ax-code` must remain independent from `@ax-code/ui`, and terminal-specific rendering should stay in the runtime package unless a stable renderer-neutral contract is defined.
 
-## Required Follow-Up
+## Follow-Up Status
 
-Implement the related PRD in low-risk phases:
+The related PRD implemented the required follow-up in low-risk phases:
 
-1. Add structure metrics and guardrails for known hotspots.
-2. Group shared UI components without breaking exports.
-3. Extract DRE graph route domain logic into a domain service.
-4. Reduce TUI session route and prompt component size through view-model and pure-helper extraction.
-5. Clarify SDK/runtime contract exports and remove relative SDK source imports from runtime code.
+1. Completed: add structure metrics and guardrails for known hotspots.
+2. Completed: group shared UI components without breaking exports.
+3. Completed: extract DRE graph route domain logic into quality-domain helpers.
+4. Completed: reduce TUI session route and prompt component size through view-model and pure-helper extraction.
+5. Completed: clarify SDK/runtime contract exports and remove relative SDK source imports from runtime code.
 
 ## Non-Decisions
 
