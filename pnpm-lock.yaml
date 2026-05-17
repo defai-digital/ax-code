@@ -666,10 +666,6 @@ importers:
         version: 7.7.1
 
   packages/sdk/js:
-    dependencies:
-      ax-code:
-        specifier: workspace:*
-        version: link:../../ax-code
     devDependencies:
       '@hey-api/openapi-ts':
         specifier: 0.90.10

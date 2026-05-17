@@ -1,14 +1,14 @@
 # PRD: Package Organization Boundary Hardening
 
 **Date:** 2026-05-17
-**Status:** Active - guardrails, SDK source-import cleanup, and DRE graph route extraction implemented
+**Status:** Active - guardrails, SDK cleanup, DRE graph extraction, and manifest-cycle cleanup implemented
 **Author:** ax-code agent
 
 ---
 
 ## Executive Summary
 
-The workspace package layout is directionally correct and does not need a broad package split in the next implementation wave. The current risk is internal boundary erosion: large interface-heavy files, a flat shared UI component surface, and workspace package manifest cycles that make ownership harder to reason about.
+The workspace package layout is directionally correct and does not need a broad package split in the next implementation wave. The current risk is internal boundary erosion: large interface-heavy files and a flat shared UI component surface that make ownership harder to reason about.
 
 This PRD hardens package organization in small, reviewable slices:
 
@@ -18,7 +18,7 @@ This PRD hardens package organization in small, reviewable slices:
 4. Replace runtime imports from SDK source paths with stable package exports.
 5. Resolve or document workspace manifest dependency cycles.
 
-Several slices are already complete. The remaining work should focus on UI component grouping, TUI/session prompt hotspot reduction, LSP surface cleanup, and the workspace package dependency cycle.
+Several slices are already complete. The remaining work should focus on UI component grouping, TUI/session prompt hotspot reduction, and LSP surface cleanup.
 
 ## Current Evidence
 
@@ -28,9 +28,7 @@ Verified against the current checkout on 2026-05-17:
 - Structure guardrails report no `@ax-code/ui` runtime dependency violations.
 - Structure guardrails report no raw cross-package `src` imports.
 - Structure guardrails report `SDK Runtime Source Imports` as OK.
-- Structure guardrails still warn about workspace package manifest cycles:
-  - `@ax-code/plugin -> @ax-code/sdk -> ax-code -> @ax-code/plugin`
-  - `@ax-code/sdk -> ax-code -> @ax-code/sdk`
+- Structure guardrails report no workspace package manifest cycles.
 - Structure guardrails report `packages/ui/src/components` with 140 direct source files, 9 child folders, and 168 total source files.
 - Structure guardrails report 73 files above 500 lines and 32 files above 800 lines.
 - Current largest package-boundary hotspots include:
@@ -89,7 +87,13 @@ Remaining DRE work is optional and should be triggered only if the route grows a
 - `packages/ax-code/src/sdk/programmatic.ts` imports generated API types through `@ax-code/sdk/v2/client`.
 - Programmatic SDK types and errors come from `@ax-code/sdk/programmatic`.
 - Runtime code no longer imports SDK source files through relative `packages/sdk/js/src` paths.
-- The package manifest dependency cycle remains unresolved and is tracked separately.
+
+### Completed: Phase 7 Workspace Manifest Dependency Cycle Cleanup
+
+- The `@ax-code/sdk -> ax-code` manifest edge was classified as a dynamic runtime load used only by the programmatic SDK entrypoint.
+- The SDK no longer declares a hard package dependency on `ax-code`; this avoids the manifest cycle while preserving the dynamic runtime boundary.
+- `packages/sdk/js/src/programmatic/agent.ts` reports a clear actionable error when `createAgent()` is called without a resolvable `ax-code` runtime.
+- `packages/sdk/js/README.md` documents that in-process `createAgent()` needs a compatible host runtime, while `@ax-code/sdk/http` remains the service-boundary path.
 
 ## Problem Statement
 
@@ -101,7 +105,7 @@ The package-level boundary is not the immediate problem. Current structure check
 - TUI route files still combine rendering, state projection, and display transformations.
 - LSP behavior is centralized in a large module that spans lifecycle, cache, query, permission, and status policy.
 - `packages/ui/src/components` still has a large flat direct-file surface despite existing grouped folders.
-- Workspace package manifests still contain dependency cycles.
+- Workspace package manifest cycles have been removed.
 
 Without a phased boundary-hardening plan, future feature work will keep landing in interface-heavy files and make eventual package splits more expensive.
 
@@ -112,7 +116,7 @@ Without a phased boundary-hardening plan, future feature work will keep landing 
 - Group shared UI components by concern without breaking public exports.
 - Keep SDK/runtime contracts on stable package exports.
 - Make hotspot growth and package dependency cycles visible in guardrail output.
-- Resolve or explicitly document any remaining workspace package manifest cycles.
+- Keep workspace package manifests acyclic or document any future exception before merging it.
 
 ## Non-Goals
 
@@ -226,7 +230,7 @@ Preserve the existing reliability rule: cache failures in `tool.lsp` should fall
 
 Runtime code should import SDK contracts through package exports, not relative paths into `packages/sdk/js/src`.
 
-The SDK source-import cleanup is complete for the current checkout. The remaining contract issue is the workspace package manifest cycle. That cycle should be resolved only after confirming whether each dependency is runtime, build-time, test-time, or type-only.
+The SDK source-import cleanup is complete for the current checkout. The previous manifest cycle was resolved by removing the SDK's hard dependency on the runtime package and treating the in-process runtime as a dynamic host requirement.
 
 ## Implementation Plan
 
@@ -310,18 +314,20 @@ Exit state:
 - Runtime code imports SDK contracts through package exports.
 - No transitional exception is required for SDK source imports in the current checkout.
 
-### Phase 7: Workspace Manifest Dependency Cycle Cleanup - Pending
+### Phase 7: Workspace Manifest Dependency Cycle Cleanup - Complete
 
-- [ ] Classify each edge in `@ax-code/plugin -> @ax-code/sdk -> ax-code -> @ax-code/plugin`.
-- [ ] Classify each edge in `@ax-code/sdk -> ax-code -> @ax-code/sdk`.
-- [ ] Move type-only contracts to a stable package export or narrower contract module if needed.
-- [ ] Remove unnecessary runtime dependencies.
-- [ ] If a cycle is intentionally retained, document the owner, reason, and removal trigger in this PRD or a follow-up ADR.
-- [ ] Verify with `bun run script/structure.ts`.
+- [x] Classify each edge in `@ax-code/plugin -> @ax-code/sdk -> ax-code -> @ax-code/plugin`.
+- [x] Classify each edge in `@ax-code/sdk -> ax-code -> @ax-code/sdk`.
+- [x] Move type-only contracts to a stable package export or narrower contract module if needed.
+- [x] Remove unnecessary runtime dependencies.
+- [x] If a cycle is intentionally retained, document the owner, reason, and removal trigger in this PRD or a follow-up ADR.
+- [x] Verify with `bun run script/structure.ts`.
 
-Exit criteria:
+Exit state:
 
-- Structure output reports no workspace manifest cycles, or each remaining cycle has an explicit owner, reason, and removal target.
+- Structure output reports no workspace manifest cycles.
+- The SDK programmatic entrypoint preserves the dynamic load of `ax-code/sdk/programmatic`.
+- Missing runtime resolution fails with a clear install/service-boundary error.
 
 ## Risk Assessment
 
@@ -347,7 +353,7 @@ Expected behavior:
 - The script exits successfully.
 - Boundary sections are present.
 - SDK runtime source imports are OK.
-- Package cycles remain visible until Phase 7 closes them.
+- Package cycles are absent.
 
 ### UI Grouping Tests
 
@@ -401,7 +407,7 @@ Expected behavior:
 
 - SDK contract exports remain stable.
 - Runtime SDK source imports stay absent.
-- Manifest cycles are removed or documented.
+- Manifest cycles are absent.
 
 ## Dependencies
 
@@ -426,7 +432,7 @@ This PRD is complete when:
 - `bun run script/structure.ts` exits successfully.
 - Runtime package boundary violations remain absent.
 - SDK runtime source imports remain absent.
-- Workspace package manifest cycles are resolved or documented with owner, reason, and removal trigger.
+- Workspace package manifest cycles are absent, or any future exception is documented with owner, reason, and removal trigger before merging.
 - `packages/ui/src/components` direct source-file count is materially reduced from the current 140 while preserving public import compatibility.
 - `packages/ax-code/src/server/routes/dre-graph.ts` remains below hotspot thresholds and owns only route-level responsibilities.
 - TUI session route, session prompt, and LSP hotspots each shrink through at least one behavior-preserving extraction.
@@ -434,12 +440,11 @@ This PRD is complete when:
 
 ## Next Best Slice
 
-The next best implementation slice is Phase 7 manifest-cycle classification. It is higher leverage than more DRE graph cleanup because DRE graph is no longer a large route hotspot, while the package cycle warning still appears in every structure report.
+The next best implementation slice is Phase 2 UI component grouping. The manifest-cycle warning is closed, while `packages/ui/src/components` still has a large direct-file surface.
 
 Recommended first task:
 
-1. Inspect `packages/plugin/package.json`, `packages/sdk/js/package.json`, and `packages/ax-code/package.json`.
-2. Classify the cycle edges as runtime, build-time, test-time, or type-only.
-3. Remove or narrow one dependency edge if safe.
-4. Re-run `bun run script/structure.ts`.
-5. Update this PRD with the result.
+1. Classify direct files under `packages/ui/src/components` into existing folders first.
+2. Move a small low-risk batch with compatibility re-exports.
+3. Run `pnpm --dir packages/ui run typecheck`.
+4. Update this PRD with the direct-file count after the batch.
