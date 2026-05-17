@@ -108,10 +108,19 @@ Implemented another section-level extraction:
 - Added focused coverage in `packages/ax-code/test/quality/dre-graph-changes-section.test.ts` for empty semantic diff output, single/plural file counts, risk chips, diff stats, no-signal placeholders, and HTML escaping for file paths and signals.
 - Kept the route-level DRE graph tests as the integration boundary while moving another independent presentation section into `quality`.
 
+### 2026-05-17 - Phase 3 DRE Graph Verdict Section Extraction Slice
+
+Implemented another section-level extraction:
+
+- Extracted the verdict section renderer into `packages/ax-code/src/quality/dre-graph-verdict-section.ts`.
+- `packages/ax-code/src/server/routes/dre-graph.ts` now imports verdict rendering instead of owning acceptance headline, confidence/risk/validation/decision stat markup, semantic summary, unknown, and mitigation callouts inline.
+- Added focused coverage in `packages/ax-code/test/quality/dre-graph-verdict-section.test.ts` for absent DRE details, readiness headline/tone mapping, core stat rendering, validation command summarization, semantic summary output, callout output, and HTML escaping.
+- Kept larger risk/activity/timeline sections untouched so later extractions can remain independently reviewable.
+
 Still pending:
 
 - UI component grouping.
-- Further DRE graph route domain extraction beyond timeline, fingerprint shaping, display formatting helpers, widget helpers, client asset scripts, CSS asset extraction, quality readiness section rendering, validation section rendering, and changes section rendering.
+- Further DRE graph route domain extraction beyond timeline, fingerprint shaping, display formatting helpers, widget helpers, client asset scripts, CSS asset extraction, quality readiness section rendering, validation section rendering, changes section rendering, and verdict section rendering.
 - TUI session route and session prompt hotspot reduction.
 - LSP surface cleanup.
 - Workspace package manifest dependency-cycle cleanup.
