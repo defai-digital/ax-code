@@ -90,10 +90,19 @@ Implemented a section-level domain extraction:
 - Added focused coverage in `packages/ax-code/test/quality/dre-graph-quality-readiness.test.ts` for absent quality data, ready workflow summaries, status chips, targeted QA recommendations, next-action rendering, and HTML escaping.
 - Kept the slice narrow so broader risk/activity/timeline section extraction can proceed independently.
 
+### 2026-05-17 - Phase 3 DRE Graph Validation Section Extraction Slice
+
+Implemented another section-level extraction:
+
+- Extracted the validation section renderer into `packages/ax-code/src/quality/dre-graph-validation-section.ts`.
+- `packages/ax-code/src/server/routes/dre-graph.ts` now imports validation section rendering instead of owning command-list, status-chip, and no-validation warning markup inline.
+- Added focused coverage in `packages/ax-code/test/quality/dre-graph-validation-section.test.ts` for empty validation state, passed command rendering, failed command rendering, no-test warning output, and command HTML escaping.
+- Kept route behavior covered by the existing DRE graph server tests while moving another small presentation boundary into `quality`.
+
 Still pending:
 
 - UI component grouping.
-- Further DRE graph route domain extraction beyond timeline, fingerprint shaping, display formatting helpers, widget helpers, client asset scripts, CSS asset extraction, and quality readiness section rendering.
+- Further DRE graph route domain extraction beyond timeline, fingerprint shaping, display formatting helpers, widget helpers, client asset scripts, CSS asset extraction, quality readiness section rendering, and validation section rendering.
 - TUI session route and session prompt hotspot reduction.
 - LSP surface cleanup.
 - Workspace package manifest dependency-cycle cleanup.
