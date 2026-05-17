@@ -17,10 +17,10 @@ import {
 import { type PreloadMultiFileDiffResult } from "@pierre/diffs/ssr"
 import { createMediaQuery } from "@solid-primitives/media"
 import { ComponentProps, createEffect, createMemo, createSignal, onCleanup, onMount, Show, splitProps } from "solid-js"
-import { createDefaultOptions, styleVariables } from "../pierre"
-import { markCommentedDiffLines, markCommentedFileLines } from "../pierre/commented-lines"
-import { fixDiffSelection, findDiffSide, type DiffSelectionSide } from "../pierre/diff-selection"
-import { createFileFind } from "../pierre/file-find"
+import { createDefaultOptions, styleVariables } from "../../pierre"
+import { markCommentedDiffLines, markCommentedFileLines } from "../../pierre/commented-lines"
+import { fixDiffSelection, findDiffSide, type DiffSelectionSide } from "../../pierre/diff-selection"
+import { createFileFind } from "../../pierre/file-find"
 import {
   applyViewerScheme,
   clearReadyWatcher,
@@ -29,17 +29,17 @@ import {
   getViewerRoot,
   notifyShadowReady,
   observeViewerScheme,
-} from "../pierre/file-runtime"
+} from "../../pierre/file-runtime"
 import {
   findCodeSelectionSide,
   findDiffLineNumber,
   findElement,
   findFileLineNumber,
   readShadowLineSelection,
-} from "../pierre/file-selection"
-import { createLineNumberSelectionBridge, restoreShadowTextSelection } from "../pierre/selection-bridge"
-import { acquireVirtualizer, virtualMetrics } from "../pierre/virtualizer"
-import { getWorkerPool } from "../pierre/worker"
+} from "../../pierre/file-selection"
+import { createLineNumberSelectionBridge, restoreShadowTextSelection } from "../../pierre/selection-bridge"
+import { acquireVirtualizer, virtualMetrics } from "../../pierre/virtualizer"
+import { getWorkerPool } from "../../pierre/worker"
 import { FileMedia, type FileMediaOptions } from "./file-media"
 import { FileSearchBar } from "./file-search"
 

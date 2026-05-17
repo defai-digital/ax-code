@@ -2,18 +2,18 @@ import { DIFFS_TAG_NAME, FileDiff, VirtualizedFileDiff } from "@pierre/diffs"
 import { type PreloadMultiFileDiffResult } from "@pierre/diffs/ssr"
 import { createEffect, onCleanup, onMount, Show, splitProps } from "solid-js"
 import { Dynamic, isServer } from "solid-js/web"
-import { useWorkerPool } from "../context/worker-pool"
-import { createDefaultOptions, styleVariables } from "../pierre"
-import { markCommentedDiffLines } from "../pierre/commented-lines"
-import { fixDiffSelection } from "../pierre/diff-selection"
+import { useWorkerPool } from "../../context/worker-pool"
+import { createDefaultOptions, styleVariables } from "../../pierre"
+import { markCommentedDiffLines } from "../../pierre/commented-lines"
+import { fixDiffSelection } from "../../pierre/diff-selection"
 import {
   applyViewerScheme,
   clearReadyWatcher,
   createReadyWatcher,
   notifyShadowReady,
   observeViewerScheme,
-} from "../pierre/file-runtime"
-import { acquireVirtualizer, virtualMetrics } from "../pierre/virtualizer"
+} from "../../pierre/file-runtime"
+import { acquireVirtualizer, virtualMetrics } from "../../pierre/virtualizer"
 import { File, type DiffFileProps, type FileProps } from "./file"
 
 type SSRDiffFileProps<T> = DiffFileProps<T> & {
