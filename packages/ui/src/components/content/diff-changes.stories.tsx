@@ -1,7 +1,7 @@
 // @ts-nocheck
 import * as mod from "./diff-changes"
-import { create } from "../storybook/scaffold"
-import { changes } from "../storybook/fixtures"
+import { create } from "../../storybook/scaffold"
+import { changes } from "../../storybook/fixtures"
 
 const docs = `### Overview
 Summarize additions/deletions as text or compact bars.

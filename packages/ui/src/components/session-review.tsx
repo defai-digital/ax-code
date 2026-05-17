@@ -2,7 +2,7 @@ import { Accordion } from "./accordion"
 import { Button } from "./button"
 import { DropdownMenu } from "./dropdown-menu"
 import { RadioGroup } from "./radio-group"
-import { DiffChanges } from "./diff-changes"
+import { DiffChanges } from "./content/diff-changes"
 import { FileIcon } from "./file-icon"
 import { Icon } from "./icon"
 import { IconButton } from "./icon-button"
@@ -22,7 +22,7 @@ import { type SelectedLineRange } from "@pierre/diffs"
 import { Dynamic } from "solid-js/web"
 import { mediaKindFromPath } from "../pierre/media"
 import { cloneSelectedLineRange, previewSelectedLines } from "../pierre/selection-bridge"
-import { createLineCommentController } from "./line-comment-annotations"
+import { createLineCommentController } from "./content/line-comment-annotations"
 
 const MAX_DIFF_CHANGED_LINES = 500
 

@@ -35,8 +35,8 @@
 /* Content */
 @import "../components/file.css" layer(components);
 @import "../components/file-icon.css" layer(components);
-@import "../components/image-preview.css" layer(components);
-@import "../components/markdown.css" layer(components);
+@import "../components/content/image-preview.css" layer(components);
+@import "../components/content/markdown.css" layer(components);
 @import "../components/message-nav.css" layer(components);
 @import "../components/message-part.css" layer(components);
 @import "../components/scroll-view.css" layer(components);
@@ -47,7 +47,7 @@
 /* Status */
 @import "../components/status/animated-number.css" layer(components);
 @import "../components/basic-tool.css" layer(components);
-@import "../components/diff-changes.css" layer(components);
+@import "../components/content/diff-changes.css" layer(components);
 @import "../components/status/progress.css" layer(components);
 @import "../components/status/progress-circle.css" layer(components);
 @import "../components/status/spinner.css" layer(components);

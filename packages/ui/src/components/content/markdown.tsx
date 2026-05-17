@@ -1,5 +1,5 @@
-import { useMarked } from "../context/marked"
-import { useI18n } from "../context/i18n"
+import { useMarked } from "../../context/marked"
+import { useI18n } from "../../context/i18n"
 import sanitizeHtml from "sanitize-html"
 import morphdom from "morphdom"
 import { checksum } from "@ax-code/util/encode"
