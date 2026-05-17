@@ -54,10 +54,19 @@ Implemented another pure-helper extraction:
 - Added focused coverage in `packages/ax-code/test/quality/dre-graph-format.test.ts` for HTML escaping, script-safe JSON escaping, agent labels, timestamps, duration formatting, and tone/readiness/validation classification.
 - Existing DRE graph route tests still cover page behavior after the extraction.
 
+### 2026-05-17 - Phase 3 DRE Graph Widget Helper Extraction Slice
+
+Implemented a follow-up display-helper extraction:
+
+- Extracted DRE graph chip, stat, flow, step summary, gauge, bar chart, and donut HTML helpers into `packages/ax-code/src/quality/dre-graph-widgets.ts`.
+- `packages/ax-code/src/server/routes/dre-graph.ts` now imports reusable widget helpers instead of owning route-local visual primitives.
+- Added focused coverage in `packages/ax-code/test/quality/dre-graph-widgets.test.ts` for HTML escaping, flow compression/truncation, step summary filtering, gauge tone color, bar chart output, and donut percentages.
+- Existing DRE graph route tests remain the route-level regression boundary after the extraction.
+
 Still pending:
 
 - UI component grouping.
-- Further DRE graph route domain extraction beyond timeline, fingerprint shaping, and display formatting helpers.
+- Further DRE graph route domain extraction beyond timeline, fingerprint shaping, display formatting helpers, and widget helpers.
 - TUI session route and session prompt hotspot reduction.
 - LSP surface cleanup.
 - Workspace package manifest dependency-cycle cleanup.
