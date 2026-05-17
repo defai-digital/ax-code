@@ -505,6 +505,19 @@ This PRD is complete when:
 
 This PRD is complete as of 2026-05-17.
 
+Success criteria closure:
+
+| Criterion | Closure evidence |
+|-----------|------------------|
+| `bun run script/structure.ts` exits successfully | Verified in the final Phase 5 closure run. |
+| Runtime package boundary violations remain absent | Structure output reports no `@ax-code/ui` runtime dependency violations and no raw cross-package `src` imports. |
+| SDK runtime source imports remain absent | Structure output reports `SDK Runtime Source Imports` as OK; runtime SDK imports now use package exports. |
+| Workspace package manifest cycles are absent or documented | Structure output reports no workspace package manifest cycles; the former SDK/runtime edge is documented as a dynamic host requirement. |
+| `packages/ui/src/components` direct source-file count is materially reduced from the original 140 | Structure output reports 84 direct source files after the grouped status, content, message, file, session, and provider-icon batches. |
+| `packages/ax-code/src/server/routes/dre-graph.ts` owns only route-level responsibilities | DRE graph rendering, formatting, activity, risk, verdict, validation, rollback, style, asset, and index helpers now live under `packages/ax-code/src/quality/`. |
+| TUI session route, session prompt, and LSP hotspots each shrink through behavior-preserving extraction | TUI assistant summary view-model helpers, session prompt todo-continuation helpers, and LSP cache orchestration now live in named modules with focused tests. |
+| Each completed phase records the targeted validation command that passed | Each implementation snapshot records the relevant targeted command; the final validation list below captures the closure chain. |
+
 Validated completion commands:
 
 1. `pnpm --dir packages/ui run typecheck`
