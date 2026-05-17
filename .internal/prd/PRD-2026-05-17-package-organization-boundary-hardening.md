@@ -1,7 +1,7 @@
 # PRD: Package Organization Boundary Hardening
 
 **Date:** 2026-05-17
-**Status:** Active - guardrails, SDK cleanup, DRE graph extraction, manifest-cycle cleanup, UI grouping, and TUI/session prompt extraction implemented
+**Status:** Complete - guardrails, SDK cleanup, DRE graph extraction, manifest-cycle cleanup, UI grouping, TUI/session prompt extraction, and LSP cache extraction implemented
 **Author:** ax-code agent
 
 ---
@@ -18,7 +18,7 @@ This PRD hardens package organization in small, reviewable slices:
 4. Replace runtime imports from SDK source paths with stable package exports.
 5. Resolve or document workspace manifest dependency cycles.
 
-Several slices are already complete. The remaining work should focus on continuing UI component grouping, TUI/session prompt hotspot reduction, and LSP surface cleanup.
+All planned slices are complete for this PRD. Future work should be opened as a narrower follow-up only when a hotspot grows again or when a behavior-specific test seam is ready.
 
 ## Current Evidence
 
@@ -34,7 +34,7 @@ Verified against the current checkout on 2026-05-17:
 - Current largest package-boundary hotspots include:
   - `packages/ax-code/src/session/prompt.ts`: about 3,175 lines.
   - `packages/ax-code/src/cli/cmd/tui/routes/session/index.tsx`: about 3,004 lines.
-  - `packages/ax-code/src/lsp/index.ts`: about 2,100 lines.
+  - `packages/ax-code/src/lsp/index.ts`: about 2,022 lines.
   - `packages/ax-code/src/quality/model-registry.ts`: about 2,700 lines.
 - `packages/ax-code/src/server/routes/dre-graph.ts` has already been reduced to request/response glue and page composition, about 212 lines.
 
@@ -131,6 +131,16 @@ Remaining DRE work is optional and should be triggered only if the route grows a
 - Kept `packages/ax-code/src/session/prompt.ts` responsible for the loop and continuation scheduling while consuming the extracted pure helpers.
 - Added focused coverage in `packages/ax-code/test/session/prompt-todo-continuation.test.ts`.
 - Verified `cd packages/ax-code && bun test test/session/prompt-todo-continuation.test.ts test/session/prompt.test.ts`.
+
+### Completed: Phase 5 LSP Surface Cleanup
+
+- Moved LSP cache enablement, hashing, lookup, write policy, TTL, and prune policy into `packages/ax-code/src/lsp/cache.ts`.
+- Kept `packages/ax-code/src/lsp/index.ts` responsible for live query orchestration, cache hit routing, and fallback from cache miss or cache failure to live LSP behavior.
+- Added focused cache policy coverage in `packages/ax-code/test/lsp/cache.test.ts`.
+- Reused existing integration coverage for cache hit/miss behavior and tool-level live fallback when cache probing throws.
+- Verified `cd packages/ax-code && bun test test/lsp/cache.test.ts test/lsp/lsp-cache-integration.test.ts test/tool/lsp.test.ts`.
+- Verified `cd packages/ax-code && bun run typecheck`.
+- Verified `bun run script/structure.ts`.
 
 ### Completed: Phase 6 SDK Source-Import Cleanup
 
@@ -342,12 +352,12 @@ Exit criteria:
 - At least one session prompt concern moves out of `session/prompt.ts`.
 - New modules have focused tests and do not import Solid or OpenTUI unless they are renderer modules.
 
-### Phase 5: LSP Surface Cleanup - Pending
+### Phase 5: LSP Surface Cleanup - Complete
 
-- [ ] Extract query/cache orchestration from `lsp/index.ts`.
-- [ ] Extract lifecycle/status policy only after tests pin behavior.
-- [ ] Preserve live fallback behavior on cache failures.
-- [ ] Run targeted LSP tests.
+- [x] Extract query/cache orchestration from `lsp/index.ts`.
+- [x] Keep lifecycle/status policy in place until a future behavior-specific test seam justifies a separate extraction.
+- [x] Preserve live fallback behavior on cache failures.
+- [x] Run targeted LSP tests.
 
 Exit criteria:
 
@@ -491,13 +501,21 @@ This PRD is complete when:
 - TUI session route, session prompt, and LSP hotspots each shrink through at least one behavior-preserving extraction.
 - Each completed phase records the targeted validation command that passed.
 
-## Next Best Slice
+## Completion Notes
 
-The next best implementation slice is the first Phase 5 LSP surface cleanup. Phase 4 now has one renderer-free TUI route seam and one behavior-preserving session prompt seam, so the remaining PRD hotspot is `packages/ax-code/src/lsp/index.ts`.
+This PRD is complete as of 2026-05-17.
 
-Recommended first task:
+Validated completion commands:
 
-1. Pick one query/cache orchestration seam from `packages/ax-code/src/lsp/index.ts`.
-2. Add or extend targeted LSP tests before moving behavior.
-3. Preserve cache-failure fallback to live LSP behavior.
-4. Run targeted LSP tests plus `cd packages/ax-code && bun run typecheck`.
+1. `pnpm --dir packages/ui run typecheck`
+2. `cd packages/ax-code && bun test test/cli/tui/render-anti-patterns.test.ts`
+3. `cd packages/ax-code && bun test test/cli/tui/session-view-model.test.ts`
+4. `cd packages/ax-code && bun test test/session/prompt-todo-continuation.test.ts test/session/prompt.test.ts`
+5. `cd packages/ax-code && bun test test/lsp/cache.test.ts test/lsp/lsp-cache-integration.test.ts test/tool/lsp.test.ts`
+6. `cd packages/ax-code && bun run check:tui-layering`
+7. `cd packages/ax-code && bun run typecheck`
+8. `bun run script/structure.ts`
+
+Optional follow-up:
+
+- Consider a separate LSP lifecycle/status PRD only after behavior-specific tests identify a narrow seam. This PRD intentionally stops after extracting cache orchestration because its success criteria require one behavior-preserving LSP extraction, not a broad rewrite of the LSP module.

@@ -14,12 +14,11 @@ import { Process } from "../util/process"
 import { spawn as lspspawn } from "./launch"
 import { withTimeout } from "../util/timeout"
 import { Ripgrep } from "../file/ripgrep"
-import { CodeGraphQuery } from "../code-intelligence/query"
-import type { LspCacheOperation } from "../code-intelligence/schema.sql"
 import { LspScheduler } from "./scheduler"
 import { BuiltinServerProfiles } from "./server-profile"
 import { LANGUAGE_EXTENSIONS } from "./language"
 import { isNonEmptyRecord } from "@/util/record"
+import { LSPCache } from "./cache"
 
 export namespace LSP {
   const log = Log.create({ service: "lsp" })
@@ -1382,134 +1381,9 @@ export namespace LSP {
   // ─── LSP response cache integration (S2) ────────────────────────────
   //
   // Content-addressable cache fronting LSP.referencesEnvelope and
-  // LSP.documentSymbolEnvelope. Gated by AX_CODE_LSP_CACHE.
-  //
-  // Key semantics live in code_intel_lsp_cache (see schema comment).
-  // Here we just hash the file, look it up, and route hit vs miss to
-  // the perf sampler with distinct operation labels so `perf:index`
-  // can compute hit rate directly from the snapshot.
-  const CACHE_TTL_MS = 24 * 60 * 60 * 1000 // 24h; see PRD §S2 risk 4
-  const CACHE_PRUNE_PROBABILITY = 0.01
-
-  function cacheEnabled(override?: boolean): boolean {
-    return override ?? Flag.AX_CODE_LSP_CACHE
-  }
-
-  async function hashFile(file: string): Promise<string | undefined> {
-    try {
-      // Persistent cache key — kept on Bun.hash for backwards compat
-      // with cache entries written by older versions. Switching the
-      // algorithm here would invalidate every existing user's LSP
-      // cache on first run after upgrade. Not a correctness issue
-      // (just a one-time miss) but unnecessary churn.
-      const buf = await Bun.file(file).arrayBuffer()
-      return Bun.hash(new Uint8Array(buf)).toString()
-    } catch (err) {
-      log.warn("cache: failed to hash file; skipping cache", { file, err: String(err) })
-      return undefined
-    }
-  }
-
-  // Try cache read. Returns a fully-formed envelope when hit, undefined
-  // on miss (or when the cache is disabled / unavailable). The caller
-  // is responsible for perf accounting — we pass `operation` here only
-  // for the row lookup, not for sampler bookkeeping.
-  function cacheLookup<T>(
-    operation: LspCacheOperation,
-    filePath: string,
-    contentHash: string,
-    line: number,
-    character: number,
-    enabled: boolean,
-  ): SemanticEnvelope<T> | undefined {
-    if (!enabled) return undefined
-    let row: ReturnType<typeof CodeGraphQuery.getLspCache>
-    try {
-      row = CodeGraphQuery.getLspCache({
-        projectID: Instance.project.id,
-        operation,
-        filePath,
-        contentHash,
-        line,
-        character,
-        now: Date.now(),
-      })
-    } catch (err) {
-      log.warn("cache: lookup failed", { err: String(err) })
-      return undefined
-    }
-    if (!row) return undefined
-
-    try {
-      CodeGraphQuery.incrementLspCacheHit(row.id)
-    } catch {
-      // Hit-count failure is not worth failing the request over.
-    }
-
-    return {
-      data: row.payload_json as T,
-      source: "cache",
-      completeness: row.completeness,
-      // Preserve the original LSP fetch timestamp so consumers can see
-      // how stale a cache hit is. This is load-bearing for S3 replay.
-      timestamp: row.time_created,
-      serverIDs: row.server_ids_json,
-      cacheKey: row.id,
-      // Cache only stores full-completeness rows (see cacheWrite
-      // guard). A cache hit therefore was not degraded at write time.
-      // Freshness is computed read-time via envelopeFreshness(), not
-      // written into this field.
-      degraded: false,
-    }
-  }
-
-  // Write a successful `full` LSP response to the cache. No-op when the
-  // cache is disabled or when the result is partial/empty.
-  function cacheWrite(
-    operation: LspCacheOperation,
-    filePath: string,
-    contentHash: string,
-    line: number,
-    character: number,
-    envelope: SemanticEnvelope<unknown>,
-    enabled: boolean,
-  ) {
-    if (!enabled) return
-    if (envelope.completeness !== "full") return
-
-    const now = Date.now()
-    try {
-      CodeGraphQuery.upsertLspCache({
-        projectID: Instance.project.id,
-        operation,
-        filePath,
-        contentHash,
-        line,
-        character,
-        payload: envelope.data,
-        serverIDs: envelope.serverIDs,
-        completeness: envelope.completeness,
-        expiresAt: now + CACHE_TTL_MS,
-      })
-    } catch (err) {
-      log.warn("cache: write failed", { err: String(err) })
-      return
-    }
-
-    // Amortized TTL sweep. No background worker, no cron — every
-    // successful write has a small chance of cleaning up after
-    // abandoned rows. On an empty cache this is a near-no-op scan
-    // against the code_intel_lsp_cache_expires_idx index.
-    if (Math.random() < CACHE_PRUNE_PROBABILITY) {
-      try {
-        const removed = CodeGraphQuery.pruneExpiredLspCache(now)
-        if (removed > 0) log.info("cache: pruned expired rows", { removed })
-      } catch (err) {
-        log.warn("cache: prune failed", { err: String(err) })
-      }
-    }
-  }
-
+  // LSP.documentSymbolEnvelope. Key semantics and storage operations live
+  // in LSPCache; this surface only routes cache hits, live fallback, and
+  // perf sampler labels.
   export async function workspaceSymbolEnvelope(query: string): Promise<SymbolEnvelope> {
     return metered("workspaceSymbol", { query }, async () => {
       const selectStarted = performance.now()
@@ -1630,9 +1504,16 @@ export namespace LSP {
     uri: string,
   ): Promise<SemanticEnvelope<(LSP.DocumentSymbol | LSP.Symbol)[]> | undefined> {
     const file = fileURLToPath(uri)
-    const contentHash = await hashFile(file)
+    const contentHash = await LSPCache.hashFile(file)
     if (!contentHash) return undefined
-    const hit = cacheLookup<(LSP.DocumentSymbol | LSP.Symbol)[]>("documentSymbol", file, contentHash, -1, -1, true)
+    const hit = LSPCache.lookup<(LSP.DocumentSymbol | LSP.Symbol)[]>({
+      operation: "documentSymbol",
+      filePath: file,
+      contentHash,
+      line: -1,
+      character: -1,
+      enabled: true,
+    })
     if (hit) recordPerf("documentSymbol.cached", 0, true)
     return hit
   }
@@ -1644,13 +1525,13 @@ export namespace LSP {
     },
   ): Promise<SemanticEnvelope<(LSP.DocumentSymbol | LSP.Symbol)[]>> {
     const file = fileURLToPath(uri)
-    const useCache = cacheEnabled(opts?.cache)
+    const useCache = LSPCache.enabled(opts?.cache)
     return metered("documentSymbol", { file }, async () => {
       // Hash the file once per call; used by both the cache (when
       // enabled) and the in-flight dedup (always). A few hundred μs
       // per call is a flat cost that's recouped many times over the
       // moment two concurrent calls collapse into one LSP RPC.
-      const contentHash = await hashFile(file)
+      const contentHash = await LSPCache.hashFile(file)
 
       if (contentHash && useCache) {
         const hit = await documentSymbolCachedEnvelope(uri)
@@ -1676,7 +1557,15 @@ export namespace LSP {
 
       recordPerf("documentSymbol.live", 0, true)
       if (contentHash && useCache) {
-        cacheWrite("documentSymbol", file, contentHash, -1, -1, envelope, useCache)
+        LSPCache.write({
+          operation: "documentSymbol",
+          filePath: file,
+          contentHash,
+          line: -1,
+          character: -1,
+          envelope,
+          enabled: useCache,
+        })
       }
       return envelope
     })
@@ -1722,9 +1611,16 @@ export namespace LSP {
     line: number
     character: number
   }): Promise<SemanticEnvelope<unknown[]> | undefined> {
-    const contentHash = await hashFile(input.file)
+    const contentHash = await LSPCache.hashFile(input.file)
     if (!contentHash) return undefined
-    const hit = cacheLookup<unknown[]>("references", input.file, contentHash, input.line, input.character, true)
+    const hit = LSPCache.lookup<unknown[]>({
+      operation: "references",
+      filePath: input.file,
+      contentHash,
+      line: input.line,
+      character: input.character,
+      enabled: true,
+    })
     if (hit) recordPerf("references.cached", 0, true)
     return hit
   }
@@ -1735,9 +1631,9 @@ export namespace LSP {
     character: number
     cache?: boolean
   }): Promise<SemanticEnvelope<unknown[]>> {
-    const useCache = cacheEnabled(input.cache)
+    const useCache = LSPCache.enabled(input.cache)
     return metered("references", { file: input.file }, async () => {
-      const contentHash = await hashFile(input.file)
+      const contentHash = await LSPCache.hashFile(input.file)
 
       if (contentHash && useCache) {
         const hit = await referencesCachedEnvelope(input)
@@ -1768,7 +1664,15 @@ export namespace LSP {
 
       recordPerf("references.live", 0, true)
       if (contentHash && useCache) {
-        cacheWrite("references", input.file, contentHash, input.line, input.character, envelope, useCache)
+        LSPCache.write({
+          operation: "references",
+          filePath: input.file,
+          contentHash,
+          line: input.line,
+          character: input.character,
+          envelope,
+          enabled: useCache,
+        })
       }
       return envelope
     })
