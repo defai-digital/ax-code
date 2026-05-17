@@ -14,6 +14,7 @@ This index tracks the active ADR set for `ax-code`. Archived ADRs are retained u
 | [ADR-007](ADR-007-headless-tui-boundary-and-orchestration-contracts.md) | Headless TUI Boundary and Orchestration Contracts | Accepted |
 | [ADR-008](ADR-008-server-operation-boundary-and-contract.md) | Server Operation Boundary and Contract | Proposed |
 | [ADR-009](ADR-009-package-organization-boundary-hardening.md) | Harden Package Organization Boundaries Before Splitting Packages | Proposed |
+| [ADR-010](ADR-010-alibaba-thinking-shape-and-budget-clamping.md) | Alibaba Thinking Shape and Budget Clamping | Accepted |
 
 ## Archived ADRs
 
