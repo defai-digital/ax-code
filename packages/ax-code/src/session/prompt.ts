@@ -81,19 +81,19 @@ import {
   findFallbackModel,
   ensureTitle as _ensureTitle,
 } from "./prompt-helpers"
+import {
+  MAX_STAGNANT_TODO_RETRIES,
+  TODO_CONTEXT_CONVERGENCE_INPUT_TOKEN_THRESHOLD,
+  hasReportStyleTodo,
+  pendingTodoSignature,
+  reportTodoClosureGuidance,
+  todoDeadlineStepBuffer,
+} from "./prompt-todo-continuation"
 
 // @ts-ignore
 globalThis.AI_SDK_LOG_WARNINGS = false
 
-const MAX_STAGNANT_TODO_RETRIES = 2
 const MAX_EMPTY_MODEL_TURN_RETRIES = 1
-const TODO_DEADLINE_MIN_STEP_BUFFER = 3
-const TODO_DEADLINE_MAX_STEP_BUFFER = 8
-const TODO_CONTEXT_CONVERGENCE_INPUT_TOKEN_THRESHOLD = 50_000
-
-function pendingTodoSignature(todos: { content: string; status: string; priority: string }[]) {
-  return todos.map((todo) => `${todo.status}\u0000${todo.priority}\u0000${todo.content}`).join("\u0001")
-}
 
 function estimateRequestTokens(input: { system: string[]; messages: ModelMessage[] }) {
   let total = 0
@@ -115,37 +115,6 @@ function getLastUserInfo(messages: readonly MessageV2.WithParts[]): MessageV2.Us
     }
   }
   return undefined
-}
-
-function todoDeadlineStepBuffer(pendingTodoCount: number) {
-  return Math.min(TODO_DEADLINE_MAX_STEP_BUFFER, Math.max(TODO_DEADLINE_MIN_STEP_BUFFER, pendingTodoCount + 2))
-}
-
-function hasReportStyleTodo(todos: { content: string }[]) {
-  return todos.some((todo) => /\b(report|reports|bug|bugs)\b|\.internal\/bugs/i.test(todo.content))
-}
-
-function reportTodoClosureGuidance(mode: "deadline" | "continuation" | "context") {
-  if (mode === "context") {
-    return (
-      `\nThe context is already large. For report-style todos, write the .internal/bugs report now ` +
-      `when there is credible suspected or confirmed evidence. Otherwise cancel that report todo with the ` +
-      `concrete reason; do not read more files for broad exploration.`
-    )
-  }
-
-  if (mode === "deadline") {
-    return (
-      `\nFor report-style todos, create the required .internal/bugs report now if there is a credible suspected ` +
-      `or confirmed issue. If the evidence is not credible enough, cancel that report todo with the concrete ` +
-      `reason instead of continuing broad analysis.`
-    )
-  }
-
-  return (
-    `\nFor report-style todos, write the .internal/bugs report now when there is credible suspected or confirmed ` +
-    `evidence. Otherwise cancel that report todo with the concrete reason; do not keep doing broad exploration.`
-  )
 }
 
 const STRUCTURED_OUTPUT_DESCRIPTION = `Use this tool to return your final response in the requested structured format.
