@@ -8,6 +8,7 @@ import { SessionGraph } from "../../session/graph"
 import { SessionRisk } from "../../session/risk"
 import { ProbabilisticRollout } from "../../quality/probabilistic-rollout"
 import { parseDreGraphTimeline, parseDreGraphTimelineStepDurationMs } from "../../quality/dre-graph-timeline"
+import { indexFingerprint, sessionFingerprint } from "../../quality/dre-graph-fingerprint"
 import { SessionRollback } from "../../session/rollback"
 import { SessionID } from "../../session/schema"
 import { lazy } from "../../util/lazy"
@@ -1381,101 +1382,6 @@ function timelineSection(dre: SessionDre.Snapshot, points: SessionRollback.Point
     `</div>`,
     `</section>`,
   ].join("")
-}
-
-function indexFingerprint(list: Session.Info[]) {
-  return list.map((item) => ({
-    id: item.id,
-    updated: item.time.updated,
-    title: item.title,
-    parentID: item.parentID ?? null,
-  }))
-}
-
-function sessionFingerprint(input: {
-  session: Awaited<ReturnType<typeof Session.get>>
-  graph: SessionGraph.Snapshot
-  dre: SessionDre.Snapshot
-  risk: SessionRisk.Detail
-  rank?: SessionBranchRank.Family
-  rollback: SessionRollback.Point[]
-}) {
-  return {
-    session: {
-      id: input.session.id,
-      updated: input.session.time.updated,
-      title: input.session.title,
-    },
-    graph: {
-      nodes: input.graph.graph.nodes.length,
-      edges: input.graph.graph.edges.length,
-      steps: input.graph.graph.metadata.steps,
-      errors: input.graph.graph.metadata.errors,
-      duration: input.graph.graph.metadata.duration,
-      tokens: input.graph.graph.metadata.tokens,
-    },
-    dre: {
-      score: input.dre.detail?.score ?? null,
-      confidence: input.dre.detail?.confidence ?? null,
-      readiness: input.dre.detail?.readiness ?? null,
-      stats: input.dre.detail?.stats ?? null,
-      decision: input.dre.detail?.decision ?? null,
-      routes: input.dre.detail?.routes.length ?? 0,
-      tools: input.dre.detail?.tools.length ?? 0,
-      notes: input.dre.detail?.notes.length ?? 0,
-      semantic: input.dre.detail?.semantic?.headline ?? null,
-      timeline: input.dre.timeline.length,
-    },
-    risk: {
-      score: input.risk.assessment.score,
-      level: input.risk.assessment.level,
-      confidence: input.risk.assessment.confidence,
-      readiness: input.risk.assessment.readiness,
-      validation: input.risk.assessment.signals.validationState,
-      files: input.risk.assessment.signals.filesChanged,
-      lines: input.risk.assessment.signals.linesChanged,
-      evidence: input.risk.assessment.evidence.length,
-      unknowns: input.risk.assessment.unknowns.length,
-      mitigations: input.risk.assessment.mitigations.length,
-      quality: input.risk.quality
-        ? {
-            review: input.risk.quality.review
-              ? {
-                  status: input.risk.quality.review.overallStatus,
-                  ready: input.risk.quality.review.readyForBenchmark,
-                  resolvedLabels: input.risk.quality.review.resolvedLabeledItems,
-                }
-              : null,
-            debug: input.risk.quality.debug
-              ? {
-                  status: input.risk.quality.debug.overallStatus,
-                  ready: input.risk.quality.debug.readyForBenchmark,
-                  resolvedLabels: input.risk.quality.debug.resolvedLabeledItems,
-                }
-              : null,
-            qa: input.risk.quality.qa
-              ? {
-                  status: input.risk.quality.qa.overallStatus,
-                  ready: input.risk.quality.qa.readyForBenchmark,
-                  resolvedLabels: input.risk.quality.qa.resolvedLabeledItems,
-                }
-              : null,
-          }
-        : null,
-    },
-    rank: input.rank
-      ? {
-          confidence: input.rank.confidence,
-          recommended: input.rank.recommended.id,
-          items: input.rank.items.map((item) => ({
-            id: item.id,
-            score: item.decision.total,
-            risk: item.risk.score,
-          })),
-        }
-      : null,
-    rollback: input.rollback.length,
-  }
 }
 
 type SessionGraphContext = {
