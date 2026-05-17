@@ -1,6 +1,6 @@
 import type { FileContent } from "@ax-code/sdk/v2"
 import { createEffect, createMemo, createResource, Match, on, Show, Switch, type JSX } from "solid-js"
-import { useI18n } from "../context/i18n"
+import { useI18n } from "../../context/i18n"
 import {
   dataUrlFromMediaValue,
   hasMediaValue,
@@ -8,7 +8,7 @@ import {
   mediaKindFromPath,
   normalizeMimeType,
   svgTextFromValue,
-} from "../pierre/media"
+} from "../../pierre/media"
 
 export type FileMediaOptions = {
   mode?: "auto" | "off"

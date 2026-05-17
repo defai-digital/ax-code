@@ -33,7 +33,7 @@
 @import "../components/tooltip.css" layer(components);
 
 /* Content */
-@import "../components/file.css" layer(components);
+@import "../components/file/file.css" layer(components);
 @import "../components/file-icon.css" layer(components);
 @import "../components/content/image-preview.css" layer(components);
 @import "../components/content/markdown.css" layer(components);
