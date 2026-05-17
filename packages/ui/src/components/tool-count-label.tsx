@@ -1,5 +1,5 @@
 import { createMemo } from "solid-js"
-import { AnimatedNumber } from "./animated-number"
+import { AnimatedNumber } from "./status/animated-number"
 
 function split(text: string) {
   const match = /{{\s*count\s*}}/.exec(text)

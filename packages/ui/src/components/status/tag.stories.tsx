@@ -1,6 +1,6 @@
 // @ts-nocheck
 import * as mod from "./tag"
-import { create } from "../storybook/scaffold"
+import { create } from "../../storybook/scaffold"
 
 const docs = `### Overview
 Small label tag for metadata and status chips.

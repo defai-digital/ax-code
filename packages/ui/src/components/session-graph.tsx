@@ -2,7 +2,7 @@ import type { ExecutionGraph, ExecutionGraphTopologyLine } from "@ax-code/sdk/v2
 import { For, Show, createMemo, splitProps, type ComponentProps, type JSX } from "solid-js"
 import { Card, CardDescription, CardTitle } from "./card"
 import { ScrollView } from "./scroll-view"
-import { Tag } from "./tag"
+import { Tag } from "./status/tag"
 import { sessionGraphLayout } from "./session-graph.logic"
 
 export interface SessionGraphProps extends Omit<ComponentProps<typeof Card>, "children" | "title" | "variant"> {

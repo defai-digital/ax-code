@@ -2,7 +2,7 @@ import type { SessionDreSnapshot } from "@ax-code/sdk/v2"
 import { For, Show, createMemo, splitProps, type ComponentProps, type JSX } from "solid-js"
 import { Card, CardDescription, CardTitle } from "./card"
 import { ScrollView } from "./scroll-view"
-import { Tag } from "./tag"
+import { Tag } from "./status/tag"
 import { sessionInsightDuration, sessionInsightVariant, sessionTimelineTone } from "./session-insight.logic"
 
 export interface SessionDreProps extends Omit<ComponentProps<typeof Card>, "children" | "title" | "variant"> {

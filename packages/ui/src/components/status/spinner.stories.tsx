@@ -1,6 +1,6 @@
 // @ts-nocheck
 import * as mod from "./spinner"
-import { create } from "../storybook/scaffold"
+import { create } from "../../storybook/scaffold"
 
 const docs = `### Overview
 Animated loading indicator for inline or page-level loading states.

@@ -1,7 +1,7 @@
 # PRD: Package Organization Boundary Hardening
 
 **Date:** 2026-05-17
-**Status:** Active - guardrails, SDK cleanup, DRE graph extraction, and manifest-cycle cleanup implemented
+**Status:** Active - guardrails, SDK cleanup, DRE graph extraction, manifest-cycle cleanup, and first UI grouping slice implemented
 **Author:** ax-code agent
 
 ---
@@ -18,7 +18,7 @@ This PRD hardens package organization in small, reviewable slices:
 4. Replace runtime imports from SDK source paths with stable package exports.
 5. Resolve or document workspace manifest dependency cycles.
 
-Several slices are already complete. The remaining work should focus on UI component grouping, TUI/session prompt hotspot reduction, and LSP surface cleanup.
+Several slices are already complete. The remaining work should focus on continuing UI component grouping, TUI/session prompt hotspot reduction, and LSP surface cleanup.
 
 ## Current Evidence
 
@@ -29,7 +29,7 @@ Verified against the current checkout on 2026-05-17:
 - Structure guardrails report no raw cross-package `src` imports.
 - Structure guardrails report `SDK Runtime Source Imports` as OK.
 - Structure guardrails report no workspace package manifest cycles.
-- Structure guardrails report `packages/ui/src/components` with 140 direct source files, 9 child folders, and 168 total source files.
+- Structure guardrails report `packages/ui/src/components` with 131 direct source files, 9 child folders, and 163 total source files.
 - Structure guardrails report 73 files above 500 lines and 32 files above 800 lines.
 - Current largest package-boundary hotspots include:
   - `packages/ax-code/src/session/prompt.ts`: about 3,200 lines.
@@ -47,6 +47,16 @@ Verified against the current checkout on 2026-05-17:
 - `script/structure.ts` separates hotspot threshold reporting from the general hotspot summary.
 - Existing package cycles and 800+ line files are warnings so known debt is visible without blocking unrelated CI.
 - `packages/ax-code/test/script/root-structure-script.test.ts` verifies that the root structure script emits boundary-hardening sections and exits successfully with known warnings.
+
+### In Progress: Phase 2 UI Component Grouping
+
+- Moved the first low-risk status batch under `packages/ui/src/components/status/`.
+- Removed root-level compatibility re-export files for `animated-number`, `progress`, `progress-circle`, `spinner`, and `tag`.
+- Preserved old public imports such as `@ax-code/ui/spinner` through exact package exports.
+- Moved the matching status stories and CSS next to their grouped components.
+- Updated internal relative imports to use `./status/*`.
+- Verified `pnpm --dir packages/ui run typecheck`.
+- Verified package export resolution from the `@ax-code/ui` package context with `import.meta.resolve()`.
 
 ### Completed: Phase 3 DRE Graph Route Extraction
 
@@ -248,18 +258,18 @@ Exit state:
 - Known debt is visible as warnings.
 - No package boundary violation is hidden behind the broader hotspot report.
 
-### Phase 2: UI Component Grouping - Pending
+### Phase 2: UI Component Grouping - In Progress
 
-- [ ] Classify current direct component files into existing UI folders before creating new folders.
-- [ ] Move a first low-risk batch of primitives/forms/actions with compatibility re-exports.
+- [x] Classify current direct component files into existing UI folders before creating new folders.
+- [x] Move a first low-risk status batch with compatibility package exports.
 - [ ] Move content and message-specific files in separate batches.
 - [ ] Move file/provider/session-specific files only after the target folder contract is clear.
-- [ ] Preserve existing `@ax-code/ui/*` import paths.
-- [ ] Run `pnpm --dir packages/ui run typecheck` after each batch.
+- [x] Preserve existing `@ax-code/ui/*` import paths for the moved status batch.
+- [x] Run `pnpm --dir packages/ui run typecheck` after the first batch.
 
 Exit criteria:
 
-- `packages/ui/src/components` direct source-file count is materially lower than the current 140.
+- `packages/ui/src/components` direct source-file count continues to shrink from the original 140.
 - Existing public imports continue to typecheck.
 - Moved CSS and stories stay colocated with their components.
 
@@ -433,18 +443,18 @@ This PRD is complete when:
 - Runtime package boundary violations remain absent.
 - SDK runtime source imports remain absent.
 - Workspace package manifest cycles are absent, or any future exception is documented with owner, reason, and removal trigger before merging.
-- `packages/ui/src/components` direct source-file count is materially reduced from the current 140 while preserving public import compatibility.
+- `packages/ui/src/components` direct source-file count is materially reduced from the original 140 while preserving public import compatibility.
 - `packages/ax-code/src/server/routes/dre-graph.ts` remains below hotspot thresholds and owns only route-level responsibilities.
 - TUI session route, session prompt, and LSP hotspots each shrink through at least one behavior-preserving extraction.
 - Each completed phase records the targeted validation command that passed.
 
 ## Next Best Slice
 
-The next best implementation slice is Phase 2 UI component grouping. The manifest-cycle warning is closed, while `packages/ui/src/components` still has a large direct-file surface.
+The next best implementation slice is the second Phase 2 UI grouping batch. The status batch reduced the direct source-file count from 140 to 131, but `packages/ui/src/components` still has a large flat direct-file surface.
 
 Recommended first task:
 
-1. Classify direct files under `packages/ui/src/components` into existing folders first.
-2. Move a small low-risk batch with compatibility re-exports.
+1. Pick either the content batch (`markdown`, `diff-changes`, `line-comment`, `image-preview`) or the message batch (`message-*`) after checking internal relative imports.
+2. Move a small low-risk batch with compatibility package exports.
 3. Run `pnpm --dir packages/ui run typecheck`.
 4. Update this PRD with the direct-file count after the batch.
