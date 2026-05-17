@@ -12,13 +12,12 @@ import { branchSection } from "../../quality/dre-graph-branch-section"
 import { changesSection } from "../../quality/dre-graph-changes-section"
 import { style } from "../../quality/dre-graph-style"
 import { summary } from "../../quality/dre-graph-summary-section"
-import { timelineSection } from "../../quality/dre-graph-timeline-section"
 import { indexFingerprint, sessionFingerprint } from "../../quality/dre-graph-fingerprint"
 import { riskSection } from "../../quality/dre-graph-risk-section"
 import { validationSection } from "../../quality/dre-graph-validation-section"
 import { verdictSection } from "../../quality/dre-graph-verdict-section"
-import { agentDisplay, esc, stamp, tone } from "../../quality/dre-graph-format"
-import { barChart, chip, flow, stepSummary } from "../../quality/dre-graph-widgets"
+import { esc, stamp } from "../../quality/dre-graph-format"
+import { chip } from "../../quality/dre-graph-widgets"
 import { SessionRollback } from "../../session/rollback"
 import { SessionID } from "../../session/schema"
 import { lazy } from "../../util/lazy"
@@ -27,162 +26,6 @@ import { SESSION_ID_PARAM, withSessionID } from "./route-params"
 const DRE_GRAPH_QUALITY_QUERY = z.object({
   quality: z.coerce.boolean().optional().default(false),
 })
-
-// ── (legacy retained for reference — replaced by activitySection) ──
-function graphSection(input: SessionGraph.Snapshot, dre: SessionDre.Snapshot) {
-  const head = input.topology.find((item) => item.kind === "heading")
-  const path = input.topology.find((item) => item.kind === "path")
-  const steps = input.topology.filter((item) => item.kind === "step")
-  const pairs = input.topology.filter((item) => item.kind === "pair")
-  const detail = dre.detail
-
-  return [
-    `<section class="band" id="graph">`,
-    `<div class="wrap">`,
-    `<div class="section-head"><h2>Execution</h2><p>${esc(head?.text ?? "No execution graph recorded.")}</p></div>`,
-    `<div class="grid">`,
-    // Left: Agent routes + Tool sequence
-    `<div class="panel">`,
-    detail?.routes.length
-      ? [
-          `<h3>Agent Routes</h3>`,
-          `<div class="route-flow">`,
-          detail.routes
-            .map(
-              (item) =>
-                `<div class="route-item"><span class="route-from">${esc(agentDisplay(item.from))}</span><span class="route-arrow">→</span><span class="route-to">${esc(agentDisplay(item.to))}</span><span class="route-conf">${item.confidence.toFixed(2)}</span></div>`,
-            )
-            .join(""),
-          `</div>`,
-        ].join("")
-      : `<h3>Agent Routes</h3><p class="empty">No routes recorded.</p>`,
-    detail?.tools.length
-      ? [
-          `<div style="margin-top:20px"><h3>Tool Usage</h3>`,
-          (() => {
-            const counts = new Map<string, number>()
-            for (const t of detail.tools) counts.set(t, (counts.get(t) ?? 0) + 1)
-            const median = [...counts.values()].sort((a, b) => a - b)[Math.floor(counts.size / 2)] ?? 1
-            return barChart({
-              items: [...counts.entries()]
-                .sort((a, b) => b[1] - a[1])
-                .slice(0, 12)
-                .map(([label, value]) => ({ label, value })),
-              unit: "×",
-              colorFn: (v) => (v > median * 4 ? "var(--warn)" : v > median * 2 ? "var(--accent)" : "var(--low)"),
-            })
-          })(),
-          `</div>`,
-          `<div style="margin-top:16px"><h3>Tool Sequence</h3>${flow(detail.tools)}</div>`,
-        ].join("")
-      : "",
-    `</div>`,
-    // Right: Critical path (pipeline view) + Tool pairs
-    `<div class="panel">`,
-    `<h3>Critical Path</h3>`,
-    path && "nodes" in path
-      ? (() => {
-          // Parse path nodes into phases grouped by step markers
-          type Phase = { label: string; tools: Map<string, number> }
-          const phases: Phase[] = []
-          let current: Phase = { label: "Init", tools: new Map() }
-          phases.push(current)
-          for (const node of path.nodes) {
-            if (node.startsWith("Step ")) {
-              current = { label: node, tools: new Map() }
-              phases.push(current)
-              continue
-            }
-            // Extract tool name — strip args and "ok"/"ERR" result nodes
-            const colonIdx = node.indexOf(":")
-            if (colonIdx > 0) {
-              const tool = node.slice(0, colonIdx).trim()
-              if (!tool.endsWith(" ok") && !tool.endsWith(" ERR")) {
-                current.tools.set(tool, (current.tools.get(tool) ?? 0) + 1)
-              }
-            } else if (node.startsWith("Start ")) {
-              current.label = node
-            }
-            // Skip result nodes like "read ok", "glob ok"
-          }
-          // Filter out empty phases
-          const active = phases.filter((p) => p.tools.size > 0)
-          if (active.length === 0) return `<p class="empty">No path recorded.</p>`
-
-          return [
-            `<div class="cpath">`,
-            `<div class="cpath-summary">${path.nodes.length.toLocaleString()} nodes across ${active.length} phase${active.length === 1 ? "" : "s"}</div>`,
-            active
-              .map((phase, idx) => {
-                const total = [...phase.tools.values()].reduce((a, b) => a + b, 0)
-                const sorted = [...phase.tools.entries()].sort((a, b) => b[1] - a[1])
-                return [
-                  idx > 0 ? `<div class="cpath-connector"><span class="cpath-arrow">↓</span></div>` : "",
-                  `<div class="cpath-phase">`,
-                  `<div class="cpath-phase-head">`,
-                  `<span class="cpath-phase-label">${esc(phase.label)}</span>`,
-                  `<span class="cpath-phase-count">${total} call${total === 1 ? "" : "s"}</span>`,
-                  `</div>`,
-                  `<div class="cpath-tools">`,
-                  sorted
-                    .slice(0, 6)
-                    .map(([name, count]) => {
-                      const pct = Math.max(8, (count / total) * 100)
-                      return `<div class="cpath-tool"><span class="cpath-tool-name">${esc(name)}${count > 1 ? ` <span class="cpath-tool-n">×${count}</span>` : ""}</span><div class="cpath-tool-bar" style="width:${pct.toFixed(0)}%"></div></div>`
-                    })
-                    .join(""),
-                  sorted.length > 6
-                    ? `<span class="muted" style="font-size:11px">+${sorted.length - 6} more</span>`
-                    : "",
-                  `</div>`,
-                  `</div>`,
-                ].join("")
-              })
-              .join(""),
-            `</div>`,
-          ].join("")
-        })()
-      : `<p class="empty">No path recorded.</p>`,
-    pairs.length
-      ? [
-          `<div style="margin-top:20px"><h3>Tool Pairs <span class="rb-count">${pairs.length}</span></h3>`,
-          `<div class="pair-list">`,
-          pairs
-            .slice(0, 12)
-            .map((item) => {
-              // Clean up pair labels — strip raw args
-              const callName = item.call.split(":")[0].trim()
-              const resultName = item.result.split(" ")[0].trim()
-              return `<div class="pair"><span>${esc(callName)}</span><span class="pair-arrow">→</span><span>${esc(resultName)}</span></div>`
-            })
-            .join(""),
-          pairs.length > 12
-            ? `<span class="muted" style="font-size:11px;padding:6px 0;display:block">+${pairs.length - 12} more pairs</span>`
-            : "",
-          `</div></div>`,
-        ].join("")
-      : "",
-    `</div>`,
-    `</div>`,
-    // Step flows — compact summaries per step
-    steps.length
-      ? [
-          `<div class="panel" style="margin-top:20px">`,
-          `<h3>Steps (${steps.length})</h3>`,
-          `<div class="step-grid">`,
-          steps
-            .map(
-              (item) =>
-                `<div class="lane"><div class="lane-head">Step ${item.stepIndex}<span class="lane-count">${item.nodes.length} calls</span></div>${stepSummary(item.nodes)}</div>`,
-            )
-            .join(""),
-          `</div></div>`,
-        ].join("")
-      : "",
-    `</div>`,
-    `</section>`,
-  ].join("")
-}
 
 type SessionGraphContext = {
   session: Awaited<ReturnType<typeof Session.get>>
