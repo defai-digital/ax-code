@@ -1124,20 +1124,21 @@ describe("ProviderTransform.options - Alibaba Token Plan Team Edition", () => {
     } as any
   }
 
-  test("uses the documented bounded thinking config for qwen3.6-plus", () => {
+  test("pairs enable_thinking with a bounded thinking_budget for qwen3.6-plus", () => {
     const result = ProviderTransform.options({
       model: createModel("qwen3.6-plus"),
       sessionID: "session-test",
       providerOptions: {},
     })
 
-    // thinking budget is clamped to maxOutputTokens (4096 — the Alibaba
+    // thinking_budget is clamped to maxOutputTokens (4096 — the Alibaba
     // short-window cap), which is below the 8192 documented ceiling.
-    expect(result.thinking).toEqual({ type: "enabled", budgetTokens: 4096 })
-    expect(result.enable_thinking).toBeUndefined()
+    expect(result.enable_thinking).toBe(true)
+    expect(result.thinking_budget).toBe(4096)
+    expect(result.thinking).toBeUndefined()
   })
 
-  test("keeps thinking budget at or below a lower configured output limit", () => {
+  test("keeps thinking_budget at or below a lower configured output limit", () => {
     const model = createModel("qwen3.6-plus")
     model.limit.output = 512
     const result = ProviderTransform.options({
@@ -1146,7 +1147,8 @@ describe("ProviderTransform.options - Alibaba Token Plan Team Edition", () => {
       providerOptions: {},
     })
 
-    expect(result.thinking).toEqual({ type: "enabled", budgetTokens: 512 })
+    expect(result.enable_thinking).toBe(true)
+    expect(result.thinking_budget).toBe(512)
     expect(ProviderTransform.maxOutputTokens(model)).toBe(512)
   })
 
@@ -1154,7 +1156,7 @@ describe("ProviderTransform.options - Alibaba Token Plan Team Edition", () => {
     const model = createModel("qwen3.6-plus")
     const result = ProviderTransform.sanitizeOptions(model, {
       thinking: { type: "enabled", budgetTokens: 8192 },
-      enable_thinking: true,
+      thinking_budget: 8192,
       reasoning: { effort: "high" },
       reasoningEffort: "high",
       reasoning_effort: "high",
@@ -1162,55 +1164,58 @@ describe("ProviderTransform.options - Alibaba Token Plan Team Edition", () => {
       custom: "keep",
     })
 
-    // Input asked for 8192, but the Alibaba short-window cap clamps the
-    // sanitized budget down to maxOutputTokens (4096).
+    // The Anthropic-shaped `thinking` block and reasoning-effort variants
+    // are stripped; the user-supplied `thinking_budget: 8192` is clamped
+    // down to maxOutputTokens (4096).
     expect(result).toEqual({
-      thinking: { type: "enabled", budgetTokens: 4096 },
+      enable_thinking: true,
+      thinking_budget: 4096,
       custom: "keep",
     })
   })
 
-  test("fills missing Token Plan thinking budget after config merges", () => {
+  test("fills missing Token Plan thinking_budget after config merges", () => {
     const model = createModel("qwen3.6-plus")
-    const result = ProviderTransform.sanitizeOptions(model, {
-      thinking: { type: "enabled" },
-    })
+    const result = ProviderTransform.sanitizeOptions(model, {})
 
-    expect(result.thinking).toEqual({ type: "enabled", budgetTokens: 4096 })
+    expect(result.enable_thinking).toBe(true)
+    expect(result.thinking_budget).toBe(4096)
   })
 
-  test("rebuilds invalid Token Plan thinking options after config merges", () => {
+  test("rebuilds invalid Token Plan thinking_budget after config merges", () => {
     const model = createModel("qwen3.6-plus")
-    for (const thinking of ["bad", null, false, { type: "enabled", budgetTokens: -1 }, { budgetTokens: NaN }]) {
+    for (const budget of [undefined, null, false, -1, NaN, "bad"]) {
       const result = ProviderTransform.sanitizeOptions(model, {
-        thinking,
+        thinking_budget: budget as any,
       })
 
-      expect(result.thinking).toEqual({ type: "enabled", budgetTokens: 4096 })
+      expect(result.enable_thinking).toBe(true)
+      expect(result.thinking_budget).toBe(4096)
     }
   })
 
-  test("floors fractional Token Plan thinking budgets", () => {
+  test("floors fractional Token Plan thinking_budget", () => {
     const model = createModel("qwen3.6-plus")
     const result = ProviderTransform.sanitizeOptions(model, {
-      thinking: { type: "enabled", budgetTokens: 511.9 },
+      thinking_budget: 511.9,
     })
 
-    expect(result.thinking).toEqual({ type: "enabled", budgetTokens: 511 })
+    expect(result.thinking_budget).toBe(511)
   })
 
-  test("uses the documented bounded thinking config for glm-5", () => {
+  test("pairs enable_thinking with a bounded thinking_budget for glm-5", () => {
     const result = ProviderTransform.options({
       model: createModel("glm-5"),
       sessionID: "session-test",
       providerOptions: {},
     })
 
-    expect(result.thinking).toEqual({ type: "enabled", budgetTokens: 4096 })
-    expect(result.enable_thinking).toBeUndefined()
+    expect(result.enable_thinking).toBe(true)
+    expect(result.thinking_budget).toBe(4096)
+    expect(result.thinking).toBeUndefined()
   })
 
-  test("uses the documented bounded thinking config for China Token Plan MiniMax-M2.5", () => {
+  test("pairs enable_thinking with a bounded thinking_budget for China Token Plan MiniMax-M2.5", () => {
     const model = createModel("MiniMax-M2.5", true, "alibaba-token-plan-cn")
     const result = ProviderTransform.options({
       model,
@@ -1218,25 +1223,25 @@ describe("ProviderTransform.options - Alibaba Token Plan Team Edition", () => {
       providerOptions: {},
     })
 
-    expect(result.thinking).toEqual({ type: "enabled", budgetTokens: 4096 })
-    expect(result.enable_thinking).toBeUndefined()
+    expect(result.enable_thinking).toBe(true)
+    expect(result.thinking_budget).toBe(4096)
     // alibaba-token-plan-cn is subject to the same short-window cap as every
     // other Alibaba-backed provider.
     expect(ProviderTransform.maxOutputTokens(model)).toBe(4_096)
   })
 
-  test("uses the documented bounded thinking config for international Token Plan MiniMax-M2.5", () => {
-    // Capability-driven: any reasoning model on Token Plan picks up the
-    // thinking block, including MiniMax-M2.5 on the international plan
-    // which used to be excluded by a hand-kept whitelist.
+  test("pairs enable_thinking for international Token Plan MiniMax-M2.5", () => {
+    // Capability-driven: any reasoning model on Token Plan picks up
+    // thinking, including MiniMax-M2.5 on the international plan which
+    // used to be excluded by a hand-kept whitelist.
     const result = ProviderTransform.options({
       model: createModel("MiniMax-M2.5"),
       sessionID: "session-test",
       providerOptions: {},
     })
 
-    expect(result.thinking).toEqual({ type: "enabled", budgetTokens: 4096 })
-    expect(result.enable_thinking).toBeUndefined()
+    expect(result.enable_thinking).toBe(true)
+    expect(result.thinking_budget).toBe(4096)
   })
 
   test("does not enable thinking for non-reasoning Token Plan models", () => {
@@ -1248,6 +1253,7 @@ describe("ProviderTransform.options - Alibaba Token Plan Team Edition", () => {
 
     expect(result.thinking).toBeUndefined()
     expect(result.enable_thinking).toBeUndefined()
+    expect(result.thinking_budget).toBeUndefined()
   })
 })
 
