@@ -1,7 +1,7 @@
 # PRD: Package Organization Boundary Hardening
 
 **Date:** 2026-05-17
-**Status:** Active - guardrails, SDK cleanup, DRE graph extraction, manifest-cycle cleanup, and UI grouping implemented
+**Status:** Active - guardrails, SDK cleanup, DRE graph extraction, manifest-cycle cleanup, UI grouping, and first TUI route extraction implemented
 **Author:** ax-code agent
 
 ---
@@ -33,7 +33,7 @@ Verified against the current checkout on 2026-05-17:
 - Structure guardrails report 73 files above 500 lines and 32 files above 800 lines.
 - Current largest package-boundary hotspots include:
   - `packages/ax-code/src/session/prompt.ts`: about 3,200 lines.
-  - `packages/ax-code/src/cli/cmd/tui/routes/session/index.tsx`: about 3,000 lines.
+  - `packages/ax-code/src/cli/cmd/tui/routes/session/index.tsx`: about 3,004 lines.
   - `packages/ax-code/src/lsp/index.ts`: about 2,100 lines.
   - `packages/ax-code/src/quality/model-registry.ts`: about 2,700 lines.
 - `packages/ax-code/src/server/routes/dre-graph.ts` has already been reduced to request/response glue and page composition, about 212 lines.
@@ -117,6 +117,16 @@ The route now owns:
 - Response body selection.
 
 Remaining DRE work is optional and should be triggered only if the route grows again or route-level composition becomes hard to review.
+
+### In Progress: Phase 4 TUI Session Route and Prompt Hotspot Reduction
+
+- Moved assistant message duration and tool usage summary derivation into `packages/ax-code/src/cli/cmd/tui/routes/session/view-model.ts`.
+- Kept `packages/ax-code/src/cli/cmd/tui/routes/session/index.tsx` responsible for rendering while consuming renderer-free assistant summary view-model helpers.
+- Added focused coverage in `packages/ax-code/test/cli/tui/session-view-model.test.ts` for assistant tool usage summaries, pluralized labels, and fallback labels.
+- Verified `cd packages/ax-code && bun test test/cli/tui/session-view-model.test.ts`.
+- Verified `cd packages/ax-code && bun run check:tui-layering`.
+- Verified `cd packages/ax-code && bun run typecheck`.
+- Verified `bun run script/structure.ts`.
 
 ### Completed: Phase 6 SDK Source-Import Cleanup
 
@@ -314,11 +324,11 @@ Exit state:
 - `packages/ax-code/src/server/routes/dre-graph.ts` is no longer a large hotspot.
 - DRE graph behavior is covered primarily through `packages/ax-code/test/quality/dre-graph*.test.ts`.
 
-### Phase 4: TUI Session Route and Prompt Hotspot Reduction - Pending
+### Phase 4: TUI Session Route and Prompt Hotspot Reduction - In Progress
 
-- [ ] Extract one renderer-free display/view-model seam from the TUI session route.
-- [ ] Add or extend route view-model tests.
-- [ ] Run `cd packages/ax-code && bun run check:tui-layering`.
+- [x] Extract one renderer-free display/view-model seam from the TUI session route.
+- [x] Add or extend route view-model tests.
+- [x] Run `cd packages/ax-code && bun run check:tui-layering`.
 - [ ] Extract one behavior-preserving seam from `session/prompt.ts`.
 - [ ] Run targeted session and prompt tests before any second extraction.
 
@@ -479,11 +489,11 @@ This PRD is complete when:
 
 ## Next Best Slice
 
-The next best implementation slice is the first Phase 4 TUI/session hotspot extraction. The status, content, message, file, session, and provider icon batches reduced the direct source-file count from 140 to 84, so further UI grouping should pause unless a new concern-specific batch becomes obvious.
+The next best implementation slice is the first Phase 4 session prompt runtime extraction. The TUI route now has one renderer-free assistant summary seam in `routes/session/view-model.ts`, so the next slice should move one narrow behavior-preserving concern out of `packages/ax-code/src/session/prompt.ts`.
 
 Recommended first task:
 
-1. Pick one renderer-free display/view-model seam from `packages/ax-code/src/cli/cmd/tui/routes/session/index.tsx`.
-2. Add or extend a targeted route view-model test.
-3. Run `cd packages/ax-code && bun run check:tui-layering`.
+1. Pick one small `session/prompt.ts` seam with existing or easy targeted coverage.
+2. Move only pure normalization/classification logic into a named session module.
+3. Run targeted session/prompt tests plus `cd packages/ax-code && bun run typecheck`.
 4. Update this PRD with the extracted module and validation result.
