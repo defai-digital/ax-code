@@ -343,13 +343,21 @@ export namespace ProviderTransform {
         reasoning_effort: _reasoning_effort,
         thinkingConfig: _thinkingConfig,
         thinking_budget: requestedBudget,
+        enable_thinking: requestedEnable,
         ...rest
       } = result
-      result = {
-        ...rest,
-        enable_thinking: true,
-        thinking_budget: alibabaThinkingBudget(model, requestedBudget),
-      }
+      // Respect an explicit `enable_thinking: false` from smallOptions or
+      // user config — auxiliary calls (summarization, titling) should not
+      // pay for thinking. Otherwise default to enabled with a clamped
+      // budget.
+      result =
+        requestedEnable === false
+          ? { ...rest, enable_thinking: false }
+          : {
+              ...rest,
+              enable_thinking: true,
+              thinking_budget: alibabaThinkingBudget(model, requestedBudget),
+            }
     }
 
     if (model.api.npm !== "@ai-sdk/xai") return result
@@ -363,6 +371,13 @@ export namespace ProviderTransform {
     }
     if (model.providerID === "venice") {
       return { veniceParameters: { disableThinking: true } }
+    }
+    // Auxiliary calls (titles, summaries) don't need reasoning. Turn
+    // thinking off explicitly so DashScope doesn't bill for thinking
+    // tokens on these short requests. sanitizeOptions respects the
+    // explicit `false` and skips re-establishing thinking_budget.
+    if (isAlibabaThinkingModel(model)) {
+      return { enable_thinking: false }
     }
 
     return {}

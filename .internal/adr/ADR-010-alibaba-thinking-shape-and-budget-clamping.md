@@ -44,10 +44,11 @@ Per-model thinking ceilings in Alibaba's docs vary (8192 in the OpenCode example
 3. Clamp `thinking_budget` through a single helper, `alibabaThinkingBudget`, which returns `min(requested, maxOutputTokens, 8192)`. The 8192 ceiling matches Alibaba's published OpenCode example and is the upper bound the product asserts regardless of per-model documentation.
 4. Apply the same clamp to user-supplied options in `sanitizeOptions` so that config overrides cannot exceed the documented ceiling.
 5. Do not introduce a second flag for the thinking ceiling. Users who need a higher budget should raise `AX_CODE_ALIBABA_OUTPUT_TOKEN_MAX` first; if a real demand for an independent thinking knob emerges, revisit.
+6. For auxiliary "small" requests (titles, summaries, internal completions routed through `smallOptions`), send `enable_thinking: false` so DashScope does not bill thinking tokens on calls that have no use for reasoning output. `sanitizeOptions` respects an explicit `enable_thinking: false` and skips re-establishing `thinking_budget`, so the small-request path is not overwritten downstream.
 
 ## Policy
 
-- New reasoning-capable Alibaba models added via `models-snapshot.json` automatically receive thinking on both Token Plan and Coding Plan as long as `reasoning: true` is set and the provider stays on `@ai-sdk/openai-compatible`.
+- New reasoning-capable Alibaba models added via `models-snapshot.json` automatically receive thinking on both Token Plan and Coding Plan as long as `reasoning: true` is set and the provider stays on `@ai-sdk/openai-compatible`. The same models automatically opt out of thinking on small auxiliary requests.
 - A new Alibaba endpoint that targets `/apps/anthropic/v1` would need its own provider entry with `npm: "@ai-sdk/anthropic"`. The current `isAlibabaThinkingModel` check explicitly excludes that case so it can be handled with the Anthropic `thinking` block separately, without breaking the OpenAI-compat path.
 - The 4096 output cap is a deliberate quota safety net, not an SLA target. Lowering it via `AX_CODE_ALIBABA_OUTPUT_TOKEN_MAX` is supported. Raising it is the only way to widen the effective thinking budget; doing so puts more weight on the user's account quota.
 - The thinking shape and clamp invariants are covered by unit tests in `test/provider/transform.test.ts`. End-to-end verification against a real Alibaba endpoint is owned by the team member with active credentials and is not part of CI.
