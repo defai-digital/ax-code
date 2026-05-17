@@ -1,7 +1,7 @@
 # PRD: Package Organization Boundary Hardening
 
 **Date:** 2026-05-17
-**Status:** Active - guardrails, SDK cleanup, DRE graph extraction, manifest-cycle cleanup, UI grouping, and first TUI route extraction implemented
+**Status:** Active - guardrails, SDK cleanup, DRE graph extraction, manifest-cycle cleanup, UI grouping, and TUI/session prompt extraction implemented
 **Author:** ax-code agent
 
 ---
@@ -32,7 +32,7 @@ Verified against the current checkout on 2026-05-17:
 - Structure guardrails report `packages/ui/src/components` with 84 direct source files, 13 child folders, and 163 total source files.
 - Structure guardrails report 73 files above 500 lines and 32 files above 800 lines.
 - Current largest package-boundary hotspots include:
-  - `packages/ax-code/src/session/prompt.ts`: about 3,200 lines.
+  - `packages/ax-code/src/session/prompt.ts`: about 3,175 lines.
   - `packages/ax-code/src/cli/cmd/tui/routes/session/index.tsx`: about 3,004 lines.
   - `packages/ax-code/src/lsp/index.ts`: about 2,100 lines.
   - `packages/ax-code/src/quality/model-registry.ts`: about 2,700 lines.
@@ -118,7 +118,7 @@ The route now owns:
 
 Remaining DRE work is optional and should be triggered only if the route grows again or route-level composition becomes hard to review.
 
-### In Progress: Phase 4 TUI Session Route and Prompt Hotspot Reduction
+### Completed: Phase 4 TUI Session Route and Prompt Hotspot Reduction
 
 - Moved assistant message duration and tool usage summary derivation into `packages/ax-code/src/cli/cmd/tui/routes/session/view-model.ts`.
 - Kept `packages/ax-code/src/cli/cmd/tui/routes/session/index.tsx` responsible for rendering while consuming renderer-free assistant summary view-model helpers.
@@ -127,6 +127,10 @@ Remaining DRE work is optional and should be triggered only if the route grows a
 - Verified `cd packages/ax-code && bun run check:tui-layering`.
 - Verified `cd packages/ax-code && bun run typecheck`.
 - Verified `bun run script/structure.ts`.
+- Moved autonomous todo continuation constants, todo signatures, deadline buffer policy, report-style todo detection, and closure guidance text into `packages/ax-code/src/session/prompt-todo-continuation.ts`.
+- Kept `packages/ax-code/src/session/prompt.ts` responsible for the loop and continuation scheduling while consuming the extracted pure helpers.
+- Added focused coverage in `packages/ax-code/test/session/prompt-todo-continuation.test.ts`.
+- Verified `cd packages/ax-code && bun test test/session/prompt-todo-continuation.test.ts test/session/prompt.test.ts`.
 
 ### Completed: Phase 6 SDK Source-Import Cleanup
 
@@ -324,13 +328,13 @@ Exit state:
 - `packages/ax-code/src/server/routes/dre-graph.ts` is no longer a large hotspot.
 - DRE graph behavior is covered primarily through `packages/ax-code/test/quality/dre-graph*.test.ts`.
 
-### Phase 4: TUI Session Route and Prompt Hotspot Reduction - In Progress
+### Phase 4: TUI Session Route and Prompt Hotspot Reduction - Complete
 
 - [x] Extract one renderer-free display/view-model seam from the TUI session route.
 - [x] Add or extend route view-model tests.
 - [x] Run `cd packages/ax-code && bun run check:tui-layering`.
-- [ ] Extract one behavior-preserving seam from `session/prompt.ts`.
-- [ ] Run targeted session and prompt tests before any second extraction.
+- [x] Extract one behavior-preserving seam from `session/prompt.ts`.
+- [x] Run targeted session and prompt tests before any second extraction.
 
 Exit criteria:
 
@@ -489,11 +493,11 @@ This PRD is complete when:
 
 ## Next Best Slice
 
-The next best implementation slice is the first Phase 4 session prompt runtime extraction. The TUI route now has one renderer-free assistant summary seam in `routes/session/view-model.ts`, so the next slice should move one narrow behavior-preserving concern out of `packages/ax-code/src/session/prompt.ts`.
+The next best implementation slice is the first Phase 5 LSP surface cleanup. Phase 4 now has one renderer-free TUI route seam and one behavior-preserving session prompt seam, so the remaining PRD hotspot is `packages/ax-code/src/lsp/index.ts`.
 
 Recommended first task:
 
-1. Pick one small `session/prompt.ts` seam with existing or easy targeted coverage.
-2. Move only pure normalization/classification logic into a named session module.
-3. Run targeted session/prompt tests plus `cd packages/ax-code && bun run typecheck`.
-4. Update this PRD with the extracted module and validation result.
+1. Pick one query/cache orchestration seam from `packages/ax-code/src/lsp/index.ts`.
+2. Add or extend targeted LSP tests before moving behavior.
+3. Preserve cache-failure fallback to live LSP behavior.
+4. Run targeted LSP tests plus `cd packages/ax-code && bun run typecheck`.
