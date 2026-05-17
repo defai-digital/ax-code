@@ -1225,9 +1225,23 @@ describe("ProviderTransform.options - Alibaba Token Plan Team Edition", () => {
     expect(ProviderTransform.maxOutputTokens(model)).toBe(4_096)
   })
 
-  test("does not add undocumented thinking config to international MiniMax-M2.5", () => {
+  test("uses the documented bounded thinking config for international Token Plan MiniMax-M2.5", () => {
+    // Capability-driven: any reasoning model on Token Plan picks up the
+    // thinking block, including MiniMax-M2.5 on the international plan
+    // which used to be excluded by a hand-kept whitelist.
     const result = ProviderTransform.options({
       model: createModel("MiniMax-M2.5"),
+      sessionID: "session-test",
+      providerOptions: {},
+    })
+
+    expect(result.thinking).toEqual({ type: "enabled", budgetTokens: 4096 })
+    expect(result.enable_thinking).toBeUndefined()
+  })
+
+  test("does not enable thinking for non-reasoning Token Plan models", () => {
+    const result = ProviderTransform.options({
+      model: createModel("deepseek-v3.2", false),
       sessionID: "session-test",
       providerOptions: {},
     })

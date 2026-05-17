@@ -209,14 +209,16 @@ export namespace ProviderTransform {
     return families.some((family) => hasFamily(model, family))
   }
 
+  // Token Plan reasoning models go through the Anthropic-shaped `thinking`
+  // block (not DashScope's `enable_thinking`). The check is capability-driven
+  // so newly added reasoning models on Token Plan pick up thinking
+  // automatically — previously the model id had to be added to a hand-kept
+  // whitelist. The npm guard keeps a future Anthropic-SDK Token Plan endpoint
+  // from accidentally matching this OpenAI-compat path.
   function isAlibabaTokenPlanThinkingModel(model: Provider.Model) {
     if (!model.providerID.startsWith("alibaba-token-plan")) return false
-    const id = model.api.id.toLowerCase()
-    return (
-      id === "qwen3.6-plus" ||
-      id === "glm-5" ||
-      (model.providerID === "alibaba-token-plan-cn" && id === "minimax-m2.5")
-    )
+    if (model.api.npm !== "@ai-sdk/openai-compatible") return false
+    return Boolean(model.capabilities.reasoning)
   }
 
   // Any Alibaba-backed provider (Token Plan or Coding Plan / DashScope) is
