@@ -82,6 +82,18 @@ test("TUI worker removes signal handlers during RPC shutdown", async () => {
   expect(src).toContain('process.off("SIGINT", onSignal)')
 })
 
+test("TUI worker always forces exit after uncaught exceptions", async () => {
+  const src = await Bun.file(path.join(import.meta.dir, "../../src/cli/cmd/tui/worker.ts")).text()
+  const start = src.indexOf('process.on("uncaughtException"')
+  const end = src.indexOf("const handleGlobalEvent", start)
+  expect(start).toBeGreaterThan(-1)
+  expect(end).toBeGreaterThan(start)
+  const block = src.slice(start, end)
+
+  expect(block).toContain("setTimeout(() => process.exit(1), 100).unref()")
+  expect(block).not.toContain("if (!shutdownPromise) setTimeout")
+})
+
 test("TUI worker waits for an old event stream before replacing it", async () => {
   const src = await Bun.file(path.join(import.meta.dir, "../../src/cli/cmd/tui/worker.ts")).text()
 

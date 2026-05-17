@@ -257,6 +257,29 @@ describe("session.compaction.isOverflow", () => {
     })
   })
 
+  test("disables automatic compaction when the usable budget is too small to converge", async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await Bun.write(
+          path.join(dir, "ax-code.json"),
+          JSON.stringify({
+            compaction: { reserved: 4_200 },
+          }),
+        )
+      },
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const model = createModel({ context: 5_000, output: 32 })
+        const tokens = { input: 2_000, output: 0, reasoning: 0, cache: { read: 0, write: 0 } }
+
+        expect(await SessionCompaction.budget(model)).toBeUndefined()
+        expect(await SessionCompaction.isOverflow({ tokens, model })).toBe(false)
+      },
+    })
+  })
+
   test("treats limit.input == 0 as unset and falls back to context", async () => {
     await using tmp = await tmpdir()
     await Instance.provide({

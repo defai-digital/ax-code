@@ -42,6 +42,7 @@ export namespace SessionCompaction {
   // Users can override with an explicit `compaction.reserved` token count
   // in ax-code.json.
   const DEFAULT_RESERVED_FRACTION = 0.1
+  const MIN_USABLE_TOKENS = 1_000
 
   export function componentTotal(tokens: MessageV2.Assistant["tokens"]) {
     return tokens.input + tokens.output + tokens.reasoning + tokens.cache.read + tokens.cache.write
@@ -64,11 +65,11 @@ export namespace SessionCompaction {
     // treat 0 as a valid cap and never compact.
     const cap = model.limit.input || context
     const reserved = config.compaction?.reserved ?? Math.ceil(cap * DEFAULT_RESERVED_FRACTION)
-    // Clamp to 0: if reserved >= cap (config misuse on tiny models),
-    // the raw subtraction goes negative and `count >= usable` fires on
-    // every step, causing an infinite compaction loop.
+    // Clamp tiny usable budgets off: if reserved nearly consumes the cap,
+    // any realistic compacted message still overflows and compaction fires
+    // on every step.
     const usable = Math.max(0, cap - reserved)
-    if (usable === 0) return undefined
+    if (usable < MIN_USABLE_TOKENS) return undefined
     return { cap, reserved, usable }
   }
 

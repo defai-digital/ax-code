@@ -108,6 +108,20 @@ test("set steals an abandoned auth lock owned by a dead process", async () => {
   expect(await Auth.get("anthropic")).toMatchObject({ type: "api", key: "sk-test" })
 })
 
+test("stale auth lock stealing claims and revalidates the stale snapshot before unlinking", async () => {
+  const src = await Bun.file(path.join(import.meta.dir, "../../src/auth/index.ts")).text()
+  const start = src.indexOf("async function removeStaleSnapshot")
+  const end = src.indexOf("async function maybeSteal", start)
+  expect(start).toBeGreaterThan(-1)
+  expect(end).toBeGreaterThan(start)
+  const body = src.slice(start, end)
+
+  expect(body).toContain("staleLockClaimFile(snapshot.text)")
+  expect(body).toContain('fsPromises.open(claimFile, "wx")')
+  expect(body).toContain("current !== snapshot.text")
+  expect(body.indexOf("current !== snapshot.text")).toBeLessThan(body.indexOf("cleanupAuthLockFile()"))
+})
+
 test("set unreferences lock polling timers while waiting for an active holder", async () => {
   const originalSetTimeout = globalThis.setTimeout
   const host = process.env.HOSTNAME ?? ""
