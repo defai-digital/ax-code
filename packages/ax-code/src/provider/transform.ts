@@ -26,13 +26,12 @@ export namespace ProviderTransform {
   const ALIBABA_OUTPUT_TOKEN_MAX_DEFAULT = 4_096
   const ALIBABA_OUTPUT_TOKEN_MAX = Flag.AX_CODE_ALIBABA_OUTPUT_TOKEN_MAX || ALIBABA_OUTPUT_TOKEN_MAX_DEFAULT
   // Cap for `budgetTokens` (Token Plan) and `thinking_budget` (Coding Plan)
-  // on Alibaba reasoning models. 8192 is the value the upstream OpenCode
-  // example uses; raise via AX_CODE_ALIBABA_THINKING_BUDGET_TOKENS if the
-  // account allows it (qwen3.5-plus / qwen3-max accept up to 81920, GLM
-  // models up to 32768).
-  const ALIBABA_THINKING_BUDGET_DEFAULT = 8_192
-  const ALIBABA_THINKING_BUDGET_TOKENS =
-    Flag.AX_CODE_ALIBABA_THINKING_BUDGET_TOKENS || ALIBABA_THINKING_BUDGET_DEFAULT
+  // on Alibaba reasoning models. 8192 matches the value in the upstream
+  // OpenCode example. The effective budget is clamped further by
+  // maxOutputTokens (controlled by AX_CODE_ALIBABA_OUTPUT_TOKEN_MAX), so
+  // there is no separate knob for this — adjusting output max already
+  // covers throttling needs.
+  const ALIBABA_THINKING_BUDGET_TOKENS = 8_192
 
   // Maps npm package to the key the AI SDK expects for providerOptions.
   // The Vertex provider uses the same "google" key as the Gemini provider,
