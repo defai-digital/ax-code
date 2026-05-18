@@ -58,7 +58,16 @@ export async function releaseReadinessChecks(cwd: string): Promise<ReleaseCheckR
     },
     {
       name: "package version",
-      status: /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(pkg.version ?? "") ? "pass" : "fail",
+      // Accept strict semver plus this project's internal pre-release
+      // convention of appending a letter suffix to the patch number
+      // between tagged releases (e.g. `5.2.3a`, `5.2.3b`). The first
+      // alternative covers semver pre-release/build (`5.2.3-rc.1`,
+      // `5.2.3+build.42`); the second covers the letter-suffix form.
+      // Tagged releases stay strict semver — only the in-development
+      // package.json carries the letter suffix.
+      status: /^\d+\.\d+\.\d+(?:[A-Za-z][0-9A-Za-z]*)?(?:[-+][0-9A-Za-z.-]+)?$/.test(pkg.version ?? "")
+        ? "pass"
+        : "fail",
       details: pkg.version ?? "missing version",
     },
   ]
