@@ -38,9 +38,9 @@ describe("homebrew source formula generator", () => {
   })
 
   test("retries npm registry fetch to handle CDN propagation lag", async () => {
-    // Right after publish-source, the npm CDN can take a few seconds to
-    // serve the tarball. Without retry the homebrew-source job would
-    // fail intermittently on every release.
+    // Right after manual source-package publish, the npm CDN can take a few
+    // seconds to serve the tarball. Without retry the manual Homebrew source
+    // update would fail intermittently.
     const text = await Bun.file(homebrewSourceScript).text()
     expect(text).toContain("max_attempts")
     expect(text).toMatch(/sleep\s+\d+/)
@@ -103,77 +103,46 @@ describe("homebrew source formula generator", () => {
     )
   })
 
-  test("homebrew jobs separate source release and tap credentials", async () => {
+  test("manual homebrew scripts keep tap credential handling outside release workflow", async () => {
     const text = await Bun.file(releaseWorkflow).text()
     const sourceScript = await Bun.file(homebrewSourceScript).text()
     expect(sourceScript).toContain("gh repo clone defai-digital/homebrew-ax-code")
     expect(sourceScript).toContain("gh auth setup-git")
     expect(sourceScript).toContain("mktemp -d")
     expect(sourceScript).not.toContain("x-access-token:${TAP_AUTH_TOKEN}")
-
-    const defaultJob = text.match(/homebrew:[\s\S]*?(?=\n  finalize:|\n  homebrew-source:|$)/)
-    expect(defaultJob).not.toBeNull()
-    expect(defaultJob![0]).toContain("GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}")
-    expect(defaultJob![0]).toContain("TAP_TOKEN: ${{ secrets.TAP_TOKEN }}")
-    expect(defaultJob![0]).toContain("if: ${{ !contains(github.ref_name, '-') }}")
-
-    const sourceJob = text.match(/homebrew-source:[\s\S]*?(?=\n  \w+:|\n\Z|$)/)
-    expect(sourceJob).not.toBeNull()
-    expect(sourceJob![0]).toContain("GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}")
-    expect(sourceJob![0]).toContain("TAP_TOKEN: ${{ secrets.TAP_TOKEN }}")
-    expect(sourceJob![0]).toContain("if: ${{ !contains(github.ref_name, '-') }}")
+    expect(text).not.toContain("TAP_TOKEN")
+    expect(text).not.toContain("update-homebrew.sh")
+    expect(text).not.toContain("update-homebrew-source.sh")
   })
 
-  test("homebrew-source job exists in release.yml gated after default homebrew", async () => {
-    // The compatibility alias should run after the default formula update so
-    // tap pushes are serialized.
+  test("release workflow does not automatically publish Homebrew formulae", async () => {
     const text = await Bun.file(releaseWorkflow).text()
-    expect(text).toContain("homebrew-source:")
-    const jobMatch = text.match(/homebrew-source:[\s\S]*?(?=\n  \w+:|\n\Z|$)/)
-    expect(jobMatch).not.toBeNull()
-    expect(jobMatch![0]).toContain("- homebrew")
-    expect(jobMatch![0]).toContain("- publish-source")
+    expect(text).not.toMatch(/\n  homebrew:/)
+    expect(text).not.toMatch(/\n  homebrew-source:/)
+    expect(text).not.toContain("defai-digital/homebrew-ax-code")
+    expect(text).toContain("npm and Homebrew publishing")
+    expect(text).toContain("manual")
   })
 
-  test("homebrew-source job skipped on prerelease tags (matches existing homebrew job)", async () => {
+  test("release workflow publishes GitHub release assets without package-channel gates", async () => {
     const text = await Bun.file(releaseWorkflow).text()
-    const jobMatch = text.match(/homebrew-source:[\s\S]*?(?=\n  \w+:|\n\Z|$)/)
-    expect(jobMatch).not.toBeNull()
-    expect(jobMatch![0]).toContain("!contains(github.ref_name, '-')")
-  })
-
-  test("release workflow publishes GitHub release only after package channels are ready", async () => {
-    const text = await Bun.file(releaseWorkflow).text()
-    const publishJob = text.match(/publish:[\s\S]*?(?=\n  publish-npm:|$)/)
+    const publishJob = text.match(/\n  publish:[\s\S]*$/)
     expect(publishJob).not.toBeNull()
     expect(publishJob![0]).toContain("gh release create")
-    expect(publishJob![0]).toContain("--draft")
-
-    const finalizeJob = text.match(/finalize:[\s\S]*?(?=\n  \w+:|\n\Z|$)/)
-    expect(finalizeJob).not.toBeNull()
-    expect(finalizeJob![0]).toContain("- publish-npm")
-    expect(finalizeJob![0]).toContain("- publish-source")
-    expect(finalizeJob![0]).toContain("- homebrew")
-    expect(finalizeJob![0]).toContain("- homebrew-source")
-    expect(finalizeJob![0]).toContain("always() && !cancelled()")
-    expect(finalizeJob![0]).toContain("actions: write")
-    expect(finalizeJob![0]).toContain('gh release edit "${{ github.ref_name }}" --draft=false')
-    expect(finalizeJob![0]).toContain("gh workflow run install-matrix-smoke.yml")
-    expect(finalizeJob![0]).toContain('--field "version=${VERSION}"')
-    expect(finalizeJob![0]).toContain('--field "channel=both"')
+    expect(publishJob![0]).toContain("gh release upload")
+    expect(publishJob![0]).not.toMatch(/\n\s+--draft(?:\s|\\|$)/)
+    expect(text).not.toMatch(/\n  finalize:/)
+    expect(text).not.toContain("gh workflow run install-matrix-smoke.yml")
   })
 
-  test("npm publish jobs request OIDC and publish provenance", async () => {
+  test("release workflow does not automatically publish npm packages", async () => {
     const text = await Bun.file(releaseWorkflow).text()
-    const publishNpmJob = text.match(/publish-npm:[\s\S]*?(?=\n  publish-source:|\n  homebrew:|$)/)
-    expect(publishNpmJob).not.toBeNull()
-    expect(publishNpmJob![0]).toContain("id-token: write")
-    expect(publishNpmJob![0]).toContain('NPM_CONFIG_PROVENANCE: "true"')
-
-    const publishSourceJob = text.match(/publish-source:[\s\S]*?(?=\n  homebrew:|\n  finalize:|$)/)
-    expect(publishSourceJob).not.toBeNull()
-    expect(publishSourceJob![0]).toContain("id-token: write")
-    expect(publishSourceJob![0]).toContain('NPM_CONFIG_PROVENANCE: "true"')
+    expect(text).not.toMatch(/\n  publish-npm:/)
+    expect(text).not.toMatch(/\n  publish-source:/)
+    expect(text).not.toContain("NPM_TOKEN")
+    expect(text).not.toContain("NPM_CONFIG_PROVENANCE")
+    expect(text).not.toContain("bun run script/publish.ts")
+    expect(text).not.toContain("bun run script/publish-source.ts")
   })
 
   test("install matrix is dispatch-only so release.published cannot race package publication", async () => {
@@ -184,6 +153,7 @@ describe("homebrew source formula generator", () => {
     expect(text).toContain("workflow_dispatch:")
     expect(text).not.toContain("types: [published]")
     expect(text).not.toMatch(/\n  release:\n/)
+    expect(text).not.toContain("release workflow dispatches")
   })
 
   test("install matrix installs exact package versions, not stale dist-tags", async () => {
@@ -237,7 +207,7 @@ describe("homebrew source formula generator", () => {
 
   test("release build matrix smokes compiled backend stdio handshake", async () => {
     const text = await Bun.file(releaseWorkflow).text()
-    const buildJob = text.match(/build:[\s\S]*?(?=\n  publish:|\n  publish-source:|$)/)
+    const buildJob = text.match(/build:[\s\S]*?(?=\n  publish:|$)/)
     expect(buildJob).not.toBeNull()
     expect(buildJob![0]).toContain("AX_CODE_TEST_HOME")
     expect(buildJob![0]).toContain("XDG_CONFIG_HOME")
@@ -252,12 +222,11 @@ describe("homebrew source formula generator", () => {
     expect(buildJob![0]).toContain('"runtimeMode":"compiled"')
   })
 
-  test("release workflow publishes compiled npm package as default and source as alias only", async () => {
+  test("manual npm publish scripts remain available outside release workflow", async () => {
     const text = await Bun.file(releaseWorkflow).text()
-    expect(text).toContain("publish-npm:")
-    expect(text).toContain("bun run script/publish.ts")
-    expect(text).toContain("AX_CODE_COMPILED_TAG: ${{ env.AX_CODE_RELEASE_CHANNEL }}")
-    expect(text).toContain('AX_CODE_SOURCE_PACKAGE_NAMES: "@defai.digital/ax-code-source"')
-    expect(text).not.toContain('AX_CODE_SOURCE_PACKAGE_NAMES: "@defai.digital/ax-code,@defai.digital/ax-code-source"')
+    expect(fs.existsSync(path.join(repoRoot, "packages/ax-code/script/publish.ts"))).toBe(true)
+    expect(fs.existsSync(path.join(repoRoot, "packages/ax-code/script/publish-source.ts"))).toBe(true)
+    expect(text).not.toContain("script/publish.ts")
+    expect(text).not.toContain("script/publish-source.ts")
   })
 })

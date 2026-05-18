@@ -6,9 +6,8 @@ name: Install Matrix Smoke
 # runtime mode. The default package is compiled; ax-code-source is source+bun.
 #
 # Triggers:
-#   - `workflow_dispatch`: the release workflow dispatches this only after
-#     npm packages and Homebrew formulae are published. Maintainers can also
-#     run it manually against an already-published version.
+#   - `workflow_dispatch`: maintainers run this manually after npm packages
+#     and Homebrew formulae are published.
 
 on:
   workflow_dispatch:
@@ -117,8 +116,8 @@ jobs:
           else
             PACKAGE="@defai.digital/ax-code"
           fi
-          # The release workflow dispatches this only after publish jobs
-          # succeed, but npm registry propagation can still lag briefly.
+          # Maintainers dispatch this after manual publish jobs succeed, but
+          # npm registry propagation can still lag briefly.
           # Poll npm until the exact version is visible, then install.
           echo "Waiting for ${PACKAGE}@${VERSION} to be available on npm..."
           for attempt in $(seq 1 180); do
