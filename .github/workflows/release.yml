@@ -19,6 +19,8 @@ jobs:
   typecheck:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v6
+
       - name: Setup Ax-code JS toolchain
         uses: ./.github/actions/setup-ax-code-toolchain
 
@@ -75,6 +77,8 @@ jobs:
       AX_CODE_DISABLE_MODELS_FETCH: "1"
       AX_CODE_DISABLE_PROJECT_CONFIG: "1"
     steps:
+      - uses: actions/checkout@v6
+
       - name: Set isolated home paths
         shell: bash
         run: |
@@ -198,6 +202,8 @@ jobs:
       id-token: write
       packages: write
     steps:
+      - uses: actions/checkout@v6
+
       - name: Setup Ax-code JS toolchain
         uses: ./.github/actions/setup-ax-code-toolchain
 
@@ -231,6 +237,8 @@ jobs:
       id-token: write
       packages: write
     steps:
+      - uses: actions/checkout@v6
+
       - name: Setup Ax-code JS toolchain
         uses: ./.github/actions/setup-ax-code-toolchain
 
