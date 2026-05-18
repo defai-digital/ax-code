@@ -4,6 +4,8 @@ import { EventLogID } from "./index"
 import type { ReplayEvent } from "./event"
 import type { SessionID } from "../session/schema"
 import { Log } from "../util/log"
+import { NamedError } from "@ax-code/util/error"
+import z from "zod"
 
 export namespace EventQuery {
   const log = Log.create({ service: "replay.query" })
@@ -18,12 +20,21 @@ export namespace EventQuery {
   // unbounded reads should paginate via `allSince`.
   export const BY_SESSION_LIMIT = 10_000
 
-  // When a per-session loader returns exactly BY_SESSION_LIMIT rows the
-  // caller may be operating on a truncated view (Replay.compare /
-  // reconstructStream silently produce wrong results in that case). We
-  // can't tell from the returned slice alone whether more rows existed,
-  // so we COUNT(*) and warn loudly if so. The cost is one cheap indexed
-  // count query; only paid when the limit is actually hit.
+  // Thrown when a strict per-session loader detects truncation. Replay
+  // determinism-critical paths (Replay.compare, reconstructStream) use
+  // assertNotTruncated so they fail loudly instead of silently producing
+  // wrong results. Diagnostic paths (audit, telemetry, trace) keep using
+  // warnIfTruncated which logs but tolerates the partial slice.
+  export const TruncatedError = NamedError.create(
+    "ReplayTruncatedError",
+    z.object({
+      sessionID: z.string(),
+      returned: z.number(),
+      total: z.number(),
+      limit: z.number(),
+    }),
+  )
+
   function warnIfTruncated(sessionID: SessionID, returned: number) {
     if (returned < BY_SESSION_LIMIT) return
     const total = count(sessionID)
@@ -34,6 +45,18 @@ export namespace EventQuery {
       total,
       limit: BY_SESSION_LIMIT,
       hint: "Replay.compare / reconstructStream may produce incorrect results; paginate via allSince for full reads",
+    })
+  }
+
+  function assertNotTruncated(sessionID: SessionID, returned: number) {
+    if (returned < BY_SESSION_LIMIT) return
+    const total = count(sessionID)
+    if (total <= BY_SESSION_LIMIT) return
+    throw new TruncatedError({
+      sessionID,
+      returned,
+      total,
+      limit: BY_SESSION_LIMIT,
     })
   }
 
@@ -48,6 +71,26 @@ export namespace EventQuery {
         .all(),
     )
     warnIfTruncated(sessionID, rows.length)
+    return rows.map((row) => row.event_data)
+  }
+
+  /**
+   * Strict variant: throws ReplayTruncatedError when the per-session
+   * cap is hit and more rows exist. Use this from determinism-critical
+   * paths (Replay.compare, reconstructStream) where silently returning
+   * a partial slice produces wrong divergence results.
+   */
+  export function bySessionStrict(sessionID: SessionID): ReplayEvent[] {
+    const rows = Database.use((db) =>
+      db
+        .select()
+        .from(EventLogTable)
+        .where(eq(EventLogTable.session_id, sessionID))
+        .orderBy(EventLogTable.sequence)
+        .limit(BY_SESSION_LIMIT)
+        .all(),
+    )
+    assertNotTruncated(sessionID, rows.length)
     return rows.map((row) => row.event_data)
   }
 
