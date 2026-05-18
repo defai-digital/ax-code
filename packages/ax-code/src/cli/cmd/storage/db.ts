@@ -1,11 +1,18 @@
 import type { Argv } from "yargs"
 import { spawn } from "child_process"
 import { Database } from "../../../storage/db"
-import { Database as BunDatabase } from "bun:sqlite"
 import { UI } from "../../ui"
 import { cmd } from "../cmd"
 import { JsonMigration } from "../../../storage/json-migration"
 import { EOL } from "os"
+
+// `bun:sqlite` is bun-only; dynamic-import inside handlers so this command
+// file loads under both bun and node entrypoints. The handlers themselves
+// remain bun-only at runtime.
+async function loadBunDatabase() {
+  const mod = await import("bun:sqlite")
+  return mod.Database
+}
 
 function formatOrphanSummary(orphans: JsonMigration.OrphanStats) {
   return Object.entries(orphans)
@@ -33,6 +40,7 @@ const QueryCommand = cmd({
   handler: async (args: { query?: string; format: string }) => {
     const query = args.query as string | undefined
     if (query) {
+      const BunDatabase = await loadBunDatabase()
       const db = new BunDatabase(Database.Path, { readonly: true })
       // Guarantee db.close() on every exit path (success AND error) so
       // the WAL checkpoint and file lock are released. The previous code
@@ -77,6 +85,7 @@ const MigrateCommand = cmd({
   command: "migrate",
   describe: "migrate JSON data to SQLite (merges with existing data)",
   handler: async () => {
+    const BunDatabase = await loadBunDatabase()
     const sqlite = new BunDatabase(Database.Path)
     const tty = process.stderr.isTTY
     const width = 36

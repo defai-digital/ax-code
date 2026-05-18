@@ -1,5 +1,7 @@
-import { Database } from "bun:sqlite"
-import { drizzle } from "drizzle-orm/bun-sqlite"
+// `bun:sqlite` is bun-only. Use a type-only import so this module loads under
+// the node runtime without ERR_UNKNOWN_BUILTIN_MODULE; the actual migration
+// is a bun-launched CLI command (see cli/cmd/storage/db.ts).
+import type { Database } from "bun:sqlite"
 import { Global } from "../global"
 import { Log } from "../util/log"
 import { ProjectTable } from "../project/project.sql"
@@ -86,6 +88,10 @@ export namespace JsonMigration {
     log.info("starting json to sqlite migration", { storageDir })
     const start = performance.now()
 
+    // Lazy-load drizzle's bun-sqlite adapter so this file's module-load does
+    // not pull bun-only code under node entrypoints. The migration command
+    // itself is bun-only at runtime.
+    const { drizzle } = await import("drizzle-orm/bun-sqlite")
     const db = drizzle({ client: sqlite })
 
     // Optimize SQLite for bulk inserts
