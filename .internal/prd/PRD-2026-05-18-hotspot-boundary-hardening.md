@@ -1,7 +1,7 @@
 # PRD: Hotspot Boundary Hardening
 
 **Date:** 2026-05-18
-**Status:** Active - Phase 3 session runtime loop boundary complete
+**Status:** Complete - Phase 4 LSP client selection boundary complete
 **Author:** ax-code agent
 
 ---
@@ -49,6 +49,7 @@ The current shape makes small tool display changes harder than necessary:
 
 - `packages/ax-code/src/cli/cmd/tui/routes/session/index.tsx` is about 1,778 lines after Phase 2's registry aggregation.
 - `packages/ax-code/src/session/prompt.ts` remains the largest hotspot; Phase 3 adds a small pure decision boundary without moving side-effectful loop execution.
+- `packages/ax-code/src/lsp/index.ts` is about 1,938 lines after Phase 4's client selection extraction.
 - The tool dispatch area starts at `ToolPart` and branches on every specialized tool name.
 - The coalesced group label policy is embedded inside `CoalescedTool`.
 - Existing tests cover broader TUI session helpers, renderer contracts, and anti-patterns, but not a pure tool renderer dispatch contract.
@@ -142,9 +143,29 @@ Validation:
 
 ### Phase 4: LSP Client Selection Boundary
 
-Status: Deferred.
+Status: Complete on 2026-05-18.
 
-Extract repeated client selection and spawn planning from `lsp/index.ts` into a pure planning helper only after adding focused tests for existing selection priority, method support, and broken-server cooldown behavior.
+Files:
+
+- Add `packages/ax-code/src/lsp/selection.ts`.
+- Update `packages/ax-code/src/lsp/index.ts`.
+- Update `packages/ax-code/test/lsp/orchestrator.test.ts`.
+
+Completed:
+
+- Moved client mode matching, method hint eligibility, requested method normalization, client sorting, and method-aware client selection into `lsp/selection.ts`.
+- Kept the existing `LSP.clientModeMatchesServer` and `LSP.clientMethodMatchesServer` public helper surface by re-exporting the extracted helpers from the namespace.
+- Added tests for requested method de-duplication and ordering.
+- Added tests for explicit method support winning over unknown support.
+- Added tests for maybe-supported fallback behavior.
+- Added tests for multi-method ordering by supported count, maybe count, priority, and server id.
+
+Validation:
+
+- Passed: `cd packages/ax-code && bun test test/lsp/orchestrator.test.ts`
+- Passed: `cd packages/ax-code && bun test test/lsp/prewarm.test.ts test/lsp/perf-sampler.test.ts test/lsp/envelope-coverage.test.ts`
+- Passed: `cd packages/ax-code && bun run typecheck`
+- Passed: `bun run script/structure.ts`
 
 ## Acceptance Criteria
 
@@ -165,3 +186,4 @@ Extract repeated client selection and spawn planning from `lsp/index.ts` into a 
 - 2026-05-18: Phase 2 fifth extraction implemented. Debugging & Refactoring Engine renderers moved into `tool-renderers/dre.tsx`; the route file dropped to about 1,850 lines and is no longer among the top three largest files in the structure report. Targeted tests, TUI layering, package typecheck, and structure guard all pass.
 - 2026-05-18: Phase 2 registry aggregation implemented. `GenericTool` and the renderer registry moved into `tool-renderers/generic.tsx` and `tool-renderers/index.tsx`; the route file dropped to about 1,778 lines and now imports only `toolRendererComponent` from the renderer package. Targeted tests, TUI layering, package typecheck, and structure guard all pass.
 - 2026-05-18: Phase 3 implemented. Pending compaction result handling and usage-overflow compaction scheduling now live behind pure helpers in `prompt-helpers.ts`; the prompt loop now delegates the decision and keeps the side effects local. Focused helper tests, processor tests, compaction tests, package typecheck, and structure guard pass.
+- 2026-05-18: Phase 4 implemented. LSP client selection policy now lives in `lsp/selection.ts`; `lsp/index.ts` keeps orchestration and side effects while re-exporting the existing helper surface. Focused orchestrator tests, prewarm/envelope tests, package typecheck, and structure guard pass.

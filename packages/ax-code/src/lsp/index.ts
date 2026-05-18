@@ -19,6 +19,7 @@ import { BuiltinServerProfiles } from "./server-profile"
 import { LANGUAGE_EXTENSIONS } from "./language"
 import { isNonEmptyRecord } from "@/util/record"
 import { LSPCache } from "./cache"
+import * as LSPSelection from "./selection"
 
 export namespace LSP {
   const log = Log.create({ service: "lsp" })
@@ -257,55 +258,15 @@ export namespace LSP {
     })
   export type DocumentSymbol = z.infer<typeof DocumentSymbol>
 
-  export type ClientMode = "all" | "semantic"
-
-  type ClientOptions = {
-    mode?: ClientMode
-    method?: LSPServer.Method
-    methods?: LSPServer.Method[]
-  }
-
-  type PrewarmSelectionOptions = {
-    maxFiles?: number
-    maxLanguages?: number
-  }
-
-  type ClientSelection = {
-    clients: LSPClient.Info[]
-    freshSpawnCount: number
-  }
-
-  export function clientModeMatchesServer(mode: ClientMode, semantic?: boolean) {
-    return mode === "all" || semantic !== false
-  }
-
-  function clientPrewarmMatchesServer(server: LSPServer.Info) {
-    return BuiltinServerProfiles[server.id]?.prewarm !== false
-  }
-
-  function requestedMethods(opts: ClientOptions): LSPServer.Method[] {
-    const seen = new Set<LSPServer.Method>()
-    const methods: LSPServer.Method[] = []
-    if (opts.method && !seen.has(opts.method)) {
-      seen.add(opts.method)
-      methods.push(opts.method)
-    }
-    for (const method of opts.methods ?? []) {
-      if (seen.has(method)) continue
-      seen.add(method)
-      methods.push(method)
-    }
-    return methods
-  }
-
-  export function clientMethodMatchesServer(
-    method: LSPServer.Method | LSPServer.Method[] | undefined,
-    capabilityHints?: LSPServer.CapabilityHints,
-  ) {
-    const methods = Array.isArray(method) ? method : method ? [method] : []
-    if (methods.length === 0) return true
-    return methods.some((candidate) => capabilityHints?.[candidate] !== false)
-  }
+  export type ClientMode = LSPSelection.ClientMode
+  type ClientOptions = LSPSelection.ClientOptions
+  type PrewarmSelectionOptions = LSPSelection.PrewarmSelectionOptions
+  type ClientSelection = LSPSelection.ClientSelection
+  export const clientModeMatchesServer = LSPSelection.clientModeMatchesServer
+  export const clientMethodMatchesServer = LSPSelection.clientMethodMatchesServer
+  export const requestedMethods = LSPSelection.requestedMethods
+  export const filterClientsForSelection = LSPSelection.filterClientsForSelection
+  const clientPrewarmMatchesServer = LSPSelection.clientPrewarmMatchesServer
 
   function mergeCapabilityHints(
     ...hints: Array<LSPServer.CapabilityHints | undefined>
@@ -316,51 +277,6 @@ export namespace LSP {
       Object.assign(merged, hint)
     }
     return isNonEmptyRecord(merged) ? merged : undefined
-  }
-
-  function sortClients(clients: LSPClient.Info[]): LSPClient.Info[] {
-    return [...clients].sort((a, b) => {
-      if (a.priority !== b.priority) return b.priority - a.priority
-      return a.serverID.localeCompare(b.serverID)
-    })
-  }
-
-  function filterClientsForMethod(clients: LSPClient.Info[], method: LSPServer.Method | undefined): LSPClient.Info[] {
-    if (!method) return sortClients(clients)
-
-    const supported = clients.filter((client) => client.methodSupport(method) === "supported")
-    if (supported.length > 0) return sortClients(supported)
-
-    const maybeSupported = clients.filter((client) => client.methodSupport(method) !== "unsupported")
-    if (maybeSupported.length > 0) return sortClients(maybeSupported)
-
-    return sortClients(clients)
-  }
-
-  function filterClientsForMethods(clients: LSPClient.Info[], methods: LSPServer.Method[]): LSPClient.Info[] {
-    if (methods.length === 0) return sortClients(clients)
-
-    return [...clients].sort((a, b) => {
-      const aSupported = methods.filter((method) => a.methodSupport(method) === "supported").length
-      const bSupported = methods.filter((method) => b.methodSupport(method) === "supported").length
-      if (aSupported !== bSupported) return bSupported - aSupported
-
-      const aMaybe = methods.filter((method) => a.methodSupport(method) !== "unsupported").length
-      const bMaybe = methods.filter((method) => b.methodSupport(method) !== "unsupported").length
-      if (aMaybe !== bMaybe) return bMaybe - aMaybe
-
-      if (a.priority !== b.priority) return b.priority - a.priority
-      return a.serverID.localeCompare(b.serverID)
-    })
-  }
-
-  function filterClientsForSelection(clients: LSPClient.Info[], opts: ClientOptions): LSPClient.Info[] {
-    if (opts.method) return filterClientsForMethod(clients, opts.method)
-
-    const methods = requestedMethods(opts)
-    if (methods.length > 0) return filterClientsForMethods(clients, methods)
-
-    return sortClients(clients)
   }
 
   const filterExperimentalServers = (servers: Record<string, LSPServer.Info>) => {

@@ -1,5 +1,21 @@
 import { describe, expect, test } from "bun:test"
 import { LSP } from "../../src/lsp"
+import type { LSPClient } from "../../src/lsp/client"
+import type { LSPServer } from "../../src/lsp/server"
+
+function client(input: {
+  serverID: string
+  priority?: number
+  support?: Partial<Record<LSPServer.Method, LSPClient.MethodSupport>>
+}): LSPClient.Info {
+  return {
+    serverID: input.serverID,
+    priority: input.priority ?? 0,
+    root: "/repo",
+    semantic: true,
+    methodSupport: (method) => input.support?.[method] ?? "unknown",
+  } as LSPClient.Info
+}
 
 describe("LSP.computeBackoff", () => {
   test("returns base delay for first failure", () => {
@@ -152,5 +168,71 @@ describe("LSP.clientMethodMatchesServer", () => {
         references: false,
       }),
     ).toBe(false)
+  })
+})
+
+describe("LSP client selection helpers", () => {
+  test("deduplicates method and methods options while preserving order", () => {
+    expect(
+      LSP.requestedMethods({
+        method: "references",
+        methods: ["references", "documentSymbol", "hover", "documentSymbol"],
+      }),
+    ).toEqual(["references", "documentSymbol", "hover"])
+  })
+
+  test("prefers clients with explicit support for a single method", () => {
+    const selected = LSP.filterClientsForSelection(
+      [
+        client({ serverID: "maybe", priority: 100 }),
+        client({ serverID: "supported-low", priority: 1, support: { references: "supported" } }),
+        client({ serverID: "unsupported", priority: 200, support: { references: "unsupported" } }),
+      ],
+      { method: "references" },
+    )
+
+    expect(selected.map((item) => item.serverID)).toEqual(["supported-low"])
+  })
+
+  test("falls back to maybe-supported clients before unsupported clients", () => {
+    const selected = LSP.filterClientsForSelection(
+      [
+        client({ serverID: "unsupported", priority: 100, support: { hover: "unsupported" } }),
+        client({ serverID: "maybe", priority: 1 }),
+      ],
+      { method: "hover" },
+    )
+
+    expect(selected.map((item) => item.serverID)).toEqual(["maybe"])
+  })
+
+  test("orders multi-method clients by supported count, maybe count, priority, then server id", () => {
+    const selected = LSP.filterClientsForSelection(
+      [
+        client({
+          serverID: "beta",
+          priority: 10,
+          support: { documentSymbol: "supported", references: "unsupported", hover: "unknown" },
+        }),
+        client({
+          serverID: "alpha",
+          priority: 10,
+          support: { documentSymbol: "supported", references: "unsupported", hover: "unknown" },
+        }),
+        client({
+          serverID: "strong",
+          priority: 0,
+          support: { documentSymbol: "supported", references: "supported", hover: "unsupported" },
+        }),
+        client({
+          serverID: "maybe-only",
+          priority: 100,
+          support: { documentSymbol: "unknown", references: "unsupported", hover: "unknown" },
+        }),
+      ],
+      { methods: ["documentSymbol", "references", "hover"] },
+    )
+
+    expect(selected.map((item) => item.serverID)).toEqual(["strong", "alpha", "beta", "maybe-only"])
   })
 })
