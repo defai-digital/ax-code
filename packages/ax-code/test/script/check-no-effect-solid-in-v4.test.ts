@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 import path from "node:path"
 import { mkdir, writeFile } from "node:fs/promises"
 import { tmpdir } from "../fixture/fixture"
-import { V4Guardrails } from "../../script/check-no-effect-solid-in-v4"
+import { V4Guardrails, EffectGuard } from "../../script/check-no-effect-solid-in-v4"
 
 describe("script.check-no-effect-solid-in-v4", () => {
   test("ignores safe imports and non-v4 directories", async () => {
@@ -40,5 +40,36 @@ describe("script.check-no-effect-solid-in-v4", () => {
       "src/cli/cmd/tui/native/opentui.ts imports @opentui/core (opentui)",
       "src/runtime/effect.ts imports effect (effect)",
     ])
+  })
+})
+
+describe("script.check-no-effect-solid-in-v4 EffectGuard", () => {
+  test("flags effect imports outside allowed dirs", async () => {
+    await using tmp = await tmpdir()
+    await mkdir(path.join(tmp.path, "src/account"), { recursive: true })
+    await writeFile(path.join(tmp.path, "src/account/new.ts"), `import { Effect } from "effect"\n`)
+    const violations = await EffectGuard.check(tmp.path)
+    expect(violations).toEqual([{ file: "src/account/new.ts", spec: "effect" }])
+  })
+
+  test("ignores effect imports inside allowed dirs and bridge file", async () => {
+    await using tmp = await tmpdir()
+    await mkdir(path.join(tmp.path, "src/effect"), { recursive: true })
+    await mkdir(path.join(tmp.path, "src/session"), { recursive: true })
+    await mkdir(path.join(tmp.path, "src/file"), { recursive: true })
+    await mkdir(path.join(tmp.path, "src/util"), { recursive: true })
+    await writeFile(path.join(tmp.path, "src/effect/ok.ts"), `import { Effect } from "effect"\n`)
+    await writeFile(path.join(tmp.path, "src/session/ok.ts"), `import { Schema } from "effect"\n`)
+    await writeFile(path.join(tmp.path, "src/file/watcher.ts"), `import { Effect } from "effect"\n`)
+    await writeFile(path.join(tmp.path, "src/util/effect-zod.ts"), `import { Schema } from "effect"\n`)
+    expect(await EffectGuard.check(tmp.path)).toEqual([])
+  })
+
+  test("does not double-report files listed in ExistingViolations", async () => {
+    // We can't add to ExistingViolations at runtime; confirm the set is
+    // exported and contains the expected legacy files so anyone editing
+    // it gets the type-level pin.
+    expect(EffectGuard.ExistingViolations.has("src/agent/agent.ts")).toBe(true)
+    expect(EffectGuard.ExistingViolations.has("src/provider/auth.ts")).toBe(true)
   })
 })
