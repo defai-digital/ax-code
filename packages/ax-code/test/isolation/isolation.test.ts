@@ -200,14 +200,22 @@ describe("isolation.bypass", () => {
     )
   })
 
-  test("bypass also covers protected paths and bash targets, but only the listed entries", () => {
-    const state = Isolation.resolve({ mode: "workspace-write", network: false }, root)
-    const protectedPath = path.resolve(root, ".git/config")
-    const otherProtected = path.resolve(root, ".ax-code/secret")
+  test("bypass does not override protected paths or bash targets", async () => {
+    await using tmp = await tmpdir()
+    const dir = path.join(tmp.path, "project")
+    await fs.mkdir(path.join(dir, ".git"), { recursive: true })
+    await fs.mkdir(path.join(dir, ".ax-code"), { recursive: true })
+    const state = Isolation.resolve({ mode: "workspace-write", network: false }, dir)
+    const protectedPath = path.join(dir, ".git/config")
+    const otherProtected = path.join(dir, ".ax-code/secret")
     const withBypass: Isolation.State = { ...state, bypass: [protectedPath] }
-    expect(() => Isolation.assertWrite(withBypass, protectedPath, root, worktree)).not.toThrow()
-    expect(() => Isolation.assertBash(withBypass, root, root, worktree, [protectedPath])).not.toThrow()
-    expect(() => Isolation.assertWrite(withBypass, otherProtected, root, worktree)).toThrow(
+    expect(() => Isolation.assertWrite(withBypass, protectedPath, dir, dir)).toThrow(
+      "Path is protected by isolation policy",
+    )
+    expect(() => Isolation.assertBash(withBypass, dir, dir, dir, [protectedPath])).toThrow(
+      "Bash command targets protected path",
+    )
+    expect(() => Isolation.assertWrite(withBypass, otherProtected, dir, dir)).toThrow(
       "Path is protected by isolation policy",
     )
   })
