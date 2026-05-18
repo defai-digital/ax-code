@@ -17,6 +17,7 @@ import { iife } from "@/util/iife"
 import { init } from "#db"
 import { NativeStore } from "@/code-intelligence/native-store"
 import { DurableStoragePolicy } from "./policy"
+import { Recorder } from "@/replay/recorder"
 
 declare const AX_CODE_MIGRATIONS: { sql: string; timestamp: number; name: string }[] | undefined
 
@@ -142,6 +143,17 @@ export namespace Database {
   })
 
   export function close() {
+    // Drain any queued replay events before tearing down the SQLite
+    // handle. Without this, emit() calls in the same tick as Database.close
+    // get scheduled on a microtask that never runs (the handle closes
+    // first). flushAll is synchronous and idempotent.
+    try {
+      Recorder.flushAll()
+    } catch (error) {
+      log.warn("recorder flush during shutdown failed", {
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
     const client = Client()
     try {
       // Keep the file-backed SQLite database as the durable source of truth,
@@ -173,11 +185,17 @@ export namespace Database {
   // Effects are intended to be synchronous. The narrowed type signals intent
   // but TypeScript's `void` return is bivariant: a function returning
   // `Promise<void>` is still assignable to `() => void`, so an accidental
-  // `async () => { ... }` compiles. The runtime guard below catches that
-  // and logs the rejection instead of leaving it as an unhandled rejection
-  // (BUG-003). Fire-and-forget async work must be wrapped explicitly:
+  // `async () => { ... }` used to compile. The `SyncEffect` brand below
+  // applies the same DrizzleTypeError pattern used for `SyncTransactionResult<T>`
+  // so the compiler now rejects async-returning effects with a clear message.
+  // The runtime guard remains as defense in depth (e.g. via `@ts-ignore`)
+  // and records async returns as errors instead of just warnings.
+  // Fire-and-forget async work must be wrapped explicitly:
   // `Database.effect(() => { void doAsync().catch(log) })`.
   type Effect = () => void
+  type SyncEffect<F extends () => unknown> = ReturnType<F> extends Promise<unknown>
+    ? DrizzleTypeError<"Database.effect callbacks must be synchronous — wrap async work as `() => { void doAsync().catch(log) }`">
+    : F
 
   const ctx = Context.create<{
     tx: TxOrDb
@@ -186,22 +204,33 @@ export namespace Database {
 
   function runEffects(effects: Effect[]) {
     const errors: { index: number; error: unknown }[] = []
+    const asyncReturns: number[] = []
     for (let i = 0; i < effects.length; i++) {
       try {
         const result = effects[i]() as unknown
         if (result instanceof Promise) {
           const idx = i
+          asyncReturns.push(idx)
           result.catch((err) => {
-            log.warn("post-commit async effect rejected", {
+            log.error("post-commit async effect rejected", {
               index: idx,
               error: err instanceof Error ? err.message : String(err),
-              hint: "Database.effect callbacks should be synchronous; wrap async work in fire-and-forget",
+              hint: "Database.effect callbacks must be synchronous; wrap async work as `() => { void doAsync().catch(log) }`",
             })
           })
         }
       } catch (e) {
         errors.push({ index: i, error: e })
       }
+    }
+    if (asyncReturns.length > 0) {
+      // Detected only via @ts-ignore now that the SyncEffect type brand
+      // is in place. Surface as error-level because the async work runs
+      // after commit and may write past the transaction boundary.
+      log.error("post-commit effects returned a Promise (should be synchronous)", {
+        count: asyncReturns.length,
+        indices: asyncReturns,
+      })
     }
     if (errors.length > 0) {
       log.warn("post-commit effects failed", {
@@ -226,9 +255,9 @@ export namespace Database {
     }
   }
 
-  export function effect(fn: Effect) {
+  export function effect<F extends () => unknown>(fn: F & SyncEffect<F>) {
     try {
-      ctx.use().effects.push(fn)
+      ctx.use().effects.push(fn as Effect)
     } catch (err) {
       // Only the "no active context" case should fall through to
       // direct execution. Any other context error (corruption,
@@ -238,7 +267,7 @@ export namespace Database {
       // Matches the narrowing in `use()` and `transaction()` above.
       // See BUG-80.
       if (!(err instanceof Context.NotFound)) throw err
-      fn()
+      ;(fn as Effect)()
     }
   }
 

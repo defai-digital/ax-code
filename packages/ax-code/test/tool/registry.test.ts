@@ -19,7 +19,7 @@ describe("tool.registry", () => {
       async () =>
         ({
           experimental: { batch_tool: batchTool },
-        }) as never,
+        }) as Awaited<ReturnType<typeof Config.get>>,
     )
 
     try {

@@ -165,14 +165,22 @@ export namespace SessionCompaction {
           },
         ]
       })
-      try {
-        for (const part of compactedParts) {
+      // Per-iteration try/catch so a single failing updatePart doesn't
+      // abort the rest of the prune. The previous outer try wrapped the
+      // whole loop, so the first DB write failure stopped pruning and
+      // hid the count of successful writes.
+      let succeeded = 0
+      let failed = 0
+      for (const part of compactedParts) {
+        try {
           await Session.updatePart.force(part)
+          succeeded += 1
+        } catch (e) {
+          failed += 1
+          log.warn("failed to compact part", { partID: part.id, err: e })
         }
-      } catch (e) {
-        log.warn("failed to compact parts", { count: compactedParts.length, err: e })
       }
-      log.info("pruned", { count: compactedParts.length })
+      log.info("pruned", { count: compactedParts.length, succeeded, failed })
     }
   }
 

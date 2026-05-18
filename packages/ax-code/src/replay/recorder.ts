@@ -92,6 +92,16 @@ export namespace Recorder {
     return sessions.has(sessionID)
   }
 
+  /**
+   * Drain any pending replay events synchronously. Call this from
+   * Database.close() before tearing down the SQLite handle so the
+   * microtask-scheduled flush has a chance to run; otherwise any
+   * emit() that fired in the same tick as shutdown is silently lost.
+   */
+  export function flushAll() {
+    flush()
+  }
+
   export function emit(event: ReplayEvent) {
     const state = sessions.get(event.sessionID)
     if (!state) return

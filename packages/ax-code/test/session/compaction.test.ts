@@ -476,6 +476,83 @@ describe("session.compaction.estimateToolPartTokens", () => {
   })
 })
 
+describe("session.compaction.process busy semantics", () => {
+  test("returns 'busy' when a second concurrent process for the same session overlaps the first", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        // The compaction process internally checks `inFlight.has(sessionID)`
+        // and returns "busy" without doing work. We exercise the in-flight
+        // gate directly by launching two calls in parallel. Both calls go
+        // through with an empty message list, so the inner work returns
+        // quickly without exercising LLM/db state — what we're pinning is
+        // the busy gate, not the compaction algorithm itself.
+        const ac = new AbortController()
+        const messages: MessageV2.WithParts[] = []
+        const parentID = MessageID.make("msg_busy_test_parent")
+        const first = SessionCompaction.process({
+          parentID,
+          messages,
+          sessionID: session.id,
+          abort: ac.signal,
+          auto: true,
+        }).catch((err) => ({ error: err }) as const)
+        const second = SessionCompaction.process({
+          parentID,
+          messages,
+          sessionID: session.id,
+          abort: ac.signal,
+          auto: true,
+        }).catch((err) => ({ error: err }) as const)
+        const [a, b] = await Promise.all([first, second])
+        // Exactly one call should observe in-flight and return "busy"
+        // without doing work. The other actually enters processInner
+        // and runs the compaction (which in this minimal fixture fails
+        // because no parent message exists — we only care about the
+        // busy gate, not the algorithm).
+        const results = [a, b]
+        const busy = results.filter((r) => r === "busy").length
+        expect(busy).toBe(1)
+      },
+    })
+  })
+
+  test("clears the in-flight gate after process resolves", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const ac = new AbortController()
+        const messages: MessageV2.WithParts[] = []
+        const parentID = MessageID.make("msg_busy_test_parent2")
+        // First call resolves (with an error in this fixture, fine).
+        await SessionCompaction.process({
+          parentID,
+          messages,
+          sessionID: session.id,
+          abort: ac.signal,
+          auto: true,
+        }).catch(() => undefined)
+        // After the first completes, the in-flight gate must be cleared
+        // so a subsequent call is no longer "busy".
+        const second = await SessionCompaction.process({
+          parentID,
+          messages,
+          sessionID: session.id,
+          abort: ac.signal,
+          auto: true,
+        }).catch((err) => ({ error: err }) as const)
+        // Second call ran (errored, but not "busy"). If the gate had
+        // leaked, we'd see "busy" here.
+        expect(second).not.toBe("busy")
+      },
+    })
+  })
+})
+
 describe("session.compaction observability", () => {
   test("logs compaction trigger reason without prompt content", async () => {
     const lines: string[] = []

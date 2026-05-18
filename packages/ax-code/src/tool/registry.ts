@@ -165,6 +165,12 @@ export namespace ToolRegistry {
         agent?: Agent.Info
         cfg: ToolConfig
       }) {
+        // Hash the whole `experimental` map rather than pinning specific
+        // flags. The previous hand-rolled list missed any new experimental
+        // tool flag added to `all()` and silently served stale cache
+        // entries when the flag flipped at runtime. Including
+        // `JSON.stringify(experimental)` makes the key self-maintaining.
+        const experimental = JSON.stringify(input.cfg.experimental ?? {})
         return [
           input.agent?.name ?? "",
           input.model.providerID,
@@ -176,7 +182,7 @@ export namespace ToolRegistry {
           Flag.AX_CODE_EXPERIMENTAL_CODE_INTELLIGENCE,
           Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE,
           Flag.AX_CODE_EXPERIMENTAL_PLAN_MODE,
-          input.cfg.experimental?.batch_tool === true,
+          experimental,
         ].join(":")
       }
 

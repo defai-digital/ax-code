@@ -89,14 +89,19 @@ export namespace Flag {
   export declare const AX_CODE_ISOLATION_MODE: "read-only" | "workspace-write" | "full-access" | undefined
   export declare const AX_CODE_ISOLATION_NETWORK: boolean | undefined
 
-  // Native Rust addons — default ON (opt-out with =0 or =false)
+  // Native Rust addons — default ON (opt-out with =0 or =false).
   // These dispatch CPU-bound operations to Rust native addons via NAPI-RS.
   // If the native addon isn't installed, the TypeScript fallback runs
   // transparently via try/catch in each dispatch point.
-  export const AX_CODE_NATIVE_INDEX = !falsy("AX_CODE_NATIVE_INDEX")
-  export const AX_CODE_NATIVE_FS = !falsy("AX_CODE_NATIVE_FS")
-  export const AX_CODE_NATIVE_DIFF = !falsy("AX_CODE_NATIVE_DIFF")
-  export const AX_CODE_NATIVE_PARSER = !falsy("AX_CODE_NATIVE_PARSER")
+  //
+  // Defined as runtime getters (see defineBooleanFlag below) so test
+  // harnesses and embedders that mutate process.env after module load
+  // see the new value. The previous `export const` form captured the
+  // flag at import time and could not be flipped at runtime.
+  export declare const AX_CODE_NATIVE_INDEX: boolean
+  export declare const AX_CODE_NATIVE_FS: boolean
+  export declare const AX_CODE_NATIVE_DIFF: boolean
+  export declare const AX_CODE_NATIVE_PARSER: boolean
   // Debug-engine native scanners run larger worktree scans through the
   // @ax-code/fs addon. A native process crash cannot be caught by JS, so
   // keep this path opt-in until it has crash-isolation coverage.
@@ -266,6 +271,14 @@ defineStringFlag("AX_CODE_MODELS_PATH")
 // This must be evaluated at access time, not module load time,
 // because some commands override the client at runtime
 defineStringFlag("AX_CODE_CLIENT", "cli")
+
+// Runtime-refreshable getters for the native-addon flags. Default ON:
+// returns false only if the env var is explicitly set to "false" or "0".
+// Matches the previous !falsy() semantic but evaluated on every access.
+defineBooleanFlag("AX_CODE_NATIVE_INDEX", true)
+defineBooleanFlag("AX_CODE_NATIVE_FS", true)
+defineBooleanFlag("AX_CODE_NATIVE_DIFF", true)
+defineBooleanFlag("AX_CODE_NATIVE_PARSER", true)
 
 // Dynamic getter for AX_CODE_ISOLATION_MODE
 // Must be evaluated at access time because --sandbox CLI flag
