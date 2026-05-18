@@ -2,11 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { Instance } from "../../src/project/instance"
 import { DebugCaptureEvidenceTool } from "../../src/tool/debug_capture_evidence"
 import { DebugPlanInstrumentationTool } from "../../src/tool/debug_plan_instrumentation"
-import {
-  computeDebugCaseId,
-  DebugEvidenceSchema,
-  DEBUG_ID_PATTERN,
-} from "../../src/debug-engine/runtime-debug"
+import { computeDebugCaseId, DebugEvidenceSchema, DEBUG_ID_PATTERN } from "../../src/debug-engine/runtime-debug"
 import { Recorder } from "../../src/replay/recorder"
 import { Session } from "../../src/session"
 import { SessionDebug } from "../../src/session/debug"
@@ -76,8 +72,14 @@ describe("DebugCaptureEvidenceTool", () => {
         const caseId = await emitOpenedCase(session.id, tmp.path, "tests time out")
 
         const tool = await DebugCaptureEvidenceTool.init()
-        const a = await tool.execute({ caseId, kind: "stack_trace", content: "Error: boom\n  at foo:1" }, fakeCtx(session.id))
-        const b = await tool.execute({ caseId, kind: "stack_trace", content: "Error: boom\n  at foo:1" }, fakeCtx(session.id))
+        const a = await tool.execute(
+          { caseId, kind: "stack_trace", content: "Error: boom\n  at foo:1" },
+          fakeCtx(session.id),
+        )
+        const b = await tool.execute(
+          { caseId, kind: "stack_trace", content: "Error: boom\n  at foo:1" },
+          fakeCtx(session.id),
+        )
         expect(a.metadata.evidenceId).toBe(b.metadata.evidenceId)
       },
     })
@@ -92,7 +94,9 @@ describe("DebugCaptureEvidenceTool", () => {
         const caseId = await emitOpenedCase(session.id, tmp.path, "tests time out")
 
         const tool = await DebugCaptureEvidenceTool.init()
-        await expect(tool.execute({ caseId, kind: "screenshot", content: "x" } as any, fakeCtx(session.id))).rejects.toThrow()
+        await expect(
+          tool.execute({ caseId, kind: "screenshot", content: "x" } as any, fakeCtx(session.id)),
+        ).rejects.toThrow()
       },
     })
   })
@@ -107,7 +111,10 @@ describe("DebugCaptureEvidenceTool", () => {
 
         const tool = await DebugCaptureEvidenceTool.init()
         await expect(
-          tool.execute({ caseId, kind: "instrumentation_result", content: "count=3", planId: "0000aaaa1111bbbb" }, fakeCtx(session.id)),
+          tool.execute(
+            { caseId, kind: "instrumentation_result", content: "count=3", planId: "0000aaaa1111bbbb" },
+            fakeCtx(session.id),
+          ),
         ).rejects.toThrow(/unknown instrumentation plan/)
       },
     })
@@ -208,7 +215,10 @@ describe("DebugCaptureEvidenceTool", () => {
         const caseId = await emitOpenedCase(session.id, tmp.path, "crash on startup")
 
         const tool = await DebugCaptureEvidenceTool.init()
-        const result = await tool.execute({ caseId, kind: "stack_trace", content: "Error: boom\n  at foo:1" }, fakeCtx(session.id))
+        const result = await tool.execute(
+          { caseId, kind: "stack_trace", content: "Error: boom\n  at foo:1" },
+          fakeCtx(session.id),
+        )
         const parsed = DebugEvidenceSchema.parse(result.metadata.debugEvidence)
         expect(parsed.planId).toBeUndefined()
       },

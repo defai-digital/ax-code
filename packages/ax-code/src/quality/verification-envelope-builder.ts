@@ -71,8 +71,7 @@ function joinErrors(errors: readonly string[]): string | undefined {
 // envelope builds shared the module-scope RegExp object — each iteration
 // here gets its own independent iterator.
 const TS_ERROR_PATTERN = /^(.+)\((\d+),(\d+)\):\s+(?:error|warning)\s+(TS\d+):\s+(.+)$/gm
-const RUST_DIAGNOSTIC_PATTERN =
-  /^(error|warning)(?:\[([A-Za-z0-9_-]+)\])?:\s+(.+?)\n\s+-->\s+(.+?):(\d+):(\d+)/gm
+const RUST_DIAGNOSTIC_PATTERN = /^(error|warning)(?:\[([A-Za-z0-9_-]+)\])?:\s+(.+?)\n\s+-->\s+(.+?):(\d+):(\d+)/gm
 const RUST_CLIPPY_ATTR_RULE_PATTERN = /#\[(?:warn|deny|allow|forbid)\(clippy::([A-Za-z0-9_-]+)\)\]/
 const RUST_CLIPPY_DENY_RULE_PATTERN = /(?:^|[\s`'"])-D\s+clippy::([A-Za-z0-9_-]+)/m
 

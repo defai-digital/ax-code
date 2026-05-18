@@ -40,7 +40,9 @@ function pagerCmd(): string[] {
   if (lessFromPath) return lessFromPath
 
   if (Flag.AX_CODE_GIT_BASH_PATH) {
-    const lessFromGitBash = resolveLessPager(path.join(Flag.AX_CODE_GIT_BASH_PATH, "..", "..", "usr", "bin", "less.exe"))
+    const lessFromGitBash = resolveLessPager(
+      path.join(Flag.AX_CODE_GIT_BASH_PATH, "..", "..", "usr", "bin", "less.exe"),
+    )
     if (lessFromGitBash) return lessFromGitBash
   }
 
@@ -68,7 +70,10 @@ export const SessionCommand = cmd({
 })
 
 function cleanupStamp() {
-  return new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z")
+  return new Date()
+    .toISOString()
+    .replace(/[-:]/g, "")
+    .replace(/\.\d{3}Z$/, "Z")
 }
 
 type DuplicateProjectIdentity = {
@@ -78,7 +83,9 @@ type DuplicateProjectIdentity = {
 }
 
 function formatDuplicateProjectIdentities(identities: DuplicateProjectIdentity[]) {
-  return identities.map((project) => `${project.id}${project.current ? " (current)" : ""}: ${project.sessionCount}`).join(", ")
+  return identities
+    .map((project) => `${project.id}${project.current ? " (current)" : ""}: ${project.sessionCount}`)
+    .join(", ")
 }
 
 function printWarning(message: string) {

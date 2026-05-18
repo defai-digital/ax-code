@@ -501,9 +501,7 @@ describe("session.prompt flow", () => {
           expect(msg.info.role).toBe("assistant")
           if (msg.info.role !== "assistant") throw new Error("expected assistant")
           expect(msg.info.error).toBeUndefined()
-          expect(Todo.get(session.id)).toEqual([
-            { content: "Write bug report", status: "completed", priority: "high" },
-          ])
+          expect(Todo.get(session.id)).toEqual([{ content: "Write bug report", status: "completed", priority: "high" }])
 
           await Session.remove(session.id)
         },
@@ -811,17 +809,24 @@ describe("session.prompt flow", () => {
         return { status: "allow" }
       })
 
-      streamSpy = spyOn(LLM, "stream").mockImplementation(async () => ({
-        fullStream: (async function* () {
-          yield { type: "start" }
-          yield { type: "start-step" }
-          yield { type: "text-start", id: "text_1" }
-          yield { type: "text-delta", id: "text_1", text: "done" }
-          yield { type: "text-end", id: "text_1" }
-          yield { type: "finish-step", finishReason: "stop", usage: { inputTokens: 5, outputTokens: 2, totalTokens: 7 } }
-          yield { type: "finish" }
-        })(),
-      }) as any)
+      streamSpy = spyOn(LLM, "stream").mockImplementation(
+        async () =>
+          ({
+            fullStream: (async function* () {
+              yield { type: "start" }
+              yield { type: "start-step" }
+              yield { type: "text-start", id: "text_1" }
+              yield { type: "text-delta", id: "text_1", text: "done" }
+              yield { type: "text-end", id: "text_1" }
+              yield {
+                type: "finish-step",
+                finishReason: "stop",
+                usage: { inputTokens: 5, outputTokens: 2, totalTokens: 7 },
+              }
+              yield { type: "finish" }
+            })(),
+          }) as any,
+      )
 
       await Instance.provide({
         directory: tmp.path,
@@ -843,9 +848,7 @@ describe("session.prompt flow", () => {
           // Original user message + two gate-injected continuation messages
           expect(userMessages).toHaveLength(3)
           const gateMessages = userMessages.filter((m) =>
-            m.parts.some(
-              (p) => p.type === "text" && p.text.includes("completion gate"),
-            ),
+            m.parts.some((p) => p.type === "text" && p.text.includes("completion gate")),
           )
           expect(gateMessages).toHaveLength(2)
 
@@ -880,17 +883,24 @@ describe("session.prompt flow", () => {
         emptyResult: { callID: "call_1", taskID: "ses_stuck", description: "task" },
       })
 
-      streamSpy = spyOn(LLM, "stream").mockImplementation(async () => ({
-        fullStream: (async function* () {
-          yield { type: "start" }
-          yield { type: "start-step" }
-          yield { type: "text-start", id: "text_1" }
-          yield { type: "text-delta", id: "text_1", text: "still stuck" }
-          yield { type: "text-end", id: "text_1" }
-          yield { type: "finish-step", finishReason: "stop", usage: { inputTokens: 5, outputTokens: 2, totalTokens: 7 } }
-          yield { type: "finish" }
-        })(),
-      }) as any)
+      streamSpy = spyOn(LLM, "stream").mockImplementation(
+        async () =>
+          ({
+            fullStream: (async function* () {
+              yield { type: "start" }
+              yield { type: "start-step" }
+              yield { type: "text-start", id: "text_1" }
+              yield { type: "text-delta", id: "text_1", text: "still stuck" }
+              yield { type: "text-end", id: "text_1" }
+              yield {
+                type: "finish-step",
+                finishReason: "stop",
+                usage: { inputTokens: 5, outputTokens: 2, totalTokens: 7 },
+              }
+              yield { type: "finish" }
+            })(),
+          }) as any,
+      )
 
       await Instance.provide({
         directory: tmp.path,
@@ -1294,18 +1304,21 @@ describe("session.prompt flow", () => {
     try {
       modelSpy = spyOn(Provider, "getModel").mockResolvedValue(model)
       summarySpy = spyOn(SessionSummary, "summarize").mockResolvedValue()
-      streamSpy = spyOn(LLM, "stream").mockImplementation(async () => ({
-        fullStream: (async function* () {
-          yield { type: "start" }
-          yield { type: "start-step" }
-          yield {
-            type: "finish-step",
-            finishReason: "other",
-            usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
-          }
-          yield { type: "finish" }
-        })(),
-      }) as any)
+      streamSpy = spyOn(LLM, "stream").mockImplementation(
+        async () =>
+          ({
+            fullStream: (async function* () {
+              yield { type: "start" }
+              yield { type: "start-step" }
+              yield {
+                type: "finish-step",
+                finishReason: "other",
+                usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+              }
+              yield { type: "finish" }
+            })(),
+          }) as any,
+      )
 
       await Instance.provide({
         directory: tmp.path,

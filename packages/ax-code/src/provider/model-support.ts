@@ -7,10 +7,7 @@ function parseModelProbes(value: string) {
   return [lower, normalized, normalized.replaceAll("-", "")]
 }
 
-export function buildModelProbes(
-  modelID: string,
-  model?: { id?: unknown; name?: unknown; family?: unknown },
-) {
+export function buildModelProbes(modelID: string, model?: { id?: unknown; name?: unknown; family?: unknown }) {
   return [modelID, model?.id, model?.name, model?.family]
     .filter((value): value is string => typeof value === "string")
     .flatMap(parseModelProbes)
@@ -36,10 +33,12 @@ export function supportsOpenAIGptModels(probes: readonly string[]) {
 
 export function supportsGrok41OrAllowedCodingModel(probes: readonly string[]) {
   if (!probes.some((probe) => probe.includes("grok"))) return true
-  if (probes.some((probe) => {
-    const finalSegment = probe.split("/").pop()
-    return finalSegment === "grok-4.1" || finalSegment === "grok-4-1"
-  }))
+  if (
+    probes.some((probe) => {
+      const finalSegment = probe.split("/").pop()
+      return finalSegment === "grok-4.1" || finalSegment === "grok-4-1"
+    })
+  )
     return false
   if (probes.some((probe) => probe.split("/").pop() === "grok-code-fast-1")) return true
   // Allow Grok 4.1 and any future Grok N>4. Parsing major/minor

@@ -99,8 +99,7 @@ export namespace ProviderError {
   function isAlibabaShortWindowQuota(providerID: ProviderID, message: string, responseBody?: string, url?: string) {
     const lowerUrl = url?.toLowerCase() ?? ""
     const urlIsAlibaba =
-      lowerUrl.includes("aliyuncs.com") &&
-      (lowerUrl.includes("token-plan.") || lowerUrl.includes("dashscope."))
+      lowerUrl.includes("aliyuncs.com") && (lowerUrl.includes("token-plan.") || lowerUrl.includes("dashscope."))
     const isAlibaba = providerID.startsWith("alibaba-") || urlIsAlibaba
     if (!isAlibaba) return false
     const text = `${message}\n${responseBody ?? ""}`.toLowerCase()

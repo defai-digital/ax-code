@@ -2,7 +2,12 @@ import fs from "fs/promises"
 import { unlinkSync } from "fs"
 import path from "path"
 import { Log } from "./log"
-import { createProcessLockBody, isSameProcessLockHost, parseProcessLockBody, type ProcessLockBody } from "./process-lock"
+import {
+  createProcessLockBody,
+  isSameProcessLockHost,
+  parseProcessLockBody,
+  type ProcessLockBody,
+} from "./process-lock"
 
 // Cross-process advisory file lock.
 //

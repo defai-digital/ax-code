@@ -17,10 +17,10 @@ const planAgent = { name: "plan", options: {} }
 describe("ReasoningPolicy", () => {
   test("uses high reasoning for plan mode", () => {
     const decision = ReasoningPolicy.decide({
-        model: baseModel,
-        agent: planAgent,
-        messages: [{ role: "user", content: "review the architecture" }],
-      })
+      model: baseModel,
+      agent: planAgent,
+      messages: [{ role: "user", content: "review the architecture" }],
+    })
 
     expect(decision).toMatchObject({
       depth: "deep",
@@ -116,10 +116,10 @@ describe("ReasoningPolicy", () => {
 
   test("respects explicit agent reasoning options", () => {
     const decision = ReasoningPolicy.decide({
-        model: baseModel,
-        agent: { name: "plan", options: { reasoningEffort: "low" } },
-        messages: [{ role: "user", content: "plan a complex migration" }],
-      })
+      model: baseModel,
+      agent: { name: "plan", options: { reasoningEffort: "low" } },
+      messages: [{ role: "user", content: "plan a complex migration" }],
+    })
 
     expect(decision).toMatchObject({
       depth: "standard",
@@ -330,15 +330,11 @@ describe("ReasoningPolicy", () => {
   })
 
   test("systemReminder returns undefined for standard depth decisions", () => {
-    expect(
-      ReasoningPolicy.systemReminder({ depth: "standard", checkpoint: false, options: {} }),
-    ).toBeUndefined()
+    expect(ReasoningPolicy.systemReminder({ depth: "standard", checkpoint: false, options: {} })).toBeUndefined()
   })
 
   test("systemReminder returns undefined for fast depth decisions", () => {
-    expect(
-      ReasoningPolicy.systemReminder({ depth: "fast", checkpoint: false, options: {} }),
-    ).toBeUndefined()
+    expect(ReasoningPolicy.systemReminder({ depth: "fast", checkpoint: false, options: {} })).toBeUndefined()
   })
 
   test("systemReminder returns undefined for deep decisions that do not require checkpoint", () => {
@@ -361,10 +357,8 @@ describe("ReasoningPolicy", () => {
   })
 
   test("objective extracts content from a content-property object", () => {
-    expect(
-      ReasoningPolicy.objective([
-        { role: "user", content: { content: "plan the migration" } },
-      ]),
-    ).toBe("plan the migration")
+    expect(ReasoningPolicy.objective([{ role: "user", content: { content: "plan the migration" } }])).toBe(
+      "plan the migration",
+    )
   })
 })

@@ -36,7 +36,7 @@ function normalizeProviderID(providerID: string) {
 }
 
 function readAuthData() {
-  return Filesystem.readJson<Record<string, unknown>>(file).catch(() => ({} as Record<string, unknown>))
+  return Filesystem.readJson<Record<string, unknown>>(file).catch(() => ({}) as Record<string, unknown>)
 }
 
 async function cleanupAuthLockFile() {

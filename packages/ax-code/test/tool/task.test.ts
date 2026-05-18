@@ -372,7 +372,9 @@ describe("tool.task", () => {
         }) as any)
 
         try {
-          const result = await (await TaskTool.init()).execute(
+          const result = await (
+            await TaskTool.init()
+          ).execute(
             {
               description: "review code",
               prompt: "review the code",
@@ -461,7 +463,9 @@ describe("tool.task", () => {
         const cancelSpy = spyOn(SessionPrompt, "cancel").mockResolvedValue(undefined as never)
 
         try {
-          const result = await (await TaskTool.init()).execute(
+          const result = await (
+            await TaskTool.init()
+          ).execute(
             {
               description: "review code",
               prompt: "review the code",
@@ -483,7 +487,9 @@ describe("tool.task", () => {
           expect(promptSpy).toHaveBeenCalledTimes(2)
           expect(cancelSpy).toHaveBeenCalledTimes(1)
           expect(result.output).toContain("Subagent completed without a final response.")
-          expect(result.output).toContain("Finalization failed with Error: Subagent finalization timed out after 2 minutes.")
+          expect(result.output).toContain(
+            "Finalization failed with Error: Subagent finalization timed out after 2 minutes.",
+          )
           expect(result.metadata.emptyResult).toBe(true)
           expect(result.metadata.finalizeAttempted).toBe(true)
           expect(result.metadata.recoveredFromEmpty).toBe(false)
@@ -547,7 +553,9 @@ describe("tool.task", () => {
         } as any)
 
         try {
-          const result = await (await TaskTool.init()).execute(
+          const result = await (
+            await TaskTool.init()
+          ).execute(
             {
               description: "review code",
               prompt: "review the code",

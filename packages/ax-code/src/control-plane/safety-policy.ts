@@ -43,14 +43,7 @@ export namespace SafetyPolicy {
     blastRadius?: BlastRadius
   }
 
-  export const DEFAULT_SAFE_PERMISSIONS = [
-    "read",
-    "glob",
-    "grep",
-    "list",
-    "list_directory",
-    "codesearch",
-  ] as const
+  export const DEFAULT_SAFE_PERMISSIONS = ["read", "glob", "grep", "list", "list_directory", "codesearch"] as const
 
   export const DEFAULT_RISKY_PERMISSIONS = [
     "edit",
@@ -200,7 +193,10 @@ export namespace SafetyPolicy {
   }
 
   function normalizePath(path: string) {
-    return path.replace(/\\/g, "/").replace(/^\.\/+/, "").replace(/\/+/g, "/")
+    return path
+      .replace(/\\/g, "/")
+      .replace(/^\.\/+/, "")
+      .replace(/\/+/g, "/")
   }
 
   function matchPath(path: string, pattern: string) {

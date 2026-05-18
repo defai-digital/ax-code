@@ -427,9 +427,7 @@ export const IndexCommand = cmd({
               if (lang === "unknown" || lang === "plaintext") continue
               const count = langFiles.length
               if (probe.ready.has(lang)) {
-                out(
-                  `  ${UI.Style.TEXT_SUCCESS}✓${UI.Style.TEXT_NORMAL} ${lang} (${count} file${fileSuffix(count)})`,
-                )
+                out(`  ${UI.Style.TEXT_SUCCESS}✓${UI.Style.TEXT_NORMAL} ${lang} (${count} file${fileSuffix(count)})`)
               } else {
                 const hint = INSTALL_HINTS[lang] ?? "check ~/.local/share/ax-code/log/ for spawn errors"
                 out(`  ${warningLine("✗")} ${lang} (${count} file${fileSuffix(count)}) — ${hint}`)

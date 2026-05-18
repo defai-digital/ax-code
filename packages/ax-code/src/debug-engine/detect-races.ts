@@ -184,8 +184,7 @@ function detectNonAtomicCounter(lines: LineInfo[], file: string, max: number): D
       const escapedName = counter.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
       // Skip counters on local variables declared in the same line
       const declLine = scopeLines.find(
-        (l) =>
-          l.num <= counter.line && new RegExp(`\\b(?:let|var|const)\\s+${escapedName}\\b`).test(l.text),
+        (l) => l.num <= counter.line && new RegExp(`\\b(?:let|var|const)\\s+${escapedName}\\b`).test(l.text),
       )
       // If declared and first used on the same line, skip
       if (declLine && declLine.num === counter.line) continue

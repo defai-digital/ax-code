@@ -108,12 +108,7 @@ export namespace AutonomousCompletionGate {
 
         const tool = record["tool"]
 
-        if (
-          isAssistantMessage(message) &&
-          typeof tool === "string" &&
-          tool !== "task" &&
-          isSubstantiveTool(tool)
-        ) {
+        if (isAssistantMessage(message) && typeof tool === "string" && tool !== "task" && isSubstantiveTool(tool)) {
           const state = asRecord(record["state"])
           if (state?.["status"] === "completed" && unresolved.size > 0) {
             for (const key of unresolved.keys()) {
@@ -280,10 +275,39 @@ export namespace AutonomousCompletionGate {
   }
 
   const DESCRIPTION_STOPWORDS = new Set([
-    "the", "and", "for", "with", "from", "all", "any", "this", "that", "you",
-    "are", "was", "were", "have", "has", "had", "but", "not", "out", "use",
-    "via", "per", "into", "onto", "over", "than", "then", "when",
-    "what", "which", "who", "how", "why",
+    "the",
+    "and",
+    "for",
+    "with",
+    "from",
+    "all",
+    "any",
+    "this",
+    "that",
+    "you",
+    "are",
+    "was",
+    "were",
+    "have",
+    "has",
+    "had",
+    "but",
+    "not",
+    "out",
+    "use",
+    "via",
+    "per",
+    "into",
+    "onto",
+    "over",
+    "than",
+    "then",
+    "when",
+    "what",
+    "which",
+    "who",
+    "how",
+    "why",
   ])
 
   function referencesResult(text: string, result: EmptySubagentResult) {
@@ -296,9 +320,7 @@ export namespace AutonomousCompletionGate {
     if (description.length > 0 && normalized.includes(description)) return true
 
     const descriptionWords = new Set(
-      description
-        .split(" ")
-        .filter((word) => word.length >= 3 && !DESCRIPTION_STOPWORDS.has(word)),
+      description.split(" ").filter((word) => word.length >= 3 && !DESCRIPTION_STOPWORDS.has(word)),
     )
     if (descriptionWords.size === 0) return false
     let matched = 0

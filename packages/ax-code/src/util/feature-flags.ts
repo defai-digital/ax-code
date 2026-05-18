@@ -3,4 +3,3 @@ export namespace FeatureFlag {
     process.env[key] = String(value)
   }
 }
-

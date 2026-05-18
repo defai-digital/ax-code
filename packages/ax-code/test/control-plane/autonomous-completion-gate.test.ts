@@ -249,8 +249,7 @@ describe("AutonomousCompletionGate", () => {
           parts: [
             {
               type: "text",
-              text:
-                "Control-plane completion gate blocked completion. Retry the subagent task, resume the task_id if available, or explicitly explain why no usable result can be recovered.",
+              text: "Control-plane completion gate blocked completion. Retry the subagent task, resume the task_id if available, or explicitly explain why no usable result can be recovered.",
             },
           ],
         },
@@ -259,8 +258,7 @@ describe("AutonomousCompletionGate", () => {
           parts: [
             {
               type: "text",
-              text:
-                "Completion gate resolution: the failed subagent was for the Catalog all database tables task. I do not need that result to complete this document review because I verified the relevant claims directly against the repository.",
+              text: "Completion gate resolution: the failed subagent was for the Catalog all database tables task. I do not need that result to complete this document review because I verified the relevant claims directly against the repository.",
             },
           ],
         },
@@ -294,8 +292,7 @@ describe("AutonomousCompletionGate", () => {
           parts: [
             {
               type: "text",
-              text:
-                "The subagent timed out twice. I'll resolve this by doing the investigation directly — reading the key files in the mcp, lsp, and code-intelligence modules myself.",
+              text: "The subagent timed out twice. I'll resolve this by doing the investigation directly — reading the key files in the mcp, lsp, and code-intelligence modules myself.",
             },
           ],
         },
@@ -339,8 +336,7 @@ describe("AutonomousCompletionGate", () => {
           parts: [
             {
               type: "text",
-              text:
-                "Both task attempts timed out. I audited the mcp, lsp, and code-intelligence modules directly and have enough evidence to file the bug reports.",
+              text: "Both task attempts timed out. I audited the mcp, lsp, and code-intelligence modules directly and have enough evidence to file the bug reports.",
             },
           ],
         },
@@ -518,8 +514,7 @@ describe("AutonomousCompletionGate", () => {
             {
               type: "text",
               synthetic: true,
-              text:
-                "Completion gate resolution: the failed subagent for review benchmark code was handled directly — no further action required.",
+              text: "Completion gate resolution: the failed subagent for review benchmark code was handled directly — no further action required.",
             },
           ],
         },
@@ -558,8 +553,7 @@ describe("AutonomousCompletionGate", () => {
             {
               type: "text",
               ignored: true,
-              text:
-                "Completion gate resolution: review benchmark code task handled directly.",
+              text: "Completion gate resolution: review benchmark code task handled directly.",
             },
           ],
         },
@@ -597,8 +591,7 @@ describe("AutonomousCompletionGate", () => {
           parts: [
             {
               type: "text",
-              text:
-                "Next, I will investigate the mcp, lsp, and code-intelligence modules directly. The task is still pending.",
+              text: "Next, I will investigate the mcp, lsp, and code-intelligence modules directly. The task is still pending.",
             },
           ],
         },
@@ -636,8 +629,7 @@ describe("AutonomousCompletionGate", () => {
           parts: [
             {
               type: "text",
-              text:
-                "Control-plane completion gate blocked completion. Retry the subagent task, resume the task_id if available, or explicitly explain why no usable result can be recovered.",
+              text: "Control-plane completion gate blocked completion. Retry the subagent task, resume the task_id if available, or explicitly explain why no usable result can be recovered.",
             },
           ],
         },

@@ -226,17 +226,11 @@ describe("AgentControlReplayQuery", () => {
     ).toMatchObject({ kind: "validation", title: "Validation: Passed", tone: "success" })
 
     expect(
-      AgentControlReplayQuery.timelineItemFromEvent(
-        { type: "agent.validation.updated", status: "failed" },
-        "event-6",
-      ),
+      AgentControlReplayQuery.timelineItemFromEvent({ type: "agent.validation.updated", status: "failed" }, "event-6"),
     ).toMatchObject({ kind: "validation", tone: "warning" })
 
     expect(
-      AgentControlReplayQuery.timelineItemFromEvent(
-        { type: "agent.validation.updated", status: "pending" },
-        "event-7",
-      ),
+      AgentControlReplayQuery.timelineItemFromEvent({ type: "agent.validation.updated", status: "pending" }, "event-7"),
     ).toMatchObject({ kind: "validation", tone: "working" })
   })
 

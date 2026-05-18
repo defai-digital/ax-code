@@ -200,19 +200,21 @@ export namespace Permission {
       paths: request.patterns,
     })
     if (decision.action === "allow" && !decision.checkpointRequired) return
-    Recorder.emit(AgentControlEvents.safetyDecided({
-      sessionID: request.sessionID,
-      messageID: request.tool?.messageID,
-      action: decision.action,
-      risk: decision.risk,
-      reason: decision.reason,
-      permission: request.permission,
-      tool,
-      path: request.patterns[0],
-      checkpointRequired: decision.checkpointRequired,
-      matchedRule: decision.matchedRule,
-      shadow: true,
-    }))
+    Recorder.emit(
+      AgentControlEvents.safetyDecided({
+        sessionID: request.sessionID,
+        messageID: request.tool?.messageID,
+        action: decision.action,
+        risk: decision.risk,
+        reason: decision.reason,
+        permission: request.permission,
+        tool,
+        path: request.patterns[0],
+        checkpointRequired: decision.checkpointRequired,
+        matchedRule: decision.matchedRule,
+        shadow: true,
+      }),
+    )
   }
 
   async function askPromise(input: z.infer<typeof AskInput>, options?: { signal?: AbortSignal }): Promise<void> {

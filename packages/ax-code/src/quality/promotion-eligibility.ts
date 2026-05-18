@@ -288,22 +288,28 @@ export namespace QualityPromotionEligibility {
     lines.push(`- same release policy as current: ${summary.reentryContext?.sameReleasePolicyAsCurrent ?? "n/a"}`)
     lines.push(`- prior promotion approvers: ${(reentryContext?.priorPromotionApprovers ?? []).join(", ") || "n/a"}`)
     lines.push(
-      `- team carryover history: ${(reentryContext?.teamCarryoverHistory ?? [])
-        .map((entry) => `${entry.team}:${entry.weightedReuseScore.toFixed(2)}`)
-        .join(", ") || "n/a"}`,
+      `- team carryover history: ${
+        (reentryContext?.teamCarryoverHistory ?? [])
+          .map((entry) => `${entry.team}:${entry.weightedReuseScore.toFixed(2)}`)
+          .join(", ") || "n/a"
+      }`,
     )
     lines.push(
       `- prior promotion reporting chains: ${(reentryContext?.priorPromotionReportingChains ?? []).join(", ") || "n/a"}`,
     )
     lines.push(
-      `- reviewer carryover history: ${(reentryContext?.reviewerCarryoverHistory ?? [])
-        .map((entry) => `${entry.approver}:${entry.weightedReuseScore.toFixed(2)}`)
-        .join(", ") || "n/a"}`,
+      `- reviewer carryover history: ${
+        (reentryContext?.reviewerCarryoverHistory ?? [])
+          .map((entry) => `${entry.approver}:${entry.weightedReuseScore.toFixed(2)}`)
+          .join(", ") || "n/a"
+      }`,
     )
     lines.push(
-      `- reporting chain carryover history: ${(reentryContext?.reportingChainCarryoverHistory ?? [])
-        .map((entry) => `${entry.reportingChain}:${entry.weightedReuseScore.toFixed(2)}`)
-        .join(", ") || "n/a"}`,
+      `- reporting chain carryover history: ${
+        (reentryContext?.reportingChainCarryoverHistory ?? [])
+          .map((entry) => `${entry.reportingChain}:${entry.weightedReuseScore.toFixed(2)}`)
+          .join(", ") || "n/a"
+      }`,
     )
     lines.push(`- remediation id: ${summary.remediation?.remediationID ?? "n/a"}`)
     lines.push(`- remediation author: ${summary.remediation?.author ?? "n/a"}`)

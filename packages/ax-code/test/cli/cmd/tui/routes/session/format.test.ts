@@ -19,15 +19,7 @@ describe("diffSummary", () => {
   })
 
   test("counts a single hunk with adds and removes", () => {
-    const diff = [
-      "--- a/foo.ts",
-      "+++ b/foo.ts",
-      "@@ -1,3 +1,3 @@",
-      " context",
-      "-old",
-      "+new",
-      "+extra",
-    ].join("\n")
+    const diff = ["--- a/foo.ts", "+++ b/foo.ts", "@@ -1,3 +1,3 @@", " context", "-old", "+new", "+extra"].join("\n")
     expect(diffSummary(diff)).toEqual({ hunks: 1, added: 2, removed: 1 })
   })
 
@@ -54,14 +46,7 @@ describe("diffSummary", () => {
   })
 
   test("pure-add diff (new file)", () => {
-    const diff = [
-      "--- /dev/null",
-      "+++ b/new.ts",
-      "@@ -0,0 +1,3 @@",
-      "+line a",
-      "+line b",
-      "+line c",
-    ].join("\n")
+    const diff = ["--- /dev/null", "+++ b/new.ts", "@@ -0,0 +1,3 @@", "+line a", "+line b", "+line c"].join("\n")
     expect(diffSummary(diff)).toEqual({ hunks: 1, added: 3, removed: 0 })
   })
 })

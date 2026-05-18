@@ -116,38 +116,38 @@ export namespace Config {
     // 1) Remote .well-known/ax-code (org defaults, with legacy .well-known/opencode fallback)
     // 2) Global config (~/.config/ax-code/ax-code.json{,c})
     // 3) Custom config (AX_CODE_CONFIG)
-  // 4) Project config (ax-code.json{,c})
-  // 5) .ax-code directories (.ax-code/agents/, .ax-code/commands/, .ax-code/plugins/, .ax-code/ax-code.json{,c})
-  // 6) Inline config (AX_CODE_CONFIG_CONTENT)
-  // Managed config directory is enterprise-only and always overrides everything above.
-  let result: Info = {}
-  // Set env tokens synchronously, then fetch all wellknown configs in parallel
-  const wellknownEntries: { url: string; key: string; token: string }[] = []
-  for (const [key, value] of Object.entries(auth)) {
-    if (value.type === "wellknown") {
-      const url = key.replace(/\/+$/, "")
-      if (!/^[A-Z][A-Z0-9_]*$/.test(value.key)) {
-        log.warn("ignoring wellknown auth with invalid env var name", {
-          command: "config.load",
-          status: "error",
-          errorCode: "INVALID_ENV_VAR",
-          key: value.key,
-          url: key,
-        })
-        continue
-      }
-      if (DANGEROUS_WELLKNOWN_ENV_KEYS.has(value.key)) {
-        log.warn("ignoring wellknown auth with dangerous env var name", {
-          command: "config.load",
-          status: "error",
-          errorCode: "DANGEROUS_ENV_VAR",
-          key: value.key,
-          url: key,
-        })
-        continue
-      }
-      FeatureFlag.set(value.key, value.token)
-      wellknownEntries.push({ url, key: value.key, token: value.token })
+    // 4) Project config (ax-code.json{,c})
+    // 5) .ax-code directories (.ax-code/agents/, .ax-code/commands/, .ax-code/plugins/, .ax-code/ax-code.json{,c})
+    // 6) Inline config (AX_CODE_CONFIG_CONTENT)
+    // Managed config directory is enterprise-only and always overrides everything above.
+    let result: Info = {}
+    // Set env tokens synchronously, then fetch all wellknown configs in parallel
+    const wellknownEntries: { url: string; key: string; token: string }[] = []
+    for (const [key, value] of Object.entries(auth)) {
+      if (value.type === "wellknown") {
+        const url = key.replace(/\/+$/, "")
+        if (!/^[A-Z][A-Z0-9_]*$/.test(value.key)) {
+          log.warn("ignoring wellknown auth with invalid env var name", {
+            command: "config.load",
+            status: "error",
+            errorCode: "INVALID_ENV_VAR",
+            key: value.key,
+            url: key,
+          })
+          continue
+        }
+        if (DANGEROUS_WELLKNOWN_ENV_KEYS.has(value.key)) {
+          log.warn("ignoring wellknown auth with dangerous env var name", {
+            command: "config.load",
+            status: "error",
+            errorCode: "DANGEROUS_ENV_VAR",
+            key: value.key,
+            url: key,
+          })
+          continue
+        }
+        FeatureFlag.set(value.key, value.token)
+        wellknownEntries.push({ url, key: value.key, token: value.token })
       }
     }
     const wellknownConfigs = await Promise.all(
@@ -564,8 +564,9 @@ export namespace Config {
 
   async function loadMarkdownConfig(item: string, kind: ConfigLoadKind) {
     return ConfigMarkdown.parse(item).catch(async (err) => {
-      const message =
-        ConfigMarkdown.FrontmatterError.isInstance(err) ? err.data.message : `Failed to parse ${kind} ${item}`
+      const message = ConfigMarkdown.FrontmatterError.isInstance(err)
+        ? err.data.message
+        : `Failed to parse ${kind} ${item}`
       await publishConfigLoadError(message)
       log.error(`failed to load ${kind}`, { [kind]: item, err })
       return undefined

@@ -141,7 +141,9 @@ describe("session.risk", () => {
           expect(assessment.summary).toContain("1 recovered subagent results")
           expect(assessment.evidence).toContain("1 subagent result recovered from an initially empty response")
           expect(assessment.unknowns).toContain("recovered subagent evidence should be reviewed before delivery")
-          expect(assessment.mitigations).toContain("review the recovered subagent result against the inspected evidence")
+          expect(assessment.mitigations).toContain(
+            "review the recovered subagent result against the inspected evidence",
+          )
         } finally {
           await Session.remove(sid)
         }

@@ -5,7 +5,11 @@ import type { HeadlessProjectionEffectHandlers } from "@/runtime/headless/effect
 import { applyHeadlessProjectionEvent, type HeadlessProjectionEffect } from "@/runtime/headless/projection"
 import type { SyncedSessionRisk } from "./sync-session-risk"
 import type { SyncEvent } from "./sync-event"
-import { runtimeSyncProbeTask, type RuntimeSyncProbeHandlers, type RuntimeSyncProbeScheduler } from "./sync-runtime-probe"
+import {
+  runtimeSyncProbeTask,
+  type RuntimeSyncProbeHandlers,
+  type RuntimeSyncProbeScheduler,
+} from "./sync-runtime-probe"
 
 type HeadlessReplyPermission = NonNullable<HeadlessProjectionEffectHandlers["replyPermission"]>
 type HeadlessReplyQuestion = NonNullable<HeadlessProjectionEffectHandlers["replyQuestion"]>

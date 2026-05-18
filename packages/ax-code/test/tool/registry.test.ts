@@ -1,15 +1,46 @@
-import { afterEach, describe, expect, test } from "bun:test"
+import { afterEach, describe, expect, spyOn, test } from "bun:test"
 import path from "path"
 import fs from "fs/promises"
 import { tmpdir } from "../fixture/fixture"
 import { Instance } from "../../src/project/instance"
 import { ToolRegistry } from "../../src/tool/registry"
+import { Config } from "../../src/config/config"
+import { ModelID, ProviderID } from "../../src/provider/schema"
 
 afterEach(async () => {
   await Instance.disposeAll()
 })
 
 describe("tool.registry", () => {
+  test("invalidates cached tool definitions when config-gated tools change", async () => {
+    await using tmp = await tmpdir()
+    let batchTool = false
+    const configSpy = spyOn(Config, "get").mockImplementation(
+      async () =>
+        ({
+          experimental: { batch_tool: batchTool },
+        }) as never,
+    )
+
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const model = { providerID: ProviderID.make("test"), modelID: ModelID.make("test-model") }
+
+          const withoutBatch = await ToolRegistry.tools(model)
+          expect(withoutBatch.map((tool) => tool.id)).not.toContain("batch")
+
+          batchTool = true
+          const withBatch = await ToolRegistry.tools(model)
+          expect(withBatch.map((tool) => tool.id)).toContain("batch")
+        },
+      })
+    } finally {
+      configSpy.mockRestore()
+    }
+  })
+
   test("loads tools from .ax-code/tool (singular)", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {

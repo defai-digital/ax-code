@@ -300,9 +300,7 @@ export namespace Installation {
             const channel = CHANNEL
             const url = `${registry}/${CURRENT_NPM_PACKAGE_PATH}/${channel}`
             yield* Effect.promise(() => Ssrf.assertPublicUrl(url, "installation"))
-            const response = yield* httpOk.execute(
-              HttpClientRequest.get(url).pipe(HttpClientRequest.acceptJson),
-            )
+            const response = yield* httpOk.execute(HttpClientRequest.get(url).pipe(HttpClientRequest.acceptJson))
             const data = yield* HttpClientResponse.schemaBodyJson(NpmPackage)(response)
             return data.version
           }

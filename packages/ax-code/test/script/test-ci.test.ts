@@ -60,10 +60,10 @@ describe("script.test-ci", () => {
     await Bun.write(
       junit,
       [
-        "<testsuite skipped=\"1\" time=\"0.50\">",
-        "<testcase classname=\"x\" name=\"ok\">",
+        '<testsuite skipped="1" time="0.50">',
+        '<testcase classname="x" name="ok">',
         "</testcase>",
-        "<testcase classname=\"x\" name=\"also-ok\">",
+        '<testcase classname="x" name="also-ok">',
         "</testcase>",
         "</testsuite>",
       ].join("\n"),

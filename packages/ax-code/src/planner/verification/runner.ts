@@ -90,9 +90,9 @@ export async function resolveCommands(cwd: string, override?: CommandOverride): 
 
   const cargo = await cargoCommands(cwd)
   return {
-    typecheck: typecheck ?? (override?.typecheck === undefined ? cargo?.typecheck ?? null : null),
-    lint: lint ?? (override?.lint === undefined ? cargo?.lint ?? null : null),
-    test: test ?? (override?.test === undefined ? cargo?.test ?? null : null),
+    typecheck: typecheck ?? (override?.typecheck === undefined ? (cargo?.typecheck ?? null) : null),
+    lint: lint ?? (override?.lint === undefined ? (cargo?.lint ?? null) : null),
+    test: test ?? (override?.test === undefined ? (cargo?.test ?? null) : null),
   }
 }
 

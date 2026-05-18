@@ -1984,12 +1984,7 @@ export function Prompt(props: PromptProps) {
                   onMouseUp: () => command.trigger("app.toggle.sandbox"),
                 })}
               </box>
-              <Show
-                when={
-                  footerLayout().showVariants ||
-                  footerLayout().showShellHint
-                }
-              >
+              <Show when={footerLayout().showVariants || footerLayout().showShellHint}>
                 <box gap={2} flexDirection="row" flexShrink={0}>
                   <Switch>
                     <Match when={store.mode === "normal"}>

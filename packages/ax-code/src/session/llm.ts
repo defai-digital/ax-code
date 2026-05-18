@@ -107,32 +107,39 @@ export namespace LLM {
       messages: input.messages,
     })
     if (reasoningPolicyDecision.checkpoint) {
-      Recorder.emit(AgentControlEvents.reasoningSelected({
-        sessionID: input.sessionID,
-        depth: reasoningPolicyDecision.depth,
-        reason: reasoningPolicyDecision.reason ?? "policy_selected",
-        policyVersion: "v4-bridge",
-        checkpoint: reasoningPolicyDecision.checkpoint,
-      }))
+      Recorder.emit(
+        AgentControlEvents.reasoningSelected({
+          sessionID: input.sessionID,
+          depth: reasoningPolicyDecision.depth,
+          reason: reasoningPolicyDecision.reason ?? "policy_selected",
+          policyVersion: "v4-bridge",
+          checkpoint: reasoningPolicyDecision.checkpoint,
+        }),
+      )
     }
     if (input.agent.name === "plan") {
-      Recorder.emit(AgentControlEvents.phaseChanged({
-        sessionID: input.sessionID,
-        previousPhase: "assess",
-        phase: "plan",
-        reason: "plan_mode",
-        deterministic: false,
-      }))
-      Recorder.emit(AgentControlEvents.planCreated({
-        sessionID: input.sessionID,
-        deterministic: false,
-        plan: AgentControl.createShadowPlan({
-          id: `plan_${input.sessionID}`,
-          objective: ReasoningPolicy.objective(input.messages) || reasoningPolicyDecision.objective || "Plan mode session",
-          ownerAgent: input.agent.name,
+      Recorder.emit(
+        AgentControlEvents.phaseChanged({
+          sessionID: input.sessionID,
+          previousPhase: "assess",
+          phase: "plan",
           reason: "plan_mode",
+          deterministic: false,
         }),
-      }))
+      )
+      Recorder.emit(
+        AgentControlEvents.planCreated({
+          sessionID: input.sessionID,
+          deterministic: false,
+          plan: AgentControl.createShadowPlan({
+            id: `plan_${input.sessionID}`,
+            objective:
+              ReasoningPolicy.objective(input.messages) || reasoningPolicyDecision.objective || "Plan mode session",
+            ownerAgent: input.agent.name,
+            reason: "plan_mode",
+          }),
+        }),
+      )
     }
     const reasoningPolicyReminder = ReasoningPolicy.systemReminder(reasoningPolicyDecision)
     if (reasoningPolicyReminder) system.push(reasoningPolicyReminder)

@@ -73,12 +73,10 @@ export function persistProjectConfigBooleanFeatureResponse(
   })
 }
 
-export async function readProjectConfigFeatureState(
-  options: {
-    featureFlag: string
-    read: (config: Config.Info | undefined) => boolean
-  },
-) {
+export async function readProjectConfigFeatureState(options: {
+  featureFlag: string
+  read: (config: Config.Info | undefined) => boolean
+}) {
   const config = await readProjectConfig()
   const enabled = options.read(config)
   FeatureFlag.set(options.featureFlag, enabled)

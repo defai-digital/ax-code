@@ -93,7 +93,8 @@ export namespace QualityShadow {
         input.stackTrace ? "stack trace was provided" : "no stack trace was provided",
       ],
       evidenceRefs: graphQuery ? [{ kind: "graph", id: graphQuery }] : undefined,
-      suggestedNextAction: "Capture runtime evidence for this candidate cause, then verify the fix before resolving it.",
+      suggestedNextAction:
+        "Capture runtime evidence for this candidate cause, then verify the fix before resolving it.",
       ruleId,
       source: { tool: "debug_analyze", version: Installation.VERSION, runId: input.session.id },
     })

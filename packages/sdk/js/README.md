@@ -11,12 +11,12 @@ Use the SDK when you want AX Code's runtime inside your own TypeScript or JavaSc
 
 ## Choose the Right Integration Surface
 
-| Need | Use | Why |
-| ---- | --- | --- |
-| Interactive repository work | `ax-code` TUI or `ax-code run` | Fastest path for humans working directly in a checkout |
-| In-process TypeScript or JavaScript automation | `@ax-code/sdk` with `createAgent()` | Lowest overhead, custom tools, streaming, multi-turn sessions, and testing helpers |
-| Service boundary or non-JavaScript clients | `ax-code serve` plus OpenAPI | Lets Python, Go, Java, Rust, CI jobs, and internal platforms call the same runtime over HTTP |
-| Editor-native workflow | VS Code integration | Uses the installed CLI/runtime while staying inside the editor |
+| Need                                           | Use                                 | Why                                                                                          |
+| ---------------------------------------------- | ----------------------------------- | -------------------------------------------------------------------------------------------- |
+| Interactive repository work                    | `ax-code` TUI or `ax-code run`      | Fastest path for humans working directly in a checkout                                       |
+| In-process TypeScript or JavaScript automation | `@ax-code/sdk` with `createAgent()` | Lowest overhead, custom tools, streaming, multi-turn sessions, and testing helpers           |
+| Service boundary or non-JavaScript clients     | `ax-code serve` plus OpenAPI        | Lets Python, Go, Java, Rust, CI jobs, and internal platforms call the same runtime over HTTP |
+| Editor-native workflow                         | VS Code integration                 | Uses the installed CLI/runtime while staying inside the editor                               |
 
 For cross-language clients, see [HTTP and OpenAPI SDKs](../../../docs/sdk-http-openapi.md).
 

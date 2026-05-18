@@ -158,8 +158,30 @@ export namespace ToolRegistry {
         }),
       )
 
-      async function all(custom: Tool.Info[]): Promise<Tool.Info[]> {
-        const cfg = await Config.get()
+      type ToolConfig = Awaited<ReturnType<typeof Config.get>>
+
+      function cacheKey(input: {
+        model: { providerID: ProviderID; modelID: ModelID }
+        agent?: Agent.Info
+        cfg: ToolConfig
+      }) {
+        return [
+          input.agent?.name ?? "",
+          input.model.providerID,
+          input.model.modelID,
+          Flag.AX_CODE_CLIENT,
+          Flag.AX_CODE_ENABLE_QUESTION_TOOL,
+          Flag.AX_CODE_ENABLE_EXA,
+          Flag.AX_CODE_EXPERIMENTAL_LSP_TOOL,
+          Flag.AX_CODE_EXPERIMENTAL_CODE_INTELLIGENCE,
+          Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE,
+          Flag.AX_CODE_EXPERIMENTAL_PLAN_MODE,
+          input.cfg.experimental?.batch_tool === true,
+        ].join(":")
+      }
+
+      async function all(custom: Tool.Info[], cfg?: ToolConfig): Promise<Tool.Info[]> {
+        cfg ??= await Config.get()
         const question = Flag.AX_CODE_CLIENT === "cli" || Flag.AX_CODE_ENABLE_QUESTION_TOOL
 
         return [
@@ -221,11 +243,12 @@ export namespace ToolRegistry {
         model: { providerID: ProviderID; modelID: ModelID },
         agent?: Agent.Info,
       ) {
-        const key = `${agent?.name ?? ""}:${model.providerID}:${model.modelID}`
+        const cfg = yield* Effect.promise(() => Config.get())
+        const key = cacheKey({ model, agent, cfg })
         if (toolCache?.key === key) return toolCache.result
 
         const state = yield* InstanceState.get(cache)
-        const allTools = yield* Effect.promise(() => all(state.custom))
+        const allTools = yield* Effect.promise(() => all(state.custom, cfg))
         // Per-tool try/catch so one broken tool (most commonly a
         // flaky MCP server whose `init()` rejects during tool
         // registration) doesn't reject Promise.all and leave the

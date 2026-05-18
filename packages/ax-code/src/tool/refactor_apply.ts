@@ -50,9 +50,7 @@ export const RefactorApplyTool = Tool.define("refactor_apply", {
     // intent, not just file writes.
     const patternFiles = args.patch ? extractFilesFromDiff(args.patch) : []
     const relativePatterns =
-      patternFiles.length > 0
-        ? patternFiles.map((f) => normalizeToWorkspacePath(f, Instance.worktree))
-        : ["*"]
+      patternFiles.length > 0 ? patternFiles.map((f) => normalizeToWorkspacePath(f, Instance.worktree)) : ["*"]
     await ctx.ask({
       permission: "edit",
       patterns: relativePatterns,

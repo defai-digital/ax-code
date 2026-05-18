@@ -35,11 +35,11 @@ The runtime isolation default is `workspace-write` with network disabled. This i
 
 ax-code includes a built-in execution isolation sandbox that restricts what the AI agent can access at the tool level. Three modes are available:
 
-| Mode                      | Behavior                                                                            |
-| ------------------------- | ----------------------------------------------------------------------------------- |
+| Mode                          | Behavior                                                                                                         |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------- |
 | **Workspace write** (default) | Allows writes only inside the workspace; `.git` and `.ax-code` are always protected; network disabled by default |
-| **Read-only**                 | Blocks all file mutations and shell commands                                                                    |
-| **Full access**               | Disables isolation entirely                                                                                     |
+| **Read-only**                 | Blocks all file mutations and shell commands                                                                     |
+| **Full access**               | Disables isolation entirely                                                                                      |
 
 Key properties:
 

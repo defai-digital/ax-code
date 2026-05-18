@@ -881,7 +881,7 @@ export namespace SessionProcessor {
               if (retry !== undefined) {
                 attempt++
                 if (attempt <= SessionRetry.RETRY_MAX_ATTEMPTS) {
-                  const delay = SessionRetry.delay(attempt, error.name === "APIError" ? error : undefined)
+                  const delay = SessionRetry.delay(attempt, MessageV2.APIError.isInstance(error) ? error : undefined)
                   await SessionStatus.set(input.sessionID, {
                     type: "retry",
                     attempt,

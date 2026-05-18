@@ -20,9 +20,7 @@ describe("AgentControlEvents", () => {
       deterministic: false,
     })
     expect("messageID" in event).toBe(false)
-    expect(
-      ReplayEvent.parse(event),
-    ).toMatchObject({
+    expect(ReplayEvent.parse(event)).toMatchObject({
       type: "agent.phase.changed",
       previousPhase: "assess",
       phase: "plan",

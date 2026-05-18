@@ -139,7 +139,11 @@ function ollamaCompatibleLoader(providerID: string, envKey: string, defaultHost:
         return r.ok
       })
       .catch((error) => {
-        log.debug("Ollama-compatible reachability probe failed", { providerID, host: initialEndpoint.discoveryHost, error })
+        log.debug("Ollama-compatible reachability probe failed", {
+          providerID,
+          host: initialEndpoint.discoveryHost,
+          error,
+        })
         return false
       })
 
@@ -149,10 +153,12 @@ function ollamaCompatibleLoader(providerID: string, envKey: string, defaultHost:
       async discoverModels(provider) {
         const endpoint = resolveLocalProviderEndpoint({ provider, envKey, defaultHost })
         const fetcher = endpoint.local ? fetch : Ssrf.pinnedFetch
-        const res = await fetcher(`${endpoint.discoveryHost}/api/tags`, { signal: AbortSignal.timeout(5000) }).catch((error) => {
-          log.debug("Ollama-compatible model discovery failed", { providerID, host: endpoint.discoveryHost, error })
-          return null
-        })
+        const res = await fetcher(`${endpoint.discoveryHost}/api/tags`, { signal: AbortSignal.timeout(5000) }).catch(
+          (error) => {
+            log.debug("Ollama-compatible model discovery failed", { providerID, host: endpoint.discoveryHost, error })
+            return null
+          },
+        )
         if (!res?.ok) {
           if (res)
             log.debug("Ollama-compatible model discovery returned non-OK", {

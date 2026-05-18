@@ -286,19 +286,16 @@ describe("DebugAnalyzeTool", () => {
         spies.push(spyOn(QualityShadow, "captureDebugAnalyze").mockResolvedValue(undefined))
 
         const tool = await DebugAnalyzeTool.init()
-        const result = await tool.execute(
-          { error: "Error: unknown" },
-          {
-            sessionID: session.id,
-            messageID: "msg_test" as any,
-            agent: "test-agent",
-            abort: new AbortController().signal,
-            callID: "call_debug_empty",
-            messages: [],
-            metadata() {},
-            ask: async () => {},
-          } as any,
-        )
+        const result = await tool.execute({ error: "Error: unknown" }, {
+          sessionID: session.id,
+          messageID: "msg_test" as any,
+          agent: "test-agent",
+          abort: new AbortController().signal,
+          callID: "call_debug_empty",
+          messages: [],
+          metadata() {},
+          ask: async () => {},
+        } as any)
 
         expect(result.metadata.finding).toBeUndefined()
         expect(result.metadata.findingId).toBeUndefined()

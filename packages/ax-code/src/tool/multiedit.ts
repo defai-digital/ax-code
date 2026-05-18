@@ -35,7 +35,9 @@ export const MultiEditTool = Tool.define("multiedit", {
   async execute(params, ctx) {
     const resolveFilePath = (filePath: string) => resolveToolFilePath(filePath, Instance.directory)
     const relativePath = (filePath: string) => normalizeToWorkspacePath(filePath, Instance.worktree)
-    const files = Array.from(new Set(params.edits.map((edit) => resolveFilePath(edit.filePath ?? params.filePath)))).sort()
+    const files = Array.from(
+      new Set(params.edits.map((edit) => resolveFilePath(edit.filePath ?? params.filePath))),
+    ).sort()
     const titlePath = files[0] ?? resolveFilePath(params.filePath)
     const original = new Map<string, string>()
     const current = new Map<string, string>()

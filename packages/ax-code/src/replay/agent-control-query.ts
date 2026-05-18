@@ -71,7 +71,8 @@ export namespace AgentControlReplayQuery {
       case "agent.blocked":
         return asString(normalized.reason) ? (normalized as ReplayEvent) : undefined
       case "agent.completed":
-        return asString(normalized.validationStatus) === "not_required" || asString(normalized.validationStatus) === "passed"
+        return asString(normalized.validationStatus) === "not_required" ||
+          asString(normalized.validationStatus) === "passed"
           ? (normalized as ReplayEvent)
           : undefined
       case "agent.safety.decided":
@@ -191,7 +192,11 @@ export namespace AgentControlReplayQuery {
           id,
           eventType,
           kind: "plan",
-          title: objective ? `Plan: ${truncate(objective)}` : eventType === "agent.plan.created" ? "Plan created" : "Plan updated",
+          title: objective
+            ? `Plan: ${truncate(objective)}`
+            : eventType === "agent.plan.created"
+              ? "Plan created"
+              : "Plan updated",
           status,
           tone: planTone(plan, status),
           detail: [planProgressLabel(plan), `approval ${status}`].filter(Boolean).join(DETAIL_SEPARATOR) || undefined,
@@ -205,7 +210,8 @@ export namespace AgentControlReplayQuery {
           kind: "validation",
           title: `Validation: ${titlecase(status)}`,
           status,
-          tone: status === "passed" || status === "not_required" ? "success" : status === "failed" ? "warning" : "working",
+          tone:
+            status === "passed" || status === "not_required" ? "success" : status === "failed" ? "warning" : "working",
           detail: asString(properties.reason),
         }
       }
@@ -245,7 +251,12 @@ export namespace AgentControlReplayQuery {
           kind: "safety",
           title: shadow ? `Safety: Shadow ${safetyActionLabel(action)}` : `Safety: ${safetyActionLabel(action)}`,
           status: action,
-          tone: action === "deny" || risk === "blocked" || risk === "high" ? "warning" : action === "allow" ? "success" : "working",
+          tone:
+            action === "deny" || risk === "blocked" || risk === "high"
+              ? "warning"
+              : action === "allow"
+                ? "success"
+                : "working",
           detail: detail || undefined,
           shadow,
         }
@@ -276,9 +287,7 @@ export namespace AgentControlReplayQuery {
   }
 
   function titlecase(value: string): string {
-    return value
-      .replace(/_/g, " ")
-      .replace(/\b\w/g, (item) => item.toUpperCase())
+    return value.replace(/_/g, " ").replace(/\b\w/g, (item) => item.toUpperCase())
   }
 
   function truncate(value: string, length = 40): string {
@@ -290,10 +299,7 @@ export namespace AgentControlReplayQuery {
   function isPlanArtifactLike(value: unknown) {
     const plan = asRecord(value)
     return (
-      !!asString(plan.id) &&
-      !!asString(plan.objective) &&
-      !!asString(plan.approvalState) &&
-      Array.isArray(plan.tasks)
+      !!asString(plan.id) && !!asString(plan.objective) && !!asString(plan.approvalState) && Array.isArray(plan.tasks)
     )
   }
 

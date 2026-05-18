@@ -1,8 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import {
-  DOUBLE_ESCAPE_CLEAR_MS,
-  promptEscapeClearIntent,
-} from "../../../src/cli/cmd/tui/component/prompt/view-model"
+import { DOUBLE_ESCAPE_CLEAR_MS, promptEscapeClearIntent } from "../../../src/cli/cmd/tui/component/prompt/view-model"
 
 describe("prompt view model", () => {
   test("arms clear on the first escape when the prompt has draft text", () => {

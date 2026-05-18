@@ -16,7 +16,11 @@ import { Locale } from "@/util/locale"
 import type { PromptInfo } from "./history"
 import { useFrecency } from "./frecency"
 import { createAbortableResourceFetcher } from "@tui/util/abortable-resource"
-import { autocompleteOptionID, autocompletePopupPlacement, autocompleteSelectionScrollDelta } from "./autocomplete-scroll"
+import {
+  autocompleteOptionID,
+  autocompletePopupPlacement,
+  autocompleteSelectionScrollDelta,
+} from "./autocomplete-scroll"
 import { useKV } from "@tui/context/kv"
 import { buildGlyphSet, NERD_FONT_KV_KEY, resolveNerdFontEnabled } from "@tui/ui/glyphs"
 import { Flag } from "@/flag/flag"

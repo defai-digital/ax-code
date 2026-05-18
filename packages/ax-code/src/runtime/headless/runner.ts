@@ -1,9 +1,6 @@
 import type { Event } from "@ax-code/sdk/v2"
 import type { HeadlessRuntimeCommand } from "./command"
-import {
-  executeHeadlessProjectionEffects,
-  type HeadlessProjectionEffectHandlers,
-} from "./effects"
+import { executeHeadlessProjectionEffects, type HeadlessProjectionEffectHandlers } from "./effects"
 import { decodeHeadlessEventLogRecord } from "./event-log"
 import { closeHeadlessEventSink, writeHeadlessEventSink, type HeadlessEventSink } from "./event-sink"
 import type { HeadlessRuntimeEvent } from "./event"
@@ -13,11 +10,7 @@ import {
   type HeadlessProjectionApplyResult,
   type HeadlessProjectionState,
 } from "./projection"
-import {
-  createHeadlessAgentRuntime,
-  type HeadlessAgentRuntime,
-  type HeadlessAgentRuntimeInput,
-} from "./runtime"
+import { createHeadlessAgentRuntime, type HeadlessAgentRuntime, type HeadlessAgentRuntimeInput } from "./runtime"
 
 export type HeadlessRuntimeEventDecoder<
   TSession extends { id: string },
@@ -85,9 +78,7 @@ export async function runHeadlessSession<
   input: HeadlessSessionRunnerInput<TSession, TTodo, TDiff, TStatus, TMessage, TPart, TRisk>,
 ): Promise<HeadlessSessionRunnerResult<TSession, TTodo, TDiff, TStatus, TMessage, TPart, TRisk>> {
   const runtime = input.runtime ?? createHeadlessAgentRuntime(input)
-  const state =
-    input.state ??
-    createHeadlessProjectionState<TSession, TTodo, TDiff, TStatus, TMessage, TPart, TRisk>()
+  const state = input.state ?? createHeadlessProjectionState<TSession, TTodo, TDiff, TStatus, TMessage, TPart, TRisk>()
   const controller = new AbortController()
   const stopFromSignal = () => controller.abort(input.signal.reason)
   input.signal.addEventListener("abort", stopFromSignal, { once: true })

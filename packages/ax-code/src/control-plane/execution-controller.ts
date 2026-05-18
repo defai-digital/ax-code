@@ -67,7 +67,8 @@ export namespace ExecutionController {
         }
         return { phase: "validate", reason: "validation_pending", validationStatus: "pending" }
       case "recover":
-        if (signal.planRequired || planHasOpenWork(input.state.plan)) return { phase: "plan", reason: "replan_required" }
+        if (signal.planRequired || planHasOpenWork(input.state.plan))
+          return { phase: "plan", reason: "replan_required" }
         return { phase: "execute", reason: "retry_execution" }
       case "summarize":
         if (planHasOpenWork(input.state.plan)) {
@@ -94,7 +95,7 @@ export namespace ExecutionController {
         ...input.state,
         lastDecisionReason: decision.reason,
         validationStatus: decision.validationStatus ?? input.state.validationStatus,
-        blockedReason: decision.phase === "blocked" ? decision.blockedReason ?? decision.reason : undefined,
+        blockedReason: decision.phase === "blocked" ? (decision.blockedReason ?? decision.reason) : undefined,
       })
     }
     return AgentControl.transition({

@@ -150,15 +150,17 @@ export namespace AgentControl {
         validationStatus: input.validationStatus ?? "not_required",
       })
     }
-    return State.parse(compact({
-      sessionID: input.sessionID,
-      phase: input.phase ?? "assess",
-      objective: input.objective,
-      plan: input.plan,
-      reasoningDepth: input.reasoningDepth ?? "standard",
-      lastDecisionReason: input.lastDecisionReason ?? "session_started",
-      validationStatus: input.validationStatus ?? "not_required",
-    }))
+    return State.parse(
+      compact({
+        sessionID: input.sessionID,
+        phase: input.phase ?? "assess",
+        objective: input.objective,
+        plan: input.plan,
+        reasoningDepth: input.reasoningDepth ?? "standard",
+        lastDecisionReason: input.lastDecisionReason ?? "session_started",
+        validationStatus: input.validationStatus ?? "not_required",
+      }),
+    )
   }
 
   export function canTransition(from: Phase, to: Phase): boolean {
@@ -173,15 +175,17 @@ export namespace AgentControl {
     const validationStatus = input.validationStatus ?? input.state.validationStatus
     if (input.phase === "complete") assertCanComplete({ plan, validationStatus })
 
-    return State.parse(compact({
-      ...input.state,
-      phase: input.phase,
-      plan,
-      reasoningDepth: input.reasoningDepth ?? input.state.reasoningDepth,
-      lastDecisionReason: input.reason,
-      validationStatus,
-      blockedReason: input.phase === "blocked" ? input.blockedReason ?? input.reason : undefined,
-    }))
+    return State.parse(
+      compact({
+        ...input.state,
+        phase: input.phase,
+        plan,
+        reasoningDepth: input.reasoningDepth ?? input.state.reasoningDepth,
+        lastDecisionReason: input.reason,
+        validationStatus,
+        blockedReason: input.phase === "blocked" ? (input.blockedReason ?? input.reason) : undefined,
+      }),
+    )
   }
 
   export function planProgress(plan: PlanArtifact) {

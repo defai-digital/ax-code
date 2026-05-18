@@ -35,32 +35,38 @@ describe("footerTokenChip", () => {
   test("no rate when elapsed window is sub-second (avoids inf t/s flash)", () => {
     // 200ms after start, 50 tokens — too noisy to surface
     const startedAt = 1_700_000_000_000
-    expect(
-      footerTokenChip({ tokens: { input: 100, output: 50 }, startedAt, now: startedAt + 200 }),
-    ).toEqual({ input: "100", output: "50" })
+    expect(footerTokenChip({ tokens: { input: 100, output: 50 }, startedAt, now: startedAt + 200 })).toEqual({
+      input: "100",
+      output: "50",
+    })
   })
 
   test("rate uses 1-decimal when <100 t/s", () => {
     // 5s elapsed, 200 output → 40 t/s
     const startedAt = 1_700_000_000_000
-    expect(
-      footerTokenChip({ tokens: { input: 1000, output: 200 }, startedAt, now: startedAt + 5_000 }),
-    ).toEqual({ input: "1.0k", output: "200", rate: "40.0 t/s" })
+    expect(footerTokenChip({ tokens: { input: 1000, output: 200 }, startedAt, now: startedAt + 5_000 })).toEqual({
+      input: "1.0k",
+      output: "200",
+      rate: "40.0 t/s",
+    })
   })
 
   test("rate uses whole number when >=100 t/s", () => {
     // 4s elapsed, 500 output → 125 t/s
     const startedAt = 1_700_000_000_000
-    expect(
-      footerTokenChip({ tokens: { input: 800, output: 500 }, startedAt, now: startedAt + 4_000 }),
-    ).toEqual({ input: "800", output: "500", rate: "125 t/s" })
+    expect(footerTokenChip({ tokens: { input: 800, output: 500 }, startedAt, now: startedAt + 4_000 })).toEqual({
+      input: "800",
+      output: "500",
+      rate: "125 t/s",
+    })
   })
 
   test("no rate when output tokens still zero (only input staged)", () => {
     const startedAt = 1_700_000_000_000
-    expect(
-      footerTokenChip({ tokens: { input: 1500, output: 0 }, startedAt, now: startedAt + 3_000 }),
-    ).toEqual({ input: "1.5k", output: "0" })
+    expect(footerTokenChip({ tokens: { input: 1500, output: 0 }, startedAt, now: startedAt + 3_000 })).toEqual({
+      input: "1.5k",
+      output: "0",
+    })
   })
 })
 
@@ -130,15 +136,11 @@ describe("footerProgressBar", () => {
   })
 
   test("hides bar on narrow terminals (< 80 cols)", () => {
-    expect(
-      footerProgressBar({ status: { type: "busy", step: 4, maxSteps: 500 }, terminalWidth: 60 }),
-    ).toBeUndefined()
+    expect(footerProgressBar({ status: { type: "busy", step: 4, maxSteps: 500 }, terminalWidth: 60 })).toBeUndefined()
   })
 
   test("renders bar on terminals >= 80 cols", () => {
-    expect(
-      footerProgressBar({ status: { type: "busy", step: 4, maxSteps: 500 }, terminalWidth: 80 }),
-    ).toBeDefined()
+    expect(footerProgressBar({ status: { type: "busy", step: 4, maxSteps: 500 }, terminalWidth: 80 })).toBeDefined()
   })
 
   test("uses only static block characters — no shimmer cell", () => {

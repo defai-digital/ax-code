@@ -150,31 +150,43 @@ describe("tool.write", () => {
 
           // Missing Evidence
           await expect(
-            write.execute({
-              filePath: filepath,
-              content: "Classification: confirmed\n\n## Suggested Fix\nfix it\n",
-            }, ctx),
+            write.execute(
+              {
+                filePath: filepath,
+                content: "Classification: confirmed\n\n## Suggested Fix\nfix it\n",
+              },
+              ctx,
+            ),
           ).rejects.toThrow("Evidence")
 
           // Missing fix section
           await expect(
-            write.execute({
-              filePath: filepath,
-              content: "Classification: suspected\n\n## Evidence\nfound it\n",
-            }, ctx),
+            write.execute(
+              {
+                filePath: filepath,
+                content: "Classification: suspected\n\n## Evidence\nfound it\n",
+              },
+              ctx,
+            ),
           ).rejects.toThrow("Suggested Fix")
 
           // ## Recommended Action is accepted instead of ## Suggested Fix
-          await write.execute({
-            filePath: filepath,
-            content: "Classification: confirmed\n\n## Evidence\nfound it\n\n## Recommended Action\ndo this\n",
-          }, ctx)
+          await write.execute(
+            {
+              filePath: filepath,
+              content: "Classification: confirmed\n\n## Evidence\nfound it\n\n## Recommended Action\ndo this\n",
+            },
+            ctx,
+          )
 
           // ## Closure is accepted for false_positive
-          await write.execute({
-            filePath: filepath,
-            content: "Classification: false_positive\n\n## Evidence\nscanner noise\n\n## Closure\nnot a real bug\n",
-          }, ctx)
+          await write.execute(
+            {
+              filePath: filepath,
+              content: "Classification: false_positive\n\n## Evidence\nscanner noise\n\n## Closure\nnot a real bug\n",
+            },
+            ctx,
+          )
         },
       })
     })
@@ -188,16 +200,22 @@ describe("tool.write", () => {
           const write = await WriteTool.init()
 
           // Normal markdown file outside .internal/bugs/ — no validation
-          await write.execute({
-            filePath: path.join(tmp.path, "notes.md"),
-            content: "# Notes\n\nNo classification needed.\n",
-          }, ctx)
+          await write.execute(
+            {
+              filePath: path.join(tmp.path, "notes.md"),
+              content: "# Notes\n\nNo classification needed.\n",
+            },
+            ctx,
+          )
 
           // .md file in a sibling directory — no validation
-          await write.execute({
-            filePath: path.join(tmp.path, ".internal", "adr", "decision.md"),
-            content: "# ADR\n\nNo classification needed.\n",
-          }, ctx)
+          await write.execute(
+            {
+              filePath: path.join(tmp.path, ".internal", "adr", "decision.md"),
+              content: "# ADR\n\nNo classification needed.\n",
+            },
+            ctx,
+          )
         },
       })
     })
@@ -210,15 +228,21 @@ describe("tool.write", () => {
         fn: async () => {
           const write = await WriteTool.init()
 
-          await write.execute({
-            filePath: path.join(tmp.path, ".internal", "bugs", "README.md"),
-            content: "# Bug Reports\n\nThis folder tracks repo-grounded bug reports.\n",
-          }, ctx)
+          await write.execute(
+            {
+              filePath: path.join(tmp.path, ".internal", "bugs", "README.md"),
+              content: "# Bug Reports\n\nThis folder tracks repo-grounded bug reports.\n",
+            },
+            ctx,
+          )
 
-          await write.execute({
-            filePath: path.join(tmp.path, ".internal", "bugs", "summary.md"),
-            content: "# Bug Summary\n\nNo report classification is required for this index file.\n",
-          }, ctx)
+          await write.execute(
+            {
+              filePath: path.join(tmp.path, ".internal", "bugs", "summary.md"),
+              content: "# Bug Summary\n\nNo report classification is required for this index file.\n",
+            },
+            ctx,
+          )
         },
       })
     })

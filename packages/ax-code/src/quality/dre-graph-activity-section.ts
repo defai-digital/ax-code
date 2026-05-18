@@ -7,7 +7,11 @@ import { renderDreGraphRollbackBars } from "./dre-graph-rollback"
 import { parseDreGraphTimeline, parseDreGraphTimelineStepDurationMs } from "./dre-graph-timeline"
 import { barChart, chip } from "./dre-graph-widgets"
 
-export function activitySection(graph: SessionGraph.Snapshot, dre: SessionDre.Snapshot, points: SessionRollback.Point[]) {
+export function activitySection(
+  graph: SessionGraph.Snapshot,
+  dre: SessionDre.Snapshot,
+  points: SessionRollback.Point[],
+) {
   const parsed = parseDreGraphTimeline(dre.timeline)
   const detail = dre.detail
   const durations = parsed.steps.map((s) => parseDreGraphTimelineStepDurationMs(s.duration))
