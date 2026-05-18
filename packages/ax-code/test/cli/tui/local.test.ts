@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { resolveCurrentAgent } from "../../src/cli/cmd/tui/context/local-util"
+import { resolveCurrentAgent } from "../../../src/cli/cmd/tui/context/local-util"
 
 describe("tui local agent selection", () => {
   test("preserves pending startup agent name until agents load", () => {

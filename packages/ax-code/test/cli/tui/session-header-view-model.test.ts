@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { collapseSessionBreadcrumbs, sessionBreadcrumbs } from "../../src/cli/cmd/tui/routes/session/header-view-model"
+import { collapseSessionBreadcrumbs, sessionBreadcrumbs } from "../../../src/cli/cmd/tui/routes/session/header-view-model"
 
 describe("tui session header view model", () => {
   test("orders breadcrumbs from root to current session", () => {

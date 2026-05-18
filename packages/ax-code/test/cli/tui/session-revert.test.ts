@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { diffFiles, revertedMessages, revertState } from "../../src/cli/cmd/tui/routes/session/revert"
+import { diffFiles, revertedMessages, revertState } from "../../../src/cli/cmd/tui/routes/session/revert"
 
 describe("tui session revert helpers", () => {
   test("parses diff file stats", () => {

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { detail, diagnostics, filetype, normalize, workdir } from "../../src/cli/cmd/tui/routes/session/format"
+import { detail, diagnostics, filetype, normalize, workdir } from "../../../src/cli/cmd/tui/routes/session/format"
 
 describe("tui session format", () => {
   test("normalizes paths inside and outside cwd", () => {

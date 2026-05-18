@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { messageScroll, nextVisibleMessage, visibleMessages } from "../../src/cli/cmd/tui/routes/session/navigation"
+import { messageScroll, nextVisibleMessage, visibleMessages } from "../../../src/cli/cmd/tui/routes/session/navigation"
 
 describe("tui session navigation", () => {
   test("filters visible messages to real text content", () => {

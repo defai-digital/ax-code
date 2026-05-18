@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { buildSubagentStatusView } from "../../src/cli/cmd/tui/routes/session/subagent-status-view"
+import { buildSubagentStatusView } from "../../../src/cli/cmd/tui/routes/session/subagent-status-view"
 
 describe("buildSubagentStatusView", () => {
   test("rolls child session activity into a parent-visible active subagent label", () => {

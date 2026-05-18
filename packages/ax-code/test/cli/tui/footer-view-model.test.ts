@@ -6,7 +6,7 @@ import {
   footerSessionStatusView,
   SESSION_STATUS_STALE_AFTER_MS,
   SESSION_STATUS_TOOL_STALE_AFTER_MS,
-} from "../../src/cli/cmd/tui/routes/session/footer-view-model"
+} from "../../../src/cli/cmd/tui/routes/session/footer-view-model"
 
 describe("footerAgentControlStatusView", () => {
   test("prioritizes open subagent calls over completion labels", () => {

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { RGBA } from "@opentui/core"
-import { createColors } from "../../src/cli/cmd/tui/ui/spinner"
+import { createColors } from "../../../src/cli/cmd/tui/ui/spinner"
 
 describe("tui spinner", () => {
   test("restarts the bidirectional fade cycle after a full loop", () => {

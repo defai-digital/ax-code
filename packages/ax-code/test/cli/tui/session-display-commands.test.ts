@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { shareTitle, transcriptFilename } from "../../src/cli/cmd/tui/routes/session/display-command-helpers"
+import { shareTitle, transcriptFilename } from "../../../src/cli/cmd/tui/routes/session/display-command-helpers"
 
 describe("tui session display command helpers", () => {
   test("formats share title from share state", () => {
