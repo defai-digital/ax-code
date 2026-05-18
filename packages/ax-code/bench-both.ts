@@ -8,6 +8,8 @@ console.log("=".repeat(60))
 console.log("  BENCHMARK: OpenCode SDK vs ax-code Programmatic SDK")
 console.log("=".repeat(60))
 
+const { Env } = await import("./src/util/env.ts")
+
 // ============================================
 // TEST 1: OpenCode SDK approach (spawn server)
 // This is how an external developer uses OpenCode
@@ -30,93 +32,94 @@ try {
   // Step 1: Spawn server
   const s1 = Date.now()
   const proc = spawn("ax-code", ["serve", "--hostname=127.0.0.1", "--port=4099"], {
-    env: { ...process.env },
+    env: Env.sanitize(),
   })
-
-  const url = await new Promise<string>((resolve, reject) => {
-    const timeout = setTimeout(() => reject(new Error("Server spawn timeout (30s)")), 30000)
-    let output = ""
-    proc.stdout?.on("data", (chunk: Buffer) => {
-      output += chunk.toString()
-      const match = output.match(/listening on\s+(https?:\/\/[^\s]+)/)
-      if (match) {
-        clearTimeout(timeout)
-        resolve(match[1])
-      }
-    })
-    proc.stderr?.on("data", (chunk: Buffer) => {
-      output += chunk.toString()
-    })
-    proc.on("error", (e: Error) => {
-      clearTimeout(timeout)
-      reject(e)
-    })
-    proc.on("exit", (code: number) => {
-      clearTimeout(timeout)
-      reject(new Error("Server exited: " + code))
-    })
-  })
-  const spawn_time = Date.now() - s1
-  console.log("  Step 1 - Spawn server:", spawn_time, "ms")
-
-  // Step 2: Create client
-  const { createOpencodeClient } = await import("@ax-code/sdk/v2/client")
-  const client = createOpencodeClient({ baseUrl: url })
-  console.log("  Step 2 - Create client: 0 ms")
-
-  // Step 3: Create session
-  const s3 = Date.now()
-  const session = await client.session.create()
-  const session_time = Date.now() - s3
-  console.log("  Step 3 - Create session:", session_time, "ms")
-
-  // Step 4: Subscribe events
-  const s4 = Date.now()
-  const events = await client.event.subscribe()
-  const sub_time = Date.now() - s4
-  console.log("  Step 4 - Subscribe events:", sub_time, "ms")
-
-  // Step 5+6: Send prompt + wait for response
-  const sessionID = (session.data as any)?.id
-  const s5 = Date.now()
-
-  let got_response = false
-  const response_promise = (async () => {
-    for await (const event of events.stream) {
-      if (event.type === "session.status") {
-        const props = (event as any).properties
-        if (props.sessionID === sessionID && props.status?.type === "idle") {
-          got_response = true
-          return
-        }
-      }
-    }
-  })()
-
-  await client.session.prompt({
-    sessionID,
-    parts: [{ type: "text", text: "What is 2+2? One word." }],
-  })
-
-  // Wait max 60 seconds for response
-  const timeout_promise = new Promise<void>((_, reject) =>
-    setTimeout(() => reject(new Error("Response timeout (60s)")), 60000),
-  )
 
   try {
-    await Promise.race([response_promise, timeout_promise])
-    const prompt_time = Date.now() - s5
-    console.log("  Step 5+6 - Prompt + response:", prompt_time, "ms")
-  } catch (e: any) {
-    console.log("  Step 5+6 - FAILED:", e.message)
+    const url = await new Promise<string>((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error("Server spawn timeout (30s)")), 30000)
+      let output = ""
+      proc.stdout?.on("data", (chunk: Buffer) => {
+        output += chunk.toString()
+        const match = output.match(/listening on\s+(https?:\/\/[^\s]+)/)
+        if (match) {
+          clearTimeout(timeout)
+          resolve(match[1])
+        }
+      })
+      proc.stderr?.on("data", (chunk: Buffer) => {
+        output += chunk.toString()
+      })
+      proc.on("error", (e: Error) => {
+        clearTimeout(timeout)
+        reject(e)
+      })
+      proc.on("exit", (code: number) => {
+        clearTimeout(timeout)
+        reject(new Error("Server exited: " + code))
+      })
+    })
+    const spawn_time = Date.now() - s1
+    console.log("  Step 1 - Spawn server:", spawn_time, "ms")
+
+    // Step 2: Create client
+    const { createOpencodeClient } = await import("@ax-code/sdk/v2/client")
+    const client = createOpencodeClient({ baseUrl: url })
+    console.log("  Step 2 - Create client: 0 ms")
+
+    // Step 3: Create session
+    const s3 = Date.now()
+    const session = await client.session.create()
+    const session_time = Date.now() - s3
+    console.log("  Step 3 - Create session:", session_time, "ms")
+
+    // Step 4: Subscribe events
+    const s4 = Date.now()
+    const events = await client.event.subscribe()
+    const sub_time = Date.now() - s4
+    console.log("  Step 4 - Subscribe events:", sub_time, "ms")
+
+    // Step 5+6: Send prompt + wait for response
+    const sessionID = (session.data as any)?.id
+    const s5 = Date.now()
+
+    let got_response = false
+    const response_promise = (async () => {
+      for await (const event of events.stream) {
+        if (event.type === "session.status") {
+          const props = (event as any).properties
+          if (props.sessionID === sessionID && props.status?.type === "idle") {
+            got_response = true
+            return
+          }
+        }
+      }
+    })()
+
+    await client.session.prompt({
+      sessionID,
+      parts: [{ type: "text", text: "What is 2+2? One word." }],
+    })
+
+    // Wait max 60 seconds for response
+    const timeout_promise = new Promise<void>((_, reject) =>
+      setTimeout(() => reject(new Error("Response timeout (60s)")), 60000),
+    )
+
+    try {
+      await Promise.race([response_promise, timeout_promise])
+      const prompt_time = Date.now() - s5
+      console.log("  Step 5+6 - Prompt + response:", prompt_time, "ms")
+    } catch (e: any) {
+      console.log("  Step 5+6 - FAILED:", e.message)
+    }
+
+    const opencode_total = Date.now() - opencode_start
+    console.log("\n  OPENCODE TOTAL:", opencode_total, "ms")
+    console.log("  Got response:", got_response)
+  } finally {
+    proc.kill()
   }
-
-  // Step 7: Cleanup
-  proc.kill()
-
-  const opencode_total = Date.now() - opencode_start
-  console.log("\n  OPENCODE TOTAL:", opencode_total, "ms")
-  console.log("  Got response:", got_response)
 } catch (e: any) {
   console.log("  OPENCODE FAILED:", e.message)
   console.log("  Time before failure:", Date.now() - opencode_start, "ms")
