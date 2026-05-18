@@ -155,6 +155,24 @@ describe("release check (full checks)", () => {
     expect(find(results, "phantom-imports").status).toBe("ok")
   })
 
+  test("import of tracked root package metadata from script does not false-positive", async () => {
+    const repo = await makeRepo("2.21.5", "v2.21.4")
+    const scriptPath = path.join(repo, "packages", "ax-code", "script")
+    await mkdir(scriptPath, { recursive: true })
+    await writeFile(path.join(repo, "package.json"), JSON.stringify({ engines: { bun: "^1.3.14" } }) + "\n")
+    await writeFile(
+      path.join(scriptPath, "source-package.ts"),
+      'import rootPkg from "../../../package.json"\nexport const bun = rootPkg.engines.bun\n',
+    )
+
+    await run("git", ["add", "."], repo)
+    await run("git", ["commit", "-qm", "root metadata import"], repo)
+
+    const results = await runChecks(mkCtx(repo, "2.21.5"))
+
+    expect(find(results, "phantom-imports").status).toBe("ok")
+  })
+
   test("dirty working tree in packages/ax-code fails", async () => {
     const repo = await makeRepo("2.21.5", "v2.21.4")
     const srcPath = path.join(repo, "packages", "ax-code", "src")

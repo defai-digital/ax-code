@@ -17773,6 +17773,823 @@
       }
     }
   },
+  "routing-run": {
+    "id": "routing-run",
+    "env": [
+      "ROUTING_RUN_API_KEY"
+    ],
+    "npm": "@ai-sdk/openai-compatible",
+    "api": "https://api.routing.run/v1",
+    "name": "routing.run",
+    "doc": "https://docs.routing.run/api-reference/models",
+    "models": {
+      "route/deepseek-v3.2": {
+        "id": "route/deepseek-v3.2",
+        "name": "DeepSeek V3.2",
+        "family": "deepseek",
+        "attachment": false,
+        "reasoning": true,
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "knowledge": "2024-07",
+        "release_date": "2025-12-01",
+        "last_updated": "2025-12-01",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 163840,
+          "output": 163840
+        }
+      },
+      "route/qwen3.5-9b": {
+        "id": "route/qwen3.5-9b",
+        "name": "Qwen3.5 9B",
+        "family": "qwen3.5",
+        "attachment": true,
+        "reasoning": true,
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-03-10",
+        "last_updated": "2026-03-10",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 262144,
+          "output": 262144
+        }
+      },
+      "route/qwen3.5-9b-chat": {
+        "id": "route/qwen3.5-9b-chat",
+        "name": "Qwen3.5 9B Chat",
+        "family": "qwen3.5",
+        "attachment": true,
+        "reasoning": true,
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-03-10",
+        "last_updated": "2026-03-10",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 262144,
+          "output": 262144
+        }
+      },
+      "route/minimax-m2.7-highspeed": {
+        "id": "route/minimax-m2.7-highspeed",
+        "name": "MiniMax M2.7 Highspeed",
+        "family": "minimax",
+        "attachment": false,
+        "reasoning": true,
+        "tool_call": true,
+        "temperature": true,
+        "release_date": "2026-03-18",
+        "last_updated": "2026-03-18",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 100000,
+          "output": 131072
+        }
+      },
+      "route/glm-5.1": {
+        "id": "route/glm-5.1",
+        "name": "GLM 5.1",
+        "family": "glm",
+        "attachment": false,
+        "reasoning": true,
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-03-27",
+        "last_updated": "2026-03-27",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 202752,
+          "output": 202752
+        }
+      },
+      "route/step-3.5-flash-full": {
+        "id": "route/step-3.5-flash-full",
+        "name": "Step 3.5 Flash Full",
+        "attachment": false,
+        "reasoning": true,
+        "tool_call": true,
+        "temperature": true,
+        "knowledge": "2025-01",
+        "release_date": "2026-01-29",
+        "last_updated": "2026-02-13",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 262144,
+          "input": 256000,
+          "output": 65536
+        }
+      },
+      "route/qwen3.6-27b": {
+        "id": "route/qwen3.6-27b",
+        "name": "Qwen3.6 27B",
+        "family": "qwen",
+        "attachment": true,
+        "reasoning": true,
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-04-22",
+        "last_updated": "2026-04-22",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video",
+            "audio"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 262144,
+          "output": 262144
+        }
+      },
+      "route/deepseek-v4-pro-precision": {
+        "id": "route/deepseek-v4-pro-precision",
+        "name": "DeepSeek V4 Pro Precision",
+        "family": "deepseek-thinking",
+        "attachment": false,
+        "reasoning": true,
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "structured_output": true,
+        "temperature": true,
+        "knowledge": "2025-05",
+        "release_date": "2026-04-24",
+        "last_updated": "2026-04-24",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 1000000,
+          "output": 131072
+        }
+      },
+      "route/deepseek-v4-pro": {
+        "id": "route/deepseek-v4-pro",
+        "name": "DeepSeek V4 Pro",
+        "family": "deepseek-thinking",
+        "attachment": false,
+        "reasoning": true,
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "structured_output": true,
+        "temperature": true,
+        "knowledge": "2025-05",
+        "release_date": "2026-04-24",
+        "last_updated": "2026-04-24",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 1000000,
+          "output": 131072
+        }
+      },
+      "route/glm-5-highspeed": {
+        "id": "route/glm-5-highspeed",
+        "name": "GLM 5 Highspeed",
+        "family": "glm",
+        "attachment": false,
+        "reasoning": true,
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "temperature": true,
+        "release_date": "2026-02-11",
+        "last_updated": "2026-02-11",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 202752,
+          "output": 202752
+        }
+      },
+      "route/mimo-v2.5-pro": {
+        "id": "route/mimo-v2.5-pro",
+        "name": "MiMo V2.5 Pro",
+        "family": "mimo",
+        "attachment": false,
+        "reasoning": true,
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "temperature": true,
+        "knowledge": "2024-12",
+        "release_date": "2026-04-22",
+        "last_updated": "2026-04-22",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 1000000,
+          "output": 262144
+        }
+      },
+      "route/minimax-m2.5": {
+        "id": "route/minimax-m2.5",
+        "name": "MiniMax M2.5",
+        "family": "minimax",
+        "attachment": false,
+        "reasoning": true,
+        "tool_call": true,
+        "temperature": true,
+        "release_date": "2026-02-12",
+        "last_updated": "2026-02-12",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 100000,
+          "output": 131072
+        }
+      },
+      "route/gemma-4-31b-it": {
+        "id": "route/gemma-4-31b-it",
+        "name": "Gemma 4 31B IT",
+        "family": "gemma",
+        "attachment": false,
+        "reasoning": true,
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-04-02",
+        "last_updated": "2026-04-02",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 131072,
+          "output": 65536
+        }
+      },
+      "route/qwen3.5-397b-a17b": {
+        "id": "route/qwen3.5-397b-a17b",
+        "name": "Qwen3.5 397B-A17B",
+        "family": "qwen",
+        "attachment": true,
+        "reasoning": true,
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-02-15",
+        "last_updated": "2026-02-15",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video",
+            "audio"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 262144,
+          "output": 262144
+        }
+      },
+      "route/glm-5.1-full": {
+        "id": "route/glm-5.1-full",
+        "name": "GLM 5.1 Full",
+        "family": "glm",
+        "attachment": false,
+        "reasoning": true,
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-03-27",
+        "last_updated": "2026-03-27",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 202752,
+          "output": 202752
+        }
+      },
+      "route/minimax-m2.7": {
+        "id": "route/minimax-m2.7",
+        "name": "MiniMax M2.7",
+        "family": "minimax",
+        "attachment": false,
+        "reasoning": true,
+        "tool_call": true,
+        "temperature": true,
+        "release_date": "2026-03-18",
+        "last_updated": "2026-03-18",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 100000,
+          "output": 131072
+        }
+      },
+      "route/mistral-small-2503": {
+        "id": "route/mistral-small-2503",
+        "name": "Mistral Small 2503",
+        "family": "mistral-small",
+        "attachment": true,
+        "reasoning": true,
+        "tool_call": true,
+        "temperature": true,
+        "knowledge": "2025-06",
+        "release_date": "2026-03-16",
+        "last_updated": "2026-03-16",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 128000,
+          "output": 32768
+        }
+      },
+      "route/mimo-v2.5-pro-precision": {
+        "id": "route/mimo-v2.5-pro-precision",
+        "name": "MiMo V2.5 Pro Precision",
+        "family": "mimo",
+        "attachment": false,
+        "reasoning": true,
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "temperature": true,
+        "knowledge": "2024-12",
+        "release_date": "2026-04-22",
+        "last_updated": "2026-04-22",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 1000000,
+          "output": 131072
+        }
+      },
+      "route/stepfun-3.5-flash": {
+        "id": "route/stepfun-3.5-flash",
+        "name": "StepFun 3.5 Flash",
+        "attachment": false,
+        "reasoning": true,
+        "tool_call": true,
+        "temperature": true,
+        "knowledge": "2025-01",
+        "release_date": "2026-01-29",
+        "last_updated": "2026-02-13",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 262144,
+          "input": 256000,
+          "output": 65536
+        }
+      },
+      "route/mistral-large-3": {
+        "id": "route/mistral-large-3",
+        "name": "Mistral Large 3",
+        "family": "mistral-large",
+        "attachment": true,
+        "reasoning": false,
+        "tool_call": true,
+        "temperature": true,
+        "knowledge": "2024-11",
+        "release_date": "2024-11-01",
+        "last_updated": "2025-12-02",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 128000,
+          "output": 32768
+        }
+      },
+      "route/step-3.5-flash-2603": {
+        "id": "route/step-3.5-flash-2603",
+        "name": "Step 3.5 Flash 2603",
+        "attachment": false,
+        "reasoning": true,
+        "tool_call": true,
+        "temperature": true,
+        "knowledge": "2025-01",
+        "release_date": "2026-04-02",
+        "last_updated": "2026-04-02",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 262144,
+          "input": 256000,
+          "output": 65536
+        }
+      },
+      "route/mistral-medium-2505": {
+        "id": "route/mistral-medium-2505",
+        "name": "Mistral Medium 2505",
+        "family": "mistral-medium",
+        "attachment": true,
+        "reasoning": false,
+        "tool_call": true,
+        "temperature": true,
+        "knowledge": "2025-05",
+        "release_date": "2025-05-07",
+        "last_updated": "2025-05-07",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 128000,
+          "output": 32768
+        }
+      },
+      "route/mimo-v2.5": {
+        "id": "route/mimo-v2.5",
+        "name": "MiMo V2.5",
+        "family": "mimo",
+        "attachment": true,
+        "reasoning": true,
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "temperature": true,
+        "knowledge": "2024-12",
+        "release_date": "2026-04-22",
+        "last_updated": "2026-04-22",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "audio",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 256000,
+          "output": 65536
+        }
+      },
+      "route/deepseek-v4-flash": {
+        "id": "route/deepseek-v4-flash",
+        "name": "DeepSeek V4 Flash",
+        "family": "deepseek-flash",
+        "attachment": false,
+        "reasoning": true,
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "structured_output": true,
+        "temperature": true,
+        "knowledge": "2025-05",
+        "release_date": "2026-04-24",
+        "last_updated": "2026-04-24",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 1000000,
+          "output": 131072
+        }
+      },
+      "route/glm-5.1-precision": {
+        "id": "route/glm-5.1-precision",
+        "name": "GLM 5.1 Precision",
+        "family": "glm",
+        "attachment": false,
+        "reasoning": true,
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-03-27",
+        "last_updated": "2026-03-27",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 202752,
+          "output": 202752
+        }
+      },
+      "route/step-3.5-flash": {
+        "id": "route/step-3.5-flash",
+        "name": "Step 3.5 Flash",
+        "attachment": false,
+        "reasoning": true,
+        "tool_call": true,
+        "temperature": true,
+        "knowledge": "2025-01",
+        "release_date": "2026-01-29",
+        "last_updated": "2026-02-13",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 262144,
+          "input": 256000,
+          "output": 65536
+        }
+      },
+      "route/minimax-m2.5-highspeed": {
+        "id": "route/minimax-m2.5-highspeed",
+        "name": "MiniMax M2.5 Highspeed",
+        "family": "minimax",
+        "attachment": false,
+        "reasoning": true,
+        "tool_call": true,
+        "temperature": true,
+        "release_date": "2026-02-13",
+        "last_updated": "2026-02-13",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 100000,
+          "output": 131072
+        }
+      },
+      "route/glm-5.1-fp16": {
+        "id": "route/glm-5.1-fp16",
+        "name": "GLM 5.1 FP16",
+        "family": "glm",
+        "attachment": false,
+        "reasoning": true,
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-03-27",
+        "last_updated": "2026-03-27",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 202752,
+          "output": 202752
+        }
+      },
+      "route/glm-5": {
+        "id": "route/glm-5",
+        "name": "GLM 5",
+        "family": "glm",
+        "attachment": false,
+        "reasoning": true,
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "temperature": true,
+        "release_date": "2026-02-11",
+        "last_updated": "2026-02-11",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 202752,
+          "output": 202752
+        }
+      },
+      "route/deepseek-v4-flash-full": {
+        "id": "route/deepseek-v4-flash-full",
+        "name": "DeepSeek V4 Flash Full",
+        "family": "deepseek-flash",
+        "attachment": false,
+        "reasoning": true,
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "structured_output": true,
+        "temperature": true,
+        "knowledge": "2025-05",
+        "release_date": "2026-04-24",
+        "last_updated": "2026-04-24",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 1000000,
+          "output": 131072
+        }
+      }
+    }
+  },
   "the-grid-ai": {
     "id": "the-grid-ai",
     "env": [
@@ -19815,76 +20632,6 @@
     "name": "NovitaAI",
     "doc": "https://novita.ai/docs/guides/introduction",
     "models": {
-      "sao10k/l3-8b-lunaris": {
-        "id": "sao10k/l3-8b-lunaris",
-        "name": "Sao10k L3 8B Lunaris\t",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": false,
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2024-11-28",
-        "last_updated": "2024-11-28",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 8192,
-          "output": 8192
-        }
-      },
-      "sao10k/l31-70b-euryale-v2.2": {
-        "id": "sao10k/l31-70b-euryale-v2.2",
-        "name": "L31 70B Euryale V2.2",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": true,
-        "temperature": true,
-        "release_date": "2024-09-19",
-        "last_updated": "2024-09-19",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 8192,
-          "output": 8192
-        }
-      },
-      "sao10k/l3-70b-euryale-v2.1": {
-        "id": "sao10k/l3-70b-euryale-v2.1",
-        "name": "L3 70B Euryale V2.1\t",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": true,
-        "temperature": true,
-        "release_date": "2024-06-18",
-        "last_updated": "2024-06-18",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 8192,
-          "output": 8192
-        }
-      },
       "openai/gpt-oss-20b": {
         "id": "openai/gpt-oss-20b",
         "name": "OpenAI: GPT OSS 20B",
@@ -20013,30 +20760,6 @@
         "limit": {
           "context": 202800,
           "output": 131072
-        }
-      },
-      "Sao10K/L3-8B-Stheno-v3.2": {
-        "id": "Sao10K/L3-8B-Stheno-v3.2",
-        "name": "L3 8B Stheno V3.2",
-        "family": "llama",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": true,
-        "temperature": true,
-        "release_date": "2024-11-29",
-        "last_updated": "2024-11-29",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 8192,
-          "output": 32000
         }
       },
       "baichuan/baichuan-m2-32b": {
@@ -20238,6 +20961,100 @@
         "temperature": true,
         "release_date": "2024-06-27",
         "last_updated": "2024-06-27",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 8192,
+          "output": 8192
+        }
+      },
+      "sao10K/l3-8b-lunaris": {
+        "id": "sao10K/l3-8b-lunaris",
+        "name": "Sao10k L3 8B Lunaris\t",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": false,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2024-11-28",
+        "last_updated": "2024-11-28",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 8192,
+          "output": 8192
+        }
+      },
+      "sao10K/l31-70b-euryale-v2.2": {
+        "id": "sao10K/l31-70b-euryale-v2.2",
+        "name": "L31 70B Euryale V2.2",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": true,
+        "temperature": true,
+        "release_date": "2024-09-19",
+        "last_updated": "2024-09-19",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 8192,
+          "output": 8192
+        }
+      },
+      "sao10K/L3-8B-stheno-v3.2": {
+        "id": "sao10K/L3-8B-stheno-v3.2",
+        "name": "L3 8B Stheno V3.2",
+        "family": "llama",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": true,
+        "temperature": true,
+        "release_date": "2024-11-29",
+        "last_updated": "2024-11-29",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 8192,
+          "output": 32000
+        }
+      },
+      "sao10K/l3-70b-euryale-v2.1": {
+        "id": "sao10K/l3-70b-euryale-v2.1",
+        "name": "L3 70B Euryale V2.1\t",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": true,
+        "temperature": true,
+        "release_date": "2024-06-18",
+        "last_updated": "2024-06-18",
         "modalities": {
           "input": [
             "text"

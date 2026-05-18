@@ -420,8 +420,9 @@ async function checkPhantomImports(ctx: CheckContext): Promise<CheckResult> {
     // src/ or script/), because source code legitimately imports files at
     // the package root (e.g. parsers-config.ts) and under assets/,
     // migration/, etc. Restricting the tracked set produced false-positive
-    // phantom reports for any cross-directory import.
-    const lsRes = await git(["ls-files", "--", `${AX_CODE_PKG}/`], { cwd: ctx.repoRoot })
+    // phantom reports for any cross-directory import. Include root metadata
+    // used by package scripts, such as source-package.ts importing package.json.
+    const lsRes = await git(["ls-files", "--", "package.json", `${AX_CODE_PKG}/`], { cwd: ctx.repoRoot })
     if (lsRes.exitCode !== 0) {
       return mkResult("Phantom imports", "phantom-imports", "fail", "git ls-files failed", 0, lsRes.stderr.toString())
     }
