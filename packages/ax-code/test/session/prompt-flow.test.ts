@@ -697,6 +697,13 @@ describe("session.prompt flow", () => {
   })
 
   test("stops cleanly after a permission-rejected tool call and allows later recovery", async () => {
+    // The "stop on deny" path is gated by `shouldBreak`, which is forced
+    // to false in autonomous mode (session/processor.ts:184-187). That
+    // mode is the runtime default, so this test must explicitly opt out
+    // to exercise the human-loop break-on-deny semantic. The autonomous
+    // path has separate coverage.
+    const originalAutonomous = process.env.AX_CODE_AUTONOMOUS
+    process.env.AX_CODE_AUTONOMOUS = "false"
     await using tmp = await tmpdir({ git: true })
 
     modelSpy = spyOn(Provider, "getModel").mockResolvedValue(model)
@@ -781,6 +788,8 @@ describe("session.prompt flow", () => {
         await Session.remove(session.id)
       },
     })
+    if (originalAutonomous === undefined) delete process.env.AX_CODE_AUTONOMOUS
+    else process.env.AX_CODE_AUTONOMOUS = originalAutonomous
   })
 
   test("injects a continuation message when autonomous completion gate blocks on empty subagent result", async () => {
