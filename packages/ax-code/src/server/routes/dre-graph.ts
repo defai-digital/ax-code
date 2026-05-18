@@ -21,8 +21,11 @@ import { esc, stamp } from "../../quality/dre-graph-format"
 import { chip } from "../../quality/dre-graph-widgets"
 import { SessionRollback } from "../../session/rollback"
 import { SessionID } from "../../session/schema"
+import { Log } from "../../util/log"
 import { lazy } from "../../util/lazy"
 import { SESSION_ID_PARAM, withSessionID } from "./route-params"
+
+const log = Log.create({ service: "server.dre-graph" })
 
 const DRE_GRAPH_QUALITY_QUERY = z.object({
   quality: z.coerce.boolean().optional().default(false),
@@ -43,8 +46,14 @@ async function loadSessionGraphContext(sessionID: SessionID, includeQuality: boo
     Promise.resolve(SessionGraph.snapshot(sessionID)),
     SessionDre.snapshot(sessionID),
     SessionRisk.load(sessionID, { includeQuality }),
-    SessionBranchRank.family(sessionID).catch(() => undefined),
-    SessionRollback.points(sessionID).catch((): SessionRollback.Point[] => []),
+    SessionBranchRank.family(sessionID).catch((error) => {
+      log.warn("failed to load DRE branch rank", { sessionID, error })
+      return undefined
+    }),
+    SessionRollback.points(sessionID).catch((error): SessionRollback.Point[] => {
+      log.warn("failed to load DRE rollback points", { sessionID, error })
+      return []
+    }),
   ])
   return { session, graph, dre, risk, rank, rollback }
 }

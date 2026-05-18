@@ -660,7 +660,12 @@ export namespace Project {
     }
 
     if (Flag.AX_CODE_EXPERIMENTAL_ICON_DISCOVERY) {
-      void discover(prev).catch(() => undefined)
+      void discover(prev).catch((error) => {
+        log.warn("project icon discovery failed", {
+          projectID: prev.id,
+          error,
+        })
+      })
     }
 
     const result: Info = {

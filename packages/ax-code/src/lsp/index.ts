@@ -163,6 +163,8 @@ export namespace LSP {
   //   attempt 5+ failure →  60m (capped)
   const BROKEN_BACKOFF_BASE_MS = 30_000
   const BROKEN_BACKOFF_MAX_MS = 60 * 60 * 1000
+  const BROKEN_SERVER_CACHE_MAX = 100
+  const BROKEN_SERVER_TTL_MS = 60 * 60 * 1000
 
   // Exported for unit tests. Deterministic pure function — no side effects.
   export function computeBackoff(failures: number): number {
@@ -199,15 +201,32 @@ export namespace LSP {
     return `${root}\0${serverID}`
   }
 
+  function pruneBrokenServers(broken: Map<string, BrokenEntry>, now: number) {
+    for (const [key, entry] of broken) {
+      if (now - (entry.nextAttempt - computeBackoff(entry.failures)) > BROKEN_SERVER_TTL_MS) {
+        broken.delete(key)
+      }
+    }
+
+    while (broken.size > BROKEN_SERVER_CACHE_MAX) {
+      const oldest = broken.keys().next().value
+      if (!oldest) break
+      broken.delete(oldest)
+    }
+  }
+
   // Exported for unit tests.
   export function markBroken(broken: Map<string, BrokenEntry>, key: string) {
+    const now = Date.now()
+    pruneBrokenServers(broken, now)
     const existing = broken.get(key)
     const failures = (existing?.failures ?? 0) + 1
     const backoffMs = computeBackoff(failures)
     broken.set(key, {
       failures,
-      nextAttempt: Date.now() + backoffMs,
+      nextAttempt: now + backoffMs,
     })
+    pruneBrokenServers(broken, now)
     log.info("lsp server marked broken", { key, failures, backoffMs })
   }
 

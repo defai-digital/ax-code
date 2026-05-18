@@ -9,6 +9,6 @@ test("MCP config write queue recovers from prior rejected locks", async () => {
   expect(end).toBeGreaterThan(start)
   const block = src.slice(start, end)
 
-  expect(block).toContain("await prev.catch(() => {})")
+  expect(block).toContain('log.warn("previous MCP config write failed before queued write"')
   expect(block).toContain("if (configLocks.get(configPath) === next) configLocks.delete(configPath)")
 })
