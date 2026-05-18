@@ -88,6 +88,7 @@ import {
   MAX_STAGNANT_TODO_RETRIES,
   TODO_CONTEXT_CONVERGENCE_INPUT_TOKEN_THRESHOLD,
   hasReportStyleTodo,
+  pendingTodoContinuationDecision,
   pendingTodoSignature,
   reportTodoClosureGuidance,
   todoDeadlineStepBuffer,
@@ -1397,7 +1398,16 @@ export namespace SessionPrompt {
         }
 
         if (modelFinished && pendingTodos.length > 0) {
-          if (isLastStep) {
+          const todoContinuation = pendingTodoContinuationDecision({
+            isLastStep,
+            todoRetries,
+            maxTodoRetries,
+            pendingTodos,
+            lastPendingTodoSignature,
+            stagnantTodoRetries,
+          })
+
+          if (todoContinuation.action === "stop_step_limit") {
             const incompleteMessage =
               `Autonomous mode reached the agent step limit with ${Locale.pluralize(
                 pendingTodos.length,
@@ -1421,7 +1431,7 @@ export namespace SessionPrompt {
             break
           }
 
-          if (todoRetries >= maxTodoRetries) {
+          if (todoContinuation.action === "stop_retry_budget") {
             const incompleteMessage =
               `Autonomous mode stopped because ${Locale.pluralize(
                 pendingTodos.length,
@@ -1445,15 +1455,11 @@ export namespace SessionPrompt {
             break
           }
 
-          const signature = pendingTodoSignature(pendingTodos)
-          if (signature === lastPendingTodoSignature) {
-            stagnantTodoRetries++
-          } else {
-            lastPendingTodoSignature = signature
-            stagnantTodoRetries = 0
-          }
+          lastPendingTodoSignature = todoContinuation.lastPendingTodoSignature
+          stagnantTodoRetries = todoContinuation.stagnantTodoRetries
+          todoRetries = todoContinuation.todoRetries
 
-          if (stagnantTodoRetries >= MAX_STAGNANT_TODO_RETRIES) {
+          if (todoContinuation.stagnant) {
             log.warn("autonomous todo continuation is stagnant", {
               command: "session.prompt.loop",
               status: "retry",
@@ -1465,18 +1471,16 @@ export namespace SessionPrompt {
             })
           }
 
-          todoRetries++
           const reportClosureGuidance = hasReportStyleTodo(pendingTodos)
             ? reportTodoClosureGuidance("continuation")
             : ""
-          const stagnantTodoGuidance =
-            stagnantTodoRetries >= MAX_STAGNANT_TODO_RETRIES
-              ? `\nThe pending todo list has not changed for ${Locale.pluralize(
-                  stagnantTodoRetries,
-                  "{} retry",
-                  "{} retries",
-                )}. Do not repeat the same summary. Complete a concrete todo, cancel a blocked todo with the reason, or use a tool to make progress before stopping.`
-              : ""
+          const stagnantTodoGuidance = todoContinuation.stagnant
+            ? `\nThe pending todo list has not changed for ${Locale.pluralize(
+                stagnantTodoRetries,
+                "{} retry",
+                "{} retries",
+              )}. Do not repeat the same summary. Complete a concrete todo, cancel a blocked todo with the reason, or use a tool to make progress before stopping.`
+            : ""
           log.info("autonomous todo continuation", {
             command: "session.prompt.loop",
             status: "ok",
@@ -1642,7 +1646,12 @@ export namespace SessionPrompt {
 
     const context = (args: any, options: ToolCallOptions, isolationOverride?: Isolation.State): Tool.Context => ({
       sessionID: input.session.id,
-      abort: options.abortSignal!,
+      // The AI SDK normally passes an AbortSignal, but `abortSignal` is
+      // typed as optional. Fall back to a fresh never-firing controller
+      // signal so tools that read `context.abort.aborted` /
+      // `addEventListener("abort", ...)` don't crash with
+      // "cannot read properties of undefined" if the SDK ever omits it.
+      abort: options.abortSignal ?? new AbortController().signal,
       messageID: input.processor.message.id,
       callID: options.toolCallId,
       extra: {

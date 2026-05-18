@@ -95,7 +95,9 @@ async function getConfiguredTuiPort(): Promise<number> {
     const config = await Config.global()
     const configured = config?.server?.port
     if (typeof configured === "number" && configured > 0) return configured
-  } catch {}
+  } catch (error) {
+    Log.Default.warn("failed to read configured TUI port; falling back to default", { error })
+  }
   return 4096
 }
 
