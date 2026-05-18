@@ -11,6 +11,27 @@ export type PromptTodo = {
 
 export type ReportTodoClosureMode = "deadline" | "continuation" | "context"
 
+export type PendingTodoContinuationDecision =
+  | {
+      action: "stop_step_limit"
+      todoRetries: number
+      lastPendingTodoSignature: string | undefined
+      stagnantTodoRetries: number
+    }
+  | {
+      action: "stop_retry_budget"
+      todoRetries: number
+      lastPendingTodoSignature: string | undefined
+      stagnantTodoRetries: number
+    }
+  | {
+      action: "continue"
+      todoRetries: number
+      lastPendingTodoSignature: string
+      stagnantTodoRetries: number
+      stagnant: boolean
+    }
+
 export function pendingTodoSignature(todos: PromptTodo[]) {
   return todos.map((todo) => `${todo.status}\u0000${todo.priority}\u0000${todo.content}`).join("\u0001")
 }
@@ -21,6 +42,44 @@ export function todoDeadlineStepBuffer(pendingTodoCount: number) {
 
 export function hasReportStyleTodo(todos: Array<Pick<PromptTodo, "content">>) {
   return todos.some((todo) => /\b(report|reports|bug|bugs)\b|\.internal\/bugs/i.test(todo.content))
+}
+
+export function pendingTodoContinuationDecision(input: {
+  isLastStep: boolean
+  todoRetries: number
+  maxTodoRetries: number
+  pendingTodos: PromptTodo[]
+  lastPendingTodoSignature: string | undefined
+  stagnantTodoRetries: number
+}): PendingTodoContinuationDecision {
+  if (input.isLastStep) {
+    return {
+      action: "stop_step_limit",
+      todoRetries: input.todoRetries,
+      lastPendingTodoSignature: input.lastPendingTodoSignature,
+      stagnantTodoRetries: input.stagnantTodoRetries,
+    }
+  }
+
+  if (input.todoRetries >= input.maxTodoRetries) {
+    return {
+      action: "stop_retry_budget",
+      todoRetries: input.todoRetries,
+      lastPendingTodoSignature: input.lastPendingTodoSignature,
+      stagnantTodoRetries: input.stagnantTodoRetries,
+    }
+  }
+
+  const signature = pendingTodoSignature(input.pendingTodos)
+  const stagnantTodoRetries = signature === input.lastPendingTodoSignature ? input.stagnantTodoRetries + 1 : 0
+
+  return {
+    action: "continue",
+    todoRetries: input.todoRetries + 1,
+    lastPendingTodoSignature: signature,
+    stagnantTodoRetries,
+    stagnant: stagnantTodoRetries >= MAX_STAGNANT_TODO_RETRIES,
+  }
 }
 
 export function reportTodoClosureGuidance(mode: ReportTodoClosureMode) {
