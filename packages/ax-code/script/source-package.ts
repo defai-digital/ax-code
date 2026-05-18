@@ -202,9 +202,7 @@ export function sourcePackageManifest(input: SourcePackageManifestInput) {
     dependencies: {
       bun: input.bunDependencyRange,
     },
-    optionalDependencies: Object.fromEntries(
-      OPENTUI_NATIVE_PACKAGES.map((name) => [name, input.opentuiCoreVersion]),
-    ),
+    optionalDependencies: Object.fromEntries(OPENTUI_NATIVE_PACKAGES.map((name) => [name, input.opentuiCoreVersion])),
     license: input.license,
     homepage: "https://github.com/defai-digital/ax-code",
     repository: {

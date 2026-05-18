@@ -728,7 +728,9 @@ describe("tui OpenTUI stability guardrails", () => {
   test("initializes session sdk before reactive workspace effects use it", async () => {
     const session = await fs.readFile(SESSION_ROUTE_SRC, "utf8")
 
-    expect(session.indexOf("const sdk = useSDK()")).toBeLessThan(session.indexOf("sdk.setWorkspace(session()?.directory)"))
+    expect(session.indexOf("const sdk = useSDK()")).toBeLessThan(
+      session.indexOf("sdk.setWorkspace(session()?.directory)"),
+    )
   })
 
   test("keeps animated spinners out of the compiled runtime render path", async () => {

@@ -214,7 +214,9 @@ export const LspTool = Tool.define("lsp", {
           ? `No aggregated diagnostics found${file ? ` for ${normalizeToWorkspacePath(file, Instance.worktree)}` : ""}`
           : JSON.stringify(envelope, null, 2)
       return {
-        title: file ? `diagnosticsAggregated ${normalizeToWorkspacePath(file, Instance.worktree)}` : "diagnosticsAggregated",
+        title: file
+          ? `diagnosticsAggregated ${normalizeToWorkspacePath(file, Instance.worktree)}`
+          : "diagnosticsAggregated",
         metadata: { envelope },
         output,
       }

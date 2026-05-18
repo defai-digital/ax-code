@@ -135,7 +135,11 @@ export const WebFetchTool = Tool.define("webfetch", {
       // Check content length header first
       const contentLength = response.headers.get("content-length")
       const contentLengthBytes = contentLength ? Number(contentLength) : undefined
-      if (contentLengthBytes !== undefined && !Number.isNaN(contentLengthBytes) && contentLengthBytes > MAX_RESPONSE_SIZE) {
+      if (
+        contentLengthBytes !== undefined &&
+        !Number.isNaN(contentLengthBytes) &&
+        contentLengthBytes > MAX_RESPONSE_SIZE
+      ) {
         throw new Error("Response too large (exceeds 5MB limit)")
       }
 

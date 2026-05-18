@@ -1,9 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { Instance } from "../../src/project/instance"
-import {
-  DebugInstrumentationPlanSchema,
-  DEBUG_ID_PATTERN,
-} from "../../src/debug-engine/runtime-debug"
+import { DebugInstrumentationPlanSchema, DEBUG_ID_PATTERN } from "../../src/debug-engine/runtime-debug"
 import { Recorder } from "../../src/replay/recorder"
 import { Session } from "../../src/session"
 import { SessionDebug } from "../../src/session/debug"

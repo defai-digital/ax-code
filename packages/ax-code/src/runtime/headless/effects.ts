@@ -8,10 +8,7 @@ export function createHeadlessAutonomousPermissionReply(requestID: string) {
   }
 }
 
-export function createHeadlessAutonomousQuestionReply(
-  requestID: string,
-  questions: AutonomousQuestion.QuestionLike[],
-) {
+export function createHeadlessAutonomousQuestionReply(requestID: string, questions: AutonomousQuestion.QuestionLike[]) {
   return {
     requestID,
     answers: AutonomousQuestion.answers(questions),
@@ -21,7 +18,9 @@ export function createHeadlessAutonomousQuestionReply(
 export type HeadlessProjectionEffectHandlers = {
   replyPermission?: (payload: ReturnType<typeof createHeadlessAutonomousPermissionReply>) => Promise<unknown> | unknown
   replyQuestion?: (payload: ReturnType<typeof createHeadlessAutonomousQuestionReply>) => Promise<unknown> | unknown
-  syncRuntimeProbe?: (key: Extract<HeadlessProjectionEffect, { type: "runtime.probe" }>["key"]) => Promise<unknown> | unknown
+  syncRuntimeProbe?: (
+    key: Extract<HeadlessProjectionEffect, { type: "runtime.probe" }>["key"],
+  ) => Promise<unknown> | unknown
   bootstrap?: () => Promise<unknown> | unknown
   onWarn: (label: string, error: unknown) => void
 }

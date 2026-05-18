@@ -129,9 +129,9 @@ describe("classifyEnvelopeSet", () => {
         envelope({ result: { ...envelope().result, name: "tests", status: "failed", passed: false } }),
       ]),
     ).toBe("inconclusive")
-    expect(classifyEnvelopeSet([envelope({ result: { ...envelope().result, status: "timeout", passed: false } })])).toBe(
-      "inconclusive",
-    )
+    expect(
+      classifyEnvelopeSet([envelope({ result: { ...envelope().result, status: "timeout", passed: false } })]),
+    ).toBe("inconclusive")
   })
 })
 

@@ -481,15 +481,17 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       const controller = new AbortController()
       putController = controller
       input.setCurrent(next)
-      void putJsonWithTimeout(input.endpoint, { enabled: next }, undefined, { signal: controller.signal }).catch((error) => {
-        if (controller.signal.aborted || putController !== controller) return
-        Log.Default.warn(input.label.warn, { error, enabled: next })
-        if (input.getCurrent() === next) input.setCurrent(previous)
-        toast.show({
-          message: error instanceof Error ? error.message : input.label.message,
-          variant: "error",
-        })
-      })
+      void putJsonWithTimeout(input.endpoint, { enabled: next }, undefined, { signal: controller.signal }).catch(
+        (error) => {
+          if (controller.signal.aborted || putController !== controller) return
+          Log.Default.warn(input.label.warn, { error, enabled: next })
+          if (input.getCurrent() === next) input.setCurrent(previous)
+          toast.show({
+            message: error instanceof Error ? error.message : input.label.message,
+            variant: "error",
+          })
+        },
+      )
     }
 
     const dispose = () => {

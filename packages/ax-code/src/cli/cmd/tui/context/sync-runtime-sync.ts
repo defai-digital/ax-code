@@ -58,11 +58,11 @@ export function createRuntimeSyncActions(input: {
     try {
       const path = pathname.startsWith("/") ? pathname : `/${pathname}`
       const response = await input.fetch(`${input.url}${path}`, init)
-    if (!response.ok) return
-    return (await response.json()) as T
-  } catch {
-    return
-  }
+      if (!response.ok) return
+      return (await response.json()) as T
+    } catch {
+      return
+    }
   }
 
   async function syncRuntimeFlag(pathname: string, apply: (value: boolean) => void) {

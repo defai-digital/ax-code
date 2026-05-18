@@ -90,7 +90,6 @@ describe("AgentControl", () => {
     ).toBe("Plan the requested work")
   })
 
-
   test("creates default shadow-mode state", () => {
     expect(
       AgentControl.createState({

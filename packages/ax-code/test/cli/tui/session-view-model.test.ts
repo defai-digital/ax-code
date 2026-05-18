@@ -132,17 +132,15 @@ describe("tui session view model", () => {
   })
 
   test("summarizes assistant tool usage without renderer state", () => {
-    const summary = assistantToolSummary(
-      [
-        { type: "tool", tool: "read", state: { status: "completed" } },
-        { type: "tool", tool: "bash", state: { status: "completed" } },
-        { type: "tool", tool: "read", state: { status: "completed" } },
-        { type: "tool", tool: "task", state: { status: "running" } },
-        { type: "tool", tool: "task", state: { status: "completed" } },
-        { type: "tool", tool: "task", state: { status: "completed" } },
-        { type: "text", text: "ignored" },
-      ] as any,
-    )
+    const summary = assistantToolSummary([
+      { type: "tool", tool: "read", state: { status: "completed" } },
+      { type: "tool", tool: "bash", state: { status: "completed" } },
+      { type: "tool", tool: "read", state: { status: "completed" } },
+      { type: "tool", tool: "task", state: { status: "running" } },
+      { type: "tool", tool: "task", state: { status: "completed" } },
+      { type: "tool", tool: "task", state: { status: "completed" } },
+      { type: "text", text: "ignored" },
+    ] as any)
 
     expect(summary).toEqual([
       { name: "task", count: 3, label: "delegations" },

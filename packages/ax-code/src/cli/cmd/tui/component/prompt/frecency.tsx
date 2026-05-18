@@ -163,10 +163,7 @@ export const { use: useFrecency, provider: FrecencyProvider } = createSimpleCont
           })
         })
 
-      if (
-        recordCount(store.data) > MAX_FRECENCY_ENTRIES ||
-        writesSinceCompact >= FRECENCY_COMPACT_WRITE_THRESHOLD
-      ) {
+      if (recordCount(store.data) > MAX_FRECENCY_ENTRIES || writesSinceCompact >= FRECENCY_COMPACT_WRITE_THRESHOLD) {
         compact()
       }
     }

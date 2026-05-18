@@ -41,10 +41,7 @@ export async function parseExistingSessionID(c: SessionRouteContext) {
   return sessionID
 }
 
-export function withRouteParam<TKey extends string, TValue>(
-  key: TKey,
-  handler: (value: TValue, c: any) => any,
-) {
+export function withRouteParam<TKey extends string, TValue>(key: TKey, handler: (value: TValue, c: any) => any) {
   return (c: any) => {
     const params = c.req.valid("param") as { [key in TKey]: TValue }
     const value = params[key]

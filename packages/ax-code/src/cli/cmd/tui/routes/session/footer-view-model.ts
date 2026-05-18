@@ -126,7 +126,11 @@ function footerTaskLabel(tool?: string) {
 
   const normalized = tool.replace(/[_-]+/g, " ").trim().toLowerCase()
   if (normalized.includes("todo")) return "Updating todos"
-  if (["lsp", "code intelligence", "codesearch", "impact analyze", "debug analyze"].some((name) => normalized.includes(name)))
+  if (
+    ["lsp", "code intelligence", "codesearch", "impact analyze", "debug analyze"].some((name) =>
+      normalized.includes(name),
+    )
+  )
     return "Analyzing code"
   if (["grep", "glob", "ls", "list", "read", "scan"].some((name) => normalized.includes(name))) return "Scanning files"
   if (["bash", "shell", "terminal", "command"].some((name) => normalized.includes(name))) return "Running command"

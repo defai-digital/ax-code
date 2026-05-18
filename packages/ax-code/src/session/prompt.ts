@@ -887,6 +887,11 @@ export namespace SessionPrompt {
           reason = task.overflow ? "error" : "completed"
           break
         }
+        if (result === "busy") {
+          await new Promise((resolve) => setTimeout(resolve, 250))
+          cachedMsgs = undefined
+          continue
+        }
         cachedMsgs = undefined // invalidate cache after compaction
         continue
       }
@@ -1137,9 +1142,7 @@ export namespace SessionPrompt {
       // the model genuinely cannot finish a todo (blocked tool, missing data, etc.).
       if (autonomous && !processor.message.error) {
         const latestMessages = await Session.messages({ sessionID })
-        const pendingTodos = Todo.get(sessionID).filter(
-          (t) => t.status === "pending" || t.status === "in_progress",
-        )
+        const pendingTodos = Todo.get(sessionID).filter((t) => t.status === "pending" || t.status === "in_progress")
         const completionGate = AutonomousCompletionGate.evaluate({
           messages: latestMessages,
           pendingTodos,
@@ -1148,12 +1151,14 @@ export namespace SessionPrompt {
           completionGate.status === "blocked" && completionGate.reason === "empty_subagent_result"
 
         if (modelFinished || shouldRecoverEmptySubagentResult) {
-          const gateRetryCount = completionGate.status === "blocked" && completionGate.reason === "unfinished_todos"
-            ? todoRetries
-            : completionGateRetries
-          const gateMaxRetries = completionGate.status === "blocked" && completionGate.reason === "unfinished_todos"
-            ? maxTodoRetries
-            : maxCompletionGateRetries
+          const gateRetryCount =
+            completionGate.status === "blocked" && completionGate.reason === "unfinished_todos"
+              ? todoRetries
+              : completionGateRetries
+          const gateMaxRetries =
+            completionGate.status === "blocked" && completionGate.reason === "unfinished_todos"
+              ? maxTodoRetries
+              : maxCompletionGateRetries
           Recorder.emit(
             AgentControlEvents.completionGateDecided({
               sessionID,
@@ -1324,9 +1329,7 @@ export namespace SessionPrompt {
           const signature = pendingTodoSignature(pendingTodos)
           if (signature !== lastTodoDeadlineSignature) {
             lastTodoDeadlineSignature = signature
-            const reportClosureGuidance = hasReportStyleTodo(pendingTodos)
-              ? reportTodoClosureGuidance("deadline")
-              : ""
+            const reportClosureGuidance = hasReportStyleTodo(pendingTodos) ? reportTodoClosureGuidance("deadline") : ""
             log.info("autonomous todo deadline convergence", {
               command: "session.prompt.loop",
               status: "ok",
@@ -1346,11 +1349,7 @@ export namespace SessionPrompt {
                       remainingAgentSteps,
                       "{} step remaining",
                       "{} steps remaining",
-                    )} and ${Locale.pluralize(
-                      pendingTodos.length,
-                      "{} unfinished todo",
-                      "{} unfinished todos",
-                    )}:\n` +
+                    )} and ${Locale.pluralize(pendingTodos.length, "{} unfinished todo", "{} unfinished todos")}:\n` +
                     `${Todo.formatLines(pendingTodos).join("\n")}\n` +
                     `Stop broad exploration now. Finish the remaining concrete work, write any required reports, ` +
                     `or cancel low-confidence todos with a short reason. Update the todo list after each completed ` +
@@ -1398,8 +1397,7 @@ export namespace SessionPrompt {
                 maxTodoRetries,
                 "{} auto-continuation attempt",
                 "{} auto-continuation attempts",
-              )}. ` +
-              `The session is stopped, but the remaining todos are not complete.`
+              )}. ` + `The session is stopped, but the remaining todos are not complete.`
             log.warn("autonomous todo continuation stopped after retry budget", {
               command: "session.prompt.loop",
               status: "stopped",
@@ -1507,8 +1505,7 @@ export namespace SessionPrompt {
             })
             Session.publishError({
               sessionID,
-              message:
-                `Provider ${lastUser.model.providerID} failed: ${err.data?.message ?? "unknown error"}. Switching to ${fallback.providerID}/${fallback.modelID}.`,
+              message: `Provider ${lastUser.model.providerID} failed: ${err.data?.message ?? "unknown error"}. Switching to ${fallback.providerID}/${fallback.modelID}.`,
             })
             fallbackModelOverride = fallback
             cachedModel = undefined
@@ -1536,8 +1533,7 @@ export namespace SessionPrompt {
           })
           Session.publishError({
             sessionID,
-            message:
-              `Agent encountered ${consecutiveErrors} consecutive errors at step ${step}. Stopping to prevent retry loop. Try rephrasing your request or breaking it into smaller tasks.`,
+            message: `Agent encountered ${consecutiveErrors} consecutive errors at step ${step}. Stopping to prevent retry loop. Try rephrasing your request or breaking it into smaller tasks.`,
           })
           reason = "error"
           break
@@ -2399,9 +2395,7 @@ export namespace SessionPrompt {
                   sessionID: input.sessionID,
                   error,
                 })
-                return [
-                  createReadFailurePart({ error, filepath }),
-                ]
+                return [createReadFailurePart({ error, filepath })]
               }
             default:
               return [
@@ -2546,7 +2540,9 @@ export namespace SessionPrompt {
     // Shallow-copy to avoid mutating cached message parts
     const userMessage = { ...userMsg, parts: [...userMsg.parts] }
     const messages = input.messages.map((m) => (m === userMsg ? userMessage : m))
-    const autonomousDecisionLedger = Flag.AX_CODE_AUTONOMOUS ? autonomousDecisionLedgerReminder(input.messages) : undefined
+    const autonomousDecisionLedger = Flag.AX_CODE_AUTONOMOUS
+      ? autonomousDecisionLedgerReminder(input.messages)
+      : undefined
     if (autonomousDecisionLedger) {
       userMessage.parts.push({
         id: PartID.ascending(),

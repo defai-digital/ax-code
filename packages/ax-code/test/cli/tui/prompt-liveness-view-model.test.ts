@@ -40,9 +40,11 @@ describe("prompt footer liveness indicator", () => {
       type: "text",
       frame: FOOTER_LIVENESS_FRAMES[0],
     })
-    expect(footerLivenessIndicator({ tick: Number.POSITIVE_INFINITY, userEnabled: true, runtime: "compiled" })).toEqual({
-      type: "text",
-      frame: FOOTER_LIVENESS_FRAMES[0],
-    })
+    expect(footerLivenessIndicator({ tick: Number.POSITIVE_INFINITY, userEnabled: true, runtime: "compiled" })).toEqual(
+      {
+        type: "text",
+        frame: FOOTER_LIVENESS_FRAMES[0],
+      },
+    )
   })
 })

@@ -28,7 +28,9 @@ function decryptToken<T extends string>(raw: string, make: (s: string) => T): T 
       error: error instanceof Error ? error.message : String(error),
       tokenLength: raw.length,
     })
-    throw new Error("Failed to decrypt token: token may be corrupted or encrypted with a different key", { cause: error })
+    throw new Error("Failed to decrypt token: token may be corrupted or encrypted with a different key", {
+      cause: error,
+    })
   }
 }
 

@@ -51,8 +51,8 @@ describe("scan coverage notices", () => {
   test("warns when JS/TS scanners run in Python and Ruby workspaces without source coverage", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
-        await Bun.write(path.join(dir, "pyproject.toml"), "[project]\nname = \"demo\"\n")
-        await Bun.write(path.join(dir, "Gemfile"), "source \"https://rubygems.org\"\n")
+        await Bun.write(path.join(dir, "pyproject.toml"), '[project]\nname = "demo"\n')
+        await Bun.write(path.join(dir, "Gemfile"), 'source "https://rubygems.org"\n')
       },
     })
 

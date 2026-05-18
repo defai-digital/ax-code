@@ -184,7 +184,14 @@ export namespace SessionCompaction {
     auto: boolean
     overflow?: boolean
   }) {
-    if (inFlight.has(input.sessionID)) return "stop" as const
+    if (inFlight.has(input.sessionID)) {
+      log.info("compaction already in-flight", {
+        command: "session.compaction.process",
+        status: "busy",
+        sessionID: input.sessionID,
+      })
+      return "busy" as const
+    }
     inFlight.add(input.sessionID)
     try {
       return await processInner(input)

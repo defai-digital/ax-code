@@ -9,7 +9,9 @@ import type { SessionID } from "../session/schema"
 export const DebugRepairFromEnvelopeTool = Tool.define("debug_repair_from_envelope", {
   description: DESCRIPTION,
   parameters: z.object({
-    envelopeId: z.string().regex(ENVELOPE_ID_PATTERN, "envelopeId must be 16-char hex from verify_project/refactor_apply"),
+    envelopeId: z
+      .string()
+      .regex(ENVELOPE_ID_PATTERN, "envelopeId must be 16-char hex from verify_project/refactor_apply"),
     maxFailures: z.number().int().min(1).max(50).optional(),
   }),
   execute: async (args, ctx) => {

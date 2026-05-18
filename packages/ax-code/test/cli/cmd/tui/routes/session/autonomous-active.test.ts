@@ -41,31 +41,21 @@ describe("autonomousActiveView", () => {
 
 describe("isLiveAutonomousText", () => {
   test("not last → not live (older messages never get the live bg)", () => {
-    expect(
-      isLiveAutonomousText({ last: false, message: { finish: undefined }, autonomousActive: true }),
-    ).toBe(false)
+    expect(isLiveAutonomousText({ last: false, message: { finish: undefined }, autonomousActive: true })).toBe(false)
   })
 
   test("not autonomous active → not live (single-turn chat stays plain)", () => {
-    expect(
-      isLiveAutonomousText({ last: true, message: { finish: undefined }, autonomousActive: false }),
-    ).toBe(false)
+    expect(isLiveAutonomousText({ last: true, message: { finish: undefined }, autonomousActive: false })).toBe(false)
   })
 
   test("autonomous + last + still streaming → live", () => {
-    expect(
-      isLiveAutonomousText({ last: true, message: { finish: undefined }, autonomousActive: true }),
-    ).toBe(true)
+    expect(isLiveAutonomousText({ last: true, message: { finish: undefined }, autonomousActive: true })).toBe(true)
     // tool-calls is a continuation marker — the loop is still mid-flight
-    expect(
-      isLiveAutonomousText({ last: true, message: { finish: "tool-calls" }, autonomousActive: true }),
-    ).toBe(true)
+    expect(isLiveAutonomousText({ last: true, message: { finish: "tool-calls" }, autonomousActive: true })).toBe(true)
   })
 
   test("autonomous + last + settled (finish=stop) → not live", () => {
-    expect(
-      isLiveAutonomousText({ last: true, message: { finish: "stop" }, autonomousActive: true }),
-    ).toBe(false)
+    expect(isLiveAutonomousText({ last: true, message: { finish: "stop" }, autonomousActive: true })).toBe(false)
   })
 })
 

@@ -316,14 +316,7 @@ describe("script.test-coverage", () => {
 
       await Bun.write(
         lcovFile,
-        [
-          "TN:",
-          `SF:${path.join(tmp.path, "src", "only.ts")}`,
-          "FNF:1",
-          "FNH:1",
-          "DA:1,1",
-          "end_of_record",
-        ].join("\n"),
+        ["TN:", `SF:${path.join(tmp.path, "src", "only.ts")}`, "FNF:1", "FNH:1", "DA:1,1", "end_of_record"].join("\n"),
       )
 
       const baseline: CoverageSummary = {
@@ -368,8 +361,11 @@ describe("script.test-coverage", () => {
       })
 
       expect(summary.trend).toBeUndefined()
-      expect(summary.notes.some((line) => line.includes("baseline summary at coverage-baseline-summary.json did not match group deterministic")))
-        .toBeTrue()
+      expect(
+        summary.notes.some((line) =>
+          line.includes("baseline summary at coverage-baseline-summary.json did not match group deterministic"),
+        ),
+      ).toBeTrue()
     } finally {
       process.chdir(cwd)
       if (savedWorkspace !== undefined) process.env["GITHUB_WORKSPACE"] = savedWorkspace

@@ -1046,9 +1046,7 @@ async function latestDebugDirs(): Promise<string[]> {
 
 async function loadStandardLogs(session?: string): Promise<StandardLogScan> {
   const debugDirs = await latestDebugDirs()
-  const logDirs = [
-    ...new Set([Flag.AX_CODE_DEBUG_DIR, Global.Path.log, ...debugDirs].filter(Boolean) as string[]),
-  ]
+  const logDirs = [...new Set([Flag.AX_CODE_DEBUG_DIR, Global.Path.log, ...debugDirs].filter(Boolean) as string[])]
   const logFile =
     (await latestFileInDirs(logDirs, (name) => name.endsWith(".json.log"))) ??
     (await latestFileInDirs(logDirs, (name) => name.endsWith(".log") && !name.endsWith(".json.log")))

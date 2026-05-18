@@ -54,8 +54,7 @@ function EditBody(props: { request: PermissionRequest }) {
       <Show when={summary()}>
         {(s) => (
           <text paddingLeft={1} fg={theme.textMuted}>
-            {s().hunks} {s().hunks === 1 ? "hunk" : "hunks"} ·{" "}
-            <span style={{ fg: theme.success }}>+{s().added}</span>{" "}
+            {s().hunks} {s().hunks === 1 ? "hunk" : "hunks"} · <span style={{ fg: theme.success }}>+{s().added}</span>{" "}
             <span style={{ fg: theme.error }}>−{s().removed}</span>
           </text>
         )}

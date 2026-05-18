@@ -71,7 +71,10 @@ for (const id of [
 // To extend: add another entry to UNSUPPORTED_PROBES.
 type RawModel = { family?: string; id?: string; name?: string }
 function normalizeModelProbe(value: string): string {
-  return value.toLowerCase().trim().replace(/[\s_]+/g, "-")
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/[\s_]+/g, "-")
 }
 function probesOf(m: RawModel): string[] {
   return [m.family, m.id, m.name]
@@ -155,12 +158,7 @@ const alibabaModelFallbackProviders: Record<string, string[]> = {
   "glm-5": ["tencent-coding-plan", "zhipuai", "302ai", "opencode"],
   "MiniMax-M2.5": ["minimax-coding-plan", "minimax-cn-coding-plan", "minimax"],
 }
-for (const id of [
-  "alibaba-coding-plan",
-  "alibaba-coding-plan-cn",
-  "alibaba-token-plan",
-  "alibaba-token-plan-cn",
-]) {
+for (const id of ["alibaba-coding-plan", "alibaba-coding-plan-cn", "alibaba-token-plan", "alibaba-token-plan-cn"]) {
   if (!fetched[id]) continue
   const models = fetched[id].models ?? {}
   const kept: Record<string, unknown> = {}
@@ -258,7 +256,9 @@ for (const [id, doc] of Object.entries(docOverrides)) {
 }
 
 for (const id of ["alibaba-coding-plan", "alibaba-coding-plan-cn", "alibaba-token-plan", "alibaba-token-plan-cn"]) {
-  const deepseek = fetched[id]?.models?.["deepseek-v3.2"] as { limit?: { context?: number; output?: number } } | undefined
+  const deepseek = fetched[id]?.models?.["deepseek-v3.2"] as
+    | { limit?: { context?: number; output?: number } }
+    | undefined
   if (deepseek?.limit) deepseek.limit.output = 16_384
 }
 

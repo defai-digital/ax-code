@@ -80,7 +80,7 @@ describe("resolveCommands", () => {
 
   test("falls back to cargo commands in a Rust workspace", async () => {
     await using tmp = await tmpdir({ git: true })
-    await fs.writeFile(path.join(tmp.path, "Cargo.toml"), "[package]\nname = \"demo\"\nversion = \"0.1.0\"\n")
+    await fs.writeFile(path.join(tmp.path, "Cargo.toml"), '[package]\nname = "demo"\nversion = "0.1.0"\n')
     const cmds = await resolveCommands(tmp.path)
     expect(cmds).toEqual({
       typecheck: "cargo check",
@@ -92,7 +92,7 @@ describe("resolveCommands", () => {
   test("package scripts take precedence over cargo defaults", async () => {
     await using tmp = await tmpdir({ git: true })
     await writePackageJson(tmp.path, { typecheck: "tsc --noEmit" })
-    await fs.writeFile(path.join(tmp.path, "Cargo.toml"), "[package]\nname = \"demo\"\nversion = \"0.1.0\"\n")
+    await fs.writeFile(path.join(tmp.path, "Cargo.toml"), '[package]\nname = "demo"\nversion = "0.1.0"\n')
     const cmds = await resolveCommands(tmp.path)
     expect(cmds.typecheck).toBe("bun run typecheck")
     expect(cmds.lint).toBe("cargo clippy --all-targets --all-features -- -D warnings")
@@ -101,7 +101,7 @@ describe("resolveCommands", () => {
 
   test("override null disables the matching cargo default", async () => {
     await using tmp = await tmpdir({ git: true })
-    await fs.writeFile(path.join(tmp.path, "Cargo.toml"), "[package]\nname = \"demo\"\nversion = \"0.1.0\"\n")
+    await fs.writeFile(path.join(tmp.path, "Cargo.toml"), '[package]\nname = "demo"\nversion = "0.1.0"\n')
     const cmds = await resolveCommands(tmp.path, { lint: null })
     expect(cmds.typecheck).toBe("cargo check")
     expect(cmds.lint).toBeNull()

@@ -4,7 +4,12 @@ import { Global } from "../global"
 import { Log } from "../util/log"
 import { Flag } from "../flag/flag"
 import { NativeStore } from "./native-store"
-import { createProcessLockBody, isSameProcessLockHost, parseProcessLockBody, type ProcessLockBody } from "../util/process-lock"
+import {
+  createProcessLockBody,
+  isSameProcessLockHost,
+  parseProcessLockBody,
+  type ProcessLockBody,
+} from "../util/process-lock"
 import type { ProjectID } from "../project/schema"
 
 // Cross-process advisory lock for code-graph indexing runs.

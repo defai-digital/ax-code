@@ -164,7 +164,10 @@ export const McpListCommand = cmd({
 
           const typeHint = serverConfig.type === "remote" ? serverConfig.url : serverConfig.command.join(" ")
           const serverTools = toolsByServer.get(name) ?? []
-          const toolCountHint = args.tools && status?.status === "connected" ? ` ${UI.Style.TEXT_DIM}(${serverTools.length} tool${serverTools.length === 1 ? "" : "s"})` : ""
+          const toolCountHint =
+            args.tools && status?.status === "connected"
+              ? ` ${UI.Style.TEXT_DIM}(${serverTools.length} tool${serverTools.length === 1 ? "" : "s"})`
+              : ""
 
           prompts.log.info(
             `${statusIcon} ${name}${toolCountHint} ${UI.Style.TEXT_DIM}${statusText}${hint}\n    ${UI.Style.TEXT_DIM}${typeHint}`,
@@ -175,11 +178,8 @@ export const McpListCommand = cmd({
               // Evaluate against the user's ruleset; pattern is "*" since
               // MCP tool calls register `patterns: ["*"]` at runtime.
               const rule = Permission.evaluate(tool.permissionKey, "*", ruleset)
-              const actionLabel =
-                rule.action === "deny" ? "deny" : rule.action === "allow" ? "allow" : "ask"
-              prompts.log.info(
-                `    ${UI.Style.TEXT_DIM}· ${tool.name}  [${actionLabel}]`,
-              )
+              const actionLabel = rule.action === "deny" ? "deny" : rule.action === "allow" ? "allow" : "ask"
+              prompts.log.info(`    ${UI.Style.TEXT_DIM}· ${tool.name}  [${actionLabel}]`)
             }
           }
         }
@@ -190,9 +190,7 @@ export const McpListCommand = cmd({
         // model starts mis-selecting and the JSON schema overhead is
         // measurable. We warn rather than enforce — power users may
         // know exactly what they are doing.
-        const totalTools = args.tools
-          ? Array.from(toolsByServer.values()).reduce((sum, arr) => sum + arr.length, 0)
-          : 0
+        const totalTools = args.tools ? Array.from(toolsByServer.values()).reduce((sum, arr) => sum + arr.length, 0) : 0
 
         prompts.outro(`${servers.length} server(s)${args.tools ? `, ${totalTools} tool(s)` : ""}`)
 

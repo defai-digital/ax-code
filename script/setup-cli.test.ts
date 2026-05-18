@@ -69,8 +69,7 @@ describe("setup-cli helpers", () => {
       env: { BUN_INSTALL: "/tmp/ax-code-test-bundled-default" },
       platform: "darwin",
       arch: "arm64",
-      exists: (target) =>
-        target === "/tmp/ax-code-test-bundled-default/bin" || target === binary || target === marker,
+      exists: (target) => target === "/tmp/ax-code-test-bundled-default/bin" || target === binary || target === marker,
       mkdirSync: () => undefined,
       readFileSync: (p) => (p === marker ? "/repo\n" : ""),
       writeFileSync: (target, content) => {
@@ -132,8 +131,7 @@ describe("setup-cli helpers", () => {
       platform: "darwin",
       arch: "arm64",
       version: "4.0.12",
-      exists: (target) =>
-        target === "/tmp/ax-code-test-bundled-stale/bin" || target === binary || target === marker,
+      exists: (target) => target === "/tmp/ax-code-test-bundled-stale/bin" || target === binary || target === marker,
       mkdirSync: () => undefined,
       readFileSync: (p) => (p === marker ? "/old-checkout\n" : ""),
       writeFileSync: (target, content) => {

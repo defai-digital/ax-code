@@ -18,12 +18,12 @@ The first-party package today is `@ax-code/sdk`. Other languages should integrat
 
 ## Integration Choice
 
-| Need | Recommended path |
-| ---- | ---------------- |
-| TypeScript or JavaScript in the same process | `js/README.md` and `createAgent()` |
-| TypeScript or JavaScript over HTTP | `@ax-code/sdk/http` with `ax-code serve` |
-| Python, Go, Java, Rust, or another runtime | Generate a client from `openapi.json` |
-| Interactive developer workflow | Root README, TUI, CLI, or VS Code integration |
+| Need                                         | Recommended path                              |
+| -------------------------------------------- | --------------------------------------------- |
+| TypeScript or JavaScript in the same process | `js/README.md` and `createAgent()`            |
+| TypeScript or JavaScript over HTTP           | `@ax-code/sdk/http` with `ax-code serve`      |
+| Python, Go, Java, Rust, or another runtime   | Generate a client from `openapi.json`         |
+| Interactive developer workflow               | Root README, TUI, CLI, or VS Code integration |
 
 Keep this page short. Detailed cross-language guidance belongs in `docs/sdk-http-openapi.md`; detailed TypeScript examples belong in `js/README.md`.
 

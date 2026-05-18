@@ -102,36 +102,36 @@ export function buildSubagentStatusView(input: {
   const childSessions = input.childSessions.filter((item) => item.parentID === input.parentSessionID)
   const ids = new Set([...childSessions.map((item) => item.id), ...taskBySessionID.keys()])
   const boundItems = [...ids].map((id): SubagentStatusItem => {
-      const child = childSessions.find((item) => item.id === id)
-      const task = taskBySessionID.get(id)
-      const status = input.statuses[id]
-      const active =
-        status?.type === "busy" || status?.type === "retry" || task?.status === "running" || task?.status === "pending"
-      const startedAt = statusStartedAt(status) ?? task?.startedAt
-      const lastActivityAt = statusLastActivityAt(status) ?? task?.lastActivityAt
-      const elapsed = formatElapsed(now, startedAt)
-      const inactive = lastActivityAt ? now - lastActivityAt : 0
-      const stale = active && inactive >= staleAfterMs
-      const activity = (() => {
-        if (status?.type === "retry") return "Retrying"
-        if (status?.type !== "busy") return task?.status === "completed" ? "Completed" : active ? "Starting" : "Waiting"
-        if (status.waitState === "tool") return toolLabel(status.activeTool)
-        if (status.waitState === "llm") return "Thinking"
-        return "Working"
-      })()
-      const staleSuffix = stale ? ` · no update ${formatElapsed(now, lastActivityAt)}` : ""
-      const elapsedSuffix = elapsed ? ` · ${elapsed}` : ""
-      return {
-        id,
-        title: task?.title ?? child?.title ?? "Subagent",
-        agent: task?.agent,
-        active,
-        done: task?.status === "completed" || (!active && status?.type === "idle"),
-        stale,
-        lastActivityAt: lastActivityAt ?? startedAt ?? 0,
-        label: `${task?.agent ? `${task.agent}: ` : ""}${activity}${elapsedSuffix}${staleSuffix}`,
-      }
-    })
+    const child = childSessions.find((item) => item.id === id)
+    const task = taskBySessionID.get(id)
+    const status = input.statuses[id]
+    const active =
+      status?.type === "busy" || status?.type === "retry" || task?.status === "running" || task?.status === "pending"
+    const startedAt = statusStartedAt(status) ?? task?.startedAt
+    const lastActivityAt = statusLastActivityAt(status) ?? task?.lastActivityAt
+    const elapsed = formatElapsed(now, startedAt)
+    const inactive = lastActivityAt ? now - lastActivityAt : 0
+    const stale = active && inactive >= staleAfterMs
+    const activity = (() => {
+      if (status?.type === "retry") return "Retrying"
+      if (status?.type !== "busy") return task?.status === "completed" ? "Completed" : active ? "Starting" : "Waiting"
+      if (status.waitState === "tool") return toolLabel(status.activeTool)
+      if (status.waitState === "llm") return "Thinking"
+      return "Working"
+    })()
+    const staleSuffix = stale ? ` · no update ${formatElapsed(now, lastActivityAt)}` : ""
+    const elapsedSuffix = elapsed ? ` · ${elapsed}` : ""
+    return {
+      id,
+      title: task?.title ?? child?.title ?? "Subagent",
+      agent: task?.agent,
+      active,
+      done: task?.status === "completed" || (!active && status?.type === "idle"),
+      stale,
+      lastActivityAt: lastActivityAt ?? startedAt ?? 0,
+      label: `${task?.agent ? `${task.agent}: ` : ""}${activity}${elapsedSuffix}${staleSuffix}`,
+    }
+  })
 
   const unboundItems = unboundTasks.map((task): SubagentStatusItem => {
     const active = task.status === "running" || task.status === "pending"
@@ -153,11 +153,10 @@ export function buildSubagentStatusView(input: {
     }
   })
 
-  const items = [...boundItems, ...unboundItems]
-    .toSorted((a, b) => {
-      if (a.active !== b.active) return a.active ? -1 : 1
-      return b.lastActivityAt - a.lastActivityAt
-    })
+  const items = [...boundItems, ...unboundItems].toSorted((a, b) => {
+    if (a.active !== b.active) return a.active ? -1 : 1
+    return b.lastActivityAt - a.lastActivityAt
+  })
   const running = items.filter((item) => item.active).length
   const done = items.filter((item) => item.done).length
 

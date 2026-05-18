@@ -26,10 +26,7 @@ export const PermissionRoutes = lazy(() =>
           ...errors(400, 404),
         },
       }),
-      validator(
-        "param",
-        PERMISSION_REQUEST_ID_PARAM,
-      ),
+      validator("param", PERMISSION_REQUEST_ID_PARAM),
       validator("json", z.object({ reply: Permission.Reply, message: z.string().optional() })),
       withPermissionRequestID(async (requestID, c) => {
         const json = c.req.valid("json")

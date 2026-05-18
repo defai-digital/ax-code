@@ -123,9 +123,7 @@ export function checkTruncation(data: GitHubPullRequest | GitHubIssue): string[]
       }
     }
 
-    const truncatedReviewComment = pr.reviews.nodes.find(
-      (review) => hasNextPage(review.comments),
-    )
+    const truncatedReviewComment = pr.reviews.nodes.find((review) => hasNextPage(review.comments))
     if (truncatedReviewComment) {
       warnings.push(`review comments in review by ${truncatedReviewComment.author?.login ?? "unknown"} (>100)`)
     }

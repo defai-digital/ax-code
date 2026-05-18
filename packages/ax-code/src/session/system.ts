@@ -40,20 +40,19 @@ export namespace SystemPrompt {
 
   export async function environment(model: Provider.Model) {
     const project = Instance.project
-    const autonomousWorkflow =
-      Flag.AX_CODE_AUTONOMOUS
-        ? [
-            `<autonomous_workflow>`,
-            `  Autonomous mode is enabled.`,
-            `  Before implementation, create a concise PRD/ADR-style decision frame: problem, constraints, decision, tradeoffs, plan, and validation.`,
-            `  For substantial multi-file, architectural, or product-visible changes, create or update a repo document when that matches the repository's documentation pattern.`,
-            `  For trivial changes, keep the PRD/ADR frame lightweight in the plan instead of creating permanent docs.`,
-            `  Prefer industry/common best practices and avoid over-engineering: choose the simplest change that solves the task, avoid new abstractions without 3+ concrete use cases, and verify before expanding scope.`,
-            `  When autonomous mode makes choices for the user, record those choices in the final response.`,
-            `  Before ending your turn, mark every todo as completed or cancelled — never leave todos in pending or in_progress state.`,
-            `</autonomous_workflow>`,
-          ]
-        : []
+    const autonomousWorkflow = Flag.AX_CODE_AUTONOMOUS
+      ? [
+          `<autonomous_workflow>`,
+          `  Autonomous mode is enabled.`,
+          `  Before implementation, create a concise PRD/ADR-style decision frame: problem, constraints, decision, tradeoffs, plan, and validation.`,
+          `  For substantial multi-file, architectural, or product-visible changes, create or update a repo document when that matches the repository's documentation pattern.`,
+          `  For trivial changes, keep the PRD/ADR frame lightweight in the plan instead of creating permanent docs.`,
+          `  Prefer industry/common best practices and avoid over-engineering: choose the simplest change that solves the task, avoid new abstractions without 3+ concrete use cases, and verify before expanding scope.`,
+          `  When autonomous mode makes choices for the user, record those choices in the final response.`,
+          `  Before ending your turn, mark every todo as completed or cancelled — never leave todos in pending or in_progress state.`,
+          `</autonomous_workflow>`,
+        ]
+      : []
     const debugEngineWorkflow = Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE
       ? [
           `<debug_engine_workflow>`,

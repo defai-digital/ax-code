@@ -489,7 +489,10 @@ export namespace Session {
     if (info.projectID !== Instance.project.id) return false
     if (Filesystem.overlaps(Instance.directory, info.directory)) return true
     if (Instance.worktree === "/") return false
-    return Filesystem.contains(Instance.worktree, Instance.directory) && Filesystem.contains(Instance.worktree, info.directory)
+    return (
+      Filesystem.contains(Instance.worktree, Instance.directory) &&
+      Filesystem.contains(Instance.worktree, info.directory)
+    )
   }
 
   export const setTitle = fn(z.object({ sessionID: SessionID.zod, title: z.string().min(1) }), async (input) =>

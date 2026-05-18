@@ -686,10 +686,7 @@ export namespace Server {
             ...errors(400),
           },
         }),
-        validator(
-          "param",
-          PROVIDER_ID_PARAM,
-        ),
+        validator("param", PROVIDER_ID_PARAM),
         validator("json", Auth.Info.zod),
         withProviderID(async (providerID, c) => {
           const info = c.req.valid("json")
@@ -714,10 +711,7 @@ export namespace Server {
             ...errors(400),
           },
         }),
-        validator(
-          "param",
-          PROVIDER_ID_PARAM,
-        ),
+        validator("param", PROVIDER_ID_PARAM),
         withProviderID(async (providerID, c) => {
           return updateProviderAuth(c, providerID, Auth.remove)
         }),
@@ -1382,10 +1376,7 @@ export namespace Server {
     }
     url = new URL(`http://${opts.hostname}:${server.port}`)
 
-    const shouldPublishMDNS =
-      opts.mdns &&
-      server.port &&
-      !isLoopbackHostname(opts.hostname)
+    const shouldPublishMDNS = opts.mdns && server.port && !isLoopbackHostname(opts.hostname)
     if (shouldPublishMDNS) {
       MDNS.publish(server.port!, opts.mdnsDomain)
     } else if (opts.mdns) {

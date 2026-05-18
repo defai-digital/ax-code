@@ -131,10 +131,7 @@ export const ProviderRoutes = lazy(() =>
           ...errors(400),
         },
       }),
-      validator(
-        "param",
-        PROVIDER_ID_PARAM,
-      ),
+      validator("param", PROVIDER_ID_PARAM),
       validator(
         "json",
         z.object({
@@ -170,10 +167,7 @@ export const ProviderRoutes = lazy(() =>
           ...errors(400),
         },
       }),
-      validator(
-        "param",
-        PROVIDER_ID_PARAM,
-      ),
+      validator("param", PROVIDER_ID_PARAM),
       validator(
         "json",
         z.object({

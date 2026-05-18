@@ -61,7 +61,13 @@ export function getIsolationPolicyCheck(input: {
   const network =
     mode === "full-access" ? true : input.envNetwork !== undefined ? input.envNetwork : (input.config?.network ?? false)
   const networkSource =
-    mode === "full-access" ? "full-access" : input.envNetwork !== undefined ? "env" : input.config ? "config" : "default"
+    mode === "full-access"
+      ? "full-access"
+      : input.envNetwork !== undefined
+        ? "env"
+        : input.config
+          ? "config"
+          : "default"
   const detail = `mode ${mode} (${modeSource}); network ${network ? "enabled" : "disabled"} (${networkSource})`
   return {
     name: "Isolation policy",

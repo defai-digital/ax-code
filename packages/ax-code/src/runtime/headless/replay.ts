@@ -31,8 +31,7 @@ export async function replayHeadlessEvents<
   TRisk = unknown,
 >(input: HeadlessReplayInput<TSession, TTodo, TDiff, TStatus, TMessage, TPart, TRisk>) {
   const state =
-    input.initialState ??
-    createHeadlessProjectionState<TSession, TTodo, TDiff, TStatus, TMessage, TPart, TRisk>()
+    input.initialState ?? createHeadlessProjectionState<TSession, TTodo, TDiff, TStatus, TMessage, TPart, TRisk>()
 
   for await (const record of toAsyncIterable(input.events)) {
     const event = decodeHeadlessEventLogRecord<TSession, TTodo, TDiff, TStatus, TMessage, TPart>(record)
@@ -66,8 +65,7 @@ export async function replayHeadlessEventLogLines<
   TRisk = unknown,
 >(input: HeadlessEventLogReplayInput<TSession, TTodo, TDiff, TStatus, TMessage, TPart, TRisk>) {
   const state =
-    input.initialState ??
-    createHeadlessProjectionState<TSession, TTodo, TDiff, TStatus, TMessage, TPart, TRisk>()
+    input.initialState ?? createHeadlessProjectionState<TSession, TTodo, TDiff, TStatus, TMessage, TPart, TRisk>()
 
   for await (const line of toAsyncIterable(input.lines)) {
     const event = decodeHeadlessEventLogLine<TSession, TTodo, TDiff, TStatus, TMessage, TPart>(line)

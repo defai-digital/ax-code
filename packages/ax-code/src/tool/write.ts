@@ -19,7 +19,11 @@ function validateInternalBugReport(filepath: string, content: string) {
   if (relative === ".internal/bugs/README.md" || relative === ".internal/bugs/summary.md") return
 
   const missing: string[] = []
-  if (!/(^|\n)(?:\*\*)?Classification(?::\*\*|\*\*:|:)\s*(confirmed|suspected|false_positive|false positive)\b/i.test(content)) {
+  if (
+    !/(^|\n)(?:\*\*)?Classification(?::\*\*|\*\*:|:)\s*(confirmed|suspected|false_positive|false positive)\b/i.test(
+      content,
+    )
+  ) {
     missing.push("`Classification: confirmed|suspected|false_positive`")
   }
   if (!/^## Evidence/im.test(content)) {

@@ -28,7 +28,11 @@ export function parseProcessLockBody<T extends Record<string, unknown> = Record<
     if (!parsed || typeof parsed !== "object") return undefined
 
     const candidate = parsed as Partial<ProcessLockBody & T>
-    if (typeof candidate.pid !== "number" || typeof candidate.startedAt !== "number" || typeof candidate.host !== "string") {
+    if (
+      typeof candidate.pid !== "number" ||
+      typeof candidate.startedAt !== "number" ||
+      typeof candidate.host !== "string"
+    ) {
       return undefined
     }
 

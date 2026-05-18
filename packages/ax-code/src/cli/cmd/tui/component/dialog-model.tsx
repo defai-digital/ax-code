@@ -102,9 +102,7 @@ export function DialogModel(props: { providerID?: string }) {
               return false
             return true
           }),
-          sortBy(
-            (x) => x.title,
-          ),
+          sortBy((x) => x.title),
         ),
       ),
     )

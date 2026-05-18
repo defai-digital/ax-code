@@ -439,9 +439,7 @@ const PerfIndexCommand = cmd({
           console.log(`  samples:  ${repeat}`)
           console.log(`  cache:    ${currentCacheMode}`)
           if (probeResult) {
-            console.log(
-              `  probe:    ${probeResult.ready.length} ready, ${recordCount(probeResult.missing)} missing`,
-            )
+            console.log(`  probe:    ${probeResult.ready.length} ready, ${recordCount(probeResult.missing)} missing`)
           }
           console.log("")
         }

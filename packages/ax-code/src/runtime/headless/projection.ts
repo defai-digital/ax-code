@@ -1,10 +1,6 @@
 import type { PermissionRequest, QuestionRequest } from "@ax-code/sdk/v2"
 import { Binary } from "@ax-code/util/binary"
-import type {
-  HeadlessRuntimeEvent,
-  HeadlessRuntimeProbeKey,
-  HeadlessRuntimeStatusEvent,
-} from "./event"
+import type { HeadlessRuntimeEvent, HeadlessRuntimeProbeKey, HeadlessRuntimeStatusEvent } from "./event"
 
 export interface HeadlessProjectionState<
   TSession extends { id: string },

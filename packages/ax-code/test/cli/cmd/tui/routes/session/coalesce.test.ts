@@ -5,7 +5,11 @@ import type { Part, ToolPart } from "@ax-code/sdk/v2"
 // Lightweight ToolPart factory — we only need fields the coalescer reads
 // (type, tool, callID, state.status). Everything else is `as any` so we
 // don't have to construct the full v2 shape.
-function tool(opts: { tool: string; callID: string; status?: "completed" | "pending" | "running" | "error" }): ToolPart {
+function tool(opts: {
+  tool: string
+  callID: string
+  status?: "completed" | "pending" | "running" | "error"
+}): ToolPart {
   return {
     type: "tool",
     tool: opts.tool,

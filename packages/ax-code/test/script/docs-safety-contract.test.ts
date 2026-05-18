@@ -13,7 +13,9 @@ describe("public safety documentation contract", () => {
     const security = await readRepoFile("SECURITY.md")
     const sandbox = await readRepoFile("docs/sandbox.md")
 
-    expect(readme).toContain("AX Code starts with autonomous mode on and runtime isolation in `workspace-write` by default")
+    expect(readme).toContain(
+      "AX Code starts with autonomous mode on and runtime isolation in `workspace-write` by default",
+    )
     expect(security).toContain("The runtime isolation default is `workspace-write` with network disabled")
     expect(sandbox).toContain("By default, AX Code starts in **workspace-write**")
   })
