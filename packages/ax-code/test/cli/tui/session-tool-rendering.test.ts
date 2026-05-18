@@ -6,7 +6,7 @@ import {
   coalescedToolLabel,
   isKnownSessionToolRenderer,
   sessionToolRendererKey,
-} from "../../src/cli/cmd/tui/routes/session/tool-rendering"
+} from "../../../src/cli/cmd/tui/routes/session/tool-rendering"
 
 describe("tui session tool rendering policy", () => {
   test("maps every specialized renderer key to itself", () => {
@@ -32,7 +32,7 @@ describe("tui session tool rendering policy", () => {
   })
 
   test("keeps extracted renderer modules independent from the route index", async () => {
-    const root = path.join(import.meta.dir, "../../src/cli/cmd/tui/routes/session/tool-renderers")
+    const root = path.join(import.meta.dir, "../../../src/cli/cmd/tui/routes/session/tool-renderers")
     for (const file of [
       "basic.tsx",
       "dre.tsx",

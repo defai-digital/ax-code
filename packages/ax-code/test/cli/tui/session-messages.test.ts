@@ -4,7 +4,7 @@ import {
   promptState,
   redoMessageID,
   undoMessageID,
-} from "../../src/cli/cmd/tui/routes/session/messages"
+} from "../../../src/cli/cmd/tui/routes/session/messages"
 
 describe("tui session message helpers", () => {
   test("finds the last user message with visible text", () => {

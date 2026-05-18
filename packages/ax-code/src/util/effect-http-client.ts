@@ -1,3 +1,10 @@
+/**
+ * @deprecated Effect-based HTTP retry helper. New code should not import
+ * from here. Per ARCHITECTURE.md, Effect is frozen outside src/effect/,
+ * src/session/, src/file/watcher.ts, and src/util/effect-zod.ts. This
+ * file remains for existing Effect-using modules; migrate callers to
+ * plain `fetch` + Result<T, E> when touching them.
+ */
 import { Schedule } from "effect"
 import { HttpClient } from "effect/unstable/http"
 

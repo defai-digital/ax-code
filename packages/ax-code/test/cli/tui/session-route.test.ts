@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import type { Part, UserMessage } from "@ax-code/sdk/v2"
-import { messageRoute, routeEvent, routeNote, userRoute } from "../../src/cli/cmd/tui/routes/session/route"
-import { activityItems } from "../../src/cli/cmd/tui/routes/session/activity"
+import { messageRoute, routeEvent, routeNote, userRoute } from "../../../src/cli/cmd/tui/routes/session/route"
+import { activityItems } from "../../../src/cli/cmd/tui/routes/session/activity"
 
 function user(id: string, agent = "build"): UserMessage {
   return {
