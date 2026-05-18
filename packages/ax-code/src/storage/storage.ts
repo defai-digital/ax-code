@@ -168,14 +168,39 @@ export namespace Storage {
         log.error("storage migration marker unreadable, replaying from 0", { err })
         return 0
       })
+    // On startup, surface any in-progress checkpoint left behind by a
+    // previous interrupted migration. The current migration set is
+    // idempotent (re-running from the same `migration` index recomputes
+    // the same output), so this is observability — but future
+    // non-idempotent migrations can read the checkpoint to resume.
+    for (let index = migration; index < MIGRATIONS.length; index++) {
+      const checkpoint = path.join(dir, `.migration.${index}.in-progress`)
+      try {
+        await fs.stat(checkpoint)
+        log.warn("storage migration was interrupted on a previous run", {
+          index,
+          checkpoint,
+          hint: "the migration will re-run; remove this file manually if you want to suppress the warning",
+        })
+      } catch {
+        // ENOENT — no interrupted run, normal path
+      }
+    }
     for (let index = migration; index < MIGRATIONS.length; index++) {
       log.info("running migration", { index })
+      const checkpoint = path.join(dir, `.migration.${index}.in-progress`)
       // Renamed to avoid shadowing the outer `migration` (the parsed
       // version-number marker) — a future maintainer adding logging or
       // recovery to the catch block below would otherwise reach for
       // `migration` and silently get the migration function instead of
       // the version number.
       const migrationFn = MIGRATIONS[index]
+      // Write the in-progress checkpoint BEFORE running. If migration
+      // crashes/is killed, the checkpoint persists and is detected on
+      // the next startup. The version marker is only advanced after
+      // both the migration AND the checkpoint cleanup succeed, so a
+      // failure can't silently skip ahead.
+      await Filesystem.write(checkpoint, new Date().toISOString())
       // Do NOT advance the version marker on failure — a failed migration
       // must be retried on the next startup, otherwise storage can be
       // left in a permanently corrupt state. The previous code swallowed
@@ -187,6 +212,10 @@ export namespace Storage {
         log.error("failed to run migration", { index, err })
         throw err
       }
+      await fs.unlink(checkpoint).catch((err: NodeJS.ErrnoException) => {
+        if (err?.code === "ENOENT") return
+        log.warn("failed to clear migration checkpoint", { checkpoint, err })
+      })
       await Filesystem.write(path.join(dir, "migration"), (index + 1).toString())
     }
     return {
