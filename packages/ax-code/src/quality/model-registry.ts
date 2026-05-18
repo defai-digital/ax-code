@@ -36,6 +36,16 @@ import { QualityReentryContext } from "./reentry-context"
 import { QualityReentryRemediation } from "./reentry-remediation"
 import { QualityPromotionWatch } from "./promotion-watch"
 import { QualityStabilityGuard } from "./stability-guard"
+import {
+  promotionApprovers,
+  promotionReportingChains,
+  reportingChainCarryoverHistory,
+  reviewerCarryoverHistory,
+  sortModelRecords,
+  sortPromotionRecords,
+  sortRollbackRecords,
+  teamCarryoverHistory,
+} from "./model-registry-selection"
 
 export namespace QualityModelRegistry {
   export const PromotionMetadata = z.object({
@@ -807,16 +817,6 @@ export namespace QualityModelRegistry {
     return decodeURIComponent(input)
   }
 
-  function normalizeReportingChain(reportingChain: string | null | undefined) {
-    const normalized = reportingChain?.trim().toLowerCase()
-    return normalized ? normalized : null
-  }
-
-  function normalizeTeam(team: string | null | undefined) {
-    const normalized = team?.trim().toLowerCase()
-    return normalized ? normalized : null
-  }
-
   function modelKey(source: string) {
     return ["quality_model", encode(source)]
   }
@@ -831,14 +831,6 @@ export namespace QualityModelRegistry {
 
   function rollbackKey(rollbackID: string) {
     return ["quality_model_rollback", rollbackID]
-  }
-
-  function sort(records: ModelRecord[]) {
-    return [...records].sort((a, b) => {
-      const byRegisteredAt = a.registeredAt.localeCompare(b.registeredAt)
-      if (byRegisteredAt !== 0) return byRegisteredAt
-      return a.model.source.localeCompare(b.model.source)
-    })
   }
 
   export async function get(source: string) {
@@ -875,7 +867,7 @@ export namespace QualityModelRegistry {
       if (!encodedSource) continue
       out.push(await get(decode(encodedSource)))
     }
-    return sort(out)
+    return sortModelRecords(out)
   }
 
   export async function getActive() {
@@ -920,7 +912,7 @@ export namespace QualityModelRegistry {
       if (source && record.source !== source) continue
       out.push(record)
     }
-    return out.sort((a, b) => a.promotedAt.localeCompare(b.promotedAt) || a.source.localeCompare(b.source))
+    return sortPromotionRecords(out)
   }
 
   export async function latestPromotion(source?: string) {
@@ -1059,7 +1051,7 @@ export namespace QualityModelRegistry {
       if (source && record.source !== source) continue
       out.push(record)
     }
-    return out.sort((a, b) => a.rolledBackAt.localeCompare(b.rolledBackAt) || a.source.localeCompare(b.source))
+    return sortRollbackRecords(out)
   }
 
   export async function evaluatePromotionEligibility(
@@ -1086,139 +1078,17 @@ export namespace QualityModelRegistry {
           throw err
         })
       : undefined
-    const priorPromotionApprovers = [
-      ...new Set([
-        ...(priorPromotion?.approvals?.map((approval) => approval.approver) ?? []),
-        ...(priorPromotion?.approval ? [priorPromotion.approval.approver] : []),
-      ]),
-    ].sort()
-    const priorPromotionReportingChains = [
-      ...new Set([
-        ...(priorPromotion?.approvals
-          ?.map((approval) => normalizeReportingChain(approval.reportingChain))
-          .filter((value): value is string => value !== null) ?? []),
-        ...(priorPromotion?.approval
-          ? [normalizeReportingChain(priorPromotion.approval.reportingChain)].filter(
-              (value): value is string => value !== null,
-            )
-          : []),
-      ]),
-    ].sort()
+    const priorPromotionApprovers = priorPromotion ? promotionApprovers(priorPromotion) : []
+    const priorPromotionReportingChains = priorPromotion ? promotionReportingChains(priorPromotion) : []
     const reviewerCarryoverLookbackPromotions = options?.reviewerCarryoverLookbackPromotions ?? 3
     const teamCarryoverLookbackPromotions = options?.teamCarryoverLookbackPromotions ?? 3
     const reportingChainCarryoverLookbackPromotions = options?.reportingChainCarryoverLookbackPromotions ?? 3
-    const reviewerCarryoverHistory = promotions
-      .filter((promotion) => promotion.eligibility?.reentryContext)
-      .slice(-reviewerCarryoverLookbackPromotions)
-      .reverse()
-      .reduce((map, promotion, index) => {
-        const weight = 1 / 2 ** index
-        const approvers = [
-          ...new Set([
-            ...(promotion.approvals?.map((approval) => approval.approver) ?? []),
-            ...(promotion.approval ? [promotion.approval.approver] : []),
-          ]),
-        ].sort()
-        for (const approver of approvers) {
-          const existing = map.get(approver)
-          if (existing) {
-            existing.weightedReuseScore += weight
-            existing.appearances += 1
-            continue
-          }
-          map.set(approver, {
-            approver,
-            weightedReuseScore: weight,
-            appearances: 1,
-            mostRecentPromotionID: promotion.promotionID,
-            mostRecentPromotedAt: promotion.promotedAt,
-          })
-        }
-        return map
-      }, new Map<string, QualityPromotionEligibility.ReviewerCarryoverEntry>())
-    const normalizedReviewerCarryoverHistory = [...reviewerCarryoverHistory.values()].sort((a, b) => {
-      const byScore = b.weightedReuseScore - a.weightedReuseScore
-      if (byScore !== 0) return byScore
-      return a.approver.localeCompare(b.approver)
-    })
-    const teamCarryoverHistory = promotions
-      .filter((promotion) => promotion.eligibility?.reentryContext)
-      .slice(-teamCarryoverLookbackPromotions)
-      .reverse()
-      .reduce((map, promotion, index) => {
-        const weight = 1 / 2 ** index
-        const teams = [
-          ...new Set([
-            ...(promotion.approvals
-              ?.map((approval) => normalizeTeam(approval.team))
-              .filter((value): value is string => value !== null) ?? []),
-            ...(promotion.approval
-              ? [normalizeTeam(promotion.approval.team)].filter((value): value is string => value !== null)
-              : []),
-          ]),
-        ].sort()
-        for (const team of teams) {
-          const existing = map.get(team)
-          if (existing) {
-            existing.weightedReuseScore += weight
-            existing.appearances += 1
-            continue
-          }
-          map.set(team, {
-            team,
-            weightedReuseScore: weight,
-            appearances: 1,
-            mostRecentPromotionID: promotion.promotionID,
-            mostRecentPromotedAt: promotion.promotedAt,
-          })
-        }
-        return map
-      }, new Map<string, QualityPromotionEligibility.TeamCarryoverEntry>())
-    const normalizedTeamCarryoverHistory = [...teamCarryoverHistory.values()].sort((a, b) => {
-      const byScore = b.weightedReuseScore - a.weightedReuseScore
-      if (byScore !== 0) return byScore
-      return a.team.localeCompare(b.team)
-    })
-    const reportingChainCarryoverHistory = promotions
-      .filter((promotion) => promotion.eligibility?.reentryContext)
-      .slice(-reportingChainCarryoverLookbackPromotions)
-      .reverse()
-      .reduce((map, promotion, index) => {
-        const weight = 1 / 2 ** index
-        const reportingChains = [
-          ...new Set([
-            ...(promotion.approvals
-              ?.map((approval) => normalizeReportingChain(approval.reportingChain))
-              .filter((value): value is string => value !== null) ?? []),
-            ...(promotion.approval
-              ? [normalizeReportingChain(promotion.approval.reportingChain)].filter(
-                  (value): value is string => value !== null,
-                )
-              : []),
-          ]),
-        ].sort()
-        for (const reportingChain of reportingChains) {
-          const existing = map.get(reportingChain)
-          if (existing) {
-            existing.weightedReuseScore += weight
-            existing.appearances += 1
-            continue
-          }
-          map.set(reportingChain, {
-            reportingChain,
-            weightedReuseScore: weight,
-            appearances: 1,
-            mostRecentPromotionID: promotion.promotionID,
-            mostRecentPromotedAt: promotion.promotedAt,
-          })
-        }
-        return map
-      }, new Map<string, QualityPromotionEligibility.ReportingChainCarryoverEntry>())
-    const normalizedReportingChainCarryoverHistory = [...reportingChainCarryoverHistory.values()].sort((a, b) => {
-      const byScore = b.weightedReuseScore - a.weightedReuseScore
-      if (byScore !== 0) return byScore
-      return a.reportingChain.localeCompare(b.reportingChain)
-    })
+    const normalizedReviewerCarryoverHistory = reviewerCarryoverHistory(promotions, reviewerCarryoverLookbackPromotions)
+    const normalizedTeamCarryoverHistory = teamCarryoverHistory(promotions, teamCarryoverLookbackPromotions)
+    const normalizedReportingChainCarryoverHistory = reportingChainCarryoverHistory(
+      promotions,
+      reportingChainCarryoverLookbackPromotions,
+    )
     const reentryRemediation = reentryContext
       ? await QualityReentryRemediation.latestForContext({
           source: bundle.model.source,

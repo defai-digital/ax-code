@@ -1,7 +1,7 @@
 # PRD: Hotspot Boundary Hardening
 
 **Date:** 2026-05-18
-**Status:** Complete - Phase 4 LSP client selection boundary complete
+**Status:** Complete - Phase 5 quality model registry selection boundary complete
 **Author:** ax-code agent
 
 ---
@@ -50,6 +50,7 @@ The current shape makes small tool display changes harder than necessary:
 - `packages/ax-code/src/cli/cmd/tui/routes/session/index.tsx` is about 1,778 lines after Phase 2's registry aggregation.
 - `packages/ax-code/src/session/prompt.ts` remains the largest hotspot; Phase 3 adds a small pure decision boundary without moving side-effectful loop execution.
 - `packages/ax-code/src/lsp/index.ts` is about 1,938 lines after Phase 4's client selection extraction.
+- `packages/ax-code/src/quality/model-registry.ts` is about 2,568 lines after Phase 5's selection helper extraction.
 - The tool dispatch area starts at `ToolPart` and branches on every specialized tool name.
 - The coalesced group label policy is embedded inside `CoalescedTool`.
 - Existing tests cover broader TUI session helpers, renderer contracts, and anti-patterns, but not a pure tool renderer dispatch contract.
@@ -167,6 +168,30 @@ Validation:
 - Passed: `cd packages/ax-code && bun run typecheck`
 - Passed: `bun run script/structure.ts`
 
+### Phase 5: Quality Model Registry Selection Boundary
+
+Status: Complete on 2026-05-18.
+
+Files:
+
+- Add `packages/ax-code/src/quality/model-registry-selection.ts`.
+- Add `packages/ax-code/test/quality/model-registry-selection.test.ts`.
+- Update `packages/ax-code/src/quality/model-registry.ts`.
+
+Completed:
+
+- Moved model, promotion, and rollback record ordering into pure selection helpers.
+- Moved approval identity normalization and de-duplication into pure helpers.
+- Moved reentry reviewer, team, and reporting-chain carryover history construction into pure helpers.
+- Kept storage reads, schema parsing, promotion writes, and registry side effects in `model-registry.ts`.
+- Added tests covering sort stability, input immutability, identity normalization, de-duplication, reentry lookback filtering, recency weighting, and deterministic tie ordering.
+
+Validation:
+
+- Passed: `cd packages/ax-code && bun test test/quality/model-registry-selection.test.ts test/quality/model-registry.test.ts`
+- Passed: `cd packages/ax-code && bun run typecheck`
+- Passed: `bun run script/structure.ts`
+
 ## Acceptance Criteria
 
 - Phase 1 lands without touching unrelated dirty session/runtime files.
@@ -187,3 +212,4 @@ Validation:
 - 2026-05-18: Phase 2 registry aggregation implemented. `GenericTool` and the renderer registry moved into `tool-renderers/generic.tsx` and `tool-renderers/index.tsx`; the route file dropped to about 1,778 lines and now imports only `toolRendererComponent` from the renderer package. Targeted tests, TUI layering, package typecheck, and structure guard all pass.
 - 2026-05-18: Phase 3 implemented. Pending compaction result handling and usage-overflow compaction scheduling now live behind pure helpers in `prompt-helpers.ts`; the prompt loop now delegates the decision and keeps the side effects local. Focused helper tests, processor tests, compaction tests, package typecheck, and structure guard pass.
 - 2026-05-18: Phase 4 implemented. LSP client selection policy now lives in `lsp/selection.ts`; `lsp/index.ts` keeps orchestration and side effects while re-exporting the existing helper surface. Focused orchestrator tests, prewarm/envelope tests, package typecheck, and structure guard pass.
+- 2026-05-18: Phase 5 implemented. Quality model registry sorting, approval identity extraction, and reentry carryover history construction now live in `model-registry-selection.ts`; `model-registry.ts` keeps storage, schema parsing, and promotion side effects. Focused quality registry tests, package typecheck, and structure guard pass.
