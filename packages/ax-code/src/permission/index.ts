@@ -460,14 +460,31 @@ export namespace Permission {
 
   export function fromConfig(permission: Config.Permission) {
     const ruleset: Ruleset = []
+    // Validate each rule through the Zod schema so a typo in `action`
+    // (e.g. "alow") fails loudly at config load instead of becoming a
+    // silently-ignored rule whose match falls through to whatever the
+    // next pattern says.
+    const pushValidated = (candidate: { permission: string; pattern: string; action: unknown }) => {
+      const parsed = Rule.safeParse(candidate)
+      if (!parsed.success) {
+        log.warn("ignoring invalid permission rule from config", {
+          permission: candidate.permission,
+          pattern: candidate.pattern,
+          action: candidate.action,
+          error: parsed.error.message,
+        })
+        return
+      }
+      ruleset.push(parsed.data)
+    }
     for (const [key, value] of Object.entries(permission)) {
       if (typeof value === "string") {
-        ruleset.push({ permission: key, action: value, pattern: "*" })
+        pushValidated({ permission: key, action: value, pattern: "*" })
         continue
       }
-      ruleset.push(
-        ...Object.entries(value).map(([pattern, action]) => ({ permission: key, pattern: expand(pattern), action })),
-      )
+      for (const [pattern, action] of Object.entries(value)) {
+        pushValidated({ permission: key, pattern: expand(pattern), action })
+      }
     }
     return ruleset
   }
@@ -545,8 +562,8 @@ export namespace Permission {
 
   export const runPromise = makeRunPromise(Service, layer)
 
-  export async function ask(input: z.infer<typeof AskInput>) {
-    return askPromise(input)
+  export async function ask(input: z.infer<typeof AskInput>, options?: { signal?: AbortSignal }) {
+    return askPromise(input, options)
   }
 
   export async function reply(input: z.infer<typeof ReplyInput>) {
