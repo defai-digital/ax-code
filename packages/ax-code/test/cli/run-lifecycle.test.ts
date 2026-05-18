@@ -72,14 +72,15 @@ test("shell env loading tears down the spawned shell after the read race", async
 test("TUI worker removes signal handlers during RPC shutdown", async () => {
   const src = await Bun.file(path.join(import.meta.dir, "../../src/cli/cmd/tui/worker.ts")).text()
 
+  // Worker now routes signal registration through the shared helper so
+  // SSH disconnect (SIGHUP) and ^\ (SIGQUIT) also drain MCP children /
+  // LSP servers / the HTTP server. The test still pins the "registered
+  // AND removed" lifecycle, just via the helper's contract.
   expect(src).toContain("let removeSignalHandlers")
   expect(src).toContain("removeSignalHandlers?.()")
-  expect(src).toContain('process.on("SIGTERM", onSignal)')
-  expect(src).toContain('process.on("SIGINT", onSignal)')
-  expect(src).not.toContain('process.once("SIGTERM", onSignal)')
-  expect(src).not.toContain('process.once("SIGINT", onSignal)')
-  expect(src).toContain('process.off("SIGTERM", onSignal)')
-  expect(src).toContain('process.off("SIGINT", onSignal)')
+  expect(src).toContain("registerShutdownSignals(onSignal)")
+  expect(src).not.toContain('process.on("SIGTERM"')
+  expect(src).not.toContain('process.on("SIGINT"')
 })
 
 test("TUI worker always forces exit after uncaught exceptions", async () => {

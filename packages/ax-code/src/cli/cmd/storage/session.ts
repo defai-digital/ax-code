@@ -16,6 +16,7 @@ import { Global } from "../../../global"
 import { EventQuery } from "../../../replay/query"
 import { buildTransfer } from "./transfer"
 import { ProjectIdentity } from "../../../project/project-identity"
+import { registerShutdownSignals } from "../../../util/signals"
 
 const lessPagerOptions = ["-R", "-S"]
 
@@ -437,15 +438,13 @@ export const SessionListCommand = cmd({
             proc.kill()
           } catch {}
         }
-        process.on("SIGINT", kill)
-        process.on("SIGTERM", kill)
+        const removeSignals = registerShutdownSignals(kill)
         try {
           proc.stdin.write(output)
           proc.stdin.end()
           await proc.exited
         } finally {
-          process.off("SIGINT", kill)
-          process.off("SIGTERM", kill)
+          removeSignals()
         }
       } else {
         console.log(output)

@@ -1,6 +1,7 @@
 import { cmd } from "../cmd"
 import { withNetworkOptions, resolveNetworkOptions, requireAuthForNetwork } from "../../network"
 import { WorkspaceServer } from "../../../control-plane/workspace-server/server"
+import { registerShutdownSignals } from "../../../util/signals"
 
 export const WorkspaceServeCommand = cmd({
   command: "workspace-serve",
@@ -12,15 +13,11 @@ export const WorkspaceServeCommand = cmd({
     const server = WorkspaceServer.Listen(opts)
     console.log(`workspace event server listening on http://${server.hostname}:${server.port}/event`)
 
-    let stopping = false
     const shutdown = async () => {
-      if (stopping) return
-      stopping = true
       await server.stop()
       process.exit(0)
     }
-    process.on("SIGINT", shutdown)
-    process.on("SIGTERM", shutdown)
+    registerShutdownSignals(shutdown)
 
     await new Promise(() => {})
   },

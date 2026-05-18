@@ -1,6 +1,7 @@
 import { Server } from "../../../server/server"
 import { cmd } from "../cmd"
 import { withNetworkOptions, resolveNetworkOptions, requireAuthForNetwork, isLocalhostOnly } from "../../network"
+import { registerShutdownSignals } from "../../../util/signals"
 
 export const ServeCommand = cmd({
   command: "serve",
@@ -15,15 +16,11 @@ export const ServeCommand = cmd({
     const server = Server.listen(opts)
     console.log(`ax-code server listening on http://${server.hostname}:${server.port}`)
 
-    let stopping = false
     const shutdown = async () => {
-      if (stopping) return
-      stopping = true
       await server.stop()
       process.exit(0)
     }
-    process.on("SIGINT", shutdown)
-    process.on("SIGTERM", shutdown)
+    registerShutdownSignals(shutdown)
 
     await new Promise(() => {})
   },

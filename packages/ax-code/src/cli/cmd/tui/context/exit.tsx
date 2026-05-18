@@ -4,6 +4,7 @@ import { createSimpleContext } from "./helper"
 import { FormatError, FormatUnknownError } from "@/cli/error"
 import { win32FlushInputBuffer } from "../win32"
 import { destroyTuiRenderer } from "../renderer"
+import { registerShutdownSignals } from "@/util/signals"
 type Exit = ((reason?: unknown) => Promise<void>) & {
   message: {
     set: (value?: string) => () => void
@@ -53,9 +54,13 @@ export const { use: useExit, provider: ExitProvider } = createSimpleContext({
         message: store,
       },
     )
-    const sighupHandler = () => void exit()
-    process.on("SIGHUP", sighupHandler)
-    onCleanup(() => process.off("SIGHUP", sighupHandler))
+    // Register SIGINT/SIGTERM/SIGHUP/SIGQUIT so external kill, SSH
+    // disconnect, ^C, and ^\ all route through the same TUI teardown path
+    // (destroyTuiRenderer → disableTuiMouseTracking → flushTuiStdout).
+    // Without this, the terminal is left in alt-screen + raw mode + mouse
+    // tracking on anything other than a clean React unmount or SIGHUP.
+    const unregister = registerShutdownSignals(() => void exit())
+    onCleanup(unregister)
     return exit
   },
 })
