@@ -97,7 +97,27 @@ export namespace Isolation {
 
   function isBypassed(state: State, resolved: string): boolean {
     if (!state.bypass?.length) return false
-    return state.bypass.includes(resolved)
+    // Re-validate against the canonical form so a symlink can't smuggle
+    // a protected path past an "approved" bypass. Example threat: a tool
+    // creates /tmp/safe.txt → /etc/passwd, the user approves bypass for
+    // /tmp/safe.txt, and a bash `rm /tmp/safe.txt` would otherwise carry
+    // the bypass through to /etc/passwd.
+    const canonical = resolveClosestExistingPath(resolved)
+    // Refuse bypass when the canonical target is in a protected path.
+    // Even an explicit approval cannot override DEFAULT_PROTECTED
+    // (.git, .ax-code) or user-configured protected entries.
+    for (const protectedPath of state.protected) {
+      if (Filesystem.contains(protectedPath, canonical)) return false
+    }
+    // A bypass entry matches if it equals either the literal resolved
+    // form or the canonical form. Compare both representations so an
+    // approval recorded one way still matches the same path expressed
+    // the other way.
+    for (const entry of state.bypass) {
+      if (entry === resolved || entry === canonical) return true
+      if (resolveClosestExistingPath(entry) === canonical) return true
+    }
+    return false
   }
 
   export function canWrite(state: State, filepath: string, directory: string, worktree: string): boolean {
