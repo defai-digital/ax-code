@@ -14,6 +14,7 @@ import { Provider } from "../provider/provider"
 import { ModelID, ProviderID } from "../provider/schema"
 import { type Tool as AITool, tool, jsonSchema, type ToolCallOptions, asSchema, type ModelMessage } from "ai"
 import { SessionCompaction } from "./compaction"
+import { SessionRetry } from "./retry"
 import {
   MAX_CONSECUTIVE_ERRORS as _MAX_CONSECUTIVE_ERRORS,
   GLOBAL_STEP_LIMIT as _GLOBAL_STEP_LIMIT,
@@ -265,11 +266,14 @@ export namespace SessionPrompt {
         } satisfies MessageV2.ToolPart)) as MessageV2.ToolPart
       },
       async ask(req) {
-        await Permission.ask({
-          ...req,
-          sessionID,
-          ruleset: Permission.merge(taskAgent.permission, session.permission ?? []),
-        })
+        await Permission.ask(
+          {
+            ...req,
+            sessionID,
+            ruleset: Permission.merge(taskAgent.permission, session.permission ?? []),
+          },
+          { signal: abort },
+        )
       },
     }
     const result = await taskTool.execute(taskArgs, taskCtx).catch((error) => {
@@ -499,12 +503,19 @@ export namespace SessionPrompt {
       await SessionStatus.set(sessionID, { type: "idle" })
       return
     }
-    for (const cb of match.callbacks) {
-      cb.reject(new Error("Session ended"))
-    }
+    // Snapshot the callbacks list and delete the state entry BEFORE
+    // iterating. A concurrent loop() re-entry that ran between zeroing
+    // `match.callbacks.length = 0` and `delete s[sessionID]` could
+    // otherwise observe a partially-cleared state. Now any re-entry
+    // either sees the original state (and gets rejected via the
+    // snapshot) or a fresh start with no leftover callbacks.
+    const callbacks = match.callbacks.slice()
     match.callbacks.length = 0
     match.abort.abort()
     delete s[sessionID]
+    for (const cb of callbacks) {
+      cb.reject(new Error("Session ended"))
+    }
     await SessionStatus.set(sessionID, { type: "idle" })
     return
   }
@@ -680,6 +691,11 @@ export namespace SessionPrompt {
       })
     }
 
+    // Counter for consecutive compaction "busy" returns. Reset on any
+    // non-busy compaction outcome (or any other task type) so the cap
+    // only triggers on a genuinely stuck in-flight compaction, not on
+    // accumulated busy events across unrelated turns.
+    let compactionBusyRetries = 0
     while (true) {
       // Reset structured output state at the start of each iteration so
       // a stale value from a prior step cannot cause the loop to save
@@ -885,16 +901,30 @@ export namespace SessionPrompt {
           auto: task.auto,
           overflow: task.overflow,
         })
-        const decision = pendingCompactionDecision({ result, overflow: task.overflow })
+        const decision = pendingCompactionDecision({
+          result,
+          overflow: task.overflow,
+          busyRetries: compactionBusyRetries,
+        })
         if (decision.type === "break") {
           reason = decision.reason
           break
         }
         if (decision.type === "retry") {
-          await new Promise((resolve) => setTimeout(resolve, decision.delayMs))
+          compactionBusyRetries += 1
+          try {
+            // Honor cancel: the previous setTimeout slept regardless of
+            // abort state, so a busy-retry chain could stall a session
+            // cancel for up to delayMs × remaining attempts.
+            await SessionRetry.sleep(decision.delayMs, abort)
+          } catch {
+            reason = "error"
+            break
+          }
           cachedMsgs = undefined
           continue
         }
+        compactionBusyRetries = 0
         cachedMsgs = undefined // invalidate cache after compaction
         continue
       }
@@ -1640,13 +1670,16 @@ export namespace SessionPrompt {
         }
       },
       async ask(req) {
-        await Permission.ask({
-          ...req,
-          sessionID: input.session.id,
-          tool: { messageID: input.processor.message.id, callID: options.toolCallId },
-          ruleset: Permission.merge(input.agent.permission, input.session.permission ?? []),
-          agent: input.agent.name,
-        })
+        await Permission.ask(
+          {
+            ...req,
+            sessionID: input.session.id,
+            tool: { messageID: input.processor.message.id, callID: options.toolCallId },
+            ruleset: Permission.merge(input.agent.permission, input.session.permission ?? []),
+            agent: input.agent.name,
+          },
+          { signal: options.abortSignal ?? undefined },
+        )
       },
     })
 

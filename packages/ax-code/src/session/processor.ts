@@ -408,11 +408,22 @@ export namespace SessionProcessor {
                         // model sees the identical results in its history
                         // which should prompt a strategy change. Step limits
                         // bound total damage if the model keeps repeating.
-                        log.warn("autonomous doom_loop detected, clearing ring buffer", {
+                        // Filter rather than clear: clearing the whole
+                        // ring rearms detection for ALL tools, widening
+                        // the next-detection window for unrelated tools
+                        // that happened to be interleaved with this one.
+                        // Keeping unrelated history preserves cycle
+                        // detection on neighbours.
+                        const before = recentToolRing.length
+                        for (let i = recentToolRing.length - 1; i >= 0; i--) {
+                          if (recentToolRing[i]!.tool === value.toolName) recentToolRing.splice(i, 1)
+                        }
+                        log.warn("autonomous doom_loop detected, dropped offending tool from ring", {
                           tool: value.toolName,
                           sessionID: input.sessionID,
+                          removed: before - recentToolRing.length,
+                          remaining: recentToolRing.length,
                         })
-                        recentToolRing.length = 0
                         break
                       }
                       // `Agent.get()` returns undefined if the agent
@@ -426,17 +437,25 @@ export namespace SessionProcessor {
                       // explicitly allowed — the user sees the prompt
                       // either way. See BUG-68.
                       const agent = await Agent.get(input.assistantMessage.agent)
-                      await Permission.ask({
-                        permission: "doom_loop",
-                        patterns: [value.toolName],
-                        sessionID: input.assistantMessage.sessionID,
-                        metadata: {
-                          tool: value.toolName,
-                          input: value.input,
+                      await Permission.ask(
+                        {
+                          permission: "doom_loop",
+                          patterns: [value.toolName],
+                          sessionID: input.assistantMessage.sessionID,
+                          metadata: {
+                            tool: value.toolName,
+                            input: value.input,
+                          },
+                          always: [value.toolName],
+                          ruleset: agent?.permission ?? [],
                         },
-                        always: [value.toolName],
-                        ruleset: agent?.permission ?? [],
-                      })
+                        // Without the signal, a session cancel while a
+                        // permission dialog is open leaves the tool-call
+                        // frame owned by the pending deferred. The session
+                        // shows idle but the leftover promise is still
+                        // attached.
+                        { signal: input.abort },
+                      )
                     }
                   }
                   break

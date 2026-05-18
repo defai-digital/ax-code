@@ -757,6 +757,14 @@ export namespace Provider {
     await state.invalidate()
   }
 
+  // Short-lived negative cache for provider install failures. Without it,
+  // a hung npm registry or a permanent install error gets retried at the
+  // request rate (one BunProc.install per getSDK call). 5s is short enough
+  // that recovery from a transient registry blip is still automatic.
+  const PROVIDER_INSTALL_NEGATIVE_CACHE_MS = 5_000
+  const PROVIDER_INSTALL_TIMEOUT_MS = 60_000
+  const providerInstallFailures = new Map<string, { at: number; error: unknown }>()
+
   async function getSDK(model: Model) {
     try {
       using _ = log.time("getSDK", {
@@ -924,7 +932,26 @@ export namespace Provider {
 
         let installedPath: string
         if (!model.api.npm.startsWith("file://")) {
-          installedPath = await BunProc.install(model.api.npm, "latest")
+          const cached = providerInstallFailures.get(model.api.npm)
+          if (cached && Date.now() - cached.at < PROVIDER_INSTALL_NEGATIVE_CACHE_MS) {
+            // Surface the cached install error instead of re-running install
+            // against the same registry that just failed.
+            throw cached.error
+          }
+          try {
+            // Wrap install in a hard timeout; without it, a hung npm
+            // registry stalls the session indefinitely. The surrounding
+            // withTimeout below only wraps the post-install `import()`.
+            installedPath = await withTimeout(
+              BunProc.install(model.api.npm, "latest"),
+              PROVIDER_INSTALL_TIMEOUT_MS,
+              `installing provider package timed out: ${model.api.npm}`,
+            )
+            providerInstallFailures.delete(model.api.npm)
+          } catch (error) {
+            providerInstallFailures.set(model.api.npm, { at: Date.now(), error })
+            throw error
+          }
         } else {
           // Restrict file:// imports to a small set of trusted directories.
           // Previously the `if (!npm.startsWith("file://"))` allowlist check

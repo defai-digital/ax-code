@@ -114,8 +114,19 @@ export class CliLanguageModel implements LanguageModelV3 {
 
     if (this.useStdin()) {
       if (!proc.stdin) throw new Error("CLI process stdin not available")
-      proc.stdin.write(text)
-      proc.stdin.end()
+      // Await drain for large prompts. ChildProcess.stdin.write returns
+      // false when the buffer is full; without waiting, .end() can ship
+      // before the tail of a >64KB prompt has been flushed and macOS
+      // sometimes EOFs the child mid-prompt, surfacing as "model returned
+      // nothing" with no error. Strict `=== false` check so non-Writable
+      // test mocks (write() returning undefined) don't enter the drain
+      // path and fail on the absence of .once.
+      const stdin = proc.stdin
+      const wrote = stdin.write(text)
+      if (wrote === false && typeof (stdin as { once?: unknown }).once === "function") {
+        await new Promise<void>((resolve) => stdin.once("drain", resolve))
+      }
+      stdin.end()
     }
     if (!proc.stdout || !proc.stderr) throw new Error("CLI process output not available")
 
@@ -181,8 +192,19 @@ export class CliLanguageModel implements LanguageModelV3 {
 
     if (this.useStdin()) {
       if (!proc.stdin) throw new Error("CLI process stdin not available")
-      proc.stdin.write(text)
-      proc.stdin.end()
+      // Await drain for large prompts. ChildProcess.stdin.write returns
+      // false when the buffer is full; without waiting, .end() can ship
+      // before the tail of a >64KB prompt has been flushed and macOS
+      // sometimes EOFs the child mid-prompt, surfacing as "model returned
+      // nothing" with no error. Strict `=== false` check so non-Writable
+      // test mocks (write() returning undefined) don't enter the drain
+      // path and fail on the absence of .once.
+      const stdin = proc.stdin
+      const wrote = stdin.write(text)
+      if (wrote === false && typeof (stdin as { once?: unknown }).once === "function") {
+        await new Promise<void>((resolve) => stdin.once("drain", resolve))
+      }
+      stdin.end()
     }
     if (!proc.stdout || !proc.stderr) throw new Error("CLI process output not available")
 
@@ -191,6 +213,25 @@ export class CliLanguageModel implements LanguageModelV3 {
 
     let done = false
     let timer: ReturnType<typeof setTimeout>
+    let killEscalationTimer: ReturnType<typeof setTimeout> | undefined
+
+    // SIGTERM → 5s → SIGKILL escalation. Without this, CLI subprocesses
+    // that trap SIGTERM (claude-code/gemini-cli/codex-cli under pty wrappers)
+    // survive cancellation and surface as orphan processes after session
+    // abort. doGenerate already has this; the streaming path used to skip
+    // it on cancel(), stderr error, stdout error, and timeout.
+    const killProcess = () => {
+      try {
+        proc.kill("SIGTERM")
+      } catch {}
+      if (killEscalationTimer) return
+      killEscalationTimer = setTimeout(() => {
+        try {
+          proc.kill("SIGKILL")
+        } catch {}
+      }, 5000)
+      killEscalationTimer.unref()
+    }
 
     const stream = new ReadableStream<LanguageModelV3StreamPart>({
       start(controller) {
@@ -221,6 +262,23 @@ export class CliLanguageModel implements LanguageModelV3 {
           controller.enqueue({ type: "error", error })
           safeClose()
         }
+        // Tolerate parser throws on malformed JSON lines. External CLI
+        // tools (claude-code/gemini-cli/codex-cli) can emit anything, and
+        // a synchronous throw in this data callback used to escape the
+        // stdout.on("data") handler and tear down the host process —
+        // stdout.on("error") only catches transport errors, not synchronous
+        // throws.
+        const safeParse = (line: string): ReturnType<typeof parser.parseStreamLine> => {
+          try {
+            return parser.parseStreamLine(line)
+          } catch (err) {
+            log.warn("CLI provider parseStreamLine failed", {
+              error: err instanceof Error ? err.message : String(err),
+              line: line.length > 200 ? line.slice(0, 200) + "…" : line,
+            })
+            return null as ReturnType<typeof parser.parseStreamLine>
+          }
+        }
         const processStdoutText = (textChunk: string) => {
           if (!textChunk || closed()) return
           raw.push(textChunk)
@@ -229,7 +287,7 @@ export class CliLanguageModel implements LanguageModelV3 {
           remainder = lines.pop() ?? ""
           for (const line of lines) {
             if (!line.trim()) continue
-            const delta = parser.parseStreamLine(line)
+            const delta = safeParse(line)
             if (delta) {
               emitted = true
               output.push(delta)
@@ -238,7 +296,7 @@ export class CliLanguageModel implements LanguageModelV3 {
           }
         }
         timer = setTimeout(() => {
-          proc.kill("SIGTERM")
+          killProcess()
           if (closed()) return
           fail(new Error(formatCliTimeout(Buffer.from(raw.join("")), Buffer.concat(stderrRaw))))
         }, CLI_TIMEOUT_MS)
@@ -249,7 +307,7 @@ export class CliLanguageModel implements LanguageModelV3 {
         const flushOutput = () => {
           processStdoutText(stdoutDecoder.end())
           if (remainder.trim()) {
-            const delta = parser.parseStreamLine(remainder)
+            const delta = safeParse(remainder)
             if (delta) {
               emitted = true
               output.push(delta)
@@ -286,7 +344,7 @@ export class CliLanguageModel implements LanguageModelV3 {
         })
         stderr.on("error", (err: Error) => {
           clearTimeout(timer)
-          proc.kill("SIGTERM")
+          killProcess()
           if (closed()) return
           fail(err)
         })
@@ -305,7 +363,7 @@ export class CliLanguageModel implements LanguageModelV3 {
 
         stdout.on("error", (err: Error) => {
           clearTimeout(timer)
-          proc.kill("SIGTERM")
+          killProcess()
           if (closed()) return
           fail(err)
         })
@@ -330,7 +388,7 @@ export class CliLanguageModel implements LanguageModelV3 {
       cancel() {
         done = true
         clearTimeout(timer)
-        proc.kill("SIGTERM")
+        killProcess()
       },
     })
 

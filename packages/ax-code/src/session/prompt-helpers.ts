@@ -72,14 +72,24 @@ export type PendingCompactionDecision =
   | { type: "retry"; delayMs: number; invalidateCache: true }
   | { type: "continue"; invalidateCache: true }
 
+// Cap consecutive busy retries before giving up. 40 × 250ms ≈ 10s, which
+// matches the previous practical ceiling but turns an unbounded livelock
+// (compaction stuck in-flight) into an explicit error path the loop can
+// surface to the user.
+export const PENDING_COMPACTION_BUSY_RETRY_LIMIT = 40
+
 export function pendingCompactionDecision(input: {
   result: PendingCompactionResult
   overflow?: boolean
+  busyRetries?: number
 }): PendingCompactionDecision {
   if (input.result === "stop") {
     return { type: "break", reason: input.overflow ? "error" : "completed", invalidateCache: false }
   }
   if (input.result === "busy") {
+    if ((input.busyRetries ?? 0) >= PENDING_COMPACTION_BUSY_RETRY_LIMIT) {
+      return { type: "break", reason: "error", invalidateCache: false }
+    }
     return { type: "retry", delayMs: 250, invalidateCache: true }
   }
   return { type: "continue", invalidateCache: true }
