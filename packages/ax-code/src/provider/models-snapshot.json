@@ -78034,6 +78034,9 @@
         "attachment": false,
         "reasoning": true,
         "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
         "structured_output": true,
         "temperature": true,
         "knowledge": "2025-01",
@@ -78051,9 +78054,6 @@
         "limit": {
           "context": 200000,
           "output": 128000
-        },
-        "provider": {
-          "npm": "@ai-sdk/anthropic"
         }
       },
       "claude-sonnet-4": {

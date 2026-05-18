@@ -1,9 +1,23 @@
-import { afterEach, test, expect } from "bun:test"
+import { afterAll, afterEach, beforeAll, test, expect } from "bun:test"
 import { Question } from "../../src/question"
 import { Instance } from "../../src/project/instance"
 import { QuestionID } from "../../src/question/schema"
 import { tmpdir } from "../fixture/fixture"
 import { SessionID } from "../../src/session/schema"
+
+// Autonomous mode defaults ON at runtime (per AX_CODE_AUTONOMOUS), which
+// makes `Question.ask` auto-answer instead of blocking. These tests
+// exercise the human-ask path, so force autonomous=false at the file
+// level. The autonomous-specific tests later in this file flip it back
+// to "true" inside their own scope.
+const ORIGINAL_AUTONOMOUS = process.env.AX_CODE_AUTONOMOUS
+beforeAll(() => {
+  process.env.AX_CODE_AUTONOMOUS = "false"
+})
+afterAll(() => {
+  if (ORIGINAL_AUTONOMOUS === undefined) delete process.env.AX_CODE_AUTONOMOUS
+  else process.env.AX_CODE_AUTONOMOUS = ORIGINAL_AUTONOMOUS
+})
 
 afterEach(async () => {
   await Instance.disposeAll()
