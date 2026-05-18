@@ -783,15 +783,16 @@ export namespace MCP {
   let toolsCacheSubscribed = false
   let toolsCacheUnsub: (() => void) | undefined
   let toolsCacheGeneration = 0
-  let toolsCacheTime = 0
-  const TOOLS_CACHE_TTL_MS = 10_000 // Minimum time between tool re-fetches
 
   export async function tools() {
     if (!toolsCacheSubscribed) {
       toolsCacheSubscribed = true
       toolsCacheUnsub = Bus.subscribe(ToolsChanged, () => {
-        // Respect TTL: if cache was just populated, defer invalidation
-        if (cachedTools && Date.now() - toolsCacheTime < TOOLS_CACHE_TTL_MS) return
+        // Always invalidate. The previous TTL guard suppressed
+        // server-emitted `tools/list_changed` notifications inside a 10s
+        // window, leaving the LLM using stale tool definitions until the
+        // TTL elapsed. Burst protection is provided by the `toolsPromise`
+        // coalescing below — concurrent callers share a single fetch.
         cachedTools = undefined
         toolsPromise = undefined
         toolsCacheGeneration++
@@ -868,7 +869,6 @@ export namespace MCP {
       // Only cache if no invalidation occurred during computation
       if (toolsCacheGeneration === generation) {
         cachedTools = result
-        toolsCacheTime = Date.now()
       }
       return result
     })()

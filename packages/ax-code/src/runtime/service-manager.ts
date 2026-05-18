@@ -17,6 +17,14 @@ function createState(): ManagerState {
   }
 }
 
+function hasActiveTasks(state: ManagerState) {
+  for (const task of state.tasks.values()) {
+    if (task.state === "completed" || task.state === "failed" || task.state === "aborted") continue
+    return true
+  }
+  return false
+}
+
 function touchRegistry(directory: string, state: ManagerState) {
   if (registry.has(directory)) {
     registry.delete(directory)
@@ -24,9 +32,38 @@ function touchRegistry(directory: string, state: ManagerState) {
   registry.set(directory, state)
 
   while (registry.size > MAX_SERVICE_MANAGER_DIRECTORIES) {
-    const oldest = registry.keys().next().value
-    if (oldest === undefined) break
-    registry.delete(oldest)
+    // Scan FIFO order for the first entry with no active tasks and evict
+    // that one. The previous code evicted the literal oldest entry, which
+    // could be a directory with in-flight tasks — those tasks' subsequent
+    // `updateTask` calls then silently no-op'd, so a long-running task
+    // failing in an evicted directory became invisible.
+    let evicted: string | undefined
+    for (const [dir, entry] of registry) {
+      if (hasActiveTasks(entry)) continue
+      evicted = dir
+      break
+    }
+    if (evicted === undefined) {
+      // All entries have active tasks. Forced to drop the oldest to
+      // respect the cap; surface a warning so the case is visible.
+      const oldest = registry.keys().next().value
+      if (oldest === undefined) break
+      const droppedState = registry.get(oldest)
+      let activeTaskCount = 0
+      if (droppedState) {
+        for (const task of droppedState.tasks.values()) {
+          if (task.state === "completed" || task.state === "failed" || task.state === "aborted") continue
+          activeTaskCount++
+        }
+      }
+      console.warn(
+        `service-manager: forced eviction of directory with ${activeTaskCount} active task(s) ` +
+          `due to MAX_SERVICE_MANAGER_DIRECTORIES=${MAX_SERVICE_MANAGER_DIRECTORIES}`,
+      )
+      registry.delete(oldest)
+      continue
+    }
+    registry.delete(evicted)
   }
 }
 

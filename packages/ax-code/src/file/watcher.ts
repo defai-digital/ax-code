@@ -1,6 +1,7 @@
 // @ts-ignore
 import { createWrapper } from "@parcel/watcher/wrapper"
 import { readdir, stat } from "fs/promises"
+import { createRequire } from "node:module"
 import path from "path"
 import z from "zod"
 import { Bus } from "@/bus"
@@ -50,9 +51,15 @@ export namespace FileWatcher {
   const overrides = new Map<string, InitOptions>()
   const relativeToDir = (dir: string, target: string) => path.relative(dir, target)
 
+  // Use createRequire(import.meta.url) rather than a bare `require`. Under
+  // Node ESM resolution in some launchers, bare `require` is undefined or
+  // resolves against the wrong base, silently disabling the native binding
+  // and falling through to the 100ms polling path with no warning.
+  // Matches the pattern used in native/addon.ts.
+  const nativeRequire = createRequire(import.meta.url)
   const watcher = lazy((): typeof import("@parcel/watcher") | undefined => {
     try {
-      const binding = require(
+      const binding = nativeRequire(
         `@parcel/watcher-${process.platform}-${process.arch}${process.platform === "linux" ? `-${AX_CODE_LIBC || "glibc"}` : ""}`,
       )
       return createWrapper(binding) as typeof import("@parcel/watcher")

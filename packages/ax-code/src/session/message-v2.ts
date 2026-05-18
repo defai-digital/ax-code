@@ -1015,16 +1015,22 @@ export namespace MessageV2 {
       // these branches the default fallthrough would serialize the
       // object via NamedError.Unknown and the retry logic would no
       // longer recognize it as an APIError.
+      //
+      // Some throw paths pass the live class instance (not the
+      // serialized object), e.g. `throw new MessageV2.APIError(...)`.
+      // Returning the live instance from a function typed as returning
+      // the serialized shape ends up mangling fields on persistence;
+      // detect instances and normalize via `.toObject()`.
       case MessageV2.APIError.isInstance(e):
-        return e
+        return typeof (e as any).toObject === "function" ? (e as any).toObject() : e
       case MessageV2.AuthError.isInstance(e):
-        return e
+        return typeof (e as any).toObject === "function" ? (e as any).toObject() : e
       case MessageV2.ContextOverflowError.isInstance(e):
-        return e
+        return typeof (e as any).toObject === "function" ? (e as any).toObject() : e
       case MessageV2.AbortedError.isInstance(e):
-        return e
+        return typeof (e as any).toObject === "function" ? (e as any).toObject() : e
       case MessageV2.OutputLengthError.isInstance(e):
-        return e
+        return typeof (e as any).toObject === "function" ? (e as any).toObject() : e
       case LoadAPIKeyError.isInstance(e):
         return new MessageV2.AuthError(
           {
