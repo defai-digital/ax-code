@@ -32,7 +32,7 @@ export namespace Replay {
   }
 
   export function run(options: Options): Result {
-    const events = EventQuery.bySession(options.sessionID)
+    const events = EventQuery.bySessionStrict(options.sessionID)
     if (events.length === 0) {
       log.warn("no events found for session", { sessionID: options.sessionID })
       return {
@@ -134,7 +134,9 @@ export namespace Replay {
     sessionID: SessionID,
     options?: { fromStep?: number },
   ): { steps: ReconstructedStep[] } {
-    const events = EventQuery.bySession(sessionID)
+    // Strict — silently dropping events past the cap would synthesize
+    // divergences for every truncated step.
+    const events = EventQuery.bySessionStrict(sessionID)
     const steps: ReconstructedStep[] = []
     let current: ReconstructedStep | undefined
     const fromStep = options?.fromStep ?? 0
@@ -294,7 +296,9 @@ export namespace Replay {
    * Returns divergences where the replay would differ from the original.
    */
   export function compare(sessionID: SessionID): { divergences: DivergenceInfo[]; stepsCompared: number } {
-    const original = EventQuery.bySession(sessionID)
+    // Strict — divergence reporting against a partial slice is wrong by
+    // construction: every truncated step would appear as a divergence.
+    const original = EventQuery.bySessionStrict(sessionID)
     const { steps } = reconstructStream(sessionID)
     const divergences: DivergenceInfo[] = []
 
