@@ -347,10 +347,14 @@ describe("session.llm.stream", () => {
         const expectedMaxTokens = ProviderTransform.maxOutputTokens(resolved)
         expect(maxTokens).toBe(expectedMaxTokens)
 
-        // Sanitized down to maxOutputTokens (4096 — the Alibaba short-window cap)
-        // even though the agent config requested 8192.
-        expect(body.thinking).toEqual({ type: "enabled", budgetTokens: 4096 })
-        expect(body.enable_thinking).toBeUndefined()
+        // Token Plan runs on the OpenAI-compat endpoint and uses DashScope's
+        // documented enable_thinking + thinking_budget pair (commit 54f168d5);
+        // the Anthropic-shaped `thinking` block is stripped. Budget is
+        // sanitized down to maxOutputTokens (4096 — the Alibaba short-window
+        // cap) even though the agent config requested 8192.
+        expect(body.thinking).toBeUndefined()
+        expect(body.enable_thinking).toBe(true)
+        expect(body.thinking_budget).toBe(4096)
         expect(body.reasoning).toBeUndefined()
         expect(body.reasoningEffort).toBeUndefined()
         expect(body.reasoning_effort).toBeUndefined()

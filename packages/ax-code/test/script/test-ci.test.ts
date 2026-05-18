@@ -116,7 +116,9 @@ describe("script.test-ci", () => {
     expect(summary).toContain("- initial: passed")
     expect(summary).toContain("- tests: 12")
     expect(summary).toContain("- runtime: 1.50s")
-    expect(summary).toContain("- Artifacts:")
+    // `Artifacts:` is a section header (no leading dash) followed by
+    // dash-prefixed artifact entries.
+    expect(summary).toContain("Artifacts:")
     expect(summary).toContain("- report-1.xml (passed)")
   })
 

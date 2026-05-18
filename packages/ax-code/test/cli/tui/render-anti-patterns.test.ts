@@ -12,6 +12,7 @@ const EXIT_CONTEXT_SRC = path.join(TUI_ROOT, "context/exit.tsx")
 const THREAD_SRC = path.join(TUI_ROOT, "thread.ts")
 const WORKER_SRC = path.join(TUI_ROOT, "worker.ts")
 const SESSION_ROUTE_SRC = path.join(TUI_ROOT, "routes/session/index.tsx")
+const TASK_RENDERER_SRC = path.join(TUI_ROOT, "routes/session/tool-renderers/task.tsx")
 const PERMISSION_PROMPT_SRC = path.join(TUI_ROOT, "routes/session/permission.tsx")
 const QUESTION_PROMPT_SRC = path.join(TUI_ROOT, "routes/session/question.tsx")
 const DIALOG_MESSAGE_SRC = path.join(TUI_ROOT, "routes/session/dialog-message.tsx")
@@ -182,10 +183,13 @@ describe("tui OpenTUI stability guardrails", () => {
   })
 
   test("handles delegated task preview session sync failures without unhandled rejections", async () => {
-    const session = await fs.readFile(SESSION_ROUTE_SRC, "utf8")
+    // The task-preview sync used to live inside routes/session/index.tsx
+    // before the tool renderers were extracted into routes/session/tool-renderers/.
+    // The anti-pattern guard now reads the extracted task renderer.
+    const task = await fs.readFile(TASK_RENDERER_SRC, "utf8")
 
-    expect(session).toContain("void sync.session.sync(id).catch((error) => {")
-    expect(session).toContain('log.warn("task child session preview sync failed"')
+    expect(task).toContain("void sync.session.sync(id).catch((error) => {")
+    expect(task).toContain('log.warn("task child session preview sync failed"')
   })
 
   test("handles question prompt replies and rejects without leaking unhandled failures", async () => {
