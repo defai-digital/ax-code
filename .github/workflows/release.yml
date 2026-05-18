@@ -9,9 +9,10 @@ concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
-# Channel policy: stable semver tags (for example `v3.1.4`) publish to npm
-# `latest`, are marked as the GitHub "Latest" release, and update Homebrew.
-# Prerelease tags (for example `v3.2.0-beta.1`) stay on the `beta` channel.
+# Channel policy: stable semver tags (for example `v3.1.4`) create the
+# GitHub release on the `latest` channel. Prerelease tags (for example
+# `v3.2.0-beta.1`) stay on the `beta` channel. npm and Homebrew publishing
+# are intentionally manual.
 env:
   AX_CODE_RELEASE_CHANNEL: ${{ contains(github.ref_name, '-') && 'beta' || 'latest' }}
 
@@ -161,10 +162,8 @@ jobs:
           if [ "$CHANNEL" != "latest" ]; then
             PRERELEASE_ARGS=(--prerelease)
           fi
-          # Create a draft release so public consumers do not see the release
-          # before npm and Homebrew artifacts are ready. The finalize job
-          # un-drafts it and dispatches install-matrix-smoke after all publish
-          # jobs complete.
+          # The release workflow only publishes GitHub release assets.
+          # npm and Homebrew distribution are manual follow-up steps.
           # Idempotent: skip if any release (draft or published) already exists.
           if ! gh release view "$TAG" >/dev/null 2>&1; then
             VERSION="${TAG#v}"
@@ -178,8 +177,9 @@ jobs:
               --title "$TAG" \
               "${NOTES_ARGS[@]}" \
               --verify-tag \
-              --draft \
               "${PRERELEASE_ARGS[@]}"
+          else
+            gh release edit "$TAG" --draft=false
           fi
 
       - name: Upload release assets
@@ -190,144 +190,3 @@ jobs:
           for f in packages/ax-code/dist/*.tar.gz packages/ax-code/dist/*.zip; do
             [ -f "$f" ] && gh release upload "$TAG" "$f" --clobber || true
           done
-
-  # Compiled binary npm publish. This is the default npm artifact for
-  # @defai.digital/ax-code; platform packages are installed as optional
-  # dependencies by the meta package.
-  publish-npm:
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
-      packages: write
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Setup Ax-code JS toolchain
-        uses: ./.github/actions/setup-ax-code-toolchain
-
-      - run: pnpm install --frozen-lockfile
-
-      - name: Download all build artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: packages/ax-code/dist/
-          merge-multiple: true
-
-      - name: Publish compiled npm packages
-        working-directory: packages/ax-code
-        run: bun run script/publish.ts
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          NPM_CONFIG_PROVENANCE: "true"
-          AX_CODE_COMPILED_TAG: ${{ env.AX_CODE_RELEASE_CHANNEL }}
-          AX_CODE_CHANNEL: ${{ env.AX_CODE_RELEASE_CHANNEL }}
-          AX_CODE_RELEASE: "true"
-
-  # Source distribution publish — bundled JS + bun runtime. This remains
-  # available as @defai.digital/ax-code-source for users who intentionally
-  # choose the compatibility source launcher.
-  publish-source:
-    needs: typecheck
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
-      packages: write
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Setup Ax-code JS toolchain
-        uses: ./.github/actions/setup-ax-code-toolchain
-
-      - run: pnpm install --frozen-lockfile
-
-      - name: Build and publish source distribution
-        working-directory: packages/ax-code
-        run: bun run script/publish-source.ts
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          NPM_CONFIG_PROVENANCE: "true"
-          AX_CODE_VERSION: ${{ github.ref_name }}
-          AX_CODE_CHANNEL: ${{ env.AX_CODE_RELEASE_CHANNEL }}
-          AX_CODE_SOURCE_TAG: ${{ env.AX_CODE_RELEASE_CHANNEL }}
-          AX_CODE_SOURCE_PACKAGE_NAMES: "@defai.digital/ax-code-source"
-          AX_CODE_RELEASE: "true"
-
-  homebrew:
-    needs: publish
-    # Homebrew tracks stable releases only. Prerelease tags still publish to
-    # npm/GitHub, but they must not move brew users off the stable line.
-    if: ${{ !contains(github.ref_name, '-') }}
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Update Homebrew formula
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAP_TOKEN: ${{ secrets.TAP_TOKEN }}
-        run: bash .github/scripts/update-homebrew.sh
-
-  # Publish the GitHub release (remove draft status) only after npm packages
-  # and Homebrew formulae are fully propagated, then explicitly dispatch the
-  # install matrix so it cannot race release publication.
-  finalize:
-    needs:
-      - publish-npm
-      - publish-source
-      - homebrew
-      - homebrew-source
-    # Run even when homebrew/homebrew-source are skipped (prerelease tags).
-    # Skip only if a required publish job failed or was cancelled.
-    if: >-
-      always() && !cancelled() &&
-      needs.publish-npm.result == 'success' &&
-      needs.publish-source.result == 'success' &&
-      (needs.homebrew.result == 'success' || needs.homebrew.result == 'skipped') &&
-      (needs.homebrew-source.result == 'success' || needs.homebrew-source.result == 'skipped')
-    runs-on: ubuntu-latest
-    permissions:
-      actions: write
-      contents: write
-    steps:
-      - name: Publish GitHub release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release edit "${{ github.ref_name }}" --draft=false --repo "${{ github.repository }}"
-
-      - name: Dispatch install matrix smoke
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          gh workflow run install-matrix-smoke.yml \
-            --repo "${{ github.repository }}" \
-            --ref "${{ github.ref_name }}" \
-            --field "version=${VERSION}" \
-            --field "channel=both"
-
-  # Compatibility Homebrew formula for users who installed ax-code-source
-  # during the transitional source-channel rollout.
-  homebrew-source:
-    needs:
-      - homebrew
-      - publish-source
-    if: ${{ !contains(github.ref_name, '-') }}
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Update Homebrew source formula
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAP_TOKEN: ${{ secrets.TAP_TOKEN }}
-        run: bash .github/scripts/update-homebrew-source.sh
