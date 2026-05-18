@@ -125,13 +125,29 @@ export async function destroyTuiRenderer(
   renderer: TuiDestroyRenderer,
   profile: TuiRenderProfile = getTuiRenderProfile(),
 ) {
+  let destroyError: unknown
   try {
     clearTuiTerminalTitle(renderer, profile)
-    renderer.destroy()
-  } finally {
-    disableTuiMouseTracking()
-    await flushTuiStdout()
+  } catch (err) {
+    log.warn("failed to clear terminal title during teardown", {
+      error: err instanceof Error ? err.message : String(err),
+    })
   }
+  try {
+    renderer.destroy()
+  } catch (err) {
+    // Log instead of swallowing — a renderer.destroy() that throws used to
+    // mask terminal-corruption bugs because the error rode the unhandled
+    // path while cleanup (mouse tracking off, stdout flush) was still
+    // started but unobserved. Run cleanup regardless, then rethrow.
+    destroyError = err
+    log.warn("renderer.destroy() failed during teardown", {
+      error: err instanceof Error ? err.message : String(err),
+    })
+  }
+  disableTuiMouseTracking()
+  await flushTuiStdout()
+  if (destroyError) throw destroyError
 }
 
 export function renderTui(root: TuiRenderRoot, options?: Parameters<typeof createTuiRenderOptions>[0]) {

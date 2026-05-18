@@ -16,6 +16,7 @@ import { internalBaseUrl } from "@/util/internal-url"
 import path from "node:path"
 import { tmpdir } from "node:os"
 import { runResilientStream, type StreamConnectionStatus } from "./util/resilient-stream"
+import { registerShutdownSignals } from "@/util/signals"
 
 type GlobalEvent = {
   directory?: string
@@ -266,10 +267,7 @@ export async function startTuiBackend(transport: "worker" | "stdio" = "worker") 
     // process would die before draining `Instance.disposeAll()` /
     // `server.stop()`, leaking MCP child processes and the GlobalBus
     // listener.
-    let signalHandled = false
     const onSignal = (signal: NodeJS.Signals) => {
-      if (signalHandled) return
-      signalHandled = true
       DiagnosticLog.recordProcess("backend.signalShutdown", { signal })
       void rpc
         .shutdown()
@@ -281,12 +279,12 @@ export async function startTuiBackend(transport: "worker" | "stdio" = "worker") 
           process.exit(signal === "SIGINT" ? 130 : 0)
         })
     }
-    process.on("SIGTERM", onSignal)
-    process.on("SIGINT", onSignal)
-    removeSignalHandlers = () => {
-      process.off("SIGTERM", onSignal)
-      process.off("SIGINT", onSignal)
-    }
+    // SIGHUP added to the original SIGTERM/SIGINT set so SSH disconnect
+    // and terminal close also drain MCP children, LSP servers, the HTTP
+    // server, and the event-stream reconnect timer instead of orphaning
+    // them. SIGQUIT too — ^\ shouldn't leak resources just because we
+    // didn't bother to register it.
+    removeSignalHandlers = registerShutdownSignals(onSignal)
     await startEventStream({ directory: process.cwd() })
     await done
     // Awaited shutdown after stdin closes. Covers the parent-crash
@@ -304,22 +302,15 @@ export async function startTuiBackend(transport: "worker" | "stdio" = "worker") 
   Rpc.listen(rpc)
   // Worker transport: same intent, in case the runtime forwards a
   // signal before `worker.terminate()` lands. Idempotent against the
-  // explicit `shutdown` RPC the thread normally invokes first.
-  let signalHandled = false
+  // explicit `shutdown` RPC the thread normally invokes first. SIGHUP
+  // and SIGQUIT included for parity with the stdio branch above.
   const onSignal = (signal: NodeJS.Signals) => {
-    if (signalHandled) return
-    signalHandled = true
     DiagnosticLog.recordProcess("worker.signalShutdown", { signal })
     void rpc.shutdown().catch((error) => {
       DiagnosticLog.recordProcess("worker.signalShutdownFailed", { signal, error })
     })
   }
-  process.on("SIGTERM", onSignal)
-  process.on("SIGINT", onSignal)
-  removeSignalHandlers = () => {
-    process.off("SIGTERM", onSignal)
-    process.off("SIGINT", onSignal)
-  }
+  removeSignalHandlers = registerShutdownSignals(onSignal)
   await startEventStream({ directory: process.cwd() })
 }
 

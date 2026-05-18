@@ -3,6 +3,7 @@ import { cmd } from "../cmd"
 import { Instance } from "@/project/instance"
 import { Process } from "@/util/process"
 import { git } from "@/util/git"
+import { registerShutdownSignals } from "@/util/signals"
 
 export const PrCommand = cmd({
   command: "pr <number>",
@@ -129,14 +130,12 @@ export const PrCommand = cmd({
             axcodeProcess.kill("SIGTERM")
           } catch {}
         }
-        process.on("SIGINT", kill)
-        process.on("SIGTERM", kill)
+        const removeSignals = registerShutdownSignals(kill)
         let code: number
         try {
           code = await axcodeProcess.exited
         } finally {
-          process.off("SIGINT", kill)
-          process.off("SIGTERM", kill)
+          removeSignals()
         }
         if (code !== 0) throw new Error(`ax-code exited with code ${code}`)
       },
