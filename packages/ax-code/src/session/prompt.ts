@@ -75,6 +75,8 @@ import {
   scanLoopMessages,
   loopMessages,
   modelInfo,
+  pendingCompactionDecision,
+  shouldScheduleUsageCompaction,
   systemPrompt as getSystemPrompt,
   createStructuredOutputTool as _createStructuredOutputTool,
   lastModel as _lastModel,
@@ -883,12 +885,13 @@ export namespace SessionPrompt {
           auto: task.auto,
           overflow: task.overflow,
         })
-        if (result === "stop") {
-          reason = task.overflow ? "error" : "completed"
+        const decision = pendingCompactionDecision({ result, overflow: task.overflow })
+        if (decision.type === "break") {
+          reason = decision.reason
           break
         }
-        if (result === "busy") {
-          await new Promise((resolve) => setTimeout(resolve, 250))
+        if (decision.type === "retry") {
+          await new Promise((resolve) => setTimeout(resolve, decision.delayMs))
           cachedMsgs = undefined
           continue
         }
@@ -898,9 +901,10 @@ export namespace SessionPrompt {
 
       // context overflow, needs compaction
       if (
-        lastFinished &&
-        lastFinished.summary !== true &&
-        (await SessionCompaction.isOverflow({ tokens: lastFinished.tokens, model }))
+        shouldScheduleUsageCompaction({
+          lastFinished,
+          overflow: lastFinished ? await SessionCompaction.isOverflow({ tokens: lastFinished.tokens, model }) : false,
+        })
       ) {
         await SessionCompaction.create({
           sessionID,

@@ -66,6 +66,32 @@ type AgentLike = {
 type AgentInfo = NonNullable<Awaited<ReturnType<typeof Agent.get>>>
 type ModelInfo = Awaited<ReturnType<typeof Provider.getModel>>
 
+export type PendingCompactionResult = "busy" | "continue" | "stop"
+export type PendingCompactionDecision =
+  | { type: "break"; reason: "completed" | "error"; invalidateCache: false }
+  | { type: "retry"; delayMs: number; invalidateCache: true }
+  | { type: "continue"; invalidateCache: true }
+
+export function pendingCompactionDecision(input: {
+  result: PendingCompactionResult
+  overflow?: boolean
+}): PendingCompactionDecision {
+  if (input.result === "stop") {
+    return { type: "break", reason: input.overflow ? "error" : "completed", invalidateCache: false }
+  }
+  if (input.result === "busy") {
+    return { type: "retry", delayMs: 250, invalidateCache: true }
+  }
+  return { type: "continue", invalidateCache: true }
+}
+
+export function shouldScheduleUsageCompaction(input: {
+  lastFinished?: Pick<MessageV2.Assistant, "summary" | "tokens">
+  overflow: boolean
+}) {
+  return input.lastFinished !== undefined && input.lastFinished.summary !== true && input.overflow
+}
+
 function titleFilePlaceholder(part: MessageV2.FilePart) {
   const filename = part.filename ?? "file"
   return `[Attached ${part.mime}: ${filename}]`

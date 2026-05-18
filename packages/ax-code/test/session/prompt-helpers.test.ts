@@ -12,10 +12,12 @@ import {
   commandUser,
   loopMessages,
   modelInfo,
+  pendingCompactionDecision,
   remindQueuedMessages,
   scanLoopMessages,
   shellArgs,
   shellKey,
+  shouldScheduleUsageCompaction,
   systemPrompt,
   titleContextMessages,
 } from "../../src/session/prompt-helpers"
@@ -218,6 +220,52 @@ describe("session.prompt helpers", () => {
     expect(String(result.lastFinished?.id)).toBe("002")
     expect(result.lastUserParts as any).toEqual(msgs[3].parts)
     expect(result.tasks as any).toEqual(msgs[2].parts)
+  })
+
+  test("maps pending compaction results to loop actions", () => {
+    expect(pendingCompactionDecision({ result: "stop" })).toEqual({
+      type: "break",
+      reason: "completed",
+      invalidateCache: false,
+    })
+    expect(pendingCompactionDecision({ result: "stop", overflow: true })).toEqual({
+      type: "break",
+      reason: "error",
+      invalidateCache: false,
+    })
+    expect(pendingCompactionDecision({ result: "busy" })).toEqual({
+      type: "retry",
+      delayMs: 250,
+      invalidateCache: true,
+    })
+    expect(pendingCompactionDecision({ result: "continue" })).toEqual({
+      type: "continue",
+      invalidateCache: true,
+    })
+  })
+
+  test("schedules usage compaction only for unfinished summaries that overflow", () => {
+    const tokens = { input: 10, output: 0, reasoning: 0, cache: { read: 0, write: 0 }, total: 10 }
+
+    expect(shouldScheduleUsageCompaction({ lastFinished: undefined, overflow: true })).toBe(false)
+    expect(
+      shouldScheduleUsageCompaction({
+        lastFinished: { summary: true, tokens } as any,
+        overflow: true,
+      }),
+    ).toBe(false)
+    expect(
+      shouldScheduleUsageCompaction({
+        lastFinished: { summary: false, tokens } as any,
+        overflow: false,
+      }),
+    ).toBe(false)
+    expect(
+      shouldScheduleUsageCompaction({
+        lastFinished: { summary: false, tokens } as any,
+        overflow: true,
+      }),
+    ).toBe(true)
   })
 
   test("wraps queued user text with a system reminder", () => {

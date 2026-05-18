@@ -1,7 +1,7 @@
 # PRD: Hotspot Boundary Hardening
 
 **Date:** 2026-05-18
-**Status:** Active - Phase 2 registry aggregation complete
+**Status:** Active - Phase 3 session runtime loop boundary complete
 **Author:** ax-code agent
 
 ---
@@ -48,6 +48,7 @@ The current shape makes small tool display changes harder than necessary:
 ## Current Evidence
 
 - `packages/ax-code/src/cli/cmd/tui/routes/session/index.tsx` is about 1,778 lines after Phase 2's registry aggregation.
+- `packages/ax-code/src/session/prompt.ts` remains the largest hotspot; Phase 3 adds a small pure decision boundary without moving side-effectful loop execution.
 - The tool dispatch area starts at `ToolPart` and branches on every specialized tool name.
 - The coalesced group label policy is embedded inside `CoalescedTool`.
 - Existing tests cover broader TUI session helpers, renderer contracts, and anti-patterns, but not a pure tool renderer dispatch contract.
@@ -110,13 +111,34 @@ Validation:
 
 Remaining Phase 2 work:
 
-- Close Phase 2 after a final review pass confirms the route imports only the renderer aggregator and the route still owns only transcript-level concerns.
+- Complete: final review confirmed the route imports only the renderer aggregator and keeps renderer implementation details out of the route file.
 
 ### Phase 3: Session Runtime Loop Boundary
 
-Status: Deferred.
+Status: Complete on 2026-05-18.
 
-Do not start while current dirty worktree changes touch session runtime files. Future work should target pure helpers around compaction task handling, autonomous completion decisions, and attachment hydration.
+Files:
+
+- Update `packages/ax-code/src/session/prompt-helpers.ts`.
+- Update `packages/ax-code/src/session/prompt.ts`.
+- Update `packages/ax-code/test/session/prompt-helpers.test.ts`.
+
+Completed:
+
+- Added `pendingCompactionDecision(result, overflow)` to keep pending compaction result handling as a pure contract.
+- Added `shouldScheduleUsageCompaction(lastFinished, overflow)` to keep usage-driven compaction scheduling as a pure contract.
+- Updated the prompt loop so it performs side effects after asking the helper for the next action.
+- Added focused tests for pending compaction `stop`, `busy`, and `continue` outcomes.
+- Added focused tests for usage-driven compaction scheduling around summaries, missing assistant state, and overflow state.
+
+Validation:
+
+- Passed: `cd packages/ax-code && bun test test/session/prompt-helpers.test.ts`
+- Passed: `cd packages/ax-code && bun test test/session/processor.test.ts`
+- Passed: `cd packages/ax-code && bun test test/session/compaction.test.ts test/session/revert-compact.test.ts`
+- Passed: `cd packages/ax-code && bun run typecheck`
+- Passed: `bun run script/structure.ts`
+- Known unrelated/surrounding failure observed: `cd packages/ax-code && bun test test/session/prompt-flow.test.ts -t "stops cleanly after a permission-rejected tool call and allows later recovery"` currently stores 3 messages where the test expects 2.
 
 ### Phase 4: LSP Client Selection Boundary
 
@@ -142,3 +164,4 @@ Extract repeated client selection and spawn planning from `lsp/index.ts` into a 
 - 2026-05-18: Phase 2 fourth extraction implemented. `Task` moved into `tool-renderers/task.tsx` with its existing child-session preview sync and navigation behavior preserved; the route file dropped to about 2,220 lines. Targeted tests, TUI layering, package typecheck, and structure guard all pass.
 - 2026-05-18: Phase 2 fifth extraction implemented. Debugging & Refactoring Engine renderers moved into `tool-renderers/dre.tsx`; the route file dropped to about 1,850 lines and is no longer among the top three largest files in the structure report. Targeted tests, TUI layering, package typecheck, and structure guard all pass.
 - 2026-05-18: Phase 2 registry aggregation implemented. `GenericTool` and the renderer registry moved into `tool-renderers/generic.tsx` and `tool-renderers/index.tsx`; the route file dropped to about 1,778 lines and now imports only `toolRendererComponent` from the renderer package. Targeted tests, TUI layering, package typecheck, and structure guard all pass.
+- 2026-05-18: Phase 3 implemented. Pending compaction result handling and usage-overflow compaction scheduling now live behind pure helpers in `prompt-helpers.ts`; the prompt loop now delegates the decision and keeps the side effects local. Focused helper tests, processor tests, compaction tests, package typecheck, and structure guard pass.
