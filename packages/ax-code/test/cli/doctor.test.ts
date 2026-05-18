@@ -122,4 +122,16 @@ describe("cli doctor", () => {
       detail: "mode full-access (env); network enabled (full-access)",
     })
   })
+
+  test("logs configured TUI port fallback failures", async () => {
+    const src = await Bun.file(path.join(import.meta.dir, "../../src/cli/cmd/doctor.ts")).text()
+    const start = src.indexOf("async function getConfiguredTuiPort()")
+    const end = src.indexOf("export async function getDuplicateProjectIdentityCheck", start)
+    expect(start).toBeGreaterThan(-1)
+    expect(end).toBeGreaterThan(start)
+    const block = src.slice(start, end)
+
+    expect(block).not.toContain("catch {}")
+    expect(block).toContain('Log.Default.warn("failed to read configured TUI port; falling back to default"')
+  })
 })
