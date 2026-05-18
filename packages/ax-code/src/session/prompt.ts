@@ -3033,7 +3033,16 @@ NOTE: At any point in time through this workflow you should feel free to ask the
 
     const abortHandler = () => {
       aborted = true
-      void kill().catch(() => {})
+      void kill().catch((error) => {
+        log.warn("shell abort kill failed", {
+          command: "session.prompt.shell",
+          status: "error",
+          errorCode: "SHELL_ABORT_KILL_FAILED",
+          shell,
+          args,
+          error,
+        })
+      })
     }
 
     abort.addEventListener("abort", abortHandler, { once: true })
@@ -3049,7 +3058,16 @@ NOTE: At any point in time through this workflow you should feel free to ask the
           shell,
           args,
         })
-        void kill().catch(() => {})
+        void kill().catch((error) => {
+          log.warn("shell timeout kill failed", {
+            command: "session.prompt.shell",
+            status: "error",
+            errorCode: "SHELL_TIMEOUT_KILL_FAILED",
+            shell,
+            args,
+            error,
+          })
+        })
       }
     }, SHELL_TIMEOUT)
     let abortTimer: ReturnType<typeof setTimeout> | undefined

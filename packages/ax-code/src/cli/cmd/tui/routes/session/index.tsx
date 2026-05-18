@@ -247,8 +247,12 @@ export function Session() {
 
   onMount(() => {
     recordTuiStartupOnce("tui.startup.sessionMounted")
+  })
+
+  createEffect(() => {
+    const sessionID = route.sessionID
     const timer = setInterval(() => {
-      const candidate = sync.data.session_status?.[route.sessionID]
+      const candidate = sync.data.session_status?.[sessionID]
       if (!isFooterSessionStatus(candidate) || candidate.type === "idle") return
       setStatusTick((value) => value + 1)
     }, 1000)

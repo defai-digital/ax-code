@@ -119,9 +119,12 @@ export namespace Clipboard {
         )
         const buffer = await Filesystem.readBytes(tmpfile)
         return { data: buffer.toString("base64"), mime: "image/png" }
-      } catch {
+      } catch (error) {
+        log.debug("macOS clipboard image read failed", { error })
       } finally {
-        await fs.rm(tmpfile, { force: true }).catch(() => {})
+        await fs.rm(tmpfile, { force: true }).catch((error) => {
+          log.debug("clipboard temporary image cleanup failed", { tmpfile, error })
+        })
       }
     }
 

@@ -343,7 +343,10 @@ export namespace File {
       const ignoreNested = new Set(["node_modules", "dist", "build", "target", "vendor"])
       const shouldIgnoreName = (name: string) => name.startsWith(".") || protectedNames.has(name)
       const shouldIgnoreNested = (name: string) => name.startsWith(".") || ignoreNested.has(name)
-      const top = await fs.promises.readdir(Instance.directory, { withFileTypes: true }).catch(() => [] as fs.Dirent[])
+      const top = await fs.promises.readdir(Instance.directory, { withFileTypes: true }).catch((error) => {
+        log.warn("failed to read project directory", { directory: Instance.directory, error })
+        return [] as fs.Dirent[]
+      })
 
       for (const entry of top) {
         if (!entry.isDirectory()) continue
@@ -351,7 +354,10 @@ export namespace File {
         dirs.add(entry.name + "/")
 
         const base = path.join(Instance.directory, entry.name)
-        const children = await fs.promises.readdir(base, { withFileTypes: true }).catch(() => [] as fs.Dirent[])
+        const children = await fs.promises.readdir(base, { withFileTypes: true }).catch((error) => {
+          log.warn("failed to read nested project directory", { directory: base, error })
+          return [] as fs.Dirent[]
+        })
         for (const child of children) {
           if (!child.isDirectory()) continue
           if (shouldIgnoreNested(child.name)) continue
@@ -624,7 +630,10 @@ export namespace File {
     }
 
     const nodes: File.Node[] = []
-    for (const entry of await fs.promises.readdir(resolved, { withFileTypes: true }).catch(() => [])) {
+    for (const entry of await fs.promises.readdir(resolved, { withFileTypes: true }).catch((error) => {
+      log.warn("failed to list directory", { directory: resolved, error })
+      return []
+    })) {
       if (exclude.includes(entry.name)) continue
       const absolute = path.join(resolved, entry.name)
       const file = toRelativePath(absolute)

@@ -576,14 +576,23 @@ export const BashTool = Tool.define("bash", async () => {
 
       const abortHandler = () => {
         aborted = true
-        void kill().catch(() => {})
+        void kill().catch((error) => {
+          log.warn("bash abort kill failed", {
+            error,
+          })
+        })
       }
 
       ctx.abort.addEventListener("abort", abortHandler, { once: true })
 
       const timeoutTimer = setTimeout(() => {
         timedOut = true
-        void kill().catch(() => {})
+        void kill().catch((error) => {
+          log.warn("bash timeout kill failed", {
+            timeout,
+            error,
+          })
+        })
       }, timeout + 100)
 
       await new Promise<void>((resolve, reject) => {
@@ -609,7 +618,11 @@ export const BashTool = Tool.define("bash", async () => {
 
         if (ctx.abort.aborted) {
           aborted = true
-          void kill().catch(() => {})
+          void kill().catch((error) => {
+            log.warn("bash pre-aborted kill failed", {
+              error,
+            })
+          })
         }
       })
 

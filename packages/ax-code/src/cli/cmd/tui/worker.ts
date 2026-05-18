@@ -218,7 +218,12 @@ export const rpc = {
       directory: input.directory,
       init: InstanceBootstrap,
       fn: async () => {
-        await upgrade().catch(() => {})
+        await upgrade().catch((error) => {
+          Log.Default.debug("upgrade check failed", {
+            directory: input.directory,
+            error,
+          })
+        })
       },
     })
   },

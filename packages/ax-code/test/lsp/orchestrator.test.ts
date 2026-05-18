@@ -122,6 +122,18 @@ describe("LSP.markBroken / LSP.isBroken", () => {
     expect(actualBackoff).toBeLessThanOrEqual(expectedBackoff)
     expect(actualBackoff).toBeGreaterThan(expectedBackoff - 50)
   })
+
+  test("markBroken bounds the broken-server cache", () => {
+    const broken = new Map<string, LSP.BrokenEntry>()
+
+    for (let i = 0; i < 125; i++) {
+      LSP.markBroken(broken, `root-${i}:typescript`)
+    }
+
+    expect(broken.size).toBeLessThanOrEqual(100)
+    expect(broken.has("root-0:typescript")).toBe(false)
+    expect(broken.has("root-124:typescript")).toBe(true)
+  })
 })
 
 describe("LSP.clientModeMatchesServer", () => {

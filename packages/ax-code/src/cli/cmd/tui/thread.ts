@@ -649,7 +649,12 @@ export const TuiThreadCommand = cmd({
         upgradeDelayMs === 0
           ? undefined
           : setTimeout(() => {
-              client.call("checkUpgrade", { directory: cwd }).catch(() => {})
+              client.call("checkUpgrade", { directory: cwd }).catch((error) => {
+                log.debug("upgrade check request failed", {
+                  directory: cwd,
+                  error,
+                })
+              })
             }, upgradeDelayMs)
       upgradeTimer?.unref?.()
 

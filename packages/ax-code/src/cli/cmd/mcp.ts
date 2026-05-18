@@ -20,12 +20,14 @@ import { isRecord } from "../../util/record"
 import { available as discoverAvailable } from "../../mcp/discovery"
 import * as McpTemplates from "../../mcp/templates"
 import { Permission } from "../../permission"
+import { Log } from "../../util/log"
 
 // Above this many MCP tools, LLM tool-selection accuracy degrades and the
 // extra schema overhead noticeably eats context. Mirrors the empirical
 // ceiling Cursor users hit (~40 across all servers) — we warn earlier to
 // give users room to deny rules before hitting it.
 const TOOL_COUNT_WARN_THRESHOLD = 30
+const log = Log.create({ service: "cli.mcp" })
 
 function getAuthStatusIcon(status: MCP.AuthStatus): string {
   switch (status) {
@@ -493,7 +495,12 @@ async function addMcpToConfig(name: string, mcpConfig: Config.Mcp, configPath: s
     resolve = r
   })
   configLocks.set(configPath, next)
-  await prev.catch(() => {})
+  await prev.catch((error) => {
+    log.warn("previous MCP config write failed before queued write", {
+      configPath,
+      error,
+    })
+  })
 
   try {
     using _crossProcess = await FileLock.acquire(configPath)
