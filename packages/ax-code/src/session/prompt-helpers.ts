@@ -107,6 +107,10 @@ function titleFilePlaceholder(part: MessageV2.FilePart) {
   return `[Attached ${part.mime}: ${filename}]`
 }
 
+function errorCode(error: unknown) {
+  return error && typeof error === "object" && "code" in error ? (error as { code?: unknown }).code : undefined
+}
+
 function truncateTitleContext(text: string) {
   if (Token.estimate(text) <= TITLE_CONTEXT_MAX_TOKENS) return text
   return `${text.slice(0, TITLE_CONTEXT_MAX_CHARS)}\n\n[Title context truncated]`
@@ -646,13 +650,22 @@ export async function resolvePromptParts(template: string): Promise<any[]> {
         ? path.resolve(os.homedir(), name.slice(2))
         : path.resolve(Instance.worktree, name)
       const checkedPath = await fs.realpath(filepath).catch((error) => {
-        const code = error instanceof Error ? error : error && typeof error === "object" ? error.code : undefined
+        const code = errorCode(error)
         if (code !== "ENOENT") {
           log.warn("failed to resolve included file path", { filepath, error })
         }
         return undefined
       })
-      if (!checkedPath) return
+      if (!checkedPath) {
+        const agent = await Agent.get(name)
+        if (agent) {
+          parts.push({
+            type: "agent",
+            name: agent.name,
+          })
+        }
+        return
+      }
 
       if (name.startsWith("~/") && !Filesystem.contains(os.homedir(), checkedPath)) {
         return
@@ -663,16 +676,7 @@ export async function resolvePromptParts(template: string): Promise<any[]> {
       }
 
       const stats = await fs.stat(checkedPath).catch(() => undefined)
-      if (!stats) {
-        const agent = await Agent.get(name)
-        if (agent) {
-          parts.push({
-            type: "agent",
-            name: agent.name,
-          })
-        }
-        return
-      }
+      if (!stats) return
 
       if (stats.isDirectory()) {
         parts.push({

@@ -390,6 +390,19 @@ describe("session.prompt special characters", () => {
       homedir.mockRestore()
     }
   })
+
+  test("resolves @agent mentions when no same-named file exists", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parts = await SessionPrompt.resolvePromptParts("Ask @build to review")
+        expect(parts.filter((part) => part.type === "agent")).toEqual([{ type: "agent", name: "build" }])
+        expect(parts.filter((part) => part.type === "file")).toHaveLength(0)
+      },
+    })
+  })
 })
 
 describe("session.prompt agent variant", () => {
