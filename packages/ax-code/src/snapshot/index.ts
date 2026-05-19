@@ -47,6 +47,7 @@ export namespace Snapshot {
     operation?: Promise<unknown>
     cleanupDelay?: ReturnType<typeof setTimeout>
     cleanupInterval?: ReturnType<typeof setInterval>
+    disposed?: boolean
   }
 
   function valid(hash: string) {
@@ -113,9 +114,12 @@ export namespace Snapshot {
 
       const scheduleCleanup = () => {
         next.cleanupDelay = setTimeout(() => {
+          next.cleanupDelay = undefined
+          if (next.disposed) return
           void withOperationLock(next, () => cleanupFor(next))
           next.cleanupInterval = setInterval(
             () => {
+              if (next.disposed) return
               void withOperationLock(next, () => cleanupFor(next))
             },
             60 * 60 * 1000,
@@ -129,8 +133,15 @@ export namespace Snapshot {
       return next
     },
     async (entry) => {
-      if (entry.cleanupDelay) clearTimeout(entry.cleanupDelay)
-      if (entry.cleanupInterval) clearInterval(entry.cleanupInterval)
+      entry.disposed = true
+      if (entry.cleanupDelay) {
+        clearTimeout(entry.cleanupDelay)
+        entry.cleanupDelay = undefined
+      }
+      if (entry.cleanupInterval) {
+        clearInterval(entry.cleanupInterval)
+        entry.cleanupInterval = undefined
+      }
     },
   )
 
