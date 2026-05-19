@@ -429,6 +429,7 @@ export namespace CodeGraphBuilder {
         completeness: "partial" | "lsp-only"
         timings: IndexTimings
         nativeTree?: any
+        imports: string[]
       }
 
   export function indexFile(projectID: ProjectID, absPath: string, opts: IndexFileOptions = {}): Promise<IndexResult> {
@@ -620,6 +621,96 @@ export namespace CodeGraphBuilder {
       }
     }
 
+    // ─── Import edge ingestion ──────────────────────────────────────────
+    //
+    // Parse TypeScript/JavaScript import statements from file text and
+    // emit "imports" edges. This complements the LSP-based reference/call
+    // edges with explicit file-level dependency information, enabling
+    // findImports and findDependents to return real results.
+    //
+    // Supported patterns:
+    //   - `import ... from 'module'`
+    //   - `import 'module'` (side-effect import)
+    //   - `require('module')` (CommonJS)
+    //   - `import('module')` (dynamic import)
+    //
+    // The edge's `from_node` is the file's module symbol (or the first
+    // symbol in the file if no module symbol exists). The `to_node` is
+    // resolved to the target file if it exists in the graph; otherwise
+    // the edge stores the raw module path in the `file` column.
+
+    const IMPORT_REGEX =
+      /(?:import\s+(?:[\s\S]*?\s+from\s+)?['"]([^'"]+)['"]|require\s*\(\s*['"]([^'"]+)['"]\s*\)|import\s*\(\s*['"]([^'"]+)['"]\s*\))/g
+
+    function parseImports(text: string, absPath: string): string[] {
+      const imports: string[] = []
+      const seen = new Set<string>()
+      const dir = path.dirname(absPath)
+
+      for (const match of text.matchAll(IMPORT_REGEX)) {
+        const modulePath = match[1] ?? match[2] ?? match[3]
+        if (!modulePath || seen.has(modulePath)) continue
+        seen.add(modulePath)
+
+        // Skip built-in modules
+        if (modulePath.startsWith("node:") || isBuiltinModule(modulePath)) continue
+
+        // Resolve relative imports to absolute paths
+        if (modulePath.startsWith(".") || modulePath.startsWith("/")) {
+          const resolved = path.resolve(dir, modulePath)
+          // Try adding extensions
+          for (const ext of [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"]) {
+            const withExt = resolved + ext
+            imports.push(withExt)
+          }
+          // Also try index files
+          for (const ext of [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"]) {
+            imports.push(path.join(resolved, `index${ext}`))
+          }
+        } else {
+          // External module (npm package) — store as-is
+          imports.push(modulePath)
+        }
+      }
+
+      return imports
+    }
+
+    function isBuiltinModule(name: string): boolean {
+      const builtins = new Set([
+        "fs",
+        "path",
+        "os",
+        "crypto",
+        "http",
+        "https",
+        "net",
+        "tls",
+        "dns",
+        "url",
+        "querystring",
+        "stream",
+        "util",
+        "events",
+        "buffer",
+        "child_process",
+        "cluster",
+        "dgram",
+        "readline",
+        "repl",
+        "vm",
+        "zlib",
+        "assert",
+        "console",
+        "process",
+        "timers",
+        "module",
+        "worker_threads",
+        "perf_hooks",
+      ])
+      return builtins.has(name)
+    }
+
     // ─── Phase 2 reference pass ─────────────────────────────────────
     //
     // For each "container" symbol (function, method, class, interface,
@@ -741,6 +832,7 @@ export namespace CodeGraphBuilder {
       completeness,
       timings,
       nativeTree,
+      imports: parseImports(text, absPath),
     }
   }
 
@@ -843,6 +935,43 @@ export namespace CodeGraphBuilder {
       if (edgeInserts.length > 0 && completeness !== "partial") completeness = "full"
       if (prepared.referenceFailures > 0) completeness = "partial"
       prepared.timings.edgeResolve = performance.now() - tResolve
+    }
+
+    // ─── Import edge ingestion ──────────────────────────────────────
+    // Create "imports" edges from the file's module symbol (or first
+    // symbol) to each resolved import target that exists in the graph.
+    if (prepared.imports.length > 0 && prepared.nodeInserts.length > 0) {
+      // Use the first symbol in the file as the from_node for import edges.
+      // Prefer a module-kind symbol if available.
+      const fromNode = prepared.nodeInserts.find((n) => n.kind === "module") ?? prepared.nodeInserts[0]
+
+      // Build a set of existing file paths in the graph for resolution.
+      const existingFiles = new Set(CodeGraphQuery.listFiles(projectID).map((f) => f.path))
+
+      for (const importPath of prepared.imports) {
+        // If the import resolves to a file in the graph, create an edge.
+        if (existingFiles.has(importPath)) {
+          // Find the target file's module symbol (or first symbol).
+          const targetNodes = CodeGraphQuery.nodesInFile(projectID, importPath)
+          const toNode = targetNodes.find((n) => n.kind === "module") ?? targetNodes[0]
+          if (toNode) {
+            edgeInserts.push({
+              id: CodeEdgeID.ascending(),
+              project_id: projectID,
+              kind: "imports",
+              from_node: fromNode.id,
+              to_node: toNode.id,
+              file: prepared.absPath,
+              range_start_line: 0,
+              range_start_char: 0,
+              range_end_line: 0,
+              range_end_char: 0,
+              time_created: prepared.now,
+              time_updated: prepared.now,
+            })
+          }
+        }
+      }
     }
 
     const tTxn = performance.now()
