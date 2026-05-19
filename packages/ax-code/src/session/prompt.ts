@@ -2264,14 +2264,21 @@ export namespace SessionPrompt {
                 }
                 if (range.start != null) {
                   const filePathURI = part.url.split("?")[0]
-                  let start = parseInt(range.start, 10)
-                  if (isNaN(start)) start = 1
-                  let end = range.end ? parseInt(range.end, 10) : undefined
-                  if (end !== undefined && isNaN(end)) end = undefined
+                  const parsedStart = Number(range.start)
+                  const hasValidStart = Number.isInteger(parsedStart) && parsedStart >= 0
+                  let start = hasValidStart ? parsedStart : undefined
+                  const parsedEnd = range.end != null && range.end !== "" ? Number(range.end) : undefined
+                  let end =
+                    start !== undefined &&
+                    typeof parsedEnd === "number" &&
+                    Number.isInteger(parsedEnd) &&
+                    parsedEnd >= start
+                      ? parsedEnd
+                      : undefined
                   // some LSP servers (eg, gopls) don't give full range in
                   // workspace/symbol searches, so we'll try to find the
                   // symbol in the document to get the full range
-                  if (start === end) {
+                  if (start !== undefined && start === end) {
                     const symbols = await documentSymbolsForRangeExpansion(filePathURI)
                     for (const symbol of symbols) {
                       let range: LSP.Range | undefined
@@ -2287,18 +2294,20 @@ export namespace SessionPrompt {
                       }
                     }
                   }
-                  // Convert LSP 0-indexed line numbers to the Read tool's
-                  // 1-indexed offset. `Math.max(start, 1)` was wrong — it
-                  // clamped 0 → 1 but left every other value unchanged,
-                  // so 0-indexed line 5 became offset 5 instead of 6. The
-                  // Read tool starts one line too early for every symbol.
-                  offset = start + 1
-                  if (end !== undefined) {
-                    // `limit` counts lines starting from `offset`. For a
-                    // symbol spanning 0-indexed lines [start, end], the
-                    // number of lines is (end - start + 1), which
-                    // simplifies to `end - offset + 2` in 1-indexed terms.
-                    limit = end - start + 1
+                  if (start !== undefined) {
+                    // Convert LSP 0-indexed line numbers to the Read tool's
+                    // 1-indexed offset. `Math.max(start, 1)` was wrong — it
+                    // clamped 0 → 1 but left every other value unchanged,
+                    // so 0-indexed line 5 became offset 5 instead of 6. The
+                    // Read tool starts one line too early for every symbol.
+                    offset = start + 1
+                    if (end !== undefined) {
+                      // `limit` counts lines starting from `offset`. For a
+                      // symbol spanning 0-indexed lines [start, end], the
+                      // number of lines is (end - start + 1), which
+                      // simplifies to `end - offset + 2` in 1-indexed terms.
+                      limit = end - start + 1
+                    }
                   }
                 }
                 const args = { filePath: filepath, offset, limit }
