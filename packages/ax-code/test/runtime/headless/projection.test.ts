@@ -123,6 +123,52 @@ describe("headless projection", () => {
     expect(state.part).toEqual({})
   })
 
+  test("removes all overflow messages and parts when the projection cap shrinks", () => {
+    const state = createHeadlessProjectionState<Session, Todo, Diff, Status, Message, Part>()
+
+    for (const id of ["1", "2", "3"]) {
+      applyHeadlessProjectionEvent(state, {
+        type: "message.updated",
+        properties: {
+          info: {
+            id: `msg_${id}`,
+            sessionID: "ses_1",
+          },
+        },
+      })
+      applyHeadlessProjectionEvent(state, {
+        type: "message.part.updated",
+        properties: {
+          part: {
+            id: `part_${id}`,
+            messageID: `msg_${id}`,
+            type: "text",
+            text: id,
+          },
+        },
+      })
+    }
+
+    applyHeadlessProjectionEvent(
+      state,
+      {
+        type: "message.updated",
+        properties: {
+          info: {
+            id: "msg_4",
+            sessionID: "ses_1",
+          },
+        },
+      },
+      {
+        maxSessionMessages: 1,
+      },
+    )
+
+    expect(state.message.ses_1).toEqual([{ id: "msg_4", sessionID: "ses_1" }])
+    expect(state.part).toEqual({})
+  })
+
   test("maps runtime events to runtime probe keys without TUI-specific handlers", () => {
     expect(runtimeProbeKeysForEvent({ type: "mcp.tools.changed" })).toEqual(["mcp"])
     expect(runtimeProbeKeysForEvent({ type: "lsp.updated" })).toEqual(["lsp", "debug-engine"])
