@@ -27,3 +27,13 @@ export const EmbeddingCacheID = Schema.String.pipe(
   })),
 )
 export type EmbeddingCacheID = Schema.Schema.Type<typeof EmbeddingCacheID>
+
+export const DebugPatternID = Schema.String.pipe(
+  Schema.brand("DebugPatternID"),
+  withStatics((s) => ({
+    make: (id: string) => s.makeUnsafe(id),
+    ascending: (id?: string) => s.makeUnsafe(Identifier.ascending("debug_pattern", id)),
+    zod: Identifier.schema("debug_pattern").pipe(z.custom<Schema.Schema.Type<typeof s>>()),
+  })),
+)
+export type DebugPatternID = Schema.Schema.Type<typeof DebugPatternID>
