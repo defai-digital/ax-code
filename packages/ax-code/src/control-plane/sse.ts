@@ -2,6 +2,7 @@ import { Log } from "@/util/log"
 
 const log = Log.create({ service: "control-plane.sse" })
 const MAX_SSE_BUFFER_CHARS = 1024 * 1024
+const SSE_BLOCK_BOUNDARY = /\r\n\r\n|\r\n\n|\r\n\r|\n\r\n|\r\r\n|\n\n|\n\r|\r\r/
 
 // Each parser invocation owns exactly one reader/buffer pair for one response
 // body. Callers must not share a ReadableStream body across concurrent
@@ -34,7 +35,7 @@ export async function parseSSE(
     let id: string | undefined
     let retry: number | undefined
 
-    for (const line of block.split(/\r?\n/)) {
+    for (const line of block.split(/\r\n|\r|\n/)) {
       if (!line || line.startsWith(":")) continue
       const idx = line.indexOf(":")
       const key = idx === -1 ? line : line.slice(0, idx)
@@ -96,16 +97,10 @@ export async function parseSSE(
       }
 
       while (true) {
-        let idx = buf.indexOf("\n\n")
-        let gap = 2
-        if (idx === -1) {
-          idx = buf.indexOf("\r\n\r\n")
-          gap = 4
-          if (idx === -1) break
-        } else if (idx > 0 && buf[idx - 1] === "\r") {
-          idx--
-          gap = 3
-        }
+        const boundary = SSE_BLOCK_BOUNDARY.exec(buf)
+        if (!boundary) break
+        const idx = boundary.index
+        const gap = boundary[0].length
         const block = buf.slice(0, idx)
         buf = buf.slice(idx + gap)
         emit(block)
