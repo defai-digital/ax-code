@@ -997,11 +997,16 @@ export async function createAgent(options?: AgentOptions): Promise<Agent> {
           return {
             async next() {
               if (!started) {
-                started = true
-                sessionID = await createTrackedSession("create")
-                gen = createSessionHandle(sdk, sessionID, opts, () => disposed, lifecycle)
-                  .stream(message, runOptions)
-                  [Symbol.asyncIterator]()
+                try {
+                  sessionID = await createTrackedSession("create")
+                  gen = createSessionHandle(sdk, sessionID, opts, () => disposed, lifecycle)
+                    .stream(message, runOptions)
+                    [Symbol.asyncIterator]()
+                  started = true
+                } catch (error) {
+                  releaseSession()
+                  throw error
+                }
               }
               const result = await gen!.next()
               if (result.done) releaseSession()
