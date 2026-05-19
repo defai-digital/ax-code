@@ -74,12 +74,21 @@ export const ReadTool = Tool.define("read", {
   parameters: z.object({
     filePath: z.string().describe("The absolute path to the file or directory to read"),
     offset: z.coerce.number().int().min(1).describe("The line number to start reading from (1-indexed)").optional(),
-    limit: z.coerce.number().max(10000).describe("The maximum number of lines to read (defaults to 2000)").optional(),
+    limit: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(10000)
+      .describe("The maximum number of lines to read (defaults to 2000)")
+      .optional(),
   }),
   async execute(params, ctx) {
     if (params.filePath.includes("\x00")) throw readError("ReadInvalidPathError", NULL_BYTE_PATH_ERROR)
     if (params.offset !== undefined && params.offset < 1) {
       throw readError("ReadInvalidOffsetError", "offset must be greater than or equal to 1")
+    }
+    if (params.limit !== undefined && (!Number.isInteger(params.limit) || params.limit < 1)) {
+      throw readError("ReadInvalidLimitError", "limit must be an integer greater than or equal to 1")
     }
     const filepath = resolveToolFilePath(params.filePath, Instance.directory)
     const title = normalizeToWorkspacePath(filepath, Instance.worktree)
