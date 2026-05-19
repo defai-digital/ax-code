@@ -2,9 +2,14 @@ import { describe, expect, test } from "bun:test"
 import path from "path"
 
 const SRC = path.join(import.meta.dir, "../../src")
+const REPO = path.join(import.meta.dir, "../../../..")
 
 async function source(relativePath: string) {
   return Bun.file(path.join(SRC, relativePath)).text()
+}
+
+async function repoSource(relativePath: string) {
+  return Bun.file(path.join(REPO, relativePath)).text()
 }
 
 describe("bug report lifecycle visibility guards", () => {
@@ -66,5 +71,48 @@ describe("bug report lifecycle visibility guards", () => {
     expect(sessionRoute).toContain("createEffect(() => {")
     expect(sessionRoute).toContain("const sessionID = route.sessionID")
     expect(sessionRoute).toContain("sync.data.session_status?.[sessionID]")
+  })
+
+  test("keeps MCP status updates race-safe", async () => {
+    const mcp = await source("mcp/index.ts")
+
+    expect(mcp).toContain('s.status[name] = {\n          status: "failed" as const')
+    expect(mcp).toContain('if (s.status[clientName]?.status !== "disabled")')
+    expect(mcp).toContain('s.status[clientName] = { status: "failed" as const')
+    expect(mcp).toContain('s.status[clientName]?.status !== "connected"')
+  })
+
+  test("keeps JSON migration inputs immutable while stripping embedded ids", async () => {
+    const migration = await source("storage/json-migration.ts")
+
+    expect(migration).toContain("const { id: _id, sessionID: _sessionID, ...rest } = data")
+    expect(migration).toContain("const { id: _id, messageID: _messageID, sessionID: _sessionID, ...rest } = data")
+    expect(migration).not.toContain("delete rest.id")
+    expect(migration).not.toContain("delete rest.sessionID")
+    expect(migration).not.toContain("delete rest.messageID")
+  })
+
+  test("keeps worktree cleanup ordered before deleting directories", async () => {
+    const worktree = await source("worktree/index.ts")
+
+    expect(worktree).toContain("await fs.rm(info.directory, { recursive: true, force: true })")
+    expect(worktree).not.toContain("fs.rmdir(info.directory)")
+
+    const cleanupIndex = worktree.indexOf("await cleanupInstanceAndSandbox()")
+    const cleanIndex = worktree.indexOf("await clean(directory)", cleanupIndex)
+    expect(cleanupIndex).toBeGreaterThan(-1)
+    expect(cleanIndex).toBeGreaterThan(cleanupIndex)
+  })
+
+  test("keeps Rust daemon and watcher send failures visible", async () => {
+    const daemon = await repoSource("crates/ax-code-daemon/src/daemon.rs")
+    const fsNative = await repoSource("crates/ax-code-fs/src/lib.rs")
+
+    expect(daemon).toContain('eprintln!("daemon: failed to write response body')
+    expect(daemon).toContain('eprintln!("daemon: failed to flush response')
+    expect(daemon).not.toContain("let _ = writer.write_all")
+    expect(fsNative).toContain(".send(WatchEvent")
+    expect(fsNative).toContain(".is_err()")
+    expect(fsNative).toContain("break;")
   })
 })

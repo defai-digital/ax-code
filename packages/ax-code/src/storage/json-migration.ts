@@ -334,9 +334,7 @@ export namespace JsonMigration {
           const id = MessageID.make(path.basename(file, ".json"))
           const sessionID = allMessageSessions[i + j]
           messageSessions.set(id, sessionID)
-          const rest = data
-          delete rest.id
-          delete rest.sessionID
+          const { id: _id, sessionID: _sessionID, ...rest } = data
           values[count++] = {
             id,
             session_id: sessionID,
@@ -380,10 +378,7 @@ export namespace JsonMigration {
             orphans.parts++
             continue
           }
-          const rest = data
-          delete rest.id
-          delete rest.messageID
-          delete rest.sessionID
+          const { id: _id, messageID: _messageID, sessionID: _sessionID, ...rest } = data
           values[count++] = {
             id,
             message_id: messageID,

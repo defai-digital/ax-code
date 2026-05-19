@@ -133,9 +133,17 @@ fn handle_client(stream: &UnixStream, state: &Arc<Mutex<DaemonState>>) {
         Err(e) => error_json(&e.to_string()),
     };
     if let Ok(mut writer) = stream.try_clone() {
-        let _ = writer.write_all(response.as_bytes());
-        let _ = writer.write_all(b"\n");
-        let _ = writer.flush();
+        if let Err(e) = writer.write_all(response.as_bytes()) {
+            eprintln!("daemon: failed to write response body: {e}");
+            return;
+        }
+        if let Err(e) = writer.write_all(b"\n") {
+            eprintln!("daemon: failed to write response terminator: {e}");
+            return;
+        }
+        if let Err(e) = writer.flush() {
+            eprintln!("daemon: failed to flush response: {e}");
+        }
     }
 }
 

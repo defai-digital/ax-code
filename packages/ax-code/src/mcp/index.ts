@@ -372,7 +372,13 @@ export namespace MCP {
   export async function add(name: string, mcp: Config.Mcp) {
     return withConnectLock(name, "MCP add failed", async () => {
       const s = await state()
-      const result = await create(name, mcp)
+      const result = await create(name, mcp).catch((error) => {
+        s.status[name] = {
+          status: "failed" as const,
+          error: NamedError.message(error),
+        }
+        throw error
+      })
       if (!result) {
         const status = {
           status: "failed" as const,
@@ -832,7 +838,9 @@ export namespace MCP {
       // Apply state mutations after all concurrent reads complete (BUG-021)
       for (const { clientName, toolsResult } of toolsResults) {
         if (toolsResult && "_failed" in toolsResult) {
-          s.status[clientName] = { status: "failed" as const, error: (toolsResult as { error: string }).error }
+          if (s.status[clientName]?.status !== "disabled") {
+            s.status[clientName] = { status: "failed" as const, error: (toolsResult as { error: string }).error }
+          }
           delete s.clients[clientName]
         }
       }
@@ -980,9 +988,10 @@ export namespace MCP {
 
   export async function getPrompt(clientName: string, name: string, args?: Record<string, string>) {
     const clientsSnapshot = await clients()
+    const s = await state()
     const client = clientsSnapshot[clientName]
 
-    if (!client) {
+    if (!client || s.status[clientName]?.status !== "connected") {
       log.warn("client not found for prompt", {
         clientName,
       })
@@ -1008,9 +1017,10 @@ export namespace MCP {
 
   export async function readResource(clientName: string, resourceUri: string) {
     const clientsSnapshot = await clients()
+    const s = await state()
     const client = clientsSnapshot[clientName]
 
-    if (!client) {
+    if (!client || s.status[clientName]?.status !== "connected") {
       log.warn("client not found for resource", {
         clientName: clientName,
       })

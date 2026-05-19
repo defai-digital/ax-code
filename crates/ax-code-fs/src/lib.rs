@@ -1333,10 +1333,15 @@ impl NativeWatcher {
                     continue;
                 }
 
-                let _ = tx.send(WatchEvent {
-                    event_type: event_type.to_string(),
-                    path: rel_str.to_string(),
-                });
+                if tx
+                    .send(WatchEvent {
+                        event_type: event_type.to_string(),
+                        path: rel_str.to_string(),
+                    })
+                    .is_err()
+                {
+                    break;
+                }
             }
         })
         .map_err(|e| napi::Error::from_reason(format!("failed to create watcher: {e}")))?;
