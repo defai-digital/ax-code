@@ -756,3 +756,74 @@ describe("session.getUsage", () => {
     expect(result.tokens.total).toBe(2000)
   })
 })
+
+describe("session.compaction.prune tier-aware", () => {
+  test("ContextTier classifies recent messages as Tier 1 and old messages as Tier 3", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const { ContextTier } = await import("../../src/session/context-tier")
+
+        // Create 10 messages: 5 user turns (10 messages total)
+        const messages: MessageV2.WithParts[] = []
+        for (let i = 0; i < 5; i++) {
+          messages.push({
+            info: {
+              id: MessageID.ascending(),
+              sessionID: "ses_test" as any,
+              role: "user",
+              time: { created: Date.now() + i * 2 },
+              summary: false,
+            } as any,
+            parts: [],
+          })
+          messages.push({
+            info: {
+              id: MessageID.ascending(),
+              sessionID: "ses_test" as any,
+              role: "assistant",
+              time: { created: Date.now() + i * 2 + 1 },
+              summary: false,
+            } as any,
+            parts: [
+              {
+                id: PartID.ascending(),
+                messageID: MessageID.ascending(),
+                sessionID: "ses_test" as any,
+                type: "tool" as const,
+                callID: `call_${i}`,
+                tool: "read",
+                state: {
+                  status: "completed" as const,
+                  input: {},
+                  output: "x".repeat(1000),
+                  title: "tool result",
+                  metadata: {},
+                  time: { start: Date.now(), end: Date.now() },
+                },
+              },
+            ],
+          })
+        }
+
+        const classified = ContextTier.classify(messages, { recentTurns: 2, supportingTurns: 2 })
+        const dist = ContextTier.distribution(classified)
+
+        // Should have 10 messages total
+        expect(dist.total).toBe(10)
+        // Last 2 user turns = 4 messages (2 user + 2 assistant) = Tier 1
+        expect(dist.tier1).toBe(4)
+        // Supporting turns (turns 3-4) = 4 messages = Tier 2
+        expect(dist.tier2).toBe(4)
+        // First user turn = 2 messages = Tier 3
+        expect(dist.tier3).toBe(2)
+
+        // Verify first message is Tier 3
+        expect(classified[0].tier).toBe(3)
+        // Verify last message is Tier 1
+        expect(classified[9].tier).toBe(1)
+      },
+    })
+  })
+})
