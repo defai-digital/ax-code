@@ -74,6 +74,58 @@ describe("control-plane/sse", () => {
     ])
   })
 
+  test("parses consecutive events with mixed CRLF/LF block boundaries", async () => {
+    const events: unknown[] = []
+    const stop = new AbortController()
+
+    await parseSSE(stream(["data: hello\r\n\n\r\ndata: world\n\n"]), stop.signal, (event) => events.push(event))
+
+    expect(events).toEqual([
+      {
+        type: "sse.message",
+        properties: {
+          data: "hello",
+          id: undefined,
+          retry: undefined,
+        },
+      },
+      {
+        type: "sse.message",
+        properties: {
+          data: "world",
+          id: undefined,
+          retry: undefined,
+        },
+      },
+    ])
+  })
+
+  test("parses standalone CR line endings and block boundaries", async () => {
+    const events: unknown[] = []
+    const stop = new AbortController()
+
+    await parseSSE(stream(["data: first\r\rdata: second\r\r"]), stop.signal, (event) => events.push(event))
+
+    expect(events).toEqual([
+      {
+        type: "sse.message",
+        properties: {
+          data: "first",
+          id: undefined,
+          retry: undefined,
+        },
+      },
+      {
+        type: "sse.message",
+        properties: {
+          data: "second",
+          id: undefined,
+          retry: undefined,
+        },
+      },
+    ])
+  })
+
   test("emits an unterminated trailing event only once at EOF", async () => {
     const events: unknown[] = []
     const stop = new AbortController()
