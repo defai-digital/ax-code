@@ -19,6 +19,7 @@ import { SessionCompaction } from "./compaction"
 import { Permission } from "@/permission"
 import { Question } from "@/question"
 import { SelfCorrection } from "./correction"
+import { ToolErrorPatternTracker } from "./tool-error-pattern"
 import { PartID } from "./schema"
 import type { SessionID, MessageID } from "./schema"
 import { NamedError } from "@ax-code/util/error"
@@ -501,6 +502,8 @@ export namespace SessionProcessor {
 
                     // Self-correction: clear retry budget on success
                     SelfCorrection.recordSuccess(input.sessionID, match.tool)
+                    // Pattern tracker: clear error patterns on success
+                    ToolErrorPatternTracker.recordSuccess(input.sessionID, match.tool)
 
                     recentToolRing.push({
                       tool: match.tool,
@@ -553,6 +556,23 @@ export namespace SessionProcessor {
                         // Sanitize error message to prevent prompt injection via
                         // tool output containing closing/opening system-reminder tags.
                         annotatedError = `${sanitizeForXmlTag(errorMsg)}\n\n<system-reminder>\n${correction.prompt}\n</system-reminder>`
+                      }
+
+                      // Pattern tracker: detect repeated errors and append
+                      // proactive guidance when the same pattern recurs 3+ times.
+                      // This is complementary to SelfCorrection — SelfCorrection
+                      // handles individual failures; the pattern tracker handles
+                      // systemic mistakes across multiple turns.
+                      const patternCount = ToolErrorPatternTracker.record(input.sessionID, match.tool, errorMsg)
+                      if (patternCount >= 3) {
+                        const guidance = ToolErrorPatternTracker.guidance(input.sessionID, match.tool, errorMsg)
+                        if (guidance) {
+                          log.info("error pattern guidance triggered", {
+                            tool: match.tool,
+                            patternCount,
+                          })
+                          annotatedError = `${sanitizeForXmlTag(annotatedError)}\n\n${guidance}`
+                        }
                       }
                     }
 
@@ -836,6 +856,10 @@ export namespace SessionProcessor {
                   })
                 }
                 deltaBatcher.flush()
+                // Reset error pattern tracker on compaction — the context
+                // window is about to be rewritten, so stale pattern counts
+                // would mislead guidance in the new context.
+                ToolErrorPatternTracker.reset(input.sessionID)
                 break
               }
             }
