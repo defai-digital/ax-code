@@ -256,8 +256,9 @@ function upsertMessage<
 ) {
   const list = state.message[message.sessionID] ?? []
   upsertByID(list, message)
-  const removed = shiftOverflow(list, maxSessionMessages)
-  if (removed) delete state.part[removed.id]
+  for (const removed of shiftOverflow(list, maxSessionMessages)) {
+    delete state.part[removed.id]
+  }
   state.message[message.sessionID] = list
 }
 
@@ -314,6 +315,7 @@ function removeByID<T extends { id: string }>(list: T[], id: string) {
 }
 
 function shiftOverflow<T>(list: T[], maxSize: number) {
-  if (list.length <= maxSize) return undefined
-  return list.shift()
+  const limit = Math.max(0, Math.floor(maxSize))
+  if (list.length <= limit) return []
+  return list.splice(0, list.length - limit)
 }
