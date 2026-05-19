@@ -511,7 +511,12 @@ export namespace Worktree {
   export const create = fn(CreateInput.optional(), async (input) => {
     const info = await makeWorktreeInfo(input?.name)
     const bootstrap = await createFromInfo(info, input?.startCommand).catch(async (error) => {
-      await fs.rmdir(info.directory).catch(() => undefined)
+      await fs.rm(info.directory, { recursive: true, force: true }).catch((cleanupError) => {
+        log.warn("failed to clean up failed worktree creation", {
+          directory: info.directory,
+          error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
+        })
+      })
       throw error
     })
     // Defer bootstrap to the next microtask so callers see the
@@ -620,13 +625,15 @@ export namespace Worktree {
       const directoryExists = await exists(directory)
       if (directoryExists) {
         await stop(directory)
+        await cleanupInstanceAndSandbox()
         await clean(directory)
       }
-      await cleanupInstanceAndSandbox()
+      if (!directoryExists) await cleanupInstanceAndSandbox()
       return true
     }
 
     await stop(entry.path)
+    await cleanupInstanceAndSandbox()
     const removed = await git(["worktree", "remove", "--force", entry.path], {
       cwd: Instance.worktree,
     })
@@ -653,8 +660,6 @@ export namespace Worktree {
         throw new RemoveFailedError({ message: errorText(deleted) || "Failed to delete worktree branch" })
       }
     }
-
-    await cleanupInstanceAndSandbox()
 
     return true
   })

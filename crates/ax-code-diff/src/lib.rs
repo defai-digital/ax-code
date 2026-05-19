@@ -77,8 +77,11 @@ fn unescape_string(s: &str) -> String {
 /// Compute byte offset of line `idx` in `lines` (each separated by '\n').
 fn line_byte_offset(lines: &[&str], idx: usize) -> usize {
     let mut offset = 0;
-    for line in lines.iter().take(idx) {
-        offset += line.len() + 1; // +1 for '\n'
+    for (i, line) in lines.iter().enumerate().take(idx) {
+        offset += line.len();
+        if i + 1 < lines.len() {
+            offset += 1; // '\n' separator before the next line
+        }
     }
     offset
 }
@@ -1147,6 +1150,15 @@ mod tests {
 
         let extracted = extract_lines(content, &lines, 1, 2);
         assert_eq!(extracted, "bbb\nccc");
+    }
+
+    #[test]
+    fn line_byte_offset_handles_content_without_trailing_newline() {
+        let content = "foo\nbar";
+        let lines: Vec<&str> = content.split('\n').collect();
+
+        assert_eq!(line_byte_offset(&lines, 2), content.len());
+        assert_eq!(extract_lines(content, &lines, 1, 1), "bar");
     }
 
     // ── strategy helpers ──────────────────────────────────────────────────
