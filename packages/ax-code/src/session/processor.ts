@@ -533,6 +533,7 @@ export namespace SessionProcessor {
                     const errorMsg = value.error instanceof Error ? value.error.message : String(value.error)
                     const errorCode = value.error instanceof Error ? value.error.name : "Unknown"
                     const toolErrorEnd = Date.now()
+                    const toolInput = value.input ?? match.state.input
 
                     // Self-correction: analyze the failure BEFORE persisting
                     // the tool error so we can append the reflection prompt
@@ -563,7 +564,12 @@ export namespace SessionProcessor {
                       // This is complementary to SelfCorrection — SelfCorrection
                       // handles individual failures; the pattern tracker handles
                       // systemic mistakes across multiple turns.
-                      const patternCount = ToolErrorPatternTracker.record(input.sessionID, match.tool, errorMsg)
+                      const patternCount = ToolErrorPatternTracker.record(
+                        input.sessionID,
+                        match.tool,
+                        errorMsg,
+                        ToolErrorPatternTracker.filePathFromInput(toolInput),
+                      )
                       if (patternCount >= 3) {
                         const guidance = ToolErrorPatternTracker.guidance(input.sessionID, match.tool, errorMsg)
                         if (guidance) {
@@ -580,7 +586,7 @@ export namespace SessionProcessor {
                       ...match,
                       state: {
                         status: "error",
-                        input: value.input ?? match.state.input,
+                        input: toolInput,
                         error: annotatedError,
                         time: {
                           start: match.state.time.start,

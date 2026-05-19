@@ -109,6 +109,23 @@ export namespace ToolErrorPatternTracker {
     return entry.count
   }
 
+  export function filePathFromInput(input: unknown): string | undefined {
+    if (!input || typeof input !== "object") return undefined
+    const record = input as Record<string, unknown>
+    for (const key of ["filePath", "filepath", "file_path", "path"]) {
+      const value = record[key]
+      if (typeof value === "string" && value.length > 0) return value
+    }
+    const edits = record["edits"]
+    if (Array.isArray(edits)) {
+      for (const edit of edits) {
+        const filePath = filePathFromInput(edit)
+        if (filePath) return filePath
+      }
+    }
+    return undefined
+  }
+
   /** Return proactive guidance if the current error pattern has recurred
    *  THRESHOLD or more times. Returns null otherwise. */
   export function guidance(sessionID: string, toolName: string, errorMessage: string): string | null {

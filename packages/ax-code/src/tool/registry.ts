@@ -110,7 +110,14 @@ export namespace ToolRegistry {
                   return {
                     title: "",
                     output: out.truncated ? out.content : result,
-                    metadata: { truncated: out.truncated, outputPath: out.truncated ? out.outputPath : undefined },
+                    metadata: {
+                      truncated: out.truncated,
+                      outputPath: out.truncated ? out.outputPath : undefined,
+                      fullOutputPath: out.truncated ? out.fullOutputPath : undefined,
+                      originalSize: out.truncated ? out.originalSize : undefined,
+                      truncatedTo: out.truncated ? out.truncatedTo : undefined,
+                      contentHint: out.truncated ? out.contentHint : undefined,
+                    },
                   }
                 },
               }),

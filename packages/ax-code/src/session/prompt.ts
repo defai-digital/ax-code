@@ -1919,7 +1919,13 @@ export namespace SessionPrompt {
         const metadata = {
           ...(result.metadata ?? {}),
           truncated: truncated.truncated,
-          ...(truncated.truncated && { outputPath: truncated.outputPath }),
+          ...(truncated.truncated && {
+            outputPath: truncated.outputPath,
+            fullOutputPath: truncated.fullOutputPath,
+            originalSize: truncated.originalSize,
+            truncatedTo: truncated.truncatedTo,
+            contentHint: truncated.contentHint,
+          }),
         }
 
         return {
