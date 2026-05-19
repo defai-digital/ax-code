@@ -1,7 +1,7 @@
 import { sqliteTable, text, integer, blob, index } from "drizzle-orm/sqlite-core"
 import { ProjectTable } from "../project/project.sql"
 import type { ProjectID } from "../project/schema"
-import type { RefactorPlanID, EmbeddingCacheID } from "./id"
+import type { RefactorPlanID, EmbeddingCacheID, DebugPatternID } from "./id"
 import { Timestamps } from "../storage/schema.sql"
 
 // Debugging & Refactoring Engine tables.
@@ -86,5 +86,54 @@ export const EmbeddingCacheTable = sqliteTable(
     index("debug_engine_embedding_cache_project_idx").on(table.project_id),
     index("debug_engine_embedding_cache_node_idx").on(table.project_id, table.node_id),
     index("debug_engine_embedding_cache_sig_idx").on(table.project_id, table.signature_hash),
+  ],
+)
+
+// Cross-session debug pattern memory. When a debug case is resolved
+// (confirmed hypothesis), a compact signature is stored here. On a new
+// debug case open, the system queries this table for similar patterns
+// using keyword overlap + file path similarity + error category match.
+//
+// ADR-002: DRE-owned table, no FK into v3 tables.
+// Cap: 1000 rows per project, LRU eviction when full.
+export type DebugPatternCategory =
+  | "null_undefined"
+  | "race_condition"
+  | "off_by_one"
+  | "type_coercion"
+  | "stale_closure"
+  | "import_error"
+  | "config_issue"
+  | "encoding_issue"
+  | "resource_leak"
+  | "logic_error"
+  | "other"
+
+export const DebugPatternTable = sqliteTable(
+  "debug_engine_pattern",
+  {
+    id: text().$type<DebugPatternID>().primaryKey(),
+    project_id: text()
+      .$type<ProjectID>()
+      .notNull()
+      .references(() => ProjectTable.id, { onDelete: "cascade" }),
+    // Short problem description (1-500 chars)
+    problem: text().notNull(),
+    // Root cause category
+    category: text().$type<DebugPatternCategory>().notNull(),
+    // Fix pattern description — what was done to resolve it
+    fix_pattern: text().notNull(),
+    // Affected file patterns (glob-style, e.g. "src/session/*.ts")
+    affected_file_patterns: text({ mode: "json" }).$type<string[]>().notNull(),
+    // Keywords extracted from the problem and fix for similarity matching
+    keywords: text({ mode: "json" }).$type<string[]>().notNull(),
+    // How many times this pattern has been matched (for LRU)
+    last_matched_at: integer(),
+    ...Timestamps,
+  },
+  (table) => [
+    index("debug_engine_pattern_project_idx").on(table.project_id),
+    index("debug_engine_pattern_category_idx").on(table.project_id, table.category),
+    index("debug_engine_pattern_keywords_idx").on(table.project_id, table.keywords),
   ],
 )

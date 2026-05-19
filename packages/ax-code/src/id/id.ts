@@ -21,6 +21,7 @@ export namespace Identifier {
     refactor_plan: "rpl",
     embedding_cache: "ebc",
     audit_semantic_call: "asc",
+    debug_pattern: "dpt",
   } as const
 
   export function schema(prefix: keyof typeof prefixes) {
