@@ -77,4 +77,28 @@ describe("autocomplete scroll", () => {
       }),
     ).toEqual({ direction: "below", height: 10, top: 3 })
   })
+
+  test("clamps popup height to available terminal space", () => {
+    expect(
+      autocompletePopupPlacement({
+        desiredHeight: 10,
+        anchorLocalY: 5,
+        anchorGlobalY: 4,
+        anchorHeight: 3,
+        terminalHeight: 12,
+      }),
+    ).toEqual({ direction: "below", height: 5, top: 8 })
+  })
+
+  test("returns zero height when neither side has terminal space", () => {
+    expect(
+      autocompletePopupPlacement({
+        desiredHeight: 10,
+        anchorLocalY: 0,
+        anchorGlobalY: 0,
+        anchorHeight: 42,
+        terminalHeight: 42,
+      }),
+    ).toEqual({ direction: "above", height: 0, top: 0 })
+  })
 })

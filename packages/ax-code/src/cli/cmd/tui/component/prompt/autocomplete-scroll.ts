@@ -40,7 +40,7 @@ export function autocompletePopupPlacement(input: {
   const availableBelow = Math.max(0, input.terminalHeight - (input.anchorGlobalY + anchorHeight))
   const direction = availableAbove >= desiredHeight || availableAbove >= availableBelow ? "above" : "below"
   const available = direction === "above" ? availableAbove : availableBelow
-  const height = Math.max(1, Math.min(desiredHeight, available || desiredHeight))
+  const height = Math.min(desiredHeight, available)
   const top = direction === "above" ? input.anchorLocalY - height : input.anchorLocalY + anchorHeight
 
   return { direction, height, top } as const
