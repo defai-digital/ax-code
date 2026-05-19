@@ -312,6 +312,57 @@ describe("session.prompt missing file", () => {
       },
     })
   })
+
+  test("ignores malformed file attachment line ranges instead of skipping the first line", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      init: async (dir) => {
+        await Bun.write(path.join(dir, "demo.ts"), ["first line", "second line", ""].join("\n"))
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const file = path.join(tmp.path, "demo.ts")
+        const ranged = new URL(pathToFileURL(file).href)
+        ranged.searchParams.set("start", "not-a-line")
+        ranged.searchParams.set("end", "0")
+
+        try {
+          const msg = await SessionPrompt.prompt({
+            sessionID: session.id,
+            noReply: true,
+            parts: [
+              {
+                type: "file",
+                mime: "text/plain",
+                url: ranged.href,
+                filename: "demo.ts",
+              },
+            ],
+          })
+
+          if (msg.info.role !== "user") throw new Error("expected user message")
+
+          const stored = await MessageV2.get({
+            sessionID: session.id,
+            messageID: msg.info.id,
+          })
+          const text = stored.parts.filter((part) => part.type === "text").map((part) => part.text)
+
+          expect(text[0]).toContain(`"filePath":"${file}"`)
+          expect(text[0]).not.toContain(`"offset":2`)
+          expect(text[0]).not.toContain(`"limit"`)
+          expect(text[1]).toContain("1: first line")
+          expect(text[1]).toContain("2: second line")
+        } finally {
+          await Session.remove(session.id)
+        }
+      },
+    })
+  })
 })
 
 describe("session.prompt special characters", () => {
