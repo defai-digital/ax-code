@@ -13,6 +13,7 @@ import { Session } from "../../session"
 import { zodToJsonSchema } from "zod-to-json-schema"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
+import { QueryBoolean } from "./query"
 
 async function canonicalSandboxDirectory(directory: string) {
   const absolute = path.resolve(directory)
@@ -218,7 +219,7 @@ export const ExperimentalRoutes = lazy(() =>
         "query",
         z.object({
           directory: z.string().optional().meta({ description: "Filter sessions by project directory" }),
-          roots: z.coerce.boolean().optional().meta({ description: "Only return root sessions (no parentID)" }),
+          roots: QueryBoolean.optional().meta({ description: "Only return root sessions (no parentID)" }),
           start: z.coerce
             .number()
             .optional()
@@ -235,7 +236,7 @@ export const ExperimentalRoutes = lazy(() =>
             .max(1000)
             .optional()
             .meta({ description: "Maximum number of sessions to return" }),
-          archived: z.coerce.boolean().optional().meta({ description: "Include archived sessions (default false)" }),
+          archived: QueryBoolean.optional().meta({ description: "Include archived sessions (default false)" }),
         }),
       ),
       async (c) => {

@@ -24,11 +24,12 @@ import { SessionID } from "../../session/schema"
 import { Log } from "../../util/log"
 import { lazy } from "../../util/lazy"
 import { SESSION_ID_PARAM, withSessionID } from "./route-params"
+import { QueryBoolean } from "./query"
 
 const log = Log.create({ service: "server.dre-graph" })
 
 const DRE_GRAPH_QUALITY_QUERY = z.object({
-  quality: z.coerce.boolean().optional().default(false),
+  quality: QueryBoolean.optional().default(false),
 })
 
 type SessionGraphContext = {
