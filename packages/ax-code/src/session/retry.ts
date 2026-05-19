@@ -32,47 +32,45 @@ export namespace SessionRetry {
     return error.data.metadata?.errorCode === "alibaba_token_plan_short_window_quota"
   }
 
+  function numericHeaderDelay(value: string | undefined, multiplier: number) {
+    if (value === undefined) return undefined
+    const trimmed = value.trim()
+    if (trimmed.length === 0) return undefined
+
+    const parsed = Number(trimmed)
+    if (!Number.isFinite(parsed) || parsed < 0) return undefined
+
+    return Math.min(Math.ceil(parsed * multiplier), RETRY_MAX_DELAY)
+  }
+
+  function retryAfterDelay(value: string | undefined) {
+    const secondsDelay = numericHeaderDelay(value, 1000)
+    if (secondsDelay !== undefined) return secondsDelay
+    if (value === undefined) return undefined
+
+    const parsed = Date.parse(value) - Date.now()
+    if (Number.isFinite(parsed) && parsed > 0) return Math.min(Math.ceil(parsed), RETRY_MAX_DELAY)
+    return undefined
+  }
+
+  function headerDelay(headers: MessageV2.APIError["data"]["responseHeaders"]) {
+    const retryAfterMs = numericHeaderDelay(headers?.["retry-after-ms"], 1)
+    if (retryAfterMs !== undefined) return retryAfterMs
+
+    return retryAfterDelay(headers?.["retry-after"])
+  }
+
   export function delay(attempt: number, error?: MessageV2.APIError) {
     if (error) {
       const headers = error.data.responseHeaders
       if (isAlibabaTokenPlanShortWindowQuota(error)) {
-        const retryAfterMs = headers?.["retry-after-ms"]
-        if (retryAfterMs) {
-          const parsedMs = Number.parseFloat(retryAfterMs)
-          if (!Number.isNaN(parsedMs)) return Math.min(parsedMs, RETRY_MAX_DELAY)
-        }
-        const retryAfter = headers?.["retry-after"]
-        if (retryAfter) {
-          const parsedSeconds = Number.parseFloat(retryAfter)
-          if (!Number.isNaN(parsedSeconds)) return Math.min(Math.ceil(parsedSeconds * 1000), RETRY_MAX_DELAY)
-          const parsed = Date.parse(retryAfter) - Date.now()
-          if (!Number.isNaN(parsed) && parsed > 0) return Math.min(Math.ceil(parsed), RETRY_MAX_DELAY)
-        }
+        const parsedHeaderDelay = headerDelay(headers)
+        if (parsedHeaderDelay !== undefined) return parsedHeaderDelay
         return jitter(ALIBABA_TOKEN_PLAN_QUOTA_RETRY_DELAY)
       }
       if (headers) {
-        const retryAfterMs = headers["retry-after-ms"]
-        if (retryAfterMs) {
-          const parsedMs = Number.parseFloat(retryAfterMs)
-          if (!Number.isNaN(parsedMs)) {
-            return Math.min(parsedMs, RETRY_MAX_DELAY)
-          }
-        }
-
-        const retryAfter = headers["retry-after"]
-        if (retryAfter) {
-          const parsedSeconds = Number.parseFloat(retryAfter)
-          if (!Number.isNaN(parsedSeconds)) {
-            // convert seconds to milliseconds — use high cap since the
-            // server explicitly requested this delay via headers
-            return Math.min(Math.ceil(parsedSeconds * 1000), RETRY_MAX_DELAY)
-          }
-          // Try parsing as HTTP date format
-          const parsed = Date.parse(retryAfter) - Date.now()
-          if (!Number.isNaN(parsed) && parsed > 0) {
-            return Math.min(Math.ceil(parsed), RETRY_MAX_DELAY)
-          }
-        }
+        const parsedHeaderDelay = headerDelay(headers)
+        if (parsedHeaderDelay !== undefined) return parsedHeaderDelay
 
         return jitter(
           Math.min(RETRY_INITIAL_DELAY * Math.pow(RETRY_BACKOFF_FACTOR, attempt - 1), RETRY_MAX_DELAY_NO_HEADERS),

@@ -58,6 +58,21 @@ describe("session.retry.delay", () => {
     expect(d).toBeLessThanOrEqual(2500)
   })
 
+  test("ignores partial or negative numeric retry hints", () => {
+    const partialSeconds = SessionRetry.delay(1, apiError({ "retry-after": "1abc" }))
+    expect(partialSeconds).toBeGreaterThanOrEqual(1500)
+    expect(partialSeconds).toBeLessThanOrEqual(2500)
+
+    const negativeMs = SessionRetry.delay(1, apiError({ "retry-after-ms": "-5" }))
+    expect(negativeMs).toBeGreaterThanOrEqual(1500)
+    expect(negativeMs).toBeLessThanOrEqual(2500)
+  })
+
+  test("accepts zero retry-after values", () => {
+    expect(SessionRetry.delay(1, apiError({ "retry-after": "0" }))).toBe(0)
+    expect(SessionRetry.delay(1, apiError({ "retry-after-ms": "0" }))).toBe(0)
+  })
+
   test("ignores malformed date retry hints", () => {
     const error = apiError({ "retry-after": "Invalid Date String" })
     const d = SessionRetry.delay(1, error)
