@@ -17,6 +17,7 @@ import { PRUNE_MINIMUM as _PRUNE_MINIMUM, PRUNE_PROTECT as _PRUNE_PROTECT } from
 import { Database } from "@/storage/db"
 import { MessageTable, PartTable } from "./session.sql"
 import { ModelID, ProviderID } from "@/provider/schema"
+import { ContextTier } from "./context-tier"
 
 export namespace SessionCompaction {
   const log = Log.create({ service: "session.compaction" })
@@ -116,21 +117,41 @@ export namespace SessionCompaction {
   // goes backwards through parts until there are 40_000 tokens worth of tool
   // calls. then erases output of previous tool calls. idea is to throw away old
   // tool calls that are no longer relevant.
+  //
+  // Tier-aware pruning: when context tiers are available, Tier 3 (background)
+  // content is pruned first, then Tier 2 (supporting), then Tier 1 (critical).
+  // This keeps the most relevant context even when the session is large.
   export async function prune(input: { sessionID: SessionID; messages?: MessageV2.WithParts[] }) {
     const config = await Config.get()
     if (config.compaction?.prune === false) return
     log.info("pruning")
     const msgs = input.messages ?? (await Session.messages({ sessionID: input.sessionID }))
+
+    // Classify messages into tiers for priority-based pruning
+    const classified = ContextTier.classify(msgs)
+    const tierMap = new Map<string, ContextTier.Tier>()
+    for (const c of classified) {
+      tierMap.set(c.message.info.id, c.tier)
+    }
+    const dist = ContextTier.distribution(classified)
+    log.info("tier distribution", dist)
+
     let total = 0
     let pruned = 0
     const toPrune: MessageV2.ToolPart[] = []
     let turns = 0
+
+    // Collect candidates grouped by tier, then prune from lowest tier first
+    const tier3Candidates: MessageV2.ToolPart[] = []
+    const tier2Candidates: MessageV2.ToolPart[] = []
+    const tier1Candidates: MessageV2.ToolPart[] = []
 
     loop: for (let msgIndex = msgs.length - 1; msgIndex >= 0; msgIndex--) {
       const msg = msgs[msgIndex]
       if (msg.info.role === "user") turns++
       if (turns < 2) continue
       if (msg.info.role === "assistant" && msg.info.summary) break loop
+      const tier = tierMap.get(msg.info.id) ?? 3
       for (let partIndex = msg.parts.length - 1; partIndex >= 0; partIndex--) {
         const part = msg.parts[partIndex]
         if (part.type === "tool")
@@ -142,15 +163,26 @@ export namespace SessionCompaction {
             total += estimate
             if (total > PRUNE_PROTECT) {
               pruned += estimate
-              toPrune.push(part)
+              if (tier === 3) tier3Candidates.push(part)
+              else if (tier === 2) tier2Candidates.push(part)
+              else tier1Candidates.push(part)
             }
           }
       }
     }
-    log.info("found", { pruned, total })
+    log.info("found", {
+      pruned,
+      total,
+      tier3: tier3Candidates.length,
+      tier2: tier2Candidates.length,
+      tier1: tier1Candidates.length,
+    })
+
+    // Prune in tier priority order: Tier 3 first, then Tier 2, then Tier 1
+    const allCandidates = [...tier3Candidates, ...tier2Candidates, ...tier1Candidates]
     if (pruned > PRUNE_MINIMUM) {
       const timestamp = Date.now()
-      const compactedParts = toPrune.flatMap((part) => {
+      const compactedParts = allCandidates.flatMap((part) => {
         if (part.state.status !== "completed") return []
         return [
           {
