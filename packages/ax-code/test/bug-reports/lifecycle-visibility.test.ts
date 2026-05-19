@@ -115,4 +115,12 @@ describe("bug report lifecycle visibility guards", () => {
     expect(fsNative).toContain(".is_err()")
     expect(fsNative).toContain("break;")
   })
+
+  test("keeps poll watcher ticks from leaking unhandled rejections", async () => {
+    const watcher = await source("file/watcher.ts")
+
+    expect(watcher).toContain('log.warn("poll watcher tick error"')
+    expect(watcher).toContain("void tick().catch((error) => {")
+    expect(watcher).not.toContain("void tick()\n          }, POLL_MS)")
+  })
 })

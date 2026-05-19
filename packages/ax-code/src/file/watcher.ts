@@ -191,6 +191,7 @@ export namespace FileWatcher {
             `Timed out after ${SUBSCRIBE_TIMEOUT_MS}ms`,
           )
           let busy = false
+          let pollErrorCount = 0
           const tick = Instance.bind(async () => {
             if (busy) return
             busy = true
@@ -205,13 +206,19 @@ export namespace FileWatcher {
                 if (!next.has(file)) await Bus.publish(Event.Updated, { file, event: "unlink" })
               }
               prev = next
+              pollErrorCount = 0
             } finally {
               busy = false
             }
           })
 
           const id = setInterval(() => {
-            void tick()
+            void tick().catch((error) => {
+              pollErrorCount++
+              if (pollErrorCount === 1 || pollErrorCount % 100 === 0) {
+                log.warn("poll watcher tick error", { dir, error, count: pollErrorCount })
+              }
+            })
           }, POLL_MS)
 
           handles.push(async () => {
