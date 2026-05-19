@@ -267,6 +267,28 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
         )
       })
 
+      // Re-validate per-agent model overrides when providers finish loading.
+      // Models set before `provider_loaded` were stored without validation;
+      // this clears any that turned out to be invalid once provider data arrives.
+      createEffect(() => {
+        if (!sync.data.provider_loaded) return
+        for (const [agentName, storedModel] of Object.entries(modelStore.model)) {
+          if (!storedModel) continue
+          if (!isModelValid(storedModel)) {
+            log.info("removing invalid model override after providers loaded", {
+              agentName,
+              providerID: storedModel.providerID,
+              modelID: storedModel.modelID,
+            })
+            setModelStore("model", (prev) => {
+              const next = { ...prev }
+              delete next[agentName]
+              return next
+            })
+          }
+        }
+      })
+
       return {
         current: currentModel,
         hasOverride(name: string) {
@@ -350,8 +372,19 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
         set(model: { providerID: string; modelID: string }, options?: { recent?: boolean }) {
           batch(() => {
             const currentAgentName = agent.current().name
+            // When providers haven't loaded yet, skip validation but still persist
+            // the selection so the user's choice is remembered after startup.
             if (!sync.data.provider_loaded) {
               setModelStore("model", currentAgentName, model)
+              if (options?.recent) {
+                const uniq = uniqueBy([model, ...modelStore.recent], (x) => `${x.providerID}/${x.modelID}`)
+                if (uniq.length > 10) uniq.pop()
+                setModelStore(
+                  "recent",
+                  uniq.map((x) => ({ providerID: x.providerID, modelID: x.modelID })),
+                )
+              }
+              save()
               return
             }
             if (!isModelValid(model)) {
