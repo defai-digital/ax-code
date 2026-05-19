@@ -32,11 +32,14 @@ describe("LSPClient interop", () => {
     expect(clientSrc).toContain("connection.onClose")
     expect(clientSrc).toContain("connection.onError")
     expect(clientSrc).toContain("input.onClose?.")
+    expect(clientSrc).toContain("get closed()")
 
     const indexSrc = await Bun.file(path.join(import.meta.dir, "../../src/lsp/index.ts")).text()
     expect(indexSrc).toContain("onClose: () => {")
     expect(indexSrc).toContain("markBroken(s.broken, key)")
     expect(indexSrc).toContain("s.clients.splice(idx, 1)")
+    expect(indexSrc).toContain("client.closed || !client.ping()")
+    expect(indexSrc).toContain("lsp client died during spawn, skipping active registration")
   })
 
   test("handles workspace/workspaceFolders request", async () => {

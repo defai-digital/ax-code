@@ -487,6 +487,9 @@ export namespace LSPClient {
       get runtimeCapabilityHints() {
         return runtimeCapabilityHints
       },
+      get closed() {
+        return closing || closeNotified
+      },
       methodSupport(method: LSPServer.Method): MethodSupport {
         return methodSupportForTest(method, runtimeCapabilityHints, input.capabilityHints)
       },
@@ -636,7 +639,9 @@ export namespace LSPClient {
       // doesn't catch the "alive but not reading stdin" case, which would
       // need a real RPC roundtrip with a short timeout.
       ping(): boolean {
-        const pid = input.server.process.pid
+        const proc = input.server.process
+        if (proc.killed || proc.exitCode !== null || proc.signalCode !== null) return false
+        const pid = proc.pid
         if (typeof pid !== "number") return false
         try {
           process.kill(pid, 0)

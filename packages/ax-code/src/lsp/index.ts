@@ -569,6 +569,13 @@ export namespace LSP {
       return existing
     }
 
+    if (client.closed || !client.ping()) {
+      log.warn("lsp client died during spawn, skipping active registration", { serverID: server.id, root })
+      markBroken(s.broken, key)
+      await Process.stop(handle.process)
+      return undefined
+    }
+
     s.clients.push(client)
     return client
   }
