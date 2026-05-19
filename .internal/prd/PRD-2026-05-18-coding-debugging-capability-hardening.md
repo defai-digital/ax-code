@@ -1,7 +1,7 @@
 # PRD: Coding & Debugging Capability Hardening
 
 **Date:** 2026-05-18
-**Status:** In Progress
+**Status:** Complete
 **Scope:** Internal
 **Owner:** AX Code runtime
 **Related:** `.internal/prd/PRD-token-efficiency-and-context-budgeting.md`, `.internal/prd/PRD-debug-fix-closed-loop-v1.md`, `.internal/prd/PRD-v5-agent-control-plane.md`, `.internal/adr/ADR-005-subagent-orchestration.md`
