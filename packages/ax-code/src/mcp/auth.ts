@@ -32,23 +32,40 @@ export namespace McpAuth {
 
   const filepath = path.join(Global.Path.data, "mcp-auth.json")
 
-  const locks = new Map<string, Promise<void>>()
+  function createLockMap() {
+    const locks = new Map<string, Promise<void>>()
+    return {
+      size() {
+        return locks.size
+      },
+      async run<T>(key: string, fn: () => Promise<T>): Promise<T> {
+        const prev = locks.get(key) ?? Promise.resolve()
+        let releaseNext!: () => void
+        const nextTail = new Promise<void>((resolve) => {
+          releaseNext = resolve
+        })
+        const chained = prev.then(() => nextTail)
+        locks.set(key, chained)
+        try {
+          await prev
+          return await fn()
+        } finally {
+          releaseNext()
+          if (locks.get(key) === chained) {
+            locks.delete(key)
+          }
+        }
+      },
+    }
+  }
+
+  const locks = createLockMap()
   export async function withLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
-    const prev = locks.get(key) ?? Promise.resolve()
-    let result: T
-    const next = prev.then(async () => {
-      result = await fn()
-    })
-    // Store a promise that always resolves so the chain continues after errors
-    locks.set(
-      key,
-      next.then(
-        () => {},
-        () => {},
-      ),
-    )
-    await next
-    return result!
+    return locks.run(key, fn)
+  }
+
+  export function createLockMapForTest() {
+    return createLockMap()
   }
 
   function decryptEntry(raw: Record<string, unknown>): Entry {
