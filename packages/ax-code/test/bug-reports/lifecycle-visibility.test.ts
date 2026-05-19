@@ -123,4 +123,14 @@ describe("bug report lifecycle visibility guards", () => {
     expect(watcher).toContain("void tick().catch((error) => {")
     expect(watcher).not.toContain("void tick()\n          }, POLL_MS)")
   })
+
+  test("keeps snapshot cleanup timers from surviving instance disposal", async () => {
+    const snapshot = await source("snapshot/index.ts")
+
+    expect(snapshot).toContain("disposed?: boolean")
+    expect(snapshot).toContain("next.cleanupDelay = undefined")
+    expect(snapshot).toContain("if (next.disposed) return")
+    expect(snapshot).toContain("entry.disposed = true")
+    expect(snapshot).toContain("entry.cleanupInterval = undefined")
+  })
 })
