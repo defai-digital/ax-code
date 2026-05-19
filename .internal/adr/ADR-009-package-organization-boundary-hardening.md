@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted - implemented by `.internal/prd/PRD-2026-05-17-package-organization-boundary-hardening.md` on 2026-05-17
+Accepted - implemented by `.internal/archive/prd/PRD-2026-05-17-package-organization-boundary-hardening.md` on 2026-05-17
 
 ## Date
 
@@ -14,7 +14,7 @@ To be filled by team
 
 ## Related
 
-- `.internal/prd/PRD-2026-05-17-package-organization-boundary-hardening.md`
+- `.internal/archive/prd/PRD-2026-05-17-package-organization-boundary-hardening.md`
 - `script/structure.ts`
 - `packages/ax-code/ARCHITECTURE.md`
 - `packages/ui/ARCHITECTURE.md`
