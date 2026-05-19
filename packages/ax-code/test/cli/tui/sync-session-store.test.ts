@@ -159,6 +159,47 @@ describe("tui sync session store", () => {
     })
   })
 
+  test("preserves live messages when a first snapshot has no overlap with the store", () => {
+    const store: {
+      session: Array<{ id: string; title: string }>
+      todo: Record<string, Array<{ id: string }>>
+      message: Record<string, Array<{ id: string }>>
+      part: Record<string, Array<{ id: string; text: string }>>
+      session_diff: Record<string, Array<{ path: string }>>
+      session_risk: Record<string, { quality?: unknown }>
+    } = {
+      session: [{ id: "ses_1", title: "old" }],
+      todo: { ses_1: [] },
+      message: {
+        ses_1: [{ id: "msg_live" }],
+      },
+      part: {
+        msg_live: [{ id: "part_live", text: "keep" }],
+      },
+      session_diff: { ses_1: [] },
+      session_risk: {},
+    }
+
+    applySessionSyncSnapshot(store, "ses_1", {
+      session: { id: "ses_1", title: "new" },
+      todo: [],
+      messages: [
+        {
+          info: { id: "msg_snapshot" },
+          parts: [{ id: "part_snapshot", text: "fresh" }],
+        },
+      ],
+      diff: [],
+      risk: undefined,
+    })
+
+    expect(store.message.ses_1).toEqual([{ id: "msg_live" }, { id: "msg_snapshot" }])
+    expect(store.part).toEqual({
+      msg_live: [{ id: "part_live", text: "keep" }],
+      msg_snapshot: [{ id: "part_snapshot", text: "fresh" }],
+    })
+  })
+
   test("removes all session-scoped data and message parts when a session is deleted", () => {
     const store: {
       session: Array<{ id: string }>
