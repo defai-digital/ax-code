@@ -4,7 +4,7 @@
 **Status:** Complete
 **Scope:** Internal
 **Owner:** AX Code runtime
-**Related:** `.internal/prd/PRD-token-efficiency-and-context-budgeting.md`, `.internal/prd/PRD-debug-fix-closed-loop-v1.md`, `.internal/prd/PRD-v5-agent-control-plane.md`, `.internal/adr/ADR-005-subagent-orchestration.md`
+**Related:** `.internal/archive/prd/PRD-token-efficiency-and-context-budgeting.md`, `.internal/archive/prd/PRD-debug-fix-closed-loop-v1.md`, `.internal/prd/PRD-v5-agent-control-plane.md`, `.internal/adr/ADR-005-subagent-orchestration.md`
 
 This is an internal planning artifact under `.internal/`, which is gitignored by default. Force-add only when the maintainer explicitly wants this PRD versioned.
 

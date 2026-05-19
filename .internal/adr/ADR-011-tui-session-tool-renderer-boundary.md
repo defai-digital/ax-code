@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted - initial helper extraction implemented by `.internal/prd/PRD-2026-05-18-hotspot-boundary-hardening.md`
+Accepted - initial helper extraction implemented by `.internal/archive/prd/PRD-2026-05-18-hotspot-boundary-hardening.md`
 
 ## Date
 
@@ -14,7 +14,7 @@ To be filled by team
 
 ## Related
 
-- `.internal/prd/PRD-2026-05-18-hotspot-boundary-hardening.md`
+- `.internal/archive/prd/PRD-2026-05-18-hotspot-boundary-hardening.md`
 - `.internal/adr/ADR-009-package-organization-boundary-hardening.md`
 - `packages/ax-code/src/cli/cmd/tui/routes/session/index.tsx`
 - `packages/ax-code/src/cli/cmd/tui/routes/session/tool-rendering.ts`
@@ -89,4 +89,3 @@ A plugin renderer API may be useful later, but it is not needed for the current 
 - Unknown tools still use `GenericTool`.
 - Focused tests cover known renderer selection, fallback selection, and coalesced labels.
 - Existing TUI session view-model and layering checks continue to pass.
-
