@@ -128,6 +128,54 @@ describe("Truncate", () => {
       expect("outputPath" in result).toBe(false)
     })
 
+    test("includes originalSize and contentHint when truncated", async () => {
+      const content = Array.from({ length: 100 }, (_, i) => `line${i}`).join("\n")
+      const result = await Truncate.output(content, { maxLines: 10 })
+
+      expect(result.truncated).toBe(true)
+      if (!result.truncated) throw new Error("expected truncated")
+      expect(result.originalSize).toBeGreaterThan(0)
+      expect(result.originalSize).toBe(Buffer.byteLength(content, "utf-8"))
+      expect(result.contentHint).toBeDefined()
+      expect(typeof result.contentHint).toBe("string")
+    })
+
+    test("contentHint classifies JSON output", async () => {
+      const content = `{ "key": "value" }\n` + "x\n".repeat(200)
+      const result = await Truncate.output(content, { maxLines: 10 })
+
+      expect(result.truncated).toBe(true)
+      if (!result.truncated) throw new Error("expected truncated")
+      expect(result.contentHint).toBe("JSON output")
+    })
+
+    test("contentHint classifies test output", async () => {
+      const content = `PASS src/foo.test.ts\nFAIL src/bar.test.ts\n` + "x\n".repeat(200)
+      const result = await Truncate.output(content, { maxLines: 10 })
+
+      expect(result.truncated).toBe(true)
+      if (!result.truncated) throw new Error("expected truncated")
+      expect(result.contentHint).toBe("test output")
+    })
+
+    test("contentHint classifies error output", async () => {
+      const content = `Error: something went wrong\n  at foo.ts:10\n` + "x\n".repeat(200)
+      const result = await Truncate.output(content, { maxLines: 10 })
+
+      expect(result.truncated).toBe(true)
+      if (!result.truncated) throw new Error("expected truncated")
+      expect(result.contentHint).toBe("error output")
+    })
+
+    test("contentHint classifies code output", async () => {
+      const content = `function hello() {\n  return "world"\n}\n` + "x\n".repeat(200)
+      const result = await Truncate.output(content, { maxLines: 10 })
+
+      expect(result.truncated).toBe(true)
+      if (!result.truncated) throw new Error("expected truncated")
+      expect(result.contentHint).toBe("code output")
+    })
+
     test("loads truncate effect in a fresh process", async () => {
       const out = await Process.run([process.execPath, "run", path.join(ROOT, "src", "tool", "truncate.ts")], {
         cwd: ROOT,

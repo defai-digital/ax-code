@@ -639,4 +639,126 @@ describe("tool.bash isolation", () => {
       },
     })
   })
+
+  describe("path existence pre-validation", () => {
+    test("rejects cd to non-existent directory", async () => {
+      await using tmp = await tmpdir()
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const bash = await BashTool.init()
+          await expect(
+            bash.execute(
+              {
+                command: "cd /nonexistent/path/that/does/not/exist",
+                description: "Change to non-existent dir",
+              },
+              ctx,
+            ),
+          ).rejects.toThrow(/Path does not exist/)
+        },
+      })
+    })
+
+    test("rejects cat on non-existent file", async () => {
+      await using tmp = await tmpdir()
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const bash = await BashTool.init()
+          await expect(
+            bash.execute(
+              {
+                command: "cat nonexistent.txt",
+                description: "Cat non-existent file",
+              },
+              ctx,
+            ),
+          ).rejects.toThrow(/Path does not exist/)
+        },
+      })
+    })
+
+    test("rejects mv from non-existent file", async () => {
+      await using tmp = await tmpdir()
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const bash = await BashTool.init()
+          await expect(
+            bash.execute(
+              {
+                command: "mv nonexistent.txt moved.txt",
+                description: "Move non-existent file",
+              },
+              ctx,
+            ),
+          ).rejects.toThrow(/Path does not exist/)
+        },
+      })
+    })
+
+    test("allows ls on existing directory", async () => {
+      await using tmp = await tmpdir()
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const bash = await BashTool.init()
+          const result = await bash.execute(
+            {
+              command: `ls ${tmp.path}`,
+              description: "List existing directory",
+            },
+            ctx,
+          )
+          expect(result.metadata.exit).toBe(0)
+        },
+      })
+    })
+
+    test("allows cat on existing file", async () => {
+      await using tmp = await tmpdir()
+      const filepath = path.join(tmp.path, "existing.txt")
+      await fs.writeFile(filepath, "hello")
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const bash = await BashTool.init()
+          const result = await bash.execute(
+            {
+              command: `cat ${filepath}`,
+              description: "Cat existing file",
+            },
+            ctx,
+          )
+          expect(result.metadata.exit).toBe(0)
+          expect(result.output).toContain("hello")
+        },
+      })
+    })
+
+    test("error message includes hint about Glob tool", async () => {
+      await using tmp = await tmpdir()
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const bash = await BashTool.init()
+          try {
+            await bash.execute(
+              {
+                command: "cat /nonexistent/file.txt",
+                description: "Cat non-existent file",
+              },
+              ctx,
+            )
+            throw new Error("should have thrown")
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err)
+            expect(msg).toContain("Glob")
+            expect(msg).toContain("Hint:")
+          }
+        },
+      })
+    })
+  })
 })

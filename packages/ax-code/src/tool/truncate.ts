@@ -21,7 +21,31 @@ export namespace Truncate {
   export const DIR = TRUNCATION_DIR
   export const GLOB = path.join(TRUNCATION_DIR, "*")
 
-  export type Result = { content: string; truncated: false } | { content: string; truncated: true; outputPath: string }
+  /** Short description of what kind of content was truncated, derived from
+   *  the first few lines of the original output. Helps the LLM decide whether
+   *  to re-read the full file or proceed with the truncated preview. */
+  function contentHint(text: string): string {
+    const first3Lines = text.split("\n").slice(0, 3).join("\n").slice(0, 200)
+    if (!first3Lines) return "empty output"
+    // Try to classify the content type heuristically
+    const trimmed = first3Lines.trimStart()
+    if (trimmed.startsWith("{") || trimmed.startsWith("[")) return "JSON output"
+    if (trimmed.startsWith("PASS") || trimmed.startsWith("FAIL") || trimmed.includes("test")) return "test output"
+    if (trimmed.startsWith("error") || trimmed.startsWith("Error") || trimmed.includes("error:")) return "error output"
+    if (trimmed.startsWith("<!DOCTYPE") || trimmed.startsWith("<html")) return "HTML output"
+    if (
+      trimmed.startsWith("```") ||
+      trimmed.includes("function ") ||
+      trimmed.includes("const ") ||
+      trimmed.includes("import ")
+    )
+      return "code output"
+    return first3Lines.length >= 200 ? `${first3Lines.slice(0, 180)}…` : first3Lines
+  }
+
+  export type Result =
+    | { content: string; truncated: false }
+    | { content: string; truncated: true; outputPath: string; originalSize: number; contentHint: string }
 
   export interface Options {
     maxLines?: number
@@ -142,6 +166,8 @@ export namespace Truncate {
               : `...${removed} ${unit} truncated...\n\n${hint}\n\n${preview}`,
           truncated: true,
           outputPath: file,
+          originalSize: totalBytes,
+          contentHint: contentHint(text),
         } as const
       })
 

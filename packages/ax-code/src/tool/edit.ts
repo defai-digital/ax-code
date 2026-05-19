@@ -158,6 +158,30 @@ export const EditTool = Tool.define("edit", {
       const old = convertToLineEnding(normalizeLineEndings(params.oldString), ending)
       const next = convertToLineEnding(normalizeLineEndings(params.newString), ending)
 
+      // Pre-validation: quick check whether oldString exists in the file before
+      // running the full replacer pipeline. If not found, throw a guidance error
+      // that includes a file snippet so the LLM can see what's actually there.
+      // This avoids wasting a full LLM turn on a generic "not found" error.
+      const quickCheck = contentOld.includes(old) || contentOld.includes(params.oldString)
+      if (!quickCheck) {
+        // Also try normalized content as a last-ditch check
+        const normalizedContent = normalizeLineEndings(contentOld)
+        const normalizedOld = normalizeLineEndings(params.oldString)
+        if (!normalizedContent.includes(normalizedOld)) {
+          const lines = contentOld.split("\n")
+          const snippet = lines
+            .slice(0, 40)
+            .map((l, i) => `${i + 1}\t${l}`)
+            .join("\n")
+          const suffix = lines.length > 40 ? `\n... (${lines.length - 40} more lines)` : ""
+          throw new Error(
+            `Could not find oldString in the file.\n\n` +
+              `The file starts with:\n${snippet}${suffix}\n\n` +
+              `Hint: read the file first to see its current content, then provide an oldString that matches exactly.`,
+          )
+        }
+      }
+
       let replaced: string | undefined
       try {
         replaced = replace(contentOld, old, next, params.replaceAll)

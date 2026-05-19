@@ -414,6 +414,69 @@ export const BashTool = Tool.define("bash", async () => {
         }
       }
 
+      // Pre-validation: check that paths referenced by read-only commands
+      // actually exist before spawning the process. This saves a wasted LLM
+      // turn — instead of getting a generic shell error, the model receives
+      // a structured message naming the missing path.
+      const missingPaths: string[] = []
+      for (const node of tree.rootNode.descendantsOfType("command")) {
+        if (!node) continue
+        const parts: string[] = []
+        for (let i = 0; i < node.childCount; i++) {
+          const c = node.child(i)
+          if (!c) continue
+          if (["command_name", "word", "string", "raw_string", "concatenation"].includes(c.type)) {
+            parts.push(c.text)
+          }
+        }
+        const cmd = parts[0]
+        if (!cmd) continue
+        // Read-only commands: path must exist
+        if (
+          [
+            "cd",
+            "cat",
+            "ls",
+            "grep",
+            "head",
+            "tail",
+            "less",
+            "more",
+            "wc",
+            "find",
+            "stat",
+            "file",
+            "readlink",
+          ].includes(cmd)
+        ) {
+          for (const arg of parts.slice(1)) {
+            if (arg.startsWith("-")) continue
+            const resolved = path.resolve(cwd, stripShellQuotes(arg))
+            const exists = await Filesystem.exists(resolved)
+            if (!exists) missingPaths.push(resolved)
+          }
+        }
+        // Write commands: source path must exist
+        // Note: rm/rmdir are excluded because `rm -rf` is commonly used
+        // idempotently on paths that may or may not exist.
+        if (["mv", "cp"].includes(cmd)) {
+          const sourceArgs = cmd === "cp" ? parts.slice(1, -1) : parts.slice(1) // cp: all but last are sources
+          for (const arg of sourceArgs) {
+            if (arg.startsWith("-")) continue
+            const resolved = path.resolve(cwd, stripShellQuotes(arg))
+            const exists = await Filesystem.exists(resolved)
+            if (!exists) missingPaths.push(resolved)
+          }
+        }
+      }
+      if (missingPaths.length > 0) {
+        const unique = [...new Set(missingPaths)]
+        throw new Error(
+          `Path does not exist: ${unique.slice(0, 3).join(", ")}${unique.length > 3 ? ` (and ${unique.length - 3} more)` : ""}.\n` +
+            `Hint: use the Glob or Read tool to discover available files before running commands against them.`,
+        )
+      }
+
       Isolation.assertBash(ctx.extra?.isolation, cwd, Instance.directory, Instance.worktree, [...resolvedPaths])
 
       if (directories.size > 0) {

@@ -240,6 +240,37 @@ describe("tool.edit", () => {
       })
     })
 
+    test("pre-validation error includes file snippet when oldString not found", async () => {
+      await using tmp = await tmpdir()
+      const filepath = path.join(tmp.path, "file.txt")
+      await fs.writeFile(filepath, "line1\nline2\nline3\nline4\nline5", "utf-8")
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          await FileTime.read(ctx.sessionID, filepath)
+
+          const edit = await EditTool.init()
+          try {
+            await edit.execute(
+              {
+                filePath: filepath,
+                oldString: "not in file at all",
+                newString: "replacement",
+              },
+              ctx,
+            )
+            throw new Error("should have thrown")
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err)
+            expect(msg).toContain("Could not find oldString")
+            expect(msg).toContain("line1")
+            expect(msg).toContain("Hint:")
+          }
+        },
+      })
+    })
+
     test("throws error when file was not read first (FileTime)", async () => {
       await using tmp = await tmpdir()
       const filepath = path.join(tmp.path, "file.txt")
