@@ -133,4 +133,14 @@ describe("bug report lifecycle visibility guards", () => {
     expect(snapshot).toContain("entry.disposed = true")
     expect(snapshot).toContain("entry.cleanupInterval = undefined")
   })
+
+  test("keeps pre-provider model selections persistent and revalidated", async () => {
+    const local = await source("cli/cmd/tui/context/local.tsx")
+
+    expect(local).toContain("if (!sync.data.provider_loaded) {")
+    expect(local).toContain('setModelStore("model", currentAgentName, model)')
+    expect(local).toContain("const uniq = uniqueBy([model, ...modelStore.recent]")
+    expect(local).toContain("save()\n              return")
+    expect(local).toContain("removing invalid model override after providers loaded")
+  })
 })
