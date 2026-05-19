@@ -661,7 +661,7 @@ export function Autocomplete(props: {
 
   return (
     <box
-      visible={store.visible !== false}
+      visible={store.visible !== false && placement().height > 0}
       position="absolute"
       top={placement().top}
       left={anchorMetrics().x}
