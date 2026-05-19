@@ -115,6 +115,36 @@ describe("server route validation", () => {
     })
   })
 
+  test("session list query booleans parse explicit false values", async () => {
+    await Instance.provide({
+      directory: root,
+      fn: async () => {
+        let sessionListInput: Parameters<typeof Session.list>[0]
+        let globalListInput: Parameters<typeof Session.listGlobal>[0]
+        const sessionListSpy = spyOn(Session, "list").mockImplementation(function* (input) {
+          sessionListInput = input
+        } as typeof Session.list)
+        const globalListSpy = spyOn(Session, "listGlobal").mockImplementation(function* (input) {
+          globalListInput = input
+        } as typeof Session.listGlobal)
+
+        try {
+          const sessionRes = await Server.Default().request("/session?roots=false")
+          const globalRes = await Server.Default().request("/experimental/session?roots=false&archived=false")
+
+          expect(sessionRes.status).toBe(200)
+          expect(globalRes.status).toBe(200)
+          expect(sessionListInput?.roots).toBe(false)
+          expect(globalListInput?.roots).toBe(false)
+          expect(globalListInput?.archived).toBe(false)
+        } finally {
+          sessionListSpy.mockRestore()
+          globalListSpy.mockRestore()
+        }
+      },
+    })
+  })
+
   test("mcp add rejects unsafe server names", async () => {
     await Instance.provide({
       directory: root,

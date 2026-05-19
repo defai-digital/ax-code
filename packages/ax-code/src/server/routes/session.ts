@@ -29,6 +29,7 @@ import { lazy } from "../../util/lazy"
 import { NamedError } from "@ax-code/util/error"
 import { DiagnosticLog } from "@/debug/diagnostic-log"
 import { parseExistingSessionID, parseSessionID, type SessionRouteContext, SESSION_ID_PARAM } from "./route-params"
+import { QueryBoolean } from "./query"
 
 const log = Log.create({ service: "server" })
 
@@ -225,7 +226,7 @@ export const SessionRoutes = lazy(() =>
         "query",
         z.object({
           directory: z.string().optional().meta({ description: "Filter sessions by project directory" }),
-          roots: z.coerce.boolean().optional().meta({ description: "Only return root sessions (no parentID)" }),
+          roots: QueryBoolean.optional().meta({ description: "Only return root sessions (no parentID)" }),
           start: z.coerce
             .number()
             .optional()
@@ -352,8 +353,7 @@ export const SessionRoutes = lazy(() =>
       validator(
         "query",
         z.object({
-          deep: z.coerce
-            .boolean()
+          deep: QueryBoolean
             .optional()
             .default(false)
             .meta({ description: "Include replay divergence signals in branch ranking" }),
@@ -441,24 +441,24 @@ export const SessionRoutes = lazy(() =>
       validator(
         "query",
         z.object({
-          quality: z.coerce.boolean().optional().default(false).meta({
+          quality: QueryBoolean.optional().default(false).meta({
             description: "Include replay readiness for review/debug/qa when replay evidence exists",
           }),
-          findings: z.coerce.boolean().optional().default(false).meta({
+          findings: QueryBoolean.optional().default(false).meta({
             description: "Include the validated Finding[] emitted by register_finding tool calls in this session",
           }),
-          envelopes: z.coerce.boolean().optional().default(false).meta({
+          envelopes: QueryBoolean.optional().default(false).meta({
             description:
               "Include the validated VerificationEnvelope[] emitted by tool calls that record verification runs (e.g. refactor_apply)",
           }),
-          reviewResults: z.coerce.boolean().optional().default(false).meta({
+          reviewResults: QueryBoolean.optional().default(false).meta({
             description: "Include the validated ReviewResult[] emitted by review_complete tool calls in this session",
           }),
-          debug: z.coerce.boolean().optional().default(false).meta({
+          debug: QueryBoolean.optional().default(false).meta({
             description:
               "Include the validated DebugCase / DebugEvidence / DebugHypothesis bundles emitted by Phase 3 runtime debug tools",
           }),
-          hints: z.coerce.boolean().optional().default(false).meta({
+          hints: QueryBoolean.optional().default(false).meta({
             description: "Include advisory decision-hint readiness derived from recent replay tool evidence",
           }),
         }),
@@ -527,8 +527,7 @@ export const SessionRoutes = lazy(() =>
       validator(
         "query",
         z.object({
-          deep: z.coerce
-            .boolean()
+          deep: QueryBoolean
             .optional()
             .default(false)
             .meta({ description: "Include replay divergence signals in session comparison" }),
