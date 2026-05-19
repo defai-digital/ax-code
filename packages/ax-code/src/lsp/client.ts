@@ -188,6 +188,40 @@ export namespace LSPClient {
     return "unknown"
   }
 
+  function createPathLock() {
+    const locks: Map<string, Promise<void>> = new Map()
+
+    return {
+      size() {
+        return locks.size
+      },
+      async run<T>(filepath: string, fn: () => Promise<T>): Promise<T> {
+        const prev = locks.get(filepath) ?? Promise.resolve()
+        let resolveNext!: () => void
+        const nextTail = new Promise<void>((resolve) => {
+          resolveNext = resolve
+        })
+        // Store the actual chain value so the idle cleanup check can prove
+        // that no newer waiter replaced this path's tail.
+        const chained = prev.then(() => nextTail)
+        locks.set(filepath, chained)
+        try {
+          await prev
+          return await fn()
+        } finally {
+          resolveNext()
+          if (locks.get(filepath) === chained) {
+            locks.delete(filepath)
+          }
+        }
+      },
+    }
+  }
+
+  export function createPathLockForTest() {
+    return createPathLock()
+  }
+
   export async function create(input: {
     serverID: string
     server: LSPServer.Handle
@@ -341,28 +375,9 @@ export namespace LSPClient {
     // chain) so a thrown fn() does not break the lock for later
     // waiters. The Map entry is overwritten on every call so it never
     // grows beyond the number of distinct in-flight paths.
-    const pathLocks: Map<string, Promise<void>> = new Map()
+    const pathLocks = createPathLock()
     async function withPathLock<T>(filepath: string, fn: () => Promise<T>): Promise<T> {
-      const prev = pathLocks.get(filepath) ?? Promise.resolve()
-      let resolveNext!: () => void
-      const nextTail = new Promise<void>((resolve) => {
-        resolveNext = resolve
-      })
-      // Chain the new tail after the previous one. Callers awaiting on
-      // `prev` will see it resolve before nextTail starts.
-      pathLocks.set(
-        filepath,
-        prev.then(() => nextTail),
-      )
-      try {
-        await prev
-        return await fn()
-      } finally {
-        resolveNext()
-        if (pathLocks.get(filepath) === nextTail) {
-          pathLocks.delete(filepath)
-        }
-      }
+      return pathLocks.run(filepath, fn)
     }
 
     // Per-file snapshot of the last text we sent to the server, used both

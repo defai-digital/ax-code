@@ -42,6 +42,34 @@ describe("LSPClient interop", () => {
     expect(indexSrc).toContain("lsp client died during spawn, skipping active registration")
   })
 
+  test("per-path lock releases idle path entries after queued work drains", async () => {
+    const lock = LSPClient.createPathLockForTest()
+    const order: string[] = []
+    let releaseFirst!: () => void
+
+    const first = lock.run("file.ts", async () => {
+      order.push("first:start")
+      await new Promise<void>((resolve) => {
+        releaseFirst = resolve
+      })
+      order.push("first:end")
+    })
+
+    const second = lock.run("file.ts", async () => {
+      order.push("second")
+    })
+
+    await Promise.resolve()
+    expect(order).toEqual(["first:start"])
+    expect(lock.size()).toBe(1)
+
+    releaseFirst()
+    await Promise.all([first, second])
+
+    expect(order).toEqual(["first:start", "first:end", "second"])
+    expect(lock.size()).toBe(0)
+  })
+
   test("handles workspace/workspaceFolders request", async () => {
     const handle = spawnFakeServer() as any
 
