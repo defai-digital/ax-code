@@ -77,10 +77,11 @@ describe("ToolErrorPatternTracker", () => {
 
     test("returns edit:oldStringNotFound specific guidance", () => {
       for (let i = 0; i < 3; i++) {
-        ToolErrorPatternTracker.record(sessionID, "edit", "Could not find oldString in the file")
+        ToolErrorPatternTracker.record(sessionID, "edit", "Could not find oldString in the file", "src/foo.ts")
       }
       const g = ToolErrorPatternTracker.guidance(sessionID, "edit", "Could not find oldString in the file")
       expect(g).toContain("Read the file first with the Read tool")
+      expect(g).toContain("src/foo.ts")
     })
 
     test("returns bash:fileNotFound specific guidance", () => {
@@ -123,6 +124,26 @@ describe("ToolErrorPatternTracker", () => {
       ToolErrorPatternTracker.recordSuccess(sessionID, "bash")
       const count = ToolErrorPatternTracker.record(sessionID, "edit", "Could not find oldString")
       expect(count).toBe(3)
+    })
+  })
+
+  describe("filePathFromInput", () => {
+    test("extracts common file path fields", () => {
+      expect(ToolErrorPatternTracker.filePathFromInput({ filePath: "src/a.ts" })).toBe("src/a.ts")
+      expect(ToolErrorPatternTracker.filePathFromInput({ filepath: "src/b.ts" })).toBe("src/b.ts")
+      expect(ToolErrorPatternTracker.filePathFromInput({ file_path: "src/c.ts" })).toBe("src/c.ts")
+      expect(ToolErrorPatternTracker.filePathFromInput({ path: "src/d.ts" })).toBe("src/d.ts")
+    })
+
+    test("extracts the first edit path from batch-style inputs", () => {
+      expect(
+        ToolErrorPatternTracker.filePathFromInput({
+          edits: [
+            { oldString: "a", newString: "b" },
+            { filePath: "src/batch.ts", oldString: "c", newString: "d" },
+          ],
+        }),
+      ).toBe("src/batch.ts")
     })
   })
 

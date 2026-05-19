@@ -42,6 +42,52 @@ function stripShellQuotes(value: string) {
   return value.replace(/^"(.*)"$|^'(.*)'$/s, "$1$2")
 }
 
+function isStaticPathArg(value: string) {
+  const stripped = stripShellQuotes(value)
+  if (!stripped || hasDynamicShellExpansion(stripped)) return undefined
+  return stripped
+}
+
+function positionalArgs(args: string[]) {
+  const result: string[] = []
+  let afterSeparator = false
+  for (const arg of args) {
+    if (!afterSeparator && arg === "--") {
+      afterSeparator = true
+      continue
+    }
+    if (!afterSeparator && arg.startsWith("-")) continue
+    result.push(arg)
+  }
+  return result
+}
+
+function hasAnyFlag(args: string[], flags: string[]) {
+  return args.some(
+    (arg) =>
+      flags.includes(arg) ||
+      (arg.startsWith("-") && !arg.startsWith("--") && flags.some((flag) => flag.length === 2 && arg.includes(flag[1]!))),
+  )
+}
+
+function staticallyCheckablePathArgs(cmd: string, args: string[]) {
+  const positional = positionalArgs(args)
+  switch (cmd) {
+    case "cd":
+      return positional.slice(0, 1)
+    case "cat":
+      return positional
+    case "rm":
+      if (hasAnyFlag(args, ["-f", "--force"])) return []
+      return positional
+    case "mv":
+    case "cp":
+      return positional.length > 1 ? positional.slice(0, -1) : positional
+    default:
+      return []
+  }
+}
+
 function hasDynamicRedirection(command: string) {
   return /(?:^|[\s&;])\d*>>?\s*(?:\$\(|\$\{|`)/.test(command)
 }
@@ -431,42 +477,12 @@ export const BashTool = Tool.define("bash", async () => {
         }
         const cmd = parts[0]
         if (!cmd) continue
-        // Read-only commands: path must exist
-        if (
-          [
-            "cd",
-            "cat",
-            "ls",
-            "grep",
-            "head",
-            "tail",
-            "less",
-            "more",
-            "wc",
-            "find",
-            "stat",
-            "file",
-            "readlink",
-          ].includes(cmd)
-        ) {
-          for (const arg of parts.slice(1)) {
-            if (arg.startsWith("-")) continue
-            const resolved = path.resolve(cwd, stripShellQuotes(arg))
-            const exists = await Filesystem.exists(resolved)
-            if (!exists) missingPaths.push(resolved)
-          }
-        }
-        // Write commands: source path must exist
-        // Note: rm/rmdir are excluded because `rm -rf` is commonly used
-        // idempotently on paths that may or may not exist.
-        if (["mv", "cp"].includes(cmd)) {
-          const sourceArgs = cmd === "cp" ? parts.slice(1, -1) : parts.slice(1) // cp: all but last are sources
-          for (const arg of sourceArgs) {
-            if (arg.startsWith("-")) continue
-            const resolved = path.resolve(cwd, stripShellQuotes(arg))
-            const exists = await Filesystem.exists(resolved)
-            if (!exists) missingPaths.push(resolved)
-          }
+        for (const arg of staticallyCheckablePathArgs(cmd, parts.slice(1))) {
+          const staticPath = isStaticPathArg(arg)
+          if (!staticPath) continue
+          const resolved = path.resolve(cwd, staticPath)
+          const exists = await Filesystem.exists(resolved)
+          if (!exists) missingPaths.push(resolved)
         }
       }
       if (missingPaths.length > 0) {

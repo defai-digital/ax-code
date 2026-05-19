@@ -401,6 +401,10 @@ describe("tool.bash truncation", () => {
           ctx,
         )
         expect((result.metadata as any).truncated).toBe(true)
+        expect((result.metadata as any).originalSize).toBeGreaterThan(0)
+        expect((result.metadata as any).truncatedTo).toBeGreaterThan(0)
+        expect((result.metadata as any).contentHint).toBeString()
+        expect((result.metadata as any).fullOutputPath).toBe((result.metadata as any).outputPath)
         expect(result.output).toContain("truncated")
         expect(result.output).toContain("The tool call succeeded but the output was truncated")
       },
@@ -757,6 +761,47 @@ describe("tool.bash isolation", () => {
             expect(msg).toContain("Glob")
             expect(msg).toContain("Hint:")
           }
+        },
+      })
+    })
+
+    test("does not treat grep pattern as a path", async () => {
+      await using tmp = await tmpdir()
+      const filepath = path.join(tmp.path, "existing.txt")
+      await fs.writeFile(filepath, "hello\n")
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const bash = await BashTool.init()
+          const result = await bash.execute(
+            {
+              command: "grep hello existing.txt",
+              description: "Grep existing file",
+            },
+            ctx,
+          )
+          expect(result.metadata.exit).toBe(0)
+          expect(result.output).toContain("hello")
+        },
+      })
+    })
+
+    test("allows mv to a new destination when source exists", async () => {
+      await using tmp = await tmpdir()
+      await fs.writeFile(path.join(tmp.path, "source.txt"), "hello")
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const bash = await BashTool.init()
+          const result = await bash.execute(
+            {
+              command: "mv source.txt renamed.txt",
+              description: "Rename existing file",
+            },
+            ctx,
+          )
+          expect(result.metadata.exit).toBe(0)
+          expect(await Filesystem.exists(path.join(tmp.path, "renamed.txt"))).toBe(true)
         },
       })
     })

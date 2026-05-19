@@ -45,7 +45,15 @@ export namespace Truncate {
 
   export type Result =
     | { content: string; truncated: false }
-    | { content: string; truncated: true; outputPath: string; originalSize: number; contentHint: string }
+    | {
+        content: string
+        truncated: true
+        outputPath: string
+        fullOutputPath: string
+        originalSize: number
+        truncatedTo: number
+        contentHint: string
+      }
 
   export interface Options {
     maxLines?: number
@@ -166,7 +174,9 @@ export namespace Truncate {
               : `...${removed} ${unit} truncated...\n\n${hint}\n\n${preview}`,
           truncated: true,
           outputPath: file,
+          fullOutputPath: file,
           originalSize: totalBytes,
+          truncatedTo: bytes,
           contentHint: contentHint(text),
         } as const
       })
