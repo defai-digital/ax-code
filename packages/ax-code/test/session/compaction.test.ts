@@ -758,6 +758,90 @@ describe("session.getUsage", () => {
 })
 
 describe("session.compaction.prune tier-aware", () => {
+  test("prunes lower-priority tiers first and stops when enough content was selected", async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await Bun.write(path.join(dir, "ax-code.json"), JSON.stringify({ compaction: { prune: true } }))
+      },
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const partIDs: Record<string, PartID> = {}
+
+        for (let turn = 1; turn <= 6; turn++) {
+          const user = await Session.updateMessage({
+            id: MessageID.ascending(),
+            sessionID: session.id,
+            role: "user",
+            time: { created: Date.now() + turn * 2 },
+            agent: "build",
+            model: { providerID: ProviderID.make("test"), modelID: ModelID.make("test-model") },
+            tools: {},
+            mode: "build",
+          } as MessageV2.User)
+          const assistant = await Session.updateMessage({
+            id: MessageID.ascending(),
+            parentID: user.id,
+            sessionID: session.id,
+            role: "assistant",
+            mode: "build",
+            agent: "build",
+            path: { cwd: tmp.path, root: tmp.path },
+            tokens: {
+              input: 0,
+              output: 0,
+              reasoning: 0,
+              cache: { read: 0, write: 0 },
+            },
+            modelID: ModelID.make("test-model"),
+            providerID: ProviderID.make("test"),
+            time: { created: Date.now() + turn * 2 + 1 },
+          } as MessageV2.Assistant)
+          const part = await Session.updatePart({
+            id: PartID.ascending(),
+            messageID: assistant.id,
+            sessionID: session.id,
+            type: "tool",
+            callID: `call-${turn}`,
+            tool: "read",
+            state: {
+              status: "completed",
+              input: { filePath: `turn-${turn}.txt` },
+              output: "x".repeat(140_000),
+              title: "Read file",
+              metadata: {},
+              time: { start: turn, end: turn + 1 },
+            },
+          })
+          partIDs[`turn${turn}`] = part.id
+        }
+
+        const before = await Session.messages({ sessionID: session.id })
+        await SessionCompaction.prune({ sessionID: session.id, messages: before })
+
+        const after = await Session.messages({ sessionID: session.id })
+        const parts = new Map(
+          after.flatMap((message) =>
+            message.parts
+              .filter((part): part is MessageV2.ToolPart => part.type === "tool")
+              .map((part) => [part.id, part]),
+          ),
+        )
+        const compactedAt = (id: PartID) => {
+          const part = parts.get(id)
+          if (part?.state.status !== "completed") return undefined
+          return part.state.time.compacted
+        }
+
+        expect(compactedAt(partIDs.turn1)).toBeNumber()
+        expect(compactedAt(partIDs.turn2)).toBeUndefined()
+        expect(compactedAt(partIDs.turn3)).toBeUndefined()
+      },
+    })
+  })
+
   test("ContextTier classifies recent messages as Tier 1 and old messages as Tier 3", async () => {
     await using tmp = await tmpdir()
     await Instance.provide({

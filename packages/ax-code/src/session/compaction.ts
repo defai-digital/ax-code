@@ -138,13 +138,12 @@ export namespace SessionCompaction {
 
     let total = 0
     let pruned = 0
-    const toPrune: MessageV2.ToolPart[] = []
     let turns = 0
 
     // Collect candidates grouped by tier, then prune from lowest tier first
-    const tier3Candidates: MessageV2.ToolPart[] = []
-    const tier2Candidates: MessageV2.ToolPart[] = []
-    const tier1Candidates: MessageV2.ToolPart[] = []
+    const tier3Candidates: { part: MessageV2.ToolPart; estimate: number }[] = []
+    const tier2Candidates: { part: MessageV2.ToolPart; estimate: number }[] = []
+    const tier1Candidates: { part: MessageV2.ToolPart; estimate: number }[] = []
 
     loop: for (let msgIndex = msgs.length - 1; msgIndex >= 0; msgIndex--) {
       const msg = msgs[msgIndex]
@@ -163,9 +162,10 @@ export namespace SessionCompaction {
             total += estimate
             if (total > PRUNE_PROTECT) {
               pruned += estimate
-              if (tier === 3) tier3Candidates.push(part)
-              else if (tier === 2) tier2Candidates.push(part)
-              else tier1Candidates.push(part)
+              const candidate = { part, estimate }
+              if (tier === 3) tier3Candidates.push(candidate)
+              else if (tier === 2) tier2Candidates.push(candidate)
+              else tier1Candidates.push(candidate)
             }
           }
       }
@@ -178,11 +178,26 @@ export namespace SessionCompaction {
       tier1: tier1Candidates.length,
     })
 
-    // Prune in tier priority order: Tier 3 first, then Tier 2, then Tier 1
-    const allCandidates = [...tier3Candidates, ...tier2Candidates, ...tier1Candidates]
     if (pruned > PRUNE_MINIMUM) {
       const timestamp = Date.now()
-      const compactedParts = allCandidates.flatMap((part) => {
+      let selectedTokens = 0
+      const selectedCandidates: { part: MessageV2.ToolPart; estimate: number; tier: ContextTier.Tier }[] = []
+      const tiers: { tier: ContextTier.Tier; candidates: { part: MessageV2.ToolPart; estimate: number }[] }[] = [
+        { tier: 3, candidates: tier3Candidates },
+        { tier: 2, candidates: tier2Candidates },
+        { tier: 1, candidates: tier1Candidates },
+      ]
+
+      for (const { tier, candidates } of tiers) {
+        if (candidates.length === 0) continue
+        for (const candidate of candidates) {
+          selectedTokens += candidate.estimate
+          selectedCandidates.push({ ...candidate, tier })
+        }
+        if (selectedTokens > PRUNE_MINIMUM) break
+      }
+
+      const compactedParts = selectedCandidates.flatMap(({ part }) => {
         if (part.state.status !== "completed") return []
         return [
           {
@@ -203,16 +218,16 @@ export namespace SessionCompaction {
       // hid the count of successful writes.
       let succeeded = 0
       let failed = 0
-      for (const part of compactedParts) {
+      for (const [index, part] of compactedParts.entries()) {
         try {
           await Session.updatePart.force(part)
           succeeded += 1
         } catch (e) {
           failed += 1
-          log.warn("failed to compact part", { partID: part.id, err: e })
+          log.warn("failed to compact part", { partID: part.id, tier: selectedCandidates[index]?.tier, err: e })
         }
       }
-      log.info("pruned", { count: compactedParts.length, succeeded, failed })
+      log.info("pruned", { count: compactedParts.length, selectedTokens, succeeded, failed })
     }
   }
 
