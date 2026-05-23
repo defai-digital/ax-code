@@ -1242,3 +1242,156 @@ describe("session.llm.stream - Phase 1 long-agent profile wiring", () => {
     })
   })
 })
+
+describe("session.llm.extractLastUserTask", () => {
+  test("returns undefined for empty messages", () => {
+    expect(LLM.extractLastUserTask([])).toBeUndefined()
+  })
+
+  test("returns string content from last user message", () => {
+    const messages: ModelMessage[] = [
+      { role: "user", content: "first message" },
+      { role: "assistant", content: "reply" },
+      { role: "user", content: "second message" },
+    ]
+    expect(LLM.extractLastUserTask(messages)).toBe("second message")
+  })
+
+  test("extracts text part from array content", () => {
+    const messages: ModelMessage[] = [
+      {
+        role: "user",
+        content: [
+          { type: "text", text: "Fix the failing tests" },
+        ],
+      },
+    ]
+    expect(LLM.extractLastUserTask(messages)).toBe("Fix the failing tests")
+  })
+
+  test("truncates content at 500 characters", () => {
+    const long = "x".repeat(600)
+    const messages: ModelMessage[] = [{ role: "user", content: long }]
+    const result = LLM.extractLastUserTask(messages)
+    expect(result?.length).toBe(500)
+  })
+
+  test("skips non-user messages to find last user", () => {
+    const messages: ModelMessage[] = [
+      { role: "user", content: "task one" },
+      { role: "assistant", content: "done" },
+    ]
+    expect(LLM.extractLastUserTask(messages)).toBe("task one")
+  })
+
+  test("returns undefined when no user messages exist", () => {
+    const messages: ModelMessage[] = [
+      { role: "assistant", content: "I will help" },
+    ]
+    expect(LLM.extractLastUserTask(messages)).toBeUndefined()
+  })
+})
+
+describe("session.llm.extractTouchedFiles", () => {
+  test("returns empty array for empty messages", () => {
+    expect(LLM.extractTouchedFiles([])).toEqual([])
+  })
+
+  test("extracts file_path from read tool calls", () => {
+    const messages = [
+      {
+        role: "assistant",
+        content: [
+          {
+            type: "tool-call",
+            toolCallId: "c1",
+            toolName: "read",
+            input: { file_path: "/src/index.ts" },
+          },
+        ],
+      },
+    ] as any as ModelMessage[]
+    const result = LLM.extractTouchedFiles(messages)
+    expect(result).toHaveLength(1)
+    expect(result[0]?.path).toBe("/src/index.ts")
+    expect(result[0]?.summary).toBe("accessed by read")
+  })
+
+  test("extracts file_path from edit and write tool calls", () => {
+    const messages = [
+      {
+        role: "assistant",
+        content: [
+          {
+            type: "tool-call",
+            toolCallId: "c1",
+            toolName: "edit",
+            input: { file_path: "/src/a.ts" },
+          },
+          {
+            type: "tool-call",
+            toolCallId: "c2",
+            toolName: "write",
+            input: { file_path: "/src/b.ts" },
+          },
+        ],
+      },
+    ] as any as ModelMessage[]
+    const result = LLM.extractTouchedFiles(messages)
+    expect(result).toHaveLength(2)
+    expect(result.map((r) => r.path)).toContain("/src/a.ts")
+    expect(result.map((r) => r.path)).toContain("/src/b.ts")
+  })
+
+  test("deduplicates repeated file accesses", () => {
+    const messages = [
+      {
+        role: "assistant",
+        content: [
+          { type: "tool-call", toolCallId: "c1", toolName: "read", input: { file_path: "/src/dup.ts" } },
+          { type: "tool-call", toolCallId: "c2", toolName: "edit", input: { file_path: "/src/dup.ts" } },
+        ],
+      },
+    ] as any as ModelMessage[]
+    const result = LLM.extractTouchedFiles(messages)
+    expect(result).toHaveLength(1)
+    expect(result[0]?.path).toBe("/src/dup.ts")
+  })
+
+  test("ignores non-file-touching tools", () => {
+    const messages = [
+      {
+        role: "assistant",
+        content: [
+          { type: "tool-call", toolCallId: "c1", toolName: "bash", input: { command: "ls" } },
+          { type: "tool-call", toolCallId: "c2", toolName: "webfetch", input: { url: "https://example.com" } },
+        ],
+      },
+    ] as any as ModelMessage[]
+    expect(LLM.extractTouchedFiles(messages)).toHaveLength(0)
+  })
+
+  test("ignores user messages", () => {
+    const messages = [
+      {
+        role: "user",
+        content: [
+          { type: "tool-call", toolCallId: "c1", toolName: "read", input: { file_path: "/src/user.ts" } },
+        ],
+      },
+    ] as any as ModelMessage[]
+    expect(LLM.extractTouchedFiles(messages)).toHaveLength(0)
+  })
+
+  test("caps result at 20 files", () => {
+    const parts = Array.from({ length: 25 }, (_, i) => ({
+      type: "tool-call",
+      toolCallId: `c${i}`,
+      toolName: "read",
+      input: { file_path: `/src/file${i}.ts` },
+    }))
+    const messages = [{ role: "assistant", content: parts }] as any as ModelMessage[]
+    const result = LLM.extractTouchedFiles(messages)
+    expect(result).toHaveLength(20)
+  })
+})
