@@ -12,7 +12,7 @@ import { Session } from "."
 import { Agent } from "../agent/agent"
 import { Provider } from "../provider/provider"
 import { ModelID, ProviderID } from "../provider/schema"
-import { type Tool as AITool, tool, jsonSchema, type ToolCallOptions, asSchema, type ModelMessage } from "ai"
+import { type ModelMessage } from "ai"
 import { SessionCompaction } from "./compaction"
 import { SessionRetry } from "./retry"
 import {
@@ -23,7 +23,6 @@ import { AgentControlEvents } from "../control-plane/agent-control-events"
 import { AutonomousCompletionGate } from "../control-plane/autonomous-completion-gate"
 import { Instance } from "../project/instance"
 import { Bus } from "../bus"
-import { ProviderTransform } from "../provider/transform"
 import { SystemPrompt } from "./system"
 import { InstructionPrompt } from "./instruction"
 import { Plugin } from "../plugin"
@@ -31,7 +30,6 @@ import PROMPT_PLAN from "../session/prompt/plan.txt"
 import BUILD_SWITCH from "../session/prompt/build-switch.txt"
 import MAX_STEPS from "../session/prompt/max-steps.txt"
 import { defer } from "../util/defer"
-import { ToolRegistry } from "../tool/registry"
 import { MCP } from "../mcp"
 import { route as routeAgent, classifyComplexity } from "../agent/router"
 import { TuiEvent } from "../cli/cmd/tui/event"
@@ -57,14 +55,12 @@ import { NamedError } from "@ax-code/util/error"
 import { fn } from "@/util/fn"
 import { Locale } from "@/util/locale"
 import { SessionProcessor } from "./processor"
-import { TaskTool } from "@/tool/task"
 import { Tool } from "@/tool/tool"
 import { Permission } from "@/permission"
 import { SessionStatus } from "./status"
 import { LLM } from "./llm"
 import { iife } from "@/util/iife"
 import { Shell } from "@/shell/shell"
-import { Truncate } from "@/tool/truncate"
 import { decodeDataUrl } from "@/util/data-url"
 import {
   commandSetup,
@@ -83,6 +79,8 @@ import {
   findFallbackModel,
   ensureTitle as _ensureTitle,
 } from "./prompt-helpers"
+import { executeSubtask, type SubtaskContext } from "./prompt-subtask"
+import { resolveTools, isolationRetryState as _isolationRetryState } from "./prompt-tools"
 import {
   MAX_STAGNANT_TODO_RETRIES,
   TODO_CONTEXT_CONVERGENCE_INPUT_TOKEN_THRESHOLD,
@@ -149,199 +147,6 @@ export namespace SessionPrompt {
       }
     },
   )
-
-  interface SubtaskContext {
-    sessionID: SessionID
-    lastUser: MessageV2.User
-    model: Provider.Model
-    abort: AbortSignal
-    msgs: MessageV2.WithParts[]
-    session: Awaited<ReturnType<typeof Session.get>>
-  }
-
-  async function executeSubtask(task: MessageV2.SubtaskPart, ctx: SubtaskContext) {
-    const { sessionID, lastUser, abort, msgs, session } = ctx
-    const now = Date.now()
-    await SessionStatus.set(sessionID, {
-      type: "busy",
-      startedAt: now,
-      lastActivityAt: now,
-      waitState: "llm",
-    })
-    const taskTool = await TaskTool.init()
-    const taskModel = task.model ? await Provider.getModel(task.model.providerID, task.model.modelID) : ctx.model
-    const assistantMessage = (await Session.updateMessage({
-      id: MessageID.ascending(),
-      role: "assistant",
-      parentID: lastUser.id,
-      sessionID,
-      mode: task.agent,
-      agent: task.agent,
-      variant: lastUser.variant,
-      path: {
-        cwd: Instance.directory,
-        root: Instance.worktree,
-      },
-      tokens: {
-        input: 0,
-        output: 0,
-        reasoning: 0,
-        cache: { read: 0, write: 0 },
-      },
-      modelID: taskModel.id,
-      providerID: taskModel.providerID,
-      time: {
-        created: Date.now(),
-      },
-    })) as MessageV2.Assistant
-    const taskArgs = {
-      prompt: task.prompt,
-      description: task.description,
-      subagent_type: task.agent,
-      command: task.command,
-    }
-    let part = (await Session.updatePart({
-      id: PartID.ascending(),
-      messageID: assistantMessage.id,
-      sessionID: assistantMessage.sessionID,
-      type: "tool",
-      callID: ulid(),
-      tool: TaskTool.id,
-      state: {
-        status: "running",
-        input: taskArgs,
-        time: {
-          start: Date.now(),
-        },
-      },
-    })) as MessageV2.ToolPart
-    await Plugin.trigger(
-      "tool.execute.before",
-      {
-        tool: "task",
-        sessionID,
-        callID: part.id,
-      },
-      { args: taskArgs },
-    )
-    let executionError: Error | undefined
-    const taskAgent = await agentInfo({ sessionID, name: task.agent })
-    const taskCtx: Tool.Context = {
-      agent: task.agent,
-      messageID: assistantMessage.id,
-      sessionID,
-      abort,
-      callID: part.callID,
-      extra: { bypassAgentCheck: true },
-      messages: msgs,
-      async metadata(input) {
-        part = (await Session.updatePart({
-          ...part,
-          type: "tool",
-          state: {
-            ...part.state,
-            ...input,
-          },
-        } satisfies MessageV2.ToolPart)) as MessageV2.ToolPart
-      },
-      async ask(req) {
-        await Permission.ask(
-          {
-            ...req,
-            sessionID,
-            ruleset: Permission.merge(taskAgent.permission, session.permission ?? []),
-          },
-          { signal: abort },
-        )
-      },
-    }
-    const result = await taskTool.execute(taskArgs, taskCtx).catch((error) => {
-      executionError = error
-      log.error("subtask execution failed", {
-        command: "session.prompt.subtask",
-        status: "error",
-        error,
-        agent: task.agent,
-        description: task.description,
-        sessionID,
-      })
-      return undefined
-    })
-    const attachments = result?.attachments?.map((attachment) => ({
-      ...attachment,
-      id: PartID.ascending(),
-      sessionID,
-      messageID: assistantMessage.id,
-    }))
-    await Plugin.trigger(
-      "tool.execute.after",
-      {
-        tool: "task",
-        sessionID,
-        callID: part.id,
-        args: taskArgs,
-      },
-      result,
-    )
-    assistantMessage.finish = "tool-calls"
-    assistantMessage.time.completed = Date.now()
-    const finalParts: MessageV2.Part[] = []
-    if (result && part.state.status === "running") {
-      finalParts.push({
-        ...part,
-        state: {
-          status: "completed",
-          input: part.state.input,
-          title: result.title,
-          metadata: result.metadata,
-          output: result.output,
-          attachments,
-          time: {
-            ...part.state.time,
-            end: Date.now(),
-          },
-        },
-      } satisfies MessageV2.ToolPart)
-    }
-    if (!result) {
-      finalParts.push({
-        ...part,
-        state: {
-          status: "error",
-          error: executionError ? `Tool execution failed: ${executionError.message}` : "Tool execution failed",
-          time: {
-            start: part.state.status === "running" ? part.state.time.start : Date.now(),
-            end: Date.now(),
-          },
-          metadata: "metadata" in part.state ? part.state.metadata : undefined,
-          input: part.state.input,
-        },
-      } satisfies MessageV2.ToolPart)
-    }
-    await Session.updateMessageWithParts(assistantMessage, finalParts)
-
-    if (task.command) {
-      const summaryUserMsg: MessageV2.User = {
-        id: MessageID.ascending(),
-        sessionID,
-        role: "user",
-        time: {
-          created: Date.now(),
-        },
-        agent: lastUser.agent,
-        model: lastUser.model,
-      }
-      await Session.updateMessage(summaryUserMsg)
-      await Session.updatePart({
-        id: PartID.ascending(),
-        messageID: summaryUserMsg.id,
-        sessionID,
-        type: "text",
-        text: "Summarize the task tool output above and continue with your task.",
-        synthetic: true,
-      } satisfies MessageV2.TextPart)
-    }
-  }
 
   export function assertNotBusy(sessionID: SessionID) {
     const match = state()[sessionID]
@@ -1586,344 +1391,9 @@ export namespace SessionPrompt {
   })
 
   const lastModel = _lastModel
-  let _schemaCache: Map<string, any> | undefined
 
   /** @internal Exported for testing */
-  export function isolationRetryState(input: {
-    isolation: Isolation.State | undefined
-    pathBypass: string[]
-    networkBypass: boolean
-  }): Isolation.State | undefined {
-    if (!input.isolation) return undefined
-    const bypass = Array.from(new Set([...(input.isolation.bypass ?? []), ...input.pathBypass]))
-    return {
-      ...input.isolation,
-      network: input.networkBypass ? true : input.isolation.network,
-      ...(bypass.length ? { bypass } : {}),
-    }
-  }
-
-  /** @internal Exported for testing */
-  export async function resolveTools(input: {
-    agent: Agent.Info
-    model: Provider.Model
-    session: Session.Info
-    tools?: Record<string, boolean>
-    processor: SessionProcessor.Info
-    bypassAgentCheck: boolean
-    messages: MessageV2.WithParts[]
-    isolation?: Isolation.State
-  }) {
-    using _ = log.time("resolveTools")
-    const tools: Record<string, AITool> = {}
-    const isolation =
-      input.isolation ?? Isolation.resolve((await Config.get()).isolation, Instance.directory, Instance.worktree)
-    // Cache transformed schemas across steps — key: "toolId:npm"
-    if (!_schemaCache) _schemaCache = new Map()
-    const schemaCacheKey = (toolId: string) => `${toolId}:${input.model.api.npm}:${input.model.providerID}`
-
-    const context = (args: any, options: ToolCallOptions, isolationOverride?: Isolation.State): Tool.Context => ({
-      sessionID: input.session.id,
-      // The AI SDK normally passes an AbortSignal, but `abortSignal` is
-      // typed as optional. Fall back to a fresh never-firing controller
-      // signal so tools that read `context.abort.aborted` /
-      // `addEventListener("abort", ...)` don't crash with
-      // "cannot read properties of undefined" if the SDK ever omits it.
-      abort: options.abortSignal ?? new AbortController().signal,
-      messageID: input.processor.message.id,
-      callID: options.toolCallId,
-      extra: {
-        model: input.model,
-        bypassAgentCheck: input.bypassAgentCheck,
-        isolation: isolationOverride ?? isolation,
-      },
-      agent: input.agent.name,
-      messages: input.messages,
-      metadata: async (val: { title?: string; metadata?: any }) => {
-        const match = input.processor.partFromToolCall(options.toolCallId)
-        if (match && match.state.status === "running") {
-          await Session.updatePart({
-            ...match,
-            state: {
-              title: val.title,
-              metadata: val.metadata,
-              status: "running",
-              input: args,
-              time: {
-                start: match.state.time?.start ?? Date.now(),
-              },
-            },
-          })
-        }
-      },
-      async ask(req) {
-        await Permission.ask(
-          {
-            ...req,
-            sessionID: input.session.id,
-            tool: { messageID: input.processor.message.id, callID: options.toolCallId },
-            ruleset: Permission.merge(input.agent.permission, input.session.permission ?? []),
-            agent: input.agent.name,
-          },
-          { signal: options.abortSignal ?? undefined },
-        )
-      },
-    })
-
-    for (const item of await ToolRegistry.tools(
-      { modelID: ModelID.make(input.model.api.id), providerID: input.model.providerID },
-      input.agent,
-    )) {
-      const cacheKey = schemaCacheKey(item.id)
-      const cached = _schemaCache!.get(cacheKey)
-      const schema =
-        cached !== undefined
-          ? // LRU: move to end so recently-used entries survive eviction
-            (_schemaCache!.delete(cacheKey), _schemaCache!.set(cacheKey, cached), cached)
-          : (() => {
-              const s = ProviderTransform.schema(input.model, z.toJSONSchema(item.parameters))
-              // Bound the cache to avoid a slow memory leak in long-running
-              // processes (TUI/daemon) that accumulate tool×model entries
-              // across session lifetimes. LRU eviction: when we reach the
-              // cap, drop the 100 least-recently-used entries. Maps preserve
-              // insertion order, so `.keys()` iterates oldest first.
-              const SCHEMA_CACHE_MAX = 500
-              if (_schemaCache!.size >= SCHEMA_CACHE_MAX) {
-                const drop = 100
-                let dropped = 0
-                for (const key of _schemaCache!.keys()) {
-                  _schemaCache!.delete(key)
-                  if (++dropped >= drop) break
-                }
-              }
-              _schemaCache!.set(cacheKey, s)
-              return s
-            })()
-      tools[item.id] = tool({
-        id: item.id as any,
-        description: item.description,
-        inputSchema: jsonSchema(schema as any),
-        async execute(args, options) {
-          const ctx = context(args, options)
-          await Plugin.trigger(
-            "tool.execute.before",
-            {
-              tool: item.id,
-              sessionID: ctx.sessionID,
-              callID: ctx.callID,
-            },
-            {
-              args,
-            },
-          )
-          let result: Awaited<ReturnType<typeof item.execute>> | undefined
-          // Per-path bypass: when the user approves an isolation_escalation
-          // for one path inside a multi-path tool call (e.g. apply_patch
-          // with several hunks), we must NOT exempt every other path in
-          // the same call. Accumulate approved paths and re-run the tool;
-          // if a later path also fails, ask again. Cap retries to bound
-          // the loop in the rare case the tool is non-deterministic about
-          // which path it touches first.
-          //
-          // Network denials have no path, so retry by enabling only network
-          // access while preserving the active write/protected-path policy.
-          const bypass: string[] = []
-          let networkBypass = false
-          let lastError: Isolation.DeniedError | undefined
-          for (let attempt = 0; attempt < 16; attempt++) {
-            let attemptCtx = ctx
-            if (attempt > 0 && ctx.extra?.isolation) {
-              attemptCtx = context(
-                args,
-                options,
-                isolationRetryState({
-                  isolation: ctx.extra.isolation,
-                  pathBypass: bypass,
-                  networkBypass,
-                }),
-              )
-            }
-            try {
-              result = await item.execute(args, attemptCtx)
-              break
-            } catch (e) {
-              if (!(e instanceof Isolation.DeniedError)) throw e
-              if (ctx.extra?.isolation?.mode === "read-only")
-                throw new Error(`Tool denied in read-only mode: ${e.reason}`, { cause: e })
-              if (!e.path) {
-                if (e.reason !== "network") throw e
-                if (networkBypass) {
-                  lastError = e
-                  throw e
-                }
-                await ctx.ask({
-                  permission: "isolation_escalation",
-                  patterns: [e.message],
-                  always: [],
-                  metadata: { reason: e.reason, requireInteractive: true },
-                })
-                networkBypass = true
-                lastError = e
-                continue
-              }
-              if (bypass.includes(e.path)) {
-                lastError = e
-                throw e
-              }
-              await ctx.ask({
-                permission: "isolation_escalation",
-                patterns: [e.message],
-                always: [],
-                metadata: { reason: e.reason, path: e.path, requireInteractive: true },
-              })
-              bypass.push(e.path)
-              lastError = e
-            }
-          }
-          if (result === undefined) throw lastError ?? new Error("Tool execution exhausted isolation retries")
-          const output = {
-            ...result,
-            attachments: result.attachments?.map((attachment) => ({
-              ...attachment,
-              id: PartID.ascending(),
-              sessionID: ctx.sessionID,
-              messageID: input.processor.message.id,
-            })),
-          }
-          await Plugin.trigger(
-            "tool.execute.after",
-            {
-              tool: item.id,
-              sessionID: ctx.sessionID,
-              callID: ctx.callID,
-              args,
-            },
-            output,
-          )
-          return output
-        },
-      })
-    }
-
-    for (const [key, item] of Object.entries(await MCP.tools())) {
-      const execute = item.execute
-      if (!execute) continue
-
-      // `MCP.tools()` returns references to cached tool objects; mutating
-      // `item.inputSchema` directly would re-transform the schema on every
-      // loop iteration, double-wrapping the JSON schema and eventually
-      // producing malformed input for the LLM. Clone to a fresh object so
-      // the transformation is idempotent across iterations.
-      const mcpTool = { ...item }
-      const mcpCacheKey = schemaCacheKey(`mcp:${key}`)
-      let transformed = _schemaCache!.get(mcpCacheKey)
-      if (transformed !== undefined) {
-        // LRU: move to end
-        _schemaCache!.delete(mcpCacheKey)
-        _schemaCache!.set(mcpCacheKey, transformed)
-      } else {
-        transformed = ProviderTransform.schema(
-          input.model,
-          await Promise.resolve(asSchema(mcpTool.inputSchema).jsonSchema),
-        )
-        _schemaCache!.set(mcpCacheKey, transformed)
-      }
-      mcpTool.inputSchema = jsonSchema(transformed)
-      // Wrap execute to add plugin hooks and format output
-      mcpTool.execute = async (args, opts) => {
-        const ctx = context(args, opts)
-
-        await Plugin.trigger(
-          "tool.execute.before",
-          {
-            tool: key,
-            sessionID: ctx.sessionID,
-            callID: opts.toolCallId,
-          },
-          {
-            args,
-          },
-        )
-
-        await ctx.ask({
-          permission: key,
-          metadata: {},
-          patterns: ["*"],
-          always: ["*"],
-        })
-
-        const result = await execute(args, opts)
-
-        await Plugin.trigger(
-          "tool.execute.after",
-          {
-            tool: key,
-            sessionID: ctx.sessionID,
-            callID: opts.toolCallId,
-            args,
-          },
-          result,
-        )
-
-        const textParts: string[] = []
-        const attachments: Omit<MessageV2.FilePart, "id" | "sessionID" | "messageID">[] = []
-
-        for (const contentItem of result.content) {
-          if (contentItem.type === "text") {
-            textParts.push(contentItem.text)
-          } else if (contentItem.type === "image") {
-            attachments.push({
-              type: "file",
-              mime: contentItem.mimeType,
-              url: `data:${contentItem.mimeType};base64,${contentItem.data}`,
-            })
-          } else if (contentItem.type === "resource") {
-            const { resource } = contentItem
-            if (resource.text) {
-              textParts.push(resource.text)
-            }
-            if (resource.blob) {
-              attachments.push({
-                type: "file",
-                mime: resource.mimeType ?? "application/octet-stream",
-                url: `data:${resource.mimeType ?? "application/octet-stream"};base64,${resource.blob}`,
-                filename: resource.uri,
-              })
-            }
-          }
-        }
-
-        const truncated = await Truncate.output(textParts.join("\n\n"), {}, input.agent)
-        const metadata = {
-          ...(result.metadata ?? {}),
-          truncated: truncated.truncated,
-          ...(truncated.truncated && {
-            outputPath: truncated.outputPath,
-            fullOutputPath: truncated.fullOutputPath,
-            originalSize: truncated.originalSize,
-            truncatedTo: truncated.truncatedTo,
-            contentHint: truncated.contentHint,
-          }),
-        }
-
-        return {
-          title: "",
-          metadata,
-          output: truncated.content,
-          attachments: attachments.map((attachment) => ({
-            ...attachment,
-            id: PartID.ascending(),
-            sessionID: ctx.sessionID,
-            messageID: input.processor.message.id,
-          })),
-          content: result.content, // directly return content to preserve ordering when outputting to model
-        }
-      }
-      tools[key] = mcpTool
-    }
-
-    return tools
-  }
+  export const isolationRetryState = _isolationRetryState
 
   /** @internal Exported for testing */
   export const createStructuredOutputTool = _createStructuredOutputTool
