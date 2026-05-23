@@ -784,6 +784,14 @@ export namespace SessionProcessor {
                     const routeClass: AgentOptimizationTrace.RouteClass =
                       profile.contextPackingBudget === "wide" ? "premium" : "cheap"
                     const failureDetect = AgentOptimizationTrace.detectRepeatedFailure(stepErrorSurfaces)
+                    // Derive verificationStatus from available step evidence:
+                    // "fail" when a repeated-failure pattern was detected (model saw
+                    // recovery hints via SelfCorrection/ToolErrorPatternTracker but
+                    // kept hitting the same surface); "skip" otherwise (no programmatic
+                    // verification command was tracked in this phase).
+                    const verificationStatus: AgentOptimizationTrace.VerificationStatus = failureDetect.detected
+                      ? "fail"
+                      : "skip"
                     const traceEvent: AgentOptimizationTrace.TraceEvent = {
                       sessionID: input.sessionID,
                       eventID: `${input.sessionID}-step-${attempt}`,
@@ -795,7 +803,7 @@ export namespace SessionProcessor {
                       toolCallCount: stepToolCallCount,
                       repeatedFailureCount: failureDetect.count ?? 0,
                       repeatedFailureSignal: failureDetect.detected,
-                      verificationStatus: "skip",
+                      verificationStatus,
                       patchOutcome: patchData ? "accepted" : "not-attempted",
                       cacheReadTokens: usage.tokens.cache.read,
                       cacheWriteTokens: usage.tokens.cache.write,
