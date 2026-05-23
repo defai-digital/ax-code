@@ -172,6 +172,9 @@ export function displayCommands(input: {
       title: "View session goal",
       value: "session.goal",
       category: "Session",
+      slash: {
+        name: "goal",
+      },
       onSelect: (dialog: DialogContext) => input.dialogReplaceGoal(dialog),
     },
     {
