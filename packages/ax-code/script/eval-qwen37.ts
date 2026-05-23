@@ -2,11 +2,14 @@
 // Local evaluation harness for Qwen3.7-Max (and other premium cloud backends).
 //
 // Usage:
-//   bun run script/eval-qwen37.ts [--fixture] [--dry-run] [--out .internal/reports/eval-YYYY-MM-DD.json]
+//   bun run script/eval-qwen37.ts [--fixture] [--dry-run] [--strict-gate] [--out .internal/reports/eval-YYYY-MM-DD.json]
 //
 // --fixture   Run against bundled fixture inputs instead of live provider calls.
 //             Always safe: no API keys required, no tokens spent.
 // --dry-run   Print the task matrix and context-pack summaries, then exit.
+// --strict-gate
+//             Exit non-zero when the promotion gate fails. Live mode is strict
+//             by default; fixture mode is a smoke test unless this flag is set.
 // --out       Write JSON report to this path (default: stdout).
 //
 // Report structure: EvalReport (below). One EvalTask per task in the matrix.
@@ -243,11 +246,16 @@ async function runLiveTask(
 ): Promise<EvalTaskResult> {
   const start = Date.now()
   const tmpPath = await fs.mkdtemp(path.join(os.tmpdir(), "ax-eval-"))
+  const previousSuperLong = process.env.AX_CODE_SUPER_LONG
+  process.env.AX_CODE_SUPER_LONG = "1"
+  LLM.clearPacingState()
   try {
     await fs.writeFile(
       path.join(tmpPath, "ax-code.json"),
       JSON.stringify({
         enabled_providers: [providerID],
+        model: `${providerID}/${modelID}`,
+        super_long: true,
         provider: {
           [providerID]: {
             options: {
@@ -352,6 +360,9 @@ async function runLiveTask(
       },
     })
   } finally {
+    if (previousSuperLong === undefined) delete process.env.AX_CODE_SUPER_LONG
+    else process.env.AX_CODE_SUPER_LONG = previousSuperLong
+    LLM.clearPacingState()
     await fs.rm(tmpPath, { recursive: true, force: true })
   }
 }
@@ -385,6 +396,7 @@ async function main() {
   const argv = process.argv.slice(2)
   const fixtureMode = argv.includes("--fixture") || argv.includes("--dry-run")
   const dryRun = argv.includes("--dry-run")
+  const strictGate = argv.includes("--strict-gate") || !fixtureMode
   const outIdx = argv.indexOf("--out")
   const outPath = outIdx !== -1 ? argv[outIdx + 1] : undefined
   const providerID = "alibaba-coding-plan"
@@ -487,7 +499,7 @@ async function main() {
     console.log(json)
   }
 
-  process.exit(report.promotionGate.passed ? 0 : 1)
+  process.exit(!strictGate || report.promotionGate.passed ? 0 : 1)
 }
 
 main().catch((err) => {

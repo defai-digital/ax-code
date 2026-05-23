@@ -1241,6 +1241,82 @@ describe("session.llm.stream - Phase 1 long-agent profile wiring", () => {
       },
     })
   })
+
+  test("Qwen3.7-Max with Super-Long enabled injects long-agent context pack into system messages", async () => {
+    process.env.AX_CODE_SUPER_LONG = "1"
+    const providerID = "alibaba-coding-plan"
+    const modelID = "qwen3.7-max"
+    const fixture = await loadFixture(providerID, modelID)
+    const model = fixture.model
+
+    const request = waitRequest(
+      "/chat/completions",
+      new Response(createChatStream("ok"), {
+        status: 200,
+        headers: { "Content-Type": "text/event-stream" },
+      }),
+    )
+
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await Bun.write(
+          path.join(dir, "ax-code.json"),
+          JSON.stringify({
+            $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+            enabled_providers: [providerID],
+            provider: {
+              [providerID]: {
+                options: { apiKey: "test-key", baseURL: `${state.server.url.origin}/v1` },
+              },
+            },
+          }),
+        )
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const resolved = await Provider.getModel(ProviderID.make(providerID), ModelID.make(model.id))
+        const sessionID = SessionID.make("session-phase4-context-pack")
+        const agent = {
+          name: "primary",
+          mode: "primary",
+          options: {},
+          permission: [{ permission: "*", pattern: "*", action: "allow" }],
+        } satisfies Agent.Info
+        const user = {
+          id: MessageID.make("user-phase4-context-pack"),
+          sessionID,
+          role: "user",
+          time: { created: Date.now() },
+          agent: agent.name,
+          model: { providerID: ProviderID.make(providerID), modelID: resolved.id },
+        } satisfies MessageV2.User
+
+        const stream = await LLM.stream({
+          user,
+          sessionID,
+          model: resolved,
+          agent,
+          system: ["You are a coding agent."],
+          abort: new AbortController().signal,
+          messages: [{ role: "user", content: "Fix the regression in src/session/llm.ts." }],
+          tools: {},
+        })
+        for await (const _ of stream.fullStream) {}
+
+        const capture = await request
+        const systemMessages = (capture.body.messages as Array<{ role: string; content: string }>).filter(
+          (m) => m.role === "system",
+        )
+        const allSystemText = systemMessages.map((m) => m.content).join("\n")
+        expect(allSystemText).toContain("## Long-Agent Context Pack")
+        expect(allSystemText).toContain("Fix the regression in src/session/llm.ts.")
+        expect(allSystemText).toContain("src/session/llm.ts")
+      },
+    })
+  })
 })
 
 describe("session.llm.extractLastUserTask", () => {

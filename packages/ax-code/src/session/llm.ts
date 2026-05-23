@@ -192,11 +192,36 @@ export namespace LLM {
         mergeDeep(reasoningPolicyDecision.options),
       ),
     )
+    // Phase 4: build and inject a long-agent context pack.
+    // Only active in Super-Long mode for models with a wide context profile
+    // (e.g. Qwen3.7-Max). Keep existing system instructions outside the pack
+    // to avoid duplicating the provider prompt.
+    if (!input.small && Flag.AX_CODE_SUPER_LONG && longAgentProfile.contextPackingBudget === "wide") {
+      const task = extractLastUserTask(input.messages)
+      const touchedFiles = extractTouchedFiles(input.messages)
+      const tokenBudget = Math.min(ProviderTransform.maxOutputTokens(input.model) * 2, 32_000)
+      const packResult = LongAgentContextPacker.pack({
+        tokenBudget,
+        task: task ?? undefined,
+        touchedFiles,
+        toolConstraints: "Use available tools deliberately. Verify meaningful code changes before reporting completion.",
+      })
+      const renderedContext = LongAgentContextPacker.render(packResult)
+      if (renderedContext) {
+        system.push(["## Long-Agent Context Pack", renderedContext].join("\n"))
+      }
+      l.info("long-agent context pack", {
+        debugSummary: packResult.debugSummary,
+        touchedCount: touchedFiles.length,
+      })
+    }
+
     // Phase 3: classify finalized system blocks and log cache policy decision.
-    // All system blocks are stable (provider instructions, rules, reminders).
-    // promptCacheKey is set in ProviderTransform.options() for Alibaba longAgent
-    // sessions; per-block cache_control requires a live route probe first.
-    if (!input.small && longAgentProfile.promptCacheEligible) {
+    // All system blocks are stable (provider instructions, rules, reminders,
+    // long-agent context pack). promptCacheKey is set in ProviderTransform.options()
+    // for Alibaba longAgent sessions; per-block cache_control still requires a
+    // live route probe before wire enablement.
+    if (!input.small && Flag.AX_CODE_SUPER_LONG && longAgentProfile.promptCacheEligible) {
       const cacheBlocks = PromptCachePolicy.buildBlocks(
         system.map((content, i) => ({ label: i === 0 ? "system" : "stable-rules", content })),
       )
@@ -208,24 +233,6 @@ export namespace LLM {
           totalBlocks: cacheResult.blocks.length,
         })
       }
-    }
-
-    // Phase 4: build long-agent context pack and log summary for debugging.
-    // Only active for models with wide contextPackingBudget (e.g. Qwen3.7-Max).
-    if (!input.small && longAgentProfile.contextPackingBudget === "wide") {
-      const task = extractLastUserTask(input.messages)
-      const touchedFiles = extractTouchedFiles(input.messages)
-      const tokenBudget = Math.min(ProviderTransform.maxOutputTokens(input.model) * 2, 32_000)
-      const packResult = LongAgentContextPacker.pack({
-        tokenBudget,
-        task: task ?? undefined,
-        touchedFiles,
-        instructions: system,
-      })
-      l.info("long-agent context pack", {
-        debugSummary: packResult.debugSummary,
-        touchedCount: touchedFiles.length,
-      })
     }
 
     const messages = [

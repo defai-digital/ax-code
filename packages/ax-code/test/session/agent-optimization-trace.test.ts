@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { AgentOptimizationTrace } from "@/session/agent-optimization-trace"
+import { ReplayEvent } from "@/replay/event"
 
 function makeEvent(overrides: Partial<AgentOptimizationTrace.TraceEvent> = {}): AgentOptimizationTrace.TraceEvent {
   return {
@@ -87,6 +88,20 @@ describe("AgentOptimizationTrace.serialize / deserialize", () => {
     const parsed = JSON.parse(json)
     expect(parsed).not.toHaveProperty("content")
     expect(parsed).not.toHaveProperty("promptText")
+  })
+})
+
+describe("AgentOptimizationTrace replay event", () => {
+  test("accepts serialized-safe trace fields in the replay schema", () => {
+    const event = makeEvent()
+    const parsed = ReplayEvent.parse({
+      type: "agent.optimization.trace",
+      stepIndex: 2,
+      ...event,
+    }) as Extract<ReplayEvent, { type: "agent.optimization.trace" }>
+    expect(parsed.type).toBe("agent.optimization.trace")
+    expect(parsed.contextPackSummary.totalTokens).toBe(4000)
+    expect(parsed.verificationStatus).toBe("pass")
   })
 })
 
