@@ -13,6 +13,7 @@ import { Locale } from "@/util/locale"
 import { Log } from "@/util/log"
 import {
   dialogSelectClampIndex,
+  dialogSelectActionOption,
   dialogSelectFlatOptions,
   dialogSelectGroupedOptions,
   dialogSelectMoveIndex,
@@ -118,7 +119,7 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
   const dimensions = useTerminalDimensions()
   const height = createMemo(() => dialogSelectVisibleHeight(rows(), dimensions().height))
 
-  const selected = createMemo(() => flat()[store.selected])
+  const selected = createMemo(() => dialogSelectActionOption(flat(), store.selected))
 
   createEffect(
     on([() => store.filter, () => props.current], ([filter, current]) => {
@@ -170,7 +171,7 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
   }
 
   function runDialogSelectAction(action: () => unknown, failureLabel: string, failureMessage: string) {
-    void Promise.resolve()
+    return Promise.resolve()
       .then(action)
       .catch((error) => {
         log.warn(failureLabel, { error, title: props.title })
@@ -179,6 +180,24 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
           variant: "error",
         })
       })
+  }
+
+  let confirmInFlight = false
+  function confirmSelected() {
+    if (confirmInFlight) return
+    const option = selected()
+    if (!option) return
+    confirmInFlight = true
+    void runDialogSelectAction(
+      () => {
+        if (option.onSelect) option.onSelect(dialog)
+        props.onSelect?.(option)
+      },
+      "dialog select action failed",
+      "Failed to complete the selected action",
+    ).finally(() => {
+      confirmInFlight = false
+    })
   }
 
   const keybind = useKeybind()
@@ -193,19 +212,10 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
     if (evt.name === "end") moveTo(flat().length - 1)
 
     if (evt.name === "return") {
-      const option = selected()
-      if (option) {
-        evt.preventDefault()
-        evt.stopPropagation()
-        runDialogSelectAction(
-          () => {
-            if (option.onSelect) option.onSelect(dialog)
-            props.onSelect?.(option)
-          },
-          "dialog select action failed",
-          "Failed to complete the selected action",
-        )
-      }
+      evt.preventDefault()
+      evt.stopPropagation()
+      confirmSelected()
+      return
     }
 
     for (const item of props.keybind ?? []) {
@@ -214,7 +224,11 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
         const s = selected()
         if (s) {
           evt.preventDefault()
-          runDialogSelectAction(() => item.onTrigger(s), "dialog select keybind failed", `Failed to run ${item.title}`)
+          void runDialogSelectAction(
+            () => item.onTrigger(s),
+            "dialog select keybind failed",
+            `Failed to run ${item.title}`,
+          )
         }
       }
     }
@@ -246,6 +260,8 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
         </box>
         <box paddingTop={1}>
           <input
+            onSubmit={confirmSelected}
+            keyBindings={[{ name: "return", action: "submit" }]}
             onInput={(e) => {
               batch(() => {
                 setStore("filter", e)
@@ -306,7 +322,7 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
                           setStore("input", "mouse")
                         }}
                         onMouseUp={() => {
-                          runDialogSelectAction(
+                          void runDialogSelectAction(
                             () => {
                               option.onSelect?.(dialog)
                               props.onSelect?.(option)

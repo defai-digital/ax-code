@@ -83,3 +83,8 @@ export function dialogSelectClampIndex(current: number, count: number) {
   if (current >= count) return count - 1
   return current
 }
+
+export function dialogSelectActionOption<T>(options: readonly T[], selectedIndex: number): T | undefined {
+  if (options.length === 0) return undefined
+  return options[dialogSelectClampIndex(selectedIndex, options.length)]
+}
