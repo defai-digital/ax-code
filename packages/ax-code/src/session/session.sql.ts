@@ -111,6 +111,23 @@ export const TodoTable = sqliteTable(
   ],
 )
 
+export const SessionGoalTable = sqliteTable(
+  "session_goal",
+  {
+    session_id: text()
+      .$type<SessionID>()
+      .primaryKey()
+      .references(() => SessionTable.id, { onDelete: "cascade" }),
+    objective: text().notNull(),
+    status: text().notNull(),
+    token_budget: integer(),
+    tokens_used: integer().notNull().default(0),
+    time_used_seconds: integer().notNull().default(0),
+    ...Timestamps,
+  },
+  (table) => [index("session_goal_status_idx").on(table.status)],
+)
+
 export const PermissionTable = sqliteTable("permission", {
   project_id: text()
     .primaryKey()

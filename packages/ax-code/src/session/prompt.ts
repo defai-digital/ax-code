@@ -44,6 +44,7 @@ import { CodeIntelligence } from "../code-intelligence"
 import { AutoIndex } from "../code-intelligence/auto-index"
 import type { ProjectID } from "../project/schema"
 import { Todo } from "./todo"
+import { SessionGoal } from "./goal"
 import { ulid } from "ulid"
 import { spawn } from "child_process"
 import { Command } from "../command"
@@ -951,6 +952,15 @@ export namespace SessionPrompt {
           break
         }
       }
+      const updatedGoal = await SessionGoal.addUsage({ sessionID, message: processor.message }).catch((error) => {
+        log.warn("goal usage update failed", {
+          command: "session.goal.usage",
+          status: "error",
+          sessionID,
+          error,
+        })
+        return undefined
+      })
 
       const publishAutonomousFailure = async (message: string) => {
         const error = new NamedError.Unknown({ message }).toObject()
@@ -1274,6 +1284,32 @@ export namespace SessionPrompt {
             ],
           })
           continue
+        }
+      }
+
+      if (modelFinished && !processor.message.error) {
+        const goal = updatedGoal ?? (await SessionGoal.get(sessionID))
+        if (goal?.status === "active") {
+          if (continuations < maxContinuations) {
+            await continueAutonomousLoop({
+              event: "goal auto-continuation",
+              resetTodoProgressTracking: true,
+              text: AutonomousContinuationPrompt.goal({
+                objective: goal.objective,
+                continuation: continuations + 1,
+                maxContinuations,
+              }),
+            })
+            continue
+          }
+          Session.publishError({
+            sessionID,
+            message:
+              `Goal remains active after ${continuations} auto-continuation(s), but the continuation limit was reached. ` +
+              `Resume the session or increase session.max_continuations to continue working toward the goal.`,
+          })
+          reason = "stalled"
+          break
         }
       }
 
@@ -2622,6 +2658,134 @@ NOTE: At any point in time through this workflow you should feel free to ask the
    * Does not match when preceded by word characters or backticks (to avoid email addresses and quoted references)
    */
 
+  function parseGoalArguments(raw: string):
+    | { action: "view" | "pause" | "resume" | "clear" }
+    | {
+        action: "create"
+        objective: string
+        tokenBudget?: number
+      } {
+    const text = raw.trim()
+    if (!text) return { action: "view" }
+    const lower = text.toLowerCase()
+    if (lower === "pause") return { action: "pause" }
+    if (lower === "resume") return { action: "resume" }
+    if (lower === "clear") return { action: "clear" }
+
+    const budgetMatch = /^--(?:token-)?budget\s+(\d+)\s+([\s\S]+)$/.exec(text)
+    if (budgetMatch) {
+      return {
+        action: "create",
+        tokenBudget: Number(budgetMatch[1]),
+        objective: budgetMatch[2].trim(),
+      }
+    }
+    return { action: "create", objective: text }
+  }
+
+  async function commandModelForControl(input: CommandInput) {
+    if (input.model) return Provider.parseModel(input.model)
+    return lastModel(input.sessionID)
+  }
+
+  async function goalControlMessage(input: CommandInput, text: string) {
+    const model = await commandModelForControl(input)
+    const user = await createUserMessage({
+      sessionID: input.sessionID,
+      messageID: input.messageID,
+      agent: input.agent,
+      model,
+      agentRouting: "preserve",
+      noReply: true,
+      parts: [
+        {
+          type: "text",
+          text: `/goal ${input.arguments}`.trim(),
+        },
+      ],
+    })
+    const assistant: MessageV2.Assistant = {
+      id: MessageID.ascending(),
+      sessionID: input.sessionID,
+      parentID: user.info.id,
+      role: "assistant",
+      time: {
+        created: Date.now(),
+        completed: Date.now(),
+      },
+      modelID: model.modelID,
+      providerID: model.providerID,
+      mode: user.info.agent,
+      agent: user.info.agent,
+      path: {
+        cwd: Instance.directory,
+        root: Instance.worktree,
+      },
+      tokens: {
+        total: 0,
+        input: 0,
+        output: 0,
+        reasoning: 0,
+        cache: { read: 0, write: 0 },
+      },
+      finish: "stop",
+    }
+    return Session.updateMessageWithParts(assistant, [
+      {
+        id: PartID.ascending(),
+        sessionID: input.sessionID,
+        messageID: assistant.id,
+        type: "text",
+        text,
+      },
+    ])
+  }
+
+  async function goalCommand(input: CommandInput) {
+    const parsed = parseGoalArguments(input.arguments)
+    if (parsed.action === "view") {
+      return goalControlMessage(input, SessionGoal.format(await SessionGoal.get(input.sessionID)))
+    }
+    if (parsed.action === "pause") {
+      return goalControlMessage(input, SessionGoal.format(await SessionGoal.pause(input.sessionID)))
+    }
+    if (parsed.action === "resume") {
+      return goalControlMessage(input, SessionGoal.format(await SessionGoal.resume(input.sessionID)))
+    }
+    if (parsed.action === "clear") {
+      await SessionGoal.clear(input.sessionID)
+      return goalControlMessage(input, "Goal cleared for this session.")
+    }
+
+    if (parsed.action !== "create") {
+      throw new Error(`Unhandled goal action: ${parsed.action}`)
+    }
+
+    const goal = await SessionGoal.create({
+      sessionID: input.sessionID,
+      objective: parsed.objective,
+      tokenBudget: parsed.tokenBudget,
+      replace: false,
+    })
+    return prompt({
+      sessionID: input.sessionID,
+      messageID: input.messageID,
+      agent: input.agent,
+      model: await commandModelForControl(input),
+      variant: input.variant,
+      parts: [
+        {
+          type: "text",
+          text:
+            `Goal set: ${goal.objective}\n\n` +
+            `Work toward this goal until it is complete, blocked, paused, cleared, or budget-limited. ` +
+            `Use get_goal to inspect current goal state and update_goal when the goal is complete or genuinely blocked.`,
+        },
+        ...(input.parts ?? []),
+      ],
+    })
+  }
+
   export async function command(input: CommandInput) {
     log.info("command", {
       command: "session.prompt.command",
@@ -2629,6 +2793,9 @@ NOTE: At any point in time through this workflow you should feel free to ask the
       sessionID: input.sessionID,
       commandName: input.command,
     })
+    if (input.command === Command.Default.GOAL) {
+      return goalCommand(input)
+    }
     const command = await Command.get(input.command)
     if (!command) {
       const available = await Command.list().then((cmds) => cmds.map((c) => c.name))

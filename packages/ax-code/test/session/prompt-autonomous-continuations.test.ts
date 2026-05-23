@@ -4,6 +4,33 @@ import { AutonomousContinuationPrompt } from "../../src/session/prompt-autonomou
 const pendingTodos = [{ content: "Report confirmed bugs to .internal/bugs/", status: "in_progress", priority: "high" }]
 
 describe("autonomous continuation prompt builders", () => {
+  test("builds goal continuation guidance", () => {
+    const text = AutonomousContinuationPrompt.goal({
+      objective: "finish the migration",
+      continuation: 1,
+      maxContinuations: 3,
+    })
+
+    expect(text).toContain("active session goal")
+    expect(text).toContain("finish the migration")
+    expect(text).toContain('update_goal with status "complete"')
+    expect(text).toContain("goal auto-continuation 1/3")
+  })
+
+  test("builds goal budget-limit wrap-up guidance", () => {
+    const text = AutonomousContinuationPrompt.goalBudgetLimit({
+      objective: "finish the migration",
+      tokensUsed: 120,
+      tokenBudget: 100,
+      timeUsedSeconds: 9,
+    })
+
+    expect(text).toContain("reached its token budget")
+    expect(text).toContain("Tokens used: 120")
+    expect(text).toContain("Token budget: 100")
+    expect(text).toContain("do not start new substantive work")
+  })
+
   test("builds global step-limit continuation guidance", () => {
     const text = AutonomousContinuationPrompt.stepLimit({
       stepLimit: 500,
