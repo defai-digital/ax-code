@@ -433,21 +433,24 @@ export namespace LSPClient {
       log.info("waiting for diagnostics", { path: input.path })
       let unsub: (() => void) | undefined
       let t: ReturnType<typeof setTimeout> | undefined
-      return withTimeout(
-        new Promise<void>((resolve) => {
-          unsub = Bus.subscribe(Event.Diagnostics, (event) => {
-            if (event.properties.path === input.path && event.properties.serverID === result.serverID) {
-              if (t) clearTimeout(t)
-              t = setTimeout(() => {
-                log.info("got diagnostics", { path: input.path })
-                unsub?.()
-                resolve()
-              }, DIAGNOSTICS_DEBOUNCE_MS)
-            }
-          })
-        }),
-        3000,
-      )
+      let startTimeout: (() => void) | undefined
+      const started = new Promise<void>((resolve) => {
+        startTimeout = resolve
+      })
+      const diagnosticsSettled = new Promise<void>((resolve) => {
+        unsub = Bus.subscribe(Event.Diagnostics, (event) => {
+          if (event.properties.path === input.path && event.properties.serverID === result.serverID) {
+            if (t) clearTimeout(t)
+            t = setTimeout(() => {
+              log.info("got diagnostics", { path: input.path })
+              unsub?.()
+              resolve()
+            }, DIAGNOSTICS_DEBOUNCE_MS)
+          }
+        })
+      })
+      const promise = started
+        .then(() => withTimeout(diagnosticsSettled, 3000))
         .catch((error) => {
           log.debug("diagnostics wait timed out", { path: input.path, error })
         })
@@ -455,6 +458,22 @@ export namespace LSPClient {
           if (t) clearTimeout(t)
           unsub?.()
         })
+      return {
+        start() {
+          startTimeout?.()
+        },
+        cancel() {
+          if (t) clearTimeout(t)
+          unsub?.()
+        },
+        promise,
+      }
+    }
+
+    function diagnosticsWaitStarted(input: { path: string }) {
+      const wait = diagnosticsWait(input)
+      wait.start()
+      return wait.promise
     }
 
     // Unlocked close: the body of notify.close, factored out so
@@ -564,7 +583,6 @@ export namespace LSPClient {
               }
 
               log.info("workspace/didChangeWatchedFiles", { ...input, path: normalized })
-              const wait = input.waitForDiagnostics ? diagnosticsWait({ path: normalized }) : undefined
               await connection.sendNotification("workspace/didChangeWatchedFiles", {
                 changes: [
                   {
@@ -573,6 +591,7 @@ export namespace LSPClient {
                   },
                 ],
               })
+              const wait = input.waitForDiagnostics ? diagnosticsWait({ path: normalized }) : undefined
 
               const next = version + 1
               files[normalized] = next
@@ -606,20 +625,25 @@ export namespace LSPClient {
                   version: next,
                 })
               }
-              await connection.sendNotification("textDocument/didChange", {
-                textDocument: {
-                  uri: pathToFileURL(normalized).href,
-                  version: next,
-                },
-                contentChanges,
-              })
+              try {
+                await connection.sendNotification("textDocument/didChange", {
+                  textDocument: {
+                    uri: pathToFileURL(normalized).href,
+                    version: next,
+                  },
+                  contentChanges,
+                })
+              } catch (error) {
+                wait?.cancel()
+                throw error
+              }
+              wait?.start()
               setLastContent(normalized, text)
-              await wait
+              await wait?.promise
               return true
             }
 
             log.info("workspace/didChangeWatchedFiles", { ...input, path: normalized })
-            const wait = input.waitForDiagnostics ? diagnosticsWait({ path: normalized }) : undefined
             await connection.sendNotification("workspace/didChangeWatchedFiles", {
               changes: [
                 {
@@ -628,20 +652,27 @@ export namespace LSPClient {
                 },
               ],
             })
+            const wait = input.waitForDiagnostics ? diagnosticsWait({ path: normalized }) : undefined
 
             log.info("textDocument/didOpen", { ...input, path: normalized })
             diagnostics.delete(normalized)
-            await connection.sendNotification("textDocument/didOpen", {
-              textDocument: {
-                uri: pathToFileURL(normalized).href,
-                languageId,
-                version: 0,
-                text,
-              },
-            })
+            try {
+              await connection.sendNotification("textDocument/didOpen", {
+                textDocument: {
+                  uri: pathToFileURL(normalized).href,
+                  languageId,
+                  version: 0,
+                  text,
+                },
+              })
+            } catch (error) {
+              wait?.cancel()
+              throw error
+            }
+            wait?.start()
             files[normalized] = 0
             setLastContent(normalized, text)
-            await wait
+            await wait?.promise
             return true
           })
         },
@@ -657,7 +688,7 @@ export namespace LSPClient {
         const normalizedPath = Filesystem.normalizePath(
           path.isAbsolute(input.path) ? input.path : path.resolve(Instance.directory, input.path),
         )
-        return await diagnosticsWait({ path: normalizedPath })
+        return await diagnosticsWaitStarted({ path: normalizedPath })
       },
       // Liveness check. Uses signal 0 (kill -0), which doesn't actually
       // send a signal — it just asks the kernel whether the process still

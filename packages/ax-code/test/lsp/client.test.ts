@@ -228,6 +228,17 @@ describe("LSPClient interop", () => {
     await client.shutdown()
   })
 
+  test("starts diagnostics timeout only after didOpen or didChange is sent", async () => {
+    const clientSrc = await Bun.file(path.join(import.meta.dir, "../../src/lsp/client.ts")).text()
+
+    expect(clientSrc).toContain("wait?.start()")
+    expect(clientSrc).toContain("await wait?.promise")
+    expect(clientSrc).toContain("const diagnosticsSettled = new Promise<void>")
+    expect(clientSrc).toContain("const started = new Promise<void>")
+    expect(clientSrc).toContain(".then(() => withTimeout(diagnosticsSettled, 3000))")
+    expect(clientSrc).not.toContain("await wait\n")
+  })
+
   test("notify.close clears per-file state", async () => {
     await using tmp = await tmpdir()
     const file = path.join(tmp.path, "file.ts")
