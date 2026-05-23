@@ -204,7 +204,8 @@ export namespace LLM {
         tokenBudget,
         task: task ?? undefined,
         touchedFiles,
-        toolConstraints: "Use available tools deliberately. Verify meaningful code changes before reporting completion.",
+        toolConstraints:
+          "Use available tools deliberately. Verify meaningful code changes before reporting completion.",
       })
       const renderedContext = LongAgentContextPacker.render(packResult)
       if (renderedContext) {
@@ -216,16 +217,18 @@ export namespace LLM {
       })
     }
 
-    // Phase 3: classify finalized system blocks and log cache policy decision.
-    // All system blocks are stable (provider instructions, rules, reminders,
-    // long-agent context pack). promptCacheKey is set in ProviderTransform.options()
-    // for Alibaba longAgent sessions; per-block cache_control still requires a
-    // live route probe before wire enablement.
+    // Phase 3: classify finalized system blocks and apply provider-specific
+    // message annotations. All system blocks are stable (provider instructions,
+    // rules, reminders, long-agent context pack).
+    let systemMessages = system.map((content) => systemMessage(content))
     if (!input.small && Flag.AX_CODE_SUPER_LONG && longAgentProfile.promptCacheEligible) {
       const cacheBlocks = PromptCachePolicy.buildBlocks(
         system.map((content, i) => ({ label: i === 0 ? "system" : "stable-rules", content })),
       )
       const cacheResult = PromptCachePolicy.render(cacheBlocks, input.model.providerID)
+      systemMessages = cacheResult.blocks.map((block) =>
+        systemMessage(block.content, cacheResult.mode, block.cacheControl),
+      )
       if (cacheResult.mode !== "off") {
         l.info("prompt cache policy active", {
           mode: cacheResult.mode,
@@ -235,15 +238,7 @@ export namespace LLM {
       }
     }
 
-    const messages = [
-      ...system.map(
-        (x): ModelMessage => ({
-          role: "system",
-          content: x,
-        }),
-      ),
-      ...input.messages,
-    ]
+    const messages = [...systemMessages, ...input.messages]
 
     const params = await Plugin.trigger(
       "chat.params",
@@ -282,7 +277,7 @@ export namespace LLM {
     const maxOutputTokens = ProviderTransform.maxOutputTokens(input.model)
 
     const tools = await resolveTools(input, cfg)
-    await applySuperLongPacing({
+    const pacingReservation = await applySuperLongPacing({
       enabled: Flag.AX_CODE_SUPER_LONG,
       providerID: input.model.providerID,
       modelID: input.model.id,
@@ -311,82 +306,94 @@ export namespace LLM {
       })
     }
 
-    return streamText({
-      // @ts-expect-error
-      maxDuration: 300_000,
-      onError(error) {
-        l.error("stream error", {
-          error: DiagnosticLog.redactForLog(error),
-        })
-      },
-      async experimental_repairToolCall(failed) {
-        const lower = failed.toolCall.toolName.toLowerCase()
-        if (lower !== failed.toolCall.toolName && tools[lower]) {
-          l.info("repairing tool call", {
-            tool: failed.toolCall.toolName,
-            repaired: lower,
+    let output: StreamOutput
+    try {
+      output = streamText({
+        // @ts-expect-error
+        maxDuration: 300_000,
+        onError(error) {
+          l.error("stream error", {
+            error: DiagnosticLog.redactForLog(error),
           })
+        },
+        async experimental_repairToolCall(failed) {
+          const lower = failed.toolCall.toolName.toLowerCase()
+          if (lower !== failed.toolCall.toolName && tools[lower]) {
+            l.info("repairing tool call", {
+              tool: failed.toolCall.toolName,
+              repaired: lower,
+            })
+            return {
+              ...failed.toolCall,
+              toolName: lower,
+            }
+          }
           return {
             ...failed.toolCall,
-            toolName: lower,
-          }
-        }
-        return {
-          ...failed.toolCall,
-          input: JSON.stringify({
-            tool: failed.toolCall.toolName,
-            error: failed.error.message,
-          }),
-          toolName: "invalid",
-        }
-      },
-      temperature: params.temperature,
-      topP: params.topP,
-      topK: params.topK,
-      providerOptions: ProviderTransform.providerOptions(input.model, paramsOptions),
-      activeTools: Object.keys(tools).filter((x) => x !== "invalid"),
-      tools,
-      toolChoice: input.toolChoice,
-      maxOutputTokens,
-      abortSignal: input.abort,
-      headers: {
-        ...(input.model.providerID.startsWith("ax-code")
-          ? {
-              "x-ax-code-project": Instance.project.id,
-              "x-ax-code-session": input.sessionID,
-              "x-ax-code-request": input.user.id,
-              "x-ax-code-client": Flag.AX_CODE_CLIENT,
-            }
-          : {
-              "User-Agent": `ax-code/${Installation.VERSION}`,
+            input: JSON.stringify({
+              tool: failed.toolCall.toolName,
+              error: failed.error.message,
             }),
-        ...input.model.headers,
-        ...headers,
-      },
-      maxRetries: input.retries ?? 0,
-      messages,
-      model: wrapLanguageModel({
-        model: language as any,
-        middleware: [
-          {
-            specificationVersion: "v3" as const,
-            async transformParams(args: any) {
-              if (args.type === "stream") {
-                args.params.prompt = ProviderTransform.message(args.params.prompt, input.model, options)
-              }
-              return args.params
-            },
-          },
-        ],
-      }),
-      experimental_telemetry: {
-        isEnabled: cfg.experimental?.openTelemetry,
-        metadata: {
-          userId: cfg.username ?? "unknown",
-          sessionId: input.sessionID,
+            toolName: "invalid",
+          }
         },
-      },
-    })
+        temperature: params.temperature,
+        topP: params.topP,
+        topK: params.topK,
+        providerOptions: ProviderTransform.providerOptions(input.model, paramsOptions),
+        activeTools: Object.keys(tools).filter((x) => x !== "invalid"),
+        tools,
+        toolChoice: input.toolChoice,
+        maxOutputTokens,
+        abortSignal: input.abort,
+        headers: {
+          ...(input.model.providerID.startsWith("ax-code")
+            ? {
+                "x-ax-code-project": Instance.project.id,
+                "x-ax-code-session": input.sessionID,
+                "x-ax-code-request": input.user.id,
+                "x-ax-code-client": Flag.AX_CODE_CLIENT,
+              }
+            : {
+                "User-Agent": `ax-code/${Installation.VERSION}`,
+              }),
+          ...input.model.headers,
+          ...headers,
+        },
+        maxRetries: input.retries ?? 0,
+        messages,
+        model: wrapLanguageModel({
+          model: language as any,
+          middleware: [
+            {
+              specificationVersion: "v3" as const,
+              async transformParams(args: any) {
+                if (args.type === "stream") {
+                  args.params.prompt = ProviderTransform.message(args.params.prompt, input.model, options)
+                }
+                return args.params
+              },
+            },
+          ],
+        }),
+        experimental_telemetry: {
+          isEnabled: cfg.experimental?.openTelemetry,
+          metadata: {
+            userId: cfg.username ?? "unknown",
+            sessionId: input.sessionID,
+          },
+        },
+      })
+    } catch (error) {
+      if (pacingReservation) releaseSuperLongPacingReservation(pacingReservation)
+      throw error
+    }
+    return attachSuperLongPacingReservation(output, pacingReservation, input.abort)
+  }
+
+  export type SuperLongPacingReservation = {
+    key: string
+    timestamp: number
   }
 
   async function applySuperLongPacing(input: {
@@ -396,31 +403,121 @@ export namespace LLM {
     sessionID: string
     small?: boolean
     abort: AbortSignal
-  }) {
+    policy?: SuperLongPolicy.PacingPolicy
+    now?: () => number
+    sleep?: (ms: number, signal: AbortSignal) => Promise<void>
+  }): Promise<SuperLongPacingReservation | undefined> {
     if (!input.enabled || input.small) return
-    const key = `${input.providerID}/${input.modelID}`
-    const policy = SuperLongPolicy.providerPacing(input.providerID)
-    const state = superLongPacing.get(key) ?? { timestamps: [] }
-    const now = Date.now()
-    const decision = SuperLongPolicy.evaluatePacing({ now, state, policy })
-    if (decision.waitMs > 0) {
-      log.info("super-long provider pacing wait", {
-        providerID: input.providerID,
-        modelID: input.modelID,
-        sessionID: input.sessionID,
-        waitMs: decision.waitMs,
-        reason: decision.reason,
-      })
-      await sleep(decision.waitMs, input.abort)
+    const key = superLongPacingKey(input)
+    const policy = input.policy ?? SuperLongPolicy.providerPacing(input.providerID)
+    while (true) {
+      const state = superLongPacing.get(key) ?? { timestamps: [] }
+      const now = input.now?.() ?? Date.now()
+      const decision = SuperLongPolicy.evaluatePacing({ now, state, policy })
+      if (decision.waitMs > 0) {
+        log.info("super-long provider pacing wait", {
+          providerID: input.providerID,
+          modelID: input.modelID,
+          sessionID: input.sessionID,
+          waitMs: decision.waitMs,
+          reason: decision.reason,
+        })
+        await (input.sleep ?? sleep)(decision.waitMs, input.abort)
+        continue
+      }
+      superLongPacing.set(
+        key,
+        SuperLongPolicy.recordRequest({
+          now,
+          state,
+          policy,
+        }),
+      )
+      return { key, timestamp: now }
     }
-    superLongPacing.set(
-      key,
-      SuperLongPolicy.recordRequest({
-        now: Date.now(),
-        state: { timestamps: decision.timestamps },
-        policy,
-      }),
-    )
+  }
+
+  function attachSuperLongPacingReservation<T extends { fullStream: AsyncIterable<unknown> }>(
+    output: T,
+    reservation: SuperLongPacingReservation | undefined,
+    signal: AbortSignal,
+  ): T {
+    if (!reservation) return output
+
+    let started = false
+    let released = false
+    const release = () => {
+      if (released || started) return
+      released = true
+      releaseSuperLongPacingReservation(reservation)
+    }
+    const markStarted = () => {
+      started = true
+      signal.removeEventListener("abort", release)
+    }
+    if (signal.aborted) {
+      release()
+    } else {
+      signal.addEventListener("abort", release, { once: true })
+    }
+
+    const fullStream = (async function* () {
+      try {
+        for await (const chunk of output.fullStream) {
+          if (!started) markStarted()
+          yield chunk
+        }
+        if (!started) release()
+      } catch (error) {
+        if (!started) release()
+        throw error
+      } finally {
+        signal.removeEventListener("abort", release)
+      }
+    })()
+
+    return new Proxy(output, {
+      get(target, prop, receiver) {
+        if (prop === "fullStream") return fullStream
+        return Reflect.get(target, prop, receiver)
+      },
+    })
+  }
+
+  function releaseSuperLongPacingReservation(reservation: SuperLongPacingReservation) {
+    const state = superLongPacing.get(reservation.key)
+    if (!state) return
+    const timestamps = [...state.timestamps]
+    const index = timestamps.indexOf(reservation.timestamp)
+    if (index === -1) return
+    timestamps.splice(index, 1)
+    if (timestamps.length === 0) superLongPacing.delete(reservation.key)
+    else superLongPacing.set(reservation.key, { timestamps })
+  }
+
+  function systemMessage(
+    content: string,
+    mode?: PromptCachePolicy.PolicyMode,
+    cacheControl?: { type: "ephemeral" },
+  ): ModelMessage {
+    if (mode !== "alibaba-explicit" || !cacheControl) {
+      return { role: "system", content }
+    }
+    return {
+      role: "system",
+      content,
+      providerOptions: {
+        openaiCompatible: {
+          cache_control: cacheControl,
+        },
+      },
+    }
+  }
+
+  function superLongPacingKey(
+    input: Pick<Parameters<typeof applySuperLongPacing>[0], "sessionID" | "providerID" | "modelID">,
+  ) {
+    return `${input.sessionID}/${input.providerID}/${input.modelID}`
   }
 
   async function sleep(ms: number, signal: AbortSignal): Promise<void> {
@@ -478,6 +575,37 @@ export namespace LLM {
   // Reset pacing state between tests; not called in production paths.
   export function clearPacingState() {
     superLongPacing.clear()
+  }
+
+  export function pacingKeyForTest(
+    input: Pick<Parameters<typeof applySuperLongPacing>[0], "sessionID" | "providerID" | "modelID">,
+  ) {
+    return superLongPacingKey(input)
+  }
+
+  export function getPacingStateForTest(
+    input: Pick<Parameters<typeof applySuperLongPacing>[0], "sessionID" | "providerID" | "modelID">,
+  ) {
+    return superLongPacing.get(superLongPacingKey(input))
+  }
+
+  export function setPacingStateForTest(
+    input: Pick<Parameters<typeof applySuperLongPacing>[0], "sessionID" | "providerID" | "modelID">,
+    state: SuperLongPolicy.PacingState,
+  ) {
+    superLongPacing.set(superLongPacingKey(input), state)
+  }
+
+  export async function applySuperLongPacingForTest(input: Parameters<typeof applySuperLongPacing>[0]) {
+    return applySuperLongPacing(input)
+  }
+
+  export function attachSuperLongPacingReservationForTest<T extends { fullStream: AsyncIterable<unknown> }>(
+    output: T,
+    reservation: SuperLongPacingReservation | undefined,
+    signal: AbortSignal,
+  ) {
+    return attachSuperLongPacingReservation(output, reservation, signal)
   }
 
   // Check if messages contain any tool-call content

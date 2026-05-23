@@ -1014,7 +1014,8 @@ describe("session.llm.stream - Phase 1 long-agent profile wiring", () => {
           messages: [{ role: "user", content: "Fix the bug." }],
           tools: {},
         })
-        for await (const _ of stream.fullStream) {}
+        for await (const _ of stream.fullStream) {
+        }
 
         const capture = await request
         expect(capture.body.preserve_thinking).toBe(true)
@@ -1085,7 +1086,8 @@ describe("session.llm.stream - Phase 1 long-agent profile wiring", () => {
           messages: [{ role: "user", content: "Fix the bug." }],
           tools: {},
         })
-        for await (const _ of stream.fullStream) {}
+        for await (const _ of stream.fullStream) {
+        }
 
         const capture = await request
         // qwen3.6-plus has preserveThinkingEligible=false via defaultLongAgentProfile
@@ -1157,7 +1159,8 @@ describe("session.llm.stream - Phase 1 long-agent profile wiring", () => {
           messages: [{ role: "user", content: "Refactor the module." }],
           tools: {},
         })
-        for await (const _ of stream.fullStream) {}
+        for await (const _ of stream.fullStream) {
+        }
 
         const capture = await request
         const systemMessages = (capture.body.messages as Array<{ role: string; content: string }>).filter(
@@ -1232,12 +1235,17 @@ describe("session.llm.stream - Phase 1 long-agent profile wiring", () => {
           messages: [{ role: "user", content: "Review the PR." }],
           tools: {},
         })
-        for await (const _ of stream.fullStream) {}
+        for await (const _ of stream.fullStream) {
+        }
 
         const capture = await request
         // promptCacheKey enables key-based session caching on DashScope for Super-Long runs
         expect(capture.body.promptCacheKey).toBe(sessionID)
         expect(capture.body.preserve_thinking).toBe(true)
+        const systemMessages = (
+          capture.body.messages as Array<{ role: string; cache_control?: { type?: string } }>
+        ).filter((m) => m.role === "system")
+        expect(systemMessages.some((m) => m.cache_control?.type === "ephemeral")).toBe(true)
       },
     })
   })
@@ -1304,7 +1312,8 @@ describe("session.llm.stream - Phase 1 long-agent profile wiring", () => {
           messages: [{ role: "user", content: "Fix the regression in src/session/llm.ts." }],
           tools: {},
         })
-        for await (const _ of stream.fullStream) {}
+        for await (const _ of stream.fullStream) {
+        }
 
         const capture = await request
         const systemMessages = (capture.body.messages as Array<{ role: string; content: string }>).filter(
@@ -1316,6 +1325,77 @@ describe("session.llm.stream - Phase 1 long-agent profile wiring", () => {
         expect(allSystemText).toContain("src/session/llm.ts")
       },
     })
+  })
+
+  test("super-long pacing keys are scoped by session", () => {
+    const base = { providerID: "alibaba-coding-plan", modelID: "qwen3.7-max" }
+    expect(LLM.pacingKeyForTest({ ...base, sessionID: "session-a" })).not.toBe(
+      LLM.pacingKeyForTest({ ...base, sessionID: "session-b" }),
+    )
+  })
+
+  test("super-long pacing rechecks state after waiting before recording", async () => {
+    const target = {
+      sessionID: "session-pacing-reread",
+      providerID: "alibaba-coding-plan",
+      modelID: "qwen3.7-max",
+    }
+    LLM.setPacingStateForTest(target, { timestamps: [1_000] })
+
+    const times = [1_050, 1_175]
+    await LLM.applySuperLongPacingForTest({
+      ...target,
+      enabled: true,
+      abort: new AbortController().signal,
+      policy: {
+        windowMs: 1_000,
+        maxRequests: 10,
+        minDelayMs: 100,
+      },
+      now: () => times.shift() ?? 1_175,
+      sleep: async (ms) => {
+        expect(ms).toBe(50)
+        LLM.setPacingStateForTest(target, { timestamps: [1_000, 1_075] })
+      },
+    })
+
+    expect(LLM.getPacingStateForTest(target)?.timestamps).toEqual([1_000, 1_075, 1_175])
+  })
+
+  test("super-long pacing releases reservation when stream fails before first chunk", async () => {
+    const target = {
+      sessionID: "session-pacing-release",
+      providerID: "alibaba-coding-plan",
+      modelID: "qwen3.7-max",
+    }
+    const reservation = await LLM.applySuperLongPacingForTest({
+      ...target,
+      enabled: true,
+      abort: new AbortController().signal,
+      policy: {
+        windowMs: 1_000,
+        maxRequests: 10,
+        minDelayMs: 100,
+      },
+      now: () => 1_000,
+    })
+    expect(LLM.getPacingStateForTest(target)?.timestamps).toEqual([1_000])
+
+    const wrapped = LLM.attachSuperLongPacingReservationForTest(
+      {
+        fullStream: (async function* () {
+          throw new Error("network failed")
+        })(),
+      },
+      reservation,
+      new AbortController().signal,
+    )
+
+    await expect(async () => {
+      for await (const _ of wrapped.fullStream) {
+      }
+    }).toThrow("network failed")
+    expect(LLM.getPacingStateForTest(target)).toBeUndefined()
   })
 })
 
@@ -1337,9 +1417,7 @@ describe("session.llm.extractLastUserTask", () => {
     const messages: ModelMessage[] = [
       {
         role: "user",
-        content: [
-          { type: "text", text: "Fix the failing tests" },
-        ],
+        content: [{ type: "text", text: "Fix the failing tests" }],
       },
     ]
     expect(LLM.extractLastUserTask(messages)).toBe("Fix the failing tests")
@@ -1361,9 +1439,7 @@ describe("session.llm.extractLastUserTask", () => {
   })
 
   test("returns undefined when no user messages exist", () => {
-    const messages: ModelMessage[] = [
-      { role: "assistant", content: "I will help" },
-    ]
+    const messages: ModelMessage[] = [{ role: "assistant", content: "I will help" }]
     expect(LLM.extractLastUserTask(messages)).toBeUndefined()
   })
 })
@@ -1451,9 +1527,7 @@ describe("session.llm.extractTouchedFiles", () => {
     const messages = [
       {
         role: "user",
-        content: [
-          { type: "tool-call", toolCallId: "c1", toolName: "read", input: { file_path: "/src/user.ts" } },
-        ],
+        content: [{ type: "tool-call", toolCallId: "c1", toolName: "read", input: { file_path: "/src/user.ts" } }],
       },
     ] as any as ModelMessage[]
     expect(LLM.extractTouchedFiles(messages)).toHaveLength(0)
