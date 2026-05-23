@@ -155,16 +155,13 @@ export class SessionClient {
   private async ensureSession(signal: AbortSignal): Promise<void> {
     const client = this.requireClient()
     if (this.sessionId && !this.sessionValidated) {
-      try {
-        const { data, error } = await client.session.get({ path: { id: this.sessionId }, signal })
-        if (error || !data) {
-          throw new Error("session lookup failed")
-        }
-        this.sessionValidated = true
-      } catch {
+      const { data, error } = await client.session.get({ path: { id: this.sessionId }, signal })
+      if (error || !data) {
         // Stale ID from a previous server instance — drop it.
         this.sessionId = null
         await this.context.workspaceState.update(STATE_SESSION_ID, undefined)
+      } else {
+        this.sessionValidated = true
       }
     }
     if (!this.sessionId) {

@@ -115,6 +115,38 @@ describe("SessionClient SSE filtering", () => {
 })
 
 describe("SessionClient server restart handling", () => {
+  test("preserves stored session id when validation is aborted", async () => {
+    workspaceState.set("axCode.sessionId", "stored-session")
+    let createCalled = false
+    clientFactory = () => ({
+      ...createSdkClient("default"),
+      session: {
+        ...createSdkClient("default").session,
+        get: async ({ signal }: { signal: AbortSignal }) => {
+          if (signal.aborted) {
+            throw new DOMException("Aborted", "AbortError")
+          }
+          return { data: { id: "stored-session" }, error: undefined }
+        },
+        create: async () => {
+          createCalled = true
+          return { data: { id: "created-session" }, error: undefined }
+        },
+      },
+    })
+
+    const server = new FakeServer("http://server")
+    const stream = createStreamEvents()
+    const client = new SessionClient(createContext() as any, server as any, stream.events)
+    const controller = new AbortController()
+    controller.abort()
+
+    await expect(client.sendMessage("first", null, controller.signal)).rejects.toThrow("Aborted")
+    expect(client.currentSessionId).toBe("stored-session")
+    expect(workspaceState.get("axCode.sessionId")).toBe("stored-session")
+    expect(createCalled).toBe(false)
+  })
+
   test("recreates the SDK client after the server exits", async () => {
     workspaceState.set("axCode.sessionId", "stored-session")
     const baseUrls: string[] = []
