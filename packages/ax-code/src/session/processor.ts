@@ -29,6 +29,7 @@ import { asRecord } from "@/util/record"
 import { usageSource } from "@/provider/usage"
 import { AgentOptimizationTrace } from "@/session/agent-optimization-trace"
 import { longAgentProfileForModel } from "@/provider/agent-optimization-profile"
+import { LongAgentContextPacker } from "@/context/long-agent-packer"
 
 export namespace SessionProcessor {
   const DOOM_LOOP_THRESHOLD = _DOOM_LOOP_THRESHOLD
@@ -118,6 +119,8 @@ export namespace SessionProcessor {
     const recentToolRing: { tool: string; input: string }[] = []
     let stepToolCallCount = 0
     let stepErrorSurfaces: string[] = []
+    let stepTouchedFiles: Array<{ path: string; summary: string }> = []
+    const fileTouchingTools = new Set(["read", "edit", "write", "multiedit", "apply_patch"])
     // Per-session sliding-window rate limiter: max 30 tool calls per 10-second window.
     // Prevents runaway agent loops from exhausting resources or burning LLM quota.
     const RATE_LIMIT_WINDOW_MS = 10_000
@@ -362,6 +365,12 @@ export namespace SessionProcessor {
                   }
 
                   const toolInput = asRecord(value.input)
+                  if (fileTouchingTools.has(value.toolName)) {
+                    const filePath = toolInput?.file_path ?? toolInput?.path
+                    if (typeof filePath === "string" && !stepTouchedFiles.some((item) => item.path === filePath)) {
+                      stepTouchedFiles.push({ path: filePath, summary: `accessed by ${value.toolName}` })
+                    }
+                  }
 
                   stepParts.push({
                     type: "tool_call",
@@ -645,6 +654,7 @@ export namespace SessionProcessor {
                   stepParts = []
                   stepToolCallCount = 0
                   stepErrorSurfaces = []
+                  stepTouchedFiles = []
                   await setBusyStatus({
                     step: attempt,
                     startedAt: stepStartTime,
@@ -784,6 +794,20 @@ export namespace SessionProcessor {
                     const routeClass: AgentOptimizationTrace.RouteClass =
                       profile.contextPackingBudget === "wide" ? "premium" : "cheap"
                     const failureDetect = AgentOptimizationTrace.detectRepeatedFailure(stepErrorSurfaces)
+                    const contextPack = LongAgentContextPacker.pack({
+                      tokenBudget: profile.contextPackingBudget === "wide" ? 32_000 : 8_000,
+                      touchedFiles: stepTouchedFiles,
+                      toolConstraints:
+                        stepToolCallCount > 0
+                          ? `${stepToolCallCount} tool call(s) observed in this step.`
+                          : undefined,
+                      historicalFailures: failureDetect.detected
+                        ? [`${failureDetect.surface ?? "unknown"} repeated ${failureDetect.count ?? 0} times`]
+                        : undefined,
+                    })
+                    const tierCounts = [0, 1, 2, 3].map(
+                      (tier) => contextPack.entries.filter((entry) => entry.tier === tier).length,
+                    ) as [number, number, number, number]
                     // Derive verificationStatus from available step evidence:
                     // "fail" when a repeated-failure pattern was detected (model saw
                     // recovery hints via SelfCorrection/ToolErrorPatternTracker but
@@ -799,7 +823,11 @@ export namespace SessionProcessor {
                       routeClass,
                       providerID: input.model.providerID,
                       modelID: input.model.id,
-                      contextPackSummary: AgentOptimizationTrace.contextPackSummary(0, [0, 0, 0, 0], []),
+                      contextPackSummary: AgentOptimizationTrace.contextPackSummary(
+                        contextPack.totalTokens,
+                        tierCounts,
+                        contextPack.droppedTiers,
+                      ),
                       toolCallCount: stepToolCallCount,
                       repeatedFailureCount: failureDetect.count ?? 0,
                       repeatedFailureSignal: failureDetect.detected,
@@ -810,6 +838,11 @@ export namespace SessionProcessor {
                       inputTokens: usage.tokens.input,
                       outputTokens: usage.tokens.output,
                     }
+                    Recorder.emit({
+                      type: "agent.optimization.trace",
+                      stepIndex: attempt,
+                      ...traceEvent,
+                    })
                     log.info("agent-optimization-trace", {
                       command: "session.processor.trace",
                       status: "ok",

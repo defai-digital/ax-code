@@ -156,6 +156,31 @@ export const AutonomousEscalationEvent = Base.extend({
   rationale: z.string().optional(),
 })
 
+export const AgentOptimizationTraceEvent = Base.extend({
+  type: z.literal("agent.optimization.trace"),
+  eventID: z.string(),
+  timestamp: z.string(),
+  routeClass: z.enum(["cheap", "premium", "premiumCrossCheck", "unknown"]),
+  providerID: z.string(),
+  modelID: z.string(),
+  contextPackSummary: z.object({
+    totalTokens: z.number(),
+    tierCounts: z.tuple([z.number(), z.number(), z.number(), z.number()]),
+    droppedTiers: z.number().array(),
+  }),
+  toolCallCount: z.number().int(),
+  repeatedFailureCount: z.number().int(),
+  repeatedFailureSignal: z.boolean(),
+  verificationCommand: z.string().optional(),
+  verificationStatus: z.enum(["pass", "fail", "skip", "partial"]),
+  patchOutcome: z.enum(["accepted", "rejected", "partial", "not-attempted"]),
+  cacheReadTokens: z.number(),
+  cacheWriteTokens: z.number(),
+  inputTokens: z.number(),
+  outputTokens: z.number(),
+  estimatedCostUsd: z.number().optional(),
+})
+
 export const PlannerArchitectCallEvent = Base.extend({
   type: z.literal("planner.architect_call"),
   model: z.string(),
@@ -259,6 +284,7 @@ export const ReplayEvent = z.discriminatedUnion("type", [
   CodeGraphSnapshotEvent,
   AutonomousCapHitEvent,
   AutonomousEscalationEvent,
+  AgentOptimizationTraceEvent,
   PlannerArchitectCallEvent,
   QualityCriticFindingEvent,
   AgentPhaseChangedEvent,
