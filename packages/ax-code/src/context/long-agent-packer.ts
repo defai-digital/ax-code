@@ -6,8 +6,9 @@
 //   Tier 2 — dependency/call graph summaries, related files, API contracts
 //   Tier 3 — stable docs, historical failures, PRD/ADR references, benchmark notes
 //
-// Token budgeting is character-based (÷4 approximation).  The packer stops
-// adding entries when the running total would exceed the configured budget.
+// Token budgeting is character-based (÷4 approximation). The packer skips
+// individual entries that would exceed the configured budget and keeps trying
+// later entries in the same tier.
 
 export namespace LongAgentContextPacker {
   // ~4 chars per token, good-enough for planning/packing purposes.
@@ -69,12 +70,13 @@ export namespace LongAgentContextPacker {
     }
 
     function tryAddAll(tier: Tier, candidates: Entry[]): void {
+      let skipped = false
       for (const e of candidates) {
         if (!tryAdd(e)) {
-          dropped.add(tier)
-          return
+          skipped = true
         }
       }
+      if (skipped) dropped.add(tier)
     }
 
     // Tier 0 — always included (if budget allows). Required for agent to function.
@@ -95,13 +97,7 @@ export namespace LongAgentContextPacker {
       }
     }
     if (input.symbols?.length) {
-      tier1.push(
-        makeEntry(
-          1,
-          "symbols",
-          input.symbols.map((s) => `${s.name}: ${s.signature}`).join("\n"),
-        ),
-      )
+      tier1.push(makeEntry(1, "symbols", input.symbols.map((s) => `${s.name}: ${s.signature}`).join("\n")))
     }
     if (input.failingTests?.length) {
       tier1.push(makeEntry(1, "failing-tests", input.failingTests.join("\n")))
