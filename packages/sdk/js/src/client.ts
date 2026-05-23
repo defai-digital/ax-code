@@ -3,6 +3,7 @@ export * from "./gen/types.gen.js"
 import { createClient } from "./gen/client/client.gen.js"
 import { type Config } from "./gen/client/types.gen.js"
 import { OpencodeClient } from "./gen/sdk.gen.js"
+import { withDirectoryHeaders } from "./protocol.js"
 export { type Config as OpencodeClientConfig, OpencodeClient }
 export { type Config as AxCodeClientConfig, OpencodeClient as AxCodeClient }
 
@@ -20,11 +21,7 @@ export function createAxCodeClient(config?: Config & { directory?: string }) {
   }
 
   if (config?.directory) {
-    config.headers = {
-      ...config.headers,
-      "x-ax-code-directory": encodeURIComponent(config.directory),
-      "x-opencode-directory": encodeURIComponent(config.directory),
-    }
+    config.headers = withDirectoryHeaders(config.headers as Record<string, string> | undefined, config.directory)
   }
 
   const client = createClient(config)
