@@ -80,7 +80,7 @@ import {
   ensureTitle as _ensureTitle,
 } from "./prompt-helpers"
 import { executeSubtask, type SubtaskContext } from "./prompt-subtask"
-import { resolveTools, isolationRetryState as _isolationRetryState } from "./prompt-tools"
+import { resolveTools as _resolveTools, isolationRetryState as _isolationRetryState } from "./prompt-tools"
 import {
   MAX_STAGNANT_TODO_RETRIES,
   TODO_CONTEXT_CONVERGENCE_INPUT_TOKEN_THRESHOLD,
@@ -879,7 +879,7 @@ export namespace SessionPrompt {
       // Check if user explicitly invoked an agent via @ in this turn
       const bypassAgentCheck = lastUserParts?.some((p) => p.type === "agent") ?? false
 
-      const tools = await resolveTools({
+      const tools = await _resolveTools({
         agent,
         session,
         model,
@@ -1394,6 +1394,9 @@ export namespace SessionPrompt {
 
   /** @internal Exported for testing */
   export const isolationRetryState = _isolationRetryState
+
+  /** @internal Exported for testing */
+  export const resolveTools = _resolveTools
 
   /** @internal Exported for testing */
   export const createStructuredOutputTool = _createStructuredOutputTool
