@@ -132,7 +132,7 @@ Qwen3.7-Max's value is unlocked by stable long context, reliable tool use, think
 
 ### Phase 0: Coding-Ready Baseline and Readiness Audit
 
-Status: Planned.
+Status: Complete. Shipped in v5.5.0.
 
 Files likely touched:
 
@@ -169,7 +169,7 @@ Acceptance criteria:
 
 ### Phase 1: Qwen3.7-Max Long-Agent Profile
 
-Status: Planned.
+Status: Complete. Shipped in v5.5.0.
 
 Files likely touched:
 
@@ -209,7 +209,7 @@ Acceptance criteria:
 
 ### Phase 2: Thinking Continuity Policy
 
-Status: Planned.
+Status: Complete. Shipped in v5.5.0.
 
 Files likely touched:
 
@@ -240,7 +240,7 @@ Acceptance criteria:
 
 ### Phase 3: Prompt-Cache Policy and Telemetry
 
-Status: Planned.
+Status: Complete. Shipped in v5.5.0.
 
 Files likely touched:
 
@@ -280,7 +280,7 @@ Acceptance criteria:
 
 ### Phase 4: Long-Agent Context Packer
 
-Status: Planned.
+Status: Complete. Shipped in v5.5.0.
 
 Files likely touched:
 
@@ -313,7 +313,7 @@ Acceptance criteria:
 
 ### Phase 5: Tool-Loop Hardening for Qwen-Class Agents
 
-Status: Planned.
+Status: Complete. Shipped in v5.5.0.
 
 Files likely touched:
 
@@ -354,7 +354,7 @@ Acceptance criteria:
 
 ### Phase 6: Local Evaluation Harness
 
-Status: Planned.
+Status: Complete. Shipped in v5.5.0.
 
 Files likely touched:
 
@@ -397,7 +397,7 @@ Acceptance criteria:
 
 ### Phase 7: Super-Long Supervised Long-Run Mode
 
-Status: Planned after Phase 6 telemetry exists.
+Status: Complete. Shipped in v5.5.0.
 
 Files likely touched:
 
