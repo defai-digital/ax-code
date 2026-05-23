@@ -12,6 +12,7 @@ import PROMPT_TRINITY from "./prompt/trinity.txt"
 import type { Provider } from "@/provider/provider"
 import type { Agent } from "@/agent/agent"
 import { Permission } from "@/permission"
+import { supportsLiveSearch } from "@/provider/xai/server-tools"
 import { Skill } from "@/skill"
 import { getContext as getMemoryContext } from "../memory/injector"
 import type { MessageV2 } from "./message-v2"
@@ -53,7 +54,12 @@ export namespace SystemPrompt {
     //     extra hint needed (tool descriptions cover it).
     const apiId = model.api.id.toLowerCase()
     const providerID = model.providerID
-    const isXaiSearch = model.api.npm === "@ai-sdk/xai" && !apiId.includes("multi-agent")
+    // Mirror the transform-side gate: only emit the hint when the request
+    // pipeline will actually attach searchParameters. supportsLiveSearch
+    // excludes multi-agent variants and non-grok-4/grok-code xAI ids, so
+    // custom aliases pointing at e.g. grok-3 don't get a false "search is on"
+    // claim from the system prompt.
+    const isXaiSearch = model.api.npm === "@ai-sdk/xai" && supportsLiveSearch(model.api.id)
     const isAlibabaQwenSearch =
       model.api.npm === "@ai-sdk/openai-compatible" &&
       (providerID.startsWith("alibaba-coding-plan") || providerID.startsWith("alibaba-token-plan")) &&
