@@ -770,7 +770,7 @@ describe("session.compaction.prune tier-aware", () => {
         const session = await Session.create({})
         const partIDs: Record<string, PartID> = {}
 
-        for (let turn = 1; turn <= 6; turn++) {
+        for (let turn = 1; turn <= 10; turn++) {
           const user = await Session.updateMessage({
             id: MessageID.ascending(),
             sessionID: session.id,
@@ -835,9 +835,10 @@ describe("session.compaction.prune tier-aware", () => {
           return part.state.time.compacted
         }
 
-        expect(compactedAt(partIDs.turn1)).toBeNumber()
-        expect(compactedAt(partIDs.turn2)).toBeUndefined()
-        expect(compactedAt(partIDs.turn3)).toBeUndefined()
+        expect(compactedAt(partIDs.turn5)).toBeNumber()
+        for (const turn of [1, 2, 3, 4, 6, 7, 8]) {
+          expect(compactedAt(partIDs[`turn${turn}`])).toBeUndefined()
+        }
       },
     })
   })

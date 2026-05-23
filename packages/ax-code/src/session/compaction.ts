@@ -193,6 +193,7 @@ export namespace SessionCompaction {
         for (const candidate of candidates) {
           selectedTokens += candidate.estimate
           selectedCandidates.push({ ...candidate, tier })
+          if (selectedTokens > PRUNE_MINIMUM) break
         }
         if (selectedTokens > PRUNE_MINIMUM) break
       }
