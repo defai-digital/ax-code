@@ -131,6 +131,14 @@ export namespace LSPClient {
 
   export type MethodSupport = "supported" | "unsupported" | "unknown"
 
+  export function diagnosticPathFromUri(uri: string) {
+    try {
+      return Filesystem.normalizePath(fileURLToPath(uri))
+    } catch {
+      return undefined
+    }
+  }
+
   export const InitializeError = NamedError.create(
     "LSPInitializeError",
     z.object({
@@ -275,7 +283,11 @@ export namespace LSPClient {
     }
 
     connection.onNotification("textDocument/publishDiagnostics", (params) => {
-      const filePath = Filesystem.normalizePath(fileURLToPath(params.uri))
+      const filePath = diagnosticPathFromUri(params.uri)
+      if (!filePath) {
+        l.debug("skipping diagnostics for non-file URI", { uri: params.uri })
+        return
+      }
       l.info("textDocument/publishDiagnostics", {
         path: filePath,
         count: params.diagnostics.length,
