@@ -13,10 +13,20 @@
 // Promotion gate: requires no verified-completion regression vs baseline and
 // bounded cost per verified completion.
 
+import path from "path"
+import os from "os"
+import fs from "fs/promises"
 import { AgentOptimizationTrace } from "../src/session/agent-optimization-trace"
 import { LongAgentContextPacker } from "../src/context/long-agent-packer"
 import { PromptCachePolicy } from "../src/provider/prompt-cache-policy"
 import { classifyTaskForModelRoute } from "../src/provider/agent-optimization-profile"
+import { Instance } from "../src/project/instance"
+import { Provider } from "../src/provider/provider"
+import { LLM } from "../src/session/llm"
+import { ProviderID, ModelID } from "../src/provider/schema"
+import { SessionID, MessageID } from "../src/session/schema"
+import type { Agent } from "../src/agent/agent"
+import type { MessageV2 } from "../src/session/message-v2"
 
 const HARNESS_VERSION = "v0"
 
@@ -220,6 +230,132 @@ function runFixtureTask(
   }
 }
 
+// ── Live runner ───────────────────────────────────────────────────────────────
+
+async function runLiveTask(
+  spec: EvalTaskSpec,
+  providerID: string,
+  modelID: string,
+  apiKey: string,
+  baseURL: string | undefined,
+  tokenBudget: number,
+  abort: AbortSignal,
+): Promise<EvalTaskResult> {
+  const start = Date.now()
+  const tmpPath = await fs.mkdtemp(path.join(os.tmpdir(), "ax-eval-"))
+  try {
+    await fs.writeFile(
+      path.join(tmpPath, "ax-code.json"),
+      JSON.stringify({
+        enabled_providers: [providerID],
+        provider: {
+          [providerID]: {
+            options: {
+              apiKey,
+              ...(baseURL ? { baseURL } : {}),
+            },
+          },
+        },
+      }),
+      "utf8",
+    )
+
+    return await Instance.provide({
+      directory: tmpPath,
+      fn: async () => {
+        const resolvedModel = await Provider.getModel(ProviderID.make(providerID), ModelID.make(modelID))
+        const sessionID = SessionID.make(`eval-${spec.id}`)
+        const agent: Agent.Info = {
+          name: "primary",
+          mode: "primary",
+          options: {},
+          permission: [{ permission: "*" as const, pattern: "*", action: "allow" as const }],
+        }
+        const userMsg: MessageV2.User = {
+          id: MessageID.make(`user-${spec.id}`),
+          sessionID,
+          role: "user",
+          time: { created: Date.now() },
+          agent: agent.name,
+          model: { providerID: ProviderID.make(providerID), modelID: resolvedModel.id },
+        }
+
+        const packResult = LongAgentContextPacker.pack({
+          tokenBudget,
+          task: spec.prompt,
+          touchedFiles: spec.fixture?.touchedFiles ?? [],
+          failingTests: spec.fixture?.failingTests ?? [],
+          diff: spec.fixture?.diff,
+        })
+
+        let toolCallCount = 0
+        const stream = await LLM.stream({
+          user: userMsg,
+          sessionID,
+          model: resolvedModel,
+          agent,
+          system: ["You are an expert coding agent. Evaluate the task briefly and respond with a short analysis."],
+          abort,
+          messages: [{ role: "user", content: spec.prompt }],
+          tools: {},
+        })
+
+        for await (const chunk of stream.fullStream) {
+          if (chunk.type === "tool-call") toolCallCount++
+        }
+
+        const usage = await stream.usage
+        const inputTokens = usage.inputTokens ?? 0
+        const outputTokens = usage.outputTokens ?? 0
+        const cacheMode = PromptCachePolicy.policyMode(providerID)
+        const route = classifyTaskForModelRoute({
+          fileCount: spec.fixture?.touchedFiles?.length ?? 0,
+          isHighRiskRefactor: spec.expectedRouteClass === "premiumCrossCheck",
+          promptTokenEstimate: Math.ceil(spec.prompt.length / 4),
+        })
+        const cost = AgentOptimizationTrace.estimateCostUsd({
+          inputTokens,
+          outputTokens,
+          cacheReadTokens: 0,
+          cacheWriteTokens: 0,
+          inputPricePerMillion: 2.5,
+          outputPricePerMillion: 7.5,
+        })
+
+        return {
+          taskId: spec.id,
+          category: spec.category,
+          routeClass: route.class,
+          contextPackSummary: AgentOptimizationTrace.contextPackSummary(
+            packResult.totalTokens,
+            [
+              packResult.entries.filter((e) => e.tier === 0).length,
+              packResult.entries.filter((e) => e.tier === 1).length,
+              packResult.entries.filter((e) => e.tier === 2).length,
+              packResult.entries.filter((e) => e.tier === 3).length,
+            ],
+            packResult.droppedTiers,
+          ),
+          cacheMode,
+          verificationStatus: "skip",
+          patchOutcome: "not-attempted",
+          toolCallCount,
+          repeatedFailureCount: 0,
+          inputTokens,
+          outputTokens,
+          cacheReadTokens: 0,
+          cacheWriteTokens: 0,
+          estimatedCostUsd: cost,
+          durationMs: Date.now() - start,
+          notes: `live run — model=${modelID} pack=${packResult.debugSummary}`,
+        }
+      },
+    })
+  } finally {
+    await fs.rm(tmpPath, { recursive: true, force: true })
+  }
+}
+
 // ── Promotion gate ────────────────────────────────────────────────────────────
 
 function evaluatePromotionGate(tasks: EvalTaskResult[]): EvalReport["promotionGate"] {
@@ -271,13 +407,63 @@ async function main() {
     process.exit(0)
   }
 
-  const tasks = fixtureMode
-    ? TASK_MATRIX.map((spec) => runFixtureTask(spec, providerID, modelID, tokenBudget))
-    : []
+  const tasks: EvalTaskResult[] = []
 
-  if (!fixtureMode) {
-    console.error("Live provider mode not yet implemented. Run with --fixture for dry eval.")
-    process.exit(1)
+  if (fixtureMode) {
+    for (const spec of TASK_MATRIX) {
+      tasks.push(runFixtureTask(spec, providerID, modelID, tokenBudget))
+    }
+  } else {
+    const apiKey = process.env.AX_CODE_QWEN37_EVAL_KEY ?? process.env.ALIBABA_API_KEY ?? ""
+    if (!apiKey) {
+      console.error("Live mode requires AX_CODE_QWEN37_EVAL_KEY or ALIBABA_API_KEY env var.")
+      console.error("Run with --fixture to evaluate without a live provider.")
+      process.exit(1)
+    }
+    const baseURL = process.env.AX_CODE_QWEN37_EVAL_BASE_URL
+    const abort = new AbortController()
+    const onSignal = () => abort.abort()
+    process.on("SIGINT", onSignal)
+    process.on("SIGTERM", onSignal)
+
+    for (const spec of TASK_MATRIX) {
+      if (abort.signal.aborted) break
+      process.stderr.write(`[eval] running ${spec.id} (${spec.category})…\n`)
+      try {
+        const result = await runLiveTask(spec, providerID, modelID, apiKey, baseURL, tokenBudget, abort.signal)
+        tasks.push(result)
+        process.stderr.write(
+          `[eval] ${spec.id}: ${result.verificationStatus} ` +
+            `cost=$${result.estimatedCostUsd.toFixed(4)} ` +
+            `tokens=${result.inputTokens}in/${result.outputTokens}out ` +
+            `duration=${result.durationMs}ms\n`,
+        )
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        process.stderr.write(`[eval] ${spec.id}: ERROR — ${msg}\n`)
+        tasks.push({
+          taskId: spec.id,
+          category: spec.category,
+          routeClass: "unknown",
+          contextPackSummary: AgentOptimizationTrace.contextPackSummary(0, [0, 0, 0, 0], []),
+          cacheMode: "off",
+          verificationStatus: "fail",
+          patchOutcome: "not-attempted",
+          toolCallCount: 0,
+          repeatedFailureCount: 0,
+          inputTokens: 0,
+          outputTokens: 0,
+          cacheReadTokens: 0,
+          cacheWriteTokens: 0,
+          estimatedCostUsd: 0,
+          durationMs: 0,
+          notes: `live run failed: ${msg}`,
+        })
+      }
+    }
+
+    process.off("SIGINT", onSignal)
+    process.off("SIGTERM", onSignal)
   }
 
   const report: EvalReport = {
