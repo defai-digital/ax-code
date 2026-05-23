@@ -887,11 +887,7 @@ export namespace CodeGraphBuilder {
           }
 
           for (const bookmark of bookmarks) {
-            if (
-              sameFile &&
-              loc.range.start.line >= bookmark.rangeStartLine &&
-              loc.range.start.line <= bookmark.rangeEndLine
-            ) {
+            if (sameFile && callerNodeId === bookmark.nodeId) {
               continue
             }
 

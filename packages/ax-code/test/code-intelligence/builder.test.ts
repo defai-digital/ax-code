@@ -1,10 +1,12 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, spyOn, test } from "bun:test"
 import path from "path"
+import { pathToFileURL } from "url"
 import { tmpdir } from "../fixture/fixture"
 import { Instance } from "../../src/project/instance"
 import { Log } from "../../src/util/log"
 import { CodeIntelligence } from "../../src/code-intelligence"
 import { CodeGraphQuery } from "../../src/code-intelligence/query"
+import { LSP } from "../../src/lsp"
 import {
   CodeGraphBuilder,
   __lookupCallerKind,
@@ -63,6 +65,13 @@ function seedNode(
     time_updated: t,
   })
   return id
+}
+
+function lspRange(startLine: number, startChar: number, endLine: number, endChar: number) {
+  return {
+    start: { line: startLine, character: startChar },
+    end: { line: endLine, character: endChar },
+  }
 }
 
 describe("builder.__lookupCallerKind", () => {
@@ -174,6 +183,95 @@ describe("builder.__lookupCallerKind", () => {
         expect(kind).toBe("method")
 
         CodeIntelligence.__clearProject(projectID)
+      },
+    })
+  })
+})
+
+describe("builder.indexFile same-file edge resolution", () => {
+  test("keeps cross-function same-file references when the target range contains the call site", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        CodeIntelligence.__clearProject(projectID)
+
+        const filePath = path.join(tmp.path, "same-file.ts")
+        await Bun.write(
+          filePath,
+          [
+            "function target() {",
+            "  function caller() {",
+            "    target()",
+            "  }",
+            "}",
+            "",
+          ].join("\n"),
+        )
+
+        const uri = pathToFileURL(filePath).href
+        const touchSpy = spyOn(LSP, "touchFile").mockResolvedValue(1)
+        const documentSymbolSpy = spyOn(LSP, "documentSymbolEnvelope").mockResolvedValue({
+          data: [
+            {
+              name: "target",
+              kind: 12,
+              range: lspRange(0, 0, 4, 1),
+              selectionRange: lspRange(0, 9, 0, 15),
+              children: [
+                {
+                  name: "caller",
+                  kind: 12,
+                  range: lspRange(1, 2, 3, 3),
+                  selectionRange: lspRange(1, 11, 1, 17),
+                },
+              ],
+            } as any,
+          ],
+          source: "lsp",
+          completeness: "full",
+          timestamp: Date.now(),
+          serverIDs: ["test-lsp"],
+        } as Awaited<ReturnType<typeof LSP.documentSymbolEnvelope>>)
+        const referencesSpy = spyOn(LSP, "referencesEnvelope").mockImplementation(async (input) => {
+          return {
+            data:
+              input.line === 0 && input.character === 9
+                ? [
+                    {
+                      uri,
+                      range: lspRange(2, 4, 2, 10),
+                    },
+                  ]
+                : [],
+            source: "lsp",
+            completeness: "full",
+            timestamp: Date.now(),
+            serverIDs: ["test-lsp"],
+          } as Awaited<ReturnType<typeof LSP.referencesEnvelope>>
+        })
+
+        try {
+          const result = await CodeGraphBuilder.indexFile(projectID, filePath, { force: true })
+          expect(result.edges).toBe(2)
+
+          const target = CodeGraphQuery.findNodesByName(projectID, "target")[0]
+          const caller = CodeGraphQuery.findNodesByName(projectID, "caller")[0]
+          expect(target).toBeDefined()
+          expect(caller).toBeDefined()
+
+          const references = CodeGraphQuery.edgesTo(projectID, target!.id, "references")
+          expect(references.some((edge) => edge.from_node === caller!.id)).toBe(true)
+
+          const calls = CodeGraphQuery.edgesTo(projectID, target!.id, "calls")
+          expect(calls.some((edge) => edge.from_node === caller!.id)).toBe(true)
+        } finally {
+          referencesSpy.mockRestore()
+          documentSymbolSpy.mockRestore()
+          touchSpy.mockRestore()
+          CodeIntelligence.__clearProject(projectID)
+        }
       },
     })
   })

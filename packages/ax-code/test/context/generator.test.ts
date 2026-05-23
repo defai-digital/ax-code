@@ -1,0 +1,56 @@
+import { describe, expect, test } from "bun:test"
+import type { ProjectInfo } from "../../src/context"
+import { generate } from "../../src/context/generator"
+
+const baseInfo: ProjectInfo = {
+  schemaVersion: "2.0",
+  name: "sample",
+  version: "1.0.0",
+  description: "Sample project",
+  primaryLanguage: "TypeScript",
+  techStack: ["TypeScript", "Bun"],
+  projectType: "cli",
+  entryPoint: "src/index.ts",
+  complexity: {
+    level: "medium",
+    score: 20,
+    fileCount: 10,
+    linesOfCode: 500,
+    dependencyCount: 4,
+  },
+  directories: {
+    source: "src",
+    tests: "test",
+  },
+  keyFiles: {
+    "package.json": "Package manifest",
+    "tsconfig.json": "TypeScript config",
+  },
+  conventions: {
+    moduleSystem: "esm",
+    importExtension: ".js",
+    testFramework: "bun:test",
+    validation: "zod",
+    strict: true,
+  },
+  scripts: {
+    build: "bun run build",
+    test: "bun test",
+    typecheck: "tsgo --noEmit",
+  },
+  packageManager: "pnpm",
+  lastAnalyzed: "2026-05-23T00:00:00.000Z",
+  gotchas: [],
+  runtimeTargets: ["bun"],
+}
+
+describe("context generator", () => {
+  test("includes agent quality guidance in generated AGENTS.md", () => {
+    const content = generate(baseInfo, { depth: "standard" })
+
+    expect(content).toContain("## Agent Quality Loop")
+    expect(content).toContain("State non-obvious assumptions before changing code")
+    expect(content).toContain("smallest scoped change")
+    expect(content).toContain("Verify with the narrowest relevant test")
+  })
+})

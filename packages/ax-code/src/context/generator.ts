@@ -38,6 +38,7 @@ export function generate(info: ProjectInfo, config: Partial<GeneratorConfig> = {
   }
 
   sections.push(projectRules(info, cfg.externalRules))
+  sections.push(agentQualityLoop())
 
   if (
     cfg.includeCodePatterns &&
@@ -203,6 +204,17 @@ function projectRules(info: ProjectInfo, externalRules?: string[]): string {
   }
 
   return lines.join("\n")
+}
+
+function agentQualityLoop(): string {
+  return [
+    "## Agent Quality Loop",
+    "- State non-obvious assumptions before changing code; ask when ambiguity could change the implementation.",
+    "- Prefer the smallest scoped change that solves the requested problem; do not add speculative features or abstractions.",
+    "- Keep every changed line tied to the user request; avoid drive-by refactors, formatting churn, and unrelated cleanup.",
+    "- Match existing patterns and module boundaries before introducing new helpers or dependencies.",
+    "- Verify with the narrowest relevant test, typecheck, or build command, and report anything you could not run.",
+  ].join("\n")
 }
 
 function codePatterns(info: ProjectInfo): string {
