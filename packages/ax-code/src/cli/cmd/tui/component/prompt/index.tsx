@@ -1055,8 +1055,10 @@ export function Prompt(props: PromptProps) {
     // Capture mode before it gets reset
     const currentMode = store.mode
     const firstLine = inputText.split("\n")[0]
-    const slashName = inputText.startsWith("/") ? firstLine.split(" ")[0].slice(1) : undefined
-    if (currentMode === "normal" && slashName && command.trySlash(slashName)) return
+    const slashToken = inputText.startsWith("/") ? firstLine.split(" ")[0] : undefined
+    const slashName = slashToken?.slice(1)
+    const slashHasArguments = slashToken ? inputText.trim() !== slashToken : false
+    if (currentMode === "normal" && slashName && !slashHasArguments && command.trySlash(slashName)) return
 
     if (autocomplete?.visible) return
 

@@ -688,13 +688,22 @@ describe("tui OpenTUI stability guardrails", () => {
     const submitEnd = prompt.indexOf("const selectedModel", submitStart)
     const submitBody = prompt.slice(submitStart, submitEnd)
     const slashDispatch = submitBody.indexOf(
-      'if (currentMode === "normal" && slashName && command.trySlash(slashName)) return',
+      'if (currentMode === "normal" && slashName && !slashHasArguments && command.trySlash(slashName)) return',
     )
     const autocompleteReturn = submitBody.indexOf("if (autocomplete?.visible) return")
 
     expect(slashDispatch).toBeGreaterThan(-1)
     expect(autocompleteReturn).toBeGreaterThan(-1)
     expect(slashDispatch).toBeLessThan(autocompleteReturn)
+    expect(submitBody).toContain("const slashHasArguments = slashToken ? inputText.trim() !== slashToken : false")
+  })
+
+  test("exposes the session goal action as a slash command", async () => {
+    const displayCommands = await fs.readFile(DISPLAY_COMMANDS_SRC, "utf8")
+
+    expect(displayCommands).toContain('title: "View session goal"')
+    expect(displayCommands).toContain('value: "session.goal"')
+    expect(displayCommands).toContain('name: "goal"')
   })
 
   test("hides assistant thinking spinner once the message has an error", async () => {
