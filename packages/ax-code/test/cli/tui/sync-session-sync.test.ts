@@ -12,15 +12,17 @@ type Message = { id: string }
 type Part = { id: string }
 type Diff = { path: string }
 type Risk = SyncedSessionRisk
+type Goal = { objective: string }
 
 function createState() {
-  return createStore<SessionSyncStoreState<Session, Todo, Message, Part, Diff, Risk>>({
+  return createStore<SessionSyncStoreState<Session, Todo, Message, Part, Diff, Risk, Goal>>({
     session: [],
     todo: {},
     message: {},
     part: {},
     session_diff: {},
     session_risk: {},
+    session_goal: {},
   })
 }
 
@@ -36,7 +38,8 @@ describe("tui sync session sync", () => {
       Part,
       Diff,
       Risk,
-      SessionSyncStoreState<Session, Todo, Message, Part, Diff, Risk>
+      Goal,
+      SessionSyncStoreState<Session, Todo, Message, Part, Diff, Risk, Goal>
     >({
       timeoutMs: 10_000,
       withTimeout: async (_label, promise) => promise,
@@ -81,11 +84,15 @@ describe("tui sync session sync", () => {
           },
         }
       },
+      fetchGoal: async (sessionID) => {
+        calls.push(`goal:${sessionID}`)
+        return { data: { objective: `goal:${sessionID}` } }
+      },
     })
 
     await controller.sync("ses_1")
 
-    expect(calls).toEqual(["session:ses_1", "messages:ses_1", "todo:ses_1", "diff:ses_1", "risk:ses_1"])
+    expect(calls).toEqual(["session:ses_1", "messages:ses_1", "todo:ses_1", "diff:ses_1", "risk:ses_1", "goal:ses_1"])
     expect(store).toEqual({
       session: [{ id: "ses_1", title: "Session" }],
       todo: { ses_1: [{ id: "todo_1" }] },
@@ -113,6 +120,7 @@ describe("tui sync session sync", () => {
           },
         },
       },
+      session_goal: { ses_1: { objective: "goal:ses_1" } },
     })
   })
 
@@ -127,7 +135,8 @@ describe("tui sync session sync", () => {
       Part,
       Diff,
       Risk,
-      SessionSyncStoreState<Session, Todo, Message, Part, Diff, Risk>
+      Goal,
+      SessionSyncStoreState<Session, Todo, Message, Part, Diff, Risk, Goal>
     >({
       timeoutMs: 10_000,
       withTimeout: async (_label, promise) => promise,
@@ -137,6 +146,7 @@ describe("tui sync session sync", () => {
       fetchTodo: async () => ({ data: [] }),
       fetchDiff: async () => ({ data: [] }),
       fetchRisk: async () => ({ data: undefined }),
+      fetchGoal: async () => ({ data: undefined }),
       onMissingSnapshot(sessionID) {
         warnings.push(sessionID)
       },
@@ -152,6 +162,7 @@ describe("tui sync session sync", () => {
       part: {},
       session_diff: {},
       session_risk: {},
+      session_goal: {},
     })
   })
 })

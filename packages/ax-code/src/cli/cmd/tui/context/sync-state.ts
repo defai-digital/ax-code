@@ -19,6 +19,7 @@ import type {
   VcsInfo,
 } from "@ax-code/sdk/v2"
 import type { Path } from "@ax-code/sdk"
+import type { SessionGoal } from "@/session/goal"
 import type { Snapshot } from "@/snapshot"
 import { Flag } from "@/flag/flag"
 import type { SyncedSessionRisk } from "./sync-session-risk"
@@ -40,6 +41,7 @@ export interface SyncStoreState {
   session: Session[]
   session_status: Record<string, SessionStatus>
   session_risk: Record<string, SyncedSessionRisk>
+  session_goal: Record<string, SessionGoal.PublicInfo | null>
   session_diff: Record<string, Snapshot.FileDiff[]>
   todo: Record<string, Todo[]>
   message: Record<string, Message[]>
@@ -104,6 +106,7 @@ export function createInitialSyncState(): SyncStoreState {
     session: [],
     session_status: {},
     session_risk: {},
+    session_goal: {},
     session_diff: {},
     todo: {},
     message: {},

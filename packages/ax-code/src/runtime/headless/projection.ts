@@ -10,6 +10,7 @@ export interface HeadlessProjectionState<
   TMessage extends { id: string; sessionID: string },
   TPart extends { id: string; messageID: string },
   TRisk = unknown,
+  TGoal = unknown,
 > {
   permission: Record<string, PermissionRequest[]>
   question: Record<string, QuestionRequest[]>
@@ -17,6 +18,7 @@ export interface HeadlessProjectionState<
   session_diff: Record<string, TDiff[]>
   session_status: Record<string, TStatus>
   session_risk: Record<string, TRisk>
+  session_goal: Record<string, TGoal | null>
   session: TSession[]
   message: Record<string, TMessage[]>
   part: Record<string, TPart[]>
@@ -42,7 +44,8 @@ export function createHeadlessProjectionState<
   TMessage extends { id: string; sessionID: string },
   TPart extends { id: string; messageID: string },
   TRisk = unknown,
->(): HeadlessProjectionState<TSession, TTodo, TDiff, TStatus, TMessage, TPart, TRisk> {
+  TGoal = unknown,
+>(): HeadlessProjectionState<TSession, TTodo, TDiff, TStatus, TMessage, TPart, TRisk, TGoal> {
   return {
     permission: {},
     question: {},
@@ -50,6 +53,7 @@ export function createHeadlessProjectionState<
     session_diff: {},
     session_status: {},
     session_risk: {},
+    session_goal: {},
     session: [],
     message: {},
     part: {},
@@ -65,9 +69,10 @@ export function applyHeadlessProjectionEvent<
   TMessage extends { id: string; sessionID: string },
   TPart extends { id: string; messageID: string },
   TRisk = unknown,
+  TGoal = unknown,
 >(
-  state: HeadlessProjectionState<TSession, TTodo, TDiff, TStatus, TMessage, TPart, TRisk>,
-  event: HeadlessRuntimeEvent<TSession, TTodo, TDiff, TStatus, TMessage, TPart>,
+  state: HeadlessProjectionState<TSession, TTodo, TDiff, TStatus, TMessage, TPart, TRisk, TGoal>,
+  event: HeadlessRuntimeEvent<TSession, TTodo, TDiff, TStatus, TMessage, TPart, TGoal>,
   options: {
     autonomous?: boolean
     maxSessionMessages?: number
@@ -119,6 +124,10 @@ export function applyHeadlessProjectionEvent<
 
     case "session.diff":
       state.session_diff[event.properties.sessionID] = event.properties.diff
+      return { handled: true, effects }
+
+    case "session.goal":
+      state.session_goal[event.properties.sessionID] = event.properties.goal
       return { handled: true, effects }
 
     case "session.status":
@@ -227,7 +236,8 @@ function deleteSessionState<
   TMessage extends { id: string; sessionID: string },
   TPart extends { id: string; messageID: string },
   TRisk = unknown,
->(state: HeadlessProjectionState<TSession, TTodo, TDiff, TStatus, TMessage, TPart, TRisk>, sessionID: string) {
+  TGoal = unknown,
+>(state: HeadlessProjectionState<TSession, TTodo, TDiff, TStatus, TMessage, TPart, TRisk, TGoal>, sessionID: string) {
   state.session = state.session.filter((session) => session.id !== sessionID)
   for (const message of state.message[sessionID] ?? []) {
     delete state.part[message.id]
@@ -238,6 +248,7 @@ function deleteSessionState<
   delete state.session_diff[sessionID]
   delete state.session_status[sessionID]
   delete state.session_risk[sessionID]
+  delete state.session_goal[sessionID]
   delete state.message[sessionID]
 }
 
@@ -249,8 +260,9 @@ function upsertMessage<
   TMessage extends { id: string; sessionID: string },
   TPart extends { id: string; messageID: string },
   TRisk = unknown,
+  TGoal = unknown,
 >(
-  state: HeadlessProjectionState<TSession, TTodo, TDiff, TStatus, TMessage, TPart, TRisk>,
+  state: HeadlessProjectionState<TSession, TTodo, TDiff, TStatus, TMessage, TPart, TRisk, TGoal>,
   message: TMessage,
   maxSessionMessages = 100,
 ) {
@@ -270,8 +282,9 @@ function removeMessage<
   TMessage extends { id: string; sessionID: string },
   TPart extends { id: string; messageID: string },
   TRisk = unknown,
+  TGoal = unknown,
 >(
-  state: HeadlessProjectionState<TSession, TTodo, TDiff, TStatus, TMessage, TPart, TRisk>,
+  state: HeadlessProjectionState<TSession, TTodo, TDiff, TStatus, TMessage, TPart, TRisk, TGoal>,
   sessionID: string,
   messageID: string,
 ) {

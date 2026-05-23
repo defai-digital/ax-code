@@ -61,6 +61,20 @@ export function footerPermissionLabel(count: number): string | undefined {
 }
 
 export type FooterTokenChip = { input: string; output: string; rate?: string }
+export type FooterGoalStatus = "active" | "paused" | "complete" | "blocked" | "budget_limited"
+export type FooterGoalInfo = {
+  objective: string
+  status: FooterGoalStatus
+  tokenBudget?: number
+  tokensUsed?: number
+  remainingTokens?: number
+}
+export type FooterGoalChip = {
+  label: string
+  shortLabel: string
+  tone: FooterSessionStatusTone
+  resumeHint?: string
+}
 
 // Render token counts as "1.2k" / "480" depending on size. Tight format
 // because the chip lives in the right-rail next to MCP / LSP and we
@@ -114,6 +128,47 @@ function shortFooterText(value: string, max = 32) {
   const normalized = value.replace(/\s+/g, " ").trim()
   if (normalized.length <= max) return normalized
   return `${normalized.slice(0, max - 3)}...`
+}
+
+function goalStatusLabel(status: FooterGoalStatus) {
+  switch (status) {
+    case "active":
+      return "Goal"
+    case "paused":
+      return "Goal paused"
+    case "complete":
+      return "Goal complete"
+    case "blocked":
+      return "Goal blocked"
+    case "budget_limited":
+      return "Goal budget"
+  }
+}
+
+export function footerGoalChip(input: {
+  goal?: FooterGoalInfo | null
+  maxObjective?: number
+}): FooterGoalChip | undefined {
+  const goal = input.goal
+  if (!goal) return
+
+  const status = goalStatusLabel(goal.status)
+  const objective = shortFooterText(goal.objective, input.maxObjective ?? 36)
+  const tokens =
+    goal.tokenBudget === undefined || goal.tokensUsed === undefined
+      ? ""
+      : ` · ${formatTokenCount(goal.tokensUsed)}/${formatTokenCount(goal.tokenBudget)} tok`
+  const resumeHint = goal.status === "paused" || goal.status === "blocked" ? "/goal resume" : undefined
+  const resume = resumeHint ? ` · ${resumeHint}` : ""
+  const tone: FooterSessionStatusTone =
+    goal.status === "complete" ? "success" : goal.status === "active" ? "working" : "warning"
+
+  return {
+    label: `${status}: ${objective}${tokens}${resume}`,
+    shortLabel: `${status}: ${objective}`,
+    tone,
+    resumeHint,
+  }
 }
 
 function lowerFirst(value: string) {

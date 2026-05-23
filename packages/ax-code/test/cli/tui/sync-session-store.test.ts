@@ -14,6 +14,7 @@ describe("tui sync session store", () => {
         messages: [{ info: { id: "msg_1" }, parts: [{ id: "part_1" }] }],
         diff: [{ path: "file.ts" }],
         risk: undefined,
+        goal: undefined,
       }),
     ).toBeUndefined()
   })
@@ -26,6 +27,7 @@ describe("tui sync session store", () => {
         messages: undefined,
         diff: undefined,
         risk: undefined,
+        goal: undefined,
       }),
     ).toEqual({
       session: { id: "ses_1", title: "current" },
@@ -33,6 +35,7 @@ describe("tui sync session store", () => {
       messages: [],
       diff: [],
       risk: undefined,
+      goal: undefined,
     })
   })
 
@@ -44,6 +47,7 @@ describe("tui sync session store", () => {
       part: Record<string, Array<{ id: string; text: string }>>
       session_diff: Record<string, Array<{ path: string }>>
       session_risk: Record<string, { quality?: unknown }>
+      session_goal: Record<string, { objective: string } | null>
     } = {
       session: [{ id: "ses_1", title: "old" }],
       todo: { ses_1: [{ id: "todo_old" }] },
@@ -57,6 +61,7 @@ describe("tui sync session store", () => {
       },
       session_diff: { ses_1: [{ path: "old.ts" }] },
       session_risk: { ses_1: { quality: { review: null, debug: null } } },
+      session_goal: { ses_1: { objective: "old" } },
     }
 
     applySessionSyncSnapshot(store, "ses_1", {
@@ -86,6 +91,7 @@ describe("tui sync session store", () => {
           debug: null,
         },
       },
+      goal: { objective: "new" },
     })
 
     expect(store).toEqual({
@@ -114,6 +120,7 @@ describe("tui sync session store", () => {
           },
         },
       },
+      session_goal: { ses_1: { objective: "new" } },
     })
   })
 
@@ -125,6 +132,7 @@ describe("tui sync session store", () => {
       part: Record<string, Array<{ id: string; text: string }>>
       session_diff: Record<string, Array<{ path: string }>>
       session_risk: Record<string, { quality?: unknown }>
+      session_goal: Record<string, { objective: string } | null>
     } = {
       session: [{ id: "ses_1", title: "old" }],
       todo: { ses_1: [] },
@@ -137,6 +145,7 @@ describe("tui sync session store", () => {
       },
       session_diff: { ses_1: [] },
       session_risk: {},
+      session_goal: {},
     }
 
     applySessionSyncSnapshot(store, "ses_1", {
@@ -150,6 +159,7 @@ describe("tui sync session store", () => {
       ],
       diff: [],
       risk: undefined,
+      goal: undefined,
     })
 
     expect(store.message.ses_1).toEqual([{ id: "msg_1" }, { id: "msg_2" }])
@@ -167,6 +177,7 @@ describe("tui sync session store", () => {
       part: Record<string, Array<{ id: string; text: string }>>
       session_diff: Record<string, Array<{ path: string }>>
       session_risk: Record<string, { quality?: unknown }>
+      session_goal: Record<string, { objective: string } | null>
     } = {
       session: [{ id: "ses_1", title: "old" }],
       todo: { ses_1: [] },
@@ -178,6 +189,7 @@ describe("tui sync session store", () => {
       },
       session_diff: { ses_1: [] },
       session_risk: {},
+      session_goal: {},
     }
 
     applySessionSyncSnapshot(store, "ses_1", {
@@ -191,6 +203,7 @@ describe("tui sync session store", () => {
       ],
       diff: [],
       risk: undefined,
+      goal: undefined,
     })
 
     expect(store.message.ses_1).toEqual([{ id: "msg_live" }, { id: "msg_snapshot" }])
@@ -207,6 +220,7 @@ describe("tui sync session store", () => {
       question: Record<string, Array<{ id: string }>>
       session_status: Record<string, string>
       session_risk: Record<string, { quality?: unknown }>
+      session_goal: Record<string, { objective: string } | null>
       session_diff: Record<string, Array<{ path: string }>>
       todo: Record<string, Array<{ id: string }>>
       message: Record<string, Array<{ id: string }>>
@@ -250,6 +264,10 @@ describe("tui sync session store", () => {
             },
           },
         },
+      },
+      session_goal: {
+        ses_1: { objective: "delete" },
+        ses_2: { objective: "keep" },
       },
       session_diff: {
         ses_1: [{ path: "delete.ts" }],
@@ -296,6 +314,9 @@ describe("tui sync session store", () => {
             },
           },
         },
+      },
+      session_goal: {
+        ses_2: { objective: "keep" },
       },
       session_diff: {
         ses_2: [{ path: "keep.ts" }],

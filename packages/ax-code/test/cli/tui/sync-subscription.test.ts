@@ -18,6 +18,7 @@ function createTestStore() {
     session_diff: {},
     session_status: {},
     session_risk: {},
+    session_goal: {},
     session: [],
     message: {},
     part: {},

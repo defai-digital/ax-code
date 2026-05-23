@@ -5,12 +5,13 @@ export interface SyncedMessageParts<TMessage, TPart> {
   parts: TPart[]
 }
 
-export function createSessionSyncSnapshot<TSession, TTodo, TMessage, TPart, TDiff, TRisk>(input: {
+export function createSessionSyncSnapshot<TSession, TTodo, TMessage, TPart, TDiff, TRisk, TGoal>(input: {
   session: TSession | undefined
   todo: TTodo[] | undefined
   messages: Array<SyncedMessageParts<TMessage, TPart>> | undefined
   diff: TDiff[] | undefined
   risk?: TRisk
+  goal?: TGoal | null
 }) {
   if (!input.session) return
   return {
@@ -19,6 +20,7 @@ export function createSessionSyncSnapshot<TSession, TTodo, TMessage, TPart, TDif
     messages: input.messages ?? [],
     diff: input.diff ?? [],
     risk: input.risk,
+    goal: input.goal,
   }
 }
 
@@ -29,6 +31,7 @@ export function applySessionSyncSnapshot<
   TPart,
   TDiff,
   TRisk,
+  TGoal,
 >(
   store: {
     session: TSession[]
@@ -37,6 +40,7 @@ export function applySessionSyncSnapshot<
     part: Record<string, TPart[]>
     session_diff: Record<string, TDiff[]>
     session_risk: Record<string, TRisk>
+    session_goal: Record<string, TGoal | null>
   },
   sessionID: string,
   snapshot: {
@@ -45,6 +49,7 @@ export function applySessionSyncSnapshot<
     messages: Array<SyncedMessageParts<TMessage, TPart>>
     diff: TDiff[]
     risk?: TRisk
+    goal?: TGoal | null
   },
 ) {
   upsert(store.session, snapshot.session)
@@ -58,9 +63,7 @@ export function applySessionSyncSnapshot<
   }, -1)
   const liveTail =
     lastSnapshotMatchIndex >= 0
-      ? existingMessages
-          .slice(lastSnapshotMatchIndex + 1)
-          .filter((message) => !snapshotMessageIDs.has(message.id))
+      ? existingMessages.slice(lastSnapshotMatchIndex + 1).filter((message) => !snapshotMessageIDs.has(message.id))
       : existingMessages.filter((message) => !snapshotMessageIDs.has(message.id))
   const mergedMessages = mergeSorted(nextMessages, liveTail)
   const nextMessageIDs = new Set(mergedMessages.map((message) => message.id))
@@ -77,6 +80,7 @@ export function applySessionSyncSnapshot<
     store.part[message.info.id] = message.parts
   }
   store.session_diff[sessionID] = snapshot.diff
+  if (snapshot.goal !== undefined) store.session_goal[sessionID] = snapshot.goal
 }
 
 export function applySessionDeleteCleanup<
@@ -89,6 +93,7 @@ export function applySessionDeleteCleanup<
   TPart,
   TDiff,
   TRisk,
+  TGoal,
 >(
   store: {
     session: TSession[]
@@ -96,6 +101,7 @@ export function applySessionDeleteCleanup<
     question: Record<string, TQuestion[]>
     session_status: Record<string, TStatus>
     session_risk: Record<string, TRisk>
+    session_goal: Record<string, TGoal | null>
     session_diff: Record<string, TDiff[]>
     todo: Record<string, TTodo[]>
     message: Record<string, TMessage[]>
@@ -114,6 +120,7 @@ export function applySessionDeleteCleanup<
   delete store.question[sessionID]
   delete store.session_status[sessionID]
   delete store.session_risk[sessionID]
+  delete store.session_goal[sessionID]
   delete store.session_diff[sessionID]
   delete store.todo[sessionID]
   delete store.message[sessionID]

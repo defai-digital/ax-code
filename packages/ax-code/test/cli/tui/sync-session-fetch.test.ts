@@ -34,6 +34,18 @@ describe("tui sync session fetch", () => {
           },
         },
       }),
+      fetchGoal: async () => ({
+        data: {
+          sessionID: "ses_1",
+          objective: "finish goals",
+          status: "active",
+          tokensUsed: 25,
+          remainingTokens: 75,
+          tokenBudget: 100,
+          timeUsedSeconds: 3,
+          time: { created: 1, updated: 2 },
+        },
+      }),
     })
 
     expect(calls).toEqual([
@@ -42,6 +54,7 @@ describe("tui sync session fetch", () => {
       { label: "tui session sync ses_1 session.todo", timeoutMs: 2500 },
       { label: "tui session sync ses_1 session.diff", timeoutMs: 2500 },
       { label: "tui session sync ses_1 session.risk", timeoutMs: 2500 },
+      { label: "tui session sync ses_1 session.goal", timeoutMs: 2500 },
     ])
     expect(snapshot).toEqual({
       session: { id: "ses_1", title: "Session" },
@@ -62,10 +75,20 @@ describe("tui sync session fetch", () => {
           debug: null,
         },
       },
+      goal: {
+        sessionID: "ses_1",
+        objective: "finish goals",
+        status: "active",
+        tokensUsed: 25,
+        remainingTokens: 75,
+        tokenBudget: 100,
+        timeUsedSeconds: 3,
+        time: { created: 1, updated: 2 },
+      },
     })
   })
 
-  test("soft-fails optional risk enrichment without breaking the session snapshot", async () => {
+  test("soft-fails optional enrichment without breaking the session snapshot", async () => {
     const snapshot = await fetchSessionSyncSnapshot({
       sessionID: "ses_3",
       timeoutMs: 1000,
@@ -77,6 +100,9 @@ describe("tui sync session fetch", () => {
       fetchRisk: async () => {
         throw new Error("risk unavailable")
       },
+      fetchGoal: async () => {
+        throw new Error("goal unavailable")
+      },
     })
 
     expect(snapshot).toEqual({
@@ -85,6 +111,7 @@ describe("tui sync session fetch", () => {
       messages: [],
       diff: [],
       risk: undefined,
+      goal: undefined,
     })
   })
 
@@ -98,6 +125,7 @@ describe("tui sync session fetch", () => {
       fetchTodo: async () => ({ data: undefined }),
       fetchDiff: async () => ({ data: undefined }),
       fetchRisk: async () => ({ data: undefined }),
+      fetchGoal: async () => ({ data: undefined }),
     })
 
     expect(snapshot).toBeUndefined()

@@ -49,6 +49,7 @@ function createTestStore() {
     session_diff: {},
     session_status: {},
     session_risk: {},
+    session_goal: {},
     session: [],
     message: {},
     part: {},
@@ -171,6 +172,7 @@ describe("tui sync store event", () => {
       session_diff: { ses_1: [{ path: "file.ts" }] },
       session_status: { ses_1: "working" },
       session_risk: { ses_1: reviewRisk },
+      session_goal: { ses_1: { objective: "delete" } },
       session: [{ id: "ses_1" }],
       message: { ses_1: [{ id: "msg_1", sessionID: "ses_1" }] },
       part: { msg_1: [{ id: "part_1", messageID: "msg_1" }] },
@@ -216,6 +218,7 @@ describe("tui sync store event", () => {
       session_diff: {},
       session_status: {},
       session_risk: {},
+      session_goal: {},
       session: [],
       message: {},
       part: {},
@@ -254,6 +257,40 @@ describe("tui sync store event", () => {
 
     expect(handled).toBe(true)
     expect(store.session_status.ses_1).toEqual({ type: "idle" })
+  })
+
+  test("applies live goal updates to the session goal bucket", () => {
+    const [store, setStore] = createTestStore()
+
+    const handled = dispatchStoreBackedSyncEvent({
+      event: {
+        type: "session.goal",
+        properties: {
+          sessionID: "ses_1",
+          goal: {
+            objective: "finish all phases",
+            status: "active",
+          },
+        },
+      },
+      autonomous: false,
+      setStore,
+      clearSessionSyncState: () => undefined,
+      replyPermission: () => undefined,
+      replyQuestion: () => undefined,
+      syncMcpStatus: () => undefined,
+      syncLspStatus: () => undefined,
+      syncDebugEngine: () => undefined,
+      bootstrap: () => undefined,
+      onWarn: () => undefined,
+      maxSessionMessages: 100,
+    })
+
+    expect(handled).toBe(true)
+    expect(store.session_goal.ses_1).toEqual({
+      objective: "finish all phases",
+      status: "active",
+    })
   })
 
   test("removes part buckets for messages trimmed by maxSessionMessages", () => {
