@@ -61,14 +61,57 @@ export namespace Pty {
     sessions: Map<PtyID, Active>
   }
 
+  type ReplayMeta = {
+    cursor: number
+    from?: number
+    gap?: {
+      requested: number
+      available: number
+    }
+  }
+
+  type ReplayWindow = Pick<Active, "buffer" | "bufferCursor" | "cursor">
+
   // WebSocket control frame: 0x00 + UTF-8 JSON.
-  const meta = (cursor: number) => {
-    const json = JSON.stringify({ cursor })
+  const meta = (payload: ReplayMeta) => {
+    const json = JSON.stringify(payload)
     const bytes = encoder.encode(json)
     const out = new Uint8Array(bytes.length + 1)
     out[0] = 0
     out.set(bytes, 1)
     return out
+  }
+
+  function replayBufferedOutput(session: ReplayWindow, cursor?: number): { data: string; meta: ReplayMeta } {
+    const start = session.bufferCursor
+    const end = session.cursor
+    const from =
+      cursor === -1 ? end : typeof cursor === "number" && Number.isSafeInteger(cursor) ? Math.max(0, cursor) : 0
+    const actualFrom = Math.max(from, start)
+
+    const data = (() => {
+      if (!session.buffer) return ""
+      if (actualFrom >= end) return ""
+      const offset = actualFrom - start
+      if (offset >= session.buffer.length) return ""
+      return session.buffer.slice(offset)
+    })()
+
+    return {
+      data,
+      meta:
+        from < start
+          ? {
+              cursor: end,
+              from: actualFrom,
+              gap: { requested: from, available: start },
+            }
+          : { cursor: end },
+    }
+  }
+
+  export function __replayBufferedOutputForTest(session: ReplayWindow, cursor?: number) {
+    return replayBufferedOutput(session, cursor)
   }
 
   const trySend = (ws: Socket, data: string | Uint8Array | ArrayBuffer) => {
@@ -394,26 +437,15 @@ export namespace Pty {
           session.subscribers.delete(key)
         }
 
-        const start = session.bufferCursor
-        const end = session.cursor
-        const from =
-          cursor === -1 ? end : typeof cursor === "number" && Number.isSafeInteger(cursor) ? Math.max(0, cursor) : 0
+        const replay = replayBufferedOutput(session, cursor)
 
-        const data = (() => {
-          if (!session.buffer) return ""
-          if (from >= end) return ""
-          const offset = Math.max(0, from - start)
-          if (offset >= session.buffer.length) return ""
-          return session.buffer.slice(offset)
-        })()
-
-        if (data && !trySendBuffered(ws, data)) {
+        if (replay.data && !trySendBuffered(ws, replay.data)) {
           cleanup()
           ws.close()
           return
         }
 
-        if (!trySend(ws, meta(end))) {
+        if (!trySend(ws, meta(replay.meta))) {
           cleanup()
           ws.close()
           return

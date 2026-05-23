@@ -772,16 +772,18 @@ export namespace MCP {
   }
 
   export async function disconnect(name: string) {
-    cachedTools = undefined
-    toolsCacheGeneration++
-    const s = await state()
-    const client = s.clients[name]
-    if (client) {
-      await closeIfPossible(client, name, "disconnecting")
-      delete s.clients[name]
-    }
-    await closePendingOAuthTransport(name)
-    s.status[name] = { status: "disabled" }
+    return withConnectLock(name, "MCP disconnect failed", async () => {
+      cachedTools = undefined
+      toolsCacheGeneration++
+      const s = await state()
+      const client = s.clients[name]
+      if (client) {
+        await closeIfPossible(client, name, "disconnecting")
+        delete s.clients[name]
+      }
+      await closePendingOAuthTransport(name)
+      s.status[name] = { status: "disabled" }
+    })
   }
 
   let cachedTools: Record<string, Tool> | undefined

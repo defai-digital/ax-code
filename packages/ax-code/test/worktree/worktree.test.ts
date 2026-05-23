@@ -51,3 +51,26 @@ test("create rolls back the git worktree when sandbox recording fails", async ()
     },
   })
 })
+
+test("runStartScripts fails when the worktree start command fails", async () => {
+  await using tmp = await tmpdir()
+  const get = spyOn(Project, "get").mockReturnValue({
+    id: "project",
+    worktree: tmp.path,
+    vcs: "git",
+    time: { created: Date.now(), updated: Date.now() },
+    sandboxes: [],
+    commands: {},
+  } as any)
+
+  try {
+    await expect(
+      Worktree.__runStartScriptsForTest(tmp.path, {
+        projectID: "project" as any,
+        extra: "exit 7",
+      }),
+    ).resolves.toBe(false)
+  } finally {
+    get.mockRestore()
+  }
+})

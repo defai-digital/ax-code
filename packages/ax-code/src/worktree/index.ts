@@ -329,9 +329,10 @@ export namespace Worktree {
     if (!ok) return false
 
     const extra = input.extra ?? ""
-    await runStartScript(directory, extra, "worktree")
-    return true
+    return runStartScript(directory, extra, "worktree")
   }
+
+  export const __runStartScriptsForTest = runStartScripts
 
   function cancelTimers(directory: string) {
     const timers = startScriptTimers.get(directory)
@@ -488,6 +489,20 @@ export namespace Worktree {
           })
         if (!booted) return
 
+        const started = await runStartScripts(info.directory, { projectID, extra })
+        if (!started) {
+          GlobalBus.emit("event", {
+            directory: info.directory,
+            payload: {
+              type: Event.Failed.type,
+              properties: {
+                message: "Worktree start command failed",
+              },
+            },
+          })
+          return
+        }
+
         GlobalBus.emit("event", {
           directory: info.directory,
           payload: {
@@ -498,8 +513,6 @@ export namespace Worktree {
             },
           },
         })
-
-        await runStartScripts(info.directory, { projectID, extra })
       }
 
       return start().catch((error) => {
