@@ -1,7 +1,7 @@
 import { afterEach, describe, test, expect } from "bun:test"
 import path from "path"
 import fs from "fs/promises"
-import { EditTool } from "../../src/tool/edit"
+import { EditTool, replace } from "../../src/tool/edit"
 import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
 import { FileTime } from "../../src/file/time"
@@ -729,6 +729,12 @@ describe("tool.edit", () => {
         newString: "line2b",
       })
       expect(output).toBe("line1\r\nline2b\nline3\r\n")
+    })
+
+    test("preserves CRLF when fuzzy replacement matches trimmed lines", () => {
+      const output = replace("  foo\r\n  bar\r\n  baz\r\n", "foo\nbar", "qux\nquux")
+      expect(output).toBe("qux\r\nquux\r\n  baz\r\n")
+      expectCrlf(output)
     })
   })
 
