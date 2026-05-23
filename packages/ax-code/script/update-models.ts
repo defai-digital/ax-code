@@ -12,6 +12,7 @@
 
 import path from "path"
 import { fileURLToPath } from "url"
+import { supportsOpenRouterModelID } from "../src/provider/model-support"
 
 const dir = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const snapshotPath = path.join(dir, "src/provider/models-snapshot.json")
@@ -121,9 +122,13 @@ function isUnsupportedModel(m: RawModel): boolean {
   if (probes.some((p) => p.includes("gpt-5.5") || p.includes("gpt-5-5") || p.includes("gpt55"))) return true
   return false
 }
-for (const provider of Object.values(fetched) as Array<{ models?: Record<string, RawModel> }>) {
+for (const [providerID, provider] of Object.entries(fetched) as Array<[string, { models?: Record<string, RawModel> }]>) {
   if (!provider.models) continue
   for (const [mid, model] of Object.entries(provider.models)) {
+    if (providerID === "openrouter" && !supportsOpenRouterModelID(mid)) {
+      delete provider.models[mid]
+      continue
+    }
     if (isUnsupportedModel(model)) delete provider.models[mid]
   }
 }

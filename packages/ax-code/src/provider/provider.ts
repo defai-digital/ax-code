@@ -32,6 +32,7 @@ import { ModelID, ProviderID } from "./schema"
 import { levenshtein } from "@/util/levenshtein"
 import {
   buildModelProbes,
+  supportsOpenRouterModelID,
   supportsGlmModels,
   supportsOpenAIGptModels,
   supportsGrok41OrAllowedCodingModel,
@@ -51,6 +52,7 @@ export namespace Provider {
     const lower = probes[0] ?? modelID.toLowerCase()
     if (probes.some((probe) => probe.includes("gpt-5.5") || probe.includes("gpt-5-5") || probe.includes("gpt55")))
       return false
+    if (providerID === "openrouter") return supportsOpenRouterModelID(modelID)
     if (providerID === "google" || providerID === "google-vertex") {
       if (!lower.includes("gemini")) return true
       return lower.includes("gemini-3")
@@ -453,7 +455,8 @@ export namespace Provider {
 
       for (const [modelID, model] of Object.entries(provider.models ?? {})) {
         const nextID = model.id ?? modelID
-        if (!supported(providerID, nextID, model)) continue
+        const filterID = providerID === "openrouter" ? modelID : nextID
+        if (!supported(providerID, filterID, model)) continue
         const existingModel = parsed.models[model.id ?? modelID]
         const name = iife(() => {
           if (model.name) return model.name
@@ -634,7 +637,8 @@ export namespace Provider {
       for (const [modelID, model] of Object.entries(provider.models)) {
         const supportModelID = model.api.id ?? model.id ?? modelID
         model.api = { ...model.api, id: supportModelID }
-        if (!supported(providerID, supportModelID, model)) {
+        const filterID = providerID === "openrouter" ? modelID : supportModelID
+        if (!supported(providerID, filterID, model)) {
           delete provider.models[modelID]
           continue
         }

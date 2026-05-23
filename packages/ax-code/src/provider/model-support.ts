@@ -1,6 +1,31 @@
 const GLM_MAJOR_VERSION = /glm-(\d+)/
 const GROK_MAJOR_MINOR_VERSION = /grok-(\d+)(?:[.-]?(\d+))?/
 
+export const OPENROUTER_SUPPORTED_MODEL_IDS = [
+  "openrouter/auto",
+  "openai/gpt-5.1-codex",
+  "openai/gpt-5.1-codex-mini",
+  "openai/gpt-5.1-codex-max",
+  "openai/gpt-5-codex",
+  "openai/gpt-5.2-codex",
+  "openai/gpt-5.3-codex",
+  "anthropic/claude-sonnet-4.5",
+  "anthropic/claude-sonnet-4.6",
+  "anthropic/claude-opus-4.7",
+  "x-ai/grok-4.3",
+  "moonshotai/kimi-k2.6",
+  "z-ai/glm-5.1",
+  "deepseek/deepseek-v4-pro",
+  "qwen/qwen3-coder",
+  "qwen/qwen3.6-plus",
+] as const
+
+const OPENROUTER_SUPPORTED_MODEL_ID_SET = new Set<string>(OPENROUTER_SUPPORTED_MODEL_IDS)
+
+export function supportsOpenRouterModelID(modelID: string) {
+  return OPENROUTER_SUPPORTED_MODEL_ID_SET.has(modelID.toLowerCase().trim())
+}
+
 function parseModelProbes(value: string) {
   const lower = value.toLowerCase().trim()
   const normalized = lower.replace(/[\s_]+/g, "-")
