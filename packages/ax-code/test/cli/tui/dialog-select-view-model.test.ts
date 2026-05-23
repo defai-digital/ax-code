@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import {
+  dialogSelectActionOption,
   dialogSelectClampIndex,
   dialogSelectFlatOptions,
   dialogSelectGroupedOptions,
@@ -55,5 +56,14 @@ describe("tui dialog select view model", () => {
     expect(dialogSelectClampIndex(5, 2)).toBe(1)
     expect(dialogSelectClampIndex(-1, 2)).toBe(0)
     expect(dialogSelectClampIndex(5, 0)).toBe(0)
+  })
+
+  test("resolves the option activated by Enter from the clamped selection", () => {
+    const selectable = [options[0], options[1]]
+
+    expect(dialogSelectActionOption(selectable, 1)).toBe(options[1])
+    expect(dialogSelectActionOption(selectable, 99)).toBe(options[1])
+    expect(dialogSelectActionOption(selectable, -1)).toBe(options[0])
+    expect(dialogSelectActionOption([], 0)).toBeUndefined()
   })
 })

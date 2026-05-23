@@ -791,7 +791,10 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(dialogSelect).toContain('"dialog select action failed"')
     expect(dialogSelect).toContain('"dialog select keybind failed"')
     expect(dialogSelect).toContain('"Failed to complete the selected action"')
-    expect(dialogSelect).toContain("void Promise.resolve()")
+    expect(dialogSelect).toContain("return Promise.resolve()")
+    expect(dialogSelect).toContain("onSubmit={confirmSelected}")
+    expect(dialogSelect).toContain('keyBindings={[{ name: "return", action: "submit" }]}')
+    expect(dialogSelect).toContain("confirmInFlight")
     expect(dialogSelect).not.toContain("setTimeout(")
   })
 
