@@ -70,6 +70,13 @@ describe("LSPClient interop", () => {
     expect(lock.size()).toBe(0)
   })
 
+  test("diagnostics URI normalization skips non-file URIs", () => {
+    const filePath = path.join(process.cwd(), "file.ts")
+    expect(LSPClient.diagnosticPathFromUri(new URL(`file://${filePath}`).href)).toBe(filePath)
+    expect(LSPClient.diagnosticPathFromUri("untitled:Scratch.ts")).toBeUndefined()
+    expect(LSPClient.diagnosticPathFromUri("vscode-notebook-cell:/workspace/notebook.ipynb#cell")).toBeUndefined()
+  })
+
   test("handles workspace/workspaceFolders request", async () => {
     const handle = spawnFakeServer() as any
 

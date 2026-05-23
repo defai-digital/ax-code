@@ -835,8 +835,8 @@ describe("session.compaction.prune tier-aware", () => {
           return part.state.time.compacted
         }
 
-        expect(compactedAt(partIDs.turn5)).toBeNumber()
-        for (const turn of [1, 2, 3, 4, 6, 7, 8]) {
+        expect(compactedAt(partIDs.turn1)).toBeNumber()
+        for (const turn of [2, 3, 4, 5, 6, 7, 8]) {
           expect(compactedAt(partIDs[`turn${turn}`])).toBeUndefined()
         }
       },

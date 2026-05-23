@@ -190,7 +190,9 @@ export namespace SessionCompaction {
 
       for (const { tier, candidates } of tiers) {
         if (candidates.length === 0) continue
-        for (const candidate of candidates) {
+        // Candidates are collected while walking messages newest-to-oldest.
+        // Within the same priority tier, compact the oldest tool results first.
+        for (const candidate of [...candidates].reverse()) {
           selectedTokens += candidate.estimate
           selectedCandidates.push({ ...candidate, tier })
           if (selectedTokens > PRUNE_MINIMUM) break
