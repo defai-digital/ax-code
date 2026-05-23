@@ -29,7 +29,7 @@ function parseCommaList(value: string | undefined): string[] | undefined {
 
 export function applyMemoryEvalExitCode(
   report: Pick<MemoryEvaluationReport, "passedThreshold">,
-  target: { exitCode?: number | string | undefined } = process,
+  target: { exitCode?: number | string | null | undefined } = process,
 ) {
   if (!report.passedThreshold) target.exitCode = 1
 }
@@ -37,7 +37,7 @@ export function applyMemoryEvalExitCode(
 export function applyMemoryDoctorExitCode(
   report: Pick<MemoryDoctorReport, "status">,
   failOn: "warn" | "error" | "never" | undefined,
-  target: { exitCode?: number | string | undefined } = process,
+  target: { exitCode?: number | string | null | undefined } = process,
 ) {
   if (!failOn || failOn === "never") return
   if (failOn === "error" && report.status === "error") target.exitCode = 1

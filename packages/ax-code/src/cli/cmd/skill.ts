@@ -36,7 +36,7 @@ export function buildSkillValidationReport(skills: Skill.Info[]): SkillValidatio
 
 export function applySkillValidationExitCode(
   report: Pick<SkillValidationReport, "invalid">,
-  target: { exitCode?: number | string | undefined } = process,
+  target: { exitCode?: number | string | null | undefined } = process,
 ) {
   if (report.invalid > 0) target.exitCode = 1
 }
