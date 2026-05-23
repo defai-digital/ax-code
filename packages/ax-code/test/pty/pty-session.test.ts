@@ -36,6 +36,38 @@ describe("pty", () => {
     expect(env.SAFE).toBe("ok")
   })
 
+  test("reports a replay gap when reconnect cursor is older than the retained buffer", () => {
+    const replay = Pty.__replayBufferedOutputForTest(
+      {
+        buffer: "cdef",
+        bufferCursor: 2,
+        cursor: 6,
+      },
+      1,
+    )
+
+    expect(replay.data).toBe("cdef")
+    expect(replay.meta).toEqual({
+      cursor: 6,
+      from: 2,
+      gap: { requested: 1, available: 2 },
+    })
+  })
+
+  test("replays retained data from the requested cursor when no gap exists", () => {
+    const replay = Pty.__replayBufferedOutputForTest(
+      {
+        buffer: "cdef",
+        bufferCursor: 2,
+        cursor: 6,
+      },
+      3,
+    )
+
+    expect(replay.data).toBe("def")
+    expect(replay.meta).toEqual({ cursor: 6 })
+  })
+
   test("publishes created, exited, deleted in order for a short-lived process", async () => {
     if (process.platform === "win32") return
 
