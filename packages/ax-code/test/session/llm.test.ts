@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test"
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test"
 import path from "path"
 import fs from "fs/promises"
 import { tool, type ModelMessage } from "ai"
@@ -935,6 +935,237 @@ describe("session.llm.stream", () => {
 
         expect(capture.url.pathname).toBe(pathSuffix)
         expect(config?.["thinkingLevel"]).toBe("minimal")
+      },
+    })
+  })
+})
+
+describe("session.llm.stream - Phase 1 long-agent profile wiring", () => {
+  const origSuperLong = process.env.AX_CODE_SUPER_LONG
+
+  afterEach(() => {
+    if (origSuperLong === undefined) {
+      delete process.env.AX_CODE_SUPER_LONG
+    } else {
+      process.env.AX_CODE_SUPER_LONG = origSuperLong
+    }
+    LLM.clearPacingState()
+  })
+
+  test("Qwen3.7-Max with Super-Long enabled emits preserve_thinking in request body", async () => {
+    process.env.AX_CODE_SUPER_LONG = "1"
+    const providerID = "alibaba-coding-plan"
+    const modelID = "qwen3.7-max"
+    const fixture = await loadFixture(providerID, modelID)
+    const model = fixture.model
+
+    const request = waitRequest(
+      "/chat/completions",
+      new Response(createChatStream("ok"), {
+        status: 200,
+        headers: { "Content-Type": "text/event-stream" },
+      }),
+    )
+
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await Bun.write(
+          path.join(dir, "ax-code.json"),
+          JSON.stringify({
+            $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+            enabled_providers: [providerID],
+            provider: {
+              [providerID]: {
+                options: { apiKey: "test-key", baseURL: `${state.server.url.origin}/v1` },
+              },
+            },
+          }),
+        )
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const resolved = await Provider.getModel(ProviderID.make(providerID), ModelID.make(model.id))
+        const sessionID = SessionID.make("session-phase1-qwen-preserve")
+        const agent = {
+          name: "primary",
+          mode: "primary",
+          options: {},
+          permission: [{ permission: "*", pattern: "*", action: "allow" }],
+        } satisfies Agent.Info
+        const user = {
+          id: MessageID.make("user-phase1-preserve"),
+          sessionID,
+          role: "user",
+          time: { created: Date.now() },
+          agent: agent.name,
+          model: { providerID: ProviderID.make(providerID), modelID: resolved.id },
+        } satisfies MessageV2.User
+
+        const stream = await LLM.stream({
+          user,
+          sessionID,
+          model: resolved,
+          agent,
+          system: ["You are a coding agent."],
+          abort: new AbortController().signal,
+          messages: [{ role: "user", content: "Fix the bug." }],
+          tools: {},
+        })
+        for await (const _ of stream.fullStream) {}
+
+        const capture = await request
+        expect(capture.body.preserve_thinking).toBe(true)
+        expect(capture.body.enable_thinking).toBe(true)
+      },
+    })
+  })
+
+  test("non-Qwen model with Super-Long enabled does not emit preserve_thinking", async () => {
+    process.env.AX_CODE_SUPER_LONG = "1"
+    const providerID = "alibaba-coding-plan"
+    const modelID = "qwen3.6-plus"
+    const fixture = await loadFixture(providerID, modelID)
+    const model = fixture.model
+
+    const request = waitRequest(
+      "/chat/completions",
+      new Response(createChatStream("ok"), {
+        status: 200,
+        headers: { "Content-Type": "text/event-stream" },
+      }),
+    )
+
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await Bun.write(
+          path.join(dir, "ax-code.json"),
+          JSON.stringify({
+            $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+            enabled_providers: [providerID],
+            provider: {
+              [providerID]: {
+                options: { apiKey: "test-key", baseURL: `${state.server.url.origin}/v1` },
+              },
+            },
+          }),
+        )
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const resolved = await Provider.getModel(ProviderID.make(providerID), ModelID.make(model.id))
+        const sessionID = SessionID.make("session-phase1-non-qwen")
+        const agent = {
+          name: "primary",
+          mode: "primary",
+          options: {},
+          permission: [{ permission: "*", pattern: "*", action: "allow" }],
+        } satisfies Agent.Info
+        const user = {
+          id: MessageID.make("user-phase1-non-qwen"),
+          sessionID,
+          role: "user",
+          time: { created: Date.now() },
+          agent: agent.name,
+          model: { providerID: ProviderID.make(providerID), modelID: resolved.id },
+        } satisfies MessageV2.User
+
+        const stream = await LLM.stream({
+          user,
+          sessionID,
+          model: resolved,
+          agent,
+          system: ["You are a coding agent."],
+          abort: new AbortController().signal,
+          messages: [{ role: "user", content: "Fix the bug." }],
+          tools: {},
+        })
+        for await (const _ of stream.fullStream) {}
+
+        const capture = await request
+        // qwen3.6-plus has preserveThinkingEligible=false via defaultLongAgentProfile
+        expect(capture.body.preserve_thinking).toBeUndefined()
+        expect(capture.body.enable_thinking).toBe(true)
+      },
+    })
+  })
+
+  test("Qwen3.7-Max with Super-Long enabled injects verification reminder in system messages", async () => {
+    process.env.AX_CODE_SUPER_LONG = "1"
+    const providerID = "alibaba-coding-plan"
+    const modelID = "qwen3.7-max"
+    const fixture = await loadFixture(providerID, modelID)
+    const model = fixture.model
+
+    const request = waitRequest(
+      "/chat/completions",
+      new Response(createChatStream("ok"), {
+        status: 200,
+        headers: { "Content-Type": "text/event-stream" },
+      }),
+    )
+
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await Bun.write(
+          path.join(dir, "ax-code.json"),
+          JSON.stringify({
+            $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+            enabled_providers: [providerID],
+            provider: {
+              [providerID]: {
+                options: { apiKey: "test-key", baseURL: `${state.server.url.origin}/v1` },
+              },
+            },
+          }),
+        )
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const resolved = await Provider.getModel(ProviderID.make(providerID), ModelID.make(model.id))
+        const sessionID = SessionID.make("session-phase1-verification")
+        const agent = {
+          name: "primary",
+          mode: "primary",
+          options: {},
+          permission: [{ permission: "*", pattern: "*", action: "allow" }],
+        } satisfies Agent.Info
+        const user = {
+          id: MessageID.make("user-phase1-verification"),
+          sessionID,
+          role: "user",
+          time: { created: Date.now() },
+          agent: agent.name,
+          model: { providerID: ProviderID.make(providerID), modelID: resolved.id },
+        } satisfies MessageV2.User
+
+        const stream = await LLM.stream({
+          user,
+          sessionID,
+          model: resolved,
+          agent,
+          system: ["You are a coding agent."],
+          abort: new AbortController().signal,
+          messages: [{ role: "user", content: "Refactor the module." }],
+          tools: {},
+        })
+        for await (const _ of stream.fullStream) {}
+
+        const capture = await request
+        const systemMessages = (capture.body.messages as Array<{ role: string; content: string }>).filter(
+          (m) => m.role === "system",
+        )
+        const allSystemText = systemMessages.map((m) => m.content).join("\n")
+        expect(allSystemText).toContain("Super-Long mode")
+        expect(allSystemText).toContain("verification")
       },
     })
   })
