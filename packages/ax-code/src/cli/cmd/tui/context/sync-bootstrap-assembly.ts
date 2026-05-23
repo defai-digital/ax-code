@@ -70,6 +70,7 @@ export interface SyncBootstrapAssemblyRequests {
   workspacesTask: BootstrapTask
   debugEngineTask: BootstrapTask
   smartLlmTask: BootstrapTask
+  superLongTask: BootstrapTask
 }
 
 export function createStoreBackedBootstrapTasks<TStore extends SyncBootstrapAssemblyStoreState>(input: {
@@ -142,6 +143,7 @@ export function createStoreBackedBootstrapTasks<TStore extends SyncBootstrapAsse
       workspacesTask: input.requests.workspacesTask,
       debugEngineTask: input.requests.debugEngineTask,
       smartLlmTask: input.requests.smartLlmTask,
+      superLongTask: input.requests.superLongTask,
     }),
   }
 }

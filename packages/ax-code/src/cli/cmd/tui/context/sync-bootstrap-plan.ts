@@ -180,6 +180,7 @@ export function createDeferredBootstrapPhaseTasks(input: {
   workspacesTask: BootstrapTask
   debugEngineTask: BootstrapTask
   smartLlmTask: BootstrapTask
+  superLongTask: BootstrapTask
 }) {
   return [
     ...createBootstrapResponsePlanTasks(
@@ -212,5 +213,6 @@ export function createDeferredBootstrapPhaseTasks(input: {
     input.workspacesTask,
     input.debugEngineTask,
     input.smartLlmTask,
+    input.superLongTask,
   ]
 }

@@ -73,6 +73,7 @@ export interface SyncStoreState {
   }
   autonomous: boolean
   smartLlm: boolean
+  superLong: boolean
   mcp: Record<string, McpStatus>
   mcp_resource: Record<string, McpResource>
   formatter: FormatterStatus[]
@@ -128,6 +129,7 @@ export function createInitialSyncState(): SyncStoreState {
     },
     autonomous: true,
     smartLlm: false,
+    superLong: false,
     mcp: {},
     mcp_resource: {},
     formatter: [],

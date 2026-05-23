@@ -216,6 +216,10 @@ describe("tui sync bootstrap request", () => {
         sideEffects.push("smart")
         return Promise.resolve()
       },
+      syncSuperLong() {
+        sideEffects.push("super-long")
+        return Promise.resolve()
+      },
     })
 
     expect(wrapped).toEqual([])

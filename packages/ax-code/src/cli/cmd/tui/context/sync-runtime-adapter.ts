@@ -10,7 +10,7 @@ import { type SyncStoreState } from "./sync-state"
 
 type RuntimeStoreState = Pick<
   SyncStoreState,
-  "workspaceList" | "mcp" | "lsp" | "debugEngine" | "autonomous" | "smartLlm" | "isolation"
+  "workspaceList" | "mcp" | "lsp" | "debugEngine" | "autonomous" | "smartLlm" | "superLong" | "isolation"
 >
 
 export function createStoreBackedRuntimeSyncActions<TStore extends RuntimeStoreState>(input: {
@@ -22,7 +22,7 @@ export function createStoreBackedRuntimeSyncActions<TStore extends RuntimeStoreS
   setStore: SetStoreFunction<TStore>
 }): RuntimeSyncActions {
   const setStore = input.setStore as unknown as SetStoreFunction<RuntimeStoreState>
-  const applyBooleanFeature = (key: "autonomous" | "smartLlm") => (value: boolean) => {
+  const applyBooleanFeature = (key: "autonomous" | "smartLlm" | "superLong") => (value: boolean) => {
     setStore(key, value)
   }
 
@@ -46,6 +46,7 @@ export function createStoreBackedRuntimeSyncActions<TStore extends RuntimeStoreS
     },
     applyAutonomous: applyBooleanFeature("autonomous"),
     applySmartLlm: applyBooleanFeature("smartLlm"),
+    applySuperLong: applyBooleanFeature("superLong"),
     applyIsolation(value: RuntimeStoreState["isolation"]) {
       setStore("isolation", reconcile(value))
     },

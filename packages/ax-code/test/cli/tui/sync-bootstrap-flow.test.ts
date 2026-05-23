@@ -164,6 +164,7 @@ describe("tui sync bootstrap flow", () => {
       syncSmartLlm: async () => {
         runtimeCalls.push("smart")
       },
+      syncSuperLong: async () => undefined,
       createTasks(requests, onProvidersReady) {
         return createStoreBackedBootstrapTasks({
           continueFromArgs: true,
@@ -232,6 +233,7 @@ describe("tui sync bootstrap flow", () => {
       syncWorkspaces: async () => undefined,
       syncDebugEngine: async () => undefined,
       syncSmartLlm: async () => undefined,
+      syncSuperLong: async () => undefined,
       createTasks() {
         throw new Error("bootstrap flow failed")
       },
@@ -281,6 +283,7 @@ describe("tui sync bootstrap flow", () => {
       syncWorkspaces: async () => undefined,
       syncDebugEngine: async () => undefined,
       syncSmartLlm: async () => undefined,
+      syncSuperLong: async () => undefined,
       createTasks() {
         const current = ++runID
         return {
