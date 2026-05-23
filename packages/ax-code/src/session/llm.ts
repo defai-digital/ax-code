@@ -30,6 +30,7 @@ import { AgentControlEvents } from "@/control-plane/agent-control-events"
 import { isNonEmptyRecord } from "@/util/record"
 import { SuperLongPolicy } from "./super-long-policy"
 import { longAgentProfileForModel } from "@/provider/agent-optimization-profile"
+import { PromptCachePolicy } from "@/provider/prompt-cache-policy"
 
 import { ReasoningPolicy } from "@/control-plane/reasoning-policy"
 
@@ -190,6 +191,24 @@ export namespace LLM {
         mergeDeep(reasoningPolicyDecision.options),
       ),
     )
+    // Phase 3: classify finalized system blocks and log cache policy decision.
+    // All system blocks are stable (provider instructions, rules, reminders).
+    // promptCacheKey is set in ProviderTransform.options() for Alibaba longAgent
+    // sessions; per-block cache_control requires a live route probe first.
+    if (!input.small && longAgentProfile.promptCacheEligible) {
+      const cacheBlocks = PromptCachePolicy.buildBlocks(
+        system.map((content, i) => ({ label: i === 0 ? "system" : "stable-rules", content })),
+      )
+      const cacheResult = PromptCachePolicy.render(cacheBlocks, input.model.providerID)
+      if (cacheResult.mode !== "off") {
+        l.info("prompt cache policy active", {
+          mode: cacheResult.mode,
+          stableBlocks: cacheResult.blocks.filter((b) => b.cacheControl !== undefined).length,
+          totalBlocks: cacheResult.blocks.length,
+        })
+      }
+    }
+
     const messages = [
       ...system.map(
         (x): ModelMessage => ({
