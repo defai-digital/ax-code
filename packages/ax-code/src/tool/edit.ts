@@ -691,7 +691,8 @@ export function trimDiff(diff: string): string {
 }
 
 export function replace(content: string, oldString: string, newString: string, replaceAll = false): string {
-  const native = NativeAddon.diff()
+  const hasCRLF = content.includes("\r\n")
+  const native = hasCRLF ? undefined : NativeAddon.diff()
   if (native) {
     try {
       const json = NativePerf.run(
@@ -724,6 +725,15 @@ export function replace(content: string, oldString: string, newString: string, r
     return content.replaceAll(oldString, newString)
   }
 
+  // Normalize CRLF to LF for fuzzy matching. Fuzzy replacers use
+  // content.split("\n") which leaves trailing \r on each line; when
+  // they reconstruct matches via .join("\n") or character arithmetic
+  // the \r artifacts corrupt line endings in the replacement result.
+  // Working on LF-normalized content avoids this entirely.
+  const matchContent = hasCRLF ? normalizeLineEndings(content) : content
+  const matchOld = hasCRLF ? normalizeLineEndings(oldString) : oldString
+  const matchNew = hasCRLF ? normalizeLineEndings(newString) : newString
+
   let notFound = true
 
   for (const replacer of [
@@ -737,13 +747,24 @@ export function replace(content: string, oldString: string, newString: string, r
     ContextAwareReplacer,
     MultiOccurrenceReplacer,
   ]) {
-    for (const search of replacer(content, oldString)) {
-      const index = content.indexOf(search)
+    for (const search of replacer(matchContent, matchOld)) {
+      const index = matchContent.indexOf(search)
       if (index === -1) continue
       notFound = false
-      const lastIndex = content.lastIndexOf(search)
+      const lastIndex = matchContent.lastIndexOf(search)
       if (index !== lastIndex) continue
-      return content.substring(0, index) + newString + content.substring(index + search.length)
+
+      const normalizedResult =
+        matchContent.substring(0, index) + matchNew + matchContent.substring(index + search.length)
+
+      if (hasCRLF) {
+        return spliceNormalizedReplacement({
+          original: content,
+          normalizedResult,
+          replacementEnding: detectLineEnding(content),
+        })
+      }
+      return normalizedResult
     }
   }
 
