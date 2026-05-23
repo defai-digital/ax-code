@@ -4,6 +4,8 @@ import { Bus } from "../../src/bus"
 import { Permission } from "../../src/permission"
 import { PermissionID } from "../../src/permission/schema"
 import { Instance } from "../../src/project/instance"
+import { PermissionTable } from "../../src/session/session.sql"
+import { Database, eq } from "../../src/storage/db"
 import { tmpdir } from "../fixture/fixture"
 import { MessageID, SessionID } from "../../src/session/schema"
 
@@ -864,6 +866,60 @@ test("reply - always persists approval and resolves", async () => {
         ruleset: [],
       })
       expect(result).toBeUndefined()
+    },
+  })
+})
+
+test("reply - concurrent always approvals persist all rules", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const bash = Permission.ask({
+        id: PermissionID.make("per_concurrent_always_bash"),
+        sessionID: SessionID.make("session_concurrent_always_bash"),
+        permission: "bash",
+        patterns: ["ls"],
+        metadata: {},
+        always: ["ls"],
+        ruleset: [],
+      })
+      const edit = Permission.ask({
+        id: PermissionID.make("per_concurrent_always_edit"),
+        sessionID: SessionID.make("session_concurrent_always_edit"),
+        permission: "edit",
+        patterns: ["src/file.ts"],
+        metadata: {},
+        always: ["src/file.ts"],
+        ruleset: [],
+      })
+
+      await waitForPending(2)
+
+      await Promise.all([
+        Permission.reply({
+          requestID: PermissionID.make("per_concurrent_always_bash"),
+          reply: "always",
+        }),
+        Permission.reply({
+          requestID: PermissionID.make("per_concurrent_always_edit"),
+          reply: "always",
+        }),
+      ])
+
+      await expect(bash).resolves.toBeUndefined()
+      await expect(edit).resolves.toBeUndefined()
+
+      const row = Database.use((db) =>
+        db.select().from(PermissionTable).where(eq(PermissionTable.project_id, Instance.project.id)).get(),
+      )
+      expect(row?.data).toEqual(
+        expect.arrayContaining([
+          { permission: "bash", pattern: "ls", action: "allow" },
+          { permission: "edit", pattern: "src/file.ts", action: "allow" },
+        ]),
+      )
+      expect(row?.data).toHaveLength(2)
     },
   })
 })

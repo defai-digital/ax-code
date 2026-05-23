@@ -171,6 +171,21 @@ export namespace Permission {
   // default rules like {permission:"*",action:"allow",pattern:"*"} from
   // silently bypassing critical safety checks.
   const INTERACTIVE_ONLY: ReadonlySet<string> = new Set(["isolation_escalation"])
+  let alwaysReplyQueue: Promise<void> = Promise.resolve()
+
+  async function serializeAlwaysReply<T>(fn: () => Promise<T>) {
+    const previous = alwaysReplyQueue
+    let release!: () => void
+    alwaysReplyQueue = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    await previous.catch(() => {})
+    try {
+      return await fn()
+    } finally {
+      release()
+    }
+  }
 
   function createDeferred<T>(): PromiseDeferred<T> {
     let resolve!: (value: T) => void
@@ -342,80 +357,74 @@ export namespace Permission {
       return
     }
 
-    pending.delete(input.requestID)
-
     if (input.reply === "once") {
+      pending.delete(input.requestID)
       publishReply(existing, input.reply)
       existing.deferred.resolve(undefined)
       return
     }
 
-    const nextApproved = [
-      ...approved,
-      ...existing.info.always.map((pattern) => ({
+    await serializeAlwaysReply(async () => {
+      if (!pending.delete(input.requestID)) return
+
+      const rules = existing.info.always.map((pattern) => ({
         permission: existing.info.permission,
         pattern,
         action: "allow" as const,
-      })),
-    ]
+      }))
+      const nextApproved = [...approved, ...rules]
 
-    try {
-      await Database.use((db) =>
-        db
-          .insert(PermissionTable)
-          .values({
-            project_id: projectID,
-            data: nextApproved,
-            time_created: Date.now(),
-            time_updated: Date.now(),
-          })
-          .onConflictDoUpdate({
-            target: PermissionTable.project_id,
-            set: {
+      try {
+        await Database.use((db) =>
+          db
+            .insert(PermissionTable)
+            .values({
+              project_id: projectID,
               data: nextApproved,
+              time_created: Date.now(),
               time_updated: Date.now(),
-            },
-          })
-          .run(),
-      )
-    } catch (error) {
-      existing.deferred.reject(error)
-      throw error
-    }
-    publishReply(existing, input.reply)
+            })
+            .onConflictDoUpdate({
+              target: PermissionTable.project_id,
+              set: {
+                data: nextApproved,
+                time_updated: Date.now(),
+              },
+            })
+            .run(),
+        )
+      } catch (error) {
+        existing.deferred.reject(error)
+        throw error
+      }
+      approved.push(...rules)
+      publishReply(existing, input.reply)
+      existing.deferred.resolve(undefined)
 
-    for (const pattern of existing.info.always) {
-      approved.push({
-        permission: existing.info.permission,
-        pattern,
-        action: "allow",
-      })
-    }
-    existing.deferred.resolve(undefined)
-
-    for (const [id, item] of pending.entries()) {
-      if (item.info.sessionID !== existing.info.sessionID) continue
-      const ok = item.info.patterns.every((pattern) => {
-        if (INTERACTIVE_ONLY.has(item.info.permission)) return false
-        return evaluate(item.info.permission, pattern, item.ruleset, approved).action === "allow"
-      })
-      if (!ok) continue
-      pending.delete(id)
-      Bus.publishDetached(Event.Replied, {
-        sessionID: item.info.sessionID,
-        requestID: item.info.id,
-        reply: "always",
-      })
-      if (Recorder.active(item.info.sessionID)) {
-        Recorder.emit({
-          type: "permission.reply",
+      for (const [id, item] of pending.entries()) {
+        if (item.info.sessionID !== existing.info.sessionID) continue
+        const ok = item.info.patterns.every((pattern) => {
+          if (INTERACTIVE_ONLY.has(item.info.permission)) return false
+          return evaluate(item.info.permission, pattern, item.ruleset, approved).action === "allow"
+        })
+        if (!ok) continue
+        pending.delete(id)
+        Bus.publishDetached(Event.Replied, {
           sessionID: item.info.sessionID,
-          permission: item.info.permission,
+          requestID: item.info.id,
           reply: "always",
         })
+        if (Recorder.active(item.info.sessionID)) {
+          Recorder.emit({
+            type: "permission.reply",
+            sessionID: item.info.sessionID,
+            permission: item.info.permission,
+            reply: "always",
+          })
+        }
+        item.deferred.resolve(undefined)
       }
-      item.deferred.resolve(undefined)
-    }
+    })
   }
 
   async function listPromise() {
