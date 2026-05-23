@@ -72,6 +72,7 @@ export namespace Command {
     ADR: "adr",
     IMPACT: "impact",
     PRD: "prd",
+    GOAL: "goal",
   } as const
 
   export interface Interface {
@@ -143,6 +144,13 @@ export namespace Command {
             return PROMPT_PRD.replace("${path}", () => ctx.worktree)
           },
           hints: hints(PROMPT_PRD),
+        }
+        commands[Default.GOAL] = {
+          name: Default.GOAL,
+          description: "set, view, pause, resume, or clear a durable session goal",
+          source: "command",
+          template: "",
+          hints: ["$ARGUMENTS"],
         }
 
         for (const [name, command] of Object.entries(cfg.command ?? {})) {

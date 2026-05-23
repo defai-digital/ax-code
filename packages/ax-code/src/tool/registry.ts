@@ -41,6 +41,7 @@ import { RegisterFindingTool } from "./register_finding"
 import { VerifyProjectTool } from "./verify_project"
 import { ReviewCompleteTool } from "./review_complete"
 import { MemorySaveTool } from "./memory"
+import { GetGoalTool, CreateGoalTool, UpdateGoalTool } from "./goal"
 import { DebugOpenCaseTool } from "./debug_open_case"
 import { DebugCaptureEvidenceTool } from "./debug_capture_evidence"
 import { DebugPlanInstrumentationTool } from "./debug_plan_instrumentation"
@@ -213,6 +214,9 @@ export namespace ToolRegistry {
           CodeSearchTool,
           SkillTool,
           MemorySaveTool,
+          GetGoalTool,
+          CreateGoalTool,
+          UpdateGoalTool,
           ApplyPatchTool,
           RegisterFindingTool,
           VerifyProjectTool,
