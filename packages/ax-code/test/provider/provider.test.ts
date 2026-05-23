@@ -7,6 +7,7 @@ import { Provider } from "../../src/provider/provider"
 import { ProviderID, ModelID } from "../../src/provider/schema"
 import { Env } from "../../src/env"
 import bundledSnapshot from "../../src/provider/models-snapshot.json"
+import { OPENROUTER_SUPPORTED_MODEL_IDS } from "../../src/provider/model-support"
 
 test("provider loaded from env variable", async () => {
   await using tmp = await tmpdir({
@@ -1157,6 +1158,36 @@ test("openai provider only exposes GPT-4 or later models", async () => {
   })
 })
 
+test("openrouter provider only exposes curated coding models", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await Bun.write(
+        path.join(dir, "ax-code.json"),
+        JSON.stringify({
+          $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+          enabled_providers: ["openrouter"],
+          provider: {
+            openrouter: {
+              options: {
+                apiKey: "test-openrouter-key",
+              },
+            },
+          },
+        }),
+      )
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const providers = await Provider.list()
+      const openrouter = providers[ProviderID.make("openrouter")]
+      expect(openrouter).toBeDefined()
+      expect(Object.keys(openrouter.models).sort()).toEqual([...OPENROUTER_SUPPORTED_MODEL_IDS].sort())
+    },
+  })
+})
+
 test("provider list filters GPT-5.5 from configured provider models", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
@@ -1197,9 +1228,21 @@ test("provider list filters GPT-5.5 from configured provider models", async () =
                 apiKey: "test-openrouter-key",
               },
               models: {
+                "openrouter/auto": {
+                  id: "openrouter/auto",
+                  name: "Auto Router",
+                },
+                "openrouter/free": {
+                  id: "openrouter/free",
+                  name: "OpenRouter Free",
+                },
                 "openai/gpt-5.5": {
                   id: "openai/gpt-5.5",
                   name: "GPT-5.5",
+                },
+                "my-openrouter-alias": {
+                  id: "openai/gpt-5.1-codex",
+                  name: "GPT-5.1 Codex Alias",
                 },
               },
             },
@@ -1273,7 +1316,10 @@ test("provider list filters GPT-5.5 from configured provider models", async () =
       expect(providers[ProviderID.make("openai")]?.models["my-spaced-gpt-alias"]).toBeUndefined()
       expect(providers[ProviderID.make("openai")]?.models["my-separated-gpt-alias"]).toBeUndefined()
       expect(providers[ProviderID.make("openai")]?.models["gpt-5"]).toBeDefined()
+      expect(providers[ProviderID.make("openrouter")]?.models["openrouter/auto"]).toBeDefined()
+      expect(providers[ProviderID.make("openrouter")]?.models["openrouter/free"]).toBeUndefined()
       expect(providers[ProviderID.make("openrouter")]?.models["openai/gpt-5.5"]).toBeUndefined()
+      expect(providers[ProviderID.make("openrouter")]?.models["my-openrouter-alias"]).toBeUndefined()
       expect(providers[ProviderID.xai]?.models["grok-4"]).toBeUndefined()
       expect(providers[ProviderID.xai]?.models["my-old-grok-alias"]).toBeUndefined()
       expect(providers[ProviderID.xai]?.models["my-grok-alias"]).toBeDefined()

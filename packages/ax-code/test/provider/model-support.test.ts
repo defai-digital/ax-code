@@ -1,9 +1,11 @@
 import { describe, expect, test } from "bun:test"
 import {
+  OPENROUTER_SUPPORTED_MODEL_IDS,
   buildModelProbes,
   supportsGlmModels,
   supportsGrok41OrAllowedCodingModel,
   supportsOpenAIGptModels,
+  supportsOpenRouterModelID,
 } from "../../src/provider/model-support"
 import { supportsReasoning, supportsServerTools } from "../../src/provider/xai/server-tools"
 
@@ -49,6 +51,21 @@ describe("supportsGrok41OrAllowedCodingModel", () => {
     expect(supportsOpenAIGptModels(neutralProbes("gpt-5", "gpt"))).toBe(true)
     expect(supportsGlmModels(neutralProbes("glm-5", "glm"))).toBe(true)
   })
+})
+
+describe("supportsOpenRouterModelID", () => {
+  test("accepts the curated OpenRouter coding allow-list", () => {
+    for (const id of OPENROUTER_SUPPORTED_MODEL_IDS) {
+      expect(supportsOpenRouterModelID(id)).toBe(true)
+    }
+  })
+
+  test.each(["openrouter/free", "openrouter/bodybuilder", "openai/gpt-5.2", "anthropic/claude-3-haiku"])(
+    "rejects %s",
+    (id) => {
+      expect(supportsOpenRouterModelID(id)).toBe(false)
+    },
+  )
 })
 
 describe("xai server-tools gates for Grok 4.3", () => {

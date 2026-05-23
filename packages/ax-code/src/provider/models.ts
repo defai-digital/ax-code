@@ -8,6 +8,7 @@ import { Instance } from "../project/instance"
 import { Flag } from "../flag/flag"
 import {
   buildModelProbes,
+  supportsOpenRouterModelID,
   supportsGlmModels,
   supportsOpenAIGptModels,
   supportsGrok41OrAllowedCodingModel,
@@ -25,6 +26,7 @@ export namespace ModelsDev {
     const probes = buildModelProbes(modelID, model)
     const lower = probes[0] ?? modelID.toLowerCase()
     if (probes.some((probe) => probe.includes("gpt-5.5"))) return false
+    if (providerID === "openrouter") return supportsOpenRouterModelID(modelID)
     if (providerID === "google" || providerID === "google-vertex") {
       if (!lower.includes("gemini")) return true
       return gemini3(lower)
