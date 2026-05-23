@@ -1,7 +1,7 @@
 import z from "zod"
 import { Bus } from "@/bus"
 import { BusEvent } from "@/bus/bus-event"
-import { Database, eq } from "@/storage/db"
+import { Database, eq, sql } from "@/storage/db"
 import { SessionGoalTable } from "./session.sql"
 import { SessionID } from "./schema"
 import type { MessageV2 } from "./message-v2"
@@ -180,31 +180,34 @@ export namespace SessionGoal {
     sessionID: SessionID
     message: MessageV2.Assistant
   }): Promise<Info | undefined> {
-    const goal = await get(input.sessionID)
-    if (!goal) return undefined
     const tokens =
       input.message.tokens.total ??
       input.message.tokens.input + input.message.tokens.output + input.message.tokens.reasoning
-    if (tokens <= 0 && input.message.time.completed === undefined) return goal
+    const tokenDelta = Math.max(0, tokens)
 
     const elapsedSeconds =
       input.message.time.completed === undefined
         ? 0
         : Math.max(0, Math.round((input.message.time.completed - input.message.time.created) / 1000))
-    const nextTokens = goal.tokensUsed + Math.max(0, tokens)
-    const nextTime = goal.timeUsedSeconds + elapsedSeconds
-    const nextStatus =
-      goal.status === "active" && goal.tokenBudget !== undefined && nextTokens >= goal.tokenBudget
-        ? "budget_limited"
-        : goal.status
+    const shouldUpdate = tokenDelta > 0 || input.message.time.completed !== undefined
     const now = Date.now()
 
-    const updated = Database.use((db) => {
+    const updated = Database.transaction((db) => {
+      const row = db.select().from(SessionGoalTable).where(eq(SessionGoalTable.session_id, input.sessionID)).get()
+      if (!row) return undefined
+      if (!shouldUpdate) return fromRow(row)
+
       db.update(SessionGoalTable)
         .set({
-          tokens_used: nextTokens,
-          time_used_seconds: nextTime,
-          status: nextStatus,
+          tokens_used: sql`${SessionGoalTable.tokens_used} + ${tokenDelta}`,
+          time_used_seconds: sql`${SessionGoalTable.time_used_seconds} + ${elapsedSeconds}`,
+          status: sql`case
+            when ${SessionGoalTable.status} = 'active'
+              and ${SessionGoalTable.token_budget} is not null
+              and ${SessionGoalTable.tokens_used} + ${tokenDelta} >= ${SessionGoalTable.token_budget}
+            then 'budget_limited'
+            else ${SessionGoalTable.status}
+          end`,
           time_updated: now,
         })
         .where(eq(SessionGoalTable.session_id, input.sessionID))
