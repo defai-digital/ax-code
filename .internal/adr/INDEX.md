@@ -16,6 +16,7 @@ This index tracks the active ADR set for `ax-code`. Archived ADRs are retained u
 | [ADR-009](ADR-009-package-organization-boundary-hardening.md) | Harden Package Organization Boundaries Before Splitting Packages | Accepted; implemented |
 | [ADR-010](ADR-010-alibaba-thinking-shape-and-budget-clamping.md) | Alibaba Thinking Shape and Budget Clamping | Accepted |
 | [ADR-011](ADR-011-tui-session-tool-renderer-boundary.md) | Make TUI Session Tool Rendering a Named Boundary | Accepted; initial extraction implemented |
+| [ADR-012](ADR-012-autonomous-continuation-contracts.md) | Make autonomous continuation prompts and terminal semantics explicit contracts | Accepted |
 
 ## Archived ADRs
 

@@ -87,10 +87,11 @@ import {
   hasReportStyleTodo,
   pendingTodoContinuationDecision,
   pendingTodoSignature,
-  reportTodoClosureGuidance,
   todoDeadlineStepBuffer,
 } from "./prompt-todo-continuation"
 import { estimateRequestTokens, getLastUserInfo } from "./prompt-request"
+import { AutonomousContinuationPrompt } from "./prompt-autonomous-continuations"
+import { emptyModelTurnDecision } from "./prompt-autonomous-decisions"
 
 // @ts-ignore
 globalThis.AI_SDK_LOG_WARNINGS = false
@@ -520,7 +521,11 @@ export namespace SessionPrompt {
           await continueAutonomousLoop({
             event: "autonomous auto-continue",
             resetTodoProgressTracking: true,
-            text: `Continue from where you left off. You have used ${GLOBAL_STEP_LIMIT} steps. This is auto-continuation ${continuations + 1}/${maxContinuations}. Prioritize completing the most important remaining work. Avoid over-engineering: prefer the simplest common-practice change that solves the task, avoid new abstractions unless there are 3+ concrete use cases, and verify before expanding scope.`,
+            text: AutonomousContinuationPrompt.stepLimit({
+              stepLimit: GLOBAL_STEP_LIMIT,
+              continuation: continuations + 1,
+              maxContinuations,
+            }),
           })
           continue
         }
@@ -746,11 +751,12 @@ export namespace SessionPrompt {
           event: "autonomous agent step-limit auto-continue",
           resetTodoDeadlineSignature: true,
           resetTodoProgressTracking: true,
-          text:
-            `Autonomous mode reached the ${agent.name} agent step limit (${maxSteps} steps). ` +
-            `Continue from where you left off with the same agent. Do not summarize the task as complete ` +
-            `unless the work is actually complete; use tools to finish the remaining work and verify it. ` +
-            `This is agent step-limit auto-continuation ${continuations + 1}/${maxContinuations}.`,
+          text: AutonomousContinuationPrompt.agentStepLimit({
+            agentName: agent.name,
+            maxSteps,
+            continuation: continuations + 1,
+            maxContinuations,
+          }),
           logExtras: { agent: agent.name, maxSteps },
         })
         continue
@@ -991,35 +997,38 @@ export namespace SessionPrompt {
           )
         }
 
-        if (emptyModelTurn) {
-          const incompleteMessage =
-            `Autonomous mode received an empty model turn: the provider returned finish=other with zero input, ` +
-            `output, and reasoning tokens. The session is stopped, but the work should not be treated as complete.`
+        const emptyTurnDecision = emptyModelTurnDecision({
+          emptyModelTurn,
+          emptyModelTurnRetries,
+          maxEmptyModelTurnRetries: MAX_EMPTY_MODEL_TURN_RETRIES,
+          todoRetries,
+        })
+        emptyModelTurnRetries = emptyTurnDecision.emptyModelTurnRetries
+        todoRetries = emptyTurnDecision.todoRetries
 
-          if (emptyModelTurnRetries >= MAX_EMPTY_MODEL_TURN_RETRIES) {
-            log.warn("autonomous stopped after repeated empty model turn", {
-              command: "session.prompt.loop",
-              status: "stopped",
-              errorCode: "EMPTY_MODEL_TURN",
-              sessionID,
-              attempts: emptyModelTurnRetries,
-              maxAttempts: MAX_EMPTY_MODEL_TURN_RETRIES,
-              pendingCount: pendingTodos.length,
-            })
-            await publishAutonomousFailure(incompleteMessage)
-            reason = "stalled"
-            break
-          }
+        if (emptyTurnDecision.action === "stop") {
+          log.warn("autonomous stopped after repeated empty model turn", {
+            command: "session.prompt.loop",
+            status: "stopped",
+            errorCode: emptyTurnDecision.errorCode,
+            sessionID,
+            attempts: emptyTurnDecision.attempts,
+            maxAttempts: emptyTurnDecision.maxAttempts,
+            pendingCount: pendingTodos.length,
+          })
+          await publishAutonomousFailure(emptyTurnDecision.message)
+          reason = emptyTurnDecision.reason
+          break
+        }
 
-          emptyModelTurnRetries++
-          todoRetries++
+        if (emptyTurnDecision.action === "recover") {
           log.warn("autonomous empty model turn recovery", {
             command: "session.prompt.loop",
             status: "retry",
             errorCode: "EMPTY_MODEL_TURN",
             sessionID,
-            attempt: emptyModelTurnRetries,
-            maxAttempts: MAX_EMPTY_MODEL_TURN_RETRIES,
+            attempt: emptyTurnDecision.attempt,
+            maxAttempts: emptyTurnDecision.maxAttempts,
             pendingCount: pendingTodos.length,
           })
           await createAutonomousUserContinuation({
@@ -1028,11 +1037,10 @@ export namespace SessionPrompt {
             parts: [
               {
                 type: "text",
-                text:
-                  `The previous autonomous model turn returned no text and no tool calls. ` +
-                  `Do not repeat broad exploration. Continue from the current evidence, update the todo list, ` +
-                  `and either finish the remaining concrete work or explain what blocks completion. ` +
-                  `This is empty-turn recovery ${emptyModelTurnRetries}/${MAX_EMPTY_MODEL_TURN_RETRIES}.`,
+                text: AutonomousContinuationPrompt.emptyModelTurnRecovery({
+                  attempt: emptyTurnDecision.attempt,
+                  maxAttempts: emptyTurnDecision.maxAttempts,
+                }),
               },
             ],
           })
@@ -1081,12 +1089,11 @@ export namespace SessionPrompt {
             parts: [
               {
                 type: "text",
-                text:
-                  `Control-plane completion gate blocked completion: ${completionGate.message}\n` +
-                  `Retry the subagent task, resume the task_id if available, or explicitly explain why no usable result can be recovered. ` +
-                  `If the missing subagent result is genuinely unnecessary, include "Completion gate resolution:" and name the subagent task plus the direct evidence you used instead. ` +
-                  `Do not mark the work complete until the missing subagent evidence is resolved. ` +
-                  `This is completion-gate auto-continuation ${completionGateRetries}/${maxCompletionGateRetries}.`,
+                text: AutonomousContinuationPrompt.completionGateRetry({
+                  message: completionGate.message,
+                  attempt: completionGateRetries,
+                  maxAttempts: maxCompletionGateRetries,
+                }),
               },
             ],
           })
@@ -1122,14 +1129,7 @@ export namespace SessionPrompt {
               parts: [
                 {
                   type: "text",
-                  text:
-                    `Autonomous mode has reached a large context while ${Locale.pluralize(
-                      pendingTodos.length,
-                      "{} unfinished todo remains",
-                      "{} unfinished todos remain",
-                    )}:\n` +
-                    Todo.formatLines(pendingTodos).join("\n") +
-                    reportTodoClosureGuidance("context"),
+                  text: AutonomousContinuationPrompt.contextConvergence({ pendingTodos }),
                 },
               ],
             })
@@ -1147,7 +1147,7 @@ export namespace SessionPrompt {
           const signature = pendingTodoSignature(pendingTodos)
           if (signature !== lastTodoDeadlineSignature) {
             lastTodoDeadlineSignature = signature
-            const reportClosureGuidance = hasReportStyleTodo(pendingTodos) ? reportTodoClosureGuidance("deadline") : ""
+            const includeReportClosureGuidance = hasReportStyleTodo(pendingTodos)
             log.info("autonomous todo deadline convergence", {
               command: "session.prompt.loop",
               status: "ok",
@@ -1162,17 +1162,11 @@ export namespace SessionPrompt {
               parts: [
                 {
                   type: "text",
-                  text:
-                    `Autonomous mode is approaching the agent step limit with ${Locale.pluralize(
-                      remainingAgentSteps,
-                      "{} step remaining",
-                      "{} steps remaining",
-                    )} and ${Locale.pluralize(pendingTodos.length, "{} unfinished todo", "{} unfinished todos")}:\n` +
-                    `${Todo.formatLines(pendingTodos).join("\n")}\n` +
-                    `Stop broad exploration now. Finish the remaining concrete work, write any required reports, ` +
-                    `or cancel low-confidence todos with a short reason. Update the todo list after each completed ` +
-                    `or cancelled item before continuing.` +
-                    reportClosureGuidance,
+                  text: AutonomousContinuationPrompt.deadlineConvergence({
+                    remainingAgentSteps,
+                    pendingTodos,
+                    includeReportClosureGuidance,
+                  }),
                 },
               ],
             })
@@ -1254,16 +1248,6 @@ export namespace SessionPrompt {
             })
           }
 
-          const reportClosureGuidance = hasReportStyleTodo(pendingTodos)
-            ? reportTodoClosureGuidance("continuation")
-            : ""
-          const stagnantTodoGuidance = todoContinuation.stagnant
-            ? `\nThe pending todo list has not changed for ${Locale.pluralize(
-                stagnantTodoRetries,
-                "{} retry",
-                "{} retries",
-              )}. Do not repeat the same summary. Complete a concrete todo, cancel a blocked todo with the reason, or use a tool to make progress before stopping.`
-            : ""
           log.info("autonomous todo continuation", {
             command: "session.prompt.loop",
             status: "ok",
@@ -1279,17 +1263,13 @@ export namespace SessionPrompt {
             parts: [
               {
                 type: "text",
-                text:
-                  `You stopped with ${Locale.pluralize(
-                    pendingTodos.length,
-                    "{} todo still pending",
-                    "{} todos still pending",
-                  )}:\n` +
-                  `${Todo.formatLines(pendingTodos).join("\n")}\n` +
-                  `Continue working until all todos are completed or cancelled. ` +
-                  `This is auto-continuation ${todoRetries}/${maxTodoRetries}.` +
-                  reportClosureGuidance +
-                  stagnantTodoGuidance,
+                text: AutonomousContinuationPrompt.todoContinuation({
+                  pendingTodos,
+                  attempt: todoRetries,
+                  maxAttempts: maxTodoRetries,
+                  includeReportClosureGuidance: hasReportStyleTodo(pendingTodos),
+                  stagnantTodoRetries: todoContinuation.stagnant ? stagnantTodoRetries : undefined,
+                }),
               },
             ],
           })

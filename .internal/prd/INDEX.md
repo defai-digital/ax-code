@@ -8,6 +8,7 @@ This index tracks the active PRD set for `ax-code`. Completed PRDs are retained 
 | --- | --- | --- |
 | [Stability Audit Remediation](PRD-2026-05-17-stability-audit-remediation.md) | Draft; remediation open | Contains open critical/high stability findings and needs live re-verification before closure. |
 | [Coding & Debugging Capability Hardening](PRD-2026-05-18-coding-debugging-capability-hardening.md) | Marked complete, needs re-verification | The document says complete, but live code still has comments and integration gaps around import-dependent impact analysis and debug pattern surfacing. Re-verify before archiving. |
+| [Autonomous Continuation Contract Hardening](PRD-2026-05-23-autonomous-continuation-contract-hardening.md) | Complete - Phase 2 | Prompt builders and the empty-model-turn decision helper are extracted before any larger prompt-loop extraction. |
 | [Debug, Refactor, and QA Competitive Closeout](PRD-debug-refactor-qa-competitive-closeout.md) | Final draft | Strategic product-direction PRD, not a completed implementation tracker. |
 | [Server Mode Hardening and Remote Operation Boundaries](PRD-server-mode-hardening.md) | Draft | Paired with ADR-008 and still represents open server/security hardening work. |
 | [Source + Bun Distribution Rollout](PRD-source-bun-distribution.md) | In progress | Distribution/release work is actively changing; keep current until the release-channel decision gates close. |
