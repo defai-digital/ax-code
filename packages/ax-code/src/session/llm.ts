@@ -29,6 +29,7 @@ import { AgentControl } from "@/control-plane/agent-control"
 import { AgentControlEvents } from "@/control-plane/agent-control-events"
 import { isNonEmptyRecord } from "@/util/record"
 import { SuperLongPolicy } from "./super-long-policy"
+import { longAgentProfileForModel } from "@/provider/agent-optimization-profile"
 
 import { ReasoningPolicy } from "@/control-plane/reasoning-policy"
 
@@ -146,6 +147,13 @@ export namespace LLM {
     const reasoningPolicyReminder = ReasoningPolicy.systemReminder(reasoningPolicyDecision)
     if (reasoningPolicyReminder) system.push(reasoningPolicyReminder)
 
+    const longAgentProfile = longAgentProfileForModel(input.model.id)
+    if (!input.small && Flag.AX_CODE_SUPER_LONG && longAgentProfile.verificationLoopEnabled) {
+      system.push(
+        "You are operating in Super-Long mode. Before declaring any task complete: run available tests or verification commands, confirm the build is clean, and surface any repeated failure patterns explicitly rather than retrying silently.",
+      )
+    }
+
     const header = system[0]
     const prePluginLength = system.length
     await Plugin.trigger(
@@ -170,7 +178,7 @@ export namespace LLM {
           model: input.model,
           sessionID: input.sessionID,
           providerOptions: provider?.options ?? {},
-          longAgent: Flag.AX_CODE_SUPER_LONG,
+          longAgent: Flag.AX_CODE_SUPER_LONG && longAgentProfile.preserveThinkingEligible,
         })
     const options: Record<string, any> = ProviderTransform.sanitizeOptions(
       input.model,
@@ -420,6 +428,11 @@ export namespace LLM {
     }
 
     return tools
+  }
+
+  // Reset pacing state between tests; not called in production paths.
+  export function clearPacingState() {
+    superLongPacing.clear()
   }
 
   // Check if messages contain any tool-call content
