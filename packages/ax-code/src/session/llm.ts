@@ -31,6 +31,7 @@ import { isNonEmptyRecord } from "@/util/record"
 import { SuperLongPolicy } from "./super-long-policy"
 import { longAgentProfileForModel } from "@/provider/agent-optimization-profile"
 import { PromptCachePolicy } from "@/provider/prompt-cache-policy"
+import { LongAgentContextPacker } from "@/context/long-agent-packer"
 
 import { ReasoningPolicy } from "@/control-plane/reasoning-policy"
 
@@ -207,6 +208,24 @@ export namespace LLM {
           totalBlocks: cacheResult.blocks.length,
         })
       }
+    }
+
+    // Phase 4: build long-agent context pack and log summary for debugging.
+    // Only active for models with wide contextPackingBudget (e.g. Qwen3.7-Max).
+    if (!input.small && longAgentProfile.contextPackingBudget === "wide") {
+      const task = extractLastUserTask(input.messages)
+      const touchedFiles = extractTouchedFiles(input.messages)
+      const tokenBudget = Math.min(ProviderTransform.maxOutputTokens(input.model) * 2, 32_000)
+      const packResult = LongAgentContextPacker.pack({
+        tokenBudget,
+        task: task ?? undefined,
+        touchedFiles,
+        instructions: system,
+      })
+      l.info("long-agent context pack", {
+        debugSummary: packResult.debugSummary,
+        touchedCount: touchedFiles.length,
+      })
     }
 
     const messages = [
@@ -464,5 +483,38 @@ export namespace LLM {
       }
     }
     return false
+  }
+
+  // Extract the last user text message as task description for context packing.
+  export function extractLastUserTask(messages: ModelMessage[]): string | undefined {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const msg = messages[i]
+      if (msg.role !== "user") continue
+      if (typeof msg.content === "string") return msg.content.slice(0, 500)
+      if (Array.isArray(msg.content)) {
+        for (const part of msg.content as Array<{ type: string; text?: string }>) {
+          if (part.type === "text" && part.text) return part.text.slice(0, 500)
+        }
+      }
+    }
+    return undefined
+  }
+
+  // Extract file paths accessed by file-touching tools from assistant messages.
+  export function extractTouchedFiles(messages: ModelMessage[]): Array<{ path: string; summary: string }> {
+    const FILE_TOOLS = new Set(["read", "edit", "write", "multiedit", "apply_patch"])
+    const paths = new Map<string, string>()
+    for (const msg of messages) {
+      if (msg.role !== "assistant" || !Array.isArray(msg.content)) continue
+      for (const part of msg.content as Array<{ type: string; toolName?: string; input?: Record<string, unknown> }>) {
+        if (part.type !== "tool-call" || !FILE_TOOLS.has(part.toolName ?? "")) continue
+        const inp = part.input as Record<string, unknown> | undefined
+        const filePath = (inp?.file_path ?? inp?.path) as string | undefined
+        if (filePath && typeof filePath === "string") {
+          paths.set(filePath, `accessed by ${part.toolName}`)
+        }
+      }
+    }
+    return [...paths.entries()].slice(0, 20).map(([path, summary]) => ({ path, summary }))
   }
 }
