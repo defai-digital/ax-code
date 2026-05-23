@@ -104,7 +104,7 @@ export class CliLanguageModel implements LanguageModelV3 {
   }
 
   async doGenerate(options: LanguageModelV3CallOptions) {
-    const text = promptToText(options.prompt)
+    const text = promptToText(options.prompt, { providerID: this.config.providerID })
     const proc = Process.spawn(this.buildCmd(text), {
       stdin: this.useStdin() ? "pipe" : "ignore",
       stdout: "pipe",
@@ -182,7 +182,7 @@ export class CliLanguageModel implements LanguageModelV3 {
   }
 
   async doStream(options: LanguageModelV3CallOptions) {
-    const text = promptToText(options.prompt)
+    const text = promptToText(options.prompt, { providerID: this.config.providerID })
     const proc = Process.spawn(this.buildCmd(text), {
       stdin: this.useStdin() ? "pipe" : "ignore",
       stdout: "pipe",

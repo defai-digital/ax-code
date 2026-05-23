@@ -225,13 +225,24 @@ export namespace BlastRadius {
   }
 
   /**
+   * Apply config-driven overrides on top of the constant defaults. Call at
+   * turn start so removing an override from ax-code.json reverts it within
+   * the same session, instead of accumulating across turns.
+   */
+  export function applyConfigCaps(sessionID: SessionID, overrides: Partial<Caps>) {
+    const s = get(sessionID)
+    s.caps = mergeCaps(defaultCaps(), overrides)
+  }
+
+  /**
    * Tool-side guard called from edit/write/apply_patch BEFORE the write.
    * Only enforces in autonomous mode. Throws a regular Error (not the
    * NamedError) so the model sees the message and can recover by writing
    * a different path, instead of the session terminating.
    */
   export function assertWritable(sessionID: SessionID, filePath: string) {
-    if (!Flag.AX_CODE_AUTONOMOUS) return
+    const isAutonomous = Flag.AX_CODE_AUTONOMOUS
+    if (!isAutonomous) return
     const result = isPathBlocked(sessionID, filePath)
     if (result.blocked) {
       const message =
@@ -260,7 +271,8 @@ export namespace BlastRadius {
    * exceeds the file or line cap.
    */
   export function recordWriteAndAssert(sessionID: SessionID, filePath: string, lineDelta: number) {
-    if (!Flag.AX_CODE_AUTONOMOUS) return
+    const isAutonomous = Flag.AX_CODE_AUTONOMOUS
+    if (!isAutonomous) return
     recordWrite(sessionID, filePath, lineDelta)
     assertWithinCaps(sessionID)
   }

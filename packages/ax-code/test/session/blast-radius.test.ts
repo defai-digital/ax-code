@@ -191,6 +191,21 @@ describe("BlastRadius", () => {
     expect(state.caps.blockedPaths).toEqual(["custom-only/**"])
   })
 
+  test("applyConfigCaps restarts from defaults each call (no accumulation across turns)", () => {
+    // Turn 1: user disables bash cap via config
+    BlastRadius.applyConfigCaps(SID, { perTool: { bash: 0 } })
+    expect(BlastRadius.get(SID).caps.perTool.bash).toBe(0)
+
+    // Turn 2: user removes bash override; only edit cap is present in new config
+    BlastRadius.applyConfigCaps(SID, { perTool: { edit: 200 } })
+    const state = BlastRadius.get(SID)
+    // bash must revert to the seeded default, not persist as 0
+    expect(state.caps.perTool.bash).toBeGreaterThan(0)
+    expect(state.caps.perTool.edit).toBe(200)
+    // unmentioned tools keep their seeded defaults
+    expect(state.caps.perTool.write).toBeGreaterThan(0)
+  })
+
   test("describe surfaces the offending tool name", () => {
     BlastRadius.get(SID, { steps: 1000, files: 1000, lines: 100_000, perTool: { write: 1 } })
     BlastRadius.incrementToolCall(SID, "write")

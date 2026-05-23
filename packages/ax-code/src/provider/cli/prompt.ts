@@ -1,7 +1,29 @@
 import type { LanguageModelV3Prompt } from "@ai-sdk/provider"
 
-export function promptToText(prompt: LanguageModelV3Prompt): string {
+export interface CliPromptOptions {
+  providerID?: string
+}
+
+const WEB_SEARCH_CLI_PROVIDERS = new Set(["claude-code", "codex-cli", "gemini-cli"])
+
+const CLI_WEB_SEARCH_HINT = [
+  "<cli_web_search>",
+  "You are running inside a CLI assistant that has built-in web search or web fetch capability.",
+  [
+    "When the user's task depends on current, recent, external, or otherwise unverifiable-from-repo information,",
+    "use your built-in web search or web fetch capability to look it up online before answering.",
+  ].join(" "),
+  [
+    "Do not claim that you cannot access the internet when web search is available.",
+    "Cite the sources you used when summarizing online information.",
+  ].join(" "),
+  "</cli_web_search>",
+].join("\n")
+
+export function promptToText(prompt: LanguageModelV3Prompt, options: CliPromptOptions = {}): string {
   const parts: string[] = []
+
+  if (options.providerID && WEB_SEARCH_CLI_PROVIDERS.has(options.providerID)) parts.push(CLI_WEB_SEARCH_HINT)
 
   for (const message of prompt) {
     if (message.role === "system") {

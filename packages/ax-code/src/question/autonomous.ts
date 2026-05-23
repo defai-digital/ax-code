@@ -42,7 +42,7 @@ export namespace AutonomousQuestion {
   const LOW_SCOPE_MARKER = /\b(targeted|focused|small|narrow|incremental|direct|reuse|existing|localized|low-risk)\b/i
 
   const CONTEXT_BEST_PRACTICE_MARKER =
-    /\b(best|recommended|default|safe|common|industry|simple|minimal|pragmatic|least complex|over-?engineer)\b/i
+    /\b(best|recommended|default|safe|common|industry|simple|minimal|pragmatic|least complex)\b/i
 
   function text(option: OptionLike) {
     return `${option.label} ${option.description ?? ""}`
