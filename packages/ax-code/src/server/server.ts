@@ -47,6 +47,7 @@ import { DreGraphRoutes } from "./routes/dre-graph"
 import { IsolationRoutes } from "./routes/isolation"
 import { AutonomousRoutes } from "./routes/autonomous"
 import { SmartLlmRoutes } from "./routes/smart-llm"
+import { SuperLongRoutes } from "./routes/super-long"
 import { GlobalRoutes } from "./routes/global"
 import { PROVIDER_ID_PARAM, withProviderID } from "./routes/route-params"
 import { ToolRegistry } from "../tool/registry"
@@ -764,6 +765,7 @@ export namespace Server {
       .route("/isolation", IsolationRoutes())
       .route("/autonomous", AutonomousRoutes())
       .route("/smart-llm", SmartLlmRoutes())
+      .route("/super-long", SuperLongRoutes())
       .route("/experimental", ExperimentalRoutes())
       .route("/session", SessionRoutes())
       .route("/permission", PermissionRoutes())

@@ -77,6 +77,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
       syncDebugEngine,
       syncAutonomous,
       syncSmartLlm,
+      syncSuperLong,
       syncIsolation,
     } = createStoreBackedRuntimeSyncActions({
       url: sdk.url,
@@ -131,6 +132,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
       syncWorkspaces,
       syncDebugEngine,
       syncSmartLlm,
+      syncSuperLong,
       createTasks(requests, onProvidersReady) {
         return createStoreBackedBootstrapTasks({
           continueFromArgs: !!args.continue,

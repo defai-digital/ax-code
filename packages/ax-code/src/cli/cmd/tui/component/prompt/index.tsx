@@ -451,6 +451,7 @@ export function Prompt(props: PromptProps) {
     promptFooterLayout({
       contentWidth: promptContentWidth(),
       toggleWidth:
+        footerToggleLabel("Super-Long", sync.data.superLong).length +
         footerToggleLabel("Autonomous", sync.data.autonomous).length +
         footerToggleLabel("Sandbox", sync.data.isolation.mode !== "full-access").length,
       mode: store.mode,
@@ -1968,6 +1969,14 @@ export function Prompt(props: PromptProps) {
               flexShrink={0}
             >
               <box flexDirection="row" flexShrink={0}>
+                {footerToggleChip({
+                  label: "Super-Long",
+                  active: sync.data.superLong,
+                  activeFg: theme.text,
+                  inactiveFg: theme.textMuted,
+                  background: theme.info,
+                  onMouseUp: () => command.trigger("app.toggle.super_long"),
+                })}
                 {footerToggleChip({
                   label: "Autonomous",
                   active: sync.data.autonomous,

@@ -94,6 +94,7 @@ export function createSyncBootstrapFlow<TClient extends SyncBootstrapRequestClie
   syncDebugEngine: () => Promise<unknown>
   syncIsolation: () => Promise<unknown>
   syncSmartLlm: () => Promise<unknown>
+  syncSuperLong: () => Promise<unknown>
   syncWorkspaces: () => Promise<unknown>
   createTasks: (
     requests: SyncBootstrapAssemblyRequests,
@@ -171,6 +172,7 @@ export function createSyncBootstrapFlow<TClient extends SyncBootstrapRequestClie
               syncWorkspaces: input.syncWorkspaces,
               syncDebugEngine: input.syncDebugEngine,
               syncSmartLlm: input.syncSmartLlm,
+              syncSuperLong: input.syncSuperLong,
             })
 
             const { blockingTasks, coreTasks, deferredTasks } = input.createTasks(requests, (failed) => {

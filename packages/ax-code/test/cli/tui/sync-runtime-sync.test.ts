@@ -58,6 +58,7 @@ describe("tui sync runtime sync", () => {
       applyDebugEngine: () => undefined,
       applyAutonomous: () => undefined,
       applySmartLlm: () => undefined,
+      applySuperLong: () => undefined,
       applyIsolation: () => undefined,
     })
 
@@ -89,6 +90,7 @@ describe("tui sync runtime sync", () => {
       applyDebugEngine: () => undefined,
       applyAutonomous: () => undefined,
       applySmartLlm: () => undefined,
+      applySuperLong: () => undefined,
       applyIsolation: () => undefined,
     })
 
@@ -123,6 +125,7 @@ describe("tui sync runtime sync", () => {
       },
       applyAutonomous: () => undefined,
       applySmartLlm: () => undefined,
+      applySuperLong: () => undefined,
       applyIsolation: () => undefined,
     })
 
@@ -184,6 +187,7 @@ describe("tui sync runtime sync", () => {
       applySmartLlm(value) {
         applied.smartLlm.push(value)
       },
+      applySuperLong: () => undefined,
       applyIsolation: () => undefined,
     })
 
@@ -218,6 +222,7 @@ describe("tui sync runtime sync", () => {
       applyDebugEngine: () => undefined,
       applyAutonomous: () => undefined,
       applySmartLlm: () => undefined,
+      applySuperLong: () => undefined,
       applyIsolation(value) {
         applied.push(value)
       },

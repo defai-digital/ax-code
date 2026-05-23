@@ -263,9 +263,13 @@ describe("tui sync bootstrap plan", () => {
           Promise.resolve().then(() => {
             applied.push("smart")
           }),
+        superLongTask: () =>
+          Promise.resolve().then(() => {
+            applied.push("super-long")
+          }),
       }).map((task) => task()),
     )
 
-    expect(applied.sort()).toEqual(["debug", "formatter", "lsp", "mcp", "resource", "smart", "vcs", "workspaces"])
+    expect(applied.sort()).toEqual(["debug", "formatter", "lsp", "mcp", "resource", "smart", "super-long", "vcs", "workspaces"])
   })
 })

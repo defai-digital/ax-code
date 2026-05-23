@@ -37,6 +37,7 @@ export interface RuntimeSyncActions {
   syncDebugEngine: () => Promise<void>
   syncAutonomous: () => Promise<void>
   syncSmartLlm: () => Promise<void>
+  syncSuperLong: () => Promise<void>
   syncIsolation: () => Promise<void>
 }
 
@@ -52,6 +53,7 @@ export function createRuntimeSyncActions(input: {
   applyDebugEngine: (value: ReturnType<typeof normalizeDebugEngineState>) => void
   applyAutonomous: (value: boolean) => void
   applySmartLlm: (value: boolean) => void
+  applySuperLong: (value: boolean) => void
   applyIsolation: (value: ReturnType<typeof normalizeIsolationState>) => void
 }): RuntimeSyncActions {
   async function fetchOptionalRuntimeJson<T>(pathname: string, init?: RequestInit) {
@@ -104,6 +106,7 @@ export function createRuntimeSyncActions(input: {
     },
     syncAutonomous: createRuntimeFeatureSync("/autonomous", input.applyAutonomous),
     syncSmartLlm: createRuntimeFeatureSync("/smart-llm", input.applySmartLlm),
+    syncSuperLong: createRuntimeFeatureSync("/super-long", input.applySuperLong),
     async syncIsolation() {
       const body = await fetchOptionalRuntimeJson<IsolationPayload>("/isolation", {
         headers: directoryRequestHeaders({

@@ -677,6 +677,10 @@ export const Info = z
     layout: Layout.optional().describe("@deprecated Always uses stretch layout."),
     permission: Permission.optional(),
     autonomous: z.boolean().optional().describe("Enable autonomous mode (default: true)"),
+    super_long: z
+      .boolean()
+      .optional()
+      .describe("Enable Super-Long supervised long-run mode (default: on for Qwen3.7-Max, off otherwise)"),
     isolation: Isolation.optional().describe("Execution isolation configuration"),
     tools: z.record(z.string(), z.boolean()).optional().describe("@deprecated Use 'permission' field instead"),
     enterprise: z

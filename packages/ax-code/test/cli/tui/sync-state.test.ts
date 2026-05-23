@@ -51,6 +51,7 @@ describe("tui sync state", () => {
       isolation: { mode: "workspace-write", network: false },
       autonomous: true,
       smartLlm: false,
+      superLong: false,
       mcp: {},
       mcp_resource: {},
       formatter: [],

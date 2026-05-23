@@ -70,6 +70,7 @@ export namespace Flag {
   export declare const AX_CODE_DISABLE_SHARE: boolean
   export declare const AX_CODE_AUTONOMOUS: boolean
   export declare const AX_CODE_SMART_LLM: boolean
+  export declare const AX_CODE_SUPER_LONG: boolean
   export declare const AX_CODE_CALLER: string | undefined
   export declare const AX_CODE_ORIGINAL_CWD: string | undefined
   export declare const AX_CODE_PROFILE_NATIVE: boolean
@@ -218,6 +219,9 @@ defineBooleanFlag("AX_CODE_AUTONOMOUS", true)
 
 // Evaluate each access so toggles and env overrides remain live.
 defineBooleanFlag("AX_CODE_SMART_LLM")
+
+// Evaluate at access time so runtime toggles remain immediately effective.
+defineBooleanFlag("AX_CODE_SUPER_LONG")
 
 // Evaluate at access time so test/runtime overrides can be flipped
 // without requiring a module reload.

@@ -53,6 +53,7 @@ function createRequests(overrides: Partial<SyncBootstrapAssemblyRequests> = {}):
     workspacesTask: async () => undefined,
     debugEngineTask: async () => undefined,
     smartLlmTask: async () => undefined,
+    superLongTask: async () => undefined,
     ...overrides,
   }
 }
@@ -131,6 +132,9 @@ describe("tui sync bootstrap assembly", () => {
         smartLlmTask: async () => {
           calls.push("smart")
         },
+        superLongTask: async () => {
+          calls.push("super-long")
+        },
       }),
       onProvidersReady(failed) {
         ready.push(failed)
@@ -140,7 +144,7 @@ describe("tui sync bootstrap assembly", () => {
     await Promise.all([...tasks.coreTasks, ...tasks.deferredTasks].map((task) => task()))
 
     expect(ready).toEqual([false])
-    expect(calls.sort()).toEqual(["autonomous", "debug", "isolation", "smart", "workspaces"])
+    expect(calls.sort()).toEqual(["autonomous", "debug", "isolation", "smart", "super-long", "workspaces"])
     expect(store.provider.map((provider) => provider.id)).toEqual(["openai"])
     expect(store.provider_default).toEqual({ chat: "openai" })
     expect(store.provider_loaded).toBe(true)

@@ -464,7 +464,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
   let sandboxPutController: AbortController | undefined
 
   function createBooleanRuntimeToggle(input: {
-    endpoint: "/smart-llm" | "/autonomous"
+    endpoint: "/smart-llm" | "/autonomous" | "/super-long"
     label: {
       warn: string
       message: string
@@ -519,6 +519,15 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       message: "Failed to save autonomous setting",
     },
   })
+  const superLongToggle = createBooleanRuntimeToggle({
+    endpoint: "/super-long",
+    getCurrent: () => sync.data.superLong,
+    setCurrent: (value) => sync.set("superLong", value),
+    label: {
+      warn: "failed to update super-long setting",
+      message: "Failed to save Super-Long setting",
+    },
+  })
 
   onCleanup(() => {
     forkRetryDisposed = true
@@ -526,6 +535,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
     retryTimers.clear()
     smartLlmToggle.dispose()
     autonomousToggle.dispose()
+    superLongToggle.dispose()
     sandboxPutController?.abort()
   })
 
@@ -982,6 +992,15 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       category: "System",
       onSelect: (dialog) => {
         autonomousToggle.toggle()
+        dialog.clear()
+      },
+    },
+    {
+      title: sync.data.superLong ? "Turn Super-Long off" : "Turn Super-Long on",
+      value: "app.toggle.super_long",
+      category: "System",
+      onSelect: (dialog) => {
+        superLongToggle.toggle()
         dialog.clear()
       },
     },
