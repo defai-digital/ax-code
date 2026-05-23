@@ -1611,6 +1611,38 @@ describe("ProviderTransform.options - preserve_thinking (Phase 2)", () => {
     })
     expect(result.preserve_thinking).toBeUndefined()
   })
+
+  test("options() omits preserve_thinking when providerOptions.preserveThinking=false (opt-out)", () => {
+    const result = ProviderTransform.options({
+      model: mkAlibabaThinking("alibaba-coding-plan"),
+      sessionID: "s-opt-out",
+      providerOptions: { preserveThinking: false },
+      longAgent: true,
+    })
+    expect(result.preserve_thinking).toBeUndefined()
+    // promptCacheKey is still set — opt-out is independent of session caching
+    expect(result.promptCacheKey).toBe("s-opt-out")
+  })
+
+  test("options() still emits preserve_thinking when providerOptions.preserveThinking=true (explicit enable)", () => {
+    const result = ProviderTransform.options({
+      model: mkAlibabaThinking("alibaba-coding-plan"),
+      sessionID: "s-explicit",
+      providerOptions: { preserveThinking: true },
+      longAgent: true,
+    })
+    expect(result.preserve_thinking).toBe(true)
+  })
+
+  test("options() emits preserve_thinking when providerOptions.preserveThinking is absent (default on)", () => {
+    const result = ProviderTransform.options({
+      model: mkAlibabaThinking("alibaba-coding-plan"),
+      sessionID: "s-default",
+      providerOptions: {},
+      longAgent: true,
+    })
+    expect(result.preserve_thinking).toBe(true)
+  })
 })
 
 describe("ProviderTransform.options - promptCacheKey for Alibaba longAgent (Phase 3)", () => {
