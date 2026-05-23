@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import {
   footerProgressBar,
+  footerGoalChip,
   footerTokenChip,
   isFooterSessionStatus,
   PROGRESS_SOFT_MAX,
@@ -148,6 +149,41 @@ describe("footerProgressBar", () => {
     expect(bar!.filled).toMatch(/^█*$/)
     expect(bar!.empty).toMatch(/^░*$/)
     expect(bar!.filled + bar!.empty).not.toMatch(/[▓▒]/)
+  })
+})
+
+describe("footerGoalChip", () => {
+  test("hides when no goal is set", () => {
+    expect(footerGoalChip({ goal: null })).toBeUndefined()
+  })
+
+  test("renders active goal with token budget", () => {
+    expect(
+      footerGoalChip({
+        goal: {
+          objective: "finish all phases",
+          status: "active",
+          tokensUsed: 1200,
+          tokenBudget: 2400,
+        },
+      }),
+    ).toEqual({
+      label: "Goal: finish all phases · 1.2k/2.4k tok",
+      shortLabel: "Goal: finish all phases",
+      tone: "working",
+      resumeHint: undefined,
+    })
+  })
+
+  test("adds resume hint for paused and blocked goals", () => {
+    expect(
+      footerGoalChip({
+        goal: {
+          objective: "wait for user input",
+          status: "blocked",
+        },
+      })?.label,
+    ).toBe("Goal blocked: wait for user input · /goal resume")
   })
 })
 

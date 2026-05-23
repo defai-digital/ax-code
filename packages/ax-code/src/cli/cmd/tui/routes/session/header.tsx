@@ -13,7 +13,7 @@ import { collapseSessionBreadcrumbs, sessionBreadcrumbs } from "./header-view-mo
 import { computeSidebarWidth } from "./layout"
 import { autonomousActiveView } from "./autonomous-active"
 import { useAutonomousPulse } from "./autonomous-pulse"
-import { isFooterSessionStatus, type FooterSessionStatus } from "./footer-view-model"
+import { footerGoalChip, isFooterSessionStatus, type FooterSessionStatus } from "./footer-view-model"
 import { Spinner } from "../../component/spinner"
 
 const SUBAGENT_PARENT_DOUBLE_CLICK_MS = 400
@@ -96,6 +96,20 @@ export function Header() {
     const alpha = MIN_ALPHA + (MAX_ALPHA - MIN_ALPHA) * chipPulse()
     return tint(theme.background, theme.accent, alpha)
   })
+  const goalChip = createMemo(() => footerGoalChip({ goal: sync.data.session_goal[route.sessionID], maxObjective: 48 }))
+  const goalChipColor = createMemo(() => {
+    switch (goalChip()?.tone) {
+      case "success":
+        return theme.success
+      case "warning":
+        return theme.warning
+      case "working":
+        return theme.accent
+      case "muted":
+      default:
+        return theme.textMuted
+    }
+  })
   function handleSubagentHeaderMouseUp() {
     const now = Date.now()
     if (now - lastSubagentHeaderClickAt <= SUBAGENT_PARENT_DOUBLE_CLICK_MS) {
@@ -149,6 +163,9 @@ export function Header() {
                     <b>Subagent session</b>
                   </text>
                   <Show when={session()?.id}>{(id) => <text fg={theme.textMuted}>{id()}</text>}</Show>
+                  <Show when={goalChip()}>
+                    <text fg={goalChipColor()}>{goalChip()?.label}</text>
+                  </Show>
                   <Show when={Flag.AX_CODE_EXPERIMENTAL_WORKSPACES}>
                     <WorkspaceInfo workspace={workspace} />
                   </Show>
@@ -195,6 +212,9 @@ export function Header() {
             <box flexDirection={narrow() ? "column" : "row"} justifyContent="space-between" gap={narrow() ? 1 : 0}>
               <box flexDirection="column">
                 <Title session={session} />
+                <Show when={goalChip()}>
+                  <text fg={goalChipColor()}>{goalChip()?.label}</text>
+                </Show>
                 <Show when={Flag.AX_CODE_EXPERIMENTAL_WORKSPACES}>
                   <WorkspaceInfo workspace={workspace} />
                 </Show>

@@ -27,6 +27,7 @@ import { useArgs } from "./args"
 import { createEffect, on, onMount, onCleanup } from "solid-js"
 import { Log } from "@/util/log"
 import type { Path } from "@ax-code/sdk"
+import type { SessionGoal } from "@/session/goal"
 import { withTimeout } from "@/util/timeout"
 import { Flag } from "@/flag/flag"
 import { createTuiStartupSpan, recordTuiStartupOnce } from "@tui/util/startup-trace"
@@ -60,6 +61,12 @@ function sessionRiskURL(input: { baseUrl: string; sessionID: string; directory?:
   url.searchParams.set("reviewResults", "true")
   url.searchParams.set("debug", "true")
   url.searchParams.set("hints", "true")
+  if (input.directory) url.searchParams.set("directory", input.directory)
+  return url.toString()
+}
+
+function sessionGoalURL(input: { baseUrl: string; sessionID: string; directory?: string }) {
+  const url = new URL(`${input.baseUrl}/session/${encodeURIComponent(input.sessionID)}/goal`)
   if (input.directory) url.searchParams.set("directory", input.directory)
   return url.toString()
 }
@@ -112,6 +119,17 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
         )
         if (!response.ok) throw new Error(`session risk request failed: ${response.status}`)
         return { data: parseSyncedSessionRisk(await response.json()) }
+      },
+      fetchGoal: async (sessionID) => {
+        const response = await sdk.fetch(
+          sessionGoalURL({
+            baseUrl: sdk.url,
+            sessionID,
+            directory: sdk.directory,
+          }),
+        )
+        if (!response.ok) throw new Error(`session goal request failed: ${response.status}`)
+        return { data: (await response.json()) as SessionGoal.PublicInfo | null }
       },
       onMissingSnapshot(sessionID) {
         Log.Default.warn("session sync returned no session data", { sessionID })

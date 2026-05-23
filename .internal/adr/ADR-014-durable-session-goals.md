@@ -29,6 +29,7 @@ Implement `/goal` as durable session-domain state:
 5. Keep pause, resume, clear, and budget-limited transitions under user/runtime control.
 6. Inject current goal state into the system prompt as task context.
 7. Let the prompt loop schedule bounded goal continuations after ordinary model stops while the goal remains active.
+8. Publish `session.goal` events and hydrate `GET /session/:sessionID/goal` so TUI state can update without reading storage directly.
 
 ## Alternatives Considered
 
@@ -45,15 +46,15 @@ Implement `/goal` as durable session-domain state:
 - Compaction and continuation can retain the objective without relying on transcript search.
 - Users get deterministic lifecycle controls.
 - Model behavior can be tested through tools instead of fragile prompt text only.
+- TUI surfaces can show active, paused, blocked, complete, and budget-limited goal state from the same projection path used for other session state.
 
 ### Costs
 
 - Adds a migration and new session table.
 - Adds another branch to the prompt loop, which is already a hotspot.
-- Phase 0 still uses bounded continuation caps, so it is not yet a fully independent long-running daemon.
+- Goal execution still uses bounded continuation caps, so it is not a fully independent long-running daemon.
+- The session projection and TUI sync store now carry another session-scoped bucket.
 
 ## Follow-Up
 
-- Add TUI status surfaces for active/paused/budget-limited goals.
-- Add sync events if live UI state needs to update without polling.
 - Revisit goal continuation budgeting after Phase 0 has runtime evidence.

@@ -15,6 +15,7 @@ import {
   footerPermissionLabel,
   footerTrustChip,
   footerAgentControlStatusView,
+  footerGoalChip,
   footerProgressBar,
   isFooterSessionStatus,
   type FooterSessionStatus,
@@ -73,6 +74,7 @@ export function Footer() {
   const showHints = createMemo(() => dimensions().width >= 100)
   const showLspChip = createMemo(() => dimensions().width >= 90 && lsp().length > 0)
   const showDreChip = createMemo(() => dimensions().width >= 80)
+  const showGoalChip = createMemo(() => dimensions().width >= 100)
   const progressBar = createMemo(() =>
     footerProgressBar({ status: sessionStatus(), terminalWidth: dimensions().width }),
   )
@@ -87,6 +89,10 @@ export function Footer() {
     return footerAgentControlStatusView(readModel.summary, readModel.tools)
   })
   const showAgentControlStatus = createMemo(() => dimensions().width >= 115 && !!agentControlStatus())
+  const goalChip = createMemo(() => {
+    if (route.data.type !== "session") return undefined
+    return footerGoalChip({ goal: sync.data.session_goal[route.data.sessionID] })
+  })
   const agentControlStatusColor = createMemo(() => {
     switch (agentControlStatus()?.tone) {
       case "success":
@@ -102,8 +108,21 @@ export function Footer() {
   })
   const showSecondaryStatus = createMemo(() => mcp() > 0 || showLspChip() || showHints())
   const showStatusSeparator = createMemo(
-    () => (permissionLabel() || showDreStatus() || showAgentControlStatus()) && showSecondaryStatus(),
+    () => (permissionLabel() || showDreStatus() || showAgentControlStatus() || goalChip()) && showSecondaryStatus(),
   )
+  const goalChipColor = createMemo(() => {
+    switch (goalChip()?.tone) {
+      case "success":
+        return theme.success
+      case "warning":
+        return theme.warning
+      case "working":
+        return theme.accent
+      case "muted":
+      default:
+        return theme.textMuted
+    }
+  })
 
   // Show "reconnecting" badge only after the first successful connection —
   // avoids a false-alarm flash during initial startup. A 3-second debounce
@@ -195,6 +214,9 @@ export function Footer() {
             </Show>
             <Show when={showAgentControlStatus()}>
               <text fg={agentControlStatusColor()}>{agentControlStatus()?.label}</text>
+            </Show>
+            <Show when={showGoalChip() && goalChip()}>
+              <text fg={goalChipColor()}>{goalChip()?.label}</text>
             </Show>
             <Show when={showStatusSeparator()}>
               <text fg={theme.borderSubtle}>·</text>

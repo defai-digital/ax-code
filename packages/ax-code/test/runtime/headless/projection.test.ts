@@ -174,4 +174,18 @@ describe("headless projection", () => {
     expect(runtimeProbeKeysForEvent({ type: "lsp.updated" })).toEqual(["lsp", "debug-engine"])
     expect(runtimeProbeKeysForEvent({ type: "vcs.branch.updated", properties: { branch: "main" } })).toEqual([])
   })
+
+  test("tracks live session goal updates", () => {
+    const state = createHeadlessProjectionState<Session, Todo, Diff, Status, Message, Part>()
+
+    applyHeadlessProjectionEvent(state, {
+      type: "session.goal",
+      properties: {
+        sessionID: "ses_1",
+        goal: { objective: "finish all phases", status: "active" },
+      },
+    })
+
+    expect(state.session_goal.ses_1).toEqual({ objective: "finish all phases", status: "active" })
+  })
 })

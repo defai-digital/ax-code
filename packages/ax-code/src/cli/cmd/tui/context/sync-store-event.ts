@@ -28,6 +28,7 @@ export interface SyncEventStoreState<
   session_diff: Record<string, TDiff[]>
   session_status: Record<string, TStatus>
   session_risk: Record<string, SyncedSessionRisk>
+  session_goal: Record<string, unknown>
   session: TSession[]
   message: Record<string, TMessage[]>
   part: Record<string, TPart[]>
@@ -97,6 +98,7 @@ function dispatchHeadlessProjectionEvent<
     case "question.rejected":
     case "todo.updated":
     case "session.diff":
+    case "session.goal":
     case "session.status":
     case "session.created":
     case "session.updated":

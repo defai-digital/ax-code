@@ -26,9 +26,10 @@ export type HeadlessRuntimeStatusEvent =
   | { type: "code.index.state" }
   | { type: "vcs.branch.updated"; properties: { branch: string } }
 
-export type HeadlessSessionEvent<TSession extends { id: string }, TTodo, TDiff, TStatus> =
+export type HeadlessSessionEvent<TSession extends { id: string }, TTodo, TDiff, TStatus, TGoal = unknown> =
   | { type: "todo.updated"; properties: { sessionID: string; todos: TTodo[] } }
   | { type: "session.diff"; properties: { sessionID: string; diff: TDiff[] } }
+  | { type: "session.goal"; properties: { sessionID: string; goal: TGoal | null } }
   | { type: "session.deleted"; properties: { info: { id: string } } }
   | { type: "session.created"; properties: { info: TSession } }
   | { type: "session.updated"; properties: { info: TSession } }
@@ -46,9 +47,10 @@ export type HeadlessRuntimeEvent<
   TStatus,
   TMessage extends { id: string; sessionID: string },
   TPart extends { id: string; messageID: string },
+  TGoal = unknown,
 > =
   | HeadlessRequestEvent
-  | HeadlessSessionEvent<TSession, TTodo, TDiff, TStatus>
+  | HeadlessSessionEvent<TSession, TTodo, TDiff, TStatus, TGoal>
   | HeadlessMessageEvent<TMessage, TPart>
   | HeadlessRuntimeStatusEvent
   | HeadlessControlEvent
@@ -70,6 +72,7 @@ export const HEADLESS_RUNTIME_EVENT_TYPES = new Set<string>([
   "question.rejected",
   "todo.updated",
   "session.diff",
+  "session.goal",
   "session.deleted",
   "session.created",
   "session.updated",

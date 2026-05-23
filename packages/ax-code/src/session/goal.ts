@@ -1,4 +1,6 @@
 import z from "zod"
+import { Bus } from "@/bus"
+import { BusEvent } from "@/bus/bus-event"
 import { Database, eq } from "@/storage/db"
 import { SessionGoalTable } from "./session.sql"
 import { SessionID } from "./schema"
@@ -22,6 +24,21 @@ export namespace SessionGoal {
   })
   export type Info = z.infer<typeof Info>
 
+  export const PublicInfo = Info.extend({
+    remainingTokens: z.number().int().min(0).optional(),
+  })
+  export type PublicInfo = z.infer<typeof PublicInfo>
+
+  export const Event = {
+    Updated: BusEvent.define(
+      "session.goal",
+      z.object({
+        sessionID: SessionID.zod,
+        goal: PublicInfo.nullable(),
+      }),
+    ),
+  }
+
   function fromRow(row: typeof SessionGoalTable.$inferSelect): Info {
     return Info.parse({
       sessionID: row.session_id,
@@ -37,9 +54,9 @@ export namespace SessionGoal {
     })
   }
 
-  function toPublic(goal: Info | undefined) {
+  function toPublic(goal: Info | undefined): PublicInfo | undefined {
     if (!goal) return undefined
-    return {
+    return PublicInfo.parse({
       sessionID: goal.sessionID,
       objective: goal.objective,
       status: goal.status,
@@ -48,13 +65,20 @@ export namespace SessionGoal {
       remainingTokens: goal.tokenBudget === undefined ? undefined : Math.max(0, goal.tokenBudget - goal.tokensUsed),
       timeUsedSeconds: goal.timeUsedSeconds,
       time: goal.time,
-    }
+    })
   }
-
-  export type PublicInfo = NonNullable<ReturnType<typeof toPublic>>
 
   export function publicInfo(goal: Info | undefined) {
     return toPublic(goal)
+  }
+
+  function publish(goal: Info | undefined, sessionID?: SessionID) {
+    const targetSessionID = goal?.sessionID ?? sessionID
+    if (!targetSessionID) return
+    Bus.publishDetached(Event.Updated, {
+      sessionID: targetSessionID,
+      goal: publicInfo(goal) ?? null,
+    })
   }
 
   export async function get(sessionID: SessionID): Promise<Info | undefined> {
@@ -92,7 +116,7 @@ export namespace SessionGoal {
     if (!input.replace) await requireActiveSlot(input.sessionID)
 
     const now = Date.now()
-    return Database.use((db) => {
+    const goal = Database.use((db) => {
       db.insert(SessionGoalTable)
         .values({
           session_id: input.sessionID,
@@ -118,11 +142,13 @@ export namespace SessionGoal {
         .run()
       return fromRow(db.select().from(SessionGoalTable).where(eq(SessionGoalTable.session_id, input.sessionID)).get()!)
     })
+    publish(goal)
+    return goal
   }
 
   export async function setStatus(input: { sessionID: SessionID; status: Status }): Promise<Info> {
     const now = Date.now()
-    return Database.use((db) => {
+    const goal = Database.use((db) => {
       const row = db.select().from(SessionGoalTable).where(eq(SessionGoalTable.session_id, input.sessionID)).get()
       if (!row) throw new Error("No goal is set for this session")
       db.update(SessionGoalTable)
@@ -131,6 +157,8 @@ export namespace SessionGoal {
         .run()
       return fromRow(db.select().from(SessionGoalTable).where(eq(SessionGoalTable.session_id, input.sessionID)).get()!)
     })
+    publish(goal)
+    return goal
   }
 
   export async function pause(sessionID: SessionID) {
@@ -145,6 +173,7 @@ export namespace SessionGoal {
     Database.use((db) => {
       db.delete(SessionGoalTable).where(eq(SessionGoalTable.session_id, sessionID)).run()
     })
+    publish(undefined, sessionID)
   }
 
   export async function addUsage(input: {
@@ -170,7 +199,7 @@ export namespace SessionGoal {
         : goal.status
     const now = Date.now()
 
-    return Database.use((db) => {
+    const updated = Database.use((db) => {
       db.update(SessionGoalTable)
         .set({
           tokens_used: nextTokens,
@@ -182,6 +211,8 @@ export namespace SessionGoal {
         .run()
       return fromRow(db.select().from(SessionGoalTable).where(eq(SessionGoalTable.session_id, input.sessionID)).get()!)
     })
+    publish(updated)
+    return updated
   }
 
   export function format(goal: Info | undefined): string {

@@ -55,6 +55,7 @@ export function displayCommands(input: {
   dialogReplaceCompare: (dialog: DialogContext) => void
   dialogReplaceDre: (dialog: DialogContext) => void
   dialogReplaceDreGraph: (dialog: DialogContext) => void
+  dialogReplaceGoal: (dialog: DialogContext) => void
   dialogReplaceQuality: (dialog: DialogContext) => void
   dialogReplaceRollback: (dialog: DialogContext) => void
   dialogReplaceTimeline: (dialog: DialogContext) => void
@@ -166,6 +167,12 @@ export function displayCommands(input: {
         name: "rename",
       },
       onSelect: (dialog: DialogContext) => input.dialogReplaceRename(dialog),
+    },
+    {
+      title: "View session goal",
+      value: "session.goal",
+      category: "Session",
+      onSelect: (dialog: DialogContext) => input.dialogReplaceGoal(dialog),
     },
     {
       title: "View activity history",

@@ -33,6 +33,7 @@ import { DialogForkFromTimeline } from "./dialog-fork-from-timeline"
 import { DialogSessionRename } from "../../component/dialog-session-rename"
 import { DialogDre } from "./dialog-dre"
 import { DialogDreGraph } from "./dialog-dre-graph"
+import { DialogGoal } from "./dialog-goal"
 import { DialogBranch } from "./dialog-branch"
 import { DialogCompare } from "./dialog-compare"
 import { DialogRollback } from "./dialog-rollback"
@@ -501,6 +502,16 @@ export function Session() {
       dialogReplaceActivity: (dialog) => dialog.replace(() => <DialogActivity sessionID={route.sessionID} />),
       dialogReplaceDre: (dialog) => dialog.replace(() => <DialogDre sessionID={route.sessionID} />),
       dialogReplaceDreGraph: (dialog) => dialog.replace(() => <DialogDreGraph sessionID={route.sessionID} />),
+      dialogReplaceGoal: (dialog) =>
+        dialog.replace(() => (
+          <DialogGoal
+            goal={sync.data.session_goal[route.sessionID]}
+            setPrompt={(value) => {
+              prompt.set({ input: value, parts: [] })
+              prompt.focus()
+            }}
+          />
+        )),
       dialogReplaceQuality: (dialog) =>
         dialog.replace(() => (
           <DialogQuality

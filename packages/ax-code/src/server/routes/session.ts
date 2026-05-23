@@ -17,6 +17,7 @@ import { SessionGraph } from "../../session/graph"
 import { SessionRisk } from "../../session/risk"
 import { SessionRollback } from "../../session/rollback"
 import { SessionSemanticDiff } from "../../session/semantic-diff"
+import { SessionGoal } from "../../session/goal"
 import { Todo } from "../../session/todo"
 import { Agent } from "../../agent/agent"
 import { Snapshot } from "@/snapshot"
@@ -301,6 +302,31 @@ export const SessionRoutes = lazy(() =>
       async (c) => {
         const { session } = await parseCurrentProjectSession(c)
         return c.json(session)
+      },
+    )
+    .get(
+      "/:sessionID/goal",
+      describeRoute({
+        summary: "Get session goal",
+        description: "Retrieve the durable goal state associated with a specific ax-code session.",
+        tags: ["Session"],
+        operationId: "session.goal",
+        responses: {
+          200: {
+            description: "Current session goal, or null when no goal is set.",
+            content: {
+              "application/json": {
+                schema: resolver(SessionGoal.PublicInfo.nullable()),
+              },
+            },
+          },
+          ...errors(400, 404),
+        },
+      }),
+      validator("param", SESSION_ID_PARAM),
+      async (c) => {
+        const sessionID = await parseCurrentProjectSessionID(c)
+        return c.json(SessionGoal.publicInfo(await SessionGoal.get(sessionID)) ?? null)
       },
     )
     .get(

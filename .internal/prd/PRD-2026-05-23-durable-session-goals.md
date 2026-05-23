@@ -1,7 +1,7 @@
 # PRD: Durable Session Goals
 
 **Date:** 2026-05-23
-**Status:** Phase 0 implemented
+**Status:** Phase 1 implemented
 **Author:** ax-code agent
 **Related:** `.internal/adr/ADR-014-durable-session-goals.md`, `.internal/prd/PRD-2026-05-23-autonomous-continuation-contract-hardening.md`
 
@@ -42,7 +42,6 @@ Without a durable goal layer, users must rely on repeated prompts like "please c
 
 ## Non-Goals
 
-- Do not build a full TUI goal dashboard in this phase.
 - Do not change autonomous mode defaults.
 - Do not remove or replace todo-based continuation.
 - Do not let the model pause, resume, clear, budget-limit, or usage-limit a goal.
@@ -99,12 +98,29 @@ Validation:
 
 ### Phase 1: UI and Resume Polish
 
-Open follow-up:
+Status: Complete on 2026-05-23.
+
+Files:
+
+- `packages/ax-code/src/session/goal.ts`
+- `packages/ax-code/src/server/routes/session.ts`
+- `packages/ax-code/src/runtime/headless/event.ts`
+- `packages/ax-code/src/runtime/headless/projection.ts`
+- `packages/ax-code/src/cli/cmd/tui/context/sync*.ts`
+- `packages/ax-code/src/cli/cmd/tui/routes/session/{dialog-goal,display-commands,footer,footer-view-model,header,index}.ts*`
+- focused tests under `packages/ax-code/test/cli/tui/`, `packages/ax-code/test/cli/cmd/tui/routes/session/`, and `packages/ax-code/test/runtime/headless/`
+
+Tasks:
 
 - Show active goal status in the session header/footer.
 - Add a dedicated goal dialog or command-palette entry.
-- Add sync state for live goal updates if needed by TUI surfaces.
+- Add sync state for live goal updates.
 - Add resume-specific UX for paused or blocked goals.
+
+Validation:
+
+- Passed: `cd packages/ax-code && bun test test/cli/tui/sync-session-fetch.test.ts test/cli/tui/sync-session-store.test.ts test/cli/tui/sync-session-sync.test.ts test/cli/tui/sync-store-event.test.ts test/cli/tui/sync-state.test.ts test/cli/tui/sync-subscription.test.ts test/runtime/headless/projection.test.ts test/cli/cmd/tui/routes/session/footer-view-model.test.ts`
+- Passed: `cd packages/ax-code && bun run typecheck`
 
 ## Acceptance Criteria
 
@@ -116,8 +132,13 @@ Open follow-up:
 - `update_goal` only accepts `complete` or `blocked`.
 - A normal assistant stop with an active goal schedules a bounded continuation.
 - Budget exhaustion marks the goal `budget_limited` and prevents further goal continuation.
+- TUI session header/footer surface current goal state when available.
+- The command palette exposes a dedicated session goal dialog.
+- TUI sync hydrates goal state from `GET /session/:sessionID/goal` and updates live from `session.goal` events.
+- Paused and blocked goals show `/goal resume` as the resume action.
 
 ## Progress Log
 
 - 2026-05-23: PRD created after reviewing OpenAI Codex `/goal` docs/source behavior and current `ax-code` autonomous continuation architecture.
 - 2026-05-23: Phase 0 implemented. Added persisted session goals, `/goal` command handling, goal model tools, system prompt context, bounded goal continuation, token budget accounting, and focused tests.
+- 2026-05-23: Phase 1 implemented. Added live `session.goal` sync, goal endpoint hydration, header/footer goal status, a session goal command-palette dialog, resume hints for paused/blocked goals, and focused TUI/headless tests.
