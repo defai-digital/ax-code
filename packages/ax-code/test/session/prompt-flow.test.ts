@@ -1200,6 +1200,7 @@ describe("session.prompt flow", () => {
 
     try {
       let sessionID: SessionID | undefined
+      const agents: string[] = []
       modelSpy = spyOn(Provider, "getModel").mockResolvedValue(model)
       summarySpy = spyOn(SessionSummary, "summarize").mockResolvedValue()
       trackSpy = spyOn(Snapshot, "track").mockResolvedValue("snap-1")
@@ -1209,7 +1210,8 @@ describe("session.prompt flow", () => {
       })
 
       let call = 0
-      streamSpy = spyOn(LLM, "stream").mockImplementation(async () => {
+      streamSpy = spyOn(LLM, "stream").mockImplementation(async (input) => {
+        agents.push(input.agent.name)
         call++
         if (call === 3 && sessionID) {
           Todo.update({
@@ -1269,10 +1271,11 @@ describe("session.prompt flow", () => {
           await SessionPrompt.prompt({
             sessionID: session.id,
             agent: "build",
-            parts: [{ type: "text", text: "continue bug reporting" }],
+            parts: [{ type: "text", text: "continue report writing" }],
           })
 
           expect(streamSpy).toHaveBeenCalledTimes(3)
+          expect(agents).toEqual(["build", "build", "build"])
           const messages = await Session.messages({ sessionID: session.id })
           const convergenceMessages = messages.filter(
             (message) =>
