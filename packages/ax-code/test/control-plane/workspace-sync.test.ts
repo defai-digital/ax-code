@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, mock, test } from "bun:test"
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
 import { WorkspaceID } from "../../src/control-plane/schema"
 import { Log } from "../../src/util/log"
 import { tmpdir } from "../fixture/fixture"
@@ -14,6 +14,10 @@ afterEach(async () => {
   mock.restore()
   await resetDatabase()
   adaptors.removeAdaptor("testing")
+})
+
+beforeEach(() => {
+  adaptors.installAdaptor("testing", TestAdaptor)
 })
 
 Log.init({ print: false })
@@ -50,8 +54,6 @@ const TestAdaptor: Adaptor = {
     })
   },
 }
-
-adaptors.installAdaptor("testing", TestAdaptor)
 
 describe("control-plane/workspace.startSyncing", () => {
   test("syncs only remote workspaces and emits remote SSE events", async () => {
@@ -116,5 +118,64 @@ describe("control-plane/workspace.startSyncing", () => {
     await sync.stop()
     expect(seenHeaders).toContain(id1)
     TestAdaptor.fetch = originalFetch
+  })
+
+  test("reconnects when remote workspace sync returns an empty response body", async () => {
+    const { Workspace } = await import("../../src/control-plane/workspace")
+    await using tmp = await tmpdir({ git: true })
+    const { project } = await Project.fromDirectory(tmp.path)
+
+    const id = WorkspaceID.ascending()
+    Database.use((db) =>
+      db
+        .insert(WorkspaceTable)
+        .values([
+          {
+            id,
+            branch: "main",
+            project_id: project.id,
+            type: remote.type,
+            name: remote.name,
+          },
+        ])
+        .run(),
+    )
+
+    const originalFetch = TestAdaptor.fetch
+    let calls = 0
+    TestAdaptor.fetch = async (config, input, init) => {
+      calls++
+      if (calls === 1) {
+        return new Response(null, {
+          status: 200,
+          headers: {
+            "content-type": "text/event-stream",
+          },
+        })
+      }
+      return originalFetch(config, input, init)
+    }
+
+    const done = new Promise<void>((resolve) => {
+      const listener = (event: { directory?: string; payload: { type: string } }) => {
+        if (event.directory !== id) return
+        if (event.payload.type !== "remote.ready") return
+        GlobalBus.off("event", listener)
+        resolve()
+      }
+      GlobalBus.on("event", listener)
+    })
+
+    const sync = Workspace.startSyncing(project)
+    try {
+      await Promise.race([
+        done,
+        new Promise((_, reject) => setTimeout(() => reject(new Error("timed out waiting for reconnect")), 3000)),
+      ])
+      expect(calls).toBeGreaterThanOrEqual(2)
+    } finally {
+      await sync.stop()
+      TestAdaptor.fetch = originalFetch
+    }
   })
 })

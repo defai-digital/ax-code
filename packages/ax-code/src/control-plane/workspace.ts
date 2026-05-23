@@ -137,7 +137,9 @@ export namespace Workspace {
             if (!response.ok) {
               throw new Error(`workspace sync endpoint returned ${response.status}`)
             }
-            if (!response.body) return
+            if (!response.body) {
+              throw new Error("workspace sync endpoint returned 200 with no body")
+            }
             backoff = WORKSPACE_SYNC_INITIAL_BACKOFF_MS
             await parseSSE(response.body, stop.signal, (payload) => {
               GlobalBus.emit("event", {
