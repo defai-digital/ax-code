@@ -1,0 +1,100 @@
+import { describe, expect, test } from "bun:test"
+import { SuperLongPolicy } from "@/session/super-long-policy"
+
+describe("SuperLongPolicy.state", () => {
+  test("defaults on for Qwen3.7-Max", () => {
+    expect(SuperLongPolicy.state({ modelID: "qwen3.7-max" })).toEqual({
+      enabled: true,
+      source: "model-default",
+    })
+  })
+
+  test("defaults off for other models", () => {
+    expect(SuperLongPolicy.state({ modelID: "claude-sonnet-4.5" }).enabled).toBe(false)
+  })
+
+  test("session override wins over model default and config", () => {
+    expect(
+      SuperLongPolicy.state({
+        modelID: "qwen3.7-max",
+        config: { enabled: true },
+        sessionOverride: false,
+      }),
+    ).toEqual({ enabled: false, source: "session-override" })
+  })
+
+  test("config wins over model default when no session override exists", () => {
+    expect(
+      SuperLongPolicy.state({
+        modelID: "qwen3.7-max",
+        config: { enabled: false },
+      }),
+    ).toEqual({ enabled: false, source: "config" })
+  })
+})
+
+describe("SuperLongPolicy.duration", () => {
+  test("accepts exactly the 72 hour ceiling", () => {
+    expect(SuperLongPolicy.duration(SuperLongPolicy.MAX_DURATION_MS)).toEqual({
+      ok: true,
+      durationMs: SuperLongPolicy.MAX_DURATION_MS,
+    })
+  })
+
+  test("rejects durations above the 72 hour ceiling", () => {
+    expect(SuperLongPolicy.duration(SuperLongPolicy.MAX_DURATION_MS + 1)).toEqual({
+      ok: false,
+      reason: "duration_exceeds_ceiling",
+      maxDurationMs: SuperLongPolicy.MAX_DURATION_MS,
+      requestedDurationMs: SuperLongPolicy.MAX_DURATION_MS + 1,
+    })
+  })
+})
+
+describe("SuperLongPolicy.evaluatePacing", () => {
+  const policy: SuperLongPolicy.PacingPolicy = {
+    windowMs: 60_000,
+    maxRequests: 2,
+    minDelayMs: 10_000,
+  }
+
+  test("allows the first request in a window", () => {
+    const decision = SuperLongPolicy.evaluatePacing({
+      now: 100_000,
+      state: { timestamps: [] },
+      policy,
+    })
+    expect(decision.waitMs).toBe(0)
+    expect(decision.reason).toBe("allowed")
+  })
+
+  test("enforces minimum delay between requests", () => {
+    const decision = SuperLongPolicy.evaluatePacing({
+      now: 105_000,
+      state: { timestamps: [100_000] },
+      policy,
+    })
+    expect(decision.waitMs).toBe(5_000)
+    expect(decision.reason).toBe("min-delay")
+  })
+
+  test("enforces rolling-window request ceiling", () => {
+    const decision = SuperLongPolicy.evaluatePacing({
+      now: 130_000,
+      state: { timestamps: [100_000, 115_000] },
+      policy,
+    })
+    expect(decision.waitMs).toBe(30_000)
+    expect(decision.reason).toBe("rolling-window")
+  })
+
+  test("drops expired timestamps before evaluating", () => {
+    const decision = SuperLongPolicy.evaluatePacing({
+      now: 170_001,
+      state: { timestamps: [100_000, 115_000] },
+      policy,
+    })
+    expect(decision.waitMs).toBe(0)
+    expect(decision.timestamps).toEqual([115_000])
+  })
+})
