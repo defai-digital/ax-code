@@ -2,6 +2,8 @@ import { isQwen37MaxModel } from "@/provider/qwen37-readiness"
 
 export namespace SuperLongPolicy {
   export const MAX_DURATION_MS = 72 * 60 * 60 * 1000
+  export const SESSION_OVERRIDE_ENV = "AX_CODE_SUPER_LONG_SESSION_OVERRIDE"
+  export const BASE_ENV = "AX_CODE_SUPER_LONG"
 
   export type RuntimeConfig = {
     enabled?: boolean
@@ -10,7 +12,7 @@ export namespace SuperLongPolicy {
 
   export type StateDecision = {
     enabled: boolean
-    source: "session-override" | "config" | "model-default"
+    source: "session-override" | "env" | "config" | "model-default"
   }
 
   export type DurationDecision =
@@ -49,11 +51,7 @@ export namespace SuperLongPolicy {
     return providerID.startsWith("alibaba-") ? ALIBABA_PACING : DEFAULT_PACING
   }
 
-  export function state(input: {
-    modelID: string
-    config?: RuntimeConfig
-    sessionOverride?: boolean
-  }): StateDecision {
+  export function state(input: { modelID: string; config?: RuntimeConfig; sessionOverride?: boolean }): StateDecision {
     if (input.sessionOverride !== undefined) {
       return { enabled: input.sessionOverride, source: "session-override" }
     }
@@ -61,6 +59,26 @@ export namespace SuperLongPolicy {
       return { enabled: input.config.enabled, source: "config" }
     }
     return { enabled: isQwen37MaxModel(input.modelID), source: "model-default" }
+  }
+
+  export function runtimeState(input: {
+    modelID: string
+    config?: RuntimeConfig
+    env?: Record<string, string | undefined>
+  }): StateDecision {
+    const env = input.env ?? process.env
+    const sessionOverride = parseBooleanEnvValue(env[SESSION_OVERRIDE_ENV])
+    if (sessionOverride !== undefined) {
+      return { enabled: sessionOverride, source: "session-override" }
+    }
+    const base = parseBooleanEnvValue(env[BASE_ENV])
+    if (base !== undefined) {
+      return { enabled: base, source: "env" }
+    }
+    return state({
+      modelID: input.modelID,
+      config: input.config,
+    })
   }
 
   export function duration(requestedDurationMs: number | undefined, fallbackMs = MAX_DURATION_MS): DurationDecision {
@@ -79,11 +97,7 @@ export namespace SuperLongPolicy {
     return { ok: true, durationMs }
   }
 
-  export function evaluatePacing(input: {
-    now: number
-    state: PacingState
-    policy: PacingPolicy
-  }): PacingDecision {
+  export function evaluatePacing(input: { now: number; state: PacingState; policy: PacingPolicy }): PacingDecision {
     const cutoff = input.now - input.policy.windowMs
     const timestamps = input.state.timestamps.filter((ts) => ts > cutoff).sort((a, b) => a - b)
     const last = timestamps.at(-1)
@@ -105,5 +119,13 @@ export namespace SuperLongPolicy {
     return {
       timestamps: [...input.state.timestamps.filter((ts) => ts > cutoff), input.now],
     }
+  }
+
+  function parseBooleanEnvValue(value: string | undefined) {
+    if (!value) return undefined
+    const normalized = value.toLowerCase()
+    if (normalized === "true" || normalized === "1") return true
+    if (normalized === "false" || normalized === "0") return false
+    return undefined
   }
 }

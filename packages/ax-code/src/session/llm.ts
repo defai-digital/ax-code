@@ -150,7 +150,13 @@ export namespace LLM {
     if (reasoningPolicyReminder) system.push(reasoningPolicyReminder)
 
     const longAgentProfile = longAgentProfileForModel(input.model.id)
-    if (!input.small && Flag.AX_CODE_SUPER_LONG && longAgentProfile.verificationLoopEnabled) {
+    const superLongEnabled =
+      !input.small &&
+      SuperLongPolicy.runtimeState({
+        modelID: input.model.id,
+        config: { enabled: cfg.super_long },
+      }).enabled
+    if (superLongEnabled && longAgentProfile.verificationLoopEnabled) {
       system.push(
         "You are operating in Super-Long mode. Before declaring any task complete: run available tests or verification commands, confirm the build is clean, and surface any repeated failure patterns explicitly rather than retrying silently.",
       )
@@ -180,7 +186,7 @@ export namespace LLM {
           model: input.model,
           sessionID: input.sessionID,
           providerOptions: provider?.options ?? {},
-          longAgent: Flag.AX_CODE_SUPER_LONG && longAgentProfile.preserveThinkingEligible,
+          longAgent: superLongEnabled && longAgentProfile.preserveThinkingEligible,
         })
     const options: Record<string, any> = ProviderTransform.sanitizeOptions(
       input.model,
@@ -196,7 +202,7 @@ export namespace LLM {
     // Only active in Super-Long mode for models with a wide context profile
     // (e.g. Qwen3.7-Max). Keep existing system instructions outside the pack
     // to avoid duplicating the provider prompt.
-    if (!input.small && Flag.AX_CODE_SUPER_LONG && longAgentProfile.contextPackingBudget === "wide") {
+    if (superLongEnabled && longAgentProfile.contextPackingBudget === "wide") {
       const task = extractLastUserTask(input.messages)
       const touchedFiles = extractTouchedFiles(input.messages)
       const tokenBudget = Math.min(ProviderTransform.maxOutputTokens(input.model) * 2, 32_000)
@@ -221,7 +227,7 @@ export namespace LLM {
     // message annotations. All system blocks are stable (provider instructions,
     // rules, reminders, long-agent context pack).
     let systemMessages = system.map((content) => systemMessage(content))
-    if (!input.small && Flag.AX_CODE_SUPER_LONG && longAgentProfile.promptCacheEligible) {
+    if (superLongEnabled && longAgentProfile.promptCacheEligible) {
       const cacheBlocks = PromptCachePolicy.buildBlocks(
         system.map((content, i) => ({ label: i === 0 ? "system" : "stable-rules", content })),
       )
@@ -278,7 +284,7 @@ export namespace LLM {
 
     const tools = await resolveTools(input, cfg)
     const pacingReservation = await applySuperLongPacing({
-      enabled: Flag.AX_CODE_SUPER_LONG,
+      enabled: superLongEnabled,
       providerID: input.model.providerID,
       modelID: input.model.id,
       sessionID: input.sessionID,
