@@ -27,6 +27,17 @@ describe("modelDisplayInfo", () => {
     expect(display.webSearch).toBe(true)
   })
 
+  test("does not duplicate markers already present in the model name", () => {
+    const display = modelDisplayInfo("claude-code", {
+      providerID: "claude-code",
+      name: "Claude Code default 🌐",
+      capabilities: { input: { image: true } },
+    })
+
+    expect(display.label).toBe("Claude Code default 👀 🌐")
+    expect(display.searchText).toBe("Claude Code default")
+  })
+
   test("marks server-side live search models", () => {
     expect(
       supportsWebSearch({

@@ -5,12 +5,16 @@ const originalConfigContent = process.env["AX_CODE_CONFIG_CONTENT"]
 const originalModelsPath = process.env["AX_CODE_MODELS_PATH"]
 const originalModelsUrl = process.env["AX_CODE_MODELS_URL"]
 const originalAutonomous = process.env["AX_CODE_AUTONOMOUS"]
+const originalSuperLong = process.env["AX_CODE_SUPER_LONG"]
+const originalSuperLongOverride = process.env["AX_CODE_SUPER_LONG_SESSION_OVERRIDE"]
 
 afterEach(() => {
   restoreEnv("AX_CODE_CONFIG_CONTENT", originalConfigContent)
   restoreEnv("AX_CODE_MODELS_PATH", originalModelsPath)
   restoreEnv("AX_CODE_MODELS_URL", originalModelsUrl)
   restoreEnv("AX_CODE_AUTONOMOUS", originalAutonomous)
+  restoreEnv("AX_CODE_SUPER_LONG", originalSuperLong)
+  restoreEnv("AX_CODE_SUPER_LONG_SESSION_OVERRIDE", originalSuperLongOverride)
 })
 
 test("autonomous flag defaults on but honors explicit false", () => {
@@ -22,6 +26,23 @@ test("autonomous flag defaults on but honors explicit false", () => {
 
   process.env["AX_CODE_AUTONOMOUS"] = "true"
   expect(Flag.AX_CODE_AUTONOMOUS).toBe(true)
+})
+
+test("super-long flag honors session override before base env", () => {
+  delete process.env["AX_CODE_SUPER_LONG"]
+  delete process.env["AX_CODE_SUPER_LONG_SESSION_OVERRIDE"]
+  expect(Flag.AX_CODE_SUPER_LONG).toBe(false)
+
+  process.env["AX_CODE_SUPER_LONG"] = "false"
+  process.env["AX_CODE_SUPER_LONG_SESSION_OVERRIDE"] = "true"
+  expect(Flag.AX_CODE_SUPER_LONG).toBe(true)
+
+  process.env["AX_CODE_SUPER_LONG"] = "true"
+  process.env["AX_CODE_SUPER_LONG_SESSION_OVERRIDE"] = "false"
+  expect(Flag.AX_CODE_SUPER_LONG).toBe(false)
+
+  delete process.env["AX_CODE_SUPER_LONG_SESSION_OVERRIDE"]
+  expect(Flag.AX_CODE_SUPER_LONG).toBe(true)
 })
 
 function restoreEnv(key: string, value: string | undefined) {

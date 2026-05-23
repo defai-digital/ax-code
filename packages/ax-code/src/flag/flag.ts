@@ -37,6 +37,19 @@ function defineBooleanFlag(name: string, fallback = false) {
   })
 }
 
+function defineBooleanFlagWithOverride(name: string, overrideName: string, fallback = false) {
+  Object.defineProperty(Flag, name, {
+    get() {
+      const override = parseBooleanEnvValue(process.env[overrideName])
+      if (override !== undefined) return override
+      const parsed = parseBooleanEnvValue(process.env[name])
+      return parsed ?? fallback
+    },
+    enumerable: true,
+    configurable: false,
+  })
+}
+
 export namespace Flag {
   export const AX_CODE_AUTO_SHARE = truthy("AX_CODE_AUTO_SHARE")
   export const AX_CODE_GIT_BASH_PATH = process.env["AX_CODE_GIT_BASH_PATH"]
@@ -221,7 +234,9 @@ defineBooleanFlag("AX_CODE_AUTONOMOUS", true)
 defineBooleanFlag("AX_CODE_SMART_LLM")
 
 // Evaluate at access time so runtime toggles remain immediately effective.
-defineBooleanFlag("AX_CODE_SUPER_LONG")
+// The session override is set by the Super-Long route and must match the
+// route's GET precedence so the reported state and runtime behavior agree.
+defineBooleanFlagWithOverride("AX_CODE_SUPER_LONG", "AX_CODE_SUPER_LONG_SESSION_OVERRIDE")
 
 // Evaluate at access time so test/runtime overrides can be flipped
 // without requiring a module reload.
