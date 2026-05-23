@@ -103,7 +103,12 @@ describe("autonomous question evaluation fixtures", () => {
     // Before the fix, CONTEXT_BEST_PRACTICE_MARKER included `over-?engineer`,
     // so a question like "How should we over-engineer this?" would incorrectly
     // set contextAsksForBestPractice=true and inflate the low-scope bonus from
-    // +3 to +6, yielding spuriously high confidence.
+    // +3 to +6. The answer is correct either way here because the competitor
+    // ("Plugin framework") scores -20 (matches RISK_MARKER's "architecture layer"),
+    // making the gap >> 10 regardless of the bonus. The value of the fix is that
+    // contextAsksForBestPractice no longer fires on an unrelated "over-engineer"
+    // in the question, preventing misleading rationale output and incorrect bonus
+    // accumulation on questions with neutral competitors.
     const question: AutonomousQuestion.QuestionLike = {
       question: "How should we over-engineer this for future flexibility?",
       header: "Approach",
@@ -113,10 +118,12 @@ describe("autonomous question evaluation fixtures", () => {
       ],
     }
     const [decision] = AutonomousQuestion.decisions([question])
-    // Correct answer: "Direct implementation" wins (plugin framework is risk class)
+    // "Direct implementation" wins: "Plugin framework" scores -20 (risk class).
     expect(decision.answer).toEqual(["Direct implementation"])
-    // Confidence must be medium, not high: without contextAsksForBestPractice the
-    // low-scope bonus is +3 (score ≈ 3), giving top=3, second=-20, gap < 5 → medium.
-    expect(decision.confidence).toBe("medium")
+    // Confidence is high: gap = ~23 (2.999 − −20) ≥ 10, per confidenceFromRanked.
+    expect(decision.confidence).toBe("high")
+    // Rationale must NOT claim "best-practice" or "best practice context" since
+    // the question asks TO over-engineer (not to follow best practices).
+    expect(decision.rationale).not.toMatch(/best.pract/i)
   })
 })
