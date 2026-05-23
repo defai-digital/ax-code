@@ -25,6 +25,8 @@ jobs:
 
       - name: Setup Ax-code JS toolchain
         uses: ./.github/actions/setup-ax-code-toolchain
+        with:
+          checkout: "false"
 
       - run: pnpm install --frozen-lockfile
 
@@ -94,6 +96,8 @@ jobs:
 
       - name: Setup Ax-code JS toolchain
         uses: ./.github/actions/setup-ax-code-toolchain
+        with:
+          checkout: "false"
 
       - run: pnpm install --frozen-lockfile
 

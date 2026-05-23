@@ -53,8 +53,13 @@ jobs:
               ;;
           esac
 
+      - name: Checkout
+        uses: actions/checkout@v6
+
       - name: Setup Ax-code JS toolchain
         uses: ./.github/actions/setup-ax-code-toolchain
+        with:
+          checkout: "false"
 
       - name: Install deps
         run: pnpm install --frozen-lockfile
@@ -165,8 +170,13 @@ jobs:
     env:
       AX_CODE_DISABLE_SHARE: "true"
     steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
       - name: Setup Ax-code JS toolchain
         uses: ./.github/actions/setup-ax-code-toolchain
+        with:
+          checkout: "false"
 
       - name: Install deps
         run: pnpm install --frozen-lockfile
