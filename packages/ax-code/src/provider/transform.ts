@@ -289,6 +289,7 @@ export namespace ProviderTransform {
     model: Provider.Model
     sessionID: string
     providerOptions?: Record<string, any>
+    longAgent?: boolean
   }): Record<string, any> {
     const result: Record<string, any> = {}
 
@@ -320,6 +321,11 @@ export namespace ProviderTransform {
     if (isAlibabaThinkingModel(input.model)) {
       result["enable_thinking"] = true
       result["thinking_budget"] = alibabaThinkingBudget(input.model, ALIBABA_THINKING_BUDGET_TOKENS)
+      // preserve_thinking keeps reasoning state across turns for long-agent execution.
+      // Only enabled in long-agent/Super-Long mode; auxiliary and short requests skip it.
+      if (input.longAgent) {
+        result["preserve_thinking"] = true
+      }
     }
 
     if (input.model.providerID === "venice") {
@@ -384,12 +390,13 @@ export namespace ProviderTransform {
         thinkingConfig: _thinkingConfig,
         thinking_budget: requestedBudget,
         enable_thinking: requestedEnable,
+        preserve_thinking: requestedPreserve,
         ...rest
       } = result
       // Respect an explicit `enable_thinking: false` from smallOptions or
       // user config — auxiliary calls (summarization, titling) should not
-      // pay for thinking. Otherwise default to enabled with a clamped
-      // budget.
+      // pay for thinking. When thinking is off, preserve_thinking is also
+      // stripped (no reasoning state to preserve).
       result =
         requestedEnable === false
           ? { ...rest, enable_thinking: false }
@@ -397,6 +404,8 @@ export namespace ProviderTransform {
               ...rest,
               enable_thinking: true,
               thinking_budget: alibabaThinkingBudget(model, requestedBudget),
+              // Carry through preserve_thinking only when it was explicitly requested
+              ...(requestedPreserve ? { preserve_thinking: true } : {}),
             }
     }
 

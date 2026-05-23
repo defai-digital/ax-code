@@ -168,6 +168,7 @@ export namespace LLM {
           model: input.model,
           sessionID: input.sessionID,
           providerOptions: provider?.options ?? {},
+          longAgent: Flag.AX_CODE_SUPER_LONG,
         })
     const options: Record<string, any> = ProviderTransform.sanitizeOptions(
       input.model,

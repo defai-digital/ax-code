@@ -1512,3 +1512,103 @@ describe("ProviderTransform.smallOptions - Alibaba thinking models", () => {
     })
   })
 })
+
+describe("ProviderTransform.options - preserve_thinking (Phase 2)", () => {
+  function mkAlibabaThinking(providerID: string, modelID = "qwen3.7-max") {
+    return {
+      id: `${providerID}/${modelID}`,
+      providerID: ProviderID.make(providerID),
+      api: {
+        id: modelID,
+        url: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        npm: "@ai-sdk/openai-compatible",
+      },
+      capabilities: { reasoning: true },
+      limit: { output: 65_536 },
+    } as any
+  }
+
+  function mkNonAlibaba(modelID = "claude-3-5-sonnet") {
+    return {
+      id: `anthropic/${modelID}`,
+      providerID: ProviderID.make("anthropic"),
+      api: { id: modelID, url: "https://api.anthropic.com", npm: "@ai-sdk/anthropic" },
+      capabilities: { reasoning: true },
+      limit: { output: 32_000 },
+    } as any
+  }
+
+  test("options() emits preserve_thinking when longAgent=true on Alibaba thinking model", () => {
+    const result = ProviderTransform.options({
+      model: mkAlibabaThinking("alibaba-coding-plan"),
+      sessionID: "s1",
+      providerOptions: {},
+      longAgent: true,
+    })
+    expect(result.preserve_thinking).toBe(true)
+    expect(result.enable_thinking).toBe(true)
+  })
+
+  test("options() omits preserve_thinking when longAgent=false", () => {
+    const result = ProviderTransform.options({
+      model: mkAlibabaThinking("alibaba-token-plan"),
+      sessionID: "s1",
+      providerOptions: {},
+      longAgent: false,
+    })
+    expect(result.preserve_thinking).toBeUndefined()
+    expect(result.enable_thinking).toBe(true)
+  })
+
+  test("options() omits preserve_thinking when longAgent is absent", () => {
+    const result = ProviderTransform.options({
+      model: mkAlibabaThinking("alibaba-coding-plan-cn"),
+      sessionID: "s1",
+      providerOptions: {},
+    })
+    expect(result.preserve_thinking).toBeUndefined()
+  })
+
+  test("options() never emits preserve_thinking for non-Alibaba models", () => {
+    const result = ProviderTransform.options({
+      model: mkNonAlibaba(),
+      sessionID: "s1",
+      providerOptions: {},
+      longAgent: true,
+    })
+    expect(result.preserve_thinking).toBeUndefined()
+  })
+
+  test("sanitizeOptions carries preserve_thinking through when enable_thinking is true", () => {
+    const model = mkAlibabaThinking("alibaba-coding-plan")
+    const result = ProviderTransform.sanitizeOptions(model, {
+      enable_thinking: true,
+      thinking_budget: 8192,
+      preserve_thinking: true,
+      custom: "keep",
+    })
+    expect(result.preserve_thinking).toBe(true)
+    expect(result.enable_thinking).toBe(true)
+    expect(result.custom).toBe("keep")
+  })
+
+  test("sanitizeOptions strips preserve_thinking when enable_thinking=false (smallOptions path)", () => {
+    const model = mkAlibabaThinking("alibaba-token-plan")
+    const result = ProviderTransform.sanitizeOptions(model, {
+      enable_thinking: false,
+      thinking_budget: 8192,
+      preserve_thinking: true,
+    })
+    expect(result.preserve_thinking).toBeUndefined()
+    expect(result.enable_thinking).toBe(false)
+  })
+
+  test("sanitizeOptions omits preserve_thinking when not set (normal thinking path)", () => {
+    const model = mkAlibabaThinking("alibaba-coding-plan")
+    const result = ProviderTransform.sanitizeOptions(model, {
+      enable_thinking: true,
+      thinking_budget: 8192,
+    })
+    expect(result.preserve_thinking).toBeUndefined()
+  })
+})
