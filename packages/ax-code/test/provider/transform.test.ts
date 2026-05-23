@@ -815,12 +815,12 @@ describe("ProviderTransform.variants", () => {
   })
 
   describe("@ai-sdk/xai", () => {
-    test("grok-4-1-fast does not auto-generate reasoningEffort variants", () => {
+    test("grok-4.3 does not auto-generate reasoningEffort variants", () => {
       const model = createMockModel({
-        id: "xai/grok-4-1-fast",
+        id: "xai/grok-4.3",
         providerID: "xai",
         api: {
-          id: "grok-4-1-fast",
+          id: "grok-4.3",
           url: "https://api.x.ai",
           npm: "@ai-sdk/xai",
         },
@@ -831,10 +831,10 @@ describe("ProviderTransform.variants", () => {
 
     test("sanitizes unsupported reasoningEffort request options", () => {
       const model = createMockModel({
-        id: "xai/grok-4-1-fast",
+        id: "xai/grok-4.3",
         providerID: "xai",
         api: {
-          id: "grok-4-1-fast",
+          id: "grok-4.3",
           url: "https://api.x.ai",
           npm: "@ai-sdk/xai",
         },
@@ -845,6 +845,141 @@ describe("ProviderTransform.variants", () => {
         temperature: 0.2,
       })
       expect(result).toEqual({ temperature: 0.2 })
+    })
+
+    test("options() injects default Live Search searchParameters for grok-4.3", () => {
+      const model = createMockModel({
+        id: "xai/grok-4.3",
+        providerID: "xai",
+        api: { id: "grok-4.3", url: "https://api.x.ai", npm: "@ai-sdk/xai" },
+      })
+      const result = ProviderTransform.options({ model, sessionID: "s1", providerOptions: {} })
+      expect(result.searchParameters).toBeDefined()
+      expect(result.searchParameters.mode).toBe("auto")
+      expect(result.searchParameters.returnCitations).toBe(true)
+      expect(result.searchParameters.sources).toEqual([{ type: "web" }, { type: "x" }, { type: "news" }])
+    })
+
+    test("options() injects Live Search for grok-code-fast-1", () => {
+      const model = createMockModel({
+        id: "xai/grok-code-fast-1",
+        providerID: "xai",
+        api: { id: "grok-code-fast-1", url: "https://api.x.ai", npm: "@ai-sdk/xai" },
+      })
+      const result = ProviderTransform.options({ model, sessionID: "s1", providerOptions: {} })
+      expect(result.searchParameters?.mode).toBe("auto")
+    })
+
+    test("options() skips Live Search for multi-agent models", () => {
+      const model = createMockModel({
+        id: "xai/grok-4.20-multi-agent-0309",
+        providerID: "xai",
+        api: { id: "grok-4.20-multi-agent-0309", url: "https://api.x.ai", npm: "@ai-sdk/xai" },
+      })
+      const result = ProviderTransform.options({ model, sessionID: "s1", providerOptions: {} })
+      expect(result.searchParameters).toBeUndefined()
+    })
+
+    test("options() honours explicit { mode: 'off' } override and omits the key", () => {
+      const model = createMockModel({
+        id: "xai/grok-4.3",
+        providerID: "xai",
+        api: { id: "grok-4.3", url: "https://api.x.ai", npm: "@ai-sdk/xai" },
+      })
+      const result = ProviderTransform.options({
+        model,
+        sessionID: "s1",
+        providerOptions: { searchParameters: { mode: "off" } },
+      })
+      expect(result.searchParameters).toBeUndefined()
+    })
+
+    test("options() shallow-merges user searchParameters overrides over defaults", () => {
+      const model = createMockModel({
+        id: "xai/grok-4.3",
+        providerID: "xai",
+        api: { id: "grok-4.3", url: "https://api.x.ai", npm: "@ai-sdk/xai" },
+      })
+      const result = ProviderTransform.options({
+        model,
+        sessionID: "s1",
+        providerOptions: { searchParameters: { mode: "on", maxSearchResults: 3 } },
+      })
+      expect(result.searchParameters.mode).toBe("on")
+      expect(result.searchParameters.maxSearchResults).toBe(3)
+      expect(result.searchParameters.returnCitations).toBe(true)
+    })
+  })
+
+  describe("Alibaba DashScope internet search", () => {
+    const mkQwen = (providerID: string, apiId = "qwen3.6-plus") =>
+      createMockModel({
+        id: `${providerID}/${apiId}`,
+        providerID,
+        api: { id: apiId, url: "https://dashscope.aliyuncs.com", npm: "@ai-sdk/openai-compatible" },
+      })
+
+    test("options() enables enable_search for Qwen on alibaba-coding-plan", () => {
+      const result = ProviderTransform.options({
+        model: mkQwen("alibaba-coding-plan"),
+        sessionID: "s1",
+        providerOptions: {},
+      })
+      expect(result.enable_search).toBe(true)
+      expect(result.search_options).toEqual({ enable_source: true, enable_citation: true })
+    })
+
+    test("options() enables enable_search for Qwen on alibaba-token-plan-cn", () => {
+      const result = ProviderTransform.options({
+        model: mkQwen("alibaba-token-plan-cn", "qwen3.7-max"),
+        sessionID: "s1",
+        providerOptions: {},
+      })
+      expect(result.enable_search).toBe(true)
+    })
+
+    test("options() skips enable_search for non-Qwen models on Alibaba plans", () => {
+      const result = ProviderTransform.options({
+        model: mkQwen("alibaba-coding-plan", "deepseek-v4-pro"),
+        sessionID: "s1",
+        providerOptions: {},
+      })
+      expect(result.enable_search).toBeUndefined()
+      expect(result.search_options).toBeUndefined()
+    })
+
+    test("options() skips enable_search for Qwen on non-Alibaba providers", () => {
+      const model = createMockModel({
+        id: "openrouter/qwen3.6-plus",
+        providerID: "openrouter",
+        api: { id: "qwen3.6-plus", url: "https://openrouter.ai", npm: "@ai-sdk/openai-compatible" },
+      })
+      const result = ProviderTransform.options({ model, sessionID: "s1", providerOptions: {} })
+      expect(result.enable_search).toBeUndefined()
+    })
+
+    test("options() honours explicit enable_search:false opt-out", () => {
+      const result = ProviderTransform.options({
+        model: mkQwen("alibaba-coding-plan"),
+        sessionID: "s1",
+        providerOptions: { enable_search: false },
+      })
+      expect(result.enable_search).toBeUndefined()
+      expect(result.search_options).toBeUndefined()
+    })
+
+    test("options() merges user search_options over defaults", () => {
+      const result = ProviderTransform.options({
+        model: mkQwen("alibaba-coding-plan"),
+        sessionID: "s1",
+        providerOptions: { search_options: { forced_search: true, search_strategy: "pro" } },
+      })
+      expect(result.search_options).toEqual({
+        enable_source: true,
+        enable_citation: true,
+        forced_search: true,
+        search_strategy: "pro",
+      })
     })
   })
 

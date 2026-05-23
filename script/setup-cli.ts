@@ -4,26 +4,18 @@
  * Usage: pnpm run setup:cli
  *
  * By default this installs a launcher that targets the locally built bundled
- * CLI, matching the npm/Homebrew runtime. Pass `--source` to install a
+ * CLI, matching the Homebrew/curl runtime. Pass `--source` to install a
  * contributor-only launcher that forwards to Bun from this checkout.
  */
 
 import childProcess from "child_process"
 import fs from "fs"
-import { createRequire } from "module"
 import os from "os"
 import path from "path"
+import { candidateBinaryTargets } from "../packages/ax-code/script/binary-targets"
 import { sourceLauncherScript as generateSourceLauncherScript } from "../packages/ax-code/script/source-launcher"
 
 export const ROOT = path.resolve(import.meta.dir, "..")
-const require = createRequire(import.meta.url)
-const { candidatePackageNames } = require("./../packages/ax-code/bin/binary-selection.cjs") as {
-  candidatePackageNames(options?: { platform?: string; arch?: string; avx2?: boolean; musl?: boolean }): {
-    binary: string
-    names: string[]
-    unsupported?: string
-  }
-}
 
 type SetupCliOptions = {
   args?: string[]
@@ -56,8 +48,8 @@ export function preferredBundledTarget(input: {
   avx2?: boolean
   musl?: boolean
 }) {
-  const selection = candidatePackageNames({
-    platform: normalizeBinarySelectionPlatform(input.platform ?? process.platform),
+  const selection = candidateBinaryTargets({
+    platform: input.platform ?? process.platform,
     arch: input.arch ?? process.arch,
     avx2: input.avx2,
     musl: input.musl,
@@ -71,7 +63,6 @@ export function preferredBundledTarget(input: {
   }
   return {
     binary: selection.binary,
-    packageName: preferred,
     legacyName: preferred.replace(/^@[^/]+\//, ""),
   }
 }
@@ -305,9 +296,4 @@ export function setupCli(input: SetupCliOptions = {}) {
 
 if (import.meta.main) {
   setupCli()
-}
-
-function normalizeBinarySelectionPlatform(platform: NodeJS.Platform) {
-  if (platform === "win32") return "windows"
-  return platform
 }

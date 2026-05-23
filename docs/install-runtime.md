@@ -2,21 +2,21 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-05-16
+Last reviewed: 2026-05-18
 Owner: ax-code runtime
 
-The root [README](../README.md) keeps the shortest install path. This page is the source of truth for the package channels, `ax-code doctor` runtime labels, and local launcher behavior.
+The root [README](../README.md) keeps the shortest install path. This page is the source of truth for supported installer channels, `ax-code doctor` runtime labels, and local launcher behavior.
 
 ## Recommended Path
 
-Use the default compiled package unless you are debugging a source-bundle issue or developing from a checkout.
+Use a supported compiled installer unless you are developing from a checkout.
 
 ```bash
 # Homebrew (macOS / Linux)
 brew install defai-digital/ax-code/ax-code
 
-# npm (any platform)
-npm i -g @defai.digital/ax-code
+# Curl installer (Linux / CI)
+curl -fsSL https://raw.githubusercontent.com/defai-digital/ax-code/main/install | bash
 ```
 
 Verify the installed runtime:
@@ -25,44 +25,38 @@ Verify the installed runtime:
 ax-code doctor
 ```
 
-The default package-manager install should report `Runtime: Bun X.Y.Z (compiled)`.
+Supported user installs should report `Runtime: Bun X.Y.Z (compiled)`.
 
 ## Channel Matrix
 
-| Channel                      | Install or setup command                                                                        | Expected runtime label | Use when                                                           |
-| ---------------------------- | ----------------------------------------------------------------------------------------------- | ---------------------- | ------------------------------------------------------------------ |
-| Compiled package             | `brew install defai-digital/ax-code/ax-code` or `npm i -g @defai.digital/ax-code`               | `compiled`             | Normal user install path                                           |
-| Source compatibility package | `brew install defai-digital/ax-code/ax-code-source` or `npm i -g @defai.digital/ax-code-source` | `bun-bundled`          | Diagnosis, fallback, or source-bundle compatibility checks         |
-| Local bundled launcher       | `pnpm install && pnpm run setup:cli`                                                            | `compiled`             | Contributor parity with the packaged startup path                  |
-| Local source launcher        | `pnpm run setup:cli -- --source`                                                                | `source`               | Contributor-only source debugging                                  |
-| Direct checkout run          | `pnpm cli` or `pnpm dev`                                                                        | `source`               | Short-lived development runs without replacing the global launcher |
+| Channel                | Install or setup command                                                                  | Expected runtime label | Use when                                                           |
+| ---------------------- | ----------------------------------------------------------------------------------------- | ---------------------- | ------------------------------------------------------------------ |
+| Homebrew               | `brew install defai-digital/ax-code/ax-code`                                              | `compiled`             | Normal macOS or Linux package-manager install path                 |
+| Curl installer         | `curl -fsSL https://raw.githubusercontent.com/defai-digital/ax-code/main/install \| bash` | `compiled`             | Linux, CI, or manual GitHub release binary install                 |
+| Local bundled launcher | `pnpm install && pnpm run setup:cli`                                                      | `compiled`             | Contributor parity with the packaged startup path                  |
+| Local source launcher  | `pnpm run setup:cli -- --source`                                                          | `source`               | Contributor-only source debugging                                  |
+| Direct checkout run    | `pnpm cli` or `pnpm dev`                                                                  | `source`               | Short-lived development runs without replacing the global launcher |
 
-`compiled`, `bun-bundled`, and `source` are runtime modes, not package-manager names. They describe which executable loads the app code:
+`compiled` and `source` are runtime modes, not package-manager names. They describe which executable loads the app code:
 
 - `compiled`: a Bun single-file binary loads the runtime.
-- `bun-bundled`: Bun loads the published source bundle.
 - `source`: Bun loads files directly from a checkout.
+
+`bun-bundled` is retained only for legacy source-bundle diagnostics. It is not a supported user install channel.
 
 ## Updating
 
-For the default compiled channel:
+For supported compiled channels:
 
 ```bash
 ax-code upgrade
 brew upgrade ax-code
-npm update -g @defai.digital/ax-code
-```
-
-For the source compatibility channel:
-
-```bash
-brew upgrade ax-code-source
-npm update -g @defai.digital/ax-code-source
+curl -fsSL https://raw.githubusercontent.com/defai-digital/ax-code/main/install | bash
 ```
 
 ## Contributor Launcher Behavior
 
-`pnpm run setup:cli` is intentionally compiled-path by default. It builds or reuses the local bundled binary under `packages/ax-code/dist/...` and installs a global launcher that points at that binary. This keeps local packaged-runtime checks close to what npm and Homebrew users run.
+`pnpm run setup:cli` is intentionally compiled-path by default. It builds or reuses the local bundled binary under `packages/ax-code/dist/...` and installs a global launcher that points at that binary. This keeps local packaged-runtime checks close to what Homebrew and curl-installer users run.
 
 After source changes that should affect the packaged runtime, refresh the bundled binary before testing the global launcher:
 

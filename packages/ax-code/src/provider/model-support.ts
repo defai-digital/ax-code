@@ -1,5 +1,5 @@
 const GLM_MAJOR_VERSION = /glm-(\d+)/
-const GROK_MAJOR_MINOR_VERSION = /grok-(\d+)(?:[.-]?(\d+))?/
+const GROK_ALLOWED_FINAL_SEGMENTS = new Set<string>(["grok-4.3", "grok-4-3", "grok-code-fast-1"])
 
 export const OPENROUTER_SUPPORTED_MODEL_IDS = [
   "openrouter/auto",
@@ -56,27 +56,12 @@ export function supportsOpenAIGptModels(probes: readonly string[]) {
   return probes.some((probe) => probe.includes("gpt-4") || probe.includes("gpt-5"))
 }
 
+// Grok allow-list: only grok-4.3 and grok-code-fast-1 are kept. Everything else
+// (4.2/4.1/4.0, betas, unversioned aliases) is dropped. Final-segment match so
+// reseller-prefixed ids like "x-ai/grok-4.3" still resolve.
 export function supportsGrok41OrAllowedCodingModel(probes: readonly string[]) {
   if (!probes.some((probe) => probe.includes("grok"))) return true
-  if (
-    probes.some((probe) => {
-      const finalSegment = probe.split("/").pop()
-      return finalSegment === "grok-4.1" || finalSegment === "grok-4-1"
-    })
-  )
-    return false
-  if (probes.some((probe) => probe.split("/").pop() === "grok-code-fast-1")) return true
-  // Allow Grok 4.1 and any future Grok N>4. Parsing major/minor
-  // avoids keeping Grok 4.0 variants like grok-4, grok-4-fast, or
-  // other unversioned grok-code-* aliases.
-  for (const probe of probes) {
-    const m = probe.match(GROK_MAJOR_MINOR_VERSION)
-    if (!m) continue
-    const major = Number(m[1])
-    const minor = m[2] === undefined ? 0 : Number(m[2])
-    if (major > 4 || (major === 4 && minor >= 1)) return true
-  }
-  return false // grok-beta, grok-vision-beta — no 4.1+ version, drop
+  return probes.some((probe) => GROK_ALLOWED_FINAL_SEGMENTS.has(probe.split("/").pop() ?? ""))
 }
 
 export function supportsGlmModels(probes: readonly string[]) {

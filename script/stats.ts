@@ -1,9 +1,5 @@
 #!/usr/bin/env bun
 
-const CURRENT_NPM_PACKAGE = "@defai.digital/ax-code"
-const LEGACY_NPM_PACKAGES = ["ax-code-ai", "opencode-ai"] as const
-const NPM_PACKAGES = [CURRENT_NPM_PACKAGE, ...LEGACY_NPM_PACKAGES] as const
-
 async function sendToPostHog(event: string, properties: Record<string, any>) {
   const key = process.env["POSTHOG_KEY"]
 
@@ -43,49 +39,6 @@ interface Release {
   assets: Asset[]
 }
 
-interface NpmDownloadsRange {
-  start: string
-  end: string
-  package: string
-  downloads: Array<{
-    downloads: number
-    day: string
-  }>
-}
-
-async function fetchNpmDownloads(packageName: string): Promise<number> {
-  try {
-    // Use a range from 2020 to current year + 5 years to ensure it works forever
-    const currentYear = new Date().getFullYear()
-    const endYear = currentYear + 5
-    const encoded = encodeURIComponent(packageName)
-    const response = await fetch(`https://api.npmjs.org/downloads/range/2020-01-01:${endYear}-12-31/${encoded}`)
-    if (!response.ok) {
-      console.warn(`Failed to fetch npm downloads for ${packageName}: ${response.status}`)
-      return 0
-    }
-    const data: NpmDownloadsRange = await response.json()
-    return data.downloads.reduce((total, day) => total + day.downloads, 0)
-  } catch (error) {
-    console.warn(`Error fetching npm downloads for ${packageName}:`, error)
-    return 0
-  }
-}
-
-async function fetchCombinedNpmDownloads(packageNames: readonly string[]) {
-  const downloads = await Promise.all(
-    packageNames.map(async (packageName) => ({
-      packageName,
-      downloads: await fetchNpmDownloads(packageName),
-    })),
-  )
-
-  return {
-    total: downloads.reduce((sum, item) => sum + item.downloads, 0),
-    packages: downloads,
-  }
-}
-
 async function fetchReleases(): Promise<Release[]> {
   const releases: Release[] = []
   let page = 1
@@ -93,7 +46,6 @@ async function fetchReleases(): Promise<Release[]> {
 
   while (true) {
     const url = `https://api.github.com/repos/defai-digital/ax-code/releases?page=${page}&per_page=${per}`
-
     const response = await fetch(url)
     if (!response.ok) {
       throw new Error(`GitHub API error: ${response.status} ${response.statusText}`)
@@ -141,14 +93,11 @@ function calculate(releases: Release[]) {
   return { total, stats }
 }
 
-async function save(githubTotal: number, npmDownloads: number) {
+async function save(githubTotal: number) {
   const file = "STATS.md"
   const date = new Date().toISOString().split("T")[0]
-  const total = githubTotal + npmDownloads
 
   let previousGithub = 0
-  let previousNpm = 0
-  let previousTotal = 0
   let content = ""
 
   try {
@@ -158,53 +107,34 @@ async function save(githubTotal: number, npmDownloads: number) {
     for (let i = lines.length - 1; i >= 0; i--) {
       const line = lines[i].trim()
       if (line.startsWith("|") && !line.includes("Date") && !line.includes("---")) {
-        const match = line.match(
-          /\|\s*[\d-]+\s*\|\s*([\d,]+)\s*(?:\([^)]*\))?\s*\|\s*([\d,]+)\s*(?:\([^)]*\))?\s*\|\s*([\d,]+)\s*(?:\([^)]*\))?\s*\|/,
-        )
+        const match = line.match(/\|\s*[\d-]+\s*\|\s*([\d,]+)\s*(?:\([^)]*\))?\s*\|/)
         if (match) {
           previousGithub = parseInt(match[1].replace(/,/g, ""))
-          previousNpm = parseInt(match[2].replace(/,/g, ""))
-          previousTotal = parseInt(match[3].replace(/,/g, ""))
           break
         }
       }
     }
   } catch {
-    content =
-      "# Download Stats\n\n| Date | GitHub Downloads | npm Downloads | Total |\n|------|------------------|---------------|-------|\n"
+    content = "# Download Stats\n\n| Date | GitHub Downloads |\n|------|------------------|\n"
   }
 
   const githubChange = githubTotal - previousGithub
-  const npmChange = npmDownloads - previousNpm
-  const totalChange = total - previousTotal
-
   const githubChangeStr =
     githubChange > 0
       ? ` (+${githubChange.toLocaleString()})`
       : githubChange < 0
         ? ` (${githubChange.toLocaleString()})`
         : " (+0)"
-  const npmChangeStr =
-    npmChange > 0 ? ` (+${npmChange.toLocaleString()})` : npmChange < 0 ? ` (${npmChange.toLocaleString()})` : " (+0)"
-  const totalChangeStr =
-    totalChange > 0
-      ? ` (+${totalChange.toLocaleString()})`
-      : totalChange < 0
-        ? ` (${totalChange.toLocaleString()})`
-        : " (+0)"
-  const line = `| ${date} | ${githubTotal.toLocaleString()}${githubChangeStr} | ${npmDownloads.toLocaleString()}${npmChangeStr} | ${total.toLocaleString()}${totalChangeStr} |\n`
+  const line = `| ${date} | ${githubTotal.toLocaleString()}${githubChangeStr} |\n`
 
   if (!content.includes("# Download Stats")) {
-    content =
-      "# Download Stats\n\n| Date | GitHub Downloads | npm Downloads | Total |\n|------|------------------|---------------|-------|\n"
+    content = "# Download Stats\n\n| Date | GitHub Downloads |\n|------|------------------|\n"
   }
 
   await Bun.write(file, content + line)
   await Bun.spawn(["bunx", "prettier", "--write", file]).exited
 
-  console.log(
-    `\nAppended stats to ${file}: GitHub ${githubTotal.toLocaleString()}${githubChangeStr}, npm ${npmDownloads.toLocaleString()}${npmChangeStr}, Total ${total.toLocaleString()}${totalChangeStr}`,
-  )
+  console.log(`\nAppended stats to ${file}: GitHub ${githubTotal.toLocaleString()}${githubChangeStr}`)
 }
 
 console.log("Fetching GitHub releases for defai-digital/ax-code...\n")
@@ -214,36 +144,31 @@ console.log(`\nFetched ${releases.length} releases total\n`)
 
 const { total: githubTotal, stats } = calculate(releases)
 
-console.log(`Fetching npm all-time downloads for ${NPM_PACKAGES.join(", ")}...\n`)
-const npm = await fetchCombinedNpmDownloads(NPM_PACKAGES)
-const npmDownloads = npm.total
-console.log(`Fetched npm all-time downloads: ${npmDownloads.toLocaleString()}`)
-for (const item of npm.packages) {
-  console.log(`  ${item.packageName}: ${item.downloads.toLocaleString()}`)
-}
-console.log("")
-
-await save(githubTotal, npmDownloads)
+await save(githubTotal)
 
 await sendToPostHog("download", {
   count: githubTotal,
   source: "github",
 })
 
-await sendToPostHog("download", {
-  count: npmDownloads,
-  source: "npm",
-})
-
-const totalDownloads = githubTotal + npmDownloads
-
 console.log("=".repeat(60))
-console.log(`TOTAL DOWNLOADS: ${totalDownloads.toLocaleString()}`)
-console.log(`  GitHub: ${githubTotal.toLocaleString()}`)
-console.log(`  npm: ${npmDownloads.toLocaleString()}`)
+console.log(`GitHub downloads: ${githubTotal.toLocaleString()}`)
 console.log("=".repeat(60))
 
 console.log("-".repeat(60))
 console.log(`GitHub Total: ${githubTotal.toLocaleString()} downloads across ${releases.length} releases`)
-console.log(`npm Total: ${npmDownloads.toLocaleString()} downloads`)
-console.log(`Combined Total: ${totalDownloads.toLocaleString()} downloads`)
+
+console.log("-".repeat(60))
+console.log("Top releases:")
+stats
+  .sort((a, b) => b.downloads - a.downloads)
+  .slice(0, 10)
+  .forEach((release, i) => {
+    console.log(`${i + 1}. ${release.tag}: ${release.downloads.toLocaleString()} downloads`)
+    release.assets
+      .sort((a, b) => b.downloads - a.downloads)
+      .slice(0, 3)
+      .forEach((asset) => {
+        console.log(`   - ${asset.name}: ${asset.downloads.toLocaleString()}`)
+      })
+  })

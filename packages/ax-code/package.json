@@ -1,6 +1,6 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
-  "version": "5.3.0",
+  "version": "5.4.0-a",
   "name": "ax-code",
   "type": "module",
   "license": "MIT",
@@ -21,17 +21,9 @@
     "perf:index": "bun run script/perf-index.ts",
     "perf:report": "bun run script/perf-report.ts",
     "build": "bun run script/build.ts",
-    "bundle:source": "bun run script/build-source.ts",
-    "bundle:source:smoke": "bun run script/build-source.ts && bun dist-source/bundle/index.js --version",
-    "bundle:source:pack": "AX_CODE_DRY_RUN=1 bun run script/publish-source.ts",
-    "bundle:source:install-smoke": "bun run script/source-install-smoke.ts",
-    "bundle:source:tui-smoke": "bun run script/source-install-smoke.ts --tui-startup-smoke",
     "tui:startup-smoke": "bun run script/tui-startup-smoke.ts",
     "dev": "bun run --conditions=browser ./src/index.ts",
     "db": "bun drizzle-kit"
-  },
-  "bin": {
-    "ax-code": "./bin/ax-code"
   },
   "exports": {
     "./*": "./src/*.ts"

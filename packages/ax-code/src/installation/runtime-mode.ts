@@ -3,7 +3,7 @@
  * via `bun run`, or as a packaged source-plus-bun distribution.
  *
  * This is distinct from `Installation.method()` which detects the package
- * manager used to install (npm, brew, curl, etc.). Runtime mode is about
+ * manager used to install (brew, curl, etc.). Runtime mode is about
  * which executable is actually loading the code — and is the signal
  * support uses to triage compiled-binary-specific bugs.
  */

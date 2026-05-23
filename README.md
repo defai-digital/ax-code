@@ -21,7 +21,6 @@ Built by [DEFAI Digital](https://github.com/defai-digital).
 [![CI](https://github.com/defai-digital/ax-code/actions/workflows/ax-code-ci.yml/badge.svg?branch=dev)](https://github.com/defai-digital/ax-code/actions/workflows/ax-code-ci.yml)
 [![Release](https://github.com/defai-digital/ax-code/actions/workflows/release.yml/badge.svg)](https://github.com/defai-digital/ax-code/actions/workflows/release.yml)
 [![Install Matrix](https://github.com/defai-digital/ax-code/actions/workflows/install-matrix-smoke.yml/badge.svg)](https://github.com/defai-digital/ax-code/actions/workflows/install-matrix-smoke.yml)
-[![npm](https://img.shields.io/npm/v/@defai.digital/ax-code?label=npm)](https://www.npmjs.com/package/@defai.digital/ax-code)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Discord](https://img.shields.io/badge/Discord-Join%20Community-5865F2?logo=discord&logoColor=white)](https://discord.gg/cTavsMgu)
 
@@ -35,8 +34,8 @@ Built by [DEFAI Digital](https://github.com/defai-digital).
 # Homebrew (macOS / Linux)
 brew install defai-digital/ax-code/ax-code
 
-# npm (any platform)
-npm i -g @defai.digital/ax-code
+# Curl installer (Linux / CI)
+curl -fsSL https://raw.githubusercontent.com/defai-digital/ax-code/main/install | bash
 ```
 
 ### Verify
@@ -47,11 +46,10 @@ ax-code doctor
 
 Look for the `Runtime` line:
 
-| Output                             | Meaning                                           |
-| ---------------------------------- | ------------------------------------------------- |
-| `Runtime: Bun X.Y.Z (compiled)`    | Default package install or local bundled launcher |
-| `Runtime: Bun X.Y.Z (bun-bundled)` | `ax-code-source` compatibility package            |
-| `Runtime: Bun X.Y.Z (source)`      | Contributor source launcher or `bun run`          |
+| Output                          | Meaning                                     |
+| ------------------------------- | ------------------------------------------- |
+| `Runtime: Bun X.Y.Z (compiled)` | Homebrew, curl installer, or local launcher |
+| `Runtime: Bun X.Y.Z (source)`   | Contributor source launcher or direct `bun` |
 
 ### Run
 
@@ -70,17 +68,17 @@ That is it. No project setup or config file is required. Run `ax-code`, then use
 
 ### Update
 
-`ax-code upgrade` and package-manager update commands apply to the compiled runtime shipped by the default package.
+`ax-code upgrade` and package-manager update commands apply to the compiled runtime shipped by supported installers.
 
 ```bash
 ax-code upgrade
 brew upgrade ax-code
-npm update -g @defai.digital/ax-code   # follows your installed dist-tag
+curl -fsSL https://raw.githubusercontent.com/defai-digital/ax-code/main/install | bash
 ```
 
 ### Distribution note
 
-The supported user install path now ships the compiled binary under the normal `ax-code` package/formula. The source+bun launcher remains available as the `ax-code-source` compatibility channel for diagnosis or fallback.
+Supported user install paths are Homebrew and the GitHub release curl installer. npm packages, including the former source compatibility package, are no longer supported as install or upgrade channels.
 
 See [Installation and Runtime Channels](docs/install-runtime.md) for the full package, runtime-label, and local launcher matrix.
 
@@ -91,7 +89,7 @@ git clone https://github.com/defai-digital/ax-code.git
 cd ax-code && pnpm install && pnpm run setup:cli
 ```
 
-Requires [pnpm](https://pnpm.io) v10.33.4+ and [Bun](https://bun.sh) matching the root `package.json` engine (`^1.3.14` today). `setup:cli` installs a launcher for the same bundled runtime used by npm and Homebrew. `ax-code doctor` should report `Runtime: Bun X.Y.Z (compiled)`.
+Requires [pnpm](https://pnpm.io) v10.33.4+ and [Bun](https://bun.sh) matching the root `package.json` engine (`^1.3.14` today). `setup:cli` installs a launcher for the same bundled runtime used by Homebrew and the curl installer. `ax-code doctor` should report `Runtime: Bun X.Y.Z (compiled)`.
 
 Refresh the local bundled runtime after code changes:
 

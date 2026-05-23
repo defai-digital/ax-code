@@ -1,20 +1,18 @@
 /**
- * XAI/Grok provider extensions for ax-code
- * Ported from ax-cli's Grok provider
+ * XAI/Grok provider extensions for ax-code.
  *
- * Adds server-side tools (x_search, code_execution) and parallel calling
- * to the existing @ai-sdk/xai provider via providerOptions injection.
+ * Adds xAI Live Search defaults via the @ai-sdk/xai `searchParameters`
+ * providerOption. Wired into ProviderTransform.options() so Grok models get
+ * "auto" Live Search out of the box for current-events queries.
  */
 
 export {
-  type ServerToolsConfig,
-  type XSearchConfig,
-  type CodeExecutionConfig,
-  DEFAULT_CONFIG,
-  buildToolsArray,
-  buildToolConfig,
-  hasEnabled,
-  merge,
+  type LiveSearchConfig,
+  type LiveSearchMode,
+  type LiveSearchSource,
+  DEFAULT_LIVE_SEARCH,
+  buildSearchParameters,
+  supportsLiveSearch,
   supportsServerTools,
   supportsReasoning,
 } from "./server-tools"

@@ -4,7 +4,6 @@
   "exclude": [
     "bench-both.ts",
     "bench-opencode.ts",
-    "script/publish.ts",
     "src/cli/cmd/workspace-serve.ts",
     "src/server/routes/workspace.ts",
     "test/control-plane/**/*"

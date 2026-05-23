@@ -40,6 +40,41 @@ export namespace SystemPrompt {
 
   export async function environment(model: Provider.Model) {
     const project = Instance.project
+    // Web search hint per provider. ax-code's default system prompt frames
+    // the assistant as a software-engineering tool, which leads some models
+    // (notably grok-4.3) to refuse real-world current-state questions
+    // outright. Tell the model what search mechanism is wired so it stops
+    // declining "I cannot check the weather" when the capability is right
+    // there. Three cases:
+    //   - xAI Live Search (server-side, no tool call): grok-4+ except multi-agent.
+    //   - Alibaba DashScope internet search (server-side, no tool call):
+    //     Qwen on alibaba-coding-plan / alibaba-token-plan.
+    //   - Other providers fall through to ax-code's `websearch` tool — no
+    //     extra hint needed (tool descriptions cover it).
+    const apiId = model.api.id.toLowerCase()
+    const providerID = model.providerID
+    const isXaiSearch = model.api.npm === "@ai-sdk/xai" && !apiId.includes("multi-agent")
+    const isAlibabaQwenSearch =
+      model.api.npm === "@ai-sdk/openai-compatible" &&
+      (providerID.startsWith("alibaba-coding-plan") || providerID.startsWith("alibaba-token-plan")) &&
+      apiId.startsWith("qwen")
+    const searchHint = isXaiSearch
+      ? ["xAI Live Search is enabled — it runs server-side on this turn", "Citations are returned automatically"]
+      : isAlibabaQwenSearch
+        ? [
+            "Alibaba DashScope internet search is enabled — it runs server-side on this turn",
+            "Sources and citations are returned automatically",
+          ]
+        : undefined
+    const liveSearchBlock = searchHint
+      ? [
+          `<live_search>`,
+          `  ${searchHint[0]}.`,
+          `  For real-world current state (weather, news, dates, recent events, public-figure activity), let the server-side search handle the lookup — you do not need a separate tool, and you should not decline or tell the user to check elsewhere.`,
+          `  ${searchHint[1]}; cite them when summarizing search-derived facts.`,
+          `</live_search>`,
+        ]
+      : []
     const autonomousWorkflow = Flag.AX_CODE_AUTONOMOUS
       ? [
           `<autonomous_workflow>`,
@@ -87,6 +122,7 @@ export namespace SystemPrompt {
             : ""
         }`,
         `</directories>`,
+        ...liveSearchBlock,
         ...autonomousWorkflow,
         ...debugEngineWorkflow,
       ].join("\n"),

@@ -2,7 +2,7 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-05-16
+Last reviewed: 2026-05-18
 Owner: ax-code runtime
 
 If the root [README](../README.md) is the fastest way to install AX Code, this page is the fastest way to understand it.
@@ -45,10 +45,10 @@ The rest of the documentation maps onto those layers.
 ### I want to try it quickly
 
 - Start with the [root README](../README.md) for install and first launch.
-- The default package-manager install path uses the compiled runtime:
+- Supported install paths use the compiled runtime:
   - `brew install defai-digital/ax-code/ax-code`
-  - `npm i -g @defai.digital/ax-code`
-- Use `ax-code-source` only when you intentionally need the source+bun compatibility launcher. See [Installation and Runtime Channels](install-runtime.md) for the runtime labels and local launcher matrix.
+  - `curl -fsSL https://raw.githubusercontent.com/defai-digital/ax-code/main/install | bash`
+- npm packages are no longer supported install or upgrade channels. See [Installation and Runtime Channels](install-runtime.md) for the runtime labels and local launcher matrix.
 - Use `/connect` or `ax-code providers login` to set a model.
 - Run `ax-code init` after opening a real project so `AGENTS.md` captures local conventions.
 - If you want tighter safety boundaries, enable [Sandbox Mode](sandbox.md) before broader edits.

@@ -1138,7 +1138,7 @@ export namespace Provider {
         priority = ["grok-4-fast", "grok-4"]
       }
       if (providerID.startsWith("alibaba")) {
-        priority = ["deepseek-v3.2", "qwen3.6-plus", "glm-5", "MiniMax-M2.5"]
+        priority = ["qwen3.6-flash", "deepseek-v4-flash", "deepseek-v4-pro", "qwen3.6-plus", "glm-5.1"]
       }
       // OpenAI and Anthropic were missing — without overrides they fell through to the
       // gemini/llama default list which never matched their model IDs, returning undefined

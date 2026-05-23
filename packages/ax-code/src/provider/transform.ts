@@ -5,6 +5,7 @@ import type { Provider } from "./provider"
 import type { ModelsDev } from "./models"
 import { Flag } from "@/flag/flag"
 import { isRecord } from "@/util/record"
+import { buildSearchParameters, type LiveSearchConfig } from "./xai/server-tools"
 
 type Modality = NonNullable<ModelsDev.Model["modalities"]>["input"][number]
 
@@ -325,7 +326,46 @@ export namespace ProviderTransform {
       result["promptCacheKey"] = input.sessionID
     }
 
+    // xAI Live Search: opt grok-4+ chat models into automatic real-world
+    // search so current-events queries (weather, news, X chatter) work out of
+    // the box. The model decides per-turn whether to actually search (mode:
+    // "auto"). User overrides at `provider.xai.options.searchParameters` or
+    // per-model `models.<id>.options.searchParameters` win via mergeDeep
+    // later; passing { mode: "off" } disables this entirely.
+    if (input.model.api.npm === "@ai-sdk/xai") {
+      const userOverride = input.providerOptions?.searchParameters as Partial<LiveSearchConfig> | undefined
+      const params = buildSearchParameters(input.model.api.id, userOverride)
+      if (params) result["searchParameters"] = params
+    }
+
+    // Alibaba DashScope internet search: Qwen models served through the
+    // Alibaba coding-plan / token-plan endpoints accept `enable_search` plus
+    // `search_options` as request body extras (DashScope's OpenAI-compat path
+    // spreads providerOptions[<providerID>] into the body). DeepSeek / GLM /
+    // MiniMax / Kimi served on the same plans don't honor this knob, so we
+    // gate on the api.id family. Users can opt out by setting
+    // `provider.<alibaba-id>.options.enable_search = false` in ax-code.json.
+    if (isAlibabaQwenPlanModel(input.model)) {
+      const userExplicit = input.providerOptions?.enable_search
+      if (userExplicit !== false) {
+        result["enable_search"] = true
+        const userSearchOptions = input.providerOptions?.search_options as Record<string, unknown> | undefined
+        result["search_options"] = {
+          enable_source: true,
+          enable_citation: true,
+          ...(userSearchOptions ?? {}),
+        }
+      }
+    }
+
     return result
+  }
+
+  function isAlibabaQwenPlanModel(model: Provider.Model): boolean {
+    if (model.api.npm !== "@ai-sdk/openai-compatible") return false
+    const pid = model.providerID
+    if (!pid.startsWith("alibaba-coding-plan") && !pid.startsWith("alibaba-token-plan")) return false
+    return model.api.id.toLowerCase().startsWith("qwen")
   }
 
   export function sanitizeOptions(model: Provider.Model, options: Record<string, any>): Record<string, any> {

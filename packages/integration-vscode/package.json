@@ -184,9 +184,11 @@
     "check-types": "tsc --noEmit",
     "typecheck": "bun run check-types",
     "lint": "eslint src",
+    "test:unit": "bun test test/",
     "test": "vscode-test"
   },
   "dependencies": {
+    "@ax-code/sdk": "workspace:*",
     "marked": "^12"
   }
 }
