@@ -61,4 +61,50 @@ describe("probeCliLanguageModel", () => {
       runSpy.mockRestore()
     }
   })
+
+  test("Claude auth probe does not reject apiKeySource none without an auth error", async () => {
+    const runSpy = spyOn(Process, "run").mockResolvedValue({
+      stdout: Buffer.from(
+        [
+          JSON.stringify({ type: "system", subtype: "init", apiKeySource: "none" }),
+          JSON.stringify({ type: "result", subtype: "success", result: "OK" }),
+        ].join("\n"),
+      ),
+      stderr: Buffer.from(""),
+      code: 0,
+      exitCode: 0,
+      text() {
+        return ""
+      },
+    } as any)
+
+    try {
+      await expect(checkCliProviderAuth("claude-code", "claude")).resolves.toBeUndefined()
+    } finally {
+      runSpy.mockRestore()
+    }
+  })
+
+  test("Claude auth probe reports explicit authentication failures", async () => {
+    const runSpy = spyOn(Process, "run").mockResolvedValue({
+      stdout: Buffer.from(
+        [
+          JSON.stringify({ type: "system", subtype: "init", apiKeySource: "none" }),
+          JSON.stringify({ type: "assistant", error: "authentication_failed" }),
+        ].join("\n"),
+      ),
+      stderr: Buffer.from(""),
+      code: 1,
+      exitCode: 1,
+      text() {
+        return ""
+      },
+    } as any)
+
+    try {
+      await expect(checkCliProviderAuth("claude-code", "claude")).resolves.toContain("claude CLI is not logged in")
+    } finally {
+      runSpy.mockRestore()
+    }
+  })
 })

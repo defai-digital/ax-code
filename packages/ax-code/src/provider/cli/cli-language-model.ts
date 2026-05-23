@@ -23,7 +23,7 @@ export interface CliLanguageModelConfig {
   binary: string
   args: string[]
   parser: CliOutputParser
-  promptMode: "stdin" | "arg"
+  promptMode: "stdin" | "arg" | "positional"
   promptFlag?: string
   providerEnvKeys?: readonly string[]
 }
@@ -70,6 +70,7 @@ export function buildCliCommand(config: CliLanguageModelConfig, prompt: string) 
   const cmd = [config.binary, ...config.args, ...autonomousCliArgs(config.providerID)]
   if (config.modelID !== config.providerID) cmd.push("--model", config.modelID)
   if (config.promptMode === "arg") cmd.push(config.promptFlag ?? "-p", prompt)
+  if (config.promptMode === "positional") cmd.push(prompt)
   return cmd
 }
 const CLI_TIMEOUT_MS = 300_000 // 5 minutes

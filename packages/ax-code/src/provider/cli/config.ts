@@ -4,7 +4,7 @@ export interface CliProviderDefinition {
   binary: string
   args: string[]
   parser: CliOutputParser
-  promptMode: "stdin" | "arg"
+  promptMode: "stdin" | "arg" | "positional"
   promptFlag?: string
 }
 
@@ -13,7 +13,7 @@ export const CLI_PROVIDER_DEFINITIONS: Record<string, CliProviderDefinition> = {
     binary: "claude",
     args: ["--print", "--verbose", "--output-format", "stream-json"],
     parser: claudeCodeParser,
-    promptMode: "stdin",
+    promptMode: "positional",
   },
   "gemini-cli": {
     binary: "gemini",
