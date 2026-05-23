@@ -17,7 +17,7 @@ This index tracks the active ADR set for `ax-code`. Archived ADRs are retained u
 | [ADR-010](ADR-010-alibaba-thinking-shape-and-budget-clamping.md) | Alibaba Thinking Shape and Budget Clamping | Accepted |
 | [ADR-011](ADR-011-tui-session-tool-renderer-boundary.md) | Make TUI Session Tool Rendering a Named Boundary | Accepted; initial extraction implemented |
 | [ADR-012](ADR-012-autonomous-continuation-contracts.md) | Make autonomous continuation prompts and terminal semantics explicit contracts | Accepted |
-| [ADR-013](ADR-013-qwen37-max-cloud-agent-backend.md) | Treat Qwen3.7-Max as a premium cloud-agent backend, not a Qwen-specific runtime architecture | Accepted; All phases (0–7) shipped in v5.5.0 |
+| [ADR-013](ADR-013-qwen37-max-cloud-agent-backend.md) | Treat Qwen3.7-Max as a premium cloud-agent backend, not a Qwen-specific runtime architecture | Accepted; implementation in progress |
 | [ADR-014](ADR-014-durable-session-goals.md) | Treat `/goal` as durable session state | Accepted |
 
 ## Archived ADRs

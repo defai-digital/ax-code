@@ -3,13 +3,11 @@ import { describeRoute, resolver, validator } from "hono-openapi"
 import { Log } from "../../util/log"
 import { lazy } from "../../util/lazy"
 import { isQwen37MaxModel } from "../../provider/qwen37-readiness"
-import {
-  BooleanFeatureState,
-  persistProjectConfigBooleanFeatureResponse,
-  readProjectConfigFeatureState,
-} from "./project-config"
+import { BooleanFeatureState, readProjectConfigFeatureState } from "./project-config"
+import { FeatureFlag } from "../../util/feature-flags"
 
 const log = Log.create({ service: "super-long" })
+const SUPER_LONG_OVERRIDE = "AX_CODE_SUPER_LONG_SESSION_OVERRIDE"
 
 const SuperLongState = BooleanFeatureState.meta({ ref: "SuperLongState" })
 
@@ -36,6 +34,9 @@ export const SuperLongRoutes = lazy(() =>
         const state = await readProjectConfigFeatureState({
           featureFlag: "AX_CODE_SUPER_LONG",
           read: (config) => {
+            const override = process.env[SUPER_LONG_OVERRIDE]
+            if (override === "true") return true
+            if (override === "false") return false
             if (config?.super_long !== undefined) return config.super_long
             // Default on when the configured model is Qwen3.7-Max
             const model = config?.model ?? ""
@@ -50,7 +51,7 @@ export const SuperLongRoutes = lazy(() =>
       "/",
       describeRoute({
         summary: "Set Super-Long mode",
-        description: "Toggle Super-Long mode on or off. Persists to ax-code.json.",
+        description: "Toggle Super-Long mode on or off for the current runtime session.",
         operationId: "superLong.set",
         responses: {
           200: {
@@ -66,18 +67,10 @@ export const SuperLongRoutes = lazy(() =>
       validator("json", BooleanFeatureState),
       async (c) => {
         const { enabled } = c.req.valid("json")
-        const state = await persistProjectConfigBooleanFeatureResponse({
-          log,
-          context: "super-long config",
-          featureFlag: "AX_CODE_SUPER_LONG",
-          enabled,
-          update: (config) => {
-            config.super_long = enabled
-          },
-        })
-        if ("error" in state) return c.json(state, 500)
-        log.info("super-long mode changed", { enabled })
-        return c.json(state)
+        FeatureFlag.set("AX_CODE_SUPER_LONG", enabled)
+        FeatureFlag.set(SUPER_LONG_OVERRIDE, enabled)
+        log.info("super-long mode changed for session", { enabled })
+        return c.json({ enabled })
       },
     ),
 )

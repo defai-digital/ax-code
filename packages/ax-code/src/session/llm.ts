@@ -28,12 +28,14 @@ import { Recorder } from "@/replay/recorder"
 import { AgentControl } from "@/control-plane/agent-control"
 import { AgentControlEvents } from "@/control-plane/agent-control-events"
 import { isNonEmptyRecord } from "@/util/record"
+import { SuperLongPolicy } from "./super-long-policy"
 
 import { ReasoningPolicy } from "@/control-plane/reasoning-policy"
 
 export namespace LLM {
   const log = Log.create({ service: "llm" })
   export const OUTPUT_TOKEN_MAX = ProviderTransform.OUTPUT_TOKEN_MAX
+  const superLongPacing = new Map<string, SuperLongPolicy.PacingState>()
 
   export type StreamInput = {
     user: MessageV2.User
@@ -227,6 +229,14 @@ export namespace LLM {
     const maxOutputTokens = ProviderTransform.maxOutputTokens(input.model)
 
     const tools = await resolveTools(input, cfg)
+    await applySuperLongPacing({
+      enabled: Flag.AX_CODE_SUPER_LONG,
+      providerID: input.model.providerID,
+      modelID: input.model.id,
+      sessionID: input.sessionID,
+      small: input.small,
+      abort: input.abort,
+    })
 
     // LiteLLM and some Anthropic proxies require the tools parameter to be present
     // when message history contains tool calls, even if no tools are being used.
@@ -323,6 +333,55 @@ export namespace LLM {
           sessionId: input.sessionID,
         },
       },
+    })
+  }
+
+  async function applySuperLongPacing(input: {
+    enabled: boolean
+    providerID: string
+    modelID: string
+    sessionID: string
+    small?: boolean
+    abort: AbortSignal
+  }) {
+    if (!input.enabled || input.small) return
+    const key = `${input.providerID}/${input.modelID}`
+    const policy = SuperLongPolicy.providerPacing(input.providerID)
+    const state = superLongPacing.get(key) ?? { timestamps: [] }
+    const now = Date.now()
+    const decision = SuperLongPolicy.evaluatePacing({ now, state, policy })
+    if (decision.waitMs > 0) {
+      log.info("super-long provider pacing wait", {
+        providerID: input.providerID,
+        modelID: input.modelID,
+        sessionID: input.sessionID,
+        waitMs: decision.waitMs,
+        reason: decision.reason,
+      })
+      await sleep(decision.waitMs, input.abort)
+    }
+    superLongPacing.set(
+      key,
+      SuperLongPolicy.recordRequest({
+        now: Date.now(),
+        state: { timestamps: decision.timestamps },
+        policy,
+      }),
+    )
+  }
+
+  async function sleep(ms: number, signal: AbortSignal): Promise<void> {
+    if (signal.aborted) throw new DOMException("Aborted", "AbortError")
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        signal.removeEventListener("abort", abortHandler)
+        resolve()
+      }, ms)
+      const abortHandler = () => {
+        clearTimeout(timeout)
+        reject(new DOMException("Aborted", "AbortError"))
+      }
+      signal.addEventListener("abort", abortHandler, { once: true })
     })
   }
 
