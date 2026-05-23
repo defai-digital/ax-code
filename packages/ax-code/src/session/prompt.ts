@@ -66,7 +66,6 @@ import { iife } from "@/util/iife"
 import { Shell } from "@/shell/shell"
 import { Truncate } from "@/tool/truncate"
 import { decodeDataUrl } from "@/util/data-url"
-import { Token } from "@/util/token"
 import {
   commandSetup,
   shellArgs,
@@ -93,33 +92,12 @@ import {
   reportTodoClosureGuidance,
   todoDeadlineStepBuffer,
 } from "./prompt-todo-continuation"
+import { estimateRequestTokens, getLastUserInfo } from "./prompt-request"
 
 // @ts-ignore
 globalThis.AI_SDK_LOG_WARNINGS = false
 
 const MAX_EMPTY_MODEL_TURN_RETRIES = 1
-
-function estimateRequestTokens(input: { system: string[]; messages: ModelMessage[] }) {
-  let total = 0
-  for (const item of input.system) {
-    total += Token.estimate(item) + 4
-  }
-  for (const message of input.messages) {
-    const content = typeof message.content === "string" ? message.content : JSON.stringify(message.content)
-    total += Token.estimate(content) + 4
-  }
-  return total
-}
-
-function getLastUserInfo(messages: readonly MessageV2.WithParts[]): MessageV2.User | undefined {
-  for (let index = messages.length - 1; index >= 0; index--) {
-    const message = messages[index]
-    if (message.info.role === "user") {
-      return message.info
-    }
-  }
-  return undefined
-}
 
 const STRUCTURED_OUTPUT_DESCRIPTION = `Use this tool to return your final response in the requested structured format.
 
