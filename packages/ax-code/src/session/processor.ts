@@ -27,6 +27,8 @@ import { Recorder } from "@/replay/recorder"
 import { Database } from "@/storage/db"
 import { asRecord } from "@/util/record"
 import { usageSource } from "@/provider/usage"
+import { AgentOptimizationTrace } from "@/session/agent-optimization-trace"
+import { longAgentProfileForModel } from "@/provider/agent-optimization-profile"
 
 export namespace SessionProcessor {
   const DOOM_LOOP_THRESHOLD = _DOOM_LOOP_THRESHOLD
@@ -114,6 +116,8 @@ export namespace SessionProcessor {
       return visit(obj, 0)
     }
     const recentToolRing: { tool: string; input: string }[] = []
+    let stepToolCallCount = 0
+    let stepErrorSurfaces: string[] = []
     // Per-session sliding-window rate limiter: max 30 tool calls per 10-second window.
     // Prevents runaway agent loops from exhausting resources or burning LLM quota.
     const RATE_LIMIT_WINDOW_MS = 10_000
@@ -341,6 +345,7 @@ export namespace SessionProcessor {
                     )
                   }
                   toolCallTimestamps.push(now)
+                  stepToolCallCount++
 
                   // Autonomous step cap (ADR-004 / PRD v4.2.0). The
                   // per-session step counter is incremented at every
@@ -609,6 +614,7 @@ export namespace SessionProcessor {
                       deterministic: false,
                     })
 
+                    stepErrorSurfaces.push(match.tool)
                     if (
                       value.error instanceof Permission.RejectedError ||
                       value.error instanceof Question.RejectedError
@@ -637,6 +643,8 @@ export namespace SessionProcessor {
                   snapshot = undefined
                   stepStartTime = Date.now()
                   stepParts = []
+                  stepToolCallCount = 0
+                  stepErrorSurfaces = []
                   await setBusyStatus({
                     step: attempt,
                     startedAt: stepStartTime,
@@ -768,6 +776,36 @@ export namespace SessionProcessor {
                       messageID: input.assistantMessage.id,
                       stepIndex: attempt,
                       parts: stepParts,
+                    })
+                  }
+                  // Phase 5: emit agent-optimization trace for local analysis.
+                  {
+                    const profile = longAgentProfileForModel(input.model.id)
+                    const routeClass: AgentOptimizationTrace.RouteClass =
+                      profile.contextPackingBudget === "wide" ? "premium" : "cheap"
+                    const failureDetect = AgentOptimizationTrace.detectRepeatedFailure(stepErrorSurfaces)
+                    const traceEvent: AgentOptimizationTrace.TraceEvent = {
+                      sessionID: input.sessionID,
+                      eventID: `${input.sessionID}-step-${attempt}`,
+                      timestamp: new Date().toISOString(),
+                      routeClass,
+                      providerID: input.model.providerID,
+                      modelID: input.model.id,
+                      contextPackSummary: AgentOptimizationTrace.contextPackSummary(0, [0, 0, 0, 0], []),
+                      toolCallCount: stepToolCallCount,
+                      repeatedFailureCount: failureDetect.count ?? 0,
+                      repeatedFailureSignal: failureDetect.detected,
+                      verificationStatus: "skip",
+                      patchOutcome: patchData ? "accepted" : "not-attempted",
+                      cacheReadTokens: usage.tokens.cache.read,
+                      cacheWriteTokens: usage.tokens.cache.write,
+                      inputTokens: usage.tokens.input,
+                      outputTokens: usage.tokens.output,
+                    }
+                    log.info("agent-optimization-trace", {
+                      command: "session.processor.trace",
+                      status: "ok",
+                      trace: AgentOptimizationTrace.serialize(traceEvent),
                     })
                   }
                   SessionSummary.summarize(
