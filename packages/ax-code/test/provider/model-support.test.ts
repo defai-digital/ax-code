@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import {
   OPENROUTER_SUPPORTED_MODEL_IDS,
   buildModelProbes,
+  isModelSupportedForProvider,
   supportsGlmModels,
   supportsGrok41OrAllowedCodingModel,
   supportsOpenAIGptModels,
@@ -65,6 +66,37 @@ describe("supportsOpenRouterModelID", () => {
       expect(supportsOpenRouterModelID(id)).toBe(false)
     },
   )
+})
+
+describe("isModelSupportedForProvider", () => {
+  test("applies the global future GPT rejection before provider filters", () => {
+    expect(isModelSupportedForProvider("custom", "gpt-5.5")).toBe(false)
+    expect(isModelSupportedForProvider("openrouter", "openai/gpt-5.5-codex")).toBe(false)
+  })
+
+  test("uses the curated OpenRouter allow-list against the raw model id", () => {
+    expect(isModelSupportedForProvider("openrouter", "openai/gpt-5.1-codex")).toBe(true)
+    expect(isModelSupportedForProvider("openrouter", "gpt-5.1-codex")).toBe(false)
+  })
+
+  test("keeps Gemini filtering scoped to Google providers", () => {
+    expect(isModelSupportedForProvider("google", "gemini-3-pro")).toBe(true)
+    expect(isModelSupportedForProvider("google-vertex", "Gemini 2.5 Pro")).toBe(false)
+    expect(isModelSupportedForProvider("google", "imagen-4")).toBe(true)
+  })
+
+  test("applies OpenAI, xAI, and GLM provider filters from model probes", () => {
+    expect(isModelSupportedForProvider("openai", "gpt-4.1")).toBe(true)
+    expect(isModelSupportedForProvider("openai", "gpt-3.5")).toBe(false)
+    expect(isModelSupportedForProvider("xai", "grok-4.3")).toBe(true)
+    expect(isModelSupportedForProvider("xai", "grok-4.2")).toBe(false)
+    expect(isModelSupportedForProvider("zai", "glm-5.1")).toBe(true)
+    expect(isModelSupportedForProvider("zhipuai", "glm-4.5")).toBe(false)
+  })
+
+  test("passes unknown providers through unless a global rejection matches", () => {
+    expect(isModelSupportedForProvider("custom", "custom-model")).toBe(true)
+  })
 })
 
 describe("xai server-tools gates for Grok 4.3", () => {

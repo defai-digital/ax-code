@@ -30,13 +30,7 @@ import { ProviderTransform } from "./transform"
 import { Installation } from "../installation"
 import { ModelID, ProviderID } from "./schema"
 import { levenshtein } from "@/util/levenshtein"
-import {
-  buildModelProbes,
-  supportsOpenRouterModelID,
-  supportsGlmModels,
-  supportsOpenAIGptModels,
-  supportsGrok41OrAllowedCodingModel,
-} from "./model-support"
+import { isModelSupportedForProvider } from "./model-support"
 import {
   CUSTOM_LOADERS,
   type CustomModelLoader,
@@ -47,32 +41,7 @@ import {
 
 export namespace Provider {
   const log = Log.create({ service: "provider" })
-  function supported(providerID: string, modelID: string, model?: { id?: unknown; name?: unknown; family?: unknown }) {
-    const probes = buildModelProbes(modelID, model)
-    const lower = probes[0] ?? modelID.toLowerCase()
-    if (probes.some((probe) => probe.includes("gpt-5.5") || probe.includes("gpt-5-5") || probe.includes("gpt55")))
-      return false
-    if (providerID === "openrouter") return supportsOpenRouterModelID(modelID)
-    if (providerID === "google" || providerID === "google-vertex") {
-      if (!lower.includes("gemini")) return true
-      return lower.includes("gemini-3")
-    }
-    if (providerID === "openai") {
-      return supportsOpenAIGptModels(probes)
-    }
-    if (providerID === "xai") {
-      return supportsGrok41OrAllowedCodingModel(probes)
-    }
-    if (
-      providerID === "zhipuai" ||
-      providerID === "zhipuai-coding-plan" ||
-      providerID === "zai" ||
-      providerID === "zai-coding-plan"
-    ) {
-      return supportsGlmModels(probes)
-    }
-    return true
-  }
+  const supported = isModelSupportedForProvider
 
   function addLegacyXaiModelAliases(providerID: ProviderID, models: Record<string, Model>) {
     if (providerID !== ProviderID.xai) return
