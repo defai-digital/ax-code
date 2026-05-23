@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted; Phase 0 + Phase 1 + Phase 7 UI shipped in v5.5.0
+Accepted; All phases (0-7) shipped in v5.5.0
 
 ## Date
 
