@@ -288,13 +288,16 @@ test("ask - interactive-only permissions still honor explicit deny rules", async
   })
 })
 
-test("loadPolicy - malformed policy fails closed", async () => {
+test("loadPolicy - malformed policy returns empty ruleset and does not block tools", async () => {
+  // A parse error in policy.json means the restrictions are unknown, not
+  // that everything should be denied. Returning [] (no policy) keeps the
+  // tool usable while the user fixes the file; the error is logged clearly.
   await using tmp = await tmpdir({ git: true })
   await Bun.write(`${tmp.path}/.ax-code/policy.json`, "{")
 
   const ruleset = await Permission.loadPolicy(tmp.path)
 
-  expect(ruleset).toEqual([{ permission: "*", pattern: "*", action: "deny" }])
+  expect(ruleset).toEqual([])
 })
 
 test("fromPolicy - filters rules by agent name", () => {
