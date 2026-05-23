@@ -25,3 +25,11 @@ test("Oxlint LSP detection caches --lsp support check", async () => {
   expect(src).toContain('spawn(lintBin, ["--help"])')
   expect(src).not.toContain('spawn(lintBin, ["--help"],')
 })
+
+test("Oxlint LSP detection retries after transient --help failures", async () => {
+  const src = await Bun.file(path.join(import.meta.dir, "../../src/lsp/server-defs.ts")).text()
+
+  expect(src).toContain('log.warn("oxlint --help check failed"')
+  expect(src).toContain("oxlintLspSupportCache.delete(lintBin)")
+  expect(src).not.toContain("setOxlintSupportCache(lintBin, false)")
+})

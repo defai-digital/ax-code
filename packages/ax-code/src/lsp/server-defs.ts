@@ -95,7 +95,7 @@ async function oxlintSupportsLsp(lintBin: string): Promise<boolean> {
         await withTimeout(proc.exited, 500, `oxlint process cleanup timed out`).catch(() => {})
       }
       log.warn("oxlint --help check failed", { lintBin, error })
-      setOxlintSupportCache(lintBin, false)
+      oxlintLspSupportCache.delete(lintBin)
       return false
     }
 
