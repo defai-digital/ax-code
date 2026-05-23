@@ -33,6 +33,49 @@ describe("SuperLongPolicy.state", () => {
   })
 })
 
+describe("SuperLongPolicy.runtimeState", () => {
+  test("session override env wins over base env, config, and model default", () => {
+    expect(
+      SuperLongPolicy.runtimeState({
+        modelID: "qwen3.7-max",
+        config: { enabled: true },
+        env: {
+          AX_CODE_SUPER_LONG_SESSION_OVERRIDE: "false",
+          AX_CODE_SUPER_LONG: "true",
+        },
+      }),
+    ).toEqual({ enabled: false, source: "session-override" })
+  })
+
+  test("base env wins over config and model default", () => {
+    expect(
+      SuperLongPolicy.runtimeState({
+        modelID: "qwen3.7-max",
+        config: { enabled: true },
+        env: {
+          AX_CODE_SUPER_LONG: "0",
+        },
+      }),
+    ).toEqual({ enabled: false, source: "env" })
+  })
+
+  test("falls back to config and then model default when env is unset", () => {
+    expect(
+      SuperLongPolicy.runtimeState({
+        modelID: "qwen3.7-max",
+        config: { enabled: false },
+        env: {},
+      }),
+    ).toEqual({ enabled: false, source: "config" })
+    expect(
+      SuperLongPolicy.runtimeState({
+        modelID: "qwen3.7-max",
+        env: {},
+      }),
+    ).toEqual({ enabled: true, source: "model-default" })
+  })
+})
+
 describe("SuperLongPolicy.duration", () => {
   test("accepts exactly the 72 hour ceiling", () => {
     expect(SuperLongPolicy.duration(SuperLongPolicy.MAX_DURATION_MS)).toEqual({
