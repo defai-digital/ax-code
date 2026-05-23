@@ -137,6 +137,25 @@ describe("LongAgentContextPacker.pack - budget enforcement", () => {
     })
     expect(result.entries).toHaveLength(0)
   })
+
+  test("continues adding smaller entries in a tier after one entry overflows", () => {
+    const result = LongAgentContextPacker.pack({
+      tokenBudget: 50,
+      touchedFiles: [
+        { path: "small-before.ts", summary: "fits before" },
+        { path: "huge.ts", summary: "x".repeat(1_000) },
+        { path: "small-after.ts", summary: "fits after" },
+      ],
+      failingTests: ["unit/after-overflow.test.ts"],
+    })
+
+    const labels = result.entries.map((e) => e.label)
+    expect(labels).toContain("touched:small-before.ts")
+    expect(labels).not.toContain("touched:huge.ts")
+    expect(labels).toContain("touched:small-after.ts")
+    expect(labels).toContain("failing-tests")
+    expect(result.droppedTiers).toContain(1)
+  })
 })
 
 describe("LongAgentContextPacker.pack - ordering", () => {
