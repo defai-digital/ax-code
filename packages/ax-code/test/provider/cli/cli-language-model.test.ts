@@ -287,11 +287,12 @@ describe("CliLanguageModel", () => {
           binary: "claude",
           args: ["--print", "--output-format", "stream-json"],
           parser: claudeCodeParser,
-          promptMode: "stdin",
+          promptMode: "positional",
         },
         "write file",
       )
       expect(cmd).toContain("--dangerously-skip-permissions")
+      expect(cmd.at(-1)).toBe("write file")
     } finally {
       restoreAutonomous()
     }
@@ -324,6 +325,26 @@ describe("CliLanguageModel", () => {
     expect(CLI_PROVIDER_DEFINITIONS["gemini-cli"]?.args).toContain("--skip-trust")
   })
 
+  test("passes Claude Code prompt as a positional argument", () => {
+    const definition = CLI_PROVIDER_DEFINITIONS["claude-code"]
+    expect(definition).toBeDefined()
+
+    const cmd = buildCliCommand(
+      {
+        providerID: "claude-code",
+        modelID: "claude-code",
+        binary: "claude",
+        args: definition?.args ?? [],
+        parser: claudeCodeParser,
+        promptMode: definition?.promptMode ?? "stdin",
+      },
+      "write file",
+    )
+
+    expect(cmd).not.toContain("-p")
+    expect(cmd.at(-1)).toBe("write file")
+  })
+
   test("adds autonomous-only flags by default", () => {
     delete process.env.AX_CODE_AUTONOMOUS
     try {
@@ -334,7 +355,7 @@ describe("CliLanguageModel", () => {
           binary: "claude",
           args: ["--print"],
           parser: claudeCodeParser,
-          promptMode: "stdin",
+          promptMode: "positional",
         },
         "write file",
       )
@@ -354,7 +375,7 @@ describe("CliLanguageModel", () => {
           binary: "claude",
           args: ["--print"],
           parser: claudeCodeParser,
-          promptMode: "stdin",
+          promptMode: "positional",
         },
         "write file",
       )

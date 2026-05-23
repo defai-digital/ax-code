@@ -9,6 +9,23 @@ export const CLI_CONNECT_TIMEOUT_MS = 15_000
 const CLI_CONNECT_PROMPT = "Reply with exactly OK."
 const log = Log.create({ service: "provider.cli.connect" })
 
+function isClaudeAuthFailure(event: unknown) {
+  if (!event || typeof event !== "object") return false
+  const record = event as Record<string, unknown>
+  if (record.type !== "error" && record.error === undefined) return false
+
+  const error = record.error
+  if (error === "authentication_failed") return true
+  if (typeof error === "string") return error.toLowerCase().includes("auth")
+  if (!error || typeof error !== "object") return false
+
+  const errorRecord = error as Record<string, unknown>
+  const type = typeof errorRecord.type === "string" ? errorRecord.type.toLowerCase() : ""
+  const code = typeof errorRecord.code === "string" ? errorRecord.code.toLowerCase() : ""
+  const message = typeof errorRecord.message === "string" ? errorRecord.message.toLowerCase() : ""
+  return [type, code, message].some((value) => value.includes("auth") || value.includes("login"))
+}
+
 async function checkClaudeAuth(binary: string): Promise<string | undefined> {
   try {
     const out = await Process.run([binary, "--print", "--verbose", "--output-format", "stream-json", "ping"], {
@@ -23,10 +40,7 @@ async function checkClaudeAuth(binary: string): Promise<string | undefined> {
       if (!trimmed || trimmed[0] !== "{") continue
       try {
         const event = JSON.parse(trimmed)
-        if (event.type === "system" && event.apiKeySource === "none") {
-          return "claude CLI is not logged in — run `claude login` first"
-        }
-        if (event.type === "error" && event.error === "authentication_failed") {
+        if (isClaudeAuthFailure(event)) {
           return "claude CLI is not logged in — run `claude login` first"
         }
       } catch (error) {
