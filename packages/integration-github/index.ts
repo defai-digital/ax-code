@@ -122,7 +122,7 @@ const { client, server } = createAxCode()
 let accessToken: string
 let octoRest: Octokit
 let octoGraph: typeof graphql
-let commentId: number
+let commentId: number | undefined
 let gitConfig: string
 let session: { id: string; title: string; version: string }
 let shareId: string | undefined
@@ -813,11 +813,26 @@ async function assertPermissions() {
 }
 
 async function updateComment(body: string) {
-  if (!commentId) return
+  const { repo } = useContext()
+  if (!commentId) {
+    try {
+      console.log("Creating comment...")
+      const comment = await octoRest.rest.issues.createComment({
+        owner: repo.owner,
+        repo: repo.repo,
+        issue_number: useIssueId(),
+        body,
+      })
+      commentId = comment.data.id
+      return comment
+    } catch (error) {
+      console.error("Failed to create GitHub comment:", error)
+      return
+    }
+  }
 
   console.log("Updating comment...")
 
-  const { repo } = useContext()
   return await octoRest.rest.issues.updateComment({
     owner: repo.owner,
     repo: repo.repo,
