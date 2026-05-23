@@ -1169,4 +1169,76 @@ describe("session.llm.stream - Phase 1 long-agent profile wiring", () => {
       },
     })
   })
+
+  test("Qwen3.7-Max with Super-Long enabled sends promptCacheKey in request body (Phase 3)", async () => {
+    process.env.AX_CODE_SUPER_LONG = "1"
+    const providerID = "alibaba-coding-plan"
+    const modelID = "qwen3.7-max"
+    const fixture = await loadFixture(providerID, modelID)
+    const model = fixture.model
+
+    const request = waitRequest(
+      "/chat/completions",
+      new Response(createChatStream("ok"), {
+        status: 200,
+        headers: { "Content-Type": "text/event-stream" },
+      }),
+    )
+
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await Bun.write(
+          path.join(dir, "ax-code.json"),
+          JSON.stringify({
+            $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+            enabled_providers: [providerID],
+            provider: {
+              [providerID]: {
+                options: { apiKey: "test-key", baseURL: `${state.server.url.origin}/v1` },
+              },
+            },
+          }),
+        )
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const resolved = await Provider.getModel(ProviderID.make(providerID), ModelID.make(model.id))
+        const sessionID = SessionID.make("session-phase3-cache")
+        const agent = {
+          name: "primary",
+          mode: "primary",
+          options: {},
+          permission: [{ permission: "*", pattern: "*", action: "allow" }],
+        } satisfies Agent.Info
+        const user = {
+          id: MessageID.make("user-phase3-cache"),
+          sessionID,
+          role: "user",
+          time: { created: Date.now() },
+          agent: agent.name,
+          model: { providerID: ProviderID.make(providerID), modelID: resolved.id },
+        } satisfies MessageV2.User
+
+        const stream = await LLM.stream({
+          user,
+          sessionID,
+          model: resolved,
+          agent,
+          system: ["You are a coding agent."],
+          abort: new AbortController().signal,
+          messages: [{ role: "user", content: "Review the PR." }],
+          tools: {},
+        })
+        for await (const _ of stream.fullStream) {}
+
+        const capture = await request
+        // promptCacheKey enables key-based session caching on DashScope for Super-Long runs
+        expect(capture.body.promptCacheKey).toBe(sessionID)
+        expect(capture.body.preserve_thinking).toBe(true)
+      },
+    })
+  })
 })

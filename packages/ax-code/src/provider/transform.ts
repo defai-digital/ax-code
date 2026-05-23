@@ -321,10 +321,13 @@ export namespace ProviderTransform {
     if (isAlibabaThinkingModel(input.model)) {
       result["enable_thinking"] = true
       result["thinking_budget"] = alibabaThinkingBudget(input.model, ALIBABA_THINKING_BUDGET_TOKENS)
-      // preserve_thinking keeps reasoning state across turns for long-agent execution.
-      // Only enabled in long-agent/Super-Long mode; auxiliary and short requests skip it.
       if (input.longAgent) {
+        // preserve_thinking keeps reasoning state across turns for long-agent execution.
         result["preserve_thinking"] = true
+        // Key-based prompt cache for Super-Long sessions.
+        // DashScope context caching is keyed by session ID; per-block cache_control
+        // requires a live route probe before enabling (Phase 3 acceptance criterion).
+        result["promptCacheKey"] = input.sessionID
       }
     }
 

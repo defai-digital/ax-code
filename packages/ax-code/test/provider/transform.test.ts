@@ -1612,3 +1612,69 @@ describe("ProviderTransform.options - preserve_thinking (Phase 2)", () => {
     expect(result.preserve_thinking).toBeUndefined()
   })
 })
+
+describe("ProviderTransform.options - promptCacheKey for Alibaba longAgent (Phase 3)", () => {
+  function mkAlibabaThinking(providerID: string, modelID = "qwen3.7-max") {
+    return {
+      id: `${providerID}/${modelID}`,
+      providerID: ProviderID.make(providerID),
+      api: {
+        id: modelID,
+        url: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        npm: "@ai-sdk/openai-compatible",
+      },
+      capabilities: { reasoning: true },
+      limit: { output: 65_536 },
+    } as any
+  }
+
+  test("options() sets promptCacheKey for Alibaba thinking model when longAgent=true", () => {
+    const result = ProviderTransform.options({
+      model: mkAlibabaThinking("alibaba-coding-plan"),
+      sessionID: "sess-abc",
+      providerOptions: {},
+      longAgent: true,
+    })
+    expect(result.promptCacheKey).toBe("sess-abc")
+  })
+
+  test("options() omits promptCacheKey for Alibaba thinking model when longAgent=false", () => {
+    const result = ProviderTransform.options({
+      model: mkAlibabaThinking("alibaba-token-plan"),
+      sessionID: "sess-abc",
+      providerOptions: {},
+      longAgent: false,
+    })
+    expect(result.promptCacheKey).toBeUndefined()
+  })
+
+  test("options() omits promptCacheKey when longAgent is absent", () => {
+    const result = ProviderTransform.options({
+      model: mkAlibabaThinking("alibaba-coding-plan-cn"),
+      sessionID: "sess-abc",
+      providerOptions: {},
+    })
+    expect(result.promptCacheKey).toBeUndefined()
+  })
+
+  test("sanitizeOptions preserves promptCacheKey through the Alibaba sanitize pass", () => {
+    const model = mkAlibabaThinking("alibaba-coding-plan")
+    const result = ProviderTransform.sanitizeOptions(model, {
+      enable_thinking: true,
+      thinking_budget: 8192,
+      preserve_thinking: true,
+      promptCacheKey: "sess-xyz",
+    })
+    expect(result.promptCacheKey).toBe("sess-xyz")
+  })
+
+  test("options() respects explicit setCacheKey for any provider", () => {
+    const model = mkAlibabaThinking("alibaba-token-plan")
+    const result = ProviderTransform.options({
+      model,
+      sessionID: "sess-set-cache",
+      providerOptions: { setCacheKey: true },
+    })
+    expect(result.promptCacheKey).toBe("sess-set-cache")
+  })
+})
