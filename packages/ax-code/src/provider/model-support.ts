@@ -1,5 +1,12 @@
 const GLM_MAJOR_VERSION = /glm-(\d+)/
 const GROK_ALLOWED_FINAL_SEGMENTS = new Set<string>(["grok-4.3", "grok-4-3", "grok-code-fast-1"])
+const GLM_PROVIDER_IDS = new Set(["zhipuai", "zhipuai-coding-plan", "zai", "zai-coding-plan"])
+
+type ModelSupportProbeInput = {
+  id?: unknown
+  name?: unknown
+  family?: unknown
+}
 
 export const OPENROUTER_SUPPORTED_MODEL_IDS = [
   "openrouter/auto",
@@ -36,6 +43,29 @@ export function buildModelProbes(modelID: string, model?: { id?: unknown; name?:
   return [modelID, model?.id, model?.name, model?.family]
     .filter((value): value is string => typeof value === "string")
     .flatMap(parseModelProbes)
+}
+
+export function isModelSupportedForProvider(providerID: string, modelID: string, model?: ModelSupportProbeInput) {
+  const probes = buildModelProbes(modelID, model)
+  const lower = probes[0] ?? modelID.toLowerCase()
+  if (probes.some((probe) => probe.includes("gpt-5.5") || probe.includes("gpt-5-5") || probe.includes("gpt55"))) {
+    return false
+  }
+  if (providerID === "openrouter") return supportsOpenRouterModelID(modelID)
+  if (providerID === "google" || providerID === "google-vertex") {
+    if (!lower.includes("gemini")) return true
+    return lower.includes("gemini-3")
+  }
+  if (providerID === "openai") {
+    return supportsOpenAIGptModels(probes)
+  }
+  if (providerID === "xai") {
+    return supportsGrok41OrAllowedCodingModel(probes)
+  }
+  if (GLM_PROVIDER_IDS.has(providerID)) {
+    return supportsGlmModels(probes)
+  }
+  return true
 }
 
 function hasGlmMajorVersionAtLeastFive(probes: readonly string[]) {
