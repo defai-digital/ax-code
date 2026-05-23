@@ -98,6 +98,64 @@ describe("SessionGoal", () => {
     })
   })
 
+  test("adds concurrent usage updates without losing increments", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        await SessionGoal.create({
+          sessionID: session.id,
+          objective: "track concurrent usage",
+          tokenBudget: 100,
+        })
+
+        const message = (id: string, total: number, created: number, completed: number) => ({
+          id: id as any,
+          sessionID: session.id,
+          parentID: "message_parent" as any,
+          role: "assistant" as const,
+          time: { created, completed },
+          modelID: "test-model" as any,
+          providerID: "test" as any,
+          mode: "build",
+          agent: "build",
+          path: { cwd: tmp.path, root: tmp.path },
+          tokens: {
+            total,
+            input: 0,
+            output: total,
+            reasoning: 0,
+            cache: { read: 0, write: 0 },
+          },
+        })
+
+        await Promise.all([
+          SessionGoal.addUsage({ sessionID: session.id, message: message("message_goal_usage_a", 30, 1_000, 3_000) }),
+          SessionGoal.addUsage({ sessionID: session.id, message: message("message_goal_usage_b", 40, 4_000, 7_000) }),
+        ])
+
+        const updated = await SessionGoal.get(session.id)
+        expect(updated?.status).toBe("active")
+        expect(updated?.tokensUsed).toBe(70)
+        expect(updated?.timeUsedSeconds).toBe(5)
+
+        await SessionGoal.addUsage({
+          sessionID: session.id,
+          message: message("message_goal_usage_c", 30, 8_000, 9_000),
+        })
+
+        const limited = await SessionGoal.get(session.id)
+        expect(limited?.status).toBe("budget_limited")
+        expect(limited?.tokensUsed).toBe(100)
+        expect(limited?.timeUsedSeconds).toBe(6)
+
+        await Session.remove(session.id)
+      },
+    })
+  })
+
   test("goal command controls lifecycle without invoking the model for view and pause", async () => {
     await using tmp = await tmpdir({ git: true })
 
