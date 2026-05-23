@@ -145,6 +145,9 @@ export namespace Permission {
     // per-instance state is already scoped to a specific project so
     // capturing once is simpler and cannot drift.
     projectID: ProjectID
+    // Per-instance mutex for "always" replies. Module-level storage would
+    // needlessly serialize concurrent project instances (e.g. worktrees).
+    alwaysReplyQueue: Promise<void>
   }
 
   const state = Instance.state(
@@ -156,6 +159,7 @@ export namespace Permission {
         pending: new Map<PermissionID, PendingEntry>(),
         approved: row?.data ?? [],
         projectID: Instance.project.id,
+        alwaysReplyQueue: Promise.resolve(),
       } satisfies State
     },
     async (state) => {
@@ -171,12 +175,11 @@ export namespace Permission {
   // default rules like {permission:"*",action:"allow",pattern:"*"} from
   // silently bypassing critical safety checks.
   const INTERACTIVE_ONLY: ReadonlySet<string> = new Set(["isolation_escalation"])
-  let alwaysReplyQueue: Promise<void> = Promise.resolve()
 
-  async function serializeAlwaysReply<T>(fn: () => Promise<T>) {
-    const previous = alwaysReplyQueue
+  async function serializeAlwaysReply<T>(s: State, fn: () => Promise<T>) {
+    const previous = s.alwaysReplyQueue
     let release!: () => void
-    alwaysReplyQueue = new Promise<void>((resolve) => {
+    s.alwaysReplyQueue = new Promise<void>((resolve) => {
       release = resolve
     })
     await previous.catch(() => {})
@@ -327,7 +330,8 @@ export namespace Permission {
   }
 
   async function replyPromise(input: z.infer<typeof ReplyInput>) {
-    const { approved, pending, projectID } = await state()
+    const s = await state()
+    const { approved, pending, projectID } = s
     const existing = pending.get(input.requestID)
     if (!existing) return
 
@@ -364,7 +368,7 @@ export namespace Permission {
       return
     }
 
-    await serializeAlwaysReply(async () => {
+    await serializeAlwaysReply(s, async () => {
       if (!pending.delete(input.requestID)) return
 
       const rules = existing.info.always.map((pattern) => ({
@@ -543,8 +547,8 @@ export namespace Permission {
       log.info("loaded policy", { name: policy.name, rules: policy.rules.length, path: filepath })
       return fromPolicy(policy, currentAgent)
     } catch (e) {
-      log.error("failed to load policy", { path: filepath, error: e })
-      return [{ permission: "*", pattern: "*", action: "deny" }]
+      log.warn("policy file malformed — all rules ignored until fixed", { path: filepath, error: e })
+      return []
     }
   }
 

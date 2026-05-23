@@ -98,4 +98,25 @@ describe("autonomous question evaluation fixtures", () => {
       expect(decisions[index].rationale, fixture.name).toBeTruthy()
     }
   })
+
+  test("question containing only 'over-engineer' does not set best-practice context (regression)", () => {
+    // Before the fix, CONTEXT_BEST_PRACTICE_MARKER included `over-?engineer`,
+    // so a question like "How should we over-engineer this?" would incorrectly
+    // set contextAsksForBestPractice=true and inflate the low-scope bonus from
+    // +3 to +6, yielding spuriously high confidence.
+    const question: AutonomousQuestion.QuestionLike = {
+      question: "How should we over-engineer this for future flexibility?",
+      header: "Approach",
+      options: [
+        { label: "Plugin framework", description: "Architecture layer for maximum extension" },
+        { label: "Direct implementation", description: "Small targeted fix" },
+      ],
+    }
+    const [decision] = AutonomousQuestion.decisions([question])
+    // Correct answer: "Direct implementation" wins (plugin framework is risk class)
+    expect(decision.answer).toEqual(["Direct implementation"])
+    // Confidence must be medium, not high: without contextAsksForBestPractice the
+    // low-scope bonus is +3 (score ≈ 3), giving top=3, second=-20, gap < 5 → medium.
+    expect(decision.confidence).toBe("medium")
+  })
 })
