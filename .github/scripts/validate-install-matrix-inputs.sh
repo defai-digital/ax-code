@@ -10,9 +10,9 @@ if ! [[ "$VERSION" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z-]+)*$ ]]; then
 fi
 
 case "$CHANNEL" in
-  both|source|latest) ;;
+  all|curl|homebrew) ;;
   *)
-    echo "FAIL: channel must be one of [both, source, latest], got '$CHANNEL'"
+    echo "FAIL: channel must be one of [all, curl, homebrew], got '$CHANNEL'"
     exit 1
     ;;
 esac

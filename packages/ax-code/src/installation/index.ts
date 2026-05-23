@@ -10,7 +10,6 @@ import z from "zod"
 import { BusEvent } from "@/bus/bus-event"
 import { Flag } from "../flag/flag"
 import { Log } from "../util/log"
-import { Ssrf } from "../util/ssrf"
 
 declare global {
   const AX_CODE_VERSION: string
@@ -21,12 +20,8 @@ import semver from "semver"
 
 export namespace Installation {
   const log = Log.create({ service: "installation" })
-  export const CURRENT_NPM_PACKAGE = "@defai.digital/ax-code"
-  export const LEGACY_NPM_PACKAGE = "ax-code-ai"
-  export const NPM_PACKAGE_ALIASES = [CURRENT_NPM_PACKAGE, LEGACY_NPM_PACKAGE] as const
-  const CURRENT_NPM_PACKAGE_PATH = encodeURIComponent(CURRENT_NPM_PACKAGE)
 
-  export type Method = "curl" | "npm" | "yarn" | "pnpm" | "bun" | "brew" | "scoop" | "choco" | "unknown"
+  export type Method = "curl" | "brew" | "unknown"
 
   export type ReleaseType = "patch" | "minor" | "major" | "unknown"
 
@@ -101,15 +96,10 @@ export namespace Installation {
 
   // Response schemas for external version APIs
   const GitHubRelease = Schema.Struct({ tag_name: Schema.String })
-  const NpmPackage = Schema.Struct({ version: Schema.String })
   const BrewFormula = Schema.Struct({ versions: Schema.Struct({ stable: Schema.String }) })
   const BrewInfoV2 = Schema.Struct({
     formulae: Schema.Array(Schema.Struct({ versions: Schema.Struct({ stable: Schema.String }) })),
   })
-  const ChocoPackage = Schema.Struct({
-    d: Schema.Struct({ results: Schema.Array(Schema.Struct({ Version: Schema.String })) }),
-  })
-  const ScoopManifest = NpmPackage
 
   export interface Interface {
     readonly info: () => Effect.Effect<Info>
@@ -229,44 +219,11 @@ export namespace Installation {
         const methodImpl = Effect.fn("Installation.method")(function* () {
           if (process.execPath.includes(path.join(".ax-code", "bin"))) return "curl" as Method
           if (process.execPath.includes(path.join(".local", "bin"))) return "curl" as Method
-          const exec = process.execPath.toLowerCase()
 
-          const checks: Array<{ name: Method; command: () => Effect.Effect<string> }> = [
-            { name: "npm", command: () => text(["npm", "list", "-g", "--depth=0"]) },
-            { name: "yarn", command: () => text(["yarn", "global", "list"]) },
-            { name: "pnpm", command: () => text(["pnpm", "list", "-g", "--depth=0"]) },
-            { name: "bun", command: () => text(["bun", "pm", "ls", "-g"]) },
-            {
-              name: "brew",
-              command: () =>
-                Effect.gen(function* () {
-                  for (const formula of ["defai-digital/ax-code/ax-code", "defai-digital/ax-code/ax", "ax-code"]) {
-                    const out = yield* text(["brew", "list", "--formula", formula])
-                    if (out.trim()) return "ax-code"
-                  }
-                  return ""
-                }),
-            },
-            { name: "scoop", command: () => text(["scoop", "list", "ax-code"]) },
-            { name: "choco", command: () => text(["choco", "list", "--limit-output", "ax-code"]) },
-          ]
-
-          checks.sort((a, b) => {
-            const aMatches = exec.includes(a.name)
-            const bMatches = exec.includes(b.name)
-            if (aMatches && !bMatches) return -1
-            if (!aMatches && bMatches) return 1
-            return 0
-          })
-
-          for (const check of checks) {
-            const output = yield* check.command()
-            const installedNames =
-              check.name === "brew" || check.name === "choco" || check.name === "scoop"
-                ? ["ax-code"]
-                : [...NPM_PACKAGE_ALIASES]
-            if (installedNames.some((name) => output.includes(name))) {
-              return check.name
+          for (const formula of ["defai-digital/ax-code/ax-code", "defai-digital/ax-code/ax", "ax-code"]) {
+            const out = yield* text(["brew", "list", "--formula", formula])
+            if (out.trim()) {
+              return "brew" as Method
             }
           }
 
@@ -293,39 +250,6 @@ export namespace Installation {
             return data.versions.stable
           }
 
-          if (detectedMethod === "npm" || detectedMethod === "bun" || detectedMethod === "pnpm") {
-            const r = (yield* text(["npm", "config", "get", "registry"])).trim()
-            const reg = r || "https://registry.npmjs.org"
-            const registry = reg.endsWith("/") ? reg.slice(0, -1) : reg
-            const channel = CHANNEL
-            const url = `${registry}/${CURRENT_NPM_PACKAGE_PATH}/${channel}`
-            yield* Effect.promise(() => Ssrf.assertPublicUrl(url, "installation"))
-            const response = yield* httpOk.execute(HttpClientRequest.get(url).pipe(HttpClientRequest.acceptJson))
-            const data = yield* HttpClientResponse.schemaBodyJson(NpmPackage)(response)
-            return data.version
-          }
-
-          if (detectedMethod === "choco") {
-            const response = yield* httpOk.execute(
-              HttpClientRequest.get(
-                "https://community.chocolatey.org/api/v2/Packages?$filter=Id%20eq%20%27ax-code%27%20and%20IsLatestVersion&$select=Version",
-              ).pipe(HttpClientRequest.setHeaders({ Accept: "application/json;odata=verbose" })),
-            )
-            const data = yield* HttpClientResponse.schemaBodyJson(ChocoPackage)(response)
-            if (!data.d.results?.length) return "unknown"
-            return data.d.results[0].Version
-          }
-
-          if (detectedMethod === "scoop") {
-            const response = yield* httpOk.execute(
-              HttpClientRequest.get(
-                "https://raw.githubusercontent.com/ScoopInstaller/Main/master/bucket/ax-code.json",
-              ).pipe(HttpClientRequest.setHeaders({ Accept: "application/json" })),
-            )
-            const data = yield* HttpClientResponse.schemaBodyJson(ScoopManifest)(response)
-            return data.version
-          }
-
           const response = yield* httpOk.execute(
             HttpClientRequest.get("https://api.github.com/repos/defai-digital/ax-code/releases/latest").pipe(
               HttpClientRequest.acceptJson,
@@ -341,28 +265,17 @@ export namespace Installation {
             case "curl":
               result = yield* upgradeCurl(target)
               break
-            case "npm":
-              result = yield* run(["npm", "install", "-g", `${CURRENT_NPM_PACKAGE}@${target}`])
-              break
-            case "yarn":
-              result = yield* run(["yarn", "global", "add", `${CURRENT_NPM_PACKAGE}@${target}`])
-              break
-            case "pnpm":
-              result = yield* run(["pnpm", "install", "-g", `${CURRENT_NPM_PACKAGE}@${target}`])
-              break
-            case "bun":
-              result = yield* run(["bun", "install", "-g", `${CURRENT_NPM_PACKAGE}@${target}`])
-              break
             case "brew": {
               const formula = yield* getBrewFormula()
               const env = { HOMEBREW_NO_AUTO_UPDATE: "1" }
               if (formula.includes("/")) {
-                const tap = yield* run(["brew", "tap", "defai-digital/tap"], { env })
+                const tapName = formula.split("/").slice(0, 2).join("/")
+                const tap = yield* run(["brew", "tap", tapName], { env })
                 if (tap.code !== 0) {
                   result = tap
                   break
                 }
-                const repo = yield* text(["brew", "--repo", "defai-digital/tap"])
+                const repo = yield* text(["brew", "--repo", tapName])
                 const dir = repo.trim()
                 if (dir) {
                   const pull = yield* run(["git", "pull", "--ff-only"], { cwd: dir, env })
@@ -375,22 +288,16 @@ export namespace Installation {
               result = yield* run(["brew", "upgrade", formula], { env })
               break
             }
-            case "choco":
-              result = yield* run(["choco", "upgrade", "ax-code", `--version=${target}`, "-y"])
-              break
-            case "scoop":
-              result = yield* run(["scoop", "install", `ax-code@${target}`])
-              break
             case "unknown":
               // Fallback to curl installer script when method can't be detected —
-              // works regardless of install location (bun global, manual copy, etc.)
+              // works regardless of install location (legacy npm global, manual copy, etc.)
               result = yield* upgradeCurl(target)
               break
             default:
               return yield* new UpgradeFailedError({ stderr: `Unknown method: ${m}` })
           }
           if (!result || result.code !== 0) {
-            const stderr = m === "choco" ? "not running from an elevated command shell" : result?.stderr || ""
+            const stderr = result?.stderr || ""
             return yield* new UpgradeFailedError({ stderr })
           }
           log.info("upgraded", {

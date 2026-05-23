@@ -1068,15 +1068,10 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(thread).toContain('DiagnosticLog.recordProcess("tui.setWorkspaceFailed"')
   })
 
-  test("worker target() resolves all three layouts: compiled binary, source-bundle, source-dev", async () => {
-    // Regression guard for ADR-002 source-bundle. The bundle emits flat
-    // worker.js next to index.js (build-source.ts uses `naming.entry =
-    // "[name].[ext]"`), so target() must probe ./worker.js BEFORE
-    // falling through to ./worker.ts. Without this, a packaged source-
-    // bundle install fails at TUI launch with a ModuleNotFound for
-    // worker.ts that does not exist in the tarball — and the install-
-    // matrix smoke does not catch it because it only exercises non-TUI
-    // commands (--version, doctor, debug config).
+  test("worker target() resolves compiled, legacy flat-bundle, and source-dev layouts", async () => {
+    // Regression guard for old flat source bundles. target() must probe
+    // ./worker.js BEFORE falling through to ./worker.ts; otherwise legacy
+    // bundles can fail at TUI launch with a ModuleNotFound for worker.ts.
     const thread = await fs.readFile(THREAD_SRC, "utf8")
 
     // Compiled-binary path (bunfs-rooted absolute string, set by build.ts)

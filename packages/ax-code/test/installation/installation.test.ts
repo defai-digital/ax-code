@@ -80,56 +80,6 @@ describe("installation", () => {
       expect(result).toBe("4.0.0-beta.1")
     })
 
-    test("reads npm registry versions", async () => {
-      let requestUrl = ""
-      const layer = testLayer(
-        (request) => {
-          requestUrl = String(request.url)
-          return jsonResponse({ version: "1.5.0" })
-        },
-        (cmd, args) => {
-          if (cmd === "npm" && args.includes("registry")) return "https://registry.npmjs.org\n"
-          return ""
-        },
-      )
-
-      const result = await Effect.runPromise(
-        Installation.Service.use((svc) => svc.latest("npm")).pipe(Effect.provide(layer)),
-      )
-      expect(result).toBe("1.5.0")
-      expect(requestUrl).toContain("/%40defai.digital%2Fax-code/")
-    })
-
-    test("reads npm registry versions for bun method", async () => {
-      const layer = testLayer(
-        () => jsonResponse({ version: "1.6.0" }),
-        () => "",
-      )
-
-      const result = await Effect.runPromise(
-        Installation.Service.use((svc) => svc.latest("bun")).pipe(Effect.provide(layer)),
-      )
-      expect(result).toBe("1.6.0")
-    })
-
-    test("reads scoop manifest versions", async () => {
-      const layer = testLayer(() => jsonResponse({ version: "2.3.4" }))
-
-      const result = await Effect.runPromise(
-        Installation.Service.use((svc) => svc.latest("scoop")).pipe(Effect.provide(layer)),
-      )
-      expect(result).toBe("2.3.4")
-    })
-
-    test("reads chocolatey feed versions", async () => {
-      const layer = testLayer(() => jsonResponse({ d: { results: [{ Version: "3.4.5" }] } }))
-
-      const result = await Effect.runPromise(
-        Installation.Service.use((svc) => svc.latest("choco")).pipe(Effect.provide(layer)),
-      )
-      expect(result).toBe("3.4.5")
-    })
-
     test("reads brew formulae API versions", async () => {
       const layer = testLayer(
         () => jsonResponse({ versions: { stable: "2.0.0" } }),
@@ -171,7 +121,7 @@ describe("installation", () => {
   })
 
   describe("method", () => {
-    test("detects the current scoped npm package", async () => {
+    test("ignores legacy npm global installs as an unsupported channel", async () => {
       const layer = testLayer(
         () => jsonResponse({}),
         (cmd, args) => {
@@ -183,14 +133,14 @@ describe("installation", () => {
       const result = await Effect.runPromise(
         Installation.Service.use((svc) => svc.method()).pipe(Effect.provide(layer)),
       )
-      expect(result).toBe("npm")
+      expect(result).toBe("unknown")
     })
 
-    test("still detects the legacy npm package for migrations", async () => {
+    test("detects Homebrew installs", async () => {
       const layer = testLayer(
         () => jsonResponse({}),
         (cmd, args) => {
-          if (cmd === "npm" && args.includes("--depth=0")) return "└── ax-code-ai@2.25.0\n"
+          if (cmd === "brew" && args.includes("--formula")) return "ax-code\n"
           return ""
         },
       )
@@ -198,29 +148,29 @@ describe("installation", () => {
       const result = await Effect.runPromise(
         Installation.Service.use((svc) => svc.method()).pipe(Effect.provide(layer)),
       )
-      expect(result).toBe("npm")
+      expect(result).toBe("brew")
     })
   })
 
   describe("upgrade", () => {
-    test("installs the current scoped npm package", async () => {
+    test("refreshes the detected Homebrew tap before upgrading", async () => {
       const calls: Array<{ cmd: string; args: readonly string[] }> = []
       const layer = testLayer(
         () => jsonResponse({}),
         (cmd, args) => {
           calls.push({ cmd, args })
+          if (cmd === "brew" && args.includes("--formula")) return "ax-code\n"
+          if (cmd === "brew" && args.includes("--repo")) return "/tmp/homebrew-ax-code\n"
           return ""
         },
       )
 
       await Effect.runPromise(
-        Installation.Service.use((svc) => svc.upgrade("npm", "3.2.0")).pipe(Effect.provide(layer)),
+        Installation.Service.use((svc) => svc.upgrade("brew", "5.3.0")).pipe(Effect.provide(layer)),
       )
 
-      expect(calls).toContainEqual({
-        cmd: "npm",
-        args: ["install", "-g", "@defai.digital/ax-code@3.2.0"],
-      })
+      expect(calls).toContainEqual({ cmd: "brew", args: ["tap", "defai-digital/ax-code"] })
+      expect(calls).toContainEqual({ cmd: "brew", args: ["upgrade", "defai-digital/ax-code/ax-code"] })
     })
   })
 })

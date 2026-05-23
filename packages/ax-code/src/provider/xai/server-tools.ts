@@ -1,97 +1,57 @@
 /**
- * Grok server-side tools configuration
- * Ported from ax-cli's server-tools.ts
+ * Grok server-side capabilities for ax-code.
  *
- * xAI's Agent Tools API provides server-side capabilities:
- * - x_search: Search X/Twitter posts (keyword or semantic)
- * - code_execution: Server-side Python sandbox (30s timeout)
- * - web_search: DEPRECATED (HTTP 410)
+ * Active feature: xAI Live Search. Surfaced via the @ai-sdk/xai provider's
+ * typed `searchParameters` option (chat completions endpoint). When enabled,
+ * Grok decides per-turn whether to query real-world sources (web / X posts /
+ * news / RSS feeds) before answering — handy for current-events questions
+ * like weather, news, and X timelines.
  *
- * These are passed to the xAI API via providerOptions, not as regular tools.
+ * Not supported here: xAI's separate Agent Tools API (server_tools with
+ * x_search / code_execution payloads). That targets a different endpoint
+ * which ax-code does not call.
+ *
+ * Docs: https://docs.x.ai/docs/guides/live-search
  */
 
-export interface XSearchConfig {
-  enabled: boolean
-  searchType: "keyword" | "semantic"
-  timeRange?: string // e.g., '24h', '7d', '30d'
-  maxResults?: number
-}
+export type LiveSearchMode = "off" | "auto" | "on"
 
-export interface CodeExecutionConfig {
-  enabled: boolean
-  timeout: number // ms, max 30000
-}
-
-export interface ServerToolsConfig {
-  xSearch: XSearchConfig
-  codeExecution: CodeExecutionConfig
-}
-
-export const DEFAULT_CONFIG: ServerToolsConfig = {
-  xSearch: {
-    enabled: true,
-    searchType: "semantic",
-  },
-  codeExecution: {
-    enabled: true,
-    timeout: 30_000,
-  },
-}
-
-/**
- * Build the server_tools array for the API request
- * Returns list of enabled tool names
- */
-export function buildToolsArray(config: ServerToolsConfig = DEFAULT_CONFIG): string[] {
-  const tools: string[] = []
-  if (config.xSearch.enabled) tools.push("x_search")
-  if (config.codeExecution.enabled) tools.push("code_execution")
-  return tools
-}
-
-/**
- * Build server_tool_config object for the API request
- */
-export function buildToolConfig(config: ServerToolsConfig = DEFAULT_CONFIG): Record<string, unknown> {
-  const result: Record<string, unknown> = {}
-
-  if (config.xSearch.enabled) {
-    const xConfig: Record<string, unknown> = {
-      search_type: config.xSearch.searchType,
+export type LiveSearchSource =
+  | { type: "web"; country?: string; excludedWebsites?: string[]; allowedWebsites?: string[]; safeSearch?: boolean }
+  | {
+      type: "x"
+      excludedXHandles?: string[]
+      includedXHandles?: string[]
+      postFavoriteCount?: number
+      postViewCount?: number
+      xHandles?: string[]
     }
-    if (config.xSearch.timeRange) xConfig.time_range = config.xSearch.timeRange
-    if (config.xSearch.maxResults) xConfig.max_results = config.xSearch.maxResults
-    result.x_search = xConfig
-  }
+  | { type: "news"; country?: string; excludedWebsites?: string[]; safeSearch?: boolean }
+  | { type: "rss"; links: string[] }
 
-  if (config.codeExecution.enabled) {
-    result.code_execution = {
-      timeout: Math.min(config.codeExecution.timeout, 30_000),
-    }
-  }
+export interface LiveSearchConfig {
+  mode: LiveSearchMode
+  returnCitations?: boolean
+  fromDate?: string
+  toDate?: string
+  maxSearchResults?: number
+  sources?: LiveSearchSource[]
+}
 
-  return result
+// Defaults match Grok's strongest current-events behaviour: model decides
+// when to search (auto), citations on so the user can verify, web+x+news
+// sources covering both general queries and timely X chatter. Tweak via
+// `provider.xai.models.<id>.options.searchParameters` in ax-code.json.
+export const DEFAULT_LIVE_SEARCH: LiveSearchConfig = {
+  mode: "auto",
+  returnCitations: true,
+  sources: [{ type: "web" }, { type: "x" }, { type: "news" }],
 }
 
 /**
- * Check if any server tools are enabled
- */
-export function hasEnabled(config: ServerToolsConfig = DEFAULT_CONFIG): boolean {
-  return config.xSearch.enabled || config.codeExecution.enabled
-}
-
-/**
- * Merge user config with defaults
- */
-export function merge(partial: Partial<ServerToolsConfig>): ServerToolsConfig {
-  return {
-    xSearch: { ...DEFAULT_CONFIG.xSearch, ...partial.xSearch },
-    codeExecution: { ...DEFAULT_CONFIG.codeExecution, ...partial.codeExecution },
-  }
-}
-
-/**
- * Check if a model supports server-side tools
+ * Check if a model is eligible for xAI Live Search.
+ * Multi-agent variants are excluded — they orchestrate sub-calls and ignore
+ * top-level search parameters.
  */
 export function supportsServerTools(modelId: string): boolean {
   const id = modelId.toLowerCase()
@@ -99,8 +59,25 @@ export function supportsServerTools(modelId: string): boolean {
   return id.includes("grok-4") || id.includes("grok-code")
 }
 
+export const supportsLiveSearch = supportsServerTools
+
 /**
- * Check if a model supports reasoning/extended thinking
+ * Build the `searchParameters` provider option for a Grok model. Returns
+ * undefined when the model is ineligible or when an explicit override sets
+ * mode to "off" — in those cases the caller should omit the key entirely so
+ * xAI's default (search disabled) applies.
+ */
+export function buildSearchParameters(
+  modelId: string,
+  override?: Partial<LiveSearchConfig>,
+): LiveSearchConfig | undefined {
+  if (!supportsLiveSearch(modelId)) return undefined
+  if (override?.mode === "off") return undefined
+  return { ...DEFAULT_LIVE_SEARCH, ...override }
+}
+
+/**
+ * Check if a model supports reasoning/extended thinking.
  */
 export function supportsReasoning(modelId: string): boolean {
   const id = modelId.toLowerCase()

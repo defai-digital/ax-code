@@ -161,7 +161,7 @@ describe("release check (full checks)", () => {
     await mkdir(scriptPath, { recursive: true })
     await writeFile(path.join(repo, "package.json"), JSON.stringify({ engines: { bun: "^1.3.14" } }) + "\n")
     await writeFile(
-      path.join(scriptPath, "source-package.ts"),
+      path.join(scriptPath, "build.ts"),
       'import rootPkg from "../../../package.json"\nexport const bun = rootPkg.engines.bun\n',
     )
 

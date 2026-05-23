@@ -1,10 +1,8 @@
-const childProcess = require("child_process")
-const fs = require("fs")
-const path = require("path")
-const os = require("os")
-const NPM_SCOPE = "@defai.digital"
+import childProcess from "child_process"
+import fs from "fs"
+import os from "os"
 
-function normalizePlatform(value = os.platform()) {
+export function normalizeBinaryTargetPlatform(value: string = os.platform()) {
   return (
     {
       darwin: "darwin",
@@ -14,7 +12,7 @@ function normalizePlatform(value = os.platform()) {
   )
 }
 
-function normalizeArch(value = os.arch()) {
+export function normalizeBinaryTargetArch(value: string = os.arch()) {
   return (
     {
       x64: "x64",
@@ -24,7 +22,7 @@ function normalizeArch(value = os.arch()) {
   )
 }
 
-function supportsAvx2(platform, arch) {
+function supportsAvx2(platform: string, arch: string) {
   if (arch !== "x64") return false
 
   if (platform === "linux") {
@@ -72,7 +70,7 @@ function supportsAvx2(platform, arch) {
   return false
 }
 
-function detectMusl(platform) {
+function detectMusl(platform: string) {
   if (platform !== "linux") return false
 
   try {
@@ -92,12 +90,18 @@ function detectMusl(platform) {
   return false
 }
 
-function candidatePackageNames(options = {}) {
-  const platform = normalizePlatform(options.platform)
-  const arch = normalizeArch(options.arch)
+export function candidateBinaryTargets(
+  options: {
+    platform?: string
+    arch?: string
+    avx2?: boolean
+    musl?: boolean
+  } = {},
+) {
+  const platform = normalizeBinaryTargetPlatform(options.platform)
+  const arch = normalizeBinaryTargetArch(options.arch)
   const base = "ax-code-" + platform + "-" + arch
   const binary = platform === "windows" ? "ax-code.exe" : "ax-code"
-  const scoped = (names) => names.map((name) => `${NPM_SCOPE}/${name}`)
 
   if (platform === "darwin" && arch !== "arm64") {
     return {
@@ -117,57 +121,22 @@ function candidatePackageNames(options = {}) {
 
     if (musl) {
       if (arch === "x64") {
-        const names = scoped(
-          baseline
-            ? [`${base}-baseline-musl`, `${base}-musl`, `${base}-baseline`, base]
-            : [`${base}-musl`, `${base}-baseline-musl`, base, `${base}-baseline`],
-        )
+        const names = baseline
+          ? [`${base}-baseline-musl`, `${base}-musl`, `${base}-baseline`, base]
+          : [`${base}-musl`, `${base}-baseline-musl`, base, `${base}-baseline`]
         return { platform, arch, binary, names }
       }
-      return { platform, arch, binary, names: scoped([`${base}-musl`, base]) }
+      return { platform, arch, binary, names: [`${base}-musl`, base] }
     }
 
     if (arch === "x64") {
-      const names = scoped(
-        baseline
-          ? [`${base}-baseline`, base, `${base}-baseline-musl`, `${base}-musl`]
-          : [base, `${base}-baseline`, `${base}-musl`, `${base}-baseline-musl`],
-      )
+      const names = baseline
+        ? [`${base}-baseline`, base, `${base}-baseline-musl`, `${base}-musl`]
+        : [base, `${base}-baseline`, `${base}-musl`, `${base}-baseline-musl`]
       return { platform, arch, binary, names }
     }
-    return { platform, arch, binary, names: scoped([base, `${base}-musl`]) }
+    return { platform, arch, binary, names: [base, `${base}-musl`] }
   }
 
-  if (arch === "x64") {
-    return { platform, arch, binary, names: scoped([base]) }
-  }
-
-  return { platform, arch, binary, names: scoped([base]) }
-}
-
-function findBinary(startDir, options = {}) {
-  const { names, binary } = candidatePackageNames(options)
-  const fallbackNames = names.map((name) => name.replace(/^@[^/]+\//, ""))
-  let current = startDir
-
-  for (;;) {
-    const modules = path.join(current, "node_modules")
-    if (fs.existsSync(modules)) {
-      for (const name of [...names, ...fallbackNames]) {
-        const candidate = path.join(modules, name, "bin", binary)
-        if (fs.existsSync(candidate)) return candidate
-      }
-    }
-
-    const parent = path.dirname(current)
-    if (parent === current) return undefined
-    current = parent
-  }
-}
-
-module.exports = {
-  candidatePackageNames,
-  findBinary,
-  normalizeArch,
-  normalizePlatform,
+  return { platform, arch, binary, names: [base] }
 }

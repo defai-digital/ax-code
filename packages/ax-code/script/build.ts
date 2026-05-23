@@ -14,7 +14,6 @@ const dir = path.resolve(__dirname, "..")
 process.chdir(dir)
 
 import pkg from "../package.json"
-import { scopePackageName } from "./package-names"
 import { compiledBunfsModulePath } from "./embedded-path"
 import { collectBuildDependencyPackages, resolveInstalledPackagePath } from "./build-deps"
 
@@ -303,7 +302,7 @@ if (targets.length === 0) {
 
 await $`rm -rf dist`
 
-const binaries: Record<string, string> = {}
+const builtTargets: string[] = []
 if (!skipInstall) {
   await ensureBuildDependencies(targets)
 }
@@ -318,8 +317,7 @@ for (const item of targets) {
   ]
     .filter(Boolean)
     .join("-")
-  const packageName = scopePackageName(legacyName)
-  console.log(`building ${packageName}`)
+  console.log(`building ${legacyName}`)
   await $`mkdir -p dist/${legacyName}/bin`
 
   const localPath = path.resolve(dir, "node_modules/@opentui/core/parser.worker.js")
@@ -384,33 +382,17 @@ for (const item of targets) {
       const versionOutput = await $`${binaryPath} --version`.text()
       console.log(`Smoke test passed: ${versionOutput.trim()}`)
     } catch (e) {
-      console.error(`Smoke test failed for ${packageName}:`, e)
+      console.error(`Smoke test failed for ${legacyName}:`, e)
       process.exit(1)
     }
   }
 
   await $`rm -rf ./dist/${legacyName}/bin/tui`
-  await Bun.file(`dist/${legacyName}/package.json`).write(
-    JSON.stringify(
-      {
-        name: packageName,
-        version: buildVersion,
-        os: [item.os],
-        cpu: [item.arch],
-        publishConfig: {
-          access: "public",
-        },
-      },
-      null,
-      2,
-    ),
-  )
-  binaries[packageName] = buildVersion
+  builtTargets.push(legacyName)
 }
 
 if (buildInfo.release) {
-  for (const key of Object.keys(binaries)) {
-    const legacyName = key.replace(/^@[^/]+\//, "")
+  for (const legacyName of builtTargets) {
     if (legacyName.includes("linux")) {
       await $`tar -czf ../../${legacyName}.tar.gz *`.cwd(`dist/${legacyName}/bin`)
     } else if (legacyName.includes("windows")) {
@@ -426,4 +408,4 @@ if (buildInfo.release) {
   // all platform runners finish and artifacts are collected.
 }
 
-export { binaries }
+export { builtTargets }

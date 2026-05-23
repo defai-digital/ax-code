@@ -11,15 +11,13 @@ import {
 } from "./setup-cli"
 
 describe("setup-cli helpers", () => {
-  test("reuses npm wrapper target selection for supported platforms", () => {
+  test("selects supported local release binary targets", () => {
     expect(preferredBundledTarget({ platform: "darwin", arch: "arm64" })).toEqual({
       binary: "ax-code",
-      packageName: "@defai.digital/ax-code-darwin-arm64",
       legacyName: "ax-code-darwin-arm64",
     })
     expect(preferredBundledTarget({ platform: "linux", arch: "x64", avx2: false, musl: true })).toEqual({
       binary: "ax-code",
-      packageName: "@defai.digital/ax-code-linux-x64-baseline-musl",
       legacyName: "ax-code-linux-x64-baseline-musl",
     })
   })
@@ -210,7 +208,7 @@ describe("setup-cli helpers", () => {
     expect(writes[0][1]).not.toContain("bun run --cwd")
   })
 
-  test("setupCli builds the same preferred variant chosen by the npm wrapper", () => {
+  test("setupCli builds the preferred local release binary variant", () => {
     const writes: Array<[string, string]> = []
     const binary = bundledBinaryPath({ root: "/repo", platform: "linux", arch: "x64", avx2: false, musl: true })
     const spawns: Array<{ cmd: string; args: string[]; env?: NodeJS.ProcessEnv }> = []

@@ -22,8 +22,6 @@ interface RemovalTargets {
   binary: string | null
 }
 
-const npmPackages = [...Installation.NPM_PACKAGE_ALIASES]
-
 export const UninstallCommand = {
   command: "uninstall",
   describe: "uninstall ax-code and remove all related files",
@@ -131,13 +129,7 @@ async function showRemovalSummary(targets: RemovalTargets, method: Installation.
 
   if (method !== "curl" && method !== "unknown") {
     const cmds: Record<string, string> = {
-      npm: `npm uninstall -g ${npmPackages.join(" ")}`,
-      pnpm: `pnpm uninstall -g ${npmPackages.join(" ")}`,
-      bun: `bun remove -g ${npmPackages.join(" ")}`,
-      yarn: `yarn global remove ${npmPackages.join(" ")}`,
       brew: "brew uninstall ax-code",
-      choco: "choco uninstall ax-code",
-      scoop: "scoop uninstall ax-code",
     }
     prompts.log.info(`  ✓ Package: ${cmds[method] || method}`)
   }
@@ -182,29 +174,16 @@ async function executeUninstall(method: Installation.Method, targets: RemovalTar
 
   if (method !== "curl" && method !== "unknown") {
     const cmds: Record<string, string[]> = {
-      npm: ["npm", "uninstall", "-g", ...npmPackages],
-      pnpm: ["pnpm", "uninstall", "-g", ...npmPackages],
-      bun: ["bun", "remove", "-g", ...npmPackages],
-      yarn: ["yarn", "global", "remove", ...npmPackages],
       brew: ["brew", "uninstall", "ax-code"],
-      choco: ["choco", "uninstall", "ax-code"],
-      scoop: ["scoop", "uninstall", "ax-code"],
     }
 
     const cmd = cmds[method]
     if (cmd) {
       spinner.start(`Running ${cmd.join(" ")}...`)
-      const result = await Process.run(method === "choco" ? ["choco", "uninstall", "ax-code", "-y", "-r"] : cmd, {
-        nothrow: true,
-      })
+      const result = await Process.run(cmd, { nothrow: true })
       if (result.code !== 0) {
         spinner.stop(`Package manager uninstall failed: exit code ${result.code}`, 1)
-        const text = `${result.stdout.toString("utf8")}\n${result.stderr.toString("utf8")}`
-        if (method === "choco" && text.includes("not running from an elevated command shell")) {
-          prompts.log.warn(`You may need to run '${cmd.join(" ")}' from an elevated command shell`)
-        } else {
-          prompts.log.warn(`You may need to run manually: ${cmd.join(" ")}`)
-        }
+        prompts.log.warn(`You may need to run manually: ${cmd.join(" ")}`)
       } else {
         spinner.stop("Package removed")
       }

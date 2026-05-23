@@ -381,10 +381,9 @@ async function target() {
   // that emit the source-tree directory shape.
   const dist = new URL("./cli/cmd/tui/worker.js", import.meta.url)
   if (await Filesystem.exists(fileURLToPath(dist))) return dist
-  // Source-bundle layout (ADR-002): build-source.ts emits flat-named outputs
-  // so worker.js sits next to the bundled index.js. Probe this before the
-  // source/dev .ts fallback so packaged users do not crash with a
-  // ModuleNotFound on worker.ts that does not exist in the tarball.
+  // Legacy flat bundle layout: worker.js sits next to the bundled index.js.
+  // Probe this before the source/dev .ts fallback so old source-bundle installs
+  // do not crash with a ModuleNotFound on worker.ts.
   const flat = new URL("./worker.js", import.meta.url)
   if (await Filesystem.exists(fileURLToPath(flat))) return flat
   // Source/dev layout: worker.ts is the sibling source file under src/.

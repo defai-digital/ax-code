@@ -6,7 +6,7 @@ REQUESTED_CHANNEL="${2:-}"
 CURRENT_CHANNEL="${3:-}"
 DISPLAY_LABEL="${4:-$CURRENT_CHANNEL}"
 
-if [ -z "$REQUESTED_CHANNEL" ] || [ "$REQUESTED_CHANNEL" = "both" ] || [ "$REQUESTED_CHANNEL" = "$CURRENT_CHANNEL" ]; then
+if [ -z "$REQUESTED_CHANNEL" ] || [ "$REQUESTED_CHANNEL" = "all" ] || [ "$REQUESTED_CHANNEL" = "$CURRENT_CHANNEL" ]; then
   echo "enabled=true" >> "$OUTPUT_FILE"
 else
   echo "Skipping ${DISPLAY_LABEL} (workflow_dispatch requested ${REQUESTED_CHANNEL})" \

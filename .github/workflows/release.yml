@@ -11,8 +11,9 @@ concurrency:
 
 # Channel policy: stable semver tags (for example `v3.1.4`) create the
 # GitHub release on the `latest` channel. Prerelease tags (for example
-# `v3.2.0-beta.1`) stay on the `beta` channel. npm and Homebrew publishing
-# are intentionally manual.
+# `v3.2.0-beta.1`) stay on the `beta` channel. The release workflow publishes
+# GitHub release assets only. Homebrew publishing is manual; npm distribution
+# is no longer supported.
 env:
   AX_CODE_RELEASE_CHANNEL: ${{ contains(github.ref_name, '-') && 'beta' || 'latest' }}
 
@@ -163,7 +164,8 @@ jobs:
             PRERELEASE_ARGS=(--prerelease)
           fi
           # The release workflow only publishes GitHub release assets.
-          # npm and Homebrew distribution are manual follow-up steps.
+          # Homebrew distribution is a manual follow-up step; npm distribution
+          # is no longer supported.
           # Idempotent: skip if any release (draft or published) already exists.
           if ! gh release view "$TAG" >/dev/null 2>&1; then
             VERSION="${TAG#v}"

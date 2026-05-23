@@ -18,27 +18,26 @@ function neutralProbes(modelID: string, family: string) {
 }
 
 describe("supportsGrok41OrAllowedCodingModel", () => {
-  // The 4.1 minimum is enforced by parsing major.minor, so every future Grok
-  // release should pass without code changes. Pin a few representative ids so
-  // a regression here surfaces immediately.
+  // Grok is restricted to an explicit allow-list (grok-4.3 + grok-code-fast-1).
+  // Anything else with "grok" in its probes is dropped, regardless of version.
   test.each([
     ["grok-4.3", true],
     ["grok-4-3", true],
-    ["grok-4.2", true],
-    ["grok-5", true],
-    ["grok-5.1", true],
-    ["grok-4-1-fast", true],
     ["grok-code-fast-1", true],
-    ["grok-4-0709", true],
   ])("accepts %s", (id, expected) => {
     expect(supportsGrok41OrAllowedCodingModel(probes(id))).toBe(expected)
   })
 
   test.each([
-    // grok-4.1 itself is explicitly blocked — only -fast and other 4.1+ ids are kept.
+    ["grok-4.2", false],
     ["grok-4.1", false],
     ["grok-4-1", false],
+    ["grok-4-1-fast", false],
     ["grok-4", false],
+    ["grok-4-fast", false],
+    ["grok-4-0709", false],
+    ["grok-5", false],
+    ["grok-5.1", false],
     ["grok-3", false],
     ["grok-beta", false],
     ["grok-vision-beta", false],

@@ -3,72 +3,50 @@ import path from "path"
 import fs from "fs"
 
 const repoRoot = path.resolve(import.meta.dir, "../../../..")
-const homebrewSourceScript = path.join(repoRoot, ".github/scripts/update-homebrew-source.sh")
 const homebrewDefaultScript = path.join(repoRoot, ".github/scripts/update-homebrew.sh")
 const releaseWorkflow = path.join(repoRoot, ".github/workflows/release.yml")
 const installMatrixWorkflow = path.join(repoRoot, ".github/workflows/install-matrix-smoke.yml")
 const isolatedHomeScript = path.join(repoRoot, ".github/scripts/set-isolated-home-env.sh")
 const filterDispatchChannelScript = path.join(repoRoot, ".github/scripts/filter-dispatch-channel.sh")
+const validateInstallMatrixInputsScript = path.join(repoRoot, ".github/scripts/validate-install-matrix-inputs.sh")
+const axCodePackageJson = path.join(repoRoot, "packages/ax-code/package.json")
+const axCodeCiWorkflow = path.join(repoRoot, ".github/workflows/ax-code-ci.yml")
 
-describe("homebrew source formula generator", () => {
-  test("script exists and is executable", () => {
-    expect(fs.existsSync(homebrewSourceScript)).toBe(true)
-    const stat = fs.statSync(homebrewSourceScript)
-    // Owner exec bit
-    expect(stat.mode & 0o100).toBe(0o100)
-  })
+const retiredNpmDistributionFiles = [
+  ".github/scripts/update-homebrew-source.sh",
+  ".github/workflows/ax-code-tui-renderer.yml",
+  "script/publish.ts",
+  "packages/ax-code/bin/ax-code",
+  "packages/ax-code/bin/binary-selection.cjs",
+  "packages/ax-code/script/build-source.ts",
+  "packages/ax-code/script/package-names.ts",
+  "packages/ax-code/script/postinstall.mjs",
+  "packages/ax-code/script/publish.ts",
+  "packages/ax-code/script/publish-plan.ts",
+  "packages/ax-code/script/publish-source.ts",
+  "packages/ax-code/script/source-install-smoke.ts",
+  "packages/ax-code/script/source-package.ts",
+]
 
-  test("generates a formula named AxCodeSource with depends_on bun", async () => {
-    const text = await Bun.file(homebrewSourceScript).text()
-    expect(text).toContain("class AxCodeSource < Formula")
-    expect(text).toContain('depends_on "bun"')
-    expect(text).toContain('depends_on "ripgrep"')
-  })
+describe("distribution support guardrails", () => {
+  test("npm distribution scripts and source-package workflows have been retired", async () => {
+    for (const rel of retiredNpmDistributionFiles) {
+      expect(fs.existsSync(path.join(repoRoot, rel)), `${rel} should be removed`).toBe(false)
+    }
 
-  test("source formula points at npm registry tarball, not GitHub release asset", async () => {
-    // The compiled formula downloads platform tarballs from GitHub
-    // releases. The source formula must pull from the npm registry where
-    // publish-source.ts uploads, otherwise the formula references a
-    // tarball that does not exist.
-    const text = await Bun.file(homebrewSourceScript).text()
-    expect(text).toContain('SOURCE_PACKAGE_PATH="@defai.digital/ax-code-source"')
-    expect(text).toContain('SOURCE_TARBALL_NAME="ax-code-source"')
-    expect(text).toContain("registry.npmjs.org/${SOURCE_PACKAGE_PATH}/-/${SOURCE_TARBALL_NAME}-${VERSION}.tgz")
-    expect(text).not.toContain("github.com/defai-digital/ax-code/releases/download")
-  })
+    const pkg = JSON.parse(await Bun.file(axCodePackageJson).text())
+    expect(pkg.bin).toBeUndefined()
+    expect(pkg.scripts["bundle:source"]).toBeUndefined()
+    expect(pkg.scripts["bundle:source:smoke"]).toBeUndefined()
+    expect(pkg.scripts["bundle:source:pack"]).toBeUndefined()
+    expect(pkg.scripts["bundle:source:install-smoke"]).toBeUndefined()
+    expect(pkg.scripts["bundle:source:tui-smoke"]).toBeUndefined()
 
-  test("retries npm registry fetch to handle CDN propagation lag", async () => {
-    // Right after manual source-package publish, the npm CDN can take a few
-    // seconds to serve the tarball. Without retry the manual Homebrew source
-    // update would fail intermittently.
-    const text = await Bun.file(homebrewSourceScript).text()
-    expect(text).toContain("max_attempts")
-    expect(text).toMatch(/sleep\s+\d+/)
-  })
-
-  test("computes sha256 cross-platform (sha256sum or shasum -a 256)", async () => {
-    // Linux runners have sha256sum, macOS runners have shasum.
-    const text = await Bun.file(homebrewSourceScript).text()
-    expect(text).toContain("sha256sum")
-    expect(text).toContain("shasum -a 256")
-  })
-
-  test("brew shim execs bun against bundle/index.js with AX_CODE_ORIGINAL_CWD set", async () => {
-    // The shim must match the npm-distribution shim's behavior so the
-    // CLI's --project resolution sees the user's actual cwd, not the
-    // brew libexec install location.
-    const text = await Bun.file(homebrewSourceScript).text()
-    expect(text).toContain("AX_CODE_ORIGINAL_CWD")
-    expect(text).toContain("bundle/index.js")
-    expect(text).toContain('Formula["bun"].opt_bin')
-  })
-
-  test("formula filename and class name are ax-code-source / AxCodeSource (compatibility alias)", async () => {
-    const text = await Bun.file(homebrewSourceScript).text()
-    expect(text).toContain("ax-code-source.rb")
-    expect(text).toContain("tracks compiled release assets")
-    expect(text).not.toContain("The default \\`ax-code\\` formula now uses the same source+bun runtime.")
-    expect(text).not.toContain("> /tmp/ax-code.rb")
+    const ci = await Bun.file(axCodeCiWorkflow).text()
+    expect(ci).not.toContain("bundle-source:")
+    expect(ci).not.toContain("dist-source")
+    expect(ci).not.toContain("publish-source")
+    expect(ci).not.toContain("source-install-smoke")
   })
 
   test("default formula points at compiled GitHub release assets", async () => {
@@ -103,27 +81,6 @@ describe("homebrew source formula generator", () => {
     )
   })
 
-  test("manual homebrew scripts keep tap credential handling outside release workflow", async () => {
-    const text = await Bun.file(releaseWorkflow).text()
-    const sourceScript = await Bun.file(homebrewSourceScript).text()
-    expect(sourceScript).toContain("gh repo clone defai-digital/homebrew-ax-code")
-    expect(sourceScript).toContain("gh auth setup-git")
-    expect(sourceScript).toContain("mktemp -d")
-    expect(sourceScript).not.toContain("x-access-token:${TAP_AUTH_TOKEN}")
-    expect(text).not.toContain("TAP_TOKEN")
-    expect(text).not.toContain("update-homebrew.sh")
-    expect(text).not.toContain("update-homebrew-source.sh")
-  })
-
-  test("release workflow does not automatically publish Homebrew formulae", async () => {
-    const text = await Bun.file(releaseWorkflow).text()
-    expect(text).not.toMatch(/\n  homebrew:/)
-    expect(text).not.toMatch(/\n  homebrew-source:/)
-    expect(text).not.toContain("defai-digital/homebrew-ax-code")
-    expect(text).toContain("npm and Homebrew publishing")
-    expect(text).toContain("manual")
-  })
-
   test("release workflow publishes GitHub release assets without package-channel gates", async () => {
     const text = await Bun.file(releaseWorkflow).text()
     const publishJob = text.match(/\n  publish:[\s\S]*$/)
@@ -135,14 +92,22 @@ describe("homebrew source formula generator", () => {
     expect(text).not.toContain("gh workflow run install-matrix-smoke.yml")
   })
 
-  test("release workflow does not automatically publish npm packages", async () => {
+  test("release workflow does not automatically publish npm or Homebrew packages", async () => {
     const text = await Bun.file(releaseWorkflow).text()
     expect(text).not.toMatch(/\n  publish-npm:/)
     expect(text).not.toMatch(/\n  publish-source:/)
+    expect(text).not.toMatch(/\n  homebrew:/)
+    expect(text).not.toMatch(/\n  homebrew-source:/)
     expect(text).not.toContain("NPM_TOKEN")
     expect(text).not.toContain("NPM_CONFIG_PROVENANCE")
+    expect(text).not.toContain("TAP_TOKEN")
     expect(text).not.toContain("bun run script/publish.ts")
     expect(text).not.toContain("bun run script/publish-source.ts")
+    expect(text).not.toContain("update-homebrew.sh")
+    expect(text).not.toContain("update-homebrew-source.sh")
+    expect(text).toContain("Homebrew distribution is a manual follow-up step")
+    expect(text).toContain("npm distribution")
+    expect(text).toContain("no longer supported")
   })
 
   test("install matrix is dispatch-only so release.published cannot race package publication", async () => {
@@ -156,31 +121,38 @@ describe("homebrew source formula generator", () => {
     expect(text).not.toContain("release workflow dispatches")
   })
 
-  test("install matrix installs exact package versions, not stale dist-tags", async () => {
+  test("install matrix supports curl and Homebrew without npm package installs", async () => {
     const text = await Bun.file(installMatrixWorkflow).text()
     const filterDispatchChannel = await Bun.file(filterDispatchChannelScript).text()
-    expect(text).toContain('PACKAGE="@defai.digital/ax-code-source"')
-    expect(text).toContain('PACKAGE="@defai.digital/ax-code"')
-    expect(text).toContain('npm install -g "${PACKAGE}@${VERSION}"')
+    const validateInputs = await Bun.file(validateInstallMatrixInputsScript).text()
+    expect(text).toContain("- curl")
+    expect(text).toContain("- homebrew")
+    expect(text).toContain('bash ./install --version "$VERSION" --no-modify-path')
+    expect(text).toContain("brew install defai-digital/ax-code/ax-code")
     expect(text).toContain('bash .github/scripts/assert-ax-code-version.sh "$VERSION"')
-    expect(text).toContain("Smoke — installed backend stdio handshake")
+    expect(text).toContain("Smoke - installed backend stdio handshake")
     expect(text).toContain("tui-backend --stdio")
     expect(text).toContain("id: channel")
     expect(filterDispatchChannel).toContain("enabled=false")
+    expect(filterDispatchChannel).toContain('"all"')
+    expect(validateInputs).toContain("all|curl|homebrew")
     expect(text).toContain("steps.channel.outputs.enabled == 'true'")
-    expect(text).toContain('bash .github/scripts/assert-runtime-mode.sh "${{ matrix.channel }}" doctor')
-    expect(text).toContain('bash .github/scripts/assert-runtime-mode.sh "${{ matrix.channel }}" backend')
-    expect(text).toContain('bash .github/scripts/assert-runtime-mode.sh "latest" doctor homebrew')
-    expect(text).toContain('bash .github/scripts/assert-runtime-mode.sh "latest" backend homebrew')
-    expect(text).not.toContain("@defai.digital/ax-code@$CHANNEL")
+    expect(text).toContain('bash .github/scripts/assert-runtime-mode.sh "curl" doctor')
+    expect(text).toContain('bash .github/scripts/assert-runtime-mode.sh "curl" backend')
+    expect(text).toContain('bash .github/scripts/assert-runtime-mode.sh "homebrew" doctor')
+    expect(text).toContain('bash .github/scripts/assert-runtime-mode.sh "homebrew" backend')
+    expect(text).not.toContain("npm install -g")
+    expect(text).not.toContain("npm view")
+    expect(text).not.toContain("@defai.digital/ax-code")
+    expect(text).not.toContain("ax-code-source")
   })
 
-  test("install matrix smokes installed packages with isolated runtime homes", async () => {
+  test("install matrix smokes supported installers with isolated runtime homes", async () => {
     const text = await Bun.file(installMatrixWorkflow).text()
     const isolatedHome = await Bun.file(isolatedHomeScript).text()
-    const smokeJob = text.match(/smoke:[\s\S]*?(?=\n  homebrew:|$)/)
-    expect(smokeJob).not.toBeNull()
-    expect(smokeJob![0]).toContain("set-isolated-home-env.sh")
+    const curlJob = text.match(/curl:[\s\S]*?(?=\n  homebrew:|$)/)
+    expect(curlJob).not.toBeNull()
+    expect(curlJob![0]).toContain("set-isolated-home-env.sh")
 
     const homebrewJob = text.match(/homebrew:[\s\S]*$/)
     expect(homebrewJob).not.toBeNull()
@@ -220,13 +192,5 @@ describe("homebrew source formula generator", () => {
     expect(buildJob![0]).not.toContain("find dist -path")
     expect(buildJob![0]).toContain("tui-backend --stdio")
     expect(buildJob![0]).toContain('"runtimeMode":"compiled"')
-  })
-
-  test("manual npm publish scripts remain available outside release workflow", async () => {
-    const text = await Bun.file(releaseWorkflow).text()
-    expect(fs.existsSync(path.join(repoRoot, "packages/ax-code/script/publish.ts"))).toBe(true)
-    expect(fs.existsSync(path.join(repoRoot, "packages/ax-code/script/publish-source.ts"))).toBe(true)
-    expect(text).not.toContain("script/publish.ts")
-    expect(text).not.toContain("script/publish-source.ts")
   })
 })

@@ -61,10 +61,9 @@ for (const id of [
 // hosting variants. Probes match against family, id, and name because
 // models.dev tags inconsistently across providers.
 //
-//   - Kimi (Moonshot): unsupported entirely.
-//   - Grok: only v4.1+ plus the explicit grok-code-fast-1 coding model
-//     (Grok 4.0, other unversioned grok-code-* aliases, Grok 2/3, and
-//     unversioned betas drop).
+//   - Kimi (Moonshot): only the kimi-k2.6 version via the Alibaba plan.
+//   - Grok: only grok-4.3 plus the grok-code-fast-1 coding model.
+//     All other Grok variants (4.2/4.1, 4.0, beta aliases, 2/3) drop.
 //   - GLM (Z.AI): only non-vision v5+ (glm-5v and every glm-4.x / glm-3.x drop).
 //   - Gemini: only v3+ (Gemini 1.x/2.x drops from ax-code's model picker).
 //   - GPT-5.5: hidden from API/provider model pickers; use Codex CLI default instead.
@@ -89,29 +88,35 @@ function probesOf(m: RawModel): string[] {
 function isGrokProbe(probe: string): boolean {
   return /(^|[^a-z0-9])grok([^a-z0-9]|$)/.test(probe) || probe.includes("grok-")
 }
-function isGrok41OrLaterProbe(probe: string): boolean {
-  const match = probe.match(/grok-(\d+)(?:[.-]?(\d+))?/)
-  if (!match) return false
-  const major = Number(match[1])
-  const minor = match[2] === undefined ? 0 : Number(match[2])
-  return major > 4 || (major === 4 && minor >= 1)
+// Grok allow-list. Only these exact final-segment ids survive the unsupported
+// filter — every other grok variant (older versions, beta aliases, vision-only,
+// etc.) is dropped. Match on the final segment so account-prefixed reseller ids
+// (e.g. "x-ai/grok-4.3") still resolve correctly.
+const GROK_ALLOWED_FINAL_SEGMENTS = new Set<string>([
+  "grok-4.3",
+  "grok-4-3",
+  "grok-code-fast-1",
+])
+function isAllowedGrokProbe(probe: string): boolean {
+  return GROK_ALLOWED_FINAL_SEGMENTS.has(probe.split("/").pop() ?? "")
 }
-function isExactGrok41Probe(probe: string): boolean {
-  const finalSegment = probe.split("/").pop()
-  return finalSegment === "grok-4.1" || finalSegment === "grok-4-1"
-}
-function isAllowedGrokCodingProbe(probe: string): boolean {
-  return probe.split("/").pop() === "grok-code-fast-1"
+// Kimi models are dropped across the board, except for an explicit allow-list of
+// versions that we want to surface (these are served through Alibaba's coding/token
+// plan). The allow-list match is exact on the final id segment so partial aliases
+// (kimi-k2.6-vision-preview, etc.) keep getting filtered out.
+const KIMI_ALLOWED_FINAL_SEGMENTS = new Set<string>(["kimi-k2.6"])
+function isAllowedKimiProbe(probe: string): boolean {
+  return KIMI_ALLOWED_FINAL_SEGMENTS.has(probe.split("/").pop() ?? "")
 }
 function isUnsupportedModel(m: RawModel): boolean {
   const probes = probesOf(m)
-  // Kimi: anything tagged kimi.
-  if (probes.some((p) => p.includes("kimi"))) return true
-  // Grok: drop if any probe mentions grok and none has a 4.1+ version or explicit coding exception.
+  // Kimi: drop anything tagged kimi unless an allow-listed version matches.
+  if (probes.some((p) => p.includes("kimi"))) {
+    if (!probes.some(isAllowedKimiProbe)) return true
+  }
+  // Grok: drop unless an allow-listed final-segment id matches.
   if (probes.some(isGrokProbe)) {
-    if (probes.some(isExactGrok41Probe)) return true
-    const supported = probes.some((p) => isGrok41OrLaterProbe(p) || isAllowedGrokCodingProbe(p))
-    if (!supported) return true
+    if (!probes.some(isAllowedGrokProbe)) return true
   }
   // GLM: drop if any probe mentions glm-N where N < 5.
   if (probes.some((p) => p.includes("glm-5v") || p.includes("glm5v"))) return true
@@ -154,14 +159,36 @@ cloneProvider("alibaba-coding-plan-cn", "alibaba-token-plan-cn", {
   env: ["ALIBABA_TOKEN_PLAN_CN_API_KEY", "ALIBABA_TOKEN_PLAN_API_KEY"],
 })
 
-// Trim Alibaba plan providers to the text/reasoning models supported by the plan.
-// Image-only models (qwen-image-*, wan*) are intentionally omitted because ax-code
-// uses this provider list for chat/code LLM selection.
-const alibabaModels = ["qwen3.6-plus", "deepseek-v3.2", "glm-5", "MiniMax-M2.5"]
+// Trim Alibaba plan providers to the curated set of chat/reasoning/image models
+// served through the plan. Entries that models.dev hasn't published yet are
+// silently skipped — the whitelist is forward-looking so they appear automatically
+// once upstream catches up. Image models (qwen-image-*, wan*) are kept here per
+// product intent even though ax-code's chat picker can't drive image generation
+// — they show up so callers using the provider via SDK / API can pick them.
+const alibabaModels = [
+  // Qwen text / reasoning
+  "qwen3.7-max",
+  "qwen3.6-plus",
+  "qwen3.6-flash",
+  // DeepSeek text / reasoning
+  "deepseek-v4-pro",
+  "deepseek-v4-flash",
+  // Other vendors aggregated under the Alibaba plan
+  "kimi-k2.6",
+  "glm-5.1",
+  // Qwen image generation
+  "qwen-image-2.0",
+  "qwen-image-2.0-pro",
+  // Wan image generation
+  "wan2.7-image",
+  "wan2.7-image-pro",
+]
 const alibabaModelFallbackProviders: Record<string, string[]> = {
-  "deepseek-v3.2": ["302ai", "ollama-cloud", "cortecs", "llmgateway"],
-  "glm-5": ["tencent-coding-plan", "zhipuai", "302ai", "opencode"],
-  "MiniMax-M2.5": ["minimax-coding-plan", "minimax-cn-coding-plan", "minimax"],
+  "qwen3.6-flash": ["aihubmix"],
+  "deepseek-v4-pro": ["auriko", "cortecs", "302ai", "llmgateway"],
+  "deepseek-v4-flash": ["cortecs", "auriko", "302ai", "llmgateway"],
+  "kimi-k2.6": ["moonshot", "moonshot-cn", "302ai", "llmgateway"],
+  "glm-5.1": ["zai-coding-plan", "zhipuai", "auriko", "302ai"],
 }
 for (const id of ["alibaba-coding-plan", "alibaba-coding-plan-cn", "alibaba-token-plan", "alibaba-token-plan-cn"]) {
   if (!fetched[id]) continue
@@ -260,11 +287,54 @@ for (const [id, doc] of Object.entries(docOverrides)) {
   if (fetched[id]) fetched[id].doc = doc
 }
 
+// Force attachment=true on Alibaba multimodal chat models. models.dev reports
+// these with input modalities ["text","image","video"] but attachment=false,
+// which leaves ax-code's picker refusing image uploads even though the upstream
+// API accepts them. Override here so the capability flag matches the modality.
+const alibabaAttachmentForceTrue = ["qwen3.6-plus"]
 for (const id of ["alibaba-coding-plan", "alibaba-coding-plan-cn", "alibaba-token-plan", "alibaba-token-plan-cn"]) {
-  const deepseek = fetched[id]?.models?.["deepseek-v3.2"] as
-    | { limit?: { context?: number; output?: number } }
-    | undefined
-  if (deepseek?.limit) deepseek.limit.output = 16_384
+  const models = fetched[id]?.models as Record<string, { attachment?: boolean }> | undefined
+  if (!models) continue
+  for (const mid of alibabaAttachmentForceTrue) {
+    const model = models[mid]
+    if (model) model.attachment = true
+  }
+}
+
+// Mark models that have native server-side web search wired in ax-code with a
+// 🌐 suffix on their display name so the model picker shows the capability at
+// a glance. The suffix is applied to the `name` field only; ids stay stable.
+// Re-applied on every regeneration via the endsWith guard so we don't end up
+// with "... 🌐 🌐". Other capabilities are NOT marked — this is a deliberate
+// narrow opt-in, not a general capability-badge system.
+const SEARCH_MARKER = " 🌐"
+const LEGACY_SEARCH_PREFIX = "🌐 "
+function markSearch(model: { name?: string } | undefined) {
+  if (!model?.name) return
+  // Clean up any legacy prefix from an earlier marker placement, otherwise we
+  // end up with "🌐 Foo 🌐" after the switch from prefix to suffix.
+  if (model.name.startsWith(LEGACY_SEARCH_PREFIX)) {
+    model.name = model.name.slice(LEGACY_SEARCH_PREFIX.length)
+  }
+  if (model.name.endsWith(SEARCH_MARKER)) return
+  model.name = model.name + SEARCH_MARKER
+}
+// xAI: grok-4.3 and grok-code-fast-1 are the two allow-listed Grok models;
+// both have Live Search wired via providerOptions.searchParameters.
+const xaiSearchModelIds = ["grok-4.3", "grok-4-3", "grok-code-fast-1"]
+const xaiModels = fetched["xai"]?.models as Record<string, { name?: string }> | undefined
+if (xaiModels) {
+  for (const mid of xaiSearchModelIds) markSearch(xaiModels[mid])
+}
+// Alibaba: every Qwen model on the four plan endpoints accepts `enable_search`.
+// Non-Qwen models (DeepSeek/GLM/Kimi/MiniMax) served on the same plans don't
+// honor the knob, so they stay unmarked.
+for (const id of ["alibaba-coding-plan", "alibaba-coding-plan-cn", "alibaba-token-plan", "alibaba-token-plan-cn"]) {
+  const models = fetched[id]?.models as Record<string, { name?: string }> | undefined
+  if (!models) continue
+  for (const [mid, model] of Object.entries(models)) {
+    if (mid.toLowerCase().startsWith("qwen")) markSearch(model)
+  }
 }
 
 const envOverrides: Record<string, string[]> = {
