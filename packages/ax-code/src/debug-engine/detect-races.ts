@@ -1,10 +1,15 @@
 import fs from "fs/promises"
-import { DEFAULT_INCLUDE, DEFAULT_MAX_FILES, DEFAULT_MAX_PER_FILE, isExcludedDir, isTestFile } from "./scanner-utils"
+import {
+  collectScannerFileBatch,
+  resolveScannerDefaults,
+  scannerFileBatchHeuristics,
+  scannerScopeDisabled,
+  scanScannerFiles,
+  sortScannerFindings,
+  type ScannerInputControls,
+} from "./scanner-utils"
 import { Instance } from "../project/instance"
-import { Glob } from "../util/glob"
-import type { ProjectID } from "../project/schema"
 import { DebugEngine } from "./index"
-import { nativeReadFilesBatch } from "./native-scan"
 
 // detect-races — AST-lite scanner for common race condition patterns
 // in async TypeScript code.
@@ -16,16 +21,8 @@ import { nativeReadFilesBatch } from "./native-scan"
 //
 // ADR-002: standalone text scan, no v3 writes.
 
-export type DetectRacesInput = {
-  scope?: "worktree" | "none"
+export type DetectRacesInput = ScannerInputControls & {
   patterns?: DebugEngine.RacePattern[]
-  excludeTests?: boolean
-  include?: string[]
-  // Pre-resolved file list for incremental scanning. When provided,
-  // skips glob enumeration and scans only these files.
-  files?: string[]
-  maxFiles?: number
-  maxFindingsPerFile?: number
 }
 
 // Suppression comment pattern: // @scan-suppress race_scan
@@ -346,10 +343,17 @@ async function scanFile(
   return findings.slice(0, maxPerFile)
 }
 
-export async function detectRacesImpl(projectID: ProjectID, input: DetectRacesInput): Promise<DebugEngine.RaceReport> {
-  const excludeTests = input.excludeTests ?? true
-  const maxFiles = input.maxFiles ?? DEFAULT_MAX_FILES
-  const maxPerFile = input.maxFindingsPerFile ?? DEFAULT_MAX_PER_FILE
+export async function detectRacesImpl(input: DetectRacesInput): Promise<DebugEngine.RaceReport> {
+  if (scannerScopeDisabled(input)) {
+    return {
+      findings: [],
+      filesScanned: 0,
+      truncated: false,
+      explain: DebugEngine.buildExplain("detect-races", [], ["scope=none"]),
+    }
+  }
+
+  const { excludeTests, maxFiles, maxPerFile, include } = resolveScannerDefaults(input)
   const patterns: DebugEngine.RacePattern[] = input.patterns ?? [
     "toctou",
     "non_atomic_counter",
@@ -357,80 +361,25 @@ export async function detectRacesImpl(projectID: ProjectID, input: DetectRacesIn
     "stale_listener",
   ]
   const enabledPatterns = new Set(patterns)
-  const include = input.include ?? DEFAULT_INCLUDE
   const heuristics: string[] = [`patterns=${patterns.join(",")}`]
   if (excludeTests) heuristics.push("exclude-tests")
 
   const cwd = Instance.directory
 
-  // Incremental mode: if `files` is provided, use that list directly
-  // instead of glob enumeration. This is the fast path for git-diff-aware
-  // scanning.
-  let allFiles: string[]
-  if (input.files && input.files.length > 0) {
-    heuristics.push("incremental")
-    allFiles = input.files.filter((f) => {
-      if (excludeTests && isTestFile(f)) return false
-      if (!Instance.containsPath(f)) return false
-      return true
-    })
-  } else {
-    allFiles = []
-    for (const pattern of include) {
-      const hits = await Glob.scan(pattern, { cwd, absolute: true, dot: false, symlink: false })
-      for (const f of hits) {
-        if (isExcludedDir(f, cwd)) continue
-        if (excludeTests && isTestFile(f)) continue
-        if (!Instance.containsPath(f)) continue
-        allFiles.push(f)
-      }
-    }
-  }
+  const fileBatch = await collectScannerFileBatch(input, { cwd, include, excludeTests, maxFiles })
+  heuristics.push(...scannerFileBatchHeuristics(fileBatch))
 
-  const uniqueFiles = [...new Set(allFiles)]
-  heuristics.push(`candidate-files=${uniqueFiles.length}`)
+  const { findings, usedNativeBatchRead } = await scanScannerFiles(fileBatch.files, (file, content) =>
+    scanFile(file, enabledPatterns, maxPerFile, content),
+  )
+  if (usedNativeBatchRead) heuristics.push("native-batch-read")
 
-  const filesToScan = uniqueFiles.slice(0, maxFiles)
-  const truncated = uniqueFiles.length > maxFiles
-  if (truncated) heuristics.push("file-cap-hit")
-
-  const preread = nativeReadFilesBatch(filesToScan)
-  if (preread) heuristics.push("native-batch-read")
-
-  const CONCURRENCY = 8
-  const findings: DebugEngine.RaceFinding[] = []
-  if (preread) {
-    for (const f of filesToScan) {
-      const content = preread.get(f)
-      if (!content) continue
-      findings.push(...(await scanFile(f, enabledPatterns, maxPerFile, content)))
-    }
-  } else {
-    for (let i = 0; i < filesToScan.length; i += CONCURRENCY) {
-      const batch = filesToScan.slice(i, i + CONCURRENCY)
-      const results = await Promise.all(batch.map((f) => scanFile(f, enabledPatterns, maxPerFile)))
-      for (const r of results) findings.push(...r)
-    }
-  }
-
-  // Sort: severity desc, then file, then line
-  const severityRank: Record<DebugEngine.RaceFinding["severity"], number> = {
-    high: 0,
-    medium: 1,
-    low: 2,
-  }
-  findings.sort((a, b) => {
-    if (severityRank[a.severity] !== severityRank[b.severity]) {
-      return severityRank[a.severity] - severityRank[b.severity]
-    }
-    if (a.file !== b.file) return a.file.localeCompare(b.file)
-    return a.line - b.line
-  })
+  sortScannerFindings(findings)
 
   return {
     findings,
-    filesScanned: filesToScan.length,
-    truncated,
+    filesScanned: fileBatch.files.length,
+    truncated: fileBatch.truncated,
     explain: DebugEngine.buildExplain("detect-races", [], heuristics),
   }
 }

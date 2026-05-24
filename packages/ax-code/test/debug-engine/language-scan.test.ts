@@ -5,7 +5,9 @@ import {
   detectMypy,
   mapClippyLevel,
   mapRuffSeverity,
-  type LanguageFinding,
+  parseClippyOutput,
+  parseMypyOutput,
+  parseRuffOutput,
 } from "../../src/debug-engine/language-scan"
 
 describe("language-scan", () => {
@@ -101,37 +103,41 @@ describe("language-scan", () => {
       })
       const sampleOutput = `${line1}\n${line2}`
 
-      const findings: LanguageFinding[] = []
-      for (const line of sampleOutput.split("\n")) {
-        if (!line.trim()) continue
-        try {
-          const msg = JSON.parse(line)
-          if (!msg.message?.spans?.length) continue
-          const primarySpan = msg.message.spans.find((s: any) => s.is_primary) ?? msg.message.spans[0]
-          findings.push({
-            file: primarySpan.file_name,
-            line: primarySpan.line_start,
-            endLine: primarySpan.line_end,
-            column: primarySpan.column_start,
-            endColumn: primarySpan.column_end,
-            code: msg.message.code?.code ?? "clippy",
-            message: msg.message.message,
-            severity: mapClippyLevel(msg.message.level),
-            language: "rust",
-            tool: "cargo-clippy",
-          })
-        } catch {
-          // Non-JSON lines — skip
-        }
-      }
+      const { findings, filesScanned } = parseClippyOutput(sampleOutput)
 
       expect(findings.length).toBe(2)
+      expect(filesScanned).toBe(1)
       expect(findings[0].code).toBe("unused_variables")
       expect(findings[0].severity).toBe("medium")
       expect(findings[0].file).toBe("src/main.rs")
       expect(findings[0].line).toBe(5)
       expect(findings[1].code).toBe("unused_imports")
       expect(findings[1].severity).toBe("medium")
+    })
+
+    test("parses flattened clippy JSON messages", () => {
+      const sampleOutput = JSON.stringify({
+        message: "dead code",
+        code: { code: "dead_code", explanation: null },
+        level: "warning",
+        spans: [
+          {
+            file_name: "src/lib.rs",
+            line_start: 9,
+            line_end: 9,
+            column_start: 1,
+            column_end: 8,
+            is_primary: true,
+            text: [{ text: "fn dead() {}", highlight_start: 1, highlight_end: 8 }],
+          },
+        ],
+      })
+
+      const { findings, filesScanned } = parseClippyOutput(sampleOutput)
+      expect(filesScanned).toBe(1)
+      expect(findings).toHaveLength(1)
+      expect(findings[0].code).toBe("dead_code")
+      expect(findings[0].file).toBe("src/lib.rs")
     })
   })
 
@@ -164,29 +170,73 @@ describe("language-scan", () => {
         ],
       })
 
-      const json = JSON.parse(sampleOutput)
-      const findings: LanguageFinding[] = []
-      for (const diag of json.diagnostics ?? []) {
-        findings.push({
-          file: diag.filename,
-          line: diag.location.row,
-          column: diag.location.column,
-          endLine: diag.end_location.row,
-          endColumn: diag.end_location.column,
-          code: diag.code,
-          message: diag.message,
-          severity: mapRuffSeverity(diag.code),
-          language: "python",
-          tool: "ruff",
-        })
-      }
+      const { findings, filesScanned } = parseRuffOutput(sampleOutput)
 
       expect(findings.length).toBe(2)
+      expect(filesScanned).toBe(1)
       expect(findings[0].code).toBe("F841")
       expect(findings[0].severity).toBe("medium")
       expect(findings[0].line).toBe(10)
       expect(findings[1].code).toBe("E501")
       expect(findings[1].severity).toBe("medium")
+    })
+
+    test("parses ruff JSON array output", () => {
+      const sampleOutput = JSON.stringify([
+        {
+          code: "B007",
+          message: "Loop control variable `item` not used within loop body",
+          location: { row: 3, column: 5 },
+          end_location: { row: 3, column: 9 },
+          filename: "src/check.py",
+        },
+      ])
+
+      const { findings, filesScanned } = parseRuffOutput(sampleOutput)
+
+      expect(findings).toHaveLength(1)
+      expect(filesScanned).toBe(1)
+      expect(findings[0].code).toBe("B007")
+      expect(findings[0].file).toBe("src/check.py")
+      expect(findings[0].severity).toBe("low")
+    })
+
+    test("keeps ruff diagnostics that do not include a rule code", () => {
+      const sampleOutput = JSON.stringify([
+        {
+          code: null,
+          message: "failed to parse source file",
+          location: { row: 1, column: 1 },
+          end_location: { row: 1, column: 1 },
+          filename: "src/broken.py",
+        },
+      ])
+
+      const { findings, filesScanned } = parseRuffOutput(sampleOutput)
+
+      expect(findings).toHaveLength(1)
+      expect(filesScanned).toBe(1)
+      expect(findings[0].code).toBe("ruff")
+      expect(findings[0].severity).toBe("info")
+    })
+
+    test("falls back to the start location when ruff omits end_location", () => {
+      const sampleOutput = JSON.stringify([
+        {
+          code: "F401",
+          message: "`os` imported but unused",
+          location: { row: 2, column: 1 },
+          filename: "src/imports.py",
+        },
+      ])
+
+      const { findings } = parseRuffOutput(sampleOutput)
+
+      expect(findings).toHaveLength(1)
+      expect(findings[0].line).toBe(2)
+      expect(findings[0].column).toBe(1)
+      expect(findings[0].endLine).toBe(2)
+      expect(findings[0].endColumn).toBe(1)
     })
   })
 
@@ -224,30 +274,25 @@ describe("language-scan", () => {
         ],
       })
 
-      const json = JSON.parse(sampleOutput)
-      const findings: LanguageFinding[] = []
-      for (const file of json.files ?? []) {
-        for (const msg of file.messages) {
-          findings.push({
-            file: file.path,
-            line: msg.line ?? 1,
-            column: msg.column,
-            endLine: msg.end_line,
-            endColumn: msg.end_column,
-            code: "mypy",
-            message: msg.message,
-            severity: msg.severity === "error" ? "high" : msg.severity === "warning" ? "medium" : "low",
-            language: "python",
-            tool: "mypy",
-          })
-        }
-      }
+      const { findings, filesScanned } = parseMypyOutput(sampleOutput)
 
       expect(findings.length).toBe(2)
+      expect(filesScanned).toBe(1)
       expect(findings[0].severity).toBe("high")
       expect(findings[0].line).toBe(5)
       expect(findings[0].code).toBe("mypy")
       expect(findings[1].severity).toBe("low")
+    })
+
+    test("counts mypy file entries without messages", () => {
+      const sampleOutput = JSON.stringify({
+        files: [{ path: "src/clean.py" }],
+      })
+
+      const { findings, filesScanned } = parseMypyOutput(sampleOutput)
+
+      expect(findings).toHaveLength(0)
+      expect(filesScanned).toBe(1)
     })
   })
 })

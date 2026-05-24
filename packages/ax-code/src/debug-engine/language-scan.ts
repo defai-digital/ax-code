@@ -13,12 +13,7 @@
  */
 
 import { spawn } from "child_process"
-import path from "path"
-import { Log } from "../util/log"
-import type { ProjectID } from "../project/schema"
 import { Instance } from "../project/instance"
-
-const log = Log.create({ service: "debug-engine.language-scan" })
 
 // ─── Shared types ──────────────────────────────────────────────────
 
@@ -44,16 +39,52 @@ export interface LanguageScanResult {
   error?: string
 }
 
-// ─── Cargo Clippy Scanner ──────────────────────────────────────────
-
-export type DetectClippyInput = {
+type LanguageScanTool = "cargo-clippy" | "ruff" | "mypy"
+type ParsedLanguageScan = Pick<LanguageScanResult, "findings" | "filesScanned">
+type DetectLanguageToolInput = {
   cwd?: string
-  projectID?: ProjectID
   args?: string[]
   timeoutMs?: number
 }
 
-interface ClippyJsonMessage {
+function languageScanSuccess(
+  tool: LanguageScanTool,
+  parsed: ParsedLanguageScan,
+  startedAt: number,
+): LanguageScanResult {
+  return {
+    findings: parsed.findings,
+    tool,
+    filesScanned: parsed.filesScanned,
+    elapsedMs: performance.now() - startedAt,
+  }
+}
+
+function languageScanError(
+  tool: LanguageScanTool,
+  err: unknown,
+  startedAt: number,
+  missingToolMessage: string,
+): LanguageScanResult {
+  const errorMsg = err instanceof Error ? err.message : String(err)
+  return {
+    findings: [],
+    tool,
+    filesScanned: 0,
+    elapsedMs: performance.now() - startedAt,
+    error: isMissingToolError(errorMsg) ? missingToolMessage : errorMsg,
+  }
+}
+
+function isMissingToolError(errorMsg: string): boolean {
+  return errorMsg.includes("ENOENT") || errorMsg.includes("not found")
+}
+
+// ─── Cargo Clippy Scanner ──────────────────────────────────────────
+
+export type DetectClippyInput = DetectLanguageToolInput
+
+interface ClippyDiagnosticMessage {
   message: string
   code?: {
     code: string
@@ -69,6 +100,13 @@ interface ClippyJsonMessage {
     is_primary: boolean
     text: Array<{ text: string }>
   }>
+}
+
+interface ClippyJsonMessage {
+  message?: ClippyDiagnosticMessage
+  spans?: ClippyDiagnosticMessage["spans"]
+  code?: ClippyDiagnosticMessage["code"]
+  level?: string
 }
 
 export async function detectClippy(input: DetectClippyInput = {}): Promise<LanguageScanResult> {
@@ -87,67 +125,46 @@ export async function detectClippy(input: DetectClippyInput = {}): Promise<Langu
 
   try {
     const output = await runCommand("cargo", args, cwd, input.timeoutMs ?? 120_000)
-    const findings: LanguageFinding[] = []
-    const filesScanned = new Set<string>()
-
-    // Parse JSON lines from cargo output
-    for (const line of output.split("\n")) {
-      if (!line.trim()) continue
-      try {
-        const msg = JSON.parse(line) as ClippyJsonMessage
-        if (!msg.spans || msg.spans.length === 0) continue
-
-        const primarySpan = msg.spans.find((s) => s.is_primary) ?? msg.spans[0]
-        if (!primarySpan) continue
-
-        filesScanned.add(primarySpan.file_name)
-
-        // Map clippy levels to our severity scale
-        const severity = mapClippyLevel(msg.level)
-
-        findings.push({
-          file: primarySpan.file_name,
-          line: primarySpan.line_start,
-          endLine: primarySpan.line_end,
-          column: primarySpan.column_start,
-          endColumn: primarySpan.column_end,
-          code: msg.code?.code ?? "clippy",
-          message: msg.message,
-          severity,
-          language: "rust",
-          tool: "cargo-clippy",
-        })
-      } catch {
-        // Non-JSON lines (cargo progress, etc.) — skip
-      }
-    }
-
-    return {
-      findings,
-      tool: "cargo-clippy",
-      filesScanned: filesScanned.size,
-      elapsedMs: performance.now() - t0,
-    }
+    return languageScanSuccess("cargo-clippy", parseClippyOutput(output), t0)
   } catch (err) {
-    const errorMsg = err instanceof Error ? err.message : String(err)
-    // Check if cargo is not installed
-    if (errorMsg.includes("ENOENT") || errorMsg.includes("not found")) {
-      return {
-        findings: [],
+    return languageScanError("cargo-clippy", err, t0, "cargo not found — install Rust toolchain to enable clippy scanning")
+  }
+}
+
+export function parseClippyOutput(output: string): ParsedLanguageScan {
+  const findings: LanguageFinding[] = []
+  const filesScanned = new Set<string>()
+
+  for (const line of output.split("\n")) {
+    if (!line.trim()) continue
+    try {
+      const parsed = JSON.parse(line) as ClippyJsonMessage
+      const msg = parsed.message?.spans ? parsed.message : (parsed as unknown as ClippyDiagnosticMessage)
+      if (!msg.spans || msg.spans.length === 0) continue
+
+      const primarySpan = msg.spans.find((s) => s.is_primary) ?? msg.spans[0]
+      if (!primarySpan) continue
+
+      filesScanned.add(primarySpan.file_name)
+
+      findings.push({
+        file: primarySpan.file_name,
+        line: primarySpan.line_start,
+        endLine: primarySpan.line_end,
+        column: primarySpan.column_start,
+        endColumn: primarySpan.column_end,
+        code: msg.code?.code ?? "clippy",
+        message: msg.message,
+        severity: mapClippyLevel(msg.level ?? "info"),
+        language: "rust",
         tool: "cargo-clippy",
-        filesScanned: 0,
-        elapsedMs: performance.now() - t0,
-        error: "cargo not found — install Rust toolchain to enable clippy scanning",
-      }
-    }
-    return {
-      findings: [],
-      tool: "cargo-clippy",
-      filesScanned: 0,
-      elapsedMs: performance.now() - t0,
-      error: errorMsg,
+      })
+    } catch {
+      // Non-JSON lines (cargo progress, etc.) are not findings.
     }
   }
+
+  return { findings, filesScanned: filesScanned.size }
 }
 
 export function mapClippyLevel(level: string): LanguageFinding["severity"] {
@@ -167,30 +184,33 @@ export function mapClippyLevel(level: string): LanguageFinding["severity"] {
 
 // ─── Ruff Scanner ──────────────────────────────────────────────────
 
-export type DetectRuffInput = {
-  cwd?: string
-  projectID?: ProjectID
-  args?: string[]
-  timeoutMs?: number
+export type DetectRuffInput = DetectLanguageToolInput
+
+type RuffDiagnostic = {
+  code?: string | null
+  message: string
+  location: { row: number; column: number }
+  end_location?: { row: number; column: number }
+  filename: string
+  fix?: {
+    applicability: string
+    message: string
+    edits: Array<{
+      content: string
+      location: { row: number; column: number }
+      end_location: { row: number; column: number }
+    }>
+  }
 }
 
-interface RuffJsonOutput {
-  diagnostics: Array<{
-    code: string
-    message: string
-    location: { row: number; column: number }
-    end_location: { row: number; column: number }
-    filename: string
-    fix?: {
-      applicability: string
-      message: string
-      edits: Array<{
-        content: string
-        location: { row: number; column: number }
-        end_location: { row: number; column: number }
-      }>
+type RuffJsonOutput =
+  | RuffDiagnostic[]
+  | {
+      diagnostics?: RuffDiagnostic[]
     }
-  }>
+
+function ruffDiagnostics(json: RuffJsonOutput): RuffDiagnostic[] {
+  return Array.isArray(json) ? json : (json.diagnostics ?? [])
 }
 
 export async function detectRuff(input: DetectRuffInput = {}): Promise<LanguageScanResult> {
@@ -200,55 +220,36 @@ export async function detectRuff(input: DetectRuffInput = {}): Promise<LanguageS
 
   try {
     const output = await runCommand("ruff", args, cwd, input.timeoutMs ?? 60_000)
-    const json = JSON.parse(output) as RuffJsonOutput
-    const findings: LanguageFinding[] = []
-    const filesScanned = new Set<string>()
-
-    for (const diag of json.diagnostics ?? []) {
-      filesScanned.add(diag.filename)
-
-      // Map ruff codes to severity
-      const severity = mapRuffSeverity(diag.code)
-
-      findings.push({
-        file: diag.filename,
-        line: diag.location.row,
-        column: diag.location.column,
-        endLine: diag.end_location.row,
-        endColumn: diag.end_location.column,
-        code: diag.code,
-        message: diag.message,
-        severity,
-        language: "python",
-        tool: "ruff",
-      })
-    }
-
-    return {
-      findings,
-      tool: "ruff",
-      filesScanned: filesScanned.size,
-      elapsedMs: performance.now() - t0,
-    }
+    return languageScanSuccess("ruff", parseRuffOutput(output), t0)
   } catch (err) {
-    const errorMsg = err instanceof Error ? err.message : String(err)
-    if (errorMsg.includes("ENOENT") || errorMsg.includes("not found")) {
-      return {
-        findings: [],
-        tool: "ruff",
-        filesScanned: 0,
-        elapsedMs: performance.now() - t0,
-        error: "ruff not found — install ruff (pip install ruff) to enable Python scanning",
-      }
-    }
-    return {
-      findings: [],
-      tool: "ruff",
-      filesScanned: 0,
-      elapsedMs: performance.now() - t0,
-      error: errorMsg,
-    }
+    return languageScanError("ruff", err, t0, "ruff not found — install ruff (pip install ruff) to enable Python scanning")
   }
+}
+
+export function parseRuffOutput(output: string): ParsedLanguageScan {
+  const json = JSON.parse(output) as RuffJsonOutput
+  const findings: LanguageFinding[] = []
+  const filesScanned = new Set<string>()
+
+  for (const diag of ruffDiagnostics(json)) {
+    const code = diag.code || "ruff"
+    const endLocation = diag.end_location ?? diag.location
+    filesScanned.add(diag.filename)
+    findings.push({
+      file: diag.filename,
+      line: diag.location.row,
+      column: diag.location.column,
+      endLine: endLocation.row,
+      endColumn: endLocation.column,
+      code,
+      message: diag.message,
+      severity: mapRuffSeverity(code),
+      language: "python",
+      tool: "ruff",
+    })
+  }
+
+  return { findings, filesScanned: filesScanned.size }
 }
 
 export function mapRuffSeverity(code: string): LanguageFinding["severity"] {
@@ -265,17 +266,12 @@ export function mapRuffSeverity(code: string): LanguageFinding["severity"] {
 
 // ─── Mypy Scanner ──────────────────────────────────────────────────
 
-export type DetectMypyInput = {
-  cwd?: string
-  projectID?: ProjectID
-  args?: string[]
-  timeoutMs?: number
-}
+export type DetectMypyInput = DetectLanguageToolInput
 
 interface MypyJsonOutput {
   files: Array<{
     path: string
-    messages: Array<{
+    messages?: Array<{
       severity: string
       message: string
       line?: number
@@ -293,60 +289,42 @@ export async function detectMypy(input: DetectMypyInput = {}): Promise<LanguageS
 
   try {
     const output = await runCommand("mypy", args, cwd, input.timeoutMs ?? 120_000)
-    const json = JSON.parse(output) as MypyJsonOutput
-    const findings: LanguageFinding[] = []
-    const filesScanned = new Set<string>()
-
-    for (const file of json.files ?? []) {
-      filesScanned.add(file.path)
-      for (const msg of file.messages) {
-        findings.push({
-          file: file.path,
-          line: msg.line ?? 1,
-          column: msg.column,
-          endLine: msg.end_line,
-          endColumn: msg.end_column,
-          code: "mypy",
-          message: msg.message,
-          severity: msg.severity === "error" ? "high" : msg.severity === "warning" ? "medium" : "low",
-          language: "python",
-          tool: "mypy",
-        })
-      }
-    }
-
-    return {
-      findings,
-      tool: "mypy",
-      filesScanned: filesScanned.size,
-      elapsedMs: performance.now() - t0,
-    }
+    return languageScanSuccess("mypy", parseMypyOutput(output), t0)
   } catch (err) {
-    const errorMsg = err instanceof Error ? err.message : String(err)
-    if (errorMsg.includes("ENOENT") || errorMsg.includes("not found")) {
-      return {
-        findings: [],
+    return languageScanError("mypy", err, t0, "mypy not found — install mypy (pip install mypy) to enable Python type checking")
+  }
+}
+
+export function parseMypyOutput(output: string): ParsedLanguageScan {
+  const json = JSON.parse(output) as MypyJsonOutput
+  const findings: LanguageFinding[] = []
+  const filesScanned = new Set<string>()
+
+  for (const file of json.files ?? []) {
+    filesScanned.add(file.path)
+    for (const msg of file.messages ?? []) {
+      findings.push({
+        file: file.path,
+        line: msg.line ?? 1,
+        column: msg.column,
+        endLine: msg.end_line,
+        endColumn: msg.end_column,
+        code: "mypy",
+        message: msg.message,
+        severity: msg.severity === "error" ? "high" : msg.severity === "warning" ? "medium" : "low",
+        language: "python",
         tool: "mypy",
-        filesScanned: 0,
-        elapsedMs: performance.now() - t0,
-        error: "mypy not found — install mypy (pip install mypy) to enable Python type checking",
-      }
-    }
-    return {
-      findings: [],
-      tool: "mypy",
-      filesScanned: 0,
-      elapsedMs: performance.now() - t0,
-      error: errorMsg,
+      })
     }
   }
+
+  return { findings, filesScanned: filesScanned.size }
 }
 
 // ─── Unified language scan ─────────────────────────────────────────
 
 export type DetectLanguageInput = {
   cwd?: string
-  projectID?: ProjectID
   languages?: ("rust" | "python")[]
   timeoutMs?: number
 }
@@ -356,11 +334,11 @@ export async function detectLanguage(input: DetectLanguageInput = {}): Promise<L
   const results: LanguageScanResult[] = []
 
   if (languages.includes("rust")) {
-    results.push(await detectClippy({ cwd: input.cwd, projectID: input.projectID, timeoutMs: input.timeoutMs }))
+    results.push(await detectClippy({ cwd: input.cwd, timeoutMs: input.timeoutMs }))
   }
   if (languages.includes("python")) {
-    results.push(await detectRuff({ cwd: input.cwd, projectID: input.projectID, timeoutMs: input.timeoutMs }))
-    results.push(await detectMypy({ cwd: input.cwd, projectID: input.projectID, timeoutMs: input.timeoutMs }))
+    results.push(await detectRuff({ cwd: input.cwd, timeoutMs: input.timeoutMs }))
+    results.push(await detectMypy({ cwd: input.cwd, timeoutMs: input.timeoutMs }))
   }
 
   return results

@@ -374,6 +374,28 @@ describe("detectDuplicates — e2e", () => {
     })
   })
 
+  test("marks duplicate scan truncated when candidate cap is hit", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        CodeIntelligence.__clearProject(projectID)
+
+        const sig = "(amount: number, currency: string) => number"
+        seedSymbol(projectID, { name: "calcA", file: path.join(tmp.path, "a.ts"), signature: sig })
+        seedSymbol(projectID, { name: "calcB", file: path.join(tmp.path, "b.ts"), signature: sig })
+        seedSymbol(projectID, { name: "calcC", file: path.join(tmp.path, "c.ts"), signature: sig })
+
+        const report = await DebugEngine.detectDuplicates(projectID, { maxCandidates: 2 })
+        expect(report.truncated).toBe(true)
+        expect(report.explain.heuristicsApplied).toContain("pool-size=2")
+
+        CodeIntelligence.__clearProject(projectID)
+      },
+    })
+  })
+
   test("excludes test files by default", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({

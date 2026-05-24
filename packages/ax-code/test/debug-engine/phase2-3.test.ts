@@ -374,6 +374,47 @@ describe("analyzeImpact — e2e", () => {
   })
 })
 
+describe("text scanner scope controls", () => {
+  test("scope=none disables worktree text scanners", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await fs.writeFile(
+      path.join(tmp.path, "issues.ts"),
+      [
+        'import path from "path"',
+        "const cache = new Map<string, number>()",
+        "export async function update(key: string, userPath: string) {",
+        "  const value = cache.get(key)",
+        "  await Promise.resolve()",
+        "  cache.set(key, (value ?? 0) + 1)",
+        "  setInterval(() => {}, 1000)",
+        '  return path.join("/tmp", userPath)',
+        "}",
+        "export const runtimeValue = 30000",
+      ].join("\n"),
+    )
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        const reports = await Promise.all([
+          DebugEngine.detectHardcodes(projectID, { scope: "none" }),
+          DebugEngine.detectRaces(projectID, { scope: "none" }),
+          DebugEngine.detectLifecycle(projectID, { scope: "none" }),
+          DebugEngine.detectSecurity(projectID, { scope: "none" }),
+        ])
+
+        for (const report of reports) {
+          expect(report.findings).toEqual([])
+          expect(report.filesScanned).toBe(0)
+          expect(report.truncated).toBe(false)
+          expect(report.explain.heuristicsApplied).toContain("scope=none")
+        }
+      },
+    })
+  })
+})
+
 // ─── detectHardcodes ─────────────────────────────────────────────────
 
 describe("detectHardcodes", () => {

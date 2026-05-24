@@ -1,11 +1,19 @@
 import fs from "fs/promises"
 import path from "path"
 import { Instance } from "../project/instance"
-import { Glob } from "../util/glob"
-import type { ProjectID } from "../project/schema"
 import { DebugEngine } from "./index"
-import { nativeReadFilesBatch, nativeDetectSecurity } from "./native-scan"
-import { DEFAULT_INCLUDE, DEFAULT_MAX_FILES, DEFAULT_MAX_PER_FILE, isExcludedDir, isTestFile } from "./scanner-utils"
+import { nativeDetectSecurity } from "./native-scan"
+import {
+  collectScannerFileBatch,
+  resolveScannerDefaults,
+  resolveScannerFile,
+  scannerFileBatchHeuristics,
+  scannerScopeDisabled,
+  scannerUsesIncrementalFiles,
+  scanScannerFiles,
+  sortScannerFindings,
+  type ScannerInputControls,
+} from "./scanner-utils"
 
 // detect-security — AST-lite scanner for common security anti-patterns.
 //
@@ -16,14 +24,8 @@ import { DEFAULT_INCLUDE, DEFAULT_MAX_FILES, DEFAULT_MAX_PER_FILE, isExcludedDir
 //
 // ADR-002: standalone text scan, no v3 writes.
 
-export type DetectSecurityInput = {
-  scope?: "worktree" | "none"
+export type DetectSecurityInput = ScannerInputControls & {
   patterns?: DebugEngine.SecurityPattern[]
-  excludeTests?: boolean
-  include?: string[]
-  files?: string[]
-  maxFiles?: number
-  maxFindingsPerFile?: number
 }
 
 const SUPPRESS_RE = /\/\/\s*@scan-suppress\s+security_scan/
@@ -246,13 +248,17 @@ async function scanFile(
   return findings.slice(0, maxPerFile)
 }
 
-export async function detectSecurityImpl(
-  projectID: ProjectID,
-  input: DetectSecurityInput,
-): Promise<DebugEngine.SecurityReport> {
-  const excludeTests = input.excludeTests ?? true
-  const maxFiles = input.maxFiles ?? DEFAULT_MAX_FILES
-  const maxPerFile = input.maxFindingsPerFile ?? DEFAULT_MAX_PER_FILE
+export async function detectSecurityImpl(input: DetectSecurityInput): Promise<DebugEngine.SecurityReport> {
+  if (scannerScopeDisabled(input)) {
+    return {
+      findings: [],
+      filesScanned: 0,
+      truncated: false,
+      explain: DebugEngine.buildExplain("detect-security", [], ["scope=none"]),
+    }
+  }
+
+  const { excludeTests, maxFiles, maxPerFile, include } = resolveScannerDefaults(input)
   const patterns: DebugEngine.SecurityPattern[] = input.patterns ?? [
     "path_traversal",
     "command_injection",
@@ -261,16 +267,15 @@ export async function detectSecurityImpl(
     "ssrf",
   ]
   const enabledPatterns = new Set(patterns)
-  const include = input.include ?? DEFAULT_INCLUDE
   const cwd = Instance.directory
 
   // Native fast-path: run entire detection in Rust (walk + read + regex in parallel)
-  if (!input.files) {
+  if (!scannerUsesIncrementalFiles(input)) {
     const native = nativeDetectSecurity({ cwd, include, patterns, maxFiles, maxPerFile, excludeTests })
     if (native) {
       return {
         findings: native.findings.map((f) => ({
-          file: path.join(cwd, f.file),
+          file: resolveScannerFile(f.file, cwd),
           line: f.line,
           pattern: f.pattern as DebugEngine.SecurityPattern,
           severity: f.severity as DebugEngine.SecurityFinding["severity"],
@@ -288,71 +293,20 @@ export async function detectSecurityImpl(
   const heuristics: string[] = [`patterns=${patterns.join(",")}`]
   if (excludeTests) heuristics.push("exclude-tests")
 
-  let allFiles: string[]
-  if (input.files && input.files.length > 0) {
-    heuristics.push("incremental")
-    allFiles = input.files.filter((f) => {
-      if (excludeTests && isTestFile(f)) return false
-      if (!Instance.containsPath(f)) return false
-      return true
-    })
-  } else {
-    allFiles = []
-    for (const pattern of include) {
-      const hits = await Glob.scan(pattern, { cwd, absolute: true, dot: false, symlink: false })
-      for (const f of hits) {
-        if (isExcludedDir(f, cwd)) continue
-        if (excludeTests && isTestFile(f)) continue
-        if (!Instance.containsPath(f)) continue
-        allFiles.push(f)
-      }
-    }
-  }
+  const fileBatch = await collectScannerFileBatch(input, { cwd, include, excludeTests, maxFiles })
+  heuristics.push(...scannerFileBatchHeuristics(fileBatch))
 
-  const uniqueFiles = [...new Set(allFiles)]
-  heuristics.push(`candidate-files=${uniqueFiles.length}`)
+  const { findings, usedNativeBatchRead } = await scanScannerFiles(fileBatch.files, (file, content) =>
+    scanFile(file, enabledPatterns, maxPerFile, content),
+  )
+  if (usedNativeBatchRead) heuristics.push("native-batch-read")
 
-  const filesToScan = uniqueFiles.slice(0, maxFiles)
-  const truncated = uniqueFiles.length > maxFiles
-  if (truncated) heuristics.push("file-cap-hit")
-
-  // Native fast-path: batch-read all files in parallel via Rust addon
-  const preread = nativeReadFilesBatch(filesToScan)
-  if (preread) heuristics.push("native-batch-read")
-
-  const CONCURRENCY = 8
-  const findings: DebugEngine.SecurityFinding[] = []
-  if (preread) {
-    for (const f of filesToScan) {
-      const content = preread.get(f)
-      if (!content) continue
-      findings.push(...(await scanFile(f, enabledPatterns, maxPerFile, content)))
-    }
-  } else {
-    for (let i = 0; i < filesToScan.length; i += CONCURRENCY) {
-      const batch = filesToScan.slice(i, i + CONCURRENCY)
-      const results = await Promise.all(batch.map((f) => scanFile(f, enabledPatterns, maxPerFile)))
-      for (const r of results) findings.push(...r)
-    }
-  }
-
-  const severityRank: Record<DebugEngine.SecurityFinding["severity"], number> = {
-    high: 0,
-    medium: 1,
-    low: 2,
-  }
-  findings.sort((a, b) => {
-    if (severityRank[a.severity] !== severityRank[b.severity]) {
-      return severityRank[a.severity] - severityRank[b.severity]
-    }
-    if (a.file !== b.file) return a.file.localeCompare(b.file)
-    return a.line - b.line
-  })
+  sortScannerFindings(findings)
 
   return {
     findings,
-    filesScanned: filesToScan.length,
-    truncated,
+    filesScanned: fileBatch.files.length,
+    truncated: fileBatch.truncated,
     explain: DebugEngine.buildExplain("detect-security", [], heuristics),
   }
 }

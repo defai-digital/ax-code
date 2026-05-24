@@ -3,7 +3,7 @@ import { CodeIntelligence } from "../code-intelligence"
 import type { CodeNodeKind } from "../code-intelligence/schema.sql"
 import type { ProjectID } from "../project/schema"
 import { DebugEngine } from "./index"
-import { isTestFile } from "./scanner-utils"
+import { isTestFile, type ScannerScopeControls } from "./scanner-utils"
 
 // detectDuplicates — AST-signature bucketing with a Jaccard-similarity
 // fallback for near-matches.
@@ -23,12 +23,10 @@ import { isTestFile } from "./scanner-utils"
 // embeddings, this path becomes the cheap pre-filter ahead of the
 // embedding step.
 
-export type DetectDuplicatesInput = {
-  scope?: "worktree" | "none"
+export type DetectDuplicatesInput = ScannerScopeControls & {
   kinds?: CodeNodeKind[]
   minSignatureLength?: number
   similarityThreshold?: number
-  excludeTests?: boolean
   // Hard cap on the candidate set to keep scan time bounded. Nodes
   // beyond this cap are not inspected and the output is marked
   // `truncated: true`.
@@ -39,6 +37,12 @@ const DEFAULT_KINDS: CodeNodeKind[] = ["function", "method"]
 const DEFAULT_MIN_SIG_LEN = 20
 const DEFAULT_SIMILARITY = 0.85
 const DEFAULT_MAX_CANDIDATES = 2000
+
+type DuplicateCandidatePool = {
+  pool: CodeIntelligence.Symbol[]
+  ciExplains: CodeIntelligence.Explain[]
+  truncated: boolean
+}
 
 // Strip whitespace, parameter names, and trivial literals from a
 // signature string to produce a canonical form suitable for exact
@@ -114,6 +118,42 @@ function computeSharedLines(members: CodeIntelligence.Symbol[]): number {
   return Math.round(avg * (members.length - 1))
 }
 
+function collectDuplicateCandidatePool(
+  projectID: ProjectID,
+  input: {
+    scope: "worktree" | "none"
+    kinds: CodeNodeKind[]
+    maxCandidates: number
+    excludeTests: boolean
+    minSigLen: number
+  },
+): DuplicateCandidatePool {
+  const pool: CodeIntelligence.Symbol[] = []
+  const ciExplains: CodeIntelligence.Explain[] = []
+  let truncated = false
+
+  for (const kind of input.kinds) {
+    const hits = CodeIntelligence.findSymbolByPrefix(projectID, "", {
+      kind,
+      limit: input.maxCandidates,
+      scope: input.scope,
+    })
+    for (const hit of hits) {
+      if (input.excludeTests && isTestFile(hit.file)) continue
+      if (!hit.signature || hit.signature.length < input.minSigLen) continue
+      pool.push(hit)
+      ciExplains.push(hit.explain)
+      if (pool.length >= input.maxCandidates) {
+        truncated = true
+        break
+      }
+    }
+    if (truncated) break
+  }
+
+  return { pool, ciExplains, truncated }
+}
+
 export async function detectDuplicatesImpl(
   projectID: ProjectID,
   input: DetectDuplicatesInput,
@@ -137,26 +177,15 @@ export async function detectDuplicatesImpl(
   // so an empty-prefix call is effectively "all names" constrained by
   // kind + limit. We pass a generous limit and rely on the maxCandidates
   // cap below to bound the total pool.
-  const pool: CodeIntelligence.Symbol[] = []
-  let truncated = false
-  for (const kind of kinds) {
-    const hits = CodeIntelligence.findSymbolByPrefix(projectID, "", {
-      kind,
-      limit: maxCandidates,
-      scope,
-    })
-    for (const hit of hits) {
-      if (excludeTests && isTestFile(hit.file)) continue
-      if (!hit.signature || hit.signature.length < minSigLen) continue
-      pool.push(hit)
-      ciExplains.push(hit.explain)
-      if (pool.length >= maxCandidates) {
-        truncated = true
-        break
-      }
-    }
-    if (truncated) break
-  }
+  const candidatePool = collectDuplicateCandidatePool(projectID, {
+    scope,
+    kinds,
+    maxCandidates,
+    excludeTests,
+    minSigLen,
+  })
+  const { pool, truncated } = candidatePool
+  ciExplains.push(...candidatePool.ciExplains)
 
   heuristics.push(`pool-size=${pool.length}`)
 

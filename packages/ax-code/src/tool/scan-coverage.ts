@@ -1,3 +1,4 @@
+import z from "zod"
 import { Instance } from "../project/instance"
 import { Locale } from "../util/locale"
 import { resolveToolFilePath } from "./file-path"
@@ -17,8 +18,57 @@ export type ScanCoverageNotice = {
   }
 }
 
+type ScanReport<TFinding> = {
+  filesScanned: number
+  findings: TFinding[]
+  truncated: boolean
+}
+
+const MAX_FINDINGS_IN_SCAN_OUTPUT = 40
+
+export const SCAN_TOOL_COMMON_PARAMETERS = {
+  excludeTests: z.boolean().optional().describe("Skip test files (default true)"),
+  include: z.array(z.string()).optional().describe("Glob patterns to include (default: TS/JS sources)"),
+  maxFiles: z.number().int().min(1).max(5000).optional().describe("Max files to scan (default 500)"),
+  maxFindingsPerFile: z.number().int().min(1).max(200).optional().describe("Max findings per file (default 20)"),
+}
+
+type ScanToolCommonInput = {
+  excludeTests?: boolean
+  include?: string[]
+  maxFiles?: number
+  maxFindingsPerFile?: number
+}
+
+export function scanToolCommonDetectInput(input: ScanToolCommonInput) {
+  return {
+    excludeTests: input.excludeTests,
+    include: input.include,
+    maxFiles: input.maxFiles,
+    maxFindingsPerFile: input.maxFindingsPerFile,
+    scope: "worktree" as const,
+  }
+}
+
 function includesExtensionGlob(include: string[] | undefined, extension: string) {
-  return include?.some((pattern) => pattern.includes(`.${extension}`) || pattern.includes(`${extension}}`)) ?? false
+  return (
+    include?.some((pattern) => {
+      if (pattern.includes(`.${extension}`)) return true
+      if (isBroadSourceGlob(pattern)) return true
+      for (const match of pattern.matchAll(/\{([^}]+)\}/g)) {
+        const entries = match[1]?.split(",").map((entry) => entry.trim().replace(/^\./, ""))
+        if (entries?.includes(extension)) return true
+      }
+      return false
+    }) ?? false
+  )
+}
+
+function isBroadSourceGlob(pattern: string) {
+  const normalized = pattern.replace(/\\/g, "/")
+  if (normalized === "*" || normalized === "**" || normalized === "**/*") return true
+  if (normalized.endsWith("/**") || normalized.endsWith("/**/*")) return true
+  return /(^|\/)\*\.\*$/.test(normalized)
 }
 
 async function anyExists(candidates: string[]) {
@@ -155,4 +205,39 @@ export async function scanCoverageNotice(input: { include?: string[] }): Promise
 
 export function scanFilesSummary(count: number): string {
   return Locale.pluralize(count, "Scanned {} file", "Scanned {} files")
+}
+
+export async function buildScanToolResult<TReport extends ScanReport<unknown>>(input: {
+  toolName: string
+  report: TReport
+  include?: string[]
+  renderFinding: (finding: TReport["findings"][number]) => string[]
+}) {
+  const coverage = await scanCoverageNotice({ include: input.include })
+  const lines: string[] = [
+    scanFilesSummary(input.report.filesScanned),
+    ...coverage.lines,
+    `Findings: ${input.report.findings.length}`,
+  ]
+  if (input.report.truncated) lines.push("Warning: file cap was hit — results are partial")
+  lines.push("")
+
+  for (const finding of input.report.findings.slice(0, MAX_FINDINGS_IN_SCAN_OUTPUT)) {
+    lines.push(...input.renderFinding(finding))
+  }
+  if (input.report.findings.length > MAX_FINDINGS_IN_SCAN_OUTPUT) {
+    lines.push(`... and ${input.report.findings.length - MAX_FINDINGS_IN_SCAN_OUTPUT} more (see metadata)`)
+  }
+
+  return {
+    title: `${input.toolName} ${input.report.findings.length} finding(s)`,
+    output: lines.join("\n"),
+    metadata: {
+      filesScanned: input.report.filesScanned,
+      findingCount: input.report.findings.length,
+      truncated: input.report.truncated,
+      coverage: coverage.metadata,
+      report: input.report,
+    },
+  }
 }
