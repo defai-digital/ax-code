@@ -1,12 +1,26 @@
 import { describe, expect, test } from "bun:test"
 import {
-  TODO_CONTEXT_CONVERGENCE_INPUT_TOKEN_THRESHOLD,
-  hasReportStyleTodo,
   pendingTodoContinuationDecision,
   pendingTodoSignature,
-  reportTodoClosureGuidance,
-  todoDeadlineStepBuffer,
+  todoContextConvergenceDecision,
+  todoDeadlineConvergenceDecision,
 } from "../../src/session/prompt-todo-continuation"
+
+const finishTaskTodo = { status: "pending", priority: "high", content: "finish task" }
+
+function pendingTodoDecisionInput(
+  overrides: Partial<Parameters<typeof pendingTodoContinuationDecision>[0]> = {},
+): Parameters<typeof pendingTodoContinuationDecision>[0] {
+  return {
+    isLastStep: false,
+    todoRetries: 1,
+    maxTodoRetries: 3,
+    pendingTodos: [finishTaskTodo],
+    lastPendingTodoSignature: undefined,
+    stagnantTodoRetries: 0,
+    ...overrides,
+  }
+}
 
 describe("session prompt todo continuation helpers", () => {
   test("builds stable signatures from status, priority, and content", () => {
@@ -18,71 +32,127 @@ describe("session prompt todo continuation helpers", () => {
     ).toBe("pending\u0000high\u0000write report\u0001in_progress\u0000medium\u0000verify fix")
   })
 
-  test("clamps deadline step buffer around pending todo count", () => {
-    expect(todoDeadlineStepBuffer(0)).toBe(3)
-    expect(todoDeadlineStepBuffer(1)).toBe(3)
-    expect(todoDeadlineStepBuffer(4)).toBe(6)
-    expect(todoDeadlineStepBuffer(20)).toBe(8)
+  test("converges report-style todos at the context threshold", () => {
+    const pendingTodos = [{ content: "write .internal/bugs report" }]
+
+    expect(todoContextConvergenceDecision({ pendingTodos, inputTokens: 49_999 }).converge).toBe(false)
+    expect(todoContextConvergenceDecision({ pendingTodos, inputTokens: 50_000 })).toEqual({
+      converge: true,
+      threshold: 50_000,
+    })
+    expect(
+      todoContextConvergenceDecision({
+        pendingTodos: [{ content: "implement parser" }],
+        inputTokens: 50_000,
+      }).converge,
+    ).toBe(false)
+    expect(
+      todoContextConvergenceDecision({
+        pendingTodos: [{ content: "triage BUG queue" }],
+        inputTokens: 50_000,
+      }).converge,
+    ).toBe(true)
   })
 
-  test("detects report-style todo wording", () => {
-    expect(hasReportStyleTodo([{ content: "write .internal/bugs report" }])).toBe(true)
-    expect(hasReportStyleTodo([{ content: "triage BUG queue" }])).toBe(true)
-    expect(hasReportStyleTodo([{ content: "implement the parser" }])).toBe(false)
-  })
+  test("converges pending todos before the agent step deadline", () => {
+    const pendingTodos = [{ content: "write .internal/bugs report" }]
 
-  test("keeps distinct closure guidance per retry mode", () => {
-    expect(reportTodoClosureGuidance("context")).toContain("context is already large")
-    expect(reportTodoClosureGuidance("deadline")).toContain("credible suspected")
-    expect(reportTodoClosureGuidance("continuation")).toContain("do not keep doing broad exploration")
-    expect(TODO_CONTEXT_CONVERGENCE_INPUT_TOKEN_THRESHOLD).toBe(50_000)
+    expect(
+      todoDeadlineConvergenceDecision({
+        modelFinished: false,
+        pendingTodos,
+        remainingAgentSteps: 3,
+      }),
+    ).toEqual({
+      converge: true,
+      buffer: 3,
+      includeReportClosureGuidance: true,
+    })
+
+    expect(
+      todoDeadlineConvergenceDecision({
+        modelFinished: true,
+        pendingTodos,
+        remainingAgentSteps: 3,
+      }).converge,
+    ).toBe(false)
+    expect(
+      todoDeadlineConvergenceDecision({
+        modelFinished: false,
+        pendingTodos: [],
+        remainingAgentSteps: 3,
+      }).converge,
+    ).toBe(false)
+    expect(
+      todoDeadlineConvergenceDecision({
+        modelFinished: false,
+        pendingTodos,
+        remainingAgentSteps: Infinity,
+      }).converge,
+    ).toBe(false)
+    expect(
+      todoDeadlineConvergenceDecision({
+        modelFinished: false,
+        pendingTodos: Array.from({ length: 4 }, (_, index) => ({ content: `todo ${index}` })),
+        remainingAgentSteps: 6,
+      }).buffer,
+    ).toBe(6)
+    expect(
+      todoDeadlineConvergenceDecision({
+        modelFinished: false,
+        pendingTodos: Array.from({ length: 20 }, (_, index) => ({ content: `todo ${index}` })),
+        remainingAgentSteps: 8,
+      }).buffer,
+    ).toBe(8)
   })
 
   test("stops continuation at the agent step limit before mutating retry state", () => {
-    expect(
-      pendingTodoContinuationDecision({
+    const decision = pendingTodoContinuationDecision(
+      pendingTodoDecisionInput({
         isLastStep: true,
-        todoRetries: 1,
-        maxTodoRetries: 3,
-        pendingTodos: [{ status: "pending", priority: "high", content: "finish task" }],
         lastPendingTodoSignature: "previous",
         stagnantTodoRetries: 1,
       }),
-    ).toEqual({
+    )
+
+    expect(decision).toMatchObject({
       action: "stop_step_limit",
-      todoRetries: 1,
-      lastPendingTodoSignature: "previous",
-      stagnantTodoRetries: 1,
+      reason: "step_limit",
+      errorCode: "STEP_LIMIT",
     })
+    if (decision.action !== "stop_step_limit") throw new Error("expected stop_step_limit")
+    expect(decision.message).toContain("agent step limit")
+    expect(decision.message).toContain("1 unfinished todo")
   })
 
   test("stops continuation when the retry budget is exhausted", () => {
-    expect(
-      pendingTodoContinuationDecision({
-        isLastStep: false,
+    const decision = pendingTodoContinuationDecision(
+      pendingTodoDecisionInput({
         todoRetries: 3,
-        maxTodoRetries: 3,
-        pendingTodos: [{ status: "pending", priority: "high", content: "finish task" }],
-        lastPendingTodoSignature: undefined,
-        stagnantTodoRetries: 0,
+        pendingTodos: [
+          finishTaskTodo,
+          { status: "in_progress", priority: "medium", content: "verify task" },
+        ],
       }),
-    ).toEqual({
+    )
+
+    expect(decision).toMatchObject({
       action: "stop_retry_budget",
-      todoRetries: 3,
-      lastPendingTodoSignature: undefined,
-      stagnantTodoRetries: 0,
+      reason: "stalled",
     })
+    if (decision.action !== "stop_retry_budget") throw new Error("expected stop_retry_budget")
+    expect(decision.message).toContain("2 todos")
+    expect(decision.message).toContain("3 auto-continuation attempts")
+    expect(decision.message).toContain("remaining todos are not complete")
   })
 
   test("increments continuation attempts and resets stagnation when pending todos change", () => {
-    const decision = pendingTodoContinuationDecision({
-      isLastStep: false,
-      todoRetries: 1,
-      maxTodoRetries: 3,
-      pendingTodos: [{ status: "pending", priority: "high", content: "finish task" }],
-      lastPendingTodoSignature: "old",
-      stagnantTodoRetries: 2,
-    })
+    const decision = pendingTodoContinuationDecision(
+      pendingTodoDecisionInput({
+        lastPendingTodoSignature: "old",
+        stagnantTodoRetries: 2,
+      }),
+    )
 
     expect(decision).toEqual({
       action: "continue",
@@ -90,6 +160,8 @@ describe("session prompt todo continuation helpers", () => {
       lastPendingTodoSignature: "pending\u0000high\u0000finish task",
       stagnantTodoRetries: 0,
       stagnant: false,
+      maxStagnantAttempts: 2,
+      includeReportClosureGuidance: false,
     })
   })
 
@@ -98,20 +170,34 @@ describe("session prompt todo continuation helpers", () => {
     const signature = pendingTodoSignature(pendingTodos)
 
     expect(
-      pendingTodoContinuationDecision({
-        isLastStep: false,
-        todoRetries: 1,
-        maxTodoRetries: 3,
-        pendingTodos,
-        lastPendingTodoSignature: signature,
-        stagnantTodoRetries: 1,
-      }),
+      pendingTodoContinuationDecision(
+        pendingTodoDecisionInput({
+          pendingTodos,
+          lastPendingTodoSignature: signature,
+          stagnantTodoRetries: 1,
+        }),
+      ),
     ).toEqual({
       action: "continue",
       todoRetries: 2,
       lastPendingTodoSignature: signature,
       stagnantTodoRetries: 2,
       stagnant: true,
+      maxStagnantAttempts: 2,
+      includeReportClosureGuidance: false,
+    })
+  })
+
+  test("includes report closure guidance state in continuation decisions", () => {
+    expect(
+      pendingTodoContinuationDecision(
+        pendingTodoDecisionInput({
+          pendingTodos: [{ status: "pending", priority: "high", content: "write .internal/bugs report" }],
+        }),
+      ),
+    ).toMatchObject({
+      action: "continue",
+      includeReportClosureGuidance: true,
     })
   })
 })

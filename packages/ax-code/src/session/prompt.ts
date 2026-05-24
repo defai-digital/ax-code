@@ -15,10 +15,7 @@ import { ModelID, ProviderID } from "../provider/schema"
 import { type ModelMessage } from "ai"
 import { SessionCompaction } from "./compaction"
 import { SessionRetry } from "./retry"
-import {
-  MAX_CONSECUTIVE_ERRORS as _MAX_CONSECUTIVE_ERRORS,
-  GLOBAL_STEP_LIMIT as _GLOBAL_STEP_LIMIT,
-} from "@/constants/session"
+import { MAX_CONSECUTIVE_ERRORS, GLOBAL_STEP_LIMIT } from "@/constants/session"
 import { AgentControlEvents } from "../control-plane/agent-control-events"
 import { AutonomousCompletionGate } from "../control-plane/autonomous-completion-gate"
 import { Instance } from "../project/instance"
@@ -54,7 +51,6 @@ import { Isolation } from "@/isolation"
 import { SessionSummary } from "./summary"
 import { NamedError } from "@ax-code/util/error"
 import { fn } from "@/util/fn"
-import { Locale } from "@/util/locale"
 import { SessionProcessor } from "./processor"
 import { Tool } from "@/tool/tool"
 import { Permission } from "@/permission"
@@ -67,32 +63,44 @@ import {
   commandSetup,
   shellArgs,
   agentInfo,
+  assistantLoopExitDecision,
+  assistantRespondedAfterUser,
+  consecutiveErrorDecision,
+  providerFallbackLookupDecision,
+  providerFallbackSwitchState,
+  processorLoopDecision,
   remindQueuedMessages,
-  resolvePromptParts as _resolvePromptParts,
   scanLoopMessages,
   loopMessages,
   modelInfo,
   pendingCompactionDecision,
   shouldScheduleUsageCompaction,
   systemPrompt as getSystemPrompt,
-  createStructuredOutputTool as _createStructuredOutputTool,
-  lastModel as _lastModel,
+  createStructuredOutputTool,
+  lastModel,
   findFallbackModel,
-  ensureTitle as _ensureTitle,
+  ensureTitle,
 } from "./prompt-helpers"
 import { executeSubtask, type SubtaskContext } from "./prompt-subtask"
-import { resolveTools as _resolveTools, isolationRetryState as _isolationRetryState } from "./prompt-tools"
+import { resolveTools } from "./prompt-tools"
 import {
-  MAX_STAGNANT_TODO_RETRIES,
-  TODO_CONTEXT_CONVERGENCE_INPUT_TOKEN_THRESHOLD,
-  hasReportStyleTodo,
   pendingTodoContinuationDecision,
   pendingTodoSignature,
-  todoDeadlineStepBuffer,
+  todoContextConvergenceDecision,
+  todoDeadlineConvergenceDecision,
 } from "./prompt-todo-continuation"
 import { estimateRequestTokens, getLastUserInfo } from "./prompt-request"
 import { AutonomousContinuationPrompt } from "./prompt-autonomous-continuations"
-import { emptyModelTurnDecision } from "./prompt-autonomous-decisions"
+import {
+  agentStepLimitContinuationDecision,
+  completionGateEventState,
+  completionGateRetryDecision,
+  emptyModelTurnDecision,
+  globalStepLimitDecision,
+  goalContinuationDecision,
+  isEmptyModelTurn,
+  modelTurnFinished,
+} from "./prompt-autonomous-decisions"
 import { SuperLongPolicy } from "./super-long-policy"
 import { SuperLongRuntime } from "./super-long-runtime"
 
@@ -232,6 +240,14 @@ export namespace SessionPrompt {
   })
   export type PromptInput = z.infer<typeof PromptInput>
 
+  function permissionRulesetFromLegacyTools(tools: Record<string, boolean> | undefined): Permission.Ruleset {
+    return Object.entries(tools ?? {}).map(([tool, enabled]) => ({
+      permission: tool,
+      action: enabled ? "allow" : "deny",
+      pattern: "*",
+    }))
+  }
+
   export const prompt = fn(PromptInput, async (input) => {
     const session = await Session.get(input.sessionID)
     await SessionRevert.cleanup(session)
@@ -239,16 +255,8 @@ export namespace SessionPrompt {
     const message = await createUserMessage(input)
     await Session.touch(input.sessionID)
 
-    // this is backwards compatibility for allowing `tools` to be specified when
-    // prompting
-    const permissions: Permission.Ruleset = []
-    for (const [tool, enabled] of Object.entries(input.tools ?? {})) {
-      permissions.push({
-        permission: tool,
-        action: enabled ? "allow" : "deny",
-        pattern: "*",
-      })
-    }
+    // Backwards compatibility for legacy prompt-time `tools` toggles.
+    const permissions = permissionRulesetFromLegacyTools(input.tools)
     if (permissions.length > 0) {
       session.permission = permissions
       await Session.setPermission({ sessionID: session.id, permission: permissions })
@@ -260,8 +268,6 @@ export namespace SessionPrompt {
 
     return loop({ sessionID: input.sessionID })
   })
-
-  export const resolvePromptParts = _resolvePromptParts
 
   function start(sessionID: SessionID) {
     const s = state()
@@ -407,11 +413,10 @@ export namespace SessionPrompt {
       }, 0)
       timer.unref?.()
     })
-    const MAX_CONSECUTIVE_ERRORS = _MAX_CONSECUTIVE_ERRORS
     const session = await Session.get(sessionID)
     // Pre-load expensive resources once before the loop
     const cfg = await Config.get()
-    const GLOBAL_STEP_LIMIT = cfg.session?.max_steps ?? _GLOBAL_STEP_LIMIT
+    const sessionStepLimit = cfg.session?.max_steps ?? GLOBAL_STEP_LIMIT
     const autonomous = Flag.AX_CODE_AUTONOMOUS
     const maxContinuations = cfg.session?.max_continuations ?? 3
     const maxTodoRetries = cfg.session?.max_todo_retries ?? 10
@@ -424,7 +429,7 @@ export namespace SessionPrompt {
     let lastTodoContextSignature: string | undefined
     let stagnantTodoRetries = 0
     let emptyModelTurnRetries = 0
-    const cachedSystemPrompt: import("./prompt-helpers").SystemCache = {
+    const cachedSystemPrompt: Parameters<typeof getSystemPrompt>[0]["cache"] = {
       environment: undefined,
       environmentModelKey: undefined,
       instructions: undefined,
@@ -541,7 +546,7 @@ export namespace SessionPrompt {
       await SessionStatus.set(sessionID, {
         type: "busy",
         step,
-        maxSteps: GLOBAL_STEP_LIMIT,
+        maxSteps: sessionStepLimit,
         startedAt: now,
         lastActivityAt: now,
         waitState: "llm",
@@ -562,38 +567,39 @@ export namespace SessionPrompt {
       }
 
       // Safety: prevent infinite loops
-      if (step >= GLOBAL_STEP_LIMIT) {
-        // In autonomous mode, auto-continue by injecting a synthetic
-        // continuation message so the model picks up where it left off.
-        // Capped by maxContinuations to prevent truly infinite runs.
-        if (autonomous && continuations < maxContinuations) {
-          await continueAutonomousLoop({
-            event: "autonomous auto-continue",
-            resetTodoProgressTracking: true,
-            text: AutonomousContinuationPrompt.stepLimit({
-              stepLimit: GLOBAL_STEP_LIMIT,
-              continuation: continuations + 1,
-              maxContinuations,
-            }),
-          })
-          continue
-        }
+      const globalStepLimit = globalStepLimitDecision({
+        step,
+        stepLimit: sessionStepLimit,
+        autonomous,
+        continuations,
+        maxContinuations,
+      })
+      if (globalStepLimit.action === "continue") {
+        await continueAutonomousLoop({
+          event: "autonomous auto-continue",
+          resetTodoProgressTracking: true,
+          text: AutonomousContinuationPrompt.stepLimit({
+            stepLimit: sessionStepLimit,
+            continuation: globalStepLimit.continuation,
+            maxContinuations,
+          }),
+        })
+        continue
+      }
+      if (globalStepLimit.action === "stop") {
         log.warn("global step limit reached", {
           command: "session.prompt.loop",
           status: "error",
-          errorCode: "STEP_LIMIT",
+          errorCode: globalStepLimit.errorCode,
           step,
           sessionID,
           continuations,
         })
         Session.publishError({
           sessionID,
-          message:
-            `Agent reached maximum step limit (${GLOBAL_STEP_LIMIT} steps${continuations > 0 ? ` after ${continuations} auto-continuations` : ""}). ` +
-            `To increase, set "session.max_steps" in ax-code.json. ` +
-            `Try breaking the task into smaller parts or increase the limit for complex autonomous tasks.`,
+          message: globalStepLimit.message,
         })
-        reason = "step_limit"
+        reason = globalStepLimit.reason
         break
       }
       // On step 0 or after compaction, load full history. Otherwise only fetch new messages.
@@ -629,69 +635,41 @@ export namespace SessionPrompt {
         startedAt: superLongStartedAt,
         now: superLongNow,
       })
-      if (!superLongDeadline.ok) {
-        const message =
-          `Super-Long mode stopped because the requested runtime ceiling exceeds the hard 72 hour limit. ` +
-          `Reduce the requested duration and resume the session.`
-        log.warn("super-long deadline rejected", {
+      const superLongDeadlineStop = SuperLongPolicy.deadlineStopDecision({
+        deadline: superLongDeadline,
+        source: superLongState.source,
+      })
+      if (superLongDeadlineStop.action === "stop") {
+        log.warn(superLongDeadlineStop.logMessage, {
           command: "session.prompt.loop",
-          status: "error",
-          errorCode: "SUPER_LONG_DURATION_EXCEEDS_CEILING",
+          status: superLongDeadlineStop.status,
+          errorCode: superLongDeadlineStop.errorCode,
           sessionID,
-          requestedDurationMs: superLongDeadline.requestedDurationMs,
-          maxDurationMs: superLongDeadline.maxDurationMs,
+          ...superLongDeadlineStop.details,
         })
-        if (!(lastAssistant?.finish && lastUser.id < lastAssistant.id)) {
-          await createSyntheticStopAssistant({ lastUser, message })
+        if (!assistantRespondedAfterUser({ lastUserID: lastUser.id, lastAssistant })) {
+          await createSyntheticStopAssistant({ lastUser, message: superLongDeadlineStop.message })
           cachedMsgs = undefined
         }
         Session.publishError({
           sessionID,
-          message,
+          message: superLongDeadlineStop.message,
         })
-        reason = "step_limit"
+        reason = superLongDeadlineStop.reason
         break
       }
-      if (superLongDeadline.expired) {
-        const message =
-          `Super-Long mode stopped after reaching the hard 72 hour runtime ceiling. ` +
-          `Review the current state, then resume with a new supervised run if more work is required.`
-        log.warn("super-long deadline reached", {
-          command: "session.prompt.loop",
-          status: "stopped",
-          errorCode: "SUPER_LONG_DEADLINE_REACHED",
-          sessionID,
-          elapsedMs: superLongDeadline.elapsedMs,
-          durationMs: superLongDeadline.durationMs,
-          source: superLongState.source,
-        })
-        if (!(lastAssistant?.finish && lastUser.id < lastAssistant.id)) {
-          await createSyntheticStopAssistant({ lastUser, message })
-          cachedMsgs = undefined
-        }
-        Session.publishError({
-          sessionID,
-          message,
-        })
-        reason = "step_limit"
-        break
-      }
-      if (
-        lastAssistant?.finish &&
-        !["tool-calls", "unknown"].includes(lastAssistant.finish) &&
-        lastUser.id < lastAssistant.id
-      ) {
+      const assistantExit = assistantLoopExitDecision({
+        lastUserID: lastUser.id,
+        lastAssistant,
+        hasPendingSubtask: tasks.some((t) => t.type === "subtask"),
+      })
+      if (assistantExit.action === "complete") {
         log.info("exiting loop", { command: "session.prompt.loop", status: "ok", sessionID })
         reason = "completed"
         break
       }
-      // Stop on "unknown" finish with no tool calls to prevent infinite empty-response loop
-      if (
-        lastAssistant?.finish === "unknown" &&
-        !tasks.some((t) => t.type === "subtask") &&
-        lastUser.id < lastAssistant.id
-      ) {
-        log.warn("model returned unknown finish with no actionable output", {
+      if (assistantExit.action === "complete_unknown_finish") {
+        log.warn(assistantExit.logMessage, {
           command: "session.prompt.loop",
           sessionID,
         })
@@ -862,7 +840,14 @@ export namespace SessionPrompt {
             })
       cachedAgent = { key: lastUser.agent, value: agent }
       const maxSteps = agent.steps ?? Infinity
-      if (autonomous && Number.isFinite(maxSteps) && step >= maxSteps && continuations < maxContinuations) {
+      const agentStepLimit = agentStepLimitContinuationDecision({
+        step,
+        maxSteps,
+        autonomous,
+        continuations,
+        maxContinuations,
+      })
+      if (agentStepLimit.action === "continue") {
         await continueAutonomousLoop({
           event: "autonomous agent step-limit auto-continue",
           resetTodoDeadlineSignature: true,
@@ -870,7 +855,7 @@ export namespace SessionPrompt {
           text: AutonomousContinuationPrompt.agentStepLimit({
             agentName: agent.name,
             maxSteps,
-            continuation: continuations + 1,
+            continuation: agentStepLimit.continuation,
             maxContinuations,
           }),
           logExtras: { agent: agent.name, maxSteps },
@@ -1001,7 +986,7 @@ export namespace SessionPrompt {
       // Check if user explicitly invoked an agent via @ in this turn
       const bypassAgentCheck = lastUserParts?.some((p) => p.type === "agent") ?? false
 
-      const tools = await _resolveTools({
+      const tools = await resolveTools({
         agent,
         session,
         model,
@@ -1046,13 +1031,11 @@ export namespace SessionPrompt {
         break
       }
 
-      // Check if model finished (finish reason is not "tool-calls" or "unknown")
-      const modelFinished = processor.message.finish && !["tool-calls", "unknown"].includes(processor.message.finish)
-      const emptyModelTurn =
-        processor.message.finish === "other" &&
-        (processor.message.tokens.input ?? 0) === 0 &&
-        (processor.message.tokens.output ?? 0) === 0 &&
-        (processor.message.tokens.reasoning ?? 0) === 0
+      const modelFinished = modelTurnFinished(processor.message.finish)
+      const emptyModelTurn = isEmptyModelTurn({
+        finish: processor.message.finish,
+        tokens: processor.message.tokens,
+      })
       if (!emptyModelTurn) emptyModelTurnRetries = 0
 
       if (modelFinished && !processor.message.error) {
@@ -1100,24 +1083,23 @@ export namespace SessionPrompt {
           completionGate.status === "blocked" && completionGate.reason === "empty_subagent_result"
 
         if (modelFinished || shouldRecoverEmptySubagentResult) {
-          const gateRetryCount =
-            completionGate.status === "blocked" && completionGate.reason === "unfinished_todos"
-              ? todoRetries
-              : completionGateRetries
-          const gateMaxRetries =
-            completionGate.status === "blocked" && completionGate.reason === "unfinished_todos"
-              ? maxTodoRetries
-              : maxCompletionGateRetries
+          const gateEventState = completionGateEventState({
+            gate: completionGate,
+            todoRetries,
+            maxTodoRetries,
+            completionGateRetries,
+            maxCompletionGateRetries,
+          })
           Recorder.emit(
             AgentControlEvents.completionGateDecided({
               sessionID,
               messageID: processor.message.id,
               stepIndex: step,
               status: completionGate.status,
-              reason: completionGate.status === "allow" ? "none" : completionGate.reason,
-              message: completionGate.status === "allow" ? "Completion gate passed." : completionGate.message,
-              retryCount: gateRetryCount,
-              maxRetries: gateMaxRetries,
+              reason: gateEventState.reason,
+              message: gateEventState.message,
+              retryCount: gateEventState.retryCount,
+              maxRetries: gateEventState.maxRetries,
             }),
           )
         }
@@ -1128,8 +1110,6 @@ export namespace SessionPrompt {
           maxEmptyModelTurnRetries: MAX_EMPTY_MODEL_TURN_RETRIES,
           todoRetries,
         })
-        emptyModelTurnRetries = emptyTurnDecision.emptyModelTurnRetries
-        todoRetries = emptyTurnDecision.todoRetries
 
         if (emptyTurnDecision.action === "stop") {
           log.warn("autonomous stopped after repeated empty model turn", {
@@ -1137,8 +1117,8 @@ export namespace SessionPrompt {
             status: "stopped",
             errorCode: emptyTurnDecision.errorCode,
             sessionID,
-            attempts: emptyTurnDecision.attempts,
-            maxAttempts: emptyTurnDecision.maxAttempts,
+            attempts: emptyModelTurnRetries,
+            maxAttempts: MAX_EMPTY_MODEL_TURN_RETRIES,
             pendingCount: pendingTodos.length,
           })
           await publishAutonomousFailure(emptyTurnDecision.message)
@@ -1146,14 +1126,17 @@ export namespace SessionPrompt {
           break
         }
 
+        emptyModelTurnRetries = emptyTurnDecision.emptyModelTurnRetries
+
         if (emptyTurnDecision.action === "recover") {
+          todoRetries = emptyTurnDecision.todoRetries
           log.warn("autonomous empty model turn recovery", {
             command: "session.prompt.loop",
             status: "retry",
             errorCode: "EMPTY_MODEL_TURN",
             sessionID,
             attempt: emptyTurnDecision.attempt,
-            maxAttempts: emptyTurnDecision.maxAttempts,
+            maxAttempts: MAX_EMPTY_MODEL_TURN_RETRIES,
             pendingCount: pendingTodos.length,
           })
           await createAutonomousUserContinuation({
@@ -1164,7 +1147,7 @@ export namespace SessionPrompt {
                 type: "text",
                 text: AutonomousContinuationPrompt.emptyModelTurnRecovery({
                   attempt: emptyTurnDecision.attempt,
-                  maxAttempts: emptyTurnDecision.maxAttempts,
+                  maxAttempts: MAX_EMPTY_MODEL_TURN_RETRIES,
                 }),
               },
             ],
@@ -1173,39 +1156,40 @@ export namespace SessionPrompt {
         }
 
         if (shouldRecoverEmptySubagentResult) {
-          if (completionGate.signature !== lastCompletionGateSignature) {
-            lastCompletionGateSignature = completionGate.signature
-            completionGateRetries = 0
-          }
+          const gateRetryDecision = completionGateRetryDecision({
+            gate: completionGate,
+            previousSignature: lastCompletionGateSignature,
+            retries: completionGateRetries,
+            maxRetries: maxCompletionGateRetries,
+            isLastStep,
+          })
 
-          if (isLastStep || completionGateRetries >= maxCompletionGateRetries) {
-            const incompleteMessage =
-              `Autonomous mode stopped because the control-plane completion gate found incomplete subagent evidence. ` +
-              `${completionGate.message} ` +
-              `The session is stopped, but the task should not be treated as complete.`
+          if (gateRetryDecision.action === "stop") {
             log.warn("autonomous completion gate stopped session", {
               command: "session.prompt.loop",
               status: "stopped",
-              errorCode: isLastStep ? "STEP_LIMIT" : "COMPLETION_GATE_BLOCKED",
+              errorCode: gateRetryDecision.errorCode,
               sessionID,
               reason: completionGate.reason,
               message: completionGate.message,
-              attempts: completionGateRetries,
+              attempts: gateRetryDecision.attempts,
               maxAttempts: maxCompletionGateRetries,
             })
-            await publishAutonomousFailure(incompleteMessage)
-            reason = isLastStep ? "step_limit" : "stalled"
+            await publishAutonomousFailure(gateRetryDecision.message)
+            reason = gateRetryDecision.reason
             break
           }
 
-          completionGateRetries++
+          lastCompletionGateSignature = gateRetryDecision.signature
+          completionGateRetries = gateRetryDecision.retries
+
           log.info("autonomous completion gate continuation", {
             command: "session.prompt.loop",
             status: "ok",
             sessionID,
             reason: completionGate.reason,
             message: completionGate.message,
-            attempt: completionGateRetries,
+            attempt: gateRetryDecision.attempt,
             maxAttempts: maxCompletionGateRetries,
           })
           await createAutonomousUserContinuation({
@@ -1216,7 +1200,7 @@ export namespace SessionPrompt {
                 type: "text",
                 text: AutonomousContinuationPrompt.completionGateRetry({
                   message: completionGate.message,
-                  attempt: completionGateRetries,
+                  attempt: gateRetryDecision.attempt,
                   maxAttempts: maxCompletionGateRetries,
                 }),
               },
@@ -1231,12 +1215,11 @@ export namespace SessionPrompt {
         }
 
         const remainingAgentSteps = Number.isFinite(maxSteps) ? Math.max(0, maxSteps - step) : Infinity
-        const shouldConvergeReportTodosBeforeContextOverflow =
-          !modelFinished &&
-          pendingTodos.length > 0 &&
-          hasReportStyleTodo(pendingTodos) &&
-          (processor.message.tokens.input ?? 0) >= TODO_CONTEXT_CONVERGENCE_INPUT_TOKEN_THRESHOLD
-        if (shouldConvergeReportTodosBeforeContextOverflow) {
+        const contextConvergence = todoContextConvergenceDecision({
+          pendingTodos,
+          inputTokens: processor.message.tokens.input,
+        })
+        if (!modelFinished && contextConvergence.converge) {
           const signature = pendingTodoSignature(pendingTodos)
           if (signature !== lastTodoContextSignature) {
             lastTodoContextSignature = signature
@@ -1246,7 +1229,7 @@ export namespace SessionPrompt {
               sessionID,
               pendingCount: pendingTodos.length,
               inputTokens: processor.message.tokens.input ?? 0,
-              threshold: TODO_CONTEXT_CONVERGENCE_INPUT_TOKEN_THRESHOLD,
+              threshold: contextConvergence.threshold,
             })
             await createAutonomousUserContinuation({
               sessionID,
@@ -1262,17 +1245,15 @@ export namespace SessionPrompt {
           }
         }
 
-        const shouldConvergePendingTodosBeforeDeadline =
-          !modelFinished &&
-          pendingTodos.length > 0 &&
-          Number.isFinite(remainingAgentSteps) &&
-          remainingAgentSteps > 0 &&
-          remainingAgentSteps <= todoDeadlineStepBuffer(pendingTodos.length)
-        if (shouldConvergePendingTodosBeforeDeadline) {
+        const deadlineConvergence = todoDeadlineConvergenceDecision({
+          modelFinished: Boolean(modelFinished),
+          pendingTodos,
+          remainingAgentSteps,
+        })
+        if (deadlineConvergence.converge) {
           const signature = pendingTodoSignature(pendingTodos)
           if (signature !== lastTodoDeadlineSignature) {
             lastTodoDeadlineSignature = signature
-            const includeReportClosureGuidance = hasReportStyleTodo(pendingTodos)
             log.info("autonomous todo deadline convergence", {
               command: "session.prompt.loop",
               status: "ok",
@@ -1290,7 +1271,7 @@ export namespace SessionPrompt {
                   text: AutonomousContinuationPrompt.deadlineConvergence({
                     remainingAgentSteps,
                     pendingTodos,
-                    includeReportClosureGuidance,
+                    includeReportClosureGuidance: deadlineConvergence.includeReportClosureGuidance,
                   }),
                 },
               ],
@@ -1310,40 +1291,22 @@ export namespace SessionPrompt {
           })
 
           if (todoContinuation.action === "stop_step_limit") {
-            const incompleteMessage =
-              `Autonomous mode reached the agent step limit with ${Locale.pluralize(
-                pendingTodos.length,
-                "{} unfinished todo",
-                "{} unfinished todos",
-              )}. ` +
-              `No further todo auto-continuation was scheduled because the maximum-step reminder may disable tools. ` +
-              `Increase the agent/session step budget or resume the session to finish the remaining work.`
             log.warn("autonomous todo continuation stopped at agent step limit", {
               command: "session.prompt.loop",
               status: "stopped",
-              errorCode: "STEP_LIMIT",
+              errorCode: todoContinuation.errorCode,
               sessionID,
               pendingCount: pendingTodos.length,
               attempts: todoRetries,
               maxAttempts: maxTodoRetries,
               maxSteps,
             })
-            await publishAutonomousFailure(incompleteMessage)
-            reason = "step_limit"
+            await publishAutonomousFailure(todoContinuation.message)
+            reason = todoContinuation.reason
             break
           }
 
           if (todoContinuation.action === "stop_retry_budget") {
-            const incompleteMessage =
-              `Autonomous mode stopped because ${Locale.pluralize(
-                pendingTodos.length,
-                "{} todo",
-                "{} todos",
-              )} remained unfinished after ${Locale.pluralize(
-                maxTodoRetries,
-                "{} auto-continuation attempt",
-                "{} auto-continuation attempts",
-              )}. ` + `The session is stopped, but the remaining todos are not complete.`
             log.warn("autonomous todo continuation stopped after retry budget", {
               command: "session.prompt.loop",
               status: "stopped",
@@ -1352,8 +1315,8 @@ export namespace SessionPrompt {
               attempts: todoRetries,
               maxAttempts: maxTodoRetries,
             })
-            await publishAutonomousFailure(incompleteMessage)
-            reason = "stalled"
+            await publishAutonomousFailure(todoContinuation.message)
+            reason = todoContinuation.reason
             break
           }
 
@@ -1369,7 +1332,7 @@ export namespace SessionPrompt {
               pendingCount: pendingTodos.length,
               attempts: todoRetries,
               stagnantAttempts: stagnantTodoRetries,
-              maxStagnantAttempts: MAX_STAGNANT_TODO_RETRIES,
+              maxStagnantAttempts: todoContinuation.maxStagnantAttempts,
             })
           }
 
@@ -1392,7 +1355,7 @@ export namespace SessionPrompt {
                   pendingTodos,
                   attempt: todoRetries,
                   maxAttempts: maxTodoRetries,
-                  includeReportClosureGuidance: hasReportStyleTodo(pendingTodos),
+                  includeReportClosureGuidance: todoContinuation.includeReportClosureGuidance,
                   stagnantTodoRetries: todoContinuation.stagnant ? stagnantTodoRetries : undefined,
                 }),
               },
@@ -1404,56 +1367,55 @@ export namespace SessionPrompt {
 
       if (modelFinished && !processor.message.error) {
         const goal = updatedGoal ?? (await SessionGoal.get(sessionID))
-        if (goal?.status === "active") {
-          if (continuations < maxContinuations) {
-            await continueAutonomousLoop({
-              event: "goal auto-continuation",
-              resetTodoProgressTracking: true,
-              text: AutonomousContinuationPrompt.goal({
-                objective: goal.objective,
-                continuation: continuations + 1,
-                maxContinuations,
-              }),
-            })
-            continue
-          }
-          Session.publishError({
-            sessionID,
-            message:
-              `Goal remains active after ${continuations} auto-continuation(s), but the continuation limit was reached. ` +
-              `Resume the session or increase session.max_continuations to continue working toward the goal.`,
+        const goalDecision = goalContinuationDecision({
+          goal,
+          continuations,
+          maxContinuations,
+          budgetLimitContinuationSent: goalBudgetLimitContinuationSent,
+        })
+
+        if (goalDecision.action === "continue_active") {
+          await continueAutonomousLoop({
+            event: "goal auto-continuation",
+            resetTodoProgressTracking: true,
+            text: AutonomousContinuationPrompt.goal({
+              objective: goalDecision.objective,
+              continuation: goalDecision.continuation,
+              maxContinuations,
+            }),
           })
-          reason = "stalled"
-          break
+          continue
         }
-        if (goal?.status === "budget_limited" && goal.tokenBudget !== undefined && !goalBudgetLimitContinuationSent) {
-          if (continuations < maxContinuations) {
-            goalBudgetLimitContinuationSent = true
-            await continueAutonomousLoop({
-              event: "goal budget-limit wrap-up",
-              resetTodoProgressTracking: true,
-              text: AutonomousContinuationPrompt.goalBudgetLimit({
-                objective: goal.objective,
-                tokensUsed: goal.tokensUsed,
-                tokenBudget: goal.tokenBudget,
-                timeUsedSeconds: goal.timeUsedSeconds,
-              }),
-            })
-            continue
-          }
-          Session.publishError({
-            sessionID,
-            message:
-              `Goal reached its token budget after ${continuations} auto-continuation(s), but the continuation limit was reached. ` +
-              `Resume the session or increase session.max_continuations for a budget wrap-up turn.`,
+
+        if (goalDecision.action === "continue_budget_wrapup") {
+          goalBudgetLimitContinuationSent = true
+          await continueAutonomousLoop({
+            event: "goal budget-limit wrap-up",
+            resetTodoProgressTracking: true,
+            text: AutonomousContinuationPrompt.goalBudgetLimit({
+              objective: goalDecision.objective,
+              tokensUsed: goalDecision.tokensUsed,
+              tokenBudget: goalDecision.tokenBudget,
+              timeUsedSeconds: goalDecision.timeUsedSeconds,
+            }),
           })
-          reason = "stalled"
+          continue
+        }
+
+        if (goalDecision.action === "stop_active_limit" || goalDecision.action === "stop_budget_limit") {
+          Session.publishError({ sessionID, message: goalDecision.message })
+          reason = goalDecision.reason
           break
         }
       }
 
-      if (result === "stop") {
-        reason = processor.message.error ? "error" : "completed"
+      const processorDecision = processorLoopDecision({
+        result,
+        messageFinish: processor.message.finish,
+        hasError: Boolean(processor.message.error),
+      })
+      if (processorDecision.action === "stop") {
+        reason = processorDecision.reason
         break
       }
 
@@ -1465,27 +1427,32 @@ export namespace SessionPrompt {
         // no credit, auth error), try switching to another available provider
         // instead of retrying the same broken one.
         const err = processor.message.error
-        if (
-          consecutiveErrors >= 2 &&
-          err.name === "APIError" &&
-          err.data?.statusCode &&
-          [401, 402, 403, 429].includes(err.data.statusCode)
-        ) {
-          const fallback = await findFallbackModel(lastUser.model.providerID, lastUser.model.modelID).catch(() => null)
+        const fallbackLookup = providerFallbackLookupDecision({
+          consecutiveErrors,
+          error: err,
+        })
+        if (fallbackLookup.action === "lookup") {
+          const fallback = await findFallbackModel(lastUser.model.providerID).catch(() => null)
           if (fallback) {
+            const fallbackSwitch = providerFallbackSwitchState({
+              current: lastUser.model,
+              fallback,
+              errorMessage: fallbackLookup.errorMessage,
+              consecutiveErrors,
+            })
             log.warn("switching to fallback provider", {
               command: "session.prompt.loop",
-              from: `${lastUser.model.providerID}/${lastUser.model.modelID}`,
-              to: `${fallback.providerID}/${fallback.modelID}`,
-              reason: err.data?.message,
+              from: fallbackSwitch.from,
+              to: fallbackSwitch.to,
+              reason: fallbackSwitch.reason,
             })
             Session.publishError({
               sessionID,
-              message: `Provider ${lastUser.model.providerID} failed: ${err.data?.message ?? "unknown error"}. Switching to ${fallback.providerID}/${fallback.modelID}.`,
+              message: fallbackSwitch.message,
             })
             fallbackModelOverride = fallback
             cachedModel = undefined
-            consecutiveErrors = Math.floor(consecutiveErrors / 2)
+            consecutiveErrors = fallbackSwitch.nextConsecutiveErrors
             continue
           }
         }
@@ -1499,7 +1466,12 @@ export namespace SessionPrompt {
           sessionID,
           error: processor.message.error,
         })
-        if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+        const errorDecision = consecutiveErrorDecision({
+          consecutiveErrors,
+          maxConsecutiveErrors: MAX_CONSECUTIVE_ERRORS,
+          step,
+        })
+        if (errorDecision.action === "stop") {
           log.warn("too many consecutive errors, stopping", {
             command: "session.prompt.loop",
             status: "error",
@@ -1509,9 +1481,9 @@ export namespace SessionPrompt {
           })
           Session.publishError({
             sessionID,
-            message: `Agent encountered ${consecutiveErrors} consecutive errors at step ${step}. Stopping to prevent retry loop. Try rephrasing your request or breaking it into smaller tasks.`,
+            message: errorDecision.message,
           })
-          reason = "error"
+          reason = errorDecision.reason
           break
         }
       } else {
@@ -1522,14 +1494,14 @@ export namespace SessionPrompt {
         }
       }
 
-      if (result === "compact") {
+      if (processorDecision.action === "compact") {
         await SessionCompaction.create({
           sessionID,
           agent: lastUser.agent,
           model: lastUser.model,
           auto: true,
-          overflow: !processor.message.finish,
-          triggerReason: processor.message.finish ? "provider_usage" : "context_overflow_error",
+          overflow: processorDecision.overflow,
+          triggerReason: processorDecision.triggerReason,
         })
       }
       continue
@@ -1548,17 +1520,6 @@ export namespace SessionPrompt {
     if (abort.aborted) throw new DOMException("Aborted", "AbortError")
     throw new Error("Impossible")
   })
-
-  const lastModel = _lastModel
-
-  /** @internal Exported for testing */
-  export const isolationRetryState = _isolationRetryState
-
-  /** @internal Exported for testing */
-  export const resolveTools = _resolveTools
-
-  /** @internal Exported for testing */
-  export const createStructuredOutputTool = _createStructuredOutputTool
 
   async function createAutonomousUserContinuation(args: {
     sessionID: SessionID
@@ -2985,6 +2946,4 @@ NOTE: At any point in time through this workflow you should feel free to ask the
 
     return result
   }
-
-  const ensureTitle = _ensureTitle
 }

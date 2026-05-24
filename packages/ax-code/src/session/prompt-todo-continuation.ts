@@ -1,7 +1,9 @@
-export const MAX_STAGNANT_TODO_RETRIES = 2
-export const TODO_DEADLINE_MIN_STEP_BUFFER = 3
-export const TODO_DEADLINE_MAX_STEP_BUFFER = 8
-export const TODO_CONTEXT_CONVERGENCE_INPUT_TOKEN_THRESHOLD = 50_000
+import { Locale } from "@/util/locale"
+
+const MAX_STAGNANT_TODO_RETRIES = 2
+const TODO_DEADLINE_MIN_STEP_BUFFER = 3
+const TODO_DEADLINE_MAX_STEP_BUFFER = 8
+const TODO_CONTEXT_CONVERGENCE_INPUT_TOKEN_THRESHOLD = 50_000
 
 export type PromptTodo = {
   content: string
@@ -9,20 +11,17 @@ export type PromptTodo = {
   priority: string
 }
 
-export type ReportTodoClosureMode = "deadline" | "continuation" | "context"
-
-export type PendingTodoContinuationDecision =
+type PendingTodoContinuationDecision =
   | {
       action: "stop_step_limit"
-      todoRetries: number
-      lastPendingTodoSignature: string | undefined
-      stagnantTodoRetries: number
+      reason: "step_limit"
+      errorCode: "STEP_LIMIT"
+      message: string
     }
   | {
       action: "stop_retry_budget"
-      todoRetries: number
-      lastPendingTodoSignature: string | undefined
-      stagnantTodoRetries: number
+      reason: "stalled"
+      message: string
     }
   | {
       action: "continue"
@@ -30,18 +29,54 @@ export type PendingTodoContinuationDecision =
       lastPendingTodoSignature: string
       stagnantTodoRetries: number
       stagnant: boolean
+      maxStagnantAttempts: number
+      includeReportClosureGuidance: boolean
     }
 
 export function pendingTodoSignature(todos: PromptTodo[]) {
   return todos.map((todo) => `${todo.status}\u0000${todo.priority}\u0000${todo.content}`).join("\u0001")
 }
 
-export function todoDeadlineStepBuffer(pendingTodoCount: number) {
+function todoDeadlineStepBuffer(pendingTodoCount: number) {
   return Math.min(TODO_DEADLINE_MAX_STEP_BUFFER, Math.max(TODO_DEADLINE_MIN_STEP_BUFFER, pendingTodoCount + 2))
 }
 
-export function hasReportStyleTodo(todos: Array<Pick<PromptTodo, "content">>) {
+function hasReportStyleTodo(todos: Array<Pick<PromptTodo, "content">>) {
   return todos.some((todo) => /\b(report|reports|bug|bugs)\b|\.internal\/bugs/i.test(todo.content))
+}
+
+export function todoContextConvergenceDecision(input: {
+  pendingTodos: Array<Pick<PromptTodo, "content">>
+  inputTokens?: number
+}) {
+  const inputTokens = input.inputTokens ?? 0
+  return {
+    converge:
+      input.pendingTodos.length > 0 &&
+      hasReportStyleTodo(input.pendingTodos) &&
+      inputTokens >= TODO_CONTEXT_CONVERGENCE_INPUT_TOKEN_THRESHOLD,
+    threshold: TODO_CONTEXT_CONVERGENCE_INPUT_TOKEN_THRESHOLD,
+  }
+}
+
+export function todoDeadlineConvergenceDecision(input: {
+  modelFinished: boolean
+  pendingTodos: Array<Pick<PromptTodo, "content">>
+  remainingAgentSteps: number
+}) {
+  const buffer = todoDeadlineStepBuffer(input.pendingTodos.length)
+  const converge =
+    !input.modelFinished &&
+    input.pendingTodos.length > 0 &&
+    Number.isFinite(input.remainingAgentSteps) &&
+    input.remainingAgentSteps > 0 &&
+    input.remainingAgentSteps <= buffer
+
+  return {
+    converge,
+    buffer,
+    includeReportClosureGuidance: converge && hasReportStyleTodo(input.pendingTodos),
+  }
 }
 
 export function pendingTodoContinuationDecision(input: {
@@ -55,18 +90,33 @@ export function pendingTodoContinuationDecision(input: {
   if (input.isLastStep) {
     return {
       action: "stop_step_limit",
-      todoRetries: input.todoRetries,
-      lastPendingTodoSignature: input.lastPendingTodoSignature,
-      stagnantTodoRetries: input.stagnantTodoRetries,
+      reason: "step_limit",
+      errorCode: "STEP_LIMIT",
+      message:
+        `Autonomous mode reached the agent step limit with ${Locale.pluralize(
+          input.pendingTodos.length,
+          "{} unfinished todo",
+          "{} unfinished todos",
+        )}. ` +
+        `No further todo auto-continuation was scheduled because the maximum-step reminder may disable tools. ` +
+        `Increase the agent/session step budget or resume the session to finish the remaining work.`,
     }
   }
 
   if (input.todoRetries >= input.maxTodoRetries) {
     return {
       action: "stop_retry_budget",
-      todoRetries: input.todoRetries,
-      lastPendingTodoSignature: input.lastPendingTodoSignature,
-      stagnantTodoRetries: input.stagnantTodoRetries,
+      reason: "stalled",
+      message:
+        `Autonomous mode stopped because ${Locale.pluralize(
+          input.pendingTodos.length,
+          "{} todo",
+          "{} todos",
+        )} remained unfinished after ${Locale.pluralize(
+          input.maxTodoRetries,
+          "{} auto-continuation attempt",
+          "{} auto-continuation attempts",
+        )}. ` + `The session is stopped, but the remaining todos are not complete.`,
     }
   }
 
@@ -79,28 +129,7 @@ export function pendingTodoContinuationDecision(input: {
     lastPendingTodoSignature: signature,
     stagnantTodoRetries,
     stagnant: stagnantTodoRetries >= MAX_STAGNANT_TODO_RETRIES,
+    maxStagnantAttempts: MAX_STAGNANT_TODO_RETRIES,
+    includeReportClosureGuidance: hasReportStyleTodo(input.pendingTodos),
   }
-}
-
-export function reportTodoClosureGuidance(mode: ReportTodoClosureMode) {
-  if (mode === "context") {
-    return (
-      `\nThe context is already large. For report-style todos, write the .internal/bugs report now ` +
-      `when there is credible suspected or confirmed evidence. Otherwise cancel that report todo with the ` +
-      `concrete reason; do not read more files for broad exploration.`
-    )
-  }
-
-  if (mode === "deadline") {
-    return (
-      `\nFor report-style todos, create the required .internal/bugs report now if there is a credible suspected ` +
-      `or confirmed issue. If the evidence is not credible enough, cancel that report todo with the concrete ` +
-      `reason instead of continuing broad analysis.`
-    )
-  }
-
-  return (
-    `\nFor report-style todos, write the .internal/bugs report now when there is credible suspected or confirmed ` +
-    `evidence. Otherwise cancel that report todo with the concrete reason; do not keep doing broad exploration.`
-  )
 }
