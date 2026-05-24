@@ -60,6 +60,8 @@ type Info = ServerInfo
 
 const OXLINT_LSP_SUPPORT_CACHE_MAX = 64
 const oxlintLspSupportCache = new Map<string, boolean | Promise<boolean>>()
+const JDTLS_DATA_DIR_PREFIX = "ax-code-jdtls-data"
+const JDTLS_STALE_DATA_DIR_MS = 24 * 60 * 60 * 1000
 
 function setOxlintSupportCache(lintBin: string, value: boolean | Promise<boolean>) {
   if (oxlintLspSupportCache.has(lintBin)) {
@@ -78,34 +80,52 @@ async function oxlintSupportsLsp(lintBin: string): Promise<boolean> {
   if (typeof cached === "boolean") return cached
   if (cached) return cached
 
-  const pending = (async () => {
-    let help = ""
-    let proc: ReturnType<typeof spawn> | undefined
-    try {
-      proc = spawn(lintBin, ["--help"])
-      const helpPromise = proc.stdout ? text(proc.stdout) : Promise.resolve("")
-      ;[help] = await withTimeout(
-        Promise.all([helpPromise, proc.exited]),
-        5_000,
-        `oxlint --help timed out for ${lintBin}`,
-      )
-    } catch (error) {
-      if (proc) {
-        proc.kill()
-        await withTimeout(proc.exited, 500, `oxlint process cleanup timed out`).catch(() => {})
-      }
-      log.warn("oxlint --help check failed", { lintBin, error })
-      oxlintLspSupportCache.delete(lintBin)
-      return false
-    }
-
-    const supports = help.includes("--lsp")
-    setOxlintSupportCache(lintBin, supports)
-    return supports
-  })()
-
+  const pending = Promise.resolve().then(() => checkOxlintSupportsLsp(lintBin))
   setOxlintSupportCache(lintBin, pending)
   return pending
+}
+
+async function checkOxlintSupportsLsp(lintBin: string): Promise<boolean> {
+  let help = ""
+  let proc: ReturnType<typeof spawn> | undefined
+  try {
+    proc = spawn(lintBin, ["--help"])
+    const helpPromise = proc.stdout ? text(proc.stdout) : Promise.resolve("")
+    ;[help] = await withTimeout(
+      Promise.all([helpPromise, proc.exited]),
+      5_000,
+      `oxlint --help timed out for ${lintBin}`,
+    )
+  } catch (error) {
+    if (proc) {
+      proc.kill()
+      await withTimeout(proc.exited, 500, `oxlint process cleanup timed out`).catch(() => {})
+    }
+    log.warn("oxlint --help check failed", { lintBin, error })
+    oxlintLspSupportCache.delete(lintBin)
+    return false
+  }
+
+  const supports = help.includes("--lsp")
+  setOxlintSupportCache(lintBin, supports)
+  return supports
+}
+
+async function cleanupStaleJdtlsDataDirs() {
+  const tmp = os.tmpdir()
+  const entries = await fs.readdir(tmp).catch(() => [])
+  const cutoff = Date.now() - JDTLS_STALE_DATA_DIR_MS
+  await Promise.all(
+    entries.map(async (entry) => {
+      if (!entry.startsWith(JDTLS_DATA_DIR_PREFIX)) return
+      const full = path.join(tmp, entry)
+      const stat = await fs.stat(full).catch(() => undefined)
+      if (!stat?.isDirectory() || stat.mtimeMs >= cutoff) return
+      await fs
+        .rm(full, { recursive: true, force: true })
+        .catch((err) => log.warn("failed to remove stale jdtls data dir", { dataDir: full, err }))
+    }),
+  )
 }
 
 export const Deno: Info = {
@@ -936,7 +956,8 @@ const spawnJdtls = async (java: string, root: string, distPath: string, launcher
       }
     })(),
   )
-  const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), "ax-code-jdtls-data"))
+  await cleanupStaleJdtlsDataDirs()
+  const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), JDTLS_DATA_DIR_PREFIX))
   let proc
   try {
     proc = spawn(
