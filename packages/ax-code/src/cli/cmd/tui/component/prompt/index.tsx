@@ -454,7 +454,7 @@ export function Prompt(props: PromptProps) {
       contentWidth: promptContentWidth(),
       toggleWidth:
         footerToggleLabel("Super-Long", sync.data.superLong).length +
-        footerToggleLabel("Autonomous", sync.data.autonomous).length +
+        footerToggleLabel("Auto", sync.data.autonomous).length +
         footerToggleLabel("Sandbox", sync.data.isolation.mode !== "full-access").length,
       mode: store.mode,
       variantsWidth:
@@ -1982,7 +1982,7 @@ export function Prompt(props: PromptProps) {
                   onMouseUp: () => command.trigger("app.toggle.super_long"),
                 })}
                 {footerToggleChip({
-                  label: "Autonomous",
+                  label: "Auto",
                   active: sync.data.autonomous,
                   activeFg: theme.text,
                   inactiveFg: theme.textMuted,
@@ -1992,8 +1992,9 @@ export function Prompt(props: PromptProps) {
                 {footerToggleChip({
                   label: "Sandbox",
                   active: sync.data.isolation.mode !== "full-access",
-                  activeFg: theme.success,
+                  activeFg: theme.text,
                   inactiveFg: theme.error,
+                  background: theme.success,
                   onMouseUp: () => command.trigger("app.toggle.sandbox"),
                 })}
               </box>
