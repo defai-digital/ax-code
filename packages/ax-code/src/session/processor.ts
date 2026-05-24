@@ -65,7 +65,10 @@ export namespace SessionProcessor {
         const existing = pending.get(partID)
         if (existing) existing.push(delta)
         else pending.set(partID, [delta])
-        if (!timer) timer = setTimeout(flush, DELTA_BATCH_MS)
+        if (!timer) {
+          timer = setTimeout(flush, DELTA_BATCH_MS)
+          timer.unref?.()
+        }
       },
       flush() {
         if (timer) clearTimeout(timer)
@@ -118,6 +121,11 @@ export namespace SessionProcessor {
     }
     const recentToolRing: { tool: string; input: string }[] = []
     const doomLoopWarnings: Record<string, string> = {}
+    const resetShortLivedToolLoopState = () => {
+      recentToolRing.length = 0
+      toolCallTimestamps.length = 0
+      for (const key of Object.keys(doomLoopWarnings)) delete doomLoopWarnings[key]
+    }
     let stepToolCallCount = 0
     let stepErrorSurfaces: string[] = []
     let stepTouchedFiles: Array<{ path: string; summary: string }> = []
@@ -134,7 +142,6 @@ export namespace SessionProcessor {
       messageID: input.assistantMessage.id,
       sessionID: input.assistantMessage.sessionID,
     })
-    let cachedShouldBreak: boolean | undefined
     let snapshot: string | undefined
     let blocked = false
     let attempt = 0
@@ -192,9 +199,7 @@ export namespace SessionProcessor {
         attempt = 0
         needsCompaction = false
         const autonomous = Flag.AX_CODE_AUTONOMOUS
-        const shouldBreak = autonomous
-          ? false
-          : (cachedShouldBreak ??= (await Config.get()).experimental?.continue_loop_on_deny !== true)
+        const shouldBreak = autonomous ? false : (await Config.get()).experimental?.continue_loop_on_deny !== true
         if (autonomous) {
           // Apply per-session cap overrides from config so users can widen
           // limits for long refactors without code changes.
@@ -970,6 +975,7 @@ export namespace SessionProcessor {
                 // window is about to be rewritten, so stale pattern counts
                 // would mislead guidance in the new context.
                 ToolErrorPatternTracker.reset(input.sessionID)
+                resetShortLivedToolLoopState()
                 break
               }
             }
@@ -1034,6 +1040,8 @@ export namespace SessionProcessor {
               const retry = SessionRetry.retryable(error)
               if (retry !== undefined) {
                 attempt++
+                recentToolRing.length = 0
+                for (const key of Object.keys(doomLoopWarnings)) delete doomLoopWarnings[key]
                 if (attempt <= SessionRetry.RETRY_MAX_ATTEMPTS) {
                   const delay = SessionRetry.delay(attempt, MessageV2.APIError.isInstance(error) ? error : undefined)
                   await SessionStatus.set(input.sessionID, {

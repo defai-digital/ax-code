@@ -62,6 +62,48 @@ describe("session.processor", () => {
     expect(src.slice(start, end)).toContain("deltaBatcher.flush()")
   })
 
+  test("resets short-lived tool loop state across compaction", async () => {
+    const src = await Bun.file(path.join(import.meta.dir, "../../src/session/processor.ts")).text()
+    expect(src).toContain("const resetShortLivedToolLoopState = () => {")
+    expect(src).toContain("recentToolRing.length = 0")
+    expect(src).toContain("toolCallTimestamps.length = 0")
+    const start = src.indexOf("if (needsCompaction) {")
+    const end = src.indexOf("\n                break", start)
+    expect(start).toBeGreaterThan(-1)
+    expect(end).toBeGreaterThan(start)
+    expect(src.slice(start, end)).toContain("resetShortLivedToolLoopState()")
+  })
+
+  test("resets doom-loop ring across retry attempts", async () => {
+    const src = await Bun.file(path.join(import.meta.dir, "../../src/session/processor.ts")).text()
+    const retryStart = src.indexOf("const retry = SessionRetry.retryable(error)")
+    const retryEnd = src.indexOf("if (attempt <= SessionRetry.RETRY_MAX_ATTEMPTS)", retryStart)
+    expect(retryStart).toBeGreaterThan(-1)
+    expect(retryEnd).toBeGreaterThan(retryStart)
+    const retryBlock = src.slice(retryStart, retryEnd)
+    expect(retryBlock).toContain("recentToolRing.length = 0")
+    expect(retryBlock).toContain("for (const key of Object.keys(doomLoopWarnings)) delete doomLoopWarnings[key]")
+  })
+
+  test("continue-loop-on-deny config is read per process call", async () => {
+    const src = await Bun.file(path.join(import.meta.dir, "../../src/session/processor.ts")).text()
+    expect(src).not.toContain("cachedShouldBreak")
+    expect(src).toContain(
+      "const shouldBreak = autonomous ? false : (await Config.get()).experimental?.continue_loop_on_deny !== true",
+    )
+  })
+
+  test("delta batch timer does not keep the process alive", async () => {
+    const src = await Bun.file(path.join(import.meta.dir, "../../src/session/processor.ts")).text()
+    const start = src.indexOf("function createDeltaBatcher")
+    const end = src.indexOf("export type Info", start)
+    expect(start).toBeGreaterThan(-1)
+    expect(end).toBeGreaterThan(start)
+    const batcher = src.slice(start, end)
+    expect(batcher).toContain("timer = setTimeout(flush, DELTA_BATCH_MS)")
+    expect(batcher).toContain("timer.unref?.()")
+  })
+
   test("wraps recurring error-pattern guidance in system-reminder tags", async () => {
     const src = await Bun.file(path.join(import.meta.dir, "../../src/session/processor.ts")).text()
     expect(src).toContain("annotatedError = `${base}\\n\\n<system-reminder>\\n${guidance}\\n</system-reminder>`")
