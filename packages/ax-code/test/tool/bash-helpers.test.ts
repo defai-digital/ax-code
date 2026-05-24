@@ -5,9 +5,9 @@ import {
   hasDynamicRedirection,
   hasDynamicShellExpansion,
   isStaticPathArg,
-  positionalArgs,
   staticallyCheckablePathArgs,
   stripShellQuotes,
+  truncateBashMetadata,
 } from "../../src/tool/bash-helpers"
 
 describe("tool.bash helpers", () => {
@@ -35,13 +35,10 @@ describe("tool.bash helpers", () => {
     expect(isStaticPathArg("$(pwd)/file.txt")).toBeUndefined()
   })
 
-  test("collects positional args while respecting option separator", () => {
-    expect(positionalArgs(["-n", "file.txt", "--", "-literal"])).toEqual(["file.txt", "-literal"])
-  })
-
   test("selects read-side path args for statically checkable commands", () => {
     expect(staticallyCheckablePathArgs("cd", ["one", "two"])).toEqual(["one"])
     expect(staticallyCheckablePathArgs("cat", ["a.txt", "b.txt"])).toEqual(["a.txt", "b.txt"])
+    expect(staticallyCheckablePathArgs("cat", ["-n", "file.txt", "--", "-literal"])).toEqual(["file.txt", "-literal"])
     expect(staticallyCheckablePathArgs("mv", ["source.txt", "dest.txt"])).toEqual(["source.txt"])
     expect(staticallyCheckablePathArgs("cp", ["source.txt", "dest.txt"])).toEqual(["source.txt"])
   })
@@ -51,6 +48,7 @@ describe("tool.bash helpers", () => {
     expect(staticallyCheckablePathArgs("rm", ["-f", "missing.txt"])).toEqual([])
     expect(staticallyCheckablePathArgs("rm", ["-rf", "missing-dir"])).toEqual([])
     expect(staticallyCheckablePathArgs("rm", ["--force", "missing.txt"])).toEqual([])
+    expect(staticallyCheckablePathArgs("rm", ["--", "-f"])).toEqual(["-f"])
   })
 
   test("detects dynamic redirection commands", () => {
@@ -64,5 +62,12 @@ describe("tool.bash helpers", () => {
       "/tmp/a file.txt",
       "/var/log/app.log",
     ])
+  })
+
+  test("truncates metadata by UTF-8 byte length without splitting characters", () => {
+    const result = truncateBashMetadata("你你", 5)
+
+    expect(result).toBe("你\n\n...")
+    expect(result).not.toContain("\uFFFD")
   })
 })

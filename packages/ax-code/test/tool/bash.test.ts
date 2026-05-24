@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 import fs from "fs/promises"
 import os from "os"
 import path from "path"
-import { __truncateBashMetadataForTest, BashTool } from "../../src/tool/bash"
+import { BashTool } from "../../src/tool/bash"
 import { Instance } from "../../src/project/instance"
 import { Filesystem } from "../../src/util/filesystem"
 import { tmpdir } from "../fixture/fixture"
@@ -25,13 +25,6 @@ const ctx = {
 const projectRoot = path.join(__dirname, "../..")
 
 describe("tool.bash", () => {
-  test("truncates metadata by UTF-8 byte length without splitting characters", () => {
-    const result = __truncateBashMetadataForTest("你你", 5)
-
-    expect(result).toBe("你\n\n...")
-    expect(result).not.toContain("\uFFFD")
-  })
-
   test("basic", async () => {
     await Instance.provide({
       directory: projectRoot,
@@ -732,6 +725,47 @@ describe("tool.bash isolation", () => {
               ctx,
             ),
           ).rejects.toThrow(/Path does not exist/)
+        },
+      })
+    })
+
+    test("rejects missing literal dash-prefixed rm target after option separator", async () => {
+      await using tmp = await tmpdir()
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const bash = await BashTool.init()
+          await expect(
+            bash.execute(
+              {
+                command: "rm -- -f",
+                description: "Remove literal dash-prefixed file",
+              },
+              ctx,
+            ),
+          ).rejects.toThrow(/Path does not exist/)
+        },
+      })
+    })
+
+    test("allows existing literal dash-prefixed rm target after option separator", async () => {
+      await using tmp = await tmpdir()
+      const filepath = path.join(tmp.path, "-f")
+      await fs.writeFile(filepath, "literal flag filename")
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const bash = await BashTool.init()
+          const result = await bash.execute(
+            {
+              command: "rm -- -f",
+              description: "Remove existing literal dash-prefixed file",
+            },
+            ctx,
+          )
+
+          expect(result.metadata.exit).toBe(0)
+          expect(await Filesystem.exists(filepath)).toBe(false)
         },
       })
     })
