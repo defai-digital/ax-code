@@ -65,6 +65,9 @@ class AxCode < Formula
   def install
     libexec.install Dir["*"]
 
+    # Install workspace dependencies so @ax-code/* packages resolve correctly.
+    system Formula["bun"].opt_bin/"bun", "install", "--cwd", libexec, "--ignore-scripts", "--frozen-lockfile"
+
     cwd = "\#{libexec}/packages/ax-code"
     entry = "\#{libexec}/packages/ax-code/src/index.ts"
 
