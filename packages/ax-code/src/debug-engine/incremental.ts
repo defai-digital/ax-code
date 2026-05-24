@@ -7,7 +7,7 @@ import { Instance } from "../project/instance"
 // Instead of scanning every file on every run, incremental mode uses
 // `git diff --name-only` to identify files changed since a reference
 // point (commit SHA, branch, or timestamp). Scanners can pass these
-// files to their `include` parameter to restrict scanning scope.
+// files to their `files` parameter to restrict scanning scope.
 //
 // This is intentionally lightweight — no new DB table, no cursor
 // management. Git is the single source of truth for what changed.
@@ -31,7 +31,7 @@ export namespace Incremental {
 
     // Get changed files from git. Use --diff-filter=ACMR to exclude
     // deleted files (D) — we can't scan files that no longer exist.
-    const result = await $`git diff --name-only --diff-filter=ACMR ${ref} -- ${includeGlobs.join(" ")}`
+    const result = await $`git diff --name-only --diff-filter=ACMR ${ref} -- ${includeGlobs}`
       .cwd(cwd)
       .text()
       .catch(() => "")
@@ -103,7 +103,7 @@ export namespace Incremental {
 
     // Use git grep for speed — it respects .gitignore automatically
     const pattern = patterns.join("|")
-    const result = await $`git grep -l -E "from\\s+['\"].*(?:${pattern})['\"]" -- ${includeGlobs.join(" ")}`
+    const result = await $`git grep -l -E "from\\s+['\"].*(?:${pattern})['\"]" -- ${includeGlobs}`
       .cwd(cwd)
       .text()
       .catch(() => "")

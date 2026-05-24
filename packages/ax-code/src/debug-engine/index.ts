@@ -349,7 +349,7 @@ export namespace DebugEngine {
 
   export async function detectHardcodes(projectID: ProjectID, input: DetectHardcodesInput): Promise<HardcodeReport> {
     log.info("detectHardcodes", { projectID })
-    return detectHardcodesImpl(projectID, input)
+    return detectHardcodesImpl(input)
   }
 
   export async function applySafeRefactor(projectID: ProjectID, input: ApplySafeRefactorInput): Promise<ApplyResult> {
@@ -359,17 +359,17 @@ export namespace DebugEngine {
 
   export async function detectRaces(projectID: ProjectID, input: DetectRacesInput): Promise<RaceReport> {
     log.info("detectRaces", { projectID })
-    return detectRacesImpl(projectID, input)
+    return detectRacesImpl(input)
   }
 
   export async function detectLifecycle(projectID: ProjectID, input: DetectLifecycleInput): Promise<LifecycleReport> {
     log.info("detectLifecycle", { projectID })
-    return detectLifecycleImpl(projectID, input)
+    return detectLifecycleImpl(input)
   }
 
   export async function detectSecurity(projectID: ProjectID, input: DetectSecurityInput): Promise<SecurityReport> {
     log.info("detectSecurity", { projectID })
-    return detectSecurityImpl(projectID, input)
+    return detectSecurityImpl(input)
   }
 
   // ─── Plan management (read-only helpers for callers) ────────────────

@@ -1,11 +1,18 @@
 import fs from "fs/promises"
-import path from "path"
 import { Instance } from "../project/instance"
-import { Glob } from "../util/glob"
-import type { ProjectID } from "../project/schema"
 import { DebugEngine } from "./index"
-import { nativeReadFilesBatch, nativeDetectHardcodes } from "./native-scan"
-import { DEFAULT_INCLUDE, DEFAULT_MAX_FILES, DEFAULT_MAX_PER_FILE, isExcludedDir, isTestFile } from "./scanner-utils"
+import { nativeDetectHardcodes } from "./native-scan"
+import {
+  collectScannerFileBatch,
+  resolveScannerDefaults,
+  resolveScannerFile,
+  scannerFileBatchHeuristics,
+  scannerScopeDisabled,
+  scannerUsesIncrementalFiles,
+  scanScannerFiles,
+  sortScannerFindings,
+  type ScannerInputControls,
+} from "./scanner-utils"
 
 // detectHardcodes — DRE-owned AST-lite scan for common anti-patterns
 // that belong in configuration instead of code.
@@ -25,19 +32,8 @@ import { DEFAULT_INCLUDE, DEFAULT_MAX_FILES, DEFAULT_MAX_PER_FILE, isExcludedDir
 //   inline_secret_shape— high-entropy strings that look like tokens;
 //                        matched by shape/length only, no known-key regex
 
-export type DetectHardcodesInput = {
-  scope?: "worktree" | "none"
+export type DetectHardcodesInput = ScannerInputControls & {
   patterns?: DebugEngine.HardcodeKind[]
-  excludeTests?: boolean
-  // Glob(s) to include (defaults to TS/JS sources)
-  include?: string[]
-  // Pre-resolved file list for incremental scanning.
-  files?: string[]
-  // Hard cap on files inspected; when hit, output is marked truncated.
-  maxFiles?: number
-  // Cap per file; prevents one huge generated file from dominating the
-  // result set.
-  maxFindingsPerFile?: number
 }
 
 // Numbers we consider "obviously fine" and never flag. 0/1/-1/2 cover
@@ -340,25 +336,28 @@ async function scanFile(
   return findings
 }
 
-export async function detectHardcodesImpl(
-  projectID: ProjectID,
-  input: DetectHardcodesInput,
-): Promise<DebugEngine.HardcodeReport> {
-  const excludeTests = input.excludeTests ?? true
-  const maxFiles = input.maxFiles ?? DEFAULT_MAX_FILES
-  const maxPerFile = input.maxFindingsPerFile ?? DEFAULT_MAX_PER_FILE
+export async function detectHardcodesImpl(input: DetectHardcodesInput): Promise<DebugEngine.HardcodeReport> {
+  if (scannerScopeDisabled(input)) {
+    return {
+      findings: [],
+      filesScanned: 0,
+      truncated: false,
+      explain: DebugEngine.buildExplain("detect-hardcodes", [], ["scope=none"]),
+    }
+  }
+
+  const { excludeTests, maxFiles, maxPerFile, include } = resolveScannerDefaults(input)
   const patterns = input.patterns ?? ["magic_number", "inline_url", "inline_path", "inline_secret_shape"]
   const enabledKinds = new Set(patterns)
-  const include = input.include ?? DEFAULT_INCLUDE
   const cwd = Instance.directory
 
   // Native fast-path: run entire detection in Rust
-  if (!input.files) {
+  if (!scannerUsesIncrementalFiles(input)) {
     const native = nativeDetectHardcodes({ cwd, include, patterns, maxFiles, maxPerFile, excludeTests })
     if (native) {
       return {
         findings: native.findings.map((f) => ({
-          file: path.join(cwd, f.file),
+          file: resolveScannerFile(f.file, cwd),
           line: f.line,
           column: f.column,
           kind: f.kind as DebugEngine.HardcodeKind,
@@ -377,82 +376,20 @@ export async function detectHardcodesImpl(
   const heuristics: string[] = [`patterns=${patterns.join(",")}`]
   if (excludeTests) heuristics.push("exclude-tests")
 
-  let allFiles: string[]
-  if (input.files && input.files.length > 0) {
-    heuristics.push("incremental")
-    allFiles = input.files.filter((f) => {
-      if (excludeTests && isTestFile(f)) return false
-      if (!Instance.containsPath(f)) return false
-      return true
-    })
-  } else {
-    // Enumerate candidate files. Glob.scan uses fast-glob under the hood
-    // and respects ignore patterns; we filter out test files and common
-    // noise directories explicitly because fast-glob doesn't honor
-    // .gitignore by default.
-    allFiles = []
-    for (const pattern of include) {
-      const hits = await Glob.scan(pattern, { cwd, absolute: true, dot: false, symlink: false })
-      for (const f of hits) {
-        if (isExcludedDir(f, cwd)) continue
-        if (excludeTests && isTestFile(f)) continue
-        // scope=worktree enforcement: every reported file must live inside
-        // the current Instance worktree. Mirrors the CodeIntelligence
-        // worktree scope filter behavior.
-        if (!Instance.containsPath(f)) continue
-        allFiles.push(f)
-      }
-    }
-  }
+  const fileBatch = await collectScannerFileBatch(input, { cwd, include, excludeTests, maxFiles })
+  heuristics.push(...scannerFileBatchHeuristics(fileBatch))
 
-  // Deduplicate (a file can match multiple include patterns).
-  const uniqueFiles = [...new Set(allFiles)]
-  heuristics.push(`candidate-files=${uniqueFiles.length}`)
+  const { findings, usedNativeBatchRead } = await scanScannerFiles(fileBatch.files, (file, content) =>
+    scanFile(file, enabledKinds, maxPerFile, content),
+  )
+  if (usedNativeBatchRead) heuristics.push("native-batch-read")
 
-  const filesToScan = uniqueFiles.slice(0, maxFiles)
-  const truncated = uniqueFiles.length > maxFiles
-  if (truncated) heuristics.push("file-cap-hit")
-
-  // Native fast-path: batch-read all files in parallel via Rust addon.
-  // Falls back to JS concurrent reads when native is unavailable.
-  const preread = nativeReadFilesBatch(filesToScan)
-  if (preread) heuristics.push("native-batch-read")
-
-  const CONCURRENCY = 8
-  const findings: DebugEngine.HardcodeFinding[] = []
-  if (preread) {
-    for (const f of filesToScan) {
-      const content = preread.get(f)
-      if (!content) continue
-      findings.push(...(await scanFile(f, enabledKinds, maxPerFile, content)))
-    }
-  } else {
-    for (let i = 0; i < filesToScan.length; i += CONCURRENCY) {
-      const batch = filesToScan.slice(i, i + CONCURRENCY)
-      const results = await Promise.all(batch.map((f) => scanFile(f, enabledKinds, maxPerFile)))
-      for (const r of results) findings.push(...r)
-    }
-  }
-
-  // Sort: severity desc, then file path, then line — deterministic
-  // ordering callers can rely on for UI stability.
-  const severityRank: Record<DebugEngine.HardcodeFinding["severity"], number> = {
-    high: 0,
-    medium: 1,
-    low: 2,
-  }
-  findings.sort((a, b) => {
-    if (severityRank[a.severity] !== severityRank[b.severity]) {
-      return severityRank[a.severity] - severityRank[b.severity]
-    }
-    if (a.file !== b.file) return a.file.localeCompare(b.file)
-    return a.line - b.line
-  })
+  sortScannerFindings(findings)
 
   return {
     findings,
-    filesScanned: filesToScan.length,
-    truncated,
+    filesScanned: fileBatch.files.length,
+    truncated: fileBatch.truncated,
     explain: DebugEngine.buildExplain("detect-hardcodes", [], heuristics),
   }
 }

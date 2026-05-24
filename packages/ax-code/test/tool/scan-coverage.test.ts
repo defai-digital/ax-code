@@ -1,10 +1,32 @@
 import { describe, expect, test } from "bun:test"
 import path from "path"
 import { Instance } from "../../src/project/instance"
-import { dedupCoverageNotice, scanCoverageNotice } from "../../src/tool/scan-coverage"
+import {
+  buildScanToolResult,
+  dedupCoverageNotice,
+  scanCoverageNotice,
+  scanToolCommonDetectInput,
+} from "../../src/tool/scan-coverage"
 import { tmpdir } from "../fixture/fixture"
 
 describe("scan coverage notices", () => {
+  test("builds common detect input for scan tool wrappers", () => {
+    expect(
+      scanToolCommonDetectInput({
+        excludeTests: false,
+        include: ["src/**/*.ts"],
+        maxFiles: 12,
+        maxFindingsPerFile: 3,
+      }),
+    ).toEqual({
+      excludeTests: false,
+      include: ["src/**/*.ts"],
+      maxFiles: 12,
+      maxFindingsPerFile: 3,
+      scope: "worktree",
+    })
+  })
+
   test("warns when JS/TS scanners run in a Rust workspace without Rust coverage", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
@@ -28,6 +50,51 @@ describe("scan coverage notices", () => {
           rubySourceCoverage: "not_applicable",
           languageScope: "js_ts_patterns",
         })
+      },
+    })
+  })
+
+  test("recognizes language extensions inside brace globs", async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await Bun.write(path.join(dir, "Cargo.toml"), "[workspace]\nmembers = []\n")
+        await Bun.write(path.join(dir, "pyproject.toml"), '[project]\nname = "demo"\n')
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const notice = await scanCoverageNotice({ include: ["**/*.{rs,ts}", "**/*.{js,py}"] })
+
+        expect(notice.metadata.rustSourceCoverage).toBe("limited")
+        expect(notice.metadata.pythonSourceCoverage).toBe("limited")
+        expect(notice.lines.join("\n")).not.toContain("did not cover Rust source files")
+        expect(notice.lines.join("\n")).not.toContain("did not cover Python source files")
+      },
+    })
+  })
+
+  test("treats broad include globs as limited source coverage", async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await Bun.write(path.join(dir, "Cargo.toml"), "[workspace]\nmembers = []\n")
+        await Bun.write(path.join(dir, "pyproject.toml"), '[project]\nname = "demo"\n')
+        await Bun.write(path.join(dir, "Gemfile"), 'source "https://rubygems.org"\n')
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const notice = await scanCoverageNotice({ include: ["src/**", "scripts/**/*.*"] })
+
+        expect(notice.metadata.rustSourceCoverage).toBe("limited")
+        expect(notice.metadata.pythonSourceCoverage).toBe("limited")
+        expect(notice.metadata.rubySourceCoverage).toBe("limited")
+        expect(notice.lines.join("\n")).not.toContain("did not cover Rust source files")
+        expect(notice.lines.join("\n")).not.toContain("did not cover Python source files")
+        expect(notice.lines.join("\n")).not.toContain("did not cover Ruby source files")
       },
     })
   })
@@ -114,6 +181,41 @@ describe("scan coverage notices", () => {
           rubySourceCoverage: "not_applicable",
           languageScope: "code_graph_symbols",
         })
+      },
+    })
+  })
+
+  test("builds a common scan tool result envelope with capped findings", async () => {
+    await using tmp = await tmpdir()
+    const findings = Array.from({ length: 42 }, (_, i) => ({ id: i + 1 }))
+    const report = {
+      filesScanned: 3,
+      findings,
+      truncated: true,
+    }
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const result = await buildScanToolResult({
+          toolName: "demo_scan",
+          report,
+          renderFinding: (finding) => [`- finding ${finding.id}`],
+        })
+
+        expect(result.title).toBe("demo_scan 42 finding(s)")
+        expect(result.output).toContain("Scanned 3 files")
+        expect(result.output).toContain("Findings: 42")
+        expect(result.output).toContain("Warning: file cap was hit")
+        expect(result.output).toContain("- finding 40")
+        expect(result.output).not.toContain("- finding 41")
+        expect(result.output).toContain("... and 2 more (see metadata)")
+        expect(result.metadata).toMatchObject({
+          filesScanned: 3,
+          findingCount: 42,
+          truncated: true,
+        })
+        expect(result.metadata.report).toBe(report)
       },
     })
   })

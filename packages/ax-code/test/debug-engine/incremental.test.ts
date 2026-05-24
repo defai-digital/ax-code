@@ -1,0 +1,39 @@
+import { $ } from "bun"
+import { describe, expect, test } from "bun:test"
+import path from "path"
+import { Incremental } from "../../src/debug-engine"
+import { Instance } from "../../src/project/instance"
+import { tmpdir } from "../fixture/fixture"
+
+describe("debug-engine incremental file selection", () => {
+  test("passes include globs as separate git pathspecs", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      init: async (dir) => {
+        await Bun.write(path.join(dir, "src", "app.ts"), "export const app = 1\n")
+        await Bun.write(path.join(dir, "scripts", "tool.js"), "export const tool = 1\n")
+        await Bun.write(path.join(dir, "README.md"), "# demo\n")
+      },
+    })
+    await $`git add .`.cwd(tmp.path).quiet()
+    await $`git commit -m "seed files"`.cwd(tmp.path).quiet()
+
+    await Bun.write(path.join(tmp.path, "src", "app.ts"), "export const app = 2\n")
+    await Bun.write(path.join(tmp.path, "scripts", "tool.js"), "export const tool = 2\n")
+    await Bun.write(path.join(tmp.path, "README.md"), "# changed\n")
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const result = await Incremental.changedFilesSince("HEAD", {
+          include: ["src/*.ts", "scripts/*.js"],
+        })
+
+        expect(result.files.sort()).toEqual([
+          path.join(tmp.path, "scripts", "tool.js"),
+          path.join(tmp.path, "src", "app.ts"),
+        ])
+      },
+    })
+  })
+})
