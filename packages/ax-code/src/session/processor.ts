@@ -572,6 +572,9 @@ export namespace SessionProcessor {
                     // self-correction feature a no-op — the log showed
                     // "self-correction active" but the model received no
                     // guidance on its next turn.
+                    // Sanitize once so subsequent appends don't re-sanitize already-added
+                    // <system-reminder> blocks (which would corrupt their XML tags).
+                    const sanitizedError = sanitizeForXmlTag(errorMsg)
                     let annotatedError = errorMsg
                     const doomLoopWarning = doomLoopWarnings[value.toolCallId]
                     if (
@@ -585,9 +588,7 @@ export namespace SessionProcessor {
                           strategy: correction.signal.strategy,
                           attempt: correction.signal.attempt,
                         })
-                        // Sanitize error message to prevent prompt injection via
-                        // tool output containing closing/opening system-reminder tags.
-                        annotatedError = `${sanitizeForXmlTag(errorMsg)}\n\n<system-reminder>\n${correction.prompt}\n</system-reminder>`
+                        annotatedError = `${sanitizedError}\n\n<system-reminder>\n${correction.prompt}\n</system-reminder>`
                       }
 
                       // Pattern tracker: detect repeated errors and append
@@ -608,12 +609,14 @@ export namespace SessionProcessor {
                             tool: match.tool,
                             patternCount,
                           })
-                          annotatedError = `${sanitizeForXmlTag(annotatedError)}\n\n${guidance}`
+                          const base = annotatedError === errorMsg ? sanitizedError : annotatedError
+                          annotatedError = `${base}\n\n${guidance}`
                         }
                       }
                     }
                     if (doomLoopWarning) {
-                      annotatedError = `${sanitizeForXmlTag(annotatedError)}\n\n<system-reminder>\n${doomLoopWarning}\n</system-reminder>`
+                      const base = annotatedError === errorMsg ? sanitizedError : annotatedError
+                      annotatedError = `${base}\n\n<system-reminder>\n${doomLoopWarning}\n</system-reminder>`
                     }
 
                     await Session.updatePart.force({
