@@ -166,6 +166,13 @@ export namespace SessionGoal {
   }
 
   export async function resume(sessionID: SessionID) {
+    const goal = await get(sessionID)
+    if (!goal) throw new Error("No goal is set for this session")
+    if (goal.status === "budget_limited" && goal.tokenBudget !== undefined && goal.tokensUsed >= goal.tokenBudget) {
+      throw new Error(
+        "Cannot resume a budget-limited goal without increasing the token budget. Start a new goal with a larger budget or clear the current goal first.",
+      )
+    }
     return setStatus({ sessionID, status: "active" })
   }
 

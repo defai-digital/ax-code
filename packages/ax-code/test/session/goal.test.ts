@@ -156,6 +156,50 @@ describe("SessionGoal", () => {
     })
   })
 
+  test("refuses to resume a budget-limited goal that is already over budget", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        await SessionGoal.create({
+          sessionID: session.id,
+          objective: "stop at the budget",
+          tokenBudget: 10,
+        })
+
+        await SessionGoal.addUsage({
+          sessionID: session.id,
+          message: {
+            id: "message_goal_budget_limit" as any,
+            sessionID: session.id,
+            parentID: "message_parent" as any,
+            role: "assistant",
+            time: { created: 1_000, completed: 2_000 },
+            modelID: "test-model" as any,
+            providerID: "test" as any,
+            mode: "build",
+            agent: "build",
+            path: { cwd: tmp.path, root: tmp.path },
+            tokens: {
+              total: 10,
+              input: 5,
+              output: 5,
+              reasoning: 0,
+              cache: { read: 0, write: 0 },
+            },
+          },
+        })
+
+        await expect(SessionGoal.resume(session.id)).rejects.toThrow("Cannot resume a budget-limited goal")
+        expect((await SessionGoal.get(session.id))?.status).toBe("budget_limited")
+
+        await Session.remove(session.id)
+      },
+    })
+  })
+
   test("goal command controls lifecycle without invoking the model for view and pause", async () => {
     await using tmp = await tmpdir({ git: true })
 
