@@ -37,6 +37,22 @@ const DEFAULT_TIMEOUT = Flag.AX_CODE_EXPERIMENTAL_BASH_DEFAULT_TIMEOUT_MS || 2 *
 
 const log = Log.create({ service: "bash-tool" })
 
+function truncateUtf8ByBytes(input: string, maxBytes: number): string {
+  const bytes = Buffer.from(input, "utf8")
+  if (bytes.byteLength <= maxBytes) return input
+
+  let end = maxBytes
+  while (end > 0 && (bytes[end]! & 0xc0) === 0x80) end--
+  return bytes.subarray(0, end).toString("utf8")
+}
+
+function truncateBashMetadata(input: string, maxBytes = MAX_METADATA_LENGTH): string {
+  if (Buffer.byteLength(input, "utf8") <= maxBytes) return input
+  return truncateUtf8ByBytes(input, maxBytes) + "\n\n..."
+}
+
+export const __truncateBashMetadataForTest = truncateBashMetadata
+
 async function estimateFileLineDelta(filePath: string) {
   const stat = await fs.stat(filePath).catch(() => undefined)
   if (!stat?.isFile()) return 1
@@ -559,7 +575,7 @@ export const BashTool = Tool.define("bash", async () => {
       // (the first MAX_METADATA_LENGTH bytes never change once we've seen
       // them). Skip those duplicate publishes to avoid flooding the bus
       // and the TUI on high-volume streams (e.g. `find /`).
-      let lastPublishedLength = -1
+      let lastPublishedBytes = -1
 
       const append = (chunk: Buffer) => {
         const priorOutputBytes = outputBytes
@@ -577,10 +593,11 @@ export const BashTool = Tool.define("bash", async () => {
             truncated = true
           }
         }
-        const isPastCap = output.length >= MAX_METADATA_LENGTH
-        if (isPastCap && lastPublishedLength >= MAX_METADATA_LENGTH) return
-        publishMetadata(isPastCap ? output.slice(0, MAX_METADATA_LENGTH) + "\n\n..." : output)
-        lastPublishedLength = output.length
+        const outputMetadataBytes = Buffer.byteLength(output, "utf8")
+        const isPastCap = outputMetadataBytes > MAX_METADATA_LENGTH
+        if (isPastCap && lastPublishedBytes > MAX_METADATA_LENGTH) return
+        publishMetadata(isPastCap ? truncateBashMetadata(output) : output)
+        lastPublishedBytes = outputMetadataBytes
       }
       void truncated
 
@@ -671,7 +688,7 @@ export const BashTool = Tool.define("bash", async () => {
       return {
         title: params.description,
         metadata: {
-          output: output.length > MAX_METADATA_LENGTH ? output.slice(0, MAX_METADATA_LENGTH) + "\n\n..." : output,
+          output: truncateBashMetadata(output),
           exit: proc.exitCode,
           description: params.description,
           hang: hangMetadata(),

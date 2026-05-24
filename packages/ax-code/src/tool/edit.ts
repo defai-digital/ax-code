@@ -223,6 +223,7 @@ export type Replacer = (content: string, find: string) => Generator<string, void
 // Similarity thresholds for block anchor fallback matching
 const SINGLE_CANDIDATE_SIMILARITY_THRESHOLD = 0.6
 const MULTIPLE_CANDIDATES_SIMILARITY_THRESHOLD = 0.3
+const CONTEXT_AWARE_SIMILARITY_THRESHOLD = 0.7
 
 import { levenshtein } from "@/util/levenshtein"
 
@@ -630,23 +631,24 @@ export const ContextAwareReplacer: Replacer = function* (content, find) {
       const blockLines = contentLines.slice(i, j + 1)
       if (blockLines.length !== findLines.length) continue
 
-      // Check if the middle content has reasonable similarity
-      // (simple heuristic: at least 50% of non-empty lines should
-      // match when trimmed).
-      let matchingLines = 0
+      // Check if the middle content has reasonable similarity. Use
+      // Levenshtein line similarity rather than exact-line counting:
+      // context-aware replacement is allowed to recover from small drift,
+      // but should not accept blocks whose interior is only half-right.
+      let similarity = 0
       let totalNonEmptyLines = 0
       for (let k = 1; k < blockLines.length - 1; k++) {
         const blockLine = blockLines[k].trim()
         const findLine = findLines[k].trim()
         if (blockLine.length > 0 || findLine.length > 0) {
           totalNonEmptyLines++
-          if (blockLine === findLine) {
-            matchingLines++
-          }
+          const maxLen = Math.max(blockLine.length, findLine.length)
+          similarity += maxLen === 0 ? 1 : 1 - levenshtein(blockLine, findLine) / maxLen
         }
       }
 
-      if (totalNonEmptyLines === 0 || matchingLines / totalNonEmptyLines >= 0.5) {
+      const canUseAnchorsOnly = totalNonEmptyLines === 0 && blockLines.length === 2
+      if (canUseAnchorsOnly || similarity / totalNonEmptyLines >= CONTEXT_AWARE_SIMILARITY_THRESHOLD) {
         yield blockLines.join("\n")
         matched = true // stop the j-loop; we've yielded the first valid match for this i
       }

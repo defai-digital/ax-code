@@ -143,6 +143,102 @@ describe("session.processor", () => {
     })
   })
 
+  test("autonomous doom-loop detection preserves the triggering tool result", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const previousAutonomous = process.env.AX_CODE_AUTONOMOUS
+    process.env.AX_CODE_AUTONOMOUS = "true"
+
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const session = await Session.create({})
+          const user = await Session.updateMessage({
+            id: MessageID.ascending(),
+            sessionID: session.id,
+            role: "user",
+            time: { created: Date.now() },
+            agent: "build",
+            model: { providerID: model.providerID, modelID: model.id },
+            tools: {},
+            mode: "build",
+          } as MessageV2.User)
+          const assistant = await Session.updateMessage({
+            id: MessageID.ascending(),
+            parentID: user.id,
+            sessionID: session.id,
+            role: "assistant",
+            mode: "build",
+            agent: "build",
+            path: { cwd: tmp.path, root: tmp.path },
+            tokens: {
+              input: 0,
+              output: 0,
+              reasoning: 0,
+              cache: { read: 0, write: 0 },
+            },
+            modelID: model.id,
+            providerID: model.providerID,
+            time: { created: Date.now() },
+          } as MessageV2.Assistant)
+
+          streamSpy = spyOn(LLM, "stream").mockResolvedValue({
+            fullStream: (async function* () {
+              yield { type: "start" }
+              yield { type: "start-step" }
+              for (let i = 1; i <= 3; i++) {
+                yield { type: "tool-input-start", id: `call_${i}`, toolName: "glob" }
+                yield { type: "tool-call", toolCallId: `call_${i}`, toolName: "glob", input: { pattern: "**/*" } }
+                yield {
+                  type: "tool-result",
+                  toolCallId: `call_${i}`,
+                  input: { pattern: "**/*" },
+                  output: { output: `match ${i}`, title: "Glob", metadata: {}, attachments: [] },
+                }
+              }
+              yield {
+                type: "finish-step",
+                finishReason: "stop",
+                usage: { inputTokens: 100, outputTokens: 10, totalTokens: 110 },
+              }
+              yield { type: "finish" }
+            })(),
+          } as any)
+
+          const processor = SessionProcessor.create({
+            assistantMessage: assistant as MessageV2.Assistant,
+            sessionID: session.id,
+            model,
+            abort: AbortSignal.any([]),
+          })
+
+          const result = await processor.process({
+            user: user as MessageV2.User,
+            agent: await Agent.get("build"),
+            abort: AbortSignal.any([]),
+            sessionID: session.id,
+            system: [],
+            messages: [],
+            tools: {},
+            model,
+          })
+
+          expect(result).toBe("continue")
+          const saved = await MessageV2.get({ sessionID: session.id, messageID: assistant.id })
+          const toolParts = saved.parts.filter((part) => part.type === "tool")
+          expect(toolParts).toHaveLength(3)
+          const repeatedPart = toolParts[2]
+          expect(repeatedPart?.state.status).toBe("completed")
+          if (repeatedPart?.state.status !== "completed") throw new Error("repeated tool call did not complete")
+          expect(repeatedPart.state.output).toContain("Autonomous doom-loop detection")
+        },
+      })
+    } finally {
+      if (previousAutonomous === undefined) delete process.env.AX_CODE_AUTONOMOUS
+      else process.env.AX_CODE_AUTONOMOUS = previousAutonomous
+    }
+  })
+
   test("resets tool tracking for a later non-tool step in the same stream", async () => {
     await using tmp = await tmpdir({ git: true })
 

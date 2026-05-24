@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 import fs from "fs/promises"
 import os from "os"
 import path from "path"
-import { BashTool } from "../../src/tool/bash"
+import { __truncateBashMetadataForTest, BashTool } from "../../src/tool/bash"
 import { Instance } from "../../src/project/instance"
 import { Filesystem } from "../../src/util/filesystem"
 import { tmpdir } from "../fixture/fixture"
@@ -25,6 +25,13 @@ const ctx = {
 const projectRoot = path.join(__dirname, "../..")
 
 describe("tool.bash", () => {
+  test("truncates metadata by UTF-8 byte length without splitting characters", () => {
+    const result = __truncateBashMetadataForTest("你你", 5)
+
+    expect(result).toBe("你\n\n...")
+    expect(result).not.toContain("\uFFFD")
+  })
+
   test("basic", async () => {
     await Instance.provide({
       directory: projectRoot,

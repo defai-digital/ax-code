@@ -736,6 +736,22 @@ describe("tool.edit", () => {
       expect(output).toBe("qux\r\nquux\r\n  baz\r\n")
       expectCrlf(output)
     })
+
+    test("rejects context-aware blocks when too much interior content differs", () => {
+      expect(() => replace("start\r\nsame\r\nwrong\r\nend\r\n", "start\nsame\nexpected\nend", "replacement")).toThrow(
+        "Could not find oldString",
+      )
+    })
+
+    test("uses exact unique match before considering non-unique fuzzy variants", () => {
+      const output = replace(
+        "  function foo() { return 1 }\r\n// reference to function foo() { return 1 }\r\n",
+        "  function foo() { return 1 }",
+        "  function foo() { return 2 }",
+      )
+
+      expect(output).toBe("  function foo() { return 2 }\r\n// reference to function foo() { return 1 }\r\n")
+    })
   })
 
   describe("concurrent editing", () => {
