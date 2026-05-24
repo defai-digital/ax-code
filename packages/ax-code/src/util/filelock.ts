@@ -1,5 +1,5 @@
 import fs from "fs/promises"
-import { unlinkSync } from "fs"
+import { readFileSync, unlinkSync } from "fs"
 import path from "path"
 import { Log } from "./log"
 import {
@@ -40,6 +40,10 @@ export namespace FileLock {
     const text = await fs.readFile(target, "utf-8").catch(() => undefined)
     if (!text) return undefined
     return parseProcessLockBody(text)
+  }
+
+  function readLockBodySync(target: string): ProcessLockBody | undefined {
+    return parseProcessLockBody(readFileSync(target, "utf-8"))
   }
 
   async function maybeSteal(target: string, staleMs: number): Promise<boolean> {
@@ -123,7 +127,12 @@ export namespace FileLock {
         if (disposed) return
         disposed = true
         try {
-          unlinkSync(target)
+          const body = readLockBodySync(target)
+          if (body?.pid === process.pid && isSameProcessLockHost(body)) {
+            unlinkSync(target)
+          } else {
+            log.warn("skipping file lock release after ownership changed", { target, ownerPid: body?.pid })
+          }
         } catch (err) {
           if ((err as NodeJS.ErrnoException)?.code === "ENOENT") return
           log.error("failed to release file lock", { target, err })

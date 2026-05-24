@@ -743,6 +743,11 @@ describe("tool.edit", () => {
       )
     })
 
+    test("matches context-aware blocks with empty middle lines", () => {
+      const output = replace("start\n\nend\n", "start\n\nend", "replacement")
+      expect(output).toBe("replacement\n")
+    })
+
     test("uses exact unique match before considering non-unique fuzzy variants", () => {
       const output = replace(
         "  function foo() { return 1 }\r\n// reference to function foo() { return 1 }\r\n",

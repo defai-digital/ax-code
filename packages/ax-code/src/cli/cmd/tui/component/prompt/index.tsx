@@ -5,6 +5,7 @@ import {
   PasteEvent,
   KeyEvent,
   decodePasteBytes,
+  RGBA,
   t,
   dim,
   fg,
@@ -80,6 +81,7 @@ import { footerLivenessIndicator, footerLivenessTextFrame } from "./liveness-vie
 import { parsePastedFilePath } from "./prompt-filepath"
 
 const log = Log.create({ service: "tui.prompt" })
+const SUPER_LONG_PINK = RGBA.fromHex("#ff4db8")
 
 export type PromptProps = {
   sessionID?: string
@@ -1976,7 +1978,7 @@ export function Prompt(props: PromptProps) {
                   active: sync.data.superLong,
                   activeFg: theme.text,
                   inactiveFg: theme.textMuted,
-                  background: theme.info,
+                  background: SUPER_LONG_PINK,
                   onMouseUp: () => command.trigger("app.toggle.super_long"),
                 })}
                 {footerToggleChip({
