@@ -46,9 +46,10 @@ export async function createAxCodeServer(options?: ServerOptions) {
 
   const url = await new Promise<string>((resolve, reject) => {
     const id = setTimeout(() => {
-      reject(new Error(`Timeout waiting for server to start after ${options.timeout}ms`))
+      fail(new Error(`Timeout waiting for server to start after ${options.timeout}ms`))
     }, options.timeout)
     let output = ""
+    let settled = false
     const onStdout = (chunk: any) => {
       output += chunk.toString()
       const lines = output.split("\n")
@@ -56,12 +57,10 @@ export async function createAxCodeServer(options?: ServerOptions) {
         if (line.startsWith("ax-code server listening")) {
           const match = line.match(/on\s+(https?:\/\/[^\s]+)/)
           if (!match) {
-            reject(new Error(`Failed to parse server url from output: ${line}`))
+            fail(new Error(`Failed to parse server url from output: ${line}`))
             return
           }
-          clearTimeout(id)
-          cleanup()
-          resolve(match[1]!)
+          succeed(match[1]!)
           return
         }
       }
@@ -72,33 +71,44 @@ export async function createAxCodeServer(options?: ServerOptions) {
     const cleanup = () => {
       proc.stdout?.removeListener("data", onStdout)
       proc.stderr?.removeListener("data", onStderr)
+      if (options.signal) options.signal.removeEventListener("abort", onAbort)
+    }
+    const fail = (error: Error, kill = true) => {
+      if (settled) return
+      settled = true
+      clearTimeout(id)
+      cleanup()
+      if (kill) {
+        try {
+          proc.kill()
+        } catch {}
+      }
+      reject(error)
+    }
+    const succeed = (url: string) => {
+      if (settled) return
+      settled = true
+      clearTimeout(id)
+      cleanup()
+      resolve(url)
+    }
+    const onAbort = () => {
+      fail(new Error("Aborted"))
     }
     proc.stdout?.on("data", onStdout)
     proc.stderr?.on("data", onStderr)
     proc.on("exit", (code) => {
-      clearTimeout(id)
-      cleanup()
       let msg = `Server exited with code ${code}`
       if (output.trim()) {
         msg += `\nServer output: ${output}`
       }
-      reject(new Error(msg))
+      fail(new Error(msg), false)
     })
     proc.on("error", (error) => {
-      clearTimeout(id)
-      cleanup()
-      reject(error)
+      fail(error, false)
     })
     if (options.signal) {
-      options.signal.addEventListener(
-        "abort",
-        () => {
-          clearTimeout(id)
-          cleanup()
-          reject(new Error("Aborted"))
-        },
-        { once: true },
-      )
+      options.signal.addEventListener("abort", onAbort, { once: true })
     }
   })
 

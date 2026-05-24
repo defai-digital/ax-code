@@ -32,6 +32,8 @@ describe("quality.dre-graph-assets", () => {
 
     expect(html).toContain(`const _sid = "\\u003csession\\u003e\\u0026\\u2028";`)
     expect(html).toContain(`fetch('/graph/' + _sid + '?format=svggantt'`)
+    expect(html).toContain(`if (_rendering) { _renderQueued = true; return; }`)
+    expect(html).toContain(`if (_renderQueued) { _renderQueued = false; _renderGraph(); }`)
     expect(html).toContain(`window._reinitGraph = function()`)
   })
 })
