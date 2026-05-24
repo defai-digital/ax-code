@@ -940,13 +940,14 @@ describe("tui OpenTUI stability guardrails", () => {
 
     expect(history).toContain('const log = Log.create({ service: "tui.prompt-history" })')
     expect(history).toContain('log.warn("failed to load prompt history"')
-    expect(history).toContain('log.warn("failed to persist prompt history"')
     expect(history).toContain('log.warn("failed to append prompt history"')
     expect(history).toContain("optionalStateErrorMessage")
     expect(history).toContain("shouldSurfaceOptionalStateError")
     expect(history).toContain('"Failed to load prompt history"')
     expect(history).toContain('"Failed to save prompt history"')
-    expect(history).toContain('"code" in error && error.code === "ENOENT"')
+    expect(history).toContain("/prompt-history")
+    expect(history).toContain("directoryRequestHeaders")
+    expect(history).not.toContain("prompt-history.jsonl")
     expect(history).toContain("if (writeWarningShown) return")
   })
 

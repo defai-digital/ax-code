@@ -9,3 +9,4 @@ export {
   PermissionTable,
 } from "../session/session.sql"
 export { SessionShareTable } from "../share/share.sql"
+export { PromptHistoryTable } from "../prompt-history/prompt-history.sql"
