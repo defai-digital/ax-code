@@ -474,6 +474,80 @@ describe("session.compaction.estimateToolPartTokens", () => {
       },
     })
   })
+
+  test("prune skips already compacted parts and still evaluates older candidates", async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await Bun.write(path.join(dir, "ax-code.json"), JSON.stringify({ compaction: { prune: true } }))
+      },
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        let olderPartID: PartID | undefined
+
+        for (let turn = 1; turn <= 5; turn++) {
+          const user = await Session.updateMessage({
+            id: MessageID.ascending(),
+            sessionID: session.id,
+            role: "user",
+            time: { created: Date.now() + turn * 2 },
+            agent: "build",
+            model: { providerID: ProviderID.make("test"), modelID: ModelID.make("test-model") },
+            tools: {},
+            mode: "build",
+          } as MessageV2.User)
+          const assistant = await Session.updateMessage({
+            id: MessageID.ascending(),
+            parentID: user.id,
+            sessionID: session.id,
+            role: "assistant",
+            mode: "build",
+            agent: "build",
+            path: { cwd: tmp.path, root: tmp.path },
+            tokens: {
+              input: 0,
+              output: 0,
+              reasoning: 0,
+              cache: { read: 0, write: 0 },
+            },
+            modelID: ModelID.make("test-model"),
+            providerID: ProviderID.make("test"),
+            time: { created: Date.now() + turn * 2 + 1 },
+          } as MessageV2.Assistant)
+          const part = await Session.updatePart({
+            id: PartID.ascending(),
+            messageID: assistant.id,
+            sessionID: session.id,
+            type: "tool",
+            callID: `call-${turn}`,
+            tool: "read",
+            state: {
+              status: "completed",
+              input: { filePath: `turn-${turn}.txt` },
+              output: turn === 2 ? "x".repeat(260_000) : "small",
+              title: "Read file",
+              metadata: {},
+              time: { start: turn, end: turn + 1, ...(turn === 3 ? { compacted: 123 } : {}) },
+            },
+          })
+          if (turn === 2) olderPartID = part.id
+        }
+
+        const before = await Session.messages({ sessionID: session.id })
+        await SessionCompaction.prune({ sessionID: session.id, messages: before })
+        const after = await Session.messages({ sessionID: session.id })
+        const olderPart = after
+          .flatMap((message) => message.parts)
+          .find((part): part is MessageV2.ToolPart => part.type === "tool" && part.id === olderPartID)
+
+        expect(olderPart?.state.status).toBe("completed")
+        if (olderPart?.state.status !== "completed") throw new Error("expected completed older tool part")
+        expect(olderPart.state.time.compacted).toBeNumber()
+      },
+    })
+  })
 })
 
 describe("session.compaction.process busy semantics", () => {

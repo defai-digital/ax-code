@@ -610,7 +610,7 @@ export namespace SessionProcessor {
                             patternCount,
                           })
                           const base = annotatedError === errorMsg ? sanitizedError : annotatedError
-                          annotatedError = `${base}\n\n${guidance}`
+                          annotatedError = `${base}\n\n<system-reminder>\n${guidance}\n</system-reminder>`
                         }
                       }
                     }
@@ -982,6 +982,7 @@ export namespace SessionProcessor {
           } catch (e: unknown) {
             deltaBatcher.flush()
             for (const k of Object.keys(toolInputCache)) delete toolInputCache[k]
+            toolCallTimestamps.length = 0
             if (currentText) {
               currentText.text = currentText.text.trimEnd()
               currentText.time = {

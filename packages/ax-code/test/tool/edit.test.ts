@@ -757,6 +757,11 @@ describe("tool.edit", () => {
 
       expect(output).toBe("  function foo() { return 2 }\r\n// reference to function foo() { return 1 }\r\n")
     })
+
+    test("uses fuzzy match positions instead of duplicate match text", () => {
+      const output = replace("target()\n// target()\n", "  target()", "updated()")
+      expect(output).toBe("updated()\n// target()\n")
+    })
   })
 
   describe("concurrent editing", () => {

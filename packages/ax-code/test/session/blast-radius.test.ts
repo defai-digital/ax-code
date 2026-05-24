@@ -171,6 +171,25 @@ describe("BlastRadius", () => {
     expect(() => BlastRadius.resetToolCalls(SID)).not.toThrow()
   })
 
+  test("cache eviction does not reset active cap state", () => {
+    const activeID = "ses_blast_active" as unknown as SessionID
+    const fillerIDs = Array.from({ length: 260 }, (_, index) => `ses_blast_filler_${index}` as unknown as SessionID)
+    try {
+      BlastRadius.reset(activeID)
+      for (const id of fillerIDs) BlastRadius.reset(id)
+
+      BlastRadius.get(activeID, { steps: 1000, files: 1000, lines: 100_000 })
+      BlastRadius.incrementStep(activeID)
+      for (const id of fillerIDs) BlastRadius.get(id)
+
+      expect(BlastRadius.get(activeID).steps).toBe(1)
+      expect(BlastRadius.sizeForTest()).toBeLessThanOrEqual(256)
+    } finally {
+      BlastRadius.reset(activeID)
+      for (const id of fillerIDs) BlastRadius.reset(id)
+    }
+  })
+
   test("perTool override merges into default seed instead of replacing it (regression)", () => {
     // A user who sets only `perTool: { bash: 0 }` to disable the bash
     // cap must not lose the seeded edit/write/apply_patch caps. The

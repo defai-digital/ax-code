@@ -572,6 +572,33 @@ describe("tool.bash isolation", () => {
     })
   })
 
+  test("rejects wget -O output target outside workspace", async () => {
+    await using outerTmp = await tmpdir()
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const bash = await BashTool.init()
+        const isolation = Isolation.resolve({ mode: "workspace-write", network: false }, tmp.path, tmp.path)
+        const testCtx = {
+          ...ctx,
+          ask: async () => {},
+          extra: { isolation },
+        }
+        const outsideFile = path.join(outerTmp.path, "payload.txt")
+        await expect(
+          bash.execute(
+            {
+              command: `wget -O ${outsideFile} https://example.invalid/payload`,
+              description: "Attempt wget outside workspace",
+            },
+            testCtx,
+          ),
+        ).rejects.toThrow(/outside workspace boundary|protected/)
+      },
+    })
+  })
+
   test("rejects interpreter inline absolute path inside `eval`", async () => {
     await using outerTmp = await tmpdir()
     await using tmp = await tmpdir({ git: true })

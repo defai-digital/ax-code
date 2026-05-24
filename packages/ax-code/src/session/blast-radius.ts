@@ -74,11 +74,7 @@ export namespace BlastRadius {
   export function get(sessionID: SessionID, overrides?: Partial<Caps>): State {
     let state = sessions.get(sessionID)
     if (!state) {
-      while (sessions.size >= MAX_SESSIONS) {
-        const oldest = sessions.keys().next().value
-        if (!oldest) break
-        sessions.delete(oldest)
-      }
+      evictEmptyStates()
       const caps = mergeCaps(defaultCaps(), overrides ?? {})
       state = { files: new Set(), lines: 0, steps: 0, toolCalls: new Map(), caps }
       sessions.set(sessionID, state)
@@ -92,8 +88,28 @@ export namespace BlastRadius {
     return state
   }
 
+  function evictEmptyStates() {
+    while (sessions.size >= MAX_SESSIONS) {
+      let evicted = false
+      for (const [id, state] of sessions) {
+        if (state.steps > 0 || state.lines > 0 || state.files.size > 0 || state.toolCalls.size > 0) continue
+        sessions.delete(id)
+        evicted = true
+        break
+      }
+      if (!evicted) {
+        log.warn("blast-radius session cache is full; preserving active cap state", { size: sessions.size })
+        break
+      }
+    }
+  }
+
   export function reset(sessionID: SessionID) {
     sessions.delete(sessionID)
+  }
+
+  export function sizeForTest() {
+    return sessions.size
   }
 
   /**
