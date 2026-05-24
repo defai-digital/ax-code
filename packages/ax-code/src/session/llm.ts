@@ -393,7 +393,7 @@ export namespace LLM {
         },
       })
     } catch (error) {
-      if (pacingReservation) void releaseSuperLongPacingReservation(pacingReservation)
+      if (pacingReservation) await releaseSuperLongPacingReservation(pacingReservation)
       throw error
     }
     return attachSuperLongPacingReservation(output, pacingReservation, input.abort)
@@ -484,19 +484,24 @@ export namespace LLM {
 
     let started = false
     let released = false
+    let releasePromise: Promise<void> | undefined
     const release = () => {
-      if (released || started) return
+      if (released || started) return releasePromise ?? Promise.resolve()
       released = true
-      void releaseSuperLongPacingReservation(reservation)
+      releasePromise = releaseSuperLongPacingReservation(reservation)
+      return releasePromise
+    }
+    const releaseOnAbort = () => {
+      void release()
     }
     const markStarted = () => {
       started = true
-      signal.removeEventListener("abort", release)
+      signal.removeEventListener("abort", releaseOnAbort)
     }
     if (signal.aborted) {
-      release()
+      void release()
     } else {
-      signal.addEventListener("abort", release, { once: true })
+      signal.addEventListener("abort", releaseOnAbort, { once: true })
     }
 
     const fullStream = (async function* () {
@@ -505,12 +510,12 @@ export namespace LLM {
           if (!started) markStarted()
           yield chunk
         }
-        if (!started) release()
+        if (!started) await release()
       } catch (error) {
-        if (!started) release()
+        if (!started) await release()
         throw error
       } finally {
-        signal.removeEventListener("abort", release)
+        signal.removeEventListener("abort", releaseOnAbort)
       }
     })()
 
