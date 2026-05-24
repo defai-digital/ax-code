@@ -102,6 +102,26 @@ export namespace SessionGoal {
     }
   }
 
+  const ACTIVE_GOAL_ERROR =
+    "session already has an active goal; pause, complete, block, or clear it before creating another goal"
+
+  function canReplaceWithoutExplicitReplace(row: typeof SessionGoalTable.$inferSelect) {
+    return row.status === "complete" || row.status === "blocked" || row.status === "budget_limited"
+  }
+
+  function assertCanSetStatus(row: typeof SessionGoalTable.$inferSelect, status: Status) {
+    if (
+      status === "active" &&
+      row.status === "budget_limited" &&
+      row.token_budget !== null &&
+      row.tokens_used >= row.token_budget
+    ) {
+      throw new Error(
+        "Cannot resume a budget-limited goal without increasing the token budget. Start a new goal with a larger budget or clear the current goal first.",
+      )
+    }
+  }
+
   export async function create(input: {
     sessionID: SessionID
     objective: string
@@ -113,32 +133,54 @@ export namespace SessionGoal {
     if (input.tokenBudget !== undefined && (!Number.isInteger(input.tokenBudget) || input.tokenBudget <= 0)) {
       throw new Error("Goal token budget must be a positive integer")
     }
-    if (!input.replace) await requireActiveSlot(input.sessionID)
-
     const now = Date.now()
-    const goal = Database.use((db) => {
-      db.insert(SessionGoalTable)
-        .values({
-          session_id: input.sessionID,
+    const values = {
+      session_id: input.sessionID,
+      objective,
+      status: "active",
+      token_budget: input.tokenBudget,
+      tokens_used: 0,
+      time_used_seconds: 0,
+      time_created: now,
+      time_updated: now,
+    } satisfies typeof SessionGoalTable.$inferInsert
+    const goal = Database.transaction((db) => {
+      if (input.replace) {
+        db.insert(SessionGoalTable)
+          .values(values)
+          .onConflictDoUpdate({
+            target: SessionGoalTable.session_id,
+            set: {
+              objective,
+              status: "active",
+              token_budget: input.tokenBudget ?? null,
+              tokens_used: 0,
+              time_used_seconds: 0,
+              time_updated: now,
+            },
+          })
+          .run()
+        return fromRow(
+          db.select().from(SessionGoalTable).where(eq(SessionGoalTable.session_id, input.sessionID)).get()!,
+        )
+      }
+
+      const inserted = db.insert(SessionGoalTable).values(values).onConflictDoNothing().returning().get()
+      if (inserted) return fromRow(inserted)
+      const row = db.select().from(SessionGoalTable).where(eq(SessionGoalTable.session_id, input.sessionID)).get()
+      if (!row || !canReplaceWithoutExplicitReplace(row)) {
+        throw new Error(ACTIVE_GOAL_ERROR)
+      }
+      db.update(SessionGoalTable)
+        .set({
           objective,
           status: "active",
-          token_budget: input.tokenBudget,
+          token_budget: input.tokenBudget ?? null,
           tokens_used: 0,
           time_used_seconds: 0,
-          time_created: now,
           time_updated: now,
         })
-        .onConflictDoUpdate({
-          target: SessionGoalTable.session_id,
-          set: {
-            objective,
-            status: "active",
-            token_budget: input.tokenBudget ?? null,
-            tokens_used: 0,
-            time_used_seconds: 0,
-            time_updated: now,
-          },
-        })
+        .where(eq(SessionGoalTable.session_id, input.sessionID))
         .run()
       return fromRow(db.select().from(SessionGoalTable).where(eq(SessionGoalTable.session_id, input.sessionID)).get()!)
     })
@@ -151,6 +193,7 @@ export namespace SessionGoal {
     const goal = Database.use((db) => {
       const row = db.select().from(SessionGoalTable).where(eq(SessionGoalTable.session_id, input.sessionID)).get()
       if (!row) throw new Error("No goal is set for this session")
+      assertCanSetStatus(row, input.status)
       db.update(SessionGoalTable)
         .set({ status: input.status, time_updated: now })
         .where(eq(SessionGoalTable.session_id, input.sessionID))
@@ -166,13 +209,6 @@ export namespace SessionGoal {
   }
 
   export async function resume(sessionID: SessionID) {
-    const goal = await get(sessionID)
-    if (!goal) throw new Error("No goal is set for this session")
-    if (goal.status === "budget_limited" && goal.tokenBudget !== undefined && goal.tokensUsed >= goal.tokenBudget) {
-      throw new Error(
-        "Cannot resume a budget-limited goal without increasing the token budget. Start a new goal with a larger budget or clear the current goal first.",
-      )
-    }
     return setStatus({ sessionID, status: "active" })
   }
 

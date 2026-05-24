@@ -156,6 +156,27 @@ describe("SessionGoal", () => {
     })
   })
 
+  test("concurrent goal creation does not replace an active goal", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const results = await Promise.allSettled([
+          SessionGoal.create({ sessionID: session.id, objective: "first concurrent goal" }),
+          SessionGoal.create({ sessionID: session.id, objective: "second concurrent goal" }),
+        ])
+
+        expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1)
+        expect(results.filter((result) => result.status === "rejected")).toHaveLength(1)
+        expect((await SessionGoal.get(session.id))?.objective).toBe("first concurrent goal")
+
+        await Session.remove(session.id)
+      },
+    })
+  })
+
   test("refuses to resume a budget-limited goal that is already over budget", async () => {
     await using tmp = await tmpdir({ git: true })
 
@@ -193,6 +214,9 @@ describe("SessionGoal", () => {
         })
 
         await expect(SessionGoal.resume(session.id)).rejects.toThrow("Cannot resume a budget-limited goal")
+        await expect(SessionGoal.setStatus({ sessionID: session.id, status: "active" })).rejects.toThrow(
+          "Cannot resume a budget-limited goal",
+        )
         expect((await SessionGoal.get(session.id))?.status).toBe("budget_limited")
 
         await Session.remove(session.id)
@@ -282,6 +306,63 @@ describe("SessionGoal", () => {
             message.parts.some((part) => part.type === "text" && part.text.includes("goal auto-continuation 1/1")),
           ),
         ).toBe(true)
+
+        await Session.remove(session.id)
+      },
+    })
+  })
+
+  test("budget-limited goal schedules one wrap-up continuation", async () => {
+    await using tmp = await tmpdir({ git: true, config: { session: { max_continuations: 2 } } })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        await SessionGoal.create({
+          sessionID: session.id,
+          objective: "summarize budgeted work",
+          tokenBudget: 10,
+        })
+        modelSpy = spyOn(Provider, "getModel").mockResolvedValue(model)
+        let streams = 0
+        streamSpy = spyOn(LLM, "stream").mockImplementation((async () => {
+          streams++
+          return {
+            fullStream: (async function* () {
+              yield { type: "start" }
+              yield { type: "start-step" }
+              yield { type: "text-start", id: `text_${streams}` }
+              yield { type: "text-delta", id: `text_${streams}`, text: streams === 1 ? "work" : "wrap up" }
+              yield { type: "text-end", id: `text_${streams}` }
+              yield {
+                type: "finish-step",
+                finishReason: "stop",
+                usage: {
+                  inputTokens: 8,
+                  outputTokens: 4,
+                  totalTokens: 12,
+                },
+              }
+              yield { type: "finish" }
+            })(),
+          } as any
+        }) as any)
+
+        await SessionPrompt.prompt({
+          sessionID: session.id,
+          agent: "build",
+          model: { providerID: model.providerID, modelID: model.id },
+          parts: [{ type: "text", text: "start budgeted work" }],
+        })
+
+        expect(streamSpy?.mock.calls.length ?? 0).toBeGreaterThanOrEqual(2)
+        expect((await SessionGoal.get(session.id))?.status).toBe("budget_limited")
+        const messages = await Session.messages({ sessionID: session.id })
+        const budgetContinuationCount = messages.filter((message) =>
+          message.parts.some((part) => part.type === "text" && part.text.includes("has reached its token budget")),
+        ).length
+        expect(budgetContinuationCount).toBe(1)
 
         await Session.remove(session.id)
       },
