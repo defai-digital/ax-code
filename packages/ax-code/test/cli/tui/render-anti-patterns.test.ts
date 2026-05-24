@@ -698,12 +698,14 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(submitBody).toContain("const slashHasArguments = slashToken ? inputText.trim() !== slashToken : false")
   })
 
-  test("exposes the session goal action as a slash command", async () => {
+  test("exposes the durable goal backend command in slash autocomplete", async () => {
+    const autocomplete = await fs.readFile(AUTOCOMPLETE_SRC, "utf8")
     const displayCommands = await fs.readFile(DISPLAY_COMMANDS_SRC, "utf8")
 
+    expect(autocomplete).toContain('new Set(["init", "review", "impact", "goal"])')
     expect(displayCommands).toContain('title: "View session goal"')
     expect(displayCommands).toContain('value: "session.goal"')
-    expect(displayCommands).toContain('name: "goal"')
+    expect(displayCommands).not.toContain('name: "goal"')
   })
 
   test("hides assistant thinking spinner once the message has an error", async () => {
