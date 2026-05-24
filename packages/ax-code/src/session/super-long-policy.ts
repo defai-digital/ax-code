@@ -19,6 +19,10 @@ export namespace SuperLongPolicy {
     | { ok: true; durationMs: number }
     | { ok: false; reason: "duration_exceeds_ceiling"; maxDurationMs: number; requestedDurationMs: number }
 
+  export type DeadlineDecision =
+    | { ok: true; expired: boolean; elapsedMs: number; durationMs: number }
+    | { ok: false; reason: "duration_exceeds_ceiling"; maxDurationMs: number; requestedDurationMs: number }
+
   export type PacingPolicy = {
     windowMs: number
     maxRequests: number
@@ -95,6 +99,23 @@ export namespace SuperLongPolicy {
       }
     }
     return { ok: true, durationMs }
+  }
+
+  export function deadline(input: {
+    enabled: boolean
+    startedAt: number
+    now: number
+    requestedDurationMs?: number
+  }): DeadlineDecision {
+    const durationDecision = duration(input.requestedDurationMs)
+    if (!durationDecision.ok) return durationDecision
+    const elapsedMs = Math.max(0, input.now - input.startedAt)
+    return {
+      ok: true,
+      expired: input.enabled && elapsedMs >= durationDecision.durationMs,
+      elapsedMs,
+      durationMs: durationDecision.durationMs,
+    }
   }
 
   export function evaluatePacing(input: { now: number; state: PacingState; policy: PacingPolicy }): PacingDecision {

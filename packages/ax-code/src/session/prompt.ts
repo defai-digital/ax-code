@@ -93,6 +93,7 @@ import {
 import { estimateRequestTokens, getLastUserInfo } from "./prompt-request"
 import { AutonomousContinuationPrompt } from "./prompt-autonomous-continuations"
 import { emptyModelTurnDecision } from "./prompt-autonomous-decisions"
+import { SuperLongPolicy } from "./super-long-policy"
 
 // @ts-ignore
 globalThis.AI_SDK_LOG_WARNINGS = false
@@ -414,6 +415,7 @@ export namespace SessionPrompt {
     const maxContinuations = cfg.session?.max_continuations ?? 3
     const maxTodoRetries = cfg.session?.max_todo_retries ?? 10
     const maxCompletionGateRetries = Math.min(maxTodoRetries, 2)
+    const superLongStartedAt = Date.now()
     let todoRetries = 0
     let completionGateRetries = 0
     let lastCompletionGateSignature: string | undefined
@@ -433,6 +435,51 @@ export namespace SessionPrompt {
     let fallbackModelOverride: MessageV2.User["model"] | undefined
     // Cache session history — only load from DB on first step, refresh on subsequent steps
     let cachedMsgs: MessageV2.WithParts[] | undefined
+
+    async function createSyntheticStopAssistant(input: { lastUser: MessageV2.User; message: string }) {
+      const created = Date.now()
+      const assistant: MessageV2.Assistant = {
+        id: MessageID.ascending(),
+        parentID: input.lastUser.id,
+        role: "assistant",
+        mode: input.lastUser.agent,
+        agent: input.lastUser.agent,
+        variant: input.lastUser.variant,
+        path: {
+          cwd: Instance.directory,
+          root: Instance.worktree,
+        },
+        tokens: {
+          input: 0,
+          output: 0,
+          reasoning: 0,
+          cache: { read: 0, write: 0 },
+        },
+        modelID: input.lastUser.model.modelID,
+        providerID: input.lastUser.model.providerID,
+        time: {
+          created,
+          completed: created,
+        },
+        sessionID,
+        finish: "stop",
+        error: new NamedError.Unknown({ message: input.message }).toObject(),
+      }
+      const part: MessageV2.TextPart = {
+        type: "text",
+        id: PartID.ascending(),
+        messageID: assistant.id,
+        sessionID,
+        text: input.message,
+        synthetic: true,
+        time: {
+          start: created,
+          end: created,
+        },
+      }
+      await Session.updateMessageWithParts(assistant, [part])
+      return assistant
+    }
 
     async function continueAutonomousLoop({
       text,
@@ -561,6 +608,62 @@ export namespace SessionPrompt {
           ...lastUser,
           model: fallbackModelOverride,
         }
+      }
+      const superLongState = SuperLongPolicy.runtimeState({
+        modelID: lastUser.model.modelID,
+        config: { enabled: cfg.super_long },
+      })
+      const superLongDeadline = SuperLongPolicy.deadline({
+        enabled: autonomous && superLongState.enabled,
+        startedAt: superLongStartedAt,
+        now: Date.now(),
+      })
+      if (!superLongDeadline.ok) {
+        const message =
+          `Super-Long mode stopped because the requested runtime ceiling exceeds the hard 72 hour limit. ` +
+          `Reduce the requested duration and resume the session.`
+        log.warn("super-long deadline rejected", {
+          command: "session.prompt.loop",
+          status: "error",
+          errorCode: "SUPER_LONG_DURATION_EXCEEDS_CEILING",
+          sessionID,
+          requestedDurationMs: superLongDeadline.requestedDurationMs,
+          maxDurationMs: superLongDeadline.maxDurationMs,
+        })
+        if (!(lastAssistant?.finish && lastUser.id < lastAssistant.id)) {
+          await createSyntheticStopAssistant({ lastUser, message })
+          cachedMsgs = undefined
+        }
+        Session.publishError({
+          sessionID,
+          message,
+        })
+        reason = "step_limit"
+        break
+      }
+      if (superLongDeadline.expired) {
+        const message =
+          `Super-Long mode stopped after reaching the hard 72 hour runtime ceiling. ` +
+          `Review the current state, then resume with a new supervised run if more work is required.`
+        log.warn("super-long deadline reached", {
+          command: "session.prompt.loop",
+          status: "stopped",
+          errorCode: "SUPER_LONG_DEADLINE_REACHED",
+          sessionID,
+          elapsedMs: superLongDeadline.elapsedMs,
+          durationMs: superLongDeadline.durationMs,
+          source: superLongState.source,
+        })
+        if (!(lastAssistant?.finish && lastUser.id < lastAssistant.id)) {
+          await createSyntheticStopAssistant({ lastUser, message })
+          cachedMsgs = undefined
+        }
+        Session.publishError({
+          sessionID,
+          message,
+        })
+        reason = "step_limit"
+        break
       }
       if (
         lastAssistant?.finish &&

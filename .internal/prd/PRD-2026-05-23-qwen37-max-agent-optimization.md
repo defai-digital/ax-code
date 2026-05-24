@@ -132,7 +132,7 @@ Qwen3.7-Max's value is unlocked by stable long context, reliable tool use, think
 
 ### Phase 0: Coding-Ready Baseline and Readiness Audit
 
-Status: Complete. Shipped in v5.5.0.
+Status: Partial. v5.5.0 ships the UI toggle, Qwen3.7-Max default, Autonomous-gated request shaping, 72h deadline enforcement, provider/model request pacing, and trace hooks. The full supervised long-run contract remains open until cost budgets, checkpoint artifacts, approval gates, richer backoff state, explicit verifier configuration, and rollback-evidence enforcement are wired as runtime guarantees.
 
 Files likely touched:
 
@@ -526,4 +526,4 @@ This slice intentionally does not change runtime model routing or add the `Super
 - 2026-05-23: External feedback incorporated. The PRD now defines the Agent Optimization Layer and a credential-free first coding slice around readiness and route/profile classification.
 - 2026-05-23: Added `Super-Long` supervised long-run mode requirement: button placement left of `Autonomous`, default off except Qwen3.7-Max default on, hard 72h ceiling, and mandatory guardrails before runtime implementation.
 - 2026-05-23: Added Super-Long provider pacing requirements so long runs avoid short-window request bursts, concurrent-agent overload, and provider rate-limit loops.
-- 2026-05-23: v5.5.0 shipped Phase 0 (`qwen37-readiness.ts` readiness classifier for alibaba/openrouter/together/gateway), Phase 1 (`agent-optimization-profile.ts` task-route classifier + long-agent profile helpers), and Phase 7 UI (Super-Long toggle in TUI footer, `/super-long` server route, full sync bootstrap chain, config schema field, AX_CODE_SUPER_LONG flag). Qwen3.7-Max defaults Super-Long on when it is the configured model. Phases 2–6 remain planned.
+- 2026-05-23: v5.5.0 shipped Phase 0 (`qwen37-readiness.ts` readiness classifier for alibaba/openrouter/together/gateway), Phase 1 (`agent-optimization-profile.ts` task-route classifier + long-agent profile helpers), and the first Phase 7 slice (Super-Long toggle in TUI footer, `/super-long` server route, full sync bootstrap chain, config schema field, AX_CODE_SUPER_LONG_SESSION_OVERRIDE, Autonomous-gated request shaping, 72h deadline enforcement, and provider/model request pacing). Qwen3.7-Max defaults Super-Long on when it is the configured model and Autonomous guardrails are enabled. Full cost, checkpoint, approval, verifier, rollback, and backoff enforcement remains open before Phase 7 can close.

@@ -94,6 +94,54 @@ describe("SuperLongPolicy.duration", () => {
   })
 })
 
+describe("SuperLongPolicy.deadline", () => {
+  test("does not expire when Super-Long is disabled", () => {
+    expect(
+      SuperLongPolicy.deadline({
+        enabled: false,
+        startedAt: 0,
+        now: SuperLongPolicy.MAX_DURATION_MS + 1,
+      }),
+    ).toEqual({
+      ok: true,
+      expired: false,
+      elapsedMs: SuperLongPolicy.MAX_DURATION_MS + 1,
+      durationMs: SuperLongPolicy.MAX_DURATION_MS,
+    })
+  })
+
+  test("expires at the 72 hour ceiling when Super-Long is enabled", () => {
+    expect(
+      SuperLongPolicy.deadline({
+        enabled: true,
+        startedAt: 1_000,
+        now: 1_000 + SuperLongPolicy.MAX_DURATION_MS,
+      }),
+    ).toEqual({
+      ok: true,
+      expired: true,
+      elapsedMs: SuperLongPolicy.MAX_DURATION_MS,
+      durationMs: SuperLongPolicy.MAX_DURATION_MS,
+    })
+  })
+
+  test("rejects requested durations above the hard ceiling", () => {
+    expect(
+      SuperLongPolicy.deadline({
+        enabled: true,
+        startedAt: 0,
+        now: 0,
+        requestedDurationMs: SuperLongPolicy.MAX_DURATION_MS + 1,
+      }),
+    ).toEqual({
+      ok: false,
+      reason: "duration_exceeds_ceiling",
+      maxDurationMs: SuperLongPolicy.MAX_DURATION_MS,
+      requestedDurationMs: SuperLongPolicy.MAX_DURATION_MS + 1,
+    })
+  })
+})
+
 describe("SuperLongPolicy.evaluatePacing", () => {
   const policy: SuperLongPolicy.PacingPolicy = {
     windowMs: 60_000,

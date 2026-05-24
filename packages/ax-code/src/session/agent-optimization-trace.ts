@@ -14,6 +14,12 @@ export namespace AgentOptimizationTrace {
 
   export type PatchOutcome = "accepted" | "rejected" | "partial" | "not-attempted"
 
+  export type ToolObservation = {
+    tool: string
+    input?: unknown
+    status: "completed" | "error"
+  }
+
   export type TraceEvent = {
     // Correlation
     sessionID: string
@@ -77,6 +83,40 @@ export namespace AgentOptimizationTrace {
     droppedTiers: number[],
   ): ContextPackSummary {
     return { totalTokens, tierCounts, droppedTiers }
+  }
+
+  export function verificationCommand(input: unknown): string | undefined {
+    if (!input || typeof input !== "object") return undefined
+    const command = (input as { command?: unknown }).command
+    return typeof command === "string" ? command : undefined
+  }
+
+  export function isVerificationObservation(observation: Pick<ToolObservation, "tool" | "input">): boolean {
+    if (observation.tool === "verify_project") return true
+    if (observation.tool !== "bash") return false
+    const command = verificationCommand(observation.input)
+    if (!command) return false
+    return /\b(test|typecheck|tsc|lint|build|check|pytest|cargo\s+test|go\s+test|bun\s+test|pnpm\s+test|npm\s+test)\b/i.test(
+      command,
+    )
+  }
+
+  export function verificationStatusFromObservations(input: {
+    observations: readonly ToolObservation[]
+    repeatedFailureDetected: boolean
+  }): { status: VerificationStatus; command?: string } {
+    const verifier = input.observations.find(isVerificationObservation)
+    if (input.repeatedFailureDetected) {
+      return {
+        status: "fail",
+        command: verifier ? verificationCommand(verifier.input) ?? verifier.tool : undefined,
+      }
+    }
+    if (!verifier) return { status: "skip" }
+    return {
+      status: verifier.status === "completed" ? "pass" : "fail",
+      command: verificationCommand(verifier.input) ?? verifier.tool,
+    }
   }
 
   // Serialize a trace event to a JSON string. Redaction: caller must not pass

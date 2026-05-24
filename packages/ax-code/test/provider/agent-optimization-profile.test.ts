@@ -64,6 +64,10 @@ describe("qwen37MaxLongAgentProfile", () => {
     expect(qwen37MaxLongAgentProfile().contextPackingBudget).toBe("wide")
   })
 
+  test("uses a long-context pack token budget", () => {
+    expect(qwen37MaxLongAgentProfile().contextPackTokenBudget).toBe(128_000)
+  })
+
   test("enables thinking", () => {
     expect(qwen37MaxLongAgentProfile().thinkingEnabled).toBe(true)
   })
@@ -88,6 +92,7 @@ describe("qwen37MaxLongAgentProfile", () => {
 describe("defaultLongAgentProfile", () => {
   test("uses narrow context packing budget", () => {
     expect(defaultLongAgentProfile().contextPackingBudget).toBe("narrow")
+    expect(defaultLongAgentProfile().contextPackTokenBudget).toBe(8_000)
   })
 
   test("disables all premium features", () => {

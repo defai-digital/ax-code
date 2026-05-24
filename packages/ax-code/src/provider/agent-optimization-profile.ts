@@ -7,6 +7,7 @@ export interface TaskRouteClassification {
 
 export interface LongAgentProfile {
   contextPackingBudget: "narrow" | "wide"
+  contextPackTokenBudget: number
   thinkingEnabled: boolean
   preserveThinkingEligible: boolean
   promptCacheEligible: boolean
@@ -34,6 +35,7 @@ export function classifyTaskForModelRoute(input: {
 export function qwen37MaxLongAgentProfile(): LongAgentProfile {
   return {
     contextPackingBudget: "wide",
+    contextPackTokenBudget: 128_000,
     thinkingEnabled: true,
     preserveThinkingEligible: true,
     promptCacheEligible: true,
@@ -45,6 +47,7 @@ export function qwen37MaxLongAgentProfile(): LongAgentProfile {
 export function defaultLongAgentProfile(): LongAgentProfile {
   return {
     contextPackingBudget: "narrow",
+    contextPackTokenBudget: 8_000,
     thinkingEnabled: false,
     preserveThinkingEligible: false,
     promptCacheEligible: false,
