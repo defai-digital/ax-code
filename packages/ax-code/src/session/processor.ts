@@ -117,6 +117,7 @@ export namespace SessionProcessor {
       return visit(obj, 0)
     }
     const recentToolRing: { tool: string; input: string }[] = []
+    const doomLoopWarnings: Record<string, string> = {}
     let stepToolCallCount = 0
     let stepErrorSurfaces: string[] = []
     let stepTouchedFiles: Array<{ path: string; summary: string }> = []
@@ -421,9 +422,10 @@ export namespace SessionProcessor {
                         // would auto-approve and waste the detection). Clear
                         // the ring buffer so the tool call proceeds this time
                         // but the detector rearms for the next batch. The
-                        // model sees the identical results in its history
-                        // which should prompt a strategy change. Step limits
-                        // bound total damage if the model keeps repeating.
+                        // model sees the tool result plus a reminder in its
+                        // history, which should prompt a strategy change.
+                        // Step limits bound total damage if the model keeps
+                        // repeating.
                         // Filter rather than clear: clearing the whole
                         // ring rearms detection for ALL tools, widening
                         // the next-detection window for unrelated tools
@@ -440,38 +442,40 @@ export namespace SessionProcessor {
                           removed: before - recentToolRing.length,
                           remaining: recentToolRing.length,
                         })
-                        break
-                      }
-                      // `Agent.get()` returns undefined if the agent
-                      // was removed or renamed mid-session (e.g. via
-                      // config reload). Accessing `.permission` on
-                      // undefined would crash the entire processor
-                      // pipeline mid-loop. An empty ruleset falls
-                      // through to the default "ask" behavior, which
-                      // is the same semantic the full ruleset would
-                      // have for a doom_loop permission that isn't
-                      // explicitly allowed — the user sees the prompt
-                      // either way. See BUG-68.
-                      const agent = await Agent.get(input.assistantMessage.agent)
-                      await Permission.ask(
-                        {
-                          permission: "doom_loop",
-                          patterns: [value.toolName],
-                          sessionID: input.assistantMessage.sessionID,
-                          metadata: {
-                            tool: value.toolName,
-                            input: value.input,
+                        doomLoopWarnings[value.toolCallId] =
+                          "Autonomous doom-loop detection saw this tool call repeat with the same input. The tool was still executed so the conversation history stays consistent. On the next step, change strategy instead of repeating the same call."
+                      } else {
+                        // `Agent.get()` returns undefined if the agent
+                        // was removed or renamed mid-session (e.g. via
+                        // config reload). Accessing `.permission` on
+                        // undefined would crash the entire processor
+                        // pipeline mid-loop. An empty ruleset falls
+                        // through to the default "ask" behavior, which
+                        // is the same semantic the full ruleset would
+                        // have for a doom_loop permission that isn't
+                        // explicitly allowed — the user sees the prompt
+                        // either way. See BUG-68.
+                        const agent = await Agent.get(input.assistantMessage.agent)
+                        await Permission.ask(
+                          {
+                            permission: "doom_loop",
+                            patterns: [value.toolName],
+                            sessionID: input.assistantMessage.sessionID,
+                            metadata: {
+                              tool: value.toolName,
+                              input: value.input,
+                            },
+                            always: [value.toolName],
+                            ruleset: agent?.permission ?? [],
                           },
-                          always: [value.toolName],
-                          ruleset: agent?.permission ?? [],
-                        },
-                        // Without the signal, a session cancel while a
-                        // permission dialog is open leaves the tool-call
-                        // frame owned by the pending deferred. The session
-                        // shows idle but the leftover promise is still
-                        // attached.
-                        { signal: input.abort },
-                      )
+                          // Without the signal, a session cancel while a
+                          // permission dialog is open leaves the tool-call
+                          // frame owned by the pending deferred. The session
+                          // shows idle but the leftover promise is still
+                          // attached.
+                          { signal: input.abort },
+                        )
+                      }
                     }
                   }
                   break
@@ -486,12 +490,17 @@ export namespace SessionProcessor {
                   const match = toolcalls[value.toolCallId]
                   if (match && match.state.status === "running") {
                     const toolEndTime = Date.now()
+                    const doomLoopWarning = doomLoopWarnings[value.toolCallId]
+                    const output =
+                      doomLoopWarning && typeof value.output.output === "string"
+                        ? `${value.output.output}\n\n<system-reminder>\n${doomLoopWarning}\n</system-reminder>`
+                        : value.output.output
                     await Session.updatePart.force({
                       ...match,
                       state: {
                         status: "completed",
                         input: value.input ?? match.state.input,
-                        output: value.output.output,
+                        output,
                         metadata: value.output.metadata,
                         title: value.output.title,
                         time: {
@@ -508,7 +517,7 @@ export namespace SessionProcessor {
                       tool: match.tool,
                       callID: value.toolCallId,
                       status: "completed",
-                      output: typeof value.output.output === "string" ? value.output.output.slice(0, 1000) : undefined,
+                      output: typeof output === "string" ? output.slice(0, 1000) : undefined,
                       metadata: value.output.metadata,
                       durationMs: toolEndTime - match.state.time.start,
                       stepIndex: attempt,
@@ -537,6 +546,7 @@ export namespace SessionProcessor {
                     if (recentToolRing.length > RING_LIMIT) recentToolRing.shift()
                     delete toolcalls[value.toolCallId]
                     delete toolInputCache[value.toolCallId]
+                    delete doomLoopWarnings[value.toolCallId]
                   }
                   break
                 }
@@ -563,6 +573,7 @@ export namespace SessionProcessor {
                     // "self-correction active" but the model received no
                     // guidance on its next turn.
                     let annotatedError = errorMsg
+                    const doomLoopWarning = doomLoopWarnings[value.toolCallId]
                     if (
                       !(value.error instanceof Permission.RejectedError) &&
                       !(value.error instanceof Question.RejectedError)
@@ -600,6 +611,9 @@ export namespace SessionProcessor {
                           annotatedError = `${sanitizeForXmlTag(annotatedError)}\n\n${guidance}`
                         }
                       }
+                    }
+                    if (doomLoopWarning) {
+                      annotatedError = `${sanitizeForXmlTag(annotatedError)}\n\n<system-reminder>\n${doomLoopWarning}\n</system-reminder>`
                     }
 
                     await Session.updatePart.force({
@@ -651,6 +665,7 @@ export namespace SessionProcessor {
                     if (recentToolRing.length > RING_LIMIT) recentToolRing.shift()
                     delete toolcalls[value.toolCallId]
                     delete toolInputCache[value.toolCallId]
+                    delete doomLoopWarnings[value.toolCallId]
                   }
                   break
                 }
@@ -810,9 +825,7 @@ export namespace SessionProcessor {
                       tokenBudget: profile.contextPackingBudget === "wide" ? 32_000 : 8_000,
                       touchedFiles: stepTouchedFiles,
                       toolConstraints:
-                        stepToolCallCount > 0
-                          ? `${stepToolCallCount} tool call(s) observed in this step.`
-                          : undefined,
+                        stepToolCallCount > 0 ? `${stepToolCallCount} tool call(s) observed in this step.` : undefined,
                       historicalFailures: failureDetect.detected
                         ? [`${failureDetect.surface ?? "unknown"} repeated ${failureDetect.count ?? 0} times`]
                         : undefined,

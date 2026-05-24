@@ -40,7 +40,7 @@ export namespace SessionRetry {
     const parsed = Number(trimmed)
     if (!Number.isFinite(parsed) || parsed < 0) return undefined
 
-    return Math.min(Math.ceil(parsed * multiplier), RETRY_MAX_DELAY)
+    return Math.min(Math.ceil(parsed * multiplier), RETRY_MAX_DELAY_NO_HEADERS)
   }
 
   function retryAfterDelay(value: string | undefined) {
@@ -49,7 +49,7 @@ export namespace SessionRetry {
     if (value === undefined) return undefined
 
     const parsed = Date.parse(value) - Date.now()
-    if (Number.isFinite(parsed) && parsed > 0) return Math.min(Math.ceil(parsed), RETRY_MAX_DELAY)
+    if (Number.isFinite(parsed) && parsed > 0) return Math.min(Math.ceil(parsed), RETRY_MAX_DELAY_NO_HEADERS)
     return undefined
   }
 

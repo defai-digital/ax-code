@@ -88,12 +88,18 @@ describe("session.retry.delay", () => {
     expect(d).toBeLessThanOrEqual(2500)
   })
 
-  test("uses retry-after values even when exceeding 10 minutes with headers", () => {
+  test("caps retry-after values at 30 seconds", () => {
     const error = apiError({ "retry-after": "50" })
-    expect(SessionRetry.delay(1, error)).toBe(50000)
+    expect(SessionRetry.delay(1, error)).toBe(SessionRetry.RETRY_MAX_DELAY_NO_HEADERS)
 
     const longError = apiError({ "retry-after-ms": "700000" })
-    expect(SessionRetry.delay(1, longError)).toBe(700000)
+    expect(SessionRetry.delay(1, longError)).toBe(SessionRetry.RETRY_MAX_DELAY_NO_HEADERS)
+  })
+
+  test("caps future http-date retry-after values at 30 seconds", () => {
+    const date = new Date(Date.now() + 120_000).toUTCString()
+    const error = apiError({ "retry-after": date })
+    expect(SessionRetry.delay(1, error)).toBe(SessionRetry.RETRY_MAX_DELAY_NO_HEADERS)
   })
 
   test("sleep caps delay to max 32-bit signed integer to avoid TimeoutOverflowWarning", async () => {
