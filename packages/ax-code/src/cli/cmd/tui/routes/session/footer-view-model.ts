@@ -246,7 +246,7 @@ export function footerSessionStatusView(input: {
 
   const staleHint =
     status.waitState === "tool"
-      ? `Tool ${inactive}`
+      ? `no tool update · ${inactive}`
       : status.waitState === "llm"
         ? undefined
         : `Inactive ${inactive}`
@@ -254,7 +254,7 @@ export function footerSessionStatusView(input: {
     status.waitState === "tool"
       ? `Still ${lowerFirst(label)}`
       : status.waitState === "llm"
-        ? "Model stale"
+        ? "Still waiting for model"
         : "Still working"
   const waiting = elapsed ? `${waitingText} · ${elapsed}` : waitingText
   const labelWithHint = staleHint ? `${waiting} · ${staleHint}` : waiting
@@ -281,7 +281,7 @@ export function footerAgentControlStatusView(
 ): FooterAgentControlStatusView | undefined {
   if (tools && tools.openTaskCalls.length > 0) {
     return {
-      label: Locale.pluralize(tools.openTaskCalls.length, "{} subagent", "{} subagents"),
+      label: Locale.pluralize(tools.openTaskCalls.length, "Agent waiting: {} subagent", "Agent waiting: {} subagents"),
       tone: summary?.completed ? "warning" : "working",
     }
   }
@@ -294,13 +294,13 @@ export function footerAgentControlStatusView(
   if (!summary) return
   if (summary.completed) {
     return {
-      label: "Complete",
+      label: "Agent complete",
       tone: "success",
     }
   }
   if (summary.blockedReason) {
     return {
-      label: `Blocked: ${shortFooterText(summary.blockedReason, 28)}`,
+      label: `Agent blocked: ${shortFooterText(summary.blockedReason, 28)}`,
       tone: "warning",
     }
   }
@@ -314,7 +314,7 @@ export function footerAgentControlStatusView(
     parts.push(`plan ${summary.plan.progress.completed}/${summary.plan.progress.total}`)
   }
   if (summary.safety.shadow > 0) {
-    parts.push(`shadow: ${summary.safety.shadow}`)
+    parts.push(`shadow safety ${summary.safety.shadow}`)
   }
   if (parts.length === 0) return
 
