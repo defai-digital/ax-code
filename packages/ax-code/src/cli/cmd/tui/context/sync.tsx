@@ -236,6 +236,9 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
       setStore,
       sessionSync: sessionSync.sync,
       workspaceSync: syncWorkspaces,
+      runtime: {
+        syncSuperLong,
+      },
       bootstrap,
     })
   },

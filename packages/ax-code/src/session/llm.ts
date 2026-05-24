@@ -29,6 +29,7 @@ import { AgentControl } from "@/control-plane/agent-control"
 import { AgentControlEvents } from "@/control-plane/agent-control-events"
 import { isNonEmptyRecord } from "@/util/record"
 import { SuperLongPolicy } from "./super-long-policy"
+import { SuperLongRuntime } from "./super-long-runtime"
 import { longAgentProfileForModel } from "@/provider/agent-optimization-profile"
 import { PromptCachePolicy } from "@/provider/prompt-cache-policy"
 import { LongAgentContextPacker } from "@/context/long-agent-packer"
@@ -392,7 +393,7 @@ export namespace LLM {
         },
       })
     } catch (error) {
-      if (pacingReservation) releaseSuperLongPacingReservation(pacingReservation)
+      if (pacingReservation) void releaseSuperLongPacingReservation(pacingReservation)
       throw error
     }
     return attachSuperLongPacingReservation(output, pacingReservation, input.abort)
@@ -417,10 +418,48 @@ export namespace LLM {
     if (!input.enabled || input.small) return
     const key = superLongPacingKey(input)
     const policy = input.policy ?? SuperLongPolicy.providerPacing(input.providerID)
+    const durablePacingDisabled = ["0", "false"].includes(
+      (process.env.AX_CODE_SUPER_LONG_DURABLE_PACING ?? "").toLowerCase(),
+    )
+    const inMemoryOnly =
+      durablePacingDisabled || input.policy !== undefined || input.now !== undefined || input.sleep !== undefined
     while (true) {
-      const state = superLongPacing.get(key) ?? { timestamps: [] }
       const now = input.now?.() ?? Date.now()
-      const decision = SuperLongPolicy.evaluatePacing({ now, state, policy })
+      let decision: SuperLongPolicy.PacingDecision
+      let reservedState: SuperLongPolicy.PacingState | undefined
+      if (inMemoryOnly) {
+        const state = superLongPacing.get(key) ?? { timestamps: [] }
+        decision = SuperLongPolicy.evaluatePacing({ now, state, policy })
+        if (decision.waitMs === 0) {
+          reservedState = SuperLongPolicy.recordRequest({
+            now,
+            state,
+            policy,
+          })
+          superLongPacing.set(key, reservedState)
+        }
+      } else {
+        const reservation = await SuperLongRuntime.reservePacing({ key, now, policy }).catch((error) => {
+          log.warn("failed to reserve durable super-long pacing; falling back to process-local pacing", {
+            providerID: input.providerID,
+            modelID: input.modelID,
+            sessionID: input.sessionID,
+            error,
+          })
+        })
+        if (reservation) {
+          decision = reservation.decision
+          reservedState = reservation.state
+          if (reservedState) superLongPacing.set(key, reservedState)
+        } else {
+          const state = superLongPacing.get(key) ?? { timestamps: [] }
+          decision = SuperLongPolicy.evaluatePacing({ now, state, policy })
+          if (decision.waitMs === 0) {
+            reservedState = SuperLongPolicy.recordRequest({ now, state, policy })
+            superLongPacing.set(key, reservedState)
+          }
+        }
+      }
       if (decision.waitMs > 0) {
         log.info("super-long provider pacing wait", {
           providerID: input.providerID,
@@ -432,14 +471,6 @@ export namespace LLM {
         await (input.sleep ?? sleep)(decision.waitMs, input.abort)
         continue
       }
-      superLongPacing.set(
-        key,
-        SuperLongPolicy.recordRequest({
-          now,
-          state,
-          policy,
-        }),
-      )
       return { key, timestamp: now }
     }
   }
@@ -456,7 +487,7 @@ export namespace LLM {
     const release = () => {
       if (released || started) return
       released = true
-      releaseSuperLongPacingReservation(reservation)
+      void releaseSuperLongPacingReservation(reservation)
     }
     const markStarted = () => {
       started = true
@@ -491,15 +522,28 @@ export namespace LLM {
     })
   }
 
-  function releaseSuperLongPacingReservation(reservation: SuperLongPacingReservation) {
+  async function releaseSuperLongPacingReservation(reservation: SuperLongPacingReservation) {
     const state = superLongPacing.get(reservation.key)
-    if (!state) return
-    const timestamps = [...state.timestamps]
-    const index = timestamps.indexOf(reservation.timestamp)
-    if (index === -1) return
-    timestamps.splice(index, 1)
-    if (timestamps.length === 0) superLongPacing.delete(reservation.key)
-    else superLongPacing.set(reservation.key, { timestamps })
+    if (state) {
+      const timestamps = [...state.timestamps]
+      const index = timestamps.indexOf(reservation.timestamp)
+      if (index !== -1) {
+        timestamps.splice(index, 1)
+        if (timestamps.length === 0) superLongPacing.delete(reservation.key)
+        else superLongPacing.set(reservation.key, { timestamps })
+      }
+    }
+    await SuperLongRuntime.releasePacingReservation({
+      key: reservation.key,
+      timestamp: reservation.timestamp,
+      now: Date.now(),
+    }).catch((error) => {
+      log.warn("failed to release durable super-long pacing reservation", {
+        key: reservation.key,
+        timestamp: reservation.timestamp,
+        error,
+      })
+    })
   }
 
   function systemMessage(

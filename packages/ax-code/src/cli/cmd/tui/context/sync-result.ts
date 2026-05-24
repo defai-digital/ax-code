@@ -18,12 +18,14 @@ export function createSyncContextValue<
   TSessionSync extends (sessionID: string) => unknown,
   TWorkspaceSync extends () => unknown,
   TBootstrap extends () => unknown,
+  TRuntime extends object,
 >(input: {
   store: TStore
   setStore: TSet
   sessionSync: TSessionSync
   workspaceSync: TWorkspaceSync
   bootstrap: TBootstrap
+  runtime: TRuntime
 }) {
   type Session = TStore["session"][number]
   type Message = TStore["message"][string] extends Array<infer TItem> ? TItem : never
@@ -60,6 +62,7 @@ export function createSyncContextValue<
       },
       sync: input.workspaceSync,
     },
+    runtime: input.runtime,
     bootstrap: input.bootstrap,
   }
 }

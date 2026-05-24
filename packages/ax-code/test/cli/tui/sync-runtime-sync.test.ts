@@ -201,6 +201,36 @@ describe("tui sync runtime sync", () => {
     })
   })
 
+  test("syncs super-long against an explicit active model", async () => {
+    const requests: string[] = []
+    const applied: boolean[] = []
+
+    const actions = createRuntimeSyncActions({
+      url: "http://localhost",
+      fetch: async (url) => {
+        requests.push(url)
+        return okJson({ enabled: true })
+      },
+      client: createClient(),
+      debugEngineEnabled: true,
+      applyWorkspaceList: () => undefined,
+      applyMcp: () => undefined,
+      applyLsp: () => undefined,
+      applyDebugEngine: () => undefined,
+      applyAutonomous: () => undefined,
+      applySmartLlm: () => undefined,
+      applySuperLong(value) {
+        applied.push(value)
+      },
+      applyIsolation: () => undefined,
+    })
+
+    await actions.syncSuperLong({ model: "alibaba-coding-plan/qwen3.7-max" })
+
+    expect(requests).toEqual(["http://localhost/super-long?model=alibaba-coding-plan%2Fqwen3.7-max"])
+    expect(applied).toEqual([true])
+  })
+
   test("applies isolation payloads and swallows failed optional runtime fetches", async () => {
     const requests: Array<{ url: string; init?: RequestInit }> = []
     const applied: Array<Record<string, unknown>> = []
