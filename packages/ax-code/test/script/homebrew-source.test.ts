@@ -49,21 +49,22 @@ describe("distribution support guardrails", () => {
     expect(ci).not.toContain("source-install-smoke")
   })
 
-  test("default formula points at GitHub source archive with bun runtime", async () => {
+  test("default formula points at compiled GitHub release assets", async () => {
     const text = await Bun.file(homebrewDefaultScript).text()
-    expect(text).toContain("github.com/defai-digital/ax-code/archive/refs/tags/")
-    expect(text).toContain("curl -fsSL")
+    expect(text).toContain("github.com/defai-digital/ax-code/releases/download")
+    expect(text).toContain('gh release download "${TAG}"')
+    expect(text).toContain('--repo "${SOURCE_REPO}"')
     expect(text).toContain("gh repo clone defai-digital/homebrew-ax-code")
     expect(text).toContain("gh auth setup-git")
     expect(text).toContain("mktemp -d")
     expect(text).not.toContain("x-access-token:${TAP_AUTH_TOKEN}")
-    expect(text).toContain('depends_on "bun"')
-    expect(text).toContain("libexec.install")
-    expect(text).toContain("bun\" run --cwd")
-    expect(text).toContain("--conditions=browser")
-    expect(text).not.toContain('bin.install "ax-code"')
+    expect(text).toContain('DARWIN_ARM64_ASSET="ax-code-darwin-arm64.zip"')
+    expect(text).toContain('LINUX_ARM64_ASSET="ax-code-linux-arm64.tar.gz"')
+    expect(text).toContain('LINUX_X64_ASSET="ax-code-linux-x64-baseline.tar.gz"')
+    expect(text).toContain("depends_on arch: :arm64")
+    expect(text).toContain('bin.install "ax-code"')
+    expect(text).not.toContain('depends_on "bun"')
     expect(text).not.toContain("bundle/index.js")
-    expect(text).not.toContain("depends_on arch: :arm64")
   })
 
   test("default homebrew update separates release-read and tap-write tokens", async () => {
@@ -73,10 +74,10 @@ describe("distribution support guardrails", () => {
     expect(text).toContain('export GH_TOKEN="${RELEASE_READ_TOKEN}"')
     expect(text).toContain('export GH_TOKEN="${TAP_AUTH_TOKEN}"')
     expect(text.indexOf('export GH_TOKEN="${RELEASE_READ_TOKEN}"')).toBeLessThan(
-      text.indexOf("curl -fsSL"),
+      text.indexOf('DARWIN_ARM64_SHA="$(download_asset "${DARWIN_ARM64_ASSET}")"'),
     )
     expect(text.indexOf('export GH_TOKEN="${TAP_AUTH_TOKEN}"')).toBeGreaterThan(
-      text.indexOf("ARCHIVE_SHA256="),
+      text.indexOf('LINUX_X64_SHA="$(download_asset "${LINUX_X64_ASSET}")"'),
     )
   })
 
