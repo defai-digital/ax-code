@@ -648,7 +648,8 @@ export const ContextAwareReplacer: Replacer = function* (content, find) {
       }
 
       const canUseAnchorsOnly = totalNonEmptyLines === 0 && blockLines.length === 2
-      if (canUseAnchorsOnly || similarity / totalNonEmptyLines >= CONTEXT_AWARE_SIMILARITY_THRESHOLD) {
+      const avgSimilarity = totalNonEmptyLines > 0 ? similarity / totalNonEmptyLines : 1.0
+      if (canUseAnchorsOnly || avgSimilarity >= CONTEXT_AWARE_SIMILARITY_THRESHOLD) {
         yield blockLines.join("\n")
         matched = true // stop the j-loop; we've yielded the first valid match for this i
       }
