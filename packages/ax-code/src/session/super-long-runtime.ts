@@ -18,7 +18,7 @@ type Store = {
 }
 
 export namespace SuperLongRuntime {
-  export const STORE_PATH = path.join(Global.Path.state, "super-long-runtime.json")
+  const STORE_PATH = path.join(Global.Path.state, "super-long-runtime.json")
   const STORE_PATH_ENV = "AX_CODE_SUPER_LONG_RUNTIME_STORE"
   const RUN_RETENTION_MS = 7 * 24 * 60 * 60 * 1000
   const LOCK_TIMEOUT_MS = 2_000
@@ -48,7 +48,10 @@ export namespace SuperLongRuntime {
       const pacing = (store.pacing ??= {})
       const state = pacing[input.key] ?? { timestamps: [] }
       const decision = SuperLongPolicy.evaluatePacing({ now: input.now, state, policy: input.policy })
-      if (decision.waitMs > 0) return { decision }
+      if (decision.waitMs > 0) {
+        pacing[input.key] = { timestamps: decision.timestamps }
+        return { decision }
+      }
       const next = SuperLongPolicy.recordRequest({ now: input.now, state, policy: input.policy })
       pacing[input.key] = next
       return { decision, state: next }
@@ -63,7 +66,10 @@ export namespace SuperLongRuntime {
     await updateStore((store) => {
       const state = store.pacing?.[input.key]
       if (!state) return
-      const timestamps = state.timestamps.filter((item) => item !== input.timestamp)
+      const timestamps = [...state.timestamps]
+      const index = timestamps.indexOf(input.timestamp)
+      if (index === -1) return
+      timestamps.splice(index, 1)
       if (timestamps.length === 0) delete store.pacing?.[input.key]
       else state.timestamps = timestamps
     }, input.now)

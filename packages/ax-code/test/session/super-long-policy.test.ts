@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test"
 import { SuperLongPolicy } from "@/session/super-long-policy"
 
+const SEVENTY_TWO_HOURS_MS = 72 * 60 * 60 * 1000
+
 describe("SuperLongPolicy.state", () => {
   test("defaults on for Qwen3.7-Max", () => {
     expect(SuperLongPolicy.state({ modelID: "qwen3.7-max" })).toEqual({
@@ -59,6 +61,17 @@ describe("SuperLongPolicy.runtimeState", () => {
     ).toEqual({ enabled: false, source: "env" })
   })
 
+  test("parses boolean env values with incidental whitespace", () => {
+    expect(
+      SuperLongPolicy.runtimeState({
+        modelID: "claude-sonnet-4.5",
+        env: {
+          AX_CODE_SUPER_LONG: " true ",
+        },
+      }),
+    ).toEqual({ enabled: true, source: "env" })
+  })
+
   test("falls back to config and then model default when env is unset", () => {
     expect(
       SuperLongPolicy.runtimeState({
@@ -76,20 +89,41 @@ describe("SuperLongPolicy.runtimeState", () => {
   })
 })
 
+describe("SuperLongPolicy.providerPacing", () => {
+  test("returns provider-specific pacing without sharing mutable policy objects", () => {
+    const first = SuperLongPolicy.providerPacing("alibaba-qwen")
+    first.maxRequests = 99
+
+    expect(SuperLongPolicy.providerPacing("alibaba-qwen").maxRequests).toBe(4)
+    expect(SuperLongPolicy.providerPacing("openai").maxRequests).toBe(6)
+  })
+})
+
 describe("SuperLongPolicy.duration", () => {
   test("accepts exactly the 72 hour ceiling", () => {
-    expect(SuperLongPolicy.duration(SuperLongPolicy.MAX_DURATION_MS)).toEqual({
+    expect(SuperLongPolicy.duration(SEVENTY_TWO_HOURS_MS)).toEqual({
       ok: true,
-      durationMs: SuperLongPolicy.MAX_DURATION_MS,
+      durationMs: SEVENTY_TWO_HOURS_MS,
     })
   })
 
   test("rejects durations above the 72 hour ceiling", () => {
-    expect(SuperLongPolicy.duration(SuperLongPolicy.MAX_DURATION_MS + 1)).toEqual({
+    expect(SuperLongPolicy.duration(SEVENTY_TWO_HOURS_MS + 1)).toEqual({
       ok: false,
       reason: "duration_exceeds_ceiling",
-      maxDurationMs: SuperLongPolicy.MAX_DURATION_MS,
-      requestedDurationMs: SuperLongPolicy.MAX_DURATION_MS + 1,
+      maxDurationMs: SEVENTY_TWO_HOURS_MS,
+      requestedDurationMs: SEVENTY_TWO_HOURS_MS + 1,
+    })
+  })
+
+  test("normalizes invalid fallback durations", () => {
+    expect(SuperLongPolicy.duration(Number.NaN, Number.NaN)).toEqual({
+      ok: true,
+      durationMs: SEVENTY_TWO_HOURS_MS,
+    })
+    expect(SuperLongPolicy.duration(-1, SEVENTY_TWO_HOURS_MS + 1)).toEqual({
+      ok: true,
+      durationMs: SEVENTY_TWO_HOURS_MS,
     })
   })
 })
@@ -100,13 +134,13 @@ describe("SuperLongPolicy.deadline", () => {
       SuperLongPolicy.deadline({
         enabled: false,
         startedAt: 0,
-        now: SuperLongPolicy.MAX_DURATION_MS + 1,
+        now: SEVENTY_TWO_HOURS_MS + 1,
       }),
     ).toEqual({
       ok: true,
       expired: false,
-      elapsedMs: SuperLongPolicy.MAX_DURATION_MS + 1,
-      durationMs: SuperLongPolicy.MAX_DURATION_MS,
+      elapsedMs: SEVENTY_TWO_HOURS_MS + 1,
+      durationMs: SEVENTY_TWO_HOURS_MS,
     })
   })
 
@@ -115,13 +149,13 @@ describe("SuperLongPolicy.deadline", () => {
       SuperLongPolicy.deadline({
         enabled: true,
         startedAt: 1_000,
-        now: 1_000 + SuperLongPolicy.MAX_DURATION_MS,
+        now: 1_000 + SEVENTY_TWO_HOURS_MS,
       }),
     ).toEqual({
       ok: true,
       expired: true,
-      elapsedMs: SuperLongPolicy.MAX_DURATION_MS,
-      durationMs: SuperLongPolicy.MAX_DURATION_MS,
+      elapsedMs: SEVENTY_TWO_HOURS_MS,
+      durationMs: SEVENTY_TWO_HOURS_MS,
     })
   })
 
@@ -131,13 +165,99 @@ describe("SuperLongPolicy.deadline", () => {
         enabled: true,
         startedAt: 0,
         now: 0,
-        requestedDurationMs: SuperLongPolicy.MAX_DURATION_MS + 1,
+        requestedDurationMs: SEVENTY_TWO_HOURS_MS + 1,
       }),
     ).toEqual({
       ok: false,
       reason: "duration_exceeds_ceiling",
-      maxDurationMs: SuperLongPolicy.MAX_DURATION_MS,
-      requestedDurationMs: SuperLongPolicy.MAX_DURATION_MS + 1,
+      maxDurationMs: SEVENTY_TWO_HOURS_MS,
+      requestedDurationMs: SEVENTY_TWO_HOURS_MS + 1,
+    })
+  })
+
+  test("normalizes invalid elapsed time to zero", () => {
+    expect(
+      SuperLongPolicy.deadline({
+        enabled: true,
+        startedAt: Number.NaN,
+        now: 1_000,
+      }),
+    ).toEqual({
+      ok: true,
+      expired: false,
+      elapsedMs: 0,
+      durationMs: SEVENTY_TWO_HOURS_MS,
+    })
+  })
+})
+
+describe("SuperLongPolicy.deadlineStopDecision", () => {
+  test("continues when the deadline is valid and not expired", () => {
+    expect(
+      SuperLongPolicy.deadlineStopDecision({
+        deadline: {
+          ok: true,
+          expired: false,
+          elapsedMs: 1_000,
+          durationMs: SEVENTY_TWO_HOURS_MS,
+        },
+        source: "config",
+      }),
+    ).toEqual({ action: "continue" })
+  })
+
+  test("returns a stop payload when the requested duration exceeds the ceiling", () => {
+    expect(
+      SuperLongPolicy.deadlineStopDecision({
+        deadline: {
+          ok: false,
+          reason: "duration_exceeds_ceiling",
+          maxDurationMs: SEVENTY_TWO_HOURS_MS,
+          requestedDurationMs: SEVENTY_TWO_HOURS_MS + 1,
+        },
+        source: "config",
+      }),
+    ).toEqual({
+      action: "stop",
+      reason: "step_limit",
+      message:
+        `Super-Long mode stopped because the requested runtime ceiling exceeds the hard 72 hour limit. ` +
+        `Reduce the requested duration and resume the session.`,
+      logMessage: "super-long deadline rejected",
+      status: "error",
+      errorCode: "SUPER_LONG_DURATION_EXCEEDS_CEILING",
+      details: {
+        maxDurationMs: SEVENTY_TWO_HOURS_MS,
+        requestedDurationMs: SEVENTY_TWO_HOURS_MS + 1,
+      },
+    })
+  })
+
+  test("returns a stop payload when the runtime ceiling expires", () => {
+    expect(
+      SuperLongPolicy.deadlineStopDecision({
+        deadline: {
+          ok: true,
+          expired: true,
+          elapsedMs: SEVENTY_TWO_HOURS_MS,
+          durationMs: SEVENTY_TWO_HOURS_MS,
+        },
+        source: "model-default",
+      }),
+    ).toEqual({
+      action: "stop",
+      reason: "step_limit",
+      message:
+        `Super-Long mode stopped after reaching the hard 72 hour runtime ceiling. ` +
+        `Review the current state, then resume with a new supervised run if more work is required.`,
+      logMessage: "super-long deadline reached",
+      status: "stopped",
+      errorCode: "SUPER_LONG_DEADLINE_REACHED",
+      details: {
+        elapsedMs: SEVENTY_TWO_HOURS_MS,
+        durationMs: SEVENTY_TWO_HOURS_MS,
+        source: "model-default",
+      },
     })
   })
 })
@@ -187,5 +307,47 @@ describe("SuperLongPolicy.evaluatePacing", () => {
     })
     expect(decision.waitMs).toBe(0)
     expect(decision.timestamps).toEqual([115_000])
+  })
+
+  test("records requests into a sorted active pacing window", () => {
+    expect(
+      SuperLongPolicy.recordRequest({
+        now: 170_000,
+        state: { timestamps: [165_000, 100_000, 150_000] },
+        policy,
+      }),
+    ).toEqual({
+      timestamps: [150_000, 165_000, 170_000],
+    })
+  })
+
+  test("normalizes invalid pacing policy values before evaluating", () => {
+    const decision = SuperLongPolicy.evaluatePacing({
+      now: 100_000,
+      state: { timestamps: [] },
+      policy: {
+        windowMs: Number.NaN,
+        maxRequests: 0,
+        minDelayMs: Number.POSITIVE_INFINITY,
+      },
+    })
+
+    expect(decision).toEqual({
+      waitMs: 0,
+      reason: "allowed",
+      timestamps: [],
+    })
+  })
+
+  test("normalizes invalid pacing timestamps before recording", () => {
+    expect(
+      SuperLongPolicy.recordRequest({
+        now: Number.NaN,
+        state: { timestamps: [1_000] },
+        policy,
+      }),
+    ).toEqual({
+      timestamps: [0],
+    })
   })
 })

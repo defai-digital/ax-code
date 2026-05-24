@@ -15,7 +15,7 @@ import { tmpdir } from "../fixture/fixture"
 import type { Agent } from "../../src/agent/agent"
 import type { MessageV2 } from "../../src/session/message-v2"
 import { SessionID, MessageID } from "../../src/session/schema"
-import { SessionPrompt } from "../../src/session/prompt"
+import { createStructuredOutputTool } from "../../src/session/prompt-helpers"
 import { SuperLongRuntime } from "../../src/session/super-long-runtime"
 
 describe("session.llm.hasToolCalls", () => {
@@ -514,7 +514,7 @@ describe("session.llm.stream", () => {
           messages: [{ role: "user", content: "Share a structured answer" }],
           toolChoice: "required",
           tools: {
-            StructuredOutput: SessionPrompt.createStructuredOutputTool({
+            StructuredOutput: createStructuredOutputTool({
               schema: {
                 $schema: "http://json-schema.org/draft-07/schema#",
                 type: "object",
@@ -1541,6 +1541,59 @@ describe("session.llm.stream - Phase 1 long-agent profile wiring", () => {
     expect(LLM.getPacingStateForTest(sessionA)?.timestamps).toEqual([1_000, 1_175])
   })
 
+  test("super-long pacing treats whitespace-padded durable disable env as process-local", async () => {
+    process.env.AX_CODE_SUPER_LONG_DURABLE_PACING = " 0 "
+    const reserveSpy = spyOn(SuperLongRuntime, "reservePacing").mockImplementation(async () => {
+      throw new Error("durable pacing should not be used")
+    })
+    try {
+      const target = {
+        sessionID: "session-pacing-env-disabled",
+        providerID: "alibaba-coding-plan",
+        modelID: "qwen3.7-max",
+      }
+
+      await LLM.applySuperLongPacingForTest({
+        ...target,
+        enabled: true,
+        abort: new AbortController().signal,
+      })
+
+      expect(reserveSpy).not.toHaveBeenCalled()
+      expect(LLM.getPacingStateForTest(target)?.timestamps).toHaveLength(1)
+    } finally {
+      reserveSpy.mockRestore()
+    }
+  })
+
+  test("super-long process-local pacing normalizes state before waiting", async () => {
+    const target = {
+      sessionID: "session-pacing-local-normalize",
+      providerID: "alibaba-coding-plan",
+      modelID: "qwen3.7-max",
+    }
+    LLM.setPacingStateForTest(target, { timestamps: [1_500, 1_000, 500] })
+
+    const times = [1_550, 1_600]
+    await LLM.applySuperLongPacingForTest({
+      ...target,
+      enabled: true,
+      abort: new AbortController().signal,
+      policy: {
+        windowMs: 1_000,
+        maxRequests: 10,
+        minDelayMs: 100,
+      },
+      now: () => times.shift() ?? 1_600,
+      sleep: async (ms) => {
+        expect(ms).toBe(50)
+        expect(LLM.getPacingStateForTest(target)?.timestamps).toEqual([1_000, 1_500])
+      },
+    })
+
+    expect(LLM.getPacingStateForTest(target)?.timestamps).toEqual([1_000, 1_500, 1_600])
+  })
+
   test("super-long pacing rechecks state after waiting before recording", async () => {
     const target = {
       sessionID: "session-pacing-reread",
@@ -1605,6 +1658,75 @@ describe("session.llm.stream - Phase 1 long-agent profile wiring", () => {
     expect(LLM.getPacingStateForTest(target)).toBeUndefined()
   })
 
+  test("super-long pacing skips durable release for process-local reservations", async () => {
+    const releaseSpy = spyOn(SuperLongRuntime, "releasePacingReservation").mockImplementation(async () => {})
+    try {
+      const target = {
+        sessionID: "session-pacing-local-release",
+        providerID: "alibaba-coding-plan",
+        modelID: "qwen3.7-max",
+      }
+      const reservation = await LLM.applySuperLongPacingForTest({
+        ...target,
+        enabled: true,
+        abort: new AbortController().signal,
+        policy: {
+          windowMs: 1_000,
+          maxRequests: 10,
+          minDelayMs: 100,
+        },
+        now: () => 1_000,
+      })
+
+      const wrapped = LLM.attachSuperLongPacingReservationForTest(
+        {
+          fullStream: (async function* () {})(),
+        },
+        reservation,
+        new AbortController().signal,
+      )
+      for await (const _ of wrapped.fullStream) {
+      }
+
+      expect(releaseSpy).not.toHaveBeenCalled()
+      expect(LLM.getPacingStateForTest(target)).toBeUndefined()
+    } finally {
+      releaseSpy.mockRestore()
+    }
+  })
+
+  test("super-long process-local pacing releases the normalized reservation timestamp", async () => {
+    const target = {
+      sessionID: "session-pacing-normalized-release",
+      providerID: "alibaba-coding-plan",
+      modelID: "qwen3.7-max",
+    }
+    const reservation = await LLM.applySuperLongPacingForTest({
+      ...target,
+      enabled: true,
+      abort: new AbortController().signal,
+      policy: {
+        windowMs: 1_000,
+        maxRequests: 10,
+        minDelayMs: 100,
+      },
+      now: () => Number.NaN,
+    })
+
+    expect(reservation?.timestamp).toBe(0)
+    const wrapped = LLM.attachSuperLongPacingReservationForTest(
+      {
+        fullStream: (async function* () {})(),
+      },
+      reservation,
+      new AbortController().signal,
+    )
+    for await (const _ of wrapped.fullStream) {
+    }
+
+    expect(LLM.getPacingStateForTest(target)).toBeUndefined()
+  })
+
   test("super-long pacing waits for durable release when stream ends before first chunk", async () => {
     const releaseGate = deferred<void>()
     const releaseSpy = spyOn(SuperLongRuntime, "releasePacingReservation").mockImplementation(async () => {
@@ -1615,7 +1737,7 @@ describe("session.llm.stream - Phase 1 long-agent profile wiring", () => {
         {
           fullStream: (async function* () {})(),
         },
-        { key: "alibaba-coding-plan/qwen3.7-max", timestamp: 1_000 },
+        { key: "alibaba-coding-plan/qwen3.7-max", timestamp: 1_000, durable: true },
         new AbortController().signal,
       )
 

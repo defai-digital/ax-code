@@ -1,9 +1,9 @@
 import { isQwen37MaxModel } from "@/provider/qwen37-readiness"
 
 export namespace SuperLongPolicy {
-  export const MAX_DURATION_MS = 72 * 60 * 60 * 1000
-  export const SESSION_OVERRIDE_ENV = "AX_CODE_SUPER_LONG_SESSION_OVERRIDE"
-  export const BASE_ENV = "AX_CODE_SUPER_LONG"
+  const MAX_DURATION_MS = 72 * 60 * 60 * 1000
+  const SESSION_OVERRIDE_ENV = "AX_CODE_SUPER_LONG_SESSION_OVERRIDE"
+  const BASE_ENV = "AX_CODE_SUPER_LONG"
 
   export type RuntimeConfig = {
     enabled?: boolean
@@ -23,6 +23,20 @@ export namespace SuperLongPolicy {
     | { ok: true; expired: boolean; elapsedMs: number; durationMs: number }
     | { ok: false; reason: "duration_exceeds_ceiling"; maxDurationMs: number; requestedDurationMs: number }
 
+  export type DeadlineStopDecision =
+    | { action: "continue" }
+    | {
+        action: "stop"
+        reason: "step_limit"
+        message: string
+        logMessage: string
+        status: "error" | "stopped"
+        errorCode: "SUPER_LONG_DURATION_EXCEEDS_CEILING" | "SUPER_LONG_DEADLINE_REACHED"
+        details:
+          | { requestedDurationMs: number; maxDurationMs: number }
+          | { elapsedMs: number; durationMs: number; source: StateDecision["source"] }
+      }
+
   export type PacingPolicy = {
     windowMs: number
     maxRequests: number
@@ -39,20 +53,21 @@ export namespace SuperLongPolicy {
     timestamps: number[]
   }
 
-  export const DEFAULT_PACING: PacingPolicy = {
+  const DEFAULT_PACING: PacingPolicy = {
     windowMs: 60_000,
     maxRequests: 6,
     minDelayMs: 5_000,
   }
 
-  export const ALIBABA_PACING: PacingPolicy = {
+  const ALIBABA_PACING: PacingPolicy = {
     windowMs: 60_000,
     maxRequests: 4,
     minDelayMs: 10_000,
   }
 
   export function providerPacing(providerID: string): PacingPolicy {
-    return providerID.startsWith("alibaba-") ? ALIBABA_PACING : DEFAULT_PACING
+    const policy = providerID.startsWith("alibaba-") ? ALIBABA_PACING : DEFAULT_PACING
+    return { ...policy }
   }
 
   export function state(input: { modelID: string; config?: RuntimeConfig; sessionOverride?: boolean }): StateDecision {
@@ -86,9 +101,10 @@ export namespace SuperLongPolicy {
   }
 
   export function duration(requestedDurationMs: number | undefined, fallbackMs = MAX_DURATION_MS): DurationDecision {
-    const durationMs = requestedDurationMs ?? fallbackMs
+    const fallbackDurationMs = normalizeDurationFallback(fallbackMs)
+    const durationMs = requestedDurationMs ?? fallbackDurationMs
     if (!Number.isFinite(durationMs) || durationMs <= 0) {
-      return { ok: true, durationMs: fallbackMs }
+      return { ok: true, durationMs: fallbackDurationMs }
     }
     if (durationMs > MAX_DURATION_MS) {
       return {
@@ -101,6 +117,11 @@ export namespace SuperLongPolicy {
     return { ok: true, durationMs }
   }
 
+  function normalizeDurationFallback(fallbackMs: number) {
+    if (!positiveFinite(fallbackMs)) return MAX_DURATION_MS
+    return Math.min(fallbackMs, MAX_DURATION_MS)
+  }
+
   export function deadline(input: {
     enabled: boolean
     startedAt: number
@@ -109,7 +130,7 @@ export namespace SuperLongPolicy {
   }): DeadlineDecision {
     const durationDecision = duration(input.requestedDurationMs)
     if (!durationDecision.ok) return durationDecision
-    const elapsedMs = Math.max(0, input.now - input.startedAt)
+    const elapsedMs = elapsedSince(input.startedAt, input.now)
     return {
       ok: true,
       expired: input.enabled && elapsedMs >= durationDecision.durationMs,
@@ -118,33 +139,107 @@ export namespace SuperLongPolicy {
     }
   }
 
+  function elapsedSince(startedAt: number, now: number) {
+    const elapsedMs = now - startedAt
+    return nonNegativeFinite(elapsedMs) ? elapsedMs : 0
+  }
+
+  export function deadlineStopDecision(input: {
+    deadline: DeadlineDecision
+    source: StateDecision["source"]
+  }): DeadlineStopDecision {
+    if (!input.deadline.ok) {
+      return {
+        action: "stop",
+        reason: "step_limit",
+        message:
+          `Super-Long mode stopped because the requested runtime ceiling exceeds the hard 72 hour limit. ` +
+          `Reduce the requested duration and resume the session.`,
+        logMessage: "super-long deadline rejected",
+        status: "error",
+        errorCode: "SUPER_LONG_DURATION_EXCEEDS_CEILING",
+        details: {
+          requestedDurationMs: input.deadline.requestedDurationMs,
+          maxDurationMs: input.deadline.maxDurationMs,
+        },
+      }
+    }
+
+    if (input.deadline.expired) {
+      return {
+        action: "stop",
+        reason: "step_limit",
+        message:
+          `Super-Long mode stopped after reaching the hard 72 hour runtime ceiling. ` +
+          `Review the current state, then resume with a new supervised run if more work is required.`,
+        logMessage: "super-long deadline reached",
+        status: "stopped",
+        errorCode: "SUPER_LONG_DEADLINE_REACHED",
+        details: {
+          elapsedMs: input.deadline.elapsedMs,
+          durationMs: input.deadline.durationMs,
+          source: input.source,
+        },
+      }
+    }
+
+    return { action: "continue" }
+  }
+
   export function evaluatePacing(input: { now: number; state: PacingState; policy: PacingPolicy }): PacingDecision {
-    const cutoff = input.now - input.policy.windowMs
-    const timestamps = input.state.timestamps.filter((ts) => ts > cutoff).sort((a, b) => a - b)
+    const policy = normalizePacingPolicy(input.policy)
+    const now = normalizeTimestamp(input.now)
+    const timestamps = activePacingTimestamps({ ...input, now, policy })
     const last = timestamps.at(-1)
     if (last !== undefined) {
-      const minDelayWait = last + input.policy.minDelayMs - input.now
+      const minDelayWait = last + policy.minDelayMs - now
       if (minDelayWait > 0) {
         return { waitMs: minDelayWait, reason: "min-delay", timestamps }
       }
     }
-    if (timestamps.length >= input.policy.maxRequests) {
+    if (timestamps.length >= policy.maxRequests) {
       const oldest = timestamps[0]!
-      return { waitMs: Math.max(0, oldest + input.policy.windowMs - input.now), reason: "rolling-window", timestamps }
+      return { waitMs: Math.max(0, oldest + policy.windowMs - now), reason: "rolling-window", timestamps }
     }
     return { waitMs: 0, reason: "allowed", timestamps }
   }
 
   export function recordRequest(input: { now: number; state: PacingState; policy: PacingPolicy }): PacingState {
-    const cutoff = input.now - input.policy.windowMs
+    const policy = normalizePacingPolicy(input.policy)
+    const now = normalizeTimestamp(input.now)
     return {
-      timestamps: [...input.state.timestamps.filter((ts) => ts > cutoff), input.now],
+      timestamps: [...activePacingTimestamps({ ...input, now, policy }), now],
     }
+  }
+
+  function activePacingTimestamps(input: { now: number; state: PacingState; policy: PacingPolicy }) {
+    const cutoff = input.now - input.policy.windowMs
+    return input.state.timestamps.filter((ts) => ts > cutoff && ts <= input.now).sort((a, b) => a - b)
+  }
+
+  function normalizePacingPolicy(policy: PacingPolicy): PacingPolicy {
+    return {
+      windowMs: positiveFinite(policy.windowMs) ? policy.windowMs : DEFAULT_PACING.windowMs,
+      maxRequests: positiveFinite(policy.maxRequests) ? Math.max(1, Math.floor(policy.maxRequests)) : DEFAULT_PACING.maxRequests,
+      minDelayMs: nonNegativeFinite(policy.minDelayMs) ? policy.minDelayMs : DEFAULT_PACING.minDelayMs,
+    }
+  }
+
+  function positiveFinite(value: number) {
+    return Number.isFinite(value) && value > 0
+  }
+
+  function nonNegativeFinite(value: number) {
+    return Number.isFinite(value) && value >= 0
+  }
+
+  function normalizeTimestamp(value: number) {
+    return nonNegativeFinite(value) ? value : 0
   }
 
   function parseBooleanEnvValue(value: string | undefined) {
     if (!value) return undefined
-    const normalized = value.toLowerCase()
+    const normalized = value.trim().toLowerCase()
     if (normalized === "true" || normalized === "1") return true
     if (normalized === "false" || normalized === "0") return false
     return undefined
