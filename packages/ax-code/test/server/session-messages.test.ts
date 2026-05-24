@@ -141,7 +141,11 @@ describe("session.prompt_async error handling", () => {
     const src = await Bun.file(path.join(import.meta.dir, "../../src/server/routes/session.ts")).text()
     expect(src).toContain("function startDetachedSessionTask")
     expect(src).toContain("const timer = setTimeout(() => {")
-    expect(src).toContain("timer.unref?.()")
+    const start = src.indexOf("function startDetachedSessionTask")
+    const end = src.indexOf("function recordAsyncSessionTask", start)
+    expect(start).toBeGreaterThan(-1)
+    expect(end).toBeGreaterThan(start)
+    expect(src.slice(start, end)).not.toContain("timer.unref")
   })
 
   test("shared async session helper records failures and publishes session errors", async () => {

@@ -56,6 +56,23 @@ test("headless-run keeps signal handlers installed until cleanup", async () => {
   expect(src).toContain('process.off("SIGTERM", onSignal)')
 })
 
+test("headless-run attach mode rejects non-internal fetch targets", async () => {
+  const src = await Bun.file(path.join(import.meta.dir, "../../src/cli/cmd/headless-run.ts")).text()
+  expect(src).toContain("function assertInternalUrl(url: URL)")
+  expect(src).toContain("function createInternalFetch")
+  expect(src).toContain("assertInternalUrl(new URL(request.url))")
+
+  const attachStart = src.indexOf("if (args.attach) {")
+  const attachEnd = src.indexOf("await bootstrap", attachStart)
+  expect(attachStart).toBeGreaterThan(-1)
+  expect(attachEnd).toBeGreaterThan(attachStart)
+
+  const attachBlock = src.slice(attachStart, attachEnd)
+  expect(attachBlock).toContain("const attachUrl = new URL(args.attach)")
+  expect(attachBlock).toContain("assertInternalUrl(attachUrl)")
+  expect(attachBlock).toContain("createInternalFetch((request) => fetch(request), headers)")
+})
+
 test("shell env loading tears down the spawned shell after the read race", async () => {
   const src = await Bun.file(path.join(import.meta.dir, "../../src/cli/bootstrap/env.ts")).text()
   const start = src.indexOf("async function loadShellEnv(")
@@ -67,6 +84,19 @@ test("shell env loading tears down the spawned shell after the read race", async
   expect(body).toContain("if (timeoutId) clearTimeout(timeoutId)")
   expect(body).toContain("proc.kill()")
   expect(body).toContain("await proc.exited.catch")
+})
+
+test("auth lock polling keeps the process alive while waiting", async () => {
+  const src = await Bun.file(path.join(import.meta.dir, "../../src/auth/index.ts")).text()
+  const start = src.indexOf("async function acquireFileLock")
+  const end = src.indexOf("const fail =", start)
+  expect(start).toBeGreaterThan(-1)
+  expect(end).toBeGreaterThan(start)
+
+  const body = src.slice(start, end)
+  expect(body).toContain("setTimeout(r, LOCK_POLL_MS)")
+  expect(body).not.toContain("LOCK_POLL_MS)\n      if")
+  expect(body).not.toContain(".unref()")
 })
 
 test("TUI worker removes signal handlers during RPC shutdown", async () => {
@@ -88,10 +118,10 @@ test("TUI worker always forces exit after uncaught exceptions", async () => {
   const start = src.indexOf('process.on("uncaughtException"')
   const end = src.indexOf("const handleGlobalEvent", start)
   expect(start).toBeGreaterThan(-1)
-  expect(end).toBeGreaterThan(start)
   const block = src.slice(start, end)
-
-  expect(block).toContain("setTimeout(() => process.exit(1), 100).unref()")
+  expect(block).toContain("setTimeout(() => process.exit(1), 100)")
+  expect(block).not.toContain(".unref()")
+  expect(end).toBeGreaterThan(start)
   expect(block).not.toContain("if (!shutdownPromise) setTimeout")
 })
 

@@ -60,7 +60,6 @@ function startDetachedSessionTask(task: () => Promise<void>) {
       log.error("detached session task failed", { error })
     })
   }, 0)
-  timer.unref?.()
 }
 
 function recordAsyncSessionTask(input: {
