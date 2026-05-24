@@ -1,16 +1,14 @@
-import path from "path"
-import { Global } from "@/global"
-import { Filesystem } from "@/util/filesystem"
 import { onCleanup, onMount } from "solid-js"
 import { createStore, produce, unwrap } from "solid-js/store"
 import { createSimpleContext } from "../../context/helper"
-import { appendFile, writeFile } from "fs/promises"
 import type { AgentPart, FilePart, TextPart } from "@ax-code/sdk/v2"
 import { scheduleDeferredStartupTask } from "@tui/util/startup-task"
 import { optionalStateErrorMessage, shouldSurfaceOptionalStateError } from "@tui/util/optional-state"
 import { useToast } from "../../ui/toast"
 import { Log } from "@/util/log"
 import z from "zod"
+import { useSDK } from "@tui/context/sdk"
+import { directoryRequestHeaders } from "@tui/util/request-headers"
 
 export type PromptInfo = {
   input: string
@@ -58,33 +56,43 @@ const log = Log.create({ service: "tui.prompt-history" })
 export const { use: usePromptHistory, provider: PromptHistoryProvider } = createSimpleContext({
   name: "PromptHistory",
   init: () => {
-    const historyPath = path.join(Global.Path.state, "prompt-history.jsonl")
+    const sdk = useSDK()
     const toast = useToast()
     let writeWarningShown = false
 
-    const persistHistory = (content: string) =>
-      writeFile(historyPath, content)
-        .then(() => {
-          writeWarningShown = false
-        })
-        .catch((error) => {
-          if (writeWarningShown) return
-          writeWarningShown = true
-          log.warn("failed to persist prompt history", { historyPath, error })
-          if (!shouldSurfaceOptionalStateError(error)) return
-          toast.show({
-            message: optionalStateErrorMessage(error, "Failed to save prompt history"),
-            variant: "warning",
-            duration: 3000,
-          })
-        })
+    function historyHeaders(input: { contentType?: string } = {}) {
+      return directoryRequestHeaders({
+        directory: sdk.directory,
+        accept: "application/json",
+        contentType: input.contentType,
+      })
+    }
+
+    async function loadProjectHistory() {
+      const response = await sdk.fetch(`${sdk.url}/prompt-history?limit=${MAX_HISTORY_ENTRIES}`, {
+        headers: historyHeaders(),
+      })
+      if (!response.ok) throw new Error(`HTTP ${response.status} ${response.statusText}`.trim())
+      const body = await response.json()
+      const parsed = z.array(PromptInfoSchema).safeParse(body)
+      if (!parsed.success) return []
+      return parsed.data.filter(isPromptInfo)
+    }
+
+    async function appendProjectHistory(entry: PromptInfo) {
+      const response = await sdk.fetch(`${sdk.url}/prompt-history`, {
+        method: "POST",
+        headers: historyHeaders({ contentType: "application/json" }),
+        body: JSON.stringify(entry),
+      })
+      if (!response.ok) throw new Error(`HTTP ${response.status} ${response.statusText}`.trim())
+    }
 
     onMount(() => {
       const cancel = scheduleDeferredStartupTask(
         async () => {
-          const text = await Filesystem.readText(historyPath).catch((error) => {
-            if (typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT") return ""
-            log.warn("failed to load prompt history", { historyPath, error })
+          const lines = await loadProjectHistory().catch((error) => {
+            log.warn("failed to load prompt history", { error })
             if (shouldSurfaceOptionalStateError(error)) {
               toast.show({
                 message: optionalStateErrorMessage(error, "Failed to load prompt history"),
@@ -92,31 +100,11 @@ export const { use: usePromptHistory, provider: PromptHistoryProvider } = create
                 duration: 3000,
               })
             }
-            return ""
+            return []
           })
-          const lines = text
-            .split("\n")
-            .filter(Boolean)
-            .flatMap((line) => {
-              try {
-                const parsed = PromptInfoSchema.safeParse(JSON.parse(line))
-                if (!parsed.success) return []
-                if (!isPromptInfo(parsed.data)) return []
-                return [parsed.data]
-              } catch {
-                return []
-              }
-            })
-            .slice(-MAX_HISTORY_ENTRIES)
 
           const merged = [...lines, ...store.history].slice(-MAX_HISTORY_ENTRIES)
           setStore("history", merged)
-
-          // Rewrite file with only valid entries to self-heal corruption
-          if (merged.length > 0) {
-            const content = merged.map((line) => JSON.stringify(line)).join("\n") + "\n"
-            void persistHistory(content)
-          }
         },
         {
           delayMs: HISTORY_LOAD_DELAY_MS,
@@ -168,19 +156,17 @@ export const { use: usePromptHistory, provider: PromptHistoryProvider } = create
         )
 
         if (trimmed) {
-          const content = store.history.map((line) => JSON.stringify(line)).join("\n") + "\n"
-          void persistHistory(content)
-          return
+          writeWarningShown = false
         }
 
-        void appendFile(historyPath, JSON.stringify(entry) + "\n")
+        void appendProjectHistory(entry)
           .then(() => {
             writeWarningShown = false
           })
           .catch((error) => {
             if (writeWarningShown) return
             writeWarningShown = true
-            log.warn("failed to append prompt history", { historyPath, error })
+            log.warn("failed to append prompt history", { error })
             if (!shouldSurfaceOptionalStateError(error)) return
             toast.show({
               message: optionalStateErrorMessage(error, "Failed to save prompt history"),

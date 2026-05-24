@@ -48,6 +48,7 @@ import { IsolationRoutes } from "./routes/isolation"
 import { AutonomousRoutes } from "./routes/autonomous"
 import { SmartLlmRoutes } from "./routes/smart-llm"
 import { SuperLongRoutes } from "./routes/super-long"
+import { PromptHistoryRoutes } from "./routes/prompt-history"
 import { GlobalRoutes } from "./routes/global"
 import { PROVIDER_ID_PARAM, withProviderID } from "./routes/route-params"
 import { ToolRegistry } from "../tool/registry"
@@ -766,6 +767,7 @@ export namespace Server {
       .route("/autonomous", AutonomousRoutes())
       .route("/smart-llm", SmartLlmRoutes())
       .route("/super-long", SuperLongRoutes())
+      .route("/prompt-history", PromptHistoryRoutes())
       .route("/experimental", ExperimentalRoutes())
       .route("/session", SessionRoutes())
       .route("/permission", PermissionRoutes())
