@@ -5,18 +5,21 @@ import { ModelID, ProviderID } from "../../src/provider/schema"
 import { MessageV2 } from "../../src/session/message-v2"
 import {
   agentInfo,
-  commandArgs,
+  assistantLoopExitDecision,
+  assistantRespondedAfterUser,
   commandParts,
-  commandTemplate,
   commandTemplateText,
+  consecutiveErrorDecision,
   commandUser,
   loopMessages,
   modelInfo,
   pendingCompactionDecision,
+  providerFallbackLookupDecision,
+  providerFallbackSwitchState,
+  processorLoopDecision,
   remindQueuedMessages,
   scanLoopMessages,
   shellArgs,
-  shellKey,
   shouldScheduleUsageCompaction,
   systemPrompt,
   titleContextMessages,
@@ -57,53 +60,62 @@ describe("session.prompt helpers", () => {
     expect(result[0].content).toContain("[Title context truncated]")
   })
 
-  test("splits quoted and image arguments", () => {
-    expect(commandArgs(`alpha "two words" 'three words' [Image 2] tail`)).toEqual([
-      "alpha",
-      "two words",
-      "three words",
-      "[Image 2]",
-      "tail",
-    ])
+  test("splits quoted and image arguments", async () => {
+    await expect(
+      commandTemplateText({
+        template: "$1|$2|$3|$4|$5",
+        arguments: `alpha "two words" 'three words' [Image 2] tail`,
+      }),
+    ).resolves.toBe("alpha|two words|three words|[Image 2]|tail")
   })
 
-  test("fills numbered placeholders", () => {
-    expect(commandTemplate("open $1 with $2", `file.ts "line 20"`)).toBe("open file.ts with line 20")
+  test("fills numbered placeholders", async () => {
+    await expect(commandTemplateText({ template: "open $1 with $2", arguments: `file.ts "line 20"` })).resolves.toBe(
+      "open file.ts with line 20",
+    )
   })
 
-  test("lets the final placeholder absorb extra args", () => {
-    expect(commandTemplate("review $1: $2", `src/app.ts missing null guard near submit handler`)).toBe(
+  test("lets the final placeholder absorb extra args", async () => {
+    await expect(
+      commandTemplateText({ template: "review $1: $2", arguments: `src/app.ts missing null guard near submit handler` }),
+    ).resolves.toBe(
       "review src/app.ts: missing null guard near submit handler",
     )
   })
 
-  test("replaces arguments placeholder verbatim", () => {
-    expect(commandTemplate("run this:\n$ARGUMENTS", `echo "hello world"`)).toBe('run this:\necho "hello world"')
+  test("replaces arguments placeholder verbatim", async () => {
+    await expect(commandTemplateText({ template: "run this:\n$ARGUMENTS", arguments: `echo "hello world"` })).resolves.toBe(
+      'run this:\necho "hello world"',
+    )
   })
 
-  test("uses remaining args for $ARGUMENTS when numbered placeholders are also present", () => {
-    expect(commandTemplate("$1 $ARGUMENTS", "foo bar baz")).toBe("foo bar baz")
-    expect(commandTemplate("compare $1 with $ARGUMENTS", 'left "right side" extra')).toBe(
+  test("uses remaining args for $ARGUMENTS when numbered placeholders are also present", async () => {
+    await expect(commandTemplateText({ template: "$1 $ARGUMENTS", arguments: "foo bar baz" })).resolves.toBe(
+      "foo bar baz",
+    )
+    await expect(
+      commandTemplateText({ template: "compare $1 with $ARGUMENTS", arguments: 'left "right side" extra' }),
+    ).resolves.toBe(
       "compare left with right side extra",
     )
   })
 
-  test("appends args when template has no placeholders", () => {
-    expect(commandTemplate("summarize this change", "focus on tests")).toBe("summarize this change\n\nfocus on tests")
+  test("appends args when template has no placeholders", async () => {
+    await expect(
+      commandTemplateText({ template: "summarize this change", arguments: "focus on tests" }),
+    ).resolves.toBe("summarize this change\n\nfocus on tests")
   })
 
-  test("drops missing numbered args", () => {
-    expect(commandTemplate("compare $1 and $2", "left")).toBe("compare left and ")
-  })
-
-  test("normalizes shell binary names by platform", () => {
-    expect(shellKey("/bin/zsh", "darwin")).toBe("zsh")
-    expect(shellKey("C:\\Program Files\\PowerShell\\7\\pwsh.exe", "win32")).toBe("pwsh")
+  test("drops missing numbered args", async () => {
+    await expect(commandTemplateText({ template: "compare $1 and $2", arguments: "left" })).resolves.toBe(
+      "compare left and",
+    )
   })
 
   test("builds shell invocation args by shell family", () => {
     expect(shellArgs("/bin/fish", "echo hi", "darwin")).toEqual(["-c", "echo hi"])
     expect(shellArgs("/bin/bash", "echo hi", "darwin")[0]).toBe("-c")
+    expect(shellArgs("/bin/zsh", "echo hi", "darwin")[0]).toBe("-c")
     expect(shellArgs("C:\\Windows\\System32\\cmd.exe", "dir", "win32")).toEqual(["/c", "dir"])
     expect(shellArgs("C:\\Program Files\\PowerShell\\7\\pwsh.exe", "Get-ChildItem", "win32")).toEqual([
       "-NoProfile",
@@ -226,21 +238,21 @@ describe("session.prompt helpers", () => {
     expect(pendingCompactionDecision({ result: "stop" })).toEqual({
       type: "break",
       reason: "completed",
-      invalidateCache: false,
     })
     expect(pendingCompactionDecision({ result: "stop", overflow: true })).toEqual({
       type: "break",
       reason: "error",
-      invalidateCache: false,
     })
     expect(pendingCompactionDecision({ result: "busy" })).toEqual({
       type: "retry",
       delayMs: 250,
-      invalidateCache: true,
+    })
+    expect(pendingCompactionDecision({ result: "busy", busyRetries: Number.NaN })).toEqual({
+      type: "break",
+      reason: "error",
     })
     expect(pendingCompactionDecision({ result: "continue" })).toEqual({
       type: "continue",
-      invalidateCache: true,
     })
   })
 
@@ -266,6 +278,244 @@ describe("session.prompt helpers", () => {
         overflow: true,
       }),
     ).toBe(true)
+  })
+
+  test("stops the prompt loop after too many consecutive errors", () => {
+    expect(
+      consecutiveErrorDecision({
+        consecutiveErrors: 2,
+        maxConsecutiveErrors: 3,
+        step: 12,
+      }),
+    ).toEqual({ action: "continue" })
+
+    expect(
+      consecutiveErrorDecision({
+        consecutiveErrors: 3,
+        maxConsecutiveErrors: 3,
+        step: 12,
+      }),
+    ).toEqual({
+      action: "stop",
+      reason: "error",
+      message:
+        `Agent encountered 3 consecutive errors at step 12. ` +
+        `Stopping to prevent retry loop. Try rephrasing your request or breaking it into smaller tasks.`,
+    })
+  })
+
+  test("stops the prompt loop when consecutive error limits are non-comparable", () => {
+    expect(
+      consecutiveErrorDecision({
+        consecutiveErrors: 1,
+        maxConsecutiveErrors: Number.NaN,
+        step: 12,
+      }),
+    ).toMatchObject({
+      action: "stop",
+      reason: "error",
+    })
+    expect(
+      consecutiveErrorDecision({
+        consecutiveErrors: Number.NaN,
+        maxConsecutiveErrors: 3,
+        step: 12,
+      }),
+    ).toEqual({
+      action: "stop",
+      reason: "error",
+      message:
+        `Agent encountered an invalid number of consecutive errors at step 12. ` +
+        `Stopping to prevent retry loop. Try rephrasing your request or breaking it into smaller tasks.`,
+    })
+  })
+
+  test("looks up fallback providers only for repeated retryable account or rate-limit API failures", () => {
+    expect(
+      providerFallbackLookupDecision({
+        consecutiveErrors: 1,
+        error: { name: "APIError", data: { statusCode: 429, message: "rate limited" } },
+      }),
+    ).toEqual({ action: "skip" })
+    expect(
+      providerFallbackLookupDecision({
+        consecutiveErrors: 2,
+        error: { name: "APIError", data: { statusCode: 429, message: "rate limited" } },
+      }),
+    ).toEqual({
+      action: "lookup",
+      errorMessage: "rate limited",
+    })
+    expect(
+      providerFallbackLookupDecision({
+        consecutiveErrors: 2,
+        error: { name: "APIError", data: { statusCode: 500, message: "server error" } },
+      }),
+    ).toEqual({ action: "skip" })
+    expect(
+      providerFallbackLookupDecision({
+        consecutiveErrors: 2,
+        error: { name: "OtherError", data: { statusCode: 429, message: "rate limited" } },
+      }),
+    ).toEqual({ action: "skip" })
+    expect(
+      providerFallbackLookupDecision({
+        consecutiveErrors: Number.NaN,
+        error: { name: "APIError", data: { statusCode: 429, message: "rate limited" } },
+      }),
+    ).toEqual({ action: "skip" })
+  })
+
+  test("builds fallback provider switch state", () => {
+    expect(
+      providerFallbackSwitchState({
+        current: { providerID: ProviderID.make("anthropic"), modelID: ModelID.make("claude-opus") },
+        fallback: { providerID: ProviderID.make("openai"), modelID: ModelID.make("gpt-5") },
+        errorMessage: "quota exceeded",
+        consecutiveErrors: 5,
+      }),
+    ).toEqual({
+      from: "anthropic/claude-opus",
+      to: "openai/gpt-5",
+      reason: "quota exceeded",
+      message: "Provider anthropic failed: quota exceeded. Switching to openai/gpt-5.",
+      nextConsecutiveErrors: 2,
+    })
+
+    const unknownReasonSwitch = providerFallbackSwitchState({
+      current: { providerID: ProviderID.make("anthropic"), modelID: ModelID.make("claude-opus") },
+      fallback: { providerID: ProviderID.make("openai"), modelID: ModelID.make("gpt-5") },
+      errorMessage: undefined,
+      consecutiveErrors: 2,
+    })
+    expect(unknownReasonSwitch.reason).toBe("unknown error")
+    expect(unknownReasonSwitch.message).toBe("Provider anthropic failed: unknown error. Switching to openai/gpt-5.")
+
+    const blankReasonSwitch = providerFallbackSwitchState({
+      current: { providerID: ProviderID.make("anthropic"), modelID: ModelID.make("claude-opus") },
+      fallback: { providerID: ProviderID.make("openai"), modelID: ModelID.make("gpt-5") },
+      errorMessage: "  ",
+      consecutiveErrors: 2,
+    })
+    expect(blankReasonSwitch.reason).toBe("unknown error")
+    expect(blankReasonSwitch.message).toBe("Provider anthropic failed: unknown error. Switching to openai/gpt-5.")
+  })
+
+  test("normalizes invalid fallback provider error counts before resuming", () => {
+    expect(
+      providerFallbackSwitchState({
+        current: { providerID: ProviderID.make("anthropic"), modelID: ModelID.make("claude-opus") },
+        fallback: { providerID: ProviderID.make("openai"), modelID: ModelID.make("gpt-5") },
+        errorMessage: "quota exceeded",
+        consecutiveErrors: Number.NaN,
+      }).nextConsecutiveErrors,
+    ).toBe(0)
+    expect(
+      providerFallbackSwitchState({
+        current: { providerID: ProviderID.make("anthropic"), modelID: ModelID.make("claude-opus") },
+        fallback: { providerID: ProviderID.make("openai"), modelID: ModelID.make("gpt-5") },
+        errorMessage: "quota exceeded",
+        consecutiveErrors: -1,
+      }).nextConsecutiveErrors,
+    ).toBe(0)
+  })
+
+  test("maps processor results to prompt loop decisions", () => {
+    expect(processorLoopDecision({ result: "stop", messageFinish: "stop", hasError: false })).toEqual({
+      action: "stop",
+      reason: "completed",
+    })
+    expect(processorLoopDecision({ result: "stop", messageFinish: "stop", hasError: true })).toEqual({
+      action: "stop",
+      reason: "error",
+    })
+    expect(processorLoopDecision({ result: "continue", messageFinish: "tool-calls", hasError: false })).toEqual({
+      action: "continue",
+    })
+    expect(processorLoopDecision({ result: "compact", messageFinish: "stop", hasError: false })).toEqual({
+      action: "compact",
+      overflow: false,
+      triggerReason: "provider_usage",
+    })
+    expect(processorLoopDecision({ result: "compact", messageFinish: undefined, hasError: false })).toEqual({
+      action: "compact",
+      overflow: true,
+      triggerReason: "context_overflow_error",
+    })
+  })
+
+  test("detects whether an assistant response belongs after the current user turn", () => {
+    expect(
+      assistantRespondedAfterUser({
+        lastUserID: "001",
+        lastAssistant: { id: "002", finish: "stop" } as any,
+      }),
+    ).toBe(true)
+    expect(
+      assistantRespondedAfterUser({
+        lastUserID: "002",
+        lastAssistant: { id: "001", finish: "stop" } as any,
+      }),
+    ).toBe(false)
+    expect(
+      assistantRespondedAfterUser({
+        lastUserID: "001",
+        lastAssistant: { id: "002", finish: undefined } as any,
+      }),
+    ).toBe(false)
+    expect(assistantRespondedAfterUser({ lastUserID: "001", lastAssistant: undefined })).toBe(false)
+  })
+
+  test("maps completed assistant turns to loop exit decisions", () => {
+    expect(
+      assistantLoopExitDecision({
+        lastUserID: "001",
+        lastAssistant: { id: "002", finish: "stop" } as any,
+        hasPendingSubtask: false,
+      }),
+    ).toEqual({ action: "complete" })
+
+    expect(
+      assistantLoopExitDecision({
+        lastUserID: "001",
+        lastAssistant: { id: "002", finish: "unknown" } as any,
+        hasPendingSubtask: false,
+      }),
+    ).toEqual({
+      action: "complete_unknown_finish",
+      logMessage: "model returned unknown finish with no actionable output",
+    })
+  })
+
+  test("keeps loop running for actionable, stale, or unfinished assistant turns", () => {
+    expect(
+      assistantLoopExitDecision({
+        lastUserID: "001",
+        lastAssistant: { id: "002", finish: "tool-calls" } as any,
+        hasPendingSubtask: false,
+      }),
+    ).toEqual({ action: "continue" })
+    expect(
+      assistantLoopExitDecision({
+        lastUserID: "001",
+        lastAssistant: { id: "002", finish: "unknown" } as any,
+        hasPendingSubtask: true,
+      }),
+    ).toEqual({ action: "continue" })
+    expect(
+      assistantLoopExitDecision({
+        lastUserID: "003",
+        lastAssistant: { id: "002", finish: "stop" } as any,
+        hasPendingSubtask: false,
+      }),
+    ).toEqual({ action: "continue" })
+    expect(
+      assistantLoopExitDecision({
+        lastUserID: "001",
+        lastAssistant: { id: "002", finish: undefined } as any,
+        hasPendingSubtask: false,
+      }),
+    ).toEqual({ action: "continue" })
   })
 
   test("wraps queued user text with a system reminder", () => {
