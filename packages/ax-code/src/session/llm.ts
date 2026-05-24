@@ -38,7 +38,6 @@ import { ReasoningPolicy } from "@/control-plane/reasoning-policy"
 
 export namespace LLM {
   const log = Log.create({ service: "llm" })
-  export const OUTPUT_TOKEN_MAX = ProviderTransform.OUTPUT_TOKEN_MAX
   const superLongPacing = new Map<string, SuperLongPolicy.PacingState>()
 
   export type StreamInput = {
@@ -402,6 +401,7 @@ export namespace LLM {
   export type SuperLongPacingReservation = {
     key: string
     timestamp: number
+    durable: boolean
   }
 
   async function applySuperLongPacing(input: {
@@ -418,26 +418,18 @@ export namespace LLM {
     if (!input.enabled || input.small) return
     const key = superLongPacingKey(input)
     const policy = input.policy ?? SuperLongPolicy.providerPacing(input.providerID)
-    const durablePacingDisabled = ["0", "false"].includes(
-      (process.env.AX_CODE_SUPER_LONG_DURABLE_PACING ?? "").toLowerCase(),
-    )
+    const durablePacingDisabled = isSuperLongDurablePacingDisabled()
     const inMemoryOnly =
       durablePacingDisabled || input.policy !== undefined || input.now !== undefined || input.sleep !== undefined
     while (true) {
       const now = input.now?.() ?? Date.now()
       let decision: SuperLongPolicy.PacingDecision
       let reservedState: SuperLongPolicy.PacingState | undefined
+      let durableReserved = false
       if (inMemoryOnly) {
-        const state = superLongPacing.get(key) ?? { timestamps: [] }
-        decision = SuperLongPolicy.evaluatePacing({ now, state, policy })
-        if (decision.waitMs === 0) {
-          reservedState = SuperLongPolicy.recordRequest({
-            now,
-            state,
-            policy,
-          })
-          superLongPacing.set(key, reservedState)
-        }
+        const reservation = reserveProcessLocalSuperLongPacing({ key, now, policy })
+        decision = reservation.decision
+        reservedState = reservation.state
       } else {
         const reservation = await SuperLongRuntime.reservePacing({ key, now, policy }).catch((error) => {
           log.warn("failed to reserve durable super-long pacing; falling back to process-local pacing", {
@@ -450,14 +442,14 @@ export namespace LLM {
         if (reservation) {
           decision = reservation.decision
           reservedState = reservation.state
-          if (reservedState) superLongPacing.set(key, reservedState)
-        } else {
-          const state = superLongPacing.get(key) ?? { timestamps: [] }
-          decision = SuperLongPolicy.evaluatePacing({ now, state, policy })
-          if (decision.waitMs === 0) {
-            reservedState = SuperLongPolicy.recordRequest({ now, state, policy })
+          if (reservedState) {
+            durableReserved = true
             superLongPacing.set(key, reservedState)
           }
+        } else {
+          const localReservation = reserveProcessLocalSuperLongPacing({ key, now, policy })
+          decision = localReservation.decision
+          reservedState = localReservation.state
         }
       }
       if (decision.waitMs > 0) {
@@ -471,8 +463,25 @@ export namespace LLM {
         await (input.sleep ?? sleep)(decision.waitMs, input.abort)
         continue
       }
-      return { key, timestamp: now }
+      return { key, timestamp: reservedState?.timestamps.at(-1) ?? now, durable: durableReserved }
     }
+  }
+
+  function reserveProcessLocalSuperLongPacing(input: {
+    key: string
+    now: number
+    policy: SuperLongPolicy.PacingPolicy
+  }): { decision: SuperLongPolicy.PacingDecision; state?: SuperLongPolicy.PacingState } {
+    const state = superLongPacing.get(input.key) ?? { timestamps: [] }
+    const decision = SuperLongPolicy.evaluatePacing({ now: input.now, state, policy: input.policy })
+    if (decision.waitMs > 0) {
+      superLongPacing.set(input.key, { timestamps: decision.timestamps })
+      return { decision }
+    }
+
+    const next = SuperLongPolicy.recordRequest({ now: input.now, state, policy: input.policy })
+    superLongPacing.set(input.key, next)
+    return { decision, state: next }
   }
 
   function attachSuperLongPacingReservation<T extends { fullStream: AsyncIterable<unknown> }>(
@@ -538,6 +547,7 @@ export namespace LLM {
         else superLongPacing.set(reservation.key, { timestamps })
       }
     }
+    if (!reservation.durable) return
     await SuperLongRuntime.releasePacingReservation({
       key: reservation.key,
       timestamp: reservation.timestamp,
@@ -572,6 +582,11 @@ export namespace LLM {
 
   function superLongPacingKey(input: Pick<Parameters<typeof applySuperLongPacing>[0], "providerID" | "modelID">) {
     return `${input.providerID}/${input.modelID}`
+  }
+
+  function isSuperLongDurablePacingDisabled() {
+    const value = (process.env.AX_CODE_SUPER_LONG_DURABLE_PACING ?? "").trim().toLowerCase()
+    return value === "0" || value === "false"
   }
 
   async function sleep(ms: number, signal: AbortSignal): Promise<void> {
