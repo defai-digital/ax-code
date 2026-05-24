@@ -120,6 +120,7 @@ export namespace SessionProcessor {
     let stepToolCallCount = 0
     let stepErrorSurfaces: string[] = []
     let stepTouchedFiles: Array<{ path: string; summary: string }> = []
+    let stepToolObservations: AgentOptimizationTrace.ToolObservation[] = []
     const fileTouchingTools = new Set(["read", "edit", "write", "multiedit", "apply_patch"])
     // Per-session sliding-window rate limiter: max 30 tool calls per 10-second window.
     // Prevents runaway agent loops from exhausting resources or burning LLM quota.
@@ -513,6 +514,11 @@ export namespace SessionProcessor {
                       stepIndex: attempt,
                       deterministic: false,
                     })
+                    stepToolObservations.push({
+                      tool: match.tool,
+                      input: value.input ?? match.state.input,
+                      status: "completed",
+                    })
 
                     // Self-correction: clear retry budget on success
                     SelfCorrection.recordSuccess(input.sessionID, match.tool)
@@ -624,6 +630,11 @@ export namespace SessionProcessor {
                     })
 
                     stepErrorSurfaces.push(match.tool)
+                    stepToolObservations.push({
+                      tool: match.tool,
+                      input: toolInput,
+                      status: "error",
+                    })
                     if (
                       value.error instanceof Permission.RejectedError ||
                       value.error instanceof Question.RejectedError
@@ -655,6 +666,7 @@ export namespace SessionProcessor {
                   stepToolCallCount = 0
                   stepErrorSurfaces = []
                   stepTouchedFiles = []
+                  stepToolObservations = []
                   await setBusyStatus({
                     step: attempt,
                     startedAt: stepStartTime,
@@ -808,14 +820,10 @@ export namespace SessionProcessor {
                     const tierCounts = [0, 1, 2, 3].map(
                       (tier) => contextPack.entries.filter((entry) => entry.tier === tier).length,
                     ) as [number, number, number, number]
-                    // Derive verificationStatus from available step evidence:
-                    // "fail" when a repeated-failure pattern was detected (model saw
-                    // recovery hints via SelfCorrection/ToolErrorPatternTracker but
-                    // kept hitting the same surface); "skip" otherwise (no programmatic
-                    // verification command was tracked in this phase).
-                    const verificationStatus: AgentOptimizationTrace.VerificationStatus = failureDetect.detected
-                      ? "fail"
-                      : "skip"
+                    const verification = AgentOptimizationTrace.verificationStatusFromObservations({
+                      observations: stepToolObservations,
+                      repeatedFailureDetected: failureDetect.detected,
+                    })
                     const traceEvent: AgentOptimizationTrace.TraceEvent = {
                       sessionID: input.sessionID,
                       eventID: `${input.sessionID}-step-${attempt}`,
@@ -831,7 +839,8 @@ export namespace SessionProcessor {
                       toolCallCount: stepToolCallCount,
                       repeatedFailureCount: failureDetect.count ?? 0,
                       repeatedFailureSignal: failureDetect.detected,
-                      verificationStatus,
+                      verificationCommand: verification.command,
+                      verificationStatus: verification.status,
                       patchOutcome: patchData ? "accepted" : "not-attempted",
                       cacheReadTokens: usage.tokens.cache.read,
                       cacheWriteTokens: usage.tokens.cache.write,

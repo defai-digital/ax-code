@@ -64,6 +64,38 @@ describe("AgentOptimizationTrace.contextPackSummary", () => {
   })
 })
 
+describe("AgentOptimizationTrace.verificationStatusFromObservations", () => {
+  test("marks successful verification commands as pass", () => {
+    const result = AgentOptimizationTrace.verificationStatusFromObservations({
+      repeatedFailureDetected: false,
+      observations: [{ tool: "bash", status: "completed", input: { command: "bun test test/session/llm.test.ts" } }],
+    })
+    expect(result).toEqual({
+      status: "pass",
+      command: "bun test test/session/llm.test.ts",
+    })
+  })
+
+  test("marks failed verification commands as fail", () => {
+    const result = AgentOptimizationTrace.verificationStatusFromObservations({
+      repeatedFailureDetected: false,
+      observations: [{ tool: "verify_project", status: "error", input: {} }],
+    })
+    expect(result).toEqual({
+      status: "fail",
+      command: "verify_project",
+    })
+  })
+
+  test("keeps non-verification tools as skip", () => {
+    const result = AgentOptimizationTrace.verificationStatusFromObservations({
+      repeatedFailureDetected: false,
+      observations: [{ tool: "read", status: "completed", input: { path: "src/foo.ts" } }],
+    })
+    expect(result.status).toBe("skip")
+  })
+})
+
 describe("AgentOptimizationTrace.serialize / deserialize", () => {
   test("round-trips a full event", () => {
     const event = makeEvent()

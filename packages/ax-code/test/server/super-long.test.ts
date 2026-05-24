@@ -35,7 +35,26 @@ describe("super-long route", () => {
           const response = await Server.Default().request(`/super-long?directory=${encodeURIComponent(tmp.path)}`)
           expect(response.status).toBe(200)
           expect(await response.json()).toEqual({ enabled: true })
-          expect(process.env.AX_CODE_SUPER_LONG).toBe("true")
+          expect(process.env.AX_CODE_SUPER_LONG).toBeUndefined()
+        },
+      })
+    })
+  })
+
+  test("does not default on when autonomous mode is disabled", async () => {
+    await withCleanSuperLongEnv(async () => {
+      await using tmp = await tmpdir({ git: true })
+      await Bun.write(
+        path.join(tmp.path, "ax-code.json"),
+        JSON.stringify({ model: "alibaba-coding-plan/qwen3.7-max", autonomous: false }),
+      )
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const response = await Server.Default().request(`/super-long?directory=${encodeURIComponent(tmp.path)}`)
+          expect(response.status).toBe(200)
+          expect(await response.json()).toEqual({ enabled: false })
         },
       })
     })
@@ -62,6 +81,29 @@ describe("super-long route", () => {
           const get = await Server.Default().request(`/super-long?directory=${encodeURIComponent(tmp.path)}`)
           expect(await get.json()).toEqual({ enabled: false })
           expect(await Bun.file(configPath).text()).toBe(original)
+        },
+      })
+    })
+  })
+
+  test("rejects enabling Super-Long when autonomous mode is disabled", async () => {
+    await withCleanSuperLongEnv(async () => {
+      await using tmp = await tmpdir({ git: true })
+      await Bun.write(path.join(tmp.path, "ax-code.json"), JSON.stringify({ model: "qwen3.7-max", autonomous: false }))
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const response = await Server.Default().request(`/super-long?directory=${encodeURIComponent(tmp.path)}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ enabled: true }),
+          })
+          expect(response.status).toBe(409)
+          expect(await response.json()).toEqual({
+            error: "Super-Long requires autonomous mode or equivalent runtime guardrails.",
+          })
+          expect(process.env[OVERRIDE]).toBeUndefined()
         },
       })
     })

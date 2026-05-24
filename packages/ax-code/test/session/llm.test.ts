@@ -943,6 +943,7 @@ describe("session.llm.stream", () => {
 describe("session.llm.stream - Phase 1 long-agent profile wiring", () => {
   const origSuperLong = process.env.AX_CODE_SUPER_LONG
   const origSuperLongOverride = process.env.AX_CODE_SUPER_LONG_SESSION_OVERRIDE
+  const origAutonomous = process.env.AX_CODE_AUTONOMOUS
 
   afterEach(() => {
     if (origSuperLong === undefined) {
@@ -954,6 +955,11 @@ describe("session.llm.stream - Phase 1 long-agent profile wiring", () => {
       delete process.env.AX_CODE_SUPER_LONG_SESSION_OVERRIDE
     } else {
       process.env.AX_CODE_SUPER_LONG_SESSION_OVERRIDE = origSuperLongOverride
+    }
+    if (origAutonomous === undefined) {
+      delete process.env.AX_CODE_AUTONOMOUS
+    } else {
+      process.env.AX_CODE_AUTONOMOUS = origAutonomous
     }
     LLM.clearPacingState()
   })
@@ -1104,6 +1110,85 @@ describe("session.llm.stream - Phase 1 long-agent profile wiring", () => {
           .map((m) => m.content)
           .join("\n")
         expect(systemText).toContain("Super-Long mode")
+      },
+    })
+  })
+
+  test("Qwen3.7-Max does not enter Super-Long request shaping when autonomous mode is off", async () => {
+    delete process.env.AX_CODE_SUPER_LONG
+    delete process.env.AX_CODE_SUPER_LONG_SESSION_OVERRIDE
+    process.env.AX_CODE_AUTONOMOUS = "false"
+    const providerID = "alibaba-coding-plan"
+    const modelID = "qwen3.7-max"
+    const fixture = await loadFixture(providerID, modelID)
+    const model = fixture.model
+
+    const request = waitRequest(
+      "/chat/completions",
+      new Response(createChatStream("ok"), {
+        status: 200,
+        headers: { "Content-Type": "text/event-stream" },
+      }),
+    )
+
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await Bun.write(
+          path.join(dir, "ax-code.json"),
+          JSON.stringify({
+            $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+            enabled_providers: [providerID],
+            provider: {
+              [providerID]: {
+                options: { apiKey: "test-key", baseURL: `${state.server.url.origin}/v1` },
+              },
+            },
+          }),
+        )
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const resolved = await Provider.getModel(ProviderID.make(providerID), ModelID.make(model.id))
+        const sessionID = SessionID.make("session-phase1-qwen-autonomous-off")
+        const agent = {
+          name: "primary",
+          mode: "primary",
+          options: {},
+          permission: [{ permission: "*", pattern: "*", action: "allow" }],
+        } satisfies Agent.Info
+        const user = {
+          id: MessageID.make("user-phase1-autonomous-off"),
+          sessionID,
+          role: "user",
+          time: { created: Date.now() },
+          agent: agent.name,
+          model: { providerID: ProviderID.make(providerID), modelID: resolved.id },
+        } satisfies MessageV2.User
+
+        const stream = await LLM.stream({
+          user,
+          sessionID,
+          model: resolved,
+          agent,
+          system: ["You are a coding agent."],
+          abort: new AbortController().signal,
+          messages: [{ role: "user", content: "Review the PR." }],
+          tools: {},
+        })
+        for await (const _ of stream.fullStream) {
+        }
+
+        const capture = await request
+        expect(capture.body.preserve_thinking).toBeUndefined()
+        expect(capture.body.promptCacheKey).toBeUndefined()
+        const systemText = (capture.body.messages as Array<{ role: string; content: string }>)
+          .filter((m) => m.role === "system")
+          .map((m) => m.content)
+          .join("\n")
+        expect(systemText).not.toContain("Super-Long mode")
       },
     })
   })
@@ -1411,11 +1496,38 @@ describe("session.llm.stream - Phase 1 long-agent profile wiring", () => {
     })
   })
 
-  test("super-long pacing keys are scoped by session", () => {
+  test("super-long pacing keys are shared across sessions for the same provider and model", () => {
     const base = { providerID: "alibaba-coding-plan", modelID: "qwen3.7-max" }
-    expect(LLM.pacingKeyForTest({ ...base, sessionID: "session-a" })).not.toBe(
+    expect(LLM.pacingKeyForTest({ ...base, sessionID: "session-a" })).toBe(
       LLM.pacingKeyForTest({ ...base, sessionID: "session-b" }),
     )
+  })
+
+  test("super-long pacing state is shared across sessions for the same provider and model", async () => {
+    const sessionA = {
+      sessionID: "session-pacing-a",
+      providerID: "alibaba-coding-plan",
+      modelID: "qwen3.7-max",
+    }
+    const sessionB = {
+      ...sessionA,
+      sessionID: "session-pacing-b",
+    }
+    LLM.setPacingStateForTest(sessionA, { timestamps: [1_000] })
+
+    await LLM.applySuperLongPacingForTest({
+      ...sessionB,
+      enabled: true,
+      abort: new AbortController().signal,
+      policy: {
+        windowMs: 1_000,
+        maxRequests: 10,
+        minDelayMs: 100,
+      },
+      now: () => 1_175,
+    })
+
+    expect(LLM.getPacingStateForTest(sessionA)?.timestamps).toEqual([1_000, 1_175])
   })
 
   test("super-long pacing rechecks state after waiting before recording", async () => {

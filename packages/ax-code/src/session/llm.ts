@@ -150,8 +150,10 @@ export namespace LLM {
     if (reasoningPolicyReminder) system.push(reasoningPolicyReminder)
 
     const longAgentProfile = longAgentProfileForModel(input.model.id)
+    const autonomousEnabled = Flag.AX_CODE_AUTONOMOUS
     const superLongEnabled =
       !input.small &&
+      autonomousEnabled &&
       SuperLongPolicy.runtimeState({
         modelID: input.model.id,
         config: { enabled: cfg.super_long },
@@ -205,9 +207,8 @@ export namespace LLM {
     if (superLongEnabled && longAgentProfile.contextPackingBudget === "wide") {
       const task = extractLastUserTask(input.messages)
       const touchedFiles = extractTouchedFiles(input.messages)
-      const tokenBudget = Math.min(ProviderTransform.maxOutputTokens(input.model) * 2, 32_000)
       const packResult = LongAgentContextPacker.pack({
-        tokenBudget,
+        tokenBudget: longAgentProfile.contextPackTokenBudget,
         task: task ?? undefined,
         touchedFiles,
         toolConstraints:
@@ -520,10 +521,8 @@ export namespace LLM {
     }
   }
 
-  function superLongPacingKey(
-    input: Pick<Parameters<typeof applySuperLongPacing>[0], "sessionID" | "providerID" | "modelID">,
-  ) {
-    return `${input.sessionID}/${input.providerID}/${input.modelID}`
+  function superLongPacingKey(input: Pick<Parameters<typeof applySuperLongPacing>[0], "providerID" | "modelID">) {
+    return `${input.providerID}/${input.modelID}`
   }
 
   async function sleep(ms: number, signal: AbortSignal): Promise<void> {
