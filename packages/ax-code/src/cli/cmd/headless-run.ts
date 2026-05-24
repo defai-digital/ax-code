@@ -18,6 +18,25 @@ import {
 import { createHeadlessJsonlFileEventSink } from "@/runtime/headless/event-sink-node"
 import path from "node:path"
 
+type FetchHandler = (request: Request) => Response | Promise<Response>
+
+function assertInternalUrl(url: URL) {
+  if (!isInternalHostname(url.hostname)) throw new Error(`Internal fetch rejected: ${url.hostname}`)
+}
+
+function createInternalFetch(handler: FetchHandler, headers?: Record<string, string>): typeof globalThis.fetch {
+  return (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const request = new Request(input, init)
+    assertInternalUrl(new URL(request.url))
+    if (headers) {
+      for (const [key, value] of Object.entries(headers)) {
+        if (!request.headers.has(key)) request.headers.set(key, value)
+      }
+    }
+    return handler(request)
+  }) as typeof globalThis.fetch
+}
+
 export const HeadlessRunCommand = cmd({
   command: "headless-run [message..]",
   describe: false,
@@ -211,27 +230,16 @@ export const HeadlessRunCommand = cmd({
     }
 
     if (args.attach) {
+      const attachUrl = new URL(args.attach)
+      assertInternalUrl(attachUrl)
       const headers = buildAttachAuthHeaders(args.password)
-      const fetchFn = (async (input: RequestInfo | URL, init?: RequestInit) => {
-        const request = new Request(input, init)
-        if (headers) {
-          for (const [key, value] of Object.entries(headers)) {
-            if (!request.headers.has(key)) request.headers.set(key, value)
-          }
-        }
-        return fetch(request)
-      }) as typeof globalThis.fetch
+      const fetchFn = createInternalFetch((request) => fetch(request), headers)
       await runWithBackend({ baseUrl: args.attach, fetch: fetchFn })
       return
     }
 
     await bootstrap(directory ?? callerCwd, async () => {
-      const fetchFn = (async (input: RequestInfo | URL, init?: RequestInit) => {
-        const request = new Request(input, init)
-        const url = new URL(request.url)
-        if (!isInternalHostname(url.hostname)) throw new Error(`Internal fetch rejected: ${url.hostname}`)
-        return Server.Default().fetch(request)
-      }) as typeof globalThis.fetch
+      const fetchFn = createInternalFetch((request) => Server.Default().fetch(request))
 
       await runWithBackend({ baseUrl: internalBaseUrl(), fetch: fetchFn })
     })
