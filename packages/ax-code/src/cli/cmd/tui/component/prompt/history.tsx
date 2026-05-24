@@ -1,4 +1,4 @@
-import { onCleanup, onMount } from "solid-js"
+import { createEffect, on, onCleanup, onMount } from "solid-js"
 import { createStore, produce, unwrap } from "solid-js/store"
 import { createSimpleContext } from "../../context/helper"
 import type { AgentPart, FilePart, TextPart } from "@ax-code/sdk/v2"
@@ -59,18 +59,19 @@ export const { use: usePromptHistory, provider: PromptHistoryProvider } = create
     const sdk = useSDK()
     const toast = useToast()
     let writeWarningShown = false
+    let loadGeneration = 0
 
-    function historyHeaders(input: { contentType?: string } = {}) {
+    function historyHeaders(input: { directory?: string; contentType?: string } = {}) {
       return directoryRequestHeaders({
-        directory: sdk.directory,
+        directory: input.directory,
         accept: "application/json",
         contentType: input.contentType,
       })
     }
 
-    async function loadProjectHistory() {
+    async function loadProjectHistory(directory: string | undefined) {
       const response = await sdk.fetch(`${sdk.url}/prompt-history?limit=${MAX_HISTORY_ENTRIES}`, {
-        headers: historyHeaders(),
+        headers: historyHeaders({ directory }),
       })
       if (!response.ok) throw new Error(`HTTP ${response.status} ${response.statusText}`.trim())
       const body = await response.json()
@@ -79,32 +80,42 @@ export const { use: usePromptHistory, provider: PromptHistoryProvider } = create
       return parsed.data.filter(isPromptInfo)
     }
 
-    async function appendProjectHistory(entry: PromptInfo) {
+    async function appendProjectHistory(entry: PromptInfo, directory: string | undefined) {
       const response = await sdk.fetch(`${sdk.url}/prompt-history`, {
         method: "POST",
-        headers: historyHeaders({ contentType: "application/json" }),
+        headers: historyHeaders({ directory, contentType: "application/json" }),
         body: JSON.stringify(entry),
       })
       if (!response.ok) throw new Error(`HTTP ${response.status} ${response.statusText}`.trim())
     }
 
+    async function refreshProjectHistory(options: { directory: string | undefined; mergeLocal: boolean }) {
+      const generation = ++loadGeneration
+      const lines = await loadProjectHistory(options.directory).catch((error) => {
+        log.warn("failed to load prompt history", { directory: options.directory, error })
+        if (shouldSurfaceOptionalStateError(error)) {
+          toast.show({
+            message: optionalStateErrorMessage(error, "Failed to load prompt history"),
+            variant: "warning",
+            duration: 3000,
+          })
+        }
+        return []
+      })
+      if (generation !== loadGeneration) return
+      setStore(
+        produce((draft) => {
+          const local = options.mergeLocal ? draft.history : []
+          draft.history = [...lines, ...local].slice(-MAX_HISTORY_ENTRIES)
+          draft.index = 0
+        }),
+      )
+    }
+
     onMount(() => {
       const cancel = scheduleDeferredStartupTask(
         async () => {
-          const lines = await loadProjectHistory().catch((error) => {
-            log.warn("failed to load prompt history", { error })
-            if (shouldSurfaceOptionalStateError(error)) {
-              toast.show({
-                message: optionalStateErrorMessage(error, "Failed to load prompt history"),
-                variant: "warning",
-                duration: 3000,
-              })
-            }
-            return []
-          })
-
-          const merged = [...lines, ...store.history].slice(-MAX_HISTORY_ENTRIES)
-          setStore("history", merged)
+          await refreshProjectHistory({ directory: sdk.directory, mergeLocal: true })
         },
         {
           delayMs: HISTORY_LOAD_DELAY_MS,
@@ -112,6 +123,18 @@ export const { use: usePromptHistory, provider: PromptHistoryProvider } = create
       )
       onCleanup(cancel)
     })
+
+    createEffect(
+      on(
+        () => sdk.directory,
+        (directory) => {
+          setStore("history", [])
+          setStore("index", 0)
+          void refreshProjectHistory({ directory, mergeLocal: false })
+        },
+        { defer: true },
+      ),
+    )
 
     const [store, setStore] = createStore({
       index: 0,
@@ -143,6 +166,7 @@ export const { use: usePromptHistory, provider: PromptHistoryProvider } = create
       },
       append(item: PromptInfo) {
         const entry = structuredClone(unwrap(item))
+        const directory = sdk.directory
         let trimmed = false
         setStore(
           produce((draft) => {
@@ -159,7 +183,7 @@ export const { use: usePromptHistory, provider: PromptHistoryProvider } = create
           writeWarningShown = false
         }
 
-        void appendProjectHistory(entry)
+        void appendProjectHistory(entry, directory)
           .then(() => {
             writeWarningShown = false
           })

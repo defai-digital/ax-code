@@ -88,20 +88,6 @@ export namespace SessionGoal {
     })
   }
 
-  export async function requireActiveSlot(sessionID: SessionID) {
-    const existing = await get(sessionID)
-    if (
-      existing &&
-      existing.status !== "complete" &&
-      existing.status !== "blocked" &&
-      existing.status !== "budget_limited"
-    ) {
-      throw new Error(
-        "session already has an active goal; pause, complete, block, or clear it before creating another goal",
-      )
-    }
-  }
-
   const ACTIVE_GOAL_ERROR =
     "session already has an active goal; pause, complete, block, or clear it before creating another goal"
 
@@ -190,7 +176,7 @@ export namespace SessionGoal {
 
   export async function setStatus(input: { sessionID: SessionID; status: Status }): Promise<Info> {
     const now = Date.now()
-    const goal = Database.use((db) => {
+    const goal = Database.transaction((db) => {
       const row = db.select().from(SessionGoalTable).where(eq(SessionGoalTable.session_id, input.sessionID)).get()
       if (!row) throw new Error("No goal is set for this session")
       assertCanSetStatus(row, input.status)

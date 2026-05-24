@@ -951,6 +951,16 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(history).toContain("if (writeWarningShown) return")
   })
 
+  test("reloads prompt history when the active workspace directory changes", async () => {
+    const history = await fs.readFile(PROMPT_HISTORY_SRC, "utf8")
+
+    expect(history).toContain("createEffect(")
+    expect(history).toContain("() => sdk.directory")
+    expect(history).toContain('setStore("history", [])')
+    expect(history).toContain("refreshProjectHistory({ directory, mergeLocal: false })")
+    expect(history).toContain("appendProjectHistory(entry, directory)")
+  })
+
   test("surfaces frecency persistence failures instead of silently dropping them", async () => {
     const frecency = await fs.readFile(PROMPT_FRECENCY_SRC, "utf8")
 
