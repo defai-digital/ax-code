@@ -191,10 +191,10 @@ function footerTaskLabel(tool?: string) {
   if (["bash", "shell", "terminal", "command"].some((name) => normalized.includes(name))) return "Running command"
   if (["edit", "write", "patch", "diff", "refactor apply"].some((name) => normalized.includes(name)))
     return "Editing files"
-  if (["task", "agent", "subagent"].some((name) => normalized.includes(name))) return "Running subtask"
+  if (["task", "agent", "subagent"].some((name) => normalized.includes(name))) return "Subtask"
   if (["web", "fetch", "search"].some((name) => normalized.includes(name))) return "Searching web"
-  if (["plan", "hypothesis"].some((name) => normalized.includes(name))) return "Planning changes"
-  if (normalized.includes("question")) return "Waiting for input"
+  if (["plan", "hypothesis"].some((name) => normalized.includes(name))) return "Planning"
+  if (normalized.includes("question")) return "Input needed"
   if (normalized.includes("skill")) return "Loading skill"
   if (normalized.includes("memory")) return "Saving memory"
   if (normalized.includes("batch")) return "Running tools"
@@ -246,15 +246,15 @@ export function footerSessionStatusView(input: {
 
   const staleHint =
     status.waitState === "tool"
-      ? `no tool update ${inactive}`
+      ? `Tool ${inactive}`
       : status.waitState === "llm"
         ? undefined
-        : `no activity ${inactive}`
+        : `Inactive ${inactive}`
   const waitingText =
     status.waitState === "tool"
       ? `Still ${lowerFirst(label)}`
       : status.waitState === "llm"
-        ? "Still waiting for model"
+        ? "Model stale"
         : "Still working"
   const waiting = elapsed ? `${waitingText} · ${elapsed}` : waitingText
   const labelWithHint = staleHint ? `${waiting} · ${staleHint}` : waiting
@@ -281,26 +281,26 @@ export function footerAgentControlStatusView(
 ): FooterAgentControlStatusView | undefined {
   if (tools && tools.openTaskCalls.length > 0) {
     return {
-      label: `Agent waiting: ${Locale.pluralize(tools.openTaskCalls.length, "{} subagent", "{} subagents")}`,
+      label: Locale.pluralize(tools.openTaskCalls.length, "{} subagent", "{} subagents"),
       tone: summary?.completed ? "warning" : "working",
     }
   }
   if (tools && tools.openCalls.length > 0) {
     return {
-      label: `Agent waiting: ${Locale.pluralize(tools.openCalls.length, "{} tool result", "{} tool results")}`,
+      label: Locale.pluralize(tools.openCalls.length, "{} tool call", "{} tool calls"),
       tone: summary?.completed ? "warning" : "working",
     }
   }
   if (!summary) return
   if (summary.completed) {
     return {
-      label: "Agent complete",
+      label: "Complete",
       tone: "success",
     }
   }
   if (summary.blockedReason) {
     return {
-      label: `Agent blocked: ${shortFooterText(summary.blockedReason, 28)}`,
+      label: `Blocked: ${shortFooterText(summary.blockedReason, 28)}`,
       tone: "warning",
     }
   }
@@ -314,7 +314,7 @@ export function footerAgentControlStatusView(
     parts.push(`plan ${summary.plan.progress.completed}/${summary.plan.progress.total}`)
   }
   if (summary.safety.shadow > 0) {
-    parts.push(`shadow safety ${summary.safety.shadow}`)
+    parts.push(`shadow: ${summary.safety.shadow}`)
   }
   if (parts.length === 0) return
 
