@@ -273,6 +273,18 @@ describe("cli.boot.fatal", () => {
 })
 
 describe("cli.boot.forced-exit", () => {
+  test("uncaught exception flush timer stays referenced", async () => {
+    const src = await Bun.file(path.join(import.meta.dir, "../../src/cli/boot.ts")).text()
+    const start = src.indexOf("function onUncaughtException")
+    const end = src.indexOf("\n}\n\nexport function clearForcedExitTimer", start)
+    expect(start).toBeGreaterThan(-1)
+    expect(end).toBeGreaterThan(start)
+
+    const handler = src.slice(start, end)
+    expect(handler).toContain("setTimeout(() => process.exit(1), 100)")
+    expect(handler).not.toContain(".unref()")
+  })
+
   test("clears the prior forced-exit timer before scheduling another", () => {
     const clearSpy = spyOn(globalThis, "clearTimeout")
     const first = scheduleForcedExit(() => {})

@@ -114,8 +114,9 @@ function onUncaughtException(err: Error) {
   Log.Default.error("exception", {
     e: err instanceof Error ? err.message : err,
   })
-  // Process state is unreliable after uncaught exception — exit after flushing
-  setTimeout(() => process.exit(1), 100).unref()
+  // Process state is unreliable after uncaught exception; keep this timer
+  // referenced so diagnostic logs have a chance to flush before exit.
+  setTimeout(() => process.exit(1), 100)
 }
 
 export function clearForcedExitTimer() {

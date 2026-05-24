@@ -36,4 +36,16 @@ describe("quality.dre-graph-assets", () => {
     expect(html).toContain(`if (_renderQueued) { _renderQueued = false; _renderGraph(); }`)
     expect(html).toContain(`window._reinitGraph = function()`)
   })
+
+  test("sanitizes fetched SVG before inserting graph markup", () => {
+    const html = mermaidScript("session-1")
+
+    expect(html).toContain("function _replaceGraphSvg(el,text)")
+    expect(html).toContain("new DOMParser().parseFromString(text, 'image/svg+xml')")
+    expect(html).toContain("svg.querySelectorAll('script,foreignObject')")
+    expect(html).toContain("name.startsWith('on') || value.startsWith('javascript:')")
+    expect(html).toContain("el.replaceChildren(document.importNode(svg, true))")
+    expect(html).toContain("if (el) _replaceGraphSvg(el, text);")
+    expect(html).not.toContain("if (el) el.innerHTML = text;")
+  })
 })
