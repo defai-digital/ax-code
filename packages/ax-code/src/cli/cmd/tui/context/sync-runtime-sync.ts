@@ -37,7 +37,7 @@ export interface RuntimeSyncActions {
   syncDebugEngine: () => Promise<void>
   syncAutonomous: () => Promise<void>
   syncSmartLlm: () => Promise<void>
-  syncSuperLong: () => Promise<void>
+  syncSuperLong: (input?: { model?: string }) => Promise<void>
   syncIsolation: () => Promise<void>
 }
 
@@ -77,6 +77,12 @@ export function createRuntimeSyncActions(input: {
     return () => syncRuntimeFlag(pathname, apply)
   }
 
+  function superLongPath(input?: { model?: string }) {
+    if (!input?.model) return "/super-long"
+    const params = new URLSearchParams({ model: input.model })
+    return `/super-long?${params.toString()}`
+  }
+
   return {
     async syncWorkspaces() {
       const result = await input.client.worktree.list().catch(() => undefined)
@@ -106,7 +112,7 @@ export function createRuntimeSyncActions(input: {
     },
     syncAutonomous: createRuntimeFeatureSync("/autonomous", input.applyAutonomous),
     syncSmartLlm: createRuntimeFeatureSync("/smart-llm", input.applySmartLlm),
-    syncSuperLong: createRuntimeFeatureSync("/super-long", input.applySuperLong),
+    syncSuperLong: (superLongInput) => syncRuntimeFlag(superLongPath(superLongInput), input.applySuperLong),
     async syncIsolation() {
       const body = await fetchOptionalRuntimeJson<IsolationPayload>("/isolation", {
         headers: directoryRequestHeaders({

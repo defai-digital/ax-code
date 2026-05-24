@@ -94,6 +94,7 @@ import { estimateRequestTokens, getLastUserInfo } from "./prompt-request"
 import { AutonomousContinuationPrompt } from "./prompt-autonomous-continuations"
 import { emptyModelTurnDecision } from "./prompt-autonomous-decisions"
 import { SuperLongPolicy } from "./super-long-policy"
+import { SuperLongRuntime } from "./super-long-runtime"
 
 // @ts-ignore
 globalThis.AI_SDK_LOG_WARNINGS = false
@@ -415,7 +416,6 @@ export namespace SessionPrompt {
     const maxContinuations = cfg.session?.max_continuations ?? 3
     const maxTodoRetries = cfg.session?.max_todo_retries ?? 10
     const maxCompletionGateRetries = Math.min(maxTodoRetries, 2)
-    const superLongStartedAt = Date.now()
     let todoRetries = 0
     let completionGateRetries = 0
     let lastCompletionGateSignature: string | undefined
@@ -613,10 +613,21 @@ export namespace SessionPrompt {
         modelID: lastUser.model.modelID,
         config: { enabled: cfg.super_long },
       })
+      const superLongEnabled = autonomous && superLongState.enabled
+      const superLongNow = Date.now()
+      const superLongStartedAt = superLongEnabled
+        ? await SuperLongRuntime.sessionStartedAt({ sessionID, now: superLongNow }).catch((error) => {
+            log.warn("failed to load durable super-long session start; using current loop start", {
+              sessionID,
+              error,
+            })
+            return superLongNow
+          })
+        : superLongNow
       const superLongDeadline = SuperLongPolicy.deadline({
-        enabled: autonomous && superLongState.enabled,
+        enabled: superLongEnabled,
         startedAt: superLongStartedAt,
-        now: Date.now(),
+        now: superLongNow,
       })
       if (!superLongDeadline.ok) {
         const message =

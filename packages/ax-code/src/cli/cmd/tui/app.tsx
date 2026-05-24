@@ -405,6 +405,15 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
   const args = useArgs()
 
   createEffect(() => {
+    if (!sync.data.provider_loaded) return
+    const model = local.model.current()
+    if (!model) return
+    void sync.runtime
+      .syncSuperLong({ model: `${model.providerID}/${model.modelID}` })
+      .catch((error) => Log.Default.warn("failed to sync super-long for active model", { error }))
+  })
+
+  createEffect(() => {
     if (route.data.type !== "session") return
     void ensureSessionRouteLoaded("route").catch((error) => {
       handleSessionRouteLoadFailure(error, { source: "route", navigateHome: true })

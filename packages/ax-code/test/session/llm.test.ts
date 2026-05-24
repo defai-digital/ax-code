@@ -944,6 +944,11 @@ describe("session.llm.stream - Phase 1 long-agent profile wiring", () => {
   const origSuperLong = process.env.AX_CODE_SUPER_LONG
   const origSuperLongOverride = process.env.AX_CODE_SUPER_LONG_SESSION_OVERRIDE
   const origAutonomous = process.env.AX_CODE_AUTONOMOUS
+  const origDurablePacing = process.env.AX_CODE_SUPER_LONG_DURABLE_PACING
+
+  beforeEach(() => {
+    process.env.AX_CODE_SUPER_LONG_DURABLE_PACING = "0"
+  })
 
   afterEach(() => {
     if (origSuperLong === undefined) {
@@ -960,6 +965,11 @@ describe("session.llm.stream - Phase 1 long-agent profile wiring", () => {
       delete process.env.AX_CODE_AUTONOMOUS
     } else {
       process.env.AX_CODE_AUTONOMOUS = origAutonomous
+    }
+    if (origDurablePacing === undefined) {
+      delete process.env.AX_CODE_SUPER_LONG_DURABLE_PACING
+    } else {
+      process.env.AX_CODE_SUPER_LONG_DURABLE_PACING = origDurablePacing
     }
     LLM.clearPacingState()
   })

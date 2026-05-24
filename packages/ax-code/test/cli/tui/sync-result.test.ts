@@ -41,6 +41,7 @@ describe("tui sync result", () => {
       sessionSync,
       workspaceSync,
       bootstrap,
+      runtime: {},
     })
 
     expect(result.data).toBe(store)
@@ -86,6 +87,7 @@ describe("tui sync result", () => {
       sessionSync: () => undefined,
       workspaceSync: () => undefined,
       bootstrap: () => undefined,
+      runtime: {},
     })
 
     expect(result.ready).toBe(false)
