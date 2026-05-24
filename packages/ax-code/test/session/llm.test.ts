@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test"
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, spyOn, test } from "bun:test"
 import path from "path"
 import fs from "fs/promises"
 import { tool, type ModelMessage } from "ai"
@@ -16,6 +16,7 @@ import type { Agent } from "../../src/agent/agent"
 import type { MessageV2 } from "../../src/session/message-v2"
 import { SessionID, MessageID } from "../../src/session/schema"
 import { SessionPrompt } from "../../src/session/prompt"
+import { SuperLongRuntime } from "../../src/session/super-long-runtime"
 
 describe("session.llm.hasToolCalls", () => {
   test("returns false for empty messages array", () => {
@@ -1602,6 +1603,43 @@ describe("session.llm.stream - Phase 1 long-agent profile wiring", () => {
       }
     }).toThrow("network failed")
     expect(LLM.getPacingStateForTest(target)).toBeUndefined()
+  })
+
+  test("super-long pacing waits for durable release when stream ends before first chunk", async () => {
+    const releaseGate = deferred<void>()
+    const releaseSpy = spyOn(SuperLongRuntime, "releasePacingReservation").mockImplementation(async () => {
+      await releaseGate.promise
+    })
+    try {
+      const wrapped = LLM.attachSuperLongPacingReservationForTest(
+        {
+          fullStream: (async function* () {})(),
+        },
+        { key: "alibaba-coding-plan/qwen3.7-max", timestamp: 1_000 },
+        new AbortController().signal,
+      )
+
+      let settled = false
+      const consume = (async () => {
+        for await (const _ of wrapped.fullStream) {
+        }
+        settled = true
+      })()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+
+      expect(releaseSpy).toHaveBeenCalledWith({
+        key: "alibaba-coding-plan/qwen3.7-max",
+        timestamp: 1_000,
+        now: expect.any(Number),
+      })
+      expect(settled).toBe(false)
+
+      releaseGate.resolve()
+      await consume
+      expect(settled).toBe(true)
+    } finally {
+      releaseSpy.mockRestore()
+    }
   })
 })
 

@@ -60,6 +60,25 @@ describe("super-long route", () => {
     })
   })
 
+  test("uses explicit query model when project config has no model", async () => {
+    await withCleanSuperLongEnv(async () => {
+      await using tmp = await tmpdir({ git: true })
+      await Bun.write(path.join(tmp.path, "ax-code.json"), JSON.stringify({}))
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const model = encodeURIComponent("alibaba-coding-plan/qwen3.7-max")
+          const response = await Server.Default().request(
+            `/super-long?directory=${encodeURIComponent(tmp.path)}&model=${model}`,
+          )
+          expect(response.status).toBe(200)
+          expect(await response.json()).toEqual({ enabled: true })
+        },
+      })
+    })
+  })
+
   test("session override wins over Qwen3.7-Max model default without rewriting config", async () => {
     await withCleanSuperLongEnv(async () => {
       await using tmp = await tmpdir({ git: true })
