@@ -30,28 +30,13 @@ import {
   isStaticPathArg,
   staticallyCheckablePathArgs,
   stripShellQuotes,
+  truncateBashMetadata,
 } from "./bash-helpers"
 
 import { BASH_MAX_METADATA_LENGTH as MAX_METADATA_LENGTH } from "@/constants/network"
 const DEFAULT_TIMEOUT = Flag.AX_CODE_EXPERIMENTAL_BASH_DEFAULT_TIMEOUT_MS || 2 * 60 * 1000
 
 const log = Log.create({ service: "bash-tool" })
-
-function truncateUtf8ByBytes(input: string, maxBytes: number): string {
-  const bytes = Buffer.from(input, "utf8")
-  if (bytes.byteLength <= maxBytes) return input
-
-  let end = maxBytes
-  while (end > 0 && (bytes[end]! & 0xc0) === 0x80) end--
-  return bytes.subarray(0, end).toString("utf8")
-}
-
-function truncateBashMetadata(input: string, maxBytes = MAX_METADATA_LENGTH): string {
-  if (Buffer.byteLength(input, "utf8") <= maxBytes) return input
-  return truncateUtf8ByBytes(input, maxBytes) + "\n\n..."
-}
-
-export const __truncateBashMetadataForTest = truncateBashMetadata
 
 async function estimateFileLineDelta(filePath: string) {
   const stat = await fs.stat(filePath).catch(() => undefined)
@@ -606,10 +591,9 @@ export const BashTool = Tool.define("bash", async () => {
         const outputMetadataBytes = Buffer.byteLength(output, "utf8")
         const isPastCap = outputMetadataBytes > MAX_METADATA_LENGTH
         if (isPastCap && lastPublishedBytes > MAX_METADATA_LENGTH) return
-        publishMetadata(isPastCap ? truncateBashMetadata(output) : output)
+        publishMetadata(isPastCap ? truncateBashMetadata(output, MAX_METADATA_LENGTH) : output)
         lastPublishedBytes = outputMetadataBytes
       }
-      void truncated
 
       proc.stdout?.on("data", append)
       proc.stderr?.on("data", append)
@@ -698,7 +682,7 @@ export const BashTool = Tool.define("bash", async () => {
       return {
         title: params.description,
         metadata: {
-          output: truncateBashMetadata(output),
+          output: truncateBashMetadata(output, MAX_METADATA_LENGTH),
           exit: proc.exitCode,
           description: params.description,
           hang: hangMetadata(),
