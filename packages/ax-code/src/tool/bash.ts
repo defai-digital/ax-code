@@ -169,6 +169,7 @@ export const BashTool = Tool.define("bash", async () => {
           const dir = (await Filesystem.isDir(normalized)) ? normalized : path.dirname(normalized)
           directories.add(dir)
         }
+        return normalized
       }
 
       const recordInnerCommandPaths = async (parts: string[]) => {
@@ -188,14 +189,18 @@ export const BashTool = Tool.define("bash", async () => {
           for (let i = 0; i < args.length; i++) {
             const arg = args[i]
             if (!arg) continue
-            if (arg === "-o" || arg === "--output" || arg === "--output-document") {
+            if (arg === "-o" || arg === "-O" || arg === "--output" || arg === "--output-document") {
               const next = args[i + 1]
-              if (next) await recordResolvedPath(next)
+              const output = next ? await recordResolvedPath(next) : undefined
+              if (output) redirectWritePaths.add(output)
               i++
               continue
             }
             const inline = arg.match(/^--(?:output|output-document)=(.+)$/)?.[1]
-            if (inline) await recordResolvedPath(inline)
+            if (inline) {
+              const output = await recordResolvedPath(inline)
+              if (output) redirectWritePaths.add(output)
+            }
           }
           return
         }
@@ -203,7 +208,10 @@ export const BashTool = Tool.define("bash", async () => {
         if (name === "dd") {
           for (const arg of args) {
             const output = arg.match(/^of=(.+)$/)?.[1]
-            if (output) await recordResolvedPath(output)
+            if (output) {
+              const resolved = await recordResolvedPath(output)
+              if (resolved) redirectWritePaths.add(resolved)
+            }
           }
           return
         }
@@ -355,6 +363,8 @@ export const BashTool = Tool.define("bash", async () => {
               }
             }
           }
+        } else {
+          await recordInnerCommandPaths(command)
         }
 
         // not an exhaustive list, but covers most common cases

@@ -156,6 +156,50 @@ describe("SessionGoal", () => {
     })
   })
 
+  test("uses component token sum when reported total is zero", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        await SessionGoal.create({
+          sessionID: session.id,
+          objective: "track zero-total providers",
+          tokenBudget: 100,
+        })
+
+        await SessionGoal.addUsage({
+          sessionID: session.id,
+          message: {
+            id: "message_goal_zero_total" as any,
+            sessionID: session.id,
+            parentID: "message_parent" as any,
+            role: "assistant",
+            time: { created: 1_000, completed: 2_000 },
+            modelID: "test-model" as any,
+            providerID: "test" as any,
+            mode: "build",
+            agent: "build",
+            path: { cwd: tmp.path, root: tmp.path },
+            tokens: {
+              total: 0,
+              input: 11,
+              output: 13,
+              reasoning: 17,
+              cache: { read: 0, write: 0 },
+            },
+          },
+        })
+
+        const updated = await SessionGoal.get(session.id)
+        expect(updated?.tokensUsed).toBe(41)
+
+        await Session.remove(session.id)
+      },
+    })
+  })
+
   test("concurrent goal creation does not replace an active goal", async () => {
     await using tmp = await tmpdir({ git: true })
 

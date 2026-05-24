@@ -1485,7 +1485,7 @@ export namespace SessionPrompt {
             })
             fallbackModelOverride = fallback
             cachedModel = undefined
-            consecutiveErrors = 0
+            consecutiveErrors = Math.floor(consecutiveErrors / 2)
             continue
           }
         }
@@ -1516,6 +1516,10 @@ export namespace SessionPrompt {
         }
       } else {
         consecutiveErrors = 0 // Reset on success
+        if (fallbackModelOverride) {
+          fallbackModelOverride = undefined
+          cachedModel = undefined
+        }
       }
 
       if (result === "compact") {

@@ -218,7 +218,19 @@ export const EditTool = Tool.define("edit", {
   },
 })
 
-export type Replacer = (content: string, find: string) => Generator<string, void, unknown>
+export type ReplacerMatch = {
+  text: string
+  index?: number
+}
+export type Replacer = (content: string, find: string) => Generator<string | ReplacerMatch, void, unknown>
+
+function lineStartIndex(lines: string[], lineIndex: number) {
+  let index = 0
+  for (let k = 0; k < lineIndex; k++) {
+    index += lines[k].length + 1
+  }
+  return index
+}
 
 // Similarity thresholds for block anchor fallback matching
 const SINGLE_CANDIDATE_SIMILARITY_THRESHOLD = 0.6
@@ -253,10 +265,7 @@ export const LineTrimmedReplacer: Replacer = function* (content, find) {
     }
 
     if (matches) {
-      let matchStartIndex = 0
-      for (let k = 0; k < i; k++) {
-        matchStartIndex += originalLines[k].length + 1
-      }
+      const matchStartIndex = lineStartIndex(originalLines, i)
 
       let matchEndIndex = matchStartIndex
       for (let k = 0; k < searchLines.length; k++) {
@@ -266,7 +275,7 @@ export const LineTrimmedReplacer: Replacer = function* (content, find) {
         }
       }
 
-      yield content.substring(matchStartIndex, matchEndIndex)
+      yield { text: content.substring(matchStartIndex, matchEndIndex), index: matchStartIndex }
     }
   }
 }
@@ -346,10 +355,7 @@ export const BlockAnchorReplacer: Replacer = function* (content, find) {
     }
 
     if (similarity >= SINGLE_CANDIDATE_SIMILARITY_THRESHOLD) {
-      let matchStartIndex = 0
-      for (let k = 0; k < startLine; k++) {
-        matchStartIndex += originalLines[k].length + 1
-      }
+      const matchStartIndex = lineStartIndex(originalLines, startLine)
       let matchEndIndex = matchStartIndex
       for (let k = startLine; k <= endLine; k++) {
         matchEndIndex += originalLines[k].length
@@ -357,7 +363,7 @@ export const BlockAnchorReplacer: Replacer = function* (content, find) {
           matchEndIndex += 1 // Add newline character except for the last line
         }
       }
-      yield content.substring(matchStartIndex, matchEndIndex)
+      yield { text: content.substring(matchStartIndex, matchEndIndex), index: matchStartIndex }
     }
     return
   }
@@ -401,10 +407,7 @@ export const BlockAnchorReplacer: Replacer = function* (content, find) {
   // Threshold judgment
   if (maxSimilarity >= MULTIPLE_CANDIDATES_SIMILARITY_THRESHOLD && bestMatch) {
     const { startLine, endLine } = bestMatch
-    let matchStartIndex = 0
-    for (let k = 0; k < startLine; k++) {
-      matchStartIndex += originalLines[k].length + 1
-    }
+    const matchStartIndex = lineStartIndex(originalLines, startLine)
     let matchEndIndex = matchStartIndex
     for (let k = startLine; k <= endLine; k++) {
       matchEndIndex += originalLines[k].length
@@ -412,7 +415,7 @@ export const BlockAnchorReplacer: Replacer = function* (content, find) {
         matchEndIndex += 1
       }
     }
-    yield content.substring(matchStartIndex, matchEndIndex)
+    yield { text: content.substring(matchStartIndex, matchEndIndex), index: matchStartIndex }
   }
 }
 
@@ -424,8 +427,9 @@ export const WhitespaceNormalizedReplacer: Replacer = function* (content, find) 
   const lines = content.split("\n")
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]
+    const lineStart = lineStartIndex(lines, i)
     if (normalizeWhitespace(line) === normalizedFind) {
-      yield line
+      yield { text: line, index: lineStart }
     } else {
       // Only check for substring matches if the full line doesn't match
       const normalizedLine = normalizeWhitespace(line)
@@ -447,7 +451,7 @@ export const WhitespaceNormalizedReplacer: Replacer = function* (content, find) 
             const regex = new RegExp(pattern)
             const match = line.match(regex)
             if (match) {
-              yield match[0]
+              yield { text: match[0], index: lineStart + match.index! }
             }
           } catch (e) {
             // Invalid regex pattern, skip
@@ -463,7 +467,7 @@ export const WhitespaceNormalizedReplacer: Replacer = function* (content, find) 
     for (let i = 0; i <= lines.length - findLines.length; i++) {
       const block = lines.slice(i, i + findLines.length)
       if (normalizeWhitespace(block.join("\n")) === normalizedFind) {
-        yield block.join("\n")
+        yield { text: block.join("\n"), index: lineStartIndex(lines, i) }
       }
     }
   }
@@ -492,7 +496,7 @@ export const IndentationFlexibleReplacer: Replacer = function* (content, find) {
   for (let i = 0; i <= contentLines.length - findLines.length; i++) {
     const block = contentLines.slice(i, i + findLines.length).join("\n")
     if (removeIndentation(block) === normalizedFind) {
-      yield block
+      yield { text: block, index: lineStartIndex(contentLines, i) }
     }
   }
 }
@@ -544,7 +548,7 @@ export const EscapeNormalizedReplacer: Replacer = function* (content, find) {
     const unescapedBlock = unescapeString(block)
 
     if (unescapedBlock === unescapedFind) {
-      yield block
+      yield { text: block, index: lineStartIndex(lines, i) }
     }
   }
 }
@@ -558,7 +562,7 @@ export const MultiOccurrenceReplacer: Replacer = function* (content, find) {
     const index = content.indexOf(find, startIndex)
     if (index === -1) break
 
-    yield find
+    yield { text: find, index }
     startIndex = index + find.length
   }
 }
@@ -584,7 +588,7 @@ export const TrimmedBoundaryReplacer: Replacer = function* (content, find) {
     const block = lines.slice(i, i + findLines.length).join("\n")
 
     if (block.trim() === trimmedFind) {
-      yield block
+      yield { text: block, index: lineStartIndex(lines, i) }
     }
   }
 }
@@ -650,7 +654,7 @@ export const ContextAwareReplacer: Replacer = function* (content, find) {
       const canUseAnchorsOnly = totalNonEmptyLines === 0 && blockLines.length === 2
       const avgSimilarity = totalNonEmptyLines > 0 ? similarity / totalNonEmptyLines : 1.0
       if (canUseAnchorsOnly || avgSimilarity >= CONTEXT_AWARE_SIMILARITY_THRESHOLD) {
-        yield blockLines.join("\n")
+        yield { text: blockLines.join("\n"), index: lineStartIndex(contentLines, i) }
         matched = true // stop the j-loop; we've yielded the first valid match for this i
       }
     }
@@ -713,7 +717,10 @@ export function replace(content: string, oldString: string, newString: string, r
         throw new Error("Native diff returned invalid result: new_content is not a string")
       return result.new_content
     } catch (e: any) {
-      if (e?.code !== "MODULE_NOT_FOUND" && e?.code !== "ERR_MODULE_NOT_FOUND") throw e
+      const message = e instanceof Error ? e.message : String(e)
+      const canRetryInJs =
+        message.includes("Could not find oldString") || message.includes("Found multiple matches for oldString")
+      if (e?.code !== "MODULE_NOT_FOUND" && e?.code !== "ERR_MODULE_NOT_FOUND" && !canRetryInJs) throw e
     }
   }
 
@@ -739,6 +746,24 @@ export function replace(content: string, oldString: string, newString: string, r
 
   let notFound = true
 
+  const matchCandidates = (raw: string | ReplacerMatch) => {
+    const text = typeof raw === "string" ? raw : raw.text
+    const indexed = typeof raw === "string" ? undefined : raw.index
+    if (indexed !== undefined) {
+      if (matchContent.slice(indexed, indexed + text.length) !== text) return []
+      return [{ index: indexed, text }]
+    }
+    const matches: Array<{ index: number; text: string }> = []
+    let startIndex = 0
+    while (true) {
+      const index = matchContent.indexOf(text, startIndex)
+      if (index === -1) break
+      matches.push({ index, text })
+      startIndex = index + Math.max(text.length, 1)
+    }
+    return matches
+  }
+
   for (const replacer of [
     SimpleReplacer,
     LineTrimmedReplacer,
@@ -750,25 +775,29 @@ export function replace(content: string, oldString: string, newString: string, r
     ContextAwareReplacer,
     MultiOccurrenceReplacer,
   ]) {
-    for (const search of replacer(matchContent, matchOld)) {
-      const index = matchContent.indexOf(search)
-      if (index === -1) continue
-      notFound = false
-      const lastIndex = matchContent.lastIndexOf(search)
-      if (index !== lastIndex) continue
-
-      const normalizedResult =
-        matchContent.substring(0, index) + matchNew + matchContent.substring(index + search.length)
-
-      if (hasCRLF) {
-        return spliceNormalizedReplacement({
-          original: content,
-          normalizedResult,
-          replacementEnding: detectLineEnding(content),
-        })
+    const candidates = new Map<string, { index: number; text: string }>()
+    for (const match of replacer(matchContent, matchOld)) {
+      for (const candidate of matchCandidates(match)) {
+        candidates.set(`${candidate.index}:${candidate.text.length}`, candidate)
       }
-      return normalizedResult
     }
+    if (candidates.size === 0) continue
+    notFound = false
+    if (candidates.size !== 1) continue
+
+    const candidate = candidates.values().next().value
+    if (!candidate) continue
+    const { index, text } = candidate
+    const normalizedResult = matchContent.substring(0, index) + matchNew + matchContent.substring(index + text.length)
+
+    if (hasCRLF) {
+      return spliceNormalizedReplacement({
+        original: content,
+        normalizedResult,
+        replacementEnding: detectLineEnding(content),
+      })
+    }
+    return normalizedResult
   }
 
   if (notFound) {

@@ -209,9 +209,9 @@ export namespace SessionGoal {
     sessionID: SessionID
     message: MessageV2.Assistant
   }): Promise<Info | undefined> {
-    const tokens =
-      input.message.tokens.total ??
-      input.message.tokens.input + input.message.tokens.output + input.message.tokens.reasoning
+    const componentTokens = input.message.tokens.input + input.message.tokens.output + input.message.tokens.reasoning
+    const reportedTotal = input.message.tokens.total ?? 0
+    const tokens = reportedTotal > 0 ? reportedTotal : componentTokens
     const tokenDelta = Math.max(0, tokens)
 
     const elapsedSeconds =

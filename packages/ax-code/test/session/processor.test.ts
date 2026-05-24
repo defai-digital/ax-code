@@ -62,6 +62,36 @@ describe("session.processor", () => {
     expect(src.slice(start, end)).toContain("deltaBatcher.flush()")
   })
 
+  test("wraps recurring error-pattern guidance in system-reminder tags", async () => {
+    const src = await Bun.file(path.join(import.meta.dir, "../../src/session/processor.ts")).text()
+    expect(src).toContain("annotatedError = `${base}\\n\\n<system-reminder>\\n${guidance}\\n</system-reminder>`")
+  })
+
+  test("clears per-attempt tool rate-limit timestamps before retrying", async () => {
+    const src = await Bun.file(path.join(import.meta.dir, "../../src/session/processor.ts")).text()
+    const catchStart = src.indexOf("} catch (e: unknown) {")
+    const retryStart = src.indexOf("const errStack", catchStart)
+    expect(catchStart).toBeGreaterThan(-1)
+    expect(retryStart).toBeGreaterThan(catchStart)
+    expect(src.slice(catchStart, retryStart)).toContain("toolCallTimestamps.length = 0")
+  })
+
+  test("provider fallback only partially resets consecutive error budget", async () => {
+    const src = await Bun.file(path.join(import.meta.dir, "../../src/session/prompt.ts")).text()
+    expect(src).toContain("consecutiveErrors = Math.floor(consecutiveErrors / 2)")
+  })
+
+  test("successful fallback step returns later loops to the original model", async () => {
+    const src = await Bun.file(path.join(import.meta.dir, "../../src/session/prompt.ts")).text()
+    const successStart = src.indexOf("consecutiveErrors = 0 // Reset on success")
+    const nextBranch = src.indexOf('if (result === "compact")', successStart)
+    expect(successStart).toBeGreaterThan(-1)
+    expect(nextBranch).toBeGreaterThan(successStart)
+    const successBlock = src.slice(successStart, nextBranch)
+    expect(successBlock).toContain("fallbackModelOverride = undefined")
+    expect(successBlock).toContain("cachedModel = undefined")
+  })
+
   test("marks tool-using steps as tool-calls even when provider finish reason is stop", async () => {
     await using tmp = await tmpdir({ git: true })
 
