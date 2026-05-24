@@ -386,6 +386,7 @@ export namespace SessionPrompt {
     let reason: "completed" | "aborted" | "error" | "step_limit" | "stalled" = "error"
     let consecutiveErrors = 0
     let continuations = 0
+    let goalBudgetLimitContinuationSent = false
     let deferredAutoIndexProjectID: ProjectID | undefined
     await using _autoIndex = defer(() => {
       if (!deferredAutoIndexProjectID || abort.aborted) return
@@ -1307,6 +1308,30 @@ export namespace SessionPrompt {
             message:
               `Goal remains active after ${continuations} auto-continuation(s), but the continuation limit was reached. ` +
               `Resume the session or increase session.max_continuations to continue working toward the goal.`,
+          })
+          reason = "stalled"
+          break
+        }
+        if (goal?.status === "budget_limited" && goal.tokenBudget !== undefined && !goalBudgetLimitContinuationSent) {
+          if (continuations < maxContinuations) {
+            goalBudgetLimitContinuationSent = true
+            await continueAutonomousLoop({
+              event: "goal budget-limit wrap-up",
+              resetTodoProgressTracking: true,
+              text: AutonomousContinuationPrompt.goalBudgetLimit({
+                objective: goal.objective,
+                tokensUsed: goal.tokensUsed,
+                tokenBudget: goal.tokenBudget,
+                timeUsedSeconds: goal.timeUsedSeconds,
+              }),
+            })
+            continue
+          }
+          Session.publishError({
+            sessionID,
+            message:
+              `Goal reached its token budget after ${continuations} auto-continuation(s), but the continuation limit was reached. ` +
+              `Resume the session or increase session.max_continuations for a budget wrap-up turn.`,
           })
           reason = "stalled"
           break
