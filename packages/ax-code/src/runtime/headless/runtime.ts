@@ -1,5 +1,6 @@
 import { createOpencodeClient, type Event } from "@ax-code/sdk/v2"
 import type { HeadlessRuntimeCommand, HeadlessRuntimeCommandResult } from "./command"
+import { parseJsonResult } from "../../util/json-value"
 
 export type HeadlessAgentRuntimeInput = {
   baseUrl: string
@@ -128,11 +129,11 @@ export function parseHeadlessRuntimeResponseBody(text: string): unknown {
 }
 
 export function parseHeadlessRuntimeJsonBody(text: string): unknown {
-  try {
-    return JSON.parse(text)
-  } catch (error) {
-    throw new Error(`Headless runtime returned invalid JSON: ${text.slice(0, 200)}`, { cause: error })
+  const parsed = parseJsonResult(text)
+  if (!parsed.ok) {
+    throw new Error(`Headless runtime returned invalid JSON: ${text.slice(0, 200)}`, { cause: parsed.error })
   }
+  return parsed.value
 }
 
 function headersToRecord(headers: RequestInit["headers"] | undefined): Record<string, string> {
