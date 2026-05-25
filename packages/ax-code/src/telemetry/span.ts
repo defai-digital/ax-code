@@ -18,6 +18,7 @@
 import { createRequire } from "node:module"
 import { Telemetry } from "./index"
 import { Log } from "@/util/log"
+import { toErrorMessage } from "../util/error-message"
 
 const log = Log.create({ service: "telemetry-span" })
 const require = createRequire(import.meta.url)
@@ -50,7 +51,7 @@ export async function withSpan<T>(
         span.setStatus({ code: SpanStatusCode.OK })
         return result
       } catch (err) {
-        span.setStatus({ code: SpanStatusCode.ERROR, message: err instanceof Error ? err.message : String(err) })
+        span.setStatus({ code: SpanStatusCode.ERROR, message: toErrorMessage(err) })
         throw err
       } finally {
         try {
@@ -80,7 +81,7 @@ export function withSpanSync<T>(
       span.setStatus({ code: SpanStatusCode.OK })
       return result
     } catch (err) {
-      span.setStatus({ code: SpanStatusCode.ERROR, message: err instanceof Error ? err.message : String(err) })
+      span.setStatus({ code: SpanStatusCode.ERROR, message: toErrorMessage(err) })
       throw err
     } finally {
       span.end()

@@ -13,6 +13,7 @@ import { fn } from "../util/fn"
 import { Log } from "../util/log"
 import { Process } from "../util/process"
 import { git } from "../util/git"
+import { toErrorMessage } from "../util/error-message"
 import { BusEvent } from "@/bus/bus-event"
 import { GlobalBus } from "@/bus/global"
 
@@ -417,7 +418,7 @@ export namespace Worktree {
     } catch (err) {
       log.warn("failed to record worktree in database; rolling back git worktree", {
         directory: info.directory,
-        error: err instanceof Error ? err.message : String(err),
+        error: toErrorMessage(err),
       })
       const removed = await git(["worktree", "remove", "--force", info.directory], { cwd: Instance.worktree })
       if (removed.exitCode !== 0) {
@@ -436,11 +437,11 @@ export namespace Worktree {
       await fs.rm(info.directory, { recursive: true, force: true }).catch((removeError) => {
         log.warn("failed to remove rolled-back worktree directory", {
           directory: info.directory,
-          error: removeError instanceof Error ? removeError.message : String(removeError),
+          error: toErrorMessage(removeError),
         })
       })
       throw new CreateFailedError({
-        message: `Failed to record worktree in database: ${err instanceof Error ? err.message : String(err)}`,
+        message: `Failed to record worktree in database: ${toErrorMessage(err)}`,
       })
     }
 
@@ -525,7 +526,7 @@ export namespace Worktree {
       await fs.rm(info.directory, { recursive: true, force: true }).catch((cleanupError) => {
         log.warn("failed to clean up failed worktree creation", {
           directory: info.directory,
-          error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
+          error: toErrorMessage(cleanupError),
         })
       })
       throw error
@@ -611,7 +612,7 @@ export namespace Worktree {
         }).catch((error) => {
           log.warn("failed to dispose removed worktree instance", {
             directory,
-            error: error instanceof Error ? error.message : String(error),
+            error: toErrorMessage(error),
           })
         })
       }
@@ -620,7 +621,7 @@ export namespace Worktree {
         log.warn("failed to remove worktree from project sandboxes", {
           directory,
           projectID: Instance.project.id,
-          error: error instanceof Error ? error.message : String(error),
+          error: toErrorMessage(error),
         })
       })
     }

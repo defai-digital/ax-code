@@ -10,6 +10,7 @@ import z from "zod"
 import { BusEvent } from "@/bus/bus-event"
 import { Flag } from "../flag/flag"
 import { Log } from "../util/log"
+import { toErrorMessage } from "../util/error-message"
 
 declare global {
   const AX_CODE_VERSION: string
@@ -194,7 +195,7 @@ export namespace Installation {
                 if (actual !== expected)
                   throw new Error(`Install script integrity check failed: expected ${expected}, got ${actual}`)
               } catch (e) {
-                const msg = e instanceof Error ? e.message : String(e)
+                const msg = toErrorMessage(e)
                 if (msg.startsWith("Install script integrity check failed")) throw e
                 log.warn("could not verify install script integrity", { error: e })
               }

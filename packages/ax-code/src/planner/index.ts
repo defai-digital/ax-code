@@ -429,7 +429,7 @@ export namespace Planner {
           continue
         }
       } catch (e) {
-        const error = e instanceof Error ? e.message : String(e)
+        const error = toErrorMessage(e)
         lastResult = {
           phaseId: phase.id,
           success: false,

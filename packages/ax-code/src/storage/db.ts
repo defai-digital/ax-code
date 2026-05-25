@@ -18,6 +18,7 @@ import { init } from "#db"
 import { NativeStore } from "@/code-intelligence/native-store"
 import { DurableStoragePolicy } from "./policy"
 import { Recorder } from "@/replay/recorder"
+import { toErrorMessage } from "../util/error-message"
 
 declare const AX_CODE_MIGRATIONS: { sql: string; timestamp: number; name: string }[] | undefined
 
@@ -105,7 +106,7 @@ export namespace Database {
     } catch (error) {
       input.warn?.("failed to checkpoint wal during startup", {
         path: input.path,
-        error: error instanceof Error ? error.message : String(error),
+        error: toErrorMessage(error),
       })
     }
   }
@@ -151,7 +152,7 @@ export namespace Database {
       Recorder.flushAll()
     } catch (error) {
       log.warn("recorder flush during shutdown failed", {
-        error: error instanceof Error ? error.message : String(error),
+        error: toErrorMessage(error),
       })
     }
     const client = Client()
@@ -165,7 +166,7 @@ export namespace Database {
     } catch (error) {
       log.warn("failed to truncate wal during shutdown", {
         path: Path,
-        error: error instanceof Error ? error.message : String(error),
+        error: toErrorMessage(error),
       })
     }
     client.$client.close()
@@ -214,7 +215,7 @@ export namespace Database {
           result.catch((err) => {
             log.error("post-commit async effect rejected", {
               index: idx,
-              error: err instanceof Error ? err.message : String(err),
+              error: toErrorMessage(err),
               hint: "Database.effect callbacks must be synchronous; wrap async work as `() => { void doAsync().catch(log) }`",
             })
           })
