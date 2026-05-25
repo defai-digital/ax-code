@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test"
-import { envelope } from "../../src/lsp/references"
+import { envelope, references } from "../../src/lsp/references"
 import type { LSPClient } from "../../src/lsp/client"
 
 test("references envelope uses semantic selection and include-declaration request params", async () => {
@@ -50,4 +50,30 @@ test("references envelope uses semantic selection and include-declaration reques
   expect(result.data).toEqual([location])
   expect(result.completeness).toBe("full")
   expect(result.serverIDs).toEqual(["typescript"])
+})
+
+test("references returns only reference payload data", async () => {
+  const location = {
+    uri: "file:///tmp/project/src/index.ts",
+    range: {
+      start: { line: 0, character: 0 },
+      end: { line: 0, character: 4 },
+    },
+  }
+  const client = {
+    serverID: "typescript",
+    connection: {
+      sendRequest: async () => [location],
+    },
+  } as unknown as LSPClient.Info
+
+  await expect(
+    references(
+      { file: "/tmp/project/src/index.ts", line: 1, character: 2, cache: false },
+      {
+        timeoutMs: 1_000,
+        selectClients: async () => ({ clients: [client], freshSpawnCount: 0 }),
+      },
+    ),
+  ).resolves.toEqual([location])
 })

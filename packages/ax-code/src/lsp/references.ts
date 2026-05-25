@@ -47,3 +47,15 @@ export async function envelope(
     })
   })
 }
+
+export async function references(
+  input: LSPPoint.PointInput & {
+    cache?: boolean
+  },
+  opts: {
+    timeoutMs: number
+    selectClients: SelectClients
+  },
+): Promise<unknown[]> {
+  return (await envelope(input, opts)).data
+}

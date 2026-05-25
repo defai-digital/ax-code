@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test"
-import { envelope } from "../../src/lsp/document-symbol"
+import { documentSymbols, envelope } from "../../src/lsp/document-symbol"
 import type { LSPClient } from "../../src/lsp/client"
 
 test("documentSymbol envelope uses semantic selection and document-symbol request params", async () => {
@@ -47,4 +47,31 @@ test("documentSymbol envelope uses semantic selection and document-symbol reques
   expect(result.data).toEqual([symbol])
   expect(result.completeness).toBe("full")
   expect(result.serverIDs).toEqual(["typescript"])
+})
+
+test("documentSymbols returns only document symbol payload data", async () => {
+  const range = {
+    start: { line: 0, character: 0 },
+    end: { line: 0, character: 4 },
+  }
+  const symbol = {
+    name: "demo",
+    kind: 12,
+    range,
+    selectionRange: range,
+  }
+  const client = {
+    serverID: "typescript",
+    connection: {
+      sendRequest: async () => [symbol],
+    },
+  } as unknown as LSPClient.Info
+
+  await expect(
+    documentSymbols("file:///tmp/project/src/index.ts", {
+      cache: false,
+      timeoutMs: 1_000,
+      selectClients: async () => ({ clients: [client], freshSpawnCount: 0 }),
+    }),
+  ).resolves.toEqual([symbol])
 })

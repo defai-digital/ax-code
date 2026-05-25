@@ -60,3 +60,14 @@ export async function envelope(
     })
   })
 }
+
+export async function documentSymbols(
+  uri: string,
+  opts: {
+    cache?: boolean
+    timeoutMs: number
+    selectClients: SelectClients
+  },
+): Promise<DocumentSymbolPayload> {
+  return (await envelope(uri, opts)).data
+}
