@@ -25,7 +25,6 @@ import { InstructionPrompt } from "./instruction"
 import { Plugin } from "../plugin"
 import MAX_STEPS from "../session/prompt/max-steps.txt"
 import { defer } from "../util/defer"
-import { MCP } from "../mcp"
 import { LSP } from "../lsp"
 import { ReadTool } from "../tool/read"
 import { FileTime } from "../file/time"
@@ -109,6 +108,7 @@ import {
 import { insertReminders } from "./prompt-reminders"
 import { resolveUserMessageRouting } from "./prompt-routing"
 import { validateUserMessageForSave } from "./prompt-message-validation"
+import { resolveMcpResourcePart } from "./prompt-mcp-resource"
 import { SuperLongPolicy } from "./super-long-policy"
 import { SuperLongRuntime } from "./super-long-runtime"
 
@@ -1591,57 +1591,12 @@ export namespace SessionPrompt {
         if (part.type === "file") {
           // before checking the protocol we check if this is an mcp resource because it needs special handling
           if (part.source?.type === "resource") {
-            const { clientName, uri } = part.source
-            log.info("mcp resource", {
-              command: "session.prompt.mcpResource",
-              status: "started",
+            return resolveMcpResourcePart({
               sessionID: input.sessionID,
-              clientName,
-              uri,
-              mime: part.mime,
+              part: { ...part, source: part.source },
+              draftSyntheticTextPart,
+              attachDraftContext,
             })
-
-            const pieces: Draft<MessageV2.Part>[] = [
-              draftSyntheticTextPart(`Reading MCP resource: ${part.filename} (${uri})`),
-            ]
-
-            try {
-              const resourceContent = await MCP.readResource(clientName, uri)
-              if (!resourceContent) {
-                throw new Error(`Resource not found: ${clientName}/${uri}`)
-              }
-
-              // Handle different content types
-              const contents = Array.isArray(resourceContent.contents)
-                ? resourceContent.contents
-                : [resourceContent.contents]
-
-              for (const content of contents) {
-                if ("text" in content && content.text) {
-                  pieces.push(draftSyntheticTextPart(content.text as string))
-                } else if ("blob" in content && content.blob) {
-                  // Handle binary content if needed
-                  const mimeType = "mimeType" in content ? content.mimeType : part.mime
-                  pieces.push(draftSyntheticTextPart(`[Binary content: ${mimeType}]`))
-                }
-              }
-
-              pieces.push(attachDraftContext(part))
-            } catch (error: unknown) {
-              log.error("failed to read MCP resource", {
-                command: "session.prompt.mcpResource",
-                status: "error",
-                errorCode: "MCP_RESOURCE_READ",
-                sessionID: input.sessionID,
-                error,
-                clientName,
-                uri,
-              })
-              const message = NamedError.message(error)
-              pieces.push(draftSyntheticTextPart(`Failed to read MCP resource ${part.filename}: ${message}`))
-            }
-
-            return pieces
           }
           const url = new URL(part.url)
           const createReadFailurePart = (options: { error: unknown; filepath: string }) => {
