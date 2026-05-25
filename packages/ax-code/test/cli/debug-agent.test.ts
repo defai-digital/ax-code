@@ -1,7 +1,16 @@
 import { describe, expect, test } from "bun:test"
-import { parseToolParams } from "../../src/cli/cmd/debug/agent"
+import { decodeToolParamsValue, parseToolParams } from "../../src/cli/cmd/debug/agent"
 
 describe("debug agent", () => {
+  test("decodeToolParamsValue decodes already-parsed params", () => {
+    expect(decodeToolParamsValue({ path: "src/index.ts", limit: 2 })).toEqual({
+      path: "src/index.ts",
+      limit: 2,
+    })
+    expect(() => decodeToolParamsValue(["not", "object"])).toThrow("Tool params must be a JSON object")
+    expect(() => decodeToolParamsValue(null)).toThrow("Tool params must be a JSON object")
+  })
+
   test("parseToolParams decodes JSON object params", () => {
     expect(parseToolParams()).toEqual({})
     expect(parseToolParams("  ")).toEqual({})
