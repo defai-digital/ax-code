@@ -3,25 +3,25 @@ export interface CliOutputParser {
   parseStreamLine(line: string): string | null
 }
 
-function tryParse(line: string): Record<string, any> | null {
+export function parseCliJsonEventLine(line: string): Record<string, any> | undefined {
   const trimmed = line.trim()
-  if (!trimmed || trimmed[0] !== "{") return null
+  if (!trimmed || trimmed[0] !== "{") return undefined
   try {
     return JSON.parse(trimmed)
   } catch {
-    return null
+    return undefined
   }
 }
 
 // Note: NO_COLOR=1 is set in CLI_ENV, so ANSI codes are not expected in output.
-// tryParse already handles non-JSON lines via fast-path check.
+// parseCliJsonEventLine already handles non-JSON lines via fast-path check.
 
 export const claudeCodeParser: CliOutputParser = {
   parseComplete(output: string) {
     const lines = output.split("\n")
     const parts: string[] = []
     for (const line of lines) {
-      const event = tryParse(line)
+      const event = parseCliJsonEventLine(line)
       if (!event) continue
       if (event.type === "result" && typeof event.result === "string") return { text: event.result }
       if (event.type === "assistant" && event.message?.content) {
@@ -33,7 +33,7 @@ export const claudeCodeParser: CliOutputParser = {
     return { text: parts.join("\n") || output.trim() }
   },
   parseStreamLine(line: string) {
-    const event = tryParse(line)
+    const event = parseCliJsonEventLine(line)
     if (!event) return null
     if (event.type === "content_block_delta" && event.delta?.text) return event.delta.text
     if (event.type === "result" && typeof event.result === "string") return event.result
@@ -46,7 +46,7 @@ export const geminiCliParser: CliOutputParser = {
     const lines = output.split("\n")
     const parts: string[] = []
     for (const line of lines) {
-      const event = tryParse(line)
+      const event = parseCliJsonEventLine(line)
       if (!event) continue
       if (event.type === "result" && typeof event.text === "string") return { text: event.text }
       if (event.type === "result" && typeof event.content === "string") return { text: event.content }
@@ -59,7 +59,7 @@ export const geminiCliParser: CliOutputParser = {
     return { text: parts.join("\n") || output.trim() }
   },
   parseStreamLine(line: string) {
-    const event = tryParse(line)
+    const event = parseCliJsonEventLine(line)
     if (!event) return null
     if (event.type === "result") {
       if (typeof event.content === "string") return event.content
@@ -78,7 +78,7 @@ export const codexCliParser: CliOutputParser = {
     const lines = output.split("\n")
     const parts: string[] = []
     for (const line of lines) {
-      const event = tryParse(line)
+      const event = parseCliJsonEventLine(line)
       if (!event) continue
       if (event.type === "item.completed" && event.item?.text) {
         return { text: event.item.text }
@@ -100,7 +100,7 @@ export const codexCliParser: CliOutputParser = {
     return { text: parts.join("\n") || output.trim() }
   },
   parseStreamLine(line: string) {
-    const event = tryParse(line)
+    const event = parseCliJsonEventLine(line)
     if (!event) return null
     if (event.type === "item.completed") {
       if (event.item?.text) return event.item.text

@@ -4,6 +4,7 @@ import { getCliProviderDefinition, type CliProviderDefinition } from "./config"
 import { resolveCliModel, type CliModelInfo } from "./resolve"
 import { Process } from "../../util/process"
 import { Log } from "../../util/log"
+import { parseCliJsonEventLine } from "./parser"
 
 export const CLI_CONNECT_TIMEOUT_MS = 15_000
 const CLI_CONNECT_PROMPT = "Reply with exactly OK."
@@ -38,19 +39,18 @@ async function checkClaudeAuth(binary: string): Promise<string | undefined> {
     for (const line of out.stdout.toString().split("\n")) {
       const trimmed = line.trim()
       if (!trimmed || trimmed[0] !== "{") continue
-      try {
-        const event = JSON.parse(trimmed)
-        if (isClaudeAuthFailure(event)) {
-          return "claude CLI is not logged in — run `claude login` first"
-        }
-      } catch (error) {
+      const event = parseCliJsonEventLine(line)
+      if (!event) {
         log.debug("claude auth probe ignored non-JSON event line", {
           command: "provider.cli.auth_probe",
           status: "ignored",
           binary,
           line: trimmed.slice(0, 200),
-          error,
         })
+        continue
+      }
+      if (isClaudeAuthFailure(event)) {
+        return "claude CLI is not logged in — run `claude login` first"
       }
     }
 
