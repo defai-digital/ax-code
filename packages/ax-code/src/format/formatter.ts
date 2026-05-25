@@ -43,13 +43,7 @@ async function runHelpCommand(cmd: string[]): Promise<HelpCheckResult | null> {
   let result: [number, string, string] | null = null
   try {
     result = await Promise.race([
-      Promise.all([
-        proc.exited.finally(() => {
-          if (timer) clearTimeout(timer)
-        }),
-        text(proc.stdout),
-        text(proc.stderr),
-      ]),
+      Promise.all([proc.exited, text(proc.stdout), text(proc.stderr)]),
       timeoutResult,
     ])
   } finally {

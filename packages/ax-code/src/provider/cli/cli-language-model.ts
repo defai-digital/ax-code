@@ -115,7 +115,8 @@ export class CliLanguageModel implements LanguageModelV3 {
   private setupProcessAbort(proc: Process.Child, signal: AbortSignal | undefined, logLabel: string) {
     let _isAborted = false
     let _killPromise = Promise.resolve<void>(undefined)
-    let _abortError: Error = signal ? readAbortError(signal) : new DOMException("This operation was aborted", "AbortError")
+    let _abortError: Error = new DOMException("This operation was aborted", "AbortError")
+    if (signal) _abortError = readAbortError(signal)
     let _killed = false
 
     const kill = (): Promise<void> => {
