@@ -37,7 +37,9 @@ describe("control-plane/sse", () => {
 
   test("parseSSEJsonData separates JSON parsing from fallback wrapping", () => {
     expect(parseSSEJsonData('{"type":"one"}')).toEqual({ type: "one" })
+    expect(parseSSEJsonData('  {"type":"one"}\n')).toEqual({ type: "one" })
     expect(parseSSEJsonData("hello world")).toBeUndefined()
+    expect(parseSSEJsonData("")).toBeUndefined()
   })
 
   test("parseSSEData wraps non-json payloads with event metadata", () => {
