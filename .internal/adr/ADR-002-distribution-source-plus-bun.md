@@ -2,7 +2,7 @@
 
 **Status:** Accepted
 **Date:** 2026-04-25
-**Deciders:** (to be filled by team)
+**Deciders:** ax-code maintainers
 **Supersedes:** None
 **Related:** ADR-001 (historical ratatui migration decision), ADR-003 (OpenTUI + Bun mainline hardening)
 

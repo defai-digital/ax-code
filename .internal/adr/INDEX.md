@@ -1,6 +1,8 @@
 # Architecture Decision Records
 
-This index tracks the active ADR set for `ax-code`. Archived ADRs are retained under `.internal/archive/adr/` for historical context, but should not be treated as current implementation guidance.
+This index tracks the active ADR set for `ax-code`. Retired ADRs are removed from this index; historical versions are recoverable from git history.
+
+**Maintenance rule:** When adding or updating an ADR, update its row here — Status must reflect the current implementation state, not the proposal date.
 
 ## Active ADRs
 
@@ -10,18 +12,16 @@ This index tracks the active ADR set for `ax-code`. Archived ADRs are retained u
 | [ADR-003](ADR-003-opentui-bun-mainline-hardening.md) | Keep OpenTUI and Bun as the mainline runtime and harden them directly | Accepted |
 | [ADR-004](ADR-004-autonomous-mode-hardening.md) | Harden autonomous mode with confidence-aware escalation, blast-radius caps, and a critic pass | Accepted |
 | [ADR-005](ADR-005-subagent-orchestration.md) | Subagent orchestration via explicit dispatcher with parallel Task fan-out | Accepted; P0 partially shipped |
-| [ADR-006](ADR-006-v5-agent-control-plane.md) | Make Agent Control Plane the v5 autonomous architecture foundation | Proposed |
+| [ADR-006](ADR-006-v5-agent-control-plane.md) | Make Agent Control Plane the v5 autonomous architecture foundation | Partially implemented via child ADRs; core runtime contract Proposed |
 | [ADR-007](ADR-007-headless-agent-runtime-boundary.md) | Establish a Headless Agent Runtime Boundary | Accepted |
-| [ADR-008](ADR-008-server-operation-mode-boundary.md) | Define Server Operation Mode Boundaries | Proposed |
+| [ADR-008](ADR-008-server-operation-mode-boundary.md) | Define Server Operation Mode Boundaries | Accepted; implementation pending |
 | [ADR-009](ADR-009-package-organization-boundary-hardening.md) | Harden Package Organization Boundaries Before Splitting Packages | Accepted; implemented |
 | [ADR-010](ADR-010-alibaba-thinking-shape-and-budget-clamping.md) | Alibaba Thinking Shape and Budget Clamping | Accepted |
 | [ADR-011](ADR-011-tui-session-tool-renderer-boundary.md) | Make TUI Session Tool Rendering a Named Boundary | Accepted; initial extraction implemented |
 | [ADR-012](ADR-012-autonomous-continuation-contracts.md) | Make autonomous continuation prompts and terminal semantics explicit contracts | Accepted |
-| [ADR-013](ADR-013-qwen37-max-cloud-agent-backend.md) | Treat Qwen3.7-Max as a premium cloud-agent backend, not a Qwen-specific runtime architecture | Accepted; implementation in progress |
+| [ADR-013](ADR-013-qwen37-max-cloud-agent-backend.md) | Treat Qwen3.7-Max as a premium cloud-agent backend, not a Qwen-specific runtime architecture | Accepted; all phases shipped in v5.5.0 |
 | [ADR-014](ADR-014-durable-session-goals.md) | Treat `/goal` as durable session state | Accepted |
+| [ADR-015](ADR-015-session-prompt-module-boundary.md) | Extract pure logic from session/prompt.ts into focused prompt-* modules | Accepted; extraction in progress |
+| [ADR-016](ADR-016-agent-routing-architecture.md) | Agent routing is keyword-only; no LLM tier, intent gates, or delegation modes | Accepted |
+| [ADR-017](ADR-017-effect-framework-freeze.md) | Freeze Effect framework usage at v2.11.0 boundaries | Accepted; enforced by CI |
 
-## Archived ADRs
-
-| ADR | Title | Archive Reason |
-| --- | --- | --- |
-| [ADR-001](../archive/adr/ADR-001-ratatui-bundled-renderer-and-opentui-rollback-only.md) | Ship ratatui as Bundled Renderer and Keep OpenTUI as Rollback Only | Superseded by ADR-003; retained as historical UI/runtime context only. |

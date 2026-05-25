@@ -2,7 +2,7 @@
 
 **Status:** Accepted (P0 partially shipped 2026-04-27)
 **Date:** 2026-04-27
-**Deciders:** (to be filled by team)
+**Deciders:** ax-code maintainers
 **Related:** ADR-004 Autonomous mode hardening (which deferred parallel subagents to a separate PRD as P2)
 
 ## P0 status (2026-04-27)

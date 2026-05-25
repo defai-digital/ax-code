@@ -1,11 +1,13 @@
-# PRD: Debug, Refactor, and QA Competitive Closeout
+# Strategy: Debug, Refactor, and QA Competitive Closeout
+
+> **Document type: Strategy / Product Direction** — This is not an implementation tracker. It defines product positioning and workflow direction. Implementation work for this direction is tracked in separate, scoped PRDs (`PRD-debug-refactor-qa-implementation-backlog.md` archived, `PRD-2026-05-18-coding-debugging-capability-hardening.md` archived). New implementation slices in this direction should open focused PRDs that reference this document.
 
 **Date:** 2026-04-26
-**Status:** Final Draft
+**Last reviewed:** 2026-05-25
+**Status:** Accepted direction — implementation tracked separately
 **Scope:** Internal
-**Last reviewed:** 2026-04-26
-**Owner:** ax-code agent
-**Related:** `.internal/adr/ADR-002-distribution-source-plus-bun.md`, `.internal/adr/ADR-003-opentui-bun-mainline-hardening.md`, `.internal/archive/prd/PRD-debug-refactor-qa-implementation-backlog.md`
+**Owner:** ax-code maintainers
+**Related:** ADR-002 (distribution), ADR-003 (OpenTUI mainline), `.internal/archive/prd/PRD-debug-refactor-qa-implementation-backlog.md`, `.internal/archive/prd/PRD-2026-05-18-coding-debugging-capability-hardening.md`
 
 ---
 

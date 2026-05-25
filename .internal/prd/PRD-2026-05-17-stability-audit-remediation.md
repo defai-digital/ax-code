@@ -1,32 +1,33 @@
 # PRD: Stability Audit Remediation
 
-**Date:** 2026-05-17 (last verified 2026-05-18)
-**Status:** Draft — Phase 0 verification complete; no remediation phase has landed yet
-**Author:** ax-code agent
-**Related:** `.internal/archive/prd/PRD-2026-05-18-hotspot-boundary-hardening.md` (file-size hotspots), ADR-009 (package boundaries)
+**Date:** 2026-05-17
+**Last reviewed:** 2026-05-25
+**Status:** Draft — remediation phases not yet landed; findings backlog active
+**Author:** ax-code maintainers
+**Related:** ADR-009 (package boundaries), ADR-017 (Effect freeze — governs H1/H2 enforcement), ADR-015 (prompt module boundary — governs M1 progress), `.internal/archive/prd/PRD-2026-05-18-hotspot-boundary-hardening.md`
+**Archive criteria:** All Critical and High findings either closed or explicitly deferred with a tracked follow-up PRD.
 
-## Current Status (2026-05-18 re-verification)
+---
 
-Working tree is clean (72 commits ahead of origin/main since the audit). No finding from this PRD has been explicitly closed yet, but adjacent extraction work and unrelated hardening have moved the needle on three items:
+## Current Status (2026-05-25 re-verification)
 
-- **H15 (wrapSSE reader lock) — FIXED.** `src/provider/provider.ts:121-141` now routes `signal.aborted` through `abortReader`, which calls `void reader.cancel(reason).catch(() => {})`. No further work needed; this finding is closed.
-- **H9 (fallback model cache invalidation) — PARTIAL.** `cachedSystemPrompt` now carries `environmentModelKey` (`src/session/prompt.ts:627-631`), so the per-model invariant is at least represented in the cache shape. The explicit clear on `fallbackModelOverride` assignment (`prompt.ts:1514`) is still missing; needs a follow-up to either reset `environment`/`environmentModelKey` or to gate the cache reuse on a fresh model-key comparison.
-- **H10 (compaction busy retry) — REFACTORED, NOT FIXED.** Commit `d1f5ec1e` extracted `pendingCompactionDecision` (`src/session/compaction.ts`). The loop now reads `decision.delayMs` instead of a hard-coded 250ms, but the retry sleep at `src/session/prompt.ts:894` is still a plain `setTimeout` with no abort check and no upper bound on iterations. Use this extraction as the natural seam to land the H10 fix.
+### Finding status changes since 2026-05-18
 
-Two scope adjustments to flag:
+- **H1 (Effect guard scope too narrow) — ADDRESSED BY ADR-017.** `script/check-no-effect-solid-in-v4.ts` scope expansion is now the formal contract in ADR-017. The CI guard enforces the allowlist (`src/effect/`, `src/session/`, `src/file/watcher.ts`, `src/util/effect-zod.ts`). H1's remediation (invert the scanner to allowlist-by-path) is the implementation task; the architectural decision is settled.
+- **H2 (Effect usage outside allowlist) — POLICY SETTLED, MIGRATION OPEN.** ADR-017 formally documents the freeze and the bridge exception for branded-ID files. The 34-file migration backlog remains; it is the ongoing task, not a question of whether to migrate.
+- **M1 (hotspot files) — SIGNIFICANT PROGRESS.** Re-verified sizes as of 2026-05-25 (previously verified 2026-05-18):
+  - `src/session/prompt.ts`: **1,623** (was 3,174 on 2026-05-18, was 3,179 at audit) — large reduction from ADR-015 prompt module extraction
+  - `src/cli/cmd/tui/routes/session/index.tsx`: **1,789** (was 1,777, effectively stable)
+  - `src/lsp/index.ts`: **791** (was 1,937 on 2026-05-18) — major reduction
+  - `src/cli/cmd/tui/component/prompt/index.tsx`: **2,026** (was 2,013, slightly grown)
+  - `src/session/processor.ts`: **1,130** (was 982, grown — review for extraction opportunity)
+  - `src/server/server.ts`: **1,398** (was 1,394, stable)
+  - `src/server/routes/session.ts`: **1,413** (was 1,389, stable)
+  - `prompt.ts` and `lsp/index.ts` are now below the 2000-line review threshold. `processor.ts` crossed 1000 lines and should be watched.
 
-- **H2 footprint is larger than originally stated.** A fresh grep across `packages/ax-code/src` finds **34** files importing from `"effect"` outside the allowlist (`src/effect/`, `src/session/`, `src/file/watcher.ts`, `src/util/effect-zod.ts`). The original audit only named three. Affected modules now include `skill/`, `pty/`, `auth/`, `agent/agent.ts`, `installation/`, `filesystem/`, `provider/auth.ts`, `command/`, `account/`, `permission/index.ts`, `mcp/index.ts`, `project/project.ts`, `config/markdown.ts`, `flag/flag.ts`, plus many `*/schema.ts` and `*/id.ts` files that use `effect/Schema` for branded IDs. The branded-ID files are the documented bridge case and should stay; everything else is in scope for H2.
-- **Hotspot M1 is progressing under PRD-2026-05-18, not this PRD.** Verified sizes today:
-  - `src/cli/cmd/tui/routes/session/index.tsx`: 1,777 (was 2,961 at audit time) — large reduction from `63b54caf Harden session renderer boundaries` and earlier.
-  - `src/lsp/index.ts`: 1,937 (was 2,021) — `84ddfad2 Extract LSP client selection policy` and `cbf895b9 Extract LSP cache orchestration`.
-  - `src/session/compaction.ts`: 484 — decision helper extracted.
-  - `src/session/prompt.ts`: 3,174 (was 3,179) — essentially unchanged.
-  - `src/session/processor.ts`: 982 — unchanged.
-  - `src/cli/cmd/tui/component/prompt/index.tsx`: 2,013 — unchanged.
-  - `src/server/server.ts`: 1,394 — unchanged.
-  - `src/server/routes/session.ts`: 1,389 — unchanged.
+All other findings from the 2026-05-18 verification remain unchanged unless marked below.
 
-Everything else from the audit remains as originally documented. Status markers in the tables below have been updated.
+---
 
 ---
 
@@ -50,7 +51,7 @@ Several classes of defect have accumulated across domains:
 - **Signal handling is uneven.** The TUI main thread only registers SIGHUP via the renderer context; SIGINT/SIGTERM are not wired, so external kill leaves the terminal in raw mode + alt-screen + mouse-tracking. Long-running server entries do not handle SIGHUP, leaving children orphaned on SSH disconnect.
 - **Effect guard is too narrow.** `script/check-no-effect-solid-in-v4.ts` only scans `src/runtime`, `src/cli/cmd/tui-v4`, and three `src/cli/cmd/tui/{state,input,native}` paths. New Effect usage already exists outside the allowlist (`src/provider/auth.ts`, `src/cli/effect/prompt.ts`, `src/cli/cmd/account.ts`) without CI catching it.
 - **Silent failure modes mask real bugs.** Replay returns truncated `bySession` slices and flags every truncated step as divergence. The MCP `cachedTools` TTL suppresses server-emitted `tools/list_changed` notifications inside 10s windows. Native `AX_CODE_NATIVE_*` flags are captured once at module-load and cannot be flipped at runtime. The CLI provider streams stdout through `parser.parseStreamLine` with no try/catch, so a single malformed line can crash the host.
-- **Hotspot files exceed the soft and hard split thresholds.** `src/session/prompt.ts` (3,179 lines), `src/cli/cmd/tui/routes/session/index.tsx` (2,961), and several others continue to absorb new logic. PRD-2026-05-18 already targets the TUI session route slice; this PRD adds session-engine and CLI command file slices to the same direction.
+- **Hotspot files exceed the soft and hard split thresholds.** Several files continue to absorb new logic. As of 2026-05-25, `src/cli/cmd/tui/component/prompt/index.tsx` (2,026), `src/session/processor.ts` (1,130, crossing 1k), and `src/server/routes/session.ts` (1,413) remain extraction candidates. `session/prompt.ts` (1,623) and `lsp/index.ts` (791) have been reduced below threshold via ADR-015 extraction work.
 
 ## Goals
 
@@ -58,7 +59,7 @@ Several classes of defect have accumulated across domains:
 - Close every cancellation / signal propagation gap surfaced by the audit so that abort and external kill release resources deterministically.
 - Invert the Effect guard to allowlist-by-path so the policy in `ARCHITECTURE.md` is mechanically enforced.
 - Eliminate the silent-failure code paths called out below (replace with explicit errors, bounded retries, or runtime-refreshable state).
-- Continue the hotspot-file reduction direction from PRD-2026-05-18 into session-engine and CLI-command files.
+- Continue hotspot-file reduction into session-engine and CLI-command files (processor.ts, server/routes, provider.ts).
 - Add tests for the behaviors changed by this PRD, using the existing `tmpdir()` fixture and real-integration patterns.
 
 ## Non-Goals
@@ -87,8 +88,8 @@ The audit is preserved in conversation context. The summary below is the canonic
 
 | # | Status | Title | Location | Remediation |
 |---|---|---|---|---|
-| H1 | Open | Effect guard scope too narrow | `script/check-no-effect-solid-in-v4.ts:33-39` (`Directories` list unchanged) | Invert: scan `src/**/*.{ts,tsx}`; allow only `src/effect/`, `src/session/`, `src/file/watcher.ts`, `src/util/effect-zod.ts`, and documented exceptions. |
-| H2 | Open (scope expanded) | Effect usage outside allowlist | 34 files re-verified by grep. Confirmed targets include `src/provider/auth.ts:8`, `src/cli/effect/prompt.ts:2`, `src/cli/cmd/account.ts:2`, `src/skill/{discovery,index}.ts`, `src/pty/index.ts`, `src/auth/index.ts`, `src/agent/agent.ts:30`, `src/installation/index.ts:2`, `src/filesystem/index.ts:5`, `src/command/index.ts:5`, `src/account/{index,repo}.ts`, `src/permission/index.ts:15`, `src/mcp/index.ts`, `src/project/project.ts:14`, `src/config/markdown.ts:1`, `src/flag/flag.ts:1`, `src/util/{effect-http-client,schema}.ts`. The `*/schema.ts` and `*/id.ts` files using `effect/Schema` for branded IDs (e.g. `provider/schema.ts`, `code-intelligence/id.ts`, `replay/index.ts`, `audit/id.ts`, `permission/schema.ts`, `question/{index,schema}.ts`, `pty/schema.ts`, `debug-engine/id.ts`, `account/schema.ts`) are out of scope per the documented bridge exception. | Migrate to async/await + Zod + `Result<T, E>`. Land one file per PR; H1 guard must be in place first. The migration order in Phase 4 still applies but the backlog is materially longer than the original audit suggested. |
+| H1 | **Policy settled via ADR-017** | Effect guard scope too narrow | `script/check-no-effect-solid-in-v4.ts` CI guard exists; ADR-017 formalizes the allowlist. Implementation task: expand the scanner to cover all `src/**/*.{ts,tsx}` (currently still scanning a narrow directory list). | Expand scanner per the ADR-017 allowlist. This is now a 1-file change to the CI script; the decision is not open. |
+| H2 | Open — migration in progress | Effect usage outside allowlist | 34 files verified 2026-05-18. Policy settled by ADR-017; bridge exception for branded-ID files (`*/schema.ts`, `*/id.ts`) documented. Non-bridge files (`provider/auth.ts`, `cli/effect/prompt.ts`, `skill/`, `pty/`, `auth/`, `agent/agent.ts`, `installation/`, `filesystem/`, `command/`, `account/`, `permission/index.ts`, `mcp/index.ts`, `project/project.ts`, `config/markdown.ts`, `flag/flag.ts`, `util/{effect-http-client,schema}.ts`) are migration targets. | Migrate to `async/await` + Zod + `Result<T, E>`. One file per PR; H1 CI guard expansion must land first so violations fail build. |
 | H3 | Open | CLI subprocess `cancel()` only SIGTERM, no SIGKILL escalation | `src/provider/cli/cli-language-model.ts:333` (still single `proc.kill("SIGTERM")` with no follow-up timer) | Mirror SIGTERM → 5s → SIGKILL escalation from `doGenerate` (`:139-145`) into `cancel()` and `fail()`. |
 | H4 | Open | File watcher uses bare `require()` instead of `createRequire` | `src/file/watcher.ts:53-58` (still bare `require` inside `lazy()`) | Match `native/addon.ts` pattern: `const _require = createRequire(import.meta.url); _require(...)`. |
 | H5 | Open | Replay truncates `bySession` at 10k rows and silently flags divergence | `src/replay/query.ts:19,27-50` (`BY_SESSION_LIMIT = 10_000`; `warnIfTruncated` still only `log.warn`s and returns the truncated slice) | Either paginate via `allSince` cursor inside `reconstructStream`, or throw `ReplayTruncatedError` on truncation; never return a partial slice as "the events". |
@@ -101,14 +102,13 @@ The audit is preserved in conversation context. The summary below is the canonic
 | H12 | Open | `Permission.fromConfig` does not validate rule action | `src/permission/index.ts:461-473` (still pushes raw `{ permission, action, pattern }` without `Permission.Rule.parse`) | Parse each rule through `Permission.Rule.parse()`; reject typos with logged error or thrown config error. |
 | H13 | Open | Isolation bash bypass can be evaded on multi-target commands | `src/isolation/index.ts:98-100,157,163` (still `isBypassed` short-circuits both the protect check and per-target validation) | Require explicit bypass for every resolved target; re-validate via `fs.realpathSync(existing prefix) + suffix` (the helper at `:34-38` already exists); refuse bypass for `DEFAULT_PROTECTED` entries (`:8`). |
 | H14 | Open | MCP `cachedTools` TTL suppresses `tools/list_changed` notifications | `src/mcp/index.ts:792-799` (`TOOLS_CACHE_TTL_MS = 10_000` still short-circuits the `ToolsChanged` subscriber) | Always invalidate on `ToolsChanged`; if rate limiting is needed, debounce the bus callback. |
-| H15 | **Fixed** | `wrapSSE` reader lock leaks on early abort | `src/provider/provider.ts:126-141` — `abortReader` now does `void reader.cancel(reason).catch(() => {})` and is called from the `if (signal.aborted)` branch at `:136-137`. | Closed. No further work. |
 | H16 | Open | Long-running server commands miss SIGHUP | `src/cli/cmd/tui/worker.ts:284-285,317-318` (only SIGTERM/SIGINT), `src/cli/cmd/runtime/{serve,workspace-serve}.ts`, `src/cli/cmd/storage/session.ts:433-434`, `src/cli/cmd/github-agent/pr.ts:132-133` | Consume the shared `src/util/signals.ts` helper introduced for C3. |
 
 ### Medium
 
 | # | Status | Title | Location | Remediation |
 |---|---|---|---|---|
-| M1 | Progressing under PRD-2026-05-18 | Hotspot files exceed split thresholds | Current sizes (2026-05-18): `src/session/prompt.ts` 3,174 (was 3,179), `src/cli/cmd/tui/routes/session/index.tsx` **1,777** (was 2,961, −40%), `src/cli/cmd/tui/component/prompt/index.tsx` 2,013 (unchanged), `src/lsp/index.ts` **1,937** (was 2,021), `src/server/server.ts` 1,394, `src/server/routes/session.ts` 1,389, `src/session/processor.ts` 982, `src/session/compaction.ts` 484 (decision extracted), `src/cli/cmd/{mcp,run,index-graph,memory,providers}.ts` unchanged | Continue PRD-2026-05-18 direction. Outstanding slices owned by this PRD's Phase 6: per-event handlers from `processor.ts`; async-task plumbing out of `routes/session.ts`; `wrapSSE`/`fromModelsDev*`/`getSDK` out of `provider.ts`. |
+| M1 | Significant progress | Hotspot files exceed split thresholds | Sizes as of 2026-05-25 (2026-05-18 in parens): `src/session/prompt.ts` **1,623** (3,174) — major reduction from ADR-015 extraction; `src/lsp/index.ts` **791** (1,937) — now below threshold; `src/cli/cmd/tui/routes/session/index.tsx` **1,789** (1,777) — stable; `src/cli/cmd/tui/component/prompt/index.tsx` **2,026** (2,013) — slightly grown, watch; `src/session/processor.ts` **1,130** (982) — crossed 1k, extraction candidate; `src/server/server.ts` **1,398** (1,394) — stable; `src/server/routes/session.ts` **1,413** (1,389) — stable. `prompt.ts` and `lsp/index.ts` resolved; `processor.ts` is the new priority. | Phase 6 of this PRD owns remaining slices: per-event handlers from `processor.ts`; async-task plumbing out of `routes/session.ts`; `wrapSSE`/`fromModelsDev*`/`getSDK` out of `provider.ts`. |
 | M2 | Open | `ToolRegistry` cacheKey is hand-rolled per flag | `src/tool/registry.ts:163-181,246-248` | Hash `JSON.stringify(cfg.experimental ?? {})` into cache key; move `Config.get()` into cache-miss branch. |
 | M3 | Open | `MessageV2.fromError` pass-through returns class instance, not serialized form | `src/session/message-v2.ts:1018-1027` | Detect class instances in pass-through branches and call `.toObject()`. |
 | M4 | Open (related commit) | `SessionCompaction.prune` aborts entire loop on first failure | `src/session/compaction.ts:168-175` (single try/catch around whole loop). Recent `b1991342 Avoid mutating compacted prune inputs` addressed a different defect in the same area. | Per-iteration try/catch; report succeeded/failed counts. |
@@ -130,6 +130,13 @@ The audit is preserved in conversation context. The summary below is the canonic
 | L4 | Open | `Config.get()` mock in registry test casts as `never` | `test/tool/registry.test.ts:18-23` | Cast as `Awaited<ReturnType<typeof Config.get>>` or use a real `Config.Info` fixture. |
 | L5 | Open | `util/effect-http-client.ts`, `util/schema.ts` are gateways for new Effect | `src/util/{effect-http-client,schema,effect-zod}.ts` | Move to `src/effect/` or rename to `util/legacy-effect-*.ts` with JSDoc warning. |
 | L6 | Open | `destroyTuiRenderer` swallows `renderer.destroy()` errors | `src/cli/cmd/tui/renderer.ts:124-135` | Wrap `renderer.destroy()` in its own try/catch, log via `Log.create({ service: "tui.renderer" })`, run cleanup regardless, rethrow only after teardown. |
+
+### Closed Findings
+
+| # | Title | Closed by |
+|----|-------|-----------|
+| H15 | `wrapSSE` reader lock leaks on early abort | Fixed: `abortReader` calls `void reader.cancel(reason).catch(() => {})` at abort signal. `src/provider/provider.ts:126-141`. |
+| H1 | Effect guard scope too narrow (policy) | Policy settled: ADR-017 defines the allowlist and CI guard contract. Implementation task (scanner expansion) tracked under H1 in Phase 4. |
 
 ## Implementation Plan
 
@@ -193,15 +200,17 @@ Grouped because each item is small and orthogonal. Ship as a series of one-findi
 - M3–M8: as listed in the backlog.
 - L1: per-tool ring filtering on doom-loop.
 
-### Phase 6 — Hotspot File Reduction (continuation of PRD-2026-05-18)
+### Phase 6 — Hotspot File Reduction
 
 Closes: **M1** (incrementally), **L3**
 
-- `session/processor.ts`: extract per-event handlers (text, reasoning, tool-call, finish-step) onto a state object; separate `runStream()` from `finalize()` / `handleError()`.
-- `server/routes/session.ts`: move async-task helpers (`startDetachedSessionTask`, `recordAsyncSessionTask`, `createAsyncSessionErrorHandler`, `startAsyncSessionTask`) into `src/session/async-task.ts`.
-- `server/server.ts`: extract middleware composition (`server/middleware/{auth,cors,bootstrap,error}.ts`).
+Priority order based on 2026-05-25 sizes (`processor.ts` 1,130 is the new watch target):
+
+- `session/processor.ts` (1,130): extract per-event handlers (text, reasoning, tool-call, finish-step) onto a state object; separate `runStream()` from `finalize()` / `handleError()`.
+- `server/routes/session.ts` (1,413): move async-task helpers (`startDetachedSessionTask`, `recordAsyncSessionTask`, `createAsyncSessionErrorHandler`, `startAsyncSessionTask`) into `src/session/async-task.ts`.
+- `server/server.ts` (1,398): extract middleware composition (`server/middleware/{auth,cors,bootstrap,error}.ts`).
 - `provider/provider.ts`: split out `wrapSSE`, `fromModelsDev*`, `getSDK`.
-- `cli/cmd/run.ts`: extract tool renderers into `src/tool/render-cli.ts` shared with TUI's `routes/session/tools/*` (when PRD-2026-05-18 phase lands them).
+- `cli/cmd/prompt/index.tsx` (2,026): watch — already near the 2k soft limit; any growth should trigger extraction.
 - L3: snapshot callbacks before zeroing in `prompt.ts:cancel()`.
 
 Each extraction is its own PR. No single PR is required to hit a target file size; the goal is direction, not a hard line count.
@@ -222,7 +231,7 @@ Closes: **L2, L4, M9, M10, M11**
 - **Effect guard inversion may surface unknown violators.** Mitigation: Step 4a temporarily allowlists current violators by path so CI stays green; subsequent PRs remove each entry as the migration lands.
 - **Signal helper rollout (Phase 2) touches many entry points.** Mitigation: helper has a single small surface; each entry-point migration is a one-line change reviewed independently.
 - **Replay truncation fix (H5) changes observable behavior for long sessions.** Mitigation: ADR documents the chosen direction (pagination vs error); error path is the safer default if pagination is non-trivial.
-- **Hotspot extraction is incremental.** Mitigation: continue the per-PR slice pattern from PRD-2026-05-18; do not gate this PRD on hitting a specific file size.
+- **Hotspot extraction is incremental.** Mitigation: one extraction per PR; do not gate this PRD on hitting a specific file size.
 
 ## Out of Scope (Tracked Elsewhere)
 
@@ -232,14 +241,10 @@ Closes: **L2, L4, M9, M10, M11**
 
 ## Acceptance Criteria
 
-Already closed at PRD time:
-
-- H15 (SSE reader lock released on early abort) — verified at `provider/provider.ts:126-141`.
-
-Remaining for completion:
+Remaining for completion (see Closed Findings for items already done):
 
 - C1–C4 closed: Node entrypoint boots a fresh install end-to-end; `db` subcommands run under both bun and node; TUI exits cleanly on SIGINT/SIGTERM/SIGHUP/SIGQUIT with terminal state restored; cancel during a permission dialog releases the tool-call frame.
 - H1–H14, H16 closed: Effect guard scans the full tree with explicit allowlist; no Effect imports outside the allowlist (~34 files to migrate); SIGKILL escalation present on all CLI subprocess cancel paths; file watcher uses `createRequire`; Replay never returns a silently-truncated slice; CLI provider stdout parsing tolerates malformed lines; native flags are runtime-refreshable; install timeout active; isolation bypass re-validates resolved paths; MCP cache invalidation always honored. H9 verified or fixed; H10 retry honors abort with bounded attempts.
-- M1–M11 progressed: at least the per-event-handler extraction in `processor.ts`, the migration marker fix, the recorder shutdown flush, and the OAuth/telemetry test rewrite land; the rest are tracked in their own PRs. PRD-2026-05-18 owns the routes/session and LSP slices and is already shipping reductions.
+- M1–M11 progressed: at least the per-event-handler extraction in `processor.ts`, the migration marker fix, the recorder shutdown flush, and the OAuth/telemetry test rewrite land; the rest are tracked in their own PRs.
 - L1–L6 closed.
 - `pnpm typecheck`, `bun run test:unit`, `bun run test:deterministic`, `pnpm run check:structure`, `bun run check:tui-layering`, and the renamed runtime-guardrails check all pass.

@@ -1,9 +1,9 @@
 # ADR-006: Make Agent Control Plane the v5 autonomous architecture foundation
 
-**Status:** Proposed
-**Date:** 2026-05-02
-**Deciders:** (to be filled by team)
-**Related:** ADR-004 Autonomous mode hardening, ADR-005 Subagent orchestration
+**Status:** Partially implemented via child ADRs; core runtime contract Proposed
+**Date:** 2026-05-02; Updated 2026-05-25
+**Deciders:** ax-code maintainers
+**Related:** ADR-004 Autonomous mode hardening, ADR-005 Subagent orchestration, ADR-007 Headless runtime boundary, ADR-010 Alibaba thinking, ADR-012 Continuation contracts, ADR-013 Qwen backend, ADR-014 Durable session goals
 
 ---
 
@@ -188,14 +188,34 @@ v5.0.0 should not ship only as new prompts or renamed modes. It should ship when
 - The user can see why the agent is planning, executing, validating, asking, blocked, or complete.
 - Existing v4 build/plan flows have a compatibility path.
 
-## Immediate follow-up
+## Implementation Progress
 
-Create a v5 PRD that turns this ADR into phased implementation slices:
+Several ADRs have shipped v5 control-plane pieces. Track them here to avoid re-deciding settled questions.
 
-1. Contract and event schema.
-2. Plan artifact state.
-3. Reasoning policy integration.
-4. Execution controller.
-5. Safety policy integration.
-6. TUI/CLI observability.
-7. Bounded subagent orchestration.
+### Shipped via child ADRs
+
+| v5 capability | Child ADR | Status |
+|---------------|-----------|--------|
+| Headless runtime boundary — HeadlessRuntimeCommand/Event, projection, effects, `runHeadlessSession` | ADR-007 | Accepted; MVP shipped |
+| Subagent orchestration — `dispatch/` module, parallel Task fan-out, merge strategies, permission gate | ADR-005 | Accepted; P0 shipped; P1 (tool registration, planner integration) pending |
+| Alibaba/OpenAI-compatible reasoning policy — `enable_thinking`, clamped `thinking_budget`, capability flags | ADR-010 | Accepted; shipped |
+| Provider-neutral orchestration with per-provider reasoning options, context packing, cache policy | ADR-013 | Accepted; all phases shipped in v5.5.0 |
+| Continuation semantics as explicit contracts — named builder functions, `agentRouting: "preserve"`, terminal stop non-completion | ADR-012 | Accepted; initial extraction shipped |
+| Typed session state for long-horizon goals — `session_goal` table, `get_goal`/`create_goal`/`update_goal` tools, goal injection into system prompt | ADR-014 | Accepted |
+
+### Pending (still Proposed scope of this ADR)
+
+| v5 capability | Notes |
+|---------------|-------|
+| `AgentPhase` as explicit runtime state (`assess → plan → await_approval → execute → validate → recover → summarize → complete → blocked`) | No runtime state machine yet; phases still encoded as prompt logic |
+| `PlanArtifact` as typed session state with evidence, assumptions, tasks, risks, and validation criteria | ADR-014 covers goals; a full plan artifact with sub-tasks and evidence is separate |
+| General `ReasoningPolicy` object emitting provider options, reminders, UI metadata, and replay events | ADR-010/013 cover provider-specific policies; a unified provider-agnostic policy contract does not exist yet |
+| Unified safety gate via `AgentDecision` contract across normal and autonomous runs | ADR-004 has hybrid permissions; the unified enforcement boundary is still per-module heuristics |
+| TUI/CLI/replay observability for agent phase, plan status, and reasoning depth | Not yet exposed; TUI shows session state, not control-plane phase |
+| `Dispatcher` as an orchestration primitive under policy control | ADR-005 P1 deferred; planner phase-tagging and replanner integration pending |
+
+## Next Steps
+
+1. Define the `AgentPhase` state machine as a typed runtime contract in `src/session/` (the lowest-risk first slice per the phased migration plan above).
+2. Create a v5 PRD turning the remaining pending items into implementation slices with acceptance criteria.
+3. Run each new phase in shadow mode before routing live traffic through it.

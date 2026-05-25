@@ -1,187 +1,54 @@
 # PRD: v5 Agent Control Plane
 
 **Date:** 2026-05-02
-**Status:** Draft
+**Last reviewed:** 2026-05-25
+**Status:** In progress — contracts and shadow-mode wiring complete; runtime enforcement pending
 **Scope:** Internal
-**Owner:** ax-code agent
-**Related:** `.internal/adr/ADR-006-v5-agent-control-plane.md`, `.internal/adr/ADR-004-autonomous-mode-hardening.md`, `.internal/adr/ADR-005-subagent-orchestration.md`
+**Owner:** ax-code maintainers
+**Related:** ADR-006 (v5 control plane), ADR-004 (autonomous hardening), ADR-005 (subagent orchestration), ADR-012 (continuation contracts), ADR-014 (durable goals)
+**Archive criteria:** All 7 phases at runtime enforcement parity; v5.0.0 acceptance bar in ADR-006 met.
 
 ---
 
-## Implementation log
+## Current Phase Status
 
-### 2026-05-02 Phase 1 contract scaffold
+| Phase | Title | Status |
+|-------|-------|--------|
+| Phase 0 | v4 bridge and policy cleanup | ✅ Complete |
+| Phase 1 | Control-plane contracts and event schema | ✅ Complete — shadow mode |
+| Phase 2 | Plan artifact as session state | ✅ Complete — shadow mode |
+| Phase 3 | Reasoning policy v5 | ✅ Complete — shadow mode |
+| Phase 4 | Execution controller | ✅ Complete — shadow mode |
+| Phase 5 | Safety policy | ✅ Complete — shadow mode |
+| Phase 6 | TUI/CLI/replay observability | ✅ Complete — shadow mode |
+| Phase 7 | Subagent orchestration under policy control | ⏸ Deferred — ADR-005 P1 pending |
 
-Phase 1 started with a shadow-mode contract slice:
+**What "shadow mode" means:** The contracts, state machines, event schemas, and view models exist and are tested. The session loop emits replay events through the control-plane factories, and the TUI activity timeline renders them. However, existing `session/processor.ts` and `prompt.ts` control flow has not been replaced — the control plane observes without governing. Runtime enforcement is the remaining work.
 
-- Added `src/control-plane/agent-control.ts` with typed phase, reasoning-depth, validation, approval, plan artifact, decision, and state contracts.
-- Added pure transition helpers so invalid lifecycle jumps can be tested before runtime wiring.
-- Added agent-control replay events to `src/replay/event.ts`.
-- Added tests for phase transitions, plan progress, and replay event parsing.
+**Next milestone:** Wire `ExecutionController` into `session/processor.ts` for the `execute → validate → summarize → complete/blocked` transition, replacing the current prompt-text-based completion signal.
 
-No session loop behavior changed in this slice.
+---
 
-### 2026-05-02 Bug sweep and reasoning shadow event
+## Completed Work (Phases 0–6, all shadow mode)
 
-Follow-up bug sweep on the touched surfaces fixed:
+All shadow-mode work landed in a single implementation session on 2026-05-02. The following modules now exist in `src/control-plane/`:
 
-- Reasoning checkpoint reminders are now inserted before plugin system transforms and prompt normalization, preserving existing caching/extension assumptions.
-- Reasoning policy recognizes Traditional Chinese planning/risk prompts.
-- Agent control transitions now reject completion while validation is pending/failed or plan tasks remain open/blocked.
-- `agent.completed` replay events require the `complete` phase.
-- Deep reasoning selections emit `agent.reasoning.selected` shadow events when a recorder is active.
+| Module | What it provides |
+|--------|-----------------|
+| `agent-control.ts` | `AgentPhase`, `ReasoningDepth`, `AgentControlState`, `PlanArtifact`, `AgentDecision` types; `transition()`, `createPlan()`, `updateTaskStatus()`, `applyCheckpoint()` pure helpers; completion invariants (rejects `complete` while validation pending or tasks open) |
+| `reasoning-policy.ts` | `ReasoningPolicy` — canonical policy for `fast` / `standard` / `deep` / `xdeep`; respects explicit overrides, blast-radius signals, failure counts; `src/session/reasoning-policy.ts` re-exports for compatibility |
+| `execution-controller.ts` | `ExecutionController` state machine: `assess → plan/execute → validate → summarize → complete/blocked`; keeps `await_approval` and `validate` pending until signals arrive; reuses `transition()` so invariants stay centralized |
+| `safety-policy.ts` | `SafetyPolicy` — `allow / ask / deny / allow_with_checkpoint` decisions; protected paths deny first; risky permissions require checkpoint in autonomous mode; glob-to-regex tokenizer for path matching |
+| `agent-control-events.ts` | `AgentControlEvents` factory namespace: `phaseChanged`, `reasoningSelected`, `planCreated`, `planUpdated`, `validationUpdated`, `blocked`, `completed`, `safetyDecided`; all strip undefined fields; tests parse every event through `ReplayEvent` |
+| `agent-control-summary.ts` | `AgentControlSummary` read model over replay events; `footerAgentControlStatusView()` converts to TUI labels (`Agent Plan · deep reasoning · plan 1/2`) |
 
-### 2026-05-02 Contract bug sweep and Phase 2 plan helpers
+**Session-loop integration (shadow):**
+- `Permission.ask()` emits `agent.safety.decided` (`shadow: true`) when `SafetyPolicy` would act — existing permission behavior unchanged
+- `llm.ts` imports `ReasoningPolicy` from control-plane; emits `agent.reasoning.selected` when checkpoint required
+- Plan Mode emits `agent.phase.changed` and `agent.plan.created` shadow events when replay recorder is active
+- TUI activity timeline renders all control-plane events: `Phase: ...`, `Reasoning: ...`, plan progress, `Safety: Shadow ...`
 
-Second bug sweep fixed contract bypasses before runtime wiring:
-
-- `createState({ phase: "complete" })` now enforces the same completion invariants as transitions.
-- `agent.completed` replay events now reject failed or pending validation statuses.
-- Reasoning policy now respects nested explicit provider reasoning options.
-- Empty reasoning variants no longer count as successful deep-reasoning activation.
-
-Phase 2 scaffold started with pure plan helpers:
-
-- `AgentControl.createPlan()` creates typed plan artifacts with conservative defaults.
-- `AgentControl.updateTaskStatus()` updates tasks by id and rejects unknown tasks.
-
-### 2026-05-02 Phase 2 shadow plan events
-
-Plan Mode now emits session-local shadow control-plane events when replay recording is active:
-
-- `agent.phase.changed` moves the shadow phase from `assess` to `plan`.
-- `agent.plan.created` records a conservative shadow plan artifact initialized from the latest user objective.
-
-This remains shadow-mode only. It does not change Plan Mode execution, tool permissions, or model routing.
-
-### 2026-05-02 TUI activity visibility for control-plane events
-
-The existing TUI activity history now renders control-plane replay events without changing the renderer structure:
-
-- `agent.phase.changed` appears as `Phase: ...`.
-- `agent.reasoning.selected` appears as `Reasoning: ...`.
-- `agent.plan.created` and `agent.plan.updated` show plan objective and task progress.
-- `agent.validation.updated`, `agent.blocked`, and `agent.completed` show validation/blocked/completion status.
-
-This makes Phase 1/2 shadow-mode state visible through the existing activity timeline.
-
-### 2026-05-02 Phase 2 plan checkpoint helper
-
-Added a pure plan-update helper before wiring runtime checkpoints:
-
-- `AgentControl.applyCheckpoint()` merges evidence, assumptions, risks, validation, and task updates into a typed plan artifact.
-- Duplicate text entries are ignored so repeated checkpoints do not inflate plan state.
-- Unknown task updates fail loudly instead of creating implicit tasks.
-
-This keeps future `agent.plan.updated` emitters on one safe contract.
-
-### 2026-05-02 Control-plane replay event factories
-
-Added `AgentControlEvents` as the canonical factory for control-plane replay payloads:
-
-- Phase, reasoning, plan, validation, blocked, and completed events are created through one typed namespace.
-- `llm.ts` now uses the factory for reasoning and plan shadow events instead of hand-writing payloads.
-- Factory tests parse every generated event through `ReplayEvent`.
-
-### 2026-05-02 Phase 3 reasoning policy domain move
-
-Moved the reasoning policy into the control-plane domain:
-
-- `src/control-plane/reasoning-policy.ts` is now the canonical policy implementation.
-- `src/session/reasoning-policy.ts` remains as a compatibility re-export.
-- `llm.ts` imports the policy from the control-plane namespace.
-
-This makes reasoning depth a v5 control-plane decision instead of a session implementation detail.
-
-### 2026-05-02 Phase 3 v5 reasoning depth semantics
-
-Expanded reasoning policy semantics to the v5 depth set while keeping runtime behavior conservative:
-
-- `fast`, `standard`, `deep`, and `xdeep` are now valid policy depths.
-- Small requests classify as `fast` without provider options or checkpoint events.
-- Explicit `xdeep` requests use `max`/`xdeep` variants when available, otherwise fall back to `deep`.
-- Repeated failures, high uncertainty, and high blast radius can request `deep` through the policy contract.
-- `llm.ts` only emits reasoning replay events when a checkpoint is required, avoiding noisy fast/standard events.
-
-### 2026-05-02 Phase 4 execution controller scaffold
-
-Added a pure `ExecutionController` state machine before live session wiring:
-
-- Decides phase transitions from current `AgentControl.State` plus execution/validation/approval/failure signals.
-- Routes assess -> plan/execute, plan -> approval/execute, execute -> validate/summarize, validate -> recover/summarize, summarize -> complete/blocked.
-- Reuses `AgentControl.transition()` so completion invariants remain centralized.
-- Tests cover planning, approval, validation, recovery, blocked, and completion paths.
-
-### 2026-05-02 Phase 5 safety policy scaffold
-
-Added a pure `SafetyPolicy` decision contract before permission runtime wiring:
-
-- Decisions use `allow`, `ask`, `deny`, and `allow_with_checkpoint`.
-- Protected paths deny before permission classification.
-- Safe permissions allow without checkpoint.
-- Risky permissions ask in autonomous mode and require checkpoints in normal mode.
-- Unknown permissions ask in autonomous/strict mode and require checkpoints otherwise.
-- Blast-radius limits can deny or require checkpoint at the limit.
-
-This prepares the v5 safety policy layer without changing existing permission behavior.
-
-### 2026-05-02 Control-plane bug sweep
-
-Follow-up bug sweep on the new control-plane contracts fixed early runtime-wiring hazards:
-
-- `ExecutionController` now keeps `await_approval` pending until approval is granted instead of prematurely blocking.
-- `ExecutionController` now keeps `validate` pending until a validation result arrives instead of prematurely recovering.
-- `ReasoningPolicy` honors explicit `fast`/`standard` requests even when the selected model has no reasoning capability.
-- `SafetyPolicy` protects directory paths such as `secrets` and `.git/hooks`, not only nested files.
-
-### 2026-05-02 Safety decision observability scaffold
-
-Added shadow observability support for future safety-policy integration:
-
-- `agent.safety.decided` replay event records action, risk, reason, permission, tool/path, checkpoint requirement, and matched rule.
-- `AgentControlEvents.safetyDecided()` is the canonical event factory.
-- TUI activity history renders safety decisions as `Safety: ...`.
-
-This remains schema/UI scaffolding only; existing permission behavior is unchanged.
-
-### 2026-05-02 Targeted control-plane cleanup
-
-Cleaned up newly added control-plane scaffolding before runtime integration:
-
-- `SafetyPolicy` now converts globs to regex with a small tokenizer so regex metacharacters are escaped predictably while `*` and `**` keep glob meaning.
-- `AgentControlEvents` strips undefined optional fields from generated replay payloads.
-- TUI activity status labels render safety actions such as `allow_with_checkpoint` as a concise `checkpoint`.
-
-### 2026-05-02 Permission shadow safety wiring
-
-Added the first runtime shadow wiring for v5 safety policy:
-
-- `Permission.ask()` emits `agent.safety.decided` when the v5 `SafetyPolicy` would ask, deny, or require a checkpoint.
-- Events are marked `shadow: true` because the policy does not yet change existing permission behavior.
-- TUI activity renders shadow safety decisions as `Safety: Shadow ...` to avoid implying that v5 policy has taken over runtime enforcement.
-
-### 2026-05-02 Safety activity copy cleanup
-
-Shortened safety activity labels:
-
-- `allow_with_checkpoint` now renders as `Checkpoint`.
-- Shadow checkpoint decisions render as `Safety: Shadow Checkpoint`.
-
-### 2026-05-02 Phase 6 control-plane summary helper
-
-Added `AgentControlSummary` as a pure read model over replay events:
-
-- Summarizes current phase, phase reason, reasoning depth, plan progress, validation, blocked/completed state, and safety counts.
-- Provides a compact status line for future TUI/CLI rendering.
-- Remains read-only and does not change runtime behavior.
-
-### 2026-05-02 Footer control-plane status view model
-
-Added a footer-friendly read model for control-plane state:
-
-- `footerAgentControlStatusView()` converts `AgentControlSummary` into concise labels such as `Agent Plan · deep reasoning · plan 1/2`.
-- Blocked and completed states are prioritized so the footer can avoid ambiguous in-progress copy.
-- This is a pure view-model helper only; footer JSX wiring remains a follow-up.
+**What shadow mode does NOT do:** The existing `session/processor.ts` and `prompt.ts` control flow is unchanged. The control plane observes and emits events; it does not govern decisions or transitions.
 
 ---
 

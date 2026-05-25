@@ -1,10 +1,14 @@
 # PRD: Server Mode Hardening and Remote Operation Boundaries
 
 **Date:** 2026-05-04
-**Status:** Draft
+**Last reviewed:** 2026-05-25
+**Status:** Draft — policy decided via ADR-008; implementation phases not yet started
 **Scope:** Internal
-**Owner:** ax-code runtime
-**Related:** `.internal/adr/ADR-008-server-operation-mode-boundary.md`, `.internal/adr/ADR-007-headless-agent-runtime-boundary.md`, `.internal/adr/ADR-006-v5-agent-control-plane.md`, `SECURITY.md`, `docs/sdk-http-openapi.md`
+**Owner:** ax-code maintainers
+**Related:** ADR-008 (server operation mode boundaries — Accepted 2026-05-25; policy is decided), ADR-007 (headless runtime boundary), ADR-006 (v5 control plane), `SECURITY.md`, `docs/sdk-http-openapi.md`
+**Archive criteria:** Implementation Tracking phases 1–5 in ADR-008 all landed and verified.
+
+> **Note:** ADR-008 was accepted on 2026-05-25. The three-tier policy (Local API / Tunneled Remote / Managed Remote Control) is decided. This PRD translates that policy into phased implementation steps.
 
 ---
 
