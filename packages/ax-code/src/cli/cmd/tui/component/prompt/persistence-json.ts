@@ -1,11 +1,8 @@
+import { parseTuiJsonPayload } from "../../util/json"
 import z from "zod"
 
 export function parsePromptPersistenceJsonLine(line: string): unknown | undefined {
-  try {
-    return JSON.parse(line)
-  } catch {
-    return undefined
-  }
+  return parseTuiJsonPayload(line)
 }
 
 export function decodePromptPersistenceJsonLine<T>(line: string, schema: z.ZodType<T>): T | undefined {
