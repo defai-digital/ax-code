@@ -9,21 +9,22 @@ This directory owns the SDK and OpenAPI integration surfaces for AX Code. Use it
 
 ## Surfaces
 
-| Path                           | Role                                                                                                    |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------- |
-| [`js/`](js/README.md)          | First-party TypeScript and JavaScript SDK, including in-process `createAgent()` and HTTP client helpers |
-| [`openapi.json`](openapi.json) | OpenAPI snapshot for HTTP clients and generated cross-language integrations                             |
+| Path                           | Role                                                                                                                     |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
+| [`js/`](js/README.md)          | First-party TypeScript and JavaScript SDK, including in-process `createAgent()`, headless app helpers, and HTTP clients |
+| [`openapi.json`](openapi.json) | OpenAPI snapshot for HTTP clients and generated cross-language integrations                                              |
 
 The first-party package today is `@ax-code/sdk`. Other languages should integrate through `ax-code serve` and generated clients based on `openapi.json` until a language has an owner, tests, and a release workflow.
 
 ## Integration Choice
 
-| Need                                         | Recommended path                              |
-| -------------------------------------------- | --------------------------------------------- |
-| TypeScript or JavaScript in the same process | `js/README.md` and `createAgent()`            |
-| TypeScript or JavaScript over HTTP           | `@ax-code/sdk/http` with `ax-code serve`      |
-| Python, Go, Java, Rust, or another runtime   | Generate a client from `openapi.json`         |
-| Interactive developer workflow               | Root README, TUI, CLI, or VS Code integration |
+| Need                                             | Recommended path                                   |
+| ------------------------------------------------ | -------------------------------------------------- |
+| TypeScript or JavaScript in the same process     | `js/README.md` and `createAgent()`                 |
+| App UI with a local process-isolated AX backend  | `@ax-code/sdk/headless`                            |
+| TypeScript or JavaScript over raw HTTP           | `@ax-code/sdk/http` with `ax-code serve`           |
+| Python, Go, Java, Rust, or another runtime       | Generate a client from `openapi.json`              |
+| Interactive developer workflow                   | Root README, TUI, CLI, or VS Code integration      |
 
 Keep this page short. Detailed cross-language guidance belongs in `docs/sdk-http-openapi.md`; detailed TypeScript examples belong in `js/README.md`.
 

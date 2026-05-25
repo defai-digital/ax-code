@@ -188,4 +188,27 @@ describe("headless projection", () => {
 
     expect(state.session_goal.ses_1).toEqual({ objective: "finish all phases", status: "active" })
   })
+
+  test("tracks and clears session errors", () => {
+    const state = createHeadlessProjectionState<Session, Todo, Diff, Status, Message, Part>()
+
+    applyHeadlessProjectionEvent(state, {
+      type: "session.error",
+      properties: {
+        sessionID: "ses_1",
+        error: { message: "Provider failed" },
+      },
+    })
+
+    expect(state.session_error.ses_1).toEqual({ message: "Provider failed" })
+
+    applyHeadlessProjectionEvent(state, {
+      type: "session.deleted",
+      properties: {
+        info: { id: "ses_1" },
+      },
+    })
+
+    expect(state.session_error.ses_1).toBeUndefined()
+  })
 })

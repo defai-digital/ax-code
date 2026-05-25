@@ -8,16 +8,16 @@
  * ```ts
  * import {
  *   startHeadlessBackend,
+ *   createHeadlessClient,
  *   createHeadlessProjectionState,
  *   applyHeadlessProjectionEvent,
  * } from "@ax-code/sdk/headless"
- * import { createAxCodeClient } from "@ax-code/sdk/v2/client"
  *
  * const backend = await startHeadlessBackend({ directory: "/path/to/workspace" })
  * try {
- *   const client = createAxCodeClient({ baseUrl: backend.url, headers: backend.headers })
+ *   const client = createHeadlessClient({ baseUrl: backend.url, headers: backend.headers })
  *   const state = createHeadlessProjectionState()
- *   const session = await client.session.create({ title: "App session" })
+ *   const session = await client.createSession({ title: "App session" })
  *   // subscribe to events and apply to state...
  * } finally {
  *   await backend.close()
@@ -27,6 +27,14 @@
 
 export { startHeadlessBackend } from "./headless/lifecycle.js"
 export type { HeadlessBackendOptions, HeadlessBackendHandle } from "./headless/lifecycle.js"
+
+export { createHeadlessClient, parseHeadlessRuntimeJsonBody, parseHeadlessRuntimeResponseBody } from "./headless/client.js"
+export type {
+  HeadlessClient,
+  HeadlessClientOptions,
+  HeadlessCreateSessionInput,
+  HeadlessSubscribeOptions,
+} from "./headless/client.js"
 
 export {
   createHeadlessProjectionState,
@@ -39,7 +47,7 @@ export type {
   HeadlessProjectionApplyResult,
 } from "./headless/projection.js"
 
-export { HEADLESS_RUNTIME_EVENT_TYPES, isHeadlessRuntimeEvent } from "./headless/event.js"
+export { HEADLESS_RUNTIME_SCHEMA_VERSION, HEADLESS_RUNTIME_EVENT_TYPES, isHeadlessRuntimeEvent } from "./headless/event.js"
 export type {
   HeadlessRuntimeEvent,
   HeadlessSessionEvent,
