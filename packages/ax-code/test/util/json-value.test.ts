@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { parseJsonPayload } from "../../src/util/json-value"
+import { parseJsonPayload, parseJsonResult } from "../../src/util/json-value"
 
 describe("util.json-value", () => {
   test("parseJsonPayload parses valid JSON values", () => {
@@ -13,5 +13,16 @@ describe("util.json-value", () => {
     expect(parseJsonPayload("")).toBeUndefined()
     expect(parseJsonPayload("   \n")).toBeUndefined()
     expect(parseJsonPayload("{not json")).toBeUndefined()
+  })
+
+  test("parseJsonResult preserves parse errors for callers that report failures", () => {
+    expect(parseJsonResult(JSON.stringify({ type: "event" }))).toEqual({
+      ok: true,
+      value: { type: "event" },
+    })
+
+    const parsed = parseJsonResult("{not json")
+    expect(parsed.ok).toBe(false)
+    if (!parsed.ok) expect(parsed.error).toBeInstanceOf(SyntaxError)
   })
 })

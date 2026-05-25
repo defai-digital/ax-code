@@ -1,21 +1,10 @@
 import { isRecord } from "@/util/record"
+import { parseJsonResult, type JsonParseResult } from "@/util/json-value"
 
-export type AuditJsonLineResult =
-  | {
-      ok: true
-      value: unknown
-    }
-  | {
-      ok: false
-      error: unknown
-    }
+export type AuditJsonLineResult = JsonParseResult
 
 export function parseAuditJsonLineResult(line: string): AuditJsonLineResult {
-  try {
-    return { ok: true, value: JSON.parse(line) }
-  } catch (error) {
-    return { ok: false, error }
-  }
+  return parseJsonResult(line)
 }
 
 export function auditSessionIDFromRecord(value: unknown): string | undefined {

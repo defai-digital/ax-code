@@ -5,6 +5,7 @@ import { Log } from "../util/log"
 import { EventQuery } from "../replay/query"
 import { Snapshot } from "../snapshot"
 import { SessionSemanticCore } from "../session/semantic-core"
+import { parseJsonResult } from "../util/json-value"
 import type { SessionID } from "../session/schema"
 
 const log = Log.create({ service: "risk" })
@@ -88,13 +89,12 @@ export namespace Risk {
   }
 
   export function decodeSessionDiffJson(raw: string): SessionDiffJsonDecodeResult {
-    let parsed: unknown
-    try {
-      parsed = JSON.parse(raw)
-    } catch (err) {
-      return { success: false, error: err instanceof Error ? err.message : String(err) }
+    const parsed = parseJsonResult(raw)
+    if (!parsed.ok) {
+      const { error } = parsed
+      return { success: false, error: error instanceof Error ? error.message : String(error) }
     }
-    return decodeSessionDiffValue(parsed)
+    return decodeSessionDiffValue(parsed.value)
   }
 
   const SECURITY_PATTERNS = [
