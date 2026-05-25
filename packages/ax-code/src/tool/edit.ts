@@ -18,6 +18,7 @@ import { Isolation } from "@/isolation"
 import { BlastRadius } from "@/session/blast-radius"
 import { NativePerf } from "../perf/native"
 import { NativeAddon } from "../native/addon"
+import { parseNativeJson } from "../util/native-json"
 import { normalizeToWorkspacePath, resolveToolFilePath } from "./file-path"
 import {
   convertToLineEnding,
@@ -25,6 +26,16 @@ import {
   normalizeLineEndings,
   spliceNormalizedReplacement,
 } from "./edit-helpers"
+
+const NativeEditReplaceResult = z.object({
+  new_content: z.string(),
+})
+
+type NativeEditReplaceResult = z.infer<typeof NativeEditReplaceResult>
+
+export function parseNativeEditReplaceResult(json: string): NativeEditReplaceResult {
+  return parseNativeJson(json, NativeEditReplaceResult, "Native diff returned invalid result")
+}
 
 export const EditTool = Tool.define("edit", {
   description: DESCRIPTION,
@@ -712,9 +723,7 @@ export function replace(content: string, oldString: string, newString: string, r
         },
         () => native.editReplace(content, oldString, newString, replaceAll ?? false),
       )
-      const result = JSON.parse(json)
-      if (typeof result.new_content !== "string")
-        throw new Error("Native diff returned invalid result: new_content is not a string")
+      const result = parseNativeEditReplaceResult(json)
       return result.new_content
     } catch (e: any) {
       const message = e instanceof Error ? e.message : String(e)
