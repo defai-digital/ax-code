@@ -15,7 +15,7 @@ import { ProviderError } from "@/provider/error"
 import { iife } from "@/util/iife"
 import { Log } from "@/util/log"
 import { isRecord } from "@/util/record"
-import { parseJsonResult } from "@/util/json-value"
+import { parseJsonStrict } from "@/util/json-value"
 import type { SystemError } from "bun"
 import type { Provider } from "@/provider/provider"
 import { ModelID, ProviderID } from "@/provider/schema"
@@ -512,13 +512,7 @@ export namespace MessageV2 {
       return Cursor.parse(input)
     },
     decodeSerializedValue(input: string): unknown {
-      const parsed = parseJsonResult(Buffer.from(input, "base64url").toString("utf8"))
-      if (!parsed.ok) {
-        const { error } = parsed
-        if (error instanceof Error) throw error
-        throw new SyntaxError(String(error))
-      }
-      return parsed.value
+      return parseJsonStrict(Buffer.from(input, "base64url").toString("utf8"))
     },
     decode(input: string): Cursor {
       // Wrap the base64 → JSON → Zod chain in a single try/catch so
