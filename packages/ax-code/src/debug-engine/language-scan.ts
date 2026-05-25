@@ -13,6 +13,7 @@
  */
 
 import { spawn } from "child_process"
+import z from "zod"
 import { Instance } from "../project/instance"
 
 // ─── Shared types ──────────────────────────────────────────────────
@@ -84,29 +85,50 @@ function isMissingToolError(errorMsg: string): boolean {
 
 export type DetectClippyInput = DetectLanguageToolInput
 
-interface ClippyDiagnosticMessage {
-  message: string
-  code?: {
-    code: string
-    explanation?: string
-  }
-  level: string
-  spans: Array<{
-    file_name: string
-    line_start: number
-    line_end: number
-    column_start: number
-    column_end: number
-    is_primary: boolean
-    text: Array<{ text: string }>
-  }>
-}
+const ClippySpanSchema = z
+  .object({
+    file_name: z.string(),
+    line_start: z.number(),
+    line_end: z.number(),
+    column_start: z.number(),
+    column_end: z.number(),
+    is_primary: z.boolean(),
+  })
+  .passthrough()
 
-interface ClippyJsonMessage {
-  message?: ClippyDiagnosticMessage
-  spans?: ClippyDiagnosticMessage["spans"]
-  code?: ClippyDiagnosticMessage["code"]
-  level?: string
+const ClippyDiagnosticMessageSchema = z
+  .object({
+    message: z.string(),
+    code: z
+      .object({
+        code: z.string(),
+        explanation: z.string().nullable().optional(),
+      })
+      .optional(),
+    level: z.string().optional(),
+    spans: z.array(ClippySpanSchema),
+  })
+  .passthrough()
+
+const ClippyJsonMessageSchema = z.union([
+  z
+    .object({
+      message: ClippyDiagnosticMessageSchema,
+    })
+    .passthrough()
+    .transform((record) => record.message),
+  ClippyDiagnosticMessageSchema,
+])
+
+type ClippyDiagnosticMessage = z.infer<typeof ClippyDiagnosticMessageSchema>
+
+function parseClippyJsonLine(line: string): ClippyDiagnosticMessage | undefined {
+  try {
+    const decoded = ClippyJsonMessageSchema.safeParse(JSON.parse(line))
+    return decoded.success ? decoded.data : undefined
+  } catch {
+    return undefined
+  }
 }
 
 export async function detectClippy(input: DetectClippyInput = {}): Promise<LanguageScanResult> {
@@ -137,31 +159,26 @@ export function parseClippyOutput(output: string): ParsedLanguageScan {
 
   for (const line of output.split("\n")) {
     if (!line.trim()) continue
-    try {
-      const parsed = JSON.parse(line) as ClippyJsonMessage
-      const msg = parsed.message?.spans ? parsed.message : (parsed as unknown as ClippyDiagnosticMessage)
-      if (!msg.spans || msg.spans.length === 0) continue
+    const msg = parseClippyJsonLine(line)
+    if (!msg || msg.spans.length === 0) continue
 
-      const primarySpan = msg.spans.find((s) => s.is_primary) ?? msg.spans[0]
-      if (!primarySpan) continue
+    const primarySpan = msg.spans.find((s) => s.is_primary) ?? msg.spans[0]
+    if (!primarySpan) continue
 
-      filesScanned.add(primarySpan.file_name)
+    filesScanned.add(primarySpan.file_name)
 
-      findings.push({
-        file: primarySpan.file_name,
-        line: primarySpan.line_start,
-        endLine: primarySpan.line_end,
-        column: primarySpan.column_start,
-        endColumn: primarySpan.column_end,
-        code: msg.code?.code ?? "clippy",
-        message: msg.message,
-        severity: mapClippyLevel(msg.level ?? "info"),
-        language: "rust",
-        tool: "cargo-clippy",
-      })
-    } catch {
-      // Non-JSON lines (cargo progress, etc.) are not findings.
-    }
+    findings.push({
+      file: primarySpan.file_name,
+      line: primarySpan.line_start,
+      endLine: primarySpan.line_end,
+      column: primarySpan.column_start,
+      endColumn: primarySpan.column_end,
+      code: msg.code?.code ?? "clippy",
+      message: msg.message,
+      severity: mapClippyLevel(msg.level ?? "info"),
+      language: "rust",
+      tool: "cargo-clippy",
+    })
   }
 
   return { findings, filesScanned: filesScanned.size }
@@ -186,31 +203,35 @@ export function mapClippyLevel(level: string): LanguageFinding["severity"] {
 
 export type DetectRuffInput = DetectLanguageToolInput
 
-type RuffDiagnostic = {
-  code?: string | null
-  message: string
-  location: { row: number; column: number }
-  end_location?: { row: number; column: number }
-  filename: string
-  fix?: {
-    applicability: string
-    message: string
-    edits: Array<{
-      content: string
-      location: { row: number; column: number }
-      end_location: { row: number; column: number }
-    }>
-  }
-}
+const RuffLocationSchema = z
+  .object({
+    row: z.number(),
+    column: z.number(),
+  })
+  .passthrough()
 
-type RuffJsonOutput =
-  | RuffDiagnostic[]
-  | {
-      diagnostics?: RuffDiagnostic[]
-    }
+const RuffDiagnosticSchema = z
+  .object({
+    code: z.string().nullable().optional(),
+    message: z.string(),
+    location: RuffLocationSchema,
+    end_location: RuffLocationSchema.optional(),
+    filename: z.string(),
+  })
+  .passthrough()
 
-function ruffDiagnostics(json: RuffJsonOutput): RuffDiagnostic[] {
-  return Array.isArray(json) ? json : (json.diagnostics ?? [])
+type RuffDiagnostic = z.infer<typeof RuffDiagnosticSchema>
+
+function ruffDiagnostics(json: unknown): RuffDiagnostic[] {
+  const candidates = Array.isArray(json)
+    ? json
+    : json && typeof json === "object" && Array.isArray((json as { diagnostics?: unknown }).diagnostics)
+      ? (json as { diagnostics: unknown[] }).diagnostics
+      : []
+  return candidates.flatMap((candidate) => {
+    const decoded = RuffDiagnosticSchema.safeParse(candidate)
+    return decoded.success ? [decoded.data] : []
+  })
 }
 
 export async function detectRuff(input: DetectRuffInput = {}): Promise<LanguageScanResult> {
@@ -227,7 +248,7 @@ export async function detectRuff(input: DetectRuffInput = {}): Promise<LanguageS
 }
 
 export function parseRuffOutput(output: string): ParsedLanguageScan {
-  const json = JSON.parse(output) as RuffJsonOutput
+  const json = JSON.parse(output)
   const findings: LanguageFinding[] = []
   const filesScanned = new Set<string>()
 
@@ -268,18 +289,41 @@ export function mapRuffSeverity(code: string): LanguageFinding["severity"] {
 
 export type DetectMypyInput = DetectLanguageToolInput
 
-interface MypyJsonOutput {
-  files: Array<{
-    path: string
-    messages?: Array<{
-      severity: string
-      message: string
-      line?: number
-      column?: number
-      end_line?: number
-      end_column?: number
-    }>
-  }>
+const MypyMessageSchema = z
+  .object({
+    severity: z.string(),
+    message: z.string(),
+    line: z.number().optional(),
+    column: z.number().optional(),
+    end_line: z.number().optional(),
+    end_column: z.number().optional(),
+  })
+  .passthrough()
+
+const MypyFileSchema = z
+  .object({
+    path: z.string(),
+    messages: z.array(z.unknown()).optional(),
+  })
+  .passthrough()
+
+type MypyMessage = z.infer<typeof MypyMessageSchema>
+type MypyFile = z.infer<typeof MypyFileSchema>
+
+function mypyFiles(json: unknown): Array<MypyFile & { decodedMessages: MypyMessage[] }> {
+  const candidates =
+    json && typeof json === "object" && Array.isArray((json as { files?: unknown }).files)
+      ? (json as { files: unknown[] }).files
+      : []
+  return candidates.flatMap((candidate) => {
+    const file = MypyFileSchema.safeParse(candidate)
+    if (!file.success) return []
+    const decodedMessages = (file.data.messages ?? []).flatMap((message) => {
+      const decoded = MypyMessageSchema.safeParse(message)
+      return decoded.success ? [decoded.data] : []
+    })
+    return [{ ...file.data, decodedMessages }]
+  })
 }
 
 export async function detectMypy(input: DetectMypyInput = {}): Promise<LanguageScanResult> {
@@ -296,13 +340,13 @@ export async function detectMypy(input: DetectMypyInput = {}): Promise<LanguageS
 }
 
 export function parseMypyOutput(output: string): ParsedLanguageScan {
-  const json = JSON.parse(output) as MypyJsonOutput
+  const json = JSON.parse(output)
   const findings: LanguageFinding[] = []
   const filesScanned = new Set<string>()
 
-  for (const file of json.files ?? []) {
+  for (const file of mypyFiles(json)) {
     filesScanned.add(file.path)
-    for (const msg of file.messages ?? []) {
+    for (const msg of file.decodedMessages) {
       findings.push({
         file: file.path,
         line: msg.line ?? 1,
