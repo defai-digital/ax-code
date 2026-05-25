@@ -27,6 +27,7 @@ import { ProjectID } from "../project/schema"
 import { SessionID, MessageID, PartID } from "./schema"
 
 import type { Provider } from "@/provider/provider"
+import { providerModelKey } from "@/provider/model-key"
 import { ModelID, ProviderID } from "@/provider/schema"
 import { usageSource } from "@/provider/usage"
 import { Permission } from "@/permission"
@@ -1038,7 +1039,7 @@ export namespace Session {
       await SessionPrompt.command({
         sessionID: input.sessionID,
         messageID: input.messageID,
-        model: input.providerID + "/" + input.modelID,
+        model: providerModelKey(input),
         command: Command.Default.INIT,
         arguments: "",
       })

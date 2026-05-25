@@ -1,4 +1,5 @@
 import { Installation } from "@/installation"
+import { providerModelKey } from "@/provider/model-key"
 import { Provider } from "@/provider/provider"
 import { Log } from "@/util/log"
 import {
@@ -581,7 +582,7 @@ export namespace LLM {
   }
 
   function superLongPacingKey(input: Pick<Parameters<typeof applySuperLongPacing>[0], "providerID" | "modelID">) {
-    return `${input.providerID}/${input.modelID}`
+    return providerModelKey(input)
   }
 
   function isSuperLongDurablePacingDisabled() {
