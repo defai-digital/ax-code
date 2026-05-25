@@ -205,10 +205,13 @@ async function autoDetectAuth(): Promise<void> {
 // STREAM HANDLE (Enhancement #2)
 // ============================================================
 
-function createStreamHandle(source: AsyncIterable<StreamEvent>): StreamHandle {
+type StreamHandleCleanup = (() => Promise<void> | void) | undefined
+
+function createStreamHandle(source: AsyncIterable<StreamEvent>, onInterrupted?: StreamHandleCleanup): StreamHandle {
   const listeners: Record<string, Function[]> = {}
   let cachedResult: RunResult | undefined
   let iteratorStarted = false
+  let completed = false
   let resolveCompletion: (() => void) | undefined
   const streamLog = Log.create({ service: "sdk.stream" })
   const completionPromise = new Promise<void>((r) => {
@@ -248,6 +251,7 @@ function createStreamHandle(source: AsyncIterable<StreamEvent>): StreamHandle {
         }
         if (event.type === "done") {
           cachedResult = event.result
+          completed = true
           emit("done", (cb) => cb(event.result))
           yield event
           return
@@ -255,6 +259,13 @@ function createStreamHandle(source: AsyncIterable<StreamEvent>): StreamHandle {
         yield event
       }
     } finally {
+      if (!completed && onInterrupted) {
+        try {
+          await onInterrupted()
+        } catch (error) {
+          streamLog.error("sdk stream interrupted cleanup failed", { error })
+        }
+      }
       resolveCompletion?.()
     }
   }
@@ -810,7 +821,9 @@ function createSessionHandle(
           await closeEvents(events)
         }
       })()
-      return createStreamHandle(rawStream)
+      return createStreamHandle(rawStream, async () => {
+        await sdk.session.abort({ sessionID }).catch(() => {})
+      })
     },
 
     async messages() {
@@ -968,8 +981,15 @@ export async function createAgent(options?: AgentOptions): Promise<Agent> {
     async run(message: string, runOptions?: RunOptions): Promise<RunResult> {
       if (disposed) throw new DisposedError()
       let sessionID: string | undefined
+      let timedOut = false
       const exec = async () => {
         sessionID = await createTrackedSession("create")
+        if (timedOut) {
+          activeSessions.delete(sessionID)
+          void sdk.session.abort({ sessionID }).catch(() => {})
+          sessionID = undefined
+          throw new TimeoutError(runOptions?.timeout ?? 0, "agent.run")
+        }
         try {
           return await createSessionHandle(sdk, sessionID, opts, () => disposed, lifecycle).run(message, runOptions)
         } finally {
@@ -984,7 +1004,12 @@ export async function createAgent(options?: AgentOptions): Promise<Agent> {
           timeoutMs,
           () => new TimeoutError(timeoutMs, "agent.run"),
           () => {
-            if (sessionID) void sdk.session.abort({ sessionID }).catch(() => {})
+            const timedOutSession = sessionID
+            timedOut = true
+            if (!timedOutSession) return
+            activeSessions.delete(timedOutSession)
+            sessionID = undefined
+            void sdk.session.abort({ sessionID: timedOutSession }).catch(() => {})
           },
         )
       }
@@ -993,16 +1018,22 @@ export async function createAgent(options?: AgentOptions): Promise<Agent> {
 
     stream(message: string, runOptions?: RunOptions): StreamHandle {
       if (disposed) throw new DisposedError()
+      let sessionID: string | undefined
+      const releaseSession = () => {
+        if (!sessionID) return
+        activeSessions.delete(sessionID)
+        sessionID = undefined
+      }
+      const abortSession = async () => {
+        const streamSessionID = sessionID
+        if (!streamSessionID) return
+        releaseSession()
+        await sdk.session.abort({ sessionID: streamSessionID }).catch(() => {})
+      }
       const rawIterable: AsyncIterable<StreamEvent> = {
         [Symbol.asyncIterator]() {
           let gen: AsyncIterator<StreamEvent> | undefined
           let started = false
-          let sessionID: string | undefined
-          const releaseSession = () => {
-            if (!sessionID) return
-            activeSessions.delete(sessionID)
-            sessionID = undefined
-          }
           return {
             async next() {
               if (!started) {
@@ -1017,28 +1048,35 @@ export async function createAgent(options?: AgentOptions): Promise<Agent> {
                   throw error
                 }
               }
-              const result = await gen!.next()
-              if (result.done) releaseSession()
-              return result
+              try {
+                const result = await gen!.next()
+                if (result.done) releaseSession()
+                return result
+              } catch (error) {
+                await abortSession()
+                throw error
+              }
             },
             async return(v?: unknown) {
               try {
                 return (await gen?.return?.(v)) ?? { done: true as const, value: undefined }
               } finally {
-                releaseSession()
+                await abortSession()
               }
             },
             async throw(e?: unknown) {
               try {
                 return (await gen?.throw?.(e)) ?? { done: true as const, value: undefined }
               } finally {
-                releaseSession()
+                await abortSession()
               }
             },
           }
         },
       }
-      return createStreamHandle(rawIterable)
+      return createStreamHandle(rawIterable, () => {
+        void abortSession()
+      })
     },
 
     async session(): Promise<SessionHandle> {

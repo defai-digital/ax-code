@@ -1,6 +1,7 @@
 import { type ChildProcess } from "child_process"
 import launch from "cross-spawn"
 import { buffer } from "node:stream/consumers"
+import { Shell } from "../shell/shell"
 import { toErrorMessage } from "./error-message"
 
 export namespace Process {
@@ -15,6 +16,7 @@ export namespace Process {
     stderr?: Stdio
     shell?: Shell
     abort?: AbortSignal
+    detached?: boolean
     kill?: NodeJS.Signals | number
     timeout?: number
   }
@@ -56,6 +58,33 @@ export namespace Process {
 
   export type Child = ChildProcess & { exited: Promise<number> }
 
+  type KillableProcess = {
+    pid?: number
+    kill: (signal?: NodeJS.Signals | number) => boolean | void
+    exitCode?: number | null
+    signalCode?: NodeJS.Signals | number | null
+  }
+
+  export async function killProcessTree(
+    proc: KillableProcess,
+    options?: { signal?: NodeJS.Signals | number },
+  ): Promise<void> {
+    if (!proc.pid) return
+    const signal = options?.signal
+    const exited = () =>
+      (proc.exitCode !== undefined && proc.exitCode !== null) ||
+      (proc.signalCode !== undefined && proc.signalCode !== null)
+    await Shell.killTree(
+      {
+        pid: proc.pid,
+        kill: (killSignal?: NodeJS.Signals | number) => {
+          return proc.kill(killSignal)
+        },
+      },
+      { exited, signal },
+    )
+  }
+
   export function spawn(cmd: string[], opts: Options = {}): Child {
     if (cmd.length === 0) throw new Error("Command is required")
     opts.abort?.throwIfAborted()
@@ -64,34 +93,52 @@ export namespace Process {
       cwd: opts.cwd,
       shell: opts.shell,
       env: opts.env === null ? {} : (opts.env ?? undefined),
+      detached: opts.detached,
       stdio: [opts.stdin ?? "ignore", opts.stdout ?? "ignore", opts.stderr ?? "ignore"],
       windowsHide: process.platform === "win32",
     })
 
     let closed = false
-    let timer: ReturnType<typeof setTimeout> | undefined
+    let forceKillTimer: ReturnType<typeof setTimeout> | undefined
+    let timeoutTimer: ReturnType<typeof setTimeout> | undefined
+    let timedOut = false
 
-    const abort = () => {
+    const terminate = (graceful = true) => {
       if (closed) return
       if (proc.exitCode !== null || proc.signalCode !== null) return
       closed = true
+      if (timeoutTimer) clearTimeout(timeoutTimer)
+      if (!graceful) timedOut = true
+      // Abort and timeout semantics diverge:
+      // - graceful (abort): prefer full-tree termination so we don't leave subprocesses behind,
+      //   with a short hard-kill fallback handled inside killProcessTree.
+      // - non-graceful (timeout): keep existing timed escalation behavior.
+      if (graceful) {
+        void killProcessTree(proc, { signal: opts.kill }).catch(() => undefined)
+        return
+      }
 
-      proc.kill(opts.kill ?? "SIGTERM")
-
+      const signal = opts.kill ?? "SIGTERM"
+      proc.kill(signal)
       const ms = opts.timeout ?? 5_000
       if (ms <= 0) return
-      timer = setTimeout(() => proc.kill("SIGKILL"), ms)
+      forceKillTimer = setTimeout(() => {
+        void killProcessTree(proc, { signal: opts.kill }).catch(() => undefined)
+      }, ms)
     }
 
     const exited = new Promise<number>((resolve, reject) => {
       const done = () => {
-        opts.abort?.removeEventListener("abort", abort)
-        if (timer) clearTimeout(timer)
+        if (opts.abort && onAbort) {
+          opts.abort.removeEventListener("abort", onAbort)
+        }
+        if (forceKillTimer) clearTimeout(forceKillTimer)
+        if (timeoutTimer) clearTimeout(timeoutTimer)
       }
 
       proc.once("exit", (code, signal) => {
         done()
-        resolve(code ?? (signal ? 1 : 0))
+        resolve(timedOut ? 124 : code ?? (signal ? 1 : 0))
       })
 
       proc.once("error", (error) => {
@@ -101,9 +148,14 @@ export namespace Process {
     })
     void exited.catch(() => undefined)
 
+    const onAbort = () => terminate(true)
     if (opts.abort) {
-      opts.abort.addEventListener("abort", abort, { once: true })
-      if (opts.abort.aborted) abort()
+      opts.abort.addEventListener("abort", onAbort, { once: true })
+      if (opts.abort.aborted) terminate(true)
+    }
+
+    if (opts.timeout !== undefined) {
+      timeoutTimer = setTimeout(() => terminate(false), opts.timeout)
     }
 
     const child = proc as Child
@@ -145,17 +197,7 @@ export namespace Process {
   }
 
   export async function stop(proc: ChildProcess) {
-    if (process.platform !== "win32" || !proc.pid) {
-      proc.kill()
-      return
-    }
-
-    const out = await run(["taskkill", "/pid", String(proc.pid), "/T", "/F"], {
-      nothrow: true,
-    })
-
-    if (out.code === 0) return
-    proc.kill()
+    await killProcessTree(proc)
   }
 
   export async function text(cmd: string[], opts: RunOptions = {}): Promise<TextResult> {

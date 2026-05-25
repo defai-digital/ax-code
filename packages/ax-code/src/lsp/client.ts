@@ -7,7 +7,7 @@ import { createMessageConnection, StreamMessageReader, StreamMessageWriter } fro
 import type { Diagnostic as VSCodeDiagnostic } from "vscode-languageserver-types"
 import { diffLines } from "diff"
 import { Log } from "../util/log"
-import { Process } from "../util/process"
+import { Shell } from "../shell/shell"
 import { LANGUAGE_EXTENSIONS } from "./language"
 import z from "zod"
 import type { LSPServer } from "./server"
@@ -673,10 +673,10 @@ export namespace LSPClient {
         l.info("shutting down")
         closing = true
         // Wrap end() and dispose() so a broken-stream throw from
-        // either one cannot prevent us from reaching Process.stop().
+        // either one cannot prevent us from reaching process kill.
         // Without this, a crashed LSP server leaves its child process
         // as an orphan because connection.end() throws before the
-        // kill runs.
+        // final kill step runs.
         try {
           connection.end()
         } catch (err) {
@@ -687,7 +687,11 @@ export namespace LSPClient {
         } catch (err) {
           l.warn("connection.dispose threw during shutdown", { err })
         }
-        await Process.stop(input.server.process)
+        await Shell.killTree(input.server.process, {
+          exited: () => input.server.process.exitCode !== null || input.server.process.signalCode !== null,
+        }).catch((error) => {
+          l.warn("lsp shutdown kill failed", { error })
+        })
         l.info("shutdown")
       },
     }

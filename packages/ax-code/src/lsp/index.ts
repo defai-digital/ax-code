@@ -1,13 +1,14 @@
 import { BusEvent } from "@/bus/bus-event"
 import { Bus } from "@/bus"
 import { Log } from "../util/log"
+import { Shell } from "../shell/shell"
 import { LSPClient } from "./client"
 import path from "path"
 import { LSPServer } from "./server"
 import z from "zod"
+import type { ChildProcessWithoutNullStreams } from "child_process"
 import { Config } from "../config/config"
 import { Instance } from "../project/instance"
-import { Process } from "../util/process"
 import { Ripgrep } from "../file/ripgrep"
 import { LspScheduler } from "./scheduler"
 import * as LSPSelection from "./selection"
@@ -47,6 +48,15 @@ export namespace LSP {
   // responsive enough for interactive use without generating log noise.
   const HEALTH_CHECK_INTERVAL_MS = 60_000
   const MAX_ROOT_CACHE_ENTRIES = 2_000
+
+  const hasProcessExited = (proc: ChildProcessWithoutNullStreams) =>
+    proc.exitCode !== null || proc.signalCode !== null
+
+  async function stopLSPProcess(proc: ChildProcessWithoutNullStreams) {
+    await Shell.killTree(proc, {
+      exited: () => hasProcessExited(proc),
+    })
+  }
 
   function clientKey(root: string, serverID: string) {
     return `${root}\0${serverID}`
@@ -130,7 +140,7 @@ export namespace LSP {
           const idx = s.clients.indexOf(client)
           if (idx >= 0) s.clients.splice(idx, 1)
           // Best-effort shutdown to release the connection objects. The
-          // process is already gone so Process.stop is a no-op.
+          // process is already gone so server stop is a no-op.
           client.shutdown().catch(() => {})
         }
         Bus.publishDetached(Event.Updated, {})
@@ -249,7 +259,7 @@ export namespace LSP {
           LSPBrokenServer.markBroken(s.broken, key)
           const idx = s.clients.findIndex((item) => item.root === root && item.serverID === server.id)
           if (idx >= 0) s.clients.splice(idx, 1)
-          void Process.stop(handle.process).catch(() => {})
+          void stopLSPProcess(handle.process).catch(() => {})
           Bus.publishDetached(Event.Updated, {})
         },
       })
@@ -257,7 +267,7 @@ export namespace LSP {
     } catch (err) {
       LSPPerf.finishPhase("client.initialize", initializeStarted, false)
       LSPBrokenServer.markBroken(s.broken, key)
-      await Process.stop(handle.process)
+      await stopLSPProcess(handle.process)
       log.error(`Failed to initialize LSP client ${server.id}`, { error: err })
       return undefined
     }
@@ -268,14 +278,14 @@ export namespace LSP {
 
     const existing = s.clients.find((x) => x.root === root && x.serverID === server.id)
     if (existing) {
-      await Process.stop(handle.process)
+      await stopLSPProcess(handle.process)
       return existing
     }
 
     if (client.closed || !client.ping()) {
       log.warn("lsp client died during spawn, skipping active registration", { serverID: server.id, root })
       LSPBrokenServer.markBroken(s.broken, key)
-      await Process.stop(handle.process)
+      await stopLSPProcess(handle.process)
       return undefined
     }
 

@@ -48,7 +48,9 @@ test("programmatic agent stream does not mark initialization started before it s
   expect(markStarted).toBeGreaterThan(createIterator)
   expect(block).toContain("} catch (error) {")
   expect(block).toContain("releaseSession()")
-  expect(block.indexOf("releaseSession()")).toBeGreaterThan(block.indexOf("} catch (error) {"))
+  expect(block.indexOf("releaseSession()", block.indexOf("} catch (error) {"))).toBeGreaterThan(
+    block.indexOf("} catch (error) {"),
+  )
 })
 
 test("programmatic agent run aborts the session on outer timeout", async () => {
@@ -62,5 +64,22 @@ test("programmatic agent run aborts the session on outer timeout", async () => {
   expect(block).toContain("let sessionID: string | undefined")
   expect(block).toContain('sessionID = await createTrackedSession("create")')
   expect(block).toContain("sessionID = undefined")
-  expect(block).toContain("if (sessionID) void sdk.session.abort({ sessionID }).catch(() => {})")
+  expect(block).toContain("const timedOutSession = sessionID")
+  expect(block).toContain("void sdk.session.abort({ sessionID: timedOutSession }).catch(() => {})")
+})
+
+test("programmatic agent run timed out session guard handles races before and after create", async () => {
+  const src = await Bun.file(path.join(import.meta.dir, "../../src/sdk/programmatic.ts")).text()
+  const start = src.indexOf("async run(message: string, runOptions?: RunOptions): Promise<RunResult>")
+  const end = src.indexOf("stream(message: string, runOptions?: RunOptions): StreamHandle", start)
+  expect(start).toBeGreaterThan(-1)
+  expect(end).toBeGreaterThan(start)
+  const block = src.slice(start, end)
+
+  expect(block).toContain("let timedOut = false")
+  expect(block).toContain("if (timedOut) {")
+  expect(block).toContain("const timedOutSession = sessionID")
+  expect(block).toContain("timedOut = true")
+  expect(block).toContain("activeSessions.delete(timedOutSession)")
+  expect(block).toContain("void sdk.session.abort({ sessionID: timedOutSession }).catch(() => {})")
 })
