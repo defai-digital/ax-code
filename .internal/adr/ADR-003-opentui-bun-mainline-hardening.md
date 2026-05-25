@@ -2,7 +2,7 @@
 
 **Status:** Accepted
 **Date:** 2026-04-26
-**Deciders:** (to be filled by team)
+**Deciders:** ax-code maintainers
 **Supersedes:** ADR-001 rendering decision
 **Related:** ADR-002 source + bun distribution
 

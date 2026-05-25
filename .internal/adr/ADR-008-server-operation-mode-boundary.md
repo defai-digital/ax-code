@@ -2,11 +2,11 @@
 
 ## Status
 
-Proposed
+Accepted
 
 ## Date
 
-2026-05-04
+2026-05-04; Accepted 2026-05-25
 
 ## Deciders
 
@@ -105,16 +105,18 @@ For non-JavaScript integrations, the recommended path remains OpenAPI over HTTP,
 - Stronger remote hardening will require auth, workspace, permission, and audit changes across multiple surfaces.
 - Generated client examples must avoid implying that raw public network exposure is safe.
 
-## Required Follow-Up
+## Implementation Tracking
 
-Implement the PRD in phases:
+Policy is decided. The following implementation phases remain pending:
 
-1. Clarify docs, warnings, and command output for local vs network operation.
-2. Add explicit non-loopback opt-in semantics beyond merely setting a password.
-3. Add workspace allowlist/pinning for network-accessible server mode.
-4. Improve auth from global password toward scoped tokens.
-5. Recommend or enforce safer sandbox defaults for network-accessible mode.
-6. Keep managed remote control work separate under the Agent Control Plane / AX Trust boundary.
+| Phase | Task | Status |
+|-------|------|--------|
+| 1 | Clarify docs, warnings, and command output for local vs network operation | Pending |
+| 2 | Add explicit non-loopback opt-in semantics beyond merely setting a password | Pending |
+| 3 | Add workspace allowlist/pinning for network-accessible server mode | Pending |
+| 4 | Improve auth from global password toward scoped tokens | Pending |
+| 5 | Recommend or enforce safer sandbox defaults for network-accessible mode | Pending |
+| 6 | Keep managed remote control work separate under the Agent Control Plane / AX Trust boundary | Pending; depends on ADR-006 v5 control plane |
 
 ## Non-Decisions
 

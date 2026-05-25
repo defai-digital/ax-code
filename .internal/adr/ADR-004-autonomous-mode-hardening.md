@@ -2,7 +2,7 @@
 
 **Status:** Accepted
 **Date:** 2026-04-26
-**Deciders:** (to be filled by team)
+**Deciders:** ax-code maintainers
 **Related:** ADR-003 OpenTUI + Bun mainline hardening
 
 ---
@@ -86,6 +86,16 @@ P1 (follow-up slice):
 6. `quality/critic.ts` phase-boundary diff review with `VerificationEnvelope` integration.
 
 P2 (deferred, separate PRD): worktree-isolated parallel sub-agents, automatic re-planning on critic findings, long-horizon (multi-hour) sessions.
+
+## Design Tension: Hardening vs. Autonomous-First Principle
+
+Autonomous mode is a core product value: the session should make progress without requiring the user to approve every step. The features in this ADR (confidence escalation, hybrid permission, critic pass) add gates that can interrupt autonomous flow. This tension is intentional and resolved as follows:
+
+- **Confidence escalation** is an enhancement, not a weakening. Without it, the session loops to its step cap on ambiguous requests and produces conflicting code. Escalation breaks the loop early and asks exactly one question — which gets the session unblocked faster. The opt-out flag (`experimental.autonomous_escalate_low_confidence: false`) restores the old unconditional behavior for unattended pipelines.
+- **Hybrid permission** is a refinement of "fully autonomous" to "autonomous for safe operations, configured for risky ones." Read operations (read, glob, grep, list) remain fully auto-approved. Write operations follow the configured ruleset. This is a narrower trust contract, not a broader one.
+- **Critic pass and blast-radius caps** are opt-in. They do not change the default experience.
+
+Any future change that weakens autonomous behavior (new default-off flags, additional confirmation prompts, MCP→risk reclassification) requires explicit justification in the PR and a follow-up update to this ADR.
 
 ## References
 
