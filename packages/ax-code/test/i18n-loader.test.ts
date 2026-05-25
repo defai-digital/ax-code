@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { parseTranslationsText, t } from "../src/i18n/loader"
+import { decodeTranslationsValue, parseTranslationsText, t } from "../src/i18n/loader"
 
 const validTranslations = {
   session: {
@@ -52,8 +52,21 @@ describe("i18n loader decoding", () => {
     expect(parseTranslationsText(JSON.stringify(validTranslations)).errors.apiError).toBe("API error")
   })
 
+  test("decodes valid translation objects", () => {
+    expect(decodeTranslationsValue(validTranslations).session.welcome).toBe("Welcome")
+  })
+
   test("rejects malformed or incomplete translation JSON", () => {
     expect(() => parseTranslationsText("{not json")).toThrow(/invalid JSON/)
+    expect(() =>
+      decodeTranslationsValue({
+        ...validTranslations,
+        errors: {
+          ...validTranslations.errors,
+          apiError: 500,
+        },
+      }),
+    ).toThrow(/errors\.apiError/)
     expect(() =>
       parseTranslationsText(
         JSON.stringify({
