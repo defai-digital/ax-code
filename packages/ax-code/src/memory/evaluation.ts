@@ -72,6 +72,10 @@ export function parseMemoryEvaluationFileText(text: string): MemoryEvaluationFil
     throw new Error("memory evaluation: invalid cases JSON", { cause: error })
   }
 
+  return decodeMemoryEvaluationFileValue(value)
+}
+
+export function decodeMemoryEvaluationFileValue(value: unknown): MemoryEvaluationFile {
   const parsed = EvaluationFileSchema.safeParse(value)
   if (!parsed.success) {
     throw new Error(`memory evaluation: invalid cases schema (${parsed.error.message})`, { cause: parsed.error })

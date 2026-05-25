@@ -1,10 +1,17 @@
 import { describe, expect, test } from "bun:test"
 import path from "path"
 import { tmpdir } from "../fixture/fixture"
-import { evaluate, parseMemoryEvaluationFileText } from "../../src/memory/evaluation"
+import { decodeMemoryEvaluationFileValue, evaluate, parseMemoryEvaluationFileText } from "../../src/memory/evaluation"
 import { recordEntry } from "../../src/memory/recorder"
 
 describe("memory.evaluation", () => {
+  test("decodeMemoryEvaluationFileValue decodes already-parsed cases files", () => {
+    expect(decodeMemoryEvaluationFileValue({ cases: [{ expected: ["rule"] }] })).toEqual({
+      cases: [{ expected: ["rule"] }],
+    })
+    expect(() => decodeMemoryEvaluationFileValue({ cases: [] })).toThrow(/invalid cases schema/)
+  })
+
   test("parseMemoryEvaluationFileText decodes valid cases JSON", () => {
     expect(parseMemoryEvaluationFileText(JSON.stringify({ cases: [{ expected: ["rule"] }] }))).toEqual({
       cases: [{ expected: ["rule"] }],
