@@ -1009,6 +1009,25 @@ export namespace QualityModelRegistry {
     }
   }
 
+  function boardDecisionRecordSummary(
+    boardDecision: QualityPromotionBoardDecision.DecisionArtifact,
+  ): NonNullable<PromotionRecord["boardDecision"]> {
+    return {
+      decisionID: boardDecision.decisionID,
+      decidedAt: boardDecision.decidedAt,
+      decider: boardDecision.decider,
+      role: boardDecision.role,
+      team: boardDecision.team ?? null,
+      reportingChain: boardDecision.reportingChain ?? null,
+      disposition: boardDecision.disposition,
+      overrideAccepted: boardDecision.overrideAccepted,
+      dossierID: boardDecision.reviewDossier.dossierID,
+      recommendation: boardDecision.summary.recommendation,
+      requiredOverride: boardDecision.summary.requiredOverride,
+      overallStatus: boardDecision.summary.overallStatus,
+    }
+  }
+
   function buildReleasePacketPromotionSnapshot(input: {
     releasePacket: QualityPromotionReleasePacket.PacketArtifact
     promotionMetadata: PromotionMetadata
@@ -1026,20 +1045,7 @@ export namespace QualityModelRegistry {
       previousActiveSource: input.previousActiveSource,
       decision: input.decision,
       decisionBundleCreatedAt: submissionBundle.decisionBundle.createdAt,
-      boardDecision: {
-        decisionID: boardDecision.decisionID,
-        decidedAt: boardDecision.decidedAt,
-        decider: boardDecision.decider,
-        role: boardDecision.role,
-        team: boardDecision.team ?? null,
-        reportingChain: boardDecision.reportingChain ?? null,
-        disposition: boardDecision.disposition,
-        overrideAccepted: boardDecision.overrideAccepted,
-        dossierID: reviewDossier.dossierID,
-        recommendation: boardDecision.summary.recommendation,
-        requiredOverride: boardDecision.summary.requiredOverride,
-        overallStatus: boardDecision.summary.overallStatus,
-      },
+      boardDecision: boardDecisionRecordSummary(boardDecision),
       releaseDecisionRecord: {
         recordID: input.releasePacket.releaseDecisionRecord.recordID,
         recordedAt: input.releasePacket.releaseDecisionRecord.recordedAt,
@@ -1993,20 +1999,7 @@ export namespace QualityModelRegistry {
     })
     const record = PromotionRecord.parse({
       ...result.record,
-      boardDecision: {
-        decisionID: boardDecision.decisionID,
-        decidedAt: boardDecision.decidedAt,
-        decider: boardDecision.decider,
-        role: boardDecision.role,
-        team: boardDecision.team ?? null,
-        reportingChain: boardDecision.reportingChain ?? null,
-        disposition: boardDecision.disposition,
-        overrideAccepted: boardDecision.overrideAccepted,
-        dossierID: boardDecision.reviewDossier.dossierID,
-        recommendation: boardDecision.summary.recommendation,
-        requiredOverride: boardDecision.summary.requiredOverride,
-        overallStatus: boardDecision.summary.overallStatus,
-      },
+      boardDecision: boardDecisionRecordSummary(boardDecision),
     })
     await writePromotionRecord(record)
     return {
