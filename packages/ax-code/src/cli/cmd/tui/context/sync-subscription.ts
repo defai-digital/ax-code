@@ -4,6 +4,7 @@ import {
   type SyncEventStoreState,
 } from "./sync-store-event"
 import type { SyncEvent } from "./sync-event"
+import { toErrorMessage } from "@/util/error-message"
 
 interface SyncEventEnvelope<TDetails = unknown> {
   details: TDetails
@@ -129,7 +130,7 @@ export function subscribeStoreBackedSyncEvents<
     } catch (error) {
       input.onHandlerError({
         type: eventType(envelope.details),
-        error: error instanceof Error ? error.message : String(error),
+        error: toErrorMessage(error),
       })
     }
   })

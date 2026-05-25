@@ -28,6 +28,7 @@ import { MessageID, PartID } from "../../../session/schema"
 import { Provider } from "../../../provider/provider"
 import { Bus } from "../../../bus"
 import { MessageV2 } from "../../../session/message-v2"
+import { toErrorMessage } from "../../../util/error-message"
 import { SessionPrompt } from "@/session/prompt"
 import { Flag } from "@/flag/flag"
 import { setTimeout as sleep } from "node:timers/promises"
@@ -558,7 +559,7 @@ export const GithubRunCommand = cmd({
         }
       } catch (e: unknown) {
         exitCode = 1
-        console.error(e instanceof Error ? e.message : String(e))
+        console.error(toErrorMessage(e))
         let msg: string
         if (e instanceof Process.RunFailedError) {
           msg = e.stderr.toString()
@@ -1347,7 +1348,7 @@ query($owner: String!, $repo: String!, $number: Int!) {
             },
           )
         } catch (err) {
-          throw new Error(`Failed to fetch issue #${issueId}: ${err instanceof Error ? err.message : String(err)}`, {
+          throw new Error(`Failed to fetch issue #${issueId}: ${toErrorMessage(err)}`, {
             cause: err,
           })
         }
@@ -1482,7 +1483,7 @@ query($owner: String!, $repo: String!, $number: Int!) {
             },
           )
         } catch (err) {
-          throw new Error(`Failed to fetch PR #${issueId}: ${err instanceof Error ? err.message : String(err)}`, {
+          throw new Error(`Failed to fetch PR #${issueId}: ${toErrorMessage(err)}`, {
             cause: err,
           })
         }

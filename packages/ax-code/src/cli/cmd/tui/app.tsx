@@ -1123,13 +1123,13 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
         duration: 30000,
       })
 
-      const result = await sdk.client.global.upgrade({ target: version })
+        const result = await sdk.client.global.upgrade({ target: version })
       if (updateHandlerDisposed) return
 
       if (result.error || !result.data?.success) {
         const reason =
           (result.data as { success: false; error: string } | undefined)?.error ||
-          (result.error instanceof Error ? result.error.message : String(result.error ?? "")) ||
+          unknownErrorMessage(result.error) ||
           "Update failed"
         toast.show({
           variant: "error",

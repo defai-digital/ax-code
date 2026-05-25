@@ -17,6 +17,7 @@ import path from "node:path"
 import { tmpdir } from "node:os"
 import { runResilientStream, type StreamConnectionStatus } from "./util/resilient-stream"
 import { registerShutdownSignals } from "@/util/signals"
+import { toErrorMessage } from "@/util/error-message"
 
 type GlobalEvent = {
   directory?: string
@@ -54,7 +55,7 @@ process.on("unhandledRejection", (e) => {
   DiagnosticLog.recordProcess("worker.unhandledRejection", { error: e })
   const error = e as Error
   Log.Default.error("rejection", {
-    message: error instanceof Error ? error.message : String(error),
+    message: toErrorMessage(error),
     stack: error instanceof Error ? error.stack : undefined,
     code: error instanceof Error && "code" in error ? (error as NodeJS.ErrnoException).code : undefined,
   })
@@ -64,7 +65,7 @@ process.on("uncaughtException", (e) => {
   DiagnosticLog.recordProcess("worker.uncaughtException", { error: e })
   const error = e as Error
   Log.Default.error("exception", {
-    message: error instanceof Error ? error.message : String(error),
+    message: toErrorMessage(error),
     stack: error instanceof Error ? error.stack : undefined,
     code: error instanceof Error && "code" in error ? (error as NodeJS.ErrnoException).code : undefined,
   })

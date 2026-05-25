@@ -3,6 +3,7 @@ import type { CliRendererConfig } from "@opentui/core"
 import { Clipboard } from "@tui/util/clipboard"
 import { Log } from "@/util/log"
 import { Flag } from "@/flag/flag"
+import { toErrorMessage } from "@/util/error-message"
 import { disableTuiMouseTracking, flushTuiStdout } from "./terminal-cleanup"
 
 const log = Log.create({ service: "tui.renderer" })
@@ -130,7 +131,7 @@ export async function destroyTuiRenderer(
     clearTuiTerminalTitle(renderer, profile)
   } catch (err) {
     log.warn("failed to clear terminal title during teardown", {
-      error: err instanceof Error ? err.message : String(err),
+      error: toErrorMessage(err),
     })
   }
   try {
@@ -142,7 +143,7 @@ export async function destroyTuiRenderer(
     // started but unobserved. Run cleanup regardless, then rethrow.
     destroyError = err
     log.warn("renderer.destroy() failed during teardown", {
-      error: err instanceof Error ? err.message : String(err),
+      error: toErrorMessage(err),
     })
   }
   disableTuiMouseTracking()

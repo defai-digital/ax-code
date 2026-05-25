@@ -8,6 +8,7 @@ import path from "path"
 import os from "os"
 import { Filesystem } from "../../util/filesystem"
 import { Process } from "../../util/process"
+import { toErrorMessage } from "../../util/error-message"
 
 interface UninstallArgs {
   keepConfig: boolean
@@ -155,7 +156,7 @@ async function executeUninstall(method: Installation.Method, targets: RemovalTar
     const err = await fs.rm(dir.path, { recursive: true, force: true }).catch((e) => e)
     if (err) {
       spinner.stop(`Failed to remove ${dir.label}`, 1)
-      errors.push(`${dir.label}: ${err instanceof Error ? err.message : String(err)}`)
+      errors.push(`${dir.label}: ${toErrorMessage(err)}`)
       continue
     }
     spinner.stop(`Removed ${dir.label}`)
@@ -166,7 +167,7 @@ async function executeUninstall(method: Installation.Method, targets: RemovalTar
     const err = await cleanShellConfig(targets.shellConfig).catch((e) => e)
     if (err) {
       spinner.stop("Failed to clean shell config", 1)
-      errors.push(`Shell config: ${err instanceof Error ? err.message : String(err)}`)
+      errors.push(`Shell config: ${toErrorMessage(err)}`)
     } else {
       spinner.stop("Cleaned shell config")
     }

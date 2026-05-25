@@ -15,6 +15,7 @@ import { Provider } from "../../provider/provider"
 import { Agent } from "../../agent/agent"
 import { Permission } from "../../permission"
 import { Log } from "../../util/log"
+import { toErrorMessage } from "../../util/error-message"
 import { Tool } from "../../tool/tool"
 import { GlobTool } from "../../tool/glob"
 import { GrepTool } from "../../tool/grep"
@@ -656,10 +657,10 @@ export const RunCommand = cmd({
       await loopPromise.catch((e) => {
         Log.Default.error("run event loop failed", {
           sessionID,
-          error: e instanceof Error ? e.message : String(e),
+          error: toErrorMessage(e),
           stack: e instanceof Error ? e.stack : undefined,
         })
-        UI.error(`Event stream error: ${e instanceof Error ? e.message : String(e)}`)
+        UI.error(`Event stream error: ${toErrorMessage(e)}`)
         process.exitCode = 1
       })
       if (error) process.exitCode = 1

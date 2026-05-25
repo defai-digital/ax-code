@@ -16,6 +16,7 @@ import type { Hooks } from "@ax-code/plugin"
 import { Process } from "../../util/process"
 import { text } from "node:stream/consumers"
 import { Ssrf } from "../../util/ssrf"
+import { toErrorMessage } from "../../util/error-message"
 
 type PluginAuth = NonNullable<Hooks["auth"]>
 
@@ -318,7 +319,7 @@ export const ProvidersLoginCommand = cmd({
             await Ssrf.assertPublicUrl(endpoint, "providers-add")
             res = await Ssrf.pinnedFetch(endpoint, { signal: AbortSignal.timeout(10_000) })
           } catch (err) {
-            prompts.log.error(`Failed to reach ${url}: ${err instanceof Error ? err.message : String(err)}`)
+            prompts.log.error(`Failed to reach ${url}: ${toErrorMessage(err)}`)
             prompts.outro("Done")
             return
           }

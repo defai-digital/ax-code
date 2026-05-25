@@ -18,6 +18,7 @@ import type { NativePerfSnapshot } from "../../perf/native"
 import { UI } from "../ui"
 import { cmd } from "./cmd"
 import { isNonEmptyRecord } from "@/util/record"
+import { toErrorMessage } from "@/util/error-message"
 
 // Initial population command for the v3 Code Intelligence graph.
 //
@@ -540,7 +541,7 @@ export const IndexCommand = cmd({
             state: "failed",
             startedAt: start,
             finishedAt: Date.now(),
-            error: err instanceof Error ? err.message : String(err),
+            error: toErrorMessage(err),
           })
           if (err instanceof CodeGraphBuilder.LockHeldError) {
             out("")

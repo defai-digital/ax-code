@@ -5,6 +5,7 @@ import { UI } from "../../ui"
 import { cmd } from "../cmd"
 import { JsonMigration } from "../../../storage/json-migration"
 import { EOL } from "os"
+import { toErrorMessage } from "../../../util/error-message"
 
 // `bun:sqlite` is bun-only; dynamic-import inside handlers so this command
 // file loads under both bun and node entrypoints. The handlers themselves
@@ -60,7 +61,7 @@ const QueryCommand = cmd({
         }
         ok = true
       } catch (err) {
-        UI.error(err instanceof Error ? err.message : String(err))
+        UI.error(toErrorMessage(err))
       }
       db.close()
       if (!ok) process.exit(1)
@@ -126,7 +127,7 @@ const MigrateCommand = cmd({
       }
     } catch (err) {
       if (tty) process.stderr.write("\x1b[?25h")
-      UI.error(`Migration failed: ${err instanceof Error ? err.message : String(err)}`)
+      UI.error(`Migration failed: ${toErrorMessage(err)}`)
       process.exit(1)
     } finally {
       sqlite.close()
