@@ -2,6 +2,7 @@ import { NativePerf } from "../perf/native"
 import { Log } from "../util/log"
 import { NativeAddon } from "../native/addon"
 import { Flag } from "../flag/flag"
+import z from "zod"
 
 const log = Log.create({ service: "debug-engine.native-scan" })
 
@@ -30,6 +31,48 @@ export interface ScanResult {
   matches: ScanMatch[]
   filesScanned: number
   elapsedMs: number
+}
+
+const NativeScanMatch = z.object({
+  file: z.string(),
+  line: z.number(),
+  column: z.number(),
+  text: z.string(),
+  label: z.string(),
+  id: z.string(),
+  contextBefore: z.array(z.string()),
+  contextAfter: z.array(z.string()),
+})
+
+const NativeScanResult = z.object({
+  matches: z.array(NativeScanMatch),
+  filesScanned: z.number(),
+  elapsedMs: z.number(),
+})
+
+const NativeReadFilesBatchResult = z.array(z.tuple([z.string(), z.string()]))
+
+const NativeDetectResult = z.object({
+  findings: z.array(z.unknown()),
+  filesScanned: z.number(),
+  truncated: z.boolean(),
+  elapsedMs: z.number(),
+  heuristics: z.array(z.string()),
+})
+
+function decodeNativeJson<T>(json: string, schema: z.ZodType<T>, message: string): T {
+  const parsed: unknown = JSON.parse(json)
+  const decoded = schema.safeParse(parsed)
+  if (!decoded.success) throw new SyntaxError(message)
+  return decoded.data
+}
+
+export function parseNativeScanResult(json: string): ScanResult {
+  return decodeNativeJson(json, NativeScanResult, "Invalid native scan result")
+}
+
+export function parseNativeReadFilesBatchResult(json: string): Array<[string, string]> {
+  return decodeNativeJson(json, NativeReadFilesBatchResult, "Invalid native read files batch result")
 }
 
 /**
@@ -69,7 +112,7 @@ export function nativeScanFiles(input: {
           }),
         ),
     )
-    return JSON.parse(json) as ScanResult
+    return parseNativeScanResult(json)
   } catch (e: any) {
     log.warn("native scan_files failed, falling back to JS", { error: e })
     return undefined
@@ -88,7 +131,7 @@ export function nativeReadFilesBatch(files: string[]): Map<string, string> | und
     const json = NativePerf.run("fs.readFilesBatch", { files: files.length }, () =>
       native.readFilesBatch(JSON.stringify(files)),
     )
-    const pairs: [string, string][] = JSON.parse(json)
+    const pairs = parseNativeReadFilesBatchResult(json)
     return new Map(pairs)
   } catch (e: any) {
     log.warn("native read_files_batch failed, falling back to JS", { error: e })
@@ -113,6 +156,10 @@ interface DetectResult<F> {
   truncated: boolean
   elapsedMs: number
   heuristics: string[]
+}
+
+export function parseNativeDetectResult<F>(json: string): DetectResult<F> {
+  return decodeNativeJson(json, NativeDetectResult, "Invalid native detector result") as DetectResult<F>
 }
 
 function callNativeDetector<F>(fnName: string, input: DetectInput): DetectResult<F> | undefined {
@@ -143,7 +190,7 @@ function callNativeDetector<F>(fnName: string, input: DetectInput): DetectResult
           }),
         ),
     )
-    return JSON.parse(json) as DetectResult<F>
+    return parseNativeDetectResult<F>(json)
   } catch (e: any) {
     log.warn(`native ${fnName} failed, falling back to JS`, { error: e })
     return undefined
