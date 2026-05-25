@@ -207,6 +207,18 @@ describe("Policy.loadQaPolicy", () => {
 })
 
 describe("Policy.loadReviewRules / loadQaRules", () => {
+  test("decodes already-parsed rules values", () => {
+    expect(Policy.decodeRulesValue({ severity_floor: "HIGH" })).toEqual({
+      ok: true,
+      data: { severity_floor: "HIGH" },
+    })
+    expect(Policy.decodeRulesValue({ unknown_field: "x" })).toMatchObject({
+      ok: false,
+      reason: "schema",
+      issues: 1,
+    })
+  })
+
   test("decodes raw rules JSON separately from file discovery", () => {
     const decoded = Policy.decodeRulesJson(JSON.stringify({ severity_floor: "HIGH" }))
     expect(decoded).toEqual({
