@@ -1,6 +1,7 @@
 import type { ChildProcessWithoutNullStreams } from "child_process"
 import { Process } from "../util/process"
 import { Env } from "../util/env"
+import { Shell } from "../shell/shell"
 
 type Child = Process.Child & ChildProcessWithoutNullStreams
 type SpawnOptions = Process.Options & {
@@ -15,6 +16,7 @@ export function spawn(cmd: string, argsOrOpts?: string[] | SpawnOptions, opts?: 
   const { onStderr, ...processOptions } = cfg ?? {}
   const proc = Process.spawn([cmd, ...args], {
     ...processOptions,
+    detached: process.platform !== "win32",
     env: processOptions.env ?? { ...Env.sanitize() },
     stdin: "pipe",
     stdout: "pipe",
@@ -25,9 +27,7 @@ export function spawn(cmd: string, argsOrOpts?: string[] | SpawnOptions, opts?: 
   if (onStderr) proc.stderr.on("data", onStderr)
 
   const kill = () => {
-    try {
-      proc.kill()
-    } catch {}
+    void Shell.killTree(proc).catch(() => {})
   }
   process.once("exit", kill)
   proc.on("close", () => process.removeListener("exit", kill))

@@ -106,10 +106,9 @@ export namespace Provider {
     const onAbort = () => abortReader(signal?.reason)
 
     if (signal) {
+      signal.addEventListener("abort", onAbort, { once: true })
       if (signal.aborted) {
         abortReader(signal.reason)
-      } else {
-        signal.addEventListener("abort", onAbort, { once: true })
       }
     }
 
@@ -983,6 +982,24 @@ export namespace Provider {
     }
   }
 
+  function languageCacheKey(model: Model, provider: Info) {
+    const base = providerModelKey({ providerID: model.providerID, modelID: model.id })
+    try {
+      const options = JSON.stringify({
+        providerOptions: provider.options,
+        modelOptions: model.options,
+        modelAPI: {
+          npm: model.api.npm,
+          id: model.api.id,
+        },
+      })
+      if (!options) return base
+      return `${base}#${Hash.fast(options)}`
+    } catch {
+      return base
+    }
+  }
+
   export async function getProvider(providerID: ProviderID) {
     return state().then((s) => s.providers[providerID])
   }
@@ -1018,17 +1035,17 @@ export namespace Provider {
 
   export async function getLanguage(model: Model): Promise<Lang> {
     const s = await state()
-    const key = providerModelKey({ providerID: model.providerID, modelID: model.id })
+    const provider = s.providers[model.providerID]
+    if (!provider) {
+      throw new ModelNotFoundError({ providerID: model.providerID, modelID: model.id })
+    }
+
+    const key = languageCacheKey(model, provider)
 
     const cached = s.models.get(key)
     if (cached) return cached
     const pending = s.modelPending.get(key)
     if (pending) return pending
-
-    const provider = s.providers[model.providerID]
-    if (!provider) {
-      throw new ModelNotFoundError({ providerID: model.providerID, modelID: model.id })
-    }
 
     const promise = Promise.resolve().then(async (): Promise<Lang> => {
       // CLI providers bypass SDK loading — their custom loaders handle everything

@@ -1,6 +1,7 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, spyOn, test } from "bun:test"
 import fs from "fs/promises"
 import path from "path"
+import { Shell } from "../../src/shell/shell"
 import { Process } from "../../src/util/process"
 import { tmpdir } from "../fixture/fixture"
 
@@ -41,6 +42,33 @@ describe("util.process", () => {
 
     expect(out.code).not.toBe(0)
     expect(Date.now() - started).toBeLessThan(1000)
+  }, 3000)
+
+  test("aborts a running process by terminating the full process tree", async () => {
+    if (process.platform === "win32") return
+
+    const abort = new AbortController()
+    const started = Date.now()
+    setTimeout(() => abort.abort(), 25)
+
+    const originalKillTree = Shell.killTree
+    const killTree = spyOn(Shell, "killTree").mockImplementation(async (proc, opts) => {
+      return originalKillTree(proc, opts as any)
+    })
+
+    try {
+      const out = await Process.run(node("setInterval(() => {}, 1000)"), {
+        abort: abort.signal,
+        nothrow: true,
+        timeout: 500,
+      })
+
+      expect(killTree).toHaveBeenCalled()
+      expect(out.code).not.toBe(0)
+      expect(Date.now() - started).toBeLessThan(1200)
+    } finally {
+      killTree.mockRestore()
+    }
   }, 3000)
 
   test("kills after timeout when process ignores terminate signal", async () => {

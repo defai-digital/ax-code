@@ -38,6 +38,7 @@ import { BASH_MAX_METADATA_LENGTH as MAX_METADATA_LENGTH } from "@/constants/net
 const DEFAULT_TIMEOUT = Flag.AX_CODE_EXPERIMENTAL_BASH_DEFAULT_TIMEOUT_MS || 2 * 60 * 1000
 
 const log = Log.create({ service: "bash-tool" })
+const CLEANUP_KILL_TIMEOUT_MS = 250
 
 async function estimateFileLineDelta(filePath: string) {
   const stat = await fs.stat(filePath).catch(() => undefined)
@@ -49,12 +50,72 @@ async function estimateFileLineDelta(filePath: string) {
 // process exits unexpectedly (crash, SIGKILL, etc.). Without this,
 // detached child processes become orphans that keep running.
 const trackedPIDs = new Set<number>()
-process.on("exit", () => {
-  for (const pid of trackedPIDs) {
-    try {
-      process.kill(-pid, "SIGTERM")
-    } catch {}
+const cleanupTimers = new Map<number, ReturnType<typeof setTimeout>>()
+
+const isPidError = (error: unknown): error is { code: string } => {
+  return error instanceof Error && "code" in error && typeof (error as { code: unknown }).code === "string"
+}
+
+const killProcessGroup = (pid: number, signal: NodeJS.Signals) => {
+  try {
+    process.kill(-pid, signal)
+    return true
+  } catch (error) {
+    if (isPidError(error) && error.code === "ESRCH") {
+      return false
+    }
+    log.warn("bash process group kill failed", { pid, signal, errorCode: isPidError(error) ? error.code : "unknown" })
   }
+
+  try {
+    process.kill(pid, signal)
+    return true
+  } catch (error) {
+    if (isPidError(error) && error.code === "ESRCH") {
+      return false
+    }
+    log.warn("bash process kill failed", { pid, signal, errorCode: isPidError(error) ? error.code : "unknown" })
+  }
+
+  return false
+}
+
+const forgetTrackedPID = (pid: number) => {
+  trackedPIDs.delete(pid)
+  const timer = cleanupTimers.get(pid)
+  if (!timer) return
+  clearTimeout(timer)
+  cleanupTimers.delete(pid)
+}
+
+const cleanupDetachedProcess = (pid: number, hard = false) => {
+  const signal = hard ? "SIGKILL" : "SIGTERM"
+  const terminated = killProcessGroup(pid, signal)
+  if (!terminated) {
+    forgetTrackedPID(pid)
+    return
+  }
+  if (hard) {
+    forgetTrackedPID(pid)
+    return
+  }
+  const timer = setTimeout(() => {
+    cleanupDetachedProcess(pid, true)
+  }, CLEANUP_KILL_TIMEOUT_MS)
+  cleanupTimers.set(pid, timer)
+}
+
+const cleanupDetachedProcesses = (hard = false) => {
+  for (const pid of trackedPIDs) {
+    cleanupDetachedProcess(pid, hard)
+  }
+}
+
+process.once("beforeExit", cleanupDetachedProcesses)
+process.once("exit", () => {
+  cleanupDetachedProcesses(true)
+  for (const timer of cleanupTimers.values()) clearTimeout(timer)
+  cleanupTimers.clear()
 })
 
 const resolveWasm = (asset: string) => {
@@ -633,7 +694,7 @@ export const BashTool = Tool.define("bash", async () => {
           ctx.abort.removeEventListener("abort", abortHandler)
           proc.stdout?.off("data", append)
           proc.stderr?.off("data", append)
-          if (proc.pid) trackedPIDs.delete(proc.pid)
+          if (proc.pid) forgetTrackedPID(proc.pid)
         }
 
         proc.once("close", () => {

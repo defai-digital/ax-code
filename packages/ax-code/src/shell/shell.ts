@@ -7,11 +7,19 @@ import { spawn, type ChildProcess } from "child_process"
 import { setTimeout as sleep } from "node:timers/promises"
 
 const SIGKILL_TIMEOUT_MS = 200
+type KillableProcess = {
+  pid?: number
+  kill: (signal?: NodeJS.Signals | number) => boolean | void
+}
 
 export namespace Shell {
-  export async function killTree(proc: ChildProcess, opts?: { exited?: () => boolean }): Promise<void> {
+  export async function killTree(
+    proc: KillableProcess,
+    opts?: { exited?: () => boolean; signal?: NodeJS.Signals | number },
+  ): Promise<void> {
     const pid = proc.pid
     if (!pid || opts?.exited?.()) return
+    const signal: NodeJS.Signals | number = opts?.signal ?? "SIGTERM"
 
     if (process.platform === "win32") {
       await new Promise<void>((resolve) => {
@@ -26,16 +34,16 @@ export namespace Shell {
     }
 
     try {
-      process.kill(-pid, "SIGTERM")
+      process.kill(-pid, signal)
       await sleep(SIGKILL_TIMEOUT_MS)
       if (!opts?.exited?.()) {
         process.kill(-pid, "SIGKILL")
       }
     } catch (_e) {
-      // SIGTERM to process group failed (ESRCH = already exited,
+      // First kill attempt with requested signal failed (ESRCH = already exited,
       // EPERM = not a group leader). Fall back to direct kill.
       try {
-        proc.kill("SIGTERM")
+        proc.kill(signal)
         await sleep(SIGKILL_TIMEOUT_MS)
         if (!opts?.exited?.()) {
           proc.kill("SIGKILL")
