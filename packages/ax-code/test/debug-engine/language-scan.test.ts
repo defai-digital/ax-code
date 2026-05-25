@@ -7,6 +7,7 @@ import {
   mapRuffSeverity,
   parseClippyJsonLine,
   parseClippyOutput,
+  parseMypyFilesJson,
   parseMypyOutput,
   parseRuffDiagnosticsJson,
   parseRuffOutput,
@@ -352,6 +353,44 @@ describe("language-scan", () => {
   })
 
   describe("detectMypy", () => {
+    test("parseMypyFilesJson decodes files and valid messages", () => {
+      const decoded = parseMypyFilesJson({
+        files: [
+          {
+            path: "src/main.py",
+            messages: [
+              {
+                severity: "error",
+                message: "bad type",
+                line: 5,
+              },
+              {
+                severity: "error",
+                line: 6,
+              },
+            ],
+          },
+        ],
+      })
+
+      expect(decoded).toHaveLength(1)
+      expect(decoded[0].path).toBe("src/main.py")
+      expect(decoded[0].decodedMessages).toHaveLength(1)
+      expect(decoded[0].decodedMessages[0]?.message).toBe("bad type")
+    })
+
+    test("parseMypyFilesJson filters malformed file entries", () => {
+      expect(
+        parseMypyFilesJson({
+          files: [
+            { path: "src/clean.py" },
+            { messages: [{ severity: "error", message: "missing path" }] },
+          ],
+        }).map((file) => file.path),
+      ).toEqual(["src/clean.py"])
+      expect(parseMypyFilesJson({ files: "not an array" })).toEqual([])
+    })
+
     test("returns error message when mypy not found", async () => {
       const result = await detectMypy({ cwd: "/nonexistent" })
       expect(result.tool).toBe("mypy")
