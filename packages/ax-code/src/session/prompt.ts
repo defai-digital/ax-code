@@ -69,7 +69,7 @@ import { createDeferredCodeGraphAutoIndex } from "./prompt-code-graph"
 import { recordPromptSessionStart } from "./prompt-session-start"
 import { scheduleFirstTurnSummary } from "./prompt-session-summary"
 import { enforceSuperLongDeadline } from "./prompt-super-long"
-import { createAutonomousUserContinuation, createUserMessage } from "./prompt-user-message"
+import { createAutonomousTextContinuation, createUserMessage } from "./prompt-user-message"
 import { permissionRulesetFromLegacyTools } from "./prompt-permission"
 import { createPromptRunState } from "./prompt-run-state"
 import {
@@ -272,10 +272,10 @@ export namespace SessionPrompt {
         ...logExtras,
       })
       const latestMessages = await Session.messages({ sessionID })
-      await createAutonomousUserContinuation({
+      await createAutonomousTextContinuation({
         sessionID,
         messages: latestMessages,
-        parts: [{ type: "text", text }],
+        text,
       })
     }
 
@@ -649,18 +649,13 @@ export namespace SessionPrompt {
             maxAttempts: MAX_EMPTY_MODEL_TURN_RETRIES,
             pendingCount: pendingTodos.length,
           })
-          await createAutonomousUserContinuation({
+          await createAutonomousTextContinuation({
             sessionID,
             messages: latestMessages,
-            parts: [
-              {
-                type: "text",
-                text: AutonomousContinuationPrompt.emptyModelTurnRecovery({
-                  attempt: emptyTurnDecision.attempt,
-                  maxAttempts: MAX_EMPTY_MODEL_TURN_RETRIES,
-                }),
-              },
-            ],
+            text: AutonomousContinuationPrompt.emptyModelTurnRecovery({
+              attempt: emptyTurnDecision.attempt,
+              maxAttempts: MAX_EMPTY_MODEL_TURN_RETRIES,
+            }),
           })
           continue
         }
@@ -702,19 +697,14 @@ export namespace SessionPrompt {
             attempt: gateRetryDecision.attempt,
             maxAttempts: maxCompletionGateRetries,
           })
-          await createAutonomousUserContinuation({
+          await createAutonomousTextContinuation({
             sessionID,
             messages: latestMessages,
-            parts: [
-              {
-                type: "text",
-                text: AutonomousContinuationPrompt.completionGateRetry({
-                  message: completionGate.message,
-                  attempt: gateRetryDecision.attempt,
-                  maxAttempts: maxCompletionGateRetries,
-                }),
-              },
-            ],
+            text: AutonomousContinuationPrompt.completionGateRetry({
+              message: completionGate.message,
+              attempt: gateRetryDecision.attempt,
+              maxAttempts: maxCompletionGateRetries,
+            }),
           })
           continue
         }
@@ -741,15 +731,10 @@ export namespace SessionPrompt {
               inputTokens: processor.message.tokens.input ?? 0,
               threshold: contextConvergence.threshold,
             })
-            await createAutonomousUserContinuation({
+            await createAutonomousTextContinuation({
               sessionID,
               messages: latestMessages,
-              parts: [
-                {
-                  type: "text",
-                  text: AutonomousContinuationPrompt.contextConvergence({ pendingTodos }),
-                },
-              ],
+              text: AutonomousContinuationPrompt.contextConvergence({ pendingTodos }),
             })
             continue
           }
@@ -772,19 +757,14 @@ export namespace SessionPrompt {
               remainingAgentSteps,
               maxSteps,
             })
-            await createAutonomousUserContinuation({
+            await createAutonomousTextContinuation({
               sessionID,
               messages: latestMessages,
-              parts: [
-                {
-                  type: "text",
-                  text: AutonomousContinuationPrompt.deadlineConvergence({
-                    remainingAgentSteps,
-                    pendingTodos,
-                    includeReportClosureGuidance: deadlineConvergence.includeReportClosureGuidance,
-                  }),
-                },
-              ],
+              text: AutonomousContinuationPrompt.deadlineConvergence({
+                remainingAgentSteps,
+                pendingTodos,
+                includeReportClosureGuidance: deadlineConvergence.includeReportClosureGuidance,
+              }),
             })
             continue
           }
@@ -855,21 +835,16 @@ export namespace SessionPrompt {
             maxAttempts: maxTodoRetries,
             stagnantAttempts: stagnantTodoRetries,
           })
-          await createAutonomousUserContinuation({
+          await createAutonomousTextContinuation({
             sessionID,
             messages: latestMessages,
-            parts: [
-              {
-                type: "text",
-                text: AutonomousContinuationPrompt.todoContinuation({
-                  pendingTodos,
-                  attempt: todoRetries,
-                  maxAttempts: maxTodoRetries,
-                  includeReportClosureGuidance: todoContinuation.includeReportClosureGuidance,
-                  stagnantTodoRetries: todoContinuation.stagnant ? stagnantTodoRetries : undefined,
-                }),
-              },
-            ],
+            text: AutonomousContinuationPrompt.todoContinuation({
+              pendingTodos,
+              attempt: todoRetries,
+              maxAttempts: maxTodoRetries,
+              includeReportClosureGuidance: todoContinuation.includeReportClosureGuidance,
+              stagnantTodoRetries: todoContinuation.stagnant ? stagnantTodoRetries : undefined,
+            }),
           })
           continue
         }
