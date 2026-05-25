@@ -27,6 +27,10 @@ export namespace Todo {
     return todos.map((todo) => `${prefix}[${statusTransform(todo.status)}] ${todo.content}`)
   }
 
+  export function isActive(todo: Pick<Info, "status">) {
+    return todo.status === "pending" || todo.status === "in_progress"
+  }
+
   export const Event = {
     Updated: BusEvent.define(
       "todo.updated",
@@ -56,14 +60,20 @@ export namespace Todo {
     Bus.publishDetached(Event.Updated, input)
   }
 
-  export function get(sessionID: SessionID) {
+  export function get(sessionID: SessionID): Info[] {
     const rows = Database.use((db) =>
       db.select().from(TodoTable).where(eq(TodoTable.session_id, sessionID)).orderBy(asc(TodoTable.position)).all(),
     )
-    return rows.map((row) => ({
-      content: row.content,
-      status: row.status,
-      priority: row.priority,
-    }))
+    return rows.map((row) =>
+      Info.parse({
+        content: row.content,
+        status: row.status,
+        priority: row.priority,
+      }),
+    )
+  }
+
+  export function active(sessionID: SessionID) {
+    return get(sessionID).filter(isActive)
   }
 }

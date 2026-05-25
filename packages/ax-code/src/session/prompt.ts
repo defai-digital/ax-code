@@ -536,7 +536,7 @@ export namespace SessionPrompt {
       // the model genuinely cannot finish a todo (blocked tool, missing data, etc.).
       if (autonomous && !processor.message.error) {
         const latestMessages = await Session.messages({ sessionID })
-        const pendingTodos = Todo.get(sessionID).filter((t) => t.status === "pending" || t.status === "in_progress")
+        const pendingTodos = Todo.active(sessionID)
         const completionGate = AutonomousCompletionGate.evaluate({
           messages: latestMessages,
           pendingTodos,
