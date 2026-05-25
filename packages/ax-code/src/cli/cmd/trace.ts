@@ -16,11 +16,12 @@ import type { ReplayEvent } from "../../replay/event"
 import path from "path"
 import fs from "fs/promises"
 import { printNoSessionFound, resolveSession } from "./session-latest"
+import { isRecord } from "@/util/record"
 
-interface LogEntry {
-  level: string
-  time: string
-  service: string
+export interface LogEntry {
+  level?: string | number
+  time?: string | number
+  service?: string
   command?: string
   toolName?: string
   status?: string
@@ -28,8 +29,22 @@ interface LogEntry {
   errorCode?: string
   errorMessage?: string
   sessionId?: string
-  msg: string
+  msg?: string
   [key: string]: unknown
+}
+
+export function decodeTraceLogEntryValue(value: unknown): LogEntry | undefined {
+  return isRecord(value) ? (value as LogEntry) : undefined
+}
+
+export function parseTraceLogEntryJsonLine(line: string): LogEntry | undefined {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(line)
+  } catch {
+    return undefined
+  }
+  return decodeTraceLogEntryValue(parsed)
 }
 
 export const TraceCommand: CommandModule = {
@@ -219,14 +234,8 @@ export const TraceCommand: CommandModule = {
 
     if (isJson) {
       entries = lines
-        .map((line) => {
-          try {
-            return JSON.parse(line) as LogEntry
-          } catch {
-            return null
-          }
-        })
-        .filter((e): e is LogEntry => e !== null)
+        .map(parseTraceLogEntryJsonLine)
+        .filter((e): e is LogEntry => e !== undefined)
     } else {
       // Parse text format: "LEVEL YYYY-MM-DDTHH:MM:SS +Nms key=value key=value message"
       entries = lines
