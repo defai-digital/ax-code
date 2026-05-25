@@ -122,8 +122,15 @@ const ProjectMemorySchema = z
   })
   .passthrough()
 
-const parseProjectMemory = (text: string) => {
-  const parsed = ProjectMemorySchema.safeParse(JSON.parse(text))
+export function parseProjectMemoryText(text: string): ProjectMemory {
+  let value: unknown
+  try {
+    value = JSON.parse(text)
+  } catch (error) {
+    throw new Error("memory store: invalid memory JSON", { cause: error })
+  }
+
+  const parsed = ProjectMemorySchema.safeParse(value)
   if (!parsed.success) {
     throw new Error(`memory store: invalid memory schema (${parsed.error.message})`, { cause: parsed.error })
   }
@@ -262,7 +269,7 @@ export async function load(projectRoot: string): Promise<ProjectMemory | null> {
   const text = await readWithCache(memoryPath)
   if (text === null) return null
   try {
-    return parseProjectMemory(text)
+    return parseProjectMemoryText(text)
   } catch (err) {
     throw new Error(`memory store: corrupt JSON in ${memoryPath}`, { cause: err })
   }
@@ -322,7 +329,7 @@ export async function loadGlobal(): Promise<ProjectMemory | null> {
   const text = await readWithCache(memoryPath)
   if (text === null) return null
   try {
-    return parseProjectMemory(text)
+    return parseProjectMemoryText(text)
   } catch (err) {
     throw new Error(`memory store: corrupt JSON in ${memoryPath}`, { cause: err })
   }
