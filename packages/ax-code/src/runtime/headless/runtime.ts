@@ -124,6 +124,10 @@ async function postJson(
 
 export function parseHeadlessRuntimeResponseBody(text: string): unknown {
   if (!text) return true
+  return parseHeadlessRuntimeJsonBody(text)
+}
+
+export function parseHeadlessRuntimeJsonBody(text: string): unknown {
   try {
     return JSON.parse(text)
   } catch (error) {
