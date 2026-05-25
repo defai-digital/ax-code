@@ -505,14 +505,14 @@ export async function commandTemplateText(input: {
 }
 
 export async function commandModel(input: {
-  command: { model?: string; agent?: string }
+  command?: { model?: string; agent?: string }
   model?: string
   sessionID: SessionID
 }) {
-  if (input.command.model) {
+  if (input.command?.model) {
     return Provider.parseModel(input.command.model)
   }
-  if (input.command.agent) {
+  if (input.command?.agent) {
     const agent = await Agent.get(input.command.agent)
     if (agent?.model) {
       return agent.model

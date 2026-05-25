@@ -8,6 +8,7 @@ import {
   appendShellOutputChunk,
   assistantLoopExitDecision,
   assistantRespondedAfterUser,
+  commandModel,
   commandParts,
   commandTemplateText,
   consecutiveErrorDecision,
@@ -205,6 +206,18 @@ describe("session.prompt helpers", () => {
         run: async (cmd) => `${cmd}:ok`,
       }),
     ).toBe("status:\necho ready:ok")
+  })
+
+  test("selects explicit command model without requiring command metadata", async () => {
+    await expect(
+      commandModel({
+        model: "openai/gpt-5.2",
+        sessionID: "ses_test" as any,
+      }),
+    ).resolves.toEqual({
+      providerID: ProviderID.make("openai"),
+      modelID: ModelID.make("gpt-5.2"),
+    })
   })
 
   test("selects user agent and model for subtask commands", async () => {
