@@ -64,12 +64,27 @@ export interface MemoryEvaluationReport {
 
 const DEFAULT_LIMIT = 5
 
+export function parseMemoryEvaluationFileText(text: string): MemoryEvaluationFile {
+  let value: unknown
+  try {
+    value = JSON.parse(text)
+  } catch (error) {
+    throw new Error("memory evaluation: invalid cases JSON", { cause: error })
+  }
+
+  const parsed = EvaluationFileSchema.safeParse(value)
+  if (!parsed.success) {
+    throw new Error(`memory evaluation: invalid cases schema (${parsed.error.message})`, { cause: parsed.error })
+  }
+  return parsed.data
+}
+
 export async function evaluate(projectRoot: string, opts: MemoryEvaluationOptions): Promise<MemoryEvaluationReport> {
   validateThreshold("minRecall", opts.minRecall)
   validateThreshold("minMrr", opts.minMrr)
 
   const text = await fs.readFile(opts.casesPath, "utf-8")
-  const file = EvaluationFileSchema.parse(JSON.parse(text))
+  const file = parseMemoryEvaluationFileText(text)
   const defaultLimit = opts.limit ?? DEFAULT_LIMIT
   const defaultScope = opts.scope ?? "project"
 

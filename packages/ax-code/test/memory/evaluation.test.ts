@@ -1,10 +1,21 @@
 import { describe, expect, test } from "bun:test"
 import path from "path"
 import { tmpdir } from "../fixture/fixture"
-import { evaluate } from "../../src/memory/evaluation"
+import { evaluate, parseMemoryEvaluationFileText } from "../../src/memory/evaluation"
 import { recordEntry } from "../../src/memory/recorder"
 
 describe("memory.evaluation", () => {
+  test("parseMemoryEvaluationFileText decodes valid cases JSON", () => {
+    expect(parseMemoryEvaluationFileText(JSON.stringify({ cases: [{ expected: ["rule"] }] }))).toEqual({
+      cases: [{ expected: ["rule"] }],
+    })
+  })
+
+  test("parseMemoryEvaluationFileText reports JSON and schema failures separately", () => {
+    expect(() => parseMemoryEvaluationFileText("{not json")).toThrow(/invalid cases JSON/)
+    expect(() => parseMemoryEvaluationFileText(JSON.stringify({ cases: [] }))).toThrow(/invalid cases schema/)
+  })
+
   test("computes recall@k for expected memory names", async () => {
     await using tmp = await tmpdir()
     await recordEntry(tmp.path, "feedback", {
