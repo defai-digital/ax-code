@@ -1714,7 +1714,7 @@ export namespace SessionPrompt {
           }
           const url = new URL(part.url)
           const createReadFailurePart = (options: { error: unknown; filepath: string }) => {
-            const message = options.error instanceof Error ? options.error.message : `${options.error}`
+            const message = NamedError.message(options.error)
             Session.publishError({ sessionID: input.sessionID, message })
             return draftSyntheticTextPart(
               `Read tool failed to read ${options.filepath} with the following error: ${message}`,
