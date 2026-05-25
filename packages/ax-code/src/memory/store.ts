@@ -8,6 +8,7 @@ import path from "path"
 import os from "os"
 import { Filesystem } from "../util/filesystem"
 import { Flag } from "../flag/flag"
+import { parseJsonResult } from "../util/json-value"
 import type { ProjectMemory } from "./types"
 import z from "zod"
 
@@ -66,14 +67,12 @@ const ProjectMemorySchema = z
   .passthrough()
 
 export function parseProjectMemoryText(text: string): ProjectMemory {
-  let value: unknown
-  try {
-    value = JSON.parse(text)
-  } catch (error) {
-    throw new Error("memory store: invalid memory JSON", { cause: error })
+  const parsed = parseJsonResult(text)
+  if (!parsed.ok) {
+    throw new Error("memory store: invalid memory JSON", { cause: parsed.error })
   }
 
-  return decodeProjectMemoryValue(value)
+  return decodeProjectMemoryValue(parsed.value)
 }
 
 export function decodeProjectMemoryValue(value: unknown): ProjectMemory {
