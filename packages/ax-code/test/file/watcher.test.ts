@@ -130,6 +130,27 @@ function ready(directory: string) {
 // Tests
 // ---------------------------------------------------------------------------
 
+describe("FileWatcher native event decoding", () => {
+  test("parseNativeWatcherEvents decodes valid native events", () => {
+    expect(
+      FileWatcher.parseNativeWatcherEvents(JSON.stringify([{ eventType: "change", path: "src/index.ts" }])),
+    ).toEqual([{ eventType: "change", path: "src/index.ts" }])
+  })
+
+  test("parseNativeWatcherEvents rejects malformed native events", () => {
+    expect(() => FileWatcher.parseNativeWatcherEvents("{not json")).toThrow(SyntaxError)
+    expect(() =>
+      FileWatcher.parseNativeWatcherEvents(JSON.stringify({ eventType: "change", path: "src/index.ts" })),
+    ).toThrow(SyntaxError)
+    expect(() =>
+      FileWatcher.parseNativeWatcherEvents(JSON.stringify([{ eventType: "rename", path: "src/index.ts" }])),
+    ).toThrow(SyntaxError)
+    expect(() => FileWatcher.parseNativeWatcherEvents(JSON.stringify([{ eventType: "change", path: 123 }]))).toThrow(
+      SyntaxError,
+    )
+  })
+})
+
 describeWatcher("FileWatcher", () => {
   afterEach(async () => {
     await Instance.disposeAll()
