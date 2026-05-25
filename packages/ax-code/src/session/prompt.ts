@@ -101,6 +101,7 @@ import { resolveUserMessageParts } from "./prompt-message-parts"
 import { createShellTurnMessages } from "./prompt-shell-turn"
 import { FilePartInput, PromptPartInput } from "./prompt-part-input"
 import { createStoppedAssistantTextResponse } from "./prompt-assistant-response"
+import { resolveCommandForExecution } from "./prompt-command"
 import { SuperLongPolicy } from "./super-long-policy"
 import { SuperLongRuntime } from "./super-long-runtime"
 
@@ -1864,14 +1865,7 @@ export namespace SessionPrompt {
     if (input.command === Command.Default.GOAL) {
       return goalCommand(input)
     }
-    const command = await Command.get(input.command)
-    if (!command) {
-      const available = await Command.list().then((cmds) => cmds.map((c) => c.name))
-      const hint = available.length ? ` Available commands: ${available.join(", ")}` : ""
-      const error = new NamedError.Unknown({ message: `Command not found: "${input.command}".${hint}` })
-      Session.publishError({ sessionID: input.sessionID, error: error.toObject() })
-      throw error
-    }
+    const command = await resolveCommandForExecution({ sessionID: input.sessionID, name: input.command })
     const prepared = await commandSetup({
       command,
       name: input.command,
