@@ -59,6 +59,10 @@ interface ResolveToolsInput {
   isolation?: Isolation.State
 }
 
+export function shouldBypassAgentCheck(parts: MessageV2.Part[] | undefined): boolean {
+  return parts?.some((part) => part.type === "agent") ?? false
+}
+
 /**
  * Resolve and configure all available tools for a session turn.
  * Handles schema transformation, caching, isolation escalation, and MCP tools.
