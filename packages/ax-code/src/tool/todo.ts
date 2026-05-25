@@ -3,6 +3,17 @@ import { Tool } from "./tool"
 import DESCRIPTION_WRITE from "./todowrite.txt"
 import { Todo } from "../session/todo"
 
+export function countIncompleteTodos(todos: readonly { status: string }[]) {
+  return todos.filter((todo) => todo.status !== "completed").length
+}
+
+export function formatTodoCheckboxLines(todos: readonly { status: string; content: string }[]) {
+  return Todo.formatLines(todos, {
+    prefix: "",
+    statusTransform: (status) => (status === "completed" ? "x" : " "),
+  })
+}
+
 export const TodoWriteTool = Tool.define("todowrite", {
   description: DESCRIPTION_WRITE,
   parameters: z.object({
@@ -21,7 +32,7 @@ export const TodoWriteTool = Tool.define("todowrite", {
       todos: params.todos,
     })
     return {
-      title: `${params.todos.filter((x) => x.status !== "completed").length} todos`,
+      title: `${countIncompleteTodos(params.todos)} todos`,
       output: JSON.stringify(params.todos, null, 2),
       metadata: {
         todos: params.todos,
@@ -43,7 +54,7 @@ export const TodoReadTool = Tool.define("todoread", {
 
     const todos = await Todo.get(ctx.sessionID)
     return {
-      title: `${todos.filter((x) => x.status !== "completed").length} todos`,
+      title: `${countIncompleteTodos(todos)} todos`,
       metadata: {
         todos,
       },

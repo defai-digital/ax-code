@@ -85394,7 +85394,7 @@
         "tool_call": true,
         "temperature": true,
         "release_date": "2026-05-22",
-        "last_updated": "2026-05-22",
+        "last_updated": "2026-05-25",
         "modalities": {
           "input": [
             "text"
@@ -85862,7 +85862,7 @@
         "structured_output": true,
         "temperature": true,
         "release_date": "2026-02-25",
-        "last_updated": "2026-04-16",
+        "last_updated": "2026-05-25",
         "modalities": {
           "input": [
             "text",
@@ -85876,7 +85876,7 @@
         "open_weights": true,
         "limit": {
           "context": 256000,
-          "output": 65536
+          "output": 16384
         }
       },
       "qwen3-5-397b-a17b": {
@@ -86608,7 +86608,7 @@
         "structured_output": true,
         "temperature": true,
         "release_date": "2026-04-03",
-        "last_updated": "2026-04-12",
+        "last_updated": "2026-05-25",
         "modalities": {
           "input": [
             "text",
@@ -86635,7 +86635,7 @@
         "structured_output": true,
         "temperature": true,
         "release_date": "2026-05-22",
-        "last_updated": "2026-05-22",
+        "last_updated": "2026-05-25",
         "modalities": {
           "input": [
             "text",
