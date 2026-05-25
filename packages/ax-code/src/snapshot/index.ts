@@ -7,7 +7,9 @@ import type { Shape } from "../project/instance"
 import { Instance } from "../project/instance"
 import { Filesystem } from "../util/filesystem"
 import { git } from "../util/git"
+import { parseLsTreeSize, parseNameStatusLine, parseNumstatLine } from "../util/git-output"
 import { Log } from "../util/log"
+import { KeyedSerialQueue } from "../util/queue"
 
 export namespace Snapshot {
   export const Patch = z.object({
@@ -44,7 +46,7 @@ export namespace Snapshot {
     gitdir: string
     vcs: Shape["project"]["vcs"]
     prevHash?: string
-    operation?: Promise<unknown>
+    operationQueue: KeyedSerialQueue
     cleanupDelay?: ReturnType<typeof setTimeout>
     cleanupInterval?: ReturnType<typeof setInterval>
     disposed?: boolean
@@ -67,29 +69,6 @@ export namespace Snapshot {
     return path.join(current.gitdir, "ax-code", "snapshots", hash)
   }
 
-  function decode(file: string) {
-    if (!file.startsWith('"')) return file
-    try {
-      return JSON.parse(file) as string
-    } catch {
-      return file
-    }
-  }
-
-  function parsePair(line: string) {
-    const idx = line.indexOf("\t")
-    if (idx < 0) return
-    return [line.slice(0, idx), decode(line.slice(idx + 1))] as const
-  }
-
-  function parseNumstat(line: string) {
-    const first = line.indexOf("\t")
-    if (first < 0) return
-    const second = line.indexOf("\t", first + 1)
-    if (second < 0) return
-    return [line.slice(0, first), line.slice(first + 1, second), decode(line.slice(second + 1))] as const
-  }
-
   async function runGit(args: string[], options?: { cwd?: string; env?: Record<string, string> }) {
     const result = await git(args, {
       cwd: options?.cwd ?? Instance.directory,
@@ -110,6 +89,7 @@ export namespace Snapshot {
         worktree: current.worktree,
         gitdir: path.join(Global.Path.data, "snapshot", current.project.id),
         vcs: current.project.vcs,
+        operationQueue: new KeyedSerialQueue(),
       }
 
       const scheduleCleanup = () => {
@@ -181,14 +161,7 @@ export namespace Snapshot {
   }
 
   async function withOperationLock<T>(current: State, fn: () => Promise<T>): Promise<T> {
-    const prev = current.operation ?? Promise.resolve()
-    const next = prev.then(fn, fn)
-    const sentinel = next.catch(() => undefined)
-    current.operation = sentinel
-    sentinel.then(() => {
-      if (current.operation === sentinel) current.operation = undefined
-    })
-    return next
+    return current.operationQueue.run("snapshot", fn)
   }
 
   async function size(current: State, hash: string, file: string) {
@@ -197,13 +170,7 @@ export namespace Snapshot {
     })
     const line = tree.text.trim()
     if (!line) return
-    const meta = parsePair(line)?.[0]
-    if (!meta) return
-    const parts = meta.trim().split(/\s+/)
-    const raw = parts[3]
-    if (!raw || raw === "-") return
-    const parsed = Number.parseInt(raw, 10)
-    return Number.isFinite(parsed) ? parsed : undefined
+    return parseLsTreeSize(line)
   }
 
   async function show(current: State, hash: string, file: string) {
@@ -502,10 +469,9 @@ export namespace Snapshot {
 
     for (const line of statuses.text.trim().split("\n")) {
       if (!line) continue
-      const parsed = parsePair(line)
-      const code = parsed?.[0]
-      const file = parsed?.[1]
-      if (!code || !file) continue
+      const parsed = parseNameStatusLine(line)
+      if (!parsed) continue
+      const { code, file } = parsed
       status.set(file, code.startsWith("A") ? "added" : code.startsWith("D") ? "deleted" : "modified")
     }
 
@@ -516,24 +482,18 @@ export namespace Snapshot {
 
     for (const line of numstat.text.trim().split("\n")) {
       if (!line) continue
-      const parsed = parseNumstat(line)
-      const adds = parsed?.[0]
-      const dels = parsed?.[1]
-      const file = parsed?.[2]
-      if (!file || adds === undefined || dels === undefined) continue
-      const binary = adds === "-" && dels === "-"
-      const [before, after] = binary
+      const parsed = parseNumstatLine(line)
+      if (!parsed) continue
+      const [before, after] = parsed.binary
         ? ["", ""]
-        : await Promise.all([show(current, from, file), show(current, to, file)])
-      const additions = binary ? 0 : parseInt(adds, 10)
-      const deletions = binary ? 0 : parseInt(dels, 10)
+        : await Promise.all([show(current, from, parsed.file), show(current, to, parsed.file)])
       result.push({
-        file,
+        file: parsed.file,
         before,
         after,
-        additions: Number.isFinite(additions) ? additions : 0,
-        deletions: Number.isFinite(deletions) ? deletions : 0,
-        status: status.get(file) ?? "modified",
+        additions: parsed.additions,
+        deletions: parsed.deletions,
+        status: status.get(parsed.file) ?? "modified",
       })
     }
 

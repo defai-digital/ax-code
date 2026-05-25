@@ -4,6 +4,7 @@ import path from "path"
 import { Config } from "../../src/config/config"
 import { Instance } from "../../src/project/instance"
 import { LSP } from "../../src/lsp"
+import { LSPCache } from "../../src/lsp/cache"
 import { tmpdir } from "../fixture/fixture"
 import { Log } from "../../src/util/log"
 
@@ -97,6 +98,70 @@ describe("LSP envelope coverage (S1)", () => {
     })
   })
 
+  test("implementationEnvelope returns empty envelope when no server matches", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const file = path.join(tmp.path, "demo.ts")
+    await Bun.write(file, "export const x = 1\n")
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        configSpy = spyOn(Config, "get").mockResolvedValue({ lsp: {} } as never)
+        const envelope = await LSP.implementationEnvelope({ file, line: 0, character: 0 })
+        assertEmptyEnvelope(envelope)
+        expect(envelope.data).toEqual([])
+      },
+    })
+  })
+
+  test("call hierarchy envelopes return empty envelopes when no server matches", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const file = path.join(tmp.path, "demo.ts")
+    await Bun.write(file, "export const x = 1\n")
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        configSpy = spyOn(Config, "get").mockResolvedValue({ lsp: {} } as never)
+
+        const prepare = await LSP.prepareCallHierarchyEnvelope({ file, line: 0, character: 0 })
+        const incoming = await LSP.incomingCallsEnvelope({ file, line: 0, character: 0 })
+        const outgoing = await LSP.outgoingCallsEnvelope({ file, line: 0, character: 0 })
+
+        assertEmptyEnvelope(prepare)
+        expect(prepare.data).toEqual([])
+        assertEmptyEnvelope(incoming)
+        expect(incoming.data).toEqual([])
+        assertEmptyEnvelope(outgoing)
+        expect(outgoing.data).toEqual([])
+      },
+    })
+  })
+
+  test("cache-enabled envelope fallback hashes each file once", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const file = path.join(tmp.path, "demo.ts")
+    await Bun.write(file, "export const x = 1\n")
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        configSpy = spyOn(Config, "get").mockResolvedValue({ lsp: {} } as never)
+        const hashFileSpy = spyOn(LSPCache, "hashFile")
+        try {
+          await LSP.documentSymbolEnvelope(pathToFileURL(file).href, { cache: true })
+          expect(hashFileSpy).toHaveBeenCalledTimes(1)
+
+          hashFileSpy.mockClear()
+          await LSP.referencesEnvelope({ file, line: 0, character: 0, cache: true })
+          expect(hashFileSpy).toHaveBeenCalledTimes(1)
+        } finally {
+          hashFileSpy.mockRestore()
+        }
+      },
+    })
+  })
+
   test("bare functions remain back-compat wrappers returning data arrays", async () => {
     await using tmp = await tmpdir({ git: true })
     const file = path.join(tmp.path, "demo.ts")
@@ -111,6 +176,10 @@ describe("LSP envelope coverage (S1)", () => {
         expect(await LSP.definition({ file, line: 0, character: 0 })).toEqual([])
         expect(await LSP.references({ file, line: 0, character: 0 })).toEqual([])
         expect(await LSP.hover({ file, line: 0, character: 0 })).toEqual([])
+        expect(await LSP.implementation({ file, line: 0, character: 0 })).toEqual([])
+        expect(await LSP.prepareCallHierarchy({ file, line: 0, character: 0 })).toEqual([])
+        expect(await LSP.incomingCalls({ file, line: 0, character: 0 })).toEqual([])
+        expect(await LSP.outgoingCalls({ file, line: 0, character: 0 })).toEqual([])
       },
     })
   })

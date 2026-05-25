@@ -20,6 +20,18 @@ export type ClientSelection = {
   freshSpawnCount: number
 }
 
+export type ClientRequest = {
+  mode: ClientMode
+  methods: LSPServer.Method[]
+}
+
+export function resolveClientRequest(opts: ClientOptions): ClientRequest {
+  return {
+    mode: opts.mode ?? "all",
+    methods: requestedMethods(opts),
+  }
+}
+
 export function clientModeMatchesServer(mode: ClientMode, semantic?: boolean) {
   return mode === "all" || semantic !== false
 }
@@ -50,6 +62,20 @@ export function clientMethodMatchesServer(
   const methods = Array.isArray(method) ? method : method ? [method] : []
   if (methods.length === 0) return true
   return methods.some((candidate) => capabilityHints?.[candidate] !== false)
+}
+
+export function serverMatchesClientRequest(
+  server: Pick<LSPServer.Info, "semantic" | "capabilityHints">,
+  request: ClientRequest,
+) {
+  return (
+    clientModeMatchesServer(request.mode, server.semantic) &&
+    clientMethodMatchesServer(request.methods, server.capabilityHints)
+  )
+}
+
+export function serverSupportsFileExtension(server: Pick<LSPServer.Info, "extensions">, extension: string) {
+  return server.extensions.length === 0 || server.extensions.includes(extension)
 }
 
 export function sortClients(clients: LSPClient.Info[]): LSPClient.Info[] {

@@ -27,6 +27,7 @@ import { Bus } from "@/bus"
 import { TuiEvent } from "@/cli/cmd/tui/event"
 import open from "open"
 import { isRecord } from "@/util/record"
+import { KeyedSerialQueue } from "@/util/queue"
 
 export namespace MCP {
   const log = Log.create({ service: "mcp" })
@@ -323,7 +324,7 @@ export namespace MCP {
       // Self-cleaning via `finally` would still happen, but explicit
       // clear keeps shutdown deterministic and stops confusing post-
       // shutdown error logs from late `connectImpl` writes.
-      connectLocks.clear()
+      connectQueue.clear()
     },
   )
 
@@ -710,22 +711,16 @@ export namespace MCP {
   // reference is silently dropped without `.close()`, leaking the
   // child process. The lock scopes to `name` so different servers
   // still connect in parallel.
-  const connectLocks = new Map<string, Promise<unknown>>()
+  const connectQueue = new KeyedSerialQueue()
   async function withConnectLock<T>(name: string, errorLabel: string, fn: () => Promise<T>) {
-    const prev = connectLocks.get(name) ?? Promise.resolve()
-    const next = prev.then(fn, fn)
-    const locked = next
-      .catch((err) => {
-        log.warn(errorLabel, {
-          name,
-          error: err instanceof Error ? err.message : String(err),
-          stack: err instanceof Error ? err.stack : undefined,
-        })
+    const next = connectQueue.run(name, fn)
+    next.catch((err) => {
+      log.warn(errorLabel, {
+        name,
+        error: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
       })
-      .finally(() => {
-        if (connectLocks.get(name) === locked) connectLocks.delete(name)
-      })
-    connectLocks.set(name, locked)
+    })
     return next
   }
   export async function connect(name: string) {

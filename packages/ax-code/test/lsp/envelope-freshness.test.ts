@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { LSP } from "../../src/lsp"
+import { participantStatus } from "../../src/lsp/envelope"
+import { isMethodNotFound } from "../../src/lsp/envelope-runner"
 import { Log } from "../../src/util/log"
 
 Log.init({ print: false })
@@ -49,5 +51,27 @@ describe("LSP.envelopeFreshness", () => {
     // Envelope produced just now by Date.now() should be fresh.
     const current = Date.now()
     expect(LSP.envelopeFreshness({ timestamp: current })).toBe("fresh")
+  })
+
+  test("participantStatus derives completeness and degraded state", () => {
+    expect(participantStatus({ participatingServerIDs: [], failures: 0 })).toEqual({
+      completeness: "empty",
+      degraded: true,
+    })
+    expect(participantStatus({ participatingServerIDs: ["typescript"], failures: 0 })).toEqual({
+      completeness: "full",
+      degraded: false,
+    })
+    expect(participantStatus({ participatingServerIDs: ["typescript"], failures: 1 })).toEqual({
+      completeness: "partial",
+      degraded: true,
+    })
+  })
+
+  test("envelope runner identifies JSON-RPC MethodNotFound errors", () => {
+    expect(isMethodNotFound({ code: -32601 })).toBe(true)
+    expect(isMethodNotFound({ code: -32000 })).toBe(false)
+    expect(isMethodNotFound(new Error("missing"))).toBe(false)
+    expect(isMethodNotFound(null)).toBe(false)
   })
 })

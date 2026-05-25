@@ -1,12 +1,13 @@
 import { describe, expect, test } from "bun:test"
 import { LSP } from "../../src/lsp"
+import { aggregate } from "../../src/lsp/diagnostics"
 import { Log } from "../../src/util/log"
 
 Log.init({ print: false })
 
 // Semantic Trust v2 §S3: cross-server diagnostics aggregation with
 // dedup + severity normalization. Tested against the pure kernel
-// (aggregateDiagnostics) so the test doesn't need a live LSP.
+// (aggregate) so the test doesn't need a live LSP.
 
 const now = 10_000_000_000
 
@@ -31,9 +32,9 @@ function makeMap(entries: Array<[string, any[]]>): Map<string, any> {
   return new Map(entries)
 }
 
-describe("LSP.aggregateDiagnostics", () => {
+describe("aggregate diagnostics", () => {
   test("empty inputs yields empty envelope", () => {
-    const env = LSP.aggregateDiagnostics([], { now })
+    const env = aggregate([], { now })
     expect(env.completeness).toBe("empty")
     expect(env.data).toEqual([])
     expect(env.serverIDs).toEqual([])
@@ -42,7 +43,7 @@ describe("LSP.aggregateDiagnostics", () => {
   })
 
   test("single server single file passes through with severity normalization", () => {
-    const env = LSP.aggregateDiagnostics(
+    const env = aggregate(
       [
         {
           serverID: "typescript",
@@ -69,7 +70,7 @@ describe("LSP.aggregateDiagnostics", () => {
 
   test("dedup merges identical (range, message) across servers", () => {
     const same = diag({ startLine: 0, startCol: 0, endLine: 0, endCol: 10 }, "unused import", 2)
-    const env = LSP.aggregateDiagnostics(
+    const env = aggregate(
       [
         { serverID: "typescript", diagnostics: makeMap([["/a.ts", [same]]]) },
         { serverID: "eslint", diagnostics: makeMap([["/a.ts", [same]]]) },
@@ -85,7 +86,7 @@ describe("LSP.aggregateDiagnostics", () => {
 
   test("different messages at same range are NOT deduped", () => {
     const r = { startLine: 0, startCol: 0, endLine: 0, endCol: 10 }
-    const env = LSP.aggregateDiagnostics(
+    const env = aggregate(
       [
         { serverID: "ts", diagnostics: makeMap([["/a.ts", [diag(r, "type mismatch", 1)]]]) },
         { serverID: "es", diagnostics: makeMap([["/a.ts", [diag(r, "no-unused-vars", 2)]]]) },
@@ -96,7 +97,7 @@ describe("LSP.aggregateDiagnostics", () => {
   })
 
   test("file filter returns only diagnostics for that file", () => {
-    const env = LSP.aggregateDiagnostics(
+    const env = aggregate(
       [
         {
           serverID: "ts",
@@ -114,7 +115,7 @@ describe("LSP.aggregateDiagnostics", () => {
 
   test("file filter with no matching diagnostics returns empty-completeness envelope", () => {
     // A server exists but hasn't published for the requested file.
-    const env = LSP.aggregateDiagnostics(
+    const env = aggregate(
       [
         {
           serverID: "ts",
@@ -150,8 +151,8 @@ describe("LSP.aggregateDiagnostics", () => {
         ]),
       },
     ]
-    const first = LSP.aggregateDiagnostics(inputs, { now })
-    const second = LSP.aggregateDiagnostics(inputs, { now })
+    const first = aggregate(inputs, { now })
+    const second = aggregate(inputs, { now })
     expect(first.data).toEqual(second.data)
     // First three: /a.ts line 2, /a.ts line 5, /z.ts line 5
     expect(first.data.map((d) => d.path)).toEqual(["/a.ts", "/a.ts", "/z.ts"])
@@ -159,7 +160,7 @@ describe("LSP.aggregateDiagnostics", () => {
   })
 
   test("code and source fields pass through", () => {
-    const env = LSP.aggregateDiagnostics(
+    const env = aggregate(
       [
         {
           serverID: "ts",
@@ -183,7 +184,7 @@ describe("LSP.aggregateDiagnostics", () => {
   })
 
   test("freshness helper reads the envelope's timestamp", () => {
-    const env = LSP.aggregateDiagnostics([], { now })
+    const env = aggregate([], { now })
     // `env.timestamp = now`; freshness at `now` is fresh.
     expect(LSP.envelopeFreshness(env, now)).toBe("fresh")
     // Older: warm.
@@ -193,7 +194,7 @@ describe("LSP.aggregateDiagnostics", () => {
   // Regression for v2 bug hunt: clients present but all diagnostic
   // maps empty → completeness must be "empty", not "full".
   test("connected clients with empty diagnostic maps produce empty completeness", () => {
-    const env = LSP.aggregateDiagnostics(
+    const env = aggregate(
       [
         { serverID: "ts", diagnostics: makeMap([]) },
         { serverID: "es", diagnostics: makeMap([]) },

@@ -75,3 +75,36 @@ export async function work<T>(concurrency: number, items: T[], fn: (item: T) => 
     }),
   )
 }
+
+// In-process keyed serialization for long async operations.
+//
+// Use this when callers need work for the same key to run one-at-a-time, but
+// work for different keys may run concurrently. This is not a cache or an
+// in-flight deduper: every submitted function still runs.
+export class KeyedSerialQueue {
+  private tails = new Map<string, Promise<unknown>>()
+
+  size(): number {
+    return this.tails.size
+  }
+
+  // Clears registry entries for future submissions. Already-started work and
+  // already-chained waiters keep running; this is useful during teardown when
+  // new work should not wait on stale tails, but it is not cancellation.
+  clear(): void {
+    this.tails.clear()
+  }
+
+  run<T>(key: string, fn: () => Promise<T>): Promise<T> {
+    const prev = this.tails.get(key) ?? Promise.resolve()
+    const next = prev.then(fn, fn)
+    const tail = next.catch(() => undefined)
+
+    this.tails.set(key, tail)
+    tail.finally(() => {
+      if (this.tails.get(key) === tail) this.tails.delete(key)
+    })
+
+    return next
+  }
+}

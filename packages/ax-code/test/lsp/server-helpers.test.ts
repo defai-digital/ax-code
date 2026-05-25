@@ -6,24 +6,34 @@ import { Global } from "../../src/global"
 import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
 import {
+  NearestRoot,
+  bunServerArgs,
+  globalBin,
+  globalPath,
+  nodeModuleScript,
+  serverHandle,
+  spawnInfo,
+  toolBin,
+  toolServer,
+  venvBin,
+  venvPaths,
+  venvPython,
+} from "../../src/lsp/server-helpers"
+import {
+  PINNED_CHECKSUM_LSP_RELEASES,
+  PINNED_DIRECT_LSP_RELEASES,
+  PINNED_GITHUB_LSP_RELEASES,
   checksumManifestSha256,
   fetchGitHubReleaseByTag,
   installPinnedChecksumReleaseAsset,
   installPinnedGitHubReleaseAsset,
+  installReleaseBin,
   jdtlsAssetUrl,
   jdtlsChecksumUrl,
-  llvmClangdAsset,
-  llvmReleaseVersion,
-  NearestRoot,
-  PINNED_CHECKSUM_LSP_RELEASES,
-  PINNED_DIRECT_LSP_RELEASES,
-  PINNED_GITHUB_LSP_RELEASES,
-  bunServerArgs,
-  globalBin,
-  globalPath,
-  installReleaseBin,
   kotlinLsAsset,
   kotlinLsChecksumUrl,
+  llvmClangdAsset,
+  llvmReleaseVersion,
   luaLsAsset,
   luaLsReleaseTarget,
   managedToolBin,
@@ -31,19 +41,13 @@ import {
   releaseAsset,
   releaseAssetSha256,
   releaseVersion,
-  spawnInfo,
   terraformLsAsset,
   terraformLsChecksumUrl,
   texlabAsset,
   tinymistAsset,
-  toolBin,
-  toolServer,
-  venvBin,
-  venvPaths,
-  venvPython,
   zlsAsset,
   zlsReleaseForZig,
-} from "../../src/lsp/server-helpers"
+} from "../../src/lsp/server-releases"
 
 describe("lsp server helpers", () => {
   test("lists default venv search paths", async () => {
@@ -413,6 +417,22 @@ describe("lsp server helpers", () => {
   test("builds bun run args for js-backed servers", () => {
     expect(bunServerArgs("/tmp/server.js", ["--stdio"])).toEqual(["run", "/tmp/server.js", "--stdio"])
     expect(bunServerArgs("/tmp/cli.js", ["start"])).toEqual(["run", "/tmp/cli.js", "start"])
+  })
+
+  test("builds shared-bin node module script paths", () => {
+    expect(nodeModuleScript("@vue", "language-server", "bin", "vue-language-server.js")).toBe(
+      path.join(Global.Path.bin, "node_modules", "@vue", "language-server", "bin", "vue-language-server.js"),
+    )
+  })
+
+  test("wraps optional server processes with initialization", () => {
+    const process = { spawnfile: "/tmp/server" } as any
+
+    expect(serverHandle(process, { telemetry: { enabled: false } })).toEqual({
+      process,
+      initialization: { telemetry: { enabled: false } },
+    })
+    expect(serverHandle(undefined)).toBeUndefined()
   })
 
   test("builds global binary paths by platform", () => {

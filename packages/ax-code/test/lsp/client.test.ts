@@ -22,6 +22,14 @@ function spawnFakeServer(env?: Record<string, string>) {
   }
 }
 
+function deferred() {
+  let resolve!: () => void
+  const promise = new Promise<void>((r) => {
+    resolve = r
+  })
+  return { promise, resolve }
+}
+
 describe("LSPClient interop", () => {
   beforeEach(async () => {
     await Log.init({ print: true })
@@ -36,38 +44,10 @@ describe("LSPClient interop", () => {
 
     const indexSrc = await Bun.file(path.join(import.meta.dir, "../../src/lsp/index.ts")).text()
     expect(indexSrc).toContain("onClose: () => {")
-    expect(indexSrc).toContain("markBroken(s.broken, key)")
+    expect(indexSrc).toContain("LSPBrokenServer.markBroken(s.broken, key)")
     expect(indexSrc).toContain("s.clients.splice(idx, 1)")
     expect(indexSrc).toContain("client.closed || !client.ping()")
     expect(indexSrc).toContain("lsp client died during spawn, skipping active registration")
-  })
-
-  test("per-path lock releases idle path entries after queued work drains", async () => {
-    const lock = LSPClient.createPathLock()
-    const order: string[] = []
-    let releaseFirst!: () => void
-
-    const first = lock.run("file.ts", async () => {
-      order.push("first:start")
-      await new Promise<void>((resolve) => {
-        releaseFirst = resolve
-      })
-      order.push("first:end")
-    })
-
-    const second = lock.run("file.ts", async () => {
-      order.push("second")
-    })
-
-    await Promise.resolve()
-    expect(order).toEqual(["first:start"])
-    expect(lock.size()).toBe(1)
-
-    releaseFirst()
-    await Promise.all([first, second])
-
-    expect(order).toEqual(["first:start", "first:end", "second"])
-    expect(lock.size()).toBe(0)
   })
 
   test("diagnostics URI normalization skips non-file URIs", () => {
@@ -361,6 +341,59 @@ describe("LSPClient interop", () => {
         expect(didChange?.params?.contentChanges?.length).toBeGreaterThan(0)
         const incremental = didChange?.params?.contentChanges?.some((change: { range?: object }) => "range" in change)
         expect(incremental).toBe(true)
+
+        await client.shutdown()
+      },
+    })
+  })
+
+  test("notify.open serializes concurrent updates for the same file", async () => {
+    await using tmp = await tmpdir()
+    const file = path.join(tmp.path, "file.ts")
+    await Bun.write(file, "export const x = 1\n")
+    const handle = spawnFakeServer() as any
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const client = await LSPClient.create({
+          serverID: "fake",
+          server: handle as unknown as LSPServer.Handle,
+          root: tmp.path,
+        })
+
+        await client.notify.open({ path: file })
+
+        const firstDidChange = deferred()
+        const releaseDidChange = deferred()
+        const didChangeVersions: number[] = []
+        const conn = client.connection as typeof client.connection & {
+          sendNotification: (method: string, params: any) => Promise<void>
+        }
+        const originalSendNotification = conn.sendNotification.bind(conn)
+        conn.sendNotification = (async (method: string, params: any) => {
+          if (method === "textDocument/didChange") {
+            didChangeVersions.push(params?.textDocument?.version)
+            if (didChangeVersions.length === 1) {
+              firstDidChange.resolve()
+              await releaseDidChange.promise
+            }
+          }
+          return originalSendNotification(method, params)
+        }) as typeof conn.sendNotification
+
+        await Bun.write(file, "export const x = 1\nexport const y = 2\n")
+        const first = client.notify.open({ path: file })
+        const second = client.notify.open({ path: file })
+
+        await firstDidChange.promise
+        await new Promise((resolve) => setTimeout(resolve, 25))
+        expect(didChangeVersions).toEqual([1])
+
+        releaseDidChange.resolve()
+        await expect(first).resolves.toBe(true)
+        await expect(second).resolves.toBe(false)
+        expect(didChangeVersions).toEqual([1])
 
         await client.shutdown()
       },

@@ -13,6 +13,7 @@ import { NativeStore } from "./native-store"
 import type { CodeNodeKind, CodeEdgeKind } from "./schema.sql"
 import type { ProjectID } from "../project/schema"
 import { INDEXER_SEMANTIC_METHODS } from "../lsp/prewarm-profile"
+import { KeyedSerialQueue } from "../util/queue"
 
 const log = Log.create({ service: "code-intelligence.builder" })
 const SYMBOL_RANGE_SCALE = 1000
@@ -335,25 +336,9 @@ export namespace CodeGraphBuilder {
   // mode prevents deadlocks but not this read-your-own-transaction
   // skew, so we serialize at the project level. Different projects
   // still run in parallel.
-  const projectMutexes = new Map<string, Promise<unknown>>()
+  const projectQueue = new KeyedSerialQueue()
   async function withProjectLock<T>(projectID: ProjectID, fn: () => Promise<T>): Promise<T> {
-    const prev = projectMutexes.get(projectID) ?? Promise.resolve()
-    const next = prev.then(fn, (err) => {
-      log.warn("previous project lock operation failed before next index run", {
-        projectID,
-        error: err instanceof Error ? err.message : String(err),
-        stack: err instanceof Error ? err.stack : undefined,
-      })
-      return fn()
-    })
-    const sentinel = next.catch(() => {})
-    projectMutexes.set(projectID, sentinel)
-    // Clean up the entry when the chain settles and no newer
-    // operation has replaced it, preventing unbounded Map growth.
-    sentinel.then(() => {
-      if (projectMutexes.get(projectID) === sentinel) projectMutexes.delete(projectID)
-    })
-    return next
+    return projectQueue.run(projectID, fn)
   }
 
   // Index a single file: extract its symbols via LSP and upsert them as
@@ -432,7 +417,7 @@ export namespace CodeGraphBuilder {
   export function indexFile(projectID: ProjectID, absPath: string, opts: IndexFileOptions = {}): Promise<IndexResult> {
     // Serialize per-project to prevent cross-file caller resolution
     // from reading stale nodes that a sibling transaction has already
-    // deleted. See the projectMutexes comment at the top of the
+    // deleted. See the projectQueue comment at the top of the
     // namespace.
     return withProjectLock(projectID, () => indexFileLocked(projectID, absPath, opts))
   }

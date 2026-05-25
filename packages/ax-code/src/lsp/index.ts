@@ -1,140 +1,41 @@
 import { BusEvent } from "@/bus/bus-event"
 import { Bus } from "@/bus"
 import { Log } from "../util/log"
-import { Env } from "../util/env"
 import { LSPClient } from "./client"
 import path from "path"
-import { pathToFileURL, fileURLToPath } from "url"
 import { LSPServer } from "./server"
 import z from "zod"
 import { Config } from "../config/config"
 import { Instance } from "../project/instance"
-import { Flag } from "@/flag/flag"
 import { Process } from "../util/process"
-import { spawn as lspspawn } from "./launch"
-import { withTimeout } from "../util/timeout"
 import { Ripgrep } from "../file/ripgrep"
 import { LspScheduler } from "./scheduler"
-import { BuiltinServerProfiles } from "./server-profile"
-import { LANGUAGE_EXTENSIONS } from "./language"
-import { isNonEmptyRecord } from "@/util/record"
-import { LSPCache } from "./cache"
 import * as LSPSelection from "./selection"
+import * as LSPBrokenServer from "./broken-server"
+import * as LSPPerf from "./perf"
+import * as LSPPrewarm from "./prewarm"
+import * as LSPEnvelope from "./envelope"
+import * as LSPDiagnostics from "./diagnostics"
+import * as LSPProtocol from "./protocol"
+import * as LSPWorkspaceSymbol from "./workspace-symbol"
+import * as LSPPoint from "./point"
+import * as LSPEnvelopeRunner from "./envelope-runner"
+import * as LSPClientNotify from "./client-notify"
+import * as LSPDocumentSymbol from "./document-symbol"
+import * as LSPReferences from "./references"
+import { LSPServerConfig } from "./server-config"
 
 export namespace LSP {
   const log = Log.create({ service: "lsp" })
 
-  // Bounded ring of recent durations per LSP operation. `perf:index` snapshots
-  // this to attribute orchestration/RPC cost at the operation level (touch,
-  // documentSymbol, references, workspaceSymbol) — the baseline metric the
-  // PRD requires before any native-extraction decision gate is evaluated.
-  //
-  // A ring (not an unbounded array) keeps long sessions bounded. We keep
-  // enough samples for stable p50/p95 without retaining session-long history.
-  const PERF_SAMPLE_CAP = 1024
-
-  type PerfEntry = {
-    durations: number[] // ring buffer of recent sample durations
-    cursor: number // next write slot; wraps at PERF_SAMPLE_CAP
-    okCount: number // monotonic since last reset
-    errorCount: number
-  }
-
-  const perfSamples = new Map<string, PerfEntry>()
-
-  // Drives the sampler directly. `metered()` is the production call path,
-  // while unit tests use this to isolate ring-buffer semantics without
-  // spinning up an actual LSP client.
-  export function recordPerfSample(operation: string, durationMs: number, ok: boolean) {
-    let entry = perfSamples.get(operation)
-    if (!entry) {
-      entry = { durations: [], cursor: 0, okCount: 0, errorCount: 0 }
-      perfSamples.set(operation, entry)
-    }
-    if (entry.durations.length < PERF_SAMPLE_CAP) {
-      entry.durations.push(durationMs)
-    } else {
-      entry.durations[entry.cursor] = durationMs
-      entry.cursor = (entry.cursor + 1) % PERF_SAMPLE_CAP
-    }
-    if (ok) entry.okCount++
-    else entry.errorCount++
-  }
-
-  function finishPerfPhase(operation: string, started: number, ok: boolean) {
-    const durationMs = Math.round(performance.now() - started)
-    recordPerfSample(operation, durationMs, ok)
-    return durationMs
-  }
-
-  function percentile(sorted: number[], p: number): number {
-    if (sorted.length === 0) return 0
-    const idx = Math.min(sorted.length - 1, Math.floor((p / 100) * sorted.length))
-    return sorted[idx]!
-  }
-
-  export type PerfRow = {
-    count: number
-    okCount: number
-    errorCount: number
-    p50: number
-    p95: number
-    maxMs: number
-    totalMs: number
-  }
-
-  export function perfSnapshot(): Record<string, PerfRow> {
-    const out: Record<string, PerfRow> = {}
-    for (const [op, entry] of perfSamples) {
-      const sorted = [...entry.durations].sort((a, b) => a - b)
-      const totalMs = sorted.reduce((s, v) => s + v, 0)
-      out[op] = {
-        count: entry.okCount + entry.errorCount,
-        okCount: entry.okCount,
-        errorCount: entry.errorCount,
-        p50: percentile(sorted, 50),
-        p95: percentile(sorted, 95),
-        maxMs: sorted.at(-1) ?? 0,
-        totalMs,
-      }
-    }
-    return out
-  }
-
-  export function perfReset() {
-    perfSamples.clear()
-  }
-
-  // Emit a structured perf line for an LSP hotspot and record it in the
-  // in-memory sampler. The operation name is the public API surface
-  // (`touch`, `documentSymbol`, `references`, `workspaceSymbol`), not the
-  // underlying RPC method — callers aggregate on the surface name.
-  async function metered<T>(operation: string, extra: Record<string, unknown>, fn: () => Promise<T>): Promise<T> {
-    const started = performance.now()
-    try {
-      const result = await fn()
-      const durationMs = Math.round(performance.now() - started)
-      recordPerfSample(operation, durationMs, true)
-      log.info("lsp.perf", {
-        operation,
-        durationMs,
-        status: "ok",
-        ...extra,
-      })
-      return result
-    } catch (err) {
-      const durationMs = Math.round(performance.now() - started)
-      recordPerfSample(operation, durationMs, false)
-      log.warn("lsp.perf", {
-        operation,
-        durationMs,
-        status: "error",
-        errorCode: err instanceof Error ? err.name : "unknown",
-        ...extra,
-      })
-      throw err
-    }
-  }
+  export type PerfRow = LSPPerf.PerfRow
+  export const perfSnapshot = LSPPerf.snapshot
+  export const perfReset = LSPPerf.reset
+  export type SemanticEnvelope<T> = LSPEnvelope.SemanticEnvelope<T>
+  export type Freshness = LSPEnvelope.Freshness
+  export const envelopeFreshness = LSPEnvelope.freshness
+  export type NormalizedSeverity = LSPDiagnostics.NormalizedSeverity
+  export type NormalizedDiagnostic = LSPDiagnostics.NormalizedDiagnostic
 
   // Bound LSP RPC calls so a hung language server cannot block tool execution.
   // Pointwise queries get a short budget; workspace-wide queries get a longer
@@ -142,241 +43,53 @@ export namespace LSP {
   const RPC_TIMEOUT_MS = 5_000
   const RPC_TIMEOUT_LONG_MS = 15_000
 
-  // Exponential backoff for broken servers. A server that fails to spawn or
-  // initialize is marked broken and skipped until nextAttempt. After the
-  // cooldown expires the entry is dropped and the next getClients() call will
-  // retry the spawn. Failures compound the backoff to avoid hammering a
-  // server that is genuinely unrecoverable (missing binary, bad config).
-  //   attempt 1 failure →  30s
-  //   attempt 2 failure →   2m
-  //   attempt 3 failure →   8m
-  //   attempt 4 failure →  32m
-  //   attempt 5+ failure →  60m (capped)
-  const BROKEN_BACKOFF_BASE_MS = 30_000
-  const BROKEN_BACKOFF_MAX_MS = 60 * 60 * 1000
-  const BROKEN_SERVER_CACHE_MAX = 100
-  const BROKEN_SERVER_TTL_MS = 60 * 60 * 1000
-
-  // Exported for unit tests. Deterministic pure function — no side effects.
-  export function computeBackoff(failures: number): number {
-    if (failures <= 0) return 0
-    const raw = BROKEN_BACKOFF_BASE_MS * Math.pow(4, failures - 1)
-    return Math.min(raw, BROKEN_BACKOFF_MAX_MS)
-  }
-
-  export type BrokenEntry = {
-    failures: number
-    nextAttempt: number
-  }
-
   // How often the health-check loop runs. A dead-process probe is cheap
   // (kill -0 syscall), so we can run it frequently without concern. 60s is
   // responsive enough for interactive use without generating log noise.
   const HEALTH_CHECK_INTERVAL_MS = 60_000
   const MAX_ROOT_CACHE_ENTRIES = 2_000
 
-  // Check whether a (root, server) key is currently in cooldown.
-  // Expired entries are kept so caller can retain failure count and
-  // continue applying backoff escalation on the next retry attempt.
-  // Exported for unit tests.
-  export function isBroken(broken: Map<string, BrokenEntry>, key: string): boolean {
-    const entry = broken.get(key)
-    if (!entry) return false
-    if (Date.now() >= entry.nextAttempt) {
-      return false
-    }
-    return true
-  }
-
   function clientKey(root: string, serverID: string) {
     return `${root}\0${serverID}`
-  }
-
-  function pruneBrokenServers(broken: Map<string, BrokenEntry>, now: number) {
-    for (const [key, entry] of broken) {
-      if (now - (entry.nextAttempt - computeBackoff(entry.failures)) > BROKEN_SERVER_TTL_MS) {
-        broken.delete(key)
-      }
-    }
-
-    while (broken.size > BROKEN_SERVER_CACHE_MAX) {
-      const oldest = broken.keys().next().value
-      if (!oldest) break
-      broken.delete(oldest)
-    }
-  }
-
-  // Exported for unit tests.
-  export function markBroken(broken: Map<string, BrokenEntry>, key: string) {
-    const now = Date.now()
-    pruneBrokenServers(broken, now)
-    const existing = broken.get(key)
-    const failures = (existing?.failures ?? 0) + 1
-    const backoffMs = computeBackoff(failures)
-    broken.set(key, {
-      failures,
-      nextAttempt: now + backoffMs,
-    })
-    pruneBrokenServers(broken, now)
-    log.info("lsp server marked broken", { key, failures, backoffMs })
   }
 
   export const Event = {
     Updated: BusEvent.define("lsp.updated", z.object({})),
   }
 
-  export const Range = z
-    .object({
-      start: z.object({
-        line: z.number(),
-        character: z.number(),
-      }),
-      end: z.object({
-        line: z.number(),
-        character: z.number(),
-      }),
-    })
-    .meta({
-      ref: "Range",
-    })
-  export type Range = z.infer<typeof Range>
-
-  export const Symbol = z
-    .object({
-      name: z.string(),
-      kind: z.number(),
-      location: z.object({
-        uri: z.string(),
-        range: Range,
-      }),
-    })
-    .meta({
-      ref: "Symbol",
-    })
-  export type Symbol = z.infer<typeof Symbol>
-
-  export const DocumentSymbol = z
-    .object({
-      name: z.string(),
-      detail: z.string().optional(),
-      kind: z.number(),
-      range: Range,
-      selectionRange: Range,
-    })
-    .meta({
-      ref: "DocumentSymbol",
-    })
-  export type DocumentSymbol = z.infer<typeof DocumentSymbol>
+  export const Range = LSPProtocol.Range
+  export type Range = LSPProtocol.Range
+  export const Symbol = LSPProtocol.Symbol
+  export type Symbol = LSPProtocol.Symbol
+  export const DocumentSymbol = LSPProtocol.DocumentSymbol
+  export type DocumentSymbol = LSPProtocol.DocumentSymbol
 
   export type ClientMode = LSPSelection.ClientMode
   type ClientOptions = LSPSelection.ClientOptions
   type PrewarmSelectionOptions = LSPSelection.PrewarmSelectionOptions
   type ClientSelection = LSPSelection.ClientSelection
-  export const clientModeMatchesServer = LSPSelection.clientModeMatchesServer
-  export const clientMethodMatchesServer = LSPSelection.clientMethodMatchesServer
-  export const requestedMethods = LSPSelection.requestedMethods
-  export const filterClientsForSelection = LSPSelection.filterClientsForSelection
+  const requestedMethods = LSPSelection.requestedMethods
+  const filterClientsForSelection = LSPSelection.filterClientsForSelection
+  const resolveClientRequest = LSPSelection.resolveClientRequest
+  const serverMatchesClientRequest = LSPSelection.serverMatchesClientRequest
+  const serverSupportsFileExtension = LSPSelection.serverSupportsFileExtension
   const clientPrewarmMatchesServer = LSPSelection.clientPrewarmMatchesServer
-
-  function mergeCapabilityHints(
-    ...hints: Array<LSPServer.CapabilityHints | undefined>
-  ): LSPServer.CapabilityHints | undefined {
-    const merged: LSPServer.CapabilityHints = {}
-    for (const hint of hints) {
-      if (!hint) continue
-      Object.assign(merged, hint)
-    }
-    return isNonEmptyRecord(merged) ? merged : undefined
-  }
-
-  const filterExperimentalServers = (servers: Record<string, LSPServer.Info>) => {
-    if (Flag.AX_CODE_EXPERIMENTAL_LSP_TY) {
-      // If experimental flag is enabled, disable pyright
-      if (servers["pyright"]) {
-        log.info("LSP server pyright is disabled because AX_CODE_EXPERIMENTAL_LSP_TY is enabled")
-        delete servers["pyright"]
-      }
-    } else {
-      // If experimental flag is disabled, disable ty
-      if (servers["ty"]) {
-        delete servers["ty"]
-      }
-    }
-  }
 
   const state = Instance.state(
     async () => {
       const clients: LSPClient.Info[] = []
-      const servers: Record<string, LSPServer.Info> = {}
       const cfg = await Config.get()
+      const servers = LSPServerConfig.buildEnabledServers(cfg)
 
       if (cfg.lsp === false) {
         log.info("all LSPs are disabled")
         return {
-          broken: new Map<string, BrokenEntry>(),
+          broken: new Map<string, LSPBrokenServer.BrokenEntry>(),
           servers,
           clients,
           rootCache: new Map<string, string | null>(),
           spawning: new Map<string, Promise<LSPClient.Info | undefined>>(),
           healthCheck: undefined,
-        }
-      }
-
-      for (const server of Object.values(LSPServer)) {
-        const profile = BuiltinServerProfiles[server.id]
-        servers[server.id] = {
-          ...server,
-          semantic: server.semantic ?? profile?.semantic ?? true,
-          priority: server.priority ?? profile?.priority ?? 0,
-          concurrency: server.concurrency ?? profile?.concurrency,
-          capabilityHints: mergeCapabilityHints(profile?.capabilityHints, server.capabilityHints),
-        }
-      }
-
-      filterExperimentalServers(servers)
-
-      for (const [name, item] of Object.entries(cfg.lsp ?? {})) {
-        const existing = servers[name]
-        if (item.disabled) {
-          log.info(`LSP server ${name} is disabled`)
-          delete servers[name]
-          continue
-        }
-        servers[name] = {
-          ...existing,
-          id: name,
-          semantic: item.semantic ?? existing?.semantic ?? true,
-          priority: item.priority ?? existing?.priority ?? 0,
-          concurrency: item.concurrency ?? existing?.concurrency,
-          capabilityHints: mergeCapabilityHints(existing?.capabilityHints, item.capabilities),
-          root: existing?.root ?? (async () => Instance.directory),
-          extensions: item.extensions ?? existing?.extensions ?? [],
-          spawn: async (root) => {
-            if (item.command) {
-              return {
-                process: lspspawn(item.command[0], item.command.slice(1), {
-                  cwd: root,
-                  env: {
-                    ...Env.sanitize(),
-                    ...item.env,
-                  },
-                }),
-                initialization: item.initialization,
-              }
-            }
-
-            if (!existing?.spawn) return undefined
-            const handle = await existing.spawn(root)
-            if (!handle) return handle
-            if (!item.initialization) return handle
-            return {
-              ...handle,
-              initialization: {
-                ...(handle.initialization ?? {}),
-                ...item.initialization,
-              },
-            }
-          },
         }
       }
 
@@ -391,7 +104,7 @@ export namespace LSP {
       })
 
       const s = {
-        broken: new Map<string, BrokenEntry>(),
+        broken: new Map<string, LSPBrokenServer.BrokenEntry>(),
         servers,
         clients,
         rootCache: new Map<string, string | null>(),
@@ -414,7 +127,7 @@ export namespace LSP {
         for (const client of dead) {
           const key = clientKey(client.root, client.serverID)
           log.warn("lsp server died unexpectedly", { serverID: client.serverID, root: client.root })
-          markBroken(s.broken, key)
+          LSPBrokenServer.markBroken(s.broken, key)
           const idx = s.clients.indexOf(client)
           if (idx >= 0) s.clients.splice(idx, 1)
           // Best-effort shutdown to release the connection objects. The
@@ -508,14 +221,14 @@ export namespace LSP {
     const spawnStarted = performance.now()
     try {
       handle = await server.spawn(root)
-      finishPerfPhase("client.spawn", spawnStarted, Boolean(handle))
+      LSPPerf.finishPhase("client.spawn", spawnStarted, Boolean(handle))
       if (!handle) {
-        markBroken(s.broken, key)
+        LSPBrokenServer.markBroken(s.broken, key)
         return undefined
       }
     } catch (err) {
-      finishPerfPhase("client.spawn", spawnStarted, false)
-      markBroken(s.broken, key)
+      LSPPerf.finishPhase("client.spawn", spawnStarted, false)
+      LSPBrokenServer.markBroken(s.broken, key)
       log.error(`Failed to spawn LSP server ${server.id}`, { error: err })
       return undefined
     }
@@ -534,17 +247,17 @@ export namespace LSP {
         capabilityHints: server.capabilityHints,
         onClose: () => {
           log.warn("lsp connection closed unexpectedly", { serverID: server.id, root })
-          markBroken(s.broken, key)
+          LSPBrokenServer.markBroken(s.broken, key)
           const idx = s.clients.findIndex((item) => item.root === root && item.serverID === server.id)
           if (idx >= 0) s.clients.splice(idx, 1)
           void Process.stop(handle.process).catch(() => {})
           Bus.publishDetached(Event.Updated, {})
         },
       })
-      finishPerfPhase("client.initialize", initializeStarted, true)
+      LSPPerf.finishPhase("client.initialize", initializeStarted, true)
     } catch (err) {
-      finishPerfPhase("client.initialize", initializeStarted, false)
-      markBroken(s.broken, key)
+      LSPPerf.finishPhase("client.initialize", initializeStarted, false)
+      LSPBrokenServer.markBroken(s.broken, key)
       await Process.stop(handle.process)
       log.error(`Failed to initialize LSP client ${server.id}`, { error: err })
       return undefined
@@ -562,7 +275,7 @@ export namespace LSP {
 
     if (client.closed || !client.ping()) {
       log.warn("lsp client died during spawn, skipping active registration", { serverID: server.id, root })
-      markBroken(s.broken, key)
+      LSPBrokenServer.markBroken(s.broken, key)
       await Process.stop(handle.process)
       return undefined
     }
@@ -571,11 +284,64 @@ export namespace LSP {
     return client
   }
 
+  type PendingClientSpawn = {
+    task: Promise<LSPClient.Info | undefined>
+    fresh: boolean
+  }
+
+  function queueClientForRoot(
+    s: State,
+    server: LSPServer.Info,
+    root: string,
+    result: LSPClient.Info[],
+    pending: PendingClientSpawn[],
+  ): boolean {
+    const key = clientKey(root, server.id)
+    if (LSPBrokenServer.isBroken(s.broken, key)) return false
+
+    const match = s.clients.find((x) => x.root === root && x.serverID === server.id)
+    if (match) {
+      result.push(match)
+      return false
+    }
+
+    const inflight = s.spawning.get(key)
+    if (inflight) {
+      // Reuse the in-flight promise from a concurrent caller. Don't mark
+      // it `fresh` — the originating call will emit the Updated event.
+      pending.push({ task: inflight, fresh: false })
+      return false
+    }
+
+    const task = scheduleClient(s, server, root, key)
+    s.spawning.set(key, task)
+    task
+      .finally(() => {
+        if (s.spawning.get(key) === task) {
+          s.spawning.delete(key)
+        }
+      })
+      .catch(() => undefined)
+    pending.push({ task, fresh: true })
+    return true
+  }
+
+  async function collectPendingClients(pending: PendingClientSpawn[], result: LSPClient.Info[]): Promise<void> {
+    if (pending.length === 0) return
+
+    const resolved = await Promise.all(pending.map((p) => p.task.catch(() => undefined)))
+    for (let i = 0; i < resolved.length; i++) {
+      const client = resolved[i]
+      if (!client) continue
+      result.push(client)
+      if (pending[i].fresh) Bus.publishDetached(Event.Updated, {})
+    }
+  }
+
   async function getClientsDetailed(file: string, opts: ClientOptions = {}): Promise<ClientSelection> {
     const s = await state()
     const extension = path.parse(file).ext || file
-    const mode = opts.mode ?? "all"
-    const methods = requestedMethods(opts)
+    const request = resolveClientRequest(opts)
     const result: LSPClient.Info[] = []
     let freshSpawnCount = 0
 
@@ -583,54 +349,21 @@ export namespace LSP {
     // Servers that already have a client land in `result` directly. Servers
     // currently being spawned reuse the inflight promise. New spawns go into
     // `pending` and are awaited in parallel in pass 2.
-    const pending: { key: string; task: Promise<LSPClient.Info | undefined>; fresh: boolean }[] = []
+    const pending: PendingClientSpawn[] = []
 
     for (const server of Object.values(s.servers)) {
-      if (!clientModeMatchesServer(mode, server.semantic)) continue
-      if (!clientMethodMatchesServer(methods, server.capabilityHints)) continue
-      if (server.extensions.length && !server.extensions.includes(extension)) continue
+      if (!serverMatchesClientRequest(server, request)) continue
+      if (!serverSupportsFileExtension(server, extension)) continue
 
       const root = await resolveRoot(s, server, file)
       if (!root) continue
-      const key = clientKey(root, server.id)
-      if (isBroken(s.broken, key)) continue
 
-      const match = s.clients.find((x) => x.root === root && x.serverID === server.id)
-      if (match) {
-        result.push(match)
-        continue
-      }
-
-      const inflight = s.spawning.get(key)
-      if (inflight) {
-        // Reuse the in-flight promise from a concurrent caller. Don't mark
-        // it `fresh` — the originating call will emit the Updated event.
-        pending.push({ key, task: inflight, fresh: false })
-        continue
-      }
-
-      const task = scheduleClient(s, server, root, key)
-      s.spawning.set(key, task)
-      task.finally(() => {
-        if (s.spawning.get(key) === task) {
-          s.spawning.delete(key)
-        }
-      })
-      freshSpawnCount++
-      pending.push({ key, task, fresh: true })
+      if (queueClientForRoot(s, server, root, result, pending)) freshSpawnCount++
     }
 
     // Pass 2: await all pending spawns in parallel. For a file that matches
     // N servers this turns init time from O(sum init) into O(max init).
-    if (pending.length > 0) {
-      const resolved = await Promise.all(pending.map((p) => p.task.catch(() => undefined)))
-      for (let i = 0; i < resolved.length; i++) {
-        const client = resolved[i]
-        if (!client) continue
-        result.push(client)
-        if (pending[i].fresh) Bus.publishDetached(Event.Updated, {})
-      }
-    }
+    await collectPendingClients(pending, result)
 
     return {
       clients: filterClientsForSelection(result, opts),
@@ -644,16 +377,12 @@ export namespace LSP {
 
   async function getWorkspaceClientsDetailed(opts: ClientOptions = {}): Promise<ClientSelection> {
     const s = await state()
-    const mode = opts.mode ?? "all"
-    const methods = requestedMethods(opts)
+    const request = resolveClientRequest(opts)
     const result: LSPClient.Info[] = []
-    const pending: { key: string; task: Promise<LSPClient.Info | undefined>; fresh: boolean }[] = []
+    const pending: PendingClientSpawn[] = []
     const probeByServer = new Map<string, string>()
     let freshSpawnCount = 0
-    const eligibleServers = Object.values(s.servers).filter(
-      (server) =>
-        clientModeMatchesServer(mode, server.semantic) && clientMethodMatchesServer(methods, server.capabilityHints),
-    )
+    const eligibleServers = Object.values(s.servers).filter((server) => serverMatchesClientRequest(server, request))
 
     // Cold workspace symbol should not spawn every configured server.
     // Scan the workspace once and only prime servers for languages that
@@ -663,7 +392,7 @@ export namespace LSP {
       const extension = path.parse(probe).ext || probe
       for (const server of eligibleServers) {
         if (probeByServer.has(server.id)) continue
-        if (server.extensions.length && !server.extensions.includes(extension)) continue
+        if (!serverSupportsFileExtension(server, extension)) continue
         probeByServer.set(server.id, probe)
       }
       if (probeByServer.size === eligibleServers.length) break
@@ -674,41 +403,11 @@ export namespace LSP {
       if (!probe) continue
       const root = await server.root(probe)
       if (!root) continue
-      const key = clientKey(root, server.id)
-      if (isBroken(s.broken, key)) continue
 
-      const match = s.clients.find((x) => x.root === root && x.serverID === server.id)
-      if (match) {
-        result.push(match)
-        continue
-      }
-
-      const inflight = s.spawning.get(key)
-      if (inflight) {
-        pending.push({ key, task: inflight, fresh: false })
-        continue
-      }
-
-      const task = scheduleClient(s, server, root, key)
-      s.spawning.set(key, task)
-      task.finally(() => {
-        if (s.spawning.get(key) === task) {
-          s.spawning.delete(key)
-        }
-      })
-      freshSpawnCount++
-      pending.push({ key, task, fresh: true })
+      if (queueClientForRoot(s, server, root, result, pending)) freshSpawnCount++
     }
 
-    if (pending.length > 0) {
-      const resolved = await Promise.all(pending.map((p) => p.task.catch(() => undefined)))
-      for (let i = 0; i < resolved.length; i++) {
-        const client = resolved[i]
-        if (!client) continue
-        result.push(client)
-        if (pending[i].fresh) Bus.publishDetached(Event.Updated, {})
-      }
-    }
+    await collectPendingClients(pending, result)
 
     return {
       clients: filterClientsForSelection(result, opts),
@@ -723,16 +422,14 @@ export namespace LSP {
   ) {
     const s = await state()
     const extension = path.parse(file).ext || file
-    const mode = opts.mode ?? "all"
-    const methods = requestedMethods(opts)
+    const request = resolveClientRequest(opts)
     for (const server of Object.values(s.servers)) {
-      if (!clientModeMatchesServer(mode, server.semantic)) continue
-      if (!clientMethodMatchesServer(methods, server.capabilityHints)) continue
+      if (!serverMatchesClientRequest(server, request)) continue
       if (matchesServer && !matchesServer(server)) continue
-      if (server.extensions.length && !server.extensions.includes(extension)) continue
+      if (!serverSupportsFileExtension(server, extension)) continue
       const root = await resolveRoot(s, server, file)
       if (!root) continue
-      if (isBroken(s.broken, clientKey(root, server.id))) continue
+      if (LSPBrokenServer.isBroken(s.broken, clientKey(root, server.id))) continue
       return true
     }
     return false
@@ -755,44 +452,18 @@ export namespace LSP {
     files: string[]
   }
 
-  function detectPrewarmLanguage(file: string): string {
-    const extension = path.parse(file).ext || file
-    return LANGUAGE_EXTENSIONS[extension] ?? "unknown"
-  }
-
-  export function selectPrewarmFiles(files: string[], opts: PrewarmSelectionOptions = {}): string[] {
-    const maxFiles = Math.max(0, opts.maxFiles ?? files.length)
-    const maxLanguages = Math.max(0, opts.maxLanguages ?? maxFiles)
-    if (maxFiles === 0 || maxLanguages === 0) return []
-
-    const selected: string[] = []
-    const seenLanguages = new Set<string>()
-
-    for (const file of files) {
-      if (selected.length >= maxFiles || seenLanguages.size >= maxLanguages) break
-
-      const language = detectPrewarmLanguage(file)
-      if (language === "unknown" || language === "plaintext") continue
-      if (seenLanguages.has(language)) continue
-
-      selected.push(file)
-      seenLanguages.add(language)
-    }
-
-    return selected
-  }
+  export const selectPrewarmFiles = LSPPrewarm.selectFiles
 
   export async function prewarmFiles(files: string[], opts: ClientOptions = {}): Promise<PrewarmResult> {
-    const mode = opts.mode ?? "all"
-    const methods = requestedMethods(opts)
+    const request = resolveClientRequest(opts)
     const uniqueFiles = [...new Set(files)]
 
-    return metered(
+    return LSPPerf.metered(
       "prewarm",
       {
         files: uniqueFiles.length,
-        mode,
-        methods: methods.join(","),
+        mode: request.mode,
+        methods: request.methods.join(","),
       },
       async () => {
         if (uniqueFiles.length === 0) {
@@ -813,16 +484,15 @@ export namespace LSP {
         for (const file of uniqueFiles) {
           const extension = path.parse(file).ext || file
           for (const server of Object.values(s.servers)) {
-            if (!clientModeMatchesServer(mode, server.semantic)) continue
-            if (!clientMethodMatchesServer(methods, server.capabilityHints)) continue
+            if (!serverMatchesClientRequest(server, request)) continue
             if (!clientPrewarmMatchesServer(server)) continue
-            if (server.extensions.length && !server.extensions.includes(extension)) continue
+            if (!serverSupportsFileExtension(server, extension)) continue
 
             const root = await resolveRoot(s, server, file)
             if (!root) continue
 
             const key = clientKey(root, server.id)
-            if (isBroken(s.broken, key)) continue
+            if (LSPBrokenServer.isBroken(s.broken, key)) continue
             if (planned.has(key)) continue
 
             const connected = s.clients.find((client) => client.root === root && client.serverID === server.id)
@@ -848,38 +518,17 @@ export namespace LSP {
             return a.server.id.localeCompare(b.server.id)
           })
 
-        const pending: { task: Promise<LSPClient.Info | undefined>; fresh: boolean }[] = []
-        for (const [key, target] of targets) {
-          const inflight = s.spawning.get(key)
-          if (inflight) {
-            pending.push({ task: inflight, fresh: false })
-            continue
-          }
-
-          const task = scheduleClient(s, target.server, target.root, key)
-          s.spawning.set(key, task)
-          task.finally(() => {
-            if (s.spawning.get(key) === task) {
-              s.spawning.delete(key)
-            }
-          })
-
-          freshSpawnCount++
-          pending.push({ task, fresh: true })
+        const pending: PendingClientSpawn[] = []
+        const warmed: LSPClient.Info[] = []
+        for (const [, target] of targets) {
+          if (queueClientForRoot(s, target.server, target.root, warmed, pending)) freshSpawnCount++
         }
 
         // Independent server roots should warm in parallel. Serializing this
         // loop turns prewarm into O(sum initialize) even though the control
         // plane already parallelizes ordinary getClients() cold starts.
-        if (pending.length > 0) {
-          const resolved = await Promise.all(pending.map((entry) => entry.task.catch(() => undefined)))
-          for (let i = 0; i < resolved.length; i++) {
-            const client = resolved[i]
-            if (!client) continue
-            readyCount++
-            if (pending[i]?.fresh) Bus.publishDetached(Event.Updated, {})
-          }
-        }
+        await collectPendingClients(pending, warmed)
+        readyCount += warmed.length
 
         return {
           readyCount,
@@ -905,7 +554,7 @@ export namespace LSP {
       if (selected.length >= maxFiles || seenLanguages.size >= maxLanguages) break
 
       const probe = path.join(Instance.directory, rel)
-      const language = detectPrewarmLanguage(probe)
+      const language = LSPPrewarm.detectLanguage(probe)
       if (language === "unknown" || language === "plaintext") continue
       if (seenLanguages.has(language)) continue
       if (!(await hasPrewarmClients(probe, opts))) continue
@@ -931,43 +580,26 @@ export namespace LSP {
   export async function touchFile(input: string, waitForDiagnostics?: boolean, opts: ClientOptions = {}) {
     const mode = opts.mode ?? "all"
     log.info("touching file", { file: input, mode })
-    return metered("touch", { file: input, mode }, async () => {
+    return LSPPerf.metered("touch", { file: input, mode }, async () => {
       let selection: ClientSelection = { clients: [], freshSpawnCount: 0 }
       const selectStarted = performance.now()
       try {
         selection = await getClientsDetailed(input, opts)
-        const durationMs = finishPerfPhase("touch.select", selectStarted, true)
+        const durationMs = LSPPerf.finishPhase("touch.select", selectStarted, true)
         if (selection.freshSpawnCount > 0) {
-          recordPerfSample("touch.select.spawned", durationMs, true)
+          LSPPerf.recordSample("touch.select.spawned", durationMs, true)
         }
       } catch (err) {
-        finishPerfPhase("touch.select", selectStarted, false)
+        LSPPerf.finishPhase("touch.select", selectStarted, false)
         log.error("failed to get clients for touch", { err, file: input })
       }
       const clients = selection.clients
-      // allSettled: one flaky client must not block healthy ones. Each client
-      // either completes its notify.open or fails individually with a logged
-      // error that carries the serverID for debugging.
       const notifyStarted = performance.now()
-      const results = await Promise.allSettled(
-        clients.map((client) => client.notify.open({ path: input, waitForDiagnostics })),
-      )
-      let opened = 0
-      let notifyOk = true
-      for (let i = 0; i < results.length; i++) {
-        const r = results[i]
-        if (r.status === "rejected") {
-          notifyOk = false
-          log.error("failed to touch file for client", {
-            err: r.reason,
-            file: input,
-            serverID: clients[i]?.serverID,
-          })
-          continue
-        }
-        opened++
-      }
-      finishPerfPhase("touch.notify", notifyStarted, notifyOk)
+      const { count: opened, ok: notifyOk } = await LSPClientNotify.openAll(clients, {
+        path: input,
+        waitForDiagnostics,
+      })
+      LSPPerf.finishPhase("touch.notify", notifyStarted, notifyOk)
       return opened
     })
   }
@@ -980,21 +612,7 @@ export namespace LSP {
   export async function closeFile(input: string, deleted = false) {
     log.info("closing file", { file: input })
     const s = await state()
-    // allSettled: see note in touchFile. Per-client failures are logged with
-    // the serverID and do not block cleanup on the other clients — local
-    // state eviction on the failing client still happens inside notify.close
-    // because notify.close only catches connection errors, not state deletes.
-    const results = await Promise.allSettled(s.clients.map((client) => client.notify.close({ path: input, deleted })))
-    for (let i = 0; i < results.length; i++) {
-      const r = results[i]
-      if (r.status === "rejected") {
-        log.error("failed to close file for client", {
-          err: r.reason,
-          file: input,
-          serverID: s.clients[i]?.serverID,
-        })
-      }
-    }
+    await LSPClientNotify.closeAll(s.clients, { path: input, deleted })
   }
 
   // Manually clear the broken-server cooldown map. The next getClients() call
@@ -1012,7 +630,8 @@ export namespace LSP {
 
   export async function diagnostics() {
     const results: Record<string, LSPClient.Diagnostic[]> = {}
-    for (const result of await runAll(async (client) => client.diagnostics)) {
+    const clients = await state().then((x) => x.clients)
+    for (const result of await LSPEnvelopeRunner.runAll(clients, async (client) => client.diagnostics)) {
       for (const [path, diagnostics] of result.entries()) {
         const arr = results[path] || []
         arr.push(...diagnostics)
@@ -1022,141 +641,12 @@ export namespace LSP {
     return results
   }
 
-  // ─── Aggregated diagnostics (Semantic Trust v2 §S3) ────────────────
-  //
-  // AI-facing diagnostics surface. The raw `diagnostics()` above
-  // exposes unmerged per-server publishes; a polyglot project with
-  // (typescript + eslint) on the same file will return duplicate
-  // entries where the servers agree. Consumers then have to normalize
-  // severity (a numeric 1..4 in VSCode protocol) and dedup by
-  // (range, message) themselves.
-  //
-  // `diagnosticsAggregated` does both. Per-file iteration uses the
-  // per-client diagnostic Map that each LSPClient maintains via its
-  // publishDiagnostics notification handler (see client.ts) — no new
-  // subscription layer needed, the state is already kept by the
-  // client layer.
-  //
-  // Returns an envelope so AI consumers can see provenance (which
-  // servers contributed, timestamp, completeness, degraded) — same
-  // contract as every other v1/v2 AI-facing semantic API.
-
-  export type NormalizedSeverity = "error" | "warning" | "info" | "hint"
-
-  export type NormalizedDiagnostic = {
-    path: string
-    range: { start: { line: number; character: number }; end: { line: number; character: number } }
-    severity: NormalizedSeverity
-    message: string
-    source?: string
-    code?: string | number
-    // Servers that published this diagnostic. Usually one; >1 when
-    // multiple servers report the same (location, message) pair.
-    serverIDs: string[]
-  }
-
-  function normalizeSeverity(s: number | undefined): NormalizedSeverity {
-    // VSCode protocol: 1=error, 2=warning, 3=info, 4=hint. Omitted
-    // severity is client-interpretable per spec; we default to `info`
-    // on the grounds that an unclassified diagnostic shouldn't be
-    // silently upgraded to `error` nor downgraded to `hint`.
-    if (s === 1) return "error"
-    if (s === 2) return "warning"
-    if (s === 3) return "info"
-    if (s === 4) return "hint"
-    return "info"
-  }
-
-  function dedupKeyOf(path: string, d: LSPClient.Diagnostic): string {
-    const r = d.range
-    return [path, r.start.line, r.start.character, r.end.line, r.end.character, d.message].join("\u0000")
-  }
-
-  // Pure aggregation kernel. `diagnosticsAggregated` below plumbs live
-  // clients and a timestamp into this function; tests call it directly
-  // to cover aggregation semantics without standing up real LSP clients.
-  export type DiagnosticsAggregateInput = {
-    serverID: string
-    diagnostics: Map<string, LSPClient.Diagnostic[]>
-  }
-  export function aggregateDiagnostics(
-    inputs: DiagnosticsAggregateInput[],
-    opts: { file?: string; now: number },
-  ): SemanticEnvelope<NormalizedDiagnostic[]> {
-    if (inputs.length === 0) {
-      return {
-        data: [],
-        source: "lsp",
-        completeness: "empty",
-        timestamp: opts.now,
-        serverIDs: [],
-        degraded: false,
-      }
-    }
-
-    const byKey = new Map<string, { d: LSPClient.Diagnostic; path: string; serverIDs: string[] }>()
-    const participatingServerIDs = new Set<string>()
-
-    for (const { serverID, diagnostics: map } of inputs) {
-      let contributed = false
-      const entries = opts.file
-        ? map.has(opts.file)
-          ? [[opts.file, map.get(opts.file)!] as const]
-          : []
-        : [...map.entries()]
-      for (const [path, diags] of entries) {
-        for (const d of diags) {
-          const key = dedupKeyOf(path, d)
-          const existing = byKey.get(key)
-          if (existing) {
-            if (!existing.serverIDs.includes(serverID)) existing.serverIDs.push(serverID)
-          } else {
-            byKey.set(key, { d, path, serverIDs: [serverID] })
-          }
-          contributed = true
-        }
-      }
-      if (contributed) participatingServerIDs.add(serverID)
-    }
-
-    const data: NormalizedDiagnostic[] = [...byKey.values()].map(({ d, path, serverIDs }) => ({
-      path,
-      range: d.range,
-      severity: normalizeSeverity(d.severity),
-      message: d.message,
-      source: d.source,
-      code: d.code,
-      serverIDs,
-    }))
-
-    data.sort((a, b) => {
-      if (a.path !== b.path) return a.path < b.path ? -1 : 1
-      if (a.range.start.line !== b.range.start.line) return a.range.start.line - b.range.start.line
-      if (a.range.start.character !== b.range.start.character) return a.range.start.character - b.range.start.character
-      return a.message < b.message ? -1 : a.message > b.message ? 1 : 0
-    })
-
-    return {
-      data,
-      source: "lsp",
-      // Match runWithEnvelopeUncollapsed's convention: "empty" iff no
-      // server actually contributed data, "full" otherwise. Previously
-      // this branch always returned "full", which was misleading when
-      // connected clients had empty diagnostic maps (servers up but
-      // none have published anything for the requested file(s)).
-      completeness: participatingServerIDs.size === 0 ? "empty" : "full",
-      timestamp: opts.now,
-      serverIDs: [...participatingServerIDs],
-      degraded: false,
-    }
-  }
-
   // Aggregate diagnostics across all connected clients. Pass `file`
   // to limit to a single file; omit to get everything.
   export async function diagnosticsAggregated(file?: string): Promise<SemanticEnvelope<NormalizedDiagnostic[]>> {
-    return metered("diagnosticsAggregated", file ? { file } : {}, async () => {
+    return LSPPerf.metered("diagnosticsAggregated", file ? { file } : {}, async () => {
       const s = await state()
-      return aggregateDiagnostics(
+      return LSPDiagnostics.aggregate(
         s.clients.map((c) => ({ serverID: c.serverID, diagnostics: c.diagnostics })),
         { file, now: Date.now() },
       )
@@ -1168,24 +658,15 @@ export namespace LSP {
     line: number
     character: number
   }): Promise<SemanticEnvelope<unknown[]>> {
-    return metered("hover", { file: input.file }, async () =>
-      runWithEnvelope(
-        input.file,
-        (client) =>
-          withTimeout(
-            client.connection.sendRequest("textDocument/hover", {
-              textDocument: { uri: pathToFileURL(input.file).href },
-              position: { line: input.line, character: input.character },
-            }),
-            RPC_TIMEOUT_MS,
-          ) as Promise<unknown>,
-        (results) => (results as unknown[]).filter((r) => r !== null && r !== undefined),
-        [] as unknown[],
-        "hover",
-        undefined,
-        { mode: "semantic", method: "hover" },
-      ),
-    )
+    return LSPPoint.requestSemanticArrayEnvelope(input, {
+      metric: "hover",
+      request: "textDocument/hover",
+      operation: "hover",
+      reduce: (results) => results.filter((r) => r !== null && r !== undefined),
+      method: "hover",
+      timeoutMs: RPC_TIMEOUT_MS,
+      selectClients: getClientsDetailed,
+    })
   }
 
   export async function hover(input: { file: string; line: number; character: number }) {
@@ -1193,223 +674,45 @@ export namespace LSP {
     return envelope.data
   }
 
-  enum SymbolKind {
-    File = 1,
-    Module = 2,
-    Namespace = 3,
-    Package = 4,
-    Class = 5,
-    Method = 6,
-    Property = 7,
-    Field = 8,
-    Constructor = 9,
-    Enum = 10,
-    Interface = 11,
-    Function = 12,
-    Variable = 13,
-    Constant = 14,
-    String = 15,
-    Number = 16,
-    Boolean = 17,
-    Array = 18,
-    Object = 19,
-    Key = 20,
-    Null = 21,
-    EnumMember = 22,
-    Struct = 23,
-    Event = 24,
-    Operator = 25,
-    TypeParameter = 26,
-  }
-
-  const kinds = [
-    SymbolKind.Class,
-    SymbolKind.Function,
-    SymbolKind.Method,
-    SymbolKind.Interface,
-    SymbolKind.Variable,
-    SymbolKind.Constant,
-    SymbolKind.Struct,
-    SymbolKind.Enum,
-  ]
-
-  // AI-facing result envelope. Per PRDs `LSP Reliability & Semantic Control
-  // Plane v1` and `Semantic Trust Layer v1`, every AI-consumed semantic
-  // result carries source/completeness/timestamp so downstream consumers can
-  // reason about staleness and partial results without parsing log lines.
-  //   data:         the wrapped payload; shape varies per operation.
-  //   source:       "lsp"   — freshly fetched from a language server.
-  //                 "cache" — served from code_intel_lsp_cache (S2). The
-  //                           `timestamp` is preserved from the original LSP
-  //                           fetch, not rewritten on each hit.
-  //   completeness: "full"    — every participating client returned successfully.
-  //                 "partial" — one or more servers failed and were skipped.
-  //                 "empty"   — no server was matched for this request.
-  //   timestamp:    wall-clock ms at response assembly time (or at the
-  //                 original LSP fetch time, for cache hits; or the
-  //                 code-graph index cursor time, for graph-sourced
-  //                 results).
-  //   serverIDs:    which servers contributed, for provenance/audit.
-  //                 Empty array for graph-sourced envelopes.
-  //   cacheKey:     opaque identifier of the cache row that served the
-  //                 response; absent for live LSP responses. Surfaces in
-  //                 audit rows (S3) so replay can assert cache-source
-  //                 equality.
-  //
-  // Source semantics:
-  //   "lsp"    — result came from a live language server query.
-  //   "cache"  — result came from the content-addressable response cache.
-  //   "graph"  — result came from the persistent code-graph index.
-  //              Staleness is signalled via `timestamp` (= graph cursor
-  //              last-indexed time) + `degraded`. Graph-sourced envelopes
-  //              don't fall back to LSP; consumers that need live data
-  //              should call the LSP tool directly.
-  export type SemanticEnvelope<T> = {
-    data: T
-    source: "lsp" | "cache" | "graph"
-    completeness: "full" | "partial" | "empty"
-    timestamp: number
-    serverIDs: string[]
-    cacheKey?: string
-    // True when any participating server errored with a non-
-    // MethodNotFound failure, OR when the result is empty despite a
-    // matching file type that should have had a server. Set at write
-    // time. Downstream consumers use this as a single-bit warning
-    // without parsing completeness semantics.
-    degraded?: boolean
-  }
-
-  // Read-time freshness classification. Not stored on the envelope —
-  // consumers that care about "how old is this hit" call this helper
-  // with the envelope's timestamp. Thresholds chosen to match the
-  // cache TTL (24h) so a cached row, at the extreme end of its life,
-  // reads as `warm` rather than misleadingly `fresh`.
-  export type Freshness = "fresh" | "warm" | "stale"
-  const FRESH_THRESHOLD_MS = 60 * 1000
-  const WARM_THRESHOLD_MS = 24 * 60 * 60 * 1000
-
-  export function envelopeFreshness(envelope: { timestamp: number }, now: number = Date.now()): Freshness {
-    const age = now - envelope.timestamp
-    if (age < FRESH_THRESHOLD_MS) return "fresh"
-    if (age < WARM_THRESHOLD_MS) return "warm"
-    return "stale"
-  }
-
   // Back-compat alias for the original workspaceSymbol-specific shape.
   // Existing tests and tool code read `envelope.symbols` via this alias;
-  // the generic shape above is preferred for new surfaces. `degraded`
+  // the generic envelope shape is preferred for new surfaces. `degraded`
   // is optional to preserve back-compat for consumers reading the
   // original v1 shape.
-  export type SymbolEnvelope = {
-    symbols: LSP.Symbol[]
-    source: "lsp"
-    completeness: "full" | "partial" | "empty"
-    timestamp: number
-    serverIDs: string[]
-    degraded?: boolean
-  }
+  export type SymbolEnvelope = LSPWorkspaceSymbol.SymbolEnvelope
 
-  // ─── LSP response cache integration (S2) ────────────────────────────
-  //
-  // Content-addressable cache fronting LSP.referencesEnvelope and
-  // LSP.documentSymbolEnvelope. Key semantics and storage operations live
-  // in LSPCache; this surface only routes cache hits, live fallback, and
-  // perf sampler labels.
   export async function workspaceSymbolEnvelope(query: string): Promise<SymbolEnvelope> {
-    return metered("workspaceSymbol", { query }, async () => {
+    return LSPPerf.metered("workspaceSymbol", { query }, async () => {
       const selectStarted = performance.now()
       let selection: ClientSelection
       try {
         selection = await getWorkspaceClientsDetailed({ mode: "semantic", method: "workspaceSymbol" })
       } catch (err) {
-        finishPerfPhase("workspaceSymbol.select", selectStarted, false)
+        LSPPerf.finishPhase("workspaceSymbol.select", selectStarted, false)
         throw err
       }
-      const selectDurationMs = finishPerfPhase("workspaceSymbol.select", selectStarted, true)
+      const selectDurationMs = LSPPerf.finishPhase("workspaceSymbol.select", selectStarted, true)
       if (selection.freshSpawnCount > 0) {
-        recordPerfSample("workspaceSymbol.select.spawned", selectDurationMs, true)
+        LSPPerf.recordSample("workspaceSymbol.select.spawned", selectDurationMs, true)
       }
 
-      const clients = selection.clients
-      if (clients.length === 0) {
-        return {
-          symbols: [],
-          source: "lsp",
-          completeness: "empty",
-          timestamp: Date.now(),
-          serverIDs: [],
-          degraded: false,
-        }
-      }
+      if (selection.clients.length === 0) return LSPWorkspaceSymbol.emptyEnvelope()
 
-      let failures = 0
-      const participatingServerIDs: string[] = []
       const rpcStarted = performance.now()
-      let result: LSP.Symbol[][]
+      let result: LSPWorkspaceSymbol.SymbolQueryResult
       try {
-        result = await Promise.all(
-          clients.map((client) =>
-            withTimeout(
-              client.connection.sendRequest("workspace/symbol", {
-                query,
-              }),
-              RPC_TIMEOUT_LONG_MS,
-            )
-              .then((result) => {
-                participatingServerIDs.push(client.serverID)
-                return (result as LSP.Symbol[]).filter((x: LSP.Symbol) => kinds.includes(x.kind))
-              })
-              .catch((err) => {
-                // A linter LSP attached to the same file type may not
-                // implement workspace/symbol — treat MethodNotFound as
-                // "not participating", not as a partial-completeness
-                // downgrade.
-                if (!isMethodNotFound(err)) {
-                  failures++
-                  log.warn("LSP client failed in workspaceSymbol", { serverID: client.serverID, err })
-                }
-                return [] as LSP.Symbol[]
-              }),
-          ),
-        )
-        finishPerfPhase("workspaceSymbol.rpc", rpcStarted, failures === 0)
+        result = await LSPWorkspaceSymbol.queryClients({
+          clients: selection.clients,
+          query,
+          timeoutMs: RPC_TIMEOUT_LONG_MS,
+          limit: 10,
+        })
+        LSPPerf.finishPhase("workspaceSymbol.rpc", rpcStarted, result.ok)
       } catch (err) {
-        finishPerfPhase("workspaceSymbol.rpc", rpcStarted, false)
+        LSPPerf.finishPhase("workspaceSymbol.rpc", rpcStarted, false)
         throw err
       }
-
-      const seen = new Set<string>()
-      const symbols = result
-        .flat()
-        .filter((symbol): symbol is LSP.Symbol => Boolean(symbol))
-        .filter((symbol) => {
-          const key = [
-            symbol.name,
-            symbol.kind,
-            symbol.location.uri,
-            symbol.location.range.start.line,
-            symbol.location.range.start.character,
-            symbol.location.range.end.line,
-            symbol.location.range.end.character,
-          ].join(":")
-          if (seen.has(key)) return false
-          seen.add(key)
-          return true
-        })
-        .slice(0, 10)
-
-      const completeness: "full" | "partial" | "empty" =
-        participatingServerIDs.length === 0 ? "empty" : failures === 0 ? "full" : "partial"
-      const degraded = failures > 0 || participatingServerIDs.length === 0
-
-      return {
-        symbols,
-        source: "lsp",
-        completeness,
-        timestamp: Date.now(),
-        serverIDs: participatingServerIDs,
-        degraded,
-      }
+      return result.envelope
     })
   }
 
@@ -1428,25 +731,10 @@ export namespace LSP {
   // The bare functions below become back-compat wrappers that discard the
   // envelope; new AI-facing consumers should read the envelope variant.
 
-  // Explicit cache probes used by callers that want to avoid the live LSP
-  // path entirely when a content-addressed answer already exists. These do
-  // not fall through to a server on miss.
   export async function documentSymbolCachedEnvelope(
     uri: string,
   ): Promise<SemanticEnvelope<(LSP.DocumentSymbol | LSP.Symbol)[]> | undefined> {
-    const file = fileURLToPath(uri)
-    const contentHash = await LSPCache.hashFile(file)
-    if (!contentHash) return undefined
-    const hit = LSPCache.lookup<(LSP.DocumentSymbol | LSP.Symbol)[]>({
-      operation: "documentSymbol",
-      filePath: file,
-      contentHash,
-      line: -1,
-      character: -1,
-      enabled: true,
-    })
-    if (hit) recordPerfSample("documentSymbol.cached", 0, true)
-    return hit
+    return LSPDocumentSymbol.cachedEnvelope(uri)
   }
 
   export async function documentSymbolEnvelope(
@@ -1455,50 +743,10 @@ export namespace LSP {
       cache?: boolean
     },
   ): Promise<SemanticEnvelope<(LSP.DocumentSymbol | LSP.Symbol)[]>> {
-    const file = fileURLToPath(uri)
-    const useCache = LSPCache.enabled(opts?.cache)
-    return metered("documentSymbol", { file }, async () => {
-      // Hash the file once per call; used by both the cache (when
-      // enabled) and the in-flight dedup (always). A few hundred μs
-      // per call is a flat cost that's recouped many times over the
-      // moment two concurrent calls collapse into one LSP RPC.
-      const contentHash = await LSPCache.hashFile(file)
-
-      if (contentHash && useCache) {
-        const hit = await documentSymbolCachedEnvelope(uri)
-        if (hit) return hit
-      }
-
-      const dedupKey = contentHash ? `documentSymbol:${file}:${contentHash}` : undefined
-      const envelope = await runWithEnvelope(
-        file,
-        (client) =>
-          withTimeout(
-            client.connection.sendRequest("textDocument/documentSymbol", {
-              textDocument: { uri },
-            }),
-            RPC_TIMEOUT_MS,
-          ) as Promise<(LSP.DocumentSymbol | LSP.Symbol)[]>,
-        (results) => results.flat().filter(Boolean) as (LSP.DocumentSymbol | LSP.Symbol)[],
-        [] as (LSP.DocumentSymbol | LSP.Symbol)[],
-        "documentSymbol",
-        dedupKey,
-        { mode: "semantic", method: "documentSymbol" },
-      )
-
-      recordPerfSample("documentSymbol.live", 0, true)
-      if (contentHash && useCache) {
-        LSPCache.write({
-          operation: "documentSymbol",
-          filePath: file,
-          contentHash,
-          line: -1,
-          character: -1,
-          envelope,
-          enabled: useCache,
-        })
-      }
-      return envelope
+    return LSPDocumentSymbol.envelope(uri, {
+      cache: opts?.cache,
+      timeoutMs: RPC_TIMEOUT_MS,
+      selectClients: getClientsDetailed,
     })
   }
 
@@ -1512,24 +760,14 @@ export namespace LSP {
     line: number
     character: number
   }): Promise<SemanticEnvelope<unknown[]>> {
-    return metered("definition", { file: input.file }, async () =>
-      runWithEnvelope(
-        input.file,
-        (client) =>
-          withTimeout(
-            client.connection.sendRequest("textDocument/definition", {
-              textDocument: { uri: pathToFileURL(input.file).href },
-              position: { line: input.line, character: input.character },
-            }),
-            RPC_TIMEOUT_MS,
-          ) as Promise<unknown>,
-        (results) => (results as unknown[]).flat().filter(Boolean),
-        [] as unknown[],
-        "definition",
-        undefined,
-        { mode: "semantic", method: "definition" },
-      ),
-    )
+    return LSPPoint.requestSemanticArrayEnvelope(input, {
+      metric: "definition",
+      request: "textDocument/definition",
+      operation: "definition",
+      method: "definition",
+      timeoutMs: RPC_TIMEOUT_MS,
+      selectClients: getClientsDetailed,
+    })
   }
 
   export async function definition(input: { file: string; line: number; character: number }) {
@@ -1542,18 +780,7 @@ export namespace LSP {
     line: number
     character: number
   }): Promise<SemanticEnvelope<unknown[]> | undefined> {
-    const contentHash = await LSPCache.hashFile(input.file)
-    if (!contentHash) return undefined
-    const hit = LSPCache.lookup<unknown[]>({
-      operation: "references",
-      filePath: input.file,
-      contentHash,
-      line: input.line,
-      character: input.character,
-      enabled: true,
-    })
-    if (hit) recordPerfSample("references.cached", 0, true)
-    return hit
+    return LSPReferences.cachedEnvelope(input)
   }
 
   export async function referencesEnvelope(input: {
@@ -1562,50 +789,9 @@ export namespace LSP {
     character: number
     cache?: boolean
   }): Promise<SemanticEnvelope<unknown[]>> {
-    const useCache = LSPCache.enabled(input.cache)
-    return metered("references", { file: input.file }, async () => {
-      const contentHash = await LSPCache.hashFile(input.file)
-
-      if (contentHash && useCache) {
-        const hit = await referencesCachedEnvelope(input)
-        if (hit) return hit
-      }
-
-      const dedupKey = contentHash
-        ? `references:${input.file}:${contentHash}:${input.line}:${input.character}`
-        : undefined
-
-      const envelope = await runWithEnvelope(
-        input.file,
-        (client) =>
-          withTimeout(
-            client.connection.sendRequest("textDocument/references", {
-              textDocument: { uri: pathToFileURL(input.file).href },
-              position: { line: input.line, character: input.character },
-              context: { includeDeclaration: true },
-            }),
-            RPC_TIMEOUT_MS,
-          ) as Promise<unknown>,
-        (results) => (results as unknown[]).flat().filter(Boolean),
-        [] as unknown[],
-        "references",
-        dedupKey,
-        { mode: "semantic", method: "references" },
-      )
-
-      recordPerfSample("references.live", 0, true)
-      if (contentHash && useCache) {
-        LSPCache.write({
-          operation: "references",
-          filePath: input.file,
-          contentHash,
-          line: input.line,
-          character: input.character,
-          envelope,
-          enabled: useCache,
-        })
-      }
-      return envelope
+    return LSPReferences.envelope(input, {
+      timeoutMs: RPC_TIMEOUT_MS,
+      selectClients: getClientsDetailed,
     })
   }
 
@@ -1624,24 +810,14 @@ export namespace LSP {
     line: number
     character: number
   }): Promise<SemanticEnvelope<unknown[]>> {
-    return metered("implementation", { file: input.file }, async () =>
-      runWithEnvelope(
-        input.file,
-        (client) =>
-          withTimeout(
-            client.connection.sendRequest("textDocument/implementation", {
-              textDocument: { uri: pathToFileURL(input.file).href },
-              position: { line: input.line, character: input.character },
-            }),
-            RPC_TIMEOUT_MS,
-          ) as Promise<unknown>,
-        (results) => (results as unknown[]).flat().filter(Boolean),
-        [] as unknown[],
-        "implementation",
-        undefined,
-        { mode: "semantic", method: "implementation" },
-      ),
-    )
+    return LSPPoint.requestSemanticArrayEnvelope(input, {
+      metric: "implementation",
+      request: "textDocument/implementation",
+      operation: "implementation",
+      method: "implementation",
+      timeoutMs: RPC_TIMEOUT_MS,
+      selectClients: getClientsDetailed,
+    })
   }
 
   export async function prepareCallHierarchy(input: { file: string; line: number; character: number }) {
@@ -1654,24 +830,14 @@ export namespace LSP {
     line: number
     character: number
   }): Promise<SemanticEnvelope<unknown[]>> {
-    return metered("prepareCallHierarchy", { file: input.file }, async () =>
-      runWithEnvelope(
-        input.file,
-        (client) =>
-          withTimeout(
-            client.connection.sendRequest("textDocument/prepareCallHierarchy", {
-              textDocument: { uri: pathToFileURL(input.file).href },
-              position: { line: input.line, character: input.character },
-            }),
-            RPC_TIMEOUT_MS,
-          ) as Promise<unknown>,
-        (results) => (results as unknown[]).flat().filter(Boolean),
-        [] as unknown[],
-        "prepareCallHierarchy",
-        undefined,
-        { mode: "semantic", method: "callHierarchy" },
-      ),
-    )
+    return LSPPoint.requestSemanticArrayEnvelope(input, {
+      metric: "prepareCallHierarchy",
+      request: "textDocument/prepareCallHierarchy",
+      operation: "prepareCallHierarchy",
+      method: "callHierarchy",
+      timeoutMs: RPC_TIMEOUT_MS,
+      selectClients: getClientsDetailed,
+    })
   }
 
   export async function incomingCalls(input: { file: string; line: number; character: number }) {
@@ -1684,34 +850,13 @@ export namespace LSP {
     line: number
     character: number
   }): Promise<SemanticEnvelope<unknown[]>> {
-    return metered("incomingCalls", { file: input.file }, async () =>
-      runWithEnvelope(
-        input.file,
-        async (client) => {
-          const items = (await withTimeout(
-            client.connection.sendRequest("textDocument/prepareCallHierarchy", {
-              textDocument: { uri: pathToFileURL(input.file).href },
-              position: { line: input.line, character: input.character },
-            }),
-            RPC_TIMEOUT_MS,
-          )) as unknown[]
-          if (!items?.length) return []
-          const calls = await Promise.all(
-            items.map((item) =>
-              withTimeout(client.connection.sendRequest("callHierarchy/incomingCalls", { item }), RPC_TIMEOUT_MS).catch(
-                () => [] as unknown[],
-              ),
-            ),
-          )
-          return calls.flat()
-        },
-        (results) => (results as unknown[]).flat().filter(Boolean),
-        [] as unknown[],
-        "incomingCalls",
-        undefined,
-        { mode: "semantic", method: "callHierarchy" },
-      ),
-    )
+    return LSPPoint.callHierarchyCallsEnvelope(input, {
+      metric: "incomingCalls",
+      request: "callHierarchy/incomingCalls",
+      operation: "incomingCalls",
+      timeoutMs: RPC_TIMEOUT_MS,
+      selectClients: getClientsDetailed,
+    })
   }
 
   export async function outgoingCalls(input: { file: string; line: number; character: number }) {
@@ -1724,213 +869,13 @@ export namespace LSP {
     line: number
     character: number
   }): Promise<SemanticEnvelope<unknown[]>> {
-    return metered("outgoingCalls", { file: input.file }, async () =>
-      runWithEnvelope(
-        input.file,
-        async (client) => {
-          const items = (await withTimeout(
-            client.connection.sendRequest("textDocument/prepareCallHierarchy", {
-              textDocument: { uri: pathToFileURL(input.file).href },
-              position: { line: input.line, character: input.character },
-            }),
-            RPC_TIMEOUT_MS,
-          )) as unknown[]
-          if (!items?.length) return []
-          const calls = await Promise.all(
-            items.map((item) =>
-              withTimeout(client.connection.sendRequest("callHierarchy/outgoingCalls", { item }), RPC_TIMEOUT_MS).catch(
-                () => [] as unknown[],
-              ),
-            ),
-          )
-          return calls.flat()
-        },
-        (results) => (results as unknown[]).flat().filter(Boolean),
-        [] as unknown[],
-        "outgoingCalls",
-        undefined,
-        { mode: "semantic", method: "callHierarchy" },
-      ),
-    )
-  }
-
-  // Per-client catch so one failing LSP client (e.g. gopls crashed
-  // mid-request) doesn't reject the whole Promise.all and discard
-  // results from every other healthy language server. The callback's
-  // own .catch wrappers handle timeout errors, but the `input` callable
-  // itself can throw (null connection, sendRequest error) before
-  // reaching those catches — this wrapper catches that case.
-  async function runAll<T>(input: (client: LSPClient.Info) => Promise<T>): Promise<T[]> {
-    const clients = await state().then((x) => x.clients)
-    const tasks = clients.map((x) =>
-      input(x).catch((err) => {
-        log.warn("LSP client failed in runAll", { serverID: x.serverID, err })
-        return undefined
-      }),
-    )
-    return (await Promise.all(tasks)).filter((r): r is Awaited<T> => r !== undefined) as T[]
-  }
-
-  async function run<T>(file: string, input: (client: LSPClient.Info) => Promise<T>): Promise<T[]> {
-    const clients = await getClients(file)
-    const tasks = clients.map((x) =>
-      input(x).catch((err) => {
-        log.warn("LSP client failed in run", { serverID: x.serverID, err })
-        return undefined
-      }),
-    )
-    return (await Promise.all(tasks)).filter((r): r is Awaited<T> => r !== undefined) as T[]
-  }
-
-  // Envelope-producing variant of run(). Unlike run(), this reports
-  // per-client failures so SemanticEnvelope.completeness can be computed
-  // ("full" if every participating client succeeded, "partial" if any
-  // failed, "empty" if no client was matched). Callers reduce the
-  // successful per-client results into a single payload and hand the
-  // reduction back via `reduce`.
-  // JSON-RPC method-not-found. A polyglot project may have multiple
-  // LSP servers attached to the same file (e.g. typescript + eslint);
-  // linters typically don't implement semantic methods like
-  // textDocument/references. MethodNotFound on one server does NOT
-  // mean the result is partial — the server in question simply
-  // doesn't participate in this method. Treat it as a skip, not a
-  // failure.
-  const LSP_ERROR_METHOD_NOT_FOUND = -32601
-
-  function isMethodNotFound(err: unknown): boolean {
-    if (typeof err !== "object" || err === null) return false
-    const code = (err as { code?: unknown }).code
-    return code === LSP_ERROR_METHOD_NOT_FOUND
-  }
-
-  async function runWithEnvelope<TClient, TPayload>(
-    file: string,
-    call: (client: LSPClient.Info) => Promise<TClient>,
-    reduce: (results: TClient[]) => TPayload,
-    empty: TPayload,
-    operation: string,
-    dedupKey?: string,
-    opts: ClientOptions = {},
-  ): Promise<SemanticEnvelope<TPayload>> {
-    // Duplicate-request collapse (Semantic Trust v2 §S1). When dedupKey
-    // is supplied and matches an in-flight call, return the same
-    // promise — second caller gets identical envelope, identical
-    // cacheKey, no extra RPC. Callers that can't cheaply compute the
-    // key (e.g. hover/definition which don't content-hash the file)
-    // pass undefined and skip dedup. That's acceptable because hover/
-    // definition calls are rare compared to references/documentSymbol.
-    if (dedupKey) {
-      return LspScheduler.Inflight.run(dedupKey, () =>
-        runWithEnvelopeUncollapsed(file, call, reduce, empty, operation, opts),
-      )
-    }
-    return runWithEnvelopeUncollapsed(file, call, reduce, empty, operation, opts)
-  }
-
-  async function runWithEnvelopeUncollapsed<TClient, TPayload>(
-    file: string,
-    call: (client: LSPClient.Info) => Promise<TClient>,
-    reduce: (results: TClient[]) => TPayload,
-    empty: TPayload,
-    operation: string,
-    opts: ClientOptions = {},
-  ): Promise<SemanticEnvelope<TPayload>> {
-    const selectStarted = performance.now()
-    let selection: ClientSelection
-    try {
-      selection = await getClientsDetailed(file, opts)
-    } catch (err) {
-      finishPerfPhase(`${operation}.select`, selectStarted, false)
-      throw err
-    }
-    const selectDurationMs = finishPerfPhase(`${operation}.select`, selectStarted, true)
-    if (selection.freshSpawnCount > 0) {
-      recordPerfSample(`${operation}.select.spawned`, selectDurationMs, true)
-    }
-
-    const clients = selection.clients
-    if (clients.length === 0) {
-      return {
-        data: empty,
-        source: "lsp",
-        completeness: "empty",
-        timestamp: Date.now(),
-        serverIDs: [],
-        degraded: false,
-      }
-    }
-
-    let failures = 0
-    const participatingServerIDs: string[] = []
-    const rpcStarted = performance.now()
-    let perClient: Array<TClient | undefined>
-    try {
-      perClient = await Promise.all(
-        clients.map(async (c) => {
-          // Per-server concurrency budget (§S2). Blocks if the server
-          // is at cap; caller sees normal queued latency, never more
-          // than ACQUIRE_TIMEOUT_MS of wait before converting to a
-          // one-client failure. Release is in finally so crashes don't
-          // leak slots.
-          let release: () => void
-          try {
-            release = await LspScheduler.Budget.acquire(c.serverID)
-          } catch (err) {
-            failures++
-            log.warn("LSP budget acquire failed in runWithEnvelope", {
-              serverID: c.serverID,
-              err: err instanceof Error ? err.message : String(err),
-            })
-            return undefined
-          }
-          try {
-            const result = await call(c)
-            participatingServerIDs.push(c.serverID)
-            return result
-          } catch (err) {
-            if (isMethodNotFound(err)) {
-              // Server doesn't implement this method — not a failure,
-              // just not participating. Don't count against completeness
-              // and don't attribute to serverIDs (provenance is about
-              // who actually contributed data).
-              return undefined
-            }
-            failures++
-            log.warn("LSP client failed in runWithEnvelope", { serverID: c.serverID, err })
-            return undefined
-          } finally {
-            release()
-          }
-        }),
-      )
-      finishPerfPhase(`${operation}.rpc`, rpcStarted, failures === 0)
-    } catch (err) {
-      finishPerfPhase(`${operation}.rpc`, rpcStarted, false)
-      throw err
-    }
-
-    const successful = perClient.filter((r): r is Awaited<TClient> => r !== undefined) as TClient[]
-    // If every server that could have contributed failed, the result
-    // is empty, not partial. This preserves the semantic difference
-    // between "no one had anything to say" (empty) and "some subset
-    // answered, others errored" (partial).
-    const completeness: "full" | "partial" | "empty" =
-      participatingServerIDs.length === 0 ? "empty" : failures === 0 ? "full" : "partial"
-    // degraded = any non-MethodNotFound failure, OR no server
-    // participated when the file type matched at least one server
-    // (the clients.length check above already short-circuits the
-    // "no matching server" case to plain empty; here, if we still
-    // got to zero participants, it means every matched server
-    // errored or returned MethodNotFound — a degraded state).
-    const degraded = failures > 0 || participatingServerIDs.length === 0
-    return {
-      data: reduce(successful),
-      source: "lsp",
-      completeness,
-      timestamp: Date.now(),
-      serverIDs: participatingServerIDs,
-      degraded,
-    }
+    return LSPPoint.callHierarchyCallsEnvelope(input, {
+      metric: "outgoingCalls",
+      request: "callHierarchy/outgoingCalls",
+      operation: "outgoingCalls",
+      timeoutMs: RPC_TIMEOUT_MS,
+      selectClients: getClientsDetailed,
+    })
   }
 
   export namespace Diagnostic {
