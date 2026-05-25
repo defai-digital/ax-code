@@ -9,7 +9,7 @@ import { assertExternalDirectory, assertSymlinkInsideProject } from "./external-
 import { NativePerf } from "../perf/native"
 import { NativeAddon } from "../native/addon"
 import { normalizeToWorkspacePath, resolveToolFilePath } from "./file-path"
-import { parseNativeJsonArray } from "./native-json"
+import { parseNativeJsonArray } from "../util/native-json"
 
 const NativeGlobEntry = z.object({
   path: z.string(),

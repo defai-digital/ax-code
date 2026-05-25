@@ -13,7 +13,7 @@ import { NativePerf } from "../perf/native"
 import { NativeAddon } from "../native/addon"
 import { Env } from "@/util/env"
 import { resolveToolFilePath } from "./file-path"
-import { parseNativeJsonArray } from "./native-json"
+import { parseNativeJsonArray } from "../util/native-json"
 
 const NativeSearchMatch = z.object({
   path: z.string(),
