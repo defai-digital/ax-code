@@ -224,7 +224,7 @@ const RuffDiagnosticSchema = z
 
 type RuffDiagnostic = z.infer<typeof RuffDiagnosticSchema>
 
-function ruffDiagnostics(json: unknown): RuffDiagnostic[] {
+export function parseRuffDiagnosticsJson(json: unknown): RuffDiagnostic[] {
   const candidates = Array.isArray(json)
     ? json
     : json && typeof json === "object" && Array.isArray((json as { diagnostics?: unknown }).diagnostics)
@@ -254,7 +254,7 @@ export function parseRuffOutput(output: string): ParsedLanguageScan {
   const findings: LanguageFinding[] = []
   const filesScanned = new Set<string>()
 
-  for (const diag of ruffDiagnostics(json)) {
+  for (const diag of parseRuffDiagnosticsJson(json)) {
     const code = diag.code || "ruff"
     const endLocation = diag.end_location ?? diag.location
     filesScanned.add(diag.filename)

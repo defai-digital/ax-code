@@ -8,6 +8,7 @@ import {
   parseClippyJsonLine,
   parseClippyOutput,
   parseMypyOutput,
+  parseRuffDiagnosticsJson,
   parseRuffOutput,
 } from "../../src/debug-engine/language-scan"
 
@@ -199,6 +200,37 @@ describe("language-scan", () => {
   })
 
   describe("detectRuff", () => {
+    test("parseRuffDiagnosticsJson decodes object and array outputs", () => {
+      const diagnostic = {
+        code: "F401",
+        message: "`os` imported but unused",
+        location: { row: 2, column: 1 },
+        filename: "src/imports.py",
+      }
+
+      expect(parseRuffDiagnosticsJson({ diagnostics: [diagnostic] })).toHaveLength(1)
+      expect(parseRuffDiagnosticsJson([diagnostic])).toHaveLength(1)
+    })
+
+    test("parseRuffDiagnosticsJson filters malformed diagnostics", () => {
+      expect(
+        parseRuffDiagnosticsJson([
+          {
+            code: "F401",
+            message: "`os` imported but unused",
+            location: { row: 2, column: 1 },
+            filename: "src/imports.py",
+          },
+          {
+            code: "F841",
+            message: "missing filename",
+            location: { row: 10, column: 5 },
+          },
+        ]),
+      ).toHaveLength(1)
+      expect(parseRuffDiagnosticsJson({ diagnostics: "not an array" })).toEqual([])
+    })
+
     test("returns error message when ruff not found", async () => {
       const result = await detectRuff({ cwd: "/nonexistent" })
       expect(result.tool).toBe("ruff")
