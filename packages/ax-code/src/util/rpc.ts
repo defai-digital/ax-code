@@ -25,11 +25,16 @@ export namespace Rpc {
     onWireDeath?: (() => void) | null
   }
 
-  type WireMessage = Record<string, any> & {
+  export type WireMessage = Record<string, any> & {
     type?: unknown
   }
 
   let emitMessage: ((data: string) => void) | undefined
+
+  export function decodeWireMessage(value: unknown): WireMessage | undefined {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return undefined
+    return value as WireMessage
+  }
 
   function parseWireMessage(data: string): WireMessage | undefined {
     let parsed: unknown
@@ -38,8 +43,7 @@ export namespace Rpc {
     } catch {
       return undefined
     }
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return undefined
-    return parsed as WireMessage
+    return decodeWireMessage(parsed)
   }
 
   // Defensive double-init guard. The current architecture calls exactly
