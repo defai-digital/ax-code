@@ -24,6 +24,7 @@ import { flushTuiStdout } from "./terminal-cleanup"
 import { parseIntegerEnv } from "./util/env"
 import { parseTuiJsonPayload } from "./util/json"
 import { toErrorMessage } from "@/util/error-message"
+import { Shell } from "@/shell/shell"
 
 declare global {
   const AX_CODE_WORKER_PATH: string
@@ -278,35 +279,28 @@ async function createBackendRuntime(input: {
           error,
         })
       }
-      if (!exited) {
-        try {
-          child.kill("SIGTERM")
-          DiagnosticLog.recordProcess("tui.backendProcessSigterm", {
-            target: command.label,
-            pid: child.pid,
+      const hasExited = () => exited || child.exitCode !== null || child.signalCode !== null
+      const terminateProcess = () =>
+        Shell.killTree(child, {
+          exited: () => hasExited(),
+        })
+          .then(() => {
+            DiagnosticLog.recordProcess("tui.backendProcessKilled", {
+              target: command.label,
+              pid: child.pid,
+            })
           })
-        } catch (error) {
-          DiagnosticLog.recordProcess("tui.backendProcessSigtermFailed", {
-            target: command.label,
-            pid: child.pid,
-            error,
+          .catch((error) => {
+            DiagnosticLog.recordProcess("tui.backendProcessKillFailed", {
+              target: command.label,
+              pid: child.pid,
+              error,
+            })
           })
-        }
-      }
+
+      await terminateProcess()
       if ((await waitForExit(DEFAULT_TUI_BACKEND_TERMINATE_GRACE_MS)) === "timeout" && !exited) {
-        try {
-          child.kill("SIGKILL")
-          DiagnosticLog.recordProcess("tui.backendProcessSigkill", {
-            target: command.label,
-            pid: child.pid,
-          })
-        } catch (error) {
-          DiagnosticLog.recordProcess("tui.backendProcessSigkillFailed", {
-            target: command.label,
-            pid: child.pid,
-            error,
-          })
-        }
+        await terminateProcess()
         await waitForExit(DEFAULT_TUI_BACKEND_TERMINATE_GRACE_MS)
       }
       DiagnosticLog.recordProcess("tui.backendProcessTerminateCompleted", {

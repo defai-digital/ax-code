@@ -19,7 +19,6 @@ import { NativeAddon } from "../native/addon"
 import { Ssrf } from "@/util/ssrf"
 import { Env } from "@/util/env"
 import { parseJsonPayload } from "@/util/json-value"
-
 export namespace Ripgrep {
   const log = Log.create({ service: "ripgrep" })
   const Stats = z.object({
@@ -209,18 +208,33 @@ export namespace Ripgrep {
           if (platformKey.endsWith("-darwin")) args.push("--include=*/rg")
           if (platformKey.endsWith("-linux")) args.push("--wildcards", "*/rg")
 
+          const commandTimeoutMs = 30_000
           const proc = Process.spawn(args, {
             cwd: Global.Path.bin,
+            timeout: commandTimeoutMs,
             stderr: "pipe",
-            stdout: "pipe",
+            stdout: "ignore",
           })
-          const exit = await proc.exited
-          if (exit !== 0) {
-            const stderr = proc.stderr ? await text(proc.stderr) : ""
-            throw new ExtractionFailedError({
-              filepath,
-              stderr,
-            })
+          const hasExited = () => proc.exitCode !== null || proc.signalCode !== null
+          try {
+            const [stderr, exit] = await Promise.all([
+              proc.stderr ? text(proc.stderr) : Promise.resolve(""),
+              proc.exited,
+            ])
+            if (exit === 124) {
+              throw new Error(`ripgrep extraction timed out after ${commandTimeoutMs / 1000}s`)
+            }
+            if (exit !== 0) {
+              throw new ExtractionFailedError({
+                filepath,
+                stderr,
+              })
+            }
+          } catch (error) {
+            if (!hasExited()) {
+              await Process.killProcessTree(proc).catch(() => {})
+            }
+            throw error
           }
         } finally {
           await fs.unlink(archivePath).catch(() => {})
@@ -346,26 +360,35 @@ export namespace Ripgrep {
     if (!proc.stdout) {
       throw new Error("Process output not available")
     }
-
-    let buffer = ""
-    const stream = proc.stdout as AsyncIterable<Buffer | string>
-    for await (const chunk of stream) {
-      input.signal?.throwIfAborted()
-
-      buffer += typeof chunk === "string" ? chunk : chunk.toString()
-      // Handle both Unix (\n) and Windows (\r\n) line endings
-      const lines = buffer.split(/\r?\n/)
-      buffer = lines.pop() || ""
-
-      for (const line of lines) {
-        if (line) yield line
-      }
+    const hasExited = () => proc.exitCode !== null || proc.signalCode !== null
+    const stop = () => {
+      if (proc.exitCode !== null || proc.signalCode !== null) return
+      return Process.killProcessTree(proc).catch(() => {})
     }
 
-    if (buffer) yield buffer
-    await proc.exited
+    try {
+      let buffer = ""
+      const stream = proc.stdout as AsyncIterable<Buffer | string>
+      for await (const chunk of stream) {
+        input.signal?.throwIfAborted()
 
-    input.signal?.throwIfAborted()
+        buffer += typeof chunk === "string" ? chunk : chunk.toString()
+        // Handle both Unix (\n) and Windows (\r\n) line endings
+        const lines = buffer.split(/\r?\n/)
+        buffer = lines.pop() || ""
+
+        for (const line of lines) {
+          if (line) yield line
+        }
+      }
+
+      if (buffer) yield buffer
+      await proc.exited
+
+      input.signal?.throwIfAborted()
+    } finally {
+      await stop()
+    }
   }
 
   export async function tree(input: { cwd: string; limit?: number; signal?: AbortSignal }) {

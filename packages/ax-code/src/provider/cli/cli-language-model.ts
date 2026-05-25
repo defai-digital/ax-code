@@ -15,6 +15,7 @@ import { Log } from "@/util/log"
 import { Flag } from "@/flag/flag"
 import { Token } from "@/util/token"
 import { markEstimatedUsage } from "../usage"
+import { Shell } from "@/shell/shell"
 
 const log = Log.create({ service: "provider.cli-language-model" })
 
@@ -85,6 +86,13 @@ function estimatedUsage(input: string, output: string): LanguageModelV3Usage {
   })
 }
 
+function readAbortError(signal: AbortSignal): Error {
+  const reason = signal.reason
+  if (reason instanceof Error) return reason
+  if (typeof reason === "string") return new DOMException(reason, "AbortError")
+  return new DOMException("This operation was aborted", "AbortError")
+}
+
 export class CliLanguageModel implements LanguageModelV3 {
   readonly specificationVersion = "v3" as const
   readonly provider: string
@@ -104,15 +112,57 @@ export class CliLanguageModel implements LanguageModelV3 {
     return this.config.promptMode === "stdin"
   }
 
+  private setupProcessAbort(proc: Process.Child, signal: AbortSignal | undefined, logLabel: string) {
+    let _isAborted = false
+    let _killPromise = Promise.resolve<void>(undefined)
+    let _abortError: Error = signal ? readAbortError(signal) : new DOMException("This operation was aborted", "AbortError")
+    let _killed = false
+
+    const kill = (): Promise<void> => {
+      if (_killed) return _killPromise
+      _killed = true
+      _killPromise = Shell.killTree(proc, {
+        exited: () => proc.exitCode !== null || proc.signalCode !== null,
+      }).catch((error) => {
+        log.warn(`failed to terminate ${logLabel}`, { error: toErrorMessage(error) })
+      })
+      return _killPromise
+    }
+
+    const onAbort = () => {
+      _isAborted = true
+      _abortError = readAbortError(signal!)
+      kill()
+    }
+
+    signal?.addEventListener("abort", onAbort, { once: true })
+    proc.exited.finally(() => signal?.removeEventListener("abort", onAbort))
+
+    return {
+      get isAborted() {
+        return _isAborted
+      },
+      get abortError() {
+        return _abortError
+      },
+      get killPromise() {
+        return _killPromise
+      },
+      kill,
+    }
+  }
+
   async doGenerate(options: LanguageModelV3CallOptions) {
+    if (options.abortSignal?.aborted) throw readAbortError(options.abortSignal)
+
     const text = promptToText(options.prompt, { providerID: this.config.providerID })
     const proc = Process.spawn(this.buildCmd(text), {
       stdin: this.useStdin() ? "pipe" : "ignore",
       stdout: "pipe",
       stderr: "pipe",
       env: cliEnv(this.config.providerEnvKeys),
-      abort: options.abortSignal,
     })
+    const abort = this.setupProcessAbort(proc, options.abortSignal, "cli generate")
 
     if (this.useStdin()) {
       if (!proc.stdin) throw new Error("CLI process stdin not available")
@@ -133,29 +183,15 @@ export class CliLanguageModel implements LanguageModelV3 {
     if (!proc.stdout || !proc.stderr) throw new Error("CLI process output not available")
 
     let timeoutTimer: ReturnType<typeof setTimeout>
-    let killTimer: ReturnType<typeof setTimeout> | undefined
-    proc.exited
-      .finally(() => {
-        if (killTimer) {
-          clearTimeout(killTimer)
-          killTimer = undefined
-        }
+    proc.exited.catch((err) => {
+      log.debug("cli process exited with error", {
+        error: toErrorMessage(err),
       })
-      .catch((err) => {
-        log.debug("cli process exited with error", {
-          error: toErrorMessage(err),
-        })
-      })
+    })
     const timeout = new Promise<never>(
       (_, reject) =>
         (timeoutTimer = setTimeout(() => {
-          proc.kill("SIGTERM")
-          killTimer = setTimeout(() => {
-            try {
-              proc.kill("SIGKILL")
-            } catch {}
-          }, 5000)
-          killTimer.unref()
+          abort.kill()
           reject(new Error(`CLI process timed out after ${CLI_TIMEOUT_MS / 1000}s`))
         }, CLI_TIMEOUT_MS)),
     )
@@ -166,8 +202,20 @@ export class CliLanguageModel implements LanguageModelV3 {
         stack: err instanceof Error ? err.stack : undefined,
       })
     })
-    const [code, stdout, stderr] = await Promise.race([result, timeout])
-    clearTimeout(timeoutTimer!)
+    let code: number, stdout: Buffer, stderr: Buffer
+    try {
+      ;[code, stdout, stderr] = await Promise.race([
+        result,
+        timeout.catch(async (error) => {
+          await abort.kill()
+          throw error
+        }),
+      ])
+    } finally {
+      clearTimeout(timeoutTimer!)
+      await abort.killPromise
+    }
+    if (abort.isAborted) throw abort.abortError
     if (code !== 0) {
       throw new Error(formatCliFailure(code, stdout, stderr))
     }
@@ -183,14 +231,16 @@ export class CliLanguageModel implements LanguageModelV3 {
   }
 
   async doStream(options: LanguageModelV3CallOptions) {
+    if (options.abortSignal?.aborted) throw readAbortError(options.abortSignal)
+
     const text = promptToText(options.prompt, { providerID: this.config.providerID })
     const proc = Process.spawn(this.buildCmd(text), {
       stdin: this.useStdin() ? "pipe" : "ignore",
       stdout: "pipe",
       stderr: "pipe",
       env: cliEnv(this.config.providerEnvKeys),
-      abort: options.abortSignal,
     })
+    const abort = this.setupProcessAbort(proc, options.abortSignal, "cli stream")
 
     if (this.useStdin()) {
       if (!proc.stdin) throw new Error("CLI process stdin not available")
@@ -215,33 +265,57 @@ export class CliLanguageModel implements LanguageModelV3 {
 
     let done = false
     let timer: ReturnType<typeof setTimeout>
-    let killEscalationTimer: ReturnType<typeof setTimeout> | undefined
-
-    // SIGTERM → 5s → SIGKILL escalation. Without this, CLI subprocesses
-    // that trap SIGTERM (claude-code/gemini-cli/codex-cli under pty wrappers)
-    // survive cancellation and surface as orphan processes after session
-    // abort. doGenerate already has this; the streaming path used to skip
-    // it on cancel(), stderr error, stdout error, and timeout.
-    const killProcess = () => {
-      try {
-        proc.kill("SIGTERM")
-      } catch {}
-      if (killEscalationTimer) return
-      killEscalationTimer = setTimeout(() => {
-        try {
-          proc.kill("SIGKILL")
-        } catch {}
-      }, 5000)
-      killEscalationTimer.unref()
-    }
+    let cancelStreaming: (() => void) | undefined
 
     const stream = new ReadableStream<LanguageModelV3StreamPart>({
       start(controller) {
         const closed = () => done || controller.desiredSize === null
+        let cleanedUp = false
+        let onStdoutData: ((chunk: Buffer) => void) | undefined
+        let onStdoutError: ((err: Error) => void) | undefined
+        let onStdoutEnd: (() => void) | undefined
+        let onStderrData: ((chunk: Buffer) => void) | undefined
+        let onStderrError: ((err: Error) => void) | undefined
+
+        const cleanupListeners = () => {
+          if (cleanedUp) return
+          cleanedUp = true
+          if (proc.stdout) {
+            if (onStdoutData) proc.stdout.off("data", onStdoutData)
+            if (onStdoutError) proc.stdout.off("error", onStdoutError)
+            if (onStdoutEnd) proc.stdout.off("end", onStdoutEnd)
+          }
+          if (proc.stderr) {
+            if (onStderrData) proc.stderr.off("data", onStderrData)
+            if (onStderrError) proc.stderr.off("error", onStderrError)
+          }
+        }
         const safeClose = () => {
           if (done) return
           done = true
+          cleanupListeners()
+          clearTimeout(timer)
           controller.close()
+        }
+        const safeAbort = () => {
+          done = true
+          cleanupListeners()
+          clearTimeout(timer)
+          abort.kill()
+        }
+
+        const onTimeout = () => {
+          void (async () => {
+            await abort.kill()
+            if (closed()) return
+            fail(new Error(formatCliTimeout(Buffer.from(raw.join("")), Buffer.concat(stderrRaw))))
+          })()
+        }
+        const onFail = (error: unknown) => {
+          if (closed()) return
+          endText()
+          controller.enqueue({ type: "error", error })
+          safeClose()
         }
 
         let remainder = ""
@@ -260,9 +334,7 @@ export class CliLanguageModel implements LanguageModelV3 {
         }
         const fail = (error: unknown) => {
           if (closed()) return
-          endText()
-          controller.enqueue({ type: "error", error })
-          safeClose()
+          onFail(error)
         }
         // Tolerate parser throws on malformed JSON lines. External CLI
         // tools (claude-code/gemini-cli/codex-cli) can emit anything, and
@@ -298,9 +370,7 @@ export class CliLanguageModel implements LanguageModelV3 {
           }
         }
         timer = setTimeout(() => {
-          killProcess()
-          if (closed()) return
-          fail(new Error(formatCliTimeout(Buffer.from(raw.join("")), Buffer.concat(stderrRaw))))
+          onTimeout()
         }, CLI_TIMEOUT_MS)
 
         controller.enqueue({ type: "stream-start", warnings: [] })
@@ -341,42 +411,51 @@ export class CliLanguageModel implements LanguageModelV3 {
         }
         const stdout = proc.stdout
         const stderr = proc.stderr
-        stderr.on("data", (chunk: Buffer) => {
+        onStderrData = (chunk: Buffer) => {
           stderrRaw.push(chunk)
-        })
-        stderr.on("error", (err: Error) => {
+        }
+        onStderrError = (err: Error) => {
           clearTimeout(timer)
-          killProcess()
+          abort.kill()
           if (closed()) return
-          fail(err)
-        })
-        stdout.on("data", (chunk: Buffer) => {
+          fail(abort.isAborted ? abort.abortError : err)
+        }
+        onStdoutData = (chunk: Buffer) => {
           if (closed()) return
           processStdoutText(stdoutDecoder.write(chunk))
-        })
-
-        stdout.on("end", () => {
+        }
+        onStdoutEnd = () => {
           clearTimeout(timer)
           if (closed()) return
           stdoutEnded = true
           flushOutput()
           finishSuccess()
-        })
-
-        stdout.on("error", (err: Error) => {
+        }
+        onStdoutError = (err: Error) => {
           clearTimeout(timer)
-          killProcess()
+          abort.kill()
           if (closed()) return
-          fail(err)
-        })
+          fail(abort.isAborted ? abort.abortError : err)
+        }
 
+        stderr.on("data", onStderrData)
+        stderr.on("error", onStderrError)
+        stdout.on("data", onStdoutData)
+        stdout.on("end", onStdoutEnd)
+        stdout.on("error", onStdoutError)
+
+        cancelStreaming = safeAbort
         proc.exited
           .then((code) => {
             clearTimeout(timer)
             if (closed()) return
             exitCode = code
             if (code !== 0) {
-              fail(new Error(formatCliFailure(code, Buffer.from(raw.join("")), Buffer.concat(stderrRaw))))
+              fail(
+                abort.isAborted
+                  ? abort.abortError
+                  : new Error(formatCliFailure(code, Buffer.from(raw.join("")), Buffer.concat(stderrRaw))),
+              )
               return
             }
             finishSuccess()
@@ -384,13 +463,14 @@ export class CliLanguageModel implements LanguageModelV3 {
           .catch((err) => {
             clearTimeout(timer)
             if (closed()) return
-            fail(err ?? new Error("CLI process killed by signal"))
+            fail(abort.isAborted ? abort.abortError : err ?? new Error("CLI process killed by signal"))
           })
       },
       cancel() {
         done = true
-        clearTimeout(timer)
-        killProcess()
+        cancelStreaming?.()
+        if (timer) clearTimeout(timer)
+        return abort.kill()
       },
     })
 

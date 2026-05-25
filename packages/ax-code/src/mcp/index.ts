@@ -11,7 +11,6 @@ import {
 } from "@modelcontextprotocol/sdk/types.js"
 import { Config } from "../config/config"
 import { Log } from "../util/log"
-import { Process } from "../util/process"
 import { Env } from "../util/env"
 import { toErrorMessage } from "../util/error-message"
 import { NamedError } from "@ax-code/util/error"
@@ -29,10 +28,28 @@ import { TuiEvent } from "@/cli/cmd/tui/event"
 import open from "open"
 import { isRecord } from "@/util/record"
 import { KeyedSerialQueue } from "@/util/queue"
+import { Shell } from "../shell/shell"
 
 export namespace MCP {
   const log = Log.create({ service: "mcp" })
   const DEFAULT_TIMEOUT = 30_000
+  const isErrnoException = (error: unknown): error is NodeJS.ErrnoException =>
+    error instanceof Error && "code" in error && typeof (error as NodeJS.ErrnoException).code === "string"
+
+  function killProcessTree(pid: number) {
+    return Shell.killTree({
+      pid,
+      kill: (signal?: NodeJS.Signals | number) => {
+        try {
+          process.kill(pid, signal)
+          return true
+        } catch (error) {
+          if (isErrnoException(error) && error.code === "ESRCH") return false
+          throw error
+        }
+      },
+    })
+  }
 
   function pinnedMcpFetch(label: string) {
     return (url: string | URL, init?: RequestInit) => Ssrf.pinnedFetch(url.toString(), { ...init, label })
@@ -216,29 +233,6 @@ export namespace MCP {
     return isRecord(entry) && "type" in entry
   }
 
-  async function descendants(pid: number): Promise<number[]> {
-    if (process.platform === "win32") return []
-    const pids: number[] = []
-    const seen = new Set<number>()
-    const queue = [pid]
-    while (queue.length > 0) {
-      const current = queue.shift()!
-      const lines = await Process.lines(["pgrep", "-P", String(current)], { nothrow: true })
-      for (const tok of lines) {
-        const cpid = parseInt(tok, 10)
-        // O(1) Set lookup instead of O(n) array.includes. For build
-        // systems that spawn hundreds of descendant processes the
-        // previous quadratic scan noticeably slowed MCP shutdown.
-        if (!isNaN(cpid) && !seen.has(cpid)) {
-          seen.add(cpid)
-          pids.push(cpid)
-          queue.push(cpid)
-        }
-      }
-    }
-    return pids
-  }
-
   const state = Instance.state(
     async () => {
       const cfg = await Config.get()
@@ -295,12 +289,10 @@ export namespace MCP {
       for (const client of Object.values(state.clients)) {
         const pid = (client.transport as { pid?: number })?.pid
         if (typeof pid !== "number") continue
-        for (const dpid of await descendants(pid)) {
-          try {
-            process.kill(dpid, "SIGTERM")
-          } catch (e: any) {
-            if (e?.code !== "ESRCH") log.debug("failed to kill descendant", { dpid, error: e?.code })
-          }
+        try {
+          await killProcessTree(pid)
+        } catch (error) {
+          log.debug("failed to kill MCP process tree", { pid, error: isErrnoException(error) ? error.code : toErrorMessage(error) })
         }
       }
 

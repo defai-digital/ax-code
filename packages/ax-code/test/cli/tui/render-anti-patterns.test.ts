@@ -509,7 +509,7 @@ describe("tui OpenTUI stability guardrails", () => {
   test("keeps queued sidebar delete controls stable for wide emoji glyphs", async () => {
     const sidebar = await fs.readFile(SIDEBAR_SRC, "utf8")
     const start = sidebar.indexOf("<For each={queued()}>")
-    const end = sidebar.indexOf("<Show when={todo()", start)
+    const end = sidebar.indexOf("<Show when={todoRemaining()", start)
     const queuedBlock = sidebar.slice(start, end)
 
     expect(sidebar).toContain('const QUEUED_DELETE_ICON = "🗑️"')
@@ -1075,7 +1075,7 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(thread).toContain('DiagnosticLog.recordProcess("tui.workerHandshakeFailed"')
     expect(thread).toContain('DiagnosticLog.recordProcess("tui.backendProtocolNoise"')
     expect(thread).toContain('DiagnosticLog.recordProcess("tui.backendProcessStdinClosed"')
-    expect(thread).toContain('child.kill("SIGKILL")')
+    expect(thread).toContain("Shell.killTree(child")
     expect(thread).toContain("worker.terminate()")
     expect(worker).toContain("health()")
     expect(worker).toContain("runtimeMode()")

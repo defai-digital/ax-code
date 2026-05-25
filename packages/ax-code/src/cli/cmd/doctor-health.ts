@@ -1,5 +1,7 @@
 import path from "path"
 import fs from "fs/promises"
+import { Process } from "../../util/process"
+import { text } from "node:stream/consumers"
 
 export type DoctorCheck = {
   name: string
@@ -172,17 +174,16 @@ export async function getRecentLogsChecks(input: {
 }
 
 async function defaultRun(command: string[]) {
-  const proc = Bun.spawn(command, {
+  const proc = Process.spawn(command, {
     stdout: "pipe",
     stderr: "pipe",
+    timeout: DEFAULT_RUN_TIMEOUT_MS,
   })
-  const timeout = setTimeout(() => {
-    proc.kill()
-  }, DEFAULT_RUN_TIMEOUT_MS)
-  if (typeof timeout === "object" && "unref" in timeout) timeout.unref()
-  try {
-    return await new Response(proc.stdout).text()
-  } finally {
-    clearTimeout(timeout)
-  }
+  const [code, stdout, stderr] = await Promise.all([
+    proc.exited,
+    proc.stdout ? text(proc.stdout) : Promise.resolve(""),
+    proc.stderr ? text(proc.stderr) : Promise.resolve(""),
+  ])
+  if (code === 124) return `command timed out after ${DEFAULT_RUN_TIMEOUT_MS}ms`
+  return code === 0 ? stdout : stderr
 }
