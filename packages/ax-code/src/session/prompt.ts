@@ -65,10 +65,11 @@ import {
 import { insertReminders } from "./prompt-reminders"
 import { executeShellCommand } from "./prompt-shell-command"
 import { executePromptCommand } from "./prompt-command-execution"
-import { createSyntheticFailureAssistant, publishPromptFailure } from "./prompt-loop-failure"
+import { publishPromptFailure } from "./prompt-loop-failure"
 import { createDeferredCodeGraphAutoIndex } from "./prompt-code-graph"
 import { recordPromptSessionStart } from "./prompt-session-start"
 import { scheduleFirstTurnSummary } from "./prompt-session-summary"
+import { enforceSuperLongDeadline } from "./prompt-super-long"
 import { createAutonomousUserContinuation, createUserMessage } from "./prompt-user-message"
 import { permissionRulesetFromLegacyTools } from "./prompt-permission"
 import { createPromptRunState } from "./prompt-run-state"
@@ -82,8 +83,6 @@ import {
   ShellInput as ShellInputSchema,
   type ShellInput as ShellInputType,
 } from "./prompt-input"
-import { SuperLongPolicy } from "./super-long-policy"
-import { SuperLongRuntime } from "./super-long-runtime"
 
 // @ts-ignore
 globalThis.AI_SDK_LOG_WARNINGS = false
@@ -353,47 +352,16 @@ export namespace SessionPrompt {
           model: fallbackModelOverride,
         }
       }
-      const superLongState = SuperLongPolicy.runtimeState({
-        modelID: lastUser.model.modelID,
+      const superLongDeadline = await enforceSuperLongDeadline({
+        sessionID,
+        lastUser,
+        lastAssistant,
+        autonomous,
         config: { enabled: cfg.super_long },
       })
-      const superLongEnabled = autonomous && superLongState.enabled
-      const superLongNow = Date.now()
-      const superLongStartedAt = superLongEnabled
-        ? await SuperLongRuntime.sessionStartedAt({ sessionID, now: superLongNow }).catch((error) => {
-            log.warn("failed to load durable super-long session start; using current loop start", {
-              sessionID,
-              error,
-            })
-            return superLongNow
-          })
-        : superLongNow
-      const superLongDeadline = SuperLongPolicy.deadline({
-        enabled: superLongEnabled,
-        startedAt: superLongStartedAt,
-        now: superLongNow,
-      })
-      const superLongDeadlineStop = SuperLongPolicy.deadlineStopDecision({
-        deadline: superLongDeadline,
-        source: superLongState.source,
-      })
-      if (superLongDeadlineStop.action === "stop") {
-        log.warn(superLongDeadlineStop.logMessage, {
-          command: "session.prompt.loop",
-          status: superLongDeadlineStop.status,
-          errorCode: superLongDeadlineStop.errorCode,
-          sessionID,
-          ...superLongDeadlineStop.details,
-        })
-        if (!assistantRespondedAfterUser({ lastUserID: lastUser.id, lastAssistant })) {
-          await createSyntheticFailureAssistant({ sessionID, lastUser, message: superLongDeadlineStop.message })
-          cachedMsgs = undefined
-        }
-        Session.publishError({
-          sessionID,
-          message: superLongDeadlineStop.message,
-        })
-        reason = superLongDeadlineStop.reason
+      if (superLongDeadline.action === "stop") {
+        if (superLongDeadline.invalidatedMessages) cachedMsgs = undefined
+        reason = superLongDeadline.reason
         break
       }
       const assistantExit = assistantLoopExitDecision({
