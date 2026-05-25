@@ -66,6 +66,24 @@ function warnPrefix(message: string) {
   UI.println(UI.Style.TEXT_WARNING_BOLD + "!", UI.Style.TEXT_NORMAL, message)
 }
 
+function describeFilesystemSearchTool(input: {
+  label: string
+  pattern: string
+  rootPath?: string
+  matches?: number
+}) {
+  const suffix = input.rootPath ? `in ${normalizePath(input.rootPath)}` : ""
+  const description =
+    input.matches === undefined
+      ? suffix
+      : `${suffix}${suffix ? " · " : ""}${input.matches} ${input.matches === 1 ? "match" : "matches"}`
+  inline({
+    icon: "✱",
+    title: `${input.label} "${input.pattern}"`,
+    ...(description && { description }),
+  })
+}
+
 function block(info: Inline, output?: string) {
   UI.empty()
   inline(info)
@@ -87,30 +105,20 @@ function fallback(part: ToolPart) {
 }
 
 function glob(info: ToolProps<typeof GlobTool>) {
-  const root = info.input.path ?? ""
-  const title = `Glob "${info.input.pattern}"`
-  const suffix = root ? `in ${normalizePath(root)}` : ""
-  const num = info.metadata.count
-  const description =
-    num === undefined ? suffix : `${suffix}${suffix ? " · " : ""}${num} ${num === 1 ? "match" : "matches"}`
-  inline({
-    icon: "✱",
-    title,
-    ...(description && { description }),
+  describeFilesystemSearchTool({
+    label: "Glob",
+    pattern: info.input.pattern,
+    rootPath: info.input.path,
+    matches: info.metadata.count,
   })
 }
 
 function grep(info: ToolProps<typeof GrepTool>) {
-  const root = info.input.path ?? ""
-  const title = `Grep "${info.input.pattern}"`
-  const suffix = root ? `in ${normalizePath(root)}` : ""
-  const num = info.metadata.matches
-  const description =
-    num === undefined ? suffix : `${suffix}${suffix ? " · " : ""}${num} ${num === 1 ? "match" : "matches"}`
-  inline({
-    icon: "✱",
-    title,
-    ...(description && { description }),
+  describeFilesystemSearchTool({
+    label: "Grep",
+    pattern: info.input.pattern,
+    rootPath: info.input.path,
+    matches: info.metadata.matches,
   })
 }
 
