@@ -10,6 +10,21 @@ import { NativePerf } from "../perf/native"
 import { NativeAddon } from "../native/addon"
 import { normalizeToWorkspacePath, resolveToolFilePath } from "./file-path"
 
+const NativeGlobEntry = z.object({
+  path: z.string(),
+  mtime: z.number(),
+  size: z.number(),
+})
+
+export type NativeGlobEntry = z.infer<typeof NativeGlobEntry>
+
+export function parseNativeGlobEntries(json: string): NativeGlobEntry[] {
+  const parsed: unknown = JSON.parse(json)
+  const decoded = z.array(NativeGlobEntry).safeParse(parsed)
+  if (!decoded.success) throw new SyntaxError("Invalid native glob output")
+  return decoded.data
+}
+
 export const GlobTool = Tool.define("glob", {
   description: DESCRIPTION,
   parameters: z.object({
@@ -47,7 +62,7 @@ export const GlobTool = Tool.define("glob", {
         const json = NativePerf.run("fs.globFiles", { search, pattern: params.pattern, limit: 100 }, () =>
           native.globFiles(search, params.pattern, 100),
         )
-        const entries = (JSON.parse(json) as Array<{ path: string; mtime: number; size: number }>).filter(
+        const entries = parseNativeGlobEntries(json).filter(
           (item) =>
             !Filesystem.contains(Instance.directory, search) || Filesystem.contains(Instance.directory, item.path),
         )
