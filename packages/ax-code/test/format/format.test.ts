@@ -207,8 +207,8 @@ describe("Format", () => {
 
     let killStarted = false
     let killCompleted = false
-    spyOn(Process, "spawn").mockReturnValue(proc as any)
-    spyOn(Process, "killProcessTree").mockImplementation(async () => {
+    const spawnSpy = spyOn(Process, "spawn").mockReturnValue(proc as any)
+    const killProcessTreeSpy = spyOn(Process, "killProcessTree").mockImplementation(async () => {
       killStarted = true
       await new Promise<void>((resolve) => {
         originalSetTimeout(() => {
@@ -225,6 +225,8 @@ describe("Format", () => {
       expect(killCompleted).toBe(true)
     } finally {
       whichSpy.mockRestore()
+      spawnSpy.mockRestore()
+      killProcessTreeSpy.mockRestore()
       globalThis.setTimeout = originalSetTimeout
     }
   })

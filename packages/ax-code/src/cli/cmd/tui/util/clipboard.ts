@@ -79,14 +79,51 @@ async function waitForWrite(input: Promise<unknown>) {
   }
 }
 
+async function waitForStdinDrain(proc: ProcWithStdin) {
+  if (!proc.stdin) return
+  const stdin = proc.stdin
+  const timeout = createTimeout(CLIPBOARD_PROC_TIMEOUT_MS)
+  let cleanup = () => {}
+  try {
+    const drain = new Promise<"drain">((resolve, reject) => {
+      const onDrain = () => resolve("drain")
+      const onError = (error: unknown) => reject(error)
+      stdin.once("drain", onDrain)
+      stdin.once("error", onError)
+      cleanup = () => {
+        stdin.off("drain", onDrain)
+        stdin.off("error", onError)
+      }
+    })
+    const result = await Promise.race([
+      drain,
+      proc.exited.then(
+        () => "exit" as const,
+        (error) => {
+          throw error
+        },
+      ),
+      timeout.promise,
+    ])
+
+    if (result === "timeout") {
+      await Process.killProcessTree(proc).catch(() => undefined)
+      throw new Error("Timed out writing to clipboard")
+    }
+    if (result === "exit") {
+      throw new Error("Clipboard process exited before stdin drained")
+    }
+  } finally {
+    cleanup()
+    timeout.clear()
+  }
+}
+
 async function writeViaProcessStdin(proc: ProcWithStdin, text: string) {
   if (!proc.stdin) return
   const wrote = proc.stdin.write(text)
   if (!wrote) {
-    await new Promise<void>((resolve, reject) => {
-      proc.stdin!.once("error", reject)
-      proc.stdin!.once("drain", resolve)
-    })
+    await waitForStdinDrain(proc)
   }
   proc.stdin.end()
   await waitForExit(proc)

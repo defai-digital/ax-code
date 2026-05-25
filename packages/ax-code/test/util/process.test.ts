@@ -88,6 +88,19 @@ describe("util.process", () => {
     expect(Date.now() - started).toBeLessThan(1000)
   }, 3000)
 
+  test("uses a short force-kill grace after wall-clock timeout", async () => {
+    if (process.platform === "win32") return
+
+    const started = Date.now()
+    const out = await Process.run(node('process.on("SIGTERM", () => {}); setInterval(() => {}, 1000)'), {
+      nothrow: true,
+      timeout: 25,
+    })
+
+    expect(out.code).toBe(124)
+    expect(Date.now() - started).toBeLessThan(1000)
+  }, 3000)
+
   test("uses cwd when spawning commands", async () => {
     await using tmp = await tmpdir()
     const out = await Process.run(node("process.stdout.write(process.cwd())"), {
