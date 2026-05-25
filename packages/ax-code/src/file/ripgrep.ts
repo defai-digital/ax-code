@@ -98,6 +98,11 @@ export namespace Ripgrep {
   export type End = z.infer<typeof End>
   export type Summary = z.infer<typeof Summary>
 
+  export function decodeJsonResult(value: unknown): Result | undefined {
+    const decoded = Result.safeParse(value)
+    return decoded.success ? decoded.data : undefined
+  }
+
   export function parseJsonLine(line: string): Result | undefined {
     let parsed: unknown
     try {
@@ -105,8 +110,7 @@ export namespace Ripgrep {
     } catch {
       return undefined
     }
-    const decoded = Result.safeParse(parsed)
-    return decoded.success ? decoded.data : undefined
+    return decodeJsonResult(parsed)
   }
 
   const PLATFORM = {

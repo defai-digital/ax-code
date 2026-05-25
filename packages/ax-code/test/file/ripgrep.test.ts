@@ -5,6 +5,23 @@ import { tmpdir } from "../fixture/fixture"
 import { Ripgrep } from "../../src/file/ripgrep"
 
 describe("file.ripgrep", () => {
+  test("decodeJsonResult decodes already-parsed ripgrep records", () => {
+    expect(
+      Ripgrep.decodeJsonResult({
+        type: "begin",
+        data: {
+          path: { text: "src/index.ts" },
+        },
+      }),
+    ).toEqual({
+      type: "begin",
+      data: {
+        path: { text: "src/index.ts" },
+      },
+    })
+    expect(Ripgrep.decodeJsonResult({ type: "match", data: {} })).toBeUndefined()
+  })
+
   test("parseJsonLine decodes ripgrep JSON records", () => {
     expect(
       Ripgrep.parseJsonLine(
