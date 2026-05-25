@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test"
 import {
+  decodeGitQuotedPathLiteral,
   decodeGitQuotedPath,
   parseGitQuotedPathLiteral,
   parseLsTreeSize,
@@ -7,6 +8,11 @@ import {
   parseNumstatLine,
   parsePathLine,
 } from "../../src/util/git-output"
+
+test("decodeGitQuotedPathLiteral accepts only decoded string literals", () => {
+  expect(decodeGitQuotedPathLiteral("dir/file\tname.ts")).toBe("dir/file\tname.ts")
+  expect(decodeGitQuotedPathLiteral({ path: "src/index.ts" })).toBeUndefined()
+})
 
 test("parseGitQuotedPathLiteral decodes only JSON string literals", () => {
   expect(parseGitQuotedPathLiteral('"dir/file\\tname.ts"')).toBe("dir/file\tname.ts")
