@@ -1,6 +1,7 @@
 import { describe, test, expect } from "bun:test"
 import {
   decodeClippyJsonMessage,
+  decodeMypyScanJson,
   decodeRuffScanJson,
   detectClippy,
   detectRuff,
@@ -443,6 +444,39 @@ describe("language-scan", () => {
         }).map((file) => file.path),
       ).toEqual(["src/clean.py"])
       expect(parseMypyFilesJson({ files: "not an array" })).toEqual([])
+    })
+
+    test("decodeMypyScanJson decodes already-parsed scan output", () => {
+      const { findings, filesScanned } = decodeMypyScanJson({
+        files: [
+          {
+            path: "src/main.py",
+            messages: [
+              {
+                severity: "error",
+                message: 'Argument 1 to "int" has incompatible type "str"; expected "SupportsInt"',
+                line: 5,
+                column: 10,
+                end_line: 5,
+                end_column: 15,
+              },
+              {
+                severity: "note",
+                message: "See https://mypy.readthedocs.io/en/stable/faq.html",
+                line: 5,
+                column: 1,
+              },
+            ],
+          },
+        ],
+      })
+
+      expect(findings).toHaveLength(2)
+      expect(filesScanned).toBe(1)
+      expect(findings[0].severity).toBe("high")
+      expect(findings[0].line).toBe(5)
+      expect(findings[0].code).toBe("mypy")
+      expect(findings[1].severity).toBe("low")
     })
 
     test("returns error message when mypy not found", async () => {
