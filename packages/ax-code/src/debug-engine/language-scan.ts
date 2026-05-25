@@ -312,7 +312,7 @@ const MypyFileSchema = z
 type MypyMessage = z.infer<typeof MypyMessageSchema>
 type MypyFile = z.infer<typeof MypyFileSchema>
 
-function mypyFiles(json: unknown): Array<MypyFile & { decodedMessages: MypyMessage[] }> {
+export function parseMypyFilesJson(json: unknown): Array<MypyFile & { decodedMessages: MypyMessage[] }> {
   const candidates =
     json && typeof json === "object" && Array.isArray((json as { files?: unknown }).files)
       ? (json as { files: unknown[] }).files
@@ -346,7 +346,7 @@ export function parseMypyOutput(output: string): ParsedLanguageScan {
   const findings: LanguageFinding[] = []
   const filesScanned = new Set<string>()
 
-  for (const file of mypyFiles(json)) {
+  for (const file of parseMypyFilesJson(json)) {
     filesScanned.add(file.path)
     for (const msg of file.decodedMessages) {
       findings.push({
