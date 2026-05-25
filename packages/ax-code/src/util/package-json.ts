@@ -1,8 +1,12 @@
 import { isRecord } from "./record"
 
+export function decodePackageJsonObject(value: unknown): Record<string, unknown> {
+  return isRecord(value) ? value : {}
+}
+
 export function parsePackageJsonObject(raw: string): Record<string, unknown> {
   const parsed: unknown = JSON.parse(raw)
-  return isRecord(parsed) ? parsed : {}
+  return decodePackageJsonObject(parsed)
 }
 
 export function packageJsonStringMap(value: unknown): Record<string, string> {
