@@ -33,6 +33,7 @@ import {
 import { resolvePromptLoopErrorTransition } from "./prompt-loop-errors"
 import { resolvePromptLoopAssistantExit } from "./prompt-loop-exit"
 import { handlePromptLoopGoalContinuation } from "./prompt-loop-goal"
+import { handlePromptLoopAgentStepLimit } from "./prompt-loop-agent-step-limit"
 import { emitPromptLoopCompletionGateDecision } from "./prompt-loop-completion-gate"
 import { handlePromptLoopCompletionGateRetry } from "./prompt-loop-completion-gate-retry"
 import { handlePromptLoopEmptyTurn } from "./prompt-loop-empty-turn"
@@ -54,9 +55,7 @@ import { executeSubtask, type SubtaskContext } from "./prompt-subtask"
 import { resolveTools } from "./prompt-tools"
 import { clearPromptProcessorInstructions, createPromptProcessor } from "./prompt-processor"
 import { addPromptGoalUsage } from "./prompt-goal-usage"
-import { AutonomousContinuationPrompt } from "./prompt-autonomous-continuations"
 import {
-  agentStepLimitContinuationDecision,
   isEmptyModelTurn,
   modelTurnFinished,
 } from "./prompt-autonomous-decisions"
@@ -415,7 +414,8 @@ export namespace SessionPrompt {
       const agent = resolvedAgent.value
       cachedAgent = resolvedAgent.cache
       const maxSteps = agent.steps ?? Infinity
-      const agentStepLimit = agentStepLimitContinuationDecision({
+      const agentStepLimit = handlePromptLoopAgentStepLimit({
+        agentName: agent.name,
         step,
         maxSteps,
         autonomous,
@@ -427,13 +427,8 @@ export namespace SessionPrompt {
           event: "autonomous agent step-limit auto-continue",
           resetTodoDeadlineSignature: true,
           resetTodoProgressTracking: true,
-          text: AutonomousContinuationPrompt.agentStepLimit({
-            agentName: agent.name,
-            maxSteps,
-            continuation: agentStepLimit.continuation,
-            maxContinuations,
-          }),
-          logExtras: { agent: agent.name, maxSteps },
+          text: agentStepLimit.text,
+          logExtras: agentStepLimit.logExtras,
         })
         continue
       }
