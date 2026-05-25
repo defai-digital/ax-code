@@ -8,7 +8,11 @@ import path from "path"
 import type { ProjectMemory, MemorySection, WarmupOptions } from "./types"
 import * as store from "./store"
 import { computeContentHash } from "./hash"
-import { packageJsonObjectKeys, packageJsonStringMap, parsePackageJsonObject } from "@/util/package-json"
+import {
+  decodePackageJsonObject,
+  packageJsonObjectKeys,
+  packageJsonStringMap,
+} from "@/util/package-json"
 
 const DEFAULT_MAX_TOKENS = 4000
 const DEFAULT_DEPTH = 3
@@ -27,7 +31,12 @@ export interface MemoryPackageJsonInfo {
 }
 
 export function parseMemoryPackageJson(raw: string): MemoryPackageJsonInfo {
-  const parsed = parsePackageJsonObject(raw)
+  const parsed: unknown = JSON.parse(raw)
+  return decodeMemoryPackageJsonValue(parsed)
+}
+
+export function decodeMemoryPackageJsonValue(value: unknown): MemoryPackageJsonInfo {
+  const parsed = decodePackageJsonObject(value)
   const scripts = Object.keys(packageJsonStringMap(parsed.scripts))
   const dependencies = packageJsonObjectKeys(parsed.dependencies)
   const devDependencies = packageJsonObjectKeys(parsed.devDependencies)
