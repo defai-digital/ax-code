@@ -52,14 +52,8 @@ export namespace ProviderError {
         return msg
       }
 
-      try {
-        const body = JSON.parse(e.responseBody)
-        // try to extract common error message fields
-        const errMsg = body.message || body.error?.message || body.error
-        if (errMsg && typeof errMsg === "string") {
-          return `${msg}: ${errMsg}`
-        }
-      } catch {}
+      const responseMessage = responseBodyErrorMessage(e.responseBody)
+      if (responseMessage) return `${msg}: ${responseMessage}`
 
       // If responseBody is HTML (e.g. from a gateway or proxy error page),
       // provide a human-readable message instead of dumping raw markup
@@ -77,7 +71,7 @@ export namespace ProviderError {
     }).trim()
   }
 
-  function json(input: unknown) {
+  export function parseJsonRecord(input: unknown): Record<string, unknown> | undefined {
     if (typeof input === "string") {
       try {
         const result = JSON.parse(input)
@@ -90,6 +84,19 @@ export namespace ProviderError {
     if (isRecord(input)) {
       return input
     }
+    return undefined
+  }
+
+  export function responseBodyErrorMessage(responseBody: string): string | undefined {
+    const body = parseJsonRecord(responseBody)
+    if (!body) return undefined
+
+    if (typeof body.message === "string" && body.message) return body.message
+    if (isRecord(body.error)) {
+      const nestedMessage = body.error.message
+      if (typeof nestedMessage === "string" && nestedMessage) return nestedMessage
+    }
+    if (typeof body.error === "string" && body.error) return body.error
     return undefined
   }
 
@@ -128,7 +135,7 @@ export namespace ProviderError {
       }
 
   export function parseStreamError(input: unknown): ParsedStreamError | undefined {
-    const body = json(input)
+    const body = parseJsonRecord(input)
     if (!body) return
     const bodyError = isRecord(body.error) ? body.error : undefined
 
@@ -184,7 +191,7 @@ export namespace ProviderError {
 
   export function parseAPICallError(input: { providerID: ProviderID; error: APICallError }): ParsedAPICallError {
     const m = message(input.providerID, input.error)
-    const body = json(input.error.responseBody)
+    const body = parseJsonRecord(input.error.responseBody)
     const bodyError = isRecord(body?.error) ? body.error : undefined
     if (isOverflow(m) || input.error.statusCode === 413 || bodyError?.code === "context_length_exceeded") {
       return {
