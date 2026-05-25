@@ -34,6 +34,7 @@ import { resolvePromptLoopErrorTransition } from "./prompt-loop-errors"
 import { resolvePromptLoopAssistantExit } from "./prompt-loop-exit"
 import { handlePromptLoopGoalContinuation } from "./prompt-loop-goal"
 import { emitPromptLoopCompletionGateDecision } from "./prompt-loop-completion-gate"
+import { handlePromptLoopEmptyTurn } from "./prompt-loop-empty-turn"
 import { loopMessages, scanLoopMessages } from "./prompt-loop-messages"
 import { finishPromptLoopQueue } from "./prompt-loop-queue"
 import {
@@ -60,7 +61,6 @@ import { AutonomousContinuationPrompt } from "./prompt-autonomous-continuations"
 import {
   agentStepLimitContinuationDecision,
   completionGateRetryDecision,
-  emptyModelTurnDecision,
   isEmptyModelTurn,
   modelTurnFinished,
 } from "./prompt-autonomous-decisions"
@@ -569,48 +569,28 @@ export namespace SessionPrompt {
           maxCompletionGateRetries,
         })
 
-        const emptyTurnDecision = emptyModelTurnDecision({
+        const emptyTurnTransition = await handlePromptLoopEmptyTurn({
+          sessionID,
+          assistant: processor.message,
           emptyModelTurn,
           emptyModelTurnRetries,
           maxEmptyModelTurnRetries,
           todoRetries,
+          pendingCount: pendingTodos.length,
         })
+        emptyModelTurnRetries = emptyTurnTransition.emptyModelTurnRetries
+        todoRetries = emptyTurnTransition.todoRetries
 
-        if (emptyTurnDecision.action === "stop") {
-          log.warn("autonomous stopped after repeated empty model turn", {
-            command: "session.prompt.loop",
-            status: "stopped",
-            errorCode: emptyTurnDecision.errorCode,
-            sessionID,
-            attempts: emptyModelTurnRetries,
-            maxAttempts: maxEmptyModelTurnRetries,
-            pendingCount: pendingTodos.length,
-          })
-          await publishPromptFailure({ sessionID, assistant: processor.message, message: emptyTurnDecision.message })
-          reason = emptyTurnDecision.reason
+        if (emptyTurnTransition.action === "stop") {
+          reason = emptyTurnTransition.reason
           break
         }
 
-        emptyModelTurnRetries = emptyTurnDecision.emptyModelTurnRetries
-
-        if (emptyTurnDecision.action === "recover") {
-          todoRetries = emptyTurnDecision.todoRetries
-          log.warn("autonomous empty model turn recovery", {
-            command: "session.prompt.loop",
-            status: "retry",
-            errorCode: "EMPTY_MODEL_TURN",
-            sessionID,
-            attempt: emptyTurnDecision.attempt,
-            maxAttempts: maxEmptyModelTurnRetries,
-            pendingCount: pendingTodos.length,
-          })
+        if (emptyTurnTransition.action === "recover") {
           await createAutonomousTextContinuation({
             sessionID,
             messages: latestMessages,
-            text: AutonomousContinuationPrompt.emptyModelTurnRecovery({
-              attempt: emptyTurnDecision.attempt,
-              maxAttempts: maxEmptyModelTurnRetries,
-            }),
+            text: emptyTurnTransition.text,
           })
           continue
         }
