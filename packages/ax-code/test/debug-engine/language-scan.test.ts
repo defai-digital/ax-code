@@ -5,6 +5,7 @@ import {
   detectMypy,
   mapClippyLevel,
   mapRuffSeverity,
+  parseClippyJsonLine,
   parseClippyOutput,
   parseMypyOutput,
   parseRuffOutput,
@@ -54,6 +55,38 @@ describe("language-scan", () => {
   })
 
   describe("detectClippy", () => {
+    test("parseClippyJsonLine decodes wrapped compiler messages", () => {
+      const decoded = parseClippyJsonLine(
+        JSON.stringify({
+          reason: "compiler-message",
+          message: {
+            message: "unused variable",
+            code: { code: "unused_variables", explanation: null },
+            level: "warning",
+            spans: [
+              {
+                file_name: "src/main.rs",
+                line_start: 5,
+                line_end: 5,
+                column_start: 9,
+                column_end: 10,
+                is_primary: true,
+              },
+            ],
+          },
+        }),
+      )
+
+      expect(decoded?.message).toBe("unused variable")
+      expect(decoded?.code?.code).toBe("unused_variables")
+      expect(decoded?.spans[0]?.file_name).toBe("src/main.rs")
+    })
+
+    test("parseClippyJsonLine rejects malformed clippy JSON lines", () => {
+      expect(parseClippyJsonLine("{not json")).toBeUndefined()
+      expect(parseClippyJsonLine(JSON.stringify({ message: "missing spans", level: "warning" }))).toBeUndefined()
+    })
+
     test("returns error message when cargo not found", async () => {
       const result = await detectClippy({ cwd: "/nonexistent" })
       expect(result.tool).toBe("cargo-clippy")
