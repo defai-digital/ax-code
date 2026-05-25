@@ -45,6 +45,13 @@ afterEach(() => {
 })
 
 describe("Rpc", () => {
+  test("decodeWireMessage accepts only decoded object messages", () => {
+    expect(Rpc.decodeWireMessage({ type: "rpc.request", id: 1 })).toEqual({ type: "rpc.request", id: 1 })
+    expect(Rpc.decodeWireMessage(null)).toBeUndefined()
+    expect(Rpc.decodeWireMessage([])).toBeUndefined()
+    expect(Rpc.decodeWireMessage("not an object")).toBeUndefined()
+  })
+
   test("returns successful handler results", async () => {
     const pair = createRpcPair()
     try {
