@@ -81,6 +81,7 @@ import {
 import { footerLivenessIndicator, footerLivenessTextFrame } from "./liveness-view-model"
 import { parsePastedFilePath } from "./prompt-filepath"
 import { isActiveTodo } from "@/session/todo-status"
+import { responseErrorMessage } from "@tui/util/error-message"
 
 const log = Log.create({ service: "tui.prompt" })
 const SUPER_LONG_PINK = RGBA.fromHex("#ff4db8")
@@ -963,28 +964,6 @@ export function Prompt(props: PromptProps) {
     })
   }
 
-  async function rejectionMessage(response: Response) {
-    const text = await response.text().catch(() => "")
-    if (!text) return `Request failed with status ${response.status}`
-    try {
-      const parsed = JSON.parse(text) as {
-        error?: unknown
-        message?: unknown
-      }
-      if (typeof parsed.message === "string" && parsed.message) return parsed.message
-      if (typeof parsed.error === "string" && parsed.error) return parsed.error
-      if (parsed.error && typeof parsed.error === "object") {
-        const error = parsed.error as {
-          message?: unknown
-          data?: { message?: unknown }
-        }
-        if (typeof error.message === "string" && error.message) return error.message
-        if (typeof error.data?.message === "string" && error.data.message) return error.data.message
-      }
-    } catch {}
-    return text
-  }
-
   async function submitAsyncRoute(input: {
     sessionID: string
     path: AsyncSessionRoute
@@ -1028,7 +1007,7 @@ export function Prompt(props: PromptProps) {
       })
       return
     }
-    const message = await rejectionMessage(response)
+    const message = await responseErrorMessage(response)
     DiagnosticLog.recordProcess("tui.promptSubmitRejected", {
       sessionID: input.sessionID,
       path: input.path,

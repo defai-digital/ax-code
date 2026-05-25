@@ -60,6 +60,7 @@ import { installResizeInputGuard, useResizeInputRecovery } from "./input-mode"
 import { directoryRequestHeaders } from "@tui/util/request-headers"
 import { scheduleDeferredStartupTask } from "@tui/util/startup-task"
 import { beginTuiStartup, createTuiStartupSpan, recordTuiStartup, recordTuiStartupOnce } from "@tui/util/startup-trace"
+import { unknownErrorMessage } from "@tui/util/error-message"
 
 const FALLBACK_COLOR_MODE = "dark" as const
 
@@ -1083,21 +1084,10 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
     sdk.event.on(SessionApi.Event.Error.type, (evt) => {
       const error = evt.properties.error
       if (error && typeof error === "object" && error.name === "MessageAbortedError") return
-      const message = (() => {
-        if (!error) return "An error occurred"
-
-        if (typeof error === "object") {
-          const data = error.data
-          if (data && typeof data === "object" && "message" in data && typeof data.message === "string") {
-            return data.message
-          }
-        }
-        return String(error)
-      })()
 
       toast.show({
         variant: "error",
-        message,
+        message: unknownErrorMessage(error),
         duration: 5000,
       })
     }),
