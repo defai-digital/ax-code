@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { LSP } from "../../src/lsp"
-import { aggregate, aggregateEnvelope, collect } from "../../src/lsp/diagnostics"
+import { Diagnostic, aggregate, aggregateEnvelope, collect } from "../../src/lsp/diagnostics"
 import { Log } from "../../src/util/log"
 
 Log.init({ print: false })
@@ -44,6 +44,12 @@ describe("aggregate diagnostics", () => {
     expect(results).toEqual({
       "/a.ts": [first, second],
     })
+  })
+
+  test("Diagnostic.pretty formats protocol severity and one-based position", () => {
+    expect(Diagnostic.pretty(diag({ startLine: 2, startCol: 4, endLine: 2, endCol: 6 }, "bad", 1))).toBe(
+      "ERROR [3:5] bad",
+    )
   })
 
   test("aggregateEnvelope owns client projection and metering boundary", async () => {

@@ -54,6 +54,25 @@ export function normalizeSeverity(s: number | undefined): NormalizedSeverity {
   return "info"
 }
 
+export function pretty(diagnostic: LSPClient.Diagnostic) {
+  const severityMap = {
+    1: "ERROR",
+    2: "WARN",
+    3: "INFO",
+    4: "HINT",
+  }
+
+  const severity = severityMap[diagnostic.severity ?? 1]
+  const line = diagnostic.range.start.line + 1
+  const col = diagnostic.range.start.character + 1
+
+  return `${severity} [${line}:${col}] ${diagnostic.message}`
+}
+
+export const Diagnostic = {
+  pretty,
+}
+
 function dedupKeyOf(path: string, d: LSPClient.Diagnostic): string {
   const r = d.range
   return [path, r.start.line, r.start.character, r.end.line, r.end.character, d.message].join("\u0000")
