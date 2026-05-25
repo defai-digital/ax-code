@@ -18,6 +18,7 @@ import { isRecord } from "@/util/record"
 import type { SystemError } from "bun"
 import type { Provider } from "@/provider/provider"
 import { ModelID, ProviderID } from "@/provider/schema"
+import { providerModelKey } from "@/provider/model-key"
 
 export namespace MessageV2 {
   const log = Log.create({ service: "session.message" })
@@ -701,7 +702,8 @@ export namespace MessageV2 {
       }
 
       if (msg.info.role === "assistant") {
-        const differentModel = `${model.providerID}/${model.id}` !== `${msg.info.providerID}/${msg.info.modelID}`
+        const differentModel =
+          providerModelKey({ providerID: model.providerID, modelID: model.id }) !== providerModelKey(msg.info)
         const media: Array<{ mime: string; url: string }> = []
 
         if (
