@@ -5,6 +5,7 @@ import type { ProjectID } from "../project/schema"
 import { Log } from "../util/log"
 import { Recorder } from "../replay/recorder"
 import type { SessionID } from "./schema"
+import { toErrorMessage } from "../util/error-message"
 
 const log = Log.create({ service: "session.prompt" })
 
@@ -75,7 +76,7 @@ export function recordCodeGraphSessionStart(input: { sessionID: SessionID; enabl
       status: "error",
       errorCode: "GRAPH_INIT_SKIPPED",
       sessionID: input.sessionID,
-      e: e instanceof Error ? e.message : String(e),
+      e: toErrorMessage(e),
     })
     return undefined
   }

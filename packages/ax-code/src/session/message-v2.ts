@@ -20,6 +20,7 @@ import type { SystemError } from "bun"
 import type { Provider } from "@/provider/provider"
 import { ModelID, ProviderID } from "@/provider/schema"
 import { providerModelKey } from "@/provider/model-key"
+import { toErrorMessage } from "../util/error-message"
 
 export namespace MessageV2 {
   const log = Log.create({ service: "session.message" })
@@ -1002,7 +1003,7 @@ export namespace MessageV2 {
     if (code === "ENOTFOUND") return "DNS lookup failed — no internet connection"
     if (code === "EPIPE") return "Connection broken (broken pipe)"
     if (code === "EAI_AGAIN") return "DNS resolution temporarily failed"
-    const msg = e instanceof Error ? e.message : String(e)
+    const msg = toErrorMessage(e)
     if (msg.includes("SSE read timed out")) return "Stream stalled — no data received (possible network interruption)"
     if (msg.includes("Stream ended without finish event"))
       return "Stream terminated prematurely — possible network interruption"
@@ -1082,7 +1083,7 @@ export namespace MessageV2 {
             metadata: {
               code: (e as SystemError)?.code ?? "",
               syscall: (e as SystemError)?.syscall ?? "",
-              message: (e as SystemError)?.message ?? (e instanceof Error ? e.message : String(e)),
+              message: (e as SystemError)?.message ?? toErrorMessage(e),
             },
           },
           { cause: e },

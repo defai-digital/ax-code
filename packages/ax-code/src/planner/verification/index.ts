@@ -7,6 +7,7 @@
 
 import { Log } from "../../util/log"
 import { Env } from "../../util/env"
+import { toErrorMessage } from "../../util/error-message"
 
 const log = Log.create({ service: "planner.verify" })
 
@@ -102,7 +103,7 @@ export async function typecheck(cwd: string, timeout = 60_000): Promise<Verifica
       status: "error",
       issues: [],
       duration: Date.now() - start,
-      output: e instanceof Error ? e.message : String(e),
+      output: toErrorMessage(e),
     }
   }
 }
@@ -156,7 +157,7 @@ export async function custom(cmd: string, cwd: string, timeout = 60_000): Promis
       status: "error",
       issues: [],
       duration: Date.now() - start,
-      output: e instanceof Error ? e.message : String(e),
+      output: toErrorMessage(e),
     }
   }
 }

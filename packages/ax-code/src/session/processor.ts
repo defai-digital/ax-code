@@ -26,6 +26,7 @@ import { NamedError } from "@ax-code/util/error"
 import { Recorder } from "@/replay/recorder"
 import { Database } from "@/storage/db"
 import { asRecord } from "@/util/record"
+import { toErrorMessage } from "../util/error-message"
 import { providerModelKey } from "@/provider/model-key"
 import { usageSource } from "@/provider/usage"
 import { AgentOptimizationTrace } from "@/session/agent-optimization-trace"
@@ -1001,7 +1002,7 @@ export namespace SessionProcessor {
             persistFinalizedInFlightParts({ overwriteEndTime: true })
             const errStack = e instanceof Error ? e.stack : undefined
             const errName = e instanceof Error ? e.name : (e as { constructor?: { name?: string } })?.constructor?.name
-            const errMessage = e instanceof Error ? e.message : String(e)
+            const errMessage = toErrorMessage(e)
             log.error("process failed", {
               sessionId: input.sessionID,
               command: "session.process",
