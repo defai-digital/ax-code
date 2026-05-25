@@ -15,7 +15,6 @@ import { defer } from "../util/defer"
 import { NotFoundError } from "@/storage/db"
 import { Flag } from "../flag/flag"
 import { Recorder } from "../replay/recorder"
-import { BlastRadius } from "./blast-radius"
 import { Todo } from "./todo"
 import { SessionGoal } from "./goal"
 import { Config } from "@/config/config"
@@ -36,6 +35,11 @@ import {
 } from "./prompt-loop-compaction"
 import { handlePromptLoopError } from "./prompt-loop-errors"
 import { loopMessages, scanLoopMessages } from "./prompt-loop-messages"
+import {
+  beginPromptLoopRecording,
+  finishPromptLoopRecording,
+  type PromptLoopEndReason,
+} from "./prompt-loop-recording"
 import { resolvePromptLoopResult } from "./prompt-loop-result"
 import { markPromptLoopBusy } from "./prompt-loop-status"
 import { preparePromptRequest, type PromptRequestCache } from "./prompt-request-build"
@@ -178,22 +182,9 @@ export namespace SessionPrompt {
     })
     let sessionStarted = false
     await using _recorder = defer(async () => {
-      if (sessionStarted && !isResumingActiveLoop) {
-        Recorder.emit({
-          type: "session.end",
-          sessionID,
-          reason,
-          totalSteps,
-        })
-      }
-      await Recorder.end(sessionID)
-      // Release the autonomous-mode per-session counters and the
-      // BlastRadius cap state. Without this the module-level Map grows
-      // unbounded across the process lifetime — small per-session, but
-      // accumulates over hundreds of sessions.
-      BlastRadius.reset(sessionID)
+      await finishPromptLoopRecording({ sessionID, sessionStarted, isResumingActiveLoop, reason, totalSteps })
     })
-    Recorder.begin(sessionID)
+    beginPromptLoopRecording(sessionID)
     // Idempotent — primary warmup happens in InstanceBootstrap so providers
     // load in the background while the UI renders. This is a fallback in
     // case the prompt loop is entered without a full bootstrap.
@@ -201,7 +192,7 @@ export namespace SessionPrompt {
 
     let step = 0
     let totalSteps = 0
-    let reason: "completed" | "aborted" | "error" | "step_limit" | "stalled" = "error"
+    let reason: PromptLoopEndReason = "error"
     let consecutiveErrors = 0
     let continuations = 0
     let goalBudgetLimitContinuationSent = false
