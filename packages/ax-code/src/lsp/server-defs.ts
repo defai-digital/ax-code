@@ -14,6 +14,7 @@ import { OxlintSupport } from "./oxlint"
 import { JS_LOCKFILES } from "@/constants/lsp"
 import {
   bunServerHandle,
+  bunSpawnInfo,
   globalBin,
   log,
   NearestRoot,
@@ -112,21 +113,11 @@ export const Typescript: Info = {
     const tsserver = Module.resolve("typescript/lib/tsserver.js", Instance.directory)
     log.info("typescript server", { tsserver })
     if (!tsserver) return
-    const proc = spawn(BunProc.which(), ["x", "typescript-language-server", "--stdio"], {
-      cwd: root,
-      env: {
-        ...Env.sanitize(),
-        BUN_BE_BUN: "1",
+    return bunSpawnInfo(root, "x", ["typescript-language-server", "--stdio"], {
+      tsserver: {
+        path: tsserver,
       },
     })
-    return {
-      process: proc,
-      initialization: {
-        tsserver: {
-          path: tsserver,
-        },
-      },
-    }
   },
 }
 
@@ -167,15 +158,7 @@ export const ESLint: Info = {
       arch,
     )
     if (await pathExists(managedServer)) {
-      return {
-        process: spawn(BunProc.which(), [managedServer, "--stdio"], {
-          cwd: root,
-          env: {
-            ...Env.sanitize(),
-            BUN_BE_BUN: "1",
-          },
-        }),
-      }
+      return bunSpawnInfo(root, managedServer, ["--stdio"])
     }
 
     const legacyServer = path.join(Global.Path.bin, "vscode-eslint", "server", "out", "eslintServer.js")
@@ -186,15 +169,7 @@ export const ESLint: Info = {
           serverPath: legacyServer,
         },
       )
-      return {
-        process: spawn(BunProc.which(), [legacyServer, "--stdio"], {
-          cwd: root,
-          env: {
-            ...Env.sanitize(),
-            BUN_BE_BUN: "1",
-          },
-        }),
-      }
+      return bunSpawnInfo(root, legacyServer, ["--stdio"])
     }
 
     if (Flag.AX_CODE_DISABLE_LSP_DOWNLOAD) return
@@ -216,15 +191,7 @@ export const ESLint: Info = {
       })) ?? null
     if (!serverPath) return
 
-    return {
-      process: spawn(BunProc.which(), [serverPath, "--stdio"], {
-        cwd: root,
-        env: {
-          ...Env.sanitize(),
-          BUN_BE_BUN: "1",
-        },
-      }),
-    }
+    return bunSpawnInfo(root, serverPath, ["--stdio"])
   },
 }
 

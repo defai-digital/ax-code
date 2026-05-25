@@ -8,6 +8,7 @@ import { tmpdir } from "../fixture/fixture"
 import {
   NearestRoot,
   bunServerArgs,
+  bunSpawnInfo,
   globalBin,
   globalPath,
   nodeModuleScript,
@@ -479,6 +480,14 @@ describe("lsp server helpers", () => {
     const info = spawnInfo("/tmp/server", "/tmp/root", ["--stdio"], initialization)
 
     expect(info.process.spawnfile).toBe("/tmp/server")
+    expect(info.initialization).toEqual(initialization)
+  })
+
+  test("builds Bun-backed spawn info with script args and initialization", () => {
+    const initialization = { tsserver: { path: "/tmp/tsserver.js" } }
+    const info = bunSpawnInfo("/tmp/root", "/tmp/server.js", ["--stdio"], initialization)
+
+    expect(info.process.spawnargs.slice(1)).toEqual(["/tmp/server.js", "--stdio"])
     expect(info.initialization).toEqual(initialization)
   })
 
