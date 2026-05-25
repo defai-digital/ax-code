@@ -40,7 +40,6 @@ import { SessionSummary } from "./summary"
 import { NamedError } from "@ax-code/util/error"
 import { fn } from "@/util/fn"
 import { SessionProcessor } from "./processor"
-import { Permission } from "@/permission"
 import { SessionStatus } from "./status"
 import { LLM } from "./llm"
 import { iife } from "@/util/iife"
@@ -98,6 +97,7 @@ import { FilePartInput, PromptPartInput } from "./prompt-part-input"
 import { createStoppedAssistantTextResponse } from "./prompt-assistant-response"
 import { resolveCommandForExecution } from "./prompt-command"
 import { createAutonomousUserContinuation, createUserMessage } from "./prompt-user-message"
+import { permissionRulesetFromLegacyTools } from "./prompt-permission"
 import { SuperLongPolicy } from "./super-long-policy"
 import { SuperLongRuntime } from "./super-long-runtime"
 
@@ -169,14 +169,6 @@ export namespace SessionPrompt {
     parts: z.array(PromptPartInput),
   })
   export type PromptInput = z.infer<typeof PromptInput>
-
-  function permissionRulesetFromLegacyTools(tools: Record<string, boolean> | undefined): Permission.Ruleset {
-    return Object.entries(tools ?? {}).map(([tool, enabled]) => ({
-      permission: tool,
-      action: enabled ? "allow" : "deny",
-      pattern: "*",
-    }))
-  }
 
   export const prompt = fn(PromptInput, async (input) => {
     const session = await Session.get(input.sessionID)
