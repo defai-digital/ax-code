@@ -56,6 +56,10 @@ describe("i18n loader decoding", () => {
     expect(decodeTranslationsValue(validTranslations).session.welcome).toBe("Welcome")
   })
 
+  test("looks up known translation paths", () => {
+    expect(t("errors.apiError")).toBe("API error")
+  })
+
   test("rejects malformed or incomplete translation JSON", () => {
     expect(() => parseTranslationsText("{not json")).toThrow(/invalid JSON/)
     expect(() =>

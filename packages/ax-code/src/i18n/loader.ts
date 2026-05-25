@@ -57,6 +57,11 @@ function translationValue(value: unknown, key: string): unknown {
   return current
 }
 
+function lookupTranslation(value: unknown, key: string): string | undefined {
+  const translation = translationValue(value, key)
+  return typeof translation === "string" ? translation : undefined
+}
+
 export function parseTranslationsText(text: string): Translations {
   let parsed: unknown
   try {
@@ -69,7 +74,7 @@ export function parseTranslationsText(text: string): Translations {
 }
 
 export function decodeTranslationsValue(value: unknown): Translations {
-  const missing = REQUIRED_TRANSLATION_PATHS.filter((key) => typeof translationValue(value, key) !== "string")
+  const missing = REQUIRED_TRANSLATION_PATHS.filter((key) => lookupTranslation(value, key) === undefined)
   if (missing.length) {
     throw new Error(`i18n locale: missing translation strings (${missing.join(", ")})`)
   }
@@ -112,24 +117,14 @@ export function getTranslations(lang?: SupportedLanguage): Translations {
  */
 export function t(key: string, lang?: SupportedLanguage): string {
   const translations = getTranslations(lang)
-  const keys = key.split(".")
-  let value: unknown = translations
-  for (const k of keys) {
-    value = (value as Record<string, unknown>)?.[k]
-    if (value === undefined) break
-  }
-
-  if (typeof value === "string") return value
+  const value = lookupTranslation(translations, key)
+  if (value !== undefined) return value
 
   // Fallback to English
   if ((lang ?? currentLanguage) !== "en") {
     const english = getTranslations("en")
-    let enValue: unknown = english
-    for (const k of keys) {
-      enValue = (enValue as Record<string, unknown>)?.[k]
-      if (enValue === undefined) break
-    }
-    if (typeof enValue === "string") return enValue
+    const enValue = lookupTranslation(english, key)
+    if (enValue !== undefined) return enValue
   }
 
   return key // Return key itself as last resort
