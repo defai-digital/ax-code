@@ -5,7 +5,7 @@ import type { ProjectID } from "../../project/schema"
 import type { DebugEngine } from "../../debug-engine"
 import { Log } from "../../util/log"
 import { Env } from "../../util/env"
-import { packageJsonStringMap, parsePackageJsonObject } from "../../util/package-json"
+import { decodePackageJsonObject, packageJsonStringMap } from "../../util/package-json"
 
 // Phase 2 P2.1: extracted from src/debug-engine/apply-safe-refactor.ts so
 // review/debug/qa workflows (not just refactor_apply) can run typecheck /
@@ -69,8 +69,12 @@ async function cargoCommands(cwd: string): Promise<CommandSet | null> {
   }
 }
 
+export function decodePackageScripts(value: unknown): Record<string, string> {
+  return packageJsonStringMap(decodePackageJsonObject(value).scripts)
+}
+
 export function parsePackageScripts(raw: string): Record<string, string> {
-  return packageJsonStringMap(parsePackageJsonObject(raw).scripts)
+  return decodePackageScripts(JSON.parse(raw))
 }
 
 // Resolve the typecheck/lint/test commands for a project. Defaults pick up
