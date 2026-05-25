@@ -1,11 +1,18 @@
 import { expect, test } from "bun:test"
 import {
   decodeGitQuotedPath,
+  parseGitQuotedPathLiteral,
   parseLsTreeSize,
   parseNameStatusLine,
   parseNumstatLine,
   parsePathLine,
 } from "../../src/util/git-output"
+
+test("parseGitQuotedPathLiteral decodes only JSON string literals", () => {
+  expect(parseGitQuotedPathLiteral('"dir/file\\tname.ts"')).toBe("dir/file\tname.ts")
+  expect(parseGitQuotedPathLiteral('"unterminated')).toBeUndefined()
+  expect(parseGitQuotedPathLiteral('{"path":"src/index.ts"}')).toBeUndefined()
+})
 
 test("decodeGitQuotedPath decodes only valid JSON string paths", () => {
   expect(decodeGitQuotedPath("src/index.ts")).toBe("src/index.ts")

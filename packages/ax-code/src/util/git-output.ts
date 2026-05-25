@@ -10,14 +10,18 @@ export interface NumstatEntry {
   binary: boolean
 }
 
-export function decodeGitQuotedPath(file: string): string {
-  if (!file.startsWith('"')) return file
+export function parseGitQuotedPathLiteral(file: string): string | undefined {
   try {
     const parsed: unknown = JSON.parse(file)
-    return typeof parsed === "string" ? parsed : file
+    return typeof parsed === "string" ? parsed : undefined
   } catch {
-    return file
+    return undefined
   }
+}
+
+export function decodeGitQuotedPath(file: string): string {
+  if (!file.startsWith('"')) return file
+  return parseGitQuotedPathLiteral(file) ?? file
 }
 
 function splitPair(line: string) {
