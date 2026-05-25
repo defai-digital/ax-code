@@ -12,6 +12,7 @@ import { iife } from "../../../util/iife"
 import { bootstrap } from "../../bootstrap"
 import { cmd } from "../cmd"
 import { decodeJsonRecord } from "@/util/json-record"
+import { parseJsonResult } from "@/util/json-value"
 
 export type ToolParams = Record<string, unknown>
 
@@ -109,13 +110,13 @@ export function parseToolParams(input?: string): ToolParams {
   // execution. `new Function` is `eval` in disguise — never feed user
   // input into it.
   const parsed = iife(() => {
-    try {
-      return JSON.parse(trimmed)
-    } catch (jsonError) {
-      throw new Error(`Failed to parse --params as JSON: ${jsonError}. Tool params must be valid JSON.`, {
-        cause: jsonError,
+    const parsed = parseJsonResult(trimmed)
+    if (!parsed.ok) {
+      throw new Error(`Failed to parse --params as JSON: ${parsed.error}. Tool params must be valid JSON.`, {
+        cause: parsed.error,
       })
     }
+    return parsed.value
   })
 
   return decodeToolParamsValue(parsed)
