@@ -682,37 +682,11 @@ export namespace LSP {
   export type SymbolEnvelope = LSPWorkspaceSymbol.SymbolEnvelope
 
   export async function workspaceSymbolEnvelope(query: string): Promise<SymbolEnvelope> {
-    return LSPPerf.metered("workspaceSymbol", { query }, async () => {
-      const selectStarted = performance.now()
-      let selection: ClientSelection
-      try {
-        selection = await getWorkspaceClientsDetailed({ mode: "semantic", method: "workspaceSymbol" })
-      } catch (err) {
-        LSPPerf.finishPhase("workspaceSymbol.select", selectStarted, false)
-        throw err
-      }
-      const selectDurationMs = LSPPerf.finishPhase("workspaceSymbol.select", selectStarted, true)
-      if (selection.freshSpawnCount > 0) {
-        LSPPerf.recordSample("workspaceSymbol.select.spawned", selectDurationMs, true)
-      }
-
-      if (selection.clients.length === 0) return LSPWorkspaceSymbol.emptyEnvelope()
-
-      const rpcStarted = performance.now()
-      let result: LSPWorkspaceSymbol.SymbolQueryResult
-      try {
-        result = await LSPWorkspaceSymbol.queryClients({
-          clients: selection.clients,
-          query,
-          timeoutMs: RPC_TIMEOUT_LONG_MS,
-          limit: 10,
-        })
-        LSPPerf.finishPhase("workspaceSymbol.rpc", rpcStarted, result.ok)
-      } catch (err) {
-        LSPPerf.finishPhase("workspaceSymbol.rpc", rpcStarted, false)
-        throw err
-      }
-      return result.envelope
+    return LSPWorkspaceSymbol.envelope({
+      query,
+      timeoutMs: RPC_TIMEOUT_LONG_MS,
+      limit: 10,
+      selectClients: getWorkspaceClientsDetailed,
     })
   }
 
