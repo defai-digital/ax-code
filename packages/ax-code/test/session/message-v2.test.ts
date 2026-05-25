@@ -110,6 +110,7 @@ describe("session.message-v2.cursor", () => {
 
   test("decodes opaque cursor strings through the same value boundary", () => {
     const encoded = MessageV2.cursor.encode({ id: messageID, time: 123 })
+    expect(MessageV2.cursor.decodeSerializedValue(encoded)).toEqual({ id: messageID, time: 123 })
     expect(MessageV2.cursor.decode(encoded)).toEqual({ id: messageID, time: 123 })
     expect(() => MessageV2.cursor.decode("not-valid-json")).toThrow("Invalid cursor")
   })
