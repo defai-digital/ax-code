@@ -16,12 +16,12 @@ describe("tool.exa-fetch", () => {
   test("parseExaSseContentText decodes MCP content text", () => {
     expect(
       parseExaSseContentText(
-        `data: ${JSON.stringify({
+        `data:   ${JSON.stringify({
           jsonrpc: "2.0",
           result: {
             content: [{ type: "text", text: "final answer" }],
           },
-        })}`,
+        })}\n`,
       ),
     ).toBe("final answer")
   })
