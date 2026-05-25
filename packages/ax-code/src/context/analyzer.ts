@@ -10,7 +10,7 @@ import fs from "fs"
 import { readFile } from "node:fs/promises"
 import { Log } from "../util/log"
 import { isNonEmptyRecord } from "../util/record"
-import { decodePackageJsonObject, packageJsonStringMap } from "../util/package-json"
+import { decodePackageJsonObject, packageJsonStringMap, parsePackageJsonObject } from "../util/package-json"
 
 export type ComplexityLevel = "small" | "medium" | "large" | "enterprise"
 export type DepthLevel = "basic" | "standard" | "full" | "security"
@@ -136,7 +136,7 @@ export function decodeAnalyzerPackageJsonValue(value: unknown): PackageJson {
 }
 
 export function parseAnalyzerPackageJsonText(raw: string): PackageJson {
-  return decodeAnalyzerPackageJsonValue(JSON.parse(raw))
+  return decodeAnalyzerPackageJsonValue(parsePackageJsonObject(raw))
 }
 
 async function readPackageJson(filepath: string): Promise<PackageJson | null> {

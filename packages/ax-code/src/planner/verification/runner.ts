@@ -5,7 +5,7 @@ import type { ProjectID } from "../../project/schema"
 import type { DebugEngine } from "../../debug-engine"
 import { Log } from "../../util/log"
 import { Env } from "../../util/env"
-import { decodePackageJsonObject, packageJsonStringMap } from "../../util/package-json"
+import { decodePackageJsonObject, packageJsonStringMap, parsePackageJsonObject } from "../../util/package-json"
 
 // Phase 2 P2.1: extracted from src/debug-engine/apply-safe-refactor.ts so
 // review/debug/qa workflows (not just refactor_apply) can run typecheck /
@@ -74,7 +74,7 @@ export function decodePackageScripts(value: unknown): Record<string, string> {
 }
 
 export function parsePackageScripts(raw: string): Record<string, string> {
-  return decodePackageScripts(JSON.parse(raw))
+  return decodePackageScripts(parsePackageJsonObject(raw))
 }
 
 // Resolve the typecheck/lint/test commands for a project. Defaults pick up
