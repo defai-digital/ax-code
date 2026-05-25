@@ -8,13 +8,44 @@ import path from "path"
 import type { ProjectMemory, MemorySection, WarmupOptions } from "./types"
 import * as store from "./store"
 import { computeContentHash } from "./hash"
-import { recordCount } from "@/util/record"
+import { isRecord } from "@/util/record"
 
 const DEFAULT_MAX_TOKENS = 4000
 const DEFAULT_DEPTH = 3
 
 function isFileNotFound(e: unknown): boolean {
   return (e as { code?: string })?.code === "ENOENT"
+}
+
+export interface MemoryPackageJsonInfo {
+  name?: string
+  version?: string
+  scripts: string[]
+  dependencies: string[]
+  devDependencies: string[]
+  allDependencies: string[]
+}
+
+export function parseMemoryPackageJson(raw: string): MemoryPackageJsonInfo {
+  const parsed: unknown = JSON.parse(raw)
+  if (!isRecord(parsed)) return { scripts: [], dependencies: [], devDependencies: [], allDependencies: [] }
+
+  const scripts = isRecord(parsed.scripts)
+    ? Object.entries(parsed.scripts)
+        .filter(([, command]) => typeof command === "string")
+        .map(([name]) => name)
+    : []
+  const dependencies = isRecord(parsed.dependencies) ? Object.keys(parsed.dependencies) : []
+  const devDependencies = isRecord(parsed.devDependencies) ? Object.keys(parsed.devDependencies) : []
+
+  return {
+    name: typeof parsed.name === "string" ? parsed.name : undefined,
+    version: typeof parsed.version === "string" ? parsed.version : undefined,
+    scripts,
+    dependencies,
+    devDependencies,
+    allDependencies: [...new Set([...dependencies, ...devDependencies])],
+  }
 }
 
 // Approximate token count (1 token ≈ 4 chars)
@@ -111,14 +142,14 @@ async function scanConfig(root: string): Promise<MemorySection> {
 
   // package.json
   try {
-    const pkg = JSON.parse(await fs.readFile(path.join(root, "package.json"), "utf-8"))
+    const pkg = parseMemoryPackageJson(await fs.readFile(path.join(root, "package.json"), "utf-8"))
     parts.push(`Name: ${pkg.name ?? "unknown"}`)
     parts.push(`Version: ${pkg.version ?? "unknown"}`)
-    if (pkg.scripts) {
-      parts.push(`Scripts: ${Object.keys(pkg.scripts).join(", ")}`)
+    if (pkg.scripts.length > 0) {
+      parts.push(`Scripts: ${pkg.scripts.join(", ")}`)
     }
-    if (pkg.dependencies) {
-      parts.push(`Dependencies: ${recordCount(pkg.dependencies)} packages`)
+    if (pkg.dependencies.length > 0) {
+      parts.push(`Dependencies: ${pkg.dependencies.length} packages`)
     }
   } catch (e) {
     if (!isFileNotFound(e) && !(e instanceof SyntaxError)) throw e
@@ -161,9 +192,7 @@ async function scanPatterns(root: string): Promise<MemorySection> {
   // Check for common frameworks
   try {
     const raw = await fs.readFile(path.join(root, "package.json"), "utf-8")
-    const pkg = JSON.parse(raw)
-    const allDeps = { ...pkg.dependencies, ...pkg.devDependencies }
-    const deps = Object.keys(allDeps)
+    const deps = parseMemoryPackageJson(raw).allDependencies
 
     if (deps.includes("react")) patterns.push("Framework: React")
     if (deps.includes("vue")) patterns.push("Framework: Vue")
