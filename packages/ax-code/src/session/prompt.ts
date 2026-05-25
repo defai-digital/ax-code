@@ -2071,15 +2071,14 @@ export namespace SessionPrompt {
       const plan = Session.plan(input.session)
       const exists = await Filesystem.exists(plan)
       if (exists) {
-        const part = await Session.updatePart({
-          id: PartID.ascending(),
-          messageID: userMessage.info.id,
-          sessionID: userMessage.info.sessionID,
-          type: "text",
-          text:
-            BUILD_SWITCH + "\n\n" + `A plan file exists at ${plan}. You should execute on the plan defined within it`,
-          synthetic: true,
-        })
+        const part = await Session.updatePart(
+          syntheticTextPart({
+            messageID: userMessage.info.id,
+            sessionID: userMessage.info.sessionID,
+            text:
+              BUILD_SWITCH + "\n\n" + `A plan file exists at ${plan}. You should execute on the plan defined within it`,
+          }),
+        )
         userMessage.parts.push(part)
       }
       return messages
@@ -2090,12 +2089,11 @@ export namespace SessionPrompt {
       const plan = Session.plan(input.session)
       const exists = await Filesystem.exists(plan)
       if (!exists) await fs.mkdir(path.dirname(plan), { recursive: true })
-      const part = await Session.updatePart({
-        id: PartID.ascending(),
-        messageID: userMessage.info.id,
-        sessionID: userMessage.info.sessionID,
-        type: "text",
-        text: `<system-reminder>
+      const part = await Session.updatePart(
+        syntheticTextPart({
+          messageID: userMessage.info.id,
+          sessionID: userMessage.info.sessionID,
+          text: `<system-reminder>
 Plan mode is active. The user indicated that they do not want you to execute yet -- you MUST NOT make any edits (with the exception of the plan file mentioned below), run any non-readonly tools (including changing configs or making commits), or otherwise make any changes to the system. This supersedes any other instructions you have received.
 
 ## Plan File Info:
@@ -2165,8 +2163,8 @@ This is critical - your turn should only end with either asking the user a quest
 
 NOTE: At any point in time through this workflow you should feel free to ask the user questions or clarifications. Don't make large assumptions about user intent. The goal is to present a well researched plan to the user, and tie any loose ends before implementation begins.
 </system-reminder>`,
-        synthetic: true,
-      })
+        }),
+      )
       userMessage.parts.push(part)
       return messages
     }
