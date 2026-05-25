@@ -30,13 +30,19 @@ export function createProcessLockBody(): ProcessLockBody {
   }
 }
 
+export function decodeProcessLockBody<T extends Record<string, unknown> = Record<string, never>>(
+  value: unknown,
+): (ProcessLockBody & T) | undefined {
+  const decoded = ProcessLockBodySchema.safeParse(value)
+  return decoded.success ? (decoded.data as ProcessLockBody & T) : undefined
+}
+
 export function parseProcessLockBody<T extends Record<string, unknown> = Record<string, never>>(
   text: string,
 ): (ProcessLockBody & T) | undefined {
   try {
     const parsed: unknown = JSON.parse(text)
-    const decoded = ProcessLockBodySchema.safeParse(parsed)
-    return decoded.success ? (decoded.data as ProcessLockBody & T) : undefined
+    return decodeProcessLockBody<T>(parsed)
   } catch {
     return undefined
   }
