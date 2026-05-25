@@ -31,6 +31,10 @@ let predictionCache: PredictionCache | undefined
 let modelCache: ModelCache | undefined
 
 export namespace QualityShadow {
+  export function decodeShadowJsonFileValue<T>(value: unknown, schema: z.ZodType<T>): T {
+    return schema.parse(value)
+  }
+
   export async function loadShadowJsonFile<T>(
     resolved: string,
     schema: z.ZodType<T>,
@@ -39,7 +43,7 @@ export namespace QualityShadow {
     const raw = await fs.readFile(resolved, "utf8")
     const parsed: unknown = JSON.parse(raw)
     return {
-      file: schema.parse(parsed),
+      file: decodeShadowJsonFileValue(parsed, schema),
       mtimeMs: Number(stat.mtimeMs),
     }
   }

@@ -6,6 +6,25 @@ import { QualityShadow } from "../../src/quality/shadow-runtime"
 import { tmpdir } from "../fixture/fixture"
 
 describe("QualityShadow JSON loading", () => {
+  test("decodes already-parsed typed shadow JSON values", () => {
+    const decoded = QualityShadow.decodeShadowJsonFileValue(
+      {
+        schemaVersion: 1,
+        kind: "ax-code-quality-prediction-file",
+        source: "candidate-test",
+        generatedAt: "2026-04-20T00:00:00.000Z",
+        predictions: [],
+      },
+      ProbabilisticRollout.PredictionFile,
+    )
+
+    expect(decoded.source).toBe("candidate-test")
+    expect(decoded.predictions).toEqual([])
+    expect(() =>
+      QualityShadow.decodeShadowJsonFileValue({ source: "missing shape" }, ProbabilisticRollout.PredictionFile),
+    ).toThrow()
+  })
+
   test("loads typed shadow JSON files with mtime metadata", async () => {
     await using tmp = await tmpdir()
     const file = path.join(tmp.path, "predictions.json")
