@@ -10,6 +10,7 @@ import { Process } from "../../../../util/process"
 import { which } from "../../../../util/which"
 import { Log } from "../../../../util/log"
 import { pickFirstEnvValue } from "./env"
+import { toErrorMessage } from "../../../../util/error-message"
 
 const log = Log.create({ service: "tui.clipboard" })
 
@@ -259,7 +260,7 @@ export namespace Clipboard {
       await getCopyMethod()(text)
     } catch (err) {
       log.warn("system clipboard tool failed; OSC52 may have handled it", {
-        error: err instanceof Error ? err.message : String(err),
+        error: toErrorMessage(err),
       })
     }
   }

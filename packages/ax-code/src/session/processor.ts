@@ -596,7 +596,7 @@ export namespace SessionProcessor {
                   })
                   const match = toolcalls[value.toolCallId]
                   if (match && match.state.status === "running") {
-                    const errorMsg = value.error instanceof Error ? value.error.message : String(value.error)
+                    const errorMsg = toErrorMessage(value.error)
                     const errorCode = value.error instanceof Error ? value.error.name : "Unknown"
                     const toolErrorEnd = Date.now()
                     const toolInput = value.input ?? match.state.input

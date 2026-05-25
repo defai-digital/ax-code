@@ -23,6 +23,7 @@ import { spawn } from "node:child_process"
 import { flushTuiStdout } from "./terminal-cleanup"
 import { parseIntegerEnv } from "./util/env"
 import { parseTuiJsonPayload } from "./util/json"
+import { toErrorMessage } from "@/util/error-message"
 
 declare global {
   const AX_CODE_WORKER_PATH: string
@@ -128,7 +129,7 @@ function createProcessWire(child: any, target: string): RpcWireTarget {
         DiagnosticLog.recordProcess("tui.backendStdinWriteFailed", { target, error })
         Log.Default.warn("TUI backend stdin write failed", {
           target,
-          error: error instanceof Error ? error.message : String(error),
+          error: toErrorMessage(error),
         })
         wire.onWireDeath?.()
         wire.onmessage = null
@@ -146,7 +147,7 @@ function createProcessWire(child: any, target: string): RpcWireTarget {
     DiagnosticLog.recordProcess("tui.backendStdinStreamError", { target, error })
     Log.Default.warn("TUI backend stdin stream error", {
       target,
-      error: error instanceof Error ? error.message : String(error),
+      error: toErrorMessage(error),
     })
     wire.onWireDeath?.()
     wire.onmessage = null
@@ -156,14 +157,14 @@ function createProcessWire(child: any, target: string): RpcWireTarget {
     DiagnosticLog.recordProcess("tui.backendStdoutStreamError", { target, error })
     Log.Default.warn("TUI backend stdout stream error", {
       target,
-      error: error instanceof Error ? error.message : String(error),
+      error: toErrorMessage(error),
     })
   })
   child.stderr?.on("error", (error: unknown) => {
     DiagnosticLog.recordProcess("tui.backendStderrStreamError", { target, error })
     Log.Default.warn("TUI backend stderr stream error", {
       target,
-      error: error instanceof Error ? error.message : String(error),
+      error: toErrorMessage(error),
     })
   })
   let buffer = ""
@@ -235,7 +236,7 @@ async function createBackendRuntime(input: {
   child.on("error", (error: unknown) => {
     DiagnosticLog.recordProcess("tui.backendProcessError", { error, target: command.label })
     Log.Default.error("TUI backend process failed", {
-      error: error instanceof Error ? error.message : String(error),
+      error: toErrorMessage(error),
       target: command.label,
     })
   })
@@ -538,7 +539,7 @@ export const TuiThreadCommand = cmd({
           timeoutMs: workerReadyTimeoutMs,
         })
         Log.Default.error("TUI backend failed readiness handshake", {
-          error: error instanceof Error ? error.message : String(error),
+          error: toErrorMessage(error),
           mode: backend.mode,
           target: backend.target,
           pid: backend.pid,
@@ -579,7 +580,7 @@ export const TuiThreadCommand = cmd({
       const reload = () => {
         client.call("reload", undefined).catch((err) => {
           Log.Default.warn("backend reload failed", {
-            error: err instanceof Error ? err.message : String(err),
+            error: toErrorMessage(err),
           })
         })
       }
@@ -597,7 +598,7 @@ export const TuiThreadCommand = cmd({
         await withTimeout(client.call("shutdown", undefined), DEFAULT_TUI_BACKEND_SHUTDOWN_TIMEOUT_MS).catch(
           (error) => {
             Log.Default.warn("backend shutdown failed", {
-              error: error instanceof Error ? error.message : String(error),
+              error: toErrorMessage(error),
             })
           },
         )
@@ -663,7 +664,7 @@ export const TuiThreadCommand = cmd({
             elapsedMs,
           })
           Log.Default.error("TUI app import failed", {
-            error: error instanceof Error ? error.message : String(error),
+            error: toErrorMessage(error),
             elapsedMs,
           })
           UI.error(

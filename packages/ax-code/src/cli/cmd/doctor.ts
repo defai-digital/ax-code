@@ -28,6 +28,7 @@ import { ProjectIdentity } from "../../project/project-identity"
 import { isLoopbackHostname } from "../../server/listen-security"
 import type { Isolation as IsolationConfig } from "../../config/schema"
 import { Isolation } from "../../isolation"
+import { toErrorMessage } from "@/util/error-message"
 
 type DoctorCheck = { name: string; status: "ok" | "warn" | "fail"; detail: string }
 
@@ -122,7 +123,7 @@ export async function getDuplicateProjectIdentityCheck(input: {
       name: "Project identity",
       status: "warn",
       detail: `Could not inspect project identity for ${input.worktree}: ${
-        error instanceof Error ? error.message : String(error)
+        toErrorMessage(error)
       }`,
     }
   }

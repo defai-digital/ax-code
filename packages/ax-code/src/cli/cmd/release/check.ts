@@ -18,6 +18,7 @@ import { git } from "../../../util/git"
 import { Process } from "../../../util/process"
 import { Filesystem } from "../../../util/filesystem"
 import { decodePackageJsonObject, parsePackageJsonObject } from "../../../util/package-json"
+import { toErrorMessage } from "../../../util/error-message"
 
 // ───── public types (narrow for external consumption) ─────────────
 
@@ -269,7 +270,7 @@ async function gitWithTimeout(args: string[], cwd: string) {
   }).catch((err: unknown) => ({
     code: 124, // conventional "timeout" exit code
     stdout: Buffer.alloc(0),
-    stderr: Buffer.from(err instanceof Error ? err.message : String(err)),
+    stderr: Buffer.from(toErrorMessage(err)),
   }))
 }
 
@@ -525,7 +526,7 @@ async function checkTypecheck(ctx: CheckContext): Promise<CheckResult> {
     }).catch((err: unknown) => ({
       code: 1,
       stdout: Buffer.alloc(0),
-      stderr: Buffer.from(err instanceof Error ? err.message : String(err)),
+      stderr: Buffer.from(toErrorMessage(err)),
     }))
     if (res.code === 0) {
       return mkResult("Typecheck", "typecheck", "ok", "passed", 0)
@@ -556,7 +557,7 @@ async function checkTests(ctx: CheckContext): Promise<CheckResult> {
     }).catch((err: unknown) => ({
       code: 1,
       stdout: Buffer.alloc(0),
-      stderr: Buffer.from(err instanceof Error ? err.message : String(err)),
+      stderr: Buffer.from(toErrorMessage(err)),
     }))
     if (res.code === 0) {
       return mkResult("Tests", "tests", "ok", "deterministic group passed", 0)
@@ -799,7 +800,7 @@ export const ReleaseCheckCommand = cmd({
       }
       process.exit(failed ? 1 : 0)
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
+      const msg = toErrorMessage(err)
       process.stderr.write(`ax-code release check: ${msg}\n`)
       process.exit(2)
     }

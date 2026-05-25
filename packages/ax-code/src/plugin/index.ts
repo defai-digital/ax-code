@@ -14,6 +14,7 @@ import { withTimeout } from "@/util/timeout"
 import { Filesystem } from "@/util/filesystem"
 import { Instance } from "@/project/instance"
 import { Global } from "@/global"
+import { toErrorMessage } from "../util/error-message"
 
 export namespace Plugin {
   const log = Log.create({ service: "plugin" })
@@ -79,8 +80,7 @@ export namespace Plugin {
           const pkg = idx > 0 ? plugin.substring(0, idx) : plugin
           const version = idx > 0 ? plugin.substring(idx + 1) : "latest"
           plugin = await BunProc.install(pkg, version).catch((err) => {
-            const cause = err instanceof Error ? err.cause : err
-            const detail = cause instanceof Error ? cause.message : String(cause ?? err)
+            const detail = toErrorMessage((err as { cause?: unknown }).cause ?? err)
             log.error("failed to install plugin", { pkg, version, error: detail })
             Session.publishError({
               message: `Failed to install plugin ${pkg}@${version}: ${detail}`,

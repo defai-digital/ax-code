@@ -1126,9 +1126,8 @@ export namespace MessageV2 {
             // Derive a human-readable message from `e` directly. Previously
             // this used JSON.stringify(e), which produces "{}" for most
             // Error instances (their fields are non-enumerable), making
-            // error telemetry useless. Prefer the instance's own message
-            // string and fall back to String(e) for non-Error throws.
-            message: e instanceof Error ? e.message : typeof e === "string" ? e : String(e),
+            // error telemetry useless.
+            message: toErrorMessage(e),
           },
           { cause: e },
         ).toObject()

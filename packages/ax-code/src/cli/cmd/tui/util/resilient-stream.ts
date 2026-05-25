@@ -1,4 +1,5 @@
 import { setTimeout as sleep } from "node:timers/promises"
+import { toErrorMessage } from "@/util/error-message"
 
 export type StreamDisconnectReason = "connect-timeout" | "watchdog-timeout" | "stream-ended" | "error"
 
@@ -106,7 +107,7 @@ export async function runResilientStream<T>(options: ResilientStreamOptions<T>) 
         phase: "reconnecting",
         attempt,
         reason: lastReason,
-        error: error instanceof Error ? error.message : String(error),
+        error: toErrorMessage(error),
       })
     } finally {
       if (subscription?.unsubscribe) {

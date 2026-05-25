@@ -673,7 +673,7 @@ export namespace Provider {
         status: "partial",
         providers: providerCount,
         failures: initFailures.map(
-          (f) => `${f.source}: ${f.error instanceof Error ? f.error.message : String(f.error)}`,
+          (f) => `${f.source}: ${toErrorMessage(f.error)}`,
         ),
       })
     } else {

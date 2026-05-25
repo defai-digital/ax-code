@@ -23,6 +23,7 @@ import * as McpTemplates from "../../mcp/templates"
 import { Permission } from "../../permission"
 import { Log } from "../../util/log"
 import { parseJsonPayload } from "../../util/json-value"
+import { toErrorMessage } from "../../util/error-message"
 
 // Above this many MCP tools, LLM tool-selection accuracy degrades and the
 // extra schema overhead noticeably eats context. Mirrors the empirical
@@ -370,7 +371,7 @@ export const McpAuthCommand = cmd({
           }
         } catch (error) {
           spinner.stop("Authentication failed", 1)
-          prompts.log.error(error instanceof Error ? error.message : String(error))
+          prompts.log.error(toErrorMessage(error))
         } finally {
           unsubscribe()
         }
@@ -876,7 +877,7 @@ export const McpDebugCommand = cmd({
                   prompts.log.info("No client ID - dynamic registration will be attempted")
                 }
               } else {
-                prompts.log.error(`Connection error: ${error instanceof Error ? error.message : String(error)}`)
+                prompts.log.error(`Connection error: ${toErrorMessage(error)}`)
               }
             }
           } else if (response.status >= 200 && response.status < 300) {
@@ -895,7 +896,7 @@ export const McpDebugCommand = cmd({
           }
         } catch (error) {
           spinner.stop("Connection failed", 1)
-          prompts.log.error(`Error: ${error instanceof Error ? error.message : String(error)}`)
+          prompts.log.error(`Error: ${toErrorMessage(error)}`)
         }
 
         prompts.outro("Debug complete")

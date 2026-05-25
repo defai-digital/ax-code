@@ -1,6 +1,7 @@
 import path from "path"
 import { stat } from "node:fs/promises"
 import { describeDurableStoragePolicy, DurableStoragePolicy } from "../../storage/policy"
+import { toErrorMessage } from "@/util/error-message"
 
 export type DoctorCheck = {
   name: string
@@ -102,7 +103,7 @@ async function inspectWithStat(target: string): Promise<DatabaseFileInfo> {
     if ((error as NodeJS.ErrnoException | undefined)?.code === "ENOENT") return { exists: false }
     return {
       exists: false,
-      error: error instanceof Error ? error.message : String(error),
+      error: toErrorMessage(error),
     }
   }
 }
