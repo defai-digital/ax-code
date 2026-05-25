@@ -15,12 +15,16 @@ export function sseMessageData(text: string, meta: { id?: string; retry?: number
   }
 }
 
-export function parseSSEData(text: string, meta: { id?: string; retry?: number } = {}): unknown {
+export function parseSSEJsonData(text: string): unknown | undefined {
   try {
     return JSON.parse(text)
   } catch {
-    return sseMessageData(text, meta)
+    return undefined
   }
+}
+
+export function parseSSEData(text: string, meta: { id?: string; retry?: number } = {}): unknown {
+  return parseSSEJsonData(text) ?? sseMessageData(text, meta)
 }
 
 // Each parser invocation owns exactly one reader/buffer pair for one response

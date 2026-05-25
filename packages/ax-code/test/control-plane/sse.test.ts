@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test"
-import { parseSSE, parseSSEData, sseMessageData } from "../../src/control-plane/sse"
+import { parseSSE, parseSSEData, parseSSEJsonData, sseMessageData } from "../../src/control-plane/sse"
 import { resetDatabase } from "../fixture/db"
 
 afterEach(async () => {
@@ -33,6 +33,11 @@ describe("control-plane/sse", () => {
       type: "one",
       properties: { ok: true },
     })
+  })
+
+  test("parseSSEJsonData separates JSON parsing from fallback wrapping", () => {
+    expect(parseSSEJsonData('{"type":"one"}')).toEqual({ type: "one" })
+    expect(parseSSEJsonData("hello world")).toBeUndefined()
   })
 
   test("parseSSEData wraps non-json payloads with event metadata", () => {
