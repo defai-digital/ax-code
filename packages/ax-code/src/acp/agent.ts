@@ -68,6 +68,43 @@ export namespace ACP {
   const PERMISSION_LOCK_TIMEOUT_MS = 24 * 60 * 60 * 1000
   type PermissionAsked = Extract<Event, { type: "permission.asked" }>["properties"]
 
+  const ACP_TODO_STATUSES: ReadonlyArray<PlanEntry["status"]> = ["pending", "in_progress", "completed"]
+
+  function toPlanEntryStatus(status: Todo.Info["status"]): PlanEntry["status"] {
+    if (ACP_TODO_STATUSES.includes(status as PlanEntry["status"])) {
+      return status as PlanEntry["status"]
+    }
+    if (status === "cancelled") return "completed"
+    return "pending"
+  }
+
+  export function decodeTodoPlanEntries(value: unknown): PlanEntry[] | null {
+    const result = z.array(Todo.Info).safeParse(value)
+    if (!result.success) {
+      log.error("failed to parse todo output", { error: result.error })
+      return null
+    }
+    return result.data.map((todo) => ({
+      priority: "medium",
+      status: toPlanEntryStatus(todo.status),
+      content: todo.content,
+    }))
+  }
+
+  // Convert an internal todowrite tool's serialized output into ACP PlanEntry[].
+  // Returns null when the output isn't valid JSON (silent skip) or when the
+  // shape doesn't match Todo.Info (logged). Callers send the entries via a
+  // sessionUpdate "plan" event when non-null.
+  export function parseTodoPlanEntries(rawOutput: string): PlanEntry[] | null {
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(rawOutput)
+    } catch {
+      return null
+    }
+    return decodeTodoPlanEntries(parsed)
+  }
+
   async function getContextLimit(
     sdk: OpencodeClient,
     providerID: ProviderID,
@@ -889,37 +926,8 @@ export namespace ACP {
       return output
     }
 
-    // Convert an internal todowrite tool's serialized output into ACP PlanEntry[].
-    // Returns null when the output isn't valid JSON (silent skip) or when the
-    // shape doesn't match Todo.Info (logged). Callers send the entries via a
-    // sessionUpdate "plan" event when non-null.
     private todosToPlanEntries(rawOutput: string): PlanEntry[] | null {
-      let parsed: unknown
-      try {
-        parsed = JSON.parse(rawOutput)
-      } catch {
-        return null
-      }
-      const result = z.array(Todo.Info).safeParse(parsed)
-      if (!result.success) {
-        log.error("failed to parse todo output", { error: result.error })
-        return null
-      }
-      // Validate against the known PlanEntry["status"] values instead of casting
-      // with `as`. An internal todo can carry a status string that isn't part of
-      // the ACP PlanEntry contract (e.g. `"blocked"` or a typo); map known
-      // synonyms and fall back to "pending" so the ACP client always receives a
-      // valid value.
-      const VALID_STATUSES: ReadonlyArray<PlanEntry["status"]> = ["pending", "in_progress", "completed"]
-      return result.data.map((todo) => {
-        const raw = todo.status
-        const status: PlanEntry["status"] = VALID_STATUSES.includes(raw as PlanEntry["status"])
-          ? (raw as PlanEntry["status"])
-          : raw === "cancelled"
-            ? "completed"
-            : "pending"
-        return { priority: "medium", status, content: todo.content }
-      })
+      return parseTodoPlanEntries(rawOutput)
     }
 
     private async emitToolRunning(sessionId: string, part: ToolPart & { state: ToolStateRunning }): Promise<void> {
