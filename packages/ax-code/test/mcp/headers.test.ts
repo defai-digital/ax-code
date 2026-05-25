@@ -11,6 +11,19 @@ const transportCalls: Array<{
   }
 }> = []
 
+let callbackRunning = false
+const pendingOauthStates = new Map<string, { reject: (error: Error) => void; timeout: ReturnType<typeof setTimeout> }>()
+const pendingOauthNames = new Map<string, string>()
+
+function resetMockOAuthCallback() {
+  callbackRunning = false
+  for (const { timeout } of pendingOauthStates.values()) {
+    clearTimeout(timeout)
+  }
+  pendingOauthStates.clear()
+  pendingOauthNames.clear()
+}
+
 // Mock the transport constructors to capture their arguments
 mock.module("@modelcontextprotocol/sdk/client/streamableHttp.js", () => ({
   StreamableHTTPClientTransport: class MockStreamableHTTP {
@@ -58,12 +71,47 @@ mock.module("@modelcontextprotocol/sdk/client/sse.js", () => ({
 
 mock.module("../../src/mcp/oauth-callback", () => ({
   McpOAuthCallback: {
-    ensureRunning: mock(async () => {}),
+    ensureRunning: mock(async () => {
+      callbackRunning = true
+    }),
+    waitForCallback: (oauthState: string, mcpName?: string) =>
+      new Promise<string>((_resolve, reject) => {
+        const previous = pendingOauthStates.get(oauthState)
+        if (previous) {
+          clearTimeout(previous.timeout)
+          previous.reject(new Error("OAuth callback request superseded"))
+        }
+
+        const timeout = setTimeout(() => {
+          pendingOauthStates.delete(oauthState)
+          if (mcpName) pendingOauthNames.delete(mcpName)
+          reject(new Error("OAuth callback timeout - authorization took too long"))
+        }, 5 * 60 * 1000)
+
+        pendingOauthStates.set(oauthState, { reject, timeout })
+        if (mcpName) pendingOauthNames.set(mcpName, oauthState)
+      }),
+    cancelPending: (mcpName: string) => {
+      const oauthState = pendingOauthNames.get(mcpName)
+      if (!oauthState) return
+      const pending = pendingOauthStates.get(oauthState)
+      if (!pending) return
+      clearTimeout(pending.timeout)
+      pendingOauthStates.delete(oauthState)
+      pendingOauthNames.delete(mcpName)
+      pending.reject(new Error("Authorization cancelled"))
+    },
+    stop: async () => {
+      resetMockOAuthCallback()
+    },
+    isRunning: () => callbackRunning,
+    isPortInUse: async () => callbackRunning,
   },
 }))
 
 beforeEach(() => {
   transportCalls.length = 0
+  resetMockOAuthCallback()
 })
 
 // Import MCP after mocking
