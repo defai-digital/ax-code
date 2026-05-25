@@ -28,7 +28,7 @@ import { createXai } from "@ai-sdk/xai"
 import { createOpenRouter } from "@openrouter/ai-sdk-provider"
 import { ProviderTransform } from "./transform"
 import { Installation } from "../installation"
-import { providerModelKey } from "./model-key"
+import { providerModelKey, providerModelList } from "./model-key"
 import { ModelID, ProviderID } from "./schema"
 import { levenshtein } from "@/util/levenshtein"
 import { isModelSupportedForProvider } from "./model-support"
@@ -1146,10 +1146,8 @@ export namespace Provider {
     if (cfg.model) return parseModel(cfg.model)
 
     const providers = await list()
-    const recent = (await Filesystem.readJson<{ recent?: { providerID: ProviderID; modelID: ModelID }[] }>(
-      path.join(Global.Path.state, "model.json"),
-    )
-      .then((x) => (Array.isArray(x.recent) ? x.recent : []))
+    const recent = (await Filesystem.readJson<{ recent?: unknown }>(path.join(Global.Path.state, "model.json"))
+      .then((x) => providerModelList(x.recent))
       .catch(() => [])) as { providerID: ProviderID; modelID: ModelID }[]
     for (const entry of recent) {
       const provider = providers[entry.providerID]

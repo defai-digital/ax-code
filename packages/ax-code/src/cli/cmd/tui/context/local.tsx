@@ -10,7 +10,12 @@ import { createSimpleContext } from "./helper"
 import { useToast } from "../ui/toast"
 import { Agent } from "@/agent/agent"
 import { Provider } from "@/provider/provider"
-import { providerModelEquals, providerModelKey, type ProviderModelKeyInput } from "@/provider/model-key"
+import {
+  providerModelEquals,
+  providerModelKey,
+  providerModelList,
+  type ProviderModelKeyInput,
+} from "@/provider/model-key"
 import { useArgs } from "./args"
 import { useSDK } from "./sdk"
 import { RGBA } from "@opentui/core"
@@ -207,9 +212,9 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
 
       Filesystem.readJson(filePath)
         .then((x: any) => {
-          if (Array.isArray(x.recent)) setModelStore("recent", x.recent)
-          if (Array.isArray(x.favorite)) setModelStore("favorite", x.favorite)
-          if (typeof x.variant === "object" && x.variant !== null) setModelStore("variant", x.variant)
+          setModelStore("recent", providerModelList(x?.recent))
+          setModelStore("favorite", providerModelList(x?.favorite))
+          if (typeof x?.variant === "object" && x.variant !== null) setModelStore("variant", x.variant)
         })
         .catch((error) => {
           if (typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT") return
