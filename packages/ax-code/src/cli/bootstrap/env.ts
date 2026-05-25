@@ -189,11 +189,6 @@ export async function init(opts: Opts, dep: InitDep = {}) {
   const log = dep.log ?? Log.init
   const info = dep.info ?? ((msg: string, data: Record<string, unknown>) => Log.Default.info(msg, data))
 
-  // Start shell env loading in the background instead of blocking startup.
-  // Shell env is only needed for provider API keys and tool execution,
-  // not for CLI parsing or TUI rendering.
-  shellEnvReady = loadShellEnv(env)
-
   const debug = debugOptions(opts, cwd)
   const debugDir = debug.enabled && debug.baseDir ? debugRunDir(debug.baseDir, pid, now) : undefined
   await DiagnosticLog.configure({
@@ -220,6 +215,12 @@ export async function init(opts: Opts, dep: InitDep = {}) {
   NativePerf.install()
 
   apply(opts, env, pid, debugDir)
+
+  // Start shell env loading in the background after logging is configured so
+  // best-effort failures can still be diagnosed without blocking startup.
+  // Shell env is only needed for provider API keys and tool execution,
+  // not for CLI parsing or TUI rendering.
+  shellEnvReady = loadShellEnv(env)
 
   info("ax-code", {
     version,

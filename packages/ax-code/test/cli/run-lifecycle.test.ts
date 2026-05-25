@@ -73,7 +73,7 @@ test("headless-run attach mode rejects non-internal fetch targets", async () => 
   expect(attachBlock).toContain("createInternalFetch((request) => fetch(request), headers)")
 })
 
-test("shell env loading tears down the spawned shell after the read race", async () => {
+test("shell env loading uses shared process timeout cleanup", async () => {
   const src = await Bun.file(path.join(import.meta.dir, "../../src/cli/bootstrap/env.ts")).text()
   const start = src.indexOf("async function loadShellEnv(")
   const end = src.indexOf("export async function init(", start)
@@ -81,9 +81,19 @@ test("shell env loading tears down the spawned shell after the read race", async
   expect(end).toBeGreaterThan(start)
   const body = src.slice(start, end)
 
-  expect(body).toContain("if (timeoutId) clearTimeout(timeoutId)")
-  expect(body).toContain("proc.kill()")
-  expect(body).toContain("await proc.exited.catch")
+  expect(body).toContain("timeout: shellTimeoutMs")
+  expect(body).toContain("if (code === 124)")
+  expect(body).toContain("Log.Default.debug(\"shell env load failed\"")
+})
+
+test("shell env loading starts after logging is configured", async () => {
+  const src = await Bun.file(path.join(import.meta.dir, "../../src/cli/bootstrap/env.ts")).text()
+  const start = src.indexOf("export async function init(")
+  expect(start).toBeGreaterThan(-1)
+  const body = src.slice(start)
+
+  expect(body.indexOf("await log({")).toBeGreaterThan(-1)
+  expect(body.indexOf("shellEnvReady = loadShellEnv(env)")).toBeGreaterThan(body.indexOf("await log({"))
 })
 
 test("auth lock polling keeps the process alive while waiting", async () => {
