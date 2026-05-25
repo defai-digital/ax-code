@@ -1,7 +1,16 @@
 import { describe, expect, test } from "bun:test"
-import { parseProcessLockBody } from "../../src/util/process-lock"
+import { decodeProcessLockBody, parseProcessLockBody } from "../../src/util/process-lock"
 
 describe("util.process-lock", () => {
+  test("decodeProcessLockBody decodes already-parsed lock bodies", () => {
+    expect(decodeProcessLockBody<{ token: string }>({ pid: 123, startedAt: 456, host: "host", token: "t" })).toEqual({
+      pid: 123,
+      startedAt: 456,
+      host: "host",
+      token: "t",
+    })
+  })
+
   test("parseProcessLockBody decodes valid lock bodies and preserves extra fields", () => {
     expect(
       parseProcessLockBody<{ token: string }>(
