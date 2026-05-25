@@ -691,12 +691,6 @@ export const BashTool = Tool.define("bash", async () => {
 
       let procExitCode: number | null = null
 
-      // 'exit' fires before 'close' and reliably carries the numeric exit code
-      // on Linux/Bun (unlike 'close' which may pass null even for normal exits).
-      proc.once("exit", (code) => {
-        procExitCode = code
-      })
-
       await new Promise<void>((resolve, reject) => {
         const cleanup = () => {
           clearTimeout(timeoutTimer)
@@ -706,10 +700,26 @@ export const BashTool = Tool.define("bash", async () => {
           if (proc.pid) forgetTrackedPID(proc.pid)
         }
 
+        let closeFired = false
+        let exitFired = false
+
+        const tryFinish = () => {
+          if (closeFired && exitFired) {
+            exited = true
+            cleanup()
+            resolve()
+          }
+        }
+
+        proc.once("exit", (code) => {
+          procExitCode = code
+          exitFired = true
+          tryFinish()
+        })
+
         proc.once("close", () => {
-          exited = true
-          cleanup()
-          resolve()
+          closeFired = true
+          tryFinish()
         })
 
         proc.once("error", (error) => {
