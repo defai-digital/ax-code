@@ -688,6 +688,8 @@ export const BashTool = Tool.define("bash", async () => {
         })
       }, timeout + 100)
 
+      let procExitCode: number | null = null
+
       await new Promise<void>((resolve, reject) => {
         const cleanup = () => {
           clearTimeout(timeoutTimer)
@@ -697,7 +699,8 @@ export const BashTool = Tool.define("bash", async () => {
           if (proc.pid) forgetTrackedPID(proc.pid)
         }
 
-        proc.once("close", () => {
+        proc.once("close", (code) => {
+          procExitCode = code
           exited = true
           cleanup()
           resolve()
@@ -741,15 +744,28 @@ export const BashTool = Tool.define("bash", async () => {
         }
       }
 
+      const truncateResult = await Truncate.output(output)
+      const truncateMeta = truncateResult.truncated
+        ? {
+            truncated: true as const,
+            outputPath: truncateResult.outputPath,
+            fullOutputPath: truncateResult.fullOutputPath,
+            originalSize: truncateResult.originalSize,
+            truncatedTo: truncateResult.truncatedTo,
+            contentHint: truncateResult.contentHint,
+          }
+        : { truncated: false as const }
+
       return {
         title: params.description,
         metadata: {
           output: truncateBashMetadata(output, MAX_METADATA_LENGTH),
-          exit: proc.exitCode,
+          exit: procExitCode ?? proc.exitCode,
           description: params.description,
           hang: hangMetadata(),
+          ...truncateMeta,
         },
-        output,
+        output: truncateResult.content,
       }
     },
   }
