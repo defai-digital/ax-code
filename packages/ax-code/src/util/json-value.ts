@@ -1,9 +1,27 @@
+export type JsonParseResult =
+  | {
+      ok: true
+      value: unknown
+    }
+  | {
+      ok: false
+      error: unknown
+    }
+
+export function parseJsonResult(text: string): JsonParseResult {
+  try {
+    return { ok: true, value: JSON.parse(text) }
+  } catch (error) {
+    return { ok: false, error }
+  }
+}
+
 export function parseJsonPayload(raw: string | undefined): unknown | undefined {
   const text = raw?.trim()
   if (!text) return undefined
-  try {
-    return JSON.parse(text)
-  } catch {
+  const parsed = parseJsonResult(text)
+  if (!parsed.ok) {
     return undefined
   }
+  return parsed.value
 }
