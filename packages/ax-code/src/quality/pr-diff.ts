@@ -1,6 +1,7 @@
 import z from "zod"
 import { NamedError } from "@ax-code/util/error"
 import { Env } from "../util/env"
+import { parseJsonResult } from "../util/json-value"
 import { Log } from "../util/log"
 
 const log = Log.create({ service: "quality.pr-diff" })
@@ -109,11 +110,12 @@ export function decodePrViewValue(value: unknown): PrViewDecodeResult {
 }
 
 export function decodePrViewJson(stdout: string): PrViewDecodeResult {
-  try {
-    return decodePrViewValue(JSON.parse(stdout))
-  } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : String(err) }
+  const parsed = parseJsonResult(stdout)
+  if (!parsed.ok) {
+    const { error } = parsed
+    return { ok: false, error: error instanceof Error ? error.message : String(error) }
   }
+  return decodePrViewValue(parsed.value)
 }
 
 export async function fetchPrDiff(prRef: string, cwd: string): Promise<PrDiff> {
