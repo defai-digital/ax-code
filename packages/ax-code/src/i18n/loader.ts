@@ -6,6 +6,7 @@
 import fs from "fs"
 import path from "path"
 import type { SupportedLanguage, Translations } from "./types"
+import { parseJsonResult } from "../util/json-value"
 
 const cache = new Map<string, Translations>()
 let currentLanguage: SupportedLanguage = "en"
@@ -63,14 +64,12 @@ function lookupTranslation(value: unknown, key: string): string | undefined {
 }
 
 export function parseTranslationsText(text: string): Translations {
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(text)
-  } catch (error) {
-    throw new Error("i18n locale: invalid JSON", { cause: error })
+  const parsed = parseJsonResult(text)
+  if (!parsed.ok) {
+    throw new Error("i18n locale: invalid JSON", { cause: parsed.error })
   }
 
-  return decodeTranslationsValue(parsed)
+  return decodeTranslationsValue(parsed.value)
 }
 
 export function decodeTranslationsValue(value: unknown): Translations {

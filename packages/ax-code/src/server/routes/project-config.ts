@@ -7,6 +7,7 @@ import { FileLock } from "@/util/filelock"
 import { Lock } from "@/util/lock"
 import { Log } from "@/util/log"
 import { FeatureFlag } from "@/util/feature-flags"
+import { parseJsonResult } from "@/util/json-value"
 
 const log = Log.create({ service: "project-config" })
 
@@ -101,13 +102,12 @@ export function decodeProjectConfigValue(value: unknown): Config.Info {
 }
 
 export function parseProjectConfigText(text: string): Config.Info {
-  try {
-    const value = JSON.parse(text)
-    return decodeProjectConfigValue(value)
-  } catch (error) {
-    log.warn("failed to parse project config JSON", { error })
+  const parsed = parseJsonResult(text)
+  if (!parsed.ok) {
+    log.warn("failed to parse project config JSON", { error: parsed.error })
     return {}
   }
+  return decodeProjectConfigValue(parsed.value)
 }
 
 export async function readProjectConfig() {
