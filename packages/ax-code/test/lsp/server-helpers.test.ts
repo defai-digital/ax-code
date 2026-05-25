@@ -13,6 +13,9 @@ import {
   globalPath,
   nodeModuleScript,
   resolveManagedToolBin,
+  resolveTypescriptSdk,
+  resolveTypescriptServer,
+  TYPESCRIPT_SERVER_MODULE,
   serverHandle,
   spawnInfo,
   toolBin,
@@ -524,6 +527,30 @@ describe("lsp server helpers", () => {
     })
 
     expect(bin).toBe(legacyBin)
+  })
+
+  test("resolves the TypeScript server module from the project directory", () => {
+    const calls: Array<[string, string]> = []
+    const tsserver = resolveTypescriptServer({
+      directory: "/repo",
+      resolve: (id, dir) => {
+        calls.push([id, dir])
+        return "/repo/node_modules/typescript/lib/tsserver.js"
+      },
+    })
+
+    expect(calls).toEqual([[TYPESCRIPT_SERVER_MODULE, "/repo"]])
+    expect(tsserver).toBe("/repo/node_modules/typescript/lib/tsserver.js")
+  })
+
+  test("derives the TypeScript SDK directory from the server module", () => {
+    const tsdk = resolveTypescriptSdk({
+      directory: "/repo",
+      resolve: () => "/repo/node_modules/typescript/lib/tsserver.js",
+    })
+
+    expect(tsdk).toBe("/repo/node_modules/typescript/lib")
+    expect(resolveTypescriptSdk({ directory: "/repo", resolve: () => undefined })).toBeUndefined()
   })
 
   test("builds tool-backed server info from the installed binary", async () => {

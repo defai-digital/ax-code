@@ -12,6 +12,7 @@ import { Flag } from "../flag/flag"
 import { which } from "../util/which"
 import { spawn } from "./launch"
 import { Glob } from "../util/glob"
+import { Module } from "@ax-code/util/module"
 export * from "./server-releases"
 
 export const log = Log.create({ service: "lsp.server" })
@@ -39,6 +40,19 @@ export const globalTool = (name: string) =>
   which(name, {
     PATH: globalPath(),
   })
+
+type ModuleResolver = (id: string, dir: string) => string | undefined
+
+export const TYPESCRIPT_SERVER_MODULE = "typescript/lib/tsserver.js"
+
+export const resolveTypescriptServer = (input: { directory?: string; resolve?: ModuleResolver } = {}) =>
+  (input.resolve ?? Module.resolve)(TYPESCRIPT_SERVER_MODULE, input.directory ?? Instance.directory)
+
+export const resolveTypescriptSdk = (input: { directory?: string; resolve?: ModuleResolver } = {}) => {
+  const tsserver = resolveTypescriptServer(input)
+  if (!tsserver) return
+  return path.dirname(tsserver)
+}
 
 export const ensureTool = async (input: {
   name: string
