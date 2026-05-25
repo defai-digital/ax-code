@@ -7,6 +7,8 @@
 // Redaction: all string fields are safe to write to disk (no secrets, no raw
 // user content). Callers must not pass raw prompt text or tool outputs here.
 
+import z from "zod"
+
 export namespace AgentOptimizationTrace {
   export type RouteClass = "cheap" | "premium" | "premiumCrossCheck" | "unknown"
 
@@ -59,6 +61,33 @@ export namespace AgentOptimizationTrace {
     tierCounts: [number, number, number, number] // t0, t1, t2, t3
     droppedTiers: number[]
   }
+
+  const ContextPackSummarySchema = z.object({
+    totalTokens: z.number(),
+    tierCounts: z.tuple([z.number(), z.number(), z.number(), z.number()]),
+    droppedTiers: z.array(z.number()),
+  })
+
+  const TraceEventSchema = z.object({
+    sessionID: z.string(),
+    eventID: z.string(),
+    timestamp: z.string(),
+    routeClass: z.enum(["cheap", "premium", "premiumCrossCheck", "unknown"]),
+    providerID: z.string(),
+    modelID: z.string(),
+    contextPackSummary: ContextPackSummarySchema,
+    toolCallCount: z.number(),
+    repeatedFailureCount: z.number(),
+    repeatedFailureSignal: z.boolean(),
+    verificationCommand: z.string().optional(),
+    verificationStatus: z.enum(["pass", "fail", "skip", "partial"]),
+    patchOutcome: z.enum(["accepted", "rejected", "partial", "not-attempted"]),
+    cacheReadTokens: z.number(),
+    cacheWriteTokens: z.number(),
+    inputTokens: z.number(),
+    outputTokens: z.number(),
+    estimatedCostUsd: z.number().optional(),
+  })
 
   // Repeated-failure detector: returns true when the same failure surface has
   // been seen >= threshold times. Callers should surface a recovery hint.
@@ -128,7 +157,9 @@ export namespace AgentOptimizationTrace {
   // Parse a previously serialized trace event. Returns null on invalid JSON.
   export function deserialize(json: string): TraceEvent | null {
     try {
-      return JSON.parse(json) as TraceEvent
+      const parsed: unknown = JSON.parse(json)
+      const decoded = TraceEventSchema.safeParse(parsed)
+      return decoded.success ? decoded.data : null
     } catch {
       return null
     }

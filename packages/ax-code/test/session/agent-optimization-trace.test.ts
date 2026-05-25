@@ -108,6 +108,18 @@ describe("AgentOptimizationTrace.serialize / deserialize", () => {
     expect(AgentOptimizationTrace.deserialize("{not valid}")).toBeNull()
   })
 
+  test("deserialize returns null on invalid trace event shape", () => {
+    expect(AgentOptimizationTrace.deserialize(JSON.stringify({ ...makeEvent(), routeClass: "fast" }))).toBeNull()
+    expect(
+      AgentOptimizationTrace.deserialize(
+        JSON.stringify({
+          ...makeEvent(),
+          contextPackSummary: { totalTokens: 4000, tierCounts: [1, 2, 3], droppedTiers: [] },
+        }),
+      ),
+    ).toBeNull()
+  })
+
   test("serialize produces valid JSON string", () => {
     const json = AgentOptimizationTrace.serialize(makeEvent())
     expect(() => JSON.parse(json)).not.toThrow()
