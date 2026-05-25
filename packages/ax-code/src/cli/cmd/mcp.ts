@@ -22,6 +22,7 @@ import { available as discoverAvailable } from "../../mcp/discovery"
 import * as McpTemplates from "../../mcp/templates"
 import { Permission } from "../../permission"
 import { Log } from "../../util/log"
+import { parseJsonPayload } from "../../util/json-value"
 
 // Above this many MCP tools, LLM tool-selection accuracy degrades and the
 // extra schema overhead noticeably eats context. Mirrors the empirical
@@ -59,6 +60,18 @@ type McpConfigured = Config.Mcp
 type McpRemote = Extract<McpConfigured, { type: "remote" }>
 function isMcpRemote(config: McpEntry): config is McpRemote {
   return MCP.isConfigured(config) && config.type === "remote"
+}
+
+export function decodeMcpDebugServerInfoValue(value: unknown): unknown | undefined {
+  if (!isRecord(value)) return undefined
+  const result = isRecord(value.result) ? value.result : undefined
+  return result?.serverInfo
+}
+
+export function parseMcpDebugServerInfoText(text: string): unknown | undefined {
+  const parsed = parseJsonPayload(text)
+  if (parsed === undefined) return undefined
+  return decodeMcpDebugServerInfoValue(parsed)
 }
 
 export const McpCommand = cmd({
@@ -869,13 +882,9 @@ export const McpDebugCommand = cmd({
           } else if (response.status >= 200 && response.status < 300) {
             prompts.log.success("Server responded successfully (no auth required or already authenticated)")
             const body = await response.text()
-            try {
-              const json = JSON.parse(body)
-              if (json.result?.serverInfo) {
-                prompts.log.info(`Server info: ${JSON.stringify(json.result.serverInfo)}`)
-              }
-            } catch {
-              // Not JSON, ignore
+            const serverInfo = parseMcpDebugServerInfoText(body)
+            if (serverInfo) {
+              prompts.log.info(`Server info: ${JSON.stringify(serverInfo)}`)
             }
           } else {
             prompts.log.warn(`Unexpected status: ${response.status}`)
