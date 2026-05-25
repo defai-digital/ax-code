@@ -58,7 +58,9 @@ describe("session.risk", () => {
   })
 
   test("decodeSessionDiffJson separates invalid JSON from schema failures", () => {
-    expect(() => Risk.decodeSessionDiffJson("{not json")).toThrow(SyntaxError)
+    const malformed = Risk.decodeSessionDiffJson("{not json")
+    expect(malformed.success).toBe(false)
+    if (!malformed.success) expect(malformed.error.length).toBeGreaterThan(0)
 
     const decoded = Risk.decodeSessionDiffJson(JSON.stringify([{ file: "src/index.ts", additions: "2" }]))
     expect(decoded.success).toBe(false)
