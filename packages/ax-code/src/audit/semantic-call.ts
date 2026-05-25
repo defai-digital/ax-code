@@ -2,6 +2,7 @@ import { Log } from "../util/log"
 import { Flag } from "../flag/flag"
 import { AuditQuery } from "./query"
 import { AuditCallID } from "./id"
+import { toErrorMessage } from "../util/error-message"
 import type { SessionID, MessageID } from "../session/schema"
 
 // Semantic-call audit writer (Semantic Trust Layer PRD §S3).
@@ -89,7 +90,7 @@ export namespace AuditSemanticCall {
     } catch (err) {
       log.warn("flush failed; dropping batch", {
         size: batch.length,
-        err: err instanceof Error ? err.message : String(err),
+        err: toErrorMessage(err),
       })
     }
   }

@@ -12,6 +12,7 @@ import { assertExternalDirectory, assertSymlinkInsideProject } from "./external-
 import { InstructionPrompt } from "../session/instruction"
 import { Filesystem } from "../util/filesystem"
 import { DEFAULT_READ_LIMIT, MAX_LINE_LENGTH, MAX_LINE_SUFFIX, MAX_BYTES, MAX_BYTES_LABEL } from "@/constants/tool"
+import { toErrorMessage } from "@/util/error-message"
 import { Log } from "@/util/log"
 import { isHarmlessEffectInterrupt } from "@/effect/interrupt"
 import { NULL_BYTE_PATH_ERROR, normalizeToWorkspacePath, resolveToolFilePath } from "./file-path"
@@ -24,17 +25,13 @@ function readError(name: string, message: string, cause?: unknown) {
   return error
 }
 
-function readErrorMessage(error: unknown) {
-  return error instanceof Error ? error.message : String(error)
-}
-
 function warmSemanticLsp(filepath: string, signal?: AbortSignal) {
   const directory = Instance.directory
   const handle = (err: unknown) => {
     if (isHarmlessEffectInterrupt(err)) return
     log.warn("opportunistic lsp warmup failed", {
       filepath,
-      error: err instanceof Error ? err.message : String(err),
+      error: toErrorMessage(err),
     })
   }
 
@@ -108,7 +105,7 @@ export const ReadTool = Tool.define("read", {
       // and must still be allowed after the permission grant.
       if (stat && Filesystem.contains(Instance.directory, filepath)) {
         await assertSymlinkInsideProject(filepath).catch((error) => {
-          throw readError("ReadSymlinkEscapeError", readErrorMessage(error), error)
+          throw readError("ReadSymlinkEscapeError", toErrorMessage(error), error)
         })
       }
 
@@ -323,7 +320,7 @@ export const ReadTool = Tool.define("read", {
         sessionID: ctx.sessionID,
         filePath: filepath,
         errorCode: error instanceof Error ? error.name : "Unknown",
-        errorMessage: readErrorMessage(error),
+        errorMessage: toErrorMessage(error),
       })
       throw error
     }

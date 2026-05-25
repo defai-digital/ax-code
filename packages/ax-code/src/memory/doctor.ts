@@ -1,5 +1,6 @@
 import type { MemoryEntry, MemoryEntryKind, MemorySection, ProjectMemory } from "./types"
 import * as store from "./store"
+import { toErrorMessage } from "@/util/error-message"
 
 export type MemoryDoctorStatus = "ok" | "warn" | "error"
 export type MemoryDoctorSource = "project" | "global"
@@ -60,7 +61,7 @@ export async function doctor(projectRoot: string, opts: MemoryDoctorOptions = {}
         status: "error",
         code: "load_failed",
         source: "project",
-        message: error instanceof Error ? error.message : String(error),
+        message: toErrorMessage(error),
       })
       return null
     })
@@ -74,7 +75,7 @@ export async function doctor(projectRoot: string, opts: MemoryDoctorOptions = {}
         status: "error",
         code: "load_failed",
         source: "global",
-        message: error instanceof Error ? error.message : String(error),
+        message: toErrorMessage(error),
       })
       return null
     })
