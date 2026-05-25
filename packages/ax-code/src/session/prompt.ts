@@ -90,6 +90,7 @@ import { createStoppedAssistantTextResponse } from "./prompt-assistant-response"
 import { resolveCommandForExecution } from "./prompt-command"
 import { createAutonomousUserContinuation, createUserMessage } from "./prompt-user-message"
 import { permissionRulesetFromLegacyTools } from "./prompt-permission"
+import { createPromptRunState } from "./prompt-run-state"
 import {
   CommandInput as CommandInputSchema,
   type CommandInput as CommandInputType,
@@ -112,32 +113,10 @@ const STRUCTURED_OUTPUT_SYSTEM_PROMPT = `IMPORTANT: The user has requested struc
 
 export namespace SessionPrompt {
   const log = Log.create({ service: "session.prompt" })
-
-  const state = Instance.state(
-    () => {
-      const data: Record<
-        string,
-        {
-          abort: AbortController
-          running: boolean
-          callbacks: {
-            resolve(input: MessageV2.WithParts): void
-            reject(reason?: unknown): void
-          }[]
-        }
-      > = {}
-      return data
-    },
-    async (current) => {
-      for (const item of Object.values(current)) {
-        item.abort.abort()
-      }
-    },
-  )
+  const runState = createPromptRunState()
 
   export function assertNotBusy(sessionID: SessionID) {
-    const match = state()[sessionID]
-    if (match) throw new Session.BusyError(sessionID)
+    runState.assertNotBusy(sessionID)
   }
 
   export const PromptInput = PromptInputSchema
@@ -165,48 +144,16 @@ export namespace SessionPrompt {
   })
 
   function start(sessionID: SessionID) {
-    const s = state()
-    const existing = s[sessionID]
-    if (existing?.running) return
-    const controller = new AbortController()
-    s[sessionID] = {
-      abort: controller,
-      running: true,
-      callbacks: existing?.callbacks ?? [],
-    }
-    return controller.signal
+    return runState.start(sessionID)
   }
 
   function resume(sessionID: SessionID) {
-    const s = state()
-    if (!s[sessionID]?.running) return
-
-    return s[sessionID].abort.signal
+    return runState.resume(sessionID)
   }
 
   export async function cancel(sessionID: SessionID) {
     log.info("cancel", { command: "session.prompt.cancel", status: "started", sessionID })
-    const s = state()
-    const match = s[sessionID]
-    if (!match) {
-      await SessionStatus.set(sessionID, { type: "idle" })
-      return
-    }
-    // Snapshot the callbacks list and delete the state entry BEFORE
-    // iterating. A concurrent loop() re-entry that ran between zeroing
-    // `match.callbacks.length = 0` and `delete s[sessionID]` could
-    // otherwise observe a partially-cleared state. Now any re-entry
-    // either sees the original state (and gets rejected via the
-    // snapshot) or a fresh start with no leftover callbacks.
-    const callbacks = match.callbacks.slice()
-    match.callbacks.length = 0
-    match.abort.abort()
-    delete s[sessionID]
-    for (const cb of callbacks) {
-      cb.reject(new Error("Session ended"))
-    }
-    await SessionStatus.set(sessionID, { type: "idle" })
-    return
+    return runState.cancel(sessionID)
   }
 
   export const LoopInput = LoopInputSchema
@@ -223,12 +170,9 @@ export namespace SessionPrompt {
         // state entry between the `start()` check above and this access,
         // which previously threw TypeError: Cannot read properties of
         // undefined (reading 'callbacks').
-        const entry = state()[sessionID]
-        if (!entry) {
+        if (!runState.enqueue(sessionID, { resolve, reject })) {
           reject(new Error("Session was cancelled"))
-          return
         }
-        entry.callbacks.push({ resolve, reject })
       })
     }
 
@@ -236,12 +180,11 @@ export namespace SessionPrompt {
       if (reason !== "completed") {
         return cancel(sessionID)
       }
-      const callbacks = state()[sessionID]?.callbacks ?? []
+      const callbacks = runState.queuedCallbacks(sessionID)
       if (callbacks.length === 0) {
         return cancel(sessionID)
       }
-      const entry = state()[sessionID]
-      if (entry) entry.running = false
+      runState.markIdle(sessionID)
       // Queued messages are waiting — re-enter the loop to process them.
       // Mirrors the pattern in shell() at lines 1681-1692.
       loop({ sessionID, resume_existing: true }).catch((error) => {
@@ -1362,10 +1305,7 @@ export namespace SessionPrompt {
     )
     for await (const item of MessageV2.stream(sessionID)) {
       if (item.info.role === "user") continue
-      const queued = state()[sessionID]?.callbacks ?? []
-      if (queued.length > 0) {
-        queued.shift()!.resolve(item)
-      }
+      runState.shiftQueuedCallback(sessionID)?.resolve(item)
       return item
     }
     if (abort.aborted) throw new DOMException("Aborted", "AbortError")
@@ -1382,7 +1322,7 @@ export namespace SessionPrompt {
 
     using _ = defer(() => {
       // If no queued callbacks, cancel (the default)
-      const callbacks = state()[input.sessionID]?.callbacks ?? []
+      const callbacks = runState.queuedCallbacks(input.sessionID)
       if (callbacks.length === 0) {
         cancel(input.sessionID)
       } else {
