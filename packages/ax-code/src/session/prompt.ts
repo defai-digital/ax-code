@@ -1647,6 +1647,8 @@ export namespace SessionPrompt {
       synthetic: true,
       text,
     })
+    const draftReadToolCallPart = (args: Parameters<typeof readToolCallText>[0]) =>
+      draftSyntheticTextPart(readToolCallText(args))
     const attachDraftContext = <T extends object>(part: T): T & { messageID: MessageID; sessionID: SessionID } => ({
       ...part,
       messageID: info.id,
@@ -1732,7 +1734,7 @@ export namespace SessionPrompt {
             case "data:":
               if (part.mime === "text/plain") {
                 return [
-                  draftSyntheticTextPart(readToolCallText({ filePath: part.filename })),
+                  draftReadToolCallPart({ filePath: part.filename }),
                   draftSyntheticTextPart(decodeDataUrl(part.url)),
                   attachDraftContext(part),
                 ]
@@ -1829,7 +1831,7 @@ export namespace SessionPrompt {
                 const args = { filePath: filepath, offset, limit }
 
                 const pieces: Draft<MessageV2.Part>[] = [
-                  draftSyntheticTextPart(readToolCallText(args)),
+                  draftReadToolCallPart(args),
                 ]
                 await ReadTool.init()
                   .then(async (t) => {
@@ -1867,7 +1869,7 @@ export namespace SessionPrompt {
                   .then(async (t) => {
                     const result = await t.execute(args, createReadToolContext())
                     return [
-                      draftSyntheticTextPart(readToolCallText(args)),
+                      draftReadToolCallPart(args),
                       draftSyntheticTextPart(result.output),
                       attachDraftContext(part),
                     ]
@@ -1887,7 +1889,7 @@ export namespace SessionPrompt {
               try {
                 await FileTime.read(input.sessionID, filepath)
                 return [
-                  draftSyntheticTextPart(readToolCallText({ filePath: filepath })),
+                  draftReadToolCallPart({ filePath: filepath }),
                   {
                     id: part.id,
                     messageID: info.id,
