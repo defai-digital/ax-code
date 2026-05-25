@@ -87,7 +87,7 @@ function filepath() {
   return path.join(Instance.directory, "ax-code.json")
 }
 
-function parse(text: string) {
+export function parseProjectConfigText(text: string): Config.Info {
   try {
     const value = JSON.parse(text)
     const next = Config.Info.safeParse(value)
@@ -109,7 +109,7 @@ function parse(text: string) {
 export async function readProjectConfig() {
   const file = filepath()
   const text = await Filesystem.readText(file).catch(() => "{}")
-  return parse(text)
+  return parseProjectConfigText(text)
 }
 
 export async function updateProjectConfig<T>(fn: (config: Config.Info) => T | Promise<T>) {
@@ -117,7 +117,7 @@ export async function updateProjectConfig<T>(fn: (config: Config.Info) => T | Pr
   using _inProcess = await Lock.write(file)
   using _crossProcess = await FileLock.acquire(file)
   const text = await Filesystem.readText(file).catch(() => "{}")
-  const config = parse(text)
+  const config = parseProjectConfigText(text)
   const result = await fn(config)
   await Filesystem.writeJson(file, config)
   return result
