@@ -5,6 +5,8 @@ import { Log } from "../../util/log"
 import path from "path"
 import os from "os"
 import { DiagnosticLog } from "../../debug/diagnostic-log"
+import { Process } from "../../util/process"
+import { text } from "node:stream/consumers"
 
 export type Opts = {
   logLevel?: string
@@ -136,25 +138,33 @@ export function ensureShellEnv() {
 async function loadShellEnv(env: Record<string, string | undefined>) {
   if (process.platform === "win32") return
   const shell = env.SHELL || (process.platform === "darwin" ? "/bin/zsh" : "/bin/bash")
+  const shellTimeoutMs = 3000
   try {
-    const proc = Bun.spawn([shell, "-l", "-c", "env -0"], {
+    const proc = Process.spawn([shell, "-l", "-c", "env -0"], {
       stdin: "ignore",
       stdout: "pipe",
-      stderr: "ignore",
+      stderr: "pipe",
       env: { ...env, TERM: "dumb", NO_COLOR: "1" },
+      timeout: shellTimeoutMs,
     })
-    let timeoutId: ReturnType<typeof setTimeout> | undefined
-    const timeout = new Promise<string>((_, reject) => {
-      timeoutId = setTimeout(() => {
-        proc.kill()
-        reject(new Error("timeout"))
-      }, 3000)
-    })
-    const stdout = await Promise.race([new Response(proc.stdout).text(), timeout]).catch(() => "")
-    if (timeoutId) clearTimeout(timeoutId)
-    proc.kill()
-    await proc.exited.catch(() => {})
-    if (!stdout) return
+    let result: [number, string, string] | undefined
+    try {
+      const [code, stdout, stderr] = await Promise.all([
+        proc.exited,
+        proc.stdout ? text(proc.stdout) : Promise.resolve(""),
+        proc.stderr ? text(proc.stderr) : Promise.resolve(""),
+      ])
+      if (code === 124) {
+        throw new Error(`Shell env load timed out after ${shellTimeoutMs / 1000}s: ${stderr}`)
+      }
+      result = [code, stdout, stderr]
+    } catch {
+      result = undefined
+    }
+    if (!result) return
+    const [code, stdout] = result
+    if (code !== 0 || !stdout) return
+
     for (const entry of stdout.split("\0")) {
       const eq = entry.indexOf("=")
       if (eq <= 0) continue

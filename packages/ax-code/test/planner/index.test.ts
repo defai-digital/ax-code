@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { Planner } from "../../src/planner"
+import { Planner, type PhaseResult } from "../../src/planner"
 
 describe("planner.execute", () => {
   test("stops later sequential batches after abort failure", async () => {
@@ -124,6 +124,34 @@ describe("planner.execute", () => {
       { phaseTimeoutMs: 10 },
     )
 
+    expect(result.success).toBe(false)
+    expect(result.phaseResults).toHaveLength(1)
+    expect(result.phaseResults[0]?.error).toContain("Phase timed out after 10ms")
+  })
+
+  test("aborts phase executor when a phase times out", async () => {
+    const plan = Planner.create("test", [{ name: "slow", maxRetries: 0 }])
+    let sawAbort = false
+
+    const result = await Planner.execute(
+      plan,
+      async (_phase, _plan, signal) => {
+        if (signal) {
+          signal.addEventListener(
+            "abort",
+            () => {
+              sawAbort = true
+            },
+            { once: true },
+          )
+        }
+
+        return await new Promise<PhaseResult>(() => {})
+      },
+      { phaseTimeoutMs: 10 },
+    )
+
+    expect(sawAbort).toBe(true)
     expect(result.success).toBe(false)
     expect(result.phaseResults).toHaveLength(1)
     expect(result.phaseResults[0]?.error).toContain("Phase timed out after 10ms")
