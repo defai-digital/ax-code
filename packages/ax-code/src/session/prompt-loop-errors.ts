@@ -17,6 +17,31 @@ type PromptLoopErrorResult =
   | { action: "fallback"; fallbackModel: MessageV2.User["model"]; consecutiveErrors: number }
   | { action: "stop"; reason: "error"; consecutiveErrors: number }
 
+type PromptLoopErrorTransition =
+  | {
+      action: "continue"
+      consecutiveErrors: number
+      fallbackModelOverride: MessageV2.User["model"] | undefined
+      resetCachedModel: boolean
+    }
+  | {
+      action: "retry"
+      consecutiveErrors: number
+      fallbackModelOverride: MessageV2.User["model"]
+      resetCachedModel: true
+    }
+  | {
+      action: "stop"
+      reason: "error"
+      consecutiveErrors: number
+      fallbackModelOverride: MessageV2.User["model"] | undefined
+      resetCachedModel: boolean
+    }
+
+type PromptLoopErrorTransitionDeps = {
+  handleError?: typeof handlePromptLoopError
+}
+
 export async function handlePromptLoopError(input: {
   sessionID: SessionID
   currentModel: MessageV2.User["model"]
@@ -88,4 +113,59 @@ export async function handlePromptLoopError(input: {
   }
 
   return { action: "continue", consecutiveErrors: input.consecutiveErrors }
+}
+
+export async function resolvePromptLoopErrorTransition(
+  input: {
+    sessionID: SessionID
+    currentModel: MessageV2.User["model"]
+    error: unknown
+    consecutiveErrors: number
+    fallbackModelOverride: MessageV2.User["model"] | undefined
+    step: number
+  },
+  deps: PromptLoopErrorTransitionDeps = {},
+): Promise<PromptLoopErrorTransition> {
+  if (!input.error) {
+    return {
+      action: "continue",
+      consecutiveErrors: 0,
+      fallbackModelOverride: undefined,
+      resetCachedModel: Boolean(input.fallbackModelOverride),
+    }
+  }
+
+  const errorResult = await (deps.handleError ?? handlePromptLoopError)({
+    sessionID: input.sessionID,
+    currentModel: input.currentModel,
+    error: input.error,
+    consecutiveErrors: input.consecutiveErrors + 1,
+    step: input.step,
+  })
+
+  if (errorResult.action === "fallback") {
+    return {
+      action: "retry",
+      consecutiveErrors: errorResult.consecutiveErrors,
+      fallbackModelOverride: errorResult.fallbackModel,
+      resetCachedModel: true,
+    }
+  }
+
+  if (errorResult.action === "stop") {
+    return {
+      action: "stop",
+      reason: errorResult.reason,
+      consecutiveErrors: errorResult.consecutiveErrors,
+      fallbackModelOverride: input.fallbackModelOverride,
+      resetCachedModel: false,
+    }
+  }
+
+  return {
+    action: "continue",
+    consecutiveErrors: errorResult.consecutiveErrors,
+    fallbackModelOverride: input.fallbackModelOverride,
+    resetCachedModel: false,
+  }
 }
