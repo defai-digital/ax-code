@@ -117,10 +117,12 @@ describe("AgentOptimizationTrace.serialize / deserialize", () => {
     const json = AgentOptimizationTrace.serialize(event)
     const parsed = AgentOptimizationTrace.deserialize(json)
     expect(parsed).toEqual(event)
+    expect(AgentOptimizationTrace.deserialize(`  ${json}\n`)).toEqual(event)
   })
 
   test("deserialize returns null on invalid JSON", () => {
     expect(AgentOptimizationTrace.deserialize("{not valid}")).toBeNull()
+    expect(AgentOptimizationTrace.deserialize("")).toBeNull()
   })
 
   test("deserialize returns null on invalid trace event shape", () => {

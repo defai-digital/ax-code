@@ -8,6 +8,7 @@
 // user content). Callers must not pass raw prompt text or tool outputs here.
 
 import z from "zod"
+import { parseJsonPayload } from "@/util/json-value"
 
 export namespace AgentOptimizationTrace {
   export type RouteClass = "cheap" | "premium" | "premiumCrossCheck" | "unknown"
@@ -161,12 +162,9 @@ export namespace AgentOptimizationTrace {
 
   // Parse a previously serialized trace event. Returns null on invalid JSON.
   export function deserialize(json: string): TraceEvent | null {
-    try {
-      const parsed: unknown = JSON.parse(json)
-      return decodeTraceEvent(parsed)
-    } catch {
-      return null
-    }
+    const parsed = parseJsonPayload(json)
+    if (parsed === undefined) return null
+    return decodeTraceEvent(parsed)
   }
 
   // Estimate cost in USD given per-million-token prices.
