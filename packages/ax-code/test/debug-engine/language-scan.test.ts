@@ -139,6 +139,30 @@ describe("language-scan", () => {
       expect(findings[0].code).toBe("dead_code")
       expect(findings[0].file).toBe("src/lib.rs")
     })
+
+    test("skips malformed clippy JSON messages", () => {
+      const valid = JSON.stringify({
+        message: "dead code",
+        code: { code: "dead_code", explanation: null },
+        level: "warning",
+        spans: [
+          {
+            file_name: "src/lib.rs",
+            line_start: 9,
+            line_end: 9,
+            column_start: 1,
+            column_end: 8,
+            is_primary: true,
+          },
+        ],
+      })
+      const malformed = JSON.stringify({ message: "missing spans", level: "warning" })
+      const { findings, filesScanned } = parseClippyOutput(`${malformed}\n${valid}`)
+
+      expect(filesScanned).toBe(1)
+      expect(findings).toHaveLength(1)
+      expect(findings[0].code).toBe("dead_code")
+    })
   })
 
   describe("detectRuff", () => {
@@ -238,6 +262,28 @@ describe("language-scan", () => {
       expect(findings[0].endLine).toBe(2)
       expect(findings[0].endColumn).toBe(1)
     })
+
+    test("skips malformed ruff diagnostics without dropping valid diagnostics", () => {
+      const sampleOutput = JSON.stringify([
+        {
+          code: "F401",
+          message: "`os` imported but unused",
+          location: { row: 2, column: 1 },
+          filename: "src/imports.py",
+        },
+        {
+          code: "F841",
+          message: "missing filename",
+          location: { row: 10, column: 5 },
+        },
+      ])
+
+      const { findings, filesScanned } = parseRuffOutput(sampleOutput)
+
+      expect(findings).toHaveLength(1)
+      expect(filesScanned).toBe(1)
+      expect(findings[0].code).toBe("F401")
+    })
   })
 
   describe("detectMypy", () => {
@@ -293,6 +339,37 @@ describe("language-scan", () => {
 
       expect(findings).toHaveLength(0)
       expect(filesScanned).toBe(1)
+    })
+
+    test("skips malformed mypy files and messages without dropping valid entries", () => {
+      const sampleOutput = JSON.stringify({
+        files: [
+          {
+            path: "src/main.py",
+            messages: [
+              {
+                severity: "error",
+                message: "bad type",
+                line: 5,
+              },
+              {
+                severity: "error",
+                line: 6,
+              },
+            ],
+          },
+          {
+            messages: [{ severity: "error", message: "missing path" }],
+          },
+        ],
+      })
+
+      const { findings, filesScanned } = parseMypyOutput(sampleOutput)
+
+      expect(filesScanned).toBe(1)
+      expect(findings).toHaveLength(1)
+      expect(findings[0].file).toBe("src/main.py")
+      expect(findings[0].message).toBe("bad type")
     })
   })
 })
