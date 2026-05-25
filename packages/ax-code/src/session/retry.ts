@@ -1,5 +1,6 @@
 import type { NamedError } from "@ax-code/util/error"
 import { MessageV2 } from "./message-v2"
+import { parseJsonRecord } from "@/util/json-record"
 import { isRecord } from "@/util/record"
 
 export namespace SessionRetry {
@@ -111,13 +112,7 @@ export namespace SessionRetry {
   }
 
   export function parseRetryMessageJson(message: unknown): Record<string, unknown> | undefined {
-    if (typeof message !== "string") return undefined
-    try {
-      const parsed: unknown = JSON.parse(message)
-      return isRecord(parsed) ? parsed : undefined
-    } catch {
-      return undefined
-    }
+    return typeof message === "string" ? parseJsonRecord(message) : undefined
   }
 
   export function retryable(error: ReturnType<NamedError["toObject"]>) {
