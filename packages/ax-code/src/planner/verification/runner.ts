@@ -5,6 +5,7 @@ import type { ProjectID } from "../../project/schema"
 import type { DebugEngine } from "../../debug-engine"
 import { Log } from "../../util/log"
 import { Env } from "../../util/env"
+import { packageJsonStringMap, parsePackageJsonObject } from "../../util/package-json"
 
 // Phase 2 P2.1: extracted from src/debug-engine/apply-safe-refactor.ts so
 // review/debug/qa workflows (not just refactor_apply) can run typecheck /
@@ -68,19 +69,8 @@ async function cargoCommands(cwd: string): Promise<CommandSet | null> {
   }
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
-}
-
 export function parsePackageScripts(raw: string): Record<string, string> {
-  const pkg: unknown = JSON.parse(raw)
-  if (!isRecord(pkg) || !isRecord(pkg.scripts)) return {}
-
-  const scripts: Record<string, string> = {}
-  for (const [name, command] of Object.entries(pkg.scripts)) {
-    if (typeof command === "string") scripts[name] = command
-  }
-  return scripts
+  return packageJsonStringMap(parsePackageJsonObject(raw).scripts)
 }
 
 // Resolve the typecheck/lint/test commands for a project. Defaults pick up

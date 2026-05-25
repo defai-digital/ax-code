@@ -8,7 +8,7 @@ import path from "path"
 import type { ProjectMemory, MemorySection, WarmupOptions } from "./types"
 import * as store from "./store"
 import { computeContentHash } from "./hash"
-import { isRecord } from "@/util/record"
+import { packageJsonObjectKeys, packageJsonStringMap, parsePackageJsonObject } from "@/util/package-json"
 
 const DEFAULT_MAX_TOKENS = 4000
 const DEFAULT_DEPTH = 3
@@ -27,16 +27,10 @@ export interface MemoryPackageJsonInfo {
 }
 
 export function parseMemoryPackageJson(raw: string): MemoryPackageJsonInfo {
-  const parsed: unknown = JSON.parse(raw)
-  if (!isRecord(parsed)) return { scripts: [], dependencies: [], devDependencies: [], allDependencies: [] }
-
-  const scripts = isRecord(parsed.scripts)
-    ? Object.entries(parsed.scripts)
-        .filter(([, command]) => typeof command === "string")
-        .map(([name]) => name)
-    : []
-  const dependencies = isRecord(parsed.dependencies) ? Object.keys(parsed.dependencies) : []
-  const devDependencies = isRecord(parsed.devDependencies) ? Object.keys(parsed.devDependencies) : []
+  const parsed = parsePackageJsonObject(raw)
+  const scripts = Object.keys(packageJsonStringMap(parsed.scripts))
+  const dependencies = packageJsonObjectKeys(parsed.dependencies)
+  const devDependencies = packageJsonObjectKeys(parsed.devDependencies)
 
   return {
     name: typeof parsed.name === "string" ? parsed.name : undefined,
