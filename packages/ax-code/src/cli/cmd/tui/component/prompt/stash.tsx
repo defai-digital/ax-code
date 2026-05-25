@@ -6,17 +6,13 @@ import { createStore, produce, unwrap } from "solid-js/store"
 import { createSimpleContext } from "../../context/helper"
 import { appendFile, writeFile } from "fs/promises"
 import type { PromptInfo } from "./history"
+import { parseStashLine, type StashEntry } from "./stash-util"
 import { Log } from "@/util/log"
 import { scheduleDeferredStartupTask } from "@tui/util/startup-task"
 import { optionalStateErrorMessage, shouldSurfaceOptionalStateError } from "@tui/util/optional-state"
 import { useToast } from "../../ui/toast"
 
-export type StashEntry = {
-  id: string
-  input: string
-  parts: PromptInfo["parts"]
-  timestamp: number
-}
+export type { StashEntry } from "./stash-util"
 
 const MAX_STASH_ENTRIES = 50
 const STASH_LOAD_DELAY_MS = 50
@@ -70,19 +66,8 @@ export const { use: usePromptStash, provider: PromptStashProvider } = createSimp
           const lines = text
             .split("\n")
             .filter(Boolean)
-            .map((line) => {
-              try {
-                const parsed = JSON.parse(line)
-                if (!parsed || typeof parsed !== "object") return null
-                return {
-                  ...parsed,
-                  id: typeof parsed.id === "string" ? parsed.id : crypto.randomUUID(),
-                }
-              } catch {
-                return null
-              }
-            })
-            .filter((line): line is StashEntry => line !== null)
+            .map((line) => parseStashLine(line, () => crypto.randomUUID()))
+            .filter((line): line is StashEntry => line !== undefined)
             .slice(-MAX_STASH_ENTRIES)
 
           const merged = [...lines, ...store.entries]
