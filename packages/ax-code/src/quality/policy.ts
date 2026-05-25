@@ -41,6 +41,18 @@ export type PolicyRules = z.infer<typeof PolicyRulesSchema>
 export namespace Policy {
   const log = Log.create({ service: "quality.policy" })
 
+  export type RulesDecodeResult =
+    | {
+        ok: true
+        data: PolicyRules
+      }
+    | {
+        ok: false
+        reason: "json" | "schema"
+        error: string
+        issues?: number
+      }
+
   // Phase 4 P4.1/P4.2: locate `.ax-code/review.md` and `.ax-code/qa.md` with
   // workspace-first precedence per the Phase 0 contract:
   //   workspace (.ax-code walk up from cwd to worktree) > user (~/.ax-code/)
@@ -90,6 +102,30 @@ export namespace Policy {
     return undefined
   }
 
+  export function decodeRulesJson(raw: string): RulesDecodeResult {
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(raw)
+    } catch (err) {
+      return {
+        ok: false,
+        reason: "json",
+        error: err instanceof Error ? err.message : String(err),
+      }
+    }
+
+    const validated = PolicyRulesSchema.safeParse(parsed)
+    if (!validated.success) {
+      return {
+        ok: false,
+        reason: "schema",
+        error: validated.error.message,
+        issues: validated.error.issues.length,
+      }
+    }
+    return { ok: true, data: validated.data }
+  }
+
   function assertSafePolicyName(name: string) {
     if (path.basename(name) !== name || name.includes("/") || name.includes("\\")) {
       throw new Error(`Invalid policy name: "${name}"`)
@@ -114,28 +150,25 @@ export namespace Policy {
         log.warn("rules read failed; skipping", { name: input.name, path: candidate, err })
         continue
       }
-      let parsed: unknown
-      try {
-        parsed = JSON.parse(raw)
-      } catch (err) {
+      const decoded = decodeRulesJson(raw)
+      if (!decoded.ok && decoded.reason === "json") {
         log.warn("rules JSON parse failed; treating as missing", {
           name: input.name,
           path: candidate,
-          err: err instanceof Error ? err.message : String(err),
+          err: decoded.error,
         })
         return undefined
       }
-      const validated = PolicyRulesSchema.safeParse(parsed)
-      if (!validated.success) {
+      if (!decoded.ok) {
         log.warn("rules schema validation failed; treating as missing", {
           name: input.name,
           path: candidate,
-          issues: validated.error.issues.length,
+          issues: decoded.issues ?? 0,
         })
         return undefined
       }
       log.info("loaded rules", { name: input.name, path: candidate })
-      return validated.data
+      return decoded.data
     }
     return undefined
   }
