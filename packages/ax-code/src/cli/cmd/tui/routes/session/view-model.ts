@@ -75,7 +75,7 @@ export function sessionTaskSummary(messages: Message[], parts: Record<string, Pa
   return { running, done, total: running + done }
 }
 
-function todos(value: unknown): TodoViewItem[] | undefined {
+export function parseTodoViewItems(value: unknown): TodoViewItem[] | undefined {
   if (!Array.isArray(value)) return
   return value.flatMap((item) => {
     if (!item || typeof item !== "object") return []
@@ -85,10 +85,10 @@ function todos(value: unknown): TodoViewItem[] | undefined {
   })
 }
 
-function outputTodos(output: string | undefined): TodoViewItem[] | undefined {
+export function parseTodoOutput(output: string | undefined): TodoViewItem[] | undefined {
   if (!output) return
   try {
-    return todos(JSON.parse(output))
+    return parseTodoViewItems(JSON.parse(output))
   } catch {
     return
   }
@@ -100,7 +100,8 @@ export function todoWriteView(input: {
   metadataTodos?: unknown
   output?: string
 }): TodoWriteView {
-  const resolved = todos(input.metadataTodos) ?? todos(input.inputTodos) ?? outputTodos(input.output)
+  const resolved =
+    parseTodoViewItems(input.metadataTodos) ?? parseTodoViewItems(input.inputTodos) ?? parseTodoOutput(input.output)
   if (resolved) {
     return {
       state: resolved.length > 0 ? "items" : "empty",
