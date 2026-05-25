@@ -43,6 +43,7 @@ import {
 } from "./prompt-loop-recording"
 import { resolvePromptLoopResult } from "./prompt-loop-result"
 import { markPromptLoopBusy } from "./prompt-loop-status"
+import { handlePromptLoopGlobalStepLimit } from "./prompt-loop-step-limit"
 import { preparePromptRequest, type PromptRequestCache } from "./prompt-request-build"
 import { createStructuredOutputTurn } from "./prompt-structured-output"
 import { executeSubtask, type SubtaskContext } from "./prompt-subtask"
@@ -61,7 +62,6 @@ import {
   completionGateEventState,
   completionGateRetryDecision,
   emptyModelTurnDecision,
-  globalStepLimitDecision,
   goalContinuationDecision,
   isEmptyModelTurn,
   modelTurnFinished,
@@ -276,38 +276,23 @@ export namespace SessionPrompt {
       }
 
       // Safety: prevent infinite loops
-      const globalStepLimit = globalStepLimitDecision({
+      const globalStepLimit = handlePromptLoopGlobalStepLimit({
+        sessionID,
         step,
         stepLimit: sessionStepLimit,
         autonomous,
         continuations,
         maxContinuations,
       })
-      if (globalStepLimit.action === "continue") {
+      if (globalStepLimit.action === "continue_autonomous") {
         await continueAutonomousLoop({
           event: "autonomous auto-continue",
           resetTodoProgressTracking: true,
-          text: AutonomousContinuationPrompt.stepLimit({
-            stepLimit: sessionStepLimit,
-            continuation: globalStepLimit.continuation,
-            maxContinuations,
-          }),
+          text: globalStepLimit.text,
         })
         continue
       }
       if (globalStepLimit.action === "stop") {
-        log.warn("global step limit reached", {
-          command: "session.prompt.loop",
-          status: "error",
-          errorCode: globalStepLimit.errorCode,
-          step,
-          sessionID,
-          continuations,
-        })
-        Session.publishError({
-          sessionID,
-          message: globalStepLimit.message,
-        })
         reason = globalStepLimit.reason
         break
       }
