@@ -1,8 +1,15 @@
 import { describe, expect, test } from "bun:test"
-import { parseEncryptedToken } from "../../src/account/repo"
+import { decodeEncryptedTokenValue, parseEncryptedToken } from "../../src/account/repo"
 import { encrypt } from "../../src/auth/encryption"
 
 describe("account token decoding", () => {
+  test("decodes already-parsed encrypted token values", () => {
+    const encrypted = encrypt("secret-token")
+    expect(decodeEncryptedTokenValue(encrypted)).toEqual(encrypted)
+    expect(decodeEncryptedTokenValue({ encrypted: "missing fields" })).toBeUndefined()
+    expect(decodeEncryptedTokenValue(["not", "encrypted"])).toBeUndefined()
+  })
+
   test("recognizes encrypted token JSON", () => {
     const encrypted = encrypt("secret-token")
     expect(parseEncryptedToken(JSON.stringify(encrypted))).toEqual(encrypted)
