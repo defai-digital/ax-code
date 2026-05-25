@@ -20,17 +20,23 @@ export function createProcessLockBody(): ProcessLockBody {
   }
 }
 
+function isJsonRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+}
+
 export function parseProcessLockBody<T extends Record<string, unknown> = Record<string, never>>(
   text: string,
 ): (ProcessLockBody & T) | undefined {
   try {
-    const parsed = JSON.parse(text)
-    if (!parsed || typeof parsed !== "object") return undefined
+    const parsed: unknown = JSON.parse(text)
+    if (!isJsonRecord(parsed)) return undefined
 
     const candidate = parsed as Partial<ProcessLockBody & T>
     if (
       typeof candidate.pid !== "number" ||
+      !Number.isFinite(candidate.pid) ||
       typeof candidate.startedAt !== "number" ||
+      !Number.isFinite(candidate.startedAt) ||
       typeof candidate.host !== "string"
     ) {
       return undefined
