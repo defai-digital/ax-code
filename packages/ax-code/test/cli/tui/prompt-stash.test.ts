@@ -33,6 +33,18 @@ describe("prompt stash persistence", () => {
         () => "generated",
       )?.id,
     ).toBe("generated")
+
+    expect(
+      parseStashLine(
+        JSON.stringify({
+          id: 123,
+          input: "hello",
+          parts: [{ type: "text", text: "hello" }],
+          timestamp: 1234,
+        }),
+        () => "generated",
+      )?.id,
+    ).toBe("generated")
   })
 
   test("rejects malformed stash jsonl rows", () => {

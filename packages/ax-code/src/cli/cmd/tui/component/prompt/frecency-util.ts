@@ -1,38 +1,26 @@
+import z from "zod"
+import { decodePromptPersistenceJsonLine } from "./persistence-json"
+
 export type FrecencyEntry = {
   path: string
   frequency: number
   lastOpen: number
 }
 
-function isFrecencyEntry(input: unknown): input is FrecencyEntry {
-  return (
-    typeof input === "object" &&
-    input !== null &&
-    !Array.isArray(input) &&
-    "path" in input &&
-    "frequency" in input &&
-    "lastOpen" in input &&
-    typeof input.path === "string" &&
-    input.path.length > 0 &&
-    typeof input.frequency === "number" &&
-    Number.isFinite(input.frequency) &&
-    input.frequency >= 0 &&
-    typeof input.lastOpen === "number" &&
-    Number.isFinite(input.lastOpen) &&
-    input.lastOpen >= 0
-  )
-}
+const FrecencyEntrySchema = z
+  .object({
+    path: z.string().min(1),
+    frequency: z.number().finite().nonnegative(),
+    lastOpen: z.number().finite().nonnegative(),
+  })
+  .passthrough()
 
 export function parseFrecencyLine(line: string): FrecencyEntry | undefined {
-  try {
-    const parsed = JSON.parse(line)
-    if (!isFrecencyEntry(parsed)) return undefined
-    return {
-      path: parsed.path,
-      frequency: parsed.frequency,
-      lastOpen: parsed.lastOpen,
-    }
-  } catch {
-    return undefined
+  const parsed = decodePromptPersistenceJsonLine(line, FrecencyEntrySchema)
+  if (!parsed) return undefined
+  return {
+    path: parsed.path,
+    frequency: parsed.frequency,
+    lastOpen: parsed.lastOpen,
   }
 }

@@ -1,4 +1,6 @@
 import type { PromptInfo } from "./history"
+import z from "zod"
+import { decodePromptPersistenceJsonLine } from "./persistence-json"
 
 export type StashEntry = {
   id: string
@@ -14,23 +16,22 @@ function isPromptPartList(input: unknown): input is PromptInfo["parts"] {
   )
 }
 
+const StashEntrySchema = z
+  .object({
+    id: z.unknown().optional(),
+    input: z.string(),
+    parts: z.custom<PromptInfo["parts"]>(isPromptPartList),
+    timestamp: z.number().finite().nonnegative(),
+  })
+  .passthrough()
+
 export function parseStashLine(line: string, makeID: () => string): StashEntry | undefined {
-  try {
-    const parsed = JSON.parse(line)
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return undefined
-    const candidate = parsed as { id?: unknown; input?: unknown; parts?: unknown; timestamp?: unknown }
-    if (typeof candidate.input !== "string") return undefined
-    if (!isPromptPartList(candidate.parts)) return undefined
-    if (typeof candidate.timestamp !== "number" || !Number.isFinite(candidate.timestamp) || candidate.timestamp < 0) {
-      return undefined
-    }
-    return {
-      id: typeof candidate.id === "string" && candidate.id.length > 0 ? candidate.id : makeID(),
-      input: candidate.input,
-      parts: candidate.parts,
-      timestamp: candidate.timestamp,
-    }
-  } catch {
-    return undefined
+  const parsed = decodePromptPersistenceJsonLine(line, StashEntrySchema)
+  if (!parsed) return undefined
+  return {
+    id: typeof parsed.id === "string" && parsed.id.length > 0 ? parsed.id : makeID(),
+    input: parsed.input,
+    parts: parsed.parts,
+    timestamp: parsed.timestamp,
   }
 }
