@@ -103,16 +103,17 @@ export type PrViewDecodeResult =
       error: string
     }
 
+export function decodePrViewValue(value: unknown): PrViewDecodeResult {
+  const decoded = PrViewSchema.safeParse(value)
+  return decoded.success ? { ok: true, data: decoded.data } : { ok: false, error: decoded.error.message }
+}
+
 export function decodePrViewJson(stdout: string): PrViewDecodeResult {
-  let parsed: unknown
   try {
-    parsed = JSON.parse(stdout)
+    return decodePrViewValue(JSON.parse(stdout))
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) }
   }
-
-  const decoded = PrViewSchema.safeParse(parsed)
-  return decoded.success ? { ok: true, data: decoded.data } : { ok: false, error: decoded.error.message }
 }
 
 export async function fetchPrDiff(prRef: string, cwd: string): Promise<PrDiff> {
