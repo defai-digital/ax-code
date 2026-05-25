@@ -853,6 +853,10 @@ export namespace QualityModelRegistry {
     return ["quality_model_promotion", promotionID]
   }
 
+  async function writePromotionRecord(record: PromotionRecord) {
+    await Storage.write(promotionKey(record.promotionID), record)
+  }
+
   function rollbackKey(rollbackID: string) {
     return ["quality_model_rollback", rollbackID]
   }
@@ -1461,7 +1465,7 @@ export namespace QualityModelRegistry {
         eligibility: input.eligibility,
         stability: input.stability,
       })
-      await Storage.write(promotionKey(promotionID), record)
+      await writePromotionRecord(record)
       return { registered, active, record, stability: input.stability, eligibility: input.eligibility }
     })()
   }
@@ -1926,7 +1930,7 @@ export namespace QualityModelRegistry {
         requiredOverride: submissionBundle.summary.requiredOverride,
       },
     })
-    await Storage.write(promotionKey(result.record.promotionID), record)
+    await writePromotionRecord(record)
     return {
       ...result,
       record,
@@ -1970,7 +1974,7 @@ export namespace QualityModelRegistry {
         recommendation: reviewDossier.summary.recommendation,
       },
     })
-    await Storage.write(promotionKey(result.record.promotionID), record)
+    await writePromotionRecord(record)
     return {
       ...result,
       record,
@@ -2018,7 +2022,7 @@ export namespace QualityModelRegistry {
         overallStatus: boardDecision.summary.overallStatus,
       },
     })
-    await Storage.write(promotionKey(result.record.promotionID), record)
+    await writePromotionRecord(record)
     return {
       ...result,
       record,
@@ -2064,7 +2068,7 @@ export namespace QualityModelRegistry {
         overallStatus: releaseDecisionRecord.summary.overallStatus,
       },
     })
-    await Storage.write(promotionKey(result.record.promotionID), record)
+    await writePromotionRecord(record)
     return {
       ...result,
       record,
@@ -2199,7 +2203,7 @@ export namespace QualityModelRegistry {
         overallStatus: releasePacket.summary.overallStatus,
       },
     })
-    await Storage.write(promotionKey(result.record.promotionID), record)
+    await writePromotionRecord(record)
     const auditManifest =
       preflight?.auditManifest ??
       QualityPromotionAuditManifest.create({
@@ -2460,7 +2464,7 @@ export namespace QualityModelRegistry {
           }
         : undefined,
     })
-    await Storage.write(promotionKey(result.record.promotionID), recordWithArtifacts)
+    await writePromotionRecord(recordWithArtifacts)
     return {
       ...result,
       record: recordWithArtifacts,
