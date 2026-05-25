@@ -46,6 +46,28 @@ import {
   sortRollbackRecords,
   teamCarryoverHistory,
 } from "./model-registry-selection"
+import {
+  adoptionReviewRecordSummary,
+  approvalRecordSummary,
+  archiveManifestRecordSummary,
+  auditManifestRecordSummary,
+  boardDecisionRecordSummary,
+  exportBundleRecordSummary,
+  handoffPackageRecordSummary,
+  packagedArchiveRecordSummary,
+  portableExportRecordSummary,
+  releaseDecisionRecordSummary,
+  releasePacketRecordSummary,
+  reviewDossierRecordSummary,
+  signedArchiveAttestationPacketRecordSummary,
+  signedArchiveAttestationPolicyRecordSummary,
+  signedArchiveAttestationRecordSummary,
+  signedArchiveGovernancePacketRecordSummary,
+  signedArchiveRecordSummary,
+  signedArchiveReviewDossierRecordSummary,
+  signedArchiveTrustRecordSummary,
+  submissionBundleRecordSummary,
+} from "./model-registry-record-summary"
 
 export namespace QualityModelRegistry {
   type PromotionGateLike = {
@@ -979,100 +1001,6 @@ export namespace QualityModelRegistry {
     })
   }
 
-  function submissionBundleRecordSummary(
-    submissionBundle: QualityPromotionSubmissionBundle.BundleArtifact,
-  ): NonNullable<PromotionRecord["submissionBundle"]> {
-    return {
-      submissionID: submissionBundle.submissionID,
-      createdAt: submissionBundle.createdAt,
-      decisionBundleCreatedAt: submissionBundle.decisionBundle.createdAt,
-      approvalPacketID: submissionBundle.approvalPacket.packetID,
-      overallStatus: submissionBundle.summary.overallStatus,
-      eligibilityDecision: submissionBundle.summary.eligibilityDecision,
-      requiredOverride: submissionBundle.summary.requiredOverride,
-    }
-  }
-
-  function reviewDossierRecordSummary(
-    reviewDossier: QualityPromotionReviewDossier.DossierArtifact,
-  ): NonNullable<PromotionRecord["reviewDossier"]> {
-    const submissionBundle = reviewDossier.submissionBundle
-    return {
-      dossierID: reviewDossier.dossierID,
-      createdAt: reviewDossier.createdAt,
-      submissionID: submissionBundle.submissionID,
-      submissionCreatedAt: submissionBundle.createdAt,
-      decisionBundleCreatedAt: submissionBundle.decisionBundle.createdAt,
-      approvalPacketID: submissionBundle.approvalPacket.packetID,
-      overallStatus: reviewDossier.summary.overallStatus,
-      recommendation: reviewDossier.summary.recommendation,
-    }
-  }
-
-  function boardDecisionRecordSummary(
-    boardDecision: QualityPromotionBoardDecision.DecisionArtifact,
-  ): NonNullable<PromotionRecord["boardDecision"]> {
-    return {
-      decisionID: boardDecision.decisionID,
-      decidedAt: boardDecision.decidedAt,
-      decider: boardDecision.decider,
-      role: boardDecision.role,
-      team: boardDecision.team ?? null,
-      reportingChain: boardDecision.reportingChain ?? null,
-      disposition: boardDecision.disposition,
-      overrideAccepted: boardDecision.overrideAccepted,
-      dossierID: boardDecision.reviewDossier.dossierID,
-      recommendation: boardDecision.summary.recommendation,
-      requiredOverride: boardDecision.summary.requiredOverride,
-      overallStatus: boardDecision.summary.overallStatus,
-    }
-  }
-
-  function releaseDecisionRecordSummary(
-    releaseDecisionRecord: QualityPromotionReleaseDecisionRecord.RecordArtifact,
-  ): NonNullable<PromotionRecord["releaseDecisionRecord"]> {
-    return {
-      recordID: releaseDecisionRecord.recordID,
-      recordedAt: releaseDecisionRecord.recordedAt,
-      decisionID: releaseDecisionRecord.boardDecision.decisionID,
-      disposition: releaseDecisionRecord.summary.disposition,
-      overrideAccepted: releaseDecisionRecord.summary.overrideAccepted,
-      authorizedPromotion: releaseDecisionRecord.summary.authorizedPromotion,
-      promotionMode: releaseDecisionRecord.summary.promotionMode,
-      overallStatus: releaseDecisionRecord.summary.overallStatus,
-    }
-  }
-
-  function releasePacketRecordSummary(
-    releasePacket: QualityPromotionReleasePacket.PacketArtifact,
-  ): NonNullable<PromotionRecord["releasePacket"]> {
-    return {
-      packetID: releasePacket.packetID,
-      createdAt: releasePacket.createdAt,
-      recordID: releasePacket.releaseDecisionRecord.recordID,
-      decisionID: releasePacket.releaseDecisionRecord.boardDecision.decisionID,
-      authorizedPromotion: releasePacket.summary.authorizedPromotion,
-      promotionMode: releasePacket.summary.promotionMode,
-      overallStatus: releasePacket.summary.overallStatus,
-    }
-  }
-
-  function approvalRecordSummary(
-    approval: QualityPromotionApproval.ApprovalArtifact,
-  ): NonNullable<PromotionRecord["approval"]> {
-    return {
-      approvalID: approval.approvalID,
-      approvedAt: approval.approvedAt,
-      approver: approval.approver,
-      role: approval.role,
-      team: approval.team ?? null,
-      reportingChain: approval.reportingChain ?? null,
-      disposition: approval.disposition,
-      decisionBundleCreatedAt: approval.decisionBundle.createdAt,
-      decisionBundleDigest: approval.decisionBundle.digest,
-    }
-  }
-
   function buildReleasePacketPromotionSnapshot(input: {
     releasePacket: QualityPromotionReleasePacket.PacketArtifact
     promotionMetadata: PromotionMetadata
@@ -1303,18 +1231,7 @@ export namespace QualityModelRegistry {
             }
           : undefined,
         approvals: input.approvals?.map(approvalRecordSummary),
-        adoptionReviews: input.adoptionReviews?.map((review) => ({
-          reviewID: review.reviewID,
-          reviewedAt: review.reviewedAt,
-          reviewer: review.reviewer,
-          role: review.role,
-          disposition: review.disposition,
-          rationale: review.rationale,
-          decisionBundleCreatedAt: review.decisionBundle.createdAt,
-          decisionBundleDigest: review.decisionBundle.digest,
-          suggestionDigest: review.suggestion.digest,
-          adoptionStatus: review.suggestion.adoptionStatus,
-        })),
+        adoptionReviews: input.adoptionReviews?.map(adoptionReviewRecordSummary),
         adoptionReviewConsensus: input.adoptionReviewConsensus
           ? {
               overallStatus: input.adoptionReviewConsensus.overallStatus,
@@ -2271,165 +2188,28 @@ export namespace QualityModelRegistry {
     }
     const recordWithArtifacts = PromotionRecord.parse({
       ...record,
-      auditManifest: {
-        manifestID: auditManifest.manifestID,
-        createdAt: auditManifest.createdAt,
-        packetID: auditManifest.releasePacket.packetID,
-        promotionID: auditManifest.promotion.promotionID,
-        decision: auditManifest.summary.promotionDecision,
-        promotionMode: auditManifest.summary.promotionMode,
-        overallStatus: auditManifest.summary.overallStatus,
-      },
-      exportBundle: {
-        bundleID: exportBundle.bundleID,
-        createdAt: exportBundle.createdAt,
-        manifestID: exportBundle.auditManifest.manifestID,
-        packetID: exportBundle.auditManifest.releasePacket.packetID,
-        promotionID: exportBundle.auditManifest.promotion.promotionID,
-        decision: exportBundle.summary.promotionDecision,
-        promotionMode: exportBundle.summary.promotionMode,
-        overallStatus: exportBundle.summary.overallStatus,
-      },
-      archiveManifest: {
-        archiveID: archiveManifest.archiveID,
-        createdAt: archiveManifest.createdAt,
-        bundleID: archiveManifest.exportBundle.bundleID,
-        manifestID: archiveManifest.exportBundle.auditManifest.manifestID,
-        packetID: archiveManifest.exportBundle.auditManifest.releasePacket.packetID,
-        promotionID: archiveManifest.exportBundle.auditManifest.promotion.promotionID,
-        inventoryCount: archiveManifest.summary.inventoryCount,
-        promotionMode: archiveManifest.summary.promotionMode,
-        overallStatus: archiveManifest.summary.overallStatus,
-      },
-      handoffPackage: {
-        packageID: handoffPackage.packageID,
-        createdAt: handoffPackage.createdAt,
-        archiveID: handoffPackage.archiveManifest.archiveID,
-        bundleID: handoffPackage.archiveManifest.exportBundle.bundleID,
-        manifestID: handoffPackage.archiveManifest.exportBundle.auditManifest.manifestID,
-        packetID: handoffPackage.archiveManifest.exportBundle.auditManifest.releasePacket.packetID,
-        promotionID: handoffPackage.archiveManifest.exportBundle.auditManifest.promotion.promotionID,
-        documentCount: handoffPackage.summary.documentCount,
-        overallStatus: handoffPackage.summary.overallStatus,
-      },
-      portableExport: {
-        exportID: portableExport.exportID,
-        createdAt: portableExport.createdAt,
-        packageID: portableExport.handoffPackage.packageID,
-        archiveID: portableExport.handoffPackage.archiveManifest.archiveID,
-        bundleID: portableExport.handoffPackage.archiveManifest.exportBundle.bundleID,
-        promotionID: portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest.promotion.promotionID,
-        fileCount: portableExport.summary.fileCount,
-        overallStatus: portableExport.summary.overallStatus,
-      },
-      packagedArchive: {
-        archiveID: packagedArchive.archiveID,
-        createdAt: packagedArchive.createdAt,
-        exportID: packagedArchive.portableExport.exportID,
-        packageID: packagedArchive.portableExport.handoffPackage.packageID,
-        promotionID:
-          packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest.promotion
-            .promotionID,
-        entryCount: packagedArchive.summary.entryCount,
-        overallStatus: packagedArchive.summary.overallStatus,
-      },
-      signedArchive: signedArchive
-        ? {
-            signedArchiveID: signedArchive.signedArchiveID,
-            createdAt: signedArchive.createdAt,
-            archiveID: signedArchive.packagedArchive.archiveID,
-            exportID: signedArchive.packagedArchive.portableExport.exportID,
-            promotionID:
-              signedArchive.packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest
-                .promotion.promotionID,
-            keyID: signedArchive.attestation.keyID,
-            attestedBy: signedArchive.attestation.attestedBy,
-            algorithm: signedArchive.attestation.algorithm,
-            overallStatus: signedArchive.summary.overallStatus,
-          }
-        : undefined,
-      signedArchiveTrust: preflight
-        ? {
-            overallStatus: preflight.signedArchiveTrust.overallStatus,
-            trusted: preflight.signedArchiveTrust.trusted,
-            signatureStatus: preflight.signedArchiveTrust.signatureStatus,
-            registryStatus: preflight.signedArchiveTrust.registryStatus,
-            lifecycleStatus: preflight.signedArchiveTrust.lifecycleStatus,
-            resolution: preflight.signedArchiveTrust.resolution,
-          }
-        : undefined,
+      auditManifest: auditManifestRecordSummary(auditManifest),
+      exportBundle: exportBundleRecordSummary(exportBundle),
+      archiveManifest: archiveManifestRecordSummary(archiveManifest),
+      handoffPackage: handoffPackageRecordSummary(handoffPackage),
+      portableExport: portableExportRecordSummary(portableExport),
+      packagedArchive: packagedArchiveRecordSummary(packagedArchive),
+      signedArchive: signedArchive ? signedArchiveRecordSummary(signedArchive) : undefined,
+      signedArchiveTrust: preflight ? signedArchiveTrustRecordSummary(preflight.signedArchiveTrust) : undefined,
       signedArchiveAttestation: preflight
-        ? {
-            overallStatus: preflight.signedArchiveAttestation.overallStatus,
-            policySource: preflight.signedArchiveAttestation.policySource,
-            policyProjectID: preflight.signedArchiveAttestation.policyProjectID,
-            policyDigest: preflight.signedArchiveAttestation.policyDigest,
-            acceptedByPolicy: preflight.signedArchiveAttestation.acceptedByPolicy,
-            trustStatus: preflight.signedArchiveAttestation.trustStatus,
-            minimumScopeStatus: preflight.signedArchiveAttestation.minimumScopeStatus,
-            lifecyclePolicyStatus: preflight.signedArchiveAttestation.lifecyclePolicyStatus,
-            effectiveTrustScope: preflight.signedArchiveAttestation.effectiveTrustScope,
-            effectiveTrustLifecycle: preflight.signedArchiveAttestation.effectiveTrustLifecycle,
-          }
+        ? signedArchiveAttestationPolicyRecordSummary(preflight.signedArchiveAttestation)
         : undefined,
       signedArchiveAttestationRecord: signedArchiveAttestationRecord
-        ? {
-            recordID: signedArchiveAttestationRecord.recordID,
-            createdAt: signedArchiveAttestationRecord.createdAt,
-            signedArchiveID: signedArchiveAttestationRecord.signedArchive.signedArchiveID,
-            promotionID: signedArchiveAttestationRecord.promotionID,
-            trustStatus: signedArchiveAttestationRecord.summary.trustStatus,
-            attestationStatus: signedArchiveAttestationRecord.summary.attestationStatus,
-            trusted: signedArchiveAttestationRecord.summary.trusted,
-            acceptedByPolicy: signedArchiveAttestationRecord.summary.acceptedByPolicy,
-            policySource: signedArchiveAttestationRecord.summary.policySource,
-            policyProjectID: signedArchiveAttestationRecord.summary.policyProjectID,
-            overallStatus: signedArchiveAttestationRecord.summary.overallStatus,
-          }
+        ? signedArchiveAttestationRecordSummary(signedArchiveAttestationRecord)
         : undefined,
       signedArchiveAttestationPacket: signedArchiveAttestationPacket
-        ? {
-            packetID: signedArchiveAttestationPacket.packetID,
-            createdAt: signedArchiveAttestationPacket.createdAt,
-            promotionID: signedArchiveAttestationPacket.promotion.promotionID,
-            signedArchiveID: signedArchiveAttestationPacket.summary.signedArchiveID,
-            trustStatus: signedArchiveAttestationPacket.summary.trustStatus,
-            attestationStatus: signedArchiveAttestationPacket.summary.attestationStatus,
-            acceptedByPolicy: signedArchiveAttestationPacket.summary.acceptedByPolicy,
-            policySource: signedArchiveAttestationPacket.summary.policySource,
-            policyProjectID: signedArchiveAttestationPacket.summary.policyProjectID,
-            overallStatus: signedArchiveAttestationPacket.summary.overallStatus,
-          }
+        ? signedArchiveAttestationPacketRecordSummary(signedArchiveAttestationPacket)
         : undefined,
       signedArchiveGovernancePacket: signedArchiveGovernancePacket
-        ? {
-            packetID: signedArchiveGovernancePacket.packetID,
-            createdAt: signedArchiveGovernancePacket.createdAt,
-            promotionID: signedArchiveGovernancePacket.promotion.promotionID,
-            releasePacketID: signedArchiveGovernancePacket.summary.releasePacketID,
-            signedArchiveID: signedArchiveGovernancePacket.summary.signedArchiveID,
-            authorizedPromotion: signedArchiveGovernancePacket.summary.authorizedPromotion,
-            promotionMode: signedArchiveGovernancePacket.summary.promotionMode,
-            policySource: signedArchiveGovernancePacket.summary.policySource,
-            policyProjectID: signedArchiveGovernancePacket.summary.policyProjectID,
-            overallStatus: signedArchiveGovernancePacket.summary.overallStatus,
-          }
+        ? signedArchiveGovernancePacketRecordSummary(signedArchiveGovernancePacket)
         : undefined,
       signedArchiveReviewDossier: signedArchiveReviewDossier
-        ? {
-            dossierID: signedArchiveReviewDossier.dossierID,
-            createdAt: signedArchiveReviewDossier.createdAt,
-            promotionID: signedArchiveReviewDossier.governancePacket.promotion.promotionID,
-            governancePacketID: signedArchiveReviewDossier.governancePacket.packetID,
-            packageID: signedArchiveReviewDossier.handoffPackage.packageID,
-            releasePacketID: signedArchiveReviewDossier.summary.releasePacketID,
-            signedArchiveID: signedArchiveReviewDossier.summary.signedArchiveID,
-            authorizedPromotion: signedArchiveReviewDossier.summary.authorizedPromotion,
-            promotionMode: signedArchiveReviewDossier.summary.promotionMode,
-            policySource: signedArchiveReviewDossier.summary.policySource,
-            policyProjectID: signedArchiveReviewDossier.summary.policyProjectID,
-            overallStatus: signedArchiveReviewDossier.summary.overallStatus,
-          }
+        ? signedArchiveReviewDossierRecordSummary(signedArchiveReviewDossier)
         : undefined,
     })
     await writePromotionRecord(recordWithArtifacts)
