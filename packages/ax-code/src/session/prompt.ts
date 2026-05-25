@@ -26,7 +26,6 @@ import { Todo } from "./todo"
 import { SessionGoal } from "./goal"
 import { Config } from "@/config/config"
 import { Isolation } from "@/isolation"
-import { SessionSummary } from "./summary"
 import { fn } from "@/util/fn"
 import { SessionProcessor } from "./processor"
 import { LLM } from "./llm"
@@ -73,6 +72,7 @@ import { executePromptCommand } from "./prompt-command-execution"
 import { createSyntheticFailureAssistant, publishPromptFailure } from "./prompt-loop-failure"
 import { createDeferredCodeGraphAutoIndex } from "./prompt-code-graph"
 import { recordPromptSessionStart } from "./prompt-session-start"
+import { scheduleFirstTurnSummary } from "./prompt-session-summary"
 import { createAutonomousUserContinuation, createUserMessage } from "./prompt-user-message"
 import { permissionRulesetFromLegacyTools } from "./prompt-permission"
 import { createPromptRunState } from "./prompt-run-state"
@@ -533,23 +533,7 @@ export namespace SessionPrompt {
       })
 
       if (step === 1 && continuations === 0) {
-        SessionSummary.summarize(
-          {
-            sessionID: sessionID,
-            messageID: lastUser.id,
-          },
-          msgs,
-        ).catch(async (e) => {
-          log.warn("summarize failed, setting fallback title", {
-            command: "session.prompt.summarize",
-            status: "error",
-            sessionID,
-            error: e,
-          })
-          await Session.setTitle({ sessionID, title: "Untitled session" }).catch((e) => {
-            log.warn("fallback setTitle also failed", { sessionID, error: e })
-          })
-        })
+        scheduleFirstTurnSummary({ sessionID, messageID: lastUser.id, messages: msgs })
       }
 
       // Ephemerally wrap queued user messages with a reminder to stay on track
