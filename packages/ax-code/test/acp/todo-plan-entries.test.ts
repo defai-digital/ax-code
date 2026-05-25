@@ -20,7 +20,7 @@ describe("ACP todo plan entry decoding", () => {
 
   test("parses serialized todo output", () => {
     const entries = ACP.parseTodoPlanEntries(
-      JSON.stringify([{ content: "Review", status: "pending", priority: "medium" }]),
+      `  ${JSON.stringify([{ content: "Review", status: "pending", priority: "medium" }])}\n`,
     )
 
     expect(entries).toEqual([{ priority: "medium", status: "pending", content: "Review" }])
@@ -28,6 +28,7 @@ describe("ACP todo plan entry decoding", () => {
 
   test("returns null for invalid JSON", () => {
     expect(ACP.parseTodoPlanEntries("not-json")).toBeNull()
+    expect(ACP.parseTodoPlanEntries("")).toBeNull()
   })
 
   test("returns null for malformed todo values", () => {
