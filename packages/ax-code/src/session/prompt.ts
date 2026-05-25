@@ -74,6 +74,7 @@ import {
   loopMessages,
   modelInfo,
   pendingCompactionDecision,
+  parseGoalArguments,
   readToolCallText,
   shouldScheduleUsageCompaction,
   syntheticTextPart,
@@ -2700,36 +2701,6 @@ NOTE: At any point in time through this workflow you should feel free to ask the
       .optional(),
   })
   export type CommandInput = z.infer<typeof CommandInput>
-  /**
-   * Regular expression to match @ file references in text
-   * Matches @ followed by file paths, excluding commas, periods at end of sentences, and backticks
-   * Does not match when preceded by word characters or backticks (to avoid email addresses and quoted references)
-   */
-
-  function parseGoalArguments(raw: string):
-    | { action: "view" | "pause" | "resume" | "clear" }
-    | {
-        action: "create"
-        objective: string
-        tokenBudget?: number
-      } {
-    const text = raw.trim()
-    if (!text) return { action: "view" }
-    const lower = text.toLowerCase()
-    if (lower === "pause") return { action: "pause" }
-    if (lower === "resume") return { action: "resume" }
-    if (lower === "clear") return { action: "clear" }
-
-    const budgetMatch = /^--(?:token-)?budget\s+(\d+)\s+([\s\S]+)$/.exec(text)
-    if (budgetMatch) {
-      return {
-        action: "create",
-        tokenBudget: Number(budgetMatch[1]),
-        objective: budgetMatch[2].trim(),
-      }
-    }
-    return { action: "create", objective: text }
-  }
 
   async function commandModelForControl(input: CommandInput) {
     if (input.model) return Provider.parseModel(input.model)

@@ -14,6 +14,7 @@ import {
   loopMessages,
   modelInfo,
   pendingCompactionDecision,
+  parseGoalArguments,
   providerFallbackLookupDecision,
   providerFallbackSwitchState,
   processorLoopDecision,
@@ -83,6 +84,30 @@ describe("session.prompt helpers", () => {
     expect(readToolCallText({ filePath: '/tmp/has "quotes".txt', offset: 3, limit: undefined })).toBe(
       'Called the Read tool with the following input: {"filePath":"/tmp/has \\"quotes\\".txt","offset":3}',
     )
+  })
+
+  test("parses goal control arguments", () => {
+    expect(parseGoalArguments("")).toEqual({ action: "view" })
+    expect(parseGoalArguments(" pause ")).toEqual({ action: "pause" })
+    expect(parseGoalArguments("RESUME")).toEqual({ action: "resume" })
+    expect(parseGoalArguments("clear")).toEqual({ action: "clear" })
+  })
+
+  test("parses goal creation arguments with optional token budgets", () => {
+    expect(parseGoalArguments("ship the refactor")).toEqual({
+      action: "create",
+      objective: "ship the refactor",
+    })
+    expect(parseGoalArguments("--budget 123 keep working")).toEqual({
+      action: "create",
+      tokenBudget: 123,
+      objective: "keep working",
+    })
+    expect(parseGoalArguments("--token-budget 456\nfinish the migration")).toEqual({
+      action: "create",
+      tokenBudget: 456,
+      objective: "finish the migration",
+    })
   })
 
   test("splits quoted and image arguments", async () => {
