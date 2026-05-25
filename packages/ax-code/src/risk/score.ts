@@ -83,7 +83,12 @@ export namespace Risk {
     | { success: false; error: string }
 
   export function decodeSessionDiffJson(raw: string): SessionDiffJsonDecodeResult {
-    const parsed: unknown = JSON.parse(raw)
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(raw)
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : String(err) }
+    }
     const decoded = Snapshot.FileDiff.array().safeParse(parsed)
     return decoded.success ? { success: true, data: decoded.data } : { success: false, error: decoded.error.message }
   }
