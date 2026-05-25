@@ -1,3 +1,5 @@
+import { parseJsonResult } from "./json-value"
+
 export interface NameStatusEntry {
   code: string
   file: string
@@ -15,12 +17,11 @@ export function decodeGitQuotedPathLiteral(value: unknown): string | undefined {
 }
 
 export function parseGitQuotedPathLiteral(file: string): string | undefined {
-  try {
-    const parsed: unknown = JSON.parse(file)
-    return decodeGitQuotedPathLiteral(parsed)
-  } catch {
+  const parsed = parseJsonResult(file)
+  if (!parsed.ok) {
     return undefined
   }
+  return decodeGitQuotedPathLiteral(parsed.value)
 }
 
 export function decodeGitQuotedPath(file: string): string {
