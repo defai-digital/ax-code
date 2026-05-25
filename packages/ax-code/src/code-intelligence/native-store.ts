@@ -66,7 +66,7 @@ export namespace NativeStore {
   }
 
   // Safe JSON.parse wrapper — returns fallback on corrupted native output (BUG-005)
-  function safeParse<T>(json: string, fallback: T): T {
+  export function parseNativeStoreJson<T>(json: string, fallback: T): T {
     try {
       return JSON.parse(json)
     } catch {
@@ -83,7 +83,7 @@ export namespace NativeStore {
 
   export function getNode(projectID: ProjectID, id: CodeNodeID): any | undefined {
     const result = op("getNode", { projectID, id }, (store) => store.getNode(projectID, id))
-    return result ? safeParse(result, undefined) : undefined
+    return result ? parseNativeStoreJson(result, undefined) : undefined
   }
 
   export function findNodesByName(
@@ -94,7 +94,7 @@ export namespace NativeStore {
     const result = op("findNodesByName", { projectID, name, opts }, (store) =>
       store.findNodesByName(projectID, name, JSON.stringify(opts ?? {})),
     )
-    return result ? safeParse(result, []) : []
+    return result ? parseNativeStoreJson(result, []) : []
   }
 
   export function findNodesByNamePrefix(
@@ -105,12 +105,12 @@ export namespace NativeStore {
     const result = op("findNodesByPrefix", { projectID, prefix, opts }, (store) =>
       store.findNodesByPrefix(projectID, prefix, JSON.stringify(opts ?? {})),
     )
-    return result ? safeParse(result, []) : []
+    return result ? parseNativeStoreJson(result, []) : []
   }
 
   export function nodesInFile(projectID: ProjectID, file: string): any[] {
     const result = op("nodesInFile", { projectID, file }, (store) => store.nodesInFile(projectID, file))
-    return result ? safeParse(result, []) : []
+    return result ? parseNativeStoreJson(result, []) : []
   }
 
   export function countNodes(projectID: ProjectID): number {
@@ -131,17 +131,17 @@ export namespace NativeStore {
     const result = op("edgesFrom", { projectID, fromNode, kind }, (store) =>
       store.edgesFrom(projectID, fromNode, kind ?? null),
     )
-    return result ? safeParse(result, []) : []
+    return result ? parseNativeStoreJson(result, []) : []
   }
 
   export function edgesTo(projectID: ProjectID, toNode: CodeNodeID, kind?: CodeEdgeKind): any[] {
     const result = op("edgesTo", { projectID, toNode, kind }, (store) => store.edgesTo(projectID, toNode, kind ?? null))
-    return result ? safeParse(result, []) : []
+    return result ? parseNativeStoreJson(result, []) : []
   }
 
   export function edgesInFile(projectID: ProjectID, file: string): any[] {
     const result = op("edgesInFile", { projectID, file }, (store) => store.edgesInFile(projectID, file))
-    return result ? safeParse(result, []) : []
+    return result ? parseNativeStoreJson(result, []) : []
   }
 
   export function deleteEdgesTouchingFile(projectID: ProjectID, file: string): void {
@@ -160,12 +160,12 @@ export namespace NativeStore {
 
   export function getFile(projectID: ProjectID, path: string): any | undefined {
     const result = op("getFile", { projectID, path }, (store) => store.getFile(projectID, path))
-    return result ? safeParse(result, undefined) : undefined
+    return result ? parseNativeStoreJson(result, undefined) : undefined
   }
 
   export function listFiles(projectID: ProjectID): any[] {
     const result = op("listFiles", { projectID }, (store) => store.listFiles(projectID))
-    return result ? safeParse(result, []) : []
+    return result ? parseNativeStoreJson(result, []) : []
   }
 
   export function pruneOrphanFiles(
@@ -176,14 +176,16 @@ export namespace NativeStore {
     const result = op("pruneOrphanFiles", { projectID, livePaths: livePaths.length, scopePrefix }, (store) =>
       store.pruneOrphanFiles(projectID, JSON.stringify(livePaths), scopePrefix),
     )
-    return result ? safeParse(result, { files: 0, nodes: 0, edges: 0 }) : { files: 0, nodes: 0, edges: 0 }
+    return result
+      ? parseNativeStoreJson(result, { files: 0, nodes: 0, edges: 0 })
+      : { files: 0, nodes: 0, edges: 0 }
   }
 
   // ─── Cursor operations ──────���─────────────────────────────────────
 
   export function getCursor(projectID: ProjectID): any | undefined {
     const result = op("getCursor", { projectID }, (store) => store.getCursor(projectID))
-    return result ? safeParse(result, undefined) : undefined
+    return result ? parseNativeStoreJson(result, undefined) : undefined
   }
 
   export function upsertCursor(
