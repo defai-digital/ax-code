@@ -74,6 +74,38 @@ const DANGEROUS_WELLKNOWN_ENV_KEYS = new Set([
 export namespace Config {
   const log = Log.create({ service: "config" })
 
+  export type PermissionEnvParseResult =
+    | {
+        ok: true
+        permission: ConfigSchema.Permission
+      }
+    | {
+        ok: false
+        reason: "json"
+      }
+    | {
+        ok: false
+        reason: "schema"
+        errors: string[]
+      }
+
+  export function parsePermissionEnv(value: string): PermissionEnvParseResult {
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(value)
+    } catch {
+      return { ok: false, reason: "json" }
+    }
+
+    const validated = ConfigSchema.Permission.safeParse(parsed)
+    if (validated.success) return { ok: true, permission: validated.data }
+    return {
+      ok: false,
+      reason: "schema",
+      errors: validated.error.issues.map((issue) => issue.message),
+    }
+  }
+
   // Managed settings directory for enterprise deployments (highest priority, admin-controlled)
   // These settings override all user and project settings
   function systemManagedConfigDir(): string {
@@ -393,18 +425,15 @@ export namespace Config {
     }
 
     if (Flag.AX_CODE_PERMISSION) {
-      try {
-        const parsed = JSON.parse(Flag.AX_CODE_PERMISSION)
-        const validated = ConfigSchema.Permission.safeParse(parsed)
-        if (validated.success) {
-          result.permission = mergeDeep(result.permission ?? {}, validated.data)
-        } else {
-          log.warn("AX_CODE_PERMISSION does not match permission schema, ignoring", {
-            value: Flag.AX_CODE_PERMISSION,
-            errors: validated.error.issues.map((i) => i.message),
-          })
-        }
-      } catch {
+      const parsed = parsePermissionEnv(Flag.AX_CODE_PERMISSION)
+      if (parsed.ok) {
+        result.permission = mergeDeep(result.permission ?? {}, parsed.permission)
+      } else if (parsed.reason === "schema") {
+        log.warn("AX_CODE_PERMISSION does not match permission schema, ignoring", {
+          value: Flag.AX_CODE_PERMISSION,
+          errors: parsed.errors,
+        })
+      } else {
         log.warn("invalid AX_CODE_PERMISSION JSON, ignoring", { value: Flag.AX_CODE_PERMISSION })
       }
     }
