@@ -1,4 +1,5 @@
 import z from "zod"
+import { parseJsonResult } from "./json-value"
 
 export interface ProcessLockBody {
   pid: number
@@ -40,10 +41,9 @@ export function decodeProcessLockBody<T extends Record<string, unknown> = Record
 export function parseProcessLockBody<T extends Record<string, unknown> = Record<string, never>>(
   text: string,
 ): (ProcessLockBody & T) | undefined {
-  try {
-    const parsed: unknown = JSON.parse(text)
-    return decodeProcessLockBody<T>(parsed)
-  } catch {
+  const parsed = parseJsonResult(text)
+  if (!parsed.ok) {
     return undefined
   }
+  return decodeProcessLockBody<T>(parsed.value)
 }
