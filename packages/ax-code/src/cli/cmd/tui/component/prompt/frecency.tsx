@@ -10,6 +10,7 @@ import { optionalStateErrorMessage, shouldSurfaceOptionalStateError } from "@tui
 import { useToast } from "../../ui/toast"
 import { Log } from "@/util/log"
 import { recordCount } from "@/util/record"
+import { parseFrecencyLine, type FrecencyEntry } from "./frecency-util"
 
 function calculateFrecency(entry?: { frequency: number; lastOpen: number }): number {
   if (!entry) return 0
@@ -85,14 +86,8 @@ export const { use: useFrecency, provider: FrecencyProvider } = createSimpleCont
           const lines = text
             .split("\n")
             .filter(Boolean)
-            .map((line) => {
-              try {
-                return JSON.parse(line) as { path: string; frequency: number; lastOpen: number }
-              } catch {
-                return null
-              }
-            })
-            .filter((line): line is { path: string; frequency: number; lastOpen: number } => line !== null)
+            .map(parseFrecencyLine)
+            .filter((line): line is FrecencyEntry => line !== undefined)
 
           const latest = lines.reduce(
             (acc, entry) => {
