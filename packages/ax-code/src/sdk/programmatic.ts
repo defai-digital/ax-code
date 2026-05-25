@@ -967,17 +967,26 @@ export async function createAgent(options?: AgentOptions): Promise<Agent> {
   return {
     async run(message: string, runOptions?: RunOptions): Promise<RunResult> {
       if (disposed) throw new DisposedError()
+      let sessionID: string | undefined
       const exec = async () => {
-        const sessionID = await createTrackedSession("create")
+        sessionID = await createTrackedSession("create")
         try {
           return await createSessionHandle(sdk, sessionID, opts, () => disposed, lifecycle).run(message, runOptions)
         } finally {
           activeSessions.delete(sessionID)
+          sessionID = undefined
         }
       }
       if (runOptions?.timeout) {
         const timeoutMs = runOptions.timeout
-        return withSdkTimeout(exec(), timeoutMs, () => new TimeoutError(timeoutMs, "agent.run"))
+        return withSdkTimeout(
+          exec(),
+          timeoutMs,
+          () => new TimeoutError(timeoutMs, "agent.run"),
+          () => {
+            if (sessionID) void sdk.session.abort({ sessionID }).catch(() => {})
+          },
+        )
       }
       return exec()
     },

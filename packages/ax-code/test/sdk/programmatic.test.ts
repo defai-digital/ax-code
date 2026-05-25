@@ -50,3 +50,17 @@ test("programmatic agent stream does not mark initialization started before it s
   expect(block).toContain("releaseSession()")
   expect(block.indexOf("releaseSession()")).toBeGreaterThan(block.indexOf("} catch (error) {"))
 })
+
+test("programmatic agent run aborts the session on outer timeout", async () => {
+  const src = await Bun.file(path.join(import.meta.dir, "../../src/sdk/programmatic.ts")).text()
+  const start = src.indexOf("async run(message: string, runOptions?: RunOptions): Promise<RunResult>")
+  const end = src.indexOf("stream(message: string, runOptions?: RunOptions): StreamHandle", start)
+  expect(start).toBeGreaterThan(-1)
+  expect(end).toBeGreaterThan(start)
+  const block = src.slice(start, end)
+
+  expect(block).toContain("let sessionID: string | undefined")
+  expect(block).toContain('sessionID = await createTrackedSession("create")')
+  expect(block).toContain("sessionID = undefined")
+  expect(block).toContain("if (sessionID) void sdk.session.abort({ sessionID }).catch(() => {})")
+})
