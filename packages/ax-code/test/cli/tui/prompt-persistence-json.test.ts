@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import z from "zod"
 import {
   decodePromptPersistenceJsonLine,
+  decodePromptPersistenceJsonValue,
   parsePromptPersistenceJsonLine,
 } from "../../../src/cli/cmd/tui/component/prompt/persistence-json"
 
@@ -24,5 +25,15 @@ describe("prompt persistence JSON", () => {
     })
     expect(decodePromptPersistenceJsonLine(JSON.stringify({ path: "" }), schema)).toBeUndefined()
     expect(decodePromptPersistenceJsonLine("not json", schema)).toBeUndefined()
+  })
+
+  test("decodePromptPersistenceJsonValue applies the caller schema to parsed values", () => {
+    const schema = z.object({ path: z.string().min(1) })
+
+    expect(decodePromptPersistenceJsonValue({ path: "/repo/file.ts", extra: true }, schema)).toEqual({
+      path: "/repo/file.ts",
+    })
+    expect(decodePromptPersistenceJsonValue({ path: "" }, schema)).toBeUndefined()
+    expect(decodePromptPersistenceJsonValue(undefined, schema)).toBeUndefined()
   })
 })
