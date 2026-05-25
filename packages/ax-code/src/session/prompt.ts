@@ -61,6 +61,7 @@ import { Shell } from "@/shell/shell"
 import { decodeDataUrl } from "@/util/data-url"
 import {
   appendShellOutputChunk,
+  attachmentLineRange,
   commandModel,
   commandSetup,
   shellArgs,
@@ -1786,23 +1787,13 @@ export namespace SessionPrompt {
               if (part.mime === "text/plain") {
                 let offset: number | undefined = undefined
                 let limit: number | undefined = undefined
-                const range = {
+                const range = attachmentLineRange({
                   start: url.searchParams.get("start"),
                   end: url.searchParams.get("end"),
-                }
-                if (range.start != null) {
+                })
+                if (range) {
                   const filePathURI = part.url.split("?")[0]
-                  const parsedStart = Number(range.start)
-                  const hasValidStart = Number.isInteger(parsedStart) && parsedStart >= 0
-                  let start = hasValidStart ? parsedStart : undefined
-                  const parsedEnd = range.end != null && range.end !== "" ? Number(range.end) : undefined
-                  let end =
-                    start !== undefined &&
-                    typeof parsedEnd === "number" &&
-                    Number.isInteger(parsedEnd) &&
-                    parsedEnd >= start
-                      ? parsedEnd
-                      : undefined
+                  let { start, end } = range
                   // some LSP servers (eg, gopls) don't give full range in
                   // workspace/symbol searches, so we'll try to find the
                   // symbol in the document to get the full range

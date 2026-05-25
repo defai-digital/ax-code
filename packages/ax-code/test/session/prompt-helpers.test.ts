@@ -8,6 +8,7 @@ import {
   appendShellOutputChunk,
   assistantLoopExitDecision,
   assistantRespondedAfterUser,
+  attachmentLineRange,
   commandModel,
   commandParts,
   commandTemplateText,
@@ -110,6 +111,15 @@ describe("session.prompt helpers", () => {
     expect(readToolCallText({ filePath: '/tmp/has "quotes".txt', offset: 3, limit: undefined })).toBe(
       'Called the Read tool with the following input: {"filePath":"/tmp/has \\"quotes\\".txt","offset":3}',
     )
+  })
+
+  test("parses attachment line ranges from URL search parameters", () => {
+    expect(attachmentLineRange({ start: null, end: null })).toBeUndefined()
+    expect(attachmentLineRange({ start: "not-a-line", end: "0" })).toBeUndefined()
+    expect(attachmentLineRange({ start: "-1", end: "0" })).toBeUndefined()
+    expect(attachmentLineRange({ start: "5", end: "3" })).toEqual({ start: 5, end: undefined })
+    expect(attachmentLineRange({ start: "5", end: "" })).toEqual({ start: 5, end: undefined })
+    expect(attachmentLineRange({ start: "5", end: "7" })).toEqual({ start: 5, end: 7 })
   })
 
   test("parses goal control arguments", () => {
