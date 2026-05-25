@@ -2,7 +2,7 @@ import { TextareaRenderable, TextAttributes } from "@opentui/core"
 import { useTheme } from "../context/theme"
 import { useDialog, type DialogContext } from "./dialog"
 import { createStore } from "solid-js/store"
-import { onMount, onCleanup, Show, type JSX } from "solid-js"
+import { onMount, onCleanup, Show } from "solid-js"
 import { useKeyboard } from "@opentui/solid"
 import { scheduleMicrotaskTask } from "@tui/util/microtask"
 
@@ -44,6 +44,24 @@ export function DialogExportOptions(props: DialogExportOptionsProps) {
     })
     dialog.clear()
   }
+
+  const renderOption = (input: {
+    key: "thinking" | "toolDetails" | "assistantMetadata" | "openWithoutSaving"
+    label: string
+    checked: boolean
+    isActive: boolean
+  }) => (
+    <box
+      flexDirection="row"
+      gap={2}
+      paddingLeft={1}
+      backgroundColor={input.isActive ? theme.backgroundElement : undefined}
+      onMouseUp={() => setStore("active", input.key)}
+    >
+      <text fg={input.isActive ? theme.primary : theme.textMuted}>{input.checked ? "[x]" : "[ ]"}</text>
+      <text fg={input.isActive ? theme.primary : theme.text}>{input.label}</text>
+    </box>
+  )
 
   useKeyboard((evt) => {
     if (evt.name === "return") {
@@ -111,54 +129,30 @@ export function DialogExportOptions(props: DialogExportOptionsProps) {
         />
       </box>
       <box flexDirection="column">
-        <box
-          flexDirection="row"
-          gap={2}
-          paddingLeft={1}
-          backgroundColor={store.active === "thinking" ? theme.backgroundElement : undefined}
-          onMouseUp={() => setStore("active", "thinking")}
-        >
-          <text fg={store.active === "thinking" ? theme.primary : theme.textMuted}>
-            {store.thinking ? "[x]" : "[ ]"}
-          </text>
-          <text fg={store.active === "thinking" ? theme.primary : theme.text}>Include thinking</text>
-        </box>
-        <box
-          flexDirection="row"
-          gap={2}
-          paddingLeft={1}
-          backgroundColor={store.active === "toolDetails" ? theme.backgroundElement : undefined}
-          onMouseUp={() => setStore("active", "toolDetails")}
-        >
-          <text fg={store.active === "toolDetails" ? theme.primary : theme.textMuted}>
-            {store.toolDetails ? "[x]" : "[ ]"}
-          </text>
-          <text fg={store.active === "toolDetails" ? theme.primary : theme.text}>Include tool details</text>
-        </box>
-        <box
-          flexDirection="row"
-          gap={2}
-          paddingLeft={1}
-          backgroundColor={store.active === "assistantMetadata" ? theme.backgroundElement : undefined}
-          onMouseUp={() => setStore("active", "assistantMetadata")}
-        >
-          <text fg={store.active === "assistantMetadata" ? theme.primary : theme.textMuted}>
-            {store.assistantMetadata ? "[x]" : "[ ]"}
-          </text>
-          <text fg={store.active === "assistantMetadata" ? theme.primary : theme.text}>Include assistant metadata</text>
-        </box>
-        <box
-          flexDirection="row"
-          gap={2}
-          paddingLeft={1}
-          backgroundColor={store.active === "openWithoutSaving" ? theme.backgroundElement : undefined}
-          onMouseUp={() => setStore("active", "openWithoutSaving")}
-        >
-          <text fg={store.active === "openWithoutSaving" ? theme.primary : theme.textMuted}>
-            {store.openWithoutSaving ? "[x]" : "[ ]"}
-          </text>
-          <text fg={store.active === "openWithoutSaving" ? theme.primary : theme.text}>Open without saving</text>
-        </box>
+        {renderOption({
+          key: "thinking",
+          label: "Include thinking",
+          checked: store.thinking,
+          isActive: store.active === "thinking",
+        })}
+        {renderOption({
+          key: "toolDetails",
+          label: "Include tool details",
+          checked: store.toolDetails,
+          isActive: store.active === "toolDetails",
+        })}
+        {renderOption({
+          key: "assistantMetadata",
+          label: "Include assistant metadata",
+          checked: store.assistantMetadata,
+          isActive: store.active === "assistantMetadata",
+        })}
+        {renderOption({
+          key: "openWithoutSaving",
+          label: "Open without saving",
+          checked: store.openWithoutSaving,
+          isActive: store.active === "openWithoutSaving",
+        })}
       </box>
       <Show when={store.active !== "filename"}>
         <text fg={theme.textMuted} paddingBottom={1}>
