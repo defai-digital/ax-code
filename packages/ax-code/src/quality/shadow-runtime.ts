@@ -1,5 +1,6 @@
 import fs from "fs/promises"
 import path from "path"
+import z from "zod"
 import type { DebugEngine } from "../debug-engine"
 import { Flag } from "../flag/flag"
 import { Installation } from "../installation"
@@ -30,6 +31,19 @@ let predictionCache: PredictionCache | undefined
 let modelCache: ModelCache | undefined
 
 export namespace QualityShadow {
+  export async function loadShadowJsonFile<T>(
+    resolved: string,
+    schema: z.ZodType<T>,
+    stat: Pick<Awaited<ReturnType<typeof fs.stat>>, "mtimeMs">,
+  ) {
+    const raw = await fs.readFile(resolved, "utf8")
+    const parsed: unknown = JSON.parse(raw)
+    return {
+      file: schema.parse(parsed),
+      mtimeMs: Number(stat.mtimeMs),
+    }
+  }
+
   function numberField(input: Record<string, unknown> | undefined, key: string) {
     const value = input?.[key]
     return typeof value === "number" ? value : undefined
@@ -217,9 +231,9 @@ export namespace QualityShadow {
         return predictionCache.file
       }
 
-      const parsed = ProbabilisticRollout.PredictionFile.parse(JSON.parse(await fs.readFile(resolved, "utf8")))
-      predictionCache = { file: parsed, mtimeMs: stat.mtimeMs, path: resolved }
-      return parsed
+      const loaded = await loadShadowJsonFile(resolved, ProbabilisticRollout.PredictionFile, stat)
+      predictionCache = { file: loaded.file, mtimeMs: loaded.mtimeMs, path: resolved }
+      return loaded.file
     } catch (err) {
       log.warn("quality shadow prediction load failed", { path: resolved, err })
       return
@@ -238,9 +252,9 @@ export namespace QualityShadow {
         return modelCache.file
       }
 
-      const parsed = QualityCalibrationModel.ModelFile.parse(JSON.parse(await fs.readFile(resolved, "utf8")))
-      modelCache = { file: parsed, mtimeMs: stat.mtimeMs, path: resolved }
-      return parsed
+      const loaded = await loadShadowJsonFile(resolved, QualityCalibrationModel.ModelFile, stat)
+      modelCache = { file: loaded.file, mtimeMs: loaded.mtimeMs, path: resolved }
+      return loaded.file
     } catch (err) {
       log.warn("quality shadow model load failed", { path: resolved, err })
       return
