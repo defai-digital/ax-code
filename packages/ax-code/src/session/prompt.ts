@@ -60,6 +60,7 @@ import { iife } from "@/util/iife"
 import { Shell } from "@/shell/shell"
 import { decodeDataUrl } from "@/util/data-url"
 import {
+  appendShellOutputChunk,
   commandSetup,
   shellArgs,
   agentInfo,
@@ -2467,42 +2468,28 @@ NOTE: At any point in time through this workflow you should feel free to ask the
     })
 
     const OUTPUT_HARD_CAP = 10 * 1024 * 1024
-    let output = ""
-    let outputBytes = 0
-    let outputTruncated = false
+    let shellOutput = {
+      output: "",
+      outputBytes: 0,
+      outputTruncated: false,
+    }
     let flushDirty = false
     let flushRunning = false
     let pending = Promise.resolve()
 
     const appendOutput = (chunk: Buffer | string) => {
-      const text = typeof chunk === "string" ? chunk : chunk.toString()
-      if (!text || outputTruncated) return
-      const chunkBytes = Buffer.byteLength(text, "utf-8")
-      if (outputBytes + chunkBytes <= OUTPUT_HARD_CAP) {
-        output += text
-        outputBytes += chunkBytes
-        return
-      }
-
-      let end = text.length
-      const remaining = OUTPUT_HARD_CAP - outputBytes
-      while (end > 0 && Buffer.byteLength(text.slice(0, end), "utf-8") > remaining) {
-        end--
-      }
-      if (end > 0) {
-        const slice = text.slice(0, end)
-        output += slice
-        outputBytes += Buffer.byteLength(slice, "utf-8")
-      }
-      output += "\n\n[output truncated at 10MB]"
-      outputTruncated = true
+      shellOutput = appendShellOutputChunk(shellOutput, chunk, OUTPUT_HARD_CAP)
     }
 
     const drainFlush = async () => {
       while (flushDirty) {
         flushDirty = false
         if (part.state.status !== "running") break
-        part.state.metadata = { output, description: "", outputTruncated }
+        part.state.metadata = {
+          output: shellOutput.output,
+          description: "",
+          outputTruncated: shellOutput.outputTruncated,
+        }
         await Session.updatePart(part).catch((e) =>
           log.warn("shell metadata write failed", {
             command: "session.prompt.shell",
@@ -2637,7 +2624,10 @@ NOTE: At any point in time through this workflow you should feel free to ask the
     })
 
     if (aborted) {
-      output += "\n\n" + ["<metadata>", "User aborted the command", "</metadata>"].join("\n")
+      shellOutput = {
+        ...shellOutput,
+        output: shellOutput.output + "\n\n" + ["<metadata>", "User aborted the command", "</metadata>"].join("\n"),
+      }
     }
     await pending
     msg.time.completed = Date.now()
@@ -2654,9 +2644,9 @@ NOTE: At any point in time through this workflow you should feel free to ask the
               input: part.state.input,
               error: `Process exited with code ${exitCode}`,
               metadata: {
-                output,
+                output: shellOutput.output,
                 description: "",
-                outputTruncated,
+                outputTruncated: shellOutput.outputTruncated,
               },
             }
           : {
@@ -2668,11 +2658,11 @@ NOTE: At any point in time through this workflow you should feel free to ask the
               input: part.state.input,
               title: "",
               metadata: {
-                output,
+                output: shellOutput.output,
                 description: "",
-                outputTruncated,
+                outputTruncated: shellOutput.outputTruncated,
               },
-              output,
+              output: shellOutput.output,
             }
       await Session.updatePart(part)
     }

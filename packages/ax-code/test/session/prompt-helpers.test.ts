@@ -5,6 +5,7 @@ import { ModelID, ProviderID } from "../../src/provider/schema"
 import { MessageV2 } from "../../src/session/message-v2"
 import {
   agentInfo,
+  appendShellOutputChunk,
   assistantLoopExitDecision,
   assistantRespondedAfterUser,
   commandParts,
@@ -108,6 +109,28 @@ describe("session.prompt helpers", () => {
       tokenBudget: 456,
       objective: "finish the migration",
     })
+  })
+
+  test("appends shell output chunks until the byte cap", () => {
+    const state = appendShellOutputChunk({ output: "abc", outputBytes: 3, outputTruncated: false }, "def", 6)
+
+    expect(state).toEqual({
+      output: "abcdef",
+      outputBytes: 6,
+      outputTruncated: false,
+    })
+  })
+
+  test("truncates shell output without splitting UTF-8 characters", () => {
+    const state = appendShellOutputChunk({ output: "ab", outputBytes: 2, outputTruncated: false }, "éz", 4)
+
+    expect(state).toEqual({
+      output: "abé\n\n[output truncated at 10MB]",
+      outputBytes: 4,
+      outputTruncated: true,
+    })
+
+    expect(appendShellOutputChunk(state, "ignored", 10).output).toBe(state.output)
   })
 
   test("splits quoted and image arguments", async () => {
