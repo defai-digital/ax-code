@@ -1,7 +1,6 @@
 import os from "os"
-import z from "zod"
 import { Env } from "../util/env"
-import { SessionID, MessageID } from "./schema"
+import { MessageID, SessionID } from "./schema"
 import { MessageV2 } from "./message-v2"
 import { Log } from "../util/log"
 import { SessionRevert } from "./revert"
@@ -93,11 +92,20 @@ import {
 } from "./prompt-autonomous-decisions"
 import { insertReminders } from "./prompt-reminders"
 import { createShellTurnMessages } from "./prompt-shell-turn"
-import { FilePartInput, PromptPartInput } from "./prompt-part-input"
 import { createStoppedAssistantTextResponse } from "./prompt-assistant-response"
 import { resolveCommandForExecution } from "./prompt-command"
 import { createAutonomousUserContinuation, createUserMessage } from "./prompt-user-message"
 import { permissionRulesetFromLegacyTools } from "./prompt-permission"
+import {
+  CommandInput as CommandInputSchema,
+  type CommandInput as CommandInputType,
+  LoopInput as LoopInputSchema,
+  type LoopInput as LoopInputType,
+  PromptInput as PromptInputSchema,
+  type PromptInput as PromptInputType,
+  ShellInput as ShellInputSchema,
+  type ShellInput as ShellInputType,
+} from "./prompt-input"
 import { SuperLongPolicy } from "./super-long-policy"
 import { SuperLongRuntime } from "./super-long-runtime"
 
@@ -138,37 +146,8 @@ export namespace SessionPrompt {
     if (match) throw new Session.BusyError(sessionID)
   }
 
-  export const PromptInput = z.object({
-    sessionID: SessionID.zod,
-    messageID: MessageID.zod.optional(),
-    model: z
-      .object({
-        providerID: ProviderID.zod,
-        modelID: ModelID.zod,
-      })
-      .optional(),
-    agent: z.string().optional(),
-    userSelectedAgent: z
-      .boolean()
-      .optional()
-      .describe("@deprecated Agent auto-routing was removed. Field accepted for backwards compatibility but ignored."),
-    agentRouting: z
-      .enum(["auto", "preserve"])
-      .optional()
-      .describe("Controls specialist agent auto-routing. Use preserve for synthetic continuation prompts."),
-    noReply: z.boolean().optional(),
-    tools: z
-      .record(z.string(), z.boolean())
-      .optional()
-      .describe(
-        "@deprecated tools and permissions have been merged, you can set permissions on the session itself now",
-      ),
-    format: MessageV2.Format.optional(),
-    system: z.string().optional(),
-    variant: z.string().optional(),
-    parts: z.array(PromptPartInput),
-  })
-  export type PromptInput = z.infer<typeof PromptInput>
+  export const PromptInput = PromptInputSchema
+  export type PromptInput = PromptInputType
 
   export const prompt = fn(PromptInput, async (input) => {
     const session = await Session.get(input.sessionID)
@@ -236,10 +215,8 @@ export namespace SessionPrompt {
     return
   }
 
-  export const LoopInput = z.object({
-    sessionID: SessionID.zod,
-    resume_existing: z.boolean().optional(),
-  })
+  export const LoopInput = LoopInputSchema
+  export type LoopInput = LoopInputType
   export const loop = fn(LoopInput, async (input) => {
     const { sessionID, resume_existing } = input
 
@@ -1401,18 +1378,8 @@ export namespace SessionPrompt {
     throw new Error("Impossible")
   })
 
-  export const ShellInput = z.object({
-    sessionID: SessionID.zod,
-    agent: z.string(),
-    model: z
-      .object({
-        providerID: ProviderID.zod,
-        modelID: ModelID.zod,
-      })
-      .optional(),
-    command: z.string(),
-  })
-  export type ShellInput = z.infer<typeof ShellInput>
+  export const ShellInput = ShellInputSchema
+  export type ShellInput = ShellInputType
   export async function shell(input: ShellInput) {
     const abort = start(input.sessionID)
     if (!abort) {
@@ -1667,17 +1634,8 @@ export namespace SessionPrompt {
     return { info: msg, parts: [part] }
   }
 
-  export const CommandInput = z.object({
-    messageID: MessageID.zod.optional(),
-    sessionID: SessionID.zod,
-    agent: z.string().optional(),
-    model: z.string().optional(),
-    arguments: z.string(),
-    command: z.string(),
-    variant: z.string().optional(),
-    parts: z.array(FilePartInput).optional(),
-  })
-  export type CommandInput = z.infer<typeof CommandInput>
+  export const CommandInput = CommandInputSchema
+  export type CommandInput = CommandInputType
 
   async function goalControlMessage(input: CommandInput, text: string) {
     const model = await commandModel({ model: input.model, sessionID: input.sessionID })
