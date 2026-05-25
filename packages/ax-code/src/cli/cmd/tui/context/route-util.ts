@@ -1,4 +1,5 @@
 import { parsePromptInfo, type PromptInfo } from "../component/prompt/prompt-info"
+import { parseTuiJsonPayload } from "../util/json"
 import z from "zod"
 
 export type HomeRoute = {
@@ -51,9 +52,6 @@ export function decodeInitialRoutePayload(value: unknown): Route {
 }
 
 export function parseInitialRoutePayload(raw?: string): Route {
-  if (!raw) return { type: "home" }
-  try {
-    return decodeInitialRoutePayload(JSON.parse(raw))
-  } catch {}
-  return { type: "home" }
+  const parsed = parseTuiJsonPayload(raw)
+  return parsed === undefined ? { type: "home" } : decodeInitialRoutePayload(parsed)
 }

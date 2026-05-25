@@ -1,6 +1,7 @@
 import type { AssistantMessage, Part, UserMessage } from "@ax-code/sdk/v2"
 import { userRoute, type AgentInfo } from "./route"
 import { filetype } from "./format"
+import { parseTuiJsonPayload } from "../../util/json"
 
 type TodoViewItem = {
   status: string
@@ -86,12 +87,8 @@ export function parseTodoViewItems(value: unknown): TodoViewItem[] | undefined {
 }
 
 export function parseTodoOutput(output: string | undefined): TodoViewItem[] | undefined {
-  if (!output) return
-  try {
-    return parseTodoViewItems(JSON.parse(output))
-  } catch {
-    return
-  }
+  const parsed = parseTuiJsonPayload(output)
+  return parsed === undefined ? undefined : parseTodoViewItems(parsed)
 }
 
 export function todoWriteView(input: {
