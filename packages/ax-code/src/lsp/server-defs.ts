@@ -1,9 +1,7 @@
 import path from "path"
-import os from "os"
 import { Global } from "../global"
 import { BunProc } from "../bun"
 import { Env } from "../util/env"
-import { text } from "node:stream/consumers"
 import fs from "fs/promises"
 import { Filesystem } from "../util/filesystem"
 import { Instance } from "../project/instance"
@@ -11,15 +9,27 @@ import { Flag } from "../flag/flag"
 import { which } from "../util/which"
 import { Module } from "@ax-code/util/module"
 import { spawn } from "./launch"
-import { withTimeout } from "../util/timeout"
+import { JdtlsDataDir } from "./jdtls-data-dir"
+import { OxlintSupport } from "./oxlint"
 import { JS_LOCKFILES } from "@/constants/lsp"
+import {
+  bunServerHandle,
+  globalBin,
+  log,
+  NearestRoot,
+  nodeModuleScript,
+  output,
+  pathExists,
+  run,
+  toolServer,
+  venvBin,
+  venvPython,
+  type ServerInfo,
+} from "./server-helpers"
 import {
   PINNED_CHECKSUM_LSP_RELEASES,
   PINNED_DIRECT_LSP_RELEASES,
   PINNED_GITHUB_LSP_RELEASES,
-  bunServer,
-  fetchGitHubReleaseByTag,
-  globalBin,
   jdtlsAssetUrl,
   jdtlsChecksumUrl,
   installReleaseBin,
@@ -32,101 +42,42 @@ import {
   llvmReleaseVersion,
   luaLsAsset,
   luaLsReleaseTarget,
-  log,
   managedToolBin,
   managedToolDir,
   managedToolPath,
-  NearestRoot,
-  output,
-  pathExists,
-  releaseAsset,
-  releaseAssetSha256,
   releaseVersion,
-  run,
   terraformLsAsset,
   terraformLsAssetUrl,
   terraformLsChecksumUrl,
   texlabAsset,
   tinymistAsset,
-  toolServer,
-  venvBin,
-  venvPython,
   zlsAsset,
   zlsReleaseForZig,
-  type ServerInfo,
-} from "./server-helpers"
+} from "./server-releases"
 
 type Info = ServerInfo
 
-const OXLINT_LSP_SUPPORT_CACHE_MAX = 64
-const oxlintLspSupportCache = new Map<string, boolean | Promise<boolean>>()
-const JDTLS_DATA_DIR_PREFIX = "ax-code-jdtls-data"
-const JDTLS_STALE_DATA_DIR_MS = 24 * 60 * 60 * 1000
-
-function setOxlintSupportCache(lintBin: string, value: boolean | Promise<boolean>) {
-  if (oxlintLspSupportCache.has(lintBin)) {
-    oxlintLspSupportCache.delete(lintBin)
-  }
-  oxlintLspSupportCache.set(lintBin, value)
-  while (oxlintLspSupportCache.size > OXLINT_LSP_SUPPORT_CACHE_MAX) {
-    const oldest = oxlintLspSupportCache.keys().next().value
-    if (!oldest) break
-    oxlintLspSupportCache.delete(oldest)
-  }
-}
-
-async function oxlintSupportsLsp(lintBin: string): Promise<boolean> {
-  const cached = oxlintLspSupportCache.get(lintBin)
-  if (typeof cached === "boolean") return cached
-  if (cached) return cached
-
-  const pending = Promise.resolve().then(() => checkOxlintSupportsLsp(lintBin))
-  setOxlintSupportCache(lintBin, pending)
-  return pending
-}
-
-async function checkOxlintSupportsLsp(lintBin: string): Promise<boolean> {
-  let help = ""
-  let proc: ReturnType<typeof spawn> | undefined
-  try {
-    proc = spawn(lintBin, ["--help"])
-    const helpPromise = proc.stdout ? text(proc.stdout) : Promise.resolve("")
-    ;[help] = await withTimeout(
-      Promise.all([helpPromise, proc.exited]),
-      5_000,
-      `oxlint --help timed out for ${lintBin}`,
-    )
-  } catch (error) {
-    if (proc) {
-      proc.kill()
-      await withTimeout(proc.exited, 500, `oxlint process cleanup timed out`).catch(() => {})
-    }
-    log.warn("oxlint --help check failed", { lintBin, error })
-    oxlintLspSupportCache.delete(lintBin)
-    return false
-  }
-
-  const supports = help.includes("--lsp")
-  setOxlintSupportCache(lintBin, supports)
-  return supports
-}
-
-async function cleanupStaleJdtlsDataDirs() {
-  const tmp = os.tmpdir()
-  const entries = await fs.readdir(tmp).catch(() => [])
-  const cutoff = Date.now() - JDTLS_STALE_DATA_DIR_MS
-  await Promise.all(
-    entries.map(async (entry) => {
-      if (!entry.startsWith(JDTLS_DATA_DIR_PREFIX)) return
-      const full = path.join(tmp, entry)
-      const stat = await fs.stat(full).catch(() => undefined)
-      if (!stat?.isDirectory() || stat.mtimeMs >= cutoff) return
-      await fs
-        .rm(full, { recursive: true, force: true })
-        .catch((err) => log.warn("failed to remove stale jdtls data dir", { dataDir: full, err }))
-    }),
-  )
-}
+const JS_RUNTIME_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".mjs"]
+const JS_PROJECT_EXTENSIONS = [...JS_RUNTIME_EXTENSIONS, ".cjs", ".mts", ".cts"]
+const JS_FRAMEWORK_EXTENSIONS = [...JS_PROJECT_EXTENSIONS, ".vue", ".astro", ".svelte"]
+const PYTHON_EXTENSIONS = [".py", ".pyi"]
+const PYTHON_ROOT_MARKERS = [
+  "pyproject.toml",
+  "setup.py",
+  "setup.cfg",
+  "requirements.txt",
+  "Pipfile",
+  "pyrightconfig.json",
+]
+const TY_ROOT_MARKERS = [
+  "pyproject.toml",
+  "ty.toml",
+  "setup.py",
+  "setup.cfg",
+  "requirements.txt",
+  "Pipfile",
+  "pyrightconfig.json",
+]
 
 export const Deno: Info = {
   id: "deno",
@@ -141,7 +92,7 @@ export const Deno: Info = {
     if (!first.value) return undefined
     return path.dirname(first.value)
   },
-  extensions: [".ts", ".tsx", ".js", ".jsx", ".mjs"],
+  extensions: JS_RUNTIME_EXTENSIONS,
   async spawn(root) {
     const deno = which("deno")
     if (!deno) {
@@ -159,7 +110,7 @@ export const Deno: Info = {
 export const Typescript: Info = {
   id: "typescript",
   root: NearestRoot([...JS_LOCKFILES], ["deno.json", "deno.jsonc"]),
-  extensions: [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".mts", ".cts"],
+  extensions: JS_PROJECT_EXTENSIONS,
   async spawn(root) {
     const tsserver = Module.resolve("typescript/lib/tsserver.js", Instance.directory)
     log.info("typescript server", { tsserver })
@@ -187,20 +138,15 @@ export const Vue: Info = {
   extensions: [".vue"],
   root: NearestRoot([...JS_LOCKFILES]),
   async spawn(root) {
-    const proc = await bunServer({
+    return bunServerHandle({
       root,
       binary: "vue-language-server",
-      script: path.join(Global.Path.bin, "node_modules", "@vue", "language-server", "bin", "vue-language-server.js"),
+      script: nodeModuleScript("@vue", "language-server", "bin", "vue-language-server.js"),
       pkg: "@vue/language-server",
       args: ["--stdio"],
+      // Leave empty; the server will auto-detect workspace TypeScript.
+      initialization: {},
     })
-    if (!proc) return
-    return {
-      process: proc,
-      initialization: {
-        // Leave empty; the server will auto-detect workspace TypeScript.
-      },
-    }
   },
 }
 
@@ -208,7 +154,7 @@ export const ESLint: Info = {
   id: "eslint",
   semantic: false,
   root: NearestRoot([...JS_LOCKFILES]),
-  extensions: [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".mts", ".cts", ".vue"],
+  extensions: [...JS_PROJECT_EXTENSIONS, ".vue"],
   async spawn(root) {
     const pinned = PINNED_DIRECT_LSP_RELEASES.eslint
     const platform = process.platform
@@ -297,7 +243,7 @@ export const Oxlint: Info = {
     "yarn.lock",
     "package.json",
   ]),
-  extensions: [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".mts", ".cts", ".vue", ".astro", ".svelte"],
+  extensions: JS_FRAMEWORK_EXTENSIONS,
   async spawn(root) {
     const ext = process.platform === "win32" ? ".cmd" : ""
 
@@ -327,7 +273,7 @@ export const Oxlint: Info = {
     }
 
     if (lintBin) {
-      const hasLsp = await oxlintSupportsLsp(lintBin)
+      const hasLsp = await OxlintSupport.supportsLsp(lintBin)
       if (hasLsp) {
         return {
           process: spawn(lintBin, ["--lsp"], {
@@ -368,14 +314,7 @@ export const Biome: Info = {
     "yarn.lock",
   ]),
   extensions: [
-    ".ts",
-    ".tsx",
-    ".js",
-    ".jsx",
-    ".mjs",
-    ".cjs",
-    ".mts",
-    ".cts",
+    ...JS_PROJECT_EXTENSIONS,
     ".json",
     ".jsonc",
     ".vue",
@@ -454,16 +393,8 @@ export const Rubocop: Info = {
 
 export const Ty: Info = {
   id: "ty",
-  extensions: [".py", ".pyi"],
-  root: NearestRoot([
-    "pyproject.toml",
-    "ty.toml",
-    "setup.py",
-    "setup.cfg",
-    "requirements.txt",
-    "Pipfile",
-    "pyrightconfig.json",
-  ]),
+  extensions: PYTHON_EXTENSIONS,
+  root: NearestRoot(TY_ROOT_MARKERS),
   async spawn(root) {
     if (!Flag.AX_CODE_EXPERIMENTAL_LSP_TY) {
       return undefined
@@ -498,25 +429,21 @@ export const Ty: Info = {
 
 export const Pyright: Info = {
   id: "pyright",
-  extensions: [".py", ".pyi"],
-  root: NearestRoot(["pyproject.toml", "setup.py", "setup.cfg", "requirements.txt", "Pipfile", "pyrightconfig.json"]),
+  extensions: PYTHON_EXTENSIONS,
+  root: NearestRoot(PYTHON_ROOT_MARKERS),
   async spawn(root) {
     const initialization: Record<string, string> = {}
     const python = await venvPython(root)
     if (python) initialization["pythonPath"] = python
 
-    const proc = await bunServer({
+    return bunServerHandle({
       root,
       binary: "pyright-langserver",
-      script: path.join(Global.Path.bin, "node_modules", "pyright", "dist", "pyright-langserver.js"),
+      script: nodeModuleScript("pyright", "dist", "pyright-langserver.js"),
       pkg: "pyright",
       args: ["--stdio"],
-    })
-    if (!proc) return
-    return {
-      process: proc,
       initialization,
-    }
+    })
   },
 }
 
@@ -635,31 +562,17 @@ export const Zls: Info = {
         return
       }
 
-      const release = await fetchGitHubReleaseByTag({
-        repo: "zigtools/zls",
-        tag: zlsTag,
-      })
-      if (!release) {
-        log.error("Failed to fetch zls release info", { zlsTag })
-      } else {
-        const asset = releaseAsset(release.assets ?? [], assetName)
-        const sha256 = asset ? releaseAssetSha256(asset) : undefined
-        if (!asset?.browser_download_url || !sha256) {
-          log.error(`Could not find a verifiable ${assetName} asset in zls release ${zlsTag}`)
-        } else {
-          bin =
-            (await installReleaseBin({
-              id: "zls",
-              assetName,
-              url: asset.browser_download_url,
-              bin: managedBin,
-              installDir: path.dirname(managedBin),
-              platform,
-              sha256,
-              tarArgs: ["-xf"],
-            })) ?? null
-        }
-      }
+      bin =
+        (await installPinnedGitHubReleaseAsset({
+          id: "zls",
+          repo: "zigtools/zls",
+          tag: zlsTag,
+          assetName,
+          bin: managedBin,
+          installDir: path.dirname(managedBin),
+          platform,
+          tarArgs: ["-xf"],
+        })) ?? null
     }
 
     if (!bin && hasLegacyBin) return useLegacyBin()
@@ -880,18 +793,14 @@ export const Svelte: Info = {
   extensions: [".svelte"],
   root: NearestRoot([...JS_LOCKFILES]),
   async spawn(root) {
-    const proc = await bunServer({
+    return bunServerHandle({
       root,
       binary: "svelteserver",
-      script: path.join(Global.Path.bin, "node_modules", "svelte-language-server", "bin", "server.js"),
+      script: nodeModuleScript("svelte-language-server", "bin", "server.js"),
       pkg: "svelte-language-server",
       args: ["--stdio"],
-    })
-    if (!proc) return
-    return {
-      process: proc,
       initialization: {},
-    }
+    })
   },
 }
 
@@ -907,22 +816,18 @@ export const Astro: Info = {
     }
     const tsdk = path.dirname(tsserver)
 
-    const proc = await bunServer({
+    return bunServerHandle({
       root,
       binary: "astro-ls",
-      script: path.join(Global.Path.bin, "node_modules", "@astrojs", "language-server", "bin", "nodeServer.js"),
+      script: nodeModuleScript("@astrojs", "language-server", "bin", "nodeServer.js"),
       pkg: "@astrojs/language-server",
       args: ["--stdio"],
-    })
-    if (!proc) return
-    return {
-      process: proc,
       initialization: {
         typescript: {
           tsdk,
         },
       },
-    }
+    })
   },
 }
 
@@ -956,8 +861,8 @@ const spawnJdtls = async (java: string, root: string, distPath: string, launcher
       }
     })(),
   )
-  await cleanupStaleJdtlsDataDirs()
-  const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), JDTLS_DATA_DIR_PREFIX))
+  await JdtlsDataDir.cleanupStale()
+  const dataDir = await JdtlsDataDir.create()
   let proc
   try {
     proc = spawn(
@@ -988,12 +893,12 @@ const spawnJdtls = async (java: string, root: string, distPath: string, launcher
     )
   } catch (err) {
     // Avoid leaking temp dirs when spawn fails synchronously.
-    await fs.rm(dataDir, { recursive: true, force: true }).catch(() => {})
+    await JdtlsDataDir.remove(dataDir).catch(() => {})
     throw err
   }
 
   void proc.exited.finally(() => {
-    fs.rm(dataDir, { recursive: true, force: true }).catch((err) =>
+    JdtlsDataDir.remove(dataDir).catch((err) =>
       log.warn("failed to remove jdtls data dir", { dataDir, err }),
     )
   })
@@ -1190,17 +1095,13 @@ export const YamlLS: Info = {
   extensions: [".yaml", ".yml"],
   root: NearestRoot([...JS_LOCKFILES]),
   async spawn(root) {
-    const proc = await bunServer({
+    return bunServerHandle({
       root,
       binary: "yaml-language-server",
-      script: path.join(Global.Path.bin, "node_modules", "yaml-language-server", "out", "server", "src", "server.js"),
+      script: nodeModuleScript("yaml-language-server", "out", "server", "src", "server.js"),
       pkg: "yaml-language-server",
       args: ["--stdio"],
     })
-    if (!proc) return
-    return {
-      process: proc,
-    }
   },
 }
 
@@ -1315,22 +1216,18 @@ export const PHPIntelephense: Info = {
   extensions: [".php"],
   root: NearestRoot(["composer.json", "composer.lock", ".php-version"]),
   async spawn(root) {
-    const proc = await bunServer({
+    return bunServerHandle({
       root,
       binary: "intelephense",
-      script: path.join(Global.Path.bin, "node_modules", "intelephense", "lib", "intelephense.js"),
+      script: nodeModuleScript("intelephense", "lib", "intelephense.js"),
       pkg: "intelephense",
       args: ["--stdio"],
-    })
-    if (!proc) return
-    return {
-      process: proc,
       initialization: {
         telemetry: {
           enabled: false,
         },
       },
-    }
+    })
   },
 }
 
@@ -1392,17 +1289,13 @@ export const BashLS: Info = {
   extensions: [".sh", ".bash", ".zsh", ".ksh"],
   root: async () => Instance.directory,
   async spawn(root) {
-    const proc = await bunServer({
+    return bunServerHandle({
       root,
       binary: "bash-language-server",
-      script: path.join(Global.Path.bin, "node_modules", "bash-language-server", "out", "cli.js"),
+      script: nodeModuleScript("bash-language-server", "out", "cli.js"),
       pkg: "bash-language-server",
       args: ["start"],
     })
-    if (!proc) return
-    return {
-      process: proc,
-    }
   },
 }
 
@@ -1577,17 +1470,13 @@ export const DockerfileLS: Info = {
   extensions: [".dockerfile", "Dockerfile"],
   root: async () => Instance.directory,
   async spawn(root) {
-    const proc = await bunServer({
+    return bunServerHandle({
       root,
       binary: "docker-langserver",
-      script: path.join(Global.Path.bin, "node_modules", "dockerfile-language-server-nodejs", "lib", "server.js"),
+      script: nodeModuleScript("dockerfile-language-server-nodejs", "lib", "server.js"),
       pkg: "dockerfile-language-server-nodejs",
       args: ["--stdio"],
     })
-    if (!proc) return
-    return {
-      process: proc,
-    }
   },
 }
 

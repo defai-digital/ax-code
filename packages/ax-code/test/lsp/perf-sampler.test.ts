@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test"
 import { Config } from "../../src/config/config"
 import { Instance } from "../../src/project/instance"
 import { LSP } from "../../src/lsp"
+import { recordSample } from "../../src/lsp/perf"
 import { tmpdir } from "../fixture/fixture"
 import { Log } from "../../src/util/log"
 import { spyOn } from "bun:test"
@@ -62,7 +63,7 @@ describe("LSP.perfSnapshot", () => {
     })
   })
 
-  // Direct sampler tests. These drive recordPerfSample instead of
+  // Direct sampler tests. These drive the sampler module instead of
   // going through the LSP client path — isolates the ring-buffer semantics
   // from any LSP state or I/O so edge cases are cheap to assert.
   test("empty snapshot is {} before any operation runs", () => {
@@ -72,9 +73,9 @@ describe("LSP.perfSnapshot", () => {
 
   test("errorCount increments and p-values still report", () => {
     LSP.perfReset()
-    LSP.recordPerfSample("references", 10, false)
-    LSP.recordPerfSample("references", 20, false)
-    LSP.recordPerfSample("references", 30, false)
+    recordSample("references", 10, false)
+    recordSample("references", 20, false)
+    recordSample("references", 30, false)
 
     const snap = LSP.perfSnapshot()
     expect(snap.references!.count).toBe(3)
@@ -89,8 +90,8 @@ describe("LSP.perfSnapshot", () => {
 
     const olderSamples = 2_000
     const newerSamples = 10_000
-    for (let i = 0; i < olderSamples; i++) LSP.recordPerfSample("touch", 1, true)
-    for (let i = 0; i < newerSamples; i++) LSP.recordPerfSample("touch", 100, true)
+    for (let i = 0; i < olderSamples; i++) recordSample("touch", 1, true)
+    for (let i = 0; i < newerSamples; i++) recordSample("touch", 100, true)
 
     const snap = LSP.perfSnapshot()
     expect(snap.touch!.count).toBe(olderSamples + newerSamples)
@@ -103,10 +104,10 @@ describe("LSP.perfSnapshot", () => {
 
   test("mixed ok/error samples attribute correctly per operation", () => {
     LSP.perfReset()
-    LSP.recordPerfSample("touch", 5, true)
-    LSP.recordPerfSample("touch", 7, true)
-    LSP.recordPerfSample("touch", 9, false)
-    LSP.recordPerfSample("documentSymbol", 3, true)
+    recordSample("touch", 5, true)
+    recordSample("touch", 7, true)
+    recordSample("touch", 9, false)
+    recordSample("documentSymbol", 3, true)
 
     const snap = LSP.perfSnapshot()
     expect(snap.touch!.count).toBe(3)

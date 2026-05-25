@@ -12,6 +12,7 @@ import { Filesystem } from "../util/filesystem"
 import { Log } from "../util/log"
 import { Protected } from "./protected"
 import { Ripgrep } from "./ripgrep"
+import { deletedFileStatus, parseDeletedPaths, parseModifiedNumstat, untrackedFileStatus } from "./status"
 
 export namespace File {
   export const Info = z
@@ -411,20 +412,7 @@ export namespace File {
       })
     ).text()
 
-    const changed: File.Info[] = []
-
-    if (diffOutput.trim()) {
-      for (const line of diffOutput.trim().split("\n")) {
-        const [added, removed, file] = line.split("\t")
-        if (!file || added === undefined || removed === undefined) continue
-        changed.push({
-          path: file,
-          added: added === "-" ? 0 : parseInt(added, 10),
-          removed: removed === "-" ? 0 : parseInt(removed, 10),
-          status: "modified",
-        })
-      }
-    }
+    const changed: File.Info[] = parseModifiedNumstat(diffOutput)
 
     const untrackedOutput = (
       await git(
@@ -453,13 +441,7 @@ export namespace File {
       const readOne = async (file: string): Promise<File.Info | null> => {
         try {
           const content = await Filesystem.readText(path.join(Instance.directory, file))
-          const lines = content.split("\n")
-          return {
-            path: file,
-            added: content.endsWith("\n") ? lines.length - 1 : lines.length,
-            removed: 0,
-            status: "added",
-          }
+          return untrackedFileStatus(file, content)
         } catch {
           return null
         }
@@ -488,24 +470,14 @@ export namespace File {
     ).text()
 
     if (deletedOutput.trim()) {
-      for (const file of deletedOutput
-        .trim()
-        .split("\n")
-        .map((item) => item.trim())
-        .filter(Boolean)) {
-        const removed =
-          parseInt(
-            (
-              await git(
-                ["-c", "core.fsmonitor=false", "-c", "core.quotepath=false", "diff", "--numstat", "HEAD", "--", file],
-                { cwd: Instance.directory },
-              )
-            )
-              .text()
-              .split("\t")[1] ?? "0",
-            10,
-          ) || 0
-        changed.push({ path: file, added: 0, removed, status: "deleted" })
+      for (const file of parseDeletedPaths(deletedOutput)) {
+        const deletedNumstat = (
+          await git(
+            ["-c", "core.fsmonitor=false", "-c", "core.quotepath=false", "diff", "--numstat", "HEAD", "--", file],
+            { cwd: Instance.directory },
+          )
+        ).text()
+        changed.push(deletedFileStatus(file, deletedNumstat))
       }
     }
 

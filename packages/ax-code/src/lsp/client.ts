@@ -2,7 +2,7 @@ import { BusEvent } from "@/bus/bus-event"
 import { Bus } from "@/bus"
 import path from "path"
 import { pathToFileURL, fileURLToPath } from "url"
-import { createHash } from "node:crypto"
+import { createHash, randomUUID } from "node:crypto"
 import { createMessageConnection, StreamMessageReader, StreamMessageWriter } from "vscode-jsonrpc/node"
 import type { Diagnostic as VSCodeDiagnostic } from "vscode-languageserver-types"
 import { diffLines } from "diff"
@@ -15,6 +15,7 @@ import { NamedError } from "@ax-code/util/error"
 import { withTimeout } from "../util/timeout"
 import { Instance } from "../project/instance"
 import { Filesystem } from "../util/filesystem"
+import { Lock } from "../util/lock"
 
 // Local-only content fingerprint. The hash never leaves the process — it
 // only compares the previous text content against the current one to skip
@@ -196,36 +197,6 @@ export namespace LSPClient {
     return "unknown"
   }
 
-  export function createPathLock() {
-    const locks: Map<string, Promise<void>> = new Map()
-
-    return {
-      size() {
-        return locks.size
-      },
-      async run<T>(filepath: string, fn: () => Promise<T>): Promise<T> {
-        const prev = locks.get(filepath) ?? Promise.resolve()
-        let resolveNext!: () => void
-        const nextTail = new Promise<void>((resolve) => {
-          resolveNext = resolve
-        })
-        // Store the actual chain value so the idle cleanup check can prove
-        // that no newer waiter replaced this path's tail.
-        const chained = prev.then(() => nextTail)
-        locks.set(filepath, chained)
-        try {
-          await prev
-          return await fn()
-        } finally {
-          resolveNext()
-          if (locks.get(filepath) === chained) {
-            locks.delete(filepath)
-          }
-        }
-      },
-    }
-  }
-
   export async function create(input: {
     serverID: string
     server: LSPServer.Handle
@@ -371,21 +342,15 @@ export namespace LSPClient {
       [path: string]: number
     } = {}
 
-    // Per-path promise chain so concurrent notify.open/notify.close for
-    // the same file serialize. Without this, two parallel notify.open
-    // calls both read `files[path]` BEFORE either writes back, both
-    // compute the same `next` version number, and both send duplicate
-    // didChange notifications with the same version — which confuses
-    // LSP servers that require strictly monotonic versions.
-    //
-    // The chain pattern: each call appends its work to the tail. The
-    // stored promise always resolves (errors are swallowed in the
-    // chain) so a thrown fn() does not break the lock for later
-    // waiters. The Map entry is overwritten on every call so it never
-    // grows beyond the number of distinct in-flight paths.
-    const pathLocks = createPathLock()
+    // Per-client path lock namespace. Concurrent notify.open/notify.close
+    // for the same file must serialize because they read-modify-write the
+    // per-client `files[path]` version counter. The common Lock primitive
+    // owns waiter cleanup and timeout handling; the client-scoped prefix
+    // keeps unrelated LSP clients from serializing each other.
+    const pathLockPrefix = `lsp-client:${input.serverID}:${input.root}:${randomUUID()}`
     async function withPathLock<T>(filepath: string, fn: () => Promise<T>): Promise<T> {
-      return pathLocks.run(filepath, fn)
+      using _lock = await Lock.write(`${pathLockPrefix}:${filepath}`, { timeoutMs: 60_000 })
+      return await fn()
     }
 
     // Per-file snapshot of the last text we sent to the server, used both

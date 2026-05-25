@@ -552,6 +552,47 @@ describe("file/index Filesystem patterns", () => {
         },
       })
     })
+
+    test("decodes quoted numstat filenames", async () => {
+      await using tmp = await tmpdir({ git: true })
+      const filename = "with\ttab.txt"
+      const filepath = path.join(tmp.path, filename)
+      await fs.writeFile(filepath, "before\n", "utf-8")
+      await $`git add .`.cwd(tmp.path).quiet()
+      await $`git commit --no-gpg-sign -m "add quoted path file"`.cwd(tmp.path).quiet()
+      await fs.writeFile(filepath, "before\nafter\n", "utf-8")
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const result = await File.status()
+          const entry = result.find((f) => f.path === filename)
+          expect(entry).toBeDefined()
+          expect(entry!.status).toBe("modified")
+          expect(entry!.added).toBe(1)
+        },
+      })
+    })
+
+    test("decodes quoted deleted filenames", async () => {
+      await using tmp = await tmpdir({ git: true })
+      const filename = "deleted\ttab.txt"
+      const filepath = path.join(tmp.path, filename)
+      await fs.writeFile(filepath, "before\n", "utf-8")
+      await $`git add .`.cwd(tmp.path).quiet()
+      await $`git commit --no-gpg-sign -m "add quoted deleted path file"`.cwd(tmp.path).quiet()
+      await fs.rm(filepath)
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const result = await File.status()
+          const entry = result.find((f) => f.path === filename && f.status === "deleted")
+          expect(entry).toBeDefined()
+          expect(entry!.removed).toBe(1)
+        },
+      })
+    })
   })
 
   describe("File.list()", () => {
