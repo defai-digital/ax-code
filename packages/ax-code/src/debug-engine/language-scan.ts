@@ -122,6 +122,11 @@ const ClippyJsonMessageSchema = z.union([
 
 export type ClippyDiagnosticMessage = z.infer<typeof ClippyDiagnosticMessageSchema>
 
+export function decodeClippyJsonMessage(value: unknown): ClippyDiagnosticMessage | undefined {
+  const decoded = ClippyJsonMessageSchema.safeParse(value)
+  return decoded.success ? decoded.data : undefined
+}
+
 export function parseClippyJsonLine(line: string): ClippyDiagnosticMessage | undefined {
   let parsed: unknown
   try {
@@ -129,8 +134,7 @@ export function parseClippyJsonLine(line: string): ClippyDiagnosticMessage | und
   } catch {
     return undefined
   }
-  const decoded = ClippyJsonMessageSchema.safeParse(parsed)
-  return decoded.success ? decoded.data : undefined
+  return decodeClippyJsonMessage(parsed)
 }
 
 export async function detectClippy(input: DetectClippyInput = {}): Promise<LanguageScanResult> {

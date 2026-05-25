@@ -1,5 +1,6 @@
 import { describe, test, expect } from "bun:test"
 import {
+  decodeClippyJsonMessage,
   detectClippy,
   detectRuff,
   detectMypy,
@@ -57,6 +58,29 @@ describe("language-scan", () => {
   })
 
   describe("detectClippy", () => {
+    test("decodeClippyJsonMessage decodes already-parsed compiler messages", () => {
+      const decoded = decodeClippyJsonMessage({
+        message: {
+          message: "unused variable",
+          code: { code: "unused_variables", explanation: null },
+          level: "warning",
+          spans: [
+            {
+              file_name: "src/main.rs",
+              line_start: 5,
+              line_end: 5,
+              column_start: 9,
+              column_end: 10,
+              is_primary: true,
+            },
+          ],
+        },
+      })
+
+      expect(decoded?.message).toBe("unused variable")
+      expect(decodeClippyJsonMessage({ message: "missing spans", level: "warning" })).toBeUndefined()
+    })
+
     test("parseClippyJsonLine decodes wrapped compiler messages", () => {
       const decoded = parseClippyJsonLine(
         JSON.stringify({
