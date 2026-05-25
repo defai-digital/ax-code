@@ -1736,6 +1736,16 @@ export namespace SessionPrompt {
               text: `Read tool failed to read ${options.filepath} with the following error: ${message}`,
             }
           }
+          const createReadToolContext = (): Tool.Context => ({
+            sessionID: input.sessionID,
+            abort: AbortSignal.timeout(30_000),
+            agent: agentName,
+            messageID: info.id,
+            extra: { bypassCwdCheck: true },
+            messages: [],
+            metadata: async () => {},
+            ask: async () => {},
+          })
           switch (url.protocol) {
             case "data:":
               if (part.mime === "text/plain") {
@@ -1885,17 +1895,7 @@ export namespace SessionPrompt {
                 ]
                 await ReadTool.init()
                   .then(async (t) => {
-                    const readCtx: Tool.Context = {
-                      sessionID: input.sessionID,
-                      abort: AbortSignal.timeout(30_000),
-                      agent: agentName,
-                      messageID: info.id,
-                      extra: { bypassCwdCheck: true },
-                      messages: [],
-                      metadata: async () => {},
-                      ask: async () => {},
-                    }
-                    const result = await t.execute(args, readCtx)
+                    const result = await t.execute(args, createReadToolContext())
                     pieces.push({
                       messageID: info.id,
                       sessionID: input.sessionID,
@@ -1937,19 +1937,9 @@ export namespace SessionPrompt {
 
               if (part.mime === "application/x-directory") {
                 const args = { filePath: filepath }
-                const listCtx: Tool.Context = {
-                  sessionID: input.sessionID,
-                  abort: AbortSignal.timeout(30_000),
-                  agent: agentName,
-                  messageID: info.id,
-                  extra: { bypassCwdCheck: true },
-                  messages: [],
-                  metadata: async () => {},
-                  ask: async () => {},
-                }
                 return await ReadTool.init()
                   .then(async (t) => {
-                    const result = await t.execute(args, listCtx)
+                    const result = await t.execute(args, createReadToolContext())
                     return [
                       {
                         messageID: info.id,
