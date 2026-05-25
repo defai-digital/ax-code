@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { LSP } from "../../src/lsp"
-import { aggregate } from "../../src/lsp/diagnostics"
+import { aggregate, aggregateEnvelope, collect } from "../../src/lsp/diagnostics"
 import { Log } from "../../src/util/log"
 
 Log.init({ print: false })
@@ -33,6 +33,37 @@ function makeMap(entries: Array<[string, any[]]>): Map<string, any> {
 }
 
 describe("aggregate diagnostics", () => {
+  test("collect merges diagnostics from connected clients by path", async () => {
+    const first = diag({ startLine: 0, startCol: 0, endLine: 0, endCol: 1 }, "first", 1)
+    const second = diag({ startLine: 1, startCol: 0, endLine: 1, endCol: 1 }, "second", 2)
+    const results = await collect([
+      { diagnostics: makeMap([["/a.ts", [first]]]) },
+      { diagnostics: makeMap([["/a.ts", [second]]]) },
+    ] as any)
+
+    expect(results).toEqual({
+      "/a.ts": [first, second],
+    })
+  })
+
+  test("aggregateEnvelope owns client projection and metering boundary", async () => {
+    const env = await aggregateEnvelope(
+      [
+        {
+          serverID: "typescript",
+          diagnostics: makeMap([
+            ["/a.ts", [diag({ startLine: 0, startCol: 0, endLine: 0, endCol: 1 }, "bad", 1)]],
+          ]),
+        },
+      ] as any,
+      "/a.ts",
+    )
+
+    expect(env.completeness).toBe("full")
+    expect(env.serverIDs).toEqual(["typescript"])
+    expect(env.data.map((d) => d.message)).toEqual(["bad"])
+  })
+
   test("empty inputs yields empty envelope", () => {
     const env = aggregate([], { now })
     expect(env.completeness).toBe("empty")

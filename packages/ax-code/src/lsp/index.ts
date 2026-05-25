@@ -19,7 +19,6 @@ import * as LSPDiagnostics from "./diagnostics"
 import * as LSPProtocol from "./protocol"
 import * as LSPWorkspaceSymbol from "./workspace-symbol"
 import * as LSPPoint from "./point"
-import * as LSPEnvelopeRunner from "./envelope-runner"
 import * as LSPClientNotify from "./client-notify"
 import * as LSPDocumentSymbol from "./document-symbol"
 import * as LSPReferences from "./references"
@@ -629,28 +628,15 @@ export namespace LSP {
   }
 
   export async function diagnostics() {
-    const results: Record<string, LSPClient.Diagnostic[]> = {}
-    const clients = await state().then((x) => x.clients)
-    for (const result of await LSPEnvelopeRunner.runAll(clients, async (client) => client.diagnostics)) {
-      for (const [path, diagnostics] of result.entries()) {
-        const arr = results[path] || []
-        arr.push(...diagnostics)
-        results[path] = arr
-      }
-    }
-    return results
+    const s = await state()
+    return LSPDiagnostics.collect(s.clients)
   }
 
   // Aggregate diagnostics across all connected clients. Pass `file`
   // to limit to a single file; omit to get everything.
   export async function diagnosticsAggregated(file?: string): Promise<SemanticEnvelope<NormalizedDiagnostic[]>> {
-    return LSPPerf.metered("diagnosticsAggregated", file ? { file } : {}, async () => {
-      const s = await state()
-      return LSPDiagnostics.aggregate(
-        s.clients.map((c) => ({ serverID: c.serverID, diagnostics: c.diagnostics })),
-        { file, now: Date.now() },
-      )
-    })
+    const s = await state()
+    return LSPDiagnostics.aggregateEnvelope(s.clients, file)
   }
 
   export async function hoverEnvelope(input: {
