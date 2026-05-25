@@ -108,6 +108,7 @@ import {
 } from "./prompt-autonomous-decisions"
 import { insertReminders } from "./prompt-reminders"
 import { resolveUserMessageRouting } from "./prompt-routing"
+import { validateUserMessageForSave } from "./prompt-message-validation"
 import { SuperLongPolicy } from "./super-long-policy"
 import { SuperLongRuntime } from "./super-long-runtime"
 
@@ -1549,7 +1550,7 @@ export namespace SessionPrompt {
     const model = complexityModel ?? input.model ?? agent.model ?? (await lastModel(input.sessionID))
     const variant = input.variant ?? (!input.model && !complexityModel && agent.variant ? agent.variant : undefined)
 
-    const info: MessageV2.Info = {
+    const info: MessageV2.User = {
       id: messageID,
       role: "user",
       sessionID: input.sessionID,
@@ -1902,50 +1903,7 @@ export namespace SessionPrompt {
       },
     )
 
-    // Validation guards: previously these blocks only logged errors and
-    // then fell through to persistence, so invalid data was written to
-    // the database anyway and corrupted downstream consumers (LLM
-    // context, replay, API responses). Now we throw on any validation
-    // failure so the caller sees a clear error and nothing is saved.
-    const parsedInfo = MessageV2.Info.safeParse(info)
-    if (!parsedInfo.success) {
-      log.error("invalid user message before save", {
-        command: "session.prompt.validate",
-        status: "error",
-        errorCode: "INVALID_MESSAGE",
-        sessionID: input.sessionID,
-        messageID: info.id,
-        agent: info.agent,
-        model: info.model,
-        issues: parsedInfo.error.issues,
-      })
-      throw new Error(
-        `Invalid user message: ${parsedInfo.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ")}`,
-      )
-    }
-
-    const invalidParts: number[] = []
-    parts.forEach((part, index) => {
-      const parsedPart = MessageV2.Part.safeParse(part)
-      if (parsedPart.success) return
-      log.error("invalid user part before save", {
-        command: "session.prompt.validate",
-        status: "error",
-        errorCode: "INVALID_PART",
-        sessionID: input.sessionID,
-        messageID: info.id,
-        partID: part.id,
-        partType: part.type,
-        index,
-        issues: parsedPart.error.issues,
-        part,
-      })
-      invalidParts.push(index)
-    })
-    if (invalidParts.length > 0) {
-      throw new Error(`Invalid user part(s) at index ${invalidParts.join(", ")} — see log for details`)
-    }
-
+    validateUserMessageForSave({ sessionID: input.sessionID, info, parts })
     await Session.updateMessageWithParts(info, parts)
 
     return {
