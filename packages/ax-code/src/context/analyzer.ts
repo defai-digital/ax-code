@@ -10,6 +10,7 @@ import fs from "fs"
 import { readFile } from "node:fs/promises"
 import { Log } from "../util/log"
 import { isNonEmptyRecord } from "../util/record"
+import { decodePackageJsonObject, packageJsonStringMap } from "../util/package-json"
 
 export type ComplexityLevel = "small" | "medium" | "large" | "enterprise"
 export type DepthLevel = "basic" | "standard" | "full" | "security"
@@ -69,7 +70,7 @@ export interface ProjectInfo {
   runtimeTargets: string[]
 }
 
-interface PackageJson {
+export interface PackageJson {
   name?: string
   version?: string
   type?: string
@@ -85,7 +86,7 @@ interface PackageJson {
 }
 
 export async function analyze(root: string): Promise<ProjectInfo> {
-  const pkg = await readJson<PackageJson>(path.join(root, "package.json"))
+  const pkg = await readPackageJson(path.join(root, "package.json"))
 
   const info: ProjectInfo = {
     schemaVersion: "2.0",
@@ -112,13 +113,39 @@ export async function analyze(root: string): Promise<ProjectInfo> {
   return info
 }
 
-async function readJson<T>(filepath: string): Promise<T | null> {
+export function decodeAnalyzerPackageJsonValue(value: unknown): PackageJson {
+  const decoded = decodePackageJsonObject(value)
+  const bin = decoded.bin
+  const binMap = packageJsonStringMap(bin)
+  const scripts = packageJsonStringMap(decoded.scripts)
+  const dependencies = packageJsonStringMap(decoded.dependencies)
+  const devDependencies = packageJsonStringMap(decoded.devDependencies)
+  return {
+    ...(typeof decoded.name === "string" ? { name: decoded.name } : {}),
+    ...(typeof decoded.version === "string" ? { version: decoded.version } : {}),
+    ...(typeof decoded.type === "string" ? { type: decoded.type } : {}),
+    ...(typeof decoded.description === "string" ? { description: decoded.description } : {}),
+    ...(typeof decoded.main === "string" ? { main: decoded.main } : {}),
+    ...(typeof bin === "string" ? { bin } : isNonEmptyRecord(binMap) ? { bin: binMap } : {}),
+    ...(isNonEmptyRecord(scripts) ? { scripts } : {}),
+    ...(isNonEmptyRecord(dependencies) ? { dependencies } : {}),
+    ...(isNonEmptyRecord(devDependencies) ? { devDependencies } : {}),
+    ...(decoded.exports !== undefined ? { exports: decoded.exports } : {}),
+    ...(typeof decoded.packageManager === "string" ? { packageManager: decoded.packageManager } : {}),
+  }
+}
+
+export function parseAnalyzerPackageJsonText(raw: string): PackageJson {
+  return decodeAnalyzerPackageJsonValue(JSON.parse(raw))
+}
+
+async function readPackageJson(filepath: string): Promise<PackageJson | null> {
   // Skip the exists() probe. It adds a TOCTOU window (the file can be
   // deleted or truncated between exists() and json()) and the catch
   // below already handles ENOENT. Removing the probe also means one
   // fewer syscall on the happy path.
   try {
-    return JSON.parse(await readFile(filepath, "utf8")) as T
+    return parseAnalyzerPackageJsonText(await readFile(filepath, "utf8"))
   } catch {
     return null
   }
@@ -399,7 +426,7 @@ async function calculateComplexity(root: string, info: ProjectInfo): Promise<Com
     }
   }
 
-  const pkg = await readJson<PackageJson>(path.join(root, "package.json"))
+  const pkg = await readPackageJson(path.join(root, "package.json"))
   const depCount = Object.keys({
     ...pkg?.dependencies,
     ...pkg?.devDependencies,
