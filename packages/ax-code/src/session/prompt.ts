@@ -35,6 +35,7 @@ import {
 } from "./prompt-loop-compaction"
 import { handlePromptLoopError } from "./prompt-loop-errors"
 import { loopMessages, scanLoopMessages } from "./prompt-loop-messages"
+import { finishPromptLoopQueue } from "./prompt-loop-queue"
 import {
   beginPromptLoopRecording,
   finishPromptLoopRecording,
@@ -160,24 +161,13 @@ export namespace SessionPrompt {
     }
 
     await using _ = defer(() => {
-      if (reason !== "completed") {
-        return cancel(sessionID)
-      }
-      const callbacks = runState.queuedCallbacks(sessionID)
-      if (callbacks.length === 0) {
-        return cancel(sessionID)
-      }
-      runState.markIdle(sessionID)
-      // Queued messages are waiting — re-enter the loop to process them.
-      // Mirrors the pattern in shell() at lines 1681-1692.
-      loop({ sessionID, resume_existing: true }).catch((error) => {
-        log.error("session loop failed to resume for queued messages", {
-          command: "session.prompt.loop",
-          status: "error",
-          sessionID,
-          error,
-        })
-        cancel(sessionID)
+      return finishPromptLoopQueue({
+        sessionID,
+        reason,
+        queuedCallbacks: runState.queuedCallbacks,
+        markIdle: runState.markIdle,
+        cancel,
+        resumeLoop: loop,
       })
     })
     let sessionStarted = false
