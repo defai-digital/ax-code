@@ -2,6 +2,7 @@ import z from "zod"
 import { Storage } from "../storage/storage"
 import { QualityPromotionApprovalPacket } from "./promotion-approval-packet"
 import { QualityPromotionDecisionBundle } from "./promotion-decision-bundle"
+import { overallStatusFromGates } from "./promotion-summary"
 
 export namespace QualityPromotionSubmissionBundle {
   export const SubmissionSummary = z.object({
@@ -96,7 +97,7 @@ export namespace QualityPromotionSubmissionBundle {
     ] as const
 
     return SubmissionSummary.parse({
-      overallStatus: gates.every((gate) => gate.status === "pass") ? "pass" : "fail",
+      overallStatus: overallStatusFromGates(gates),
       approvalPacketStatus: input.approvalPacket.readiness.overallStatus,
       eligibilityDecision: input.decisionBundle.eligibility.decision,
       requiredOverride: input.decisionBundle.eligibility.requiredOverride,

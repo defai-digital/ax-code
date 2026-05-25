@@ -5,6 +5,7 @@ import { QualityPromotionAdoptionDissentSupersession } from "./promotion-adoptio
 import { QualityPromotionAdoptionReview } from "./promotion-adoption-review"
 import { QualityPromotionApprovalPolicy } from "./promotion-approval-policy"
 import { QualityPromotionDecisionBundle } from "./promotion-decision-bundle"
+import { overallStatusFromGates } from "./promotion-summary"
 
 export namespace QualityPromotionAdoptionDissentHandling {
   export const QualifiedRejectingReview = z.object({
@@ -199,7 +200,7 @@ export namespace QualityPromotionAdoptionDissentHandling {
     ] as const
 
     return HandlingSummary.parse({
-      overallStatus: gates.every((gate) => gate.status === "pass") ? "pass" : "fail",
+      overallStatus: overallStatusFromGates(gates),
       adoptionStatus: consensus.adoptionStatus,
       requiredRole: consensus.requirement.minimumRole,
       totalQualifiedRejectingReviews: consensus.qualifiedRejectingReviews,

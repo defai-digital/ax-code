@@ -1,6 +1,7 @@
 import z from "zod"
 import { Storage } from "../storage/storage"
 import { QualityPromotionReviewDossier } from "./promotion-review-dossier"
+import { overallStatusFromGates } from "./promotion-summary"
 
 export namespace QualityPromotionBoardDecision {
   export const Disposition = z.enum(["approved", "held", "rejected"])
@@ -129,7 +130,7 @@ export namespace QualityPromotionBoardDecision {
     ] as const
 
     return DecisionSummary.parse({
-      overallStatus: gates.every((gate) => gate.status === "pass") ? "pass" : "fail",
+      overallStatus: overallStatusFromGates(gates),
       reviewDossierStatus: input.reviewDossier.summary.overallStatus,
       recommendation: input.reviewDossier.summary.recommendation,
       requiredOverride,

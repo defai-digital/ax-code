@@ -5,6 +5,7 @@ import { QualityPromotionAdoptionReview } from "./promotion-adoption-review"
 import { QualityPromotionApproval } from "./promotion-approval"
 import { QualityPromotionApprovalPolicy } from "./promotion-approval-policy"
 import { QualityPromotionDecisionBundle } from "./promotion-decision-bundle"
+import { overallStatusFromGates } from "./promotion-summary"
 
 export namespace QualityPromotionApprovalPacket {
   export const ReadinessSummary = z.object({
@@ -136,7 +137,7 @@ export namespace QualityPromotionApprovalPacket {
     ] as const
 
     return ReadinessSummary.parse({
-      overallStatus: gates.every((gate) => gate.status === "pass") ? "pass" : "fail",
+      overallStatus: overallStatusFromGates(gates),
       adoptionStatus: input.adoptionReviewConsensus.adoptionStatus,
       totalApprovals: input.approvals.length,
       totalAdoptionReviews: input.adoptionReviews.length,

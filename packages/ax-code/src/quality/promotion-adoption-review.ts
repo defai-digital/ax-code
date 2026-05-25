@@ -3,6 +3,7 @@ import z from "zod"
 import { Storage } from "../storage/storage"
 import { QualityPromotionApprovalPolicy } from "./promotion-approval-policy"
 import { QualityPromotionDecisionBundle } from "./promotion-decision-bundle"
+import { overallStatusFromGates } from "./promotion-summary"
 
 export namespace QualityPromotionAdoptionReview {
   export const Disposition = z.enum(["accepted", "accepted_override", "rejected"])
@@ -303,7 +304,7 @@ export namespace QualityPromotionAdoptionReview {
       },
     ] as const
     return ConsensusSummary.parse({
-      overallStatus: gates.every((gate) => gate.status === "pass") ? "pass" : "fail",
+      overallStatus: overallStatusFromGates(gates),
       adoptionStatus: suggestion.adoption.status,
       qualifyingDisposition,
       requirement,

@@ -1,6 +1,7 @@
 import type { Finding } from "./finding"
 import type { Severity } from "./finding-registry"
 import type { VerificationEnvelope } from "./verification-envelope"
+import { statusGlyph } from "./status-glyph"
 
 export type RenderOptions = {
   color?: boolean
@@ -80,13 +81,6 @@ function groupKey(finding: Finding, group: NonNullable<RenderOptions["group"]>):
   return ""
 }
 
-function envelopeStatusGlyph(envelope: VerificationEnvelope): string {
-  const status = envelope.result.status
-  if (status === "passed") return "✓"
-  if (status === "skipped") return "⏭"
-  return "✗"
-}
-
 function formatEvidenceRef(
   ref: NonNullable<Finding["evidenceRefs"]>[number],
   envelopes?: ReadonlyMap<string, VerificationEnvelope>,
@@ -94,7 +88,7 @@ function formatEvidenceRef(
   if (ref.kind === "verification" && envelopes) {
     const envelope = envelopes.get(ref.id)
     if (envelope) {
-      const glyph = envelopeStatusGlyph(envelope)
+      const glyph = statusGlyph(envelope.result.status)
       const runner = envelope.command.runner
       const first = envelope.structuredFailures[0]
       if (first && first.kind === "typecheck") {

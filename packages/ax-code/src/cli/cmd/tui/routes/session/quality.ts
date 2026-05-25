@@ -7,6 +7,7 @@ import type { ReviewResult } from "@/quality/review-result"
 import type { DebugCase, DebugCaseRollup, DebugHypothesis } from "@/debug-engine/runtime-debug"
 import { ProbabilisticRollout } from "@/quality/probabilistic-rollout"
 import { SessionDebug } from "@/session/debug"
+import { statusGlyph } from "@/quality/status-glyph"
 
 export type SessionQualityWorkflow = "review" | "debug" | "qa"
 
@@ -410,9 +411,12 @@ export function renderSessionChecksSummary(envelopes: readonly VerificationEnvel
     const { status, failedCount } = aggregateStatus(kind)
     const label = labelFor(kind)
     if (status === "missing") return null
-    if (status === "passed") return `${label} ✓`
-    if (status === "skipped") return `${label} ⏭`
-    return failedCount > 1 ? `${label} ✗ ${failedCount}` : `${label} ✗`
+    const glyph = statusGlyph(status)
+    return status === "passed" || status === "skipped"
+      ? `${label} ${glyph}`
+      : failedCount > 1
+        ? `${label} ${glyph} ${failedCount}`
+        : `${label} ${glyph}`
   }
 
   const parts = (["typecheck", "lint", "test"] as const).map(formatPart).filter((part): part is string => part !== null)

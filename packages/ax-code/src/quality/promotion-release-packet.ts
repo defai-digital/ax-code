@@ -1,6 +1,7 @@
 import z from "zod"
 import { Storage } from "../storage/storage"
 import { QualityPromotionReleaseDecisionRecord } from "./promotion-release-decision-record"
+import { overallStatusFromGates } from "./promotion-summary"
 
 export namespace QualityPromotionReleasePacket {
   export const PacketSummary = z.object({
@@ -122,7 +123,7 @@ export namespace QualityPromotionReleasePacket {
     ] as const
 
     return PacketSummary.parse({
-      overallStatus: gates.every((gate) => gate.status === "pass") ? "pass" : "fail",
+      overallStatus: overallStatusFromGates(gates),
       releaseDecisionRecordStatus: releaseDecisionRecord.summary.overallStatus,
       boardDecisionStatus: boardDecision.summary.overallStatus,
       reviewDossierStatus: reviewDossier.summary.overallStatus,
