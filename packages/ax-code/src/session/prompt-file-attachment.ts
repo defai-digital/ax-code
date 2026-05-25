@@ -13,7 +13,7 @@ import { decodeDataUrl } from "../util/data-url"
 import { Log } from "../util/log"
 import { MessageV2 } from "./message-v2"
 import { MessageID, type SessionID } from "./schema"
-import { attachmentLineRange, readToolCallText } from "./prompt-helpers"
+import { attachmentLineRange, readToolCallText } from "./prompt-file-reference"
 
 const log = Log.create({ service: "session.prompt" })
 
