@@ -5,6 +5,7 @@ import { Database } from "@/storage/db"
 import { encrypt, isEncrypted, decrypt, type EncryptedValue } from "@/auth/encryption"
 import { AccountStateTable, AccountTable } from "./account.sql"
 import { AccessToken, AccountID, AccountRepoError, Info, OrgID, RefreshToken } from "./schema"
+import { toErrorMessage } from "@/util/error-message"
 import { Log } from "@/util/log"
 import { parseJsonRecord } from "@/util/json-record"
 
@@ -29,7 +30,7 @@ function decryptToken<T extends string>(raw: string, make: (s: string) => T): T 
     return make(decrypt(encrypted))
   } catch (error) {
     log.warn("failed to decrypt token", {
-      error: error instanceof Error ? error.message : String(error),
+      error: toErrorMessage(error),
       tokenLength: raw.length,
     })
     throw new Error("Failed to decrypt token: token may be corrupted or encrypted with a different key", {

@@ -10,6 +10,7 @@ import { promptToText } from "./prompt"
 import type { CliOutputParser } from "./parser"
 import { buffer } from "node:stream/consumers"
 import { StringDecoder } from "node:string_decoder"
+import { toErrorMessage } from "@/util/error-message"
 import { Log } from "@/util/log"
 import { Flag } from "@/flag/flag"
 import { Token } from "@/util/token"
@@ -142,7 +143,7 @@ export class CliLanguageModel implements LanguageModelV3 {
       })
       .catch((err) => {
         log.debug("cli process exited with error", {
-          error: err instanceof Error ? err.message : String(err),
+          error: toErrorMessage(err),
         })
       })
     const timeout = new Promise<never>(
@@ -161,7 +162,7 @@ export class CliLanguageModel implements LanguageModelV3 {
     const result = Promise.all([proc.exited, buffer(proc.stdout), buffer(proc.stderr)])
     result.catch((err) => {
       log.warn("cli language model result collection failed", {
-        error: err instanceof Error ? err.message : String(err),
+        error: toErrorMessage(err),
         stack: err instanceof Error ? err.stack : undefined,
       })
     })
@@ -274,7 +275,7 @@ export class CliLanguageModel implements LanguageModelV3 {
             return parser.parseStreamLine(line)
           } catch (err) {
             log.warn("CLI provider parseStreamLine failed", {
-              error: err instanceof Error ? err.message : String(err),
+              error: toErrorMessage(err),
               line: line.length > 200 ? line.slice(0, 200) + "…" : line,
             })
             return null as ReturnType<typeof parser.parseStreamLine>

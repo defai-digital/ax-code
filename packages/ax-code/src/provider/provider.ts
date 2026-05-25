@@ -5,6 +5,7 @@ import { Config } from "../config/config"
 import { mapValues, mergeDeep, omit, pickBy, sortBy } from "remeda"
 import { NoSuchModelError, type LanguageModel } from "ai"
 import { Log } from "../util/log"
+import { toErrorMessage } from "@/util/error-message"
 import { BunProc } from "../bun"
 import { Hash } from "../util/hash"
 import { Plugin } from "../plugin"
@@ -304,7 +305,7 @@ export namespace Provider {
       log.warn("skipping malformed model", {
         providerID: provider?.id,
         modelID: model?.id,
-        reason: error instanceof Error ? error.message : String(error),
+        reason: toErrorMessage(error),
       })
       return undefined
     }
@@ -342,7 +343,7 @@ export namespace Provider {
     } catch (error) {
       log.warn("skipping malformed provider", {
         providerID: provider?.id,
-        reason: error instanceof Error ? error.message : String(error),
+        reason: toErrorMessage(error),
       })
       return undefined
     }
