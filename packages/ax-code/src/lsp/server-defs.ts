@@ -21,6 +21,7 @@ import {
   nodeModuleScript,
   output,
   pathExists,
+  resolveManagedToolBin,
   run,
   spawnInfo,
   toolServer,
@@ -629,20 +630,8 @@ export const Clangd: Info = {
     const version = llvmReleaseVersion(pinned.tag)
     const managedBin = managedToolPath("clangd", version, path.join("bin", "clangd" + ext), platform, arch)
     const installedBin = which("clangd")
-    if (installedBin && !installedBin.startsWith(Global.Path.bin)) {
-      return spawnInfo(installedBin, root, args)
-    }
-
-    if (await pathExists(managedBin)) {
-      return spawnInfo(managedBin, root, args)
-    }
-
-    if (installedBin) {
-      log.warn("using legacy unmanaged clangd install; remove shared-bin copy to switch to pinned managed installs", {
-        bin: installedBin,
-      })
-      return spawnInfo(installedBin, root, args)
-    }
+    const selectedBin = await resolveManagedToolBin({ toolName: "clangd", managedBin, installedBin })
+    if (selectedBin) return spawnInfo(selectedBin, root, args)
 
     const entries = await fs.readdir(Global.Path.bin, { withFileTypes: true }).catch(() => [])
     for (const entry of entries) {
@@ -912,23 +901,12 @@ export const KotlinLS: Info = {
     const managedLauncher = managedToolPath("kotlin-ls", pinned.version, launcherName, platform, arch)
     const installedLauncher =
       which("kotlin-lsp") ?? (platform === "win32" ? which("kotlin-lsp.cmd") : which("kotlin-lsp.sh"))
-    if (installedLauncher && !installedLauncher.startsWith(Global.Path.bin)) {
-      return spawnInfo(installedLauncher, root, ["--stdio"])
-    }
-
-    if (await pathExists(managedLauncher)) {
-      return spawnInfo(managedLauncher, root, ["--stdio"])
-    }
-
-    if (installedLauncher) {
-      log.warn(
-        "using legacy unmanaged kotlin-lsp install; remove shared-bin copy to switch to pinned managed installs",
-        {
-          bin: installedLauncher,
-        },
-      )
-      return spawnInfo(installedLauncher, root, ["--stdio"])
-    }
+    const selectedLauncher = await resolveManagedToolBin({
+      toolName: "kotlin-lsp",
+      managedBin: managedLauncher,
+      installedBin: installedLauncher,
+    })
+    if (selectedLauncher) return spawnInfo(selectedLauncher, root, ["--stdio"])
 
     const legacyLauncher = path.join(Global.Path.bin, "kotlin-ls", launcherName)
     if (await pathExists(legacyLauncher)) {
@@ -1010,21 +988,8 @@ export const LuaLS: Info = {
       arch,
     )
     const installedBin = which("lua-language-server")
-    if (installedBin && !installedBin.startsWith(Global.Path.bin)) {
-      return spawnInfo(installedBin, root)
-    }
-
-    if (await pathExists(managedBin)) {
-      return spawnInfo(managedBin, root)
-    }
-
-    if (installedBin) {
-      log.warn(
-        "using legacy unmanaged lua-language-server install; remove shared-bin copy to switch to pinned managed installs",
-        { bin: installedBin },
-      )
-      return spawnInfo(installedBin, root)
-    }
+    const selectedBin = await resolveManagedToolBin({ toolName: "lua-language-server", managedBin, installedBin })
+    if (selectedBin) return spawnInfo(selectedBin, root)
 
     const target = luaLsReleaseTarget(platform, arch)
     const legacyBin =
@@ -1166,23 +1131,8 @@ export const TerraformLS: Info = {
     const arch = process.arch
     const managedBin = managedToolBin("terraform-ls", pinned.version, platform, arch)
     const installedBin = which("terraform-ls")
-    if (installedBin && !installedBin.startsWith(Global.Path.bin)) {
-      return terraformLsHandle(installedBin, root)
-    }
-
-    if (await pathExists(managedBin)) {
-      return terraformLsHandle(managedBin, root)
-    }
-
-    if (installedBin) {
-      log.warn(
-        "using legacy unmanaged terraform-ls install; remove shared-bin copy to switch to pinned managed installs",
-        {
-          bin: installedBin,
-        },
-      )
-      return terraformLsHandle(installedBin, root)
-    }
+    const selectedBin = await resolveManagedToolBin({ toolName: "terraform-ls", managedBin, installedBin })
+    if (selectedBin) return terraformLsHandle(selectedBin, root)
 
     if (Flag.AX_CODE_DISABLE_LSP_DOWNLOAD) return
     const assetName = terraformLsAsset(pinned.version, platform, arch)
@@ -1223,20 +1173,8 @@ export const TexLab: Info = {
     const version = releaseVersion(pinned.tag)
     const managedBin = managedToolBin("texlab", version, platform, arch)
     const installedBin = which("texlab")
-    if (installedBin && !installedBin.startsWith(Global.Path.bin)) {
-      return spawnInfo(installedBin, root)
-    }
-
-    if (await pathExists(managedBin)) {
-      return spawnInfo(managedBin, root)
-    }
-
-    if (installedBin) {
-      log.warn("using legacy unmanaged texlab install; remove shared-bin copy to switch to pinned managed installs", {
-        bin: installedBin,
-      })
-      return spawnInfo(installedBin, root)
-    }
+    const selectedBin = await resolveManagedToolBin({ toolName: "texlab", managedBin, installedBin })
+    if (selectedBin) return spawnInfo(selectedBin, root)
 
     if (Flag.AX_CODE_DISABLE_LSP_DOWNLOAD) return
     const assetName = texlabAsset(platform, arch)
@@ -1347,20 +1285,8 @@ export const Tinymist: Info = {
     const version = releaseVersion(pinned.tag)
     const managedBin = managedToolBin("tinymist", version, platform, arch)
     const installedBin = which("tinymist")
-    if (installedBin && !installedBin.startsWith(Global.Path.bin)) {
-      return spawnInfo(installedBin, root)
-    }
-
-    if (await pathExists(managedBin)) {
-      return spawnInfo(managedBin, root)
-    }
-
-    if (installedBin) {
-      log.warn("using legacy unmanaged tinymist install; remove shared-bin copy to switch to pinned managed installs", {
-        bin: installedBin,
-      })
-      return spawnInfo(installedBin, root)
-    }
+    const selectedBin = await resolveManagedToolBin({ toolName: "tinymist", managedBin, installedBin })
+    if (selectedBin) return spawnInfo(selectedBin, root)
 
     if (Flag.AX_CODE_DISABLE_LSP_DOWNLOAD) return
     const assetName = tinymistAsset(platform, arch)
