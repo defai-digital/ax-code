@@ -100,6 +100,7 @@ import { validateUserMessageForSave } from "./prompt-message-validation"
 import { resolveUserMessageParts } from "./prompt-message-parts"
 import { createShellTurnMessages } from "./prompt-shell-turn"
 import { FilePartInput, PromptPartInput } from "./prompt-part-input"
+import { createStoppedAssistantTextResponse } from "./prompt-assistant-response"
 import { SuperLongPolicy } from "./super-long-policy"
 import { SuperLongRuntime } from "./super-long-runtime"
 
@@ -382,38 +383,14 @@ export namespace SessionPrompt {
     let cachedMsgs: MessageV2.WithParts[] | undefined
 
     async function createSyntheticStopAssistant(input: { lastUser: MessageV2.User; message: string }) {
-      const created = Date.now()
-      const assistant: MessageV2.Assistant = {
-        id: MessageID.ascending(),
-        parentID: input.lastUser.id,
-        role: "assistant",
-        mode: input.lastUser.agent,
-        agent: input.lastUser.agent,
-        variant: input.lastUser.variant,
-        path: sessionAssistantPath(),
-        tokens: zeroTokenUsage(),
-        modelID: input.lastUser.model.modelID,
-        providerID: input.lastUser.model.providerID,
-        time: {
-          created,
-          completed: created,
-        },
+      const result = await createStoppedAssistantTextResponse({
         sessionID,
-        finish: "stop",
-        error: new NamedError.Unknown({ message: input.message }).toObject(),
-      }
-      const part = textPart({
-        messageID: assistant.id,
-        sessionID,
+        parent: input.lastUser,
         text: input.message,
         synthetic: true,
-        time: {
-          start: created,
-          end: created,
-        },
+        error: new NamedError.Unknown({ message: input.message }).toObject(),
       })
-      await Session.updateMessageWithParts(assistant, [part])
-      return assistant
+      return result.info
     }
 
     async function continueAutonomousLoop({
@@ -1824,30 +1801,12 @@ export namespace SessionPrompt {
         },
       ],
     })
-    const assistant: MessageV2.Assistant = {
-      id: MessageID.ascending(),
+    return createStoppedAssistantTextResponse({
       sessionID: input.sessionID,
-      parentID: user.info.id,
-      role: "assistant",
-      time: {
-        created: Date.now(),
-        completed: Date.now(),
-      },
-      modelID: model.modelID,
-      providerID: model.providerID,
-      mode: user.info.agent,
-      agent: user.info.agent,
-      path: sessionAssistantPath(),
-      tokens: zeroTokenUsage({ total: 0 }),
-      finish: "stop",
-    }
-    return Session.updateMessageWithParts(assistant, [
-      textPart({
-        sessionID: input.sessionID,
-        messageID: assistant.id,
-        text,
-      }),
-    ])
+      parent: user.info,
+      text,
+      tokenTotal: 0,
+    })
   }
 
   async function goalCommand(input: CommandInput) {
