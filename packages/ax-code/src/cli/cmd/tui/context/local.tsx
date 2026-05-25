@@ -10,6 +10,7 @@ import { createSimpleContext } from "./helper"
 import { useToast } from "../ui/toast"
 import { Agent } from "@/agent/agent"
 import { Provider } from "@/provider/provider"
+import { providerModelEquals, providerModelKey, type ProviderModelKeyInput } from "@/provider/model-key"
 import { useArgs } from "./args"
 import { useSDK } from "./sdk"
 import { RGBA } from "@opentui/core"
@@ -164,6 +165,16 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
       const state = {
         pending: false,
         saveWarningShown: false,
+      }
+
+      function modelIdentity(model: ProviderModelKeyInput) {
+        return { providerID: model.providerID, modelID: model.modelID }
+      }
+
+      function rememberRecentModel(model: ProviderModelKeyInput) {
+        const uniq = uniqueBy([model, ...modelStore.recent], providerModelKey)
+        if (uniq.length > 10) uniq.pop()
+        setModelStore("recent", uniq.map(modelIdentity))
       }
 
       function save() {
@@ -327,7 +338,7 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
           const current = currentModel()
           if (!current) return
           const recent = modelStore.recent
-          const index = recent.findIndex((x) => x.providerID === current.providerID && x.modelID === current.modelID)
+          const index = recent.findIndex((x) => providerModelEquals(x, current))
           if (index === -1) return
           let next = index + direction
           if (next < 0) next = recent.length - 1
@@ -349,7 +360,7 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
           const current = currentModel()
           let index = -1
           if (current) {
-            index = favorites.findIndex((x) => x.providerID === current.providerID && x.modelID === current.modelID)
+            index = favorites.findIndex((x) => providerModelEquals(x, current))
           }
           if (index === -1) {
             index = direction === 1 ? 0 : favorites.length - 1
@@ -361,12 +372,7 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
           const next = favorites[index]
           if (!next) return
           setModelStore("model", agent.current().name, { ...next })
-          const uniq = uniqueBy([next, ...modelStore.recent], (x) => `${x.providerID}/${x.modelID}`)
-          if (uniq.length > 10) uniq.pop()
-          setModelStore(
-            "recent",
-            uniq.map((x) => ({ providerID: x.providerID, modelID: x.modelID })),
-          )
+          rememberRecentModel(next)
           save()
         },
         set(model: { providerID: string; modelID: string }, options?: { recent?: boolean }) {
@@ -377,19 +383,14 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
             if (!sync.data.provider_loaded) {
               setModelStore("model", currentAgentName, model)
               if (options?.recent) {
-                const uniq = uniqueBy([model, ...modelStore.recent], (x) => `${x.providerID}/${x.modelID}`)
-                if (uniq.length > 10) uniq.pop()
-                setModelStore(
-                  "recent",
-                  uniq.map((x) => ({ providerID: x.providerID, modelID: x.modelID })),
-                )
+                rememberRecentModel(model)
               }
               save()
               return
             }
             if (!isModelValid(model)) {
               toast.show({
-                message: `Model ${model.providerID}/${model.modelID} is not valid`,
+                message: `Model ${providerModelKey(model)} is not valid`,
                 variant: "warning",
                 duration: 3000,
               })
@@ -397,12 +398,7 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
             }
             setModelStore("model", currentAgentName, model)
             if (options?.recent) {
-              const uniq = uniqueBy([model, ...modelStore.recent], (x) => `${x.providerID}/${x.modelID}`)
-              if (uniq.length > 10) uniq.pop()
-              setModelStore(
-                "recent",
-                uniq.map((x) => ({ providerID: x.providerID, modelID: x.modelID })),
-              )
+              rememberRecentModel(model)
               save()
             }
           })
@@ -411,22 +407,17 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
           batch(() => {
             if (!isModelValid(model)) {
               toast.show({
-                message: `Model ${model.providerID}/${model.modelID} is not valid`,
+                message: `Model ${providerModelKey(model)} is not valid`,
                 variant: "warning",
                 duration: 3000,
               })
               return
             }
-            const exists = modelStore.favorite.some(
-              (x) => x.providerID === model.providerID && x.modelID === model.modelID,
-            )
+            const exists = modelStore.favorite.some((x) => providerModelEquals(x, model))
             const next = exists
-              ? modelStore.favorite.filter((x) => x.providerID !== model.providerID || x.modelID !== model.modelID)
+              ? modelStore.favorite.filter((x) => !providerModelEquals(x, model))
               : [model, ...modelStore.favorite]
-            setModelStore(
-              "favorite",
-              next.map((x) => ({ providerID: x.providerID, modelID: x.modelID })),
-            )
+            setModelStore("favorite", next.map(modelIdentity))
             save()
           })
         },
@@ -434,7 +425,7 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
           current() {
             const m = currentModel()
             if (!m) return undefined
-            const key = `${m.providerID}/${m.modelID}`
+            const key = providerModelKey(m)
             return modelStore.variant[key]
           },
           list() {
@@ -448,7 +439,7 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
           set(value: string | undefined) {
             const m = currentModel()
             if (!m) return
-            const key = `${m.providerID}/${m.modelID}`
+            const key = providerModelKey(m)
             setModelStore("variant", key, value)
             save()
           },
