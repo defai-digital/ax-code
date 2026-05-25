@@ -57,6 +57,11 @@ export function withToolTimeout<T>(input: {
     }, input.timeoutMs)
     if (typeof timer === "object" && "unref" in timer) timer.unref()
 
+    if (controller.signal.aborted) {
+      finish(() => reject(asError(controller.signal.reason, `Tool '${input.tool}' was aborted`)))
+      return
+    }
+
     input.run(controller.signal).then(
       (value) => finish(() => resolve(value)),
       (error) => finish(() => reject(asError(error, `Tool '${input.tool}' failed`))),

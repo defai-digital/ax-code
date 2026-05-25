@@ -363,13 +363,31 @@ export const ProvidersLoginCommand = cmd({
             prompts.outro("Done")
             return
           }
-          const timeout = setTimeout(() => proc.kill(), 30_000)
-          const [exit, token, stderr] = await Promise.all([
-            proc.exited,
-            text(proc.stdout),
-            proc.stderr ? text(proc.stderr) : Promise.resolve(""),
-          ])
-          clearTimeout(timeout)
+          let timeout: ReturnType<typeof setTimeout> | undefined
+          let timeoutKill: Promise<void> = Promise.resolve()
+          const timeoutResult = new Promise<null>((resolve) => {
+            timeout = setTimeout(() => {
+              timeoutKill = Process.killProcessTree(proc).catch(() => undefined)
+              resolve(null)
+            }, 30_000)
+          })
+          let result: [number, string, string] | null = null
+
+          try {
+            result = await Promise.race([
+              Promise.all([proc.exited, text(proc.stdout), proc.stderr ? text(proc.stderr) : Promise.resolve("")]),
+              timeoutResult,
+            ])
+          } finally {
+            if (timeout) clearTimeout(timeout)
+          }
+          if (result === null) {
+            await timeoutKill
+            prompts.log.error("Auth command timed out after 30000ms")
+            prompts.outro("Done")
+            return
+          }
+          const [exit, token, stderr] = result
           if (exit !== 0) {
             prompts.log.error(`Auth command failed (exit ${exit})${stderr ? ": " + stderr.trim() : ""}`)
             prompts.outro("Done")

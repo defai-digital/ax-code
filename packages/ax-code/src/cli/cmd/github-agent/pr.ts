@@ -6,6 +6,7 @@ import { git } from "@/util/git"
 import { registerShutdownSignals } from "@/util/signals"
 import { isRecord } from "@/util/record"
 import { parseJsonResult } from "@/util/json-value"
+import { Shell } from "@/shell/shell"
 
 export interface GitHubPrViewInfo {
   isCrossRepository?: boolean
@@ -161,16 +162,20 @@ export const PrCommand = cmd({
           stderr: "inherit",
           cwd: process.cwd(),
         })
+        const hasExited = () => axcodeProcess.exitCode !== null || axcodeProcess.signalCode !== null
+        const terminateProcess = () =>
+          void Shell.killTree(axcodeProcess, {
+            exited: () => hasExited(),
+          }).catch(() => {})
         const kill = () => {
-          try {
-            axcodeProcess.kill("SIGTERM")
-          } catch {}
+          terminateProcess()
         }
         const removeSignals = registerShutdownSignals(kill)
         let code: number
         try {
           code = await axcodeProcess.exited
         } finally {
+          terminateProcess()
           removeSignals()
         }
         if (code !== 0) throw new Error(`ax-code exited with code ${code}`)

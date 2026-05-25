@@ -601,6 +601,11 @@ export namespace LLM {
         clearTimeout(timeout)
         reject(new DOMException("Aborted", "AbortError"))
       }
+      if (signal.aborted) {
+        clearTimeout(timeout)
+        reject(new DOMException("Aborted", "AbortError"))
+        return
+      }
       signal.addEventListener("abort", abortHandler, { once: true })
     })
   }

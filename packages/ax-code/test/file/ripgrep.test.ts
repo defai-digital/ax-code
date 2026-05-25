@@ -1,8 +1,15 @@
-import { describe, expect, test } from "bun:test"
+import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
 import fs from "fs/promises"
 import path from "path"
+import { PassThrough } from "node:stream"
+import { NativeAddon } from "../../src/native/addon"
+import { Process } from "../../src/util/process"
 import { tmpdir } from "../fixture/fixture"
 import { Ripgrep } from "../../src/file/ripgrep"
+
+afterEach(() => {
+  mock.restore()
+})
 
 describe("file.ripgrep", () => {
   test("decodeJsonResult decodes already-parsed ripgrep records", () => {
@@ -102,5 +109,35 @@ describe("file.ripgrep", () => {
     })
 
     expect(hits).toEqual([])
+  })
+
+  test("files() terminates spawned ripgrep process when generator is returned early", async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await Bun.write(path.join(dir, "visible.txt"), "hello")
+      },
+    })
+
+    const nativeFs = spyOn(NativeAddon, "fs").mockReturnValue(undefined)
+    const proc = {
+      exitCode: null,
+      signalCode: null,
+      exited: new Promise<number>(() => {}),
+      stdout: new PassThrough(),
+    }
+    const spawn = spyOn(Process, "spawn").mockReturnValue(proc as never)
+    const killProcessTree = spyOn(Process, "killProcessTree").mockResolvedValue(undefined)
+
+    const iterator = Ripgrep.files({ cwd: tmp.path })[Symbol.asyncIterator]()
+    proc.stdout.write("visible.txt\n")
+
+    const first = await iterator.next()
+    expect(first.value).toBe("visible.txt")
+
+    const result = await iterator.return()
+    expect(result.done).toBe(true)
+    expect(spawn).toHaveBeenCalledTimes(1)
+    expect(killProcessTree).toHaveBeenCalledWith(proc as never)
+    expect(killProcessTree).toHaveBeenCalledTimes(1)
   })
 })

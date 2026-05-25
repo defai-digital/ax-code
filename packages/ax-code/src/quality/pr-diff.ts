@@ -4,6 +4,7 @@ import { Env } from "../util/env"
 import { toErrorMessage } from "../util/error-message"
 import { parseJsonResult } from "../util/json-value"
 import { Log } from "../util/log"
+import { Process } from "../util/process"
 
 const log = Log.create({ service: "quality.pr-diff" })
 
@@ -43,23 +44,16 @@ export type PrDiff = {
 const DEFAULT_TIMEOUT_MS = 30_000
 
 async function runGh(args: string[], cwd: string, timeoutMs = DEFAULT_TIMEOUT_MS) {
-  const proc = Bun.spawn(["gh", ...args], {
+  const { code, stdout, stderr } = await Process.run(["gh", ...args], {
     cwd,
-    stdout: "pipe",
-    stderr: "pipe",
     env: Env.sanitize(),
+    timeout: timeoutMs,
+    nothrow: true,
   })
-  let timedOut = false
-  const timer = setTimeout(() => {
-    timedOut = true
-    proc.kill()
-  }, timeoutMs)
-  const [code, stdout, stderr] = await Promise.all([
-    proc.exited.finally(() => clearTimeout(timer)),
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
-  ])
-  return { code, stdout, stderr, timedOut }
+  if (code === 124) {
+    return { code, stdout: "", stderr: `command timed out after ${timeoutMs}ms`, timedOut: true }
+  }
+  return { code, stdout: stdout.toString(), stderr: stderr.toString(), timedOut: false }
 }
 
 async function ensureGhAvailable(cwd: string): Promise<void> {

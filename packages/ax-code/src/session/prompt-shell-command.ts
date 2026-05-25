@@ -134,33 +134,37 @@ export async function executeShellCommand(
     appendOutput(chunk)
     flush()
   }
-  const onStderrData = (chunk: Buffer | string) => {
-    appendOutput(chunk)
-    flush()
-  }
-  proc.stdout?.on("data", onStdoutData)
-  proc.stdout?.on("error", (error) => {
+  const onStdoutError = (error: Error) => {
     log.warn("shell stdout stream error", {
       command: "session.prompt.shell",
       status: "error",
       errorCode: "STDOUT_STREAM_ERROR",
       error,
     })
-  })
-
-  proc.stderr?.on("data", onStderrData)
-  proc.stderr?.on("error", (error) => {
+  }
+  const onStderrData = (chunk: Buffer | string) => {
+    appendOutput(chunk)
+    flush()
+  }
+  const onStderrError = (error: Error) => {
     log.warn("shell stderr stream error", {
       command: "session.prompt.shell",
       status: "error",
       errorCode: "STDERR_STREAM_ERROR",
       error,
     })
-  })
+  }
+
+  proc.stdout?.on("data", onStdoutData)
+  proc.stdout?.on("error", onStdoutError)
+  proc.stderr?.on("data", onStderrData)
+  proc.stderr?.on("error", onStderrError)
 
   let aborted = false
   let exited = false
   let exitCode = 0
+  let exitSignal: NodeJS.Signals | number | null = null
+  let rejectPromise: ((reason?: unknown) => void) | undefined
 
   const kill = () => Shell.killTree(proc, { exited: () => exited })
 
@@ -210,38 +214,51 @@ export async function executeShellCommand(
   }, SHELL_TIMEOUT)
   let abortTimer: ReturnType<typeof setTimeout> | undefined
 
-  await new Promise<void>((resolve, reject) => {
-    const abortTimeoutHandler = () => {
-      abortTimer = setTimeout(() => {
-        if (!exited) reject(new Error("Shell abort timed out while waiting for process to exit"))
-      }, 5_000)
-    }
-    if (abort.aborted) {
-      abortTimeoutHandler()
-    }
-    proc.once("close", (code) => {
-      exited = true
-      exitCode = code ?? 0
-      clearTimeout(shellTimer)
-      if (abortTimer) clearTimeout(abortTimer)
-      abort.removeEventListener("abort", abortHandler)
-      abort.removeEventListener("abort", abortTimeoutHandler)
-      proc.stdout?.off("data", onStdoutData)
-      proc.stderr?.off("data", onStderrData)
-      resolve()
+  const clearShellCommandTimers = () => {
+    clearTimeout(shellTimer)
+    if (abortTimer) clearTimeout(abortTimer)
+  }
+
+  const clearShellCommandListeners = () => {
+    abort.removeEventListener("abort", abortHandler)
+    abort.removeEventListener("abort", abortTimeoutHandler)
+    proc.stdout?.off("data", onStdoutData)
+    proc.stderr?.off("data", onStderrData)
+    proc.stdout?.off("error", onStdoutError)
+    proc.stderr?.off("error", onStderrError)
+  }
+
+  const abortTimeoutHandler = () => {
+    abortTimer = setTimeout(() => {
+      if (!exited) {
+        rejectPromise?.(new Error("Shell abort timed out while waiting for process to exit"))
+      }
+    }, 5_000)
+  }
+
+  abort.addEventListener("abort", abortTimeoutHandler, { once: true })
+
+  try {
+    await new Promise<void>((resolve, reject) => {
+      rejectPromise = reject
+      if (abort.aborted) {
+        abortTimeoutHandler()
+      }
+      proc.once("close", (code, signal) => {
+        exited = true
+        exitSignal = signal ?? null
+        exitCode = signal !== null ? 1 : code ?? 0
+        resolve()
+      })
+      proc.once("error", (err) => {
+        exited = true
+        reject(err)
+      })
     })
-    proc.once("error", (err) => {
-      exited = true
-      clearTimeout(shellTimer)
-      if (abortTimer) clearTimeout(abortTimer)
-      abort.removeEventListener("abort", abortHandler)
-      abort.removeEventListener("abort", abortTimeoutHandler)
-      proc.stdout?.off("data", onStdoutData)
-      proc.stderr?.off("data", onStderrData)
-      reject(err)
-    })
-    abort.addEventListener("abort", abortTimeoutHandler, { once: true })
-  })
+  } finally {
+    clearShellCommandTimers()
+    clearShellCommandListeners()
+  }
 
   if (aborted) {
     shellOutput = {
@@ -253,6 +270,7 @@ export async function executeShellCommand(
   msg.time.completed = Date.now()
   await Session.updateMessage(msg)
   if (part.state.status === "running") {
+    const error = exitSignal === null ? `Process exited with code ${exitCode}` : `Process exited with signal ${exitSignal}`
     part.state =
       exitCode !== 0 && !aborted
         ? {
@@ -262,7 +280,7 @@ export async function executeShellCommand(
               end: Date.now(),
             },
             input: part.state.input,
-            error: `Process exited with code ${exitCode}`,
+            error,
             metadata: shellOutputMetadata(shellOutput),
           }
         : {

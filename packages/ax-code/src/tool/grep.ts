@@ -151,26 +151,31 @@ export const GrepTool = Tool.define("grep", {
       args.push("--glob", params.include)
     }
     args.push(searchPath)
+    const commandTimeoutMs = 120_000
 
     const proc = Process.spawn([rgPath, ...args], {
       stdout: "pipe",
       stderr: "pipe",
       abort: ctx.abort,
       env: Env.sanitize(),
+      timeout: commandTimeoutMs,
     })
 
     let output: string
     let errorOutput: string
     let exitCode: number
+    const hasExited = () => proc.exitCode !== null || proc.signalCode !== null
+
     try {
       if (!proc.stdout || !proc.stderr) {
         throw new Error("Process output not available")
       }
-      output = await text(proc.stdout)
-      errorOutput = await text(proc.stderr)
-      exitCode = await proc.exited
+      ;[output, errorOutput, exitCode] = await Promise.all([text(proc.stdout), text(proc.stderr), proc.exited])
+      if (exitCode === 124) {
+        throw new Error(`grep command timed out after ${commandTimeoutMs / 1000}s`)
+      }
     } catch (err) {
-      if (proc.exitCode === null && proc.signalCode === null) proc.kill("SIGTERM")
+      if (!hasExited()) Process.stop(proc).catch(() => {})
       throw err
     }
 

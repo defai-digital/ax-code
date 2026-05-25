@@ -25,6 +25,11 @@ export namespace SessionRetry {
         },
         Math.min(ms, RETRY_MAX_DELAY),
       )
+      if (signal.aborted) {
+        clearTimeout(timeout)
+        reject(new DOMException("Aborted", "AbortError"))
+        return
+      }
       signal.addEventListener("abort", abortHandler, { once: true })
     })
   }

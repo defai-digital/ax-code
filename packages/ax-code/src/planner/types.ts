@@ -145,6 +145,8 @@ export interface ExecutionOptions {
   phaseReviewer?: (phase: TaskPhase, result: PhaseResult, plan: TaskPlan) => Promise<PhaseReviewResult>
 }
 
+export type PhaseExecutor = (phase: TaskPhase, plan: TaskPlan, abortSignal?: AbortSignal) => Promise<PhaseResult>
+
 export function createPhase(input: Partial<TaskPhase> & { id: string; index: number; name: string }): TaskPhase {
   return {
     description: "",

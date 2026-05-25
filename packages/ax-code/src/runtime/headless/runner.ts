@@ -82,6 +82,9 @@ export async function runHeadlessSession<
   const controller = new AbortController()
   const stopFromSignal = () => controller.abort(input.signal.reason)
   input.signal.addEventListener("abort", stopFromSignal, { once: true })
+  if (input.signal.aborted) {
+    controller.abort(input.signal.reason)
+  }
   let stopped: HeadlessSessionRunnerResult<TSession, TTodo, TDiff, TStatus, TMessage, TPart, TRisk>["stopped"] =
     "signal"
 
@@ -121,8 +124,11 @@ export async function runHeadlessSession<
     }
   } finally {
     if (!controller.signal.aborted) controller.abort()
-    await closeHeadlessEventSink(input.eventSink)
-    input.signal.removeEventListener("abort", stopFromSignal)
+    try {
+      await closeHeadlessEventSink(input.eventSink)
+    } finally {
+      input.signal.removeEventListener("abort", stopFromSignal)
+    }
   }
 
   return { state, stopped }

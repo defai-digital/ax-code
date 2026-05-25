@@ -56,6 +56,7 @@ function warmSemanticLsp(filepath: string, signal?: AbortSignal) {
   }
   const timer = setTimeout(() => {
     signal?.removeEventListener("abort", cancel)
+    if (signal?.aborted) return
     void task()
   }, 0)
   timer.unref?.()

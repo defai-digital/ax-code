@@ -302,11 +302,9 @@ async function runOne(
 
   let parentAbortHandler: (() => void) | undefined
   if (options.signal) {
+    parentAbortHandler = () => localAc.abort()
+    options.signal.addEventListener("abort", parentAbortHandler, { once: true })
     if (options.signal.aborted) localAc.abort()
-    else {
-      parentAbortHandler = () => localAc.abort()
-      options.signal.addEventListener("abort", parentAbortHandler, { once: true })
-    }
   }
 
   try {

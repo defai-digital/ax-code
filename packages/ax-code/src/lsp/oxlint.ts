@@ -1,7 +1,7 @@
 import { text } from "node:stream/consumers"
-import { withTimeout } from "../util/timeout"
 import { spawn } from "./launch"
 import { log } from "./server-helpers"
+import { Process } from "../util/process"
 
 const LSP_SUPPORT_CACHE_MAX = 64
 const lspSupportCache = new Map<string, boolean | Promise<boolean>>()
@@ -22,17 +22,17 @@ async function checkSupportsLsp(lintBin: string): Promise<boolean> {
   let help = ""
   let proc: ReturnType<typeof spawn> | undefined
   try {
-    proc = spawn(lintBin, ["--help"])
+    proc = spawn(lintBin, ["--help"], { timeout: 5_000 })
     const helpPromise = proc.stdout ? text(proc.stdout) : Promise.resolve("")
-    ;[help] = await withTimeout(
-      Promise.all([helpPromise, proc.exited]),
-      5_000,
-      `oxlint --help timed out for ${lintBin}`,
-    )
+    const output = await Promise.all([helpPromise, proc.exited, proc.stderr ? text(proc.stderr) : Promise.resolve("")])
+    const [helpText, exitCode] = output
+    help = helpText
+    if (exitCode === 124) {
+      throw new Error(`oxlint --help timed out for ${lintBin}`)
+    }
   } catch (error) {
     if (proc) {
-      proc.kill()
-      await withTimeout(proc.exited, 500, `oxlint process cleanup timed out`).catch(() => {})
+      await Process.stop(proc).catch(() => {})
     }
     log.warn("oxlint --help check failed", { lintBin, error })
     lspSupportCache.delete(lintBin)

@@ -6,6 +6,7 @@ import type { DebugEngine } from "../../debug-engine"
 import { Log } from "../../util/log"
 import { Env } from "../../util/env"
 import { decodePackageJsonObject, packageJsonStringMap, parsePackageJsonObject } from "../../util/package-json"
+import { Process } from "../../util/process"
 
 // Phase 2 P2.1: extracted from src/debug-engine/apply-safe-refactor.ts so
 // review/debug/qa workflows (not just refactor_apply) can run typecheck /
@@ -115,24 +116,31 @@ export async function runCommand(
   cwd: string,
   timeoutMs: number = RUN_COMMAND_TIMEOUT_MS,
 ): Promise<{ ok: boolean; stdout: string; stderr: string; code: number; timedOut: boolean }> {
-  const proc = Bun.spawn({
-    cmd: ["sh", "-c", cmd],
+  const { code, stdout, stderr } = await Process.run(["sh", "-c", cmd], {
     cwd,
     env: Env.sanitize(),
-    stdout: "pipe",
-    stderr: "pipe",
+    timeout: timeoutMs,
+    nothrow: true,
   })
-  let timedOut = false
-  const timer = setTimeout(() => {
-    timedOut = true
-    proc.kill("SIGKILL")
-  }, timeoutMs)
-  try {
-    const [stdout, stderr] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text()])
-    const code = await proc.exited
-    return { ok: code === 0 && !timedOut, stdout, stderr, code, timedOut }
-  } finally {
-    clearTimeout(timer)
+  const stdoutText = stdout.toString()
+  const stderrText = stderr.toString()
+
+  if (code === 124) {
+    return {
+      ok: false,
+      stdout: "",
+      stderr: `command timed out after ${timeoutMs}ms`,
+      code,
+      timedOut: true,
+    }
+  }
+
+  return {
+    ok: code === 0,
+    stdout: stdoutText,
+    stderr: stderrText,
+    code,
+    timedOut: false,
   }
 }
 

@@ -4,6 +4,8 @@ import { CLI_PROVIDER_DEFINITIONS } from "../../../src/provider/cli/config"
 import { claudeCodeParser, geminiCliParser, codexCliParser } from "../../../src/provider/cli/parser"
 import { usageSource } from "../../../src/provider/usage"
 import { Process } from "../../../src/util/process"
+import { Shell } from "../../../src/shell/shell"
+import { PassThrough } from "node:stream"
 
 function makeModel(overrides?: Partial<ConstructorParameters<typeof CliLanguageModel>[0]>) {
   return new CliLanguageModel({
@@ -134,6 +136,125 @@ describe("CliLanguageModel", () => {
         prompt: [{ role: "user", content: [{ type: "text", text: "hi" }] }],
       }),
     ).rejects.toThrow(/CLI exited with code 7: partial output/)
+  })
+
+  test("doGenerate waits for CLI process kill before timing out", async () => {
+    const originalSetTimeout = globalThis.setTimeout
+    const setTimeoutSpy = (handler: (...args: any[]) => void, timeout?: number, ...args: any[]): ReturnType<typeof setTimeout> => {
+      if (timeout === 300_000) {
+        return originalSetTimeout(handler, 1, ...args)
+      }
+      return originalSetTimeout(handler, timeout, ...args)
+    }
+    globalThis.setTimeout = setTimeoutSpy as typeof globalThis.setTimeout
+
+    let killStarted = false
+    let killCompleted = false
+    const spawn = spyOn(Process, "spawn").mockReturnValue({
+      stdout: new PassThrough(),
+      stderr: new PassThrough(),
+      exited: new Promise<number>(() => {}),
+      exitCode: null,
+      signalCode: null,
+      kill: () => true,
+      pid: 999,
+      stdin: null,
+    } as any)
+    const shellKill = spyOn(Shell, "killTree").mockImplementation(async () => {
+      killStarted = true
+      await new Promise<void>((resolve) => {
+        originalSetTimeout(() => {
+          killCompleted = true
+          resolve()
+        }, 20)
+      })
+    })
+
+    try {
+      const model = makeModel({
+        binary: "sleep",
+        args: ["60"],
+      })
+      await expect(
+        model.doGenerate({
+          prompt: [{ role: "user", content: [{ type: "text", text: "hi" }] }],
+        }),
+      ).rejects.toThrow("CLI process timed out after 300s")
+      expect(killStarted).toBe(true)
+      expect(killCompleted).toBe(true)
+    } finally {
+      globalThis.setTimeout = originalSetTimeout
+      spawn.mockRestore()
+      shellKill.mockRestore()
+    }
+  })
+
+  test("doGenerate rejects with AbortError when signal is already aborted", async () => {
+    const spawn = spyOn(Process, "spawn")
+    const controller = new AbortController()
+    controller.abort()
+
+    const model = makeModel({
+      binary: "sleep",
+      args: ["60"],
+    })
+    await expect(
+      model.doGenerate({
+        prompt: [{ role: "user", content: [{ type: "text", text: "hi" }] }],
+        abortSignal: controller.signal,
+      }),
+    ).rejects.toMatchObject({ name: "AbortError" })
+    expect(spawn).not.toHaveBeenCalled()
+
+    spawn.mockRestore()
+  })
+
+  test("doGenerate rejects with AbortError when signal aborts during execution", async () => {
+    const mockStdout = new PassThrough()
+    const mockStderr = new PassThrough()
+    let resolveExited: ((code: number) => void) | undefined
+    let killCalled = false
+
+    const spawn = spyOn(Process, "spawn").mockReturnValue({
+      stdout: mockStdout,
+      stderr: mockStderr,
+      exited: new Promise<number>((resolve) => {
+        resolveExited = resolve
+      }),
+      exitCode: null,
+      signalCode: null,
+      kill: () => true,
+      pid: 777,
+      stdin: { write() {}, end() {} },
+    } as any)
+
+    const shellKill = spyOn(Shell, "killTree").mockImplementation(async () => {
+      killCalled = true
+      resolveExited?.(143)
+      mockStdout.end()
+      mockStderr.end()
+    })
+
+    try {
+      const controller = new AbortController()
+      const model = makeModel({
+        binary: "sleep",
+        args: ["60"],
+        promptMode: "arg",
+      })
+      const result = model.doGenerate({
+        prompt: [{ role: "user", content: [{ type: "text", text: "hi" }] }],
+        abortSignal: controller.signal,
+      })
+
+      await new Promise<void>((resolve) => setTimeout(resolve, 10))
+      controller.abort()
+      await expect(result).rejects.toMatchObject({ name: "AbortError" })
+      expect(killCalled).toBe(true)
+    } finally {
+      spawn.mockRestore()
+      shellKill.mockRestore()
+    }
   })
 
   test("doGenerate fails cleanly when stdin stream is unavailable", async () => {
@@ -275,6 +396,55 @@ describe("CliLanguageModel", () => {
 
     // Should have received stream-start at minimum
     expect(parts.length).toBeGreaterThanOrEqual(1)
+  })
+
+  test("doStream rejects with AbortError when signal is already aborted", async () => {
+    const spawn = spyOn(Process, "spawn")
+    const controller = new AbortController()
+    controller.abort()
+
+    const model = makeModel({ binary: "sleep", args: ["60"], promptMode: "arg" })
+    await expect(
+      model.doStream({
+        prompt: [{ role: "user", content: [{ type: "text", text: "hi" }] }],
+        abortSignal: controller.signal,
+      }),
+    ).rejects.toMatchObject({ name: "AbortError" })
+    expect(spawn).not.toHaveBeenCalled()
+
+    spawn.mockRestore()
+  })
+
+  test("doStream handles abort signal without throwing", async () => {
+    const spawn = spyOn(Process, "spawn").mockReturnValue({
+      stdout: new PassThrough(),
+      stderr: new PassThrough(),
+      exited: new Promise<number>(() => {}),
+      exitCode: null,
+      signalCode: null,
+      kill: () => true,
+      pid: 888,
+      stdin: null,
+    } as any)
+
+    const shellKill = spyOn(Shell, "killTree").mockResolvedValue()
+    const controller = new AbortController()
+
+    try {
+      const model = makeModel({ binary: "sleep", args: ["60"], promptMode: "arg" })
+      const { stream } = await model.doStream({
+        prompt: [{ role: "user", content: [{ type: "text", text: "hi" }] }],
+        abortSignal: controller.signal,
+      })
+
+      controller.abort()
+      const reader = stream.getReader()
+      await reader.cancel()
+      expect(shellKill).toHaveBeenCalled()
+    } finally {
+      spawn.mockRestore()
+      shellKill.mockRestore()
+    }
   })
 
   test("adds Claude Code permission bypass in autonomous mode", () => {
