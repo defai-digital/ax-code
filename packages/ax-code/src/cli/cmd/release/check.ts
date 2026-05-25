@@ -17,6 +17,7 @@ import { cmd } from "../cmd"
 import { git } from "../../../util/git"
 import { Process } from "../../../util/process"
 import { Filesystem } from "../../../util/filesystem"
+import { decodePackageJsonObject } from "../../../util/package-json"
 
 // ───── public types (narrow for external consumption) ─────────────
 
@@ -73,9 +74,21 @@ export async function releaseReadinessChecks(cwd: string): Promise<ReleaseCheckR
   ]
 }
 
-type PackageJSON = {
+export type PackageJSON = {
   name?: string
   version?: string
+}
+
+export function decodeReleasePackageJsonValue(value: unknown): PackageJSON {
+  const decoded = decodePackageJsonObject(value)
+  return {
+    name: typeof decoded.name === "string" ? decoded.name : undefined,
+    version: typeof decoded.version === "string" ? decoded.version : undefined,
+  }
+}
+
+export function parseReleasePackageJsonText(raw: string): PackageJSON {
+  return decodeReleasePackageJsonValue(JSON.parse(raw))
 }
 
 async function readAxCodePackageJSON(cwd: string): Promise<PackageJSON | undefined> {
@@ -96,7 +109,7 @@ function packageJSONCandidates(cwd: string) {
 
 async function readPackageJSON(file: string): Promise<PackageJSON | undefined> {
   try {
-    return JSON.parse(await readFile(file, "utf8")) as PackageJSON
+    return parseReleasePackageJsonText(await readFile(file, "utf8"))
   } catch {
     return undefined
   }
@@ -168,7 +181,7 @@ async function findRepoRoot(): Promise<string> {
 async function readPackageVersion(repoRoot: string): Promise<string> {
   const pkgPath = path.join(repoRoot, AX_CODE_PKG, "package.json")
   const raw = await readFile(pkgPath, "utf8")
-  const pkg = JSON.parse(raw) as { version?: string }
+  const pkg = parseReleasePackageJsonText(raw)
   if (!pkg.version) throw new Error(`Missing "version" in ${pkgPath}`)
   return pkg.version
 }

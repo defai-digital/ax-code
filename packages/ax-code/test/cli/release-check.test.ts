@@ -4,6 +4,8 @@ import os from "node:os"
 import path from "node:path"
 import { Process } from "../../src/util/process"
 import {
+  decodeReleasePackageJsonValue,
+  parseReleasePackageJsonText,
   releaseReadinessChecks,
   runChecks,
   CHECK_IDS,
@@ -64,6 +66,22 @@ function find(results: CheckResult[], id: string): CheckResult {
 // ───── legacy surface (back-compat) ───────────────────────────────
 
 describe("release check command (legacy surface)", () => {
+  test("decodes only release package name and version strings", () => {
+    expect(decodeReleasePackageJsonValue({ name: "ax-code", version: "2.21.5", private: true })).toEqual({
+      name: "ax-code",
+      version: "2.21.5",
+    })
+    expect(decodeReleasePackageJsonValue({ name: 123, version: 456 })).toEqual({})
+  })
+
+  test("parses release package JSON before value decoding", () => {
+    expect(parseReleasePackageJsonText(JSON.stringify({ name: "ax-code", version: "2.21.5" }))).toEqual({
+      name: "ax-code",
+      version: "2.21.5",
+    })
+    expect(() => parseReleasePackageJsonText("{not json")).toThrow(SyntaxError)
+  })
+
   test("passes for the ax-code package", async () => {
     const checks = await releaseReadinessChecks(path.resolve(import.meta.dir, "../.."))
 
