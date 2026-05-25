@@ -27,6 +27,7 @@ export interface SyncEventStoreState<
   todo: Record<string, TTodo[]>
   session_diff: Record<string, TDiff[]>
   session_status: Record<string, TStatus>
+  session_error: Record<string, unknown>
   session_risk: Record<string, SyncedSessionRisk>
   session_goal: Record<string, unknown>
   session: TSession[]

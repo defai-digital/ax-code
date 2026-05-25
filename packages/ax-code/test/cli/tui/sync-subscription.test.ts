@@ -17,6 +17,7 @@ function createTestStore() {
     todo: {},
     session_diff: {},
     session_status: {},
+    session_error: {},
     session_risk: {},
     session_goal: {},
     session: [],

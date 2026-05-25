@@ -80,7 +80,7 @@ export async function createAxCodeServer(options?: ServerOptions) {
       cleanup()
       if (kill) {
         try {
-          proc.kill()
+          proc.kill("SIGTERM")
         } catch {}
       }
       reject(error)
@@ -115,9 +115,18 @@ export async function createAxCodeServer(options?: ServerOptions) {
   return {
     url,
     close() {
+      if (proc.exitCode !== null || proc.signalCode !== null) return
       try {
-        proc.kill()
-      } catch {}
+        proc.kill("SIGTERM")
+      } catch {
+        return
+      }
+      const timer = setTimeout(() => {
+        try {
+          proc.kill("SIGKILL")
+        } catch {}
+      }, 300)
+      proc.once("exit", () => clearTimeout(timer))
     },
   }
 }

@@ -1,4 +1,4 @@
-import type { PermissionRequest, QuestionRequest } from "@ax-code/sdk/v2"
+import type { PermissionRequest, QuestionRequest } from "../v2/index.js"
 
 export type HeadlessMessageEvent<
   TMessage extends { id: string; sessionID: string },
@@ -16,8 +16,6 @@ export type HeadlessRequestEvent =
   | { type: "question.asked"; properties: QuestionRequest }
   | { type: "question.replied"; properties: { sessionID: string; requestID: string } }
   | { type: "question.rejected"; properties: { sessionID: string; requestID: string } }
-
-export type HeadlessRuntimeProbeKey = "mcp" | "lsp" | "debug-engine"
 
 export type HeadlessRuntimeStatusEvent =
   | { type: "mcp.tools.changed" }
@@ -56,10 +54,6 @@ export type HeadlessRuntimeEvent<
   | HeadlessRuntimeStatusEvent
   | HeadlessControlEvent
 
-export type HeadlessRuntimeEventEnvelope<TEvent = unknown> = {
-  details: TEvent
-}
-
 export const HEADLESS_RUNTIME_EVENT_TYPES = new Set<string>([
   "message.updated",
   "message.removed",
@@ -89,50 +83,9 @@ export const HEADLESS_RUNTIME_EVENT_TYPES = new Set<string>([
   "server.instance.disposed",
 ])
 
-export function headlessRuntimeEventType(event: unknown) {
-  if (!event || typeof event !== "object") return undefined
-  if (!("type" in event)) return undefined
+export function isHeadlessRuntimeEvent(event: unknown): boolean {
+  if (!event || typeof event !== "object") return false
+  if (!("type" in event)) return false
   const value = (event as { type?: unknown }).type
-  return typeof value === "string" ? value : undefined
-}
-
-export function isHeadlessRuntimeEvent(event: unknown) {
-  const type = headlessRuntimeEventType(event)
-  return !!type && HEADLESS_RUNTIME_EVENT_TYPES.has(type)
-}
-
-export function headlessSessionStatusType(event: unknown, sessionID?: string) {
-  const candidate = eventProperties(event)
-  if (!candidate || headlessRuntimeEventType(event) !== "session.status") return undefined
-  if (sessionID && candidate.sessionID !== sessionID) return undefined
-  const status = candidate.status
-  if (!status || typeof status !== "object") return undefined
-  if (!("type" in status)) return undefined
-  return typeof status.type === "string" ? status.type : undefined
-}
-
-export function isHeadlessSessionIdleEvent(event: unknown, sessionID?: string) {
-  return headlessSessionStatusType(event, sessionID) === "idle"
-}
-
-export function headlessSessionErrorMessage(event: unknown, sessionID?: string) {
-  const candidate = eventProperties(event)
-  if (!candidate || headlessRuntimeEventType(event) !== "session.error") return undefined
-  if (sessionID && candidate.sessionID !== sessionID) return undefined
-  const error = candidate.error
-  if (!error || typeof error !== "object") return "Session error"
-  const data = (error as { data?: unknown }).data
-  if (data && typeof data === "object" && "message" in data && typeof data.message === "string") {
-    return data.message
-  }
-  if ("message" in error && typeof error.message === "string") return error.message
-  if ("name" in error && typeof error.name === "string") return error.name
-  return "Session error"
-}
-
-function eventProperties(event: unknown) {
-  if (!event || typeof event !== "object") return undefined
-  if (!("properties" in event)) return undefined
-  const properties = event.properties
-  return properties && typeof properties === "object" ? (properties as Record<string, unknown>) : undefined
+  return typeof value === "string" && HEADLESS_RUNTIME_EVENT_TYPES.has(value)
 }
