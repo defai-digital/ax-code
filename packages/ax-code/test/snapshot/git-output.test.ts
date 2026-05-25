@@ -1,5 +1,18 @@
 import { expect, test } from "bun:test"
-import { parseLsTreeSize, parseNameStatusLine, parseNumstatLine, parsePathLine } from "../../src/util/git-output"
+import {
+  decodeGitQuotedPath,
+  parseLsTreeSize,
+  parseNameStatusLine,
+  parseNumstatLine,
+  parsePathLine,
+} from "../../src/util/git-output"
+
+test("decodeGitQuotedPath decodes only valid JSON string paths", () => {
+  expect(decodeGitQuotedPath("src/index.ts")).toBe("src/index.ts")
+  expect(decodeGitQuotedPath('"dir/file\\tname.ts"')).toBe("dir/file\tname.ts")
+  expect(decodeGitQuotedPath('"unterminated')).toBe('"unterminated')
+  expect(decodeGitQuotedPath('{"path":"src/index.ts"}')).toBe('{"path":"src/index.ts"}')
+})
 
 test("parsePathLine decodes single git-quoted paths", () => {
   expect(parsePathLine("src/index.ts")).toBe("src/index.ts")
