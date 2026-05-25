@@ -3,6 +3,7 @@ import { appendFileSync } from "fs"
 import path from "path"
 import os from "os"
 import type { ReplayEvent } from "@/replay/event"
+import { toErrorMessage } from "@/util/error-message"
 import { Log } from "@/util/log"
 import { asRecordOrUndefined } from "@/util/record"
 
@@ -141,7 +142,7 @@ export namespace DiagnosticLog {
         if (!writeFailureReported) {
           writeFailureReported = true
           log.warn("diagnostic log write failed", {
-            error: error instanceof Error ? error.message : String(error),
+            error: toErrorMessage(error),
             path: current.eventsPath,
           })
         }

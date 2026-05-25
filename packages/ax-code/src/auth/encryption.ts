@@ -15,6 +15,7 @@ import { createCipheriv, createDecipheriv, randomBytes, pbkdf2Sync } from "crypt
 import { readFileSync, writeFileSync, mkdirSync } from "fs"
 import path from "path"
 import os from "os"
+import { toErrorMessage } from "@/util/error-message"
 import { Log } from "../util/log"
 import { Global } from "../global"
 
@@ -252,7 +253,7 @@ export function decryptField<T extends Record<string, unknown>>(obj: T, field: s
     return { ...obj, [field]: plaintext }
   } catch (err) {
     log.warn(`failed to decrypt field "${field}" — credential may need to be re-entered`, {
-      err: err instanceof Error ? err.message : String(err),
+      err: toErrorMessage(err),
     })
     return { ...obj, [field]: undefined }
   }

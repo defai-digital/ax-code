@@ -4,6 +4,7 @@ import { pathToFileURL, fileURLToPath } from "url"
 import { createRequire } from "module"
 import os from "os"
 import z from "zod"
+import { toErrorMessage } from "@/util/error-message"
 import { ModelsDev } from "../provider/models"
 import { mergeDeep, pipe, unique } from "remeda"
 import { Global } from "../global"
@@ -401,7 +402,7 @@ export namespace Config {
         }
       } catch (err: unknown) {
         log.debug("failed to fetch remote account config", {
-          error: err instanceof Error ? err.message : String(err),
+          error: toErrorMessage(err),
         })
       }
     }

@@ -2,6 +2,7 @@ import fs from "fs/promises"
 import { xdgData, xdgCache, xdgConfig, xdgState } from "xdg-basedir"
 import path from "path"
 import os from "os"
+import { toErrorMessage } from "../util/error-message"
 import { Filesystem } from "../util/filesystem"
 import { Flag } from "../flag/flag"
 
@@ -28,7 +29,7 @@ const config = path.join(fallback(xdgConfig, "XDG_CONFIG_HOME", ".config"), app)
 const state = path.join(fallback(xdgState, "XDG_STATE_HOME", ".local/state"), app)
 
 function warnGlobalInit(message: string, error: unknown, extra?: Record<string, string>) {
-  const suffix = error instanceof Error ? error.message : String(error)
+  const suffix = toErrorMessage(error)
   const detail = extra ? ` ${JSON.stringify(extra)}` : ""
   console.error(`[ax-code global] ${message}: ${suffix}${detail}`)
 }
