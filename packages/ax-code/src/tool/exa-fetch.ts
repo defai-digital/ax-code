@@ -21,6 +21,11 @@ const McpResponse = z
   })
   .passthrough()
 
+export function decodeExaMcpContentText(value: unknown): string | undefined {
+  const decoded = McpResponse.safeParse(value)
+  return decoded.success ? decoded.data.result.content[0]?.text : undefined
+}
+
 export function parseExaSseContentText(line: string): string | undefined {
   if (!line.startsWith("data: ")) return undefined
   let parsed: unknown
@@ -29,8 +34,7 @@ export function parseExaSseContentText(line: string): string | undefined {
   } catch {
     return undefined
   }
-  const decoded = McpResponse.safeParse(parsed)
-  return decoded.success ? decoded.data.result.content[0]?.text : undefined
+  return decodeExaMcpContentText(parsed)
 }
 
 /**
