@@ -1639,6 +1639,13 @@ export namespace SessionPrompt {
       ...part,
       id: part.id ? PartID.make(part.id) : PartID.ascending(),
     })
+    const draftSyntheticTextPart = (text: string): Draft<MessageV2.TextPart> => ({
+      messageID: info.id,
+      sessionID: input.sessionID,
+      type: "text",
+      synthetic: true,
+      text,
+    })
 
     const resolvedParts = await Promise.allSettled(
       input.parts.map(async (part): Promise<Draft<MessageV2.Part>[]> => {
@@ -1656,13 +1663,7 @@ export namespace SessionPrompt {
             })
 
             const pieces: Draft<MessageV2.Part>[] = [
-              {
-                messageID: info.id,
-                sessionID: input.sessionID,
-                type: "text",
-                synthetic: true,
-                text: `Reading MCP resource: ${part.filename} (${uri})`,
-              },
+              draftSyntheticTextPart(`Reading MCP resource: ${part.filename} (${uri})`),
             ]
 
             try {
@@ -1678,23 +1679,11 @@ export namespace SessionPrompt {
 
               for (const content of contents) {
                 if ("text" in content && content.text) {
-                  pieces.push({
-                    messageID: info.id,
-                    sessionID: input.sessionID,
-                    type: "text",
-                    synthetic: true,
-                    text: content.text as string,
-                  })
+                  pieces.push(draftSyntheticTextPart(content.text as string))
                 } else if ("blob" in content && content.blob) {
                   // Handle binary content if needed
                   const mimeType = "mimeType" in content ? content.mimeType : part.mime
-                  pieces.push({
-                    messageID: info.id,
-                    sessionID: input.sessionID,
-                    type: "text",
-                    synthetic: true,
-                    text: `[Binary content: ${mimeType}]`,
-                  })
+                  pieces.push(draftSyntheticTextPart(`[Binary content: ${mimeType}]`))
                 }
               }
 
@@ -1714,13 +1703,7 @@ export namespace SessionPrompt {
                 uri,
               })
               const message = NamedError.message(error)
-              pieces.push({
-                messageID: info.id,
-                sessionID: input.sessionID,
-                type: "text",
-                synthetic: true,
-                text: `Failed to read MCP resource ${part.filename}: ${message}`,
-              })
+              pieces.push(draftSyntheticTextPart(`Failed to read MCP resource ${part.filename}: ${message}`))
             }
 
             return pieces
@@ -1729,13 +1712,9 @@ export namespace SessionPrompt {
           const createReadFailurePart = (options: { error: unknown; filepath: string }) => {
             const message = options.error instanceof Error ? options.error.message : `${options.error}`
             Session.publishError({ sessionID: input.sessionID, message })
-            return {
-              messageID: info.id,
-              sessionID: input.sessionID,
-              type: "text" as const,
-              synthetic: true,
-              text: `Read tool failed to read ${options.filepath} with the following error: ${message}`,
-            }
+            return draftSyntheticTextPart(
+              `Read tool failed to read ${options.filepath} with the following error: ${message}`,
+            )
           }
           const createReadToolContext = (): Tool.Context => ({
             sessionID: input.sessionID,
@@ -1751,20 +1730,8 @@ export namespace SessionPrompt {
             case "data:":
               if (part.mime === "text/plain") {
                 return [
-                  {
-                    messageID: info.id,
-                    sessionID: input.sessionID,
-                    type: "text",
-                    synthetic: true,
-                    text: readToolCallText({ filePath: part.filename }),
-                  },
-                  {
-                    messageID: info.id,
-                    sessionID: input.sessionID,
-                    type: "text",
-                    synthetic: true,
-                    text: decodeDataUrl(part.url),
-                  },
+                  draftSyntheticTextPart(readToolCallText({ filePath: part.filename })),
+                  draftSyntheticTextPart(decodeDataUrl(part.url)),
                   {
                     ...part,
                     messageID: info.id,
@@ -1794,13 +1761,7 @@ export namespace SessionPrompt {
                   filepath,
                 })
                 return [
-                  {
-                    messageID: info.id,
-                    sessionID: input.sessionID,
-                    type: "text" as const,
-                    synthetic: true,
-                    text: `Access denied: file path is outside the project directory: ${filepath}`,
-                  },
+                  draftSyntheticTextPart(`Access denied: file path is outside the project directory: ${filepath}`),
                 ]
               }
               const realFilepath = await fs.realpath(filepath).catch(() => null)
@@ -1813,13 +1774,7 @@ export namespace SessionPrompt {
                   realFilepath,
                 })
                 return [
-                  {
-                    messageID: info.id,
-                    sessionID: input.sessionID,
-                    type: "text" as const,
-                    synthetic: true,
-                    text: `Access denied: symlink target is outside the project directory: ${filepath}`,
-                  },
+                  draftSyntheticTextPart(`Access denied: symlink target is outside the project directory: ${filepath}`),
                 ]
               }
 
@@ -1886,24 +1841,12 @@ export namespace SessionPrompt {
                 const args = { filePath: filepath, offset, limit }
 
                 const pieces: Draft<MessageV2.Part>[] = [
-                  {
-                    messageID: info.id,
-                    sessionID: input.sessionID,
-                    type: "text",
-                    synthetic: true,
-                    text: readToolCallText(args),
-                  },
+                  draftSyntheticTextPart(readToolCallText(args)),
                 ]
                 await ReadTool.init()
                   .then(async (t) => {
                     const result = await t.execute(args, createReadToolContext())
-                    pieces.push({
-                      messageID: info.id,
-                      sessionID: input.sessionID,
-                      type: "text",
-                      synthetic: true,
-                      text: result.output,
-                    })
+                    pieces.push(draftSyntheticTextPart(result.output))
                     if (result.attachments?.length) {
                       pieces.push(
                         ...result.attachments.map((attachment) => ({
@@ -1942,20 +1885,8 @@ export namespace SessionPrompt {
                   .then(async (t) => {
                     const result = await t.execute(args, createReadToolContext())
                     return [
-                      {
-                        messageID: info.id,
-                        sessionID: input.sessionID,
-                        type: "text" as const,
-                        synthetic: true,
-                        text: readToolCallText(args),
-                      },
-                      {
-                        messageID: info.id,
-                        sessionID: input.sessionID,
-                        type: "text" as const,
-                        synthetic: true,
-                        text: result.output,
-                      },
+                      draftSyntheticTextPart(readToolCallText(args)),
+                      draftSyntheticTextPart(result.output),
                       {
                         ...part,
                         messageID: info.id,
@@ -1978,13 +1909,7 @@ export namespace SessionPrompt {
               try {
                 await FileTime.read(input.sessionID, filepath)
                 return [
-                  {
-                    messageID: info.id,
-                    sessionID: input.sessionID,
-                    type: "text",
-                    text: readToolCallText({ filePath: filepath }),
-                    synthetic: true,
-                  },
+                  draftSyntheticTextPart(readToolCallText({ filePath: filepath })),
                   {
                     id: part.id,
                     messageID: info.id,
@@ -2012,15 +1937,7 @@ export namespace SessionPrompt {
                 return [createReadFailurePart({ error, filepath })]
               }
             default:
-              return [
-                {
-                  messageID: info.id,
-                  sessionID: input.sessionID,
-                  type: "text" as const,
-                  synthetic: true,
-                  text: `Unsupported file protocol: ${url.protocol}`,
-                },
-              ]
+              return [draftSyntheticTextPart(`Unsupported file protocol: ${url.protocol}`)]
           }
         }
 
@@ -2034,18 +1951,13 @@ export namespace SessionPrompt {
               messageID: info.id,
               sessionID: input.sessionID,
             },
-            {
-              messageID: info.id,
-              sessionID: input.sessionID,
-              type: "text",
-              synthetic: true,
-              // An extra space is added here. Otherwise the 'Use' gets appended
-              // to user's last word; making a combined word
-              text:
-                " Use the above message and context to generate a prompt and call the task tool with subagent: " +
+            // An extra space is added here. Otherwise the 'Use' gets appended
+            // to user's last word; making a combined word
+            draftSyntheticTextPart(
+              " Use the above message and context to generate a prompt and call the task tool with subagent: " +
                 part.name +
                 hint,
-            },
+            ),
           ]
         }
 
@@ -2069,15 +1981,7 @@ export namespace SessionPrompt {
           sessionID: input.sessionID,
           error: result.reason,
         })
-        return [
-          {
-            messageID: info.id,
-            sessionID: input.sessionID,
-            type: "text",
-            synthetic: true,
-            text: `Failed to resolve attachment: ${message}`,
-          },
-        ]
+        return [draftSyntheticTextPart(`Failed to resolve attachment: ${message}`)]
       })
       .map(assign)
 
