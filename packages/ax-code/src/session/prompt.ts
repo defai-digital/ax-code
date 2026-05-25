@@ -33,7 +33,7 @@ import {
   maybeScheduleUsageCompaction,
   processPendingCompaction,
 } from "./prompt-loop-compaction"
-import { handlePromptLoopError } from "./prompt-loop-errors"
+import { resolvePromptLoopErrorTransition } from "./prompt-loop-errors"
 import { loopMessages, scanLoopMessages } from "./prompt-loop-messages"
 import { finishPromptLoopQueue } from "./prompt-loop-queue"
 import {
@@ -894,32 +894,25 @@ export namespace SessionPrompt {
         break
       }
 
-      // Track consecutive errors — break if agent is stuck
-      if (processor.message.error) {
-        consecutiveErrors++
-        const errorResult = await handlePromptLoopError({
-          sessionID,
-          currentModel: lastUser.model,
-          error: processor.message.error,
-          consecutiveErrors,
-          step,
-        })
-        consecutiveErrors = errorResult.consecutiveErrors
-        if (errorResult.action === "fallback") {
-          fallbackModelOverride = errorResult.fallbackModel
-          cachedModel = undefined
-          continue
-        }
-        if (errorResult.action === "stop") {
-          reason = errorResult.reason
-          break
-        }
-      } else {
-        consecutiveErrors = 0 // Reset on success
-        if (fallbackModelOverride) {
-          fallbackModelOverride = undefined
-          cachedModel = undefined
-        }
+      const errorTransition = await resolvePromptLoopErrorTransition({
+        sessionID,
+        currentModel: lastUser.model,
+        error: processor.message.error,
+        consecutiveErrors,
+        fallbackModelOverride,
+        step,
+      })
+      consecutiveErrors = errorTransition.consecutiveErrors
+      fallbackModelOverride = errorTransition.fallbackModelOverride
+      if (errorTransition.resetCachedModel) {
+        cachedModel = undefined
+      }
+      if (errorTransition.action === "retry") {
+        continue
+      }
+      if (errorTransition.action === "stop") {
+        reason = errorTransition.reason
+        break
       }
 
       if (processorDecision.action === "compact") {
