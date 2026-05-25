@@ -8,7 +8,6 @@ import { Agent } from "../agent/agent"
 import { Provider } from "../provider/provider"
 import { ModelID, ProviderID } from "../provider/schema"
 import { SessionCompaction } from "./compaction"
-import { GLOBAL_STEP_LIMIT } from "@/constants/session"
 import { AgentControlEvents } from "../control-plane/agent-control-events"
 import { AutonomousCompletionGate } from "../control-plane/autonomous-completion-gate"
 import { Instance } from "../project/instance"
@@ -73,6 +72,7 @@ import { createAutonomousTextContinuation, createUserMessage } from "./prompt-us
 import { permissionRulesetFromLegacyTools } from "./prompt-permission"
 import { createPromptRunState } from "./prompt-run-state"
 import { resolvePromptCache, type PromptCacheEntry } from "./prompt-cache"
+import { promptLoopLimits } from "./prompt-loop-config"
 import {
   CommandInput as CommandInputSchema,
   type CommandInput as CommandInputType,
@@ -86,8 +86,6 @@ import {
 
 // @ts-ignore
 globalThis.AI_SDK_LOG_WARNINGS = false
-
-const MAX_EMPTY_MODEL_TURN_RETRIES = 1
 
 const STRUCTURED_OUTPUT_SYSTEM_PROMPT = `IMPORTANT: The user has requested structured output. You MUST use the StructuredOutput tool to provide your final response. Do NOT respond with plain text - you MUST call the StructuredOutput tool with your answer formatted according to the schema.`
 
@@ -211,11 +209,14 @@ export namespace SessionPrompt {
     const session = await Session.get(sessionID)
     // Pre-load expensive resources once before the loop
     const cfg = await Config.get()
-    const sessionStepLimit = cfg.session?.max_steps ?? GLOBAL_STEP_LIMIT
+    const {
+      sessionStepLimit,
+      maxContinuations,
+      maxTodoRetries,
+      maxCompletionGateRetries,
+      maxEmptyModelTurnRetries,
+    } = promptLoopLimits(cfg)
     const autonomous = Flag.AX_CODE_AUTONOMOUS
-    const maxContinuations = cfg.session?.max_continuations ?? 3
-    const maxTodoRetries = cfg.session?.max_todo_retries ?? 10
-    const maxCompletionGateRetries = Math.min(maxTodoRetries, 2)
     let todoRetries = 0
     let completionGateRetries = 0
     let lastCompletionGateSignature: string | undefined
@@ -624,7 +625,7 @@ export namespace SessionPrompt {
         const emptyTurnDecision = emptyModelTurnDecision({
           emptyModelTurn,
           emptyModelTurnRetries,
-          maxEmptyModelTurnRetries: MAX_EMPTY_MODEL_TURN_RETRIES,
+          maxEmptyModelTurnRetries,
           todoRetries,
         })
 
@@ -635,7 +636,7 @@ export namespace SessionPrompt {
             errorCode: emptyTurnDecision.errorCode,
             sessionID,
             attempts: emptyModelTurnRetries,
-            maxAttempts: MAX_EMPTY_MODEL_TURN_RETRIES,
+            maxAttempts: maxEmptyModelTurnRetries,
             pendingCount: pendingTodos.length,
           })
           await publishPromptFailure({ sessionID, assistant: processor.message, message: emptyTurnDecision.message })
@@ -653,7 +654,7 @@ export namespace SessionPrompt {
             errorCode: "EMPTY_MODEL_TURN",
             sessionID,
             attempt: emptyTurnDecision.attempt,
-            maxAttempts: MAX_EMPTY_MODEL_TURN_RETRIES,
+            maxAttempts: maxEmptyModelTurnRetries,
             pendingCount: pendingTodos.length,
           })
           await createAutonomousTextContinuation({
@@ -661,7 +662,7 @@ export namespace SessionPrompt {
             messages: latestMessages,
             text: AutonomousContinuationPrompt.emptyModelTurnRecovery({
               attempt: emptyTurnDecision.attempt,
-              maxAttempts: MAX_EMPTY_MODEL_TURN_RETRIES,
+              maxAttempts: maxEmptyModelTurnRetries,
             }),
           })
           continue
