@@ -17,7 +17,7 @@ import { cmd } from "../cmd"
 import { git } from "../../../util/git"
 import { Process } from "../../../util/process"
 import { Filesystem } from "../../../util/filesystem"
-import { decodePackageJsonObject } from "../../../util/package-json"
+import { decodePackageJsonObject, parsePackageJsonObject } from "../../../util/package-json"
 
 // ───── public types (narrow for external consumption) ─────────────
 
@@ -88,7 +88,7 @@ export function decodeReleasePackageJsonValue(value: unknown): PackageJSON {
 }
 
 export function parseReleasePackageJsonText(raw: string): PackageJSON {
-  return decodeReleasePackageJsonValue(JSON.parse(raw))
+  return decodeReleasePackageJsonValue(parsePackageJsonObject(raw))
 }
 
 async function readAxCodePackageJSON(cwd: string): Promise<PackageJSON | undefined> {

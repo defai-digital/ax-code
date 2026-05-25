@@ -12,6 +12,7 @@ import {
   decodePackageJsonObject,
   packageJsonObjectKeys,
   packageJsonStringMap,
+  parsePackageJsonObject,
 } from "@/util/package-json"
 
 const DEFAULT_MAX_TOKENS = 4000
@@ -31,8 +32,7 @@ export interface MemoryPackageJsonInfo {
 }
 
 export function parseMemoryPackageJson(raw: string): MemoryPackageJsonInfo {
-  const parsed: unknown = JSON.parse(raw)
-  return decodeMemoryPackageJsonValue(parsed)
+  return decodeMemoryPackageJsonValue(parsePackageJsonObject(raw))
 }
 
 export function decodeMemoryPackageJsonValue(value: unknown): MemoryPackageJsonInfo {
