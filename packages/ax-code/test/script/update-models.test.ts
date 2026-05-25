@@ -5,14 +5,14 @@ import path from "path"
 describe("update-models script", () => {
   test("fetches models and writes snapshot", async () => {
     await using tmp = await tmpdir()
-    const snapshotPath = path.join(tmp.path, "models-snapshot.json")
+    const { fixturePath, snapshotPath } = await createModelsFixture(tmp.path)
 
-    // Run with AX_CODE_MODELS_URL pointing to real endpoint
     const result = Bun.spawnSync({
       cmd: ["bun", "run", path.join(import.meta.dir, "../../script/update-models.ts")],
       env: {
         ...process.env,
-        // Override the snapshot path by pointing to a temp dir structure
+        AX_CODE_MODELS_FIXTURE_PATH: fixturePath,
+        AX_CODE_MODELS_SNAPSHOT_PATH: snapshotPath,
       },
       cwd: path.join(import.meta.dir, "../.."),
     })
@@ -22,6 +22,7 @@ describe("update-models script", () => {
     expect(stdout).toContain("Fetching models from")
     // Either "Updated" or "already up to date" — both are valid
     expect(stdout).toMatch(/Updated|already up to date/)
+    expect(await Bun.file(snapshotPath).json()).toHaveProperty("anthropic")
   })
 
   test("snapshot file is valid JSON with provider entries", async () => {
@@ -54,11 +55,24 @@ describe("update-models script", () => {
   })
 
   test("idempotent — running twice produces same result", async () => {
-    const snapshotPath = path.join(import.meta.dir, "../../src/provider/models-snapshot.json")
+    await using tmp = await tmpdir()
+    const { fixturePath, snapshotPath } = await createModelsFixture(tmp.path)
+    const env = {
+      ...process.env,
+      AX_CODE_MODELS_FIXTURE_PATH: fixturePath,
+      AX_CODE_MODELS_SNAPSHOT_PATH: snapshotPath,
+    }
+
+    Bun.spawnSync({
+      cmd: ["bun", "run", path.join(import.meta.dir, "../../script/update-models.ts")],
+      env,
+      cwd: path.join(import.meta.dir, "../.."),
+    })
     const before = await Bun.file(snapshotPath).text()
 
     const result = Bun.spawnSync({
       cmd: ["bun", "run", path.join(import.meta.dir, "../../script/update-models.ts")],
+      env,
       cwd: path.join(import.meta.dir, "../.."),
     })
 
@@ -86,3 +100,27 @@ describe("update-models script", () => {
     expect(stderr).toContain("Failed to fetch models")
   })
 })
+
+async function createModelsFixture(dir: string) {
+  const fixturePath = path.join(dir, "models-fixture.json")
+  const snapshotPath = path.join(dir, "models-snapshot.json")
+  await Bun.write(
+    fixturePath,
+    JSON.stringify({
+      anthropic: {
+        id: "anthropic",
+        name: "Anthropic",
+        models: {
+          "claude-sonnet-5": {
+            id: "claude-sonnet-5",
+            name: "Claude Sonnet 5",
+            family: "claude",
+            limit: { context: 200_000, output: 64_000 },
+          },
+        },
+      },
+    }),
+  )
+  await Bun.write(snapshotPath, "{}\n")
+  return { fixturePath, snapshotPath }
+}

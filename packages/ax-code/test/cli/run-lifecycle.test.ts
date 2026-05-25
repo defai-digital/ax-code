@@ -96,7 +96,7 @@ test("shell env loading starts after logging is configured", async () => {
   expect(body.indexOf("shellEnvReady = loadShellEnv(env)")).toBeGreaterThan(body.indexOf("await log({"))
 })
 
-test("auth lock polling keeps the process alive while waiting", async () => {
+test("auth lock polling does not keep the process alive while waiting", async () => {
   const src = await Bun.file(path.join(import.meta.dir, "../../src/auth/index.ts")).text()
   const start = src.indexOf("async function acquireFileLock")
   const end = src.indexOf("const fail =", start)
@@ -104,9 +104,8 @@ test("auth lock polling keeps the process alive while waiting", async () => {
   expect(end).toBeGreaterThan(start)
 
   const body = src.slice(start, end)
-  expect(body).toContain("setTimeout(r, LOCK_POLL_MS)")
-  expect(body).not.toContain("LOCK_POLL_MS)\n      if")
-  expect(body).not.toContain(".unref()")
+  expect(body).toContain("sleepUnref(LOCK_POLL_MS)")
+  expect(body).toContain("timer.unref?.()")
 })
 
 test("TUI worker removes signal handlers during RPC shutdown", async () => {

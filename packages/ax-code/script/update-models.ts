@@ -15,20 +15,29 @@ import { fileURLToPath } from "url"
 import { supportsOpenRouterModelID } from "../src/provider/model-support"
 
 const dir = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
-const snapshotPath = path.join(dir, "src/provider/models-snapshot.json")
+const snapshotPath = process.env.AX_CODE_MODELS_SNAPSHOT_PATH || path.join(dir, "src/provider/models-snapshot.json")
 const modelsUrl = process.env.AX_CODE_MODELS_URL || "https://models.dev"
+const modelsFixturePath = process.env.AX_CODE_MODELS_FIXTURE_PATH
 
-console.log(`Fetching models from ${modelsUrl}/api.json ...`)
+async function loadFetchedModels(): Promise<Record<string, any>> {
+  if (modelsFixturePath) {
+    console.log(`Fetching models from ${modelsFixturePath} ...`)
+    return Bun.file(modelsFixturePath).json()
+  }
 
-const fetched = await fetch(`${modelsUrl}/api.json`, { signal: AbortSignal.timeout(10_000) })
-  .then((r) => {
-    if (!r.ok) throw new Error(`HTTP ${r.status}`)
-    return r.json()
-  })
-  .catch((err) => {
-    console.error(`Failed to fetch models: ${err.message}`)
-    process.exit(0) // don't block commit if network is down
-  })
+  console.log(`Fetching models from ${modelsUrl}/api.json ...`)
+  return fetch(`${modelsUrl}/api.json`, { signal: AbortSignal.timeout(10_000) })
+    .then((r) => {
+      if (!r.ok) throw new Error(`HTTP ${r.status}`)
+      return r.json()
+    })
+    .catch((err) => {
+      console.error(`Failed to fetch models: ${err.message}`)
+      process.exit(0) // don't block commit if network is down
+    })
+}
+
+const fetched = await loadFetchedModels()
 
 const existing = await Bun.file(snapshotPath)
   .json()
@@ -393,8 +402,7 @@ const next = JSON.stringify(fetched, null, 2) + "\n"
 
 if (prev === JSON.stringify(fetched)) {
   console.log("models-snapshot.json is already up to date")
-  process.exit(0)
+} else {
+  await Bun.write(snapshotPath, next)
+  console.log("Updated models-snapshot.json")
 }
-
-await Bun.write(snapshotPath, next)
-console.log("Updated models-snapshot.json")

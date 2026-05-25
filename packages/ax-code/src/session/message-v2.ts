@@ -536,63 +536,6 @@ export namespace MessageV2 {
       message: issue.message,
     }))
 
-  const corruptedMessageFallback = (row: typeof MessageTable.$inferSelect, issues: z.ZodIssue[]) => {
-    const created = row.time_created
-    const isAssistant = isRecord(row.data) && row.data.role === "assistant"
-    const model = { providerID: ProviderID.make("ax-code"), modelID: ModelID.make("corrupted") }
-    const issueSummary = compactIssues(issues)
-      .map((issue) => `${issue.path} (${issue.code}) ${issue.message}`)
-      .join("; ")
-
-    if (isAssistant) {
-      return {
-        id: row.id,
-        sessionID: row.session_id,
-        role: "assistant",
-        time: {
-          created,
-          completed: row.time_updated,
-        },
-        parentID: MessageID.ascending(row.id),
-        modelID: model.modelID,
-        providerID: model.providerID,
-        mode: "corrupted",
-        agent: "system",
-        path: {
-          cwd: process.cwd(),
-          root: process.cwd(),
-        },
-        summary: false,
-        tokens: {
-          total: 0,
-          input: 0,
-          output: 0,
-          reasoning: 0,
-          cache: {
-            read: 0,
-            write: 0,
-          },
-        },
-      } as MessageV2.Info
-    }
-
-    return {
-      id: row.id,
-      sessionID: row.session_id,
-      role: "user",
-      time: {
-        created,
-      },
-      agent: "system",
-      model,
-      summary: {
-        title: "Corrupted user message",
-        body: `Unable to parse user message payload: ${issueSummary}. Message has been preserved as a synthetic entry.`,
-        diffs: [],
-      },
-    } as MessageV2.Info
-  }
-
   const info = (row: typeof MessageTable.$inferSelect) => {
     const next = MessageV2.Info.safeParse({
       ...row.data,
@@ -606,20 +549,7 @@ export namespace MessageV2 {
       issue: next.error.issues.length,
       issues: compactIssues(next.error.issues),
     })
-    return corruptedMessageFallback(row, next.error.issues)
-  }
-
-  const corruptedPartFallback = (row: typeof PartTable.$inferSelect, issues: z.ZodIssue[]) => {
-    const issueSummary = compactIssues(issues)
-      .map((issue) => `${issue.path} (${issue.code}) ${issue.message}`)
-      .join("; ")
-    return {
-      type: "text",
-      id: PartID.ascending(row.id),
-      sessionID: row.session_id,
-      messageID: row.message_id,
-      text: `Unable to parse message part payload: ${issueSummary}. Message part has been preserved as a synthetic text segment.`,
-    } as MessageV2.TextPart
+    return undefined
   }
 
   const part = (row: typeof PartTable.$inferSelect) => {
@@ -637,7 +567,7 @@ export namespace MessageV2 {
       issue: next.error.issues.length,
       issues: compactIssues(next.error.issues),
     })
-    return corruptedPartFallback(row, next.error.issues)
+    return undefined
   }
 
   const older = (row: Cursor) =>

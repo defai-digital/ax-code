@@ -43,8 +43,7 @@ test("Oxlint LSP detection caches --lsp support check", async () => {
   expect(src).toContain("supportsLsp")
   expect(src).toContain("const pending = Promise.resolve().then(() => checkSupportsLsp(lintBin))")
   expect(src).toContain("setSupportCache(lintBin, pending)")
-  expect(src).toContain('spawn(lintBin, ["--help"])')
-  expect(src).not.toContain('spawn(lintBin, ["--help"],')
+  expect(src).toContain('spawn(lintBin, ["--help"], { timeout: 5_000 })')
 })
 
 test("Oxlint LSP detection retries after transient --help failures", async () => {

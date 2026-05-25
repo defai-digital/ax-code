@@ -178,8 +178,15 @@ async function acquireFileLock(): Promise<Disposable> {
     if (Date.now() >= deadline) {
       throw new Error("Failed to acquire auth lock: timed out waiting for active holder")
     }
-    await new Promise<void>((r) => setTimeout(r, LOCK_POLL_MS))
+    await sleepUnref(LOCK_POLL_MS)
   }
+}
+
+function sleepUnref(ms: number) {
+  return new Promise<void>((resolve) => {
+    const timer = setTimeout(resolve, ms)
+    timer.unref?.()
+  })
 }
 
 const fail = (message: string) => (cause: unknown) => new Auth.AuthError({ message, cause })

@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, spyOn, test } from "bun:test"
 import path from "path"
 import { FileLock } from "../../src/util/filelock"
 import { currentLockHost } from "../../src/util/process-lock"
@@ -31,5 +31,50 @@ describe("util.filelock", () => {
     lock[Symbol.dispose]()
 
     expect(JSON.parse(await Bun.file(lockpath).text())).toEqual(otherOwner)
+  })
+
+  test("unreferences polling timers while waiting for an active holder", async () => {
+    await using tmp = await tmpdir()
+    const filepath = path.join(tmp.path, "state.json")
+    const lockpath = filepath + ".lock"
+    const originalSetTimeout = globalThis.setTimeout
+    let unrefCalls = 0
+    let nowCalls = 0
+
+    await Bun.write(
+      lockpath,
+      JSON.stringify({
+        pid: process.pid + 1,
+        startedAt: 1_000,
+        host: currentLockHost(),
+      }),
+    )
+
+    const killSpy = spyOn(process, "kill").mockImplementation(() => true as any)
+    const nowSpy = spyOn(Date, "now").mockImplementation(() => {
+      nowCalls += 1
+      return nowCalls >= 5 ? 2_010 : 2_000
+    })
+
+    globalThis.setTimeout = ((fn: (...args: any[]) => void, _ms?: number, ...args: any[]) => {
+      originalSetTimeout(() => fn(...args), 0)
+      return {
+        unref() {
+          unrefCalls += 1
+          return this
+        },
+      } as any
+    }) as typeof setTimeout
+
+    try {
+      await expect(FileLock.acquire(filepath, { timeoutMs: 5, staleMs: 60_000 })).rejects.toThrow(
+        "timed out waiting for file lock",
+      )
+      expect(unrefCalls).toBeGreaterThan(0)
+    } finally {
+      globalThis.setTimeout = originalSetTimeout
+      killSpy.mockRestore()
+      nowSpy.mockRestore()
+    }
   })
 })

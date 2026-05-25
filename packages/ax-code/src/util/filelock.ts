@@ -111,8 +111,15 @@ export namespace FileLock {
       if (Date.now() >= deadline) {
         throw new Error(`timed out waiting for file lock: ${target}`)
       }
-      await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS))
+      await sleepUnref(POLL_INTERVAL_MS)
     }
+  }
+
+  function sleepUnref(ms: number) {
+    return new Promise<void>((resolve) => {
+      const timer = setTimeout(resolve, ms)
+      timer.unref?.()
+    })
   }
 
   function makeDisposable(target: string): Disposable {
