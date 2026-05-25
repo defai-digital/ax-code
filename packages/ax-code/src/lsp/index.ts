@@ -374,6 +374,8 @@ export namespace LSP {
     return (await getClientsDetailed(file, opts)).clients
   }
 
+  const pointRuntime = { timeoutMs: RPC_TIMEOUT_MS, selectClients: getClientsDetailed }
+
   async function getWorkspaceClientsDetailed(opts: ClientOptions = {}): Promise<ClientSelection> {
     const s = await state()
     const request = resolveClientRequest(opts)
@@ -644,15 +646,11 @@ export namespace LSP {
     line: number
     character: number
   }): Promise<SemanticEnvelope<unknown[]>> {
-    return LSPPoint.hoverEnvelope(input, {
-      timeoutMs: RPC_TIMEOUT_MS,
-      selectClients: getClientsDetailed,
-    })
+    return LSPPoint.hoverEnvelope(input, pointRuntime)
   }
 
   export async function hover(input: { file: string; line: number; character: number }) {
-    const envelope = await hoverEnvelope(input)
-    return envelope.data
+    return LSPPoint.hover(input, pointRuntime)
   }
 
   // Back-compat alias for the original workspaceSymbol-specific shape.
@@ -715,15 +713,11 @@ export namespace LSP {
     line: number
     character: number
   }): Promise<SemanticEnvelope<unknown[]>> {
-    return LSPPoint.definitionEnvelope(input, {
-      timeoutMs: RPC_TIMEOUT_MS,
-      selectClients: getClientsDetailed,
-    })
+    return LSPPoint.definitionEnvelope(input, pointRuntime)
   }
 
   export async function definition(input: { file: string; line: number; character: number }) {
-    const envelope = await definitionEnvelope(input)
-    return envelope.data
+    return LSPPoint.definition(input, pointRuntime)
   }
 
   export async function referencesCachedEnvelope(input: {
@@ -752,8 +746,7 @@ export namespace LSP {
   }
 
   export async function implementation(input: { file: string; line: number; character: number }) {
-    const envelope = await implementationEnvelope(input)
-    return envelope.data
+    return LSPPoint.implementation(input, pointRuntime)
   }
 
   export async function implementationEnvelope(input: {
@@ -761,15 +754,11 @@ export namespace LSP {
     line: number
     character: number
   }): Promise<SemanticEnvelope<unknown[]>> {
-    return LSPPoint.implementationEnvelope(input, {
-      timeoutMs: RPC_TIMEOUT_MS,
-      selectClients: getClientsDetailed,
-    })
+    return LSPPoint.implementationEnvelope(input, pointRuntime)
   }
 
   export async function prepareCallHierarchy(input: { file: string; line: number; character: number }) {
-    const envelope = await prepareCallHierarchyEnvelope(input)
-    return envelope.data
+    return LSPPoint.prepareCallHierarchy(input, pointRuntime)
   }
 
   export async function prepareCallHierarchyEnvelope(input: {
@@ -777,15 +766,11 @@ export namespace LSP {
     line: number
     character: number
   }): Promise<SemanticEnvelope<unknown[]>> {
-    return LSPPoint.prepareCallHierarchyEnvelope(input, {
-      timeoutMs: RPC_TIMEOUT_MS,
-      selectClients: getClientsDetailed,
-    })
+    return LSPPoint.prepareCallHierarchyEnvelope(input, pointRuntime)
   }
 
   export async function incomingCalls(input: { file: string; line: number; character: number }) {
-    const envelope = await incomingCallsEnvelope(input)
-    return envelope.data
+    return LSPPoint.incomingCalls(input, pointRuntime)
   }
 
   export async function incomingCallsEnvelope(input: {
@@ -793,15 +778,11 @@ export namespace LSP {
     line: number
     character: number
   }): Promise<SemanticEnvelope<unknown[]>> {
-    return LSPPoint.incomingCallsEnvelope(input, {
-      timeoutMs: RPC_TIMEOUT_MS,
-      selectClients: getClientsDetailed,
-    })
+    return LSPPoint.incomingCallsEnvelope(input, pointRuntime)
   }
 
   export async function outgoingCalls(input: { file: string; line: number; character: number }) {
-    const envelope = await outgoingCallsEnvelope(input)
-    return envelope.data
+    return LSPPoint.outgoingCalls(input, pointRuntime)
   }
 
   export async function outgoingCallsEnvelope(input: {
@@ -809,26 +790,8 @@ export namespace LSP {
     line: number
     character: number
   }): Promise<SemanticEnvelope<unknown[]>> {
-    return LSPPoint.outgoingCallsEnvelope(input, {
-      timeoutMs: RPC_TIMEOUT_MS,
-      selectClients: getClientsDetailed,
-    })
+    return LSPPoint.outgoingCallsEnvelope(input, pointRuntime)
   }
 
-  export namespace Diagnostic {
-    export function pretty(diagnostic: LSPClient.Diagnostic) {
-      const severityMap = {
-        1: "ERROR",
-        2: "WARN",
-        3: "INFO",
-        4: "HINT",
-      }
-
-      const severity = severityMap[diagnostic.severity ?? 1]
-      const line = diagnostic.range.start.line + 1
-      const col = diagnostic.range.start.character + 1
-
-      return `${severity} [${line}:${col}] ${diagnostic.message}`
-    }
-  }
+  export const Diagnostic = LSPDiagnostics.Diagnostic
 }

@@ -174,6 +174,14 @@ export function hoverEnvelope(
   })
 }
 
+async function envelopeData<T>(envelope: Promise<SemanticEnvelope<T>>): Promise<T> {
+  return (await envelope).data
+}
+
+export function hover(input: PointInput, runtime: PointEnvelopeRuntime): Promise<unknown[]> {
+  return envelopeData(hoverEnvelope(input, runtime))
+}
+
 export function definitionEnvelope(
   input: PointInput,
   runtime: PointEnvelopeRuntime,
@@ -186,6 +194,10 @@ export function definitionEnvelope(
     timeoutMs: runtime.timeoutMs,
     selectClients: runtime.selectClients,
   })
+}
+
+export function definition(input: PointInput, runtime: PointEnvelopeRuntime): Promise<unknown[]> {
+  return envelopeData(definitionEnvelope(input, runtime))
 }
 
 export function implementationEnvelope(
@@ -202,6 +214,10 @@ export function implementationEnvelope(
   })
 }
 
+export function implementation(input: PointInput, runtime: PointEnvelopeRuntime): Promise<unknown[]> {
+  return envelopeData(implementationEnvelope(input, runtime))
+}
+
 export function prepareCallHierarchyEnvelope(
   input: PointInput,
   runtime: PointEnvelopeRuntime,
@@ -214,6 +230,10 @@ export function prepareCallHierarchyEnvelope(
     timeoutMs: runtime.timeoutMs,
     selectClients: runtime.selectClients,
   })
+}
+
+export function prepareCallHierarchy(input: PointInput, runtime: PointEnvelopeRuntime): Promise<unknown[]> {
+  return envelopeData(prepareCallHierarchyEnvelope(input, runtime))
 }
 
 export function incomingCallsEnvelope(
@@ -229,6 +249,10 @@ export function incomingCallsEnvelope(
   })
 }
 
+export function incomingCalls(input: PointInput, runtime: PointEnvelopeRuntime): Promise<unknown[]> {
+  return envelopeData(incomingCallsEnvelope(input, runtime))
+}
+
 export function outgoingCallsEnvelope(
   input: PointInput,
   runtime: PointEnvelopeRuntime,
@@ -240,4 +264,8 @@ export function outgoingCallsEnvelope(
     timeoutMs: runtime.timeoutMs,
     selectClients: runtime.selectClients,
   })
+}
+
+export function outgoingCalls(input: PointInput, runtime: PointEnvelopeRuntime): Promise<unknown[]> {
+  return envelopeData(outgoingCallsEnvelope(input, runtime))
 }

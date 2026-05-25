@@ -2,6 +2,7 @@ import { expect, test } from "bun:test"
 import {
   callHierarchyCallsEnvelope,
   callHierarchyCallsForClient,
+  hover,
   hoverEnvelope,
   incomingCallsEnvelope,
   pointRequestParams,
@@ -145,6 +146,25 @@ test("hoverEnvelope owns hover request defaults and filters empty responses", as
   expect(selectedOptions).toEqual({ mode: "semantic", method: "hover" })
   expect(envelope.data).toEqual([{ contents: "ok" }])
   expect(envelope.completeness).toBe("full")
+})
+
+test("hover returns only hover envelope data", async () => {
+  const client = {
+    ...clientWithResponses({
+      "textDocument/hover": { contents: "ok" },
+    }),
+    serverID: "fake",
+  }
+
+  await expect(
+    hover(
+      { file: "/tmp/project/src/index.ts", line: 1, character: 2 },
+      {
+        timeoutMs: 1_000,
+        selectClients: async () => ({ clients: [client], freshSpawnCount: 0 }),
+      },
+    ),
+  ).resolves.toEqual([{ contents: "ok" }])
 })
 
 test("callHierarchyCallsEnvelope delegates through selected clients", async () => {
