@@ -28,6 +28,43 @@ describe("session.risk", () => {
     }
   }
 
+  test("decodeSessionDiffJson decodes valid session diffs", () => {
+    const decoded = Risk.decodeSessionDiffJson(
+      JSON.stringify([
+        {
+          file: "src/index.ts",
+          before: "old",
+          after: "new",
+          additions: 2,
+          deletions: 1,
+          status: "modified",
+        },
+      ]),
+    )
+
+    expect(decoded).toEqual({
+      success: true,
+      data: [
+        {
+          file: "src/index.ts",
+          before: "old",
+          after: "new",
+          additions: 2,
+          deletions: 1,
+          status: "modified",
+        },
+      ],
+    })
+  })
+
+  test("decodeSessionDiffJson separates invalid JSON from schema failures", () => {
+    expect(() => Risk.decodeSessionDiffJson("{not json")).toThrow(SyntaxError)
+
+    const decoded = Risk.decodeSessionDiffJson(JSON.stringify([{ file: "src/index.ts", additions: "2" }]))
+    expect(decoded.success).toBe(false)
+    if (!decoded.success) expect(decoded.error.length).toBeGreaterThan(0)
+  })
+
   test("omits quality readiness by default", async () => {
     await using tmp = await tmpdir({ git: true })
 

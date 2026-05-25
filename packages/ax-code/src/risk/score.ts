@@ -78,6 +78,16 @@ export namespace Risk {
     detail: string
   }
 
+  export type SessionDiffJsonDecodeResult =
+    | { success: true; data: Snapshot.FileDiff[] }
+    | { success: false; error: string }
+
+  export function decodeSessionDiffJson(raw: string): SessionDiffJsonDecodeResult {
+    const parsed: unknown = JSON.parse(raw)
+    const decoded = Snapshot.FileDiff.array().safeParse(parsed)
+    return decoded.success ? { success: true, data: decoded.data } : { success: false, error: decoded.error.message }
+  }
+
   const SECURITY_PATTERNS = [
     /auth/i,
     /password/i,
@@ -196,9 +206,9 @@ export namespace Risk {
     if (!existsSync(next)) return
     try {
       const raw = readFileSync(next, "utf-8")
-      const parsed = Snapshot.FileDiff.array().safeParse(JSON.parse(raw))
-      if (parsed.success) return parsed.data
-      log.warn("risk diff parse failed", { sessionID, error: parsed.error.message })
+      const decoded = decodeSessionDiffJson(raw)
+      if (decoded.success) return decoded.data
+      log.warn("risk diff parse failed", { sessionID, error: decoded.error })
       return
     } catch (err) {
       log.warn("risk diff read failed", { sessionID, err })
