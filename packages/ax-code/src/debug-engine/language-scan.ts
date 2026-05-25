@@ -15,7 +15,7 @@
 import { spawn } from "child_process"
 import z from "zod"
 import { Instance } from "../project/instance"
-import { parseJsonPayload } from "../util/json-value"
+import { parseJsonPayload, parseJsonResult } from "../util/json-value"
 
 // ─── Shared types ──────────────────────────────────────────────────
 
@@ -80,6 +80,16 @@ function languageScanError(
 
 function isMissingToolError(errorMsg: string): boolean {
   return errorMsg.includes("ENOENT") || errorMsg.includes("not found")
+}
+
+function parseLanguageScanJson(output: string): unknown {
+  const parsed = parseJsonResult(output)
+  if (!parsed.ok) {
+    const { error } = parsed
+    if (error instanceof Error) throw error
+    throw new SyntaxError(String(error))
+  }
+  return parsed.value
 }
 
 // ─── Cargo Clippy Scanner ──────────────────────────────────────────
@@ -251,7 +261,7 @@ export async function detectRuff(input: DetectRuffInput = {}): Promise<LanguageS
 }
 
 export function parseRuffOutput(output: string): ParsedLanguageScan {
-  return decodeRuffScanJson(JSON.parse(output))
+  return decodeRuffScanJson(parseLanguageScanJson(output))
 }
 
 export function decodeRuffScanJson(json: unknown): ParsedLanguageScan {
@@ -346,7 +356,7 @@ export async function detectMypy(input: DetectMypyInput = {}): Promise<LanguageS
 }
 
 export function parseMypyOutput(output: string): ParsedLanguageScan {
-  return decodeMypyScanJson(JSON.parse(output))
+  return decodeMypyScanJson(parseLanguageScanJson(output))
 }
 
 export function decodeMypyScanJson(json: unknown): ParsedLanguageScan {
