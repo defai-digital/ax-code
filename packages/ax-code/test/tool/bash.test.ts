@@ -387,6 +387,12 @@ describe("tool.bash truncation", () => {
     expect(src).not.toContain("proc.exitCode === 0 || proc.signalCode")
   })
 
+  test("truncation keeps a valid lead byte when the next byte is a UTF-8 continuation", async () => {
+    const src = await Bun.file(path.join(import.meta.dir, "../../src/tool/bash.ts")).text()
+    expect(src).toContain("safeRemaining === 0 && chunk.length > 0 && (chunk[0]! & 0xc0) !== 0x80")
+    expect(src).toContain("safeRemaining = 1")
+  })
+
   test("truncates output exceeding line limit", async () => {
     await Instance.provide({
       directory: projectRoot,

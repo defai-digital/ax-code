@@ -102,7 +102,7 @@ describe("probeCliLanguageModel", () => {
     } as any)
 
     try {
-      await expect(checkCliProviderAuth("claude-code", "claude")).resolves.toContain("claude CLI is not logged in")
+      await expect(checkCliProviderAuth("claude-code", "claude")).resolves.toContain("Claude CLI is not logged in")
     } finally {
       runSpy.mockRestore()
     }

@@ -120,6 +120,17 @@ describe("session.processor", () => {
     expect(src).toContain("annotatedError = `${base}\\n\\n<system-reminder>\\n${guidance}\\n</system-reminder>`")
   })
 
+  test("sanitizes tool output before appending doom-loop reminders", async () => {
+    const src = await Bun.file(path.join(import.meta.dir, "../../src/session/processor.ts")).text()
+    expect(src).toContain("`${sanitizeForXmlTag(value.output.output)}\\n\\n<system-reminder>")
+  })
+
+  test("stores sanitized rejected permission and question errors", async () => {
+    const src = await Bun.file(path.join(import.meta.dir, "../../src/session/processor.ts")).text()
+    expect(src).toContain("const sanitizedError = sanitizeForXmlTag(errorMsg)")
+    expect(src).toContain("let annotatedError = sanitizedError")
+  })
+
   test("clears per-attempt tool rate-limit timestamps before retrying", async () => {
     const src = await Bun.file(path.join(import.meta.dir, "../../src/session/processor.ts")).text()
     const catchStart = src.indexOf("} catch (e: unknown) {")

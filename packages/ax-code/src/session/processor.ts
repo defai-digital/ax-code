@@ -536,7 +536,7 @@ export namespace SessionProcessor {
                     const doomLoopWarning = doomLoopWarnings[value.toolCallId]
                     const output =
                       doomLoopWarning && typeof value.output.output === "string"
-                        ? `${value.output.output}\n\n<system-reminder>\n${doomLoopWarning}\n</system-reminder>`
+                        ? `${sanitizeForXmlTag(value.output.output)}\n\n<system-reminder>\n${doomLoopWarning}\n</system-reminder>`
                         : value.output.output
                     await Session.updatePart.force({
                       ...match,
@@ -611,7 +611,7 @@ export namespace SessionProcessor {
                     // Sanitize once so subsequent appends don't re-sanitize already-added
                     // <system-reminder> blocks (which would corrupt their XML tags).
                     const sanitizedError = sanitizeForXmlTag(errorMsg)
-                    let annotatedError = errorMsg
+                    let annotatedError = sanitizedError
                     const doomLoopWarning = doomLoopWarnings[value.toolCallId]
                     if (
                       !(value.error instanceof Permission.RejectedError) &&

@@ -245,20 +245,38 @@ const CLI_DEFAULT_MODEL_NAMES: Record<string, string> = {
   "codex-cli": "Codex CLI default",
 }
 
-function cliModels(providerID: string, provider: Provider.Info): Record<string, Provider.Model> {
+function cliModels(providerID: string, provider: Provider.Info, resolved?: string): Record<string, Provider.Model> {
   const base = Object.values(provider.models)[0]
   if (!base) return {}
-  const id = ModelID.make(providerID)
   const name = CLI_DEFAULT_MODEL_NAMES[providerID] ?? "CLI default"
   const models: Record<string, Provider.Model> = {}
-  models[id] = {
-    ...base,
-    id,
-    providerID: ProviderID.make(providerID),
-    api: { ...base.api, id: providerID },
-    name,
+  const add = (modelID: string, modelName: string) => {
+    const id = ModelID.make(modelID)
+    models[id] = {
+      ...base,
+      id,
+      providerID: ProviderID.make(providerID),
+      api: { ...base.api, id: modelID },
+      name: modelName,
+    }
+  }
+  add(providerID, name)
+  if (resolved && resolved !== providerID) {
+    add(resolved, `${name} (${resolved})`)
   }
   return models
+}
+
+function cliModel(providerID: string, provider: Provider.Info, modelID: string): Provider.Model | undefined {
+  const base = Object.values(provider.models)[0]
+  if (!base) return
+  return {
+    ...base,
+    id: ModelID.make(modelID),
+    providerID: ProviderID.make(providerID),
+    api: { ...base.api, id: modelID },
+    name: modelID === providerID ? (CLI_DEFAULT_MODEL_NAMES[providerID] ?? "CLI default") : modelID,
+  }
 }
 
 interface CliLoaderOpts {
@@ -279,6 +297,8 @@ function cliLoader(opts: CliLoaderOpts): CustomLoader {
         if (!path) throw new Error(`${opts.binary} CLI not found in PATH`)
         const authError = await checkCliProviderAuth(opts.providerID, path)
         if (authError) throw new Error(authError)
+        const published = cliModel(opts.providerID, provider, modelID)
+        if (!published) throw new Error(`Model not found: ${opts.providerID}/${modelID}`)
         return new CliLanguageModel({
           providerID: opts.providerID,
           modelID,
@@ -294,8 +314,8 @@ function cliLoader(opts: CliLoaderOpts): CustomLoader {
         if (!path) return {}
         const authError = await checkCliProviderAuth(opts.providerID, path)
         if (authError) return {}
-        await resolveCliModel(opts.providerID)
-        return cliModels(opts.providerID, provider)
+        const resolved = await resolveCliModel(opts.providerID)
+        return cliModels(opts.providerID, provider, resolved.model)
       },
     }
   }

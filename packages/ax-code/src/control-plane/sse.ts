@@ -96,11 +96,13 @@ export async function parseSSE(
         flushTrailing = true
         break
       }
-      buf += decoder.decode(next.value, { stream: true })
-      if (buf.length > MAX_SSE_BUFFER_CHARS) {
-        log.warn("SSE buffer exceeded limit", { size: buf.length, max: MAX_SSE_BUFFER_CHARS })
+      const chunk = decoder.decode(next.value, { stream: true })
+      const nextSize = buf.length + chunk.length
+      if (nextSize > MAX_SSE_BUFFER_CHARS) {
+        log.warn("SSE buffer exceeded limit", { size: nextSize, max: MAX_SSE_BUFFER_CHARS })
         throw new Error(`SSE buffer exceeded maximum size (${MAX_SSE_BUFFER_CHARS} chars)`)
       }
+      buf += chunk
 
       while (true) {
         const boundary = SSE_BLOCK_BOUNDARY.exec(buf)

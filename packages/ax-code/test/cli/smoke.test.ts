@@ -106,7 +106,7 @@ describe("cli smoke", () => {
 
     const text = out.stdout.toString().trim()
     expect(out.code).toBe(0)
-    expect(text).toBe(path.join(Global.Path.data, "ax-code.db"))
+    expect(text).toBe(Database.Path)
   }, 20000)
 
   test("run --file resolves relative paths from AX_CODE_ORIGINAL_CWD", async () => {

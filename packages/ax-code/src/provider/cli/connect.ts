@@ -50,7 +50,7 @@ async function checkClaudeAuth(binary: string): Promise<string | undefined> {
         continue
       }
       if (isClaudeAuthFailure(event)) {
-        return "claude CLI is not logged in — run `claude login` first"
+        return "Claude CLI is not logged in. Run `claude login` first, then retry `ax-code providers login --provider claude-code`."
       }
     }
 

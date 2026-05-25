@@ -87,6 +87,20 @@ describe("AgentOptimizationTrace.verificationStatusFromObservations", () => {
     })
   })
 
+  test("uses the latest verification observation in a step", () => {
+    const result = AgentOptimizationTrace.verificationStatusFromObservations({
+      repeatedFailureDetected: false,
+      observations: [
+        { tool: "bash", status: "error", input: { command: "bun test" } },
+        { tool: "bash", status: "completed", input: { command: "bun test" } },
+      ],
+    })
+    expect(result).toEqual({
+      status: "pass",
+      command: "bun test",
+    })
+  })
+
   test("keeps non-verification tools as skip", () => {
     const result = AgentOptimizationTrace.verificationStatusFromObservations({
       repeatedFailureDetected: false,

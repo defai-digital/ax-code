@@ -52,6 +52,13 @@ async function expectMissingCliProvider(input: {
 }
 
 describe("CLI provider loaders", () => {
+  test("CLI provider discovery publishes resolved external model ids", async () => {
+    const src = await Bun.file(path.join(import.meta.dir, "../../src/provider/loaders.ts")).text()
+    expect(src).toContain("return cliModels(opts.providerID, provider, resolved.model)")
+    expect(src).toContain("if (resolved && resolved !== providerID)")
+    expect(src).toContain("add(resolved, `${name} (${resolved})`)")
+  })
+
   test("claude-code configured provider does not discover runnable variants when binary missing", async () => {
     await expectMissingCliProvider({
       providerID: "claude-code",

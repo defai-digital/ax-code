@@ -195,6 +195,17 @@ describe("LongAgentContextPacker.pack - debugSummary", () => {
 })
 
 describe("LongAgentContextPacker.render", () => {
+  test("totalTokens accounts for render separators", () => {
+    const result = LongAgentContextPacker.pack({
+      tokenBudget: BIG_BUDGET,
+      task: "abcd",
+      agentsMd: "efgh",
+    })
+
+    expect(result.totalTokens).toBeGreaterThan(Math.ceil("abcdefgh".length / 4))
+    expect(result.totalTokens).toBe(Math.ceil(LongAgentContextPacker.render(result).length / 4))
+  })
+
   test("concatenates entry contents with double newlines", () => {
     const result = LongAgentContextPacker.pack({
       tokenBudget: BIG_BUDGET,
