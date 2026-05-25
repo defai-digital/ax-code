@@ -57,12 +57,45 @@ describe("session.risk", () => {
     })
   })
 
+  test("decodeSessionDiffValue decodes parsed session diffs", () => {
+    const decoded = Risk.decodeSessionDiffValue([
+      {
+        file: "src/index.ts",
+        before: "old",
+        after: "new",
+        additions: 2,
+        deletions: 1,
+        status: "modified",
+      },
+    ])
+
+    expect(decoded).toEqual({
+      success: true,
+      data: [
+        {
+          file: "src/index.ts",
+          before: "old",
+          after: "new",
+          additions: 2,
+          deletions: 1,
+          status: "modified",
+        },
+      ],
+    })
+  })
+
   test("decodeSessionDiffJson separates invalid JSON from schema failures", () => {
     const malformed = Risk.decodeSessionDiffJson("{not json")
     expect(malformed.success).toBe(false)
     if (!malformed.success) expect(malformed.error.length).toBeGreaterThan(0)
 
     const decoded = Risk.decodeSessionDiffJson(JSON.stringify([{ file: "src/index.ts", additions: "2" }]))
+    expect(decoded.success).toBe(false)
+    if (!decoded.success) expect(decoded.error.length).toBeGreaterThan(0)
+  })
+
+  test("decodeSessionDiffValue reports schema failures without parsing JSON", () => {
+    const decoded = Risk.decodeSessionDiffValue([{ file: "src/index.ts", additions: "2" }])
     expect(decoded.success).toBe(false)
     if (!decoded.success) expect(decoded.error.length).toBeGreaterThan(0)
   })
