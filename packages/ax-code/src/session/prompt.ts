@@ -37,6 +37,7 @@ import { emitPromptLoopCompletionGateDecision } from "./prompt-loop-completion-g
 import { handlePromptLoopCompletionGateRetry } from "./prompt-loop-completion-gate-retry"
 import { handlePromptLoopEmptyTurn } from "./prompt-loop-empty-turn"
 import { handlePromptLoopTodoConvergence } from "./prompt-loop-todo-convergence"
+import { handlePromptLoopTodoContinuation } from "./prompt-loop-todo-continuation"
 import { loopMessages, scanLoopMessages } from "./prompt-loop-messages"
 import { finishPromptLoopQueue } from "./prompt-loop-queue"
 import {
@@ -53,7 +54,6 @@ import { executeSubtask, type SubtaskContext } from "./prompt-subtask"
 import { resolveTools } from "./prompt-tools"
 import { clearPromptProcessorInstructions, createPromptProcessor } from "./prompt-processor"
 import { addPromptGoalUsage } from "./prompt-goal-usage"
-import { pendingTodoContinuationDecision } from "./prompt-todo-continuation"
 import { AutonomousContinuationPrompt } from "./prompt-autonomous-continuations"
 import {
   agentStepLimitContinuationDecision,
@@ -63,7 +63,6 @@ import {
 import { insertReminders } from "./prompt-reminders"
 import { executeShellCommand } from "./prompt-shell-command"
 import { executePromptCommand } from "./prompt-command-execution"
-import { publishPromptFailure } from "./prompt-loop-failure"
 import { createDeferredCodeGraphAutoIndex } from "./prompt-code-graph"
 import { recordPromptSessionStart } from "./prompt-session-start"
 import { scheduleFirstTurnSummary } from "./prompt-session-summary"
@@ -645,80 +644,30 @@ export namespace SessionPrompt {
         }
 
         if (modelFinished && pendingTodos.length > 0) {
-          const todoContinuation = pendingTodoContinuationDecision({
+          const todoContinuation = await handlePromptLoopTodoContinuation({
+            sessionID,
+            assistant: processor.message,
             isLastStep,
             todoRetries,
             maxTodoRetries,
             pendingTodos,
             lastPendingTodoSignature,
             stagnantTodoRetries,
+            maxSteps,
           })
 
-          if (todoContinuation.action === "stop_step_limit") {
-            log.warn("autonomous todo continuation stopped at agent step limit", {
-              command: "session.prompt.loop",
-              status: "stopped",
-              errorCode: todoContinuation.errorCode,
-              sessionID,
-              pendingCount: pendingTodos.length,
-              attempts: todoRetries,
-              maxAttempts: maxTodoRetries,
-              maxSteps,
-            })
-            await publishPromptFailure({ sessionID, assistant: processor.message, message: todoContinuation.message })
-            reason = todoContinuation.reason
-            break
-          }
-
-          if (todoContinuation.action === "stop_retry_budget") {
-            log.warn("autonomous todo continuation stopped after retry budget", {
-              command: "session.prompt.loop",
-              status: "stopped",
-              sessionID,
-              pendingCount: pendingTodos.length,
-              attempts: todoRetries,
-              maxAttempts: maxTodoRetries,
-            })
-            await publishPromptFailure({ sessionID, assistant: processor.message, message: todoContinuation.message })
+          if (todoContinuation.action === "stop") {
             reason = todoContinuation.reason
             break
           }
 
           lastPendingTodoSignature = todoContinuation.lastPendingTodoSignature
-          stagnantTodoRetries = todoContinuation.stagnantTodoRetries
           todoRetries = todoContinuation.todoRetries
-
-          if (todoContinuation.stagnant) {
-            log.warn("autonomous todo continuation is stagnant", {
-              command: "session.prompt.loop",
-              status: "retry",
-              sessionID,
-              pendingCount: pendingTodos.length,
-              attempts: todoRetries,
-              stagnantAttempts: stagnantTodoRetries,
-              maxStagnantAttempts: todoContinuation.maxStagnantAttempts,
-            })
-          }
-
-          log.info("autonomous todo continuation", {
-            command: "session.prompt.loop",
-            status: "ok",
-            sessionID,
-            pendingCount: pendingTodos.length,
-            attempt: todoRetries,
-            maxAttempts: maxTodoRetries,
-            stagnantAttempts: stagnantTodoRetries,
-          })
+          stagnantTodoRetries = todoContinuation.stagnantTodoRetries
           await createAutonomousTextContinuation({
             sessionID,
             messages: latestMessages,
-            text: AutonomousContinuationPrompt.todoContinuation({
-              pendingTodos,
-              attempt: todoRetries,
-              maxAttempts: maxTodoRetries,
-              includeReportClosureGuidance: todoContinuation.includeReportClosureGuidance,
-              stagnantTodoRetries: todoContinuation.stagnant ? stagnantTodoRetries : undefined,
-            }),
+            text: todoContinuation.text,
           })
           continue
         }
