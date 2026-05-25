@@ -123,6 +123,25 @@ export const spawnInfo = (
   }
 }
 
+export const bunSpawnInfo = (
+  root: string,
+  script: string,
+  args: string[] = [],
+  initialization?: Record<string, any>,
+): Handle => {
+  const handle = {
+    process: spawn(BunProc.which(), [script, ...args], {
+      cwd: root,
+      env: bunEnv(),
+    }),
+  }
+  if (!initialization) return handle
+  return {
+    ...handle,
+    initialization,
+  }
+}
+
 export const toolServer = async (
   root: string,
   input: Parameters<typeof toolBin>[0] & {
