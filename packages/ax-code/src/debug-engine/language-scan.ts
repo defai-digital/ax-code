@@ -15,6 +15,7 @@
 import { spawn } from "child_process"
 import z from "zod"
 import { Instance } from "../project/instance"
+import { parseJsonPayload } from "../util/json-value"
 
 // ─── Shared types ──────────────────────────────────────────────────
 
@@ -128,12 +129,8 @@ export function decodeClippyJsonMessage(value: unknown): ClippyDiagnosticMessage
 }
 
 export function parseClippyJsonLine(line: string): ClippyDiagnosticMessage | undefined {
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(line)
-  } catch {
-    return undefined
-  }
+  const parsed = parseJsonPayload(line)
+  if (parsed === undefined) return undefined
   return decodeClippyJsonMessage(parsed)
 }
 

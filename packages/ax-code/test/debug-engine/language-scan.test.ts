@@ -85,7 +85,7 @@ describe("language-scan", () => {
 
     test("parseClippyJsonLine decodes wrapped compiler messages", () => {
       const decoded = parseClippyJsonLine(
-        JSON.stringify({
+        `  ${JSON.stringify({
           reason: "compiler-message",
           message: {
             message: "unused variable",
@@ -102,7 +102,7 @@ describe("language-scan", () => {
               },
             ],
           },
-        }),
+        })}\n`,
       )
 
       expect(decoded?.message).toBe("unused variable")
@@ -112,6 +112,7 @@ describe("language-scan", () => {
 
     test("parseClippyJsonLine rejects malformed clippy JSON lines", () => {
       expect(parseClippyJsonLine("{not json")).toBeUndefined()
+      expect(parseClippyJsonLine("")).toBeUndefined()
       expect(parseClippyJsonLine(JSON.stringify({ message: "missing spans", level: "warning" }))).toBeUndefined()
     })
 
