@@ -1057,6 +1057,22 @@ export namespace QualityModelRegistry {
     }
   }
 
+  function approvalRecordSummary(
+    approval: QualityPromotionApproval.ApprovalArtifact,
+  ): NonNullable<PromotionRecord["approval"]> {
+    return {
+      approvalID: approval.approvalID,
+      approvedAt: approval.approvedAt,
+      approver: approval.approver,
+      role: approval.role,
+      team: approval.team ?? null,
+      reportingChain: approval.reportingChain ?? null,
+      disposition: approval.disposition,
+      decisionBundleCreatedAt: approval.decisionBundle.createdAt,
+      decisionBundleDigest: approval.decisionBundle.digest,
+    }
+  }
+
   function buildReleasePacketPromotionSnapshot(input: {
     releasePacket: QualityPromotionReleasePacket.PacketArtifact
     promotionMetadata: PromotionMetadata
@@ -1272,19 +1288,7 @@ export namespace QualityModelRegistry {
         decision,
         decisionBundleCreatedAt: input.decisionBundleCreatedAt ?? null,
         submissionBundle: input.submissionBundle ? submissionBundleRecordSummary(input.submissionBundle) : undefined,
-        approval: input.approval
-          ? {
-              approvalID: input.approval.approvalID,
-              approvedAt: input.approval.approvedAt,
-              approver: input.approval.approver,
-              role: input.approval.role,
-              team: input.approval.team ?? null,
-              reportingChain: input.approval.reportingChain ?? null,
-              disposition: input.approval.disposition,
-              decisionBundleCreatedAt: input.approval.decisionBundle.createdAt,
-              decisionBundleDigest: input.approval.decisionBundle.digest,
-            }
-          : undefined,
+        approval: input.approval ? approvalRecordSummary(input.approval) : undefined,
         approvalPacket: input.approvalPacket
           ? {
               packetID: input.approvalPacket.packetID,
@@ -1298,17 +1302,7 @@ export namespace QualityModelRegistry {
               overallStatus: input.approvalPacket.readiness.overallStatus,
             }
           : undefined,
-        approvals: input.approvals?.map((approval) => ({
-          approvalID: approval.approvalID,
-          approvedAt: approval.approvedAt,
-          approver: approval.approver,
-          role: approval.role,
-          team: approval.team ?? null,
-          reportingChain: approval.reportingChain ?? null,
-          disposition: approval.disposition,
-          decisionBundleCreatedAt: approval.decisionBundle.createdAt,
-          decisionBundleDigest: approval.decisionBundle.digest,
-        })),
+        approvals: input.approvals?.map(approvalRecordSummary),
         adoptionReviews: input.adoptionReviews?.map((review) => ({
           reviewID: review.reviewID,
           reviewedAt: review.reviewedAt,
