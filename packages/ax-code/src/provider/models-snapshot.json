@@ -48827,30 +48827,6 @@
         },
         "status": "beta"
       },
-      "qwen37-max": {
-        "id": "qwen37-max",
-        "name": "Qwen3.7 Max",
-        "family": "qwen",
-        "attachment": false,
-        "reasoning": true,
-        "tool_call": true,
-        "temperature": true,
-        "release_date": "2026-05-21",
-        "last_updated": "2026-05-21",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 1000000,
-          "output": 65536
-        }
-      },
       "claude-opus-4-1-20250805": {
         "id": "claude-opus-4-1-20250805",
         "name": "Claude Opus 4.1",
@@ -49553,6 +49529,30 @@
         "open_weights": true,
         "limit": {
           "context": 262144,
+          "output": 65536
+        }
+      },
+      "qwen3.7-max": {
+        "id": "qwen3.7-max",
+        "name": "Qwen3.7 Max",
+        "family": "qwen",
+        "attachment": false,
+        "reasoning": true,
+        "tool_call": true,
+        "temperature": true,
+        "release_date": "2026-05-21",
+        "last_updated": "2026-05-21",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
           "output": 65536
         }
       },
@@ -88762,7 +88762,7 @@
         "temperature": false,
         "knowledge": "2025-12-30",
         "release_date": "2026-05-01",
-        "last_updated": "2026-05-15",
+        "last_updated": "2026-05-25",
         "modalities": {
           "input": [
             "text",
@@ -88774,8 +88774,8 @@
         },
         "open_weights": false,
         "limit": {
-          "context": 400000,
-          "output": 128000
+          "context": 1000000,
+          "output": 384000
         }
       }
     }

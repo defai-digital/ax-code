@@ -170,30 +170,34 @@ Use `@ax-code/sdk/headless` when your application needs to manage the AX Code se
 ```ts
 import {
   startHeadlessBackend,
+  createHeadlessClient,
   createHeadlessProjectionState,
   applyHeadlessProjectionEvent,
 } from "@ax-code/sdk/headless"
-import { createAxCodeClient } from "@ax-code/sdk/v2/client"
 
 const backend = await startHeadlessBackend({ directory: "/path/to/workspace" })
 try {
-  const client = createAxCodeClient({ baseUrl: backend.url, headers: backend.headers })
+  const client = createHeadlessClient({ baseUrl: backend.url, headers: backend.headers })
   const state = createHeadlessProjectionState()
-  const session = await client.session.create({ title: "My session" })
+  const session = await client.createSession({ title: "My session" })
 
-  // Apply events from your SSE/WebSocket stream to the projection:
-  applyHeadlessProjectionEvent(state, {
-    type: "session.created",
-    properties: { info: session },
-  })
+  await client.sendPrompt(session.id, { parts: [{ type: "text", text: "Review this project" }] })
+  for await (const event of client.subscribe()) {
+    applyHeadlessProjectionEvent(state, event)
+    if (state.session_status[session.id]?.type === "idle") break
+  }
 } finally {
   await backend.close()
 }
 ```
 
-`startHeadlessBackend` spawns `ax-code serve` on a random port, generates a one-time auth credential, and resolves once the server is ready. `close()` sends SIGTERM then SIGKILL after 300 ms.
+`startHeadlessBackend` spawns `ax-code serve` on a random port, generates a one-time auth credential, verifies `/global/health`, and resolves once the server is ready. `close()` terminates the backend process tree with SIGTERM and a SIGKILL fallback.
 
 The projection functions (`createHeadlessProjectionState`, `applyHeadlessProjectionEvent`) are pure TypeScript with no runtime dependencies — safe for use in any environment.
+
+App UIs should treat `permission`, `question`, `session_diff`, `todo`, `session_status`, and `session_error` as primary state. Autonomous replies are opt-in through projection options; supervised apps should render pending permission and question requests and answer them with the headless client helpers.
+
+See [`example/headless-app.ts`](./example/headless-app.ts) for a minimal app-style integration that starts a local backend, creates a session, sends a prompt, projects events, and shuts the backend down.
 
 ## HTTP client (server-based)
 

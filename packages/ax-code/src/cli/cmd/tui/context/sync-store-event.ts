@@ -101,6 +101,7 @@ function dispatchHeadlessProjectionEvent<
     case "session.diff":
     case "session.goal":
     case "session.status":
+    case "session.error":
     case "session.created":
     case "session.updated":
     case "session.deleted":

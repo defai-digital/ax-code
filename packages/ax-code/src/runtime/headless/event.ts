@@ -1,5 +1,7 @@
 import type { PermissionRequest, QuestionRequest } from "@ax-code/sdk/v2"
 
+export const HEADLESS_RUNTIME_SCHEMA_VERSION = 1
+
 export type HeadlessMessageEvent<
   TMessage extends { id: string; sessionID: string },
   TPart extends { id: string; messageID: string },
