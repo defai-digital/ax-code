@@ -82,6 +82,7 @@ import {
   sessionAssistantPath,
   syntheticTextPart,
   systemPrompt as getSystemPrompt,
+  textPart,
   zeroTokenUsage,
   createStructuredOutputTool,
   lastModel,
@@ -470,9 +471,7 @@ export namespace SessionPrompt {
         finish: "stop",
         error: new NamedError.Unknown({ message: input.message }).toObject(),
       }
-      const part: MessageV2.TextPart = {
-        type: "text",
-        id: PartID.ascending(),
+      const part = textPart({
         messageID: assistant.id,
         sessionID,
         text: input.message,
@@ -481,7 +480,7 @@ export namespace SessionPrompt {
           start: created,
           end: created,
         },
-      }
+      })
       await Session.updateMessageWithParts(assistant, [part])
       return assistant
     }
@@ -2375,14 +2374,12 @@ NOTE: At any point in time through this workflow you should feel free to ask the
       },
     }
     await Session.updateMessage(userMsg)
-    const userPart: MessageV2.Part = {
-      type: "text",
-      id: PartID.ascending(),
+    const userPart = textPart({
       messageID: userMsg.id,
       sessionID: input.sessionID,
       text: "The following tool was executed by the user",
       synthetic: true,
-    }
+    })
     await Session.updatePart(userPart)
 
     const msg: MessageV2.Assistant = {
@@ -2705,13 +2702,11 @@ NOTE: At any point in time through this workflow you should feel free to ask the
       finish: "stop",
     }
     return Session.updateMessageWithParts(assistant, [
-      {
-        id: PartID.ascending(),
+      textPart({
         sessionID: input.sessionID,
         messageID: assistant.id,
-        type: "text",
         text,
-      },
+      }),
     ])
   }
 

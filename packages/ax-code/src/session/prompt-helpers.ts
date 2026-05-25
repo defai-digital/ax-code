@@ -334,10 +334,12 @@ export function titleContextMessages(contextMessages: MessageV2.WithParts[]): Mo
   return [{ role: "user", content }]
 }
 
-export function syntheticTextPart(input: {
+export function textPart(input: {
   messageID: MessageID
   sessionID: SessionID
   text: string
+  synthetic?: boolean
+  time?: MessageV2.TextPart["time"]
 }): MessageV2.TextPart {
   return {
     id: PartID.ascending(),
@@ -345,8 +347,17 @@ export function syntheticTextPart(input: {
     sessionID: input.sessionID,
     type: "text",
     text: input.text,
-    synthetic: true,
+    ...(input.synthetic === undefined ? {} : { synthetic: input.synthetic }),
+    ...(input.time === undefined ? {} : { time: input.time }),
   }
+}
+
+export function syntheticTextPart(input: {
+  messageID: MessageID
+  sessionID: SessionID
+  text: string
+}): MessageV2.TextPart {
+  return textPart({ ...input, synthetic: true })
 }
 
 export function readToolCallText(args: { filePath?: string; offset?: number; limit?: number }) {

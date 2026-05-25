@@ -28,6 +28,7 @@ import {
   shouldScheduleUsageCompaction,
   syntheticTextPart,
   systemPrompt,
+  textPart,
   titleContextMessages,
   zeroTokenUsage,
 } from "../../src/session/prompt-helpers"
@@ -80,6 +81,26 @@ describe("session.prompt helpers", () => {
       type: "text",
       text: "remember the plan",
       synthetic: true,
+    })
+    expect(part.id).toStartWith("prt_")
+  })
+
+  test("builds text parts with optional synthetic and time metadata", () => {
+    const part = textPart({
+      messageID: "msg_test" as any,
+      sessionID: "ses_test" as any,
+      text: "done",
+      synthetic: true,
+      time: { start: 1, end: 2 },
+    })
+
+    expect(part).toMatchObject({
+      messageID: "msg_test",
+      sessionID: "ses_test",
+      type: "text",
+      text: "done",
+      synthetic: true,
+      time: { start: 1, end: 2 },
     })
     expect(part.id).toStartWith("prt_")
   })
