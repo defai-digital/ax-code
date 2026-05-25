@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import path from "path"
-import { GrepTool } from "../../src/tool/grep"
+import { GrepTool, parseNativeSearchMatches } from "../../src/tool/grep"
 import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
 import { SessionID, MessageID } from "../../src/session/schema"
@@ -19,6 +19,22 @@ const ctx = {
 const projectRoot = path.join(__dirname, "../..")
 
 describe("tool.grep", () => {
+  test("parseNativeSearchMatches decodes valid native output", () => {
+    expect(
+      parseNativeSearchMatches(JSON.stringify([{ path: "/repo/a.ts", line: 2, column: 4, matchText: "needle" }])),
+    ).toEqual([{ path: "/repo/a.ts", line: 2, column: 4, matchText: "needle" }])
+  })
+
+  test("parseNativeSearchMatches rejects malformed native output", () => {
+    expect(() => parseNativeSearchMatches("{not json")).toThrow(SyntaxError)
+    expect(() =>
+      parseNativeSearchMatches(JSON.stringify({ path: "/repo/a.ts", line: 2, column: 4, matchText: "needle" })),
+    ).toThrow(SyntaxError)
+    expect(() =>
+      parseNativeSearchMatches(JSON.stringify([{ path: "/repo/a.ts", line: "2", column: 4, matchText: "needle" }])),
+    ).toThrow(SyntaxError)
+  })
+
   test("basic search", async () => {
     await Instance.provide({
       directory: projectRoot,
