@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { resolveCurrentAgent } from "../../../src/cli/cmd/tui/context/local-util"
+import { normalizeModelVariantStore, resolveCurrentAgent } from "../../../src/cli/cmd/tui/context/local-util"
 
 describe("tui local agent selection", () => {
   test("preserves pending startup agent name until agents load", () => {
@@ -36,5 +36,27 @@ describe("tui local agent selection", () => {
       name: "build",
       displayName: "Build",
     })
+  })
+})
+
+describe("tui local model preferences", () => {
+  test("normalizes stored model variants to string values", () => {
+    expect(
+      normalizeModelVariantStore({
+        "openai/gpt-5": "high",
+        "xai/grok-code-fast-1": undefined,
+        "anthropic/claude": 42,
+        nested: { value: "bad" },
+      }),
+    ).toEqual({
+      "openai/gpt-5": "high",
+      "xai/grok-code-fast-1": undefined,
+    })
+  })
+
+  test("rejects non-object or array variant stores", () => {
+    expect(normalizeModelVariantStore(null)).toEqual({})
+    expect(normalizeModelVariantStore(["openai/gpt-5"])).toEqual({})
+    expect(normalizeModelVariantStore("openai/gpt-5")).toEqual({})
   })
 })
