@@ -10,9 +10,66 @@ import type { SupportedLanguage, Translations } from "./types"
 const cache = new Map<string, Translations>()
 let currentLanguage: SupportedLanguage = "en"
 let availableLanguagesCache: SupportedLanguage[] | null = null
+const REQUIRED_TRANSLATION_PATHS = [
+  "session.welcome",
+  "session.thinking",
+  "session.generating",
+  "session.goodbye",
+  "session.sessionEnded",
+  "tools.executing",
+  "tools.completed",
+  "tools.failed",
+  "tools.readingFile",
+  "tools.writingFile",
+  "tools.searchingFiles",
+  "tools.commandRunning",
+  "tools.commandCompleted",
+  "errors.connectionFailed",
+  "errors.apiError",
+  "errors.rateLimited",
+  "errors.timeout",
+  "errors.permissionDenied",
+  "errors.fileNotFound",
+  "errors.invalidInput",
+  "errors.unknown",
+  "toast.copiedToClipboard",
+  "toast.changesSaved",
+  "toast.operationCancelled",
+  "toast.agentSwitched",
+  "usage.tokens",
+  "usage.tokensIn",
+  "usage.tokensOut",
+  "status.thinking",
+  "status.context",
+  "status.contextWarning",
+] as const
 
 function getLocalePath(lang: SupportedLanguage): string {
   return path.join(import.meta.dir, "locales", lang, "ui.json")
+}
+
+function translationValue(value: unknown, key: string): unknown {
+  let current = value
+  for (const segment of key.split(".")) {
+    if (!current || typeof current !== "object") return undefined
+    current = (current as Record<string, unknown>)[segment]
+  }
+  return current
+}
+
+export function parseTranslationsText(text: string): Translations {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(text)
+  } catch (error) {
+    throw new Error("i18n locale: invalid JSON", { cause: error })
+  }
+
+  const missing = REQUIRED_TRANSLATION_PATHS.filter((key) => typeof translationValue(parsed, key) !== "string")
+  if (missing.length) {
+    throw new Error(`i18n locale: missing translation strings (${missing.join(", ")})`)
+  }
+  return parsed as Translations
 }
 
 function loadLocale(lang: SupportedLanguage): Translations | null {
@@ -21,7 +78,7 @@ function loadLocale(lang: SupportedLanguage): Translations | null {
   const filePath = getLocalePath(lang)
   try {
     const text = fs.readFileSync(filePath, "utf-8")
-    const translations = JSON.parse(text) as Translations
+    const translations = parseTranslationsText(text)
     cache.set(lang, translations)
     return translations
   } catch {
