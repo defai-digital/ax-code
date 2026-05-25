@@ -4,6 +4,7 @@ import { type Config } from "./gen/types.gen.js"
 type Proc = ReturnType<typeof spawn> & {
   on(event: "exit", listener: (code: number | null) => void): void
   on(event: "error", listener: (error: Error) => void): void
+  once(event: "exit", listener: (code: number | null) => void): void
 }
 
 export type ServerOptions = {
