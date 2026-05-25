@@ -1,17 +1,11 @@
-import { decodeJsonRecord } from "@/util/json-record"
+import { decodeJsonRecord, parseJsonRecord } from "@/util/json-record"
 
-export type CliJsonObject = Record<string, any>
+export type CliJsonObject = Record<string, unknown>
 
 export function decodeCliJsonObject(value: unknown): CliJsonObject | undefined {
-  return decodeJsonRecord(value) as CliJsonObject | undefined
+  return decodeJsonRecord(value)
 }
 
 export function parseCliJsonObject(text: string): CliJsonObject | undefined {
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(text)
-  } catch {
-    return undefined
-  }
-  return decodeCliJsonObject(parsed)
+  return parseJsonRecord(text)
 }
