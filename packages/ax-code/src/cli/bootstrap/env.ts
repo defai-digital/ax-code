@@ -158,7 +158,8 @@ async function loadShellEnv(env: Record<string, string | undefined>) {
         throw new Error(`Shell env load timed out after ${shellTimeoutMs / 1000}s: ${stderr}`)
       }
       result = [code, stdout, stderr]
-    } catch {
+    } catch (err) {
+      Log.Default.debug("shell env load failed", { error: err instanceof Error ? err.message : String(err) })
       result = undefined
     }
     if (!result) return
