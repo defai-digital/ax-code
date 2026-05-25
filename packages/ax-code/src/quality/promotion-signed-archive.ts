@@ -5,6 +5,7 @@ import z from "zod"
 import { Storage } from "../storage/storage"
 import { QualityPromotionPackagedArchive } from "./promotion-packaged-archive"
 import { QualityPromotionReleaseDecisionRecord } from "./promotion-release-decision-record"
+import { overallStatusFromGates } from "./promotion-summary"
 
 export namespace QualityPromotionSignedArchive {
   export const SignatureAlgorithm = z.literal("hmac-sha256")
@@ -193,7 +194,7 @@ export namespace QualityPromotionSignedArchive {
     ] as const
 
     return ArchiveSummary.parse({
-      overallStatus: gates.every((gate) => gate.status === "pass") ? "pass" : "fail",
+      overallStatus: overallStatusFromGates(gates),
       packagedArchiveStatus: packagedArchive.summary.overallStatus,
       portableExportStatus: packagedArchive.portableExport.summary.overallStatus,
       attestationStatus: gates.every((gate) => gate.status === "pass") ? "pass" : "fail",

@@ -2,6 +2,7 @@ import z from "zod"
 import { Storage } from "../storage/storage"
 import { QualityPromotionAuditManifest } from "./promotion-audit-manifest"
 import { QualityPromotionReleaseDecisionRecord } from "./promotion-release-decision-record"
+import { overallStatusFromGates } from "./promotion-summary"
 
 export namespace QualityPromotionExportBundle {
   export const ExportSummary = z.object({
@@ -108,7 +109,7 @@ export namespace QualityPromotionExportBundle {
     ] as const
 
     return ExportSummary.parse({
-      overallStatus: gates.every((gate) => gate.status === "pass") ? "pass" : "fail",
+      overallStatus: overallStatusFromGates(gates),
       auditManifestStatus: auditManifest.summary.overallStatus,
       releasePacketStatus: auditManifest.releasePacket.summary.overallStatus,
       promotionRecorded: auditManifest.summary.promotionRecorded,

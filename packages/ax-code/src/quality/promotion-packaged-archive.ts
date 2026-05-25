@@ -5,6 +5,7 @@ import z from "zod"
 import { Storage } from "../storage/storage"
 import { QualityPromotionPortableExport } from "./promotion-portable-export"
 import { QualityPromotionReleaseDecisionRecord } from "./promotion-release-decision-record"
+import { overallStatusFromGates } from "./promotion-summary"
 
 export namespace QualityPromotionPackagedArchive {
   export const Entry = z.object({
@@ -149,7 +150,7 @@ export namespace QualityPromotionPackagedArchive {
     ] as const
 
     return ArchiveSummary.parse({
-      overallStatus: gates.every((gate) => gate.status === "pass") ? "pass" : "fail",
+      overallStatus: overallStatusFromGates(gates),
       portableExportStatus: portableExport.summary.overallStatus,
       handoffPackageStatus: portableExport.handoffPackage.summary.overallStatus,
       archiveManifestStatus: portableExport.handoffPackage.archiveManifest.summary.overallStatus,

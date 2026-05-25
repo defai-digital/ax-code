@@ -1,4 +1,5 @@
 import z from "zod"
+import { overallStatusFromGates } from "./promotion-summary"
 
 export namespace QualityPromotionApprovalPolicy {
   type DecisionBundleLike = {
@@ -1603,7 +1604,7 @@ export namespace QualityPromotionApprovalPolicy {
       matchingArtifacts: matchingArtifacts.length,
       qualifiedApprovals: qualifiedApprovals.length,
       distinctQualifiedApprovers,
-      overallStatus: gates.every((gate) => gate.status === "pass") ? "pass" : "fail",
+      overallStatus: overallStatusFromGates(gates),
       acceptedApprovals: qualifiedApprovals.map((item) => ({
         approvalID: item.approval.approvalID,
         approver: item.approval.approver,

@@ -3,6 +3,7 @@ import z from "zod"
 import { Storage } from "../storage/storage"
 import { QualityPromotionExportBundle } from "./promotion-export-bundle"
 import { QualityPromotionReleaseDecisionRecord } from "./promotion-release-decision-record"
+import { overallStatusFromGates } from "./promotion-summary"
 
 export namespace QualityPromotionArchiveManifest {
   export const InventoryKind = z.enum([
@@ -217,7 +218,7 @@ export namespace QualityPromotionArchiveManifest {
     ] as const
 
     return ArchiveSummary.parse({
-      overallStatus: gates.every((gate) => gate.status === "pass") ? "pass" : "fail",
+      overallStatus: overallStatusFromGates(gates),
       exportBundleStatus: exportBundle.summary.overallStatus,
       auditManifestStatus: exportBundle.auditManifest.summary.overallStatus,
       releasePacketStatus: exportBundle.auditManifest.releasePacket.summary.overallStatus,

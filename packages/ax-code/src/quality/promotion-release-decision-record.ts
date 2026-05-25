@@ -1,6 +1,7 @@
 import z from "zod"
 import { Storage } from "../storage/storage"
 import { QualityPromotionBoardDecision } from "./promotion-board-decision"
+import { overallStatusFromGates } from "./promotion-summary"
 
 export namespace QualityPromotionReleaseDecisionRecord {
   export const PromotionMode = z.enum(["pass", "warn_override", "force"])
@@ -120,7 +121,7 @@ export namespace QualityPromotionReleaseDecisionRecord {
     ] as const
 
     return RecordSummary.parse({
-      overallStatus: gates.every((gate) => gate.status === "pass") ? "pass" : "fail",
+      overallStatus: overallStatusFromGates(gates),
       boardDecisionStatus: boardDecision.summary.overallStatus,
       recommendation: boardDecision.summary.recommendation,
       requiredOverride: boardDecision.summary.requiredOverride,

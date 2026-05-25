@@ -1,6 +1,7 @@
 import z from "zod"
 import { Storage } from "../storage/storage"
 import { QualityPromotionSubmissionBundle } from "./promotion-submission-bundle"
+import { overallStatusFromGates } from "./promotion-summary"
 
 export namespace QualityPromotionReviewDossier {
   export const Recommendation = z.enum(["approve_promotion", "requires_override_review", "hold"])
@@ -129,7 +130,7 @@ export namespace QualityPromotionReviewDossier {
     ] as const
 
     return DossierSummary.parse({
-      overallStatus: gates.every((gate) => gate.status === "pass") ? "pass" : "fail",
+      overallStatus: overallStatusFromGates(gates),
       recommendation: recommendationForSubmission(submissionBundle.summary),
       submissionStatus: submissionBundle.summary.overallStatus,
       approvalPacketStatus: submissionBundle.summary.approvalPacketStatus,

@@ -3,6 +3,7 @@ import { Storage } from "../storage/storage"
 import { QualityPromotionAdoptionReview } from "./promotion-adoption-review"
 import { QualityPromotionApprovalPolicy } from "./promotion-approval-policy"
 import { QualityPromotionDecisionBundle } from "./promotion-decision-bundle"
+import { overallStatusFromGates } from "./promotion-summary"
 
 export namespace QualityPromotionAdoptionDissentSupersession {
   export const Disposition = z.enum(["withdrawn", "re_reviewed_accept", "superseded_by_new_evidence"])
@@ -340,7 +341,7 @@ export namespace QualityPromotionAdoptionDissentSupersession {
     ] as const
 
     return SupersessionSummary.parse({
-      overallStatus: gates.every((gate) => gate.status === "pass") ? "pass" : "fail",
+      overallStatus: overallStatusFromGates(gates),
       adoptionStatus: consensus.adoptionStatus,
       requiredRole: consensus.requirement.minimumRole,
       totalSupersessions: supersessions.length,

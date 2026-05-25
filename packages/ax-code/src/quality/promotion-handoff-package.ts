@@ -11,6 +11,7 @@ import { QualityPromotionReleaseDecisionRecord } from "./promotion-release-decis
 import { QualityPromotionReleasePacket } from "./promotion-release-packet"
 import { QualityPromotionReviewDossier } from "./promotion-review-dossier"
 import { QualityPromotionSubmissionBundle } from "./promotion-submission-bundle"
+import { overallStatusFromGates } from "./promotion-summary"
 
 export namespace QualityPromotionHandoffPackage {
   export const DocumentKind = z.enum([
@@ -289,7 +290,7 @@ export namespace QualityPromotionHandoffPackage {
     ] as const
 
     return PackageSummary.parse({
-      overallStatus: gates.every((gate) => gate.status === "pass") ? "pass" : "fail",
+      overallStatus: overallStatusFromGates(gates),
       archiveManifestStatus: archiveManifest.summary.overallStatus,
       exportBundleStatus: archiveManifest.exportBundle.summary.overallStatus,
       auditManifestStatus: archiveManifest.exportBundle.auditManifest.summary.overallStatus,

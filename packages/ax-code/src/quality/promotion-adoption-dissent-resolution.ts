@@ -3,6 +3,7 @@ import { Storage } from "../storage/storage"
 import { QualityPromotionAdoptionReview } from "./promotion-adoption-review"
 import { QualityPromotionApprovalPolicy } from "./promotion-approval-policy"
 import { QualityPromotionDecisionBundle } from "./promotion-decision-bundle"
+import { overallStatusFromGates } from "./promotion-summary"
 
 export namespace QualityPromotionAdoptionDissentResolution {
   export const TargetReview = z.object({
@@ -313,7 +314,7 @@ export namespace QualityPromotionAdoptionDissentResolution {
     ] as const
 
     return ResolutionSummary.parse({
-      overallStatus: gates.every((gate) => gate.status === "pass") ? "pass" : "fail",
+      overallStatus: overallStatusFromGates(gates),
       adoptionStatus: consensus.adoptionStatus,
       requiredRole: consensus.requirement.minimumRole,
       totalResolutions: resolutions.length,
