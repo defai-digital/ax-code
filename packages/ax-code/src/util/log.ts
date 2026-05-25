@@ -6,6 +6,7 @@ import pino from "pino"
 import { Global } from "../global"
 import z from "zod"
 import { Glob } from "./glob"
+import { toErrorMessage } from "./error-message"
 import { withTimeout } from "./timeout"
 import { recordCount } from "./record"
 
@@ -173,7 +174,7 @@ export namespace Log {
         }
         return { path: next }
       } catch (error) {
-        failures.push(`${dir}: ${error instanceof Error ? error.message : String(error)}`)
+        failures.push(`${dir}: ${toErrorMessage(error)}`)
       }
     }
 

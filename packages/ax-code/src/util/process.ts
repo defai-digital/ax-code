@@ -1,6 +1,7 @@
 import { type ChildProcess } from "child_process"
 import launch from "cross-spawn"
 import { buffer } from "node:stream/consumers"
+import { toErrorMessage } from "./error-message"
 
 export namespace Process {
   export type Stdio = "inherit" | "pipe" | "ignore"
@@ -136,7 +137,7 @@ export namespace Process {
         return {
           code: 1,
           stdout: Buffer.alloc(0),
-          stderr: Buffer.from(err instanceof Error ? err.message : String(err)),
+          stderr: Buffer.from(toErrorMessage(err)),
         }
       })
     if (out.code === 0 || opts.nothrow) return out

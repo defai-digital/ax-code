@@ -15,6 +15,7 @@
 import { spawn } from "child_process"
 import z from "zod"
 import { Instance } from "../project/instance"
+import { toErrorMessage } from "../util/error-message"
 import { parseJsonPayload, parseJsonStrict } from "../util/json-value"
 
 // ─── Shared types ──────────────────────────────────────────────────
@@ -68,7 +69,7 @@ function languageScanError(
   startedAt: number,
   missingToolMessage: string,
 ): LanguageScanResult {
-  const errorMsg = err instanceof Error ? err.message : String(err)
+  const errorMsg = toErrorMessage(err)
   return {
     findings: [],
     tool,

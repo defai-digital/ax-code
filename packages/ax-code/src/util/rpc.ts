@@ -1,3 +1,4 @@
+import { toErrorMessage } from "./error-message"
 import { parseJsonPayload } from "./json-value"
 
 export namespace Rpc {
@@ -142,7 +143,7 @@ export namespace Rpc {
     stdout.on?.("error", (error: unknown) => {
       stdoutBroken = true
       // eslint-disable-next-line no-console
-      console.error("rpc listenStdio stdout error", error instanceof Error ? error.message : String(error))
+      console.error("rpc listenStdio stdout error", toErrorMessage(error))
     })
     const safeWrite = (data: string) => {
       if (stdoutBroken) return
@@ -151,7 +152,7 @@ export namespace Rpc {
       } catch (error) {
         stdoutBroken = true
         // eslint-disable-next-line no-console
-        console.error("rpc listenStdio stdout write threw", error instanceof Error ? error.message : String(error))
+        console.error("rpc listenStdio stdout write threw", toErrorMessage(error))
       }
     }
     bindEmitMessage((data) => {
@@ -182,7 +183,7 @@ export namespace Rpc {
     const dispatch = (line: string) =>
       handleLine(line).catch((error) => {
         // eslint-disable-next-line no-console
-        console.error("rpc listenStdio handler threw", error instanceof Error ? error.message : String(error))
+        console.error("rpc listenStdio handler threw", toErrorMessage(error))
       })
 
     await new Promise<void>((resolve) => {
