@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import * as fs from "fs/promises"
 import path from "path"
-import { resolveCommands, runCommand } from "../../src/planner/verification/runner"
+import { parsePackageScripts, resolveCommands, runCommand } from "../../src/planner/verification/runner"
 import { tmpdir } from "../fixture/fixture"
 
 async function writePackageJson(dir: string, scripts: Record<string, string>) {
@@ -13,6 +13,24 @@ async function writePackageJson(dir: string, scripts: Record<string, string>) {
 }
 
 describe("resolveCommands", () => {
+  test("parsePackageScripts decodes only string package scripts", () => {
+    expect(
+      parsePackageScripts(
+        JSON.stringify({
+          scripts: {
+            typecheck: "tsc --noEmit",
+            lint: 123,
+            test: "vitest",
+          },
+        }),
+      ),
+    ).toEqual({ typecheck: "tsc --noEmit", test: "vitest" })
+
+    expect(parsePackageScripts(JSON.stringify({ scripts: [] }))).toEqual({})
+    expect(parsePackageScripts(JSON.stringify(null))).toEqual({})
+    expect(() => parsePackageScripts("{ not json")).toThrow(SyntaxError)
+  })
+
   test("returns all-null when no package.json exists", async () => {
     await using tmp = await tmpdir({ git: true })
     const cmds = await resolveCommands(tmp.path)
@@ -76,6 +94,18 @@ describe("resolveCommands", () => {
     await fs.writeFile(path.join(tmp.path, "package.json"), "{ not json", "utf8")
     const cmds = await resolveCommands(tmp.path)
     expect(cmds).toEqual({ typecheck: null, lint: null, test: null })
+  })
+
+  test("non-string package scripts are ignored", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await fs.writeFile(
+      path.join(tmp.path, "package.json"),
+      JSON.stringify({ scripts: { typecheck: true, lint: "eslint ." } }),
+      "utf8",
+    )
+    const cmds = await resolveCommands(tmp.path)
+    expect(cmds.typecheck).toBeNull()
+    expect(cmds.lint).toBe("bun run lint")
   })
 
   test("falls back to cargo commands in a Rust workspace", async () => {

@@ -68,6 +68,21 @@ async function cargoCommands(cwd: string): Promise<CommandSet | null> {
   }
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+}
+
+export function parsePackageScripts(raw: string): Record<string, string> {
+  const pkg: unknown = JSON.parse(raw)
+  if (!isRecord(pkg) || !isRecord(pkg.scripts)) return {}
+
+  const scripts: Record<string, string> = {}
+  for (const [name, command] of Object.entries(pkg.scripts)) {
+    if (typeof command === "string") scripts[name] = command
+  }
+  return scripts
+}
+
 // Resolve the typecheck/lint/test commands for a project. Defaults pick up
 // `bun run <script>` when package.json defines the matching script, then fall
 // back to Cargo checks when the directory belongs to a Rust workspace;
@@ -77,8 +92,7 @@ export async function resolveCommands(cwd: string, override?: CommandOverride): 
   let scripts: Record<string, string> = {}
   try {
     const raw = await fs.readFile(pkgPath, "utf8")
-    const pkg = JSON.parse(raw)
-    scripts = pkg.scripts ?? {}
+    scripts = parsePackageScripts(raw)
   } catch {
     scripts = {}
   }
