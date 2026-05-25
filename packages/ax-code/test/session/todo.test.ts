@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { Instance } from "../../src/project/instance"
 import { Todo } from "../../src/session/todo"
+import { isActiveTodo, isActiveTodoStatus } from "../../src/session/todo-status"
 import { Session } from "../../src/session"
 import { tmpdir } from "../fixture/fixture"
 
@@ -45,5 +46,15 @@ describe("session.todo", () => {
         ])
       },
     })
+  })
+
+  test("classifies active todo statuses for generic todo-like values", () => {
+    expect(isActiveTodoStatus("pending")).toBe(true)
+    expect(isActiveTodoStatus("in_progress")).toBe(true)
+    expect(isActiveTodoStatus("completed")).toBe(false)
+    expect(isActiveTodoStatus(undefined)).toBe(false)
+
+    expect(isActiveTodo({ status: "pending" })).toBe(true)
+    expect(isActiveTodo({ status: "cancelled" })).toBe(false)
   })
 })
