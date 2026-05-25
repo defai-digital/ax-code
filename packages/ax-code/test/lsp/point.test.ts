@@ -2,6 +2,8 @@ import { expect, test } from "bun:test"
 import {
   callHierarchyCallsEnvelope,
   callHierarchyCallsForClient,
+  hoverEnvelope,
+  incomingCallsEnvelope,
   pointRequestParams,
   requestEnvelope,
   requestSemanticArrayEnvelope,
@@ -120,6 +122,31 @@ test("requestSemanticArrayEnvelope applies semantic method defaults and flattens
   expect(envelope.serverIDs).toEqual(["fake"])
 })
 
+test("hoverEnvelope owns hover request defaults and filters empty responses", async () => {
+  const client = {
+    ...clientWithResponses({
+      "textDocument/hover": { contents: "ok" },
+    }),
+    serverID: "fake",
+  }
+  let selectedOptions: unknown
+
+  const envelope = await hoverEnvelope(
+    { file: "/tmp/project/src/index.ts", line: 1, character: 2 },
+    {
+      timeoutMs: 1_000,
+      selectClients: async (_file, opts) => {
+        selectedOptions = opts
+        return { clients: [client], freshSpawnCount: 0 }
+      },
+    },
+  )
+
+  expect(selectedOptions).toEqual({ mode: "semantic", method: "hover" })
+  expect(envelope.data).toEqual([{ contents: "ok" }])
+  expect(envelope.completeness).toBe("full")
+})
+
 test("callHierarchyCallsEnvelope delegates through selected clients", async () => {
   const client = {
     ...clientWithResponses({
@@ -143,4 +170,29 @@ test("callHierarchyCallsEnvelope delegates through selected clients", async () =
   expect(envelope.data).toEqual([{ from: "caller" }])
   expect(envelope.completeness).toBe("full")
   expect(envelope.serverIDs).toEqual(["fake"])
+})
+
+test("incomingCallsEnvelope owns incoming call hierarchy defaults", async () => {
+  const client = {
+    ...clientWithResponses({
+      "textDocument/prepareCallHierarchy": [{ name: "caller" }],
+      "callHierarchy/incomingCalls": (params: { item: { name: string } }) => [{ from: params.item.name }],
+    }),
+    serverID: "fake",
+  }
+  let selectedOptions: unknown
+
+  const envelope = await incomingCallsEnvelope(
+    { file: "/tmp/project/src/index.ts", line: 1, character: 2 },
+    {
+      timeoutMs: 1_000,
+      selectClients: async (_file, opts) => {
+        selectedOptions = opts
+        return { clients: [client], freshSpawnCount: 0 }
+      },
+    },
+  )
+
+  expect(selectedOptions).toEqual({ mode: "semantic", method: "callHierarchy" })
+  expect(envelope.data).toEqual([{ from: "caller" }])
 })
