@@ -21,6 +21,7 @@ import {
   output,
   pathExists,
   run,
+  spawnInfo,
   toolServer,
   venvBin,
   venvPython,
@@ -710,30 +711,18 @@ export const Clangd: Info = {
     const managedBin = managedToolPath("clangd", version, path.join("bin", "clangd" + ext), platform, arch)
     const installedBin = which("clangd")
     if (installedBin && !installedBin.startsWith(Global.Path.bin)) {
-      return {
-        process: spawn(installedBin, args, {
-          cwd: root,
-        }),
-      }
+      return spawnInfo(installedBin, root, args)
     }
 
     if (await pathExists(managedBin)) {
-      return {
-        process: spawn(managedBin, args, {
-          cwd: root,
-        }),
-      }
+      return spawnInfo(managedBin, root, args)
     }
 
     if (installedBin) {
       log.warn("using legacy unmanaged clangd install; remove shared-bin copy to switch to pinned managed installs", {
         bin: installedBin,
       })
-      return {
-        process: spawn(installedBin, args, {
-          cwd: root,
-        }),
-      }
+      return spawnInfo(installedBin, root, args)
     }
 
     const entries = await fs.readdir(Global.Path.bin, { withFileTypes: true }).catch(() => [])
@@ -748,11 +737,7 @@ export const Clangd: Info = {
             bin: candidate,
           },
         )
-        return {
-          process: spawn(candidate, args, {
-            cwd: root,
-          }),
-        }
+        return spawnInfo(candidate, root, args)
       }
     }
 
@@ -780,11 +765,7 @@ export const Clangd: Info = {
       })) ?? null
     if (!bin) return
 
-    return {
-      process: spawn(bin, args, {
-        cwd: root,
-      }),
-    }
+    return spawnInfo(bin, root, args)
   },
 }
 
@@ -1131,19 +1112,11 @@ export const LuaLS: Info = {
     )
     const installedBin = which("lua-language-server")
     if (installedBin && !installedBin.startsWith(Global.Path.bin)) {
-      return {
-        process: spawn(installedBin, {
-          cwd: root,
-        }),
-      }
+      return spawnInfo(installedBin, root)
     }
 
     if (await pathExists(managedBin)) {
-      return {
-        process: spawn(managedBin, {
-          cwd: root,
-        }),
-      }
+      return spawnInfo(managedBin, root)
     }
 
     if (installedBin) {
@@ -1151,11 +1124,7 @@ export const LuaLS: Info = {
         "using legacy unmanaged lua-language-server install; remove shared-bin copy to switch to pinned managed installs",
         { bin: installedBin },
       )
-      return {
-        process: spawn(installedBin, {
-          cwd: root,
-        }),
-      }
+      return spawnInfo(installedBin, root)
     }
 
     const target = luaLsReleaseTarget(platform, arch)
@@ -1172,11 +1141,7 @@ export const LuaLS: Info = {
         "using legacy unmanaged lua-language-server install; remove shared-bin copy to switch to pinned managed installs",
         { bin: legacyBin },
       )
-      return {
-        process: spawn(legacyBin, {
-          cwd: root,
-        }),
-      }
+      return spawnInfo(legacyBin, root)
     }
 
     if (Flag.AX_CODE_DISABLE_LSP_DOWNLOAD) return
@@ -1203,11 +1168,7 @@ export const LuaLS: Info = {
       })) ?? null
     if (!bin) return
 
-    return {
-      process: spawn(bin, {
-        cwd: root,
-      }),
-    }
+    return spawnInfo(bin, root)
   },
 }
 
@@ -1299,6 +1260,15 @@ export const BashLS: Info = {
   },
 }
 
+const TERRAFORM_LS_INITIALIZATION = {
+  experimentalFeatures: {
+    prefillRequiredFields: true,
+    validateOnSave: true,
+  },
+}
+
+const terraformLsHandle = (bin: string, root: string) => spawnInfo(bin, root, ["serve"], TERRAFORM_LS_INITIALIZATION)
+
 export const TerraformLS: Info = {
   id: "terraform",
   extensions: [".tf", ".tfvars"],
@@ -1310,31 +1280,11 @@ export const TerraformLS: Info = {
     const managedBin = managedToolBin("terraform-ls", pinned.version, platform, arch)
     const installedBin = which("terraform-ls")
     if (installedBin && !installedBin.startsWith(Global.Path.bin)) {
-      return {
-        process: spawn(installedBin, ["serve"], {
-          cwd: root,
-        }),
-        initialization: {
-          experimentalFeatures: {
-            prefillRequiredFields: true,
-            validateOnSave: true,
-          },
-        },
-      }
+      return terraformLsHandle(installedBin, root)
     }
 
     if (await pathExists(managedBin)) {
-      return {
-        process: spawn(managedBin, ["serve"], {
-          cwd: root,
-        }),
-        initialization: {
-          experimentalFeatures: {
-            prefillRequiredFields: true,
-            validateOnSave: true,
-          },
-        },
-      }
+      return terraformLsHandle(managedBin, root)
     }
 
     if (installedBin) {
@@ -1344,17 +1294,7 @@ export const TerraformLS: Info = {
           bin: installedBin,
         },
       )
-      return {
-        process: spawn(installedBin, ["serve"], {
-          cwd: root,
-        }),
-        initialization: {
-          experimentalFeatures: {
-            prefillRequiredFields: true,
-            validateOnSave: true,
-          },
-        },
-      }
+      return terraformLsHandle(installedBin, root)
     }
 
     if (Flag.AX_CODE_DISABLE_LSP_DOWNLOAD) return
@@ -1381,17 +1321,7 @@ export const TerraformLS: Info = {
       })) ?? null
     if (!bin) return
 
-    return {
-      process: spawn(bin, ["serve"], {
-        cwd: root,
-      }),
-      initialization: {
-        experimentalFeatures: {
-          prefillRequiredFields: true,
-          validateOnSave: true,
-        },
-      },
-    }
+    return terraformLsHandle(bin, root)
   },
 }
 
@@ -1407,30 +1337,18 @@ export const TexLab: Info = {
     const managedBin = managedToolBin("texlab", version, platform, arch)
     const installedBin = which("texlab")
     if (installedBin && !installedBin.startsWith(Global.Path.bin)) {
-      return {
-        process: spawn(installedBin, {
-          cwd: root,
-        }),
-      }
+      return spawnInfo(installedBin, root)
     }
 
     if (await pathExists(managedBin)) {
-      return {
-        process: spawn(managedBin, {
-          cwd: root,
-        }),
-      }
+      return spawnInfo(managedBin, root)
     }
 
     if (installedBin) {
       log.warn("using legacy unmanaged texlab install; remove shared-bin copy to switch to pinned managed installs", {
         bin: installedBin,
       })
-      return {
-        process: spawn(installedBin, {
-          cwd: root,
-        }),
-      }
+      return spawnInfo(installedBin, root)
     }
 
     if (Flag.AX_CODE_DISABLE_LSP_DOWNLOAD) return
@@ -1457,11 +1375,7 @@ export const TexLab: Info = {
       })) ?? null
     if (!bin) return
 
-    return {
-      process: spawn(bin, {
-        cwd: root,
-      }),
-    }
+    return spawnInfo(bin, root)
   },
 }
 
@@ -1562,24 +1476,18 @@ export const Tinymist: Info = {
     const managedBin = managedToolBin("tinymist", version, platform, arch)
     const installedBin = which("tinymist")
     if (installedBin && !installedBin.startsWith(Global.Path.bin)) {
-      return {
-        process: spawn(installedBin, { cwd: root }),
-      }
+      return spawnInfo(installedBin, root)
     }
 
     if (await pathExists(managedBin)) {
-      return {
-        process: spawn(managedBin, { cwd: root }),
-      }
+      return spawnInfo(managedBin, root)
     }
 
     if (installedBin) {
       log.warn("using legacy unmanaged tinymist install; remove shared-bin copy to switch to pinned managed installs", {
         bin: installedBin,
       })
-      return {
-        process: spawn(installedBin, { cwd: root }),
-      }
+      return spawnInfo(installedBin, root)
     }
 
     if (Flag.AX_CODE_DISABLE_LSP_DOWNLOAD) return
@@ -1606,9 +1514,7 @@ export const Tinymist: Info = {
       })) ?? null
     if (!bin) return
 
-    return {
-      process: spawn(bin, { cwd: root }),
-    }
+    return spawnInfo(bin, root)
   },
 }
 

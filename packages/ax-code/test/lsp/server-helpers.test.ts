@@ -471,6 +471,15 @@ describe("lsp server helpers", () => {
 
     expect(info.process.spawnfile).toBe("/tmp/server")
     expect(info.process.spawnargs.slice(1)).toEqual(["--stdio"])
+    expect("initialization" in info).toBe(false)
+  })
+
+  test("builds spawn info with initialization when provided", () => {
+    const initialization = { experimentalFeatures: { enabled: true } }
+    const info = spawnInfo("/tmp/server", "/tmp/root", ["--stdio"], initialization)
+
+    expect(info.process.spawnfile).toBe("/tmp/server")
+    expect(info.initialization).toEqual(initialization)
   })
 
   test("builds tool-backed server info from the installed binary", async () => {
