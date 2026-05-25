@@ -2,6 +2,16 @@ import { describe, expect, test } from "bun:test"
 import { Config } from "../../src/config/config"
 
 describe("AX_CODE_PERMISSION decoding", () => {
+  test("decodes already-parsed permission config values", () => {
+    expect(Config.decodePermissionEnvValue({ bash: "allow", edit: "ask" })).toEqual({
+      ok: true,
+      permission: {
+        bash: "allow",
+        edit: "ask",
+      },
+    })
+  })
+
   test("parses valid permission config JSON", () => {
     expect(Config.parsePermissionEnv(JSON.stringify({ bash: "allow", edit: "ask" }))).toEqual({
       ok: true,
