@@ -14,6 +14,22 @@ import { NativeAddon } from "../native/addon"
 import { Env } from "@/util/env"
 import { resolveToolFilePath } from "./file-path"
 
+const NativeSearchMatch = z.object({
+  path: z.string(),
+  line: z.number(),
+  column: z.number(),
+  matchText: z.string(),
+})
+
+export type NativeSearchMatch = z.infer<typeof NativeSearchMatch>
+
+export function parseNativeSearchMatches(json: string): NativeSearchMatch[] {
+  const parsed: unknown = JSON.parse(json)
+  const decoded = z.array(NativeSearchMatch).safeParse(parsed)
+  if (!decoded.success) throw new SyntaxError("Invalid native search output")
+  return decoded.data
+}
+
 export const GrepTool = Tool.define("grep", {
   description: DESCRIPTION,
   parameters: z.object({
@@ -72,9 +88,7 @@ export const GrepTool = Tool.define("grep", {
         // `path` is absolute so `Filesystem.contains` works, and `line` +
         // `matchText` are the field names the native emits. `modTime` was
         // never populated and its old sort was a no-op — dropped.
-        const matches = (
-          JSON.parse(json) as Array<{ path: string; line: number; column: number; matchText: string }>
-        ).filter(
+        const matches = parseNativeSearchMatches(json).filter(
           (match) =>
             !Filesystem.contains(Instance.directory, searchPath) || Filesystem.contains(Instance.directory, match.path),
         )
