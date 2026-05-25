@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import * as fs from "fs/promises"
 import path from "path"
-import { parsePackageScripts, resolveCommands, runCommand } from "../../src/planner/verification/runner"
+import { decodePackageScripts, parsePackageScripts, resolveCommands, runCommand } from "../../src/planner/verification/runner"
 import { tmpdir } from "../fixture/fixture"
 
 async function writePackageJson(dir: string, scripts: Record<string, string>) {
@@ -13,6 +13,20 @@ async function writePackageJson(dir: string, scripts: Record<string, string>) {
 }
 
 describe("resolveCommands", () => {
+  test("decodePackageScripts decodes already-parsed package scripts", () => {
+    expect(
+      decodePackageScripts({
+        scripts: {
+          typecheck: "tsc --noEmit",
+          lint: 123,
+          test: "vitest",
+        },
+      }),
+    ).toEqual({ typecheck: "tsc --noEmit", test: "vitest" })
+    expect(decodePackageScripts({ scripts: [] })).toEqual({})
+    expect(decodePackageScripts(null)).toEqual({})
+  })
+
   test("parsePackageScripts decodes only string package scripts", () => {
     expect(
       parsePackageScripts(
