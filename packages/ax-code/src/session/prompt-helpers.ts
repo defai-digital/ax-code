@@ -5,6 +5,7 @@ export { commandTemplateText } from "./prompt-command-template"
 export { commandModel, commandUser, lastModel } from "./prompt-command-selection"
 export { commandParts } from "./prompt-command-parts"
 export { resolvePromptParts } from "./prompt-reference-parts"
+export { attachmentLineRange, readToolCallText } from "./prompt-file-reference"
 export { appendShellOutputChunk, shellArgs, shellOutputMetadata, type ShellOutputState } from "./prompt-shell-runtime"
 export { agentInfo, modelInfo } from "./prompt-agent-model-info"
 export { sessionAssistantPath, syntheticTextPart, textPart, zeroTokenUsage } from "./prompt-message-builders"
@@ -24,11 +25,6 @@ export {
   shouldScheduleUsageCompaction,
 } from "./prompt-loop-decisions"
 
-type AttachmentLineRange = {
-  start: number
-  end?: number
-}
-
 type GoalArgumentDecision =
   | { action: "view" | "pause" | "resume" | "clear" }
   | {
@@ -36,21 +32,6 @@ type GoalArgumentDecision =
       objective: string
       tokenBudget?: number
     }
-
-export function readToolCallText(args: { filePath?: string; offset?: number; limit?: number }) {
-  return `Called the Read tool with the following input: ${JSON.stringify(args)}`
-}
-
-export function attachmentLineRange(input: { start: string | null; end: string | null }): AttachmentLineRange | undefined {
-  if (input.start == null) return undefined
-  const parsedStart = Number(input.start)
-  if (!Number.isInteger(parsedStart) || parsedStart < 0) return undefined
-
-  const parsedEnd = input.end != null && input.end !== "" ? Number(input.end) : undefined
-  const end =
-    parsedEnd !== undefined && Number.isInteger(parsedEnd) && parsedEnd >= parsedStart ? parsedEnd : undefined
-  return { start: parsedStart, end }
-}
 
 export function parseGoalArguments(raw: string): GoalArgumentDecision {
   const text = raw.trim()
