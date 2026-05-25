@@ -4,6 +4,48 @@ import { Instance } from "@/project/instance"
 import { Process } from "@/util/process"
 import { git } from "@/util/git"
 import { registerShutdownSignals } from "@/util/signals"
+import { isRecord } from "@/util/record"
+
+export interface GitHubPrViewInfo {
+  isCrossRepository?: boolean
+  headRepository?: {
+    name: string
+  }
+  headRepositoryOwner?: {
+    login: string
+  }
+  headRefName?: string
+  body?: string
+}
+
+export function decodeGitHubPrViewInfoValue(value: unknown): GitHubPrViewInfo | undefined {
+  if (!isRecord(value)) return undefined
+  const headRepository =
+    isRecord(value.headRepository) && typeof value.headRepository.name === "string"
+      ? { name: value.headRepository.name }
+      : undefined
+  const headRepositoryOwner =
+    isRecord(value.headRepositoryOwner) && typeof value.headRepositoryOwner.login === "string"
+      ? { login: value.headRepositoryOwner.login }
+      : undefined
+  return {
+    ...(typeof value.isCrossRepository === "boolean" ? { isCrossRepository: value.isCrossRepository } : {}),
+    ...(headRepository ? { headRepository } : {}),
+    ...(headRepositoryOwner ? { headRepositoryOwner } : {}),
+    ...(typeof value.headRefName === "string" ? { headRefName: value.headRefName } : {}),
+    ...(typeof value.body === "string" ? { body: value.body } : {}),
+  }
+}
+
+export function parseGitHubPrViewInfoText(text: string): GitHubPrViewInfo | undefined {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(text)
+  } catch (error) {
+    throw new Error(`Failed to parse PR info from gh CLI: ${text.slice(0, 200)}`, { cause: error })
+  }
+  return decodeGitHubPrViewInfoValue(parsed)
+}
 
 export const PrCommand = cmd({
   command: "pr <number>",
@@ -59,15 +101,10 @@ export const PrCommand = cmd({
         if (prInfoResult.code === 0) {
           const prInfoText = prInfoResult.text
           if (prInfoText.trim()) {
-            let prInfo: any
-            try {
-              prInfo = JSON.parse(prInfoText)
-            } catch {
-              throw new Error(`Failed to parse PR info from gh CLI: ${prInfoText.slice(0, 200)}`)
-            }
+            const prInfo = parseGitHubPrViewInfoText(prInfoText)
 
             // Handle fork PRs
-            if (prInfo && prInfo.isCrossRepository && prInfo.headRepository && prInfo.headRepositoryOwner) {
+            if (prInfo?.isCrossRepository && prInfo.headRepository && prInfo.headRepositoryOwner) {
               const forkOwner = prInfo.headRepositoryOwner.login
               const forkName = prInfo.headRepository.name
               const remoteName = forkOwner
@@ -89,7 +126,7 @@ export const PrCommand = cmd({
             }
 
             // Check for ax-code session link in PR body
-            if (prInfo && prInfo.body) {
+            if (prInfo?.body) {
               const sessionMatch = prInfo.body.match(/https:\/\/opncd\.ai\/s\/([a-zA-Z0-9_-]+)/)
               if (sessionMatch) {
                 const sessionUrl = sessionMatch[0]
