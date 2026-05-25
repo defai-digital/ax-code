@@ -1,43 +1,12 @@
 import { createStore } from "solid-js/store"
 import { createSimpleContext } from "./helper"
-import type { PromptInfo } from "../component/prompt/history"
 import { pickFirstEnvValue } from "../util/env"
+import { parseInitialRoutePayload, type Route } from "./route-util"
 
-export type HomeRoute = {
-  type: "home"
-  initialPrompt?: PromptInfo
-  workspaceID?: string
-}
+export type { HomeRoute, SessionRoute, Route } from "./route-util"
 
-export type SessionRoute = {
-  type: "session"
-  sessionID: string
-  initialPrompt?: PromptInfo
-}
-
-export type Route = HomeRoute | SessionRoute
-
-function parseInitialRoute(raw?: string): Route {
-  if (!raw) return { type: "home" }
-  try {
-    const parsed = JSON.parse(raw)
-    if (!parsed || typeof parsed !== "object") return { type: "home" }
-    if (parsed.type === "home") {
-      return {
-        type: "home",
-        initialPrompt: parsed.initialPrompt,
-        workspaceID: typeof parsed.workspaceID === "string" ? parsed.workspaceID : undefined,
-      }
-    }
-    if (parsed.type === "session" && typeof parsed.sessionID === "string") {
-      return {
-        type: "session",
-        sessionID: parsed.sessionID,
-        initialPrompt: parsed.initialPrompt,
-      }
-    }
-  } catch {}
-  return { type: "home" }
+export function parseInitialRoute(raw?: string): Route {
+  return parseInitialRoutePayload(raw)
 }
 
 export const { use: useRoute, provider: RouteProvider } = createSimpleContext({

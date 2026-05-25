@@ -1,53 +1,15 @@
 import { createEffect, on, onCleanup, onMount } from "solid-js"
 import { createStore, produce, unwrap } from "solid-js/store"
 import { createSimpleContext } from "../../context/helper"
-import type { AgentPart, FilePart, TextPart } from "@ax-code/sdk/v2"
 import { scheduleDeferredStartupTask } from "@tui/util/startup-task"
 import { optionalStateErrorMessage, shouldSurfaceOptionalStateError } from "@tui/util/optional-state"
 import { useToast } from "../../ui/toast"
 import { Log } from "@/util/log"
-import z from "zod"
 import { useSDK } from "@tui/context/sdk"
 import { directoryRequestHeaders } from "@tui/util/request-headers"
+import { parsePromptInfoList, type PromptInfo } from "./prompt-info"
 
-export type PromptInfo = {
-  input: string
-  mode?: "normal" | "shell"
-  parts: (
-    | Omit<FilePart, "id" | "messageID" | "sessionID">
-    | Omit<AgentPart, "id" | "messageID" | "sessionID">
-    | (Omit<TextPart, "id" | "messageID" | "sessionID"> & {
-        source?: {
-          text: {
-            start: number
-            end: number
-            value: string
-          }
-        }
-      })
-  )[]
-}
-
-const PromptInfoSchema = z
-  .object({
-    input: z.string(),
-    mode: z.enum(["normal", "shell"]).optional(),
-    parts: z.array(z.record(z.string(), z.unknown())).default([]),
-  })
-  .passthrough()
-
-const isPromptInfo = (value: unknown): value is PromptInfo => {
-  if (!value || typeof value !== "object") return false
-  const candidate = value as { input?: unknown; mode?: unknown; parts?: unknown }
-  if (typeof candidate.input !== "string") return false
-  if (candidate.mode !== undefined && candidate.mode !== "normal" && candidate.mode !== "shell") return false
-  if (!Array.isArray(candidate.parts)) return false
-  for (const part of candidate.parts) {
-    if (!part || typeof part !== "object") return false
-    if (typeof (part as { type?: unknown }).type !== "string") return false
-  }
-  return true
-}
+export type { PromptInfo } from "./prompt-info"
 
 const MAX_HISTORY_ENTRIES = 50
 const HISTORY_LOAD_DELAY_MS = 100
@@ -75,9 +37,7 @@ export const { use: usePromptHistory, provider: PromptHistoryProvider } = create
       })
       if (!response.ok) throw new Error(`HTTP ${response.status} ${response.statusText}`.trim())
       const body = await response.json()
-      const parsed = z.array(PromptInfoSchema).safeParse(body)
-      if (!parsed.success) return []
-      return parsed.data.filter(isPromptInfo)
+      return parsePromptInfoList(body)
     }
 
     async function appendProjectHistory(entry: PromptInfo, directory: string | undefined) {
