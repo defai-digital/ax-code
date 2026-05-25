@@ -9,7 +9,6 @@ import { Provider } from "../provider/provider"
 import { ModelID, ProviderID } from "../provider/schema"
 import { type ModelMessage } from "ai"
 import { SessionCompaction } from "./compaction"
-import { SessionRetry } from "./retry"
 import { GLOBAL_STEP_LIMIT } from "@/constants/session"
 import { AgentControlEvents } from "../control-plane/agent-control-events"
 import { AutonomousCompletionGate } from "../control-plane/autonomous-completion-gate"
@@ -34,12 +33,12 @@ import { LLM } from "./llm"
 import { iife } from "@/util/iife"
 import { agentInfo, modelInfo } from "./prompt-agent-model-info"
 import {
-  pendingCompactionDecision,
   shouldScheduleUsageCompaction,
   processorLoopDecision,
   assistantLoopExitDecision,
   assistantRespondedAfterUser,
 } from "./prompt-loop-decisions"
+import { processPendingCompaction } from "./prompt-loop-compaction"
 import { handlePromptLoopError } from "./prompt-loop-errors"
 import { loopMessages, remindQueuedMessages, scanLoopMessages } from "./prompt-loop-messages"
 import { markPromptLoopBusy } from "./prompt-loop-status"
@@ -457,38 +456,23 @@ export namespace SessionPrompt {
 
       // pending compaction
       if (task?.type === "compaction") {
-        const result = await SessionCompaction.process({
+        const compaction = await processPendingCompaction({
+          task,
           messages: msgs,
           parentID: lastUser.id,
           abort,
           sessionID,
-          auto: task.auto,
-          overflow: task.overflow,
-        })
-        const decision = pendingCompactionDecision({
-          result,
-          overflow: task.overflow,
           busyRetries: compactionBusyRetries,
         })
-        if (decision.type === "break") {
-          reason = decision.reason
+        if (compaction.action === "break") {
+          reason = compaction.reason
           break
         }
-        if (decision.type === "retry") {
-          compactionBusyRetries += 1
-          try {
-            // Honor cancel: the previous setTimeout slept regardless of
-            // abort state, so a busy-retry chain could stall a session
-            // cancel for up to delayMs × remaining attempts.
-            await SessionRetry.sleep(decision.delayMs, abort)
-          } catch {
-            reason = "error"
-            break
-          }
+        compactionBusyRetries = compaction.busyRetries
+        if (compaction.action === "retry") {
           cachedMsgs = undefined
           continue
         }
-        compactionBusyRetries = 0
         cachedMsgs = undefined // invalidate cache after compaction
         continue
       }
