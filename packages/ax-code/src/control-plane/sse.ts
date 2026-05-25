@@ -4,18 +4,22 @@ const log = Log.create({ service: "control-plane.sse" })
 const MAX_SSE_BUFFER_CHARS = 1024 * 1024
 const SSE_BLOCK_BOUNDARY = /\r\n\r\n|\r\n\n|\r\n\r|\n\r\n|\r\r\n|\n\n|\n\r|\r\r/
 
+export function sseMessageData(text: string, meta: { id?: string; retry?: number } = {}) {
+  return {
+    type: "sse.message",
+    properties: {
+      data: text,
+      id: meta.id,
+      retry: meta.retry,
+    },
+  }
+}
+
 export function parseSSEData(text: string, meta: { id?: string; retry?: number } = {}): unknown {
   try {
     return JSON.parse(text)
   } catch {
-    return {
-      type: "sse.message",
-      properties: {
-        data: text,
-        id: meta.id,
-        retry: meta.retry,
-      },
-    }
+    return sseMessageData(text, meta)
   }
 }
 
