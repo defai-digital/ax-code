@@ -17,6 +17,7 @@ import path from "path"
 import fs from "fs/promises"
 import { printNoSessionFound, resolveSession } from "./session-latest"
 import { isRecord } from "@/util/record"
+import { parseJsonPayload } from "@/util/json-value"
 
 export interface LogEntry {
   level?: string | number
@@ -38,12 +39,8 @@ export function decodeTraceLogEntryValue(value: unknown): LogEntry | undefined {
 }
 
 export function parseTraceLogEntryJsonLine(line: string): LogEntry | undefined {
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(line)
-  } catch {
-    return undefined
-  }
+  const parsed = parseJsonPayload(line)
+  if (parsed === undefined) return undefined
   return decodeTraceLogEntryValue(parsed)
 }
 
