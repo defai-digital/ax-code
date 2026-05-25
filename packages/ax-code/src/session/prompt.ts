@@ -23,7 +23,6 @@ import { NotFoundError } from "@/storage/db"
 import { Flag } from "../flag/flag"
 import { Recorder } from "../replay/recorder"
 import { BlastRadius } from "./blast-radius"
-import { CodeIntelligence } from "../code-intelligence"
 import { AutoIndex } from "../code-intelligence/auto-index"
 import type { ProjectID } from "../project/schema"
 import { Todo } from "./todo"
@@ -78,6 +77,7 @@ import { insertReminders } from "./prompt-reminders"
 import { executeShellCommand } from "./prompt-shell-command"
 import { createStoppedAssistantTextResponse } from "./prompt-assistant-response"
 import { executePromptCommand } from "./prompt-command-execution"
+import { recordCodeGraphSessionStart } from "./prompt-code-graph"
 import { createAutonomousUserContinuation, createUserMessage } from "./prompt-user-message"
 import { permissionRulesetFromLegacyTools } from "./prompt-permission"
 import { createPromptRunState } from "./prompt-run-state"
@@ -490,58 +490,11 @@ export namespace SessionPrompt {
             directory: Instance.directory,
           })
         }
-        // Snapshot the Code Intelligence graph state alongside session.start
-        // so deterministic replay can see what the agent "knew" about the
-        // code at the moment it began this session, and start the watcher
-        // so file edits during the session are reflected in the graph.
-        // Both are gated behind the experimental flag so users who have
-        // not opted in don't pay any cost for this feature.
-        //
-        // Defensive: if the code_* tables are missing (e.g. an old DB
-        // before v3) or the watcher fails to subscribe, swallow and
-        // skip — we never want this to take down a session.
-        if (!isResumingActiveLoop && Flag.AX_CODE_EXPERIMENTAL_CODE_INTELLIGENCE) {
-          try {
-            const s = CodeIntelligence.status(Instance.project.id)
-            Recorder.emit({
-              type: "code.graph.snapshot",
-              sessionID,
-              projectID: s.projectID,
-              commitSha: s.lastCommitSha,
-              nodeCount: s.nodeCount,
-              edgeCount: s.edgeCount,
-              lastIndexedAt: s.lastUpdated,
-            })
-            CodeIntelligence.startWatcher(Instance.project.id)
-            if (s.nodeCount === 0) {
-              try {
-                AutoIndex.maybeStart(Instance.project.id)
-              } catch (error) {
-                log.warn("auto-index scheduling failed during code graph init", {
-                  command: "session.prompt.codeGraph",
-                  status: "error",
-                  sessionID,
-                  error,
-                })
-              }
-            }
-            // Start auto-index from the same reliable path that starts
-            // the graph watcher. maybeStart() is fire-and-forget and
-            // self-gates on empty-graph state, in-flight runs, and the
-            // explicit auto-index opt-out flag. The deferred callback
-            // below remains a second chance for sessions that initialized
-            // before the graph became observable.
-            deferredAutoIndexProjectID = Instance.project.id
-          } catch (e) {
-            log.warn("code.graph init skipped", {
-              command: "session.prompt.codeGraph",
-              status: "error",
-              errorCode: "GRAPH_INIT_SKIPPED",
-              sessionID,
-              e: e instanceof Error ? e.message : String(e),
-            })
-          }
-        }
+        deferredAutoIndexProjectID =
+          recordCodeGraphSessionStart({
+            sessionID,
+            enabled: !isResumingActiveLoop && Flag.AX_CODE_EXPERIMENTAL_CODE_INTELLIGENCE,
+          }) ?? deferredAutoIndexProjectID
         sessionStarted = true
       }
 
