@@ -1,5 +1,7 @@
 import type { LSPClient } from "./client"
 import type { SemanticEnvelope } from "./envelope"
+import * as LSPEnvelopeRunner from "./envelope-runner"
+import * as LSPPerf from "./perf"
 
 export type NormalizedSeverity = "error" | "warning" | "info" | "hint"
 
@@ -16,6 +18,30 @@ export type NormalizedDiagnostic = {
 export type AggregateInput = {
   serverID: string
   diagnostics: Map<string, LSPClient.Diagnostic[]>
+}
+
+export async function collect(clients: LSPClient.Info[]): Promise<Record<string, LSPClient.Diagnostic[]>> {
+  const results: Record<string, LSPClient.Diagnostic[]> = {}
+  for (const result of await LSPEnvelopeRunner.runAll(clients, async (client) => client.diagnostics)) {
+    for (const [path, diagnostics] of result.entries()) {
+      const arr = results[path] || []
+      arr.push(...diagnostics)
+      results[path] = arr
+    }
+  }
+  return results
+}
+
+export async function aggregateEnvelope(
+  clients: LSPClient.Info[],
+  file?: string,
+): Promise<SemanticEnvelope<NormalizedDiagnostic[]>> {
+  return LSPPerf.metered("diagnosticsAggregated", file ? { file } : {}, async () =>
+    aggregate(
+      clients.map((client) => ({ serverID: client.serverID, diagnostics: client.diagnostics })),
+      { file, now: Date.now() },
+    ),
+  )
 }
 
 export function normalizeSeverity(s: number | undefined): NormalizedSeverity {
