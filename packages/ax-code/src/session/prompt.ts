@@ -10,7 +10,7 @@ import { ModelID, ProviderID } from "../provider/schema"
 import { type ModelMessage } from "ai"
 import { SessionCompaction } from "./compaction"
 import { SessionRetry } from "./retry"
-import { MAX_CONSECUTIVE_ERRORS, GLOBAL_STEP_LIMIT } from "@/constants/session"
+import { GLOBAL_STEP_LIMIT } from "@/constants/session"
 import { AgentControlEvents } from "../control-plane/agent-control-events"
 import { AutonomousCompletionGate } from "../control-plane/autonomous-completion-gate"
 import { Instance } from "../project/instance"
@@ -36,19 +36,16 @@ import { agentInfo, modelInfo } from "./prompt-agent-model-info"
 import {
   pendingCompactionDecision,
   shouldScheduleUsageCompaction,
-  consecutiveErrorDecision,
-  providerFallbackLookupDecision,
-  providerFallbackSwitchState,
   processorLoopDecision,
   assistantLoopExitDecision,
   assistantRespondedAfterUser,
 } from "./prompt-loop-decisions"
+import { handlePromptLoopError } from "./prompt-loop-errors"
 import { loopMessages, remindQueuedMessages, scanLoopMessages } from "./prompt-loop-messages"
 import { markPromptLoopBusy } from "./prompt-loop-status"
 import { systemPrompt as getSystemPrompt } from "./prompt-system"
 import { createStructuredOutputTool } from "./prompt-structured-output"
 import { sessionAssistantPath, textPart, zeroTokenUsage } from "./prompt-message-builders"
-import { findFallbackModel } from "./prompt-provider-fallback"
 import { executeSubtask, type SubtaskContext } from "./prompt-subtask"
 import { resolveTools } from "./prompt-tools"
 import {
@@ -1091,68 +1088,21 @@ export namespace SessionPrompt {
       // Track consecutive errors — break if agent is stuck
       if (processor.message.error) {
         consecutiveErrors++
-
-        // Provider fallback: if the error is a provider API failure (rate limit,
-        // no credit, auth error), try switching to another available provider
-        // instead of retrying the same broken one.
-        const err = processor.message.error
-        const fallbackLookup = providerFallbackLookupDecision({
-          consecutiveErrors,
-          error: err,
-        })
-        if (fallbackLookup.action === "lookup") {
-          const fallback = await findFallbackModel(lastUser.model.providerID).catch(() => null)
-          if (fallback) {
-            const fallbackSwitch = providerFallbackSwitchState({
-              current: lastUser.model,
-              fallback,
-              errorMessage: fallbackLookup.errorMessage,
-              consecutiveErrors,
-            })
-            log.warn("switching to fallback provider", {
-              command: "session.prompt.loop",
-              from: fallbackSwitch.from,
-              to: fallbackSwitch.to,
-              reason: fallbackSwitch.reason,
-            })
-            Session.publishError({
-              sessionID,
-              message: fallbackSwitch.message,
-            })
-            fallbackModelOverride = fallback
-            cachedModel = undefined
-            consecutiveErrors = fallbackSwitch.nextConsecutiveErrors
-            continue
-          }
-        }
-
-        log.warn("consecutive error", {
-          command: "session.prompt.loop",
-          status: "error",
-          errorCode: "CONSECUTIVE_ERROR",
-          consecutiveErrors,
-          step,
+        const errorResult = await handlePromptLoopError({
           sessionID,
+          currentModel: lastUser.model,
           error: processor.message.error,
-        })
-        const errorDecision = consecutiveErrorDecision({
           consecutiveErrors,
-          maxConsecutiveErrors: MAX_CONSECUTIVE_ERRORS,
           step,
         })
-        if (errorDecision.action === "stop") {
-          log.warn("too many consecutive errors, stopping", {
-            command: "session.prompt.loop",
-            status: "error",
-            errorCode: "MAX_CONSECUTIVE_ERRORS",
-            consecutiveErrors,
-            sessionID,
-          })
-          Session.publishError({
-            sessionID,
-            message: errorDecision.message,
-          })
-          reason = errorDecision.reason
+        consecutiveErrors = errorResult.consecutiveErrors
+        if (errorResult.action === "fallback") {
+          fallbackModelOverride = errorResult.fallbackModel
+          cachedModel = undefined
+          continue
+        }
+        if (errorResult.action === "stop") {
+          reason = errorResult.reason
           break
         }
       } else {
