@@ -97,6 +97,18 @@ export namespace Ripgrep {
   export type Begin = z.infer<typeof Begin>
   export type End = z.infer<typeof End>
   export type Summary = z.infer<typeof Summary>
+
+  export function parseJsonLine(line: string): Result | undefined {
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(line)
+    } catch {
+      return undefined
+    }
+    const decoded = Result.safeParse(parsed)
+    return decoded.success ? decoded.data : undefined
+  }
+
   const PLATFORM = {
     "arm64-darwin": { platform: "aarch64-apple-darwin", extension: "tar.gz" },
     "arm64-linux": {
@@ -454,13 +466,8 @@ export namespace Ripgrep {
 
     const matches = []
     for (const line of lines) {
-      try {
-        const parsed = Result.parse(JSON.parse(line))
-        if (parsed.type === "match") matches.push(parsed.data)
-      } catch {
-        // Skip malformed JSON lines from ripgrep (e.g., truncated output)
-        continue
-      }
+      const parsed = parseJsonLine(line)
+      if (parsed?.type === "match") matches.push(parsed.data)
     }
     return matches
   }

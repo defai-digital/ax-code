@@ -5,6 +5,40 @@ import { tmpdir } from "../fixture/fixture"
 import { Ripgrep } from "../../src/file/ripgrep"
 
 describe("file.ripgrep", () => {
+  test("parseJsonLine decodes ripgrep JSON records", () => {
+    expect(
+      Ripgrep.parseJsonLine(
+        JSON.stringify({
+          type: "match",
+          data: {
+            path: { text: "src/index.ts" },
+            lines: { text: "const needle = true\n" },
+            line_number: 1,
+            absolute_offset: 0,
+            submatches: [
+              {
+                match: { text: "needle" },
+                start: 6,
+                end: 12,
+              },
+            ],
+          },
+        }),
+      ),
+    ).toMatchObject({
+      type: "match",
+      data: {
+        path: { text: "src/index.ts" },
+        line_number: 1,
+      },
+    })
+  })
+
+  test("parseJsonLine rejects malformed ripgrep JSON records", () => {
+    expect(Ripgrep.parseJsonLine("{not json")).toBeUndefined()
+    expect(Ripgrep.parseJsonLine(JSON.stringify({ type: "match", data: {} }))).toBeUndefined()
+  })
+
   test("defaults to include hidden", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
