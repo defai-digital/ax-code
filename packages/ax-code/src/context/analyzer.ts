@@ -8,6 +8,7 @@
 import path from "path"
 import fs from "fs"
 import { readFile } from "node:fs/promises"
+import { toErrorMessage } from "../util/error-message"
 import { Log } from "../util/log"
 import { isNonEmptyRecord } from "../util/record"
 import { decodePackageJsonObject, packageJsonStringMap, parsePackageJsonObject } from "../util/package-json"
@@ -421,7 +422,7 @@ async function calculateComplexity(root: string, info: ProjectInfo): Promise<Com
       Log.Default.warn("complexity scan failed, using fallback", {
         root,
         sourceDir,
-        error: error instanceof Error ? error.message : String(error),
+        error: toErrorMessage(error),
       })
     }
   }

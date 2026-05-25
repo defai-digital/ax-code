@@ -1,6 +1,7 @@
 import fs from "fs/promises"
 import path from "path"
 import { git } from "../util/git"
+import { toErrorMessage } from "../util/error-message"
 import { Instance } from "../project/instance"
 import { Log } from "../util/log"
 import type { ProjectID } from "../project/schema"
@@ -225,7 +226,7 @@ export namespace ShadowWorktree {
       return {
         ok: false,
         reason: "create-failed",
-        detail: err instanceof Error ? err.message : String(err),
+        detail: toErrorMessage(err),
       }
     }
   }

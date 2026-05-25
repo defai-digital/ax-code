@@ -15,6 +15,7 @@ import { Config } from "../config/config"
 import { Session } from "../session"
 import { Provider } from "../provider/provider"
 import { isHarmlessEffectInterrupt } from "@/effect/interrupt"
+import { toErrorMessage } from "@/util/error-message"
 import {
   BOOTSTRAP_PREWARM_MAX_FILES,
   BOOTSTRAP_PREWARM_MAX_LANGUAGES,
@@ -28,7 +29,7 @@ function fireAndForget(label: string, task: () => Promise<unknown> | unknown) {
   const handle = (err: unknown) => {
     if (isHarmlessEffectInterrupt(err)) return
     Log.Default.warn(`${label} failed`, {
-      error: err instanceof Error ? err.message : String(err),
+      error: toErrorMessage(err),
     })
   }
   try {
