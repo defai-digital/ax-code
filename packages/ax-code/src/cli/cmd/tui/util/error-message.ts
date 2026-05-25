@@ -1,3 +1,5 @@
+import { parseJsonRecord } from "@/util/json-record"
+
 function nonEmptyString(value: unknown) {
   return typeof value === "string" && value.length > 0 ? value : undefined
 }
@@ -38,11 +40,7 @@ export function unknownErrorMessage(error: unknown, fallback = "An error occurre
 
 export function textErrorMessage(text: string) {
   if (!text) return undefined
-  try {
-    return errorPayloadMessage(JSON.parse(text)) ?? text
-  } catch {
-    return text
-  }
+  return errorPayloadMessage(parseJsonRecord(text)) ?? text
 }
 
 export async function responseErrorMessage(response: Pick<Response, "status" | "text">) {
