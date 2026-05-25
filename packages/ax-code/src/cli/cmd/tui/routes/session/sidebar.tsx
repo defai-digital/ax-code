@@ -17,6 +17,7 @@ import { activityItems as items } from "./activity"
 import { SessionDreView } from "./dre"
 import { SessionRollbackView } from "./rollback"
 import { SessionSemanticDiff } from "@/session/semantic-diff"
+import { Todo } from "@/session/todo"
 import { footerSessionStatusOrIdle, footerSessionStatusView } from "./footer-view-model"
 import { computeSidebarWidth } from "./layout"
 import { sidebarGraphIndexStatusText } from "./sidebar-index-view-model"
@@ -117,7 +118,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
   const dimensions = useTerminalDimensions()
   const sidebarWidth = createMemo(() => computeSidebarWidth(dimensions().width))
 
-  const todoRemaining = createMemo(() => todo().filter((item) => item.status !== "completed").length)
+  const todoRemaining = createMemo(() => Todo.countActive(todo()))
 
   // A user message is "queued" iff the loop has not yet picked it up,
   // i.e. no assistant message references it as `parentID`. We can't gate
