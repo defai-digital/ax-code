@@ -97,6 +97,21 @@ describe("AgentOptimizationTrace.verificationStatusFromObservations", () => {
 })
 
 describe("AgentOptimizationTrace.serialize / deserialize", () => {
+  test("decodeTraceEvent decodes valid trace objects", () => {
+    const event = makeEvent()
+    expect(AgentOptimizationTrace.decodeTraceEvent(event)).toEqual(event)
+  })
+
+  test("decodeTraceEvent returns null for invalid trace objects", () => {
+    expect(AgentOptimizationTrace.decodeTraceEvent({ ...makeEvent(), routeClass: "fast" })).toBeNull()
+    expect(
+      AgentOptimizationTrace.decodeTraceEvent({
+        ...makeEvent(),
+        contextPackSummary: { totalTokens: 4000, tierCounts: [1, 2, 3], droppedTiers: [] },
+      }),
+    ).toBeNull()
+  })
+
   test("round-trips a full event", () => {
     const event = makeEvent()
     const json = AgentOptimizationTrace.serialize(event)
