@@ -1,4 +1,5 @@
 import { isHeadlessRuntimeEvent, type HeadlessRuntimeEvent } from "./event"
+import { parseJsonPayload } from "@/util/json-value"
 
 export function encodeHeadlessEventLogRecord(record: unknown) {
   const encoded = JSON.stringify(record)
@@ -19,13 +20,7 @@ export function decodeHeadlessEventLogRecord<
 }
 
 export function parseHeadlessEventLogJsonLine(line: string): unknown | undefined {
-  const trimmed = line.trim()
-  if (!trimmed) return undefined
-  try {
-    return JSON.parse(trimmed)
-  } catch {
-    return undefined
-  }
+  return parseJsonPayload(line)
 }
 
 export function decodeHeadlessEventLogLine<
