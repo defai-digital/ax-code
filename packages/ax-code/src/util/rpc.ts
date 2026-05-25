@@ -25,7 +25,22 @@ export namespace Rpc {
     onWireDeath?: (() => void) | null
   }
 
+  type WireMessage = Record<string, any> & {
+    type?: unknown
+  }
+
   let emitMessage: ((data: string) => void) | undefined
+
+  function parseWireMessage(data: string): WireMessage | undefined {
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(data)
+    } catch {
+      return undefined
+    }
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return undefined
+    return parsed as WireMessage
+  }
 
   // Defensive double-init guard. The current architecture calls exactly
   // one of `listen()` or `listenStdio()` per process (the TUI backend
@@ -83,12 +98,8 @@ export namespace Rpc {
       // Malformed messages must not crash the worker: onmessage is a raw
       // assignment (not addEventListener), so any throw here kills it and
       // strands every in-flight RPC promise. Parse defensively and drop.
-      let parsed: any
-      try {
-        parsed = JSON.parse(evt.data)
-      } catch {
-        return
-      }
+      const parsed = parseWireMessage(evt.data)
+      if (!parsed) return
       if (parsed.type === "rpc.request") {
         const handler = rpc[parsed.method]
         if (typeof handler !== "function") return
@@ -149,12 +160,8 @@ export namespace Rpc {
     let buffer = ""
     const handleLine = async (line: string) => {
       if (!line.trim()) return
-      let parsed: any
-      try {
-        parsed = JSON.parse(line)
-      } catch {
-        return
-      }
+      const parsed = parseWireMessage(line)
+      if (!parsed) return
       if (parsed.type !== "rpc.request") return
       const handler = rpc[parsed.method]
       if (typeof handler !== "function") return
@@ -239,12 +246,8 @@ export namespace Rpc {
     }
     target.onmessage = async (evt) => {
       // See Rpc.listen — drop malformed messages instead of crashing.
-      let parsed: any
-      try {
-        parsed = JSON.parse(evt.data)
-      } catch {
-        return
-      }
+      const parsed = parseWireMessage(evt.data)
+      if (!parsed) return
       if (parsed.type === "rpc.result" || parsed.type === "rpc.error") {
         const entry = pending.get(parsed.id)
         if (entry) {

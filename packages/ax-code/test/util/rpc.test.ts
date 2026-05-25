@@ -77,6 +77,25 @@ describe("Rpc", () => {
     }
   })
 
+  test("drops malformed and non-object worker messages without crashing", async () => {
+    const pair = createRpcPair()
+    try {
+      Rpc.listen({
+        plusOne(value: number) {
+          return value + 1
+        },
+      })
+
+      const handler = globalThis.onmessage as ((event: MessageEvent<string>) => void | Promise<void>) | null
+      expect(handler).toBeFunction()
+      await expect(Promise.resolve(handler?.({ data: "not json" } as MessageEvent<string>))).resolves.toBeUndefined()
+      await expect(Promise.resolve(handler?.({ data: "null" } as MessageEvent<string>))).resolves.toBeUndefined()
+      await expect(Promise.resolve(handler?.({ data: "[]" } as MessageEvent<string>))).resolves.toBeUndefined()
+    } finally {
+      pair.restore()
+    }
+  })
+
   test("supports newline-framed stdio requests and event emission", async () => {
     const stdin = new EventEmitter() as EventEmitter & { setEncoding: (encoding: BufferEncoding) => typeof stdin }
     stdin.setEncoding = () => stdin
