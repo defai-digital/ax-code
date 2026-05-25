@@ -4,7 +4,7 @@ import { SessionID } from "./schema"
 import z from "zod"
 import { Database, eq, asc } from "../storage/db"
 import { TodoTable } from "./session.sql"
-import { isActiveTodo } from "./todo-status"
+import { isActiveTodoStatus, isActiveTodo } from "./todo-status"
 
 export namespace Todo {
   export const Info = z
@@ -30,6 +30,17 @@ export namespace Todo {
 
   export function isActive(todo: Pick<Info, "status">) {
     return isActiveTodo(todo)
+  }
+
+  export function countActive(todos: readonly { status?: unknown }[]) {
+    return todos.filter((todo) => isActiveTodoStatus(todo.status)).length
+  }
+
+  export function formatCheckboxLines(todos: readonly { status: string; content: string }[]) {
+    return formatLines(todos, {
+      prefix: "",
+      statusTransform: (status) => (status === "completed" ? "x" : " "),
+    })
   }
 
   export const Event = {
