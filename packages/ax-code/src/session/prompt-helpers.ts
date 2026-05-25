@@ -24,7 +24,9 @@ import type { SessionCompaction } from "./compaction"
 import { formatDecisionCount, modelTurnFinished } from "./prompt-autonomous-decisions"
 import { commandTemplateText } from "./prompt-command-template"
 import { resolvePromptParts } from "./prompt-reference-parts"
+import { commandModel, commandUser } from "./prompt-command-selection"
 export { commandTemplateText } from "./prompt-command-template"
+export { commandModel, commandUser, lastModel } from "./prompt-command-selection"
 export { resolvePromptParts } from "./prompt-reference-parts"
 export { appendShellOutputChunk, shellArgs, shellOutputMetadata, type ShellOutputState } from "./prompt-shell-runtime"
 
@@ -400,50 +402,6 @@ export function zeroTokenUsage(input?: { total?: number }): AssistantTokens {
   return {
     total: input.total,
     ...tokens,
-  }
-}
-
-export async function commandModel(input: {
-  command?: { model?: string; agent?: string }
-  model?: string
-  sessionID: SessionID
-}) {
-  if (input.command?.model) {
-    return Provider.parseModel(input.command.model)
-  }
-  if (input.command?.agent) {
-    const agent = await Agent.get(input.command.agent)
-    if (agent?.model) {
-      return agent.model
-    }
-  }
-  if (input.model) return Provider.parseModel(input.model)
-  return lastModel(input.sessionID)
-}
-
-export async function commandUser(input: {
-  subtask: boolean
-  inputAgent?: string
-  inputModel?: string
-  agentName: string
-  taskModel: { providerID: ProviderID; modelID: ModelID }
-  sessionID: SessionID
-  defaultAgent?: () => Promise<string>
-  parseModel?: (model: string) => { providerID: ProviderID; modelID: ModelID }
-  last?: (sessionID: SessionID) => Promise<{ providerID: ProviderID; modelID: ModelID }>
-}) {
-  if (!input.subtask) {
-    return {
-      agent: input.agentName,
-      model: input.taskModel,
-    }
-  }
-
-  return {
-    agent: input.inputAgent ?? (await (input.defaultAgent ?? Agent.defaultAgent)()),
-    model: input.inputModel
-      ? (input.parseModel ?? Provider.parseModel)(input.inputModel)
-      : await (input.last ?? lastModel)(input.sessionID),
   }
 }
 
@@ -835,13 +793,6 @@ export function createStructuredOutputTool(input: {
       }
     },
   })
-}
-
-export async function lastModel(sessionID: SessionID) {
-  for await (const item of MessageV2.stream(sessionID)) {
-    if (item.info.role === "user" && item.info.model) return item.info.model
-  }
-  return Provider.defaultModel()
 }
 
 /**
