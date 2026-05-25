@@ -23,6 +23,7 @@ import { ProviderID, type ModelID } from "../provider/schema"
 import { WebSearchTool } from "./websearch"
 import { CodeSearchTool } from "./codesearch"
 import { Flag } from "@/flag/flag"
+import { toErrorMessage } from "@/util/error-message"
 import { Log } from "@/util/log"
 import { LspTool } from "./lsp"
 import { CodeIntelligenceTool } from "./code-intelligence"
@@ -141,7 +142,7 @@ export namespace ToolRegistry {
                 }
               } catch (err) {
                 log.warn("failed to load tool, registering as unavailable", { match, err })
-                const errMsg = err instanceof Error ? err.message : String(err)
+                const errMsg = toErrorMessage(err)
                 custom.push(
                   fromPlugin(namespace, {
                     description: `Tool ${namespace} failed to load: ${errMsg}`,

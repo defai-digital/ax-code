@@ -11,6 +11,7 @@ import fs from "fs/promises"
 
 import { Filesystem } from "@/util/filesystem"
 import { Env } from "@/util/env"
+import { toErrorMessage } from "@/util/error-message"
 import { fileURLToPath } from "url"
 import { Flag } from "@/flag/flag.ts"
 import { Shell } from "@/shell/shell"
@@ -557,7 +558,7 @@ export const BashTool = Tool.define("bash", async () => {
         } catch (error) {
           log.warn("bash metadata publish failed", {
             pid: proc.pid,
-            error: error instanceof Error ? error.message : String(error),
+            error: toErrorMessage(error),
           })
         }
       }
