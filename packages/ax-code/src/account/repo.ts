@@ -14,7 +14,11 @@ function encryptToken(token: string): string {
 
 export function parseEncryptedToken(raw: string): EncryptedValue | undefined {
   const parsed = parseJsonRecord(raw)
-  return isEncrypted(parsed) ? parsed : undefined
+  return decodeEncryptedTokenValue(parsed)
+}
+
+export function decodeEncryptedTokenValue(value: unknown): EncryptedValue | undefined {
+  return isEncrypted(value) ? value : undefined
 }
 
 function decryptToken<T extends string>(raw: string, make: (s: string) => T): T {
