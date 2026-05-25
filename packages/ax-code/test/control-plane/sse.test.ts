@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test"
-import { parseSSE, parseSSEData } from "../../src/control-plane/sse"
+import { parseSSE, parseSSEData, sseMessageData } from "../../src/control-plane/sse"
 import { resetDatabase } from "../fixture/db"
 
 afterEach(async () => {
@@ -17,6 +17,17 @@ function stream(chunks: string[]) {
 }
 
 describe("control-plane/sse", () => {
+  test("wraps text data as explicit SSE message events", () => {
+    expect(sseMessageData("hello world", { id: "abc", retry: 1500 })).toEqual({
+      type: "sse.message",
+      properties: {
+        data: "hello world",
+        id: "abc",
+        retry: 1500,
+      },
+    })
+  })
+
   test("parseSSEData decodes JSON payloads", () => {
     expect(parseSSEData('{"type":"one","properties":{"ok":true}}')).toEqual({
       type: "one",
