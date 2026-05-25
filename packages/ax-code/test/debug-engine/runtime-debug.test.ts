@@ -146,8 +146,8 @@ describe("DebugHypothesisSchema", () => {
   })
 
   test("evidenceRefs defaults to empty array when omitted", () => {
-    const { evidenceRefs, ...without } = validHypothesis
-    void evidenceRefs
+    const without = { ...validHypothesis } as Partial<DebugHypothesis>
+    delete without.evidenceRefs
     const parsed = DebugHypothesisSchema.parse(without)
     expect(parsed.evidenceRefs).toEqual([])
   })

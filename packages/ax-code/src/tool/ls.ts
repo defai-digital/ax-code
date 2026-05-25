@@ -7,7 +7,7 @@ import { Ripgrep } from "../file/ripgrep"
 import { assertExternalDirectory, assertSymlinkInsideProject } from "./external-directory"
 import { normalizeToWorkspacePath, resolveToolFilePath } from "./file-path"
 
-export const IGNORE_PATTERNS = [
+const IGNORE_PATTERNS = [
   "node_modules/",
   "__pycache__/",
   ".git/",

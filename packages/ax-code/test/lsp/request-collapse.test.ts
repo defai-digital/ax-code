@@ -105,7 +105,7 @@ describe("Request collapse (§S1)", () => {
         ])
 
         // No leaked in-flight entries after settle.
-        expect(LspScheduler.Inflight.sizeForTest()).toBe(0)
+        expect(LspScheduler.Inflight.size()).toBe(0)
       },
     })
   })

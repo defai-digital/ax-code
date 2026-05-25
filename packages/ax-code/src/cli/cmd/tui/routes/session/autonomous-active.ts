@@ -10,9 +10,8 @@ import type { FooterSessionStatus } from "./footer-view-model"
 // pragmatic, no-new-event signal we use to decide whether to surface
 // the autonomous chip and tint the transcript border.
 //
-// Mirrors the gate footerProgressBar() already uses, so the chip and
-// the existing progress bar appear and disappear together.
-export type AutonomousActive = {
+// Multi-step status means an autonomous loop is currently active.
+type AutonomousActive = {
   active: boolean
   step?: number
   maxSteps?: number

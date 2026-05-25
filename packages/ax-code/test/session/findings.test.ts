@@ -2,9 +2,10 @@ import { describe, expect, test } from "bun:test"
 import { Instance } from "../../src/project/instance"
 import { computeFindingId } from "../../src/quality/finding"
 import type { Finding } from "../../src/quality/finding"
+import { countByWorkflow } from "../../src/quality/finding-counts"
 import { Recorder } from "../../src/replay/recorder"
 import { Session } from "../../src/session"
-import { SessionFindings } from "../../src/session/findings"
+import { loadSessionFindings } from "../../src/session/findings"
 import { tmpdir } from "../fixture/fixture"
 
 function buildFinding(overrides: Partial<Finding> = {}): Finding {
@@ -67,7 +68,7 @@ async function emitRegisterFinding(
   })
 }
 
-describe("SessionFindings.load", () => {
+describe("loadSessionFindings", () => {
   test("returns [] for a session with no register_finding calls", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
@@ -91,7 +92,7 @@ describe("SessionFindings.load", () => {
         Recorder.end(session.id)
         await new Promise((resolve) => setTimeout(resolve, 50))
 
-        expect(SessionFindings.load(session.id)).toEqual([])
+        expect(loadSessionFindings(session.id)).toEqual([])
       },
     })
   })
@@ -132,7 +133,7 @@ describe("SessionFindings.load", () => {
         Recorder.end(session.id)
         await new Promise((resolve) => setTimeout(resolve, 50))
 
-        const findings = SessionFindings.load(session.id)
+        const findings = loadSessionFindings(session.id)
         expect(findings).toHaveLength(2)
         expect(findings.map((f) => f.findingId)).toEqual([f1.findingId, f2.findingId])
         expect(findings[0].severity).toBe("HIGH")
@@ -179,7 +180,7 @@ describe("SessionFindings.load", () => {
         Recorder.end(session.id)
         await new Promise((resolve) => setTimeout(resolve, 50))
 
-        const findings = SessionFindings.load(session.id)
+        const findings = loadSessionFindings(session.id)
         expect(findings).toHaveLength(1)
         expect(findings[0].findingId).toBe(f1.findingId)
         expect(findings[0].source.tool).toBe("debug_analyze")
@@ -218,7 +219,7 @@ describe("SessionFindings.load", () => {
         Recorder.end(session.id)
         await new Promise((resolve) => setTimeout(resolve, 50))
 
-        const findings = SessionFindings.load(session.id)
+        const findings = loadSessionFindings(session.id)
         expect(findings).toHaveLength(1)
         expect(findings[0].findingId).toBe(good.findingId)
       },
@@ -250,7 +251,7 @@ describe("SessionFindings.load", () => {
         Recorder.end(session.id)
         await new Promise((resolve) => setTimeout(resolve, 50))
 
-        const findings = SessionFindings.load(session.id)
+        const findings = loadSessionFindings(session.id)
         expect(findings).toHaveLength(1)
         expect(findings[0].findingId).toBe(finding.findingId)
       },
@@ -287,15 +288,15 @@ describe("SessionFindings.load", () => {
         Recorder.end(session.id)
         await new Promise((resolve) => setTimeout(resolve, 50))
 
-        expect(SessionFindings.load(session.id)).toEqual([])
+        expect(loadSessionFindings(session.id)).toEqual([])
       },
     })
   })
 })
 
-describe("SessionFindings.countByWorkflow", () => {
+describe("countByWorkflow", () => {
   test("returns zero counts for an empty list", () => {
-    const counts = SessionFindings.countByWorkflow([])
+    const counts = countByWorkflow([])
     expect(counts.review.total).toBe(0)
     expect(counts.debug.total).toBe(0)
     expect(counts.qa.total).toBe(0)
@@ -311,7 +312,7 @@ describe("SessionFindings.countByWorkflow", () => {
       buildFinding({ severity: "INFO", workflow: "qa", anchor: { kind: "line", line: 80 } }),
       buildFinding({ severity: "LOW", workflow: "qa", anchor: { kind: "line", line: 90 } }),
     ]
-    const counts = SessionFindings.countByWorkflow(findings)
+    const counts = countByWorkflow(findings)
     expect(counts.review.CRITICAL).toBe(1)
     expect(counts.review.HIGH).toBe(2)
     expect(counts.review.total).toBe(3)

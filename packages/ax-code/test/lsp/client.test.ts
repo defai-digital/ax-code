@@ -43,7 +43,7 @@ describe("LSPClient interop", () => {
   })
 
   test("per-path lock releases idle path entries after queued work drains", async () => {
-    const lock = LSPClient.createPathLockForTest()
+    const lock = LSPClient.createPathLock()
     const order: string[] = []
     let releaseFirst!: () => void
 

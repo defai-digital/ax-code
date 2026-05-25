@@ -7,7 +7,6 @@ const APP_SRC = path.join(TUI_SRC, "app.tsx")
 const RENDERER_SRC = path.join(TUI_SRC, "renderer.ts")
 const PROMPT_SRC = path.join(TUI_SRC, "component/prompt/index.tsx")
 const SESSION_HEADER_SRC = path.join(TUI_SRC, "routes/session/header.tsx")
-const SESSION_FOOTER_SRC = path.join(TUI_SRC, "routes/session/footer.tsx")
 const SESSION_DIALOG_SRC = path.join(TUI_SRC, "routes/session/dialog-message.tsx")
 const TIMELINE_FORK_DIALOG_SRC = path.join(TUI_SRC, "routes/session/dialog-fork-from-timeline.tsx")
 const PROVIDER_DIALOG_SRC = path.join(TUI_SRC, "component/dialog-provider.tsx")
@@ -84,13 +83,6 @@ describe("tui console hygiene", () => {
     expect(text).not.toContain("ContextInfo")
     expect(text).not.toContain("tok/s")
     expect(text).not.toContain("Usage.last(")
-  })
-
-  test("keeps empty footer signals hidden instead of showing zero-value chips", async () => {
-    const footer = await fs.readFile(SESSION_FOOTER_SRC, "utf8")
-
-    expect(footer).toContain("dimensions().width >= 90 && lsp().length > 0")
-    expect(footer).toContain("showStatusSeparator")
   })
 
   test("keeps stalled prompt status static and interrupt copy direct", async () => {

@@ -60,6 +60,16 @@ describe("session.processor", () => {
     expect(end).toBeGreaterThan(start)
 
     expect(src.slice(start, end)).toContain("deltaBatcher.flush()")
+    expect(src.slice(start, end)).toContain("persistFinalizedInFlightParts({ overwriteEndTime: false })")
+  })
+
+  test("finalizes in-flight parts before processor error handling", async () => {
+    const src = await Bun.file(path.join(import.meta.dir, "../../src/session/processor.ts")).text()
+    const catchStart = src.indexOf("} catch (e: unknown) {")
+    const retryStart = src.indexOf("const errStack", catchStart)
+    expect(catchStart).toBeGreaterThan(-1)
+    expect(retryStart).toBeGreaterThan(catchStart)
+    expect(src.slice(catchStart, retryStart)).toContain("persistFinalizedInFlightParts({ overwriteEndTime: true })")
   })
 
   test("resets short-lived tool loop state across compaction", async () => {
@@ -67,6 +77,7 @@ describe("session.processor", () => {
     expect(src).toContain("const resetShortLivedToolLoopState = () => {")
     expect(src).toContain("recentToolRing.length = 0")
     expect(src).toContain("toolCallTimestamps.length = 0")
+    expect(src).toContain("for (const key of Object.keys(toolInputCache)) delete toolInputCache[key]")
     const start = src.indexOf("if (needsCompaction) {")
     const end = src.indexOf("\n                break", start)
     expect(start).toBeGreaterThan(-1)
@@ -74,15 +85,13 @@ describe("session.processor", () => {
     expect(src.slice(start, end)).toContain("resetShortLivedToolLoopState()")
   })
 
-  test("resets doom-loop ring across retry attempts", async () => {
+  test("resets short-lived tool loop state across processor errors", async () => {
     const src = await Bun.file(path.join(import.meta.dir, "../../src/session/processor.ts")).text()
-    const retryStart = src.indexOf("const retry = SessionRetry.retryable(error)")
-    const retryEnd = src.indexOf("if (attempt <= SessionRetry.RETRY_MAX_ATTEMPTS)", retryStart)
-    expect(retryStart).toBeGreaterThan(-1)
-    expect(retryEnd).toBeGreaterThan(retryStart)
-    const retryBlock = src.slice(retryStart, retryEnd)
-    expect(retryBlock).toContain("recentToolRing.length = 0")
-    expect(retryBlock).toContain("for (const key of Object.keys(doomLoopWarnings)) delete doomLoopWarnings[key]")
+    const catchStart = src.indexOf("} catch (e: unknown) {")
+    const retryStart = src.indexOf("const retry = SessionRetry.retryable(error)", catchStart)
+    expect(catchStart).toBeGreaterThan(-1)
+    expect(retryStart).toBeGreaterThan(catchStart)
+    expect(src.slice(catchStart, retryStart)).toContain("resetShortLivedToolLoopState()")
   })
 
   test("continue-loop-on-deny config is read per process call", async () => {
@@ -115,18 +124,20 @@ describe("session.processor", () => {
     const retryStart = src.indexOf("const errStack", catchStart)
     expect(catchStart).toBeGreaterThan(-1)
     expect(retryStart).toBeGreaterThan(catchStart)
-    expect(src.slice(catchStart, retryStart)).toContain("toolCallTimestamps.length = 0")
+    expect(src.slice(catchStart, retryStart)).toContain("resetShortLivedToolLoopState()")
   })
 
   test("provider fallback only partially resets consecutive error budget", async () => {
-    const src = await Bun.file(path.join(import.meta.dir, "../../src/session/prompt.ts")).text()
-    expect(src).toContain("consecutiveErrors = Math.floor(consecutiveErrors / 2)")
+    const prompt = await Bun.file(path.join(import.meta.dir, "../../src/session/prompt.ts")).text()
+    const helpers = await Bun.file(path.join(import.meta.dir, "../../src/session/prompt-helpers.ts")).text()
+    expect(prompt).toContain("consecutiveErrors = fallbackSwitch.nextConsecutiveErrors")
+    expect(helpers).toContain("nextConsecutiveErrors: Math.floor(input.consecutiveErrors / 2)")
   })
 
   test("successful fallback step returns later loops to the original model", async () => {
     const src = await Bun.file(path.join(import.meta.dir, "../../src/session/prompt.ts")).text()
     const successStart = src.indexOf("consecutiveErrors = 0 // Reset on success")
-    const nextBranch = src.indexOf('if (result === "compact")', successStart)
+    const nextBranch = src.indexOf('if (processorDecision.action === "compact")', successStart)
     expect(successStart).toBeGreaterThan(-1)
     expect(nextBranch).toBeGreaterThan(successStart)
     const successBlock = src.slice(successStart, nextBranch)

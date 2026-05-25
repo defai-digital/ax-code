@@ -94,8 +94,6 @@ describe("session.compaction.isOverflow", () => {
           reasoning: 15_000,
           cache: { read: 0, write: 0 },
         }
-        expect(SessionCompaction.componentTotal(tokens)).toBe(95_000)
-        expect(SessionCompaction.effectiveTotal(tokens)).toBe(95_000)
         expect(await SessionCompaction.isOverflow({ tokens, model })).toBe(true)
       },
     })
@@ -351,58 +349,140 @@ describe("util.token.estimate", () => {
   })
 })
 
-describe("session.compaction.estimateToolPartTokens", () => {
-  function completedToolPart(input: Record<string, unknown>, output = "ok") {
-    return {
-      id: "part",
-      messageID: "message",
-      sessionID: "session",
-      type: "tool",
-      callID: "call",
-      tool: "read",
-      state: {
-        status: "completed",
-        input,
-        output,
-        title: "Read file",
-        metadata: {},
-        time: { start: 1, end: 2 },
-      },
-    } as any
+describe("session.compaction.prune tool estimates", () => {
+  async function createPrunableSession(
+    directory: string,
+    state: { input: Record<string, unknown>; output: string; attachmentFilename?: string },
+  ) {
+    const session = await Session.create({})
+    let targetPartID: PartID | undefined
+
+    for (let turn = 1; turn <= 3; turn++) {
+      const user = await Session.updateMessage({
+        id: MessageID.ascending(),
+        sessionID: session.id,
+        role: "user",
+        time: { created: Date.now() + turn * 2 },
+        agent: "build",
+        model: { providerID: ProviderID.make("test"), modelID: ModelID.make("test-model") },
+        tools: {},
+        mode: "build",
+      } as MessageV2.User)
+      const assistant = await Session.updateMessage({
+        id: MessageID.ascending(),
+        parentID: user.id,
+        sessionID: session.id,
+        role: "assistant",
+        mode: "build",
+        agent: "build",
+        path: { cwd: directory, root: directory },
+        tokens: {
+          input: 0,
+          output: 0,
+          reasoning: 0,
+          cache: { read: 0, write: 0 },
+        },
+        modelID: ModelID.make("test-model"),
+        providerID: ProviderID.make("test"),
+        time: { created: Date.now() + turn * 2 + 1 },
+      } as MessageV2.Assistant)
+      if (turn !== 1) continue
+
+      const part = await Session.updatePart({
+        id: PartID.ascending(),
+        messageID: assistant.id,
+        sessionID: session.id,
+        type: "tool",
+        callID: "call",
+        tool: "read",
+        state: {
+          status: "completed",
+          input: state.input,
+          output: state.output,
+          attachments: state.attachmentFilename
+            ? [
+                {
+                  id: PartID.ascending(),
+                  messageID: assistant.id,
+                  sessionID: session.id,
+                  type: "file",
+                  mime: "image/png",
+                  filename: state.attachmentFilename,
+                  url: "data:image/png;base64,AA==",
+                },
+              ]
+            : undefined,
+          title: "Read file",
+          metadata: {},
+          time: { start: 1, end: 2 },
+        },
+      })
+      targetPartID = part.id
+    }
+
+    if (!targetPartID) throw new Error("expected target part")
+    return { session, targetPartID }
   }
 
-  test("counts serialized tool input, not only output", () => {
-    const small = completedToolPart({ filePath: "README.md" }, "same")
-    const largeInput = completedToolPart({ filePath: "README.md", pattern: "x".repeat(4000) }, "same")
+  function findToolPart(messages: MessageV2.WithParts[], partID: PartID) {
+    return messages
+      .flatMap((message) => message.parts)
+      .find((item): item is MessageV2.ToolPart => item.type === "tool" && item.id === partID)
+  }
 
-    expect(SessionCompaction.estimateToolPartTokens(largeInput)).toBeGreaterThan(
-      SessionCompaction.estimateToolPartTokens(small) + 900,
-    )
+  test("counts serialized tool input when pruning", async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await Bun.write(path.join(dir, "ax-code.json"), JSON.stringify({ compaction: { prune: true } }))
+      },
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const { session, targetPartID } = await createPrunableSession(tmp.path, {
+          input: { filePath: "README.md", pattern: "x".repeat(260_000) },
+          output: "same",
+        })
+
+        await SessionCompaction.prune({
+          sessionID: session.id,
+          messages: await Session.messages({ sessionID: session.id }),
+        })
+
+        const part = findToolPart(await Session.messages({ sessionID: session.id }), targetPartID)
+        expect(part?.state.status).toBe("completed")
+        if (part?.state.status !== "completed") throw new Error("expected completed tool part")
+        expect(part.state.time.compacted).toBeNumber()
+      },
+    })
   })
 
-  test("counts attachment placeholders", () => {
-    const plain = completedToolPart({ filePath: "image.png" }, "same")
-    const withAttachment = {
-      ...plain,
-      state: {
-        ...plain.state,
-        attachments: [
-          {
-            id: "file",
-            messageID: "message",
-            sessionID: "session",
-            type: "file",
-            mime: "image/png",
-            filename: "screenshot.png",
-            url: "data:image/png;base64,AA==",
-          },
-        ],
+  test("counts attachment placeholders when pruning", async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await Bun.write(path.join(dir, "ax-code.json"), JSON.stringify({ compaction: { prune: true } }))
       },
-    } as any
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const { session, targetPartID } = await createPrunableSession(tmp.path, {
+          input: { filePath: "image.png" },
+          output: "same",
+          attachmentFilename: `${"screenshot".repeat(30_000)}.png`,
+        })
 
-    expect(SessionCompaction.estimateToolPartTokens(withAttachment)).toBeGreaterThan(
-      SessionCompaction.estimateToolPartTokens(plain),
-    )
+        await SessionCompaction.prune({
+          sessionID: session.id,
+          messages: await Session.messages({ sessionID: session.id }),
+        })
+
+        const part = findToolPart(await Session.messages({ sessionID: session.id }), targetPartID)
+        expect(part?.state.status).toBe("completed")
+        if (part?.state.status !== "completed") throw new Error("expected completed tool part")
+        expect(part.state.time.compacted).toBeNumber()
+      },
+    })
   })
 
   test("prune uses compacted clones without mutating caller-owned message parts", async () => {
@@ -414,63 +494,23 @@ describe("session.compaction.estimateToolPartTokens", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const session = await Session.create({})
-        const user = await Session.updateMessage({
-          id: MessageID.ascending(),
-          sessionID: session.id,
-          role: "user",
-          time: { created: Date.now() },
-          agent: "build",
-          model: { providerID: ProviderID.make("test"), modelID: ModelID.make("test-model") },
-          tools: {},
-          mode: "build",
-        } as MessageV2.User)
-        const assistant = await Session.updateMessage({
-          id: MessageID.ascending(),
-          parentID: user.id,
-          sessionID: session.id,
-          role: "assistant",
-          mode: "build",
-          agent: "build",
-          path: { cwd: tmp.path, root: tmp.path },
-          tokens: {
-            input: 0,
-            output: 0,
-            reasoning: 0,
-            cache: { read: 0, write: 0 },
-          },
-          modelID: ModelID.make("test-model"),
-          providerID: ProviderID.make("test"),
-          time: { created: Date.now() },
-        } as MessageV2.Assistant)
-        await Session.updatePart({
-          id: PartID.ascending(),
-          messageID: assistant.id,
-          sessionID: session.id,
-          type: "tool",
-          callID: "call",
-          tool: "read",
-          state: {
-            status: "completed",
-            input: { filePath: "large.txt" },
-            output: "x".repeat(260_000),
-            title: "Read file",
-            metadata: {},
-            time: { start: 1, end: 2 },
-          },
+        const { session, targetPartID } = await createPrunableSession(tmp.path, {
+          input: { filePath: "large.txt" },
+          output: "x".repeat(260_000),
         })
 
         const messages = await Session.messages({ sessionID: session.id })
-        const part = messages
-          .flatMap((message) => message.parts)
-          .find((item): item is MessageV2.ToolPart => item.type === "tool")
+        const part = findToolPart(messages, targetPartID)
         expect(part?.state.status).toBe("completed")
         if (!part || part.state.status !== "completed") throw new Error("expected completed tool part")
-        expect(SessionCompaction.estimateToolPartTokens(part)).toBeGreaterThan(SessionCompaction.PRUNE_PROTECT)
 
         await SessionCompaction.prune({ sessionID: session.id, messages })
 
         expect(part.state.time.compacted).toBeUndefined()
+        const stored = findToolPart(await Session.messages({ sessionID: session.id }), targetPartID)
+        expect(stored?.state.status).toBe("completed")
+        if (stored?.state.status !== "completed") throw new Error("expected completed stored tool part")
+        expect(stored.state.time.compacted).toBeNumber()
       },
     })
   })

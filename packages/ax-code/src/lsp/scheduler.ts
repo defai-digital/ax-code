@@ -70,7 +70,7 @@ export namespace LspScheduler {
     // Exported for tests and diagnostics. Do not rely on this in hot-
     // path logic — the right primitive for "is this cached" is the
     // cache layer, not the in-flight registry.
-    export function sizeForTest(): number {
+    export function size(): number {
       return registry.size
     }
 
@@ -211,7 +211,7 @@ export namespace LspScheduler {
     }
 
     // Exported for tests and diagnostics.
-    export function inUseForTest(serverID: string): number {
+    export function inUse(serverID: string): number {
       return slots.get(serverID)?.inUse ?? 0
     }
 

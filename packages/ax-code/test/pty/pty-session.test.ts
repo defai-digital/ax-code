@@ -21,7 +21,7 @@ const pick = (log: Array<{ type: "created" | "exited" | "deleted"; id: PtyID }>,
 
 describe("pty", () => {
   test("sanitizes user-provided terminal env before spawn", () => {
-    const env = Pty.__sanitizeUserEnvForTest({
+    const env = Pty.sanitizeUserEnv({
       OPENAI_API_KEY: "api_key_from_user",
       NODE_OPTIONS: "--require ./shim.js",
       LD_PRELOAD: "/tmp/malicious.so",
@@ -37,7 +37,7 @@ describe("pty", () => {
   })
 
   test("reports a replay gap when reconnect cursor is older than the retained buffer", () => {
-    const replay = Pty.__replayBufferedOutputForTest(
+    const replay = Pty.replayBufferedOutput(
       {
         buffer: "cdef",
         bufferCursor: 2,
@@ -55,7 +55,7 @@ describe("pty", () => {
   })
 
   test("replays retained data from the requested cursor when no gap exists", () => {
-    const replay = Pty.__replayBufferedOutputForTest(
+    const replay = Pty.replayBufferedOutput(
       {
         buffer: "cdef",
         bufferCursor: 2,

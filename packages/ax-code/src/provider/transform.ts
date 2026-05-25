@@ -458,24 +458,6 @@ export namespace ProviderTransform {
   }
 
   export function schema(model: Provider.Model, schema: JSONSchema.BaseSchema | JSONSchema7): JSONSchema7 {
-    /*
-    if (providerID === "openai") {
-      if (schema.type === "object" && schema.properties) {
-        for (const [key, value] of Object.entries(schema.properties)) {
-          if (schema.required?.includes(key)) continue
-          schema.properties[key] = {
-            anyOf: [
-              value as JSONSchema.JSONSchema,
-              {
-                type: "null",
-              },
-            ],
-          }
-        }
-      }
-    }
-    */
-
     // Convert integer enums to string enums for Google/Gemini
     if (model.providerID === "google" || model.api.id.includes("gemini")) {
       const isPlainObject = (node: unknown): node is Record<string, any> => isRecord(node)

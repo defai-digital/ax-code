@@ -1,8 +1,4 @@
 import {
-  computeDebugCaseId,
-  computeDebugEvidenceId,
-  computeDebugHypothesisId,
-  computeDebugInstrumentationPlanId,
   type DebugCase,
   type DebugCaseRollup,
   DebugCaseSchema,
@@ -26,7 +22,7 @@ export namespace SessionDebug {
   // tool.result metadata.
   // Each artefact is re-validated against its schema; entries that fail
   // validation are skipped (with a warning) so a single corrupted record
-  // cannot block the rest. Mirrors SessionFindings.load.
+  // cannot block the rest. Mirrors loadSessionFindings.
   //
   // The tools that emit these artefacts are debug_open_case,
   // debug_capture_evidence, debug_plan_instrumentation,
@@ -34,7 +30,7 @@ export namespace SessionDebug {
   // are tool-name agnostic; any tool.result that carries a metadata entry of
   // the right shape is included.
 
-  export type Loaded = {
+  type Loaded = {
     cases: DebugCase[]
     evidence: DebugEvidence[]
     instrumentationPlans: DebugInstrumentationPlan[]
@@ -113,18 +109,18 @@ export namespace SessionDebug {
   // debug_propose_hypothesis — they reject artefacts that reference an
   // id not present in the session.
   //
-  // Single-call sites (capture_evidence only needs caseIds) keep the
-  // narrow helpers below; callers that need BOTH sets — like
+  // Single-call sites that only need caseIds keep the narrow helper below;
+  // callers that need multiple sets — like
   // propose_hypothesis, which validates caseId AND every evidenceRef —
   // must use indexedIds() so we walk the event log once instead of twice.
 
-  export type IndexedIds = {
+  type IndexedIds = {
     caseIds: Set<string>
     evidenceIds: Set<string>
     planIds: Set<string>
   }
 
-  export type DebugAnalyzeReference = {
+  type DebugAnalyzeReference = {
     callID: string
     chainLength: number
     chainConfidence: number
@@ -143,14 +139,6 @@ export namespace SessionDebug {
 
   export function caseIdSet(sessionID: SessionID): Set<string> {
     return indexedIds(sessionID).caseIds
-  }
-
-  export function evidenceIdSet(sessionID: SessionID): Set<string> {
-    return indexedIds(sessionID).evidenceIds
-  }
-
-  export function planIdSet(sessionID: SessionID): Set<string> {
-    return indexedIds(sessionID).planIds
   }
 
   export function debugAnalyzeReferences(sessionID: SessionID): Map<string, DebugAnalyzeReference> {
@@ -176,10 +164,9 @@ export namespace SessionDebug {
   // - "unresolved" if all hypotheses are "refuted" (no path forward)
   // - "investigating" if at least one hypothesis is "active"
   // - "open" otherwise (no hypotheses yet)
-  export type CaseRollup = DebugCaseRollup
   type RollupInput = Pick<Loaded, "cases" | "hypotheses"> & Partial<Pick<Loaded, "evidence" | "instrumentationPlans">>
 
-  export function rollup(loaded: RollupInput): CaseRollup[] {
+  export function rollup(loaded: RollupInput): DebugCaseRollup[] {
     return loaded.cases.map((c) => {
       const own = loaded.hypotheses.filter((h) => h.caseId === c.caseId)
       const effective = resolveCaseStatus(c.status, own)
@@ -192,15 +179,4 @@ export namespace SessionDebug {
       return { ...c, effectiveStatus: effective, planSummary }
     })
   }
-
-  export function evidenceByPlanId(sessionID: SessionID, planId: string): DebugEvidence[] {
-    return load(sessionID).evidence.filter((e) => e.planId === planId)
-  }
-}
-
-export const _internal = {
-  computeDebugCaseId,
-  computeDebugEvidenceId,
-  computeDebugHypothesisId,
-  computeDebugInstrumentationPlanId,
 }

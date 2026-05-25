@@ -143,9 +143,7 @@ function resolveContainingNodeInMemory(
   return best?.id
 }
 
-// Exported for testing. Not part of the public surface. See builder.test.ts.
-export { resolveContainingNodeFromDb as __resolveContainingNodeFromDbForTests }
-function resolveContainingNodeFromDb(
+export function resolveContainingNodeFromDb(
   projectID: ProjectID,
   file: string,
   line: number,
@@ -189,8 +187,7 @@ function resolveContainingNodeFromRows(
 // unit-tested independently of the full builder pipeline (which requires
 // a running LSP server).
 //
-// Exported for testing. Not part of the public surface.
-export function __lookupCallerKind(
+export function lookupCallerKind(
   projectID: ProjectID,
   callerNodeId: CodeNodeID,
   sameFile: boolean,
@@ -312,7 +309,7 @@ function planReferenceQueries(bookmarks: ReferenceBookmark[], limit: number): Re
   return planned
 }
 
-export function __planReferenceQueriesForTest(
+export function planReferenceQueriesForBookmarks(
   bookmarks: Array<{
     nodeId: CodeNodeID
     kind: CodeNodeKind
@@ -878,7 +875,7 @@ export namespace CodeGraphBuilder {
 
           let callerKind: CodeNodeKind | undefined
           if (sameFile) {
-            callerKind = __lookupCallerKind(projectID, callerNodeId, true, prepared.refBookmarks)
+            callerKind = lookupCallerKind(projectID, callerNodeId, true, prepared.refBookmarks)
           } else if (callerKindByNode.has(callerNodeId)) {
             callerKind = callerKindByNode.get(callerNodeId)
           } else {

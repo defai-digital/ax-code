@@ -257,7 +257,7 @@ function envelopeForLint(input: FromRefactorApplyInput): VerificationEnvelope {
   })
 }
 
-function envelopeForTests(input: FromRefactorApplyInput): VerificationEnvelope {
+function testEnvelopeFromRefactorApply(input: FromRefactorApplyInput): VerificationEnvelope {
   const tests = input.applyResult.checks.tests
   const status = tests.selection === "skipped" ? "skipped" : checkStatus(tests.ok, tests.skipped, tests.timedOut)
   const output = joinErrors(tests.failures)
@@ -282,7 +282,7 @@ function envelopeForTests(input: FromRefactorApplyInput): VerificationEnvelope {
 }
 
 export function fromRefactorApplyResult(input: FromRefactorApplyInput): VerificationEnvelope[] {
-  return [envelopeForTypecheck(input), envelopeForLint(input), envelopeForTests(input)]
+  return [envelopeForTypecheck(input), envelopeForLint(input), testEnvelopeFromRefactorApply(input)]
 }
 
 function envelopeForCommandTypecheck(input: FromVerificationCommandsInput): VerificationEnvelope {
@@ -331,7 +331,7 @@ function envelopeForCommandLint(input: FromVerificationCommandsInput): Verificat
   })
 }
 
-function envelopeForCommandTests(input: FromVerificationCommandsInput): VerificationEnvelope {
+function testEnvelopeFromVerificationCommand(input: FromVerificationCommandsInput): VerificationEnvelope {
   const tests = input.checks.tests
   const output = joinErrors(tests.failures.length > 0 ? tests.failures : tests.errors)
   return VerificationEnvelopeSchema.parse({
@@ -355,5 +355,5 @@ function envelopeForCommandTests(input: FromVerificationCommandsInput): Verifica
 }
 
 export function fromVerificationCommandResult(input: FromVerificationCommandsInput): VerificationEnvelope[] {
-  return [envelopeForCommandTypecheck(input), envelopeForCommandLint(input), envelopeForCommandTests(input)]
+  return [envelopeForCommandTypecheck(input), envelopeForCommandLint(input), testEnvelopeFromVerificationCommand(input)]
 }

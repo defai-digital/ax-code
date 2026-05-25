@@ -8,7 +8,7 @@ import {
   supportsOpenAIGptModels,
   supportsOpenRouterModelID,
 } from "../../src/provider/model-support"
-import { supportsReasoning, supportsServerTools } from "../../src/provider/xai/server-tools"
+import { supportsLiveSearch } from "../../src/provider/xai/server-tools"
 
 function probes(modelID: string) {
   return buildModelProbes(modelID, { id: modelID, name: modelID, family: "grok" })
@@ -99,18 +99,13 @@ describe("isModelSupportedForProvider", () => {
   })
 })
 
-describe("xai server-tools gates for Grok 4.3", () => {
-  test("grok-4.3 supports server-side tools (xSearch, codeExecution)", () => {
-    expect(supportsServerTools("grok-4.3")).toBe(true)
-    expect(supportsServerTools("grok-4-3")).toBe(true)
+describe("xai Live Search gates for Grok 4.3", () => {
+  test("grok-4.3 supports server-side Live Search", () => {
+    expect(supportsLiveSearch("grok-4.3")).toBe(true)
+    expect(supportsLiveSearch("grok-4-3")).toBe(true)
   })
 
-  test("grok-4.3 supports reasoning", () => {
-    expect(supportsReasoning("grok-4.3")).toBe(true)
-    expect(supportsReasoning("grok-4-3")).toBe(true)
-  })
-
-  test("multi-agent grok-4 variants still opt out of server tools", () => {
-    expect(supportsServerTools("grok-4.20-multi-agent-0309")).toBe(false)
+  test("multi-agent grok-4 variants still opt out of Live Search", () => {
+    expect(supportsLiveSearch("grok-4.20-multi-agent-0309")).toBe(false)
   })
 })

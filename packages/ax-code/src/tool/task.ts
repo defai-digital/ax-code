@@ -8,6 +8,7 @@ import { MessageV2 } from "../session/message-v2"
 import { Identifier } from "../id/id"
 import { Agent } from "../agent/agent"
 import { SessionPrompt } from "../session/prompt"
+import { resolvePromptParts } from "../session/prompt-helpers"
 import { iife } from "@/util/iife"
 import { defer } from "@/util/defer"
 import { Config } from "../config/config"
@@ -234,7 +235,7 @@ export const TaskTool = Tool.define("task", async (ctx) => {
 
         const messageID = MessageID.ascending()
         ensureNotAborted()
-        const promptParts = await SessionPrompt.resolvePromptParts(params.prompt)
+        const promptParts = await resolvePromptParts(params.prompt)
 
         result = await withTimeout(
           SessionPrompt.prompt({

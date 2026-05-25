@@ -26,7 +26,6 @@ import { Global } from "@/global"
 import path from "path"
 import { Plugin } from "@/plugin"
 import { Skill } from "../skill"
-import { readOnlyWithWeb, readOnlyNoWeb, denyAll } from "./permission-presets"
 import { Effect, ServiceMap, Layer } from "effect"
 import { InstanceState } from "@/effect/instance-state"
 import { makeRunPromise } from "@/effect/run-service"
@@ -109,7 +108,6 @@ export namespace Agent {
               ...Object.fromEntries(whitelistedDirs.map((dir) => [dir, "allow"])),
             },
             question: "deny",
-            plan_enter: "deny",
             plan_exit: "deny",
             // mirrors github.com/github/gitignore Node.gitignore pattern for .env files
             read: {
@@ -121,6 +119,31 @@ export namespace Agent {
           })
 
           const user = Permission.fromConfig(cfg.permission ?? {})
+          const allowQuestion = Permission.fromConfig({
+            question: "allow",
+          })
+          const denySubagentFanout = Permission.fromConfig({ task: "deny" })
+          const denyAll = Permission.fromConfig({ "*": "deny" })
+          const exploreReadOnlyWithWeb = Permission.fromConfig({
+            "*": "deny",
+            grep: "allow",
+            glob: "allow",
+            list: "allow",
+            read: "allow",
+            codesearch: "allow",
+            webfetch: "allow",
+            websearch: "allow",
+            // DRE read-only tools are inert unless the registry enables them.
+            debug_analyze: "allow",
+            refactor_plan: "allow",
+            dedup_scan: "allow",
+            impact_analyze: "allow",
+            hardcode_scan: "allow",
+            external_directory: {
+              "*": "ask",
+              ...Object.fromEntries(whitelistedDirs.map((dir) => [dir, "allow"])),
+            },
+          })
           const policyMap = new Map<string, Permission.Ruleset>()
           const names = [
             "build",
@@ -156,15 +179,7 @@ export namespace Agent {
               description: "The default agent. Executes tools based on configured permissions.",
               tier: "core",
               options: {},
-              permission: Permission.merge(
-                defaults,
-                policy("build"),
-                Permission.fromConfig({
-                  question: "allow",
-                  plan_enter: "allow",
-                }),
-                user,
-              ),
+              permission: Permission.merge(defaults, policy("build"), allowQuestion, user),
               mode: "primary",
               native: true,
             },
@@ -205,11 +220,10 @@ export namespace Agent {
                 Permission.fromConfig({
                   todoread: "deny",
                   todowrite: "deny",
-                  // Subagent-tier agents do not get to fan out further
-                  // (ADR-005). Prevents fork bombs and keeps cost
-                  // bounded — only primary agents orchestrate.
-                  dispatcher: "deny",
                 }),
+                // Subagent-tier agents do not get to fan out further
+                // (ADR-005). Prevents fork bombs and keeps cost bounded.
+                denySubagentFanout,
                 user,
               ),
               options: {},
@@ -222,13 +236,9 @@ export namespace Agent {
               permission: Permission.merge(
                 defaults,
                 policy("explore"),
-                readOnlyWithWeb(whitelistedDirs),
-                // Subagent-tier (mode: "subagent") — must not fan out
-                // further per ADR-005. Pinned here, not in the
-                // readOnlyWithWeb preset, because security/architect
-                // share that preset but are primary-tier and should
-                // keep default-allow on dispatcher.
-                Permission.fromConfig({ dispatcher: "deny" }),
+                exploreReadOnlyWithWeb,
+                // Subagent-tier agents must not fan out further per ADR-005.
+                denySubagentFanout,
                 user,
               ),
               description: `Fast agent specialized for exploring codebases. Use this when you need to quickly find files by patterns (eg. "src/components/**/*.tsx"), search code for keywords (eg. "API endpoints"), or answer questions about the codebase (eg. "how do API endpoints work?"). When calling this agent, specify the desired thoroughness level: "quick" for basic searches, "medium" for moderate exploration, or "very thorough" for comprehensive analysis across multiple locations and naming conventions.`,
@@ -244,15 +254,7 @@ export namespace Agent {
               description:
                 "ReAct mode agent. Uses structured Thought → Action → Observation loops for careful, step-by-step reasoning. Best for complex debugging, multi-step investigation, and tasks requiring deliberate analysis.",
               prompt: PROMPT_REACT,
-              permission: Permission.merge(
-                defaults,
-                policy("react"),
-                Permission.fromConfig({
-                  question: "allow",
-                  plan_enter: "allow",
-                }),
-                user,
-              ),
+              permission: Permission.merge(defaults, policy("react"), allowQuestion, user),
               options: {},
               mode: "primary",
               native: true,
@@ -296,15 +298,7 @@ export namespace Agent {
               description:
                 "Debugger agent. Systematically investigates bugs — reproduces, isolates, traces root cause, and fixes. Uses all tools to diagnose and resolve issues.",
               prompt: PROMPT_DEBUG,
-              permission: Permission.merge(
-                defaults,
-                policy("debug"),
-                Permission.fromConfig({
-                  question: "allow",
-                  plan_enter: "allow",
-                }),
-                user,
-              ),
+              permission: Permission.merge(defaults, policy("debug"), allowQuestion, user),
               options: {},
               mode: "primary",
               native: true,
@@ -331,15 +325,7 @@ export namespace Agent {
               description:
                 "DevOps Engineer agent. Handles Docker, CI/CD, deployment, infrastructure config, and operational concerns. Can create and modify Dockerfiles, pipeline configs, K8s manifests, and deployment scripts.",
               prompt: PROMPT_DEVOPS,
-              permission: Permission.merge(
-                defaults,
-                policy("devops"),
-                Permission.fromConfig({
-                  question: "allow",
-                  plan_enter: "allow",
-                }),
-                user,
-              ),
+              permission: Permission.merge(defaults, policy("devops"), allowQuestion, user),
               options: {},
               mode: "primary",
               native: true,
@@ -352,15 +338,7 @@ export namespace Agent {
               description:
                 "Test Engineer agent. Writes tests, analyzes failures, improves coverage, and maintains test infrastructure. Uses all tools to create, run, and verify tests across any framework.",
               prompt: PROMPT_TEST,
-              permission: Permission.merge(
-                defaults,
-                policy("test"),
-                Permission.fromConfig({
-                  question: "allow",
-                  plan_enter: "allow",
-                }),
-                user,
-              ),
+              permission: Permission.merge(defaults, policy("test"), allowQuestion, user),
               options: {},
               mode: "primary",
               native: true,

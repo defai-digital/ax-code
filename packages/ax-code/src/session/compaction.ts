@@ -13,7 +13,7 @@ import { fn } from "@/util/fn"
 import { Agent } from "@/agent/agent"
 import { Plugin } from "@/plugin"
 import { Config } from "@/config/config"
-import { PRUNE_MINIMUM as _PRUNE_MINIMUM, PRUNE_PROTECT as _PRUNE_PROTECT } from "@/constants/session"
+import { PRUNE_MINIMUM, PRUNE_PROTECT } from "@/constants/session"
 import { Database } from "@/storage/db"
 import { MessageTable, PartTable } from "./session.sql"
 import { ModelID, ProviderID } from "@/provider/schema"
@@ -45,11 +45,11 @@ export namespace SessionCompaction {
   const DEFAULT_RESERVED_FRACTION = 0.1
   const MIN_USABLE_TOKENS = 1_000
 
-  export function componentTotal(tokens: MessageV2.Assistant["tokens"]) {
+  function componentTotal(tokens: MessageV2.Assistant["tokens"]) {
     return tokens.input + tokens.output + tokens.reasoning + tokens.cache.read + tokens.cache.write
   }
 
-  export function effectiveTotal(tokens: MessageV2.Assistant["tokens"]) {
+  function effectiveTotal(tokens: MessageV2.Assistant["tokens"]) {
     const total = typeof tokens.total === "number" && Number.isFinite(tokens.total) ? tokens.total : 0
     return Math.max(total, componentTotal(tokens))
   }
@@ -80,9 +80,6 @@ export namespace SessionCompaction {
     return effectiveTotal(input.tokens) >= tokenBudget.usable
   }
 
-  export const PRUNE_MINIMUM = _PRUNE_MINIMUM
-  export const PRUNE_PROTECT = _PRUNE_PROTECT
-
   const PRUNE_PROTECTED_TOOLS = ["skill"]
   const TOOL_RESULT_WRAPPER_TOKENS = 16
 
@@ -99,7 +96,7 @@ export namespace SessionCompaction {
     return `[Attachment ${attachment.mime}: ${filename}]`
   }
 
-  export function estimateToolPartTokens(part: MessageV2.ToolPart) {
+  function estimateToolPartTokens(part: MessageV2.ToolPart) {
     if (part.state.status !== "completed") return 0
 
     const attachmentSummary = (part.state.attachments ?? []).map(attachmentPlaceholder).join("\n")

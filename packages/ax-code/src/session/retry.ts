@@ -3,10 +3,10 @@ import { MessageV2 } from "./message-v2"
 import { iife } from "@/util/iife"
 
 export namespace SessionRetry {
-  export const RETRY_INITIAL_DELAY = 2000
-  export const RETRY_BACKOFF_FACTOR = 2
-  export const RETRY_MAX_DELAY_NO_HEADERS = 30_000 // 30 seconds
-  export const RETRY_MAX_DELAY = 2_147_483_647 // max 32-bit signed integer for setTimeout
+  const RETRY_INITIAL_DELAY = 2000
+  const RETRY_BACKOFF_FACTOR = 2
+  const RETRY_MAX_DELAY_NO_HEADERS = 30_000 // 30 seconds
+  const RETRY_MAX_DELAY = 2_147_483_647 // max 32-bit signed integer for setTimeout
   export const RETRY_MAX_ATTEMPTS = 5
   const ALIBABA_TOKEN_PLAN_QUOTA_RETRY_DELAY = 60_000
 

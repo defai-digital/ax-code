@@ -3,6 +3,7 @@ import z from "zod"
 import { Global } from "../global"
 import { Filesystem } from "../util/filesystem"
 import { encryptField, decryptField } from "../auth/encryption"
+import { Lock } from "../util/lock"
 
 export namespace McpAuth {
   export const Tokens = z.object({
@@ -32,40 +33,9 @@ export namespace McpAuth {
 
   const filepath = path.join(Global.Path.data, "mcp-auth.json")
 
-  function createLockMap() {
-    const locks = new Map<string, Promise<void>>()
-    return {
-      size() {
-        return locks.size
-      },
-      async run<T>(key: string, fn: () => Promise<T>): Promise<T> {
-        const prev = locks.get(key) ?? Promise.resolve()
-        let releaseNext!: () => void
-        const nextTail = new Promise<void>((resolve) => {
-          releaseNext = resolve
-        })
-        const chained = prev.then(() => nextTail)
-        locks.set(key, chained)
-        try {
-          await prev
-          return await fn()
-        } finally {
-          releaseNext()
-          if (locks.get(key) === chained) {
-            locks.delete(key)
-          }
-        }
-      },
-    }
-  }
-
-  const locks = createLockMap()
   export async function withLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
-    return locks.run(key, fn)
-  }
-
-  export function createLockMapForTest() {
-    return createLockMap()
+    using _lock = await Lock.write(key)
+    return await fn()
   }
 
   function decryptEntry(raw: Record<string, unknown>): Entry {

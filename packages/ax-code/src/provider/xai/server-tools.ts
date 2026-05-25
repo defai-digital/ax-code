@@ -14,9 +14,9 @@
  * Docs: https://docs.x.ai/docs/guides/live-search
  */
 
-export type LiveSearchMode = "off" | "auto" | "on"
+type LiveSearchMode = "off" | "auto" | "on"
 
-export type LiveSearchSource =
+type LiveSearchSource =
   | { type: "web"; country?: string; excludedWebsites?: string[]; allowedWebsites?: string[]; safeSearch?: boolean }
   | {
       type: "x"
@@ -42,7 +42,7 @@ export interface LiveSearchConfig {
 // when to search (auto), citations on so the user can verify, web+x+news
 // sources covering both general queries and timely X chatter. Tweak via
 // `provider.xai.models.<id>.options.searchParameters` in ax-code.json.
-export const DEFAULT_LIVE_SEARCH: LiveSearchConfig = {
+const DEFAULT_LIVE_SEARCH: LiveSearchConfig = {
   mode: "auto",
   returnCitations: true,
   sources: [{ type: "web" }, { type: "x" }, { type: "news" }],
@@ -53,13 +53,11 @@ export const DEFAULT_LIVE_SEARCH: LiveSearchConfig = {
  * Multi-agent variants are excluded — they orchestrate sub-calls and ignore
  * top-level search parameters.
  */
-export function supportsServerTools(modelId: string): boolean {
+export function supportsLiveSearch(modelId: string): boolean {
   const id = modelId.toLowerCase()
   if (id.includes("multi-agent")) return false
   return id.includes("grok-4") || id.includes("grok-code")
 }
-
-export const supportsLiveSearch = supportsServerTools
 
 /**
  * Build the `searchParameters` provider option for a Grok model. Returns
@@ -74,14 +72,4 @@ export function buildSearchParameters(
   if (!supportsLiveSearch(modelId)) return undefined
   if (override?.mode === "off") return undefined
   return { ...DEFAULT_LIVE_SEARCH, ...override }
-}
-
-/**
- * Check if a model supports reasoning/extended thinking.
- */
-export function supportsReasoning(modelId: string): boolean {
-  const id = modelId.toLowerCase()
-  if (id.includes("non-reasoning")) return false
-  if (id.includes("fast")) return false
-  return id.includes("grok-4") || id.includes("grok-code")
 }

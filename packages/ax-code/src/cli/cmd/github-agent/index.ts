@@ -90,7 +90,6 @@ export const GithubInstallCommand = cmd({
 
           const provider = await promptProvider()
           const model = await promptModel()
-          //const key = await promptKey()
 
           await addWorkflowFiles()
           printNextSteps()
@@ -770,7 +769,6 @@ export const GithubRunCommand = cmd({
         let text = ""
         Bus.subscribe(MessageV2.Event.PartUpdated, async (evt) => {
           if (evt.properties.part.sessionID !== session.id) return
-          //if (evt.properties.part.messageID === messageID) return
           const part = evt.properties.part
 
           if (part.type === "tool" && part.state.status === "completed") {

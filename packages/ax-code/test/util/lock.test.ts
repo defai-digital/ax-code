@@ -1,12 +1,18 @@
 import { describe, expect, test } from "bun:test"
 import { Lock } from "../../src/util/lock"
 
+const SHORT_TIMEOUT_MS = 25
+
 function tick() {
   return new Promise<void>((r) => queueMicrotask(r))
 }
 
 async function flush(n = 5) {
   for (let i = 0; i < n; i++) await tick()
+}
+
+function dispose(lock: Disposable) {
+  lock[Symbol.dispose]()
 }
 
 describe("util.lock", () => {
@@ -48,7 +54,7 @@ describe("util.lock", () => {
     expect(state.reader).toBe(false)
 
     // Release writer1
-    writer1[Symbol.dispose]()
+    dispose(writer1)
     state.writers--
 
     // writer2 should acquire next
@@ -60,13 +66,113 @@ describe("util.lock", () => {
     expect(state.reader).toBe(false)
 
     // Release writer2
-    writer2[Symbol.dispose]()
+    dispose(writer2)
     state.writers--
 
     // Reader should now acquire
     const reader = await readerTask
     expect(state.reader).toBe(true)
 
-    reader[Symbol.dispose]()
+    dispose(reader)
+  })
+
+  test("writer dispose is idempotent and does not release the next writer", async () => {
+    const key = "lock:" + Math.random().toString(36).slice(2)
+    let writer2Acquired = false
+    let readerAcquired = false
+
+    const writer1 = await Lock.write(key)
+    const writer2Task = (async () => {
+      const writer2 = await Lock.write(key)
+      writer2Acquired = true
+      return writer2
+    })()
+    const readerTask = (async () => {
+      const reader = await Lock.read(key)
+      readerAcquired = true
+      return reader
+    })()
+
+    await flush()
+    expect(writer2Acquired).toBe(false)
+    expect(readerAcquired).toBe(false)
+
+    dispose(writer1)
+    dispose(writer1)
+
+    const writer2 = await writer2Task
+    expect(writer2Acquired).toBe(true)
+    await flush()
+    expect(readerAcquired).toBe(false)
+
+    dispose(writer2)
+    const reader = await readerTask
+    expect(readerAcquired).toBe(true)
+    dispose(reader)
+  })
+
+  test("reader dispose is idempotent and preserves other active readers", async () => {
+    const key = "lock:" + Math.random().toString(36).slice(2)
+    let writerAcquired = false
+
+    const reader1 = await Lock.read(key)
+    const reader2 = await Lock.read(key)
+    const writerTask = (async () => {
+      const writer = await Lock.write(key)
+      writerAcquired = true
+      return writer
+    })()
+
+    await flush()
+    expect(writerAcquired).toBe(false)
+
+    dispose(reader1)
+    dispose(reader1)
+
+    await flush()
+    expect(writerAcquired).toBe(false)
+
+    dispose(reader2)
+    const writer = await writerTask
+    expect(writerAcquired).toBe(true)
+    dispose(writer)
+  })
+
+  test("timed-out writer is not acquired after the current writer releases", async () => {
+    const key = "lock:" + Math.random().toString(36).slice(2)
+    let acquired = false
+
+    const writer = await Lock.write(key)
+    const timedOutWriter = Lock.write(key, { timeoutMs: SHORT_TIMEOUT_MS }).then((lock) => {
+      acquired = true
+      return lock
+    })
+
+    await expect(timedOutWriter).rejects.toThrow(/Lock\.write: timed out/)
+    dispose(writer)
+    await flush()
+
+    expect(acquired).toBe(false)
+    const nextWriter = await Lock.write(key)
+    dispose(nextWriter)
+  })
+
+  test("timed-out reader is not acquired after the current writer releases", async () => {
+    const key = "lock:" + Math.random().toString(36).slice(2)
+    let acquired = false
+
+    const writer = await Lock.write(key)
+    const timedOutReader = Lock.read(key, { timeoutMs: SHORT_TIMEOUT_MS }).then((lock) => {
+      acquired = true
+      return lock
+    })
+
+    await expect(timedOutReader).rejects.toThrow(/Lock\.read: timed out/)
+    dispose(writer)
+    await flush()
+
+    expect(acquired).toBe(false)
+    const nextReader = await Lock.read(key)
+    dispose(nextReader)
   })
 })

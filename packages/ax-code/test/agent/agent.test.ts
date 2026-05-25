@@ -94,7 +94,7 @@ test("explore agent asks for external directories and allows Truncate.GLOB", asy
   })
 })
 
-test("general agent denies todo tools", async () => {
+test("general agent denies nested orchestration tools", async () => {
   await using tmp = await tmpdir()
   await Instance.provide({
     directory: tmp.path,
@@ -103,6 +103,7 @@ test("general agent denies todo tools", async () => {
       expect(general).toBeDefined()
       expect(general?.mode).toBe("subagent")
       expect(general?.hidden).toBeUndefined()
+      expect(evalPerm(general, "task")).toBe("deny")
       expect(evalPerm(general, "todoread")).toBe("deny")
       expect(evalPerm(general, "todowrite")).toBe("deny")
     },

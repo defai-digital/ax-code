@@ -65,7 +65,7 @@ test("runStartScripts fails when the worktree start command fails", async () => 
 
   try {
     await expect(
-      Worktree.__runStartScriptsForTest(tmp.path, {
+      Worktree.runStartScripts(tmp.path, {
         projectID: "project" as any,
         extra: "exit 7",
       }),

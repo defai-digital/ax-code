@@ -48,7 +48,7 @@ export function isolationRetryState(input: {
   }
 }
 
-export interface ResolveToolsInput {
+interface ResolveToolsInput {
   agent: Agent.Info
   model: Provider.Model
   session: Session.Info
@@ -68,9 +68,12 @@ export async function resolveTools(input: ResolveToolsInput) {
   const tools: Record<string, AITool> = {}
   const isolation =
     input.isolation ?? Isolation.resolve((await Config.get()).isolation, Instance.directory, Instance.worktree)
+  const ruleset = Permission.merge(input.agent.permission, input.session.permission ?? [])
   // Initialize schema cache on first use
   if (!_schemaCache) _schemaCache = new Map()
+  const schemaCache = _schemaCache
   const schemaCacheKey = (toolId: string) => `${toolId}:${input.model.api.npm}:${input.model.providerID}`
+  const isDisabledByConfig = (toolID: string) => input.tools?.[toolID] === false
 
   const context = (args: any, options: ToolCallOptions, isolationOverride?: Isolation.State): Tool.Context => ({
     sessionID: input.session.id,
@@ -112,7 +115,7 @@ export async function resolveTools(input: ResolveToolsInput) {
           ...req,
           sessionID: input.session.id,
           tool: { messageID: input.processor.message.id, callID: options.toolCallId },
-          ruleset: Permission.merge(input.agent.permission, input.session.permission ?? []),
+          ruleset,
           agent: input.agent.name,
         },
         { signal: options.abortSignal ?? undefined },
@@ -120,16 +123,23 @@ export async function resolveTools(input: ResolveToolsInput) {
     },
   })
 
-  for (const item of await ToolRegistry.tools(
+  const registryTools = await ToolRegistry.tools(
     { modelID: ModelID.make(input.model.api.id), providerID: input.model.providerID },
     input.agent,
-  )) {
+  )
+  const disabledRegistryTools = Permission.disabled(
+    registryTools.map((item) => item.id),
+    ruleset,
+  )
+  for (const item of registryTools) {
+    if (isDisabledByConfig(item.id) || disabledRegistryTools.has(item.id)) continue
+
     const cacheKey = schemaCacheKey(item.id)
-    const cached = _schemaCache!.get(cacheKey)
+    const cached = schemaCache.get(cacheKey)
     const schema =
       cached !== undefined
         ? // LRU: move to end so recently-used entries survive eviction
-          (_schemaCache!.delete(cacheKey), _schemaCache!.set(cacheKey, cached), cached)
+          (schemaCache.delete(cacheKey), schemaCache.set(cacheKey, cached), cached)
         : (() => {
             const s = ProviderTransform.schema(input.model, z.toJSONSchema(item.parameters))
             // Bound the cache to avoid a slow memory leak in long-running
@@ -138,15 +148,15 @@ export async function resolveTools(input: ResolveToolsInput) {
             // cap, drop the 100 least-recently-used entries. Maps preserve
             // insertion order, so `.keys()` iterates oldest first.
             const SCHEMA_CACHE_MAX = 500
-            if (_schemaCache!.size >= SCHEMA_CACHE_MAX) {
+            if (schemaCache.size >= SCHEMA_CACHE_MAX) {
               const drop = 100
               let dropped = 0
-              for (const key of _schemaCache!.keys()) {
-                _schemaCache!.delete(key)
+              for (const key of schemaCache.keys()) {
+                schemaCache.delete(key)
                 if (++dropped >= drop) break
               }
             }
-            _schemaCache!.set(cacheKey, s)
+            schemaCache.set(cacheKey, s)
             return s
           })()
     tools[item.id] = tool({
@@ -255,7 +265,11 @@ export async function resolveTools(input: ResolveToolsInput) {
     })
   }
 
-  for (const [key, item] of Object.entries(await MCP.tools())) {
+  const mcpTools = await MCP.tools()
+  const disabledMcpTools = Permission.disabled(Object.keys(mcpTools), ruleset)
+  for (const [key, item] of Object.entries(mcpTools)) {
+    if (isDisabledByConfig(key) || disabledMcpTools.has(key)) continue
+
     const execute = item.execute
     if (!execute) continue
 
@@ -266,17 +280,17 @@ export async function resolveTools(input: ResolveToolsInput) {
     // the transformation is idempotent across iterations.
     const mcpTool = { ...item }
     const mcpCacheKey = schemaCacheKey(`mcp:${key}`)
-    let transformed = _schemaCache!.get(mcpCacheKey)
+    let transformed = schemaCache.get(mcpCacheKey)
     if (transformed !== undefined) {
       // LRU: move to end
-      _schemaCache!.delete(mcpCacheKey)
-      _schemaCache!.set(mcpCacheKey, transformed)
+      schemaCache.delete(mcpCacheKey)
+      schemaCache.set(mcpCacheKey, transformed)
     } else {
       transformed = ProviderTransform.schema(
         input.model,
         await Promise.resolve(asSchema(mcpTool.inputSchema).jsonSchema),
       )
-      _schemaCache!.set(mcpCacheKey, transformed)
+      schemaCache.set(mcpCacheKey, transformed)
     }
     mcpTool.inputSchema = jsonSchema(transformed)
     // Wrap execute to add plugin hooks and format output
@@ -373,11 +387,4 @@ export async function resolveTools(input: ResolveToolsInput) {
   }
 
   return tools
-}
-
-/**
- * Clear the schema cache. Useful for testing or when the model changes.
- */
-export function clearSchemaCache() {
-  _schemaCache = undefined
 }

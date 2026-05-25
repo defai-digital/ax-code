@@ -112,7 +112,7 @@ describe("LspScheduler.Inflight", () => {
 
   test("registry empties after settle", async () => {
     await LspScheduler.Inflight.run("k", async () => 1)
-    expect(LspScheduler.Inflight.sizeForTest()).toBe(0)
+    expect(LspScheduler.Inflight.size()).toBe(0)
   })
 })
 
@@ -122,7 +122,7 @@ describe("LspScheduler.Budget", () => {
 
     const r1 = await LspScheduler.Budget.acquire("srv")
     const r2 = await LspScheduler.Budget.acquire("srv")
-    expect(LspScheduler.Budget.inUseForTest("srv")).toBe(2)
+    expect(LspScheduler.Budget.inUse("srv")).toBe(2)
 
     // A third acquire should block. We race it against a short timer
     // to confirm it's pending rather than resolving immediately.
@@ -138,11 +138,11 @@ describe("LspScheduler.Budget", () => {
     r1()
     const r3 = await blocked
     expect(acquired).toBe(true)
-    expect(LspScheduler.Budget.inUseForTest("srv")).toBe(2)
+    expect(LspScheduler.Budget.inUse("srv")).toBe(2)
 
     r2()
     r3()
-    expect(LspScheduler.Budget.inUseForTest("srv")).toBe(0)
+    expect(LspScheduler.Budget.inUse("srv")).toBe(0)
   })
 
   test("different servers do not block each other", async () => {
@@ -153,8 +153,8 @@ describe("LspScheduler.Budget", () => {
     // If b were blocked by a, this would hang; the test would time out.
     const rb = await LspScheduler.Budget.acquire("b")
 
-    expect(LspScheduler.Budget.inUseForTest("a")).toBe(1)
-    expect(LspScheduler.Budget.inUseForTest("b")).toBe(1)
+    expect(LspScheduler.Budget.inUse("a")).toBe(1)
+    expect(LspScheduler.Budget.inUse("b")).toBe(1)
 
     ra()
     rb()
@@ -165,18 +165,18 @@ describe("LspScheduler.Budget", () => {
     const r = await LspScheduler.Budget.acquire("srv")
     r()
     r() // second call should be a no-op, not a double-release
-    expect(LspScheduler.Budget.inUseForTest("srv")).toBe(0)
+    expect(LspScheduler.Budget.inUse("srv")).toBe(0)
 
     // Budget should still be coherent — we should be able to acquire again.
     const r2 = await LspScheduler.Budget.acquire("srv")
-    expect(LspScheduler.Budget.inUseForTest("srv")).toBe(1)
+    expect(LspScheduler.Budget.inUse("srv")).toBe(1)
     r2()
   })
 
   test("setBudget coerces nonsense values to 1", async () => {
     LspScheduler.Budget.setBudget("srv", 0)
     const r = await LspScheduler.Budget.acquire("srv")
-    expect(LspScheduler.Budget.inUseForTest("srv")).toBe(1)
+    expect(LspScheduler.Budget.inUse("srv")).toBe(1)
     r()
   })
 
@@ -209,12 +209,12 @@ describe("LspScheduler.Budget", () => {
     // Release — the first waiter wakes.
     held()
     const r1 = await w1
-    expect(LspScheduler.Budget.inUseForTest("race")).toBe(1)
+    expect(LspScheduler.Budget.inUse("race")).toBe(1)
     r1()
     const r2 = await w2
-    expect(LspScheduler.Budget.inUseForTest("race")).toBe(1)
+    expect(LspScheduler.Budget.inUse("race")).toBe(1)
     r2()
-    expect(LspScheduler.Budget.inUseForTest("race")).toBe(0)
+    expect(LspScheduler.Budget.inUse("race")).toBe(0)
     expect(order).toEqual(["w1", "w2"])
   })
 

@@ -9,6 +9,8 @@ import { ModelID, ProviderID } from "../../src/provider/schema"
 import { Session } from "../../src/session"
 import { MessageV2 } from "../../src/session/message-v2"
 import { SessionPrompt } from "../../src/session/prompt"
+import { resolvePromptParts } from "../../src/session/prompt-helpers"
+import { isolationRetryState } from "../../src/session/prompt-tools"
 import { EventQuery } from "../../src/replay/query"
 import { Recorder } from "../../src/replay/recorder"
 import { Log } from "../../src/util/log"
@@ -26,7 +28,7 @@ describe("session.prompt isolation retry state", () => {
       bypass: ["/tmp/already-approved"],
     }
 
-    const retry = SessionPrompt.isolationRetryState({
+    const retry = isolationRetryState({
       isolation,
       pathBypass: ["/tmp/newly-approved"],
       networkBypass: true,
@@ -43,7 +45,7 @@ describe("session.prompt isolation retry state", () => {
   test("path-only escalation does not enable network", () => {
     const isolation = Isolation.resolve({ mode: "workspace-write", network: false }, "/tmp/project")
 
-    const retry = SessionPrompt.isolationRetryState({
+    const retry = isolationRetryState({
       isolation,
       pathBypass: ["/tmp/approved"],
       networkBypass: false,
@@ -365,6 +367,49 @@ describe("session.prompt missing file", () => {
   })
 })
 
+describe("session.prompt legacy tools compatibility", () => {
+  test("persists prompt-time tool toggles as permission rules", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      config: {
+        agent: {
+          build: {
+            model: "openai/gpt-5.2",
+          },
+        },
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+
+        try {
+          await SessionPrompt.prompt({
+            sessionID: session.id,
+            agent: "build",
+            noReply: true,
+            tools: {
+              question: true,
+              bash: false,
+            },
+            parts: [{ type: "text", text: "legacy tool toggles" }],
+          })
+
+          const updated = await Session.get(session.id)
+          expect(updated.permission).toEqual([
+            { permission: "question", action: "allow", pattern: "*" },
+            { permission: "bash", action: "deny", pattern: "*" },
+          ])
+        } finally {
+          await Session.remove(session.id)
+        }
+      },
+    })
+  })
+})
+
 describe("session.prompt special characters", () => {
   test("handles filenames with # character", async () => {
     await using tmp = await tmpdir({
@@ -379,7 +424,7 @@ describe("session.prompt special characters", () => {
       fn: async () => {
         const session = await Session.create({})
         const template = "Read @file#name.txt"
-        const parts = await SessionPrompt.resolvePromptParts(template)
+        const parts = await resolvePromptParts(template)
         const fileParts = parts.filter((part) => part.type === "file")
 
         expect(fileParts.length).toBe(1)
@@ -412,7 +457,7 @@ describe("session.prompt special characters", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const parts = await SessionPrompt.resolvePromptParts(`Read @${outside}`)
+        const parts = await resolvePromptParts(`Read @${outside}`)
         expect(parts.filter((part) => part.type === "file")).toHaveLength(0)
       },
     })
@@ -431,7 +476,7 @@ describe("session.prompt special characters", () => {
       await Instance.provide({
         directory: tmp.path,
         fn: async () => {
-          const parts = await SessionPrompt.resolvePromptParts("Read @~/allowed.txt")
+          const parts = await resolvePromptParts("Read @~/allowed.txt")
           const fileParts = parts.filter((part) => part.type === "file")
           expect(fileParts).toHaveLength(1)
           expect(fileURLToPath(fileParts[0].url)).toBe(path.join(fakeHome, "allowed.txt"))
@@ -448,7 +493,7 @@ describe("session.prompt special characters", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const parts = await SessionPrompt.resolvePromptParts("Ask @build to review")
+        const parts = await resolvePromptParts("Ask @build to review")
         expect(parts.filter((part) => part.type === "agent")).toEqual([{ type: "agent", name: "build" }])
         expect(parts.filter((part) => part.type === "file")).toHaveLength(0)
       },

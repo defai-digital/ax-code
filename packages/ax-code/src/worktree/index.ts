@@ -322,7 +322,7 @@ export namespace Worktree {
     return false
   }
 
-  async function runStartScripts(directory: string, input: { projectID: ProjectID; extra?: string }) {
+  export async function runStartScripts(directory: string, input: { projectID: ProjectID; extra?: string }) {
     const project = Project.get(input.projectID)
     const startup = project?.commands?.start?.trim() ?? ""
     const ok = await runStartScript(directory, startup, "project")
@@ -331,8 +331,6 @@ export namespace Worktree {
     const extra = input.extra ?? ""
     return runStartScript(directory, extra, "worktree")
   }
-
-  export const __runStartScriptsForTest = runStartScripts
 
   function cancelTimers(directory: string) {
     const timers = startScriptTimers.get(directory)

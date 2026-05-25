@@ -62,7 +62,7 @@ describe("LSP.perfSnapshot", () => {
     })
   })
 
-  // Direct sampler tests. These drive recordPerfSampleForTest instead of
+  // Direct sampler tests. These drive recordPerfSample instead of
   // going through the LSP client path — isolates the ring-buffer semantics
   // from any LSP state or I/O so edge cases are cheap to assert.
   test("empty snapshot is {} before any operation runs", () => {
@@ -72,9 +72,9 @@ describe("LSP.perfSnapshot", () => {
 
   test("errorCount increments and p-values still report", () => {
     LSP.perfReset()
-    LSP.recordPerfSampleForTest("references", 10, false)
-    LSP.recordPerfSampleForTest("references", 20, false)
-    LSP.recordPerfSampleForTest("references", 30, false)
+    LSP.recordPerfSample("references", 10, false)
+    LSP.recordPerfSample("references", 20, false)
+    LSP.recordPerfSample("references", 30, false)
 
     const snap = LSP.perfSnapshot()
     expect(snap.references!.count).toBe(3)
@@ -84,31 +84,29 @@ describe("LSP.perfSnapshot", () => {
     expect(snap.references!.totalMs).toBe(60)
   })
 
-  test("ring wraps past PERF_SAMPLE_CAP; count keeps climbing, durations window", () => {
+  test("keeps a bounded duration window while count keeps climbing", () => {
     LSP.perfReset()
 
-    const cap = LSP.PERF_SAMPLE_CAP_FOR_TEST
-    // Fill the ring with 1ms samples, then push cap more 100ms samples.
-    // The first cap samples should have been overwritten, so max reflects
-    // only the second batch.
-    for (let i = 0; i < cap; i++) LSP.recordPerfSampleForTest("touch", 1, true)
-    for (let i = 0; i < cap; i++) LSP.recordPerfSampleForTest("touch", 100, true)
+    const olderSamples = 2_000
+    const newerSamples = 10_000
+    for (let i = 0; i < olderSamples; i++) LSP.recordPerfSample("touch", 1, true)
+    for (let i = 0; i < newerSamples; i++) LSP.recordPerfSample("touch", 100, true)
 
     const snap = LSP.perfSnapshot()
-    expect(snap.touch!.count).toBe(cap * 2) // monotonic, not windowed
-    expect(snap.touch!.okCount).toBe(cap * 2)
-    expect(snap.touch!.maxMs).toBe(100) // 1ms samples evicted
-    // After full wrap with 100ms values only, p50 and p95 should both be 100.
+    expect(snap.touch!.count).toBe(olderSamples + newerSamples)
+    expect(snap.touch!.okCount).toBe(olderSamples + newerSamples)
+    expect(snap.touch!.maxMs).toBe(100)
+    expect(snap.touch!.totalMs).toBeLessThanOrEqual(newerSamples * 100)
     expect(snap.touch!.p50).toBe(100)
     expect(snap.touch!.p95).toBe(100)
   })
 
   test("mixed ok/error samples attribute correctly per operation", () => {
     LSP.perfReset()
-    LSP.recordPerfSampleForTest("touch", 5, true)
-    LSP.recordPerfSampleForTest("touch", 7, true)
-    LSP.recordPerfSampleForTest("touch", 9, false)
-    LSP.recordPerfSampleForTest("documentSymbol", 3, true)
+    LSP.recordPerfSample("touch", 5, true)
+    LSP.recordPerfSample("touch", 7, true)
+    LSP.recordPerfSample("touch", 9, false)
+    LSP.recordPerfSample("documentSymbol", 3, true)
 
     const snap = LSP.perfSnapshot()
     expect(snap.touch!.count).toBe(3)

@@ -1,4 +1,5 @@
 import { describe, expect, test, afterEach, beforeEach } from "bun:test"
+import { AUTONOMOUS_MAX_STEPS } from "../../src/constants/session"
 import { BlastRadius } from "../../src/session/blast-radius"
 import type { SessionID } from "../../src/session/schema"
 
@@ -180,10 +181,11 @@ describe("BlastRadius", () => {
 
       BlastRadius.get(activeID, { steps: 1000, files: 1000, lines: 100_000 })
       BlastRadius.incrementStep(activeID)
+      BlastRadius.get(fillerIDs[0], { steps: 42 })
       for (const id of fillerIDs) BlastRadius.get(id)
 
       expect(BlastRadius.get(activeID).steps).toBe(1)
-      expect(BlastRadius.sizeForTest()).toBeLessThanOrEqual(256)
+      expect(BlastRadius.get(fillerIDs[0]).caps.steps).toBe(AUTONOMOUS_MAX_STEPS)
     } finally {
       BlastRadius.reset(activeID)
       for (const id of fillerIDs) BlastRadius.reset(id)
@@ -225,13 +227,19 @@ describe("BlastRadius", () => {
     expect(state.caps.perTool.write).toBeGreaterThan(0)
   })
 
-  test("describe surfaces the offending tool name", () => {
+  test("assertWithinCaps surfaces the offending tool name", () => {
     BlastRadius.get(SID, { steps: 1000, files: 1000, lines: 100_000, perTool: { write: 1 } })
     BlastRadius.incrementToolCall(SID, "write")
     BlastRadius.incrementToolCall(SID, "write")
-    const trip = BlastRadius.checkAfterIncrement(SID)
-    expect(trip).not.toBeNull()
-    expect(BlastRadius.describe(trip!, "write")).toContain('"write"')
-    expect(BlastRadius.describe(trip!, "write")).toContain("2/1")
+    let message = ""
+    try {
+      BlastRadius.assertWithinCaps(SID)
+    } catch (error) {
+      message =
+        (error as { toObject?: () => { data?: { message?: string } } }).toObject?.().data?.message ??
+        (error instanceof Error ? error.message : String(error))
+    }
+    expect(message).toContain('"write"')
+    expect(message).toContain("2/1")
   })
 })
