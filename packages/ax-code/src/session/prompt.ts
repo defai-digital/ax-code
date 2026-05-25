@@ -98,8 +98,7 @@ import {
 import { insertReminders } from "./prompt-reminders"
 import { resolveUserMessageRouting } from "./prompt-routing"
 import { validateUserMessageForSave } from "./prompt-message-validation"
-import { resolveMcpResourcePart } from "./prompt-mcp-resource"
-import { resolveFileAttachmentPart } from "./prompt-file-attachment"
+import { resolveUserMessageParts } from "./prompt-message-parts"
 import { SuperLongPolicy } from "./super-long-policy"
 import { SuperLongRuntime } from "./super-long-runtime"
 
@@ -1541,79 +1540,13 @@ export namespace SessionPrompt {
     }
     using _ = defer(() => InstructionPrompt.clear(info.id))
 
-    type Draft<T> = T extends MessageV2.Part ? Omit<T, "id"> & { id?: string } : never
-    const assign = (part: Draft<MessageV2.Part>): MessageV2.Part => ({
-      ...part,
-      id: part.id ? PartID.make(part.id) : PartID.ascending(),
-    })
-    const draftSyntheticTextPart = (text: string): Draft<MessageV2.TextPart> => ({
-      messageID: info.id,
+    const parts = await resolveUserMessageParts({
       sessionID: input.sessionID,
-      type: "text",
-      synthetic: true,
-      text,
-    })
-    const attachDraftContext = <T extends object>(part: T): T & { messageID: MessageID; sessionID: SessionID } => ({
-      ...part,
       messageID: info.id,
-      sessionID: input.sessionID,
+      agentName,
+      agentPermission: agent.permission,
+      parts: input.parts,
     })
-
-    const resolvedParts = await Promise.allSettled(
-      input.parts.map(async (part): Promise<Draft<MessageV2.Part>[]> => {
-        if (part.type === "file") {
-          // before checking the protocol we check if this is an mcp resource because it needs special handling
-          if (part.source?.type === "resource") {
-            return resolveMcpResourcePart({
-              sessionID: input.sessionID,
-              part: { ...part, source: part.source },
-              draftSyntheticTextPart,
-              attachDraftContext,
-            })
-          }
-          return resolveFileAttachmentPart({
-            sessionID: input.sessionID,
-            messageID: info.id,
-            agentName,
-            part,
-            draftSyntheticTextPart,
-            attachDraftContext,
-          })
-        }
-
-        if (part.type === "agent") {
-          // Check if this agent would be denied by task permission
-          const perm = Permission.evaluate("task", part.name, agent.permission)
-          const hint = perm.action === "deny" ? " . Invoked by user; guaranteed to exist." : ""
-          return [
-            attachDraftContext(part),
-            // An extra space is added here. Otherwise the 'Use' gets appended
-            // to user's last word; making a combined word
-            draftSyntheticTextPart(
-              " Use the above message and context to generate a prompt and call the task tool with subagent: " +
-                part.name +
-                hint,
-            ),
-          ]
-        }
-
-        return [attachDraftContext(part)]
-      }),
-    )
-    const parts = resolvedParts
-      .flatMap((result): Draft<MessageV2.Part>[] => {
-        if (result.status === "fulfilled") return result.value
-        const message = NamedError.message(result.reason)
-        log.warn("failed to resolve user message part", {
-          command: "session.prompt.resolvePart",
-          status: "error",
-          errorCode: "PART_RESOLVE",
-          sessionID: input.sessionID,
-          error: result.reason,
-        })
-        return [draftSyntheticTextPart(`Failed to resolve attachment: ${message}`)]
-      })
-      .map(assign)
 
     await Plugin.trigger(
       "chat.message",
