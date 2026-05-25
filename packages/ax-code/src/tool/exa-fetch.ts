@@ -1,18 +1,37 @@
 import { abortAfterAny } from "../util/abort"
 import { EXA_BASE_URL, EXA_ENDPOINT } from "@/constants/network"
 import { Ssrf } from "@/util/ssrf"
-
-interface McpResponse {
-  jsonrpc: string
-  result: {
-    content: Array<{
-      type: string
-      text: string
-    }>
-  }
-}
+import z from "zod"
 
 const MAX_RESPONSE_BYTES = 1024 * 1024
+
+const McpResponse = z
+  .object({
+    result: z
+      .object({
+        content: z.array(
+          z
+            .object({
+              text: z.string(),
+            })
+            .passthrough(),
+        ),
+      })
+      .passthrough(),
+  })
+  .passthrough()
+
+export function parseExaSseContentText(line: string): string | undefined {
+  if (!line.startsWith("data: ")) return undefined
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(line.substring(6))
+  } catch {
+    return undefined
+  }
+  const decoded = McpResponse.safeParse(parsed)
+  return decoded.success ? decoded.data.result.content[0]?.text : undefined
+}
 
 /**
  * Shared fetch logic for Exa MCP tools (websearch and codesearch).
@@ -66,16 +85,10 @@ export async function fetchExaTool(config: {
     const lines = responseText.split("\n")
     let lastResult: { output: string; title: string; metadata: Record<string, never> } | undefined
     for (const line of lines) {
-      if (!line.startsWith("data: ")) continue
-      let data: McpResponse
-      try {
-        data = JSON.parse(line.substring(6))
-      } catch {
-        continue // skip malformed SSE lines
-      }
-      if (data.result?.content?.[0]?.text) {
+      const text = parseExaSseContentText(line)
+      if (text) {
         lastResult = {
-          output: data.result.content[0].text,
+          output: text,
           title: config.title,
           metadata: {},
         }
