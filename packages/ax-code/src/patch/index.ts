@@ -6,6 +6,7 @@ import { Log } from "../util/log"
 import { NativePerf } from "../perf/native"
 import { NativeAddon } from "../native/addon"
 import { Filesystem } from "../util/filesystem"
+import { toErrorMessage } from "../util/error-message"
 
 export namespace Patch {
   const log = Log.create({ service: "patch" })
@@ -330,7 +331,7 @@ export namespace Patch {
     try {
       originalContent = readFileSync(filePath, "utf-8")
     } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error)
+      const msg = toErrorMessage(error)
       throw new Error(`Failed to read file ${filePath}: ${msg}`, { cause: error })
     }
 

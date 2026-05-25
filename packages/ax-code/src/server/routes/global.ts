@@ -16,6 +16,7 @@ import { redactConfig } from "./config"
 import { errors } from "../error"
 import { pushSseFrame } from "../sse-queue"
 import { Event } from "../event"
+import { toErrorMessage } from "../../util/error-message"
 
 const log = Log.create({ service: "server" })
 
@@ -248,7 +249,7 @@ export const GlobalRoutes = lazy(() =>
         }
         const result = await Installation.upgrade(method, target)
           .then(() => ({ success: true as const, version: target }))
-          .catch((e) => ({ success: false as const, error: e instanceof Error ? e.message : String(e) }))
+          .catch((e) => ({ success: false as const, error: toErrorMessage(e) }))
         if (result.success) {
           GlobalBus.emit("event", {
             directory: "global",

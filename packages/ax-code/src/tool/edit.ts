@@ -20,6 +20,7 @@ import { NativePerf } from "../perf/native"
 import { NativeAddon } from "../native/addon"
 import { parseNativeJson } from "../util/native-json"
 import { normalizeToWorkspacePath, resolveToolFilePath } from "./file-path"
+import { toErrorMessage } from "../util/error-message"
 import {
   convertToLineEnding,
   detectLineEnding,
@@ -726,7 +727,7 @@ export function replace(content: string, oldString: string, newString: string, r
       const result = parseNativeEditReplaceResult(json)
       return result.new_content
     } catch (e: any) {
-      const message = e instanceof Error ? e.message : String(e)
+      const message = toErrorMessage(e)
       const canRetryInJs =
         message.includes("Could not find oldString") || message.includes("Found multiple matches for oldString")
       if (e?.code !== "MODULE_NOT_FOUND" && e?.code !== "ERR_MODULE_NOT_FOUND" && !canRetryInJs) throw e
