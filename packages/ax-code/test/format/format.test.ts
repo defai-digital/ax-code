@@ -1,9 +1,12 @@
-import { afterEach, describe, expect, test } from "bun:test"
+import { afterEach, describe, expect, spyOn, test } from "bun:test"
 import { tmpdir } from "../fixture/fixture"
 import { Bus } from "../../src/bus"
 import { File } from "../../src/file"
 import { Format } from "../../src/format"
 import * as Formatter from "../../src/format/formatter"
+import { Process } from "../../src/util/process"
+import * as Which from "../../src/util/which"
+import { PassThrough } from "node:stream"
 import { Instance } from "../../src/project/instance"
 
 describe("Format", () => {
@@ -183,5 +186,46 @@ describe("Format", () => {
     })
 
     expect(await Bun.file(file).text()).toBe("xAB")
+  })
+
+  test("formatter help checks wait for process kill to complete on timeout", async () => {
+    const originalSetTimeout = globalThis.setTimeout
+    const setTimeoutSpy = (handler: (...args: any[]) => void, timeout?: number, ...args: any[]): ReturnType<typeof setTimeout> => {
+      if (timeout === 30_000 || timeout === 5_000) {
+        return originalSetTimeout(handler, 1, ...args)
+      }
+      return originalSetTimeout(handler, timeout, ...args)
+    }
+    globalThis.setTimeout = setTimeoutSpy as typeof globalThis.setTimeout
+
+    const whichSpy = spyOn(Which, "which").mockReturnValue("/usr/bin/air")
+    const proc = {
+      exited: new Promise<number>(() => {}),
+      stdout: new PassThrough(),
+      stderr: new PassThrough(),
+    }
+
+    let killStarted = false
+    let killCompleted = false
+    spyOn(Process, "spawn").mockReturnValue(proc as any)
+    spyOn(Process, "killProcessTree").mockImplementation(async () => {
+      killStarted = true
+      await new Promise<void>((resolve) => {
+        originalSetTimeout(() => {
+          killCompleted = true
+          resolve()
+        }, 20)
+      })
+    })
+
+    try {
+      const result = await Formatter.rlang.enabled()
+      expect(result).toBe(false)
+      expect(killStarted).toBe(true)
+      expect(killCompleted).toBe(true)
+    } finally {
+      whichSpy.mockRestore()
+      globalThis.setTimeout = originalSetTimeout
+    }
   })
 })

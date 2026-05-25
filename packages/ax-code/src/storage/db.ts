@@ -242,9 +242,18 @@ export namespace Database {
     }
   }
 
+  function requireSyncTransactionResult<T>(result: T): T {
+    if (result instanceof Promise) {
+      throw new Error(
+        "Database.transaction callback must be synchronous (do not pass async functions)."
+      )
+    }
+    return result
+  }
+
   export function use<T>(callback: (trx: TxOrDb) => T): T {
     try {
-      return callback(ctx.use().tx)
+      return requireSyncTransactionResult(callback(ctx.use().tx))
     } catch (err) {
       if (err instanceof Context.NotFound) {
         const effects: Effect[] = []
@@ -274,12 +283,14 @@ export namespace Database {
 
   export function transaction<T>(callback: (tx: TxOrDb) => T): SyncTransactionResult<T> {
     try {
-      return callback(ctx.use().tx) as SyncTransactionResult<T>
+      return requireSyncTransactionResult(callback(ctx.use().tx)) as SyncTransactionResult<T>
     } catch (err) {
       if (err instanceof Context.NotFound) {
         const effects: Effect[] = []
         const result = Client().transaction<T>((tx) => {
-          return ctx.provide({ tx, effects }, () => callback(tx)) as SyncTransactionResult<T>
+          return requireSyncTransactionResult(
+            ctx.provide({ tx, effects }, () => callback(tx)) as SyncTransactionResult<T>,
+          ) as SyncTransactionResult<T>
         }) as SyncTransactionResult<T>
         runEffects(effects)
         return result

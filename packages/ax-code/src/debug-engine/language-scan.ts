@@ -17,6 +17,7 @@ import z from "zod"
 import { Instance } from "../project/instance"
 import { toErrorMessage } from "../util/error-message"
 import { parseJsonPayload, parseJsonStrict } from "../util/json-value"
+import { Process } from "../util/process"
 
 // ─── Shared types ──────────────────────────────────────────────────
 
@@ -406,11 +407,24 @@ function runCommand(cmd: string, args: string[], cwd: string, timeoutMs: number)
     let stdout = ""
     let stderr = ""
     let timedOut = false
+    let settled = false
+
+    const finish = (value: string | Error | undefined) => {
+      if (settled) return
+      settled = true
+      if (value instanceof Error) {
+        reject(value)
+      } else {
+        resolve(value ?? "")
+      }
+    }
 
     const timer = setTimeout(() => {
       timedOut = true
-      proc.kill()
-      reject(new Error(`${cmd} timed out after ${timeoutMs}ms`))
+      const error = new Error(`${cmd} timed out after ${timeoutMs}ms`)
+      void Process.killProcessTree(proc).catch(() => undefined).finally(() => {
+        finish(error)
+      })
     }, timeoutMs)
 
     proc.stdout.on("data", (d) => (stdout += d.toString()))
@@ -422,16 +436,16 @@ function runCommand(cmd: string, args: string[], cwd: string, timeoutMs: number)
       // clippy/ruff/mypy may exit non-zero with findings — that's OK
       // Only reject on ENOENT or other spawn errors
       if (code === null) {
-        reject(new Error(`${cmd} was killed`))
+        finish(new Error(`${cmd} was killed`))
       } else {
         // Return stdout even if non-zero — the JSON output is what matters
-        resolve(stdout || stderr)
+        finish(stdout || stderr)
       }
     })
 
     proc.on("error", (err) => {
       clearTimeout(timer)
-      reject(err)
+      finish(err)
     })
   })
 }

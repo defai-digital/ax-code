@@ -435,12 +435,18 @@ export const SessionListCommand = cmd({
 
         const kill = () => {
           try {
-            proc.kill()
+            return Process.killProcessTree(proc)
           } catch {}
         }
         const removeSignals = registerShutdownSignals(kill)
         try {
-          proc.stdin.write(output)
+          const didWrite = proc.stdin.write(output)
+          if (!didWrite) {
+            await new Promise<void>((resolve, reject) => {
+              proc.stdin!.once("error", reject)
+              proc.stdin!.once("drain", resolve)
+            })
+          }
           proc.stdin.end()
           await proc.exited
         } finally {

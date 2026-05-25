@@ -79,13 +79,22 @@ export const ensureTool = async (input: {
   // the OS pipe buffer (~64KB on Linux) and the child process will block
   // on write, deadlocking `await proc.exited`. Installers like npm/pnpm
   // produce well more than 64KB of output.
+  const installTimeoutMs = 120_000
   const proc = Process.spawn(input.install, {
+    timeout: installTimeoutMs,
     env: input.env,
     stdout: "ignore",
     stderr: "ignore",
     stdin: "ignore",
   })
-  const exit = await proc.exited
+  const hasExited = () => proc.exitCode !== null || proc.signalCode !== null
+  let exit: number
+  try {
+    exit = await proc.exited
+  } catch {
+    if (!hasExited()) await Process.killProcessTree(proc).catch(() => {})
+    return
+  }
   if (exit !== 0) {
     log.error(`Failed to install ${input.name}`)
     return
@@ -214,6 +223,7 @@ export const bunServer = async (input: {
       await Process.spawn([BunProc.which(), "install", input.pkg], {
         cwd: Global.Path.bin,
         env: bunEnv(),
+        timeout: 120_000,
         stdout: "ignore",
         stderr: "ignore",
         stdin: "ignore",

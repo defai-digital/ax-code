@@ -8,6 +8,7 @@
 import { Log } from "../../util/log"
 import { Env } from "../../util/env"
 import { toErrorMessage } from "../../util/error-message"
+import { Process } from "../../util/process"
 
 const log = Log.create({ service: "planner.verify" })
 
@@ -53,26 +54,26 @@ export async function typecheck(cwd: string, timeout = 60_000): Promise<Verifica
   const name = "typecheck"
 
   try {
-    const proc = Bun.spawn(["bun", "typecheck"], {
+    const { code, stdout, stderr } = await Process.run(["bun", "typecheck"], {
       cwd,
-      stdout: "pipe",
-      stderr: "pipe",
       env: Env.sanitize(),
+      timeout,
+      nothrow: true,
     })
 
-    let timedOut = false
-    const timer = setTimeout(() => {
-      timedOut = true
-      proc.kill()
-    }, timeout)
-    const [code, stdout, stderr] = await Promise.all([
-      proc.exited.finally(() => {
-        clearTimeout(timer)
-      }),
-      new Response(proc.stdout).text(),
-      new Response(proc.stderr).text(),
-    ])
-    const output = (stdout + stderr).trim()
+    if (code === 124) {
+      return {
+        name,
+        type: "typecheck",
+        passed: false,
+        status: "timeout",
+        issues: [],
+        duration: Date.now() - start,
+        output: `typecheck command timed out after ${timeout}ms`,
+      }
+    }
+
+    const output = (stdout.toString() + stderr.toString()).trim()
     const issues = parseTypeScriptErrors(output)
 
     const passed = code === 0
@@ -82,7 +83,7 @@ export async function typecheck(cwd: string, timeout = 60_000): Promise<Verifica
       name,
       type: "typecheck",
       passed,
-      status: timedOut ? "timeout" : passed ? "passed" : "failed",
+      status: passed ? "passed" : "failed",
       issues,
       duration: Date.now() - start,
       output,
@@ -116,35 +117,36 @@ export async function custom(cmd: string, cwd: string, timeout = 60_000): Promis
   const shell = process.platform === "win32" ? ["cmd", "/c", cmd] : ["sh", "-c", cmd]
 
   try {
-    const proc = Bun.spawn(shell, {
+    const { code, stdout, stderr } = await Process.run(shell, {
       cwd,
-      stdout: "pipe",
-      stderr: "pipe",
       env: { ...Env.sanitize(process.env), CI: "true" },
+      timeout,
+      nothrow: true,
     })
 
-    let timedOut = false
-    const timer = setTimeout(() => {
-      timedOut = true
-      proc.kill()
-    }, timeout)
-    const [code, stdout, stderr] = await Promise.all([
-      proc.exited.finally(() => {
-        clearTimeout(timer)
-      }),
-      new Response(proc.stdout).text(),
-      new Response(proc.stderr).text(),
-    ])
+    if (code === 124) {
+      return {
+        name: cmd,
+        type: "custom",
+        passed: false,
+        status: "timeout",
+        issues: [],
+        duration: Date.now() - start,
+        output: `custom verification command timed out after ${timeout}ms`,
+      }
+    }
+
+    const output = (stdout.toString() + stderr.toString()).trim()
     const passed = code === 0
 
     return {
       name: cmd,
       type: "custom",
       passed,
-      status: timedOut ? "timeout" : passed ? "passed" : "failed",
+      status: passed ? "passed" : "failed",
       issues: [],
       duration: Date.now() - start,
-      output: (stdout + stderr).trim(),
+      output,
     }
   } catch (e) {
     // Same rationale as the typecheck catch above — a spawn failure

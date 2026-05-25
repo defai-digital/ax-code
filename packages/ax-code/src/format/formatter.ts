@@ -6,12 +6,62 @@ import { Process } from "../util/process"
 import { which } from "../util/which"
 import { Flag } from "@/flag/flag"
 
+const HELP_CHECK_TIMEOUT_MS = 5_000
+
 export interface Info {
   name: string
   command: string[]
   environment?: Record<string, string>
   extensions: string[]
   enabled(): Promise<boolean>
+}
+
+type HelpCheckResult = {
+  code: number
+  stdout: string
+  stderr: string
+  timedOut: boolean
+}
+
+async function runHelpCommand(cmd: string[]): Promise<HelpCheckResult | null> {
+  const proc = Process.spawn(cmd, {
+    stdout: "pipe",
+    stderr: "pipe",
+  })
+  if (!proc.stdout || !proc.stderr) return null
+
+  let timedOut = false
+  let timer: ReturnType<typeof setTimeout> | undefined
+  let timeoutKill: Promise<void> = Promise.resolve()
+  const timeoutResult = new Promise<null>((resolve) => {
+    timer = setTimeout(() => {
+      timedOut = true
+      timeoutKill = Process.killProcessTree(proc).catch(() => undefined)
+      resolve(null)
+    }, HELP_CHECK_TIMEOUT_MS)
+  })
+  let result: [number, string, string] | null = null
+  try {
+    result = await Promise.race([
+      Promise.all([
+        proc.exited.finally(() => {
+          if (timer) clearTimeout(timer)
+        }),
+        text(proc.stdout),
+        text(proc.stderr),
+      ]),
+      timeoutResult,
+    ])
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
+
+  if (result === null || timedOut) {
+    await timeoutKill
+    return null
+  }
+  const [code, stdout, stderr] = result
+  return { code, stdout, stderr, timedOut }
 }
 
 export const gofmt: Info = {
@@ -215,16 +265,12 @@ export const rlang: Info = {
     if (airPath == null) return false
 
     try {
-      const proc = Process.spawn(["air", "--help"], {
-        stdout: "pipe",
-        stderr: "pipe",
-      })
-      await proc.exited
-      if (!proc.stdout) return false
-      const output = await text(proc.stdout)
+      const result = await runHelpCommand(["air", "--help"])
+      if (!result) return false
+      if (result.timedOut || result.code !== 0 || !result.stdout) return false
 
       // Check for "Air: An R language server and formatter"
-      const firstLine = output.split("\n")[0]
+      const firstLine = result.stdout.split("\n")[0]
       const hasR = firstLine.includes("R language")
       const hasFormatter = firstLine.includes("formatter")
       return hasR && hasFormatter
@@ -241,9 +287,9 @@ export const uvformat: Info = {
   async enabled() {
     if (await ruff.enabled()) return false
     if (which("uv") !== null) {
-      const proc = Process.spawn(["uv", "format", "--help"], { stderr: "pipe", stdout: "pipe" })
-      const code = await proc.exited
-      return code === 0
+      const result = await runHelpCommand(["uv", "format", "--help"])
+      if (!result) return false
+      return result.code === 0
     }
     return false
   },

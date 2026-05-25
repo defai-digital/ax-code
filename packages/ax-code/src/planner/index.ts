@@ -34,6 +34,7 @@ import {
   type PhaseResult,
   type PlanResult,
   type ExecutionOptions,
+  type PhaseExecutor,
 } from "./types"
 
 export {
@@ -42,6 +43,7 @@ export {
   type PhaseResult,
   type PlanResult,
   type ExecutionOptions,
+  type PhaseExecutor,
   type Replanner,
   type ReplanInput,
   type CreatePlanOptions,
@@ -129,7 +131,7 @@ export namespace Planner {
    */
   export async function execute(
     plan: TaskPlan,
-    executor: (phase: TaskPhase, plan: TaskPlan) => Promise<PhaseResult>,
+    executor: PhaseExecutor,
     opts: Partial<ExecutionOptions> = {},
   ): Promise<PlanResult> {
     const options = { ...defaultOptions(), ...opts }
@@ -286,7 +288,7 @@ export namespace Planner {
   async function runReplan(
     plan: TaskPlan,
     failed: TaskPhase,
-    executor: (phase: TaskPhase, plan: TaskPlan) => Promise<PhaseResult>,
+    executor: PhaseExecutor,
     options: ExecutionOptions,
     error: string,
     depth: number,
@@ -353,7 +355,7 @@ export namespace Planner {
   async function executePhase(
     plan: TaskPlan,
     phase: TaskPhase,
-    executor: (phase: TaskPhase, plan: TaskPlan) => Promise<PhaseResult>,
+    executor: PhaseExecutor,
     options: ExecutionOptions,
   ): Promise<PhaseResult> {
     const start = Date.now()
@@ -373,12 +375,16 @@ export namespace Planner {
       // setTimeout pending until it fires (`phaseTimeoutMs`, default
       // 10 minutes) — `Promise.race` does not cancel the loser. In
       // short-lived CLI processes this delays exit by the timeout.
+      const abortController = new AbortController()
       let timer: ReturnType<typeof setTimeout> | undefined
       const timeoutPromise = new Promise<never>((_, reject) => {
-        timer = setTimeout(() => reject(new Error(`Phase timed out after ${timeout}ms`)), timeout)
+        timer = setTimeout(() => {
+          abortController.abort(new Error(`Phase timed out after ${timeout}ms`))
+          reject(new Error(`Phase timed out after ${timeout}ms`))
+        }, timeout)
       })
       try {
-        return await Promise.race([executor(phase, plan), timeoutPromise])
+        return await Promise.race([executor(phase, plan, abortController.signal), timeoutPromise])
       } finally {
         if (timer) clearTimeout(timer)
       }

@@ -23,10 +23,9 @@ const OSC52_MAX_BYTES = 100_000
 const CLIPBOARD_PROC_TIMEOUT_MS = 5_000
 
 type ProcWithStdin = {
-  stdin: NodeJS.WritableStream | null | undefined
   exited: Promise<unknown>
-  kill(): void
-}
+  stdin: NodeJS.WritableStream | null | undefined
+} & Process.Child
 
 function writeOsc52(text: string): void {
   if (!process.stdout.isTTY) return
@@ -50,13 +49,13 @@ function createTimeout(ms: number) {
   }
 }
 
-async function waitForExit(proc: { exited: Promise<unknown>; kill(): void }) {
+async function waitForExit(proc: ProcWithStdin) {
   const timeout = createTimeout(CLIPBOARD_PROC_TIMEOUT_MS)
   try {
     const result = await Promise.race([proc.exited.then(() => "done" as const), timeout.promise]).catch(
       () => "timeout" as const,
     )
-    if (result === "timeout") proc.kill()
+    if (result === "timeout") await Process.killProcessTree(proc).catch(() => undefined)
   } finally {
     timeout.clear()
   }
@@ -82,7 +81,13 @@ async function waitForWrite(input: Promise<unknown>) {
 
 async function writeViaProcessStdin(proc: ProcWithStdin, text: string) {
   if (!proc.stdin) return
-  proc.stdin.write(text)
+  const wrote = proc.stdin.write(text)
+  if (!wrote) {
+    await new Promise<void>((resolve, reject) => {
+      proc.stdin!.once("error", reject)
+      proc.stdin!.once("drain", resolve)
+    })
+  }
   proc.stdin.end()
   await waitForExit(proc)
 }

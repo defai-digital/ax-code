@@ -28,25 +28,22 @@ export async function spawnExitsCleanly(
   options: { timeoutMs?: number } = {},
 ): Promise<boolean> {
   const { timeoutMs = 5000 } = options
-  // Process.spawn's `timeout` option is the SIGTERM→SIGKILL grace
-  // period after an abort fires, not a wall-clock budget. We need
-  // an explicit AbortController to actually cap how long the probe
-  // can run end-to-end.
-  const abort = new AbortController()
-  const timer = setTimeout(() => abort.abort(), timeoutMs)
+  // Process.spawn now enforces hard timeouts directly.
+  let proc: ReturnType<typeof Process.spawn> | undefined
   try {
-    const proc = Process.spawn([command, ...args], {
+    proc = Process.spawn([command, ...args], {
       stdout: "ignore",
       stderr: "ignore",
-      abort: abort.signal,
+      timeout: timeoutMs,
       env: Env.sanitize(),
     })
     const code = await proc.exited
     return code === 0
   } catch {
+    if (proc && proc.exitCode === null && proc.signalCode === null) {
+      await Process.killProcessTree(proc).catch(() => {})
+    }
     return false
-  } finally {
-    clearTimeout(timer)
   }
 }
 

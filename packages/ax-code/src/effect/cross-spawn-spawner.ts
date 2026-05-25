@@ -24,6 +24,7 @@ import * as NodeChildProcess from "node:child_process"
 import { PassThrough } from "node:stream"
 import launch from "cross-spawn"
 import { Env } from "../util/env"
+import { Shell } from "../shell/shell"
 
 const toError = (err: unknown): Error => (err instanceof globalThis.Error ? err : new globalThis.Error(String(err)))
 
@@ -320,7 +321,7 @@ export const make = Effect.gen(function* () {
       })
     }
 
-    return Effect.try({
+    return Effect.tryPromise({
       try: () => {
         // Guard the PID before calling kill. `proc.pid` is
         // `number | undefined` until the `'spawn'` event fires;
@@ -329,8 +330,19 @@ export const make = Effect.gen(function* () {
         // the PID will still be undefined. A bare non-null assertion
         // would invoke `process.kill(-undefined, …)` which throws a
         // raw TypeError and masks the real spawn failure.
-        if (proc.pid == null) return
-        globalThis.process.kill(-proc.pid, signal)
+        if (proc.pid == null) return Promise.resolve()
+        return Shell.killTree(
+          {
+            pid: proc.pid,
+              kill: (killSignal?: NodeJS.Signals | number) => {
+                return proc.kill(killSignal)
+              },
+          },
+          {
+            exited: () => proc.exitCode !== null || proc.signalCode !== null,
+            signal,
+          },
+        )
       },
       catch: (err) => toPlatformError("kill", toError(err), command),
     })
