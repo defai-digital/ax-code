@@ -1,4 +1,5 @@
 import { Log } from "@/util/log"
+import { parseJsonPayload } from "@/util/json-value"
 
 const log = Log.create({ service: "control-plane.sse" })
 const MAX_SSE_BUFFER_CHARS = 1024 * 1024
@@ -16,11 +17,7 @@ export function sseMessageData(text: string, meta: { id?: string; retry?: number
 }
 
 export function parseSSEJsonData(text: string): unknown | undefined {
-  try {
-    return JSON.parse(text)
-  } catch {
-    return undefined
-  }
+  return parseJsonPayload(text)
 }
 
 export function parseSSEData(text: string, meta: { id?: string; retry?: number } = {}): unknown {
