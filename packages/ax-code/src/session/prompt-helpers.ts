@@ -1,6 +1,3 @@
-import { MessageV2 } from "./message-v2"
-import { Provider } from "../provider/provider"
-import { ModelID, ProviderID } from "../provider/schema"
 export { commandTemplateText } from "./prompt-command-template"
 export { commandModel, commandUser, lastModel } from "./prompt-command-selection"
 export { commandParts } from "./prompt-command-parts"
@@ -14,6 +11,8 @@ export { ensureTitle, titleContextMessages } from "./prompt-title"
 export { systemPrompt } from "./prompt-system"
 export { loopMessages, remindQueuedMessages, scanLoopMessages } from "./prompt-loop-messages"
 export { createStructuredOutputTool } from "./prompt-structured-output"
+export { parseGoalArguments } from "./prompt-goal-arguments"
+export { findFallbackModel } from "./prompt-provider-fallback"
 export {
   assistantLoopExitDecision,
   assistantRespondedAfterUser,
@@ -24,48 +23,3 @@ export {
   providerFallbackSwitchState,
   shouldScheduleUsageCompaction,
 } from "./prompt-loop-decisions"
-
-type GoalArgumentDecision =
-  | { action: "view" | "pause" | "resume" | "clear" }
-  | {
-      action: "create"
-      objective: string
-      tokenBudget?: number
-    }
-
-export function parseGoalArguments(raw: string): GoalArgumentDecision {
-  const text = raw.trim()
-  if (!text) return { action: "view" }
-  const lower = text.toLowerCase()
-  if (lower === "pause") return { action: "pause" }
-  if (lower === "resume") return { action: "resume" }
-  if (lower === "clear") return { action: "clear" }
-
-  const budgetMatch = /^--(?:token-)?budget\s+(\d+)\s+([\s\S]+)$/.exec(text)
-  if (budgetMatch) {
-    return {
-      action: "create",
-      tokenBudget: Number(budgetMatch[1]),
-      objective: budgetMatch[2].trim(),
-    }
-  }
-  return { action: "create", objective: text }
-}
-
-/**
- * Find a fallback model from a different provider when the current one fails.
- * Skips the failed provider and returns the best model from the next available one.
- */
-export async function findFallbackModel(
-  failedProviderID: ProviderID,
-): Promise<{ providerID: ProviderID; modelID: ModelID } | undefined> {
-  const providers = await Provider.list()
-  for (const [id, provider] of Object.entries(providers)) {
-    if (id === failedProviderID) continue
-    const models = Provider.sort(Object.values(provider.models))
-    if (models.length > 0) {
-      return { providerID: ProviderID.make(id), modelID: models[0].id }
-    }
-  }
-  return undefined
-}
