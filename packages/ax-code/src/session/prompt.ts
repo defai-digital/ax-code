@@ -34,6 +34,7 @@ import {
 } from "./prompt-loop-compaction"
 import { resolvePromptLoopErrorTransition } from "./prompt-loop-errors"
 import { resolvePromptLoopAssistantExit } from "./prompt-loop-exit"
+import { handlePromptLoopGoalContinuation } from "./prompt-loop-goal"
 import { loopMessages, scanLoopMessages } from "./prompt-loop-messages"
 import { finishPromptLoopQueue } from "./prompt-loop-queue"
 import {
@@ -62,7 +63,6 @@ import {
   completionGateEventState,
   completionGateRetryDecision,
   emptyModelTurnDecision,
-  goalContinuationDecision,
   isEmptyModelTurn,
   modelTurnFinished,
 } from "./prompt-autonomous-decisions"
@@ -819,44 +819,26 @@ export namespace SessionPrompt {
 
       if (modelFinished && !processor.message.error) {
         const goal = updatedGoal ?? (await SessionGoal.get(sessionID))
-        const goalDecision = goalContinuationDecision({
+        const goalTransition = handlePromptLoopGoalContinuation({
+          sessionID,
           goal,
           continuations,
           maxContinuations,
           budgetLimitContinuationSent: goalBudgetLimitContinuationSent,
         })
+        goalBudgetLimitContinuationSent = goalTransition.budgetLimitContinuationSent
 
-        if (goalDecision.action === "continue_active") {
+        if (goalTransition.action === "continue") {
           await continueAutonomousLoop({
-            event: "goal auto-continuation",
+            event: goalTransition.event,
             resetTodoProgressTracking: true,
-            text: AutonomousContinuationPrompt.goal({
-              objective: goalDecision.objective,
-              continuation: goalDecision.continuation,
-              maxContinuations,
-            }),
+            text: goalTransition.text,
           })
           continue
         }
 
-        if (goalDecision.action === "continue_budget_wrapup") {
-          goalBudgetLimitContinuationSent = true
-          await continueAutonomousLoop({
-            event: "goal budget-limit wrap-up",
-            resetTodoProgressTracking: true,
-            text: AutonomousContinuationPrompt.goalBudgetLimit({
-              objective: goalDecision.objective,
-              tokensUsed: goalDecision.tokensUsed,
-              tokenBudget: goalDecision.tokenBudget,
-              timeUsedSeconds: goalDecision.timeUsedSeconds,
-            }),
-          })
-          continue
-        }
-
-        if (goalDecision.action === "stop_active_limit" || goalDecision.action === "stop_budget_limit") {
-          Session.publishError({ sessionID, message: goalDecision.message })
-          reason = goalDecision.reason
+        if (goalTransition.action === "stop") {
+          reason = goalTransition.reason
           break
         }
       }
