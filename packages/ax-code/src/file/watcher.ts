@@ -17,6 +17,7 @@ import { Config } from "../config/config"
 import { FileIgnore } from "./ignore"
 import { Protected } from "./protected"
 import { Log } from "../util/log"
+import { parseNativeJsonArray } from "../util/native-json"
 
 declare const AX_CODE_LIBC: string | undefined
 
@@ -56,10 +57,7 @@ export namespace FileWatcher {
   export type NativeWatcherEvent = z.infer<typeof NativeWatcherEvent>
 
   export function parseNativeWatcherEvents(json: string): NativeWatcherEvent[] {
-    const parsed: unknown = JSON.parse(json)
-    const decoded = z.array(NativeWatcherEvent).safeParse(parsed)
-    if (!decoded.success) throw new SyntaxError("Invalid native watcher events")
-    return decoded.data
+    return parseNativeJsonArray(json, NativeWatcherEvent, "Invalid native watcher events")
   }
 
   const overrides = new Map<string, InitOptions>()

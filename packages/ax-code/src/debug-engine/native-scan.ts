@@ -3,6 +3,7 @@ import { Log } from "../util/log"
 import { NativeAddon } from "../native/addon"
 import { Flag } from "../flag/flag"
 import z from "zod"
+import { parseNativeJson } from "../util/native-json"
 
 const log = Log.create({ service: "debug-engine.native-scan" })
 
@@ -60,19 +61,12 @@ const NativeDetectResult = z.object({
   heuristics: z.array(z.string()),
 })
 
-function decodeNativeJson<T>(json: string, schema: z.ZodType<T>, message: string): T {
-  const parsed: unknown = JSON.parse(json)
-  const decoded = schema.safeParse(parsed)
-  if (!decoded.success) throw new SyntaxError(message)
-  return decoded.data
-}
-
 export function parseNativeScanResult(json: string): ScanResult {
-  return decodeNativeJson(json, NativeScanResult, "Invalid native scan result")
+  return parseNativeJson(json, NativeScanResult, "Invalid native scan result")
 }
 
 export function parseNativeReadFilesBatchResult(json: string): Array<[string, string]> {
-  return decodeNativeJson(json, NativeReadFilesBatchResult, "Invalid native read files batch result")
+  return parseNativeJson(json, NativeReadFilesBatchResult, "Invalid native read files batch result")
 }
 
 /**
@@ -159,7 +153,7 @@ interface DetectResult<F> {
 }
 
 export function parseNativeDetectResult<F>(json: string): DetectResult<F> {
-  return decodeNativeJson(json, NativeDetectResult, "Invalid native detector result") as DetectResult<F>
+  return parseNativeJson(json, NativeDetectResult, "Invalid native detector result") as DetectResult<F>
 }
 
 function callNativeDetector<F>(fnName: string, input: DetectInput): DetectResult<F> | undefined {
