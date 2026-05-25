@@ -7,16 +7,12 @@ import { Session } from "."
 import { Agent } from "../agent/agent"
 import { Provider } from "../provider/provider"
 import { ModelID, ProviderID } from "../provider/schema"
-import { type ModelMessage } from "ai"
 import { SessionCompaction } from "./compaction"
 import { GLOBAL_STEP_LIMIT } from "@/constants/session"
 import { AgentControlEvents } from "../control-plane/agent-control-events"
 import { AutonomousCompletionGate } from "../control-plane/autonomous-completion-gate"
 import { Instance } from "../project/instance"
-import { SystemPrompt } from "./system"
 import { InstructionPrompt } from "./instruction"
-import { Plugin } from "../plugin"
-import MAX_STEPS from "../session/prompt/max-steps.txt"
 import { defer } from "../util/defer"
 import { NotFoundError } from "@/storage/db"
 import { Flag } from "../flag/flag"
@@ -42,9 +38,9 @@ import {
   processPendingCompaction,
 } from "./prompt-loop-compaction"
 import { handlePromptLoopError } from "./prompt-loop-errors"
-import { loopMessages, remindQueuedMessages, scanLoopMessages } from "./prompt-loop-messages"
+import { loopMessages, scanLoopMessages } from "./prompt-loop-messages"
 import { markPromptLoopBusy } from "./prompt-loop-status"
-import { systemPrompt as getSystemPrompt } from "./prompt-system"
+import { preparePromptRequest, type PromptRequestCache } from "./prompt-request-build"
 import { createStructuredOutputTool } from "./prompt-structured-output"
 import { sessionAssistantPath, textPart, zeroTokenUsage } from "./prompt-message-builders"
 import { executeSubtask, type SubtaskContext } from "./prompt-subtask"
@@ -234,7 +230,7 @@ export namespace SessionPrompt {
     let lastTodoContextSignature: string | undefined
     let stagnantTodoRetries = 0
     let emptyModelTurnRetries = 0
-    const cachedSystemPrompt: Parameters<typeof getSystemPrompt>[0]["cache"] = {
+    const cachedSystemPrompt: PromptRequestCache = {
       environment: undefined,
       environmentModelKey: undefined,
       instructions: undefined,
@@ -536,39 +532,19 @@ export namespace SessionPrompt {
         scheduleFirstTurnSummary({ sessionID, messageID: lastUser.id, messages: msgs })
       }
 
-      // Ephemerally wrap queued user messages with a reminder to stay on track
-      if (step > 1) msgs = remindQueuedMessages(msgs, lastFinished)
-
-      await Plugin.trigger("experimental.chat.messages.transform", {}, { messages: msgs })
-
-      // Build system prompt and convert messages to model format in parallel —
-      // both walk the same msgs/model independently with no side effects on
-      // each other, so awaiting them sequentially wastes wall-clock time on
-      // long sessions where toModelMessages can run 10-30ms.
-      const format = lastUser.format ?? { type: "text" }
-      const [system, modelMessages] = await Promise.all([
-        getSystemPrompt({
-          agent,
-          model,
-          format,
-          cache: cachedSystemPrompt,
-          messages: msgs,
-          sessionID,
-          structuredPrompt: STRUCTURED_OUTPUT_SYSTEM_PROMPT,
-        }),
-        MessageV2.toModelMessages(msgs, model),
-      ])
-      const requestMessages: ModelMessage[] = [
-        ...modelMessages,
-        ...(isLastStep
-          ? [
-              {
-                role: "assistant" as const,
-                content: MAX_STEPS,
-              },
-            ]
-          : []),
-      ]
+      const request = await preparePromptRequest({
+        sessionID,
+        messages: msgs,
+        lastUser,
+        lastFinished,
+        step,
+        isLastStep,
+        agent,
+        model,
+        cache: cachedSystemPrompt,
+        structuredPrompt: STRUCTURED_OUTPUT_SYSTEM_PROMPT,
+      })
+      msgs = request.messages
       if (
         await maybeSchedulePreflightCompaction({
           sessionID,
@@ -576,8 +552,8 @@ export namespace SessionPrompt {
           userModel: lastUser.model,
           model,
           userParts: lastUserParts ?? [],
-          system,
-          requestMessages,
+          system: request.system,
+          requestMessages: request.requestMessages,
         })
       ) {
         cachedMsgs = undefined
@@ -638,11 +614,11 @@ export namespace SessionPrompt {
         permission: session.permission,
         abort,
         sessionID,
-        system,
-        messages: requestMessages,
+        system: request.system,
+        messages: request.requestMessages,
         tools,
         model,
-        toolChoice: format.type === "json_schema" ? "required" : undefined,
+        toolChoice: request.format.type === "json_schema" ? "required" : undefined,
         config: cfg,
       })
 
@@ -664,7 +640,7 @@ export namespace SessionPrompt {
       if (!emptyModelTurn) emptyModelTurnRetries = 0
 
       if (modelFinished && !processor.message.error) {
-        if (format.type === "json_schema") {
+        if (request.format.type === "json_schema") {
           // Model stopped without calling StructuredOutput tool
           processor.message.error = new MessageV2.StructuredOutputError({
             message: "Model did not produce structured output",
