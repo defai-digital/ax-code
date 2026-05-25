@@ -125,6 +125,15 @@ describe("session.retry.delay", () => {
 })
 
 describe("session.retry.retryable", () => {
+  test("parseRetryMessageJson decodes only JSON records", () => {
+    expect(SessionRetry.parseRetryMessageJson(JSON.stringify({ code: "resource_exhausted" }))).toEqual({
+      code: "resource_exhausted",
+    })
+    expect(SessionRetry.parseRetryMessageJson("[1,2]")).toBeUndefined()
+    expect(SessionRetry.parseRetryMessageJson("not-json")).toBeUndefined()
+    expect(SessionRetry.parseRetryMessageJson({ code: "resource_exhausted" })).toBeUndefined()
+  })
+
   test("maps too_many_requests json messages", () => {
     const error = wrap(JSON.stringify({ type: "error", error: { type: "too_many_requests" } }))
     expect(SessionRetry.retryable(error)).toBe("Too Many Requests")

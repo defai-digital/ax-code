@@ -1,6 +1,6 @@
 import type { NamedError } from "@ax-code/util/error"
 import { MessageV2 } from "./message-v2"
-import { iife } from "@/util/iife"
+import { isRecord } from "@/util/record"
 
 export namespace SessionRetry {
   const RETRY_INITIAL_DELAY = 2000
@@ -110,6 +110,16 @@ export namespace SessionRetry {
     return NON_RETRYABLE_PATTERNS.some((p) => lower.includes(p))
   }
 
+  export function parseRetryMessageJson(message: unknown): Record<string, unknown> | undefined {
+    if (typeof message !== "string") return undefined
+    try {
+      const parsed: unknown = JSON.parse(message)
+      return isRecord(parsed) ? parsed : undefined
+    } catch {
+      return undefined
+    }
+  }
+
   export function retryable(error: ReturnType<NamedError["toObject"]>) {
     // context overflow errors should not be retried
     if (MessageV2.ContextOverflowError.isInstance(error)) return undefined
@@ -127,34 +137,21 @@ export namespace SessionRetry {
       return message.includes("Overloaded") ? "Provider is overloaded" : message
     }
 
-    const json = iife(() => {
-      // Previously this had an unreachable fallthrough that called
-      // `JSON.parse(error.data.message)` on a non-string, which always
-      // threw a TypeError (caught by the surrounding catch). Replace
-      // with an explicit early return so the logic reads clearly.
-      if (typeof error.data?.message !== "string") return undefined
-      try {
-        return JSON.parse(error.data.message)
-      } catch {
-        return undefined
-      }
-    })
-    try {
-      if (!json || typeof json !== "object") return undefined
-      const code = typeof json.code === "string" ? json.code : ""
+    const json = parseRetryMessageJson(error.data?.message)
+    if (!json) return undefined
 
-      if (json.type === "error" && json.error?.type === "too_many_requests") {
-        return "Too Many Requests"
-      }
-      if (code.includes("exhausted") || code.includes("unavailable")) {
-        return "Provider is overloaded"
-      }
-      if (json.type === "error" && json.error?.code?.includes("rate_limit")) {
-        return "Rate Limited"
-      }
-      return undefined
-    } catch {
-      return undefined
+    const code = typeof json.code === "string" ? json.code : ""
+    const nestedError = isRecord(json.error) ? json.error : undefined
+    if (json.type === "error" && nestedError?.type === "too_many_requests") {
+      return "Too Many Requests"
     }
+    if (code.includes("exhausted") || code.includes("unavailable")) {
+      return "Provider is overloaded"
+    }
+    const nestedCode = nestedError && typeof nestedError.code === "string" ? nestedError.code : ""
+    if (json.type === "error" && nestedCode.includes("rate_limit")) {
+      return "Rate Limited"
+    }
+    return undefined
   }
 }
