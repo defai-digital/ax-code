@@ -18,6 +18,7 @@
  */
 
 import { Log } from "../util/log"
+import { toErrorMessage } from "../util/error-message"
 import * as Complexity from "./complexity"
 import * as Dependency from "./dependency"
 import * as Estimator from "./estimator"
@@ -400,7 +401,7 @@ export namespace Planner {
                 lastResult = { ...lastResult, success: false, error: review.error ?? "phase blocked by reviewer" }
               }
             } catch (err) {
-              const msg = err instanceof Error ? err.message : String(err)
+              const msg = toErrorMessage(err)
               log.warn("phase reviewer threw, ignoring", { phaseId: phase.id, error: msg })
             }
           }

@@ -14,6 +14,7 @@ import type { CodeNodeKind, CodeEdgeKind } from "./schema.sql"
 import type { ProjectID } from "../project/schema"
 import { INDEXER_SEMANTIC_METHODS } from "../lsp/prewarm-profile"
 import { KeyedSerialQueue } from "../util/queue"
+import { toErrorMessage } from "../util/error-message"
 
 const log = Log.create({ service: "code-intelligence.builder" })
 const SYMBOL_RANGE_SCALE = 1000
@@ -775,7 +776,7 @@ export namespace CodeGraphBuilder {
                 file: absPath,
                 symbols: query.bookmarks.map((bookmark) => bookmark.nodeId),
                 line: query.selectionLine,
-                err: err instanceof Error ? err.message : String(err),
+                err: toErrorMessage(err),
               })
               return undefined
             })

@@ -12,6 +12,7 @@ import { CodeGraphQuery } from "./query"
 import { Instance } from "../project/instance"
 import type { ProjectID } from "../project/schema"
 import { NativeAddon } from "../native/addon"
+import { toErrorMessage } from "../util/error-message"
 
 // Auto-index: fires a background code-intelligence index when a
 // session starts against an empty or missing graph, so users don't
@@ -393,13 +394,13 @@ export namespace AutoIndex {
         }
         log.warn("background auto-index failed", {
           projectID,
-          error: err instanceof Error ? err.message : String(err),
+          error: toErrorMessage(err),
         })
         setState(projectID, {
           state: "failed",
           startedAt: start,
           finishedAt: Date.now(),
-          error: err instanceof Error ? err.message : String(err),
+          error: toErrorMessage(err),
         })
       } finally {
         inFlight.delete(key)

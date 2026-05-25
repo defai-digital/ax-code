@@ -13,6 +13,7 @@ import { Config } from "../config/config"
 import { Log } from "../util/log"
 import { Process } from "../util/process"
 import { Env } from "../util/env"
+import { toErrorMessage } from "../util/error-message"
 import { NamedError } from "@ax-code/util/error"
 import z from "zod/v4"
 import { Instance } from "../project/instance"
@@ -159,7 +160,7 @@ export namespace MCP {
             },
           )
         } catch (e) {
-          log.error("MCP tool call failed", { tool: mcpTool.name, error: e instanceof Error ? e.message : String(e) })
+          log.error("MCP tool call failed", { tool: mcpTool.name, error: toErrorMessage(e) })
           throw e
         }
       },
@@ -267,7 +268,7 @@ export namespace MCP {
             log.error("MCP server creation failed", { server: key, err })
             status[key] = {
               status: "failed" as const,
-              error: err instanceof Error ? err.message : String(err),
+              error: toErrorMessage(err),
             }
             return undefined
           })
@@ -717,7 +718,7 @@ export namespace MCP {
     next.catch((err) => {
       log.warn(errorLabel, {
         name,
-        error: err instanceof Error ? err.message : String(err),
+        error: toErrorMessage(err),
         stack: err instanceof Error ? err.stack : undefined,
       })
     })
