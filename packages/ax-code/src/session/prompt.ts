@@ -23,8 +23,6 @@ import { NotFoundError } from "@/storage/db"
 import { Flag } from "../flag/flag"
 import { Recorder } from "../replay/recorder"
 import { BlastRadius } from "./blast-radius"
-import { AutoIndex } from "../code-intelligence/auto-index"
-import type { ProjectID } from "../project/schema"
 import { Todo } from "./todo"
 import { SessionGoal } from "./goal"
 import { Config } from "@/config/config"
@@ -75,6 +73,7 @@ import { insertReminders } from "./prompt-reminders"
 import { executeShellCommand } from "./prompt-shell-command"
 import { executePromptCommand } from "./prompt-command-execution"
 import { createSyntheticFailureAssistant, publishPromptFailure } from "./prompt-loop-failure"
+import { createDeferredCodeGraphAutoIndex } from "./prompt-code-graph"
 import { recordPromptSessionStart } from "./prompt-session-start"
 import { createAutonomousUserContinuation, createUserMessage } from "./prompt-user-message"
 import { permissionRulesetFromLegacyTools } from "./prompt-permission"
@@ -219,24 +218,8 @@ export namespace SessionPrompt {
     let consecutiveErrors = 0
     let continuations = 0
     let goalBudgetLimitContinuationSent = false
-    let deferredAutoIndexProjectID: ProjectID | undefined
-    await using _autoIndex = defer(() => {
-      if (!deferredAutoIndexProjectID || abort.aborted) return
-      const projectID = deferredAutoIndexProjectID
-      const timer = setTimeout(() => {
-        try {
-          AutoIndex.maybeStart(projectID)
-        } catch (error) {
-          log.warn("deferred auto-index scheduling failed", {
-            command: "session.prompt.codeGraph",
-            status: "error",
-            sessionID,
-            error,
-          })
-        }
-      }, 0)
-      timer.unref?.()
-    })
+    const deferredCodeGraphAutoIndex = createDeferredCodeGraphAutoIndex({ sessionID, abort })
+    await using _autoIndex = defer(deferredCodeGraphAutoIndex.flush)
     const session = await Session.get(sessionID)
     // Pre-load expensive resources once before the loop
     const cfg = await Config.get()
@@ -459,7 +442,7 @@ export namespace SessionPrompt {
       step++
       totalSteps++
       if (!sessionStarted) {
-        deferredAutoIndexProjectID =
+        deferredCodeGraphAutoIndex.set(
           recordPromptSessionStart({
             sessionID,
             session,
@@ -467,7 +450,8 @@ export namespace SessionPrompt {
             messages: msgs,
             abort,
             isResumingActiveLoop,
-          }) ?? deferredAutoIndexProjectID
+          }),
+        )
         sessionStarted = true
       }
 
