@@ -3,6 +3,7 @@ import { cmd } from "./cmd"
 import { Session } from "../../session"
 import { bootstrap } from "../bootstrap"
 import { Database } from "../../storage/db"
+import { providerModelKey } from "../../provider/model-key"
 import { SessionTable } from "../../session/session.sql"
 import { Project } from "../../project/project"
 import { Instance } from "../../project/instance"
@@ -187,7 +188,7 @@ export async function aggregateSessionStats(days?: number, projectFilter?: strin
 
       for (const message of messages) {
         if (message.info.role === "assistant") {
-          const modelKey = `${message.info.providerID}/${message.info.modelID}`
+          const modelKey = providerModelKey(message.info)
           if (!sessionModelUsage[modelKey]) {
             sessionModelUsage[modelKey] = {
               messages: 0,

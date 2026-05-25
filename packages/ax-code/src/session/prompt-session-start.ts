@@ -1,5 +1,6 @@
 import { Flag } from "../flag/flag"
 import { Instance } from "../project/instance"
+import { providerModelKey } from "../provider/model-key"
 import type { ProjectID } from "../project/schema"
 import { Recorder } from "../replay/recorder"
 import { Log } from "../util/log"
@@ -34,7 +35,7 @@ export function recordPromptSessionStart(input: {
       type: "session.start",
       sessionID: input.sessionID,
       agent: input.lastUser.agent,
-      model: `${input.lastUser.model.providerID}/${input.lastUser.model.modelID}`,
+      model: providerModelKey(input.lastUser.model),
       directory: Instance.directory,
     })
   }

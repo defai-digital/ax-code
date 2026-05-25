@@ -5,6 +5,7 @@ import { Log } from "../util/log"
 import { SessionRevert } from "./revert"
 import { Session } from "."
 import { Agent } from "../agent/agent"
+import { providerModelKey } from "../provider/model-key"
 import { Provider } from "../provider/provider"
 import { ModelID, ProviderID } from "../provider/schema"
 import { SessionCompaction } from "./compaction"
@@ -340,7 +341,7 @@ export namespace SessionPrompt {
         sessionStarted = true
       }
 
-      const modelKey = `${lastUser.model.providerID}/${lastUser.model.modelID}`
+      const modelKey = providerModelKey(lastUser.model)
       const resolvedModel = await resolvePromptCache({
         cache: cachedModel,
         key: modelKey,

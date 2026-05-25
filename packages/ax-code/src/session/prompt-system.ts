@@ -1,5 +1,6 @@
 import type { Agent } from "../agent/agent"
 import { Flag } from "../flag/flag"
+import { providerModelKey } from "../provider/model-key"
 import type { ProviderID } from "../provider/schema"
 import { InstructionPrompt } from "./instruction"
 import type { MessageV2 } from "./message-v2"
@@ -80,7 +81,7 @@ export async function systemPrompt(input: {
   const decisionHints = await decisionHintsFn({ messages: input.messages, sessionID: input.sessionID })
   const assuranceWorkflow = SystemPrompt.assuranceWorkflow(input.agent)
 
-  const modelKey = `${input.model.providerID}/${input.model.api.id}`
+  const modelKey = providerModelKey({ providerID: input.model.providerID, modelID: input.model.api.id })
   if (!input.cache.environment || input.cache.environmentModelKey !== modelKey) {
     input.cache.environment = await (input.environment ?? SystemPrompt.environment)(input.model as any)
     input.cache.environmentModelKey = modelKey

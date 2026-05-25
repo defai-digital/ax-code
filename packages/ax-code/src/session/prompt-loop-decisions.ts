@@ -1,3 +1,4 @@
+import { providerModelKey } from "../provider/model-key"
 import { ModelID, ProviderID } from "../provider/schema"
 import type { SessionCompaction } from "./compaction"
 import type { MessageV2 } from "./message-v2"
@@ -159,8 +160,8 @@ export function providerFallbackSwitchState(input: {
   errorMessage: string | undefined
   consecutiveErrors: number
 }): ProviderFallbackSwitchState {
-  const from = `${input.current.providerID}/${input.current.modelID}`
-  const to = `${input.fallback.providerID}/${input.fallback.modelID}`
+  const from = providerModelKey(input.current)
+  const to = providerModelKey(input.fallback)
   const reason = fallbackErrorReason(input.errorMessage)
   return {
     from,
