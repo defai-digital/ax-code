@@ -36,10 +36,16 @@ export namespace Todo {
     return todos.filter((todo) => isActiveTodoStatus(todo.status)).length
   }
 
+  export function checkboxMarker(status: string, style: "markdown" | "unicode" = "markdown") {
+    if (status === "completed") return style === "unicode" ? "✓" : "x"
+    if (style === "unicode" && status === "in_progress") return "•"
+    return " "
+  }
+
   export function formatCheckboxLines(todos: readonly { status: string; content: string }[]) {
     return formatLines(todos, {
       prefix: "",
-      statusTransform: (status) => (status === "completed" ? "x" : " "),
+      statusTransform: (status) => checkboxMarker(status, "markdown"),
     })
   }
 
