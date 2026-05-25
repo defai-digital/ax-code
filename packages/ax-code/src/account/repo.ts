@@ -11,18 +11,22 @@ function encryptToken(token: string): string {
   return JSON.stringify(encrypt(token))
 }
 
-function decryptToken<T extends string>(raw: string, make: (s: string) => T): T {
+export function parseEncryptedToken(raw: string): EncryptedValue | undefined {
   let parsed: unknown
   try {
     parsed = JSON.parse(raw) as unknown
   } catch {
-    // not JSON or not encrypted — treat as plaintext
-    return make(raw)
+    return undefined
   }
-  if (!isEncrypted(parsed)) return make(raw)
+  return isEncrypted(parsed) ? parsed : undefined
+}
+
+function decryptToken<T extends string>(raw: string, make: (s: string) => T): T {
+  const encrypted = parseEncryptedToken(raw)
+  if (!encrypted) return make(raw)
 
   try {
-    return make(decrypt(parsed as EncryptedValue))
+    return make(decrypt(encrypted))
   } catch (error) {
     log.warn("failed to decrypt token", {
       error: error instanceof Error ? error.message : String(error),
