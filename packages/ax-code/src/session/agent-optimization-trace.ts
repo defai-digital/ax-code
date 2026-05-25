@@ -154,12 +154,16 @@ export namespace AgentOptimizationTrace {
     return JSON.stringify(event, null, 2)
   }
 
+  export function decodeTraceEvent(value: unknown): TraceEvent | null {
+    const decoded = TraceEventSchema.safeParse(value)
+    return decoded.success ? decoded.data : null
+  }
+
   // Parse a previously serialized trace event. Returns null on invalid JSON.
   export function deserialize(json: string): TraceEvent | null {
     try {
       const parsed: unknown = JSON.parse(json)
-      const decoded = TraceEventSchema.safeParse(parsed)
-      return decoded.success ? decoded.data : null
+      return decodeTraceEvent(parsed)
     } catch {
       return null
     }
