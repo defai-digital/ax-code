@@ -163,6 +163,38 @@ if (!isSDKVersionCompatible("^2.0.0")) {
 }
 ```
 
+## Headless backend SDK
+
+Use `@ax-code/sdk/headless` when your application needs to manage the AX Code server lifecycle, subscribe to a typed event stream, and maintain projected state — all without coupling to the internal runtime package.
+
+```ts
+import {
+  startHeadlessBackend,
+  createHeadlessProjectionState,
+  applyHeadlessProjectionEvent,
+} from "@ax-code/sdk/headless"
+import { createAxCodeClient } from "@ax-code/sdk/v2/client"
+
+const backend = await startHeadlessBackend({ directory: "/path/to/workspace" })
+try {
+  const client = createAxCodeClient({ baseUrl: backend.url, headers: backend.headers })
+  const state = createHeadlessProjectionState()
+  const session = await client.session.create({ title: "My session" })
+
+  // Apply events from your SSE/WebSocket stream to the projection:
+  applyHeadlessProjectionEvent(state, {
+    type: "session.created",
+    properties: { info: session },
+  })
+} finally {
+  await backend.close()
+}
+```
+
+`startHeadlessBackend` spawns `ax-code serve` on a random port, generates a one-time auth credential, and resolves once the server is ready. `close()` sends SIGTERM then SIGKILL after 300 ms.
+
+The projection functions (`createHeadlessProjectionState`, `applyHeadlessProjectionEvent`) are pure TypeScript with no runtime dependencies — safe for use in any environment.
+
 ## HTTP client (server-based)
 
 The 1.4.0 default entry point (`createAxCode`) is still available at a subpath:
