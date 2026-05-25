@@ -48,6 +48,15 @@ import {
 } from "./model-registry-selection"
 
 export namespace QualityModelRegistry {
+  type PromotionGateLike = {
+    status: "pass" | "warn" | "fail"
+    detail?: string | null
+  }
+
+  function firstFailureDetail(gates: readonly PromotionGateLike[], fallback = "unknown failure") {
+    return gates.find((gate) => gate.status === "fail")?.detail ?? fallback
+  }
+
   export const PromotionMetadata = z.object({
     promotionID: z.string(),
     promotedAt: z.string(),
@@ -1660,7 +1669,7 @@ export namespace QualityModelRegistry {
       await QualityPromotionApprovalPacket.assertPersisted(approvalPacket)
       if (approvalPacket.readiness.overallStatus !== "pass") {
         throw new Error(
-          `Cannot promote model ${decisionBundle.source}: approval packet readiness not satisfied (${approvalPacket.readiness.gates.find((gate) => gate.status === "fail")?.detail ?? "unknown failure"})`,
+          `Cannot promote model ${decisionBundle.source}: approval packet readiness not satisfied (${firstFailureDetail(approvalPacket.readiness.gates)})`,
         )
       }
       approvals = approvalPacket.approvals
@@ -1827,7 +1836,7 @@ export namespace QualityModelRegistry {
     }
     if (approvalEvaluation.overallStatus !== "pass") {
       throw new Error(
-        `Cannot promote model ${decisionBundle.source}: approval policy not satisfied (${approvalEvaluation.gates.find((gate) => gate.status === "fail")?.detail ?? "unknown failure"})`,
+        `Cannot promote model ${decisionBundle.source}: approval policy not satisfied (${firstFailureDetail(approvalEvaluation.gates)})`,
       )
     }
 
@@ -1908,7 +1917,7 @@ export namespace QualityModelRegistry {
     await QualityPromotionSubmissionBundle.assertPersisted(submissionBundle)
     if (submissionBundle.summary.overallStatus !== "pass") {
       throw new Error(
-        `Cannot promote model ${submissionBundle.source}: submission bundle not ready (${submissionBundle.summary.gates.find((gate) => gate.status === "fail")?.detail ?? "unknown failure"})`,
+        `Cannot promote model ${submissionBundle.source}: submission bundle not ready (${firstFailureDetail(submissionBundle.summary.gates)})`,
       )
     }
     const result = await promoteApprovedDecisionBundle(submissionBundle.decisionBundle, undefined, {
@@ -1956,7 +1965,7 @@ export namespace QualityModelRegistry {
     await QualityPromotionReviewDossier.assertPersisted(reviewDossier)
     if (reviewDossier.summary.overallStatus !== "pass") {
       throw new Error(
-        `Cannot promote model ${reviewDossier.source}: review dossier not ready (${reviewDossier.summary.gates.find((gate) => gate.status === "fail")?.detail ?? "unknown failure"})`,
+        `Cannot promote model ${reviewDossier.source}: review dossier not ready (${firstFailureDetail(reviewDossier.summary.gates)})`,
       )
     }
     const result = await promoteSubmissionBundle(reviewDossier.submissionBundle, {
@@ -2004,7 +2013,7 @@ export namespace QualityModelRegistry {
     await QualityPromotionBoardDecision.assertPersisted(boardDecision)
     if (boardDecision.summary.overallStatus !== "pass") {
       throw new Error(
-        `Cannot promote model ${boardDecision.source}: board decision not ready (${boardDecision.summary.gates.find((gate) => gate.status === "fail")?.detail ?? "unknown failure"})`,
+        `Cannot promote model ${boardDecision.source}: board decision not ready (${firstFailureDetail(boardDecision.summary.gates)})`,
       )
     }
     const result = await promoteReviewDossier(boardDecision.reviewDossier, {
@@ -2056,7 +2065,7 @@ export namespace QualityModelRegistry {
     await QualityPromotionReleaseDecisionRecord.assertPersisted(releaseDecisionRecord)
     if (releaseDecisionRecord.summary.overallStatus !== "pass") {
       throw new Error(
-        `Cannot promote model ${releaseDecisionRecord.source}: release decision record not ready (${releaseDecisionRecord.summary.gates.find((gate) => gate.status === "fail")?.detail ?? "unknown failure"})`,
+        `Cannot promote model ${releaseDecisionRecord.source}: release decision record not ready (${firstFailureDetail(releaseDecisionRecord.summary.gates)})`,
       )
     }
     const result = await promoteBoardDecision(releaseDecisionRecord.boardDecision, {
@@ -2133,7 +2142,7 @@ export namespace QualityModelRegistry {
     })
     if (!signedArchiveAttestation.acceptedByPolicy) {
       throw new Error(
-        `Cannot promote model ${input.releasePacket.source}: signed archive attestation policy not satisfied (${signedArchiveAttestation.gates.find((gate) => gate.status === "fail")?.detail ?? "unknown failure"})`,
+        `Cannot promote model ${input.releasePacket.source}: signed archive attestation policy not satisfied (${firstFailureDetail(signedArchiveAttestation.gates)})`,
       )
     }
     return {
@@ -2170,7 +2179,7 @@ export namespace QualityModelRegistry {
     await QualityPromotionReleasePacket.assertPersisted(releasePacket)
     if (releasePacket.summary.overallStatus !== "pass") {
       throw new Error(
-        `Cannot promote model ${releasePacket.source}: release packet not ready (${releasePacket.summary.gates.find((gate) => gate.status === "fail")?.detail ?? "unknown failure"})`,
+        `Cannot promote model ${releasePacket.source}: release packet not ready (${firstFailureDetail(releasePacket.summary.gates)})`,
       )
     }
     const attestationProjectID = releasePacketAttestationProjectID(releasePacket)
