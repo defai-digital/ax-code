@@ -135,11 +135,11 @@ export namespace AgentOptimizationTrace {
     observations: readonly ToolObservation[]
     repeatedFailureDetected: boolean
   }): { status: VerificationStatus; command?: string } {
-    const verifier = input.observations.find(isVerificationObservation)
+    const verifier = input.observations.findLast(isVerificationObservation)
     if (input.repeatedFailureDetected) {
       return {
         status: "fail",
-        command: verifier ? verificationCommand(verifier.input) ?? verifier.tool : undefined,
+        command: verifier ? (verificationCommand(verifier.input) ?? verifier.tool) : undefined,
       }
     }
     if (!verifier) return { status: "skip" }
@@ -177,8 +177,14 @@ export namespace AgentOptimizationTrace {
     inputPricePerMillion: number
     outputPricePerMillion: number
   }): number {
-    const { inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens, inputPricePerMillion, outputPricePerMillion } =
-      params
+    const {
+      inputTokens,
+      outputTokens,
+      cacheReadTokens,
+      cacheWriteTokens,
+      inputPricePerMillion,
+      outputPricePerMillion,
+    } = params
     const input = (inputTokens / 1_000_000) * inputPricePerMillion
     const output = (outputTokens / 1_000_000) * outputPricePerMillion
     const cacheRead = (cacheReadTokens / 1_000_000) * inputPricePerMillion * 0.1

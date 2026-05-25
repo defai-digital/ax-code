@@ -4,11 +4,17 @@ import fs from "fs/promises"
 import path from "path"
 import { PassThrough } from "node:stream"
 import { Auth } from "../../src/auth"
-import { DEFAULT_LOGIN_PROVIDER_IDS, ProvidersLoginCommand, ProvidersListCommand } from "../../src/cli/cmd/providers"
+import {
+  DEFAULT_LOGIN_PROVIDER_IDS,
+  ProvidersLoginCommand,
+  ProvidersListCommand,
+  ProvidersLogoutCommand,
+} from "../../src/cli/cmd/providers"
 import { Process } from "../../src/util/process"
 import { Ssrf } from "../../src/util/ssrf"
 import { Global } from "../../src/global"
 import { Instance } from "../../src/project/instance"
+import { Provider } from "../../src/provider/provider"
 
 const originalCwd = process.cwd()
 const authFile = path.join(Global.Path.data, "auth.json")
@@ -50,9 +56,65 @@ describe("providers command", () => {
     }
   })
 
+  test("providers logout accepts a provider argument without opening selector", async () => {
+    const introSpy = spyOn(prompts, "intro").mockImplementation(() => {})
+    const outroSpy = spyOn(prompts, "outro").mockImplementation(() => {})
+    const selectSpy = spyOn(prompts, "select")
+    const invalidateSpy = spyOn(Provider, "invalidate").mockResolvedValue()
+
+    try {
+      await Auth.set("gemini-cli", { type: "api", key: "cli" })
+      await ProvidersLogoutCommand.handler({ provider: "gemini-cli" } as any)
+
+      expect(selectSpy).not.toHaveBeenCalled()
+      expect(await Auth.get("gemini-cli")).toBeUndefined()
+      expect(invalidateSpy).toHaveBeenCalled()
+      expect(outroSpy).toHaveBeenCalledWith("Logout successful")
+    } finally {
+      introSpy.mockRestore()
+      outroSpy.mockRestore()
+      selectSpy.mockRestore()
+      invalidateSpy.mockRestore()
+    }
+  })
+
+  test("providers logout fails fast in non-interactive mode without provider", async () => {
+    const introSpy = spyOn(prompts, "intro").mockImplementation(() => {})
+    const errorSpy = spyOn(prompts.log, "error").mockImplementation(() => {})
+    const selectSpy = spyOn(prompts, "select")
+    const stdin = process.stdin as typeof process.stdin & { isTTY?: boolean }
+    const originalIsTTY = stdin.isTTY
+
+    try {
+      stdin.isTTY = false
+      await Auth.set("gemini-cli", { type: "api", key: "cli" })
+      await ProvidersLogoutCommand.handler({} as any)
+
+      expect(selectSpy).not.toHaveBeenCalled()
+      expect(errorSpy).toHaveBeenCalledWith(
+        "Provider is required in non-interactive mode. Use `ax-code providers logout --provider <id>`.",
+      )
+    } finally {
+      stdin.isTTY = originalIsTTY
+      introSpy.mockRestore()
+      errorSpy.mockRestore()
+      selectSpy.mockRestore()
+    }
+  })
+
+  test("CLI provider login reports probe failures as user-facing errors", async () => {
+    const src = await Bun.file(path.join(import.meta.dir, "../../src/cli/cmd/providers.ts")).text()
+    expect(src).toContain("const result = await probeCliProvider(provider).catch((error) => {")
+    expect(src).toContain("prompts.log.error(toErrorMessage(error))")
+  })
+
   test("auth command timeout waits for process kill to complete", async () => {
     const originalSetTimeout = globalThis.setTimeout
-    const setTimeoutSpy = (handler: (...args: any[]) => void, timeout?: number, ...args: any[]): ReturnType<typeof setTimeout> => {
+    const setTimeoutSpy = (
+      handler: (...args: any[]) => void,
+      timeout?: number,
+      ...args: any[]
+    ): ReturnType<typeof setTimeout> => {
       return originalSetTimeout(handler, timeout === 30_000 ? 1 : timeout, ...args)
     }
 

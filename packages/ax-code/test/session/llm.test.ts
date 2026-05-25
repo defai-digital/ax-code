@@ -1658,6 +1658,41 @@ describe("session.llm.stream - Phase 1 long-agent profile wiring", () => {
     expect(LLM.getPacingStateForTest(target)).toBeUndefined()
   })
 
+  test("super-long pacing releases reservation when stream iterator is abandoned before first chunk", async () => {
+    const target = {
+      sessionID: "session-pacing-return-release",
+      providerID: "alibaba-coding-plan",
+      modelID: "qwen3.7-max",
+    }
+    const reservation = await LLM.applySuperLongPacingForTest({
+      ...target,
+      enabled: true,
+      abort: new AbortController().signal,
+      policy: {
+        windowMs: 1_000,
+        maxRequests: 10,
+        minDelayMs: 100,
+      },
+      now: () => 1_000,
+    })
+    expect(LLM.getPacingStateForTest(target)?.timestamps).toEqual([1_000])
+
+    const wrapped = LLM.attachSuperLongPacingReservationForTest(
+      {
+        fullStream: (async function* () {
+          yield "started"
+        })(),
+      },
+      reservation,
+      new AbortController().signal,
+    )
+
+    const iterator = wrapped.fullStream[Symbol.asyncIterator]()
+    await iterator.return?.()
+
+    expect(LLM.getPacingStateForTest(target)).toBeUndefined()
+  })
+
   test("super-long pacing skips durable release for process-local reservations", async () => {
     const releaseSpy = spyOn(SuperLongRuntime, "releasePacingReservation").mockImplementation(async () => {})
     try {

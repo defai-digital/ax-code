@@ -6,6 +6,7 @@ import { Instance } from "../../src/project/instance"
 import { Provider } from "../../src/provider/provider"
 import { ProviderID, ModelID } from "../../src/provider/schema"
 import { Env } from "../../src/env"
+import { Auth } from "../../src/auth"
 import bundledSnapshot from "../../src/provider/models-snapshot.json"
 import { OPENROUTER_SUPPORTED_MODEL_IDS } from "../../src/provider/model-support"
 
@@ -47,6 +48,24 @@ test("Provider.invalidate clears SDK cache as well as pending loads", async () =
   expect(body).toContain("currentState.modelPending.clear()")
   expect(body).toContain("currentState.sdkPending.clear()")
   expect(body).toContain("currentState.sdk.clear()")
+})
+
+test("Auth.set invalidates provider cache after key replacement", async () => {
+  await using tmp = await tmpdir()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      try {
+        await Auth.set("xai", { type: "api", key: "wrong-key" })
+        expect((await Provider.list())[ProviderID.xai]?.key).toBe("wrong-key")
+
+        await Auth.set("xai", { type: "api", key: "correct-key" })
+        expect((await Provider.list())[ProviderID.xai]?.key).toBe("correct-key")
+      } finally {
+        await Auth.remove("xai")
+      }
+    },
+  })
 })
 
 test("getLanguage registers pending model loads before awaiting them", async () => {

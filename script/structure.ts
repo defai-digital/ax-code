@@ -65,6 +65,7 @@ const keep = [
   ".husky",
   ".internal",
   ".pnpm-store",
+  ".ruff_cache",
   ".tmp",
   ".turbo",
   "crates",

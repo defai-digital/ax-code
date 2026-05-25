@@ -514,20 +514,49 @@ export namespace LLM {
       signal.addEventListener("abort", releaseOnAbort, { once: true })
     }
 
-    const fullStream = (async function* () {
-      try {
-        for await (const chunk of output.fullStream) {
-          if (!started) markStarted()
-          yield chunk
+    const cleanup = () => {
+      signal.removeEventListener("abort", releaseOnAbort)
+    }
+
+    const fullStream: AsyncIterable<unknown> = {
+      [Symbol.asyncIterator]() {
+        const inner = output.fullStream[Symbol.asyncIterator]()
+        return {
+          async next() {
+            try {
+              const result = await inner.next()
+              if (result.done) {
+                if (!started) await release()
+                cleanup()
+                return result
+              }
+              if (!started) markStarted()
+              return result
+            } catch (error) {
+              if (!started) await release()
+              cleanup()
+              throw error
+            }
+          },
+          async return(value?: unknown) {
+            try {
+              return (await inner.return?.(value)) ?? { done: true as const, value }
+            } finally {
+              if (!started) await release()
+              cleanup()
+            }
+          },
+          async throw(error?: unknown) {
+            try {
+              return (await inner.throw?.(error)) ?? Promise.reject(error)
+            } finally {
+              if (!started) await release()
+              cleanup()
+            }
+          },
         }
-        if (!started) await release()
-      } catch (error) {
-        if (!started) await release()
-        throw error
-      } finally {
-        signal.removeEventListener("abort", releaseOnAbort)
-      }
-    })()
+      },
+    }
 
     return new Proxy(output, {
       get(target, prop, receiver) {

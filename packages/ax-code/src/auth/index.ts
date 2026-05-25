@@ -191,6 +191,16 @@ function sleepUnref(ms: number) {
 
 const fail = (message: string) => (cause: unknown) => new Auth.AuthError({ message, cause })
 
+async function invalidateProviderCacheAfterAuthChange() {
+  try {
+    const { Provider } = await import("../provider/provider")
+    await Provider.invalidate()
+  } catch {
+    // Auth is also used before an Instance context exists. In that case
+    // there is no provider cache to invalidate.
+  }
+}
+
 export namespace Auth {
   export class Oauth extends Schema.Class<Oauth>("OAuth")({
     type: Schema.Literal("oauth"),
@@ -390,10 +400,12 @@ export namespace Auth {
   }
 
   export async function set(key: string, info: Info) {
-    return runPromise((service) => service.set(key, info))
+    await runPromise((service) => service.set(key, info))
+    await invalidateProviderCacheAfterAuthChange()
   }
 
   export async function remove(key: string) {
-    return runPromise((service) => service.remove(key))
+    await runPromise((service) => service.remove(key))
+    await invalidateProviderCacheAfterAuthChange()
   }
 }

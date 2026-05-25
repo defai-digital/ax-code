@@ -12,6 +12,7 @@ import { Config } from "../../config/config"
 import { Global } from "../../global"
 import { Plugin } from "../../plugin"
 import { Instance } from "../../project/instance"
+import { Provider } from "../../provider/provider"
 import type { Hooks } from "@ax-code/plugin"
 import { Process } from "../../util/process"
 import { text } from "node:stream/consumers"
@@ -19,6 +20,16 @@ import { Ssrf } from "../../util/ssrf"
 import { toErrorMessage } from "../../util/error-message"
 
 type PluginAuth = NonNullable<Hooks["auth"]>
+
+async function setProviderAuth(provider: string, info: Auth.Info) {
+  await Auth.set(provider, info)
+  await Provider.invalidate().catch(() => {})
+}
+
+async function removeProviderAuth(provider: string) {
+  await Auth.remove(provider)
+  await Provider.invalidate().catch(() => {})
+}
 
 async function handlePluginAuth(plugin: { auth: PluginAuth }, provider: string, methodName?: string): Promise<boolean> {
   let index = 0
@@ -95,7 +106,7 @@ async function handlePluginAuth(plugin: { auth: PluginAuth }, provider: string, 
       const saveProvider = result.provider ?? provider
       if ("refresh" in result) {
         const { type: _, provider: __, refresh, access, expires, ...extraFields } = result
-        await Auth.set(saveProvider, {
+        await setProviderAuth(saveProvider, {
           type: "oauth",
           refresh,
           access,
@@ -105,7 +116,7 @@ async function handlePluginAuth(plugin: { auth: PluginAuth }, provider: string, 
         return
       }
       if ("key" in result) {
-        await Auth.set(saveProvider, {
+        await setProviderAuth(saveProvider, {
           type: "api",
           key: result.key,
         })
@@ -162,7 +173,7 @@ async function handlePluginAuth(plugin: { auth: PluginAuth }, provider: string, 
       }
       if (result.type === "success") {
         const saveProvider = result.provider ?? provider
-        await Auth.set(saveProvider, {
+        await setProviderAuth(saveProvider, {
           type: "api",
           key: result.key,
         })
@@ -303,7 +314,7 @@ export const ProvidersLoginCommand = cmd({
         validate: (x) => (x && x.length > 0 ? undefined : "Required"),
       })
       if (prompts.isCancel(key)) throw new UI.CancelledError()
-      await Auth.set(provider, { type: "api", key })
+      await setProviderAuth(provider, { type: "api", key })
       prompts.outro("Done")
       return
     }
@@ -393,7 +404,7 @@ export const ProvidersLoginCommand = cmd({
             prompts.outro("Done")
             return
           }
-          await Auth.set(url, {
+          await setProviderAuth(url, {
             type: "wellknown",
             key: wellknown.auth.env,
             token: token.trim(),
@@ -515,8 +526,15 @@ export const ProvidersLoginCommand = cmd({
 
         const cliProvider = getCliProviderDefinition(provider)
         if (cliProvider) {
-          await probeCliProvider(provider)
-          await Auth.set(provider, {
+          const result = await probeCliProvider(provider).catch((error) => {
+            prompts.log.error(toErrorMessage(error))
+            return undefined
+          })
+          if (!result) {
+            prompts.outro("Done")
+            return
+          }
+          await setProviderAuth(provider, {
             type: "api",
             key: "cli",
           })
@@ -540,7 +558,7 @@ export const ProvidersLoginCommand = cmd({
           validate: (x) => (x && x.length > 0 ? undefined : "Required"),
         })
         if (prompts.isCancel(key)) throw new UI.CancelledError()
-        await Auth.set(provider, {
+        await setProviderAuth(provider, {
           type: "api",
           key,
         })
@@ -552,9 +570,20 @@ export const ProvidersLoginCommand = cmd({
 })
 
 export const ProvidersLogoutCommand = cmd({
-  command: "logout",
+  command: "logout [provider]",
   describe: "log out from a configured provider",
-  async handler(_args) {
+  builder: (yargs) =>
+    yargs
+      .positional("provider", {
+        describe: "provider id to log out from",
+        type: "string",
+      })
+      .option("provider", {
+        alias: ["p"],
+        describe: "provider id to log out from",
+        type: "string",
+      }),
+  async handler(args) {
     UI.empty()
     const credentials = await Auth.all().then((x) => Object.entries(x))
     prompts.intro("Remove credential")
@@ -563,15 +592,33 @@ export const ProvidersLogoutCommand = cmd({
       return
     }
     const database = await ModelsDev.get()
-    const providerID = await prompts.select({
-      message: "Select provider",
-      options: credentials.map(([key, value]) => ({
-        label: (database[key]?.name || key) + UI.Style.TEXT_DIM + " (" + value.type + ")",
-        value: key,
-      })),
-    })
-    if (prompts.isCancel(providerID)) throw new UI.CancelledError()
-    await Auth.remove(providerID)
+    const requestedProvider = args.provider
+    let providerID: string
+    if (requestedProvider) {
+      const match = credentials.find(([key]) => key === requestedProvider)
+      if (!match) {
+        prompts.log.error(`No credential found for ${requestedProvider}`)
+        return
+      }
+      providerID = match[0]
+    } else {
+      if (!process.stdin.isTTY) {
+        prompts.log.error(
+          "Provider is required in non-interactive mode. Use `ax-code providers logout --provider <id>`.",
+        )
+        return
+      }
+      const selected = await prompts.select({
+        message: "Select provider",
+        options: credentials.map(([key, value]) => ({
+          label: (database[key]?.name || key) + UI.Style.TEXT_DIM + " (" + value.type + ")",
+          value: key,
+        })),
+      })
+      if (prompts.isCancel(selected)) throw new UI.CancelledError()
+      providerID = selected
+    }
+    await removeProviderAuth(providerID)
     prompts.outro("Logout successful")
   },
 })

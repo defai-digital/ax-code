@@ -186,4 +186,14 @@ describe("control-plane/sse", () => {
       "SSE buffer exceeded maximum size",
     )
   })
+
+  test("checks combined SSE buffer size before appending a chunk", async () => {
+    const stop = new AbortController()
+    const payload = "x".repeat(1024 * 1024)
+    const chunk = "y".repeat(65)
+
+    await expect(parseSSE(stream([payload, chunk]), stop.signal, () => undefined)).rejects.toThrow(
+      "SSE buffer exceeded maximum size",
+    )
+  })
 })

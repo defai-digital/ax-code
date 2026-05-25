@@ -13,6 +13,7 @@ dist
 dist-source
 ts-dist
 .turbo
+.ruff_cache
 **/.serena
 .serena/
 /result

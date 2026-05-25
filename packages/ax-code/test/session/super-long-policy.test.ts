@@ -116,14 +116,23 @@ describe("SuperLongPolicy.duration", () => {
     })
   })
 
-  test("normalizes invalid fallback durations", () => {
-    expect(SuperLongPolicy.duration(Number.NaN, Number.NaN)).toEqual({
+  test("normalizes invalid fallback durations when no duration is requested", () => {
+    expect(SuperLongPolicy.duration(undefined, Number.NaN)).toEqual({
       ok: true,
       durationMs: SEVENTY_TWO_HOURS_MS,
     })
+  })
+
+  test("rejects invalid requested durations", () => {
     expect(SuperLongPolicy.duration(-1, SEVENTY_TWO_HOURS_MS + 1)).toEqual({
-      ok: true,
-      durationMs: SEVENTY_TWO_HOURS_MS,
+      ok: false,
+      reason: "invalid_duration",
+      requestedDurationMs: -1,
+    })
+    expect(SuperLongPolicy.duration(0)).toEqual({
+      ok: false,
+      reason: "invalid_duration",
+      requestedDurationMs: 0,
     })
   })
 })

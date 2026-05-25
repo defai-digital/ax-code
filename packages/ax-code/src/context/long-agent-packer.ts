@@ -128,7 +128,7 @@ export namespace LongAgentContextPacker {
     if (input.benchmarkNotes) tier3.push(makeEntry(3, "benchmark-notes", input.benchmarkNotes))
     tryAddAll(3, tier3)
 
-    const totalTokens = approxTokens(entries.map((e) => e.content).join(""))
+    const totalTokens = approxTokens(entries.map((e) => e.content).join("\n\n"))
     const droppedTiers = [...dropped].sort() as Tier[]
 
     const tierCounts = [0, 1, 2, 3].map((t) => entries.filter((e) => e.tier === t).length)

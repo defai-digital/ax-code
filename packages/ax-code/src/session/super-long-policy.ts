@@ -17,10 +17,12 @@ export namespace SuperLongPolicy {
 
   export type DurationDecision =
     | { ok: true; durationMs: number }
+    | { ok: false; reason: "invalid_duration"; requestedDurationMs: number }
     | { ok: false; reason: "duration_exceeds_ceiling"; maxDurationMs: number; requestedDurationMs: number }
 
   export type DeadlineDecision =
     | { ok: true; expired: boolean; elapsedMs: number; durationMs: number }
+    | { ok: false; reason: "invalid_duration"; requestedDurationMs: number }
     | { ok: false; reason: "duration_exceeds_ceiling"; maxDurationMs: number; requestedDurationMs: number }
 
   export type DeadlineStopDecision =
@@ -104,7 +106,11 @@ export namespace SuperLongPolicy {
     const fallbackDurationMs = normalizeDurationFallback(fallbackMs)
     const durationMs = requestedDurationMs ?? fallbackDurationMs
     if (!Number.isFinite(durationMs) || durationMs <= 0) {
-      return { ok: true, durationMs: fallbackDurationMs }
+      return {
+        ok: false,
+        reason: "invalid_duration",
+        requestedDurationMs: durationMs,
+      }
     }
     if (durationMs > MAX_DURATION_MS) {
       return {
@@ -153,15 +159,24 @@ export namespace SuperLongPolicy {
         action: "stop",
         reason: "step_limit",
         message:
-          `Super-Long mode stopped because the requested runtime ceiling exceeds the hard 72 hour limit. ` +
-          `Reduce the requested duration and resume the session.`,
+          input.deadline.reason === "invalid_duration"
+            ? `Super-Long mode stopped because the requested runtime duration is invalid. ` +
+              `Use a positive finite duration and resume the session.`
+            : `Super-Long mode stopped because the requested runtime ceiling exceeds the hard 72 hour limit. ` +
+              `Reduce the requested duration and resume the session.`,
         logMessage: "super-long deadline rejected",
         status: "error",
         errorCode: "SUPER_LONG_DURATION_EXCEEDS_CEILING",
-        details: {
-          requestedDurationMs: input.deadline.requestedDurationMs,
-          maxDurationMs: input.deadline.maxDurationMs,
-        },
+        details:
+          input.deadline.reason === "invalid_duration"
+            ? {
+                requestedDurationMs: input.deadline.requestedDurationMs,
+                maxDurationMs: MAX_DURATION_MS,
+              }
+            : {
+                requestedDurationMs: input.deadline.requestedDurationMs,
+                maxDurationMs: input.deadline.maxDurationMs,
+              },
       }
     }
 
@@ -220,7 +235,9 @@ export namespace SuperLongPolicy {
   function normalizePacingPolicy(policy: PacingPolicy): PacingPolicy {
     return {
       windowMs: positiveFinite(policy.windowMs) ? policy.windowMs : DEFAULT_PACING.windowMs,
-      maxRequests: positiveFinite(policy.maxRequests) ? Math.max(1, Math.floor(policy.maxRequests)) : DEFAULT_PACING.maxRequests,
+      maxRequests: positiveFinite(policy.maxRequests)
+        ? Math.max(1, Math.floor(policy.maxRequests))
+        : DEFAULT_PACING.maxRequests,
       minDelayMs: nonNegativeFinite(policy.minDelayMs) ? policy.minDelayMs : DEFAULT_PACING.minDelayMs,
     }
   }
