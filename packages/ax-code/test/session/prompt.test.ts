@@ -9,6 +9,7 @@ import { ModelID, ProviderID } from "../../src/provider/schema"
 import { Session } from "../../src/session"
 import { MessageV2 } from "../../src/session/message-v2"
 import { SessionPrompt } from "../../src/session/prompt"
+import { autonomousDecisionLedgerReminder } from "../../src/session/prompt-autonomous-ledger"
 import { resolvePromptParts } from "../../src/session/prompt-helpers"
 import { isolationRetryState } from "../../src/session/prompt-tools"
 import { EventQuery } from "../../src/replay/query"
@@ -61,7 +62,7 @@ describe("session.prompt isolation retry state", () => {
 
 describe("session.prompt autonomous decision ledger", () => {
   test("builds a prompt-safe session ledger from question tool metadata", () => {
-    const result = SessionPrompt.autonomousDecisionLedgerReminder([
+    const result = autonomousDecisionLedgerReminder([
       {
         info: { id: "msg_assistant", sessionID: "ses_test", role: "assistant" },
         parts: [
@@ -104,7 +105,7 @@ describe("session.prompt autonomous decision ledger", () => {
   })
 
   test("ignores completed question parts without metadata", () => {
-    const result = SessionPrompt.autonomousDecisionLedgerReminder([
+    const result = autonomousDecisionLedgerReminder([
       {
         info: { id: "msg_assistant", sessionID: "ses_test", role: "assistant" },
         parts: [

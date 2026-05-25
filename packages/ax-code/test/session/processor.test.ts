@@ -8,6 +8,7 @@ import { Session } from "../../src/session"
 import { LLM } from "../../src/session/llm"
 import { SessionProcessor } from "../../src/session/processor"
 import { MessageV2 } from "../../src/session/message-v2"
+import { providerFallbackSwitchState } from "../../src/session/prompt-helpers"
 import { SessionRetry } from "../../src/session/retry"
 import { MessageID } from "../../src/session/schema"
 import { tmpdir } from "../fixture/fixture"
@@ -129,9 +130,15 @@ describe("session.processor", () => {
 
   test("provider fallback only partially resets consecutive error budget", async () => {
     const prompt = await Bun.file(path.join(import.meta.dir, "../../src/session/prompt.ts")).text()
-    const helpers = await Bun.file(path.join(import.meta.dir, "../../src/session/prompt-helpers.ts")).text()
     expect(prompt).toContain("consecutiveErrors = fallbackSwitch.nextConsecutiveErrors")
-    expect(helpers).toContain("nextConsecutiveErrors: Math.floor(input.consecutiveErrors / 2)")
+    expect(
+      providerFallbackSwitchState({
+        current: { providerID: "current" as any, modelID: "model-a" as any },
+        fallback: { providerID: "fallback" as any, modelID: "model-b" as any },
+        errorMessage: "rate limited",
+        consecutiveErrors: 5,
+      }).nextConsecutiveErrors,
+    ).toBe(2)
   })
 
   test("successful fallback step returns later loops to the original model", async () => {
