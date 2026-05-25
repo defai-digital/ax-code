@@ -1,3 +1,5 @@
+import { parseJsonPayload } from "./json-value"
+
 export namespace Rpc {
   type SerializedError = {
     name?: string
@@ -36,13 +38,9 @@ export namespace Rpc {
     return value as WireMessage
   }
 
-  function parseWireMessage(data: string): WireMessage | undefined {
-    let parsed: unknown
-    try {
-      parsed = JSON.parse(data)
-    } catch {
-      return undefined
-    }
+  export function parseWireMessage(data: string): WireMessage | undefined {
+    const parsed = parseJsonPayload(data)
+    if (parsed === undefined) return undefined
     return decodeWireMessage(parsed)
   }
 

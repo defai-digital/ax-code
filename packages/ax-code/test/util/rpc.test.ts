@@ -52,6 +52,16 @@ describe("Rpc", () => {
     expect(Rpc.decodeWireMessage("not an object")).toBeUndefined()
   })
 
+  test("parseWireMessage parses JSON object messages before decoding", () => {
+    expect(Rpc.parseWireMessage(`  ${JSON.stringify({ type: "rpc.request", id: 1 })}\n`)).toEqual({
+      type: "rpc.request",
+      id: 1,
+    })
+    expect(Rpc.parseWireMessage("{not json")).toBeUndefined()
+    expect(Rpc.parseWireMessage("")).toBeUndefined()
+    expect(Rpc.parseWireMessage("[]")).toBeUndefined()
+  })
+
   test("returns successful handler results", async () => {
     const pair = createRpcPair()
     try {
