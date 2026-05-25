@@ -22,6 +22,7 @@ import { runtimeMode } from "@/installation/runtime-mode"
 import { spawn } from "node:child_process"
 import { flushTuiStdout } from "./terminal-cleanup"
 import { parseIntegerEnv } from "./util/env"
+import { parseTuiJsonPayload } from "./util/json"
 
 declare global {
   const AX_CODE_WORKER_PATH: string
@@ -98,12 +99,7 @@ function backendProcessCommand() {
 }
 
 function isBackendProtocolMessage(line: string) {
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(line)
-  } catch {
-    return false
-  }
+  const parsed = parseTuiJsonPayload(line)
   if (!parsed || typeof parsed !== "object") return false
   const type = (parsed as { type?: unknown }).type
   return type === "rpc.result" || type === "rpc.error" || type === "rpc.event"
