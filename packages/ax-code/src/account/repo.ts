@@ -6,18 +6,14 @@ import { encrypt, isEncrypted, decrypt, type EncryptedValue } from "@/auth/encry
 import { AccountStateTable, AccountTable } from "./account.sql"
 import { AccessToken, AccountID, AccountRepoError, Info, OrgID, RefreshToken } from "./schema"
 import { Log } from "@/util/log"
+import { parseJsonRecord } from "@/util/json-record"
 
 function encryptToken(token: string): string {
   return JSON.stringify(encrypt(token))
 }
 
 export function parseEncryptedToken(raw: string): EncryptedValue | undefined {
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(raw) as unknown
-  } catch {
-    return undefined
-  }
+  const parsed = parseJsonRecord(raw)
   return isEncrypted(parsed) ? parsed : undefined
 }
 

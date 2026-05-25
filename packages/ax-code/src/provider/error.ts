@@ -2,6 +2,7 @@ import { APICallError } from "ai"
 import { STATUS_CODES } from "http"
 import { iife } from "@/util/iife"
 import { isRecord } from "@/util/record"
+import { parseJsonRecord as parseJsonRecordUtil } from "@/util/json-record"
 import type { ProviderID } from "./schema"
 
 export namespace ProviderError {
@@ -72,19 +73,7 @@ export namespace ProviderError {
   }
 
   export function parseJsonRecord(input: unknown): Record<string, unknown> | undefined {
-    if (typeof input === "string") {
-      try {
-        const result = JSON.parse(input)
-        if (isRecord(result)) return result
-        return undefined
-      } catch {
-        return undefined
-      }
-    }
-    if (isRecord(input)) {
-      return input
-    }
-    return undefined
+    return parseJsonRecordUtil(input)
   }
 
   export function responseBodyErrorMessage(responseBody: string): string | undefined {
