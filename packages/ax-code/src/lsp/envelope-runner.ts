@@ -1,4 +1,5 @@
 import { Log } from "../util/log"
+import { toErrorMessage } from "../util/error-message"
 import type { LSPClient } from "./client"
 import { participantStatus, type SemanticEnvelope } from "./envelope"
 import * as LSPPerf from "./perf"
@@ -93,7 +94,7 @@ async function runWithEnvelopeUncollapsed<TClient, TPayload>(input: {
           failures++
           log.warn("LSP budget acquire failed in runWithEnvelope", {
             serverID: client.serverID,
-            err: err instanceof Error ? err.message : String(err),
+            err: toErrorMessage(err),
           })
           return undefined
         }

@@ -14,6 +14,7 @@
  */
 
 import { Log } from "../util/log"
+import { toErrorMessage } from "../util/error-message"
 
 const log = Log.create({ service: "dispatch" })
 
@@ -246,7 +247,7 @@ async function dispatchUntil(
             results[idx] = {
               agent: spec.agent,
               status: "failed",
-              error: err instanceof Error ? err.message : String(err),
+              error: toErrorMessage(err),
               filesModified: [],
               tokensUsed: 0,
               durationMs: 0,
@@ -328,7 +329,7 @@ async function runOne(
     const result: DispatchResult = {
       agent: spec.agent,
       status,
-      error: err instanceof Error ? err.message : String(err),
+      error: toErrorMessage(err),
       filesModified: [],
       tokensUsed: 0,
       durationMs: Date.now() - start,

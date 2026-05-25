@@ -1,5 +1,6 @@
 import z from "zod"
 import { Log } from "../util/log"
+import { toErrorMessage } from "../util/error-message"
 import { Instance } from "../project/instance"
 import { BusEvent } from "./bus-event"
 import { GlobalBus } from "./global"
@@ -103,7 +104,7 @@ export namespace Bus {
     void Promise.all(pending).catch((err) => {
       log.warn("subscriber failed during detached publish", {
         event: def.type,
-        error: err instanceof Error ? err.message : String(err),
+        error: toErrorMessage(err),
         stack: err instanceof Error ? err.stack : undefined,
       })
     })
