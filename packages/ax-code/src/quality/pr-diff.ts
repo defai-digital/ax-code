@@ -91,6 +91,29 @@ const PrViewSchema = z.object({
   headRefName: z.string(),
   headRefOid: z.string(),
 })
+type PrView = z.infer<typeof PrViewSchema>
+
+export type PrViewDecodeResult =
+  | {
+      ok: true
+      data: PrView
+    }
+  | {
+      ok: false
+      error: string
+    }
+
+export function decodePrViewJson(stdout: string): PrViewDecodeResult {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(stdout)
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) }
+  }
+
+  const decoded = PrViewSchema.safeParse(parsed)
+  return decoded.success ? { ok: true, data: decoded.data } : { ok: false, error: decoded.error.message }
+}
 
 export async function fetchPrDiff(prRef: string, cwd: string): Promise<PrDiff> {
   await ensureGhAvailable(cwd)
@@ -104,16 +127,15 @@ export async function fetchPrDiff(prRef: string, cwd: string): Promise<PrDiff> {
     })
   }
 
-  let parsed: z.infer<typeof PrViewSchema>
-  try {
-    parsed = PrViewSchema.parse(JSON.parse(view.stdout))
-  } catch (err) {
+  const decoded = decodePrViewJson(view.stdout)
+  if (!decoded.ok) {
     throw new GhFetchError({
       command: `gh pr view ${prRef}`,
       exitCode: 0,
-      stderr: `gh returned 0 but the response did not match the expected shape: ${err instanceof Error ? err.message : String(err)}`,
+      stderr: `gh returned 0 but the response did not match the expected shape: ${decoded.error}`,
     })
   }
+  const parsed = decoded.data
 
   const diff = await runGh(["pr", "diff", prRef], cwd)
   if (diff.code !== 0) {
