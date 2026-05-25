@@ -89,6 +89,16 @@ export namespace Config {
         errors: string[]
       }
 
+  export function decodePermissionEnvValue(value: unknown): PermissionEnvParseResult {
+    const validated = ConfigSchema.Permission.safeParse(value)
+    if (validated.success) return { ok: true, permission: validated.data }
+    return {
+      ok: false,
+      reason: "schema",
+      errors: validated.error.issues.map((issue) => issue.message),
+    }
+  }
+
   export function parsePermissionEnv(value: string): PermissionEnvParseResult {
     let parsed: unknown
     try {
@@ -97,13 +107,7 @@ export namespace Config {
       return { ok: false, reason: "json" }
     }
 
-    const validated = ConfigSchema.Permission.safeParse(parsed)
-    if (validated.success) return { ok: true, permission: validated.data }
-    return {
-      ok: false,
-      reason: "schema",
-      errors: validated.error.issues.map((issue) => issue.message),
-    }
+    return decodePermissionEnvValue(parsed)
   }
 
   // Managed settings directory for enterprise deployments (highest priority, admin-controlled)
