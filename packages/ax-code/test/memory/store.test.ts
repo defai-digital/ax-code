@@ -20,6 +20,17 @@ describe("memory.store cache", () => {
     store._resetReadCache()
   })
 
+  test("parseProjectMemoryText decodes valid memory JSON", () => {
+    expect(store.parseProjectMemoryText(JSON.stringify(sampleMemory({ contentHash: "parsed" }))).contentHash).toBe(
+      "parsed",
+    )
+  })
+
+  test("parseProjectMemoryText reports JSON and schema failures separately", () => {
+    expect(() => store.parseProjectMemoryText('{"truncated":')).toThrow(/invalid memory JSON/)
+    expect(() => store.parseProjectMemoryText(JSON.stringify({ version: 1 }))).toThrow(/invalid memory schema/)
+  })
+
   test("load reflects save() updates (cache invalidated on save)", async () => {
     await using tmp = await tmpdir()
 
