@@ -1,4 +1,5 @@
 import { parsePromptInfo, type PromptInfo } from "../component/prompt/prompt-info"
+import z from "zod"
 
 export type HomeRoute = {
   type: "home"
@@ -14,25 +15,45 @@ export type SessionRoute = {
 
 export type Route = HomeRoute | SessionRoute
 
+const HomeRoutePayload = z
+  .object({
+    type: z.literal("home"),
+    initialPrompt: z.unknown().optional(),
+    workspaceID: z.string().optional(),
+  })
+  .passthrough()
+
+const SessionRoutePayload = z
+  .object({
+    type: z.literal("session"),
+    sessionID: z.string(),
+    initialPrompt: z.unknown().optional(),
+  })
+  .passthrough()
+
+const InitialRoutePayload = z.discriminatedUnion("type", [HomeRoutePayload, SessionRoutePayload])
+
+export function decodeInitialRoutePayload(value: unknown): Route {
+  const parsed = InitialRoutePayload.safeParse(value)
+  if (!parsed.success) return { type: "home" }
+  if (parsed.data.type === "home") {
+    return {
+      type: "home",
+      initialPrompt: parsePromptInfo(parsed.data.initialPrompt),
+      workspaceID: parsed.data.workspaceID,
+    }
+  }
+  return {
+    type: "session",
+    sessionID: parsed.data.sessionID,
+    initialPrompt: parsePromptInfo(parsed.data.initialPrompt),
+  }
+}
+
 export function parseInitialRoutePayload(raw?: string): Route {
   if (!raw) return { type: "home" }
   try {
-    const parsed = JSON.parse(raw)
-    if (!parsed || typeof parsed !== "object") return { type: "home" }
-    if (parsed.type === "home") {
-      return {
-        type: "home",
-        initialPrompt: parsePromptInfo(parsed.initialPrompt),
-        workspaceID: typeof parsed.workspaceID === "string" ? parsed.workspaceID : undefined,
-      }
-    }
-    if (parsed.type === "session" && typeof parsed.sessionID === "string") {
-      return {
-        type: "session",
-        sessionID: parsed.sessionID,
-        initialPrompt: parsePromptInfo(parsed.initialPrompt),
-      }
-    }
+    return decodeInitialRoutePayload(JSON.parse(raw))
   } catch {}
   return { type: "home" }
 }
