@@ -1,21 +1,16 @@
 import { type Tool as AITool, tool, jsonSchema } from "ai"
-import { Agent } from "../agent/agent"
-import { Command } from "../command"
 import { Instance } from "../project/instance"
 import { MessageID, PartID, SessionID } from "./schema"
 import { MessageV2 } from "./message-v2"
 import { Provider } from "../provider/provider"
 import { ModelID, ProviderID } from "../provider/schema"
-import { commandTemplateText } from "./prompt-command-template"
-import { commandModel, commandUser } from "./prompt-command-selection"
-import { commandParts } from "./prompt-command-parts"
-import { agentInfo, modelInfo } from "./prompt-agent-model-info"
 export { commandTemplateText } from "./prompt-command-template"
 export { commandModel, commandUser, lastModel } from "./prompt-command-selection"
 export { commandParts } from "./prompt-command-parts"
 export { resolvePromptParts } from "./prompt-reference-parts"
 export { appendShellOutputChunk, shellArgs, shellOutputMetadata, type ShellOutputState } from "./prompt-shell-runtime"
 export { agentInfo, modelInfo } from "./prompt-agent-model-info"
+export { commandSetup } from "./prompt-command-setup"
 export { ensureTitle, titleContextMessages } from "./prompt-title"
 export { systemPrompt } from "./prompt-system"
 export { loopMessages, remindQueuedMessages, scanLoopMessages } from "./prompt-loop-messages"
@@ -132,72 +127,6 @@ export function zeroTokenUsage(input?: { total?: number }): AssistantTokens {
   return {
     total: input.total,
     ...tokens,
-  }
-}
-
-export async function commandSetup(input: {
-  command: {
-    agent?: string
-    model?: string
-    template: string | Promise<string>
-    description?: string
-    subtask?: boolean
-  }
-  name: string
-  arguments: string
-  sessionID: SessionID
-  agent?: string
-  model?: string
-  parts?: unknown[]
-}) {
-  const agentName = input.command.agent ?? input.agent ?? (await Agent.defaultAgent())
-  const template = await commandTemplateText({
-    template: await input.command.template,
-    arguments: input.arguments,
-  })
-
-  const taskModel = await commandModel({
-    command: input.command,
-    model: input.model,
-    sessionID: input.sessionID,
-  })
-  await modelInfo({
-    sessionID: input.sessionID,
-    providerID: taskModel.providerID,
-    modelID: taskModel.modelID,
-  })
-
-  const agent = await agentInfo({
-    sessionID: input.sessionID,
-    name: agentName,
-  })
-
-  const result = await commandParts({
-    agent,
-    command: input.command,
-    name: input.name,
-    model: taskModel,
-    template,
-    parts: input.parts,
-  })
-
-  const user = await commandUser({
-    subtask: result.subtask,
-    inputAgent: input.agent,
-    inputModel: input.model,
-    agentName,
-    taskModel,
-    sessionID: input.sessionID,
-  })
-
-  return {
-    agent,
-    agentName,
-    model: taskModel,
-    parts: result.parts,
-    subtask: result.subtask,
-    template,
-    user,
   }
 }
 
