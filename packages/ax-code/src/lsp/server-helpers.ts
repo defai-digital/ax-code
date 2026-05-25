@@ -104,13 +104,24 @@ export const toolBin = async (input: {
     title: input.title,
   }))
 
-export const spawnInfo = (bin: string, root: string, args: string[] = [], initialization?: Record<string, any>) => ({
-  process: spawn(bin, args, {
-    cwd: root,
-    env: { ...Env.sanitize() },
-  }),
-  initialization,
-})
+export const spawnInfo = (
+  bin: string,
+  root: string,
+  args: string[] = [],
+  initialization?: Record<string, any>,
+): Handle => {
+  const handle = {
+    process: spawn(bin, args, {
+      cwd: root,
+      env: { ...Env.sanitize() },
+    }),
+  }
+  if (!initialization) return handle
+  return {
+    ...handle,
+    initialization,
+  }
+}
 
 export const toolServer = async (
   root: string,
