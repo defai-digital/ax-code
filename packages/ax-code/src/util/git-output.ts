@@ -10,10 +10,14 @@ export interface NumstatEntry {
   binary: boolean
 }
 
+export function decodeGitQuotedPathLiteral(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined
+}
+
 export function parseGitQuotedPathLiteral(file: string): string | undefined {
   try {
     const parsed: unknown = JSON.parse(file)
-    return typeof parsed === "string" ? parsed : undefined
+    return decodeGitQuotedPathLiteral(parsed)
   } catch {
     return undefined
   }
