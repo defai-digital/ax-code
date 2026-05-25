@@ -1,5 +1,6 @@
 import type { Argv } from "yargs"
 import { Instance } from "../../project/instance"
+import { providerModelKey } from "../../provider/model-key"
 import { Provider } from "../../provider/provider"
 import { ProviderID } from "../../provider/schema"
 import { ModelsDev } from "../../provider/models"
@@ -40,7 +41,7 @@ export const ModelsCommand = cmd({
           const provider = providers[providerID]
           const sortedModels = Object.entries(provider.models).sort(([a], [b]) => a.localeCompare(b))
           for (const [modelID, model] of sortedModels) {
-            process.stdout.write(`${providerID}/${modelID}`)
+            process.stdout.write(providerModelKey({ providerID, modelID }))
             process.stdout.write(EOL)
             if (verbose) {
               process.stdout.write(JSON.stringify(model, null, 2))
