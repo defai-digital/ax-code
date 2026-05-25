@@ -131,6 +131,9 @@ type ShellOutputState = {
   outputTruncated: boolean
 }
 
+type AssistantPath = MessageV2.Assistant["path"]
+type AssistantTokens = MessageV2.Assistant["tokens"]
+
 type ProcessorCompactionTriggerReason = Extract<
   SessionCompaction.TriggerReason,
   "provider_usage" | "context_overflow_error"
@@ -404,6 +407,27 @@ export function appendShellOutputChunk(
     output: output + "\n\n[output truncated at 10MB]",
     outputBytes,
     outputTruncated: true,
+  }
+}
+
+export function sessionAssistantPath(input?: { directory?: string; worktree?: string }): AssistantPath {
+  return {
+    cwd: input?.directory ?? Instance.directory,
+    root: input?.worktree ?? Instance.worktree,
+  }
+}
+
+export function zeroTokenUsage(input?: { total?: number }): AssistantTokens {
+  const tokens = {
+    input: 0,
+    output: 0,
+    reasoning: 0,
+    cache: { read: 0, write: 0 },
+  }
+  if (input?.total === undefined) return tokens
+  return {
+    total: input.total,
+    ...tokens,
   }
 }
 

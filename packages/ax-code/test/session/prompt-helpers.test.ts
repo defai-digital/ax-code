@@ -23,11 +23,13 @@ import {
   readToolCallText,
   remindQueuedMessages,
   scanLoopMessages,
+  sessionAssistantPath,
   shellArgs,
   shouldScheduleUsageCompaction,
   syntheticTextPart,
   systemPrompt,
   titleContextMessages,
+  zeroTokenUsage,
 } from "../../src/session/prompt-helpers"
 
 describe("session.prompt helpers", () => {
@@ -132,6 +134,29 @@ describe("session.prompt helpers", () => {
     })
 
     expect(appendShellOutputChunk(state, "ignored", 10).output).toBe(state.output)
+  })
+
+  test("builds assistant path from explicit runtime boundaries", () => {
+    expect(sessionAssistantPath({ directory: "/tmp/project", worktree: "/tmp" })).toEqual({
+      cwd: "/tmp/project",
+      root: "/tmp",
+    })
+  })
+
+  test("builds zero token usage with optional total", () => {
+    expect(zeroTokenUsage()).toEqual({
+      input: 0,
+      output: 0,
+      reasoning: 0,
+      cache: { read: 0, write: 0 },
+    })
+    expect(zeroTokenUsage({ total: 0 })).toEqual({
+      total: 0,
+      input: 0,
+      output: 0,
+      reasoning: 0,
+      cache: { read: 0, write: 0 },
+    })
   })
 
   test("splits quoted and image arguments", async () => {
