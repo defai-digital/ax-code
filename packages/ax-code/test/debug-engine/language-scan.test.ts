@@ -406,6 +406,10 @@ describe("language-scan", () => {
       expect(filesScanned).toBe(1)
       expect(findings[0].code).toBe("F401")
     })
+
+    test("parseRuffOutput reports malformed JSON output", () => {
+      expect(() => parseRuffOutput("{not json")).toThrow(SyntaxError)
+    })
   })
 
   describe("detectMypy", () => {
@@ -563,6 +567,10 @@ describe("language-scan", () => {
       expect(findings).toHaveLength(1)
       expect(findings[0].file).toBe("src/main.py")
       expect(findings[0].message).toBe("bad type")
+    })
+
+    test("parseMypyOutput reports malformed JSON output", () => {
+      expect(() => parseMypyOutput("{not json")).toThrow(SyntaxError)
     })
   })
 })
