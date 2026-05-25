@@ -207,6 +207,24 @@ describe("Policy.loadQaPolicy", () => {
 })
 
 describe("Policy.loadReviewRules / loadQaRules", () => {
+  test("decodes raw rules JSON separately from file discovery", () => {
+    const decoded = Policy.decodeRulesJson(JSON.stringify({ severity_floor: "HIGH" }))
+    expect(decoded).toEqual({
+      ok: true,
+      data: { severity_floor: "HIGH" },
+    })
+
+    expect(Policy.decodeRulesJson("{ not valid json")).toMatchObject({
+      ok: false,
+      reason: "json",
+    })
+    expect(Policy.decodeRulesJson(JSON.stringify({ unknown_field: "x" }))).toMatchObject({
+      ok: false,
+      reason: "schema",
+      issues: 1,
+    })
+  })
+
   test("returns undefined when no rules file exists", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
