@@ -15,6 +15,7 @@
 import { generateObject } from "ai"
 import z from "zod"
 import { Config } from "@/config/config"
+import { providerModelKey } from "@/provider/model-key"
 import { Provider } from "@/provider/provider"
 import type { ModelID, ProviderID } from "@/provider/schema"
 import { Recorder } from "@/replay/recorder"
@@ -91,7 +92,7 @@ INFO = stylistic. Do not flag style-only issues unless they affect correctness.`
       const modelRef = explicit ?? (await configuredArchitectModel()) ?? (await Provider.defaultModel())
       const resolved = await Provider.getModel(modelRef.providerID, modelRef.modelID)
       const language = await Provider.getLanguage(resolved)
-      modelLabel = `${modelRef.providerID}/${modelRef.modelID}`
+      modelLabel = providerModelKey(modelRef)
       timer = setTimeout(() => abort.abort(), input.timeoutMs ?? 60_000)
       raw = await generateObject({
         model: language,
