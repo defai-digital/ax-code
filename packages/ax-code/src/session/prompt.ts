@@ -30,7 +30,6 @@ import { SessionGoal } from "./goal"
 import { Config } from "@/config/config"
 import { Isolation } from "@/isolation"
 import { SessionSummary } from "./summary"
-import { NamedError } from "@ax-code/util/error"
 import { fn } from "@/util/fn"
 import { SessionProcessor } from "./processor"
 import { SessionStatus } from "./status"
@@ -74,8 +73,8 @@ import {
 } from "./prompt-autonomous-decisions"
 import { insertReminders } from "./prompt-reminders"
 import { executeShellCommand } from "./prompt-shell-command"
-import { createStoppedAssistantTextResponse } from "./prompt-assistant-response"
 import { executePromptCommand } from "./prompt-command-execution"
+import { createSyntheticFailureAssistant, publishPromptFailure } from "./prompt-loop-failure"
 import { recordPromptSessionStart } from "./prompt-session-start"
 import { createAutonomousUserContinuation, createUserMessage } from "./prompt-user-message"
 import { permissionRulesetFromLegacyTools } from "./prompt-permission"
@@ -266,17 +265,6 @@ export namespace SessionPrompt {
     // Cache session history — only load from DB on first step, refresh on subsequent steps
     let cachedMsgs: MessageV2.WithParts[] | undefined
 
-    async function createSyntheticStopAssistant(input: { lastUser: MessageV2.User; message: string }) {
-      const result = await createStoppedAssistantTextResponse({
-        sessionID,
-        parent: input.lastUser,
-        text: input.message,
-        synthetic: true,
-        error: new NamedError.Unknown({ message: input.message }).toObject(),
-      })
-      return result.info
-    }
-
     async function continueAutonomousLoop({
       text,
       event,
@@ -439,7 +427,7 @@ export namespace SessionPrompt {
           ...superLongDeadlineStop.details,
         })
         if (!assistantRespondedAfterUser({ lastUserID: lastUser.id, lastAssistant })) {
-          await createSyntheticStopAssistant({ lastUser, message: superLongDeadlineStop.message })
+          await createSyntheticFailureAssistant({ sessionID, lastUser, message: superLongDeadlineStop.message })
           cachedMsgs = undefined
         }
         Session.publishError({
@@ -782,13 +770,6 @@ export namespace SessionPrompt {
         return undefined
       })
 
-      const publishAutonomousFailure = async (message: string) => {
-        const error = new NamedError.Unknown({ message }).toObject()
-        processor.message.error = error
-        await Session.updateMessage(processor.message)
-        Session.publishError({ sessionID, error })
-      }
-
       // In autonomous mode, when the model ends a turn cleanly but leaves todos
       // pending, inject a continuation user message and keep the loop running.
       // This is the runtime guarantee — complements the system-prompt reminder
@@ -843,7 +824,7 @@ export namespace SessionPrompt {
             maxAttempts: MAX_EMPTY_MODEL_TURN_RETRIES,
             pendingCount: pendingTodos.length,
           })
-          await publishAutonomousFailure(emptyTurnDecision.message)
+          await publishPromptFailure({ sessionID, assistant: processor.message, message: emptyTurnDecision.message })
           reason = emptyTurnDecision.reason
           break
         }
@@ -897,7 +878,7 @@ export namespace SessionPrompt {
               attempts: gateRetryDecision.attempts,
               maxAttempts: maxCompletionGateRetries,
             })
-            await publishAutonomousFailure(gateRetryDecision.message)
+            await publishPromptFailure({ sessionID, assistant: processor.message, message: gateRetryDecision.message })
             reason = gateRetryDecision.reason
             break
           }
@@ -1023,7 +1004,7 @@ export namespace SessionPrompt {
               maxAttempts: maxTodoRetries,
               maxSteps,
             })
-            await publishAutonomousFailure(todoContinuation.message)
+            await publishPromptFailure({ sessionID, assistant: processor.message, message: todoContinuation.message })
             reason = todoContinuation.reason
             break
           }
@@ -1037,7 +1018,7 @@ export namespace SessionPrompt {
               attempts: todoRetries,
               maxAttempts: maxTodoRetries,
             })
-            await publishAutonomousFailure(todoContinuation.message)
+            await publishPromptFailure({ sessionID, assistant: processor.message, message: todoContinuation.message })
             reason = todoContinuation.reason
             break
           }
