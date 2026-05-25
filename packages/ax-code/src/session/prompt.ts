@@ -8,13 +8,11 @@ import { Agent } from "../agent/agent"
 import { Provider } from "../provider/provider"
 import { ModelID, ProviderID } from "../provider/schema"
 import { SessionCompaction } from "./compaction"
-import { AgentControlEvents } from "../control-plane/agent-control-events"
 import { AutonomousCompletionGate } from "../control-plane/autonomous-completion-gate"
 import { Instance } from "../project/instance"
 import { defer } from "../util/defer"
 import { NotFoundError } from "@/storage/db"
 import { Flag } from "../flag/flag"
-import { Recorder } from "../replay/recorder"
 import { Todo } from "./todo"
 import { SessionGoal } from "./goal"
 import { Config } from "@/config/config"
@@ -35,6 +33,7 @@ import {
 import { resolvePromptLoopErrorTransition } from "./prompt-loop-errors"
 import { resolvePromptLoopAssistantExit } from "./prompt-loop-exit"
 import { handlePromptLoopGoalContinuation } from "./prompt-loop-goal"
+import { emitPromptLoopCompletionGateDecision } from "./prompt-loop-completion-gate"
 import { loopMessages, scanLoopMessages } from "./prompt-loop-messages"
 import { finishPromptLoopQueue } from "./prompt-loop-queue"
 import {
@@ -60,7 +59,6 @@ import {
 import { AutonomousContinuationPrompt } from "./prompt-autonomous-continuations"
 import {
   agentStepLimitContinuationDecision,
-  completionGateEventState,
   completionGateRetryDecision,
   emptyModelTurnDecision,
   isEmptyModelTurn,
@@ -559,27 +557,17 @@ export namespace SessionPrompt {
         const shouldRecoverEmptySubagentResult =
           completionGate.status === "blocked" && completionGate.reason === "empty_subagent_result"
 
-        if (modelFinished || shouldRecoverEmptySubagentResult) {
-          const gateEventState = completionGateEventState({
-            gate: completionGate,
-            todoRetries,
-            maxTodoRetries,
-            completionGateRetries,
-            maxCompletionGateRetries,
-          })
-          Recorder.emit(
-            AgentControlEvents.completionGateDecided({
-              sessionID,
-              messageID: processor.message.id,
-              stepIndex: step,
-              status: completionGate.status,
-              reason: gateEventState.reason,
-              message: gateEventState.message,
-              retryCount: gateEventState.retryCount,
-              maxRetries: gateEventState.maxRetries,
-            }),
-          )
-        }
+        emitPromptLoopCompletionGateDecision({
+          sessionID,
+          messageID: processor.message.id,
+          step,
+          modelFinished,
+          gate: completionGate,
+          todoRetries,
+          maxTodoRetries,
+          completionGateRetries,
+          maxCompletionGateRetries,
+        })
 
         const emptyTurnDecision = emptyModelTurnDecision({
           emptyModelTurn,
