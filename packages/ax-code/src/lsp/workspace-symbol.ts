@@ -4,6 +4,8 @@ import type { LSPClient } from "./client"
 import { Log } from "../util/log"
 import { withTimeout } from "../util/timeout"
 import { isMethodNotFound } from "./envelope-runner"
+import * as LSPPerf from "./perf"
+import type { ClientOptions, ClientSelection } from "./selection"
 
 const log = Log.create({ service: "lsp" })
 
@@ -20,6 +22,8 @@ export type SymbolQueryResult = {
   envelope: SymbolEnvelope
   ok: boolean
 }
+
+type SelectWorkspaceClients = (opts: ClientOptions) => Promise<ClientSelection>
 
 enum SymbolKind {
   Class = 5,
@@ -143,4 +147,44 @@ export async function queryClients(input: {
     },
     ok: failures === 0,
   }
+}
+
+export async function envelope(input: {
+  query: string
+  timeoutMs: number
+  limit: number
+  selectClients: SelectWorkspaceClients
+}): Promise<SymbolEnvelope> {
+  return LSPPerf.metered("workspaceSymbol", { query: input.query }, async () => {
+    const selectStarted = performance.now()
+    let selection: ClientSelection
+    try {
+      selection = await input.selectClients({ mode: "semantic", method: "workspaceSymbol" })
+    } catch (err) {
+      LSPPerf.finishPhase("workspaceSymbol.select", selectStarted, false)
+      throw err
+    }
+    const selectDurationMs = LSPPerf.finishPhase("workspaceSymbol.select", selectStarted, true)
+    if (selection.freshSpawnCount > 0) {
+      LSPPerf.recordSample("workspaceSymbol.select.spawned", selectDurationMs, true)
+    }
+
+    if (selection.clients.length === 0) return emptyEnvelope()
+
+    const rpcStarted = performance.now()
+    let result: SymbolQueryResult
+    try {
+      result = await queryClients({
+        clients: selection.clients,
+        query: input.query,
+        timeoutMs: input.timeoutMs,
+        limit: input.limit,
+      })
+      LSPPerf.finishPhase("workspaceSymbol.rpc", rpcStarted, result.ok)
+    } catch (err) {
+      LSPPerf.finishPhase("workspaceSymbol.rpc", rpcStarted, false)
+      throw err
+    }
+    return result.envelope
+  })
 }

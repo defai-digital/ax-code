@@ -3,7 +3,7 @@ import path from "path"
 import { Config } from "../../src/config/config"
 import { Instance } from "../../src/project/instance"
 import { LSP } from "../../src/lsp"
-import { completeness, dedupeAndLimit, isRelevant, queryClients } from "../../src/lsp/workspace-symbol"
+import { completeness, dedupeAndLimit, envelope, isRelevant, queryClients } from "../../src/lsp/workspace-symbol"
 import { tmpdir } from "../fixture/fixture"
 import { Log } from "../../src/util/log"
 
@@ -118,6 +118,40 @@ describe("LSP.workspaceSymbol", () => {
     expect(result.envelope.serverIDs).toEqual(["typescript"])
     expect(result.envelope.completeness).toBe("partial")
     expect(result.envelope.degraded).toBe(true)
+  })
+
+  test("workspace symbol envelope owns semantic selection and query orchestration", async () => {
+    const first = symbol({ name: "Thing", kind: 5, line: 1 })
+    let selectedOptions: unknown
+
+    const result = await envelope({
+      query: "Thing",
+      timeoutMs: 100,
+      limit: 10,
+      selectClients: async (opts) => {
+        selectedOptions = opts
+        return {
+          freshSpawnCount: 0,
+          clients: [
+            {
+              serverID: "typescript",
+              connection: {
+                sendRequest: async (method: string, params: unknown) => {
+                  expect(method).toBe("workspace/symbol")
+                  expect(params).toEqual({ query: "Thing" })
+                  return [first]
+                },
+              },
+            } as never,
+          ],
+        }
+      },
+    })
+
+    expect(selectedOptions).toEqual({ mode: "semantic", method: "workspaceSymbol" })
+    expect(result.symbols).toEqual([first])
+    expect(result.completeness).toBe("full")
+    expect(result.serverIDs).toEqual(["typescript"])
   })
 
   test("primes configured servers on a cold workspace query", async () => {
