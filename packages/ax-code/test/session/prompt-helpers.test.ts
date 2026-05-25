@@ -21,6 +21,7 @@ import {
   scanLoopMessages,
   shellArgs,
   shouldScheduleUsageCompaction,
+  syntheticTextPart,
   systemPrompt,
   titleContextMessages,
 } from "../../src/session/prompt-helpers"
@@ -58,6 +59,23 @@ describe("session.prompt helpers", () => {
     expect(result).toHaveLength(1)
     expect(result[0].content).toContain("[Attached image/png: screenshot.png]")
     expect(result[0].content).toContain("[Title context truncated]")
+  })
+
+  test("builds synthetic text parts with generated ids", () => {
+    const part = syntheticTextPart({
+      messageID: "msg_test" as any,
+      sessionID: "ses_test" as any,
+      text: "remember the plan",
+    })
+
+    expect(part).toMatchObject({
+      messageID: "msg_test",
+      sessionID: "ses_test",
+      type: "text",
+      text: "remember the plan",
+      synthetic: true,
+    })
+    expect(part.id).toStartWith("prt_")
   })
 
   test("splits quoted and image arguments", async () => {

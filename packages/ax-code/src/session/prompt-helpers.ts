@@ -8,7 +8,7 @@ import { Command } from "../command"
 import { Instance } from "../project/instance"
 import { ConfigMarkdown } from "../config/markdown"
 import { Session } from "."
-import { SessionID } from "./schema"
+import { MessageID, PartID, SessionID } from "./schema"
 import { MessageV2 } from "./message-v2"
 import { Provider } from "../provider/provider"
 import { ModelID, ProviderID } from "../provider/schema"
@@ -315,6 +315,21 @@ export function titleContextMessages(contextMessages: MessageV2.WithParts[]): Mo
   const content = truncateTitleContext(chunks.join("\n\n").trim())
   if (!content) return []
   return [{ role: "user", content }]
+}
+
+export function syntheticTextPart(input: {
+  messageID: MessageID
+  sessionID: SessionID
+  text: string
+}): MessageV2.TextPart {
+  return {
+    id: PartID.ascending(),
+    messageID: input.messageID,
+    sessionID: input.sessionID,
+    type: "text",
+    text: input.text,
+    synthetic: true,
+  }
 }
 
 function shellKey(shell: string, platform = process.platform) {
