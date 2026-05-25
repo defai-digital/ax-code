@@ -1,12 +1,19 @@
-import { test, expect, describe, afterEach } from "bun:test"
-import { resolveCliModel } from "../../../src/provider/cli/resolve"
-import * as fs from "fs/promises"
-import path from "path"
-import os from "os"
-
-const HOME = os.homedir()
+import { test, expect, describe } from "bun:test"
+import { parseCliSettingsJson, resolveCliModel } from "../../../src/provider/cli/resolve"
 
 describe("resolveCliModel", () => {
+  test("parseCliSettingsJson decodes object settings", () => {
+    expect(parseCliSettingsJson(JSON.stringify({ model: "claude-sonnet-4-6" }))).toEqual({
+      model: "claude-sonnet-4-6",
+    })
+  })
+
+  test("parseCliSettingsJson rejects invalid and non-object settings", () => {
+    expect(parseCliSettingsJson("{not json")).toBeNull()
+    expect(parseCliSettingsJson("[]")).toBeNull()
+    expect(parseCliSettingsJson('"claude-sonnet-4-6"')).toBeNull()
+  })
+
   test("returns default for claude-code when no config exists", async () => {
     const original = process.env.ANTHROPIC_MODEL
     delete process.env.ANTHROPIC_MODEL
