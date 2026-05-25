@@ -79,8 +79,10 @@ import {
   parseGoalArguments,
   readToolCallText,
   shouldScheduleUsageCompaction,
+  sessionAssistantPath,
   syntheticTextPart,
   systemPrompt as getSystemPrompt,
+  zeroTokenUsage,
   createStructuredOutputTool,
   lastModel,
   findFallbackModel,
@@ -456,16 +458,8 @@ export namespace SessionPrompt {
         mode: input.lastUser.agent,
         agent: input.lastUser.agent,
         variant: input.lastUser.variant,
-        path: {
-          cwd: Instance.directory,
-          root: Instance.worktree,
-        },
-        tokens: {
-          input: 0,
-          output: 0,
-          reasoning: 0,
-          cache: { read: 0, write: 0 },
-        },
+        path: sessionAssistantPath(),
+        tokens: zeroTokenUsage(),
         modelID: input.lastUser.model.modelID,
         providerID: input.lastUser.model.providerID,
         time: {
@@ -965,16 +959,8 @@ export namespace SessionPrompt {
           mode: agent.name,
           agent: agent.name,
           variant: lastUser.variant,
-          path: {
-            cwd: Instance.directory,
-            root: Instance.worktree,
-          },
-          tokens: {
-            input: 0,
-            output: 0,
-            reasoning: 0,
-            cache: { read: 0, write: 0 },
-          },
+          path: sessionAssistantPath(),
+          tokens: zeroTokenUsage(),
           modelID: model.id,
           providerID: model.providerID,
           time: {
@@ -2405,20 +2391,12 @@ NOTE: At any point in time through this workflow you should feel free to ask the
       parentID: userMsg.id,
       mode: input.agent,
       agent: input.agent,
-      path: {
-        cwd: Instance.directory,
-        root: Instance.worktree,
-      },
+      path: sessionAssistantPath(),
       time: {
         created: Date.now(),
       },
       role: "assistant",
-      tokens: {
-        input: 0,
-        output: 0,
-        reasoning: 0,
-        cache: { read: 0, write: 0 },
-      },
+      tokens: zeroTokenUsage(),
       modelID: model.modelID,
       providerID: model.providerID,
     }
@@ -2722,17 +2700,8 @@ NOTE: At any point in time through this workflow you should feel free to ask the
       providerID: model.providerID,
       mode: user.info.agent,
       agent: user.info.agent,
-      path: {
-        cwd: Instance.directory,
-        root: Instance.worktree,
-      },
-      tokens: {
-        total: 0,
-        input: 0,
-        output: 0,
-        reasoning: 0,
-        cache: { read: 0, write: 0 },
-      },
+      path: sessionAssistantPath(),
+      tokens: zeroTokenUsage({ total: 0 }),
       finish: "stop",
     }
     return Session.updateMessageWithParts(assistant, [
