@@ -26,8 +26,6 @@ import { Plugin } from "../plugin"
 import MAX_STEPS from "../session/prompt/max-steps.txt"
 import { defer } from "../util/defer"
 import { MCP } from "../mcp"
-import { route as routeAgent, classifyComplexity } from "../agent/router"
-import { TuiEvent } from "../cli/cmd/tui/event"
 import { LSP } from "../lsp"
 import { ReadTool } from "../tool/read"
 import { FileTime } from "../file/time"
@@ -109,6 +107,7 @@ import {
   modelTurnFinished,
 } from "./prompt-autonomous-decisions"
 import { insertReminders } from "./prompt-reminders"
+import { resolveUserMessageRouting } from "./prompt-routing"
 import { SuperLongPolicy } from "./super-long-policy"
 import { SuperLongRuntime } from "./super-long-runtime"
 
@@ -1534,84 +1533,18 @@ export namespace SessionPrompt {
       .map((p) => p.text)
       .join(" ")
 
-    // v2-style auto agent switching: simple sync keyword route, fires whenever
-    // a topic keyword scores ≥ 0.4. Skipped when the user explicitly named an
-    // agent (@-mention), routing.disable is set in config, or a synthetic
-    // continuation prompt asks to preserve the current agent.
-    const cfg = await Config.get()
-    const hasAgentPart = input.parts.some((p) => p.type === "agent")
-    const routingDisabled = cfg.routing?.disable === true
-    const preserveAgent = input.agentRouting === "preserve"
-    if (messageText && !preserveAgent && !hasAgentPart && !routingDisabled) {
-      const routeResult = routeAgent(messageText, agentName)
-      if (routeResult) {
-        const routedAgent = await Agent.get(routeResult.agent).catch(() => undefined)
-        if (routedAgent) {
-          const routedLabel = routedAgent.displayName ?? routeResult.agent
-          Recorder.emit({
-            type: "agent.route",
-            sessionID: input.sessionID,
-            messageID,
-            fromAgent: agentName,
-            toAgent: routeResult.agent,
-            confidence: routeResult.confidence,
-            routeMode: "switch",
-            matched: routeResult.matched,
-          })
-          agentName = routeResult.agent
-          log.info("auto-routed to agent", {
-            command: "session.prompt.route",
-            status: "ok",
-            sessionID: input.sessionID,
-            agent: routeResult.agent,
-            confidence: routeResult.confidence,
-          })
-          Bus.publishDetached(TuiEvent.ToastShow, {
-            title: "Agent Auto-Switched",
-            message: `Switched to "${routedLabel}" agent for this task`,
-            variant: "info",
-            duration: 5000,
-          })
-        } else {
-          log.warn("auto-route target not found", { agent: routeResult.agent })
-        }
-      }
-    }
-
-    // Classify message complexity (independent of agent routing) so simple
-    // queries can use a small/fast model.
-    const messageComplexity = messageText ? (await classifyComplexity(messageText)).complexity : null
-
-    const agent = await agentInfo({ sessionID: input.sessionID, name: agentName })
-
-    // Use a small/fast model for simple tasks when the user/agent didn't pin one.
-    let complexityModel: { providerID: ProviderID; modelID: ModelID } | undefined
-    if (messageComplexity === "low" && !input.model && !agent.model) {
-      const defaultM = await Provider.defaultModel().catch(() => undefined)
-      if (defaultM) {
-        const small = await Provider.getSmallModel(defaultM.providerID)
-        if (small) {
-          complexityModel = { providerID: small.providerID, modelID: small.id }
-          log.info("complexity-route", {
-            command: "session.prompt.complexity",
-            status: "ok",
-            sessionID: input.sessionID,
-            model: small.id,
-          })
-          // Emit a dedicated event so the thread indicator can show the fast-model decision.
-          Recorder.emit({
-            type: "agent.route",
-            sessionID: input.sessionID,
-            messageID,
-            fromAgent: agentName,
-            toAgent: agentName,
-            confidence: 0,
-            routeMode: "complexity",
-            complexity: messageComplexity,
-          })
-        }
-      }
-    }
+    const route = await resolveUserMessageRouting({
+      sessionID: input.sessionID,
+      messageID,
+      agentName,
+      messageText,
+      parts: input.parts,
+      agentRouting: input.agentRouting,
+      requestedModel: input.model,
+    })
+    agentName = route.agentName
+    const agent = route.agent
+    const complexityModel = route.complexityModel
 
     const model = complexityModel ?? input.model ?? agent.model ?? (await lastModel(input.sessionID))
     const variant = input.variant ?? (!input.model && !complexityModel && agent.variant ? agent.variant : undefined)
