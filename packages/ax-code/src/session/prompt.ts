@@ -75,6 +75,7 @@ import {
   modelInfo,
   pendingCompactionDecision,
   shouldScheduleUsageCompaction,
+  syntheticTextPart,
   systemPrompt as getSystemPrompt,
   createStructuredOutputTool,
   lastModel,
@@ -2177,14 +2178,13 @@ export namespace SessionPrompt {
       ? autonomousDecisionLedgerReminder(input.messages)
       : undefined
     if (autonomousDecisionLedger) {
-      userMessage.parts.push({
-        id: PartID.ascending(),
-        messageID: userMessage.info.id,
-        sessionID: userMessage.info.sessionID,
-        type: "text",
-        text: autonomousDecisionLedger,
-        synthetic: true,
-      })
+      userMessage.parts.push(
+        syntheticTextPart({
+          messageID: userMessage.info.id,
+          sessionID: userMessage.info.sessionID,
+          text: autonomousDecisionLedger,
+        }),
+      )
     }
 
     // Original logic when experimental plan mode is disabled
@@ -2193,14 +2193,13 @@ export namespace SessionPrompt {
         input.agent.name === "plan" &&
         !userMessage.parts.some((p) => p.type === "text" && p.synthetic && p.text === PROMPT_PLAN)
       ) {
-        userMessage.parts.push({
-          id: PartID.ascending(),
-          messageID: userMessage.info.id,
-          sessionID: userMessage.info.sessionID,
-          type: "text",
-          text: PROMPT_PLAN,
-          synthetic: true,
-        })
+        userMessage.parts.push(
+          syntheticTextPart({
+            messageID: userMessage.info.id,
+            sessionID: userMessage.info.sessionID,
+            text: PROMPT_PLAN,
+          }),
+        )
       }
       const wasPlan = input.messages.some((msg) => msg.info.role === "assistant" && msg.info.agent === "plan")
       if (
@@ -2208,14 +2207,13 @@ export namespace SessionPrompt {
         input.agent.name === "build" &&
         !userMessage.parts.some((p) => p.type === "text" && p.synthetic && p.text === BUILD_SWITCH)
       ) {
-        userMessage.parts.push({
-          id: PartID.ascending(),
-          messageID: userMessage.info.id,
-          sessionID: userMessage.info.sessionID,
-          type: "text",
-          text: BUILD_SWITCH,
-          synthetic: true,
-        })
+        userMessage.parts.push(
+          syntheticTextPart({
+            messageID: userMessage.info.id,
+            sessionID: userMessage.info.sessionID,
+            text: BUILD_SWITCH,
+          }),
+        )
       }
       return messages
     }
