@@ -4,6 +4,21 @@ const log = Log.create({ service: "control-plane.sse" })
 const MAX_SSE_BUFFER_CHARS = 1024 * 1024
 const SSE_BLOCK_BOUNDARY = /\r\n\r\n|\r\n\n|\r\n\r|\n\r\n|\r\r\n|\n\n|\n\r|\r\r/
 
+export function parseSSEData(text: string, meta: { id?: string; retry?: number } = {}): unknown {
+  try {
+    return JSON.parse(text)
+  } catch {
+    return {
+      type: "sse.message",
+      properties: {
+        data: text,
+        id: meta.id,
+        retry: meta.retry,
+      },
+    }
+  }
+}
+
 // Each parser invocation owns exactly one reader/buffer pair for one response
 // body. Callers must not share a ReadableStream body across concurrent
 // parseSSE calls; the stream reader lock is the intended serialization point.
@@ -66,21 +81,7 @@ export async function parseSSE(
     // single-try/catch swallowed any error thrown inside onEvent —
     // including real handler bugs — as if it were a parse failure,
     // silently dropping events with no feedback.
-    let parsed: unknown
-    try {
-      parsed = JSON.parse(text)
-    } catch {
-      onEvent({
-        type: "sse.message",
-        properties: {
-          data: text,
-          id,
-          retry,
-        },
-      })
-      return
-    }
-    onEvent(parsed as Parameters<typeof onEvent>[0])
+    onEvent(parseSSEData(text, { id, retry }) as Parameters<typeof onEvent>[0])
   }
 
   try {

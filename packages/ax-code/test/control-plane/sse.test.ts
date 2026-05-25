@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test"
-import { parseSSE } from "../../src/control-plane/sse"
+import { parseSSE, parseSSEData } from "../../src/control-plane/sse"
 import { resetDatabase } from "../fixture/db"
 
 afterEach(async () => {
@@ -17,6 +17,24 @@ function stream(chunks: string[]) {
 }
 
 describe("control-plane/sse", () => {
+  test("parseSSEData decodes JSON payloads", () => {
+    expect(parseSSEData('{"type":"one","properties":{"ok":true}}')).toEqual({
+      type: "one",
+      properties: { ok: true },
+    })
+  })
+
+  test("parseSSEData wraps non-json payloads with event metadata", () => {
+    expect(parseSSEData("hello world", { id: "abc", retry: 1500 })).toEqual({
+      type: "sse.message",
+      properties: {
+        data: "hello world",
+        id: "abc",
+        retry: 1500,
+      },
+    })
+  })
+
   test("parses JSON events with CRLF and multiline data blocks", async () => {
     const events: unknown[] = []
     const stop = new AbortController()
