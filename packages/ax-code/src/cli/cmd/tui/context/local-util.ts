@@ -15,3 +15,12 @@ export function resolveCurrentAgent<
     model: undefined,
   } as T
 }
+
+export function normalizeModelVariantStore(input: unknown): Record<string, string | undefined> {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return {}
+  return Object.fromEntries(
+    Object.entries(input).filter(
+      (entry): entry is [string, string | undefined] => entry[1] === undefined || typeof entry[1] === "string",
+    ),
+  )
+}

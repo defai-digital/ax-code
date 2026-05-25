@@ -21,7 +21,7 @@ import { useSDK } from "./sdk"
 import { RGBA } from "@opentui/core"
 import { Filesystem } from "@/util/filesystem"
 import { optionalStateErrorMessage, shouldSurfaceOptionalStateError } from "@tui/util/optional-state"
-import { resolveCurrentAgent } from "./local-util"
+import { normalizeModelVariantStore, resolveCurrentAgent } from "./local-util"
 import { Log } from "@/util/log"
 import { modelDisplayInfo } from "@tui/component/model-vision-label"
 
@@ -214,7 +214,7 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
         .then((x: any) => {
           setModelStore("recent", providerModelList(x?.recent))
           setModelStore("favorite", providerModelList(x?.favorite))
-          if (typeof x?.variant === "object" && x.variant !== null) setModelStore("variant", x.variant)
+          setModelStore("variant", normalizeModelVariantStore(x?.variant))
         })
         .catch((error) => {
           if (typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT") return
