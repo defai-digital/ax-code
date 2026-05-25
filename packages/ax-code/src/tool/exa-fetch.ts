@@ -1,6 +1,7 @@
 import { abortAfterAny } from "../util/abort"
 import { EXA_BASE_URL, EXA_ENDPOINT } from "@/constants/network"
 import { Ssrf } from "@/util/ssrf"
+import { parseJsonPayload } from "@/util/json-value"
 import z from "zod"
 
 const MAX_RESPONSE_BYTES = 1024 * 1024
@@ -28,12 +29,8 @@ export function decodeExaMcpContentText(value: unknown): string | undefined {
 
 export function parseExaSseContentText(line: string): string | undefined {
   if (!line.startsWith("data: ")) return undefined
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(line.substring(6))
-  } catch {
-    return undefined
-  }
+  const parsed = parseJsonPayload(line.substring(6))
+  if (parsed === undefined) return undefined
   return decodeExaMcpContentText(parsed)
 }
 
