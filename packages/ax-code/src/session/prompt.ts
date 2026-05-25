@@ -74,6 +74,7 @@ import {
   loopMessages,
   modelInfo,
   pendingCompactionDecision,
+  readToolCallText,
   shouldScheduleUsageCompaction,
   syntheticTextPart,
   systemPrompt as getSystemPrompt,
@@ -1756,7 +1757,7 @@ export namespace SessionPrompt {
                     sessionID: input.sessionID,
                     type: "text",
                     synthetic: true,
-                    text: `Called the Read tool with the following input: ${JSON.stringify({ filePath: part.filename })}`,
+                    text: readToolCallText({ filePath: part.filename }),
                   },
                   {
                     messageID: info.id,
@@ -1891,7 +1892,7 @@ export namespace SessionPrompt {
                     sessionID: input.sessionID,
                     type: "text",
                     synthetic: true,
-                    text: `Called the Read tool with the following input: ${JSON.stringify(args)}`,
+                    text: readToolCallText(args),
                   },
                 ]
                 await ReadTool.init()
@@ -1967,7 +1968,7 @@ export namespace SessionPrompt {
                         sessionID: input.sessionID,
                         type: "text" as const,
                         synthetic: true,
-                        text: `Called the Read tool with the following input: ${JSON.stringify(args)}`,
+                        text: readToolCallText(args),
                       },
                       {
                         messageID: info.id,
@@ -2002,7 +2003,7 @@ export namespace SessionPrompt {
                     messageID: info.id,
                     sessionID: input.sessionID,
                     type: "text",
-                    text: `Called the Read tool with the following input: {"filePath":"${filepath}"}`,
+                    text: readToolCallText({ filePath: filepath }),
                     synthetic: true,
                   },
                   {

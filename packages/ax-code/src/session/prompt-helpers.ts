@@ -332,6 +332,10 @@ export function syntheticTextPart(input: {
   }
 }
 
+export function readToolCallText(args: { filePath?: string; offset?: number; limit?: number }) {
+  return `Called the Read tool with the following input: ${JSON.stringify(args)}`
+}
+
 function shellKey(shell: string, platform = process.platform) {
   const name = platform === "win32" ? path.win32.basename(shell, ".exe") : path.basename(shell)
   return name.toLowerCase()

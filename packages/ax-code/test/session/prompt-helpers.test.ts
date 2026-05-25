@@ -17,6 +17,7 @@ import {
   providerFallbackLookupDecision,
   providerFallbackSwitchState,
   processorLoopDecision,
+  readToolCallText,
   remindQueuedMessages,
   scanLoopMessages,
   shellArgs,
@@ -76,6 +77,12 @@ describe("session.prompt helpers", () => {
       synthetic: true,
     })
     expect(part.id).toStartWith("prt_")
+  })
+
+  test("formats Read tool call text through JSON serialization", () => {
+    expect(readToolCallText({ filePath: '/tmp/has "quotes".txt', offset: 3, limit: undefined })).toBe(
+      'Called the Read tool with the following input: {"filePath":"/tmp/has \\"quotes\\".txt","offset":3}',
+    )
   })
 
   test("splits quoted and image arguments", async () => {
