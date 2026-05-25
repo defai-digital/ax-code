@@ -7,6 +7,7 @@ import { Installation } from "../installation"
 import type { Risk } from "../risk/score"
 import type { Session } from "../session"
 import { Log } from "../util/log"
+import { parseJsonResult } from "../util/json-value"
 import { QualityCalibrationModel } from "./calibration-model"
 import { computeFindingId, FindingSchema, type Finding } from "./finding"
 import { QualityModelRegistry } from "./model-registry"
@@ -41,9 +42,14 @@ export namespace QualityShadow {
     stat: Pick<Awaited<ReturnType<typeof fs.stat>>, "mtimeMs">,
   ) {
     const raw = await fs.readFile(resolved, "utf8")
-    const parsed: unknown = JSON.parse(raw)
+    const parsed = parseJsonResult(raw)
+    if (!parsed.ok) {
+      const { error } = parsed
+      if (error instanceof Error) throw error
+      throw new SyntaxError(String(error))
+    }
     return {
-      file: decodeShadowJsonFileValue(parsed, schema),
+      file: decodeShadowJsonFileValue(parsed.value, schema),
       mtimeMs: Number(stat.mtimeMs),
     }
   }

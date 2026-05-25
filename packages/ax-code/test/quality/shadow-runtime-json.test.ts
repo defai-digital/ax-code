@@ -56,4 +56,15 @@ describe("QualityShadow JSON loading", () => {
     const stat = await fs.stat(file)
     await expect(QualityShadow.loadShadowJsonFile(file, ProbabilisticRollout.PredictionFile, stat)).rejects.toThrow()
   })
+
+  test("reports malformed shadow JSON text as a syntax error", async () => {
+    await using tmp = await tmpdir()
+    const file = path.join(tmp.path, "predictions.json")
+    await fs.writeFile(file, "{not json", "utf8")
+
+    const stat = await fs.stat(file)
+    await expect(QualityShadow.loadShadowJsonFile(file, ProbabilisticRollout.PredictionFile, stat)).rejects.toThrow(
+      SyntaxError,
+    )
+  })
 })
