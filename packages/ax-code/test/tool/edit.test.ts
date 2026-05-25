@@ -1,7 +1,7 @@
 import { afterEach, describe, test, expect } from "bun:test"
 import path from "path"
 import fs from "fs/promises"
-import { EditTool, replace } from "../../src/tool/edit"
+import { EditTool, parseNativeEditReplaceResult, replace } from "../../src/tool/edit"
 import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
 import { FileTime } from "../../src/file/time"
@@ -28,6 +28,17 @@ async function touch(file: string, time: number) {
 }
 
 describe("tool.edit", () => {
+  test("parseNativeEditReplaceResult decodes native replace output", () => {
+    expect(parseNativeEditReplaceResult(JSON.stringify({ new_content: "updated" }))).toEqual({
+      new_content: "updated",
+    })
+  })
+
+  test("parseNativeEditReplaceResult rejects malformed native replace output", () => {
+    expect(() => parseNativeEditReplaceResult("{not json")).toThrow(SyntaxError)
+    expect(() => parseNativeEditReplaceResult(JSON.stringify({ new_content: 123 }))).toThrow(SyntaxError)
+  })
+
   describe("creating new files", () => {
     test("creates new file when oldString is empty", async () => {
       await using tmp = await tmpdir()
