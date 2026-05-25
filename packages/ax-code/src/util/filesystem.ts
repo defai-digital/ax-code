@@ -7,6 +7,7 @@ import { Readable } from "stream"
 import { pipeline } from "stream/promises"
 import { Flag } from "../flag/flag"
 import { Glob } from "./glob"
+import { parseJsonResult } from "./json-value"
 import { isRecord } from "./record"
 
 export namespace Filesystem {
@@ -39,13 +40,14 @@ export namespace Filesystem {
 
   export async function readJson<T = any>(p: string): Promise<T> {
     const text = await fs.readFile(p, "utf-8")
-    try {
-      return JSON.parse(text) as T
-    } catch (error) {
+    const parsed = parseJsonResult(text)
+    if (!parsed.ok) {
+      const { error } = parsed
       throw new Error(`Failed to parse JSON in ${p}: ${error instanceof Error ? error.message : String(error)}`, {
         cause: error instanceof Error ? error : undefined,
       })
     }
+    return parsed.value as T
   }
 
   export async function readBytes(p: string): Promise<Buffer> {
