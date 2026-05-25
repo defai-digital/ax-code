@@ -36,6 +36,7 @@ import {
 } from "./prompt-loop-compaction"
 import { handlePromptLoopError } from "./prompt-loop-errors"
 import { loopMessages, scanLoopMessages } from "./prompt-loop-messages"
+import { resolvePromptLoopResult } from "./prompt-loop-result"
 import { markPromptLoopBusy } from "./prompt-loop-status"
 import { preparePromptRequest, type PromptRequestCache } from "./prompt-request-build"
 import { createStructuredOutputTurn } from "./prompt-structured-output"
@@ -952,16 +953,11 @@ export namespace SessionPrompt {
       }
       continue
     }
-    SessionCompaction.prune({ sessionID }).catch((e) =>
-      log.warn("prune failed", { command: "session.prompt.prune", status: "error", sessionID, error: e }),
-    )
-    for await (const item of MessageV2.stream(sessionID)) {
-      if (item.info.role === "user") continue
-      runState.shiftQueuedCallback(sessionID)?.resolve(item)
-      return item
-    }
-    if (abort.aborted) throw new DOMException("Aborted", "AbortError")
-    throw new Error("Impossible")
+    return resolvePromptLoopResult({
+      sessionID,
+      abort,
+      shiftQueuedCallback: runState.shiftQueuedCallback,
+    })
   })
 
   export const ShellInput = ShellInputSchema
