@@ -13,6 +13,8 @@ import { bootstrap } from "../../bootstrap"
 import { cmd } from "../cmd"
 import { decodeJsonRecord } from "@/util/json-record"
 
+export type ToolParams = Record<string, unknown>
+
 export const AgentCommand = cmd({
   command: "agent <name>",
   describe: "show agent configuration details",
@@ -87,7 +89,15 @@ async function resolveTools(agent: Agent.Info, availableTools: Awaited<ReturnTyp
   return resolved
 }
 
-export function parseToolParams(input?: string) {
+export function decodeToolParamsValue(value: unknown): ToolParams {
+  const record = decodeJsonRecord(value)
+  if (!record) {
+    throw new Error("Tool params must be a JSON object.")
+  }
+  return record
+}
+
+export function parseToolParams(input?: string): ToolParams {
   if (!input) return {}
   const trimmed = input.trim()
   if (trimmed.length === 0) return {}
@@ -108,11 +118,7 @@ export function parseToolParams(input?: string) {
     }
   })
 
-  const record = decodeJsonRecord(parsed)
-  if (!record) {
-    throw new Error("Tool params must be a JSON object.")
-  }
-  return record
+  return decodeToolParamsValue(parsed)
 }
 
 async function createToolContext(agent: Agent.Info) {
