@@ -4,6 +4,7 @@ import { SessionID } from "./schema"
 import z from "zod"
 import { Database, eq, asc } from "../storage/db"
 import { TodoTable } from "./session.sql"
+import { isActiveTodo } from "./todo-status"
 
 export namespace Todo {
   export const Info = z
@@ -28,7 +29,7 @@ export namespace Todo {
   }
 
   export function isActive(todo: Pick<Info, "status">) {
-    return todo.status === "pending" || todo.status === "in_progress"
+    return isActiveTodo(todo)
   }
 
   export const Event = {

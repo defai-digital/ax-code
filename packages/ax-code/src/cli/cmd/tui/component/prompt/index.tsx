@@ -79,6 +79,7 @@ import {
 } from "./submit-state"
 import { footerLivenessIndicator, footerLivenessTextFrame } from "./liveness-view-model"
 import { parsePastedFilePath } from "./prompt-filepath"
+import { isActiveTodo } from "@/session/todo-status"
 
 const log = Log.create({ service: "tui.prompt" })
 const SUPER_LONG_PINK = RGBA.fromHex("#ff4db8")
@@ -166,7 +167,7 @@ export function hasUnfinishedTodosInPromptParts(
       latestTodos = todos as Array<{ status?: unknown }>
     }
   }
-  return latestTodos?.some((todo) => todo.status === "pending" || todo.status === "in_progress") ?? false
+  return latestTodos?.some(isActiveTodo) ?? false
 }
 
 export function Prompt(props: PromptProps) {

@@ -1,5 +1,6 @@
 import { Locale } from "@/util/locale"
 import { asRecordOrUndefined } from "../util/record"
+import { isActiveTodo } from "../session/todo-status"
 export namespace AutonomousCompletionGate {
   export type Todo = {
     content: string
@@ -63,7 +64,7 @@ export namespace AutonomousCompletionGate {
       }
     }
 
-    const pendingTodos = input.pendingTodos.filter((todo) => todo.status === "pending" || todo.status === "in_progress")
+    const pendingTodos = input.pendingTodos.filter(isActiveTodo)
     if (pendingTodos.length > 0) {
       return {
         status: "blocked",
