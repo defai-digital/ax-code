@@ -100,11 +100,7 @@ export const Deno: Info = {
       log.info("deno not found, please install deno first")
       return
     }
-    return {
-      process: spawn(deno, ["lsp"], {
-        cwd: root,
-      }),
-    }
+    return spawnInfo(deno, root, ["lsp"])
   },
 }
 
@@ -276,11 +272,7 @@ export const Oxlint: Info = {
     if (lintBin) {
       const hasLsp = await OxlintSupport.supportsLsp(lintBin)
       if (hasLsp) {
-        return {
-          process: spawn(lintBin, ["--lsp"], {
-            cwd: root,
-          }),
-        }
+        return spawnInfo(lintBin, root, ["--lsp"])
       }
     }
 
@@ -290,11 +282,7 @@ export const Oxlint: Info = {
       if (found) serverBin = found
     }
     if (serverBin) {
-      return {
-        process: spawn(serverBin, [], {
-          cwd: root,
-        }),
-      }
+      return spawnInfo(serverBin, root)
     }
 
     log.info("oxlint not found, please install oxlint")
@@ -1459,10 +1447,11 @@ export const JuliaLS: Info = {
       log.info("julia not found, please install julia first (https://julialang.org/downloads/)")
       return
     }
-    return {
-      process: spawn(julia, ["--startup-file=no", "--history-file=no", "-e", "using LanguageServer; runserver()"], {
-        cwd: root,
-      }),
-    }
+    return spawnInfo(julia, root, [
+      "--startup-file=no",
+      "--history-file=no",
+      "-e",
+      "using LanguageServer; runserver()",
+    ])
   },
 }
