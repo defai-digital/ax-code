@@ -1,7 +1,7 @@
 import os from "os"
 import z from "zod"
 import { Env } from "../util/env"
-import { SessionID, MessageID, PartID } from "./schema"
+import { SessionID, MessageID } from "./schema"
 import { MessageV2 } from "./message-v2"
 import { Log } from "../util/log"
 import { SessionRevert } from "./revert"
@@ -31,7 +31,6 @@ import { AutoIndex } from "../code-intelligence/auto-index"
 import type { ProjectID } from "../project/schema"
 import { Todo } from "./todo"
 import { SessionGoal } from "./goal"
-import { ulid } from "ulid"
 import { spawn } from "child_process"
 import { Command } from "../command"
 import { pathToFileURL } from "url"
@@ -99,6 +98,7 @@ import { insertReminders } from "./prompt-reminders"
 import { resolveUserMessageRouting } from "./prompt-routing"
 import { validateUserMessageForSave } from "./prompt-message-validation"
 import { resolveUserMessageParts } from "./prompt-message-parts"
+import { createShellTurnMessages } from "./prompt-shell-turn"
 import { SuperLongPolicy } from "./super-long-policy"
 import { SuperLongRuntime } from "./super-long-runtime"
 
@@ -1615,62 +1615,12 @@ export namespace SessionPrompt {
     }
     const agent = await agentInfo({ sessionID: input.sessionID, name: input.agent })
     const model = input.model ?? agent.model ?? (await lastModel(input.sessionID))
-    const userMsg: MessageV2.User = {
-      id: MessageID.ascending(),
+    const { msg, part } = await createShellTurnMessages({
       sessionID: input.sessionID,
-      time: {
-        created: Date.now(),
-      },
-      role: "user",
       agent: input.agent,
-      model: {
-        providerID: model.providerID,
-        modelID: model.modelID,
-      },
-    }
-    await Session.updateMessage(userMsg)
-    const userPart = textPart({
-      messageID: userMsg.id,
-      sessionID: input.sessionID,
-      text: "The following tool was executed by the user",
-      synthetic: true,
+      model,
+      command: input.command,
     })
-    await Session.updatePart(userPart)
-
-    const msg: MessageV2.Assistant = {
-      id: MessageID.ascending(),
-      sessionID: input.sessionID,
-      parentID: userMsg.id,
-      mode: input.agent,
-      agent: input.agent,
-      path: sessionAssistantPath(),
-      time: {
-        created: Date.now(),
-      },
-      role: "assistant",
-      tokens: zeroTokenUsage(),
-      modelID: model.modelID,
-      providerID: model.providerID,
-    }
-    await Session.updateMessage(msg)
-    const part: MessageV2.Part = {
-      type: "tool",
-      id: PartID.ascending(),
-      messageID: msg.id,
-      sessionID: input.sessionID,
-      tool: "bash",
-      callID: ulid(),
-      state: {
-        status: "running",
-        time: {
-          start: Date.now(),
-        },
-        input: {
-          command: input.command,
-        },
-      },
-    }
-    await Session.updatePart(part)
     const shell = Shell.preferred()
     const args = shellArgs(shell, input.command)
 
