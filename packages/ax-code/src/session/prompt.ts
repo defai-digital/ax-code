@@ -72,6 +72,7 @@ import { enforceSuperLongDeadline } from "./prompt-super-long"
 import { createAutonomousTextContinuation, createUserMessage } from "./prompt-user-message"
 import { permissionRulesetFromLegacyTools } from "./prompt-permission"
 import { createPromptRunState } from "./prompt-run-state"
+import { resolvePromptCache, type PromptCacheEntry } from "./prompt-cache"
 import {
   CommandInput as CommandInputSchema,
   type CommandInput as CommandInputType,
@@ -229,8 +230,8 @@ export namespace SessionPrompt {
       instructions: undefined,
     }
     // Cache agent/model info per loop to avoid repeated async lookups
-    let cachedAgent: { key: string; value: Agent.Info } | undefined
-    let cachedModel: { key: string; value: Provider.Model } | undefined
+    let cachedAgent: PromptCacheEntry<Agent.Info>
+    let cachedModel: PromptCacheEntry<Provider.Model>
     let fallbackModelOverride: MessageV2.User["model"] | undefined
     // Cache session history — only load from DB on first step, refresh on subsequent steps
     let cachedMsgs: MessageV2.WithParts[] | undefined
@@ -388,18 +389,21 @@ export namespace SessionPrompt {
       }
 
       const modelKey = `${lastUser.model.providerID}/${lastUser.model.modelID}`
-      const model =
-        cachedModel?.key === modelKey
-          ? cachedModel.value
-          : await modelInfo({
-              sessionID,
-              providerID: lastUser.model.providerID,
-              modelID: lastUser.model.modelID,
-            }).catch((e) => {
-              reason = "error"
-              throw e
-            })
-      cachedModel = { key: modelKey, value: model }
+      const resolvedModel = await resolvePromptCache({
+        cache: cachedModel,
+        key: modelKey,
+        load: () =>
+          modelInfo({
+            sessionID,
+            providerID: lastUser.model.providerID,
+            modelID: lastUser.model.modelID,
+          }).catch((e) => {
+            reason = "error"
+            throw e
+          }),
+      })
+      const model = resolvedModel.value
+      cachedModel = resolvedModel.cache
       const task = tasks.pop()
 
       // pending subtask
@@ -446,14 +450,17 @@ export namespace SessionPrompt {
       }
 
       // normal processing
-      const agent =
-        cachedAgent?.key === lastUser.agent
-          ? cachedAgent.value
-          : await agentInfo({ sessionID, name: lastUser.agent }).catch((error) => {
-              reason = "error"
-              throw error
-            })
-      cachedAgent = { key: lastUser.agent, value: agent }
+      const resolvedAgent = await resolvePromptCache({
+        cache: cachedAgent,
+        key: lastUser.agent,
+        load: () =>
+          agentInfo({ sessionID, name: lastUser.agent }).catch((error) => {
+            reason = "error"
+            throw error
+          }),
+      })
+      const agent = resolvedAgent.value
+      cachedAgent = resolvedAgent.cache
       const maxSteps = agent.steps ?? Infinity
       const agentStepLimit = agentStepLimitContinuationDecision({
         step,
