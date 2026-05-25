@@ -254,7 +254,10 @@ export async function detectRuff(input: DetectRuffInput = {}): Promise<LanguageS
 }
 
 export function parseRuffOutput(output: string): ParsedLanguageScan {
-  const json = JSON.parse(output)
+  return decodeRuffScanJson(JSON.parse(output))
+}
+
+export function decodeRuffScanJson(json: unknown): ParsedLanguageScan {
   const findings: LanguageFinding[] = []
   const filesScanned = new Set<string>()
 

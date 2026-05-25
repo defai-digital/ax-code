@@ -1,6 +1,7 @@
 import { describe, test, expect } from "bun:test"
 import {
   decodeClippyJsonMessage,
+  decodeRuffScanJson,
   detectClippy,
   detectRuff,
   detectMypy,
@@ -254,6 +255,35 @@ describe("language-scan", () => {
         ]),
       ).toHaveLength(1)
       expect(parseRuffDiagnosticsJson({ diagnostics: "not an array" })).toEqual([])
+    })
+
+    test("decodeRuffScanJson decodes already-parsed scan output", () => {
+      const { findings, filesScanned } = decodeRuffScanJson({
+        diagnostics: [
+          {
+            code: "F841",
+            message: "Local variable `x` is assigned to but never used",
+            location: { row: 10, column: 5 },
+            end_location: { row: 10, column: 6 },
+            filename: "src/main.py",
+          },
+          {
+            code: "E501",
+            message: "Line too long (120 > 88)",
+            location: { row: 15, column: 89 },
+            end_location: { row: 15, column: 120 },
+            filename: "src/main.py",
+          },
+        ],
+      })
+
+      expect(findings).toHaveLength(2)
+      expect(filesScanned).toBe(1)
+      expect(findings[0].code).toBe("F841")
+      expect(findings[0].severity).toBe("medium")
+      expect(findings[0].line).toBe(10)
+      expect(findings[1].code).toBe("E501")
+      expect(findings[1].severity).toBe("medium")
     })
 
     test("returns error message when ruff not found", async () => {
