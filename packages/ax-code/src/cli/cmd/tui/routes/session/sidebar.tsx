@@ -538,7 +538,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
                   </Show>
                 </box>
               </Show>
-              <Show when={todo().length > 0 && todo().some((t) => t.status !== "completed")}>
+              <Show when={todoRemaining() > 0}>
                 <box backgroundColor={theme.backgroundElement} paddingLeft={1} paddingRight={1}>
                   <box
                     flexDirection="row"
