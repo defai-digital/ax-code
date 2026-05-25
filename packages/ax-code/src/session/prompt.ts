@@ -1,8 +1,5 @@
-import path from "path"
 import os from "os"
-import fs from "fs/promises"
 import z from "zod"
-import { Filesystem } from "../util/filesystem"
 import { Env } from "../util/env"
 import { SessionID, MessageID, PartID } from "./schema"
 import { MessageV2 } from "./message-v2"
@@ -25,9 +22,6 @@ import { InstructionPrompt } from "./instruction"
 import { Plugin } from "../plugin"
 import MAX_STEPS from "../session/prompt/max-steps.txt"
 import { defer } from "../util/defer"
-import { LSP } from "../lsp"
-import { ReadTool } from "../tool/read"
-import { FileTime } from "../file/time"
 import { NotFoundError } from "@/storage/db"
 import { Flag } from "../flag/flag"
 import { Recorder } from "../replay/recorder"
@@ -40,23 +34,20 @@ import { SessionGoal } from "./goal"
 import { ulid } from "ulid"
 import { spawn } from "child_process"
 import { Command } from "../command"
-import { pathToFileURL, fileURLToPath } from "url"
+import { pathToFileURL } from "url"
 import { Config } from "@/config/config"
 import { Isolation } from "@/isolation"
 import { SessionSummary } from "./summary"
 import { NamedError } from "@ax-code/util/error"
 import { fn } from "@/util/fn"
 import { SessionProcessor } from "./processor"
-import { Tool } from "@/tool/tool"
 import { Permission } from "@/permission"
 import { SessionStatus } from "./status"
 import { LLM } from "./llm"
 import { iife } from "@/util/iife"
 import { Shell } from "@/shell/shell"
-import { decodeDataUrl } from "@/util/data-url"
 import {
   appendShellOutputChunk,
-  attachmentLineRange,
   commandModel,
   commandSetup,
   shellArgs,
@@ -73,7 +64,6 @@ import {
   modelInfo,
   pendingCompactionDecision,
   parseGoalArguments,
-  readToolCallText,
   shouldScheduleUsageCompaction,
   sessionAssistantPath,
   shellOutputMetadata,
@@ -109,6 +99,7 @@ import { insertReminders } from "./prompt-reminders"
 import { resolveUserMessageRouting } from "./prompt-routing"
 import { validateUserMessageForSave } from "./prompt-message-validation"
 import { resolveMcpResourcePart } from "./prompt-mcp-resource"
+import { resolveFileAttachmentPart } from "./prompt-file-attachment"
 import { SuperLongPolicy } from "./super-long-policy"
 import { SuperLongRuntime } from "./super-long-runtime"
 
@@ -129,22 +120,6 @@ const STRUCTURED_OUTPUT_SYSTEM_PROMPT = `IMPORTANT: The user has requested struc
 
 export namespace SessionPrompt {
   const log = Log.create({ service: "session.prompt" })
-
-  async function documentSymbolsForRangeExpansion(
-    uri: string,
-  ): Promise<Awaited<ReturnType<typeof LSP.documentSymbolEnvelope>>["data"]> {
-    const cached = await LSP.documentSymbolCachedEnvelope(uri).catch((error) => {
-      log.debug("cached document symbols unavailable for range expansion", { uri, error })
-      return undefined
-    })
-    if (cached) return cached.data
-
-    const live = await LSP.documentSymbolEnvelope(uri, { cache: true }).catch((error) => {
-      log.debug("document symbols unavailable for range expansion", { uri, error })
-      return undefined
-    })
-    return live?.data ?? []
-  }
 
   const state = Instance.state(
     () => {
@@ -1578,8 +1553,6 @@ export namespace SessionPrompt {
       synthetic: true,
       text,
     })
-    const draftReadToolCallPart = (args: Parameters<typeof readToolCallText>[0]) =>
-      draftSyntheticTextPart(readToolCallText(args))
     const attachDraftContext = <T extends object>(part: T): T & { messageID: MessageID; sessionID: SessionID } => ({
       ...part,
       messageID: info.id,
@@ -1598,213 +1571,14 @@ export namespace SessionPrompt {
               attachDraftContext,
             })
           }
-          const url = new URL(part.url)
-          const createReadFailurePart = (options: { error: unknown; filepath: string }) => {
-            const message = NamedError.message(options.error)
-            Session.publishError({ sessionID: input.sessionID, message })
-            return draftSyntheticTextPart(
-              `Read tool failed to read ${options.filepath} with the following error: ${message}`,
-            )
-          }
-          const createReadToolContext = (): Tool.Context => ({
+          return resolveFileAttachmentPart({
             sessionID: input.sessionID,
-            abort: AbortSignal.timeout(30_000),
-            agent: agentName,
             messageID: info.id,
-            extra: { bypassCwdCheck: true },
-            messages: [],
-            metadata: async () => {},
-            ask: async () => {},
+            agentName,
+            part,
+            draftSyntheticTextPart,
+            attachDraftContext,
           })
-          switch (url.protocol) {
-            case "data:":
-              if (part.mime === "text/plain") {
-                return [
-                  draftReadToolCallPart({ filePath: part.filename }),
-                  draftSyntheticTextPart(decodeDataUrl(part.url)),
-                  attachDraftContext(part),
-                ]
-              }
-              break
-            case "file:":
-              log.info("file", {
-                command: "session.prompt.fileAttach",
-                status: "started",
-                sessionID: input.sessionID,
-                mime: part.mime,
-              })
-              // have to normalize, symbol search returns absolute paths
-              // Decode the pathname since URL constructor doesn't automatically decode it
-              const filepath = fileURLToPath(part.url)
-
-              // Path containment: reject file:// paths outside the project directory
-              // and resolve symlinks to prevent symlink escapes (BUG-001, BUG-002)
-              if (!Instance.containsPath(filepath)) {
-                log.warn("file attachment outside project", {
-                  command: "session.prompt.fileAttach",
-                  status: "denied",
-                  sessionID: input.sessionID,
-                  filepath,
-                })
-                return [
-                  draftSyntheticTextPart(`Access denied: file path is outside the project directory: ${filepath}`),
-                ]
-              }
-              const realFilepath = await fs.realpath(filepath).catch(() => null)
-              if (realFilepath && !Instance.containsPath(realFilepath)) {
-                log.warn("file attachment symlink escapes project", {
-                  command: "session.prompt.fileAttach",
-                  status: "denied",
-                  sessionID: input.sessionID,
-                  filepath,
-                  realFilepath,
-                })
-                return [
-                  draftSyntheticTextPart(`Access denied: symlink target is outside the project directory: ${filepath}`),
-                ]
-              }
-
-              const s = Filesystem.stat(filepath)
-
-              if (s?.isDirectory()) {
-                part.mime = "application/x-directory"
-              }
-              if (part.mime === "text/plain") {
-                let offset: number | undefined = undefined
-                let limit: number | undefined = undefined
-                const range = attachmentLineRange({
-                  start: url.searchParams.get("start"),
-                  end: url.searchParams.get("end"),
-                })
-                if (range) {
-                  const filePathURI = part.url.split("?")[0]
-                  let { start, end } = range
-                  // some LSP servers (eg, gopls) don't give full range in
-                  // workspace/symbol searches, so we'll try to find the
-                  // symbol in the document to get the full range
-                  if (start !== undefined && start === end) {
-                    const symbols = await documentSymbolsForRangeExpansion(filePathURI)
-                    for (const symbol of symbols) {
-                      let range: LSP.Range | undefined
-                      if ("range" in symbol) {
-                        range = symbol.range
-                      } else if ("location" in symbol) {
-                        range = symbol.location.range
-                      }
-                      if (range?.start?.line != null && range?.start?.line === start) {
-                        start = range.start.line
-                        end = range?.end?.line ?? start
-                        break
-                      }
-                    }
-                  }
-                  if (start !== undefined) {
-                    // Convert LSP 0-indexed line numbers to the Read tool's
-                    // 1-indexed offset. `Math.max(start, 1)` was wrong — it
-                    // clamped 0 → 1 but left every other value unchanged,
-                    // so 0-indexed line 5 became offset 5 instead of 6. The
-                    // Read tool starts one line too early for every symbol.
-                    offset = start + 1
-                    if (end !== undefined) {
-                      // `limit` counts lines starting from `offset`. For a
-                      // symbol spanning 0-indexed lines [start, end], the
-                      // number of lines is (end - start + 1), which
-                      // simplifies to `end - offset + 2` in 1-indexed terms.
-                      limit = end - start + 1
-                    }
-                  }
-                }
-                const args = { filePath: filepath, offset, limit }
-
-                const pieces: Draft<MessageV2.Part>[] = [
-                  draftReadToolCallPart(args),
-                ]
-                await ReadTool.init()
-                  .then(async (t) => {
-                    const result = await t.execute(args, createReadToolContext())
-                    pieces.push(draftSyntheticTextPart(result.output))
-                    if (result.attachments?.length) {
-                      pieces.push(
-                        ...result.attachments.map((attachment) => ({
-                          ...attachDraftContext(attachment),
-                          synthetic: true,
-                          filename: attachment.filename ?? part.filename,
-                        })),
-                      )
-                    } else {
-                      pieces.push(attachDraftContext(part))
-                    }
-                  })
-                  .catch((error) => {
-                    log.error("failed to read file", {
-                      command: "session.prompt.readFile",
-                      status: "error",
-                      errorCode: "FILE_READ",
-                      sessionID: input.sessionID,
-                      error,
-                    })
-                    pieces.push(createReadFailurePart({ error, filepath }))
-                  })
-
-                return pieces
-              }
-
-              if (part.mime === "application/x-directory") {
-                const args = { filePath: filepath }
-                return await ReadTool.init()
-                  .then(async (t) => {
-                    const result = await t.execute(args, createReadToolContext())
-                    return [
-                      draftReadToolCallPart(args),
-                      draftSyntheticTextPart(result.output),
-                      attachDraftContext(part),
-                    ]
-                  })
-                  .catch((error) => {
-                    log.error("failed to read directory", {
-                      command: "session.prompt.readDir",
-                      status: "error",
-                      errorCode: "DIR_READ",
-                      sessionID: input.sessionID,
-                      error,
-                    })
-                    return [createReadFailurePart({ error, filepath })]
-                  })
-              }
-
-              try {
-                await FileTime.read(input.sessionID, filepath)
-                return [
-                  draftReadToolCallPart({ filePath: filepath }),
-                  {
-                    id: part.id,
-                    messageID: info.id,
-                    sessionID: input.sessionID,
-                    type: "file",
-                    url: await (async () => {
-                      const buffer = await Filesystem.readBytes(filepath)
-                      if (buffer.length > 50 * 1024 * 1024)
-                        throw new Error(`Attachment too large: ${buffer.length} bytes`)
-                      return `data:${part.mime};base64,` + buffer.toString("base64")
-                    })(),
-                    mime: part.mime,
-                    filename: part.filename ?? path.basename(filepath),
-                    source: part.source,
-                  },
-                ]
-              } catch (error) {
-                log.error("failed to read binary file", {
-                  command: "session.prompt.readBinaryFile",
-                  status: "error",
-                  errorCode: "BINARY_READ",
-                  sessionID: input.sessionID,
-                  error,
-                })
-                return [createReadFailurePart({ error, filepath })]
-              }
-            default:
-              return [draftSyntheticTextPart(`Unsupported file protocol: ${url.protocol}`)]
-          }
         }
 
         if (part.type === "agent") {
@@ -1823,9 +1597,7 @@ export namespace SessionPrompt {
           ]
         }
 
-        return [
-          attachDraftContext(part),
-        ]
+        return [attachDraftContext(part)]
       }),
     )
     const parts = resolvedParts
