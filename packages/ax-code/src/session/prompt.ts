@@ -45,7 +45,7 @@ import { iife } from "@/util/iife"
 import { Shell } from "@/shell/shell"
 import { appendShellOutputChunk, shellArgs, shellOutputMetadata } from "./prompt-shell-runtime"
 import { agentInfo, modelInfo } from "./prompt-agent-model-info"
-import { commandModel, lastModel } from "./prompt-command-selection"
+import { lastModel } from "./prompt-command-selection"
 import { commandSetup } from "./prompt-command-setup"
 import {
   pendingCompactionDecision,
@@ -61,7 +61,6 @@ import { loopMessages, remindQueuedMessages, scanLoopMessages } from "./prompt-l
 import { systemPrompt as getSystemPrompt } from "./prompt-system"
 import { createStructuredOutputTool } from "./prompt-structured-output"
 import { ensureTitle } from "./prompt-title"
-import { parseGoalArguments } from "./prompt-goal-arguments"
 import { sessionAssistantPath, textPart, zeroTokenUsage } from "./prompt-message-builders"
 import { findFallbackModel } from "./prompt-provider-fallback"
 import { executeSubtask, type SubtaskContext } from "./prompt-subtask"
@@ -88,6 +87,7 @@ import { insertReminders } from "./prompt-reminders"
 import { createShellTurnMessages } from "./prompt-shell-turn"
 import { createStoppedAssistantTextResponse } from "./prompt-assistant-response"
 import { resolveCommandForExecution } from "./prompt-command"
+import { executeGoalCommand } from "./prompt-goal-command"
 import { createAutonomousUserContinuation, createUserMessage } from "./prompt-user-message"
 import { permissionRulesetFromLegacyTools } from "./prompt-permission"
 import { createPromptRunState } from "./prompt-run-state"
@@ -1571,75 +1571,6 @@ export namespace SessionPrompt {
   export const CommandInput = CommandInputSchema
   export type CommandInput = CommandInputType
 
-  async function goalControlMessage(input: CommandInput, text: string) {
-    const model = await commandModel({ model: input.model, sessionID: input.sessionID })
-    const user = await createUserMessage({
-      sessionID: input.sessionID,
-      messageID: input.messageID,
-      agent: input.agent,
-      model,
-      agentRouting: "preserve",
-      noReply: true,
-      parts: [
-        {
-          type: "text",
-          text: `/goal ${input.arguments}`.trim(),
-        },
-      ],
-    })
-    return createStoppedAssistantTextResponse({
-      sessionID: input.sessionID,
-      parent: user.info,
-      text,
-      tokenTotal: 0,
-    })
-  }
-
-  async function goalCommand(input: CommandInput) {
-    const parsed = parseGoalArguments(input.arguments)
-    if (parsed.action === "view") {
-      return goalControlMessage(input, SessionGoal.format(await SessionGoal.get(input.sessionID)))
-    }
-    if (parsed.action === "pause") {
-      return goalControlMessage(input, SessionGoal.format(await SessionGoal.pause(input.sessionID)))
-    }
-    if (parsed.action === "resume") {
-      return goalControlMessage(input, SessionGoal.format(await SessionGoal.resume(input.sessionID)))
-    }
-    if (parsed.action === "clear") {
-      await SessionGoal.clear(input.sessionID)
-      return goalControlMessage(input, "Goal cleared for this session.")
-    }
-
-    if (parsed.action !== "create") {
-      throw new Error(`Unhandled goal action: ${parsed.action}`)
-    }
-
-    const goal = await SessionGoal.create({
-      sessionID: input.sessionID,
-      objective: parsed.objective,
-      tokenBudget: parsed.tokenBudget,
-      replace: false,
-    })
-    return prompt({
-      sessionID: input.sessionID,
-      messageID: input.messageID,
-      agent: input.agent,
-      model: await commandModel({ model: input.model, sessionID: input.sessionID }),
-      variant: input.variant,
-      parts: [
-        {
-          type: "text",
-          text:
-            `Goal set: ${goal.objective}\n\n` +
-            `Work toward this goal until it is complete, blocked, paused, cleared, or budget-limited. ` +
-            `Use get_goal to inspect current goal state and update_goal when the goal is complete or genuinely blocked.`,
-        },
-        ...(input.parts ?? []),
-      ],
-    })
-  }
-
   export async function command(input: CommandInput) {
     log.info("command", {
       command: "session.prompt.command",
@@ -1648,7 +1579,7 @@ export namespace SessionPrompt {
       commandName: input.command,
     })
     if (input.command === Command.Default.GOAL) {
-      return goalCommand(input)
+      return executeGoalCommand(input, prompt)
     }
     const command = await resolveCommandForExecution({ sessionID: input.sessionID, name: input.command })
     const prepared = await commandSetup({
