@@ -90,10 +90,7 @@ export async function systemPrompt(input: {
   // In autonomous mode, inject pending todos into the system context each turn
   // so the model always knows exactly what's left. This is live state visible
   // at the start of every reasoning cycle, not just an upfront instruction.
-  const pendingTodos =
-    Flag.AX_CODE_AUTONOMOUS && input.sessionID
-      ? Todo.get(input.sessionID).filter((t) => t.status === "pending" || t.status === "in_progress")
-      : []
+  const pendingTodos = Flag.AX_CODE_AUTONOMOUS && input.sessionID ? Todo.active(input.sessionID) : []
   const pendingTodosSection =
     pendingTodos.length > 0
       ? [
