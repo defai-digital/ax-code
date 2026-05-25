@@ -1,4 +1,5 @@
 import { parseCliJsonObject, type CliJsonObject } from "./json"
+import { isRecord } from "@/util/record"
 
 export interface CliOutputParser {
   parseComplete(output: string): { text: string }
@@ -14,6 +15,24 @@ export function parseCliJsonEventLine(line: string): CliJsonObject | undefined {
 // Note: NO_COLOR=1 is set in CLI_ENV, so ANSI codes are not expected in output.
 // parseCliJsonEventLine already handles non-JSON lines via fast-path check.
 
+function recordField(record: CliJsonObject, key: string): Record<string, unknown> | undefined {
+  const value = record[key]
+  return isRecord(value) ? value : undefined
+}
+
+function stringField(record: Record<string, unknown> | undefined, key: string): string | undefined {
+  const value = record?.[key]
+  return typeof value === "string" ? value : undefined
+}
+
+function textFromContentBlocks(value: unknown): string {
+  if (!Array.isArray(value)) return ""
+  return value
+    .filter((block) => isRecord(block) && block.type === "text" && typeof block.text === "string")
+    .map((block) => block.text)
+    .join("")
+}
+
 export const claudeCodeParser: CliOutputParser = {
   parseComplete(output: string) {
     const lines = output.split("\n")
@@ -22,10 +41,10 @@ export const claudeCodeParser: CliOutputParser = {
       const event = parseCliJsonEventLine(line)
       if (!event) continue
       if (event.type === "result" && typeof event.result === "string") return { text: event.result }
-      if (event.type === "assistant" && event.message?.content) {
-        for (const block of event.message.content) {
-          if (block.type === "text") parts.push(block.text)
-        }
+      const message = recordField(event, "message")
+      if (event.type === "assistant" && message?.content) {
+        const text = textFromContentBlocks(message.content)
+        if (text) parts.push(text)
       }
     }
     return { text: parts.join("\n") || output.trim() }
@@ -33,7 +52,8 @@ export const claudeCodeParser: CliOutputParser = {
   parseStreamLine(line: string) {
     const event = parseCliJsonEventLine(line)
     if (!event) return null
-    if (event.type === "content_block_delta" && event.delta?.text) return event.delta.text
+    const deltaText = stringField(recordField(event, "delta"), "text")
+    if (event.type === "content_block_delta" && deltaText) return deltaText
     if (event.type === "result" && typeof event.result === "string") return event.result
     return null
   },
@@ -78,17 +98,17 @@ export const codexCliParser: CliOutputParser = {
     for (const line of lines) {
       const event = parseCliJsonEventLine(line)
       if (!event) continue
-      if (event.type === "item.completed" && event.item?.text) {
-        return { text: event.item.text }
+      const item = recordField(event, "item")
+      const itemText = stringField(item, "text")
+      if (event.type === "item.completed" && itemText) {
+        return { text: itemText }
       }
-      if (event.type === "item.completed" && event.item?.content) {
-        const text = Array.isArray(event.item.content)
-          ? event.item.content
-              .filter((b: any) => b.type === "text")
-              .map((b: any) => b.text)
-              .join("")
-          : typeof event.item.content === "string"
-            ? event.item.content
+      const itemContent = item?.content
+      if (event.type === "item.completed" && itemContent) {
+        const text = Array.isArray(itemContent)
+          ? textFromContentBlocks(itemContent)
+          : typeof itemContent === "string"
+            ? itemContent
             : null
         if (text) return { text }
       }
@@ -101,8 +121,10 @@ export const codexCliParser: CliOutputParser = {
     const event = parseCliJsonEventLine(line)
     if (!event) return null
     if (event.type === "item.completed") {
-      if (event.item?.text) return event.item.text
-      if (typeof event.item?.content === "string") return event.item.content
+      const item = recordField(event, "item")
+      const itemText = stringField(item, "text")
+      if (itemText) return itemText
+      if (typeof item?.content === "string") return item.content
     }
     if (typeof event.content === "string") return event.content
     if (typeof event.text === "string") return event.text
