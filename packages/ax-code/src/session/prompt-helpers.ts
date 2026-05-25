@@ -1,4 +1,3 @@
-import { type Tool as AITool, tool, jsonSchema } from "ai"
 import { Instance } from "../project/instance"
 import { MessageID, PartID, SessionID } from "./schema"
 import { MessageV2 } from "./message-v2"
@@ -14,6 +13,7 @@ export { commandSetup } from "./prompt-command-setup"
 export { ensureTitle, titleContextMessages } from "./prompt-title"
 export { systemPrompt } from "./prompt-system"
 export { loopMessages, remindQueuedMessages, scanLoopMessages } from "./prompt-loop-messages"
+export { createStructuredOutputTool } from "./prompt-structured-output"
 export {
   assistantLoopExitDecision,
   assistantRespondedAfterUser,
@@ -24,14 +24,6 @@ export {
   providerFallbackSwitchState,
   shouldScheduleUsageCompaction,
 } from "./prompt-loop-decisions"
-
-const STRUCTURED_OUTPUT_DESCRIPTION = `Use this tool to return your final response in the requested structured format.
-
-IMPORTANT:
-- You MUST call this tool exactly once at the end of your response
-- The input must be valid JSON matching the required schema
-- Complete all necessary research and tool calls BEFORE calling this tool
-- This tool provides your final answer - no further actions are taken after calling it`
 
 type AttachmentLineRange = {
   start: number
@@ -128,33 +120,6 @@ export function zeroTokenUsage(input?: { total?: number }): AssistantTokens {
     total: input.total,
     ...tokens,
   }
-}
-
-export function createStructuredOutputTool(input: {
-  schema: Record<string, any>
-  onSuccess: (output: unknown) => void
-}): AITool {
-  const { $schema, ...toolSchema } = input.schema
-
-  return tool({
-    id: "StructuredOutput" as any,
-    description: STRUCTURED_OUTPUT_DESCRIPTION,
-    inputSchema: jsonSchema(toolSchema as any),
-    async execute(args) {
-      input.onSuccess(args)
-      return {
-        output: "Structured output captured successfully.",
-        title: "Structured Output",
-        metadata: { valid: true },
-      }
-    },
-    toModelOutput(result) {
-      return {
-        type: "text",
-        value: result.output,
-      }
-    },
-  })
 }
 
 /**
