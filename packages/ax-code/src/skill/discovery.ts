@@ -5,6 +5,7 @@ import { AppFileSystem } from "@/filesystem"
 import { Global } from "../global"
 import { Log } from "../util/log"
 import { Ssrf } from "@/util/ssrf"
+import { parseJsonResult } from "@/util/json-value"
 
 export namespace Discovery {
   const skillConcurrency = 4
@@ -47,7 +48,13 @@ export namespace Discovery {
   }
 
   export function parseIndexText(text: string): IndexData {
-    return decodeIndexValue(JSON.parse(text))
+    const parsed = parseJsonResult(text)
+    if (!parsed.ok) {
+      const { error } = parsed
+      if (error instanceof Error) throw error
+      throw new SyntaxError(String(error))
+    }
+    return decodeIndexValue(parsed.value)
   }
 
   export interface Interface {
