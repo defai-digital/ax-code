@@ -5,18 +5,13 @@ import { MessageV2 } from "./message-v2"
 import { PartID, type MessageID, type SessionID } from "./schema"
 import { resolveFileAttachmentPart } from "./prompt-file-attachment"
 import { resolveMcpResourcePart } from "./prompt-mcp-resource"
+import type { PromptPartInput } from "./prompt-part-input"
 
 const log = Log.create({ service: "session.prompt" })
 
 type Draft<T> = T extends MessageV2.Part ? Omit<T, "id"> & { id?: string } : never
 type DraftTextPart = Draft<MessageV2.TextPart>
 type DraftPart = Draft<MessageV2.Part>
-
-type UserMessagePartInput =
-  | (Omit<MessageV2.TextPart, "id" | "messageID" | "sessionID"> & { id?: string })
-  | (Omit<MessageV2.FilePart, "id" | "messageID" | "sessionID"> & { id?: string })
-  | (Omit<MessageV2.AgentPart, "id" | "messageID" | "sessionID"> & { id?: string })
-  | (Omit<MessageV2.SubtaskPart, "id" | "messageID" | "sessionID"> & { id?: string })
 
 function assignPartID(part: DraftPart): MessageV2.Part {
   return {
@@ -26,7 +21,7 @@ function assignPartID(part: DraftPart): MessageV2.Part {
 }
 
 function agentInstructionPart(input: {
-  part: Extract<UserMessagePartInput, { type: "agent" }>
+  part: Extract<PromptPartInput, { type: "agent" }>
   agentPermission: Permission.Ruleset
   attachDraftContext: <T extends object>(part: T) => T & { messageID: MessageID; sessionID: SessionID }
   draftSyntheticTextPart: (text: string) => DraftTextPart
@@ -50,7 +45,7 @@ export async function resolveUserMessageParts(input: {
   messageID: MessageID
   agentName: string
   agentPermission: Permission.Ruleset
-  parts: UserMessagePartInput[]
+  parts: PromptPartInput[]
 }): Promise<MessageV2.Part[]> {
   const draftSyntheticTextPart = (text: string): DraftTextPart => ({
     messageID: input.messageID,

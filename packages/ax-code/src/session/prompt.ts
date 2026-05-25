@@ -99,6 +99,7 @@ import { resolveUserMessageRouting } from "./prompt-routing"
 import { validateUserMessageForSave } from "./prompt-message-validation"
 import { resolveUserMessageParts } from "./prompt-message-parts"
 import { createShellTurnMessages } from "./prompt-shell-turn"
+import { FilePartInput, PromptPartInput } from "./prompt-part-input"
 import { SuperLongPolicy } from "./super-long-policy"
 import { SuperLongRuntime } from "./super-long-runtime"
 
@@ -175,50 +176,7 @@ export namespace SessionPrompt {
     format: MessageV2.Format.optional(),
     system: z.string().optional(),
     variant: z.string().optional(),
-    parts: z.array(
-      z.discriminatedUnion("type", [
-        MessageV2.TextPart.omit({
-          messageID: true,
-          sessionID: true,
-        })
-          .partial({
-            id: true,
-          })
-          .meta({
-            ref: "TextPartInput",
-          }),
-        MessageV2.FilePart.omit({
-          messageID: true,
-          sessionID: true,
-        })
-          .partial({
-            id: true,
-          })
-          .meta({
-            ref: "FilePartInput",
-          }),
-        MessageV2.AgentPart.omit({
-          messageID: true,
-          sessionID: true,
-        })
-          .partial({
-            id: true,
-          })
-          .meta({
-            ref: "AgentPartInput",
-          }),
-        MessageV2.SubtaskPart.omit({
-          messageID: true,
-          sessionID: true,
-        })
-          .partial({
-            id: true,
-          })
-          .meta({
-            ref: "SubtaskPartInput",
-          }),
-      ]),
-    ),
+    parts: z.array(PromptPartInput),
   })
   export type PromptInput = z.infer<typeof PromptInput>
 
@@ -1846,18 +1804,7 @@ export namespace SessionPrompt {
     arguments: z.string(),
     command: z.string(),
     variant: z.string().optional(),
-    parts: z
-      .array(
-        z.discriminatedUnion("type", [
-          MessageV2.FilePart.omit({
-            messageID: true,
-            sessionID: true,
-          }).partial({
-            id: true,
-          }),
-        ]),
-      )
-      .optional(),
+    parts: z.array(FilePartInput).optional(),
   })
   export type CommandInput = z.infer<typeof CommandInput>
 
