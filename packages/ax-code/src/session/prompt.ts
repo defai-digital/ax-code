@@ -36,6 +36,7 @@ import { handlePromptLoopGoalContinuation } from "./prompt-loop-goal"
 import { emitPromptLoopCompletionGateDecision } from "./prompt-loop-completion-gate"
 import { handlePromptLoopCompletionGateRetry } from "./prompt-loop-completion-gate-retry"
 import { handlePromptLoopEmptyTurn } from "./prompt-loop-empty-turn"
+import { handlePromptLoopTodoConvergence } from "./prompt-loop-todo-convergence"
 import { loopMessages, scanLoopMessages } from "./prompt-loop-messages"
 import { finishPromptLoopQueue } from "./prompt-loop-queue"
 import {
@@ -52,12 +53,7 @@ import { executeSubtask, type SubtaskContext } from "./prompt-subtask"
 import { resolveTools } from "./prompt-tools"
 import { clearPromptProcessorInstructions, createPromptProcessor } from "./prompt-processor"
 import { addPromptGoalUsage } from "./prompt-goal-usage"
-import {
-  pendingTodoContinuationDecision,
-  pendingTodoSignature,
-  todoContextConvergenceDecision,
-  todoDeadlineConvergenceDecision,
-} from "./prompt-todo-continuation"
+import { pendingTodoContinuationDecision } from "./prompt-todo-continuation"
 import { AutonomousContinuationPrompt } from "./prompt-autonomous-continuations"
 import {
   agentStepLimitContinuationDecision,
@@ -627,59 +623,25 @@ export namespace SessionPrompt {
         }
 
         const remainingAgentSteps = Number.isFinite(maxSteps) ? Math.max(0, maxSteps - step) : Infinity
-        const contextConvergence = todoContextConvergenceDecision({
+        const todoConvergence = handlePromptLoopTodoConvergence({
+          sessionID,
           pendingTodos,
           inputTokens: processor.message.tokens.input,
-        })
-        if (!modelFinished && contextConvergence.converge) {
-          const signature = pendingTodoSignature(pendingTodos)
-          if (signature !== lastTodoContextSignature) {
-            lastTodoContextSignature = signature
-            log.info("autonomous todo context convergence", {
-              command: "session.prompt.loop",
-              status: "ok",
-              sessionID,
-              pendingCount: pendingTodos.length,
-              inputTokens: processor.message.tokens.input ?? 0,
-              threshold: contextConvergence.threshold,
-            })
-            await createAutonomousTextContinuation({
-              sessionID,
-              messages: latestMessages,
-              text: AutonomousContinuationPrompt.contextConvergence({ pendingTodos }),
-            })
-            continue
-          }
-        }
-
-        const deadlineConvergence = todoDeadlineConvergenceDecision({
           modelFinished: Boolean(modelFinished),
-          pendingTodos,
           remainingAgentSteps,
+          maxSteps,
+          lastTodoContextSignature,
+          lastTodoDeadlineSignature,
         })
-        if (deadlineConvergence.converge) {
-          const signature = pendingTodoSignature(pendingTodos)
-          if (signature !== lastTodoDeadlineSignature) {
-            lastTodoDeadlineSignature = signature
-            log.info("autonomous todo deadline convergence", {
-              command: "session.prompt.loop",
-              status: "ok",
-              sessionID,
-              pendingCount: pendingTodos.length,
-              remainingAgentSteps,
-              maxSteps,
-            })
-            await createAutonomousTextContinuation({
-              sessionID,
-              messages: latestMessages,
-              text: AutonomousContinuationPrompt.deadlineConvergence({
-                remainingAgentSteps,
-                pendingTodos,
-                includeReportClosureGuidance: deadlineConvergence.includeReportClosureGuidance,
-              }),
-            })
-            continue
-          }
+        lastTodoContextSignature = todoConvergence.lastTodoContextSignature
+        lastTodoDeadlineSignature = todoConvergence.lastTodoDeadlineSignature
+        if (todoConvergence.action === "continue") {
+          await createAutonomousTextContinuation({
+            sessionID,
+            messages: latestMessages,
+            text: todoConvergence.text,
+          })
+          continue
         }
 
         if (modelFinished && pendingTodos.length > 0) {
