@@ -993,6 +993,22 @@ export namespace QualityModelRegistry {
     }
   }
 
+  function reviewDossierRecordSummary(
+    reviewDossier: QualityPromotionReviewDossier.DossierArtifact,
+  ): NonNullable<PromotionRecord["reviewDossier"]> {
+    const submissionBundle = reviewDossier.submissionBundle
+    return {
+      dossierID: reviewDossier.dossierID,
+      createdAt: reviewDossier.createdAt,
+      submissionID: submissionBundle.submissionID,
+      submissionCreatedAt: submissionBundle.createdAt,
+      decisionBundleCreatedAt: submissionBundle.decisionBundle.createdAt,
+      approvalPacketID: submissionBundle.approvalPacket.packetID,
+      overallStatus: reviewDossier.summary.overallStatus,
+      recommendation: reviewDossier.summary.recommendation,
+    }
+  }
+
   function buildReleasePacketPromotionSnapshot(input: {
     releasePacket: QualityPromotionReleasePacket.PacketArtifact
     promotionMetadata: PromotionMetadata
@@ -1043,16 +1059,7 @@ export namespace QualityModelRegistry {
         promotionMode: input.releasePacket.summary.promotionMode,
         overallStatus: input.releasePacket.summary.overallStatus,
       },
-      reviewDossier: {
-        dossierID: reviewDossier.dossierID,
-        createdAt: reviewDossier.createdAt,
-        submissionID: submissionBundle.submissionID,
-        submissionCreatedAt: submissionBundle.createdAt,
-        decisionBundleCreatedAt: submissionBundle.decisionBundle.createdAt,
-        approvalPacketID: approvalPacket.packetID,
-        overallStatus: reviewDossier.summary.overallStatus,
-        recommendation: reviewDossier.summary.recommendation,
-      },
+      reviewDossier: reviewDossierRecordSummary(reviewDossier),
       submissionBundle: submissionBundleRecordSummary(submissionBundle),
       approvalPacket: {
         packetID: approvalPacket.packetID,
@@ -1951,16 +1958,7 @@ export namespace QualityModelRegistry {
     })
     const record = PromotionRecord.parse({
       ...result.record,
-      reviewDossier: {
-        dossierID: reviewDossier.dossierID,
-        createdAt: reviewDossier.createdAt,
-        submissionID: reviewDossier.submissionBundle.submissionID,
-        submissionCreatedAt: reviewDossier.submissionBundle.createdAt,
-        decisionBundleCreatedAt: reviewDossier.submissionBundle.decisionBundle.createdAt,
-        approvalPacketID: reviewDossier.submissionBundle.approvalPacket.packetID,
-        overallStatus: reviewDossier.summary.overallStatus,
-        recommendation: reviewDossier.summary.recommendation,
-      },
+      reviewDossier: reviewDossierRecordSummary(reviewDossier),
     })
     await writePromotionRecord(record)
     return {
