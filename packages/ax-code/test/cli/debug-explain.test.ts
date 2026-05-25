@@ -149,6 +149,12 @@ describe("debug explain replay hang analysis", () => {
     expect(issue?.rootCause).toContain("read: File not found:")
   })
 
+  test("skips non-record JSON diagnostic lines", () => {
+    expect(scanStandardLogLines(["null", "[]"], true).errorEntries).toEqual([])
+    expect(parseReplayEventLines(["null", "[]"])).toEqual([])
+    expect(parseProcessEventLines(["null", "[]"])).toEqual([])
+  })
+
   test("flags renderer testing mode as a critical TUI misconfiguration", () => {
     const lines = [
       JSON.stringify({
