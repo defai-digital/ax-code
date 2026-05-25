@@ -57,6 +57,11 @@ export namespace QualityModelRegistry {
     return gates.find((gate) => gate.status === "fail")?.detail ?? fallback
   }
 
+  function optionalInputArray<T>(input: T | T[] | null | undefined) {
+    if (input == null) return []
+    return Array.isArray(input) ? input : [input]
+  }
+
   export const PromotionMetadata = z.object({
     promotionID: z.string(),
     promotedAt: z.string(),
@@ -1635,15 +1640,11 @@ export namespace QualityModelRegistry {
       releasePolicyResolution?: QualityPromotionReleasePolicyStore.Resolution
     },
   ) {
-    const approvalPackets = options?.approvalPacket
-      ? Array.isArray(options.approvalPacket)
-        ? options.approvalPacket
-        : [options.approvalPacket]
-      : []
+    const approvalPackets = optionalInputArray(options?.approvalPacket)
     if (approvalPackets.length > 1) {
       throw new Error(`Cannot promote model ${decisionBundle.source}: provide at most one approval packet`)
     }
-    const directApprovals = approvalInput ? (Array.isArray(approvalInput) ? approvalInput : [approvalInput]) : []
+    const directApprovals = optionalInputArray(approvalInput)
     if (approvalPackets.length > 0 && directApprovals.length > 0) {
       throw new Error(
         `Cannot promote model ${decisionBundle.source}: approval packet cannot be combined with direct approval artifacts`,
@@ -1698,11 +1699,7 @@ export namespace QualityModelRegistry {
         }
         await QualityPromotionApproval.assertPersisted(approval)
       }
-      const adoptionReviews = options?.adoptionReviews
-        ? Array.isArray(options.adoptionReviews)
-          ? options.adoptionReviews
-          : [options.adoptionReviews]
-        : []
+      const adoptionReviews = optionalInputArray(options?.adoptionReviews)
       for (const review of adoptionReviews) {
         const reviewReasons = QualityPromotionAdoptionReview.verify(decisionBundle, review)
         if (reviewReasons.length > 0) {
@@ -1722,11 +1719,7 @@ export namespace QualityModelRegistry {
           `Cannot promote model ${decisionBundle.source}: adoption review consensus not satisfied (${blockingConsensusGate.detail})`,
         )
       }
-      const dissentHandlingBundles = options?.dissentHandling
-        ? Array.isArray(options.dissentHandling)
-          ? options.dissentHandling
-          : [options.dissentHandling]
-        : []
+      const dissentHandlingBundles = optionalInputArray(options?.dissentHandling)
       if (dissentHandlingBundles.length > 1) {
         throw new Error(`Cannot promote model ${decisionBundle.source}: provide at most one dissent handling bundle`)
       }
@@ -1748,11 +1741,7 @@ export namespace QualityModelRegistry {
         resolvedDissentResolutions = handlingBundle.resolutions
         resolvedDissentSupersessions = handlingBundle.supersessions
       } else {
-        const dissentResolutions = options?.dissentResolutions
-          ? Array.isArray(options.dissentResolutions)
-            ? options.dissentResolutions
-            : [options.dissentResolutions]
-          : []
+        const dissentResolutions = optionalInputArray(options?.dissentResolutions)
         for (const resolution of dissentResolutions) {
           const resolutionReasons = QualityPromotionAdoptionDissentResolution.verify(decisionBundle, resolution)
           if (resolutionReasons.length > 0) {
@@ -1767,11 +1756,7 @@ export namespace QualityModelRegistry {
           dissentResolutions,
         )
 
-        const dissentSupersessions = options?.dissentSupersessions
-          ? Array.isArray(options.dissentSupersessions)
-            ? options.dissentSupersessions
-            : [options.dissentSupersessions]
-          : []
+        const dissentSupersessions = optionalInputArray(options?.dissentSupersessions)
         for (const supersession of dissentSupersessions) {
           const supersessionReasons = QualityPromotionAdoptionDissentSupersession.verify(decisionBundle, supersession)
           if (supersessionReasons.length > 0) {
