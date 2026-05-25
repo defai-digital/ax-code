@@ -25,7 +25,6 @@ import { iife } from "@/util/iife"
 import { agentInfo, modelInfo } from "./prompt-agent-model-info"
 import {
   processorLoopDecision,
-  assistantLoopExitDecision,
   assistantRespondedAfterUser,
 } from "./prompt-loop-decisions"
 import {
@@ -34,6 +33,7 @@ import {
   processPendingCompaction,
 } from "./prompt-loop-compaction"
 import { resolvePromptLoopErrorTransition } from "./prompt-loop-errors"
+import { resolvePromptLoopAssistantExit } from "./prompt-loop-exit"
 import { loopMessages, scanLoopMessages } from "./prompt-loop-messages"
 import { finishPromptLoopQueue } from "./prompt-loop-queue"
 import {
@@ -336,22 +336,14 @@ export namespace SessionPrompt {
         reason = superLongDeadline.reason
         break
       }
-      const assistantExit = assistantLoopExitDecision({
+      const assistantExit = resolvePromptLoopAssistantExit({
+        sessionID,
         lastUserID: lastUser.id,
         lastAssistant,
         hasPendingSubtask: tasks.some((t) => t.type === "subtask"),
       })
-      if (assistantExit.action === "complete") {
-        log.info("exiting loop", { command: "session.prompt.loop", status: "ok", sessionID })
-        reason = "completed"
-        break
-      }
-      if (assistantExit.action === "complete_unknown_finish") {
-        log.warn(assistantExit.logMessage, {
-          command: "session.prompt.loop",
-          sessionID,
-        })
-        reason = "completed"
+      if (assistantExit.action === "stop") {
+        reason = assistantExit.reason
         break
       }
 
