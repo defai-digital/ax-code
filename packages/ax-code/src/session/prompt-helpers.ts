@@ -30,6 +30,7 @@ import { Token } from "../util/token"
 import type { SessionProcessor } from "./processor"
 import type { SessionCompaction } from "./compaction"
 import { formatDecisionCount, modelTurnFinished } from "./prompt-autonomous-decisions"
+export { appendShellOutputChunk, shellArgs, shellOutputMetadata, type ShellOutputState } from "./prompt-shell-runtime"
 
 function publishAgentInfoError(input: {
   sessionID: SessionID
@@ -129,12 +130,6 @@ type GoalArgumentDecision =
       objective: string
       tokenBudget?: number
     }
-
-export type ShellOutputState = {
-  output: string
-  outputBytes: number
-  outputTruncated: boolean
-}
 
 type AssistantPath = MessageV2.Assistant["path"]
 type AssistantTokens = MessageV2.Assistant["tokens"]
@@ -399,52 +394,6 @@ export function parseGoalArguments(raw: string): GoalArgumentDecision {
   return { action: "create", objective: text }
 }
 
-export function appendShellOutputChunk(
-  state: ShellOutputState,
-  chunk: Buffer | string,
-  hardCap: number,
-): ShellOutputState {
-  const text = typeof chunk === "string" ? chunk : chunk.toString()
-  if (!text || state.outputTruncated) return state
-
-  const chunkBytes = Buffer.byteLength(text, "utf-8")
-  if (state.outputBytes + chunkBytes <= hardCap) {
-    return {
-      ...state,
-      output: state.output + text,
-      outputBytes: state.outputBytes + chunkBytes,
-    }
-  }
-
-  let end = text.length
-  const remaining = hardCap - state.outputBytes
-  while (end > 0 && Buffer.byteLength(text.slice(0, end), "utf-8") > remaining) {
-    end--
-  }
-
-  let output = state.output
-  let outputBytes = state.outputBytes
-  if (end > 0) {
-    const slice = text.slice(0, end)
-    output += slice
-    outputBytes += Buffer.byteLength(slice, "utf-8")
-  }
-
-  return {
-    output: output + "\n\n[output truncated at 10MB]",
-    outputBytes,
-    outputTruncated: true,
-  }
-}
-
-export function shellOutputMetadata(state: ShellOutputState) {
-  return {
-    output: state.output,
-    description: "",
-    outputTruncated: state.outputTruncated,
-  }
-}
-
 export function sessionAssistantPath(input?: { directory?: string; worktree?: string }): AssistantPath {
   return {
     cwd: input?.directory ?? Instance.directory,
@@ -464,43 +413,6 @@ export function zeroTokenUsage(input?: { total?: number }): AssistantTokens {
     total: input.total,
     ...tokens,
   }
-}
-
-function shellKey(shell: string, platform = process.platform) {
-  const name = platform === "win32" ? path.win32.basename(shell, ".exe") : path.basename(shell)
-  return name.toLowerCase()
-}
-
-export function shellArgs(shell: string, command: string, platform = process.platform) {
-  const name = shellKey(shell, platform)
-  const args: Record<string, string[]> = {
-    nu: ["-c", command],
-    fish: ["-c", command],
-    zsh: [
-      "-c",
-      "-l",
-      `
-            [[ -f ~/.zshenv ]] && source ~/.zshenv >/dev/null 2>&1 || true
-            [[ -f "\${ZDOTDIR:-$HOME}/.zshrc" ]] && source "\${ZDOTDIR:-$HOME}/.zshrc" >/dev/null 2>&1 || true
-            eval ${JSON.stringify(command)}
-          `,
-    ],
-    bash: [
-      "-c",
-      "-l",
-      `
-            shopt -s expand_aliases
-            [[ -f ~/.bashrc ]] && source ~/.bashrc >/dev/null 2>&1 || true
-            eval ${JSON.stringify(command)}
-          `,
-    ],
-    cmd: ["/c", command],
-    powershell: ["-NoProfile", "-Command", command],
-    pwsh: ["-NoProfile", "-Command", command],
-    "": ["-c", command],
-  }
-
-  return args[name] ?? args[""]
 }
 
 function commandArgs(input: string) {

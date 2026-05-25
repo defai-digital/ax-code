@@ -45,11 +45,10 @@ import { SessionStatus } from "./status"
 import { LLM } from "./llm"
 import { iife } from "@/util/iife"
 import { Shell } from "@/shell/shell"
+import { appendShellOutputChunk, shellArgs, shellOutputMetadata } from "./prompt-shell-runtime"
 import {
-  appendShellOutputChunk,
   commandModel,
   commandSetup,
-  shellArgs,
   agentInfo,
   assistantLoopExitDecision,
   assistantRespondedAfterUser,
@@ -65,7 +64,6 @@ import {
   parseGoalArguments,
   shouldScheduleUsageCompaction,
   sessionAssistantPath,
-  shellOutputMetadata,
   systemPrompt as getSystemPrompt,
   textPart,
   zeroTokenUsage,
