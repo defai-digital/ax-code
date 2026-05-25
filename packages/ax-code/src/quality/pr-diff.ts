@@ -1,6 +1,7 @@
 import z from "zod"
 import { NamedError } from "@ax-code/util/error"
 import { Env } from "../util/env"
+import { toErrorMessage } from "../util/error-message"
 import { parseJsonResult } from "../util/json-value"
 import { Log } from "../util/log"
 
@@ -113,7 +114,7 @@ export function decodePrViewJson(stdout: string): PrViewDecodeResult {
   const parsed = parseJsonResult(stdout)
   if (!parsed.ok) {
     const { error } = parsed
-    return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    return { ok: false, error: toErrorMessage(error) }
   }
   return decodePrViewValue(parsed.value)
 }

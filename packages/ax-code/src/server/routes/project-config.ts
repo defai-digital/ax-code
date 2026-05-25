@@ -7,6 +7,7 @@ import { FileLock } from "@/util/filelock"
 import { Lock } from "@/util/lock"
 import { Log } from "@/util/log"
 import { FeatureFlag } from "@/util/feature-flags"
+import { toErrorMessage } from "@/util/error-message"
 import { parseJsonResult } from "@/util/json-value"
 
 const log = Log.create({ service: "project-config" })
@@ -17,13 +18,9 @@ export const BooleanFeatureState = z.object({
   enabled: z.boolean(),
 })
 
-function coerceErrorMessage(error: unknown) {
-  return error instanceof Error ? error.message : String(error)
-}
-
 function createPersistErrorLogger(log: ReturnType<typeof Log.create>, context: string) {
   return (error: unknown) => {
-    log.warn(`failed to persist ${context}`, { error: coerceErrorMessage(error) })
+    log.warn(`failed to persist ${context}`, { error: toErrorMessage(error) })
   }
 }
 

@@ -3,6 +3,7 @@ import * as fs from "fs/promises"
 import z from "zod"
 import { CategoryEnum, SeverityEnum, WorkflowEnum } from "./finding"
 import { ConfigPaths } from "../config/paths"
+import { toErrorMessage } from "../util/error-message"
 import { Log } from "../util/log"
 import { parseJsonResult } from "../util/json-value"
 
@@ -123,7 +124,7 @@ export namespace Policy {
       return {
         ok: false,
         reason: "json",
-        error: error instanceof Error ? error.message : String(error),
+        error: toErrorMessage(error),
       }
     }
     return decodeRulesValue(parsed.value)

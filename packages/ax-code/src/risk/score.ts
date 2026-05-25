@@ -5,6 +5,7 @@ import { Log } from "../util/log"
 import { EventQuery } from "../replay/query"
 import { Snapshot } from "../snapshot"
 import { SessionSemanticCore } from "../session/semantic-core"
+import { toErrorMessage } from "../util/error-message"
 import { parseJsonResult } from "../util/json-value"
 import type { SessionID } from "../session/schema"
 
@@ -92,7 +93,7 @@ export namespace Risk {
     const parsed = parseJsonResult(raw)
     if (!parsed.ok) {
       const { error } = parsed
-      return { success: false, error: error instanceof Error ? error.message : String(error) }
+      return { success: false, error: toErrorMessage(error) }
     }
     return decodeSessionDiffValue(parsed.value)
   }
