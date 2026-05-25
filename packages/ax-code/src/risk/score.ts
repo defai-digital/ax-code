@@ -82,6 +82,11 @@ export namespace Risk {
     | { success: true; data: Snapshot.FileDiff[] }
     | { success: false; error: string }
 
+  export function decodeSessionDiffValue(value: unknown): SessionDiffJsonDecodeResult {
+    const decoded = Snapshot.FileDiff.array().safeParse(value)
+    return decoded.success ? { success: true, data: decoded.data } : { success: false, error: decoded.error.message }
+  }
+
   export function decodeSessionDiffJson(raw: string): SessionDiffJsonDecodeResult {
     let parsed: unknown
     try {
@@ -89,8 +94,7 @@ export namespace Risk {
     } catch (err) {
       return { success: false, error: err instanceof Error ? err.message : String(err) }
     }
-    const decoded = Snapshot.FileDiff.array().safeParse(parsed)
-    return decoded.success ? { success: true, data: decoded.data } : { success: false, error: decoded.error.message }
+    return decodeSessionDiffValue(parsed)
   }
 
   const SECURITY_PATTERNS = [
