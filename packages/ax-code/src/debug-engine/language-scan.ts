@@ -349,7 +349,10 @@ export async function detectMypy(input: DetectMypyInput = {}): Promise<LanguageS
 }
 
 export function parseMypyOutput(output: string): ParsedLanguageScan {
-  const json = JSON.parse(output)
+  return decodeMypyScanJson(JSON.parse(output))
+}
+
+export function decodeMypyScanJson(json: unknown): ParsedLanguageScan {
   const findings: LanguageFinding[] = []
   const filesScanned = new Set<string>()
 
