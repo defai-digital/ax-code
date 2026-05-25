@@ -19,6 +19,25 @@ export function getGlobalMemoryPath(): string {
   return path.join(Flag.AX_CODE_TEST_HOME || os.homedir(), ".ax-code", "memory.json")
 }
 
+const MemoryEntrySchema = z.object({
+  name: z.string(),
+  body: z.string(),
+  savedAt: z.string(),
+  why: z.string().optional(),
+  howToApply: z.string().optional(),
+  tags: z.array(z.string()).optional(),
+  pathGlobs: z.array(z.string()).optional(),
+  expiresAt: z.string().optional(),
+  confidence: z.number().optional(),
+  sourceSessionId: z.string().optional(),
+  agents: z.array(z.string()).optional(),
+})
+
+const MemoryEntrySectionSchema = z.object({
+  entries: z.array(MemoryEntrySchema),
+  tokens: z.number(),
+})
+
 const ProjectMemorySchema = z
   .object({
     version: z.number(),
@@ -37,86 +56,10 @@ const ProjectMemorySchema = z
         // Store reads are structurally tolerant so `memory doctor` can
         // diagnose recoverable semantic corruption. Recorder writes and
         // doctor checks still enforce confidence in the documented 0..1 range.
-        userPrefs: z
-          .object({
-            entries: z.array(
-              z.object({
-                name: z.string(),
-                body: z.string(),
-                savedAt: z.string(),
-                why: z.string().optional(),
-                howToApply: z.string().optional(),
-                tags: z.array(z.string()).optional(),
-                pathGlobs: z.array(z.string()).optional(),
-                expiresAt: z.string().optional(),
-                confidence: z.number().optional(),
-                sourceSessionId: z.string().optional(),
-                agents: z.array(z.string()).optional(),
-              }),
-            ),
-            tokens: z.number(),
-          })
-          .optional(),
-        feedback: z
-          .object({
-            entries: z.array(
-              z.object({
-                name: z.string(),
-                body: z.string(),
-                savedAt: z.string(),
-                why: z.string().optional(),
-                howToApply: z.string().optional(),
-                tags: z.array(z.string()).optional(),
-                pathGlobs: z.array(z.string()).optional(),
-                expiresAt: z.string().optional(),
-                confidence: z.number().optional(),
-                sourceSessionId: z.string().optional(),
-                agents: z.array(z.string()).optional(),
-              }),
-            ),
-            tokens: z.number(),
-          })
-          .optional(),
-        decisions: z
-          .object({
-            entries: z.array(
-              z.object({
-                name: z.string(),
-                body: z.string(),
-                savedAt: z.string(),
-                why: z.string().optional(),
-                howToApply: z.string().optional(),
-                tags: z.array(z.string()).optional(),
-                pathGlobs: z.array(z.string()).optional(),
-                expiresAt: z.string().optional(),
-                confidence: z.number().optional(),
-                sourceSessionId: z.string().optional(),
-                agents: z.array(z.string()).optional(),
-              }),
-            ),
-            tokens: z.number(),
-          })
-          .optional(),
-        reference: z
-          .object({
-            entries: z.array(
-              z.object({
-                name: z.string(),
-                body: z.string(),
-                savedAt: z.string(),
-                why: z.string().optional(),
-                howToApply: z.string().optional(),
-                tags: z.array(z.string()).optional(),
-                pathGlobs: z.array(z.string()).optional(),
-                expiresAt: z.string().optional(),
-                confidence: z.number().optional(),
-                sourceSessionId: z.string().optional(),
-                agents: z.array(z.string()).optional(),
-              }),
-            ),
-            tokens: z.number(),
-          })
-          .optional(),
+        userPrefs: MemoryEntrySectionSchema.optional(),
+        feedback: MemoryEntrySectionSchema.optional(),
+        decisions: MemoryEntrySectionSchema.optional(),
+        reference: MemoryEntrySectionSchema.optional(),
       })
       .passthrough(),
   })

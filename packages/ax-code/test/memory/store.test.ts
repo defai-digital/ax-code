@@ -26,6 +26,32 @@ describe("memory.store cache", () => {
     )
   })
 
+  test("parseProjectMemoryText decodes all entry-backed memory sections", () => {
+    const entry = {
+      name: "rule",
+      body: "Prefer focused commits",
+      savedAt: "2026-04-27T00:00:00Z",
+      confidence: 0.9,
+      tags: ["workflow"],
+    }
+    const parsed = store.parseProjectMemoryText(
+      JSON.stringify({
+        ...sampleMemory(),
+        sections: {
+          userPrefs: { entries: [entry], tokens: 4 },
+          feedback: { entries: [entry], tokens: 4 },
+          decisions: { entries: [entry], tokens: 4 },
+          reference: { entries: [entry], tokens: 4 },
+        },
+      }),
+    )
+
+    expect(parsed.sections.userPrefs?.entries[0]?.name).toBe("rule")
+    expect(parsed.sections.feedback?.entries[0]?.name).toBe("rule")
+    expect(parsed.sections.decisions?.entries[0]?.name).toBe("rule")
+    expect(parsed.sections.reference?.entries[0]?.name).toBe("rule")
+  })
+
   test("parseProjectMemoryText reports JSON and schema failures separately", () => {
     expect(() => store.parseProjectMemoryText('{"truncated":')).toThrow(/invalid memory JSON/)
     expect(() => store.parseProjectMemoryText(JSON.stringify({ version: 1 }))).toThrow(/invalid memory schema/)
