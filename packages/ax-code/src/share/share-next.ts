@@ -1,6 +1,7 @@
 import { Bus } from "@/bus"
 import { Account } from "@/account"
 import { Config } from "@/config/config"
+import { providerModelKey } from "@/provider/model-key"
 import { Provider } from "@/provider/provider"
 import { ProviderID, ModelID } from "@/provider/schema"
 import { Session } from "@/session"
@@ -424,7 +425,7 @@ export namespace ShareNext {
     for await (const msg of MessageV2.stream(sessionID)) {
       if (msg.info.role === "user") {
         const m = (msg.info as SDK.UserMessage).model
-        modelMap.set(`${m.providerID}/${m.modelID}`, m)
+        modelMap.set(providerModelKey(m), m)
       }
       chunk.push({ type: "message", data: msg.info })
       for (const part of msg.parts) chunk.push({ type: "part", data: part })

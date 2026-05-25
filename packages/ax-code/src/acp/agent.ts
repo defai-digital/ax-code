@@ -36,6 +36,7 @@ import { Hash } from "../util/hash"
 import { Lock } from "../util/lock"
 import { ACPSessionManager } from "./session"
 import type { ACPConfig, ACPSessionState } from "./types"
+import { providerModelKey } from "../provider/model-key"
 import { Provider } from "../provider/provider"
 import { ModelID, ProviderID } from "../provider/schema"
 import { Agent as AgentModule } from "../agent/agent"
@@ -480,7 +481,7 @@ export namespace ACP {
 
         const lastUser = messages?.findLast((m) => m.info.role === "user")?.info
         if (lastUser?.role === "user") {
-          result.models.currentModelId = `${lastUser.model.providerID}/${lastUser.model.modelID}`
+          result.models.currentModelId = providerModelKey(lastUser.model)
           this.sessionManager.setModel(sessionId, {
             providerID: ProviderID.make(lastUser.model.providerID),
             modelID: ModelID.make(lastUser.model.modelID),
@@ -1475,7 +1476,7 @@ export namespace ACP {
           sessionID,
           command: command.name,
           arguments: cmd.args,
-          model: model.providerID + "/" + model.modelID,
+          model: providerModelKey(model),
           agent,
           directory,
         })
@@ -1714,14 +1715,15 @@ export namespace ACP {
       )
       const models = Provider.sort(unsorted)
       return models.flatMap((model) => {
+        const modelId = providerModelKey({ providerID: provider.id, modelID: model.id })
         const base: ModelOption = {
-          modelId: `${provider.id}/${model.id}`,
+          modelId,
           name: `${provider.name}/${model.name}`,
         }
         if (!includeVariants || !model.variants) return [base]
         const variants = Object.keys(model.variants).filter((variant) => variant !== DEFAULT_VARIANT_VALUE)
         const variantOptions = variants.map((variant) => ({
-          modelId: `${provider.id}/${model.id}/${variant}`,
+          modelId: `${modelId}/${variant}`,
           name: `${provider.name}/${model.name} (${variant})`,
         }))
         return [base, ...variantOptions]
@@ -1735,7 +1737,7 @@ export namespace ACP {
     availableVariants: string[],
     includeVariant: boolean,
   ) {
-    const base = `${model.providerID}/${model.modelID}`
+    const base = providerModelKey(model)
     if (!includeVariant || !variant || !availableVariants.includes(variant)) return base
     return `${base}/${variant}`
   }
@@ -1747,7 +1749,7 @@ export namespace ACP {
   }) {
     return {
       "ax-code": {
-        modelId: `${input.model.providerID}/${input.model.modelID}`,
+        modelId: providerModelKey(input.model),
         variant: input.variant ?? null,
         availableVariants: input.availableVariants,
       },
