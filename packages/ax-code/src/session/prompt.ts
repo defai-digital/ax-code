@@ -52,7 +52,7 @@ import { handlePromptLoopGlobalStepLimit } from "./prompt-loop-step-limit"
 import { preparePromptRequest, type PromptRequestCache } from "./prompt-request-build"
 import { createStructuredOutputTurn } from "./prompt-structured-output"
 import { executeSubtask, type SubtaskContext } from "./prompt-subtask"
-import { resolveTools } from "./prompt-tools"
+import { resolveTools, shouldBypassAgentCheck } from "./prompt-tools"
 import { clearPromptProcessorInstructions, createPromptProcessor } from "./prompt-processor"
 import { addPromptGoalUsage } from "./prompt-goal-usage"
 import {
@@ -481,16 +481,13 @@ export namespace SessionPrompt {
       })
       using _ = defer(() => clearPromptProcessorInstructions(processor))
 
-      // Check if user explicitly invoked an agent via @ in this turn
-      const bypassAgentCheck = lastUserParts?.some((p) => p.type === "agent") ?? false
-
       const tools = await resolveTools({
         agent,
         session,
         model,
         tools: lastUser.tools,
         processor,
-        bypassAgentCheck,
+        bypassAgentCheck: shouldBypassAgentCheck(lastUserParts),
         messages: msgs,
         isolation: Isolation.resolve(cfg.isolation, Instance.directory, Instance.worktree),
       })
