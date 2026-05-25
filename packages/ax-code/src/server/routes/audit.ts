@@ -13,7 +13,7 @@ const log = Log.create({ service: "audit.routes" })
 // One corrupt line (partial write, truncation) previously blew up the
 // whole /audit export — callers now skip null entries so the rest of the
 // log is still returned.
-function parseLine(line: string): unknown | null {
+export function parseAuditJsonLine(line: string): unknown | null {
   try {
     return JSON.parse(line)
   } catch (err) {
@@ -38,7 +38,7 @@ export const AuditRoutes = lazy(() =>
       async (c) => {
         const sessionID = parseSessionID(c)
         const lines = [...AuditExport.stream(sessionID)]
-        return c.json({ data: lines.map(parseLine).filter((x) => x !== null) })
+        return c.json({ data: lines.map(parseAuditJsonLine).filter((x) => x !== null) })
       },
     )
     .get(
@@ -66,7 +66,7 @@ export const AuditRoutes = lazy(() =>
         const { since, risk, type } = c.req.valid("query")
         type AuditRecord = { session_id: string; event_type: string; [key: string]: unknown }
         let records = [...AuditExport.streamAll({ since })]
-          .map(parseLine)
+          .map(parseAuditJsonLine)
           .filter((x): x is AuditRecord => x !== null && typeof x === "object" && "session_id" in (x as object))
         if (type) records = records.filter((r) => r.event_type === type)
         if (risk) {
