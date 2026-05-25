@@ -2,6 +2,7 @@ import { Hono } from "hono"
 import { describeRoute, validator } from "hono-openapi"
 import z from "zod"
 import { AuditExport } from "../../audit/export"
+import { parseAuditJsonLineResult } from "../../audit/json"
 import { Replay } from "../../replay/replay"
 import { lazy } from "../../util/lazy"
 import { Log } from "../../util/log"
@@ -14,12 +15,12 @@ const log = Log.create({ service: "audit.routes" })
 // whole /audit export — callers now skip null entries so the rest of the
 // log is still returned.
 export function parseAuditJsonLine(line: string): unknown | null {
-  try {
-    return JSON.parse(line)
-  } catch (err) {
-    log.warn("skipping corrupt audit line", { line: line.slice(0, 200), err })
+  const parsed = parseAuditJsonLineResult(line)
+  if (!parsed.ok) {
+    log.warn("skipping corrupt audit line", { line: line.slice(0, 200), err: parsed.error })
     return null
   }
+  return parsed.value
 }
 
 export const AuditRoutes = lazy(() =>
