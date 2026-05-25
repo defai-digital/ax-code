@@ -11,7 +11,6 @@ import { LLM } from "./llm"
 import { iife } from "@/util/iife"
 import { NotFoundError } from "@/storage/db"
 import { Log } from "../util/log"
-import { NamedError } from "@ax-code/util/error"
 import { SystemPrompt } from "./system"
 import { InstructionPrompt } from "./instruction"
 import { DiagnosticLog } from "@/debug/diagnostic-log"
@@ -25,25 +24,13 @@ import { formatDecisionCount, modelTurnFinished } from "./prompt-autonomous-deci
 import { commandTemplateText } from "./prompt-command-template"
 import { commandModel, commandUser } from "./prompt-command-selection"
 import { commandParts } from "./prompt-command-parts"
+import { agentInfo, modelInfo } from "./prompt-agent-model-info"
 export { commandTemplateText } from "./prompt-command-template"
 export { commandModel, commandUser, lastModel } from "./prompt-command-selection"
 export { commandParts } from "./prompt-command-parts"
 export { resolvePromptParts } from "./prompt-reference-parts"
 export { appendShellOutputChunk, shellArgs, shellOutputMetadata, type ShellOutputState } from "./prompt-shell-runtime"
-
-function publishAgentInfoError(input: {
-  sessionID: SessionID
-  message: string
-  report?: (sessionID: SessionID, error: Record<string, unknown>) => unknown
-}) {
-  const error = new NamedError.Unknown({ message: input.message }).toObject()
-  if (input.report) {
-    input.report(input.sessionID, error)
-    return error
-  }
-  Session.publishError({ sessionID: input.sessionID, error })
-  return error
-}
+export { agentInfo, modelInfo } from "./prompt-agent-model-info"
 
 const log = Log.create({ service: "session.prompt" })
 
@@ -57,14 +44,6 @@ IMPORTANT:
 
 const TITLE_CONTEXT_MAX_TOKENS = 3_000
 const TITLE_CONTEXT_MAX_CHARS = TITLE_CONTEXT_MAX_TOKENS * 4
-
-type AgentLike = {
-  hidden?: boolean
-  name: string
-}
-
-type AgentInfo = NonNullable<Awaited<ReturnType<typeof Agent.get>>>
-type ModelInfo = Awaited<ReturnType<typeof Provider.getModel>>
 
 type PendingCompactionDecision =
   | { type: "break"; reason: "completed" | "error" }
@@ -469,52 +448,6 @@ export async function commandSetup(input: {
     subtask: result.subtask,
     template,
     user,
-  }
-}
-
-export async function agentInfo<T extends AgentLike = AgentInfo>(input: {
-  sessionID: SessionID
-  name: string
-  get?: (name: string) => Promise<T | undefined>
-  list?: () => Promise<T[]>
-  report?: (sessionID: SessionID, error: Record<string, unknown>) => unknown
-}) {
-  const agent = await (input.get ?? Agent.get)(input.name)
-  if (agent) return agent
-
-  const available = await (input.list ?? Agent.list)().then((items) =>
-    items.filter((item) => Agent.resolveTier(item) !== "internal").map((item) => item.name),
-  )
-  const hint = available.length ? ` Available agents: ${available.join(", ")}` : ""
-  const errorMessage = `Agent not found: "${input.name}".${hint}`
-  publishAgentInfoError({
-    sessionID: input.sessionID,
-    message: errorMessage,
-    report: input.report,
-  })
-  throw new NamedError.Unknown({ message: errorMessage })
-}
-
-export async function modelInfo<T = ModelInfo>(input: {
-  sessionID: SessionID
-  providerID: ProviderID
-  modelID: ModelID
-  get?: (providerID: ProviderID, modelID: ModelID) => Promise<T>
-  report?: (sessionID: SessionID, error: Record<string, unknown>) => unknown
-}) {
-  try {
-    return await (input.get ?? Provider.getModel)(input.providerID, input.modelID)
-  } catch (error) {
-    if (Provider.ModelNotFoundError.isInstance(error)) {
-      const { providerID, modelID, suggestions } = error.data
-      const hint = suggestions?.length ? ` Did you mean: ${suggestions.join(", ")}?` : ""
-      publishAgentInfoError({
-        sessionID: input.sessionID,
-        message: `Model not found: ${providerID}/${modelID}.${hint}`,
-        report: input.report,
-      })
-    }
-    throw error
   }
 }
 
