@@ -4,6 +4,8 @@ import { buffer } from "node:stream/consumers"
 import { Shell } from "../shell/shell"
 import { toErrorMessage } from "./error-message"
 
+const TIMEOUT_FORCE_KILL_GRACE_MS = 250
+
 export namespace Process {
   export type Stdio = "inherit" | "pipe" | "ignore"
   export type Shell = boolean | string
@@ -120,11 +122,10 @@ export namespace Process {
 
       const signal = opts.kill ?? "SIGTERM"
       proc.kill(signal)
-      const ms = opts.timeout ?? 5_000
-      if (ms <= 0) return
+      if (TIMEOUT_FORCE_KILL_GRACE_MS <= 0) return
       forceKillTimer = setTimeout(() => {
         void killProcessTree(proc, { signal: opts.kill }).catch(() => undefined)
-      }, ms)
+      }, TIMEOUT_FORCE_KILL_GRACE_MS)
     }
 
     const exited = new Promise<number>((resolve, reject) => {
