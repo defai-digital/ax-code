@@ -1,8 +1,18 @@
+import z from "zod"
+
 export interface ProcessLockBody {
   pid: number
   startedAt: number
   host: string
 }
+
+const ProcessLockBodySchema = z
+  .object({
+    pid: z.number().finite(),
+    startedAt: z.number().finite(),
+    host: z.string(),
+  })
+  .passthrough()
 
 export function currentLockHost(): string {
   return process.env.HOSTNAME ?? ""
@@ -20,29 +30,13 @@ export function createProcessLockBody(): ProcessLockBody {
   }
 }
 
-function isJsonRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
-}
-
 export function parseProcessLockBody<T extends Record<string, unknown> = Record<string, never>>(
   text: string,
 ): (ProcessLockBody & T) | undefined {
   try {
     const parsed: unknown = JSON.parse(text)
-    if (!isJsonRecord(parsed)) return undefined
-
-    const candidate = parsed as Partial<ProcessLockBody & T>
-    if (
-      typeof candidate.pid !== "number" ||
-      !Number.isFinite(candidate.pid) ||
-      typeof candidate.startedAt !== "number" ||
-      !Number.isFinite(candidate.startedAt) ||
-      typeof candidate.host !== "string"
-    ) {
-      return undefined
-    }
-
-    return candidate as ProcessLockBody & T
+    const decoded = ProcessLockBodySchema.safeParse(parsed)
+    return decoded.success ? (decoded.data as ProcessLockBody & T) : undefined
   } catch {
     return undefined
   }
