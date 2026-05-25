@@ -102,19 +102,8 @@ export namespace Policy {
     return undefined
   }
 
-  export function decodeRulesJson(raw: string): RulesDecodeResult {
-    let parsed: unknown
-    try {
-      parsed = JSON.parse(raw)
-    } catch (err) {
-      return {
-        ok: false,
-        reason: "json",
-        error: err instanceof Error ? err.message : String(err),
-      }
-    }
-
-    const validated = PolicyRulesSchema.safeParse(parsed)
+  export function decodeRulesValue(value: unknown): RulesDecodeResult {
+    const validated = PolicyRulesSchema.safeParse(value)
     if (!validated.success) {
       return {
         ok: false,
@@ -124,6 +113,18 @@ export namespace Policy {
       }
     }
     return { ok: true, data: validated.data }
+  }
+
+  export function decodeRulesJson(raw: string): RulesDecodeResult {
+    try {
+      return decodeRulesValue(JSON.parse(raw))
+    } catch (err) {
+      return {
+        ok: false,
+        reason: "json",
+        error: err instanceof Error ? err.message : String(err),
+      }
+    }
   }
 
   function assertSafePolicyName(name: string) {
