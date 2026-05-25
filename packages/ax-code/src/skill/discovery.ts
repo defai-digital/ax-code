@@ -40,6 +40,16 @@ export namespace Discovery {
     skills: Schema.Array(IndexSkill),
   }) {}
 
+  export type IndexData = Schema.Schema.Type<typeof Index>
+
+  export function decodeIndexValue(value: unknown): IndexData {
+    return Schema.decodeUnknownSync(Index)(value)
+  }
+
+  export function parseIndexText(text: string): IndexData {
+    return decodeIndexValue(JSON.parse(text))
+  }
+
   export interface Interface {
     readonly pull: (url: string) => Effect.Effect<string[]>
   }
@@ -136,8 +146,7 @@ export namespace Discovery {
         log.info("fetching index", { url: index })
 
         const data = yield* fetchArrayBuffer(index, { headers: { Accept: "application/json" } }).pipe(
-          Effect.map((body) => JSON.parse(Buffer.from(body).toString("utf8"))),
-          Effect.flatMap(Schema.decodeUnknownEffect(Index)),
+          Effect.map((body) => parseIndexText(Buffer.from(body).toString("utf8"))),
           Effect.catch((err) =>
             Effect.sync(() => {
               log.error("failed to fetch index", { url: index, err })

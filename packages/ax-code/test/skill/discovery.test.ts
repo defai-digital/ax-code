@@ -121,6 +121,28 @@ describe("Discovery.pull", () => {
   const pull = (url: string) =>
     Effect.runPromise(Discovery.Service.use((s) => s.pull(url)).pipe(Effect.provide(Discovery.defaultLayer)))
 
+  test("decodes skill discovery index values", () => {
+    expect(
+      Discovery.decodeIndexValue({
+        skills: [{ name: "safe-skill", files: [{ path: "SKILL.md", sha256: safeSkillHash }] }],
+      }),
+    ).toEqual({
+      skills: [{ name: "safe-skill", files: [{ path: "SKILL.md", sha256: safeSkillHash }] }],
+    })
+    expect(() => Discovery.decodeIndexValue({ skills: [{ name: "safe-skill", files: [123] }] })).toThrow()
+  })
+
+  test("parses skill discovery index text before value decoding", () => {
+    expect(
+      Discovery.parseIndexText(
+        JSON.stringify({ skills: [{ name: "safe-skill", files: [{ path: "SKILL.md", sha256: safeSkillHash }] }] }),
+      ),
+    ).toEqual({
+      skills: [{ name: "safe-skill", files: [{ path: "SKILL.md", sha256: safeSkillHash }] }],
+    })
+    expect(() => Discovery.parseIndexText("{not json")).toThrow(SyntaxError)
+  })
+
   test("downloads skills from cloudflare url", async () => {
     const dirs = await pull(CLOUDFLARE_SKILLS_URL)
     expect(dirs.length).toBeGreaterThan(0)
