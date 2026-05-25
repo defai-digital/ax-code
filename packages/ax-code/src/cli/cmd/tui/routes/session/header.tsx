@@ -13,7 +13,7 @@ import { collapseSessionBreadcrumbs, sessionBreadcrumbs } from "./header-view-mo
 import { computeSidebarWidth } from "./layout"
 import { autonomousActiveView } from "./autonomous-active"
 import { useAutonomousPulse } from "./autonomous-pulse"
-import { footerGoalChip, isFooterSessionStatus, type FooterSessionStatus } from "./footer-view-model"
+import { footerGoalChip, footerSessionStatusOrIdle } from "./footer-view-model"
 import { Spinner } from "../../component/spinner"
 
 const SUBAGENT_PARENT_DOUBLE_CLICK_MS = 400
@@ -79,8 +79,7 @@ export function Header() {
   // the transcript border tint all share one truth.
   const autonomous = createMemo(() => {
     const candidate = sync.data.session_status?.[route.sessionID]
-    const status: FooterSessionStatus = isFooterSessionStatus(candidate) ? candidate : { type: "idle" }
-    return autonomousActiveView(status)
+    return autonomousActiveView(footerSessionStatusOrIdle(candidate))
   })
   // Breathing pulse for the AUTONOMOUS chip — same driver as the
   // transcript outer border and the assistant text bubble so all three

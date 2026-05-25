@@ -332,7 +332,7 @@ describe("SessionVerifications.load", () => {
     })
   })
 
-  test("envelopeIdSet returns the set of all envelope ids in the session", async () => {
+  test("loadWithIds returns the set of all envelope ids in the session", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
       directory: tmp.path,
@@ -367,7 +367,7 @@ describe("SessionVerifications.load", () => {
         Recorder.end(session.id)
         await new Promise((resolve) => setTimeout(resolve, 50))
 
-        const ids = SessionVerifications.envelopeIdSet(session.id)
+        const ids = new Set(SessionVerifications.loadWithIds(session.id).map((item) => item.envelopeId))
         expect(ids.size).toBe(2)
         expect(ids.has(computeEnvelopeId(a))).toBe(true)
         expect(ids.has(computeEnvelopeId(b))).toBe(true)

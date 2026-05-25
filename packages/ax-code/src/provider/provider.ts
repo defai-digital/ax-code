@@ -84,7 +84,7 @@ export namespace Provider {
     chat?: (modelID: string) => unknown
   }
 
-  export function wrapSSEForTest(res: Response, ms: number, ctl: AbortController, signal?: AbortSignal) {
+  export function wrapSSE(res: Response, ms: number, ctl: AbortController, signal?: AbortSignal) {
     if (typeof ms !== "number" || ms <= 0) return res
     if (!res.body) return res
     if (!res.headers.get("content-type")?.includes("text/event-stream")) return res
@@ -152,10 +152,6 @@ export namespace Provider {
       status: res.status,
       statusText: res.statusText,
     })
-  }
-
-  function wrapSSE(res: Response, ms: number, ctl: AbortController, signal?: AbortSignal) {
-    return wrapSSEForTest(res, ms, ctl, signal)
   }
 
   const BUNDLED_PROVIDERS: Record<string, (options: any) => SDK> = {

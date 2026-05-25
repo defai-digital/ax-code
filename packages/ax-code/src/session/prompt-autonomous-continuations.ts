@@ -1,7 +1,35 @@
 import { Locale } from "@/util/locale"
 import { Todo } from "./todo"
 import type { PromptTodo } from "./prompt-todo-continuation"
-import { reportTodoClosureGuidance } from "./prompt-todo-continuation"
+
+type ReportTodoClosureMode = "deadline" | "continuation" | "context"
+
+function reportTodoClosureGuidance(mode: ReportTodoClosureMode) {
+  if (mode === "context") {
+    return (
+      `\nThe context is already large. For report-style todos, write the .internal/bugs report now ` +
+      `when there is credible suspected or confirmed evidence. Otherwise cancel that report todo with the ` +
+      `concrete reason; do not read more files for broad exploration.`
+    )
+  }
+
+  if (mode === "deadline") {
+    return (
+      `\nFor report-style todos, create the required .internal/bugs report now if there is a credible suspected ` +
+      `or confirmed issue. If the evidence is not credible enough, cancel that report todo with the concrete ` +
+      `reason instead of continuing broad analysis.`
+    )
+  }
+
+  return (
+    `\nFor report-style todos, write the .internal/bugs report now when there is credible suspected or confirmed ` +
+    `evidence. Otherwise cancel that report todo with the concrete reason; do not keep doing broad exploration.`
+  )
+}
+
+function optionalReportTodoClosureGuidance(input: { include: boolean; mode: ReportTodoClosureMode }) {
+  return input.include ? reportTodoClosureGuidance(input.mode) : ""
+}
 
 export namespace AutonomousContinuationPrompt {
   export function goal(input: { objective: string; continuation: number; maxContinuations: number }) {
@@ -103,7 +131,7 @@ export namespace AutonomousContinuationPrompt {
       `Stop broad exploration now. Finish the remaining concrete work, write any required reports, ` +
       `or cancel low-confidence todos with a short reason. Update the todo list after each completed ` +
       `or cancelled item before continuing.` +
-      (input.includeReportClosureGuidance ? reportTodoClosureGuidance("deadline") : "")
+      optionalReportTodoClosureGuidance({ include: input.includeReportClosureGuidance, mode: "deadline" })
     )
   }
 
@@ -132,7 +160,7 @@ export namespace AutonomousContinuationPrompt {
       `${Todo.formatLines(input.pendingTodos).join("\n")}\n` +
       `Continue working until all todos are completed or cancelled. ` +
       `This is auto-continuation ${input.attempt}/${input.maxAttempts}.` +
-      (input.includeReportClosureGuidance ? reportTodoClosureGuidance("continuation") : "") +
+      optionalReportTodoClosureGuidance({ include: input.includeReportClosureGuidance, mode: "continuation" }) +
       stagnantTodoGuidance
     )
   }

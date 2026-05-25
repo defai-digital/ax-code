@@ -75,7 +75,7 @@ function validateEvidencePresence(input: {
 
 function validateStaticAnalysis(input: {
   staticAnalysis: z.infer<typeof StaticAnalysisInput> | undefined
-  debugAnalyzeReferences: Map<string, SessionDebug.DebugAnalyzeReference>
+  debugAnalyzeReferences: ReturnType<typeof SessionDebug.debugAnalyzeReferences>
   sessionID: SessionID
 }) {
   if (!input.staticAnalysis) return

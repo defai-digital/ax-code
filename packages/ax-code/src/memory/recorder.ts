@@ -15,47 +15,8 @@ import * as store from "./store"
 import { generate } from "./generator"
 import { computeContentHash, renderEntry } from "./hash"
 import type { EntrySection, MemoryEntry, MemoryEntryKind, ProjectMemory } from "./types"
-import { Log } from "../util/log"
 import { FileLock } from "../util/filelock"
-
-const log = Log.create({ service: "memory.recorder" })
-
-// Serialize concurrent recordEntry / removeEntry calls for the same memory
-// file. Two parallel callers would otherwise both `loadOrInit` the same
-// snapshot, each apply their mutation, and the second `save` would overwrite
-// the first — a classic lost-update race. Cross-process safety is handled by
-// `store.save` (atomic tmp+rename); this in-process queue is the missing
-// layer for concurrent in-process callers (TUI sessions, parallel agent
-// turns, etc.). Each key (project root or "global") gets its own promise
-// chain; the entry is dropped once its tail resolves so the Map stays
-// bounded by the number of currently in-flight write paths.
-const writeQueues = new Map<string, Promise<unknown>>()
-
-async function withWriteQueue<T>(key: string, fn: () => Promise<T>): Promise<T> {
-  const prev = writeQueues.get(key) ?? Promise.resolve()
-  // Recover from a prior write failure but log it. `then(fn, fn)` would
-  // silently swallow the rejection, so an earlier disk error (full disk,
-  // permission denied, etc.) was never surfaced to operators — only the
-  // mutation it carried was lost. The log gives a forensic trail without
-  // breaking the chain (subsequent writes still proceed).
-  const next = prev.then(fn, (error) => {
-    log.warn("prior memory write failed; proceeding with next write", {
-      command: "memory.write_queue",
-      status: "error",
-      key,
-      error,
-    })
-    return fn()
-  })
-  writeQueues.set(key, next)
-  try {
-    return await next
-  } finally {
-    if (writeQueues.get(key) === next) writeQueues.delete(key)
-  }
-}
-
-const GLOBAL_KEY = "__global__"
+import { Lock } from "../util/lock"
 
 function estimateTokens(text: string): number {
   return Math.ceil(text.length / 4)
@@ -162,10 +123,20 @@ function nameKey(value: string) {
   return value.trim().toLowerCase()
 }
 
+function memoryPath(projectRoot: string, isGlobal: boolean) {
+  return isGlobal ? store.getGlobalMemoryPath() : store.getMemoryPath(projectRoot)
+}
+
+async function withMemoryWriteLock<T>(path: string, fn: () => Promise<T>): Promise<T> {
+  using _process = await Lock.write(path)
+  using _crossProcess = await FileLock.acquire(path)
+  return await fn()
+}
+
 /**
  * Add or replace an entry within the given kind. Returns the persisted memory.
  *
- * Serialized per memory file via `withWriteQueue` so two concurrent record
+ * Serialized per memory file via `withMemoryWriteLock` so two concurrent record
  * calls for the same project (or both global) don't race on
  * load → modify → save and lose one writer's entry.
  */
@@ -180,11 +151,7 @@ export async function recordEntry(
   if (!body) throw new Error("memory recorder: entry body must be non-empty")
 
   const isGlobal = input.scope === "global"
-  const queueKey = isGlobal ? GLOBAL_KEY : projectRoot
-  return withWriteQueue(queueKey, async () => {
-    using _crossProcess = await FileLock.acquire(
-      isGlobal ? store.getGlobalMemoryPath() : store.getMemoryPath(projectRoot),
-    )
+  return withMemoryWriteLock(memoryPath(projectRoot, isGlobal), async () => {
     const memory = isGlobal ? await loadOrInitGlobal() : await loadOrInit(projectRoot)
     const existing = memory.sections[kind]?.entries ?? []
     const filtered = existing.filter((e) => nameKey(e.name) !== nameKey(name))
@@ -220,7 +187,7 @@ export async function recordEntry(
 /**
  * Remove an entry by name. Returns true if removed, false if not found.
  *
- * Shares the per-file write queue with `recordEntry` so a remove can't
+ * Shares the per-file write lock with `recordEntry` so a remove can't
  * interleave with a record on the same file.
  */
 export async function removeEntry(
@@ -230,11 +197,7 @@ export async function removeEntry(
   scope: "project" | "global" = "project",
 ): Promise<boolean> {
   const isGlobal = scope === "global"
-  const queueKey = isGlobal ? GLOBAL_KEY : projectRoot
-  return withWriteQueue(queueKey, async () => {
-    using _crossProcess = await FileLock.acquire(
-      isGlobal ? store.getGlobalMemoryPath() : store.getMemoryPath(projectRoot),
-    )
+  return withMemoryWriteLock(memoryPath(projectRoot, isGlobal), async () => {
     const memory = isGlobal ? await store.loadGlobal() : await store.load(projectRoot)
     if (!memory) return false
     const section = memory.sections[kind]

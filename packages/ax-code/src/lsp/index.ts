@@ -42,15 +42,10 @@ export namespace LSP {
 
   const perfSamples = new Map<string, PerfEntry>()
 
-  // Exported for unit tests. Drives the sampler directly so ring-wrap,
-  // all-error, and mixed-status cases can be exercised without spinning up
-  // an actual LSP client. Production code should only reach this via the
-  // `metered()` wrapper.
-  export function recordPerfSampleForTest(operation: string, durationMs: number, ok: boolean) {
-    recordPerf(operation, durationMs, ok)
-  }
-
-  function recordPerf(operation: string, durationMs: number, ok: boolean) {
+  // Drives the sampler directly. `metered()` is the production call path,
+  // while unit tests use this to isolate ring-buffer semantics without
+  // spinning up an actual LSP client.
+  export function recordPerfSample(operation: string, durationMs: number, ok: boolean) {
     let entry = perfSamples.get(operation)
     if (!entry) {
       entry = { durations: [], cursor: 0, okCount: 0, errorCount: 0 }
@@ -68,13 +63,9 @@ export namespace LSP {
 
   function finishPerfPhase(operation: string, started: number, ok: boolean) {
     const durationMs = Math.round(performance.now() - started)
-    recordPerf(operation, durationMs, ok)
+    recordPerfSample(operation, durationMs, ok)
     return durationMs
   }
-
-  // Exported for unit tests. The cap is load-bearing for p95 stability and
-  // memory bounds; tests assert ring-wrap behavior against this value.
-  export const PERF_SAMPLE_CAP_FOR_TEST = PERF_SAMPLE_CAP
 
   function percentile(sorted: number[], p: number): number {
     if (sorted.length === 0) return 0
@@ -123,7 +114,7 @@ export namespace LSP {
     try {
       const result = await fn()
       const durationMs = Math.round(performance.now() - started)
-      recordPerf(operation, durationMs, true)
+      recordPerfSample(operation, durationMs, true)
       log.info("lsp.perf", {
         operation,
         durationMs,
@@ -133,7 +124,7 @@ export namespace LSP {
       return result
     } catch (err) {
       const durationMs = Math.round(performance.now() - started)
-      recordPerf(operation, durationMs, false)
+      recordPerfSample(operation, durationMs, false)
       log.warn("lsp.perf", {
         operation,
         durationMs,
@@ -947,7 +938,7 @@ export namespace LSP {
         selection = await getClientsDetailed(input, opts)
         const durationMs = finishPerfPhase("touch.select", selectStarted, true)
         if (selection.freshSpawnCount > 0) {
-          recordPerf("touch.select.spawned", durationMs, true)
+          recordPerfSample("touch.select.spawned", durationMs, true)
         }
       } catch (err) {
         finishPerfPhase("touch.select", selectStarted, false)
@@ -1081,16 +1072,14 @@ export namespace LSP {
     return [path, r.start.line, r.start.character, r.end.line, r.end.character, d.message].join("\u0000")
   }
 
-  // Pure aggregation kernel, exported for unit tests. Real call site
-  // is `diagnosticsAggregated` below, which just plumbs live clients
-  // and a timestamp into this function. Separating the pure logic
-  // from the Instance-bound state lookup makes aggregation semantics
-  // testable without standing up real LSP clients.
+  // Pure aggregation kernel. `diagnosticsAggregated` below plumbs live
+  // clients and a timestamp into this function; tests call it directly
+  // to cover aggregation semantics without standing up real LSP clients.
   export type DiagnosticsAggregateInput = {
     serverID: string
     diagnostics: Map<string, LSPClient.Diagnostic[]>
   }
-  export function aggregateDiagnosticsForTest(
+  export function aggregateDiagnostics(
     inputs: DiagnosticsAggregateInput[],
     opts: { file?: string; now: number },
   ): SemanticEnvelope<NormalizedDiagnostic[]> {
@@ -1167,7 +1156,7 @@ export namespace LSP {
   export async function diagnosticsAggregated(file?: string): Promise<SemanticEnvelope<NormalizedDiagnostic[]>> {
     return metered("diagnosticsAggregated", file ? { file } : {}, async () => {
       const s = await state()
-      return aggregateDiagnosticsForTest(
+      return aggregateDiagnostics(
         s.clients.map((c) => ({ serverID: c.serverID, diagnostics: c.diagnostics })),
         { file, now: Date.now() },
       )
@@ -1338,7 +1327,7 @@ export namespace LSP {
       }
       const selectDurationMs = finishPerfPhase("workspaceSymbol.select", selectStarted, true)
       if (selection.freshSpawnCount > 0) {
-        recordPerf("workspaceSymbol.select.spawned", selectDurationMs, true)
+        recordPerfSample("workspaceSymbol.select.spawned", selectDurationMs, true)
       }
 
       const clients = selection.clients
@@ -1456,7 +1445,7 @@ export namespace LSP {
       character: -1,
       enabled: true,
     })
-    if (hit) recordPerf("documentSymbol.cached", 0, true)
+    if (hit) recordPerfSample("documentSymbol.cached", 0, true)
     return hit
   }
 
@@ -1497,7 +1486,7 @@ export namespace LSP {
         { mode: "semantic", method: "documentSymbol" },
       )
 
-      recordPerf("documentSymbol.live", 0, true)
+      recordPerfSample("documentSymbol.live", 0, true)
       if (contentHash && useCache) {
         LSPCache.write({
           operation: "documentSymbol",
@@ -1563,7 +1552,7 @@ export namespace LSP {
       character: input.character,
       enabled: true,
     })
-    if (hit) recordPerf("references.cached", 0, true)
+    if (hit) recordPerfSample("references.cached", 0, true)
     return hit
   }
 
@@ -1604,7 +1593,7 @@ export namespace LSP {
         { mode: "semantic", method: "references" },
       )
 
-      recordPerf("references.live", 0, true)
+      recordPerfSample("references.live", 0, true)
       if (contentHash && useCache) {
         LSPCache.write({
           operation: "references",
@@ -1856,7 +1845,7 @@ export namespace LSP {
     }
     const selectDurationMs = finishPerfPhase(`${operation}.select`, selectStarted, true)
     if (selection.freshSpawnCount > 0) {
-      recordPerf(`${operation}.select.spawned`, selectDurationMs, true)
+      recordPerfSample(`${operation}.select.spawned`, selectDurationMs, true)
     }
 
     const clients = selection.clients

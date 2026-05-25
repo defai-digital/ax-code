@@ -188,8 +188,8 @@ export function buildIndexReport(input: {
 
 // Probe LSP availability for each language present in the project.
 // For each language with at least one file, we pick a representative
-// file and call LSP.touchFile to force the server to spawn. Then we
-// call LSP.status() to see which servers are actually connected.
+// file and call LSP.touchFile to force the server to spawn. The observed
+// opened-document count is the readiness signal.
 //
 // This is the pre-flight check users needed in v2.3.12: the earlier
 // flow silently produced `nodes=0` when an LSP server couldn't spawn,
@@ -221,15 +221,6 @@ export async function probeLspServers(
       return { lang, fileCount: files.length, opened }
     })
 
-  // Read the set of connected clients. Each client has a `root` and a
-  // list of extensions it serves. We don't get the language name
-  // directly from status(), so we cross-reference by checking which
-  // of our groups have a client whose root matches any file's
-  // directory prefix. In practice ax-code's clients are all rooted at
-  // Instance.directory so a simpler check works: if status() returns
-  // a client at all and its extensions include an extension present
-  // in the group, mark the language ready.
-  const statuses = await LSP.status().catch(() => [])
   for (const probe of await Promise.all(probes)) {
     if (!probe) continue
     // Use the observed touch result rather than hasClients(). The
@@ -242,11 +233,6 @@ export async function probeLspServers(
       missing.set(probe.lang, probe.fileCount)
     }
   }
-
-  // Ignore the unused `statuses` — it's captured here so a future
-  // enhancement can print per-server health (root path, error state)
-  // without a second round-trip. Silence the unused-variable lint.
-  void statuses
 
   return { ready, missing }
 }

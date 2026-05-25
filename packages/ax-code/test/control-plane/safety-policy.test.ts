@@ -75,6 +75,47 @@ describe("SafetyPolicy", () => {
     })
   })
 
+  test("uses runtime permission risk classes for autonomous shadow decisions", () => {
+    expect(
+      SafetyPolicy.decide({
+        mode: "autonomous",
+        permission: "task",
+      }),
+    ).toMatchObject({
+      action: "ask",
+      risk: "high",
+      reason: "autonomous_risky_permission",
+      matchedRule: "task",
+    })
+
+    expect(
+      SafetyPolicy.decide({
+        mode: "autonomous",
+        permission: "memorywrite",
+      }),
+    ).toMatchObject({
+      action: "ask",
+      risk: "high",
+      reason: "autonomous_risky_permission",
+      matchedRule: "memorywrite",
+    })
+  })
+
+  test("keeps web search aligned with runtime safe permissions", () => {
+    expect(
+      SafetyPolicy.decide({
+        mode: "autonomous",
+        permission: "websearch",
+      }),
+    ).toEqual({
+      action: "allow",
+      risk: "safe",
+      reason: "safe_permission",
+      checkpointRequired: false,
+      matchedRule: "websearch",
+    })
+  })
+
   test("allows risky normal-mode permissions only with checkpoint", () => {
     expect(
       SafetyPolicy.decide({

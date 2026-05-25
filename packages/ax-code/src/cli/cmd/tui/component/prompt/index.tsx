@@ -1420,10 +1420,9 @@ export function Prompt(props: PromptProps) {
       now: Date.now(),
     })
   })
-  // Live token totals + t/s rate for the prompt's busy row. Same
-  // helper the (currently dead) Footer used. Anchored on the last
-  // assistant message that has tokens, paired with that message's own
-  // time.created so the rate window matches the token count.
+  // Live token totals + t/s rate for the prompt's busy row. Anchored on
+  // the last assistant message that has tokens, paired with that
+  // message's own time.created so the rate window matches the count.
   const tokenChipView = createMemo(() => {
     statusTick()
     if (!props.sessionID) return undefined

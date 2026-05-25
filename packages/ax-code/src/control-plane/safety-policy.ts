@@ -1,5 +1,6 @@
 import z from "zod"
 
+import { classify as classifyPermissionRisk } from "../permission/risk-classes"
 import { AgentControl } from "./agent-control"
 
 export namespace SafetyPolicy {
@@ -43,9 +44,21 @@ export namespace SafetyPolicy {
     blastRadius?: BlastRadius
   }
 
-  export const DEFAULT_SAFE_PERMISSIONS = ["read", "glob", "grep", "list", "list_directory", "codesearch"] as const
+  const DEFAULT_SAFE_PERMISSIONS = [
+    "read",
+    "glob",
+    "grep",
+    "list",
+    "list_directory",
+    "codesearch",
+    "lsp",
+    "code_intelligence",
+    "skill",
+    "todoread",
+    "websearch",
+  ] as const
 
-  export const DEFAULT_RISKY_PERMISSIONS = [
+  const DEFAULT_RISKY_PERMISSIONS = [
     "edit",
     "write",
     "apply_patch",
@@ -53,10 +66,13 @@ export namespace SafetyPolicy {
     "network",
     "package_install",
     "webfetch",
-    "websearch",
+    "external_directory",
+    "task",
+    "todowrite",
+    "memorywrite",
   ] as const
 
-  export const DEFAULT_PROTECTED_PATHS = [
+  const DEFAULT_PROTECTED_PATHS = [
     ".env",
     ".env.*",
     "**/.env",
@@ -96,8 +112,8 @@ export namespace SafetyPolicy {
       }
     }
 
-    const safe = new Set(input.safePermissions ?? DEFAULT_SAFE_PERMISSIONS)
-    if (safe.has(input.permission)) {
+    const riskClass = permissionRiskClass(input)
+    if (riskClass === "safe") {
       return {
         action: "allow",
         risk: "safe",
@@ -107,8 +123,7 @@ export namespace SafetyPolicy {
       }
     }
 
-    const risky = new Set(input.riskyPermissions ?? DEFAULT_RISKY_PERMISSIONS)
-    if (risky.has(input.permission)) {
+    if (riskClass === "risk") {
       if (mode === "autonomous") {
         return {
           action: "ask",
@@ -144,6 +159,28 @@ export namespace SafetyPolicy {
       checkpointRequired: true,
       matchedRule: input.permission,
     }
+  }
+
+  function permissionRiskClass(input: Input): "safe" | "risk" | "unknown" {
+    const defaultClass = classifyPermissionRisk(input.permission)
+
+    if (input.safePermissions) {
+      if (input.safePermissions.includes(input.permission)) return "safe"
+    } else if (defaultClass === "safe" || includesPermission(DEFAULT_SAFE_PERMISSIONS, input.permission)) {
+      return "safe"
+    }
+
+    if (input.riskyPermissions) {
+      if (input.riskyPermissions.includes(input.permission)) return "risk"
+    } else if (defaultClass === "risk" || includesPermission(DEFAULT_RISKY_PERMISSIONS, input.permission)) {
+      return "risk"
+    }
+
+    return "unknown"
+  }
+
+  function includesPermission(permissions: readonly string[], permission: string): boolean {
+    return permissions.includes(permission)
   }
 
   function blastRadiusDecision(input: BlastRadius | undefined): Decision | undefined {

@@ -18,8 +18,8 @@ import { Session } from "."
 import { SessionBranchRank } from "./branch"
 import { SessionDebug } from "./debug"
 import { DecisionHints } from "./decision-hints"
-import { SessionFindings } from "./findings"
-import { SessionReviewResults } from "./review-results"
+import { loadSessionFindings } from "./findings"
+import { loadSessionReviewResults } from "./review-results"
 import { SessionSemanticDiff } from "./semantic-diff"
 import { SessionVerifications } from "./verifications"
 import { EventQuery } from "../replay/query"
@@ -128,9 +128,9 @@ export namespace SessionRisk {
       log.warn("quality shadow capture failed", { sessionID, err })
     })
     const quality = options?.includeQuality ? await loadQualityReadiness(sessionID) : undefined
-    const findings = options?.includeFindings ? SessionFindings.load(sessionID) : undefined
+    const findings = options?.includeFindings ? loadSessionFindings(sessionID) : undefined
     const envelopes = options?.includeEnvelopes ? SessionVerifications.load(sessionID) : undefined
-    const reviewResults = options?.includeReviewResults ? SessionReviewResults.load(sessionID) : undefined
+    const reviewResults = options?.includeReviewResults ? loadSessionReviewResults(sessionID) : undefined
     const loadedDebug = options?.includeDebug ? SessionDebug.load(sessionID) : undefined
     const debug = loadedDebug ? { ...loadedDebug, rollups: SessionDebug.rollup(loadedDebug) } : undefined
     const decisionHints = options?.includeDecisionHints

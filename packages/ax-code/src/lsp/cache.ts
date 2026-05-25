@@ -23,8 +23,8 @@ export namespace LSPCache {
     serverIDs: string[]
   }
 
-  export const TTL_MS = 24 * 60 * 60 * 1000
-  export const PRUNE_PROBABILITY = 0.01
+  const TTL_MS = 24 * 60 * 60 * 1000
+  const PRUNE_PROBABILITY = 0.01
 
   export function enabled(override?: boolean): boolean {
     return override ?? Flag.AX_CODE_LSP_CACHE

@@ -38,12 +38,12 @@ const MAX_CACHED_DIAGNOSTICS = 1000
 // change. Above this threshold, the diff cost (linear in the larger of the
 // two texts) approaches the cost of just sending the whole file, so we fall
 // back to full sync. 1 MB is generous — typical source files are well under.
-export const MAX_INCREMENTAL_SYNC_BYTES = 1_000_000
+const MAX_INCREMENTAL_SYNC_BYTES = 1_000_000
 
 // If the incremental change list would contain more than this many hunks, the
 // diff is pathological (e.g. random shuffles). Fall back to full sync so we
 // don't ship an enormous payload of small ranges.
-export const MAX_INCREMENTAL_HUNKS = 256
+const MAX_INCREMENTAL_HUNKS = 256
 
 // Exported shape for tests.
 export type LspContentChange = {
@@ -160,7 +160,7 @@ export namespace LSPClient {
     return value !== undefined && value !== null && value !== false
   }
 
-  export function capabilityHintsFromInitializeForTest(
+  function capabilityHintsFromInitialize(
     capabilities: Record<string, unknown> | undefined,
   ): LSPServer.CapabilityHints {
     if (!capabilities) return {}
@@ -181,7 +181,7 @@ export namespace LSPClient {
     return hints
   }
 
-  export function methodSupportForTest(
+  function methodSupport(
     method: LSPServer.Method,
     runtimeHints?: LSPServer.CapabilityHints,
     staticHints?: LSPServer.CapabilityHints,
@@ -196,7 +196,7 @@ export namespace LSPClient {
     return "unknown"
   }
 
-  function createPathLock() {
+  export function createPathLock() {
     const locks: Map<string, Promise<void>> = new Map()
 
     return {
@@ -224,10 +224,6 @@ export namespace LSPClient {
         }
       },
     }
-  }
-
-  export function createPathLockForTest() {
-    return createPathLock()
   }
 
   export async function create(input: {
@@ -361,7 +357,7 @@ export namespace LSPClient {
       )
     })
 
-    const runtimeCapabilityHints = capabilityHintsFromInitializeForTest(initializeResult?.capabilities)
+    const runtimeCapabilityHints = capabilityHintsFromInitialize(initializeResult?.capabilities)
 
     await connection.sendNotification("initialized", {})
 
@@ -537,7 +533,7 @@ export namespace LSPClient {
         return closing || closeNotified
       },
       methodSupport(method: LSPServer.Method): MethodSupport {
-        return methodSupportForTest(method, runtimeCapabilityHints, input.capabilityHints)
+        return methodSupport(method, runtimeCapabilityHints, input.capabilityHints)
       },
       get connection() {
         return connection

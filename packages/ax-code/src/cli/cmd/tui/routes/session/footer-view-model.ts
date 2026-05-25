@@ -1,9 +1,6 @@
 import { formatDuration } from "@/util/format"
 import { Locale } from "@/util/locale"
-import type { AgentControlSummary } from "@/control-plane/agent-control-summary"
-import type { ToolCallReplayQuery } from "@/replay/tool-call-query"
 
-export type FooterMcpStatus = "connected" | "failed" | "needs_auth" | "needs_client_registration" | string
 export type FooterSessionStatus =
   | {
       type: "idle"
@@ -25,53 +22,29 @@ export type FooterSessionStatus =
       waitState?: "llm" | "tool"
     }
 
-export type FooterSessionStatusTone = "muted" | "working" | "success" | "warning"
+type FooterSessionStatusTone = "muted" | "working" | "success" | "warning"
 
-export type FooterSessionStatusView = {
+type FooterSessionStatusView = {
   label?: string
-  shortLabel?: string
   stale: boolean
   tone: FooterSessionStatusTone
 }
 
-export type FooterAgentControlStatusView = {
-  label: string
-  tone: FooterSessionStatusTone
-}
-
-export type FooterTrustChip =
-  | {
-      type: "plans"
-      label: string
-      count: number
-    }
-  | {
-      type: "ready"
-      label: string
-      count: 0
-    }
-
-export const SESSION_STATUS_STALE_AFTER_MS = 60_000
-export const SESSION_STATUS_TOOL_STALE_AFTER_MS = 90_000
+const SESSION_STATUS_STALE_AFTER_MS = 60_000
+const SESSION_STATUS_TOOL_STALE_AFTER_MS = 90_000
 const MS_PER_SECOND = 1_000
 
-export function footerPermissionLabel(count: number): string | undefined {
-  if (count <= 0) return
-  return Locale.pluralize(count, "{} Permission", "{} Permissions")
-}
-
-export type FooterTokenChip = { input: string; output: string; rate?: string }
-export type FooterGoalStatus = "active" | "paused" | "complete" | "blocked" | "budget_limited"
-export type FooterGoalInfo = {
+type FooterTokenChip = { input: string; output: string; rate?: string }
+type FooterGoalStatus = "active" | "paused" | "complete" | "blocked" | "budget_limited"
+type FooterGoalInfo = {
   objective: string
   status: FooterGoalStatus
   tokenBudget?: number
   tokensUsed?: number
   remainingTokens?: number
 }
-export type FooterGoalChip = {
+type FooterGoalChip = {
   label: string
-  shortLabel: string
   tone: FooterSessionStatusTone
   resumeHint?: string
 }
@@ -165,7 +138,6 @@ export function footerGoalChip(input: {
 
   return {
     label: `${status}: ${objective}${tokens}${resume}`,
-    shortLabel: `${status}: ${objective}`,
     tone,
     resumeHint,
   }
@@ -217,7 +189,6 @@ export function footerSessionStatusView(input: {
     const duration = formatDuration(remaining)
     return {
       label: duration ? `Retrying in ${duration}` : "Retrying",
-      shortLabel: duration ? `Retrying in ${duration}` : "Retrying",
       stale: false,
       tone: "warning",
     }
@@ -242,7 +213,7 @@ export function footerSessionStatusView(input: {
   const inactive = stale && idleMs > 0 ? formatDuration(Math.max(1, Math.floor(idleMs / MS_PER_SECOND))) : undefined
   const text = elapsed ? `${label} · ${elapsed}` : label
 
-  if (!inactive) return { label: text, shortLabel: text, stale, tone: stale ? "warning" : "working" }
+  if (!inactive) return { label: text, stale, tone: stale ? "warning" : "working" }
 
   const staleHint =
     status.waitState === "tool"
@@ -261,106 +232,12 @@ export function footerSessionStatusView(input: {
 
   return {
     label: labelWithHint,
-    shortLabel: labelWithHint,
     stale,
     tone: "warning",
   }
 }
 
-export function footerSessionStatusLabel(input: {
-  status?: FooterSessionStatus
-  now?: number
-  stalledAfterMs?: number
-}): string | undefined {
-  return footerSessionStatusView(input).label
-}
-
-export function footerAgentControlStatusView(
-  summary?: AgentControlSummary.Summary,
-  tools?: ToolCallReplayQuery.Summary,
-): FooterAgentControlStatusView | undefined {
-  if (tools && tools.openTaskCalls.length > 0) {
-    return {
-      label: Locale.pluralize(tools.openTaskCalls.length, "Agent waiting: {} subagent", "Agent waiting: {} subagents"),
-      tone: summary?.completed ? "warning" : "working",
-    }
-  }
-  if (tools && tools.openCalls.length > 0) {
-    return {
-      label: Locale.pluralize(tools.openCalls.length, "{} tool call", "{} tool calls"),
-      tone: summary?.completed ? "warning" : "working",
-    }
-  }
-  if (!summary) return
-  if (summary.completed) {
-    return {
-      label: "Agent complete",
-      tone: "success",
-    }
-  }
-  if (summary.blockedReason) {
-    return {
-      label: `Agent blocked: ${shortFooterText(summary.blockedReason, 28)}`,
-      tone: "warning",
-    }
-  }
-
-  const parts: string[] = []
-  if (summary.phase) parts.push(Locale.titlecase(summary.phase.replace(/_/g, " ")))
-  if (summary.reasoningDepth === "deep" || summary.reasoningDepth === "xdeep") {
-    parts.push(`${summary.reasoningDepth} reasoning`)
-  }
-  if (summary.plan) {
-    parts.push(`plan ${summary.plan.progress.completed}/${summary.plan.progress.total}`)
-  }
-  if (summary.safety.shadow > 0) {
-    parts.push(`shadow safety ${summary.safety.shadow}`)
-  }
-  if (parts.length === 0) return
-
-  return {
-    label: `Agent ${parts.join(" · ")}`,
-    tone: summary.safety.ask > 0 || summary.safety.deny > 0 ? "warning" : "working",
-  }
-}
-
-export function footerMcpView(statuses: FooterMcpStatus[]) {
-  return {
-    connected: statuses.filter((status) => status === "connected").length,
-    hasError: statuses.some((status) => status === "failed"),
-  }
-}
-
-export function footerTrustChip(input: {
-  experimentalDebugEngine: boolean
-  pendingPlans: number
-  graphNodeCount: number
-}): FooterTrustChip | undefined {
-  if (input.pendingPlans > 0) {
-    return {
-      type: "plans",
-      label: Locale.pluralize(input.pendingPlans, "{} Plan", "{} Plans"),
-      count: input.pendingPlans,
-    }
-  }
-  if (input.experimentalDebugEngine && input.graphNodeCount > 0) {
-    return {
-      type: "ready",
-      label: "DRE ready",
-      count: 0,
-    }
-  }
-  return
-}
-
-export function footerSandboxView(mode: string) {
-  return {
-    label: mode === "full-access" ? "sandbox off" : "sandbox on",
-    risk: mode === "full-access" ? "danger" : "safe",
-  } as const
-}
-
-export function isFooterSessionStatus(value: unknown): value is FooterSessionStatus {
+function isFooterSessionStatus(value: unknown): value is FooterSessionStatus {
   if (!value || typeof value !== "object") return false
   const status = value as Record<string, unknown>
   if (status.type === "idle") return true
@@ -371,55 +248,6 @@ export function isFooterSessionStatus(value: unknown): value is FooterSessionSta
   return false
 }
 
-export type FooterProgressBarView = {
-  filled: string
-  empty: string
-  label: string
-  percent: number
-  stale: boolean
-  overSoftMax: boolean
-}
-
-const PROGRESS_BAR_WIDTH = 10
-const PROGRESS_MIN_TERMINAL_WIDTH = 80
-// Soft target — the bar fills relative to this, not the global hard cap
-// (typically 500). 50 covers ordinary task density (a ~5-10 task batch);
-// reaching it means "this run is unusually long" and the bar flips to a
-// warning tone. The hard cap stays in `status.maxSteps` for correctness
-// but is intentionally hidden from the bar's visual scale because a
-// 4/500 bar reads as empty and gives users no useful feedback.
-export const PROGRESS_SOFT_MAX = 50
-
-// Pure data-driven progress bar derived from step/maxSteps in the session
-// status. Re-renders only when those values change — there is no internal
-// timer, no animation frame, and no shimmer cell. v2's earlier "animated
-// usage bar" used a 120ms setInterval driving a moving cell, which was a
-// known TUI hang vector under opentui + compiled-binary rendering. This
-// helper deliberately avoids that pattern.
-export function footerProgressBar(input: {
-  status?: FooterSessionStatus
-  terminalWidth?: number
-  stale?: boolean
-  softMax?: number
-}): FooterProgressBarView | undefined {
-  const status = input.status
-  if (!status || status.type !== "busy") return
-  if (status.step === undefined || status.maxSteps === undefined) return
-  if (status.maxSteps <= 0) return
-  if (input.terminalWidth !== undefined && input.terminalWidth < PROGRESS_MIN_TERMINAL_WIDTH) return
-
-  const softMax = input.softMax ?? PROGRESS_SOFT_MAX
-  const overSoftMax = status.step > softMax
-  // Visual fill scales against softMax and clamps at 100% — a "long-run"
-  // task pegs the bar full and the warning tone communicates the overrun.
-  const ratio = Math.max(0, Math.min(1, status.step / softMax))
-  const fillCells = Math.max(0, Math.min(PROGRESS_BAR_WIDTH, Math.round(ratio * PROGRESS_BAR_WIDTH)))
-  return {
-    filled: "█".repeat(fillCells),
-    empty: "░".repeat(PROGRESS_BAR_WIDTH - fillCells),
-    label: `${status.step}`,
-    percent: Math.round(ratio * 100),
-    stale: input.stale ?? false,
-    overSoftMax,
-  }
+export function footerSessionStatusOrIdle(value: unknown): FooterSessionStatus {
+  return isFooterSessionStatus(value) ? value : { type: "idle" }
 }

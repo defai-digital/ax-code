@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { computeIncrementalChanges, MAX_INCREMENTAL_HUNKS } from "../../src/lsp/client"
+import { computeIncrementalChanges } from "../../src/lsp/client"
 
 describe("computeIncrementalChanges", () => {
   test("returns null and empty list for identical inputs", () => {
@@ -58,9 +58,10 @@ describe("computeIncrementalChanges", () => {
   })
 
   test("returns null for pathological diffs with too many hunks", () => {
-    // Interleave changes to produce more than MAX_INCREMENTAL_HUNKS hunks.
+    // Interleave enough changes to exceed the internal hunk budget without
+    // coupling this test to the exact cap.
     const lines: string[] = []
-    for (let i = 0; i < MAX_INCREMENTAL_HUNKS * 3; i++) {
+    for (let i = 0; i < 900; i++) {
       lines.push(`line-${i}`)
     }
     const oldText = lines.join("\n") + "\n"

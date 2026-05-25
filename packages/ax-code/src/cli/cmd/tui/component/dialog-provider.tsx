@@ -1,6 +1,6 @@
 import { createMemo, createSignal, onCleanup, onMount, Show } from "solid-js"
 import { useSync } from "@tui/context/sync"
-import { filter, map, pipe, sortBy } from "remeda"
+import { map, pipe } from "remeda"
 import { DialogSelect } from "@tui/ui/dialog-select"
 import { useDialog } from "@tui/ui/dialog"
 import { useSDK } from "../context/sdk"
@@ -15,16 +15,13 @@ import { Clipboard } from "@tui/util/clipboard"
 import { useToast } from "../ui/toast"
 import { which } from "@/util/which"
 import { Log } from "@/util/log"
-
-const CLI_BINARIES: Record<string, string> = {
-  "claude-code": "claude",
-  "gemini-cli": "gemini",
-  "codex-cli": "codex",
-}
-
-const OFFLINE_PROVIDERS = new Set(["ax-serving", "ollama", "lmstudio"])
-const CLI_PROVIDERS = new Set(["claude-code", "gemini-cli", "codex-cli"])
-const HIDDEN_PROVIDERS = new Set(["google", "github-copilot"])
+import {
+  CLI_BINARIES,
+  CLI_PROVIDERS,
+  OFFLINE_PROVIDERS,
+  providerDialogConnected,
+  providerDialogProviders,
+} from "./dialog-provider-options"
 
 const OFFLINE_PROVIDER_HOSTS: Record<string, { envVar: string; defaultHost: string }> = {
   "ax-serving": { envVar: "AX_SERVING_HOST", defaultHost: "http://localhost:18080" },
@@ -84,14 +81,16 @@ export function createDialogProviderOptions() {
   const { theme } = useTheme()
   const options = createMemo(() => {
     return pipe(
-      sync.data.provider_next.all,
-      filter((x) => !HIDDEN_PROVIDERS.has(x.id)),
-      sortBy(
-        (x) => (OFFLINE_PROVIDERS.has(x.id) ? 0 : CLI_PROVIDERS.has(x.id) ? 1 : 2),
-        (x) => x.name,
-      ),
+      providerDialogProviders({
+        available: sync.data.provider_next.all,
+        configured: sync.data.provider,
+      }),
       map((provider) => {
-        const isConnected = sync.data.provider_next.connected.includes(provider.id)
+        const isConnected = providerDialogConnected({
+          providerID: provider.id,
+          connected: sync.data.provider_next.connected,
+          configured: sync.data.provider,
+        })
         const isOfflineKind = OFFLINE_PROVIDERS.has(provider.id)
         return {
           title: provider.name,
@@ -106,7 +105,11 @@ export function createDialogProviderOptions() {
               fallbackMessage: `Failed to update ${provider.name}`,
               toast,
               run: async () => {
-                const isConnected = sync.data.provider_next.connected.includes(provider.id)
+                const isConnected = providerDialogConnected({
+                  providerID: provider.id,
+                  connected: sync.data.provider_next.connected,
+                  configured: sync.data.provider,
+                })
 
                 if (isOfflineKind) {
                   const saveEndpoint = async (value: string) => {
@@ -123,7 +126,13 @@ export function createDialogProviderOptions() {
                     await sdk.client.instance.dispose()
                     await sync.bootstrap()
                     toast.show({ variant: "success", message: `Updated ${provider.name} endpoint` })
-                    if (sync.data.provider_next.connected.includes(provider.id)) {
+                    if (
+                      providerDialogConnected({
+                        providerID: provider.id,
+                        connected: sync.data.provider_next.connected,
+                        configured: sync.data.provider,
+                      })
+                    ) {
                       dialog.replace(() => <DialogModel providerID={provider.id} />)
                     } else {
                       dialog.clear()

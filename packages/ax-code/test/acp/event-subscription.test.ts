@@ -374,7 +374,6 @@ describe("acp.agent event subscription", () => {
 
     ;(agent as any).bashSnapshots.set("bash", "snapshot")
     ;(agent as any).toolStarts.add("tool")
-    ;(agent as any).permissionQueues.set("perm", Promise.resolve())
     ;(agent as any).replaying.add("session")
     ;(agent as any).replayQueue.set("session", [])
 
@@ -383,7 +382,6 @@ describe("acp.agent event subscription", () => {
     expect((agent as any).eventAbort.signal.aborted).toBe(true)
     expect((agent as any).bashSnapshots.size).toBe(0)
     expect((agent as any).toolStarts.size).toBe(0)
-    expect((agent as any).permissionQueues.size).toBe(0)
     expect((agent as any).replaying.size).toBe(0)
     expect((agent as any).replayQueue.size).toBe(0)
   })
@@ -508,6 +506,69 @@ describe("acp.agent event subscription", () => {
 
         // Now session A's permission should be replied
         expect(permissionReplies).toContain("perm_a")
+
+        stop()
+      },
+    })
+  })
+
+  test("permission prompts for the same session are serialized", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const permissionReplies: string[] = []
+        let releaseFirst!: () => void
+        const firstPermission = new Promise<void>((resolve) => {
+          releaseFirst = resolve
+        })
+
+        const { agent, controller, stop, sdk, connection } = createFakeAgent()
+        const requestOrder: string[] = []
+        connection.requestPermission = async (params: RequestPermissionParams) => {
+          requestOrder.push(params.toolCall.toolCallId)
+          if (params.toolCall.toolCallId === "perm_1") {
+            await firstPermission
+          }
+          return { outcome: { outcome: "selected", optionId: "once" } } as RequestPermissionResult
+        }
+
+        sdk.permission.reply = async (params: any) => {
+          permissionReplies.push(params.requestID)
+          return { data: true }
+        }
+
+        const cwd = "/tmp/opencode-acp-test"
+        const sessionId = await agent.newSession({ cwd, mcpServers: [] } as any).then((x) => x.sessionId)
+        const pushPermission = (id: string) => {
+          controller.push({
+            directory: cwd,
+            payload: {
+              type: "permission.asked",
+              properties: {
+                id,
+                sessionID: sessionId,
+                permission: "bash",
+                patterns: ["*"],
+                metadata: {},
+                always: [],
+              },
+            },
+          } as any)
+        }
+
+        pushPermission("perm_1")
+        pushPermission("perm_2")
+
+        await new Promise((r) => setTimeout(r, 20))
+        expect(requestOrder).toEqual(["perm_1"])
+        expect(permissionReplies).toEqual([])
+
+        releaseFirst()
+        await new Promise((r) => setTimeout(r, 20))
+
+        expect(requestOrder).toEqual(["perm_1", "perm_2"])
+        expect(permissionReplies).toEqual(["perm_1", "perm_2"])
 
         stop()
       },

@@ -16,13 +16,13 @@
  * is dead code: classify() never sees it.
  */
 
-export type RiskClass = "safe" | "risk" | "unknown"
+type RiskClass = "safe" | "risk" | "unknown"
 
 /**
  * Read-only / observation permissions. Autonomous mode auto-approves
  * these without consulting the ruleset.
  */
-export const SAFE_PERMISSIONS: ReadonlySet<string> = new Set([
+const SAFE_PERMISSIONS: ReadonlySet<string> = new Set([
   "read",
   "glob",
   "grep",
@@ -49,20 +49,20 @@ export const SAFE_PERMISSIONS: ReadonlySet<string> = new Set([
  *                            even though it already has its own ask rules.
  *   - `task`              — spawns a subagent session; cost / privilege
  *                            implications.
- *   - `dispatcher`        — fans out to multiple subagents (ADR-005); same
- *                            reasoning as `task`.
  *   - `todowrite`         — modifies session todos; auto-approval would
  *                            silently rewrite the user's plan list.
+ *   - `memorywrite`       — persists project/global memory outside the
+ *                            current conversation.
  *   - `webfetch`          — arbitrary URL fetch; potential exfiltration
  *                            channel.
  */
-export const RISK_PERMISSIONS: ReadonlySet<string> = new Set([
+const RISK_PERMISSIONS: ReadonlySet<string> = new Set([
   "edit",
   "bash",
   "external_directory",
   "task",
-  "dispatcher",
   "todowrite",
+  "memorywrite",
   "webfetch",
 ])
 

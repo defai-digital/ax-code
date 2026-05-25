@@ -3,7 +3,7 @@ import { Instance } from "../../src/project/instance"
 import { createReviewResult } from "../../src/quality/review-result"
 import { Recorder } from "../../src/replay/recorder"
 import { Session } from "../../src/session"
-import { SessionReviewResults } from "../../src/session/review-results"
+import { loadSessionReviewResults } from "../../src/session/review-results"
 import { tmpdir } from "../fixture/fixture"
 
 function reviewResult(sessionID: string) {
@@ -38,7 +38,7 @@ function reviewResult(sessionID: string) {
   })
 }
 
-describe("SessionReviewResults", () => {
+describe("loadSessionReviewResults", () => {
   test("loads valid reviewResult metadata from completed tool results", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
@@ -61,8 +61,7 @@ describe("SessionReviewResults", () => {
         Recorder.end(session.id)
         await new Promise((resolve) => setTimeout(resolve, 50))
 
-        expect(SessionReviewResults.load(session.id)).toEqual([result])
-        expect(SessionReviewResults.latest(session.id)?.reviewId).toBe(result.reviewId)
+        expect(loadSessionReviewResults(session.id)).toEqual([result])
       },
     })
   })
@@ -101,8 +100,9 @@ describe("SessionReviewResults", () => {
         Recorder.end(session.id)
         await new Promise((resolve) => setTimeout(resolve, 50))
 
-        expect(SessionReviewResults.load(session.id)).toHaveLength(1)
-        expect(SessionReviewResults.load(session.id)[0]?.reviewId).toBe(result.reviewId)
+        const results = loadSessionReviewResults(session.id)
+        expect(results).toHaveLength(1)
+        expect(results[0]?.reviewId).toBe(result.reviewId)
       },
     })
   })

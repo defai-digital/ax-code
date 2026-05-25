@@ -1,5 +1,4 @@
 import path from "path"
-import { Ripgrep } from "../file/ripgrep"
 
 import { Instance } from "../project/instance"
 
@@ -118,16 +117,6 @@ export namespace SystemPrompt {
         `  Platform: ${process.platform}`,
         `  Today's date: ${new Date().toDateString()}`,
         `</env>`,
-        `<directories>`,
-        `  ${
-          project.vcs === "git" && false
-            ? await Ripgrep.tree({
-                cwd: Instance.directory,
-                limit: 50,
-              })
-            : ""
-        }`,
-        `</directories>`,
         ...liveSearchBlock,
         ...autonomousWorkflow,
         ...debugEngineWorkflow,
@@ -206,7 +195,7 @@ export namespace SystemPrompt {
     ].join("\n")
   }
 
-  export const FILE_TOOLS = new Set(["read", "edit", "write", "multiedit"])
+  const FILE_TOOLS = new Set(["read", "edit", "write", "multiedit"])
 
   /** True if any message contains a file-tool call (read/edit/write/multiedit). */
   export function hasFileToolCall(messages: MessageV2.WithParts[]): boolean {

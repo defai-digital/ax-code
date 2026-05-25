@@ -205,7 +205,6 @@ export namespace AutonomousCompletionGate {
     "todowrite",
     "todoread",
     "question",
-    "plan_enter",
     "plan_exit",
     "register_finding",
     "review_complete",

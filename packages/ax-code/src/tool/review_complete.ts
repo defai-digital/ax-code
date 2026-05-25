@@ -11,14 +11,14 @@ import {
   type ReviewResult,
   type VerificationEnvelopeWithId,
 } from "../quality/review-result"
-import { SessionFindings } from "../session/findings"
+import { loadSessionFindings } from "../session/findings"
 import type { SessionID } from "../session/schema"
 import { SessionVerifications } from "../session/verifications"
 import { Tool } from "./tool"
 import DESCRIPTION from "./review_complete.txt"
 
 function selectFindings(sessionID: SessionID, ids: string[] | undefined) {
-  const findings = SessionFindings.load(sessionID).filter((finding) => finding.workflow === "review")
+  const findings = loadSessionFindings(sessionID).filter((finding) => finding.workflow === "review")
   const byId = new Map(findings.map((finding) => [finding.findingId, finding]))
   if (!ids) return findings
   return ids.map((id) => {

@@ -9,7 +9,7 @@ import { SessionRetry } from "./retry"
 import { SessionStatus } from "./status"
 import { Plugin } from "@/plugin"
 import { Flag } from "@/flag/flag"
-import { DOOM_LOOP_THRESHOLD as _DOOM_LOOP_THRESHOLD, AUTONOMOUS_MAX_CYCLE_LEN } from "@/constants/session"
+import { DOOM_LOOP_THRESHOLD, AUTONOMOUS_MAX_CYCLE_LEN } from "@/constants/session"
 import { BlastRadius } from "./blast-radius"
 import { detectCycle } from "./cycle-detection"
 import type { Provider } from "@/provider/provider"
@@ -32,7 +32,6 @@ import { longAgentProfileForModel } from "@/provider/agent-optimization-profile"
 import { LongAgentContextPacker } from "@/context/long-agent-packer"
 
 export namespace SessionProcessor {
-  const DOOM_LOOP_THRESHOLD = _DOOM_LOOP_THRESHOLD
   const log = Log.create({ service: "session.processor" })
 
   /** Strip XML tags that could escape a <system-reminder> wrapper and inject arbitrary LLM instructions. */
@@ -121,9 +120,29 @@ export namespace SessionProcessor {
     }
     const recentToolRing: { tool: string; input: string }[] = []
     const doomLoopWarnings: Record<string, string> = {}
+    // Window large enough to evaluate the longest cycle length plus headroom.
+    const recentToolRingLimit = Math.max(DOOM_LOOP_THRESHOLD, AUTONOMOUS_MAX_CYCLE_LEN * 3)
+    const finishTrackedToolCall = (input: {
+      toolCallId: string
+      tool: string
+      eventInput: unknown
+      fallbackInput: unknown
+    }) => {
+      recentToolRing.push({
+        tool: input.tool,
+        input:
+          toolInputCache[input.toolCallId] ??
+          (input.eventInput ? safeStringify(input.eventInput) : safeStringify(input.fallbackInput)),
+      })
+      if (recentToolRing.length > recentToolRingLimit) recentToolRing.shift()
+      delete toolcalls[input.toolCallId]
+      delete toolInputCache[input.toolCallId]
+      delete doomLoopWarnings[input.toolCallId]
+    }
     const resetShortLivedToolLoopState = () => {
       recentToolRing.length = 0
       toolCallTimestamps.length = 0
+      for (const key of Object.keys(toolInputCache)) delete toolInputCache[key]
       for (const key of Object.keys(doomLoopWarnings)) delete doomLoopWarnings[key]
     }
     let stepToolCallCount = 0
@@ -215,6 +234,28 @@ export namespace SessionProcessor {
           blocked = false
           let currentText: MessageV2.TextPart | undefined
           let reasoningMap: Record<string, MessageV2.ReasoningPart> = {}
+          const finalizeBufferedPart = (
+            part: MessageV2.TextPart | MessageV2.ReasoningPart,
+            input: { overwriteEndTime: boolean },
+          ) => {
+            part.text = part.text.trimEnd()
+            if (input.overwriteEndTime || !part.time?.end) {
+              part.time = { start: part.time?.start ?? Date.now(), end: Date.now() }
+            }
+          }
+          const persistFinalizedInFlightParts = (input: { overwriteEndTime: boolean }) => {
+            if (currentText) {
+              finalizeBufferedPart(currentText, input)
+            }
+            for (const part of Object.values(reasoningMap)) {
+              finalizeBufferedPart(part, input)
+            }
+            const parts = [...(currentText ? [currentText] : []), ...Object.values(reasoningMap)]
+            if (parts.length === 0) return
+            Database.transaction(() => {
+              for (const p of parts) Session.updatePart.force(p)
+            })
+          }
           try {
             let usedTools = false
             let receivedFinish = false
@@ -289,12 +330,7 @@ export namespace SessionProcessor {
                   if (value.id in reasoningMap) {
                     deltaBatcher.flush()
                     const part = reasoningMap[value.id]
-                    part.text = part.text.trimEnd()
-
-                    part.time = {
-                      ...part.time,
-                      end: Date.now(),
-                    }
+                    finalizeBufferedPart(part, { overwriteEndTime: true })
                     if (value.providerMetadata) part.metadata = value.providerMetadata
                     stepParts.push({ type: "reasoning", text: part.text })
                     await Session.updatePart.force(part)
@@ -539,19 +575,12 @@ export namespace SessionProcessor {
                     // Pattern tracker: clear error patterns on success
                     ToolErrorPatternTracker.recordSuccess(input.sessionID, match.tool)
 
-                    recentToolRing.push({
+                    finishTrackedToolCall({
+                      toolCallId: value.toolCallId,
                       tool: match.tool,
-                      input:
-                        toolInputCache[value.toolCallId] ??
-                        (value.input ? safeStringify(value.input) : safeStringify(match.state.input)),
+                      eventInput: value.input,
+                      fallbackInput: match.state.input,
                     })
-                    // Window large enough to evaluate the longest cycle
-                    // length (need 2*MAX_CYCLE_LEN entries) plus headroom.
-                    const RING_LIMIT = Math.max(DOOM_LOOP_THRESHOLD, AUTONOMOUS_MAX_CYCLE_LEN * 3)
-                    if (recentToolRing.length > RING_LIMIT) recentToolRing.shift()
-                    delete toolcalls[value.toolCallId]
-                    delete toolInputCache[value.toolCallId]
-                    delete doomLoopWarnings[value.toolCallId]
                   }
                   break
                 }
@@ -663,17 +692,12 @@ export namespace SessionProcessor {
                     ) {
                       blocked = shouldBreak
                     }
-                    recentToolRing.push({
+                    finishTrackedToolCall({
+                      toolCallId: value.toolCallId,
                       tool: match.tool,
-                      input:
-                        toolInputCache[value.toolCallId] ??
-                        (value.input ? safeStringify(value.input) : safeStringify(match.state.input)),
+                      eventInput: value.input,
+                      fallbackInput: match.state.input,
                     })
-                    const RING_LIMIT = Math.max(DOOM_LOOP_THRESHOLD, AUTONOMOUS_MAX_CYCLE_LEN * 3)
-                    if (recentToolRing.length > RING_LIMIT) recentToolRing.shift()
-                    delete toolcalls[value.toolCallId]
-                    delete toolInputCache[value.toolCallId]
-                    delete doomLoopWarnings[value.toolCallId]
                   }
                   break
                 }
@@ -951,25 +975,10 @@ export namespace SessionProcessor {
                   continue
               }
               if (needsCompaction) {
-                // Finalize in-flight parts before breaking for compaction
-                if (currentText) {
-                  currentText.text = currentText.text.trimEnd()
-                  if (!currentText.time?.end)
-                    currentText.time = { start: currentText.time?.start ?? Date.now(), end: Date.now() }
-                }
-                for (const part of Object.values(reasoningMap)) {
-                  part.text = part.text.trimEnd()
-                  if (!part.time?.end) part.time = { start: part.time?.start ?? Date.now(), end: Date.now() }
-                }
                 // Persist finalized in-flight parts so they are not lost when
                 // compaction breaks the loop (the catch path handles errors
                 // separately; the break path previously skipped this).
-                const compactionParts = [...(currentText ? [currentText] : []), ...Object.values(reasoningMap)]
-                if (compactionParts.length > 0) {
-                  Database.transaction(() => {
-                    for (const p of compactionParts) Session.updatePart.force(p)
-                  })
-                }
+                persistFinalizedInFlightParts({ overwriteEndTime: false })
                 deltaBatcher.flush()
                 // Reset error pattern tracker on compaction — the context
                 // window is about to be rewritten, so stale pattern counts
@@ -987,29 +996,8 @@ export namespace SessionProcessor {
             }
           } catch (e: unknown) {
             deltaBatcher.flush()
-            for (const k of Object.keys(toolInputCache)) delete toolInputCache[k]
-            toolCallTimestamps.length = 0
-            if (currentText) {
-              currentText.text = currentText.text.trimEnd()
-              currentText.time = {
-                start: currentText.time?.start ?? Date.now(),
-                end: Date.now(),
-              }
-            }
-            for (const part of Object.values(reasoningMap)) {
-              part.text = part.text.trimEnd()
-              part.time = {
-                start: part.time?.start ?? Date.now(),
-                end: Date.now(),
-              }
-            }
-            // Batch error-recovery writes in one transaction
-            const errorParts = [...(currentText ? [currentText] : []), ...Object.values(reasoningMap)]
-            if (errorParts.length > 0) {
-              Database.transaction(() => {
-                for (const p of errorParts) Session.updatePart.force(p)
-              })
-            }
+            resetShortLivedToolLoopState()
+            persistFinalizedInFlightParts({ overwriteEndTime: true })
             const errStack = e instanceof Error ? e.stack : undefined
             const errName = e instanceof Error ? e.name : (e as { constructor?: { name?: string } })?.constructor?.name
             const errMessage = e instanceof Error ? e.message : String(e)
@@ -1040,8 +1028,6 @@ export namespace SessionProcessor {
               const retry = SessionRetry.retryable(error)
               if (retry !== undefined) {
                 attempt++
-                recentToolRing.length = 0
-                for (const key of Object.keys(doomLoopWarnings)) delete doomLoopWarnings[key]
                 if (attempt <= SessionRetry.RETRY_MAX_ATTEMPTS) {
                   const delay = SessionRetry.delay(attempt, MessageV2.APIError.isInstance(error) ? error : undefined)
                   await SessionStatus.set(input.sessionID, {

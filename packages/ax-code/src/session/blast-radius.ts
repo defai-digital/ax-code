@@ -16,9 +16,9 @@ import { Flag } from "@/flag/flag"
 export namespace BlastRadius {
   const log = Log.create({ service: "session.blast-radius" })
 
-  export type Kind = "steps" | "files" | "lines" | "blocked_path" | "tool_calls"
+  type Kind = "steps" | "files" | "lines" | "blocked_path" | "tool_calls"
 
-  export interface Caps {
+  interface Caps {
     steps: number
     files: number
     lines: number
@@ -30,7 +30,7 @@ export namespace BlastRadius {
     perTool: Readonly<Record<string, number>>
   }
 
-  export interface State {
+  interface State {
     files: Set<string>
     lines: number
     steps: number
@@ -106,10 +106,6 @@ export namespace BlastRadius {
 
   export function reset(sessionID: SessionID) {
     sessions.delete(sessionID)
-  }
-
-  export function sizeForTest() {
-    return sessions.size
   }
 
   /**
@@ -190,7 +186,7 @@ export namespace BlastRadius {
     return null
   }
 
-  export const LimitExceededError = NamedError.create(
+  const LimitExceededError = NamedError.create(
     "AutonomousLimitExceededError",
     z.object({
       kind: z.enum(["steps", "files", "lines", "blocked_path", "tool_calls"]),
@@ -201,7 +197,7 @@ export namespace BlastRadius {
   )
 
   /** Pretty error message for a tripped cap. */
-  export function describe(check: { kind: Kind; current: number; limit: number }, toolName?: string): string {
+  function describe(check: { kind: Kind; current: number; limit: number }, toolName?: string): string {
     switch (check.kind) {
       case "steps":
         return `Autonomous step cap reached: ${check.current}/${check.limit}. The session will stop. Set experimental.autonomous_caps.steps to raise this limit.`

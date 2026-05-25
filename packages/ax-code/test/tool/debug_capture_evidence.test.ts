@@ -197,11 +197,7 @@ describe("DebugCaptureEvidenceTool", () => {
         const loaded = SessionDebug.load(session.id)
         expect(loaded.evidence).toHaveLength(1)
         expect(loaded.evidence[0].planId).toBe(planId)
-
-        // Reverse lookup via evidenceByPlanId.
-        const byPlan = SessionDebug.evidenceByPlanId(session.id, planId)
-        expect(byPlan).toHaveLength(1)
-        expect(byPlan[0].evidenceId).toBe(result.metadata.evidenceId)
+        expect(loaded.evidence[0].evidenceId).toBe(result.metadata.evidenceId)
       },
     })
   })

@@ -17,7 +17,7 @@ import { activityItems as items } from "./activity"
 import { SessionDreView } from "./dre"
 import { SessionRollbackView } from "./rollback"
 import { SessionSemanticDiff } from "@/session/semantic-diff"
-import { footerSessionStatusView, type FooterSessionStatus, isFooterSessionStatus } from "./footer-view-model"
+import { footerSessionStatusOrIdle, footerSessionStatusView } from "./footer-view-model"
 import { computeSidebarWidth } from "./layout"
 import { sidebarGraphIndexStatusText } from "./sidebar-index-view-model"
 import { Locale } from "@/util/locale"
@@ -103,9 +103,9 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
   const diff = createMemo(() => sync.data.session_diff[props.sessionID] ?? [])
   const todo = createMemo(() => sync.data.todo[props.sessionID] ?? [])
   const messages = createMemo(() => sync.data.message[props.sessionID] ?? [])
-  const status = createMemo<FooterSessionStatus>(() => {
+  const status = createMemo(() => {
     const candidate = sync.data.session_status?.[props.sessionID]
-    return isFooterSessionStatus(candidate) ? candidate : { type: "idle" }
+    return footerSessionStatusOrIdle(candidate)
   })
   const sidebarStatusView = createMemo(() => {
     props.statusTick?.()

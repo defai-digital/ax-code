@@ -82,7 +82,7 @@ export namespace Pty {
     return out
   }
 
-  function replayBufferedOutput(session: ReplayWindow, cursor?: number): { data: string; meta: ReplayMeta } {
+  export function replayBufferedOutput(session: ReplayWindow, cursor?: number): { data: string; meta: ReplayMeta } {
     const start = session.bufferCursor
     const end = session.cursor
     const from =
@@ -110,10 +110,6 @@ export namespace Pty {
     }
   }
 
-  export function __replayBufferedOutputForTest(session: ReplayWindow, cursor?: number) {
-    return replayBufferedOutput(session, cursor)
-  }
-
   const trySend = (ws: Socket, data: string | Uint8Array | ArrayBuffer) => {
     try {
       ws.send(data)
@@ -134,7 +130,7 @@ export namespace Pty {
     }
   }
 
-  const sanitizeUserEnv = (input?: Record<string, string>): Record<string, string> => {
+  export function sanitizeUserEnv(input?: Record<string, string>): Record<string, string> {
     const out: Record<string, string> = {}
     if (!input) return out
 
@@ -145,10 +141,6 @@ export namespace Pty {
       out[key] = value
     }
     return out
-  }
-
-  export function __sanitizeUserEnvForTest(input?: Record<string, string>): Record<string, string> {
-    return sanitizeUserEnv(input)
   }
 
   const pty = lazy(async () => {

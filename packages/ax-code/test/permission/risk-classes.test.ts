@@ -1,15 +1,30 @@
 import { describe, expect, test } from "bun:test"
-import { classify, SAFE_PERMISSIONS, RISK_PERMISSIONS } from "../../src/permission/risk-classes"
+import { classify } from "../../src/permission/risk-classes"
+
+const safePermissions = [
+  "read",
+  "glob",
+  "grep",
+  "list",
+  "codesearch",
+  "lsp",
+  "code_intelligence",
+  "skill",
+  "todoread",
+  "websearch",
+]
+
+const riskPermissions = ["edit", "bash", "external_directory", "task", "todowrite", "memorywrite", "webfetch"]
 
 describe("permission risk classification", () => {
   test("safe permissions classify as safe", () => {
-    for (const p of SAFE_PERMISSIONS) {
+    for (const p of safePermissions) {
       expect(classify(p)).toBe("safe")
     }
   })
 
   test("risk permissions classify as risk", () => {
-    for (const p of RISK_PERMISSIONS) {
+    for (const p of riskPermissions) {
       expect(classify(p)).toBe("risk")
     }
   })
@@ -21,8 +36,9 @@ describe("permission risk classification", () => {
   })
 
   test("safe and risk sets do not overlap", () => {
-    for (const p of SAFE_PERMISSIONS) {
-      expect(RISK_PERMISSIONS.has(p)).toBe(false)
+    const risky = new Set(riskPermissions)
+    for (const p of safePermissions) {
+      expect(risky.has(p)).toBe(false)
     }
   })
 
@@ -44,6 +60,7 @@ describe("permission risk classification", () => {
       "grep",
       "list",
       "lsp",
+      "memorywrite",
       "read",
       "skill",
       "task",
@@ -51,14 +68,11 @@ describe("permission risk classification", () => {
       "todowrite",
       "webfetch",
       "websearch",
-      // ADR-005 dispatcher; checked explicitly because the Dispatch
-      // tool is registered separately.
-      "dispatcher",
     ])
-    for (const p of SAFE_PERMISSIONS) {
+    for (const p of safePermissions) {
       expect(realPermissionNames.has(p)).toBe(true)
     }
-    for (const p of RISK_PERMISSIONS) {
+    for (const p of riskPermissions) {
       expect(realPermissionNames.has(p)).toBe(true)
     }
   })
@@ -73,7 +87,7 @@ describe("permission risk classification", () => {
     expect(classify("bash")).toBe("risk")
     expect(classify("external_directory")).toBe("risk")
     expect(classify("task")).toBe("risk")
-    expect(classify("dispatcher")).toBe("risk")
+    expect(classify("memorywrite")).toBe("risk")
     expect(classify("webfetch")).toBe("risk")
   })
 })

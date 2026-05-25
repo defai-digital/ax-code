@@ -6,6 +6,7 @@ import { MessageV2 } from "../../src/session/message-v2"
 import { ProviderID } from "../../src/provider/schema"
 
 const providerID = ProviderID.make("test")
+const MAX_RETRY_HEADER_DELAY_MS = 30_000
 
 function apiError(headers?: Record<string, string>): MessageV2.APIError {
   return new MessageV2.APIError({
@@ -90,16 +91,16 @@ describe("session.retry.delay", () => {
 
   test("caps retry-after values at 30 seconds", () => {
     const error = apiError({ "retry-after": "50" })
-    expect(SessionRetry.delay(1, error)).toBe(SessionRetry.RETRY_MAX_DELAY_NO_HEADERS)
+    expect(SessionRetry.delay(1, error)).toBe(MAX_RETRY_HEADER_DELAY_MS)
 
     const longError = apiError({ "retry-after-ms": "700000" })
-    expect(SessionRetry.delay(1, longError)).toBe(SessionRetry.RETRY_MAX_DELAY_NO_HEADERS)
+    expect(SessionRetry.delay(1, longError)).toBe(MAX_RETRY_HEADER_DELAY_MS)
   })
 
   test("caps future http-date retry-after values at 30 seconds", () => {
     const date = new Date(Date.now() + 120_000).toUTCString()
     const error = apiError({ "retry-after": date })
-    expect(SessionRetry.delay(1, error)).toBe(SessionRetry.RETRY_MAX_DELAY_NO_HEADERS)
+    expect(SessionRetry.delay(1, error)).toBe(MAX_RETRY_HEADER_DELAY_MS)
   })
 
   test("sleep caps delay to max 32-bit signed integer to avoid TimeoutOverflowWarning", async () => {

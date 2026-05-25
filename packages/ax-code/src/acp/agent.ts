@@ -33,8 +33,9 @@ import { pathToFileURL } from "url"
 import { Filesystem } from "../util/filesystem"
 import { FileTime } from "../file/time"
 import { Hash } from "../util/hash"
+import { Lock } from "../util/lock"
 import { ACPSessionManager } from "./session"
-import type { ACPConfig } from "./types"
+import type { ACPConfig, ACPSessionState } from "./types"
 import { Provider } from "../provider/provider"
 import { ModelID, ProviderID } from "../provider/schema"
 import { Agent as AgentModule } from "../agent/agent"
@@ -63,6 +64,8 @@ const DEFAULT_VARIANT_VALUE = "default"
 
 export namespace ACP {
   const log = Log.create({ service: "acp-agent" })
+  const PERMISSION_LOCK_TIMEOUT_MS = 24 * 60 * 60 * 1000
+  type PermissionAsked = Extract<Event, { type: "permission.asked" }>["properties"]
 
   async function getContextLimit(
     sdk: OpencodeClient,
@@ -148,7 +151,6 @@ export namespace ACP {
     private eventStarted = false
     private bashSnapshots = new Map<string, string>()
     private toolStarts = new Set<string>()
-    private permissionQueues = new Map<string, Promise<void>>()
     private replaying = new Set<string>()
     private replayQueue = new Map<string, Event[]>()
     // Cap per-session replay buffer. Long replays (thousands of historical
@@ -216,7 +218,6 @@ export namespace ACP {
       this.eventAbort.abort()
       this.bashSnapshots.clear()
       this.toolStarts.clear()
-      this.permissionQueues.clear()
       this.replaying.clear()
       this.replayQueue.clear()
       // Drop the per-session state map too — without this, an agent
@@ -262,96 +263,7 @@ export namespace ACP {
           const session = this.sessionManager.tryGet(permission.sessionID)
           if (!session) return
 
-          const prev = this.permissionQueues.get(permission.sessionID) ?? Promise.resolve()
-          const next = prev
-            .then(async () => {
-              const directory = session.cwd
-
-              const res = await this.connection
-                .requestPermission({
-                  sessionId: permission.sessionID,
-                  toolCall: {
-                    toolCallId: permission.tool?.callID ?? permission.id,
-                    status: "pending",
-                    title: permission.permission,
-                    rawInput: permission.metadata,
-                    kind: toToolKind(permission.permission),
-                    locations: toLocations(permission.permission, permission.metadata),
-                  },
-                  options: this.permissionOptions,
-                })
-                .catch(async (error) => {
-                  log.error("failed to request permission from ACP", {
-                    error,
-                    permissionID: permission.id,
-                    sessionID: permission.sessionID,
-                  })
-                  await this.sdk.permission.reply({
-                    requestID: permission.id,
-                    reply: "reject",
-                    directory,
-                  })
-                  return undefined
-                })
-
-              if (!res) return
-              if (res.outcome.outcome !== "selected") {
-                await this.sdk.permission.reply({
-                  requestID: permission.id,
-                  reply: "reject",
-                  directory,
-                })
-                return
-              }
-
-              if (res.outcome.optionId !== "reject" && permission.permission === "edit") {
-                const metadata = permission.metadata || {}
-                const filepath = typeof metadata["filepath"] === "string" ? metadata["filepath"] : ""
-                const diff = typeof metadata["diff"] === "string" ? metadata["diff"] : ""
-                if (filepath) {
-                  // Serialize the read-modify-write through FileTime's
-                  // per-path lock — matches the discipline used by
-                  // tool/edit.ts and tool/write.ts. Without the lock,
-                  // the file could be deleted or replaced between
-                  // `exists()` and `readText()`, producing a diff
-                  // applied against stale content.
-                  await FileTime.withLock(filepath, async () => {
-                    const content = (await Filesystem.exists(filepath)) ? await Filesystem.readText(filepath) : ""
-                    const newContent = getNewContent(content, diff)
-                    if (newContent) {
-                      // Await the ACP write so any failure surfaces here and
-                      // so the permission reply below cannot race ahead of
-                      // the file change. Previously the promise was
-                      // discarded, silently swallowing write errors and
-                      // letting the client receive `permission.reply`
-                      // before it had observed the edit.
-                      await this.connection.writeTextFile({
-                        sessionId: session.id,
-                        path: filepath,
-                        content: newContent,
-                      })
-                    }
-                  })
-                }
-              }
-
-              await this.sdk.permission.reply({
-                requestID: permission.id,
-                reply: res.outcome.optionId as "once" | "always" | "reject",
-                directory,
-              })
-            })
-            .catch((error) => {
-              log.error("failed to handle permission", { error, permissionID: permission.id })
-            })
-            .finally(() => {
-              if (this.permissionQueues.get(permission.sessionID) === next) {
-                this.permissionQueues.delete(permission.sessionID)
-              }
-            })
-          // Set immediately after chain construction (synchronous) to prevent
-          // a re-entrant event handler from reading the stale `prev` chain.
-          this.permissionQueues.set(permission.sessionID, next)
+          this.handlePermissionAsked(permission, session)
           return
         }
 
@@ -890,6 +802,82 @@ export namespace ACP {
           }
         }
       }
+    }
+
+    private handlePermissionAsked(permission: PermissionAsked, session: ACPSessionState) {
+      void this.runPermissionRequest(permission, session).catch((error) => {
+        log.error("failed to handle permission", { error, permissionID: permission.id })
+      })
+    }
+
+    private async runPermissionRequest(permission: PermissionAsked, session: ACPSessionState) {
+      using _lock = await Lock.write(`acp:permission:${permission.sessionID}`, {
+        timeoutMs: PERMISSION_LOCK_TIMEOUT_MS,
+      })
+
+      const directory = session.cwd
+      const res = await this.connection
+        .requestPermission({
+          sessionId: permission.sessionID,
+          toolCall: {
+            toolCallId: permission.tool?.callID ?? permission.id,
+            status: "pending",
+            title: permission.permission,
+            rawInput: permission.metadata,
+            kind: toToolKind(permission.permission),
+            locations: toLocations(permission.permission, permission.metadata),
+          },
+          options: this.permissionOptions,
+        })
+        .catch(async (error) => {
+          log.error("failed to request permission from ACP", {
+            error,
+            permissionID: permission.id,
+            sessionID: permission.sessionID,
+          })
+          await this.sdk.permission.reply({
+            requestID: permission.id,
+            reply: "reject",
+            directory,
+          })
+          return undefined
+        })
+
+      if (!res) return
+      if (res.outcome.outcome !== "selected") {
+        await this.sdk.permission.reply({
+          requestID: permission.id,
+          reply: "reject",
+          directory,
+        })
+        return
+      }
+
+      if (res.outcome.optionId !== "reject" && permission.permission === "edit") {
+        const metadata = permission.metadata || {}
+        const filepath = typeof metadata["filepath"] === "string" ? metadata["filepath"] : ""
+        const diff = typeof metadata["diff"] === "string" ? metadata["diff"] : ""
+        if (filepath) {
+          // Serialize the read-modify-write through FileTime's per-path lock.
+          await FileTime.withLock(filepath, async () => {
+            const content = (await Filesystem.exists(filepath)) ? await Filesystem.readText(filepath) : ""
+            const newContent = getNewContent(content, diff)
+            if (newContent) {
+              await this.connection.writeTextFile({
+                sessionId: session.id,
+                path: filepath,
+                content: newContent,
+              })
+            }
+          })
+        }
+      }
+
+      await this.sdk.permission.reply({
+        requestID: permission.id,
+        reply: res.outcome.optionId as "once" | "always" | "reject",
+        directory,
+      })
     }
 
     private bashOutput(part: ToolPart) {

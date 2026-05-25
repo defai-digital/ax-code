@@ -90,7 +90,7 @@ test("wrapSSE cancels the underlying reader when the outer abort signal fires", 
   })
   const chunkAbort = new AbortController()
   const outerAbort = new AbortController()
-  const wrapped = Provider.wrapSSEForTest(response, 60_000, chunkAbort, outerAbort.signal)
+  const wrapped = Provider.wrapSSE(response, 60_000, chunkAbort, outerAbort.signal)
 
   const reader = wrapped.body!.getReader()
   const pendingRead = reader.read().catch(() => undefined)
@@ -124,7 +124,7 @@ test("wrapSSE removes the outer abort listener when the chunk timeout fires", as
     return originalRemove(...args)
   }) as AbortSignal["removeEventListener"]
 
-  const wrapped = Provider.wrapSSEForTest(response, 1, chunkAbort, outerAbort.signal)
+  const wrapped = Provider.wrapSSE(response, 1, chunkAbort, outerAbort.signal)
   await expect(wrapped.body!.getReader().read()).rejects.toThrow("SSE read timed out")
 
   expect(chunkAbort.signal.aborted).toBe(true)

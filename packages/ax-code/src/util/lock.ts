@@ -74,6 +74,17 @@ export namespace Lock {
     return `Lock.${kind}: timed out after ${ms}ms waiting for ${JSON.stringify(key)}`
   }
 
+  function disposable(release: () => void): Disposable {
+    let released = false
+    return {
+      [Symbol.dispose]: () => {
+        if (released) return
+        released = true
+        release()
+      },
+    }
+  }
+
   type LockKind = "read" | "write"
 
   function waitWithTimeout(
@@ -91,12 +102,12 @@ export namespace Lock {
         fire: () => {
           clearTimeout(timer)
           onGrant()
-          resolve({
-            [Symbol.dispose]: () => {
+          resolve(
+            disposable(() => {
               onRelease()
               process(key)
-            },
-          })
+            }),
+          )
         },
       }
       const timer = setTimeout(() => {
@@ -111,46 +122,17 @@ export namespace Lock {
     })
   }
 
-  function takeRead(key: string, opts?: { timeoutMs?: number }): Promise<Disposable> {
-    const lock = get(key)
-    const timeoutMs = opts?.timeoutMs ?? DEFAULT_TIMEOUT_MS
-
-    if (!lock.writer && lock.waitingWriters.length === 0) {
-      lock.readers++
-      return Promise.resolve({
-        [Symbol.dispose]: () => {
-          lock.readers--
-          process(key)
-        },
-      })
-    }
-
-    return waitWithTimeout(
-      key,
-      lock,
-      lock.waitingReaders,
-      "read",
-      timeoutMs,
-      () => {
-        lock.readers++
-      },
-      () => {
-        lock.readers--
-      },
-    )
-  }
-
   export async function write(key: string, opts?: { timeoutMs?: number }): Promise<Disposable> {
     const timeoutMs = opts?.timeoutMs ?? DEFAULT_TIMEOUT_MS
     const lock = get(key)
     if (!lock.writer && lock.readers === 0) {
       lock.writer = true
-      return Promise.resolve({
-        [Symbol.dispose]: () => {
+      return Promise.resolve(
+        disposable(() => {
           lock.writer = false
           process(key)
-        },
-      })
+        }),
+      )
     }
 
     return waitWithTimeout(
@@ -169,6 +151,31 @@ export namespace Lock {
   }
 
   export async function read(key: string, opts?: { timeoutMs?: number }): Promise<Disposable> {
-    return takeRead(key, opts)
+    const lock = get(key)
+    const timeoutMs = opts?.timeoutMs ?? DEFAULT_TIMEOUT_MS
+
+    if (!lock.writer && lock.waitingWriters.length === 0) {
+      lock.readers++
+      return Promise.resolve(
+        disposable(() => {
+          lock.readers--
+          process(key)
+        }),
+      )
+    }
+
+    return waitWithTimeout(
+      key,
+      lock,
+      lock.waitingReaders,
+      "read",
+      timeoutMs,
+      () => {
+        lock.readers++
+      },
+      () => {
+        lock.readers--
+      },
+    )
   }
 }

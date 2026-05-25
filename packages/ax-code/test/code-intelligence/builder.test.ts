@@ -9,9 +9,9 @@ import { CodeGraphQuery } from "../../src/code-intelligence/query"
 import { LSP } from "../../src/lsp"
 import {
   CodeGraphBuilder,
-  __lookupCallerKind,
-  __planReferenceQueriesForTest,
-  __resolveContainingNodeFromDbForTests as resolveContainingNodeFromDb,
+  lookupCallerKind,
+  planReferenceQueriesForBookmarks,
+  resolveContainingNodeFromDb,
 } from "../../src/code-intelligence/builder"
 import { CodeNodeID, CodeFileID } from "../../src/code-intelligence/id"
 import type { ProjectID } from "../../src/project/schema"
@@ -74,7 +74,7 @@ function lspRange(startLine: number, startChar: number, endLine: number, endChar
   }
 }
 
-describe("builder.__lookupCallerKind", () => {
+describe("builder.lookupCallerKind", () => {
   // Regression: the pre-fix builder only consulted the in-memory
   // refBookmarks to decide whether a caller was callable. Cross-file
   // callers were never in refBookmarks (those bookmarks only cover the
@@ -93,7 +93,7 @@ describe("builder.__lookupCallerKind", () => {
         const callerId = CodeNodeID.ascending()
         const bookmarks = [{ nodeId: callerId, kind: "function" as const }]
 
-        const kind = __lookupCallerKind(projectID, callerId, true, bookmarks)
+        const kind = lookupCallerKind(projectID, callerId, true, bookmarks)
         expect(kind).toBe("function")
 
         CodeIntelligence.__clearProject(projectID)
@@ -117,7 +117,7 @@ describe("builder.__lookupCallerKind", () => {
 
         // refBookmarks is empty — it only contains the file currently
         // being indexed, which is not where the caller lives.
-        const kind = __lookupCallerKind(projectID, callerId, false, [])
+        const kind = lookupCallerKind(projectID, callerId, false, [])
         expect(kind).toBe("function")
 
         CodeIntelligence.__clearProject(projectID)
@@ -134,7 +134,7 @@ describe("builder.__lookupCallerKind", () => {
         CodeIntelligence.__clearProject(projectID)
 
         const phantomId = CodeNodeID.ascending()
-        const kind = __lookupCallerKind(projectID, phantomId, false, [])
+        const kind = lookupCallerKind(projectID, phantomId, false, [])
         expect(kind).toBeUndefined()
 
         CodeIntelligence.__clearProject(projectID)
@@ -151,7 +151,7 @@ describe("builder.__lookupCallerKind", () => {
         CodeIntelligence.__clearProject(projectID)
 
         const callerId = seedNode(projectID, { name: "process", kind: "method", file: "/tmp/klass.ts" })
-        const kind = __lookupCallerKind(projectID, callerId, false, [])
+        const kind = lookupCallerKind(projectID, callerId, false, [])
         // Methods are callable — the isCallable check downstream will
         // accept this and emit a calls edge. If this regresses to only
         // "function", we'd drop every method-to-method call edge.
@@ -179,7 +179,7 @@ describe("builder.__lookupCallerKind", () => {
         // Bookmark claims the node is a class — but we should trust
         // the DB, which knows it's a method.
         const bookmarks = [{ nodeId: id, kind: "class" as const }]
-        const kind = __lookupCallerKind(projectID, id, false, bookmarks)
+        const kind = lookupCallerKind(projectID, id, false, bookmarks)
         expect(kind).toBe("method")
 
         CodeIntelligence.__clearProject(projectID)
@@ -277,13 +277,13 @@ describe("builder.indexFile same-file edge resolution", () => {
   })
 })
 
-describe("builder.__planReferenceQueriesForTest", () => {
+describe("builder.planReferenceQueriesForBookmarks", () => {
   test("deduplicates bookmarks that share the same reference position", () => {
     const outer = CodeNodeID.ascending()
     const inner = CodeNodeID.ascending()
     const sibling = CodeNodeID.ascending()
 
-    const planned = __planReferenceQueriesForTest([
+    const planned = planReferenceQueriesForBookmarks([
       {
         nodeId: outer,
         kind: "function",
@@ -328,7 +328,7 @@ describe("builder.__planReferenceQueriesForTest", () => {
     const callable = CodeNodeID.ascending()
     const container = CodeNodeID.ascending()
 
-    const planned = __planReferenceQueriesForTest(
+    const planned = planReferenceQueriesForBookmarks(
       [
         {
           nodeId: container,
@@ -364,7 +364,7 @@ describe("builder.__planReferenceQueriesForTest", () => {
     const sharedB = CodeNodeID.ascending()
     const unique = CodeNodeID.ascending()
 
-    const planned = __planReferenceQueriesForTest(
+    const planned = planReferenceQueriesForBookmarks(
       [
         {
           nodeId: sharedA,

@@ -11,7 +11,7 @@ import { Session } from "../../src/session"
 import { SessionDebug } from "../../src/session/debug"
 import { tmpdir } from "../fixture/fixture"
 
-async function emit(sessionID: string, directory: string, payload: { kind: string; metadata: any }) {
+async function emit(sessionID: string, payload: { kind: string; metadata: any }) {
   Recorder.emit({
     type: "tool.result",
     sessionID: sessionID as any,
@@ -21,7 +21,6 @@ async function emit(sessionID: string, directory: string, payload: { kind: strin
     metadata: payload.metadata,
     durationMs: 1,
   })
-  void directory
 }
 
 function buildCase(sessionID: string, problem: string) {
@@ -147,19 +146,19 @@ describe("SessionDebug.load", () => {
           model: "test/model",
           directory: tmp.path,
         })
-        await emit(session.id, tmp.path, {
+        await emit(session.id, {
           kind: "debug_open_case",
           metadata: { caseId: c.caseId, debugCase: c.debugCase },
         })
-        await emit(session.id, tmp.path, {
+        await emit(session.id, {
           kind: "debug_capture_evidence",
           metadata: { evidenceId: e.evidenceId, debugEvidence: e.debugEvidence },
         })
-        await emit(session.id, tmp.path, {
+        await emit(session.id, {
           kind: "debug_plan_instrumentation",
           metadata: { planId: p.planId, debugInstrumentationPlan: p.debugInstrumentationPlan },
         })
-        await emit(session.id, tmp.path, {
+        await emit(session.id, {
           kind: "debug_propose_hypothesis",
           metadata: { hypothesisId: h.hypothesisId, debugHypothesis: h.debugHypothesis },
         })
@@ -195,12 +194,12 @@ describe("SessionDebug.load", () => {
           directory: tmp.path,
         })
         // Malformed case (status not in enum)
-        await emit(session.id, tmp.path, {
+        await emit(session.id, {
           kind: "debug_open_case",
           metadata: { debugCase: { ...good.debugCase, status: "in_progress" } },
         })
         // Valid case
-        await emit(session.id, tmp.path, {
+        await emit(session.id, {
           kind: "debug_open_case",
           metadata: { caseId: good.caseId, debugCase: good.debugCase },
         })
@@ -233,16 +232,16 @@ describe("SessionDebug.load", () => {
           model: "test/model",
           directory: tmp.path,
         })
-        await emit(session.id, tmp.path, {
+        await emit(session.id, {
           kind: "debug_open_case",
           metadata: { caseId: c.caseId, debugCase: c.debugCase },
         })
         // First emit: active. Second emit: confirmed. The latter must win.
-        await emit(session.id, tmp.path, {
+        await emit(session.id, {
           kind: "debug_propose_hypothesis",
           metadata: { hypothesisId: active.hypothesisId, debugHypothesis: active.debugHypothesis },
         })
-        await emit(session.id, tmp.path, {
+        await emit(session.id, {
           kind: "debug_propose_hypothesis",
           metadata: { hypothesisId: confirmed.hypothesisId, debugHypothesis: confirmed.debugHypothesis },
         })
@@ -275,20 +274,19 @@ describe("SessionDebug.load", () => {
           directory: tmp.path,
         })
         // Each emitted three times (model re-opens, re-captures, re-proposes)
-        for (const callSuffix of ["a", "b", "c"]) {
-          await emit(session.id, tmp.path, {
+        for (let i = 0; i < 3; i++) {
+          await emit(session.id, {
             kind: "debug_open_case",
             metadata: { caseId: c.caseId, debugCase: c.debugCase },
           })
-          await emit(session.id, tmp.path, {
+          await emit(session.id, {
             kind: "debug_capture_evidence",
             metadata: { evidenceId: e.evidenceId, debugEvidence: e.debugEvidence },
           })
-          await emit(session.id, tmp.path, {
+          await emit(session.id, {
             kind: "debug_propose_hypothesis",
             metadata: { hypothesisId: h.hypothesisId, debugHypothesis: h.debugHypothesis },
           })
-          void callSuffix
         }
         Recorder.end(session.id)
         await new Promise((resolve) => setTimeout(resolve, 50))
@@ -333,7 +331,7 @@ describe("SessionDebug.load", () => {
     })
   })
 
-  test("indexedIds returns both caseIds and evidenceIds in a single walk (matches narrow helpers)", async () => {
+  test("indexedIds returns both caseIds and evidenceIds in a single walk (matches caseIdSet helper)", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
       directory: tmp.path,
@@ -350,11 +348,11 @@ describe("SessionDebug.load", () => {
           model: "test/model",
           directory: tmp.path,
         })
-        await emit(session.id, tmp.path, {
+        await emit(session.id, {
           kind: "debug_open_case",
           metadata: { caseId: c.caseId, debugCase: c.debugCase },
         })
-        await emit(session.id, tmp.path, {
+        await emit(session.id, {
           kind: "debug_capture_evidence",
           metadata: { evidenceId: e.evidenceId, debugEvidence: e.debugEvidence },
         })
@@ -363,9 +361,8 @@ describe("SessionDebug.load", () => {
         const indexed = SessionDebug.indexedIds(session.id)
         expect(indexed.caseIds.has(c.caseId)).toBe(true)
         expect(indexed.evidenceIds.has(e.evidenceId)).toBe(true)
-        // the narrow helpers must match what indexedIds returns
+        // The narrow helper must match what indexedIds returns.
         expect([...SessionDebug.caseIdSet(session.id)].sort()).toEqual([...indexed.caseIds].sort())
-        expect([...SessionDebug.evidenceIdSet(session.id)].sort()).toEqual([...indexed.evidenceIds].sort())
       },
     })
   })
@@ -453,11 +450,11 @@ describe("SessionDebug.load", () => {
           model: "test/model",
           directory: tmp.path,
         })
-        await emit(session.id, tmp.path, {
+        await emit(session.id, {
           kind: "debug_open_case",
           metadata: { caseId: a.caseId, debugCase: a.debugCase },
         })
-        await emit(session.id, tmp.path, {
+        await emit(session.id, {
           kind: "debug_open_case",
           metadata: { caseId: b.caseId, debugCase: b.debugCase },
         })

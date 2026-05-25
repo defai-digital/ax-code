@@ -21,8 +21,8 @@ export namespace SessionVerifications {
   // Each envelope is re-validated via VerificationEnvelopeSchema. Entries
   // that fail validation are skipped (with a warning) so a single corrupted
   // record cannot block the rest.
-  export type LoadedEnvelope = { envelope: VerificationEnvelope; envelopeId: string }
-  export type LoadedEnvelopeRun = {
+  type LoadedEnvelope = { envelope: VerificationEnvelope; envelopeId: string }
+  type LoadedEnvelopeRun = {
     tool: string
     callID: string
     metadata?: Record<string, unknown>
@@ -82,16 +82,5 @@ export namespace SessionVerifications {
   // against the envelopes recorded in this session — see Phase 2 P2.5.
   export function loadWithIds(sessionID: SessionID): LoadedEnvelope[] {
     return loadRunsWithIds(sessionID).flatMap((run) => run.envelopes)
-  }
-
-  // Returns the set of envelopeIds present in the session — for callers that
-  // only need to validate a referenced id exists (e.g. register_finding's
-  // strict evidenceRefs validator).
-  export function envelopeIdSet(sessionID: SessionID): Set<string> {
-    const ids = new Set<string>()
-    for (const envelope of load(sessionID)) {
-      ids.add(computeEnvelopeId(envelope))
-    }
-    return ids
   }
 }

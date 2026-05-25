@@ -55,7 +55,7 @@ import { normalize } from "./format"
 import { coalesceParts } from "./coalesce"
 import { autonomousActiveView, isAutonomousProducedMessage, isLiveAutonomousText } from "./autonomous-active"
 import { useAutonomousPulse } from "./autonomous-pulse"
-import { isFooterSessionStatus, type FooterSessionStatus } from "./footer-view-model"
+import { footerSessionStatusOrIdle } from "./footer-view-model"
 import { childAction, firstChildID, nextChildID } from "./child"
 import { lastUserMessageID, promptState, redoMessageID, undoMessageID } from "./messages"
 import { messageScroll, messageTarget, nextVisibleMessage } from "./navigation"
@@ -116,8 +116,7 @@ export function Session() {
   // so the transcript outer border and the header chip flip together.
   const autonomous = createMemo(() => {
     const candidate = sync.data.session_status?.[route.sessionID]
-    const status: FooterSessionStatus = isFooterSessionStatus(candidate) ? candidate : { type: "idle" }
-    return autonomousActiveView(status)
+    return autonomousActiveView(footerSessionStatusOrIdle(candidate))
   })
   // Breathing pulse for the transcript's outer border while the
   // autonomous turn is running. Same driver as the assistant text
@@ -254,7 +253,7 @@ export function Session() {
     const sessionID = route.sessionID
     const timer = setInterval(() => {
       const candidate = sync.data.session_status?.[sessionID]
-      if (!isFooterSessionStatus(candidate) || candidate.type === "idle") return
+      if (footerSessionStatusOrIdle(candidate).type === "idle") return
       setStatusTick((value) => value + 1)
     }, 1000)
     onCleanup(() => clearInterval(timer))
@@ -356,8 +355,7 @@ export function Session() {
   onCleanup(() => reconnectSession.dispose())
 
   // plan_exit hands off to the build agent. Sync the picker so the chip
-  // matches the synthetic user message the tool created. (PlanEnterTool is
-  // disabled, so there's no symmetric plan_enter branch.)
+  // matches the synthetic user message the tool created.
   let lastSwitch: string | undefined = undefined
   const unsubAgentSwitch = sdk.event.on("message.part.updated", (evt) => {
     const part = evt.properties.part
@@ -1628,11 +1626,10 @@ function TextPart(props: { last: boolean; part: TextPart; message: AssistantMess
   // so they can't desync from the header chip or transcript border.
   const isLiveAutonomous = createMemo(() => {
     const candidate = ctx.sync.data.session_status?.[ctx.sessionID]
-    const status: FooterSessionStatus = isFooterSessionStatus(candidate) ? candidate : { type: "idle" }
     return isLiveAutonomousText({
       last: props.last,
       message: props.message,
-      autonomousActive: autonomousActiveView(status).active,
+      autonomousActive: autonomousActiveView(footerSessionStatusOrIdle(candidate)).active,
     })
   })
   const isAutonomousProduced = createMemo(() => {
