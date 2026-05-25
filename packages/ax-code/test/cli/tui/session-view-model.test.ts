@@ -6,6 +6,8 @@ import {
   compactDelegatedLabel,
   codeDisplayView,
   diffDisplayView,
+  parseTodoOutput,
+  parseTodoViewItems,
   sessionTaskSummary,
   userMessageMetadataDensity,
   todoWriteView,
@@ -151,6 +153,26 @@ describe("tui session view model", () => {
 
   test("uses tool names as fallback summary labels", () => {
     expect(assistantToolSummaryLabel("custom_tool", 2)).toBe("custom_tool")
+  })
+
+  test("decodes todo view items from generic payloads", () => {
+    expect(
+      parseTodoViewItems([
+        { status: "pending", content: "Keep this todo", priority: "high" },
+        { status: "missing content" },
+        null,
+      ]),
+    ).toEqual([{ status: "pending", content: "Keep this todo" }])
+    expect(parseTodoViewItems({ status: "pending", content: "not an array" })).toBeUndefined()
+  })
+
+  test("decodes legacy todo output without throwing on malformed data", () => {
+    expect(parseTodoOutput(JSON.stringify([{ status: "pending", content: "Review enterprise model list" }]))).toEqual([
+      { status: "pending", content: "Review enterprise model list" },
+    ])
+    expect(parseTodoOutput("not json")).toBeUndefined()
+    expect(parseTodoOutput(JSON.stringify({ status: "pending", content: "not an array" }))).toBeUndefined()
+    expect(parseTodoOutput(undefined)).toBeUndefined()
   })
 
   test("uses todo metadata over input when rendering a completed todo write", () => {
