@@ -2,6 +2,7 @@ import { Log } from "../util/log"
 import { Global } from "../global"
 import { NativePerf } from "../perf/native"
 import { NativeAddon } from "../native/addon"
+import { parseJsonPayload } from "../util/json-value"
 import type { ProjectID } from "../project/schema"
 import type { CodeNodeID, CodeEdgeID, CodeFileID } from "./id"
 import type { CodeNodeKind, CodeEdgeKind } from "./schema.sql"
@@ -67,12 +68,12 @@ export namespace NativeStore {
 
   // Safe JSON.parse wrapper — returns fallback on corrupted native output (BUG-005)
   export function parseNativeStoreJson<T>(json: string, fallback: T): T {
-    try {
-      return JSON.parse(json)
-    } catch {
+    const parsed = parseJsonPayload(json)
+    if (parsed === undefined) {
       log.warn("native store returned malformed JSON", { length: json?.length })
       return fallback
     }
+    return parsed as T
   }
 
   // ─── Node operations ──────────────────────────────────────────────
