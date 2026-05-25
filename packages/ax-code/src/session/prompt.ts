@@ -33,12 +33,15 @@ import { LLM } from "./llm"
 import { iife } from "@/util/iife"
 import { agentInfo, modelInfo } from "./prompt-agent-model-info"
 import {
-  shouldScheduleUsageCompaction,
   processorLoopDecision,
   assistantLoopExitDecision,
   assistantRespondedAfterUser,
 } from "./prompt-loop-decisions"
-import { processPendingCompaction } from "./prompt-loop-compaction"
+import {
+  maybeSchedulePreflightCompaction,
+  maybeScheduleUsageCompaction,
+  processPendingCompaction,
+} from "./prompt-loop-compaction"
 import { handlePromptLoopError } from "./prompt-loop-errors"
 import { loopMessages, remindQueuedMessages, scanLoopMessages } from "./prompt-loop-messages"
 import { markPromptLoopBusy } from "./prompt-loop-status"
@@ -53,7 +56,6 @@ import {
   todoContextConvergenceDecision,
   todoDeadlineConvergenceDecision,
 } from "./prompt-todo-continuation"
-import { estimateRequestTokens } from "./prompt-request"
 import { AutonomousContinuationPrompt } from "./prompt-autonomous-continuations"
 import {
   agentStepLimitContinuationDecision,
@@ -479,18 +481,14 @@ export namespace SessionPrompt {
 
       // context overflow, needs compaction
       if (
-        shouldScheduleUsageCompaction({
-          lastFinished,
-          overflow: lastFinished ? await SessionCompaction.isOverflow({ tokens: lastFinished.tokens, model }) : false,
-        })
-      ) {
-        await SessionCompaction.create({
+        await maybeScheduleUsageCompaction({
           sessionID,
           agent: lastUser.agent,
-          model: lastUser.model,
-          auto: true,
-          triggerReason: "provider_usage",
+          userModel: lastUser.model,
+          model,
+          lastFinished,
         })
+      ) {
         cachedMsgs = undefined // invalidate cache after compaction
         continue
       }
@@ -587,33 +585,19 @@ export namespace SessionPrompt {
             ]
           : []),
       ]
-      const tokenBudget = await SessionCompaction.budget(model)
-      const currentUserParts = lastUserParts ?? []
-      const syntheticContinuation =
-        currentUserParts.length > 0 &&
-        currentUserParts.every((part) => (part as { synthetic?: boolean }).synthetic === true)
-      if (tokenBudget && !syntheticContinuation) {
-        const estimatedTokens = estimateRequestTokens({ system, messages: requestMessages })
-        if (estimatedTokens >= tokenBudget.usable) {
-          log.info("prompt preflight scheduled compaction", {
-            command: "session.prompt.preflight",
-            status: "ok",
-            sessionID,
-            estimatedTokens,
-            usableTokens: tokenBudget.usable,
-            modelID: model.id,
-            providerID: model.providerID,
-          })
-          await SessionCompaction.create({
-            sessionID,
-            agent: lastUser.agent,
-            model: lastUser.model,
-            auto: true,
-            triggerReason: "prompt_preflight",
-          })
-          cachedMsgs = undefined
-          continue
-        }
+      if (
+        await maybeSchedulePreflightCompaction({
+          sessionID,
+          agent: lastUser.agent,
+          userModel: lastUser.model,
+          model,
+          userParts: lastUserParts ?? [],
+          system,
+          requestMessages,
+        })
+      ) {
+        cachedMsgs = undefined
+        continue
       }
 
       const processor = SessionProcessor.create({
