@@ -1,6 +1,7 @@
 import fs from "fs/promises"
 import z from "zod"
 import { recall, type RecallQuery } from "./recall"
+import { parseJsonResult } from "../util/json-value"
 import type { MemoryEntryKind } from "./types"
 
 const MemoryEntryKindSchema = z.enum(["userPrefs", "feedback", "decisions", "reference"])
@@ -65,14 +66,12 @@ export interface MemoryEvaluationReport {
 const DEFAULT_LIMIT = 5
 
 export function parseMemoryEvaluationFileText(text: string): MemoryEvaluationFile {
-  let value: unknown
-  try {
-    value = JSON.parse(text)
-  } catch (error) {
-    throw new Error("memory evaluation: invalid cases JSON", { cause: error })
+  const parsed = parseJsonResult(text)
+  if (!parsed.ok) {
+    throw new Error("memory evaluation: invalid cases JSON", { cause: parsed.error })
   }
 
-  return decodeMemoryEvaluationFileValue(value)
+  return decodeMemoryEvaluationFileValue(parsed.value)
 }
 
 export function decodeMemoryEvaluationFileValue(value: unknown): MemoryEvaluationFile {
