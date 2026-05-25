@@ -18,6 +18,16 @@ export function decodeHeadlessEventLogRecord<
   return candidate as HeadlessRuntimeEvent<TSession, TTodo, TDiff, TStatus, TMessage, TPart>
 }
 
+export function parseHeadlessEventLogJsonLine(line: string): unknown | undefined {
+  const trimmed = line.trim()
+  if (!trimmed) return undefined
+  try {
+    return JSON.parse(trimmed)
+  } catch {
+    return undefined
+  }
+}
+
 export function decodeHeadlessEventLogLine<
   TSession extends { id: string } = { id: string },
   TTodo = unknown,
@@ -26,13 +36,9 @@ export function decodeHeadlessEventLogLine<
   TMessage extends { id: string; sessionID: string } = { id: string; sessionID: string },
   TPart extends { id: string; messageID: string } = { id: string; messageID: string },
 >(line: string): HeadlessRuntimeEvent<TSession, TTodo, TDiff, TStatus, TMessage, TPart> | undefined {
-  const trimmed = line.trim()
-  if (!trimmed) return undefined
-  try {
-    return decodeHeadlessEventLogRecord<TSession, TTodo, TDiff, TStatus, TMessage, TPart>(JSON.parse(trimmed))
-  } catch {
-    return undefined
-  }
+  const record = parseHeadlessEventLogJsonLine(line)
+  if (record === undefined) return undefined
+  return decodeHeadlessEventLogRecord<TSession, TTodo, TDiff, TStatus, TMessage, TPart>(record)
 }
 
 function eventCandidate(record: unknown) {
