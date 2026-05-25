@@ -979,6 +979,20 @@ export namespace QualityModelRegistry {
     })
   }
 
+  function submissionBundleRecordSummary(
+    submissionBundle: QualityPromotionSubmissionBundle.BundleArtifact,
+  ): NonNullable<PromotionRecord["submissionBundle"]> {
+    return {
+      submissionID: submissionBundle.submissionID,
+      createdAt: submissionBundle.createdAt,
+      decisionBundleCreatedAt: submissionBundle.decisionBundle.createdAt,
+      approvalPacketID: submissionBundle.approvalPacket.packetID,
+      overallStatus: submissionBundle.summary.overallStatus,
+      eligibilityDecision: submissionBundle.summary.eligibilityDecision,
+      requiredOverride: submissionBundle.summary.requiredOverride,
+    }
+  }
+
   function buildReleasePacketPromotionSnapshot(input: {
     releasePacket: QualityPromotionReleasePacket.PacketArtifact
     promotionMetadata: PromotionMetadata
@@ -1039,15 +1053,7 @@ export namespace QualityModelRegistry {
         overallStatus: reviewDossier.summary.overallStatus,
         recommendation: reviewDossier.summary.recommendation,
       },
-      submissionBundle: {
-        submissionID: submissionBundle.submissionID,
-        createdAt: submissionBundle.createdAt,
-        decisionBundleCreatedAt: submissionBundle.decisionBundle.createdAt,
-        approvalPacketID: approvalPacket.packetID,
-        overallStatus: submissionBundle.summary.overallStatus,
-        eligibilityDecision: submissionBundle.summary.eligibilityDecision,
-        requiredOverride: submissionBundle.summary.requiredOverride,
-      },
+      submissionBundle: submissionBundleRecordSummary(submissionBundle),
       approvalPacket: {
         packetID: approvalPacket.packetID,
         createdAt: approvalPacket.createdAt,
@@ -1240,17 +1246,7 @@ export namespace QualityModelRegistry {
         previousActiveSource: previousActive?.source ?? null,
         decision,
         decisionBundleCreatedAt: input.decisionBundleCreatedAt ?? null,
-        submissionBundle: input.submissionBundle
-          ? {
-              submissionID: input.submissionBundle.submissionID,
-              createdAt: input.submissionBundle.createdAt,
-              decisionBundleCreatedAt: input.submissionBundle.decisionBundle.createdAt,
-              approvalPacketID: input.submissionBundle.approvalPacket.packetID,
-              overallStatus: input.submissionBundle.summary.overallStatus,
-              eligibilityDecision: input.submissionBundle.summary.eligibilityDecision,
-              requiredOverride: input.submissionBundle.summary.requiredOverride,
-            }
-          : undefined,
+        submissionBundle: input.submissionBundle ? submissionBundleRecordSummary(input.submissionBundle) : undefined,
         approval: input.approval
           ? {
               approvalID: input.approval.approvalID,
@@ -1920,15 +1916,7 @@ export namespace QualityModelRegistry {
     })
     const record = PromotionRecord.parse({
       ...result.record,
-      submissionBundle: {
-        submissionID: submissionBundle.submissionID,
-        createdAt: submissionBundle.createdAt,
-        decisionBundleCreatedAt: submissionBundle.decisionBundle.createdAt,
-        approvalPacketID: submissionBundle.approvalPacket.packetID,
-        overallStatus: submissionBundle.summary.overallStatus,
-        eligibilityDecision: submissionBundle.summary.eligibilityDecision,
-        requiredOverride: submissionBundle.summary.requiredOverride,
-      },
+      submissionBundle: submissionBundleRecordSummary(submissionBundle),
     })
     await writePromotionRecord(record)
     return {
