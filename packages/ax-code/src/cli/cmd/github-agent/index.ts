@@ -34,6 +34,7 @@ import { setTimeout as sleep } from "node:timers/promises"
 import { Process } from "@/util/process"
 import { git } from "@/util/git"
 import { isNonEmptyRecord } from "@/util/record"
+import { parseJsonResult } from "@/util/json-value"
 import {
   type GitHubPullRequest,
   type GitHubIssue,
@@ -60,6 +61,14 @@ export const GithubCommand = cmd({
   builder: (yargs) => yargs.command(GithubInstallCommand).command(GithubRunCommand).demandCommand(),
   async handler() {},
 })
+
+export function parseGitHubRunContextText(text: string): Context {
+  const parsed = parseJsonResult(text)
+  if (!parsed.ok) {
+    throw new Error(`Failed to parse --event as JSON: ${text}`, { cause: parsed.error })
+  }
+  return parsed.value as Context
+}
 
 function requireOidcBaseUrl(): string {
   const value = process.env["OIDC_BASE_URL"]
@@ -300,9 +309,9 @@ export const GithubRunCommand = cmd({
       let context: Context
       if (isMock) {
         try {
-          context = JSON.parse(args.event!) as Context
-        } catch {
-          core.setFailed(`Failed to parse --event as JSON: ${args.event}`)
+          context = parseGitHubRunContextText(args.event!)
+        } catch (error) {
+          core.setFailed(error instanceof Error ? error.message : `Failed to parse --event as JSON: ${args.event}`)
           process.exit(1)
         }
       } else {
