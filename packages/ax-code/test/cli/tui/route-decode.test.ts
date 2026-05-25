@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { parseInitialRoutePayload } from "../../../src/cli/cmd/tui/context/route-util"
+import { decodeInitialRoutePayload, parseInitialRoutePayload } from "../../../src/cli/cmd/tui/context/route-util"
 
 describe("tui initial route decoding", () => {
   test("parses home routes with validated initial prompts", () => {
@@ -38,5 +38,8 @@ describe("tui initial route decoding", () => {
     expect(parseInitialRoutePayload("not json")).toEqual({ type: "home" })
     expect(parseInitialRoutePayload(JSON.stringify({ type: "session", sessionID: 1 }))).toEqual({ type: "home" })
     expect(parseInitialRoutePayload(undefined)).toEqual({ type: "home" })
+    expect(decodeInitialRoutePayload(null)).toEqual({ type: "home" })
+    expect(decodeInitialRoutePayload({ type: "unknown" })).toEqual({ type: "home" })
+    expect(decodeInitialRoutePayload({ type: "home", workspaceID: 1 })).toEqual({ type: "home" })
   })
 })
