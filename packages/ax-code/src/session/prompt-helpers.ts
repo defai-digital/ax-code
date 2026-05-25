@@ -1,12 +1,7 @@
-import path from "path"
-import os from "os"
-import fs from "fs/promises"
 import { type ModelMessage, type Tool as AITool, tool, jsonSchema } from "ai"
-import { pathToFileURL } from "url"
 import { Agent } from "../agent/agent"
 import { Command } from "../command"
 import { Instance } from "../project/instance"
-import { ConfigMarkdown } from "../config/markdown"
 import { Session } from "."
 import { MessageID, PartID, SessionID } from "./schema"
 import { MessageV2 } from "./message-v2"
@@ -20,7 +15,6 @@ import { NamedError } from "@ax-code/util/error"
 import { SystemPrompt } from "./system"
 import { InstructionPrompt } from "./instruction"
 import { DiagnosticLog } from "@/debug/diagnostic-log"
-import { Filesystem } from "@/util/filesystem"
 import { Todo } from "./todo"
 import { SessionGoal } from "./goal"
 import { Flag } from "../flag/flag"
@@ -29,7 +23,9 @@ import type { SessionProcessor } from "./processor"
 import type { SessionCompaction } from "./compaction"
 import { formatDecisionCount, modelTurnFinished } from "./prompt-autonomous-decisions"
 import { commandTemplateText } from "./prompt-command-template"
+import { resolvePromptParts } from "./prompt-reference-parts"
 export { commandTemplateText } from "./prompt-command-template"
+export { resolvePromptParts } from "./prompt-reference-parts"
 export { appendShellOutputChunk, shellArgs, shellOutputMetadata, type ShellOutputState } from "./prompt-shell-runtime"
 
 function publishAgentInfoError(input: {
@@ -293,10 +289,6 @@ export function assistantLoopExitDecision(input: AssistantTurnCursor & {
 function titleFilePlaceholder(part: MessageV2.FilePart) {
   const filename = part.filename ?? "file"
   return `[Attached ${part.mime}: ${filename}]`
-}
-
-function errorCode(error: unknown) {
-  return error && typeof error === "object" && "code" in error ? (error as { code?: unknown }).code : undefined
 }
 
 function truncateTitleContext(text: string) {
@@ -816,73 +808,6 @@ export async function systemPrompt(input: {
     system.push(input.structuredPrompt)
   }
   return system
-}
-
-export async function resolvePromptParts(template: string): Promise<any[]> {
-  const parts: any[] = [
-    {
-      type: "text",
-      text: template,
-    },
-  ]
-  const files = ConfigMarkdown.files(template)
-  const seen = new Set<string>()
-  await Promise.all(
-    files.map(async (match) => {
-      const name = match[1]
-      if (seen.has(name)) return
-      seen.add(name)
-      const filepath = name.startsWith("~/")
-        ? path.resolve(os.homedir(), name.slice(2))
-        : path.resolve(Instance.worktree, name)
-      const checkedPath = await fs.realpath(filepath).catch((error) => {
-        const code = errorCode(error)
-        if (code !== "ENOENT") {
-          log.warn("failed to resolve included file path", { filepath, error })
-        }
-        return undefined
-      })
-      if (!checkedPath) {
-        const agent = await Agent.get(name)
-        if (agent) {
-          parts.push({
-            type: "agent",
-            name: agent.name,
-          })
-        }
-        return
-      }
-
-      if (name.startsWith("~/") && !Filesystem.contains(os.homedir(), checkedPath)) {
-        return
-      }
-
-      if (!name.startsWith("~/") && !Filesystem.contains(Instance.worktree, checkedPath)) {
-        return
-      }
-
-      const stats = await fs.stat(checkedPath).catch(() => undefined)
-      if (!stats) return
-
-      if (stats.isDirectory()) {
-        parts.push({
-          type: "file",
-          url: pathToFileURL(checkedPath).href,
-          filename: name,
-          mime: "application/x-directory",
-        })
-        return
-      }
-
-      parts.push({
-        type: "file",
-        url: pathToFileURL(checkedPath).href,
-        filename: name,
-        mime: "text/plain",
-      })
-    }),
-  )
-  return parts
 }
 
 export function createStructuredOutputTool(input: {
