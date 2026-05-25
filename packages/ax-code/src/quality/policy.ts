@@ -4,6 +4,7 @@ import z from "zod"
 import { CategoryEnum, SeverityEnum, WorkflowEnum } from "./finding"
 import { ConfigPaths } from "../config/paths"
 import { Log } from "../util/log"
+import { parseJsonResult } from "../util/json-value"
 
 export const PolicyRequiredCheckSchema = z.enum(["typecheck", "lint", "test"])
 export type PolicyRequiredCheck = z.infer<typeof PolicyRequiredCheckSchema>
@@ -116,15 +117,16 @@ export namespace Policy {
   }
 
   export function decodeRulesJson(raw: string): RulesDecodeResult {
-    try {
-      return decodeRulesValue(JSON.parse(raw))
-    } catch (err) {
+    const parsed = parseJsonResult(raw)
+    if (!parsed.ok) {
+      const { error } = parsed
       return {
         ok: false,
         reason: "json",
-        error: err instanceof Error ? err.message : String(err),
+        error: error instanceof Error ? error.message : String(error),
       }
     }
+    return decodeRulesValue(parsed.value)
   }
 
   function assertSafePolicyName(name: string) {
