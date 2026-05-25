@@ -25,7 +25,7 @@ describe("file.ripgrep", () => {
   test("parseJsonLine decodes ripgrep JSON records", () => {
     expect(
       Ripgrep.parseJsonLine(
-        JSON.stringify({
+        `  ${JSON.stringify({
           type: "match",
           data: {
             path: { text: "src/index.ts" },
@@ -40,7 +40,7 @@ describe("file.ripgrep", () => {
               },
             ],
           },
-        }),
+        })}\n`,
       ),
     ).toMatchObject({
       type: "match",
@@ -53,6 +53,7 @@ describe("file.ripgrep", () => {
 
   test("parseJsonLine rejects malformed ripgrep JSON records", () => {
     expect(Ripgrep.parseJsonLine("{not json")).toBeUndefined()
+    expect(Ripgrep.parseJsonLine("")).toBeUndefined()
     expect(Ripgrep.parseJsonLine(JSON.stringify({ type: "match", data: {} }))).toBeUndefined()
   })
 

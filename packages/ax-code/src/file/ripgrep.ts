@@ -18,6 +18,7 @@ import { NativePerf } from "../perf/native"
 import { NativeAddon } from "../native/addon"
 import { Ssrf } from "@/util/ssrf"
 import { Env } from "@/util/env"
+import { parseJsonPayload } from "@/util/json-value"
 
 export namespace Ripgrep {
   const log = Log.create({ service: "ripgrep" })
@@ -104,12 +105,8 @@ export namespace Ripgrep {
   }
 
   export function parseJsonLine(line: string): Result | undefined {
-    let parsed: unknown
-    try {
-      parsed = JSON.parse(line)
-    } catch {
-      return undefined
-    }
+    const parsed = parseJsonPayload(line)
+    if (parsed === undefined) return undefined
     return decodeJsonResult(parsed)
   }
 
