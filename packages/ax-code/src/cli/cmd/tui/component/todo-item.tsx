@@ -1,4 +1,5 @@
 import { useTheme } from "../context/theme"
+import { Todo } from "@/session/todo"
 
 export interface TodoItemProps {
   status: string
@@ -7,22 +8,23 @@ export interface TodoItemProps {
 
 export function TodoItem(props: TodoItemProps) {
   const { theme } = useTheme()
+  const isInProgress = props.status === "in_progress"
 
   return (
     <box flexDirection="row" gap={0}>
       <text
         flexShrink={0}
         style={{
-          fg: props.status === "in_progress" ? theme.warning : theme.textMuted,
+          fg: isInProgress ? theme.warning : theme.textMuted,
         }}
       >
-        [{props.status === "completed" ? "✓" : props.status === "in_progress" ? "•" : " "}]{" "}
+        [{Todo.checkboxMarker(props.status, "unicode")}]{" "}
       </text>
       <text
         flexGrow={1}
         wrapMode="word"
         style={{
-          fg: props.status === "in_progress" ? theme.warning : theme.textMuted,
+          fg: isInProgress ? theme.warning : theme.textMuted,
         }}
       >
         {props.content}

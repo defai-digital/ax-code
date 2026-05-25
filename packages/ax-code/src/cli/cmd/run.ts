@@ -105,6 +105,12 @@ function fallback(part: ToolPart) {
   })
 }
 
+function completedOutput(status: string, output?: string, trim?: boolean) {
+  if (status !== "completed") return undefined
+  if (!trim) return output
+  return output?.trim()
+}
+
 function glob(info: ToolProps<typeof GlobTool>) {
   describeFilesystemSearchTool({
     label: "Glob",
@@ -151,7 +157,7 @@ function write(info: ToolProps<typeof WriteTool>) {
       icon: "←",
       title: `Write ${normalizePath(info.input.filePath)}`,
     },
-    info.part.state.status === "completed" ? info.part.state.output : undefined,
+    completedOutput(info.part.state.status, info.part.state.output),
   )
 }
 
@@ -213,7 +219,7 @@ function skill(info: ToolProps<typeof SkillTool>) {
 }
 
 function bash(info: ToolProps<typeof BashTool>) {
-  const output = info.part.state.status === "completed" ? info.part.state.output?.trim() : undefined
+  const output = completedOutput(info.part.state.status, info.part.state.output, true)
   block(
     {
       icon: "$",
