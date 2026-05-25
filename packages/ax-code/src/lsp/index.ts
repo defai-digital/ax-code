@@ -644,12 +644,7 @@ export namespace LSP {
     line: number
     character: number
   }): Promise<SemanticEnvelope<unknown[]>> {
-    return LSPPoint.requestSemanticArrayEnvelope(input, {
-      metric: "hover",
-      request: "textDocument/hover",
-      operation: "hover",
-      reduce: (results) => results.filter((r) => r !== null && r !== undefined),
-      method: "hover",
+    return LSPPoint.hoverEnvelope(input, {
       timeoutMs: RPC_TIMEOUT_MS,
       selectClients: getClientsDetailed,
     })
@@ -720,11 +715,7 @@ export namespace LSP {
     line: number
     character: number
   }): Promise<SemanticEnvelope<unknown[]>> {
-    return LSPPoint.requestSemanticArrayEnvelope(input, {
-      metric: "definition",
-      request: "textDocument/definition",
-      operation: "definition",
-      method: "definition",
+    return LSPPoint.definitionEnvelope(input, {
       timeoutMs: RPC_TIMEOUT_MS,
       selectClients: getClientsDetailed,
     })
@@ -770,11 +761,7 @@ export namespace LSP {
     line: number
     character: number
   }): Promise<SemanticEnvelope<unknown[]>> {
-    return LSPPoint.requestSemanticArrayEnvelope(input, {
-      metric: "implementation",
-      request: "textDocument/implementation",
-      operation: "implementation",
-      method: "implementation",
+    return LSPPoint.implementationEnvelope(input, {
       timeoutMs: RPC_TIMEOUT_MS,
       selectClients: getClientsDetailed,
     })
@@ -790,11 +777,7 @@ export namespace LSP {
     line: number
     character: number
   }): Promise<SemanticEnvelope<unknown[]>> {
-    return LSPPoint.requestSemanticArrayEnvelope(input, {
-      metric: "prepareCallHierarchy",
-      request: "textDocument/prepareCallHierarchy",
-      operation: "prepareCallHierarchy",
-      method: "callHierarchy",
+    return LSPPoint.prepareCallHierarchyEnvelope(input, {
       timeoutMs: RPC_TIMEOUT_MS,
       selectClients: getClientsDetailed,
     })
@@ -810,10 +793,7 @@ export namespace LSP {
     line: number
     character: number
   }): Promise<SemanticEnvelope<unknown[]>> {
-    return LSPPoint.callHierarchyCallsEnvelope(input, {
-      metric: "incomingCalls",
-      request: "callHierarchy/incomingCalls",
-      operation: "incomingCalls",
+    return LSPPoint.incomingCallsEnvelope(input, {
       timeoutMs: RPC_TIMEOUT_MS,
       selectClients: getClientsDetailed,
     })
@@ -829,10 +809,7 @@ export namespace LSP {
     line: number
     character: number
   }): Promise<SemanticEnvelope<unknown[]>> {
-    return LSPPoint.callHierarchyCallsEnvelope(input, {
-      metric: "outgoingCalls",
-      request: "callHierarchy/outgoingCalls",
-      operation: "outgoingCalls",
+    return LSPPoint.outgoingCallsEnvelope(input, {
       timeoutMs: RPC_TIMEOUT_MS,
       selectClients: getClientsDetailed,
     })
