@@ -21,14 +21,15 @@ describe("trace log entry decoding", () => {
   })
 
   test("parseTraceLogEntryJsonLine parses raw JSON before record decoding", () => {
-    expect(parseTraceLogEntryJsonLine(JSON.stringify({ level: "INFO", service: "session", msg: "started" }))).toEqual(
-      {
-        level: "INFO",
-        service: "session",
-        msg: "started",
-      },
-    )
+    expect(
+      parseTraceLogEntryJsonLine(`  ${JSON.stringify({ level: "INFO", service: "session", msg: "started" })}\n`),
+    ).toEqual({
+      level: "INFO",
+      service: "session",
+      msg: "started",
+    })
     expect(parseTraceLogEntryJsonLine("[]")).toBeUndefined()
+    expect(parseTraceLogEntryJsonLine("")).toBeUndefined()
     expect(parseTraceLogEntryJsonLine("{not json")).toBeUndefined()
   })
 })
