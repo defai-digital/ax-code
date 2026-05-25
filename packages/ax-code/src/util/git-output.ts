@@ -10,10 +10,11 @@ export interface NumstatEntry {
   binary: boolean
 }
 
-function decodePath(file: string) {
+export function decodeGitQuotedPath(file: string): string {
   if (!file.startsWith('"')) return file
   try {
-    return JSON.parse(file) as string
+    const parsed: unknown = JSON.parse(file)
+    return typeof parsed === "string" ? parsed : file
   } catch {
     return file
   }
@@ -22,7 +23,7 @@ function decodePath(file: string) {
 function splitPair(line: string) {
   const idx = line.indexOf("\t")
   if (idx < 0) return
-  return [line.slice(0, idx), decodePath(line.slice(idx + 1))] as const
+  return [line.slice(0, idx), decodeGitQuotedPath(line.slice(idx + 1))] as const
 }
 
 function parseCount(value: string) {
@@ -32,7 +33,7 @@ function parseCount(value: string) {
 
 export function parsePathLine(line: string): string | undefined {
   if (!line) return
-  const file = decodePath(line)
+  const file = decodeGitQuotedPath(line)
   return file || undefined
 }
 
@@ -52,7 +53,7 @@ export function parseNumstatLine(line: string): NumstatEntry | undefined {
 
   const rawAdditions = line.slice(0, first)
   const rawDeletions = line.slice(first + 1, second)
-  const file = decodePath(line.slice(second + 1))
+  const file = decodeGitQuotedPath(line.slice(second + 1))
   if (!file) return
 
   const binary = rawAdditions === "-" && rawDeletions === "-"
