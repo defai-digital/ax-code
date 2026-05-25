@@ -5,6 +5,7 @@ import { Process } from "@/util/process"
 import { git } from "@/util/git"
 import { registerShutdownSignals } from "@/util/signals"
 import { isRecord } from "@/util/record"
+import { parseJsonResult } from "@/util/json-value"
 
 export interface GitHubPrViewInfo {
   isCrossRepository?: boolean
@@ -38,13 +39,11 @@ export function decodeGitHubPrViewInfoValue(value: unknown): GitHubPrViewInfo | 
 }
 
 export function parseGitHubPrViewInfoText(text: string): GitHubPrViewInfo | undefined {
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(text)
-  } catch (error) {
-    throw new Error(`Failed to parse PR info from gh CLI: ${text.slice(0, 200)}`, { cause: error })
+  const parsed = parseJsonResult(text)
+  if (!parsed.ok) {
+    throw new Error(`Failed to parse PR info from gh CLI: ${text.slice(0, 200)}`, { cause: parsed.error })
   }
-  return decodeGitHubPrViewInfoValue(parsed)
+  return decodeGitHubPrViewInfoValue(parsed.value)
 }
 
 export const PrCommand = cmd({
