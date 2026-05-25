@@ -22,6 +22,8 @@ import {
   output,
   pathExists,
   resolveManagedToolBin,
+  resolveTypescriptSdk,
+  resolveTypescriptServer,
   run,
   spawnInfo,
   toolServer,
@@ -111,7 +113,7 @@ export const Typescript: Info = {
   root: NearestRoot([...JS_LOCKFILES], ["deno.json", "deno.jsonc"]),
   extensions: JS_PROJECT_EXTENSIONS,
   async spawn(root) {
-    const tsserver = Module.resolve("typescript/lib/tsserver.js", Instance.directory)
+    const tsserver = resolveTypescriptServer()
     log.info("typescript server", { tsserver })
     if (!tsserver) return
     return bunSpawnInfo(root, "x", ["typescript-language-server", "--stdio"], {
@@ -698,12 +700,11 @@ export const Astro: Info = {
   extensions: [".astro"],
   root: NearestRoot([...JS_LOCKFILES]),
   async spawn(root) {
-    const tsserver = Module.resolve("typescript/lib/tsserver.js", Instance.directory)
-    if (!tsserver) {
+    const tsdk = resolveTypescriptSdk()
+    if (!tsdk) {
       log.info("typescript not found, required for Astro language server")
       return
     }
-    const tsdk = path.dirname(tsserver)
 
     return bunServerHandle({
       root,
