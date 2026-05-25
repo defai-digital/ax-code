@@ -125,6 +125,12 @@ type GoalArgumentDecision =
       tokenBudget?: number
     }
 
+type ShellOutputState = {
+  output: string
+  outputBytes: number
+  outputTruncated: boolean
+}
+
 type ProcessorCompactionTriggerReason = Extract<
   SessionCompaction.TriggerReason,
   "provider_usage" | "context_overflow_error"
@@ -361,6 +367,44 @@ export function parseGoalArguments(raw: string): GoalArgumentDecision {
     }
   }
   return { action: "create", objective: text }
+}
+
+export function appendShellOutputChunk(
+  state: ShellOutputState,
+  chunk: Buffer | string,
+  hardCap: number,
+): ShellOutputState {
+  const text = typeof chunk === "string" ? chunk : chunk.toString()
+  if (!text || state.outputTruncated) return state
+
+  const chunkBytes = Buffer.byteLength(text, "utf-8")
+  if (state.outputBytes + chunkBytes <= hardCap) {
+    return {
+      ...state,
+      output: state.output + text,
+      outputBytes: state.outputBytes + chunkBytes,
+    }
+  }
+
+  let end = text.length
+  const remaining = hardCap - state.outputBytes
+  while (end > 0 && Buffer.byteLength(text.slice(0, end), "utf-8") > remaining) {
+    end--
+  }
+
+  let output = state.output
+  let outputBytes = state.outputBytes
+  if (end > 0) {
+    const slice = text.slice(0, end)
+    output += slice
+    outputBytes += Buffer.byteLength(slice, "utf-8")
+  }
+
+  return {
+    output: output + "\n\n[output truncated at 10MB]",
+    outputBytes,
+    outputTruncated: true,
+  }
 }
 
 function shellKey(shell: string, platform = process.platform) {
