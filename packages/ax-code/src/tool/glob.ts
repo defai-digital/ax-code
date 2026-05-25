@@ -9,6 +9,7 @@ import { assertExternalDirectory, assertSymlinkInsideProject } from "./external-
 import { NativePerf } from "../perf/native"
 import { NativeAddon } from "../native/addon"
 import { normalizeToWorkspacePath, resolveToolFilePath } from "./file-path"
+import { parseNativeJsonArray } from "./native-json"
 
 const NativeGlobEntry = z.object({
   path: z.string(),
@@ -19,10 +20,7 @@ const NativeGlobEntry = z.object({
 export type NativeGlobEntry = z.infer<typeof NativeGlobEntry>
 
 export function parseNativeGlobEntries(json: string): NativeGlobEntry[] {
-  const parsed: unknown = JSON.parse(json)
-  const decoded = z.array(NativeGlobEntry).safeParse(parsed)
-  if (!decoded.success) throw new SyntaxError("Invalid native glob output")
-  return decoded.data
+  return parseNativeJsonArray(json, NativeGlobEntry, "Invalid native glob output")
 }
 
 export const GlobTool = Tool.define("glob", {

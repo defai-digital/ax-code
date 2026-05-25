@@ -13,6 +13,7 @@ import { NativePerf } from "../perf/native"
 import { NativeAddon } from "../native/addon"
 import { Env } from "@/util/env"
 import { resolveToolFilePath } from "./file-path"
+import { parseNativeJsonArray } from "./native-json"
 
 const NativeSearchMatch = z.object({
   path: z.string(),
@@ -24,10 +25,7 @@ const NativeSearchMatch = z.object({
 export type NativeSearchMatch = z.infer<typeof NativeSearchMatch>
 
 export function parseNativeSearchMatches(json: string): NativeSearchMatch[] {
-  const parsed: unknown = JSON.parse(json)
-  const decoded = z.array(NativeSearchMatch).safeParse(parsed)
-  if (!decoded.success) throw new SyntaxError("Invalid native search output")
-  return decoded.data
+  return parseNativeJsonArray(json, NativeSearchMatch, "Invalid native search output")
 }
 
 export const GrepTool = Tool.define("grep", {
