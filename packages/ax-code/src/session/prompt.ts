@@ -1647,6 +1647,11 @@ export namespace SessionPrompt {
       synthetic: true,
       text,
     })
+    const attachDraftContext = <T extends object>(part: T): T & { messageID: MessageID; sessionID: SessionID } => ({
+      ...part,
+      messageID: info.id,
+      sessionID: input.sessionID,
+    })
 
     const resolvedParts = await Promise.allSettled(
       input.parts.map(async (part): Promise<Draft<MessageV2.Part>[]> => {
@@ -1688,11 +1693,7 @@ export namespace SessionPrompt {
                 }
               }
 
-              pieces.push({
-                ...part,
-                messageID: info.id,
-                sessionID: input.sessionID,
-              })
+              pieces.push(attachDraftContext(part))
             } catch (error: unknown) {
               log.error("failed to read MCP resource", {
                 command: "session.prompt.mcpResource",
@@ -1733,11 +1734,7 @@ export namespace SessionPrompt {
                 return [
                   draftSyntheticTextPart(readToolCallText({ filePath: part.filename })),
                   draftSyntheticTextPart(decodeDataUrl(part.url)),
-                  {
-                    ...part,
-                    messageID: info.id,
-                    sessionID: input.sessionID,
-                  },
+                  attachDraftContext(part),
                 ]
               }
               break
@@ -1841,19 +1838,13 @@ export namespace SessionPrompt {
                     if (result.attachments?.length) {
                       pieces.push(
                         ...result.attachments.map((attachment) => ({
-                          ...attachment,
+                          ...attachDraftContext(attachment),
                           synthetic: true,
                           filename: attachment.filename ?? part.filename,
-                          messageID: info.id,
-                          sessionID: input.sessionID,
                         })),
                       )
                     } else {
-                      pieces.push({
-                        ...part,
-                        messageID: info.id,
-                        sessionID: input.sessionID,
-                      })
+                      pieces.push(attachDraftContext(part))
                     }
                   })
                   .catch((error) => {
@@ -1878,11 +1869,7 @@ export namespace SessionPrompt {
                     return [
                       draftSyntheticTextPart(readToolCallText(args)),
                       draftSyntheticTextPart(result.output),
-                      {
-                        ...part,
-                        messageID: info.id,
-                        sessionID: input.sessionID,
-                      },
+                      attachDraftContext(part),
                     ]
                   })
                   .catch((error) => {
@@ -1937,11 +1924,7 @@ export namespace SessionPrompt {
           const perm = Permission.evaluate("task", part.name, agent.permission)
           const hint = perm.action === "deny" ? " . Invoked by user; guaranteed to exist." : ""
           return [
-            {
-              ...part,
-              messageID: info.id,
-              sessionID: input.sessionID,
-            },
+            attachDraftContext(part),
             // An extra space is added here. Otherwise the 'Use' gets appended
             // to user's last word; making a combined word
             draftSyntheticTextPart(
@@ -1953,11 +1936,7 @@ export namespace SessionPrompt {
         }
 
         return [
-          {
-            ...part,
-            messageID: info.id,
-            sessionID: input.sessionID,
-          },
+          attachDraftContext(part),
         ]
       }),
     )
