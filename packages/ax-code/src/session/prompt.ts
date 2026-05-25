@@ -14,7 +14,6 @@ import { MAX_CONSECUTIVE_ERRORS, GLOBAL_STEP_LIMIT } from "@/constants/session"
 import { AgentControlEvents } from "../control-plane/agent-control-events"
 import { AutonomousCompletionGate } from "../control-plane/autonomous-completion-gate"
 import { Instance } from "../project/instance"
-import { Bus } from "../bus"
 import { SystemPrompt } from "./system"
 import { InstructionPrompt } from "./instruction"
 import { Plugin } from "../plugin"
@@ -29,7 +28,6 @@ import { AutoIndex } from "../code-intelligence/auto-index"
 import type { ProjectID } from "../project/schema"
 import { Todo } from "./todo"
 import { SessionGoal } from "./goal"
-import { Command } from "../command"
 import { Config } from "@/config/config"
 import { Isolation } from "@/isolation"
 import { SessionSummary } from "./summary"
@@ -40,8 +38,6 @@ import { SessionStatus } from "./status"
 import { LLM } from "./llm"
 import { iife } from "@/util/iife"
 import { agentInfo, modelInfo } from "./prompt-agent-model-info"
-import { lastModel } from "./prompt-command-selection"
-import { commandSetup } from "./prompt-command-setup"
 import {
   pendingCompactionDecision,
   shouldScheduleUsageCompaction,
@@ -81,8 +77,7 @@ import {
 import { insertReminders } from "./prompt-reminders"
 import { executeShellCommand } from "./prompt-shell-command"
 import { createStoppedAssistantTextResponse } from "./prompt-assistant-response"
-import { resolveCommandForExecution } from "./prompt-command"
-import { executeGoalCommand } from "./prompt-goal-command"
+import { executePromptCommand } from "./prompt-command-execution"
 import { createAutonomousUserContinuation, createUserMessage } from "./prompt-user-message"
 import { permissionRulesetFromLegacyTools } from "./prompt-permission"
 import { createPromptRunState } from "./prompt-run-state"
@@ -1322,52 +1317,6 @@ export namespace SessionPrompt {
   export type CommandInput = CommandInputType
 
   export async function command(input: CommandInput) {
-    log.info("command", {
-      command: "session.prompt.command",
-      status: "started",
-      sessionID: input.sessionID,
-      commandName: input.command,
-    })
-    if (input.command === Command.Default.GOAL) {
-      return executeGoalCommand(input, prompt)
-    }
-    const command = await resolveCommandForExecution({ sessionID: input.sessionID, name: input.command })
-    const prepared = await commandSetup({
-      command,
-      name: input.command,
-      arguments: input.arguments,
-      sessionID: input.sessionID,
-      agent: input.agent,
-      model: input.model,
-      parts: input.parts,
-    })
-
-    await Plugin.trigger(
-      "command.execute.before",
-      {
-        command: input.command,
-        sessionID: input.sessionID,
-        arguments: input.arguments,
-      },
-      { parts: prepared.parts },
-    )
-
-    const result = (await prompt({
-      sessionID: input.sessionID,
-      messageID: input.messageID,
-      model: prepared.user.model,
-      agent: prepared.user.agent,
-      parts: prepared.parts,
-      variant: input.variant,
-    })) as MessageV2.WithParts
-
-    Bus.publishDetached(Command.Event.Executed, {
-      name: input.command,
-      sessionID: input.sessionID,
-      arguments: input.arguments,
-      messageID: result.info.id,
-    })
-
-    return result
+    return executePromptCommand(input, prompt)
   }
 }
