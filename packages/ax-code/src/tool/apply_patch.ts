@@ -15,6 +15,7 @@ import { Filesystem } from "../util/filesystem"
 import { FileTime } from "../file/time"
 import DESCRIPTION from "./apply_patch.txt"
 import { collectDiagnostics } from "./diagnostics"
+import { toErrorMessage } from "@/util/error-message"
 import { Log } from "../util/log"
 import { BlastRadius } from "@/session/blast-radius"
 import { normalizeToWorkspacePath, resolveToolFilePath } from "./file-path"
@@ -49,12 +50,9 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
       const parseResult = Patch.parsePatch(params.patchText)
       hunks = parseResult.hunks
     } catch (error) {
-      // `${error}` on an Error produces "Error: <msg>" (ugly prefix)
-      // and on a non-Error plain object produces "[object Object]".
-      // Extract .message for Error instances, String() everything
-      // else. `{ cause }` still carries the full original for
-      // downstream handlers that inspect it.
-      const msg = error instanceof Error ? error.message : String(error)
+      // Keep `{ cause }` as the full original for downstream handlers
+      // while normalizing the user-facing verification message.
+      const msg = toErrorMessage(error)
       throw new Error(`apply_patch verification failed: ${msg}`, { cause: error })
     }
 
@@ -161,7 +159,7 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
             const fileUpdate = Patch.deriveNewContentsFromChunks(filePath, hunk.chunks)
             newContent = fileUpdate.content
           } catch (error) {
-            const msg = error instanceof Error ? error.message : String(error)
+            const msg = toErrorMessage(error)
             throw new Error(`apply_patch verification failed: ${msg}`, { cause: error })
           }
 
@@ -228,7 +226,7 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
             throw new Error(`apply_patch: cannot delete a directory: ${filePath}`)
           }
           const contentToDelete = await fs.readFile(filePath, "utf-8").catch((error) => {
-            const msg = error instanceof Error ? error.message : String(error)
+            const msg = toErrorMessage(error)
             throw new Error(`apply_patch verification failed: ${msg}`, { cause: error })
           })
           const deleteDiff = trimDiff(createTwoFilesPatch(filePath, filePath, contentToDelete, ""))
@@ -467,7 +465,7 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
         // the caller needs to know about (BUG-107).
         const files = rollbackErrors.map((e) => e.file).join(", ")
         const wrapped = new Error(
-          `apply_patch failed and rollback was incomplete for: ${files}. Original error: ${error instanceof Error ? error.message : String(error)}`,
+          `apply_patch failed and rollback was incomplete for: ${files}. Original error: ${toErrorMessage(error)}`,
           { cause: error },
         )
         throw wrapped
