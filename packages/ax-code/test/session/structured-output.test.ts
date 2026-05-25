@@ -1,7 +1,8 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, spyOn, test } from "bun:test"
 import { MessageV2 } from "../../src/session/message-v2"
-import { createStructuredOutputTool } from "../../src/session/prompt-helpers"
+import { createStructuredOutputTool, createStructuredOutputTurn } from "../../src/session/prompt-helpers"
 import { SessionID, MessageID } from "../../src/session/schema"
+import { Session } from "../../src/session"
 
 describe("structured-output.OutputFormat", () => {
   test("parses text format", () => {
@@ -384,4 +385,76 @@ describe("structured-output.createStructuredOutputTool", () => {
   // Note: Retry behavior is handled by the AI SDK and the prompt loop, not the tool itself
   // The tool simply calls onSuccess when execute() is called with valid args
   // See prompt.ts loop() for actual retry logic
+})
+
+describe("structured-output.createStructuredOutputTurn", () => {
+  function assistantMessage(): MessageV2.Assistant {
+    return {
+      id: MessageID.ascending(),
+      sessionID: SessionID.descending(),
+      role: "assistant",
+      parentID: MessageID.ascending(),
+      modelID: "claude-3" as any,
+      providerID: "anthropic" as any,
+      mode: "default",
+      agent: "default",
+      path: { cwd: "/test", root: "/test" },
+      tokens: { input: 100, output: 50, reasoning: 0, cache: { read: 0, write: 0 } },
+      time: { created: Date.now() },
+    }
+  }
+
+  test("does not attach a tool for text output", async () => {
+    const turn = createStructuredOutputTurn({ type: "text" })
+    const tools = {}
+    turn.attachTool(tools)
+
+    expect(turn.toolChoice).toBeUndefined()
+    expect(tools).toEqual({})
+    expect(await turn.saveCaptured(assistantMessage())).toBe(false)
+    expect(await turn.failIfMissing(assistantMessage())).toBe(false)
+  })
+
+  test("attaches required tool and saves captured structured output", async () => {
+    const update = spyOn(Session, "updateMessage").mockResolvedValue(undefined as any)
+    try {
+      const turn = createStructuredOutputTurn({
+        type: "json_schema",
+        schema: { type: "object", properties: { name: { type: "string" } } },
+        retryCount: 2,
+      })
+      const tools: Record<string, any> = {}
+      turn.attachTool(tools)
+
+      expect(turn.toolChoice).toBe("required")
+      expect(tools.StructuredOutput).toBeDefined()
+      await tools.StructuredOutput.execute({ name: "Acme" }, { toolCallId: "call_1", messages: [] })
+
+      const assistant = assistantMessage()
+      await expect(turn.saveCaptured(assistant)).resolves.toBe(true)
+      expect(assistant.structured).toEqual({ name: "Acme" })
+      expect(assistant.finish).toBe("stop")
+      expect(update).toHaveBeenCalledWith(assistant)
+    } finally {
+      update.mockRestore()
+    }
+  })
+
+  test("marks missing required structured output as an assistant error", async () => {
+    const update = spyOn(Session, "updateMessage").mockResolvedValue(undefined as any)
+    try {
+      const turn = createStructuredOutputTurn({
+        type: "json_schema",
+        schema: { type: "object" },
+        retryCount: 2,
+      })
+      const assistant = assistantMessage()
+
+      await expect(turn.failIfMissing(assistant)).resolves.toBe(true)
+      expect(assistant.error?.name).toBe("StructuredOutputError")
+      expect(update).toHaveBeenCalledWith(assistant)
+    } finally {
+      update.mockRestore()
+    }
+  })
 })

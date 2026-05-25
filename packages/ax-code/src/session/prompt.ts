@@ -41,7 +41,7 @@ import { handlePromptLoopError } from "./prompt-loop-errors"
 import { loopMessages, scanLoopMessages } from "./prompt-loop-messages"
 import { markPromptLoopBusy } from "./prompt-loop-status"
 import { preparePromptRequest, type PromptRequestCache } from "./prompt-request-build"
-import { createStructuredOutputTool } from "./prompt-structured-output"
+import { createStructuredOutputTurn } from "./prompt-structured-output"
 import { sessionAssistantPath, textPart, zeroTokenUsage } from "./prompt-message-builders"
 import { executeSubtask, type SubtaskContext } from "./prompt-subtask"
 import { resolveTools } from "./prompt-tools"
@@ -200,11 +200,6 @@ export namespace SessionPrompt {
     // case the prompt loop is entered without a full bootstrap.
     Provider.warmup()
 
-    // Structured output state
-    // Note: On session resumption, state is reset but outputFormat is preserved
-    // on the user message and will be retrieved from lastUser below
-    let structuredOutput: unknown | undefined
-
     let step = 0
     let totalSteps = 0
     let reason: "completed" | "aborted" | "error" | "step_limit" | "stalled" = "error"
@@ -291,12 +286,6 @@ export namespace SessionPrompt {
     // accumulated busy events across unrelated turns.
     let compactionBusyRetries = 0
     while (true) {
-      // Reset structured output state at the start of each iteration so
-      // a stale value from a prior step cannot cause the loop to save
-      // old output and break out prematurely. `structuredOutput` is
-      // populated via the onSuccess callback only when the current step
-      // is actually using structured output mode.
-      structuredOutput = undefined
       await markPromptLoopBusy({ sessionID, step, maxSteps: sessionStepLimit, consecutiveErrors })
       if (abort.aborted) {
         reason = "aborted"
@@ -566,15 +555,8 @@ export namespace SessionPrompt {
         isolation: Isolation.resolve(cfg.isolation, Instance.directory, Instance.worktree),
       })
 
-      // Inject StructuredOutput tool if JSON schema mode enabled
-      if (lastUser.format?.type === "json_schema") {
-        tools["StructuredOutput"] = createStructuredOutputTool({
-          schema: lastUser.format.schema,
-          onSuccess(output) {
-            structuredOutput = output
-          },
-        })
-      }
+      const structuredOutput = createStructuredOutputTurn(request.format)
+      structuredOutput.attachTool(tools)
 
       const result = await processor.process({
         user: lastUser,
@@ -586,16 +568,11 @@ export namespace SessionPrompt {
         messages: request.requestMessages,
         tools,
         model,
-        toolChoice: request.format.type === "json_schema" ? "required" : undefined,
+        toolChoice: structuredOutput.toolChoice,
         config: cfg,
       })
 
-      // If structured output was captured, save it and exit immediately
-      // This takes priority because the StructuredOutput tool was called successfully
-      if (structuredOutput !== undefined) {
-        processor.message.structured = structuredOutput
-        processor.message.finish = processor.message.finish ?? "stop"
-        await Session.updateMessage(processor.message)
+      if (await structuredOutput.saveCaptured(processor.message)) {
         reason = "completed"
         break
       }
@@ -608,13 +585,7 @@ export namespace SessionPrompt {
       if (!emptyModelTurn) emptyModelTurnRetries = 0
 
       if (modelFinished && !processor.message.error) {
-        if (request.format.type === "json_schema") {
-          // Model stopped without calling StructuredOutput tool
-          processor.message.error = new MessageV2.StructuredOutputError({
-            message: "Model did not produce structured output",
-            retries: 0,
-          }).toObject()
-          await Session.updateMessage(processor.message)
+        if (await structuredOutput.failIfMissing(processor.message)) {
           reason = "error"
           break
         }

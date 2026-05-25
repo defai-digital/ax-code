@@ -1,4 +1,6 @@
 import { type Tool as AITool, tool, jsonSchema } from "ai"
+import { Session } from "."
+import { MessageV2 } from "./message-v2"
 
 const STRUCTURED_OUTPUT_DESCRIPTION = `Use this tool to return your final response in the requested structured format.
 
@@ -33,4 +35,42 @@ export function createStructuredOutputTool(input: {
       }
     },
   })
+}
+
+export function createStructuredOutputTurn(format: MessageV2.OutputFormat): {
+  toolChoice?: "required"
+  attachTool(tools: Record<string, AITool>): void
+  saveCaptured(assistant: MessageV2.Assistant): Promise<boolean>
+  failIfMissing(assistant: MessageV2.Assistant): Promise<boolean>
+} {
+  let captured: unknown
+  const required = format.type === "json_schema"
+  return {
+    toolChoice: required ? "required" : undefined,
+    attachTool(tools) {
+      if (!required) return
+      tools["StructuredOutput"] = createStructuredOutputTool({
+        schema: format.schema,
+        onSuccess(output) {
+          captured = output
+        },
+      })
+    },
+    async saveCaptured(assistant) {
+      if (captured === undefined) return false
+      assistant.structured = captured
+      assistant.finish = assistant.finish ?? "stop"
+      await Session.updateMessage(assistant)
+      return true
+    },
+    async failIfMissing(assistant) {
+      if (!required) return false
+      assistant.error = new MessageV2.StructuredOutputError({
+        message: "Model did not produce structured output",
+        retries: 0,
+      }).toObject()
+      await Session.updateMessage(assistant)
+      return true
+    },
+  }
 }
