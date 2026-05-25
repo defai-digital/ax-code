@@ -42,6 +42,7 @@ import { withTimeout } from "@/util/timeout"
 import * as ConfigSchema from "./schema"
 import { isRecord } from "../util/record"
 import { FeatureFlag } from "../util/feature-flags"
+import { parseJsonResult } from "../util/json-value"
 
 // Single source of truth for the public config schema URL. Written
 // into every user's ax-code.json on first load, into legacy-TOML
@@ -100,14 +101,12 @@ export namespace Config {
   }
 
   export function parsePermissionEnv(value: string): PermissionEnvParseResult {
-    let parsed: unknown
-    try {
-      parsed = JSON.parse(value)
-    } catch {
+    const parsed = parseJsonResult(value)
+    if (!parsed.ok) {
       return { ok: false, reason: "json" }
     }
 
-    return decodePermissionEnvValue(parsed)
+    return decodePermissionEnvValue(parsed.value)
   }
 
   // Managed settings directory for enterprise deployments (highest priority, admin-controlled)
