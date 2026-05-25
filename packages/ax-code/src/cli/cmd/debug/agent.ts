@@ -11,7 +11,7 @@ import { Permission } from "../../../permission"
 import { iife } from "../../../util/iife"
 import { bootstrap } from "../../bootstrap"
 import { cmd } from "../cmd"
-import { isRecord } from "@/util/record"
+import { decodeJsonRecord } from "@/util/json-record"
 
 export const AgentCommand = cmd({
   command: "agent <name>",
@@ -29,7 +29,7 @@ export const AgentCommand = cmd({
       })
       .option("params", {
         type: "string",
-        description: "Tool params as JSON or a JS object literal",
+        description: "Tool params as JSON",
       }),
   async handler(args) {
     await bootstrap(process.cwd(), async () => {
@@ -87,7 +87,7 @@ async function resolveTools(agent: Agent.Info, availableTools: Awaited<ReturnTyp
   return resolved
 }
 
-function parseToolParams(input?: string) {
+export function parseToolParams(input?: string) {
   if (!input) return {}
   const trimmed = input.trim()
   if (trimmed.length === 0) return {}
@@ -108,10 +108,11 @@ function parseToolParams(input?: string) {
     }
   })
 
-  if (!isRecord(parsed)) {
+  const record = decodeJsonRecord(parsed)
+  if (!record) {
     throw new Error("Tool params must be a JSON object.")
   }
-  return parsed as Record<string, unknown>
+  return record
 }
 
 async function createToolContext(agent: Agent.Info) {
