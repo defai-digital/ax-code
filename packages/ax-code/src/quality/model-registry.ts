@@ -1043,6 +1043,20 @@ export namespace QualityModelRegistry {
     }
   }
 
+  function releasePacketRecordSummary(
+    releasePacket: QualityPromotionReleasePacket.PacketArtifact,
+  ): NonNullable<PromotionRecord["releasePacket"]> {
+    return {
+      packetID: releasePacket.packetID,
+      createdAt: releasePacket.createdAt,
+      recordID: releasePacket.releaseDecisionRecord.recordID,
+      decisionID: releasePacket.releaseDecisionRecord.boardDecision.decisionID,
+      authorizedPromotion: releasePacket.summary.authorizedPromotion,
+      promotionMode: releasePacket.summary.promotionMode,
+      overallStatus: releasePacket.summary.overallStatus,
+    }
+  }
+
   function buildReleasePacketPromotionSnapshot(input: {
     releasePacket: QualityPromotionReleasePacket.PacketArtifact
     promotionMetadata: PromotionMetadata
@@ -1062,15 +1076,7 @@ export namespace QualityModelRegistry {
       decisionBundleCreatedAt: submissionBundle.decisionBundle.createdAt,
       boardDecision: boardDecisionRecordSummary(boardDecision),
       releaseDecisionRecord: releaseDecisionRecordSummary(input.releasePacket.releaseDecisionRecord),
-      releasePacket: {
-        packetID: input.releasePacket.packetID,
-        createdAt: input.releasePacket.createdAt,
-        recordID: input.releasePacket.releaseDecisionRecord.recordID,
-        decisionID: boardDecision.decisionID,
-        authorizedPromotion: input.releasePacket.summary.authorizedPromotion,
-        promotionMode: input.releasePacket.summary.promotionMode,
-        overallStatus: input.releasePacket.summary.overallStatus,
-      },
+      releasePacket: releasePacketRecordSummary(input.releasePacket),
       reviewDossier: reviewDossierRecordSummary(reviewDossier),
       submissionBundle: submissionBundleRecordSummary(submissionBundle),
       approvalPacket: {
@@ -2169,15 +2175,7 @@ export namespace QualityModelRegistry {
     })
     const record = PromotionRecord.parse({
       ...result.record,
-      releasePacket: {
-        packetID: releasePacket.packetID,
-        createdAt: releasePacket.createdAt,
-        recordID: releasePacket.releaseDecisionRecord.recordID,
-        decisionID: releasePacket.releaseDecisionRecord.boardDecision.decisionID,
-        authorizedPromotion: releasePacket.summary.authorizedPromotion,
-        promotionMode: releasePacket.summary.promotionMode,
-        overallStatus: releasePacket.summary.overallStatus,
-      },
+      releasePacket: releasePacketRecordSummary(releasePacket),
     })
     await writePromotionRecord(record)
     const auditManifest =
