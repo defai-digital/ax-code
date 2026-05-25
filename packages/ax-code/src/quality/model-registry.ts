@@ -53,8 +53,18 @@ export namespace QualityModelRegistry {
     detail?: string | null
   }
 
+  type PromotionSummaryLike = {
+    overallStatus: "pass" | "warn" | "fail"
+    gates: readonly PromotionGateLike[]
+  }
+
   function firstFailureDetail(gates: readonly PromotionGateLike[], fallback = "unknown failure") {
     return gates.find((gate) => gate.status === "fail")?.detail ?? fallback
+  }
+
+  function assertPromotionSummaryPass(source: string, reason: string, summary: PromotionSummaryLike) {
+    if (summary.overallStatus === "pass") return
+    throw new Error(`Cannot promote model ${source}: ${reason} (${firstFailureDetail(summary.gates)})`)
   }
 
   function optionalInputArray<T>(input: T | T[] | null | undefined) {
@@ -1668,11 +1678,11 @@ export namespace QualityModelRegistry {
         throw new Error(`Cannot promote model ${decisionBundle.source}: invalid approval packet (${packetReasons[0]})`)
       }
       await QualityPromotionApprovalPacket.assertPersisted(approvalPacket)
-      if (approvalPacket.readiness.overallStatus !== "pass") {
-        throw new Error(
-          `Cannot promote model ${decisionBundle.source}: approval packet readiness not satisfied (${firstFailureDetail(approvalPacket.readiness.gates)})`,
-        )
-      }
+      assertPromotionSummaryPass(
+        decisionBundle.source,
+        "approval packet readiness not satisfied",
+        approvalPacket.readiness,
+      )
       approvals = approvalPacket.approvals
       resolvedAdoptionReviews = approvalPacket.adoptionReviews
       adoptionReviewConsensus = approvalPacket.adoptionReviewConsensus
@@ -1819,11 +1829,7 @@ export namespace QualityModelRegistry {
         `Cannot promote model ${decisionBundle.source}: adoption dissent handling not satisfied (${combinedDissentCoverage.size}/${adoptionReviewConsensus.qualifiedRejectingReviews} qualified rejecting review(s) resolved or superseded)`,
       )
     }
-    if (approvalEvaluation.overallStatus !== "pass") {
-      throw new Error(
-        `Cannot promote model ${decisionBundle.source}: approval policy not satisfied (${firstFailureDetail(approvalEvaluation.gates)})`,
-      )
-    }
+    assertPromotionSummaryPass(decisionBundle.source, "approval policy not satisfied", approvalEvaluation)
 
     const evaluation = await evaluatePromotionEligibility(decisionBundle.benchmark, {
       ...decisionBundle.policy,
@@ -1900,11 +1906,7 @@ export namespace QualityModelRegistry {
       )
     }
     await QualityPromotionSubmissionBundle.assertPersisted(submissionBundle)
-    if (submissionBundle.summary.overallStatus !== "pass") {
-      throw new Error(
-        `Cannot promote model ${submissionBundle.source}: submission bundle not ready (${firstFailureDetail(submissionBundle.summary.gates)})`,
-      )
-    }
+    assertPromotionSummaryPass(submissionBundle.source, "submission bundle not ready", submissionBundle.summary)
     const result = await promoteApprovedDecisionBundle(submissionBundle.decisionBundle, undefined, {
       allowWarn: options?.allowWarn,
       force: options?.force,
@@ -1948,11 +1950,7 @@ export namespace QualityModelRegistry {
       throw new Error(`Cannot promote model ${reviewDossier.source}: invalid review dossier (${dossierReasons[0]})`)
     }
     await QualityPromotionReviewDossier.assertPersisted(reviewDossier)
-    if (reviewDossier.summary.overallStatus !== "pass") {
-      throw new Error(
-        `Cannot promote model ${reviewDossier.source}: review dossier not ready (${firstFailureDetail(reviewDossier.summary.gates)})`,
-      )
-    }
+    assertPromotionSummaryPass(reviewDossier.source, "review dossier not ready", reviewDossier.summary)
     const result = await promoteSubmissionBundle(reviewDossier.submissionBundle, {
       allowWarn: options?.allowWarn,
       force: options?.force,
@@ -1996,11 +1994,7 @@ export namespace QualityModelRegistry {
       )
     }
     await QualityPromotionBoardDecision.assertPersisted(boardDecision)
-    if (boardDecision.summary.overallStatus !== "pass") {
-      throw new Error(
-        `Cannot promote model ${boardDecision.source}: board decision not ready (${firstFailureDetail(boardDecision.summary.gates)})`,
-      )
-    }
+    assertPromotionSummaryPass(boardDecision.source, "board decision not ready", boardDecision.summary)
     const result = await promoteReviewDossier(boardDecision.reviewDossier, {
       allowWarn: boardDecision.summary.requiredOverride === "allow_warn" && boardDecision.overrideAccepted,
       force: boardDecision.summary.requiredOverride === "force" && boardDecision.overrideAccepted,
@@ -2048,11 +2042,11 @@ export namespace QualityModelRegistry {
       )
     }
     await QualityPromotionReleaseDecisionRecord.assertPersisted(releaseDecisionRecord)
-    if (releaseDecisionRecord.summary.overallStatus !== "pass") {
-      throw new Error(
-        `Cannot promote model ${releaseDecisionRecord.source}: release decision record not ready (${firstFailureDetail(releaseDecisionRecord.summary.gates)})`,
-      )
-    }
+    assertPromotionSummaryPass(
+      releaseDecisionRecord.source,
+      "release decision record not ready",
+      releaseDecisionRecord.summary,
+    )
     const result = await promoteBoardDecision(releaseDecisionRecord.boardDecision, {
       releasePolicyResolution: options?.releasePolicyResolution,
       promotionMetadata: options?.promotionMetadata,
@@ -2162,11 +2156,7 @@ export namespace QualityModelRegistry {
       throw new Error(`Cannot promote model ${releasePacket.source}: invalid release packet (${packetReasons[0]})`)
     }
     await QualityPromotionReleasePacket.assertPersisted(releasePacket)
-    if (releasePacket.summary.overallStatus !== "pass") {
-      throw new Error(
-        `Cannot promote model ${releasePacket.source}: release packet not ready (${firstFailureDetail(releasePacket.summary.gates)})`,
-      )
-    }
+    assertPromotionSummaryPass(releasePacket.source, "release packet not ready", releasePacket.summary)
     const attestationProjectID = releasePacketAttestationProjectID(releasePacket)
     if (
       options?.archiveSigning &&
