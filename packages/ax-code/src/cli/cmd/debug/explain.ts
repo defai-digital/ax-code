@@ -18,6 +18,7 @@ import type { Dirent } from "fs"
 import { Global } from "../../../global"
 import { cmd } from "../cmd"
 import { asRecordOrUndefined } from "../../../util/record"
+import { parseJsonRecord } from "../../../util/json-record"
 import { Flag } from "../../../flag/flag"
 
 interface DiagnosticEntry {
@@ -289,11 +290,9 @@ export function scanStandardLogLines(lines: string[], isJson: boolean, session?:
   for (const line of lines) {
     let parsed: Record<string, unknown>
     if (isJson) {
-      try {
-        parsed = JSON.parse(line) as Record<string, unknown>
-      } catch {
-        continue
-      }
+      const record = parseJsonRecord(line)
+      if (!record) continue
+      parsed = record
     } else {
       const match = line.match(/^(\w+)\s+/)
       if (!match) continue
@@ -353,12 +352,8 @@ export function scanStandardLogLines(lines: string[], isJson: boolean, session?:
 export function parseReplayEventLines(lines: string[], session?: string): ReplayDebugRecord[] {
   const records: ReplayDebugRecord[] = []
   for (const line of lines) {
-    let parsed: Record<string, unknown>
-    try {
-      parsed = JSON.parse(line) as Record<string, unknown>
-    } catch {
-      continue
-    }
+    const parsed = parseJsonRecord(line)
+    if (!parsed) continue
     if (parsed.kind !== "replay.event") continue
     const event = asRecord(parsed.event)
     if (!event) continue
@@ -379,12 +374,8 @@ export function parseReplayEventLines(lines: string[], session?: string): Replay
 export function parseProcessEventLines(lines: string[], session?: string): ProcessDebugRecord[] {
   const records: ProcessDebugRecord[] = []
   for (const line of lines) {
-    let parsed: Record<string, unknown>
-    try {
-      parsed = JSON.parse(line) as Record<string, unknown>
-    } catch {
-      continue
-    }
+    const parsed = parseJsonRecord(line)
+    if (!parsed) continue
     if (parsed.kind !== "process.event") continue
     const data = asRecord(parsed.data)
     if (!data) continue
