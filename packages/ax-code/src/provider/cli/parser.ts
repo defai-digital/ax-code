@@ -1,16 +1,14 @@
+import { parseCliJsonObject, type CliJsonObject } from "./json"
+
 export interface CliOutputParser {
   parseComplete(output: string): { text: string }
   parseStreamLine(line: string): string | null
 }
 
-export function parseCliJsonEventLine(line: string): Record<string, any> | undefined {
+export function parseCliJsonEventLine(line: string): CliJsonObject | undefined {
   const trimmed = line.trim()
   if (!trimmed || trimmed[0] !== "{") return undefined
-  try {
-    return JSON.parse(trimmed)
-  } catch {
-    return undefined
-  }
+  return parseCliJsonObject(trimmed)
 }
 
 // Note: NO_COLOR=1 is set in CLI_ENV, so ANSI codes are not expected in output.

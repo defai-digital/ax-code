@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises"
 import { join } from "node:path"
 import { homedir } from "node:os"
+import { parseCliJsonObject, type CliJsonObject } from "./json"
 
 export interface CliModelInfo {
   model: string
@@ -15,19 +16,10 @@ const DEFAULTS: Record<string, string> = {
   "codex-cli": "codex-cli",
 }
 
-type JsonLike = Record<string, unknown>
-
-function isJsonLike(value: unknown): value is JsonLike {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
-}
+type JsonLike = CliJsonObject
 
 export function parseCliSettingsJson(text: string): JsonLike | null {
-  try {
-    const parsed: unknown = JSON.parse(text)
-    return isJsonLike(parsed) ? parsed : null
-  } catch {
-    return null
-  }
+  return parseCliJsonObject(text) ?? null
 }
 
 async function readJson(path: string): Promise<JsonLike | null> {
