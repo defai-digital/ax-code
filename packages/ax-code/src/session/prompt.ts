@@ -30,7 +30,6 @@ import { Isolation } from "@/isolation"
 import { SessionSummary } from "./summary"
 import { fn } from "@/util/fn"
 import { SessionProcessor } from "./processor"
-import { SessionStatus } from "./status"
 import { LLM } from "./llm"
 import { iife } from "@/util/iife"
 import { agentInfo, modelInfo } from "./prompt-agent-model-info"
@@ -45,6 +44,7 @@ import {
   assistantRespondedAfterUser,
 } from "./prompt-loop-decisions"
 import { loopMessages, remindQueuedMessages, scanLoopMessages } from "./prompt-loop-messages"
+import { markPromptLoopBusy } from "./prompt-loop-status"
 import { systemPrompt as getSystemPrompt } from "./prompt-system"
 import { createStructuredOutputTool } from "./prompt-structured-output"
 import { sessionAssistantPath, textPart, zeroTokenUsage } from "./prompt-message-builders"
@@ -304,25 +304,7 @@ export namespace SessionPrompt {
       // populated via the onSuccess callback only when the current step
       // is actually using structured output mode.
       structuredOutput = undefined
-      const now = Date.now()
-      await SessionStatus.set(sessionID, {
-        type: "busy",
-        step,
-        maxSteps: sessionStepLimit,
-        startedAt: now,
-        lastActivityAt: now,
-        waitState: "llm",
-      })
-      log.info("loop", { command: "session.prompt.loop", status: "started", step, sessionID, consecutiveErrors })
-      if (step > 0 && step % 10 === 0) {
-        log.warn("long-running task", {
-          command: "session.prompt.loop",
-          status: "ok",
-          step,
-          sessionID,
-          message: `Agent has been working for ${step} steps`,
-        })
-      }
+      await markPromptLoopBusy({ sessionID, step, maxSteps: sessionStepLimit, consecutiveErrors })
       if (abort.aborted) {
         reason = "aborted"
         break
