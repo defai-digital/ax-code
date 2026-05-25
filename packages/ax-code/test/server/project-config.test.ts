@@ -1,7 +1,14 @@
 import { describe, expect, test } from "bun:test"
-import { parseProjectConfigText } from "../../src/server/routes/project-config"
+import { decodeProjectConfigValue, parseProjectConfigText } from "../../src/server/routes/project-config"
 
 describe("project config route decoding", () => {
+  test("decodes already-parsed project config values", () => {
+    expect(decodeProjectConfigValue({ model: "openai/gpt-5", super_long: true })).toEqual({
+      model: "openai/gpt-5",
+      super_long: true,
+    })
+  })
+
   test("parses valid project config JSON", () => {
     expect(parseProjectConfigText(JSON.stringify({ model: "openai/gpt-5", super_long: true }))).toEqual({
       model: "openai/gpt-5",
