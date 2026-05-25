@@ -1,5 +1,5 @@
 import os from "os"
-import { MessageID, SessionID } from "./schema"
+import { SessionID } from "./schema"
 import { MessageV2 } from "./message-v2"
 import { Log } from "../util/log"
 import { SessionRevert } from "./revert"
@@ -12,7 +12,6 @@ import { GLOBAL_STEP_LIMIT } from "@/constants/session"
 import { AgentControlEvents } from "../control-plane/agent-control-events"
 import { AutonomousCompletionGate } from "../control-plane/autonomous-completion-gate"
 import { Instance } from "../project/instance"
-import { InstructionPrompt } from "./instruction"
 import { defer } from "../util/defer"
 import { NotFoundError } from "@/storage/db"
 import { Flag } from "../flag/flag"
@@ -23,7 +22,6 @@ import { SessionGoal } from "./goal"
 import { Config } from "@/config/config"
 import { Isolation } from "@/isolation"
 import { fn } from "@/util/fn"
-import { SessionProcessor } from "./processor"
 import { LLM } from "./llm"
 import { iife } from "@/util/iife"
 import { agentInfo, modelInfo } from "./prompt-agent-model-info"
@@ -42,9 +40,9 @@ import { loopMessages, scanLoopMessages } from "./prompt-loop-messages"
 import { markPromptLoopBusy } from "./prompt-loop-status"
 import { preparePromptRequest, type PromptRequestCache } from "./prompt-request-build"
 import { createStructuredOutputTurn } from "./prompt-structured-output"
-import { sessionAssistantPath, textPart, zeroTokenUsage } from "./prompt-message-builders"
 import { executeSubtask, type SubtaskContext } from "./prompt-subtask"
 import { resolveTools } from "./prompt-tools"
+import { clearPromptProcessorInstructions, createPromptProcessor } from "./prompt-processor"
 import {
   pendingTodoContinuationDecision,
   pendingTodoSignature,
@@ -517,29 +515,15 @@ export namespace SessionPrompt {
         continue
       }
 
-      const processor = SessionProcessor.create({
-        assistantMessage: (await Session.updateMessage({
-          id: MessageID.ascending(),
-          parentID: lastUser.id,
-          role: "assistant",
-          mode: agent.name,
-          agent: agent.name,
-          variant: lastUser.variant,
-          path: sessionAssistantPath(),
-          tokens: zeroTokenUsage(),
-          modelID: model.id,
-          providerID: model.providerID,
-          time: {
-            created: Date.now(),
-          },
-          sessionID,
-        })) as MessageV2.Assistant,
-        sessionID: sessionID,
+      const processor = await createPromptProcessor({
+        sessionID,
+        lastUser,
+        agent,
         model,
         abort,
         messages: msgs,
       })
-      using _ = defer(() => InstructionPrompt.clear(processor.message.id))
+      using _ = defer(() => clearPromptProcessorInstructions(processor))
 
       // Check if user explicitly invoked an agent via @ in this turn
       const bypassAgentCheck = lastUserParts?.some((p) => p.type === "agent") ?? false
