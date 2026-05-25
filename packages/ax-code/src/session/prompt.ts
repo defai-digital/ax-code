@@ -50,7 +50,6 @@ import {
 import { loopMessages, remindQueuedMessages, scanLoopMessages } from "./prompt-loop-messages"
 import { systemPrompt as getSystemPrompt } from "./prompt-system"
 import { createStructuredOutputTool } from "./prompt-structured-output"
-import { ensureTitle } from "./prompt-title"
 import { sessionAssistantPath, textPart, zeroTokenUsage } from "./prompt-message-builders"
 import { findFallbackModel } from "./prompt-provider-fallback"
 import { executeSubtask, type SubtaskContext } from "./prompt-subtask"
@@ -77,7 +76,7 @@ import { insertReminders } from "./prompt-reminders"
 import { executeShellCommand } from "./prompt-shell-command"
 import { createStoppedAssistantTextResponse } from "./prompt-assistant-response"
 import { executePromptCommand } from "./prompt-command-execution"
-import { recordCodeGraphSessionStart } from "./prompt-code-graph"
+import { recordPromptSessionStart } from "./prompt-session-start"
 import { createAutonomousUserContinuation, createUserMessage } from "./prompt-user-message"
 import { permissionRulesetFromLegacyTools } from "./prompt-permission"
 import { createPromptRunState } from "./prompt-run-state"
@@ -472,28 +471,14 @@ export namespace SessionPrompt {
       step++
       totalSteps++
       if (!sessionStarted) {
-        ensureTitle({
-          session,
-          modelID: lastUser.model.modelID,
-          providerID: lastUser.model.providerID,
-          history: msgs,
-          abort,
-        }).catch((error) => {
-          log.debug("failed to ensure title", { sessionID, error })
-        })
-        if (!isResumingActiveLoop) {
-          Recorder.emit({
-            type: "session.start",
-            sessionID,
-            agent: lastUser.agent,
-            model: `${lastUser.model.providerID}/${lastUser.model.modelID}`,
-            directory: Instance.directory,
-          })
-        }
         deferredAutoIndexProjectID =
-          recordCodeGraphSessionStart({
+          recordPromptSessionStart({
             sessionID,
-            enabled: !isResumingActiveLoop && Flag.AX_CODE_EXPERIMENTAL_CODE_INTELLIGENCE,
+            session,
+            lastUser,
+            messages: msgs,
+            abort,
+            isResumingActiveLoop,
           }) ?? deferredAutoIndexProjectID
         sessionStarted = true
       }
