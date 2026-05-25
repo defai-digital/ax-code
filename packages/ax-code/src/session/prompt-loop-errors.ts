@@ -42,13 +42,19 @@ type PromptLoopErrorTransitionDeps = {
   handleError?: typeof handlePromptLoopError
 }
 
+type PromptLoopErrorDeps = {
+  findFallback?: (providerID: MessageV2.User["model"]["providerID"]) => Promise<MessageV2.User["model"] | undefined>
+  warn?: (message: string, fields: Record<string, unknown>) => void
+  publishError?: (input: { sessionID: SessionID; message: string }) => void
+}
+
 export async function handlePromptLoopError(input: {
   sessionID: SessionID
   currentModel: MessageV2.User["model"]
   error: unknown
   consecutiveErrors: number
   step: number
-}): Promise<PromptLoopErrorResult> {
+}, deps: PromptLoopErrorDeps = {}): Promise<PromptLoopErrorResult> {
   // Provider fallback: if the error is a provider API failure (rate limit,
   // no credit, auth error), try switching to another available provider
   // instead of retrying the same broken one.
@@ -57,7 +63,7 @@ export async function handlePromptLoopError(input: {
     error: input.error,
   })
   if (fallbackLookup.action === "lookup") {
-    const fallback = await findFallbackModel(input.currentModel.providerID).catch(() => null)
+    const fallback = await (deps.findFallback ?? findFallbackModel)(input.currentModel.providerID).catch(() => undefined)
     if (fallback) {
       const fallbackSwitch = providerFallbackSwitchState({
         current: input.currentModel,
@@ -65,13 +71,13 @@ export async function handlePromptLoopError(input: {
         errorMessage: fallbackLookup.errorMessage,
         consecutiveErrors: input.consecutiveErrors,
       })
-      log.warn("switching to fallback provider", {
+      ;(deps.warn ?? log.warn)("switching to fallback provider", {
         command: "session.prompt.loop",
         from: fallbackSwitch.from,
         to: fallbackSwitch.to,
         reason: fallbackSwitch.reason,
       })
-      Session.publishError({
+      ;(deps.publishError ?? Session.publishError)({
         sessionID: input.sessionID,
         message: fallbackSwitch.message,
       })
@@ -83,7 +89,7 @@ export async function handlePromptLoopError(input: {
     }
   }
 
-  log.warn("consecutive error", {
+  ;(deps.warn ?? log.warn)("consecutive error", {
     command: "session.prompt.loop",
     status: "error",
     errorCode: "CONSECUTIVE_ERROR",
@@ -98,14 +104,14 @@ export async function handlePromptLoopError(input: {
     step: input.step,
   })
   if (errorDecision.action === "stop") {
-    log.warn("too many consecutive errors, stopping", {
+    ;(deps.warn ?? log.warn)("too many consecutive errors, stopping", {
       command: "session.prompt.loop",
       status: "error",
       errorCode: "MAX_CONSECUTIVE_ERRORS",
       consecutiveErrors: input.consecutiveErrors,
       sessionID: input.sessionID,
     })
-    Session.publishError({
+    ;(deps.publishError ?? Session.publishError)({
       sessionID: input.sessionID,
       message: errorDecision.message,
     })
