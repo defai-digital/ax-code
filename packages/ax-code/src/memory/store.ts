@@ -73,6 +73,10 @@ export function parseProjectMemoryText(text: string): ProjectMemory {
     throw new Error("memory store: invalid memory JSON", { cause: error })
   }
 
+  return decodeProjectMemoryValue(value)
+}
+
+export function decodeProjectMemoryValue(value: unknown): ProjectMemory {
   const parsed = ProjectMemorySchema.safeParse(value)
   if (!parsed.success) {
     throw new Error(`memory store: invalid memory schema (${parsed.error.message})`, { cause: parsed.error })
