@@ -44,31 +44,29 @@ import { LLM } from "./llm"
 import { iife } from "@/util/iife"
 import { Shell } from "@/shell/shell"
 import { appendShellOutputChunk, shellArgs, shellOutputMetadata } from "./prompt-shell-runtime"
+import { agentInfo, modelInfo } from "./prompt-agent-model-info"
+import { commandModel, lastModel } from "./prompt-command-selection"
+import { commandSetup } from "./prompt-command-setup"
 import {
-  commandModel,
-  commandSetup,
-  agentInfo,
-  assistantLoopExitDecision,
-  assistantRespondedAfterUser,
+  pendingCompactionDecision,
+  shouldScheduleUsageCompaction,
   consecutiveErrorDecision,
   providerFallbackLookupDecision,
   providerFallbackSwitchState,
   processorLoopDecision,
-  remindQueuedMessages,
-  scanLoopMessages,
-  loopMessages,
-  modelInfo,
-  pendingCompactionDecision,
+  assistantLoopExitDecision,
+  assistantRespondedAfterUser,
+} from "./prompt-loop-decisions"
+import { loopMessages, remindQueuedMessages, scanLoopMessages } from "./prompt-loop-messages"
+import { systemPrompt as getSystemPrompt } from "./prompt-system"
+import { createStructuredOutputTool } from "./prompt-structured-output"
+import { ensureTitle } from "./prompt-title"
+import {
+  findFallbackModel,
   parseGoalArguments,
-  shouldScheduleUsageCompaction,
   sessionAssistantPath,
-  systemPrompt as getSystemPrompt,
   textPart,
   zeroTokenUsage,
-  createStructuredOutputTool,
-  lastModel,
-  findFallbackModel,
-  ensureTitle,
 } from "./prompt-helpers"
 import { executeSubtask, type SubtaskContext } from "./prompt-subtask"
 import { resolveTools } from "./prompt-tools"
