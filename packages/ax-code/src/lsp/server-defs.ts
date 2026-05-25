@@ -455,11 +455,7 @@ export const ElixirLS: Info = {
   async spawn(root) {
     let binary = which("elixir-ls")
     if (binary) {
-      return {
-        process: spawn(binary, {
-          cwd: root,
-        }),
-      }
+      return spawnInfo(binary, root)
     }
 
     binary = path.join(
@@ -475,11 +471,7 @@ export const ElixirLS: Info = {
           bin: binary,
         },
       )
-      return {
-        process: spawn(binary, {
-          cwd: root,
-        }),
-      }
+      return spawnInfo(binary, root)
     }
 
     log.error(
@@ -497,11 +489,7 @@ export const Zls: Info = {
   async spawn(root) {
     let bin = which("zls")
     if (bin) {
-      return {
-        process: spawn(bin, {
-          cwd: root,
-        }),
-      }
+      return spawnInfo(bin, root)
     }
 
     const legacyBin = globalBin("zls")
@@ -510,11 +498,7 @@ export const Zls: Info = {
       log.warn("using legacy unmanaged zls install; install zls on PATH or configure lsp.zls.command to pin it", {
         bin: legacyBin,
       })
-      return {
-        process: spawn(legacyBin, {
-          cwd: root,
-        }),
-      }
+      return spawnInfo(legacyBin, root)
     }
 
     const zig = which("zig")
@@ -544,11 +528,7 @@ export const Zls: Info = {
     const arch = process.arch
     const managedBin = managedToolBin("zls", zlsTag, platform, arch)
     if (await pathExists(managedBin)) {
-      return {
-        process: spawn(managedBin, {
-          cwd: root,
-        }),
-      }
+      return spawnInfo(managedBin, root)
     }
 
     if (!Flag.AX_CODE_DISABLE_LSP_DOWNLOAD) {
@@ -579,11 +559,7 @@ export const Zls: Info = {
     if (!bin && hasLegacyBin) return useLegacyBin()
     if (!bin) return
 
-    return {
-      process: spawn(bin, {
-        cwd: root,
-      }),
-    }
+    return spawnInfo(bin, root)
   },
 }
 
@@ -626,11 +602,7 @@ export const SourceKit: Info = {
     // This is installed with the Swift toolchain
     const sourcekit = which("sourcekit-lsp")
     if (sourcekit) {
-      return {
-        process: spawn(sourcekit, {
-          cwd: root,
-        }),
-      }
+      return spawnInfo(sourcekit, root)
     }
 
     // If sourcekit-lsp not found, check if xcrun is available
@@ -643,11 +615,7 @@ export const SourceKit: Info = {
 
     const bin = lspLoc.text.trim()
 
-    return {
-      process: spawn(bin, {
-        cwd: root,
-      }),
-    }
+    return spawnInfo(bin, root)
   },
 }
 
@@ -689,11 +657,7 @@ export const RustAnalyzer: Info = {
       log.info("rust-analyzer not found in path, please install it")
       return
     }
-    return {
-      process: spawn(bin, {
-        cwd: root,
-      }),
-    }
+    return spawnInfo(bin, root)
   },
 }
 
@@ -994,19 +958,11 @@ export const KotlinLS: Info = {
     const installedLauncher =
       which("kotlin-lsp") ?? (platform === "win32" ? which("kotlin-lsp.cmd") : which("kotlin-lsp.sh"))
     if (installedLauncher && !installedLauncher.startsWith(Global.Path.bin)) {
-      return {
-        process: spawn(installedLauncher, ["--stdio"], {
-          cwd: root,
-        }),
-      }
+      return spawnInfo(installedLauncher, root, ["--stdio"])
     }
 
     if (await pathExists(managedLauncher)) {
-      return {
-        process: spawn(managedLauncher, ["--stdio"], {
-          cwd: root,
-        }),
-      }
+      return spawnInfo(managedLauncher, root, ["--stdio"])
     }
 
     if (installedLauncher) {
@@ -1016,11 +972,7 @@ export const KotlinLS: Info = {
           bin: installedLauncher,
         },
       )
-      return {
-        process: spawn(installedLauncher, ["--stdio"], {
-          cwd: root,
-        }),
-      }
+      return spawnInfo(installedLauncher, root, ["--stdio"])
     }
 
     const legacyLauncher = path.join(Global.Path.bin, "kotlin-ls", launcherName)
@@ -1031,11 +983,7 @@ export const KotlinLS: Info = {
           bin: legacyLauncher,
         },
       )
-      return {
-        process: spawn(legacyLauncher, ["--stdio"], {
-          cwd: root,
-        }),
-      }
+      return spawnInfo(legacyLauncher, root, ["--stdio"])
     }
 
     if (Flag.AX_CODE_DISABLE_LSP_DOWNLOAD) return
@@ -1063,11 +1011,7 @@ export const KotlinLS: Info = {
       })) ?? null
     if (!launcher) return
 
-    return {
-      process: spawn(launcher, ["--stdio"], {
-        cwd: root,
-      }),
-    }
+    return spawnInfo(launcher, root, ["--stdio"])
   },
 }
 
@@ -1202,11 +1146,7 @@ export const Prisma: Info = {
       log.info("prisma not found, please install prisma")
       return
     }
-    return {
-      process: spawn(prisma, ["language-server"], {
-        cwd: root,
-      }),
-    }
+    return spawnInfo(prisma, root, ["language-server"])
   },
 }
 
@@ -1220,11 +1160,7 @@ export const Dart: Info = {
       log.info("dart not found, please install dart first")
       return
     }
-    return {
-      process: spawn(dart, ["language-server", "--lsp"], {
-        cwd: root,
-      }),
-    }
+    return spawnInfo(dart, root, ["language-server", "--lsp"])
   },
 }
 
@@ -1238,11 +1174,7 @@ export const Ocaml: Info = {
       log.info("ocamllsp not found, please install ocaml-lsp-server")
       return
     }
-    return {
-      process: spawn(bin, {
-        cwd: root,
-      }),
-    }
+    return spawnInfo(bin, root)
   },
 }
 export const BashLS: Info = {
@@ -1404,11 +1336,7 @@ export const Gleam: Info = {
       log.info("gleam not found, please install gleam first")
       return
     }
-    return {
-      process: spawn(gleam, ["lsp"], {
-        cwd: root,
-      }),
-    }
+    return spawnInfo(gleam, root, ["lsp"])
   },
 }
 
@@ -1425,11 +1353,7 @@ export const Clojure: Info = {
       log.info("clojure-lsp not found, please install clojure-lsp first")
       return
     }
-    return {
-      process: spawn(bin, ["listen"], {
-        cwd: root,
-      }),
-    }
+    return spawnInfo(bin, root, ["listen"])
   },
 }
 
@@ -1453,14 +1377,7 @@ export const Nixd: Info = {
       log.info("nixd not found, please install nixd first")
       return
     }
-    return {
-      process: spawn(nixd, [], {
-        cwd: root,
-        env: {
-          ...Env.sanitize(),
-        },
-      }),
-    }
+    return spawnInfo(nixd, root)
   },
 }
 
@@ -1528,11 +1445,7 @@ export const HLS: Info = {
       log.info("haskell-language-server-wrapper not found, please install haskell-language-server")
       return
     }
-    return {
-      process: spawn(bin, ["--lsp"], {
-        cwd: root,
-      }),
-    }
+    return spawnInfo(bin, root, ["--lsp"])
   },
 }
 
