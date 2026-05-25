@@ -3,6 +3,7 @@ import { SessionID } from "../../session/schema"
 import { cmd } from "./cmd"
 import { bootstrap } from "../bootstrap"
 import { AuditExport } from "../../audit/export"
+import { auditSessionIDFromRecord, parseAuditJsonLineResult } from "../../audit/json"
 import { EventQuery } from "../../replay/query"
 import { EOL } from "os"
 import { writeFile } from "node:fs/promises"
@@ -78,17 +79,18 @@ const AuditExportCommand = cmd({
           const minLevel = riskOrder[riskFilter] ?? 0
           const sessionRisks = new Map<string, number>()
           for (const line of AuditExport.streamAll({ since }, ctx)) {
-            try {
-              const record = JSON.parse(line) as { session_id?: string }
-              if (record.session_id) {
-                if (!sessionRisks.has(record.session_id)) {
-                  const assessment = Risk.fromSession(record.session_id as any)
-                  sessionRisks.set(record.session_id, riskOrder[assessment.level] ?? 0)
-                }
-                if ((sessionRisks.get(record.session_id) ?? 0) >= minLevel) process.stdout.write(line + EOL)
-              }
-            } catch {
+            const parsed = parseAuditJsonLineResult(line)
+            if (!parsed.ok) {
               process.stdout.write(line + EOL)
+              continue
+            }
+            const sessionID = auditSessionIDFromRecord(parsed.value)
+            if (sessionID) {
+              if (!sessionRisks.has(sessionID)) {
+                const assessment = Risk.fromSession(sessionID as any)
+                sessionRisks.set(sessionID, riskOrder[assessment.level] ?? 0)
+              }
+              if ((sessionRisks.get(sessionID) ?? 0) >= minLevel) process.stdout.write(line + EOL)
             }
           }
         } else {
