@@ -34,6 +34,7 @@ import { resolvePromptLoopErrorTransition } from "./prompt-loop-errors"
 import { resolvePromptLoopAssistantExit } from "./prompt-loop-exit"
 import { handlePromptLoopGoalContinuation } from "./prompt-loop-goal"
 import { emitPromptLoopCompletionGateDecision } from "./prompt-loop-completion-gate"
+import { handlePromptLoopCompletionGateRetry } from "./prompt-loop-completion-gate-retry"
 import { handlePromptLoopEmptyTurn } from "./prompt-loop-empty-turn"
 import { loopMessages, scanLoopMessages } from "./prompt-loop-messages"
 import { finishPromptLoopQueue } from "./prompt-loop-queue"
@@ -60,7 +61,6 @@ import {
 import { AutonomousContinuationPrompt } from "./prompt-autonomous-continuations"
 import {
   agentStepLimitContinuationDecision,
-  completionGateRetryDecision,
   isEmptyModelTurn,
   modelTurnFinished,
 } from "./prompt-autonomous-decisions"
@@ -596,7 +596,9 @@ export namespace SessionPrompt {
         }
 
         if (shouldRecoverEmptySubagentResult) {
-          const gateRetryDecision = completionGateRetryDecision({
+          const gateRetryTransition = await handlePromptLoopCompletionGateRetry({
+            sessionID,
+            assistant: processor.message,
             gate: completionGate,
             previousSignature: lastCompletionGateSignature,
             retries: completionGateRetries,
@@ -604,42 +606,17 @@ export namespace SessionPrompt {
             isLastStep,
           })
 
-          if (gateRetryDecision.action === "stop") {
-            log.warn("autonomous completion gate stopped session", {
-              command: "session.prompt.loop",
-              status: "stopped",
-              errorCode: gateRetryDecision.errorCode,
-              sessionID,
-              reason: completionGate.reason,
-              message: completionGate.message,
-              attempts: gateRetryDecision.attempts,
-              maxAttempts: maxCompletionGateRetries,
-            })
-            await publishPromptFailure({ sessionID, assistant: processor.message, message: gateRetryDecision.message })
-            reason = gateRetryDecision.reason
+          if (gateRetryTransition.action === "stop") {
+            reason = gateRetryTransition.reason
             break
           }
 
-          lastCompletionGateSignature = gateRetryDecision.signature
-          completionGateRetries = gateRetryDecision.retries
-
-          log.info("autonomous completion gate continuation", {
-            command: "session.prompt.loop",
-            status: "ok",
-            sessionID,
-            reason: completionGate.reason,
-            message: completionGate.message,
-            attempt: gateRetryDecision.attempt,
-            maxAttempts: maxCompletionGateRetries,
-          })
+          lastCompletionGateSignature = gateRetryTransition.signature
+          completionGateRetries = gateRetryTransition.retries
           await createAutonomousTextContinuation({
             sessionID,
             messages: latestMessages,
-            text: AutonomousContinuationPrompt.completionGateRetry({
-              message: completionGate.message,
-              attempt: gateRetryDecision.attempt,
-              maxAttempts: maxCompletionGateRetries,
-            }),
+            text: gateRetryTransition.text,
           })
           continue
         }
