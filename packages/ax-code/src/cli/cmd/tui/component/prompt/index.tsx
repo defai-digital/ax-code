@@ -27,6 +27,7 @@ import {
 import "opentui-spinner/solid"
 import path from "path"
 import { Filesystem } from "@/util/filesystem"
+import { providerModelKey } from "@/provider/model-key"
 import { useLocal } from "@tui/context/local"
 import { useTheme } from "@tui/context/theme"
 import { EmptyBorder } from "@tui/component/border"
@@ -1224,7 +1225,7 @@ export function Prompt(props: PromptProps) {
             command: commandName.slice(1),
             arguments: args,
             agent: local.agent.current().name,
-            model: `${selectedModel.providerID}/${selectedModel.modelID}`,
+            model: providerModelKey(selectedModel),
             messageID,
             variant,
             parts: nonTextParts

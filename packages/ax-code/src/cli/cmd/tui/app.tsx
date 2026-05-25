@@ -20,6 +20,7 @@ import {
 import { Dynamic } from "solid-js/web"
 import { win32DisableProcessedInput, win32FlushInputBuffer, win32InstallCtrlCGuard } from "./win32"
 import { Flag } from "@/flag/flag"
+import { providerModelKey } from "@/provider/model-key"
 import { DialogProvider, useDialog } from "@tui/ui/dialog"
 import { SDKProvider, useSDK } from "@tui/context/sdk"
 import { SyncProvider, useSync } from "@tui/context/sync"
@@ -409,7 +410,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
     const model = local.model.current()
     if (!model) return
     void sync.runtime
-      .syncSuperLong({ model: `${model.providerID}/${model.modelID}` })
+      .syncSuperLong({ model: providerModelKey(model) })
       .catch((error) => Log.Default.warn("failed to sync super-long for active model", { error }))
   })
 
