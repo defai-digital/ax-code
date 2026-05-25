@@ -45,6 +45,18 @@ export async function createAutonomousUserContinuation(args: {
   })
 }
 
+export async function createAutonomousTextContinuation(args: {
+  sessionID: SessionID
+  messages: readonly MessageV2.WithParts[]
+  text: string
+}) {
+  await createAutonomousUserContinuation({
+    sessionID: args.sessionID,
+    messages: args.messages,
+    parts: [{ type: "text", text: args.text }],
+  })
+}
+
 export async function createUserMessage(input: CreateUserMessageInput) {
   const messageID = input.messageID ?? MessageID.ascending()
   let agentName = input.agent || (await Agent.defaultAgent())
