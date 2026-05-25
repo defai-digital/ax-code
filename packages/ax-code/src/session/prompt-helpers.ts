@@ -125,7 +125,7 @@ type GoalArgumentDecision =
       tokenBudget?: number
     }
 
-type ShellOutputState = {
+export type ShellOutputState = {
   output: string
   outputBytes: number
   outputTruncated: boolean
@@ -418,6 +418,14 @@ export function appendShellOutputChunk(
     output: output + "\n\n[output truncated at 10MB]",
     outputBytes,
     outputTruncated: true,
+  }
+}
+
+export function shellOutputMetadata(state: ShellOutputState) {
+  return {
+    output: state.output,
+    description: "",
+    outputTruncated: state.outputTruncated,
   }
 }
 

@@ -80,6 +80,7 @@ import {
   readToolCallText,
   shouldScheduleUsageCompaction,
   sessionAssistantPath,
+  shellOutputMetadata,
   syntheticTextPart,
   systemPrompt as getSystemPrompt,
   textPart,
@@ -2451,11 +2452,7 @@ NOTE: At any point in time through this workflow you should feel free to ask the
       while (flushDirty) {
         flushDirty = false
         if (part.state.status !== "running") break
-        part.state.metadata = {
-          output: shellOutput.output,
-          description: "",
-          outputTruncated: shellOutput.outputTruncated,
-        }
+        part.state.metadata = shellOutputMetadata(shellOutput)
         await Session.updatePart(part).catch((e) =>
           log.warn("shell metadata write failed", {
             command: "session.prompt.shell",
@@ -2609,11 +2606,7 @@ NOTE: At any point in time through this workflow you should feel free to ask the
               },
               input: part.state.input,
               error: `Process exited with code ${exitCode}`,
-              metadata: {
-                output: shellOutput.output,
-                description: "",
-                outputTruncated: shellOutput.outputTruncated,
-              },
+              metadata: shellOutputMetadata(shellOutput),
             }
           : {
               status: "completed",
@@ -2623,11 +2616,7 @@ NOTE: At any point in time through this workflow you should feel free to ask the
               },
               input: part.state.input,
               title: "",
-              metadata: {
-                output: shellOutput.output,
-                description: "",
-                outputTruncated: shellOutput.outputTruncated,
-              },
+              metadata: shellOutputMetadata(shellOutput),
               output: shellOutput.output,
             }
       await Session.updatePart(part)

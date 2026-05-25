@@ -25,6 +25,7 @@ import {
   scanLoopMessages,
   sessionAssistantPath,
   shellArgs,
+  shellOutputMetadata,
   shouldScheduleUsageCompaction,
   syntheticTextPart,
   systemPrompt,
@@ -155,6 +156,14 @@ describe("session.prompt helpers", () => {
     })
 
     expect(appendShellOutputChunk(state, "ignored", 10).output).toBe(state.output)
+  })
+
+  test("builds shell output metadata from output state", () => {
+    expect(shellOutputMetadata({ output: "done", outputBytes: 4, outputTruncated: true })).toEqual({
+      output: "done",
+      description: "",
+      outputTruncated: true,
+    })
   })
 
   test("builds assistant path from explicit runtime boundaries", () => {
