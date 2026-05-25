@@ -48,6 +48,20 @@ export namespace FileWatcher {
     ),
   }
 
+  const NativeWatcherEvent = z.object({
+    eventType: z.union([z.literal("add"), z.literal("change"), z.literal("unlink")]),
+    path: z.string(),
+  })
+
+  export type NativeWatcherEvent = z.infer<typeof NativeWatcherEvent>
+
+  export function parseNativeWatcherEvents(json: string): NativeWatcherEvent[] {
+    const parsed: unknown = JSON.parse(json)
+    const decoded = z.array(NativeWatcherEvent).safeParse(parsed)
+    if (!decoded.success) throw new SyntaxError("Invalid native watcher events")
+    return decoded.data
+  }
+
   const overrides = new Map<string, InitOptions>()
   const relativeToDir = (dir: string, target: string) => path.relative(dir, target)
 
@@ -161,11 +175,11 @@ export namespace FileWatcher {
           Instance.bind(() => {
             try {
               const eventsJson = NativePerf.run("fs.NativeWatcher.poll", dir, () => watcher.poll())
-              const events = JSON.parse(eventsJson) as Array<{ eventType: string; path: string }>
+              const events = parseNativeWatcherEvents(eventsJson)
               pollErrorCount = 0
               for (const evt of events) {
                 const file = path.resolve(dir, evt.path)
-                Bus.publishDetached(Event.Updated, { file, event: evt.eventType as "add" | "change" | "unlink" })
+                Bus.publishDetached(Event.Updated, { file, event: evt.eventType })
               }
             } catch (error) {
               pollErrorCount++
