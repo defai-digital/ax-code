@@ -2049,17 +2049,20 @@ export namespace SessionPrompt {
     // Shallow-copy to avoid mutating cached message parts
     const userMessage = { ...userMsg, parts: [...userMsg.parts] }
     const messages = input.messages.map((m) => (m === userMsg ? userMessage : m))
-    const autonomousDecisionLedger = Flag.AX_CODE_AUTONOMOUS
-      ? autonomousDecisionLedgerReminder(input.messages)
-      : undefined
-    if (autonomousDecisionLedger) {
+    const appendSyntheticReminder = (text: string) => {
       userMessage.parts.push(
         syntheticTextPart({
           messageID: userMessage.info.id,
           sessionID: userMessage.info.sessionID,
-          text: autonomousDecisionLedger,
+          text,
         }),
       )
+    }
+    const autonomousDecisionLedger = Flag.AX_CODE_AUTONOMOUS
+      ? autonomousDecisionLedgerReminder(input.messages)
+      : undefined
+    if (autonomousDecisionLedger) {
+      appendSyntheticReminder(autonomousDecisionLedger)
     }
 
     // Original logic when experimental plan mode is disabled
@@ -2068,13 +2071,7 @@ export namespace SessionPrompt {
         input.agent.name === "plan" &&
         !userMessage.parts.some((p) => p.type === "text" && p.synthetic && p.text === PROMPT_PLAN)
       ) {
-        userMessage.parts.push(
-          syntheticTextPart({
-            messageID: userMessage.info.id,
-            sessionID: userMessage.info.sessionID,
-            text: PROMPT_PLAN,
-          }),
-        )
+        appendSyntheticReminder(PROMPT_PLAN)
       }
       const wasPlan = input.messages.some((msg) => msg.info.role === "assistant" && msg.info.agent === "plan")
       if (
@@ -2082,13 +2079,7 @@ export namespace SessionPrompt {
         input.agent.name === "build" &&
         !userMessage.parts.some((p) => p.type === "text" && p.synthetic && p.text === BUILD_SWITCH)
       ) {
-        userMessage.parts.push(
-          syntheticTextPart({
-            messageID: userMessage.info.id,
-            sessionID: userMessage.info.sessionID,
-            text: BUILD_SWITCH,
-          }),
-        )
+        appendSyntheticReminder(BUILD_SWITCH)
       }
       return messages
     }
