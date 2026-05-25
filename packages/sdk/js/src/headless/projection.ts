@@ -1,6 +1,5 @@
-import type { PermissionRequest, QuestionRequest } from "@ax-code/sdk/v2"
-import { Binary } from "@ax-code/util/binary"
-import type { HeadlessRuntimeEvent, HeadlessRuntimeProbeKey, HeadlessRuntimeStatusEvent } from "./event"
+import type { PermissionRequest, QuestionRequest } from "../v2/index.js"
+import type { HeadlessRuntimeEvent, HeadlessRuntimeStatusEvent } from "./event.js"
 
 export interface HeadlessProjectionState<
   TSession extends { id: string },
@@ -29,7 +28,7 @@ export interface HeadlessProjectionState<
 export type HeadlessProjectionEffect =
   | { type: "permission.auto_reply"; requestID: string }
   | { type: "question.auto_reply"; requestID: string; questions: QuestionRequest["questions"] }
-  | { type: "runtime.probe"; key: HeadlessRuntimeProbeKey }
+  | { type: "runtime.probe"; key: "mcp" | "lsp" | "debug-engine" }
   | { type: "bootstrap.reload" }
 
 export type HeadlessProjectionApplyResult = {
@@ -195,7 +194,7 @@ export function applyHeadlessProjectionEvent<
   return { handled: false, effects: _exhaustive }
 }
 
-export function runtimeProbeKeysForEvent(event: HeadlessRuntimeStatusEvent): HeadlessRuntimeProbeKey[] {
+export function runtimeProbeKeysForEvent(event: HeadlessRuntimeStatusEvent): Array<"mcp" | "lsp" | "debug-engine"> {
   switch (event.type) {
     case "mcp.tools.changed":
       return ["mcp"]
@@ -228,7 +227,7 @@ function removeRequest<TRequest extends { id: string }>(
 }
 
 function upsertByID<T extends { id: string }>(list: T[], item: T) {
-  const result = Binary.search(list, item.id, (entry) => entry.id)
+  const result = binarySearch(list, item.id, (entry) => entry.id)
   if (result.found) {
     list[result.index] = item
     return
@@ -314,7 +313,7 @@ function appendPartTextDelta<TPart extends { id: string; messageID: string }>(
   delta: string,
 ) {
   const list = parts[messageID] ?? []
-  const result = Binary.search(list, partID, (entry) => entry.id)
+  const result = binarySearch(list, partID, (entry) => entry.id)
   if (!result.found) return
   const part = list[result.index] as TPart & { type?: string; text?: string }
   if (part.type !== "text" && part.type !== "reasoning") return
@@ -330,7 +329,7 @@ function removePart<TPart extends { id: string; messageID: string }>(
 }
 
 function removeByID<T extends { id: string }>(list: T[], id: string) {
-  const result = Binary.search(list, id, (entry) => entry.id)
+  const result = binarySearch(list, id, (entry) => entry.id)
   if (!result.found) return undefined
   const [removed] = list.splice(result.index, 1)
   return removed
@@ -340,4 +339,17 @@ function shiftOverflow<T>(list: T[], maxSize: number) {
   const limit = Math.max(0, Math.floor(maxSize))
   if (list.length <= limit) return []
   return list.splice(0, list.length - limit)
+}
+
+function binarySearch<T>(array: T[], id: string, compare: (item: T) => string): { found: boolean; index: number } {
+  let left = 0
+  let right = array.length - 1
+  while (left <= right) {
+    const mid = Math.floor((left + right) / 2)
+    const midId = compare(array[mid])
+    if (midId === id) return { found: true, index: mid }
+    if (midId < id) left = mid + 1
+    else right = mid - 1
+  }
+  return { found: false, index: left }
 }

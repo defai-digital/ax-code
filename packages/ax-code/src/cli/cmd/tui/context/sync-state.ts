@@ -40,6 +40,7 @@ export interface SyncStoreState {
   config: Config
   session: Session[]
   session_status: Record<string, SessionStatus>
+  session_error: Record<string, unknown>
   session_risk: Record<string, SyncedSessionRisk>
   session_goal: Record<string, SessionGoal.PublicInfo | null>
   session_diff: Record<string, Snapshot.FileDiff[]>
@@ -105,6 +106,7 @@ export function createInitialSyncState(): SyncStoreState {
     provider_default: {},
     session: [],
     session_status: {},
+    session_error: {},
     session_risk: {},
     session_goal: {},
     session_diff: {},

@@ -28,6 +28,7 @@ describe("tui sync state", () => {
       provider_default: {},
       session: [],
       session_status: {},
+      session_error: {},
       session_risk: {},
       session_goal: {},
       session_diff: {},
