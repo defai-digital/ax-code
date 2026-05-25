@@ -61,6 +61,7 @@ import { Shell } from "@/shell/shell"
 import { decodeDataUrl } from "@/util/data-url"
 import {
   appendShellOutputChunk,
+  commandModel,
   commandSetup,
   shellArgs,
   agentInfo,
@@ -2692,13 +2693,8 @@ NOTE: At any point in time through this workflow you should feel free to ask the
   })
   export type CommandInput = z.infer<typeof CommandInput>
 
-  async function commandModelForControl(input: CommandInput) {
-    if (input.model) return Provider.parseModel(input.model)
-    return lastModel(input.sessionID)
-  }
-
   async function goalControlMessage(input: CommandInput, text: string) {
-    const model = await commandModelForControl(input)
+    const model = await commandModel({ model: input.model, sessionID: input.sessionID })
     const user = await createUserMessage({
       sessionID: input.sessionID,
       messageID: input.messageID,
@@ -2780,7 +2776,7 @@ NOTE: At any point in time through this workflow you should feel free to ask the
       sessionID: input.sessionID,
       messageID: input.messageID,
       agent: input.agent,
-      model: await commandModelForControl(input),
+      model: await commandModel({ model: input.model, sessionID: input.sessionID }),
       variant: input.variant,
       parts: [
         {
