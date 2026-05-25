@@ -20,6 +20,11 @@ describe("memory.store cache", () => {
     store._resetReadCache()
   })
 
+  test("decodeProjectMemoryValue decodes already-parsed memory objects", () => {
+    expect(store.decodeProjectMemoryValue(sampleMemory({ contentHash: "decoded" })).contentHash).toBe("decoded")
+    expect(() => store.decodeProjectMemoryValue({ version: 1 })).toThrow(/invalid memory schema/)
+  })
+
   test("parseProjectMemoryText decodes valid memory JSON", () => {
     expect(store.parseProjectMemoryText(JSON.stringify(sampleMemory({ contentHash: "parsed" }))).contentHash).toBe(
       "parsed",
