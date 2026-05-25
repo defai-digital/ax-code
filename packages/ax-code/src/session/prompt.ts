@@ -43,6 +43,7 @@ import { createStructuredOutputTurn } from "./prompt-structured-output"
 import { executeSubtask, type SubtaskContext } from "./prompt-subtask"
 import { resolveTools } from "./prompt-tools"
 import { clearPromptProcessorInstructions, createPromptProcessor } from "./prompt-processor"
+import { addPromptGoalUsage } from "./prompt-goal-usage"
 import {
   pendingTodoContinuationDecision,
   pendingTodoSignature,
@@ -574,15 +575,7 @@ export namespace SessionPrompt {
           break
         }
       }
-      const updatedGoal = await SessionGoal.addUsage({ sessionID, message: processor.message }).catch((error) => {
-        log.warn("goal usage update failed", {
-          command: "session.goal.usage",
-          status: "error",
-          sessionID,
-          error,
-        })
-        return undefined
-      })
+      const updatedGoal = await addPromptGoalUsage({ sessionID, message: processor.message })
 
       // In autonomous mode, when the model ends a turn cleanly but leaves todos
       // pending, inject a continuation user message and keep the loop running.
