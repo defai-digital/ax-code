@@ -1,4 +1,4 @@
-import { parseJsonResult } from "./json-value"
+import { parseJsonStrict } from "./json-value"
 import { isRecord } from "./record"
 
 export function decodePackageJsonObject(value: unknown): Record<string, unknown> {
@@ -6,13 +6,7 @@ export function decodePackageJsonObject(value: unknown): Record<string, unknown>
 }
 
 export function parsePackageJsonObject(raw: string): Record<string, unknown> {
-  const parsed = parseJsonResult(raw)
-  if (!parsed.ok) {
-    const { error } = parsed
-    if (error instanceof Error) throw error
-    throw new SyntaxError(String(error))
-  }
-  return decodePackageJsonObject(parsed.value)
+  return decodePackageJsonObject(parseJsonStrict(raw))
 }
 
 export function packageJsonStringMap(value: unknown): Record<string, string> {

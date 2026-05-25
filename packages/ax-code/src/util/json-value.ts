@@ -16,6 +16,16 @@ export function parseJsonResult(text: string): JsonParseResult {
   }
 }
 
+export function parseJsonStrict(text: string): unknown {
+  const parsed = parseJsonResult(text)
+  if (!parsed.ok) {
+    const { error } = parsed
+    if (error instanceof Error) throw error
+    throw new SyntaxError(String(error))
+  }
+  return parsed.value
+}
+
 export function parseJsonPayload(raw: string | undefined): unknown | undefined {
   const text = raw?.trim()
   if (!text) return undefined
