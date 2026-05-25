@@ -17,9 +17,22 @@ const DEFAULTS: Record<string, string> = {
 
 type JsonLike = Record<string, unknown>
 
+function isJsonLike(value: unknown): value is JsonLike {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+}
+
+export function parseCliSettingsJson(text: string): JsonLike | null {
+  try {
+    const parsed: unknown = JSON.parse(text)
+    return isJsonLike(parsed) ? parsed : null
+  } catch {
+    return null
+  }
+}
+
 async function readJson(path: string): Promise<JsonLike | null> {
   try {
-    return JSON.parse(await readFile(path, "utf-8"))
+    return parseCliSettingsJson(await readFile(path, "utf-8"))
   } catch {
     return null
   }
