@@ -65,11 +65,15 @@ export function parseTranslationsText(text: string): Translations {
     throw new Error("i18n locale: invalid JSON", { cause: error })
   }
 
-  const missing = REQUIRED_TRANSLATION_PATHS.filter((key) => typeof translationValue(parsed, key) !== "string")
+  return decodeTranslationsValue(parsed)
+}
+
+export function decodeTranslationsValue(value: unknown): Translations {
+  const missing = REQUIRED_TRANSLATION_PATHS.filter((key) => typeof translationValue(value, key) !== "string")
   if (missing.length) {
     throw new Error(`i18n locale: missing translation strings (${missing.join(", ")})`)
   }
-  return parsed as Translations
+  return value as Translations
 }
 
 function loadLocale(lang: SupportedLanguage): Translations | null {
