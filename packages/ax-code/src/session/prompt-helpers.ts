@@ -1,5 +1,3 @@
-import { Instance } from "../project/instance"
-import { MessageID, PartID, SessionID } from "./schema"
 import { MessageV2 } from "./message-v2"
 import { Provider } from "../provider/provider"
 import { ModelID, ProviderID } from "../provider/schema"
@@ -9,6 +7,7 @@ export { commandParts } from "./prompt-command-parts"
 export { resolvePromptParts } from "./prompt-reference-parts"
 export { appendShellOutputChunk, shellArgs, shellOutputMetadata, type ShellOutputState } from "./prompt-shell-runtime"
 export { agentInfo, modelInfo } from "./prompt-agent-model-info"
+export { sessionAssistantPath, syntheticTextPart, textPart, zeroTokenUsage } from "./prompt-message-builders"
 export { commandSetup } from "./prompt-command-setup"
 export { ensureTitle, titleContextMessages } from "./prompt-title"
 export { systemPrompt } from "./prompt-system"
@@ -37,35 +36,6 @@ type GoalArgumentDecision =
       objective: string
       tokenBudget?: number
     }
-
-type AssistantPath = MessageV2.Assistant["path"]
-type AssistantTokens = MessageV2.Assistant["tokens"]
-
-export function textPart(input: {
-  messageID: MessageID
-  sessionID: SessionID
-  text: string
-  synthetic?: boolean
-  time?: MessageV2.TextPart["time"]
-}): MessageV2.TextPart {
-  return {
-    id: PartID.ascending(),
-    messageID: input.messageID,
-    sessionID: input.sessionID,
-    type: "text",
-    text: input.text,
-    ...(input.synthetic === undefined ? {} : { synthetic: input.synthetic }),
-    ...(input.time === undefined ? {} : { time: input.time }),
-  }
-}
-
-export function syntheticTextPart(input: {
-  messageID: MessageID
-  sessionID: SessionID
-  text: string
-}): MessageV2.TextPart {
-  return textPart({ ...input, synthetic: true })
-}
 
 export function readToolCallText(args: { filePath?: string; offset?: number; limit?: number }) {
   return `Called the Read tool with the following input: ${JSON.stringify(args)}`
@@ -99,27 +69,6 @@ export function parseGoalArguments(raw: string): GoalArgumentDecision {
     }
   }
   return { action: "create", objective: text }
-}
-
-export function sessionAssistantPath(input?: { directory?: string; worktree?: string }): AssistantPath {
-  return {
-    cwd: input?.directory ?? Instance.directory,
-    root: input?.worktree ?? Instance.worktree,
-  }
-}
-
-export function zeroTokenUsage(input?: { total?: number }): AssistantTokens {
-  const tokens = {
-    input: 0,
-    output: 0,
-    reasoning: 0,
-    cache: { read: 0, write: 0 },
-  }
-  if (input?.total === undefined) return tokens
-  return {
-    total: input.total,
-    ...tokens,
-  }
 }
 
 /**

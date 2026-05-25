@@ -1,7 +1,7 @@
 import { Session } from "."
 import { MessageV2 } from "./message-v2"
 import { MessageID, type SessionID } from "./schema"
-import { sessionAssistantPath, textPart, zeroTokenUsage } from "./prompt-helpers"
+import { sessionAssistantPath, textPart, zeroTokenUsage } from "./prompt-message-builders"
 
 type ParentUser = Pick<MessageV2.User, "id" | "agent" | "variant" | "model">
 
