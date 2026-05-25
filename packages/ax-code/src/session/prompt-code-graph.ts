@@ -8,6 +8,32 @@ import type { SessionID } from "./schema"
 
 const log = Log.create({ service: "session.prompt" })
 
+export function createDeferredCodeGraphAutoIndex(input: { sessionID: SessionID; abort: AbortSignal }) {
+  let projectID: ProjectID | undefined
+  return {
+    set(nextProjectID: ProjectID | undefined) {
+      if (nextProjectID) projectID = nextProjectID
+    },
+    flush() {
+      if (!projectID || input.abort.aborted) return
+      const deferredProjectID = projectID
+      const timer = setTimeout(() => {
+        try {
+          AutoIndex.maybeStart(deferredProjectID)
+        } catch (error) {
+          log.warn("deferred auto-index scheduling failed", {
+            command: "session.prompt.codeGraph",
+            status: "error",
+            sessionID: input.sessionID,
+            error,
+          })
+        }
+      }, 0)
+      timer.unref?.()
+    },
+  }
+}
+
 export function recordCodeGraphSessionStart(input: { sessionID: SessionID; enabled: boolean }): ProjectID | undefined {
   if (!input.enabled) return undefined
 
