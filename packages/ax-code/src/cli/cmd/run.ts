@@ -29,7 +29,7 @@ import { WebSearchTool } from "../../tool/websearch"
 import { TaskTool } from "../../tool/task"
 import { SkillTool } from "../../tool/skill"
 import { BashTool } from "../../tool/bash"
-import { TodoWriteTool } from "../../tool/todo"
+import { TodoWriteTool, formatTodoCheckboxLines } from "../../tool/todo"
 import { Locale } from "../../util/locale"
 import { internalBaseUrl, isInternalHostname } from "../../util/internal-url"
 import { isNonEmptyRecord } from "../../util/record"
@@ -220,7 +220,7 @@ function todo(info: ToolProps<typeof TodoWriteTool>) {
       icon: "#",
       title: "Todos",
     },
-    info.input.todos.map((item) => `${item.status === "completed" ? "[x]" : "[ ]"} ${item.content}`).join("\n"),
+    formatTodoCheckboxLines(info.input.todos).join("\n"),
   )
 }
 
