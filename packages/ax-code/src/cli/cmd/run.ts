@@ -67,6 +67,11 @@ function warnPrefix(message: string) {
   UI.println(UI.Style.TEXT_WARNING_BOLD + "!", UI.Style.TEXT_NORMAL, message)
 }
 
+function toolStateOutput(part: ToolPart): string | undefined {
+  if ("output" in part.state) return part.state.output
+  return undefined
+}
+
 function describeFilesystemSearchTool(input: {
   label: string
   pattern: string
@@ -157,7 +162,7 @@ function write(info: ToolProps<typeof WriteTool>) {
       icon: "←",
       title: `Write ${normalizePath(info.input.filePath)}`,
     },
-    completedOutput(info.part.state.status, info.part.state.output),
+    completedOutput(info.part.state.status, toolStateOutput(info.part)),
   )
 }
 
@@ -219,7 +224,7 @@ function skill(info: ToolProps<typeof SkillTool>) {
 }
 
 function bash(info: ToolProps<typeof BashTool>) {
-  const output = completedOutput(info.part.state.status, info.part.state.output, true)
+  const output = completedOutput(info.part.state.status, toolStateOutput(info.part), true)
   block(
     {
       icon: "$",
