@@ -142,6 +142,24 @@ export const bunSpawnInfo = (
   }
 }
 
+export const resolveManagedToolBin = async (input: {
+  toolName: string
+  managedBin: string
+  installedBin?: string | null
+  exists?: (path: string) => Promise<boolean>
+}) => {
+  if (input.installedBin && !input.installedBin.startsWith(Global.Path.bin)) return input.installedBin
+
+  if (await (input.exists ?? pathExists)(input.managedBin)) return input.managedBin
+
+  if (input.installedBin) {
+    log.warn(`using legacy unmanaged ${input.toolName} install; remove shared-bin copy to switch to pinned managed installs`, {
+      bin: input.installedBin,
+    })
+    return input.installedBin
+  }
+}
+
 export const toolServer = async (
   root: string,
   input: Parameters<typeof toolBin>[0] & {

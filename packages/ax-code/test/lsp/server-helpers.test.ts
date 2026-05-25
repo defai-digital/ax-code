@@ -12,6 +12,7 @@ import {
   globalBin,
   globalPath,
   nodeModuleScript,
+  resolveManagedToolBin,
   serverHandle,
   spawnInfo,
   toolBin,
@@ -489,6 +490,40 @@ describe("lsp server helpers", () => {
 
     expect(info.process.spawnargs.slice(1)).toEqual(["/tmp/server.js", "--stdio"])
     expect(info.initialization).toEqual(initialization)
+  })
+
+  test("prefers a PATH-installed managed tool outside the shared bin", async () => {
+    const bin = await resolveManagedToolBin({
+      toolName: "clangd",
+      managedBin: path.join(Global.Path.bin, ".managed", "clangd"),
+      installedBin: "/usr/local/bin/clangd",
+      exists: async () => true,
+    })
+
+    expect(bin).toBe("/usr/local/bin/clangd")
+  })
+
+  test("falls back to the managed tool when no external PATH install exists", async () => {
+    const managedBin = path.join(Global.Path.bin, ".managed", "tinymist")
+    const bin = await resolveManagedToolBin({
+      toolName: "tinymist",
+      managedBin,
+      exists: async (candidate) => candidate === managedBin,
+    })
+
+    expect(bin).toBe(managedBin)
+  })
+
+  test("uses shared-bin installs as legacy fallback after managed tools", async () => {
+    const legacyBin = path.join(Global.Path.bin, "texlab")
+    const bin = await resolveManagedToolBin({
+      toolName: "texlab",
+      managedBin: path.join(Global.Path.bin, ".managed", "texlab"),
+      installedBin: legacyBin,
+      exists: async () => false,
+    })
+
+    expect(bin).toBe(legacyBin)
   })
 
   test("builds tool-backed server info from the installed binary", async () => {
