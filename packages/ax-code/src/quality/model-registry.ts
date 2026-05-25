@@ -1028,6 +1028,21 @@ export namespace QualityModelRegistry {
     }
   }
 
+  function releaseDecisionRecordSummary(
+    releaseDecisionRecord: QualityPromotionReleaseDecisionRecord.RecordArtifact,
+  ): NonNullable<PromotionRecord["releaseDecisionRecord"]> {
+    return {
+      recordID: releaseDecisionRecord.recordID,
+      recordedAt: releaseDecisionRecord.recordedAt,
+      decisionID: releaseDecisionRecord.boardDecision.decisionID,
+      disposition: releaseDecisionRecord.summary.disposition,
+      overrideAccepted: releaseDecisionRecord.summary.overrideAccepted,
+      authorizedPromotion: releaseDecisionRecord.summary.authorizedPromotion,
+      promotionMode: releaseDecisionRecord.summary.promotionMode,
+      overallStatus: releaseDecisionRecord.summary.overallStatus,
+    }
+  }
+
   function buildReleasePacketPromotionSnapshot(input: {
     releasePacket: QualityPromotionReleasePacket.PacketArtifact
     promotionMetadata: PromotionMetadata
@@ -1046,16 +1061,7 @@ export namespace QualityModelRegistry {
       decision: input.decision,
       decisionBundleCreatedAt: submissionBundle.decisionBundle.createdAt,
       boardDecision: boardDecisionRecordSummary(boardDecision),
-      releaseDecisionRecord: {
-        recordID: input.releasePacket.releaseDecisionRecord.recordID,
-        recordedAt: input.releasePacket.releaseDecisionRecord.recordedAt,
-        decisionID: boardDecision.decisionID,
-        disposition: input.releasePacket.releaseDecisionRecord.summary.disposition,
-        overrideAccepted: input.releasePacket.releaseDecisionRecord.summary.overrideAccepted,
-        authorizedPromotion: input.releasePacket.releaseDecisionRecord.summary.authorizedPromotion,
-        promotionMode: input.releasePacket.releaseDecisionRecord.summary.promotionMode,
-        overallStatus: input.releasePacket.releaseDecisionRecord.summary.overallStatus,
-      },
+      releaseDecisionRecord: releaseDecisionRecordSummary(input.releasePacket.releaseDecisionRecord),
       releasePacket: {
         packetID: input.releasePacket.packetID,
         createdAt: input.releasePacket.createdAt,
@@ -2036,16 +2042,7 @@ export namespace QualityModelRegistry {
     })
     const record = PromotionRecord.parse({
       ...result.record,
-      releaseDecisionRecord: {
-        recordID: releaseDecisionRecord.recordID,
-        recordedAt: releaseDecisionRecord.recordedAt,
-        decisionID: releaseDecisionRecord.boardDecision.decisionID,
-        disposition: releaseDecisionRecord.summary.disposition,
-        overrideAccepted: releaseDecisionRecord.summary.overrideAccepted,
-        authorizedPromotion: releaseDecisionRecord.summary.authorizedPromotion,
-        promotionMode: releaseDecisionRecord.summary.promotionMode,
-        overallStatus: releaseDecisionRecord.summary.overallStatus,
-      },
+      releaseDecisionRecord: releaseDecisionRecordSummary(releaseDecisionRecord),
     })
     await writePromotionRecord(record)
     return {
