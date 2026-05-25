@@ -29,6 +29,7 @@ import {
 } from "@agentclientprotocol/sdk"
 
 import { Log } from "../util/log"
+import { parseJsonPayload } from "@/util/json-value"
 import { pathToFileURL } from "url"
 import { Filesystem } from "../util/filesystem"
 import { FileTime } from "../file/time"
@@ -96,12 +97,8 @@ export namespace ACP {
   // shape doesn't match Todo.Info (logged). Callers send the entries via a
   // sessionUpdate "plan" event when non-null.
   export function parseTodoPlanEntries(rawOutput: string): PlanEntry[] | null {
-    let parsed: unknown
-    try {
-      parsed = JSON.parse(rawOutput)
-    } catch {
-      return null
-    }
+    const parsed = parseJsonPayload(rawOutput)
+    if (parsed === undefined) return null
     return decodeTodoPlanEntries(parsed)
   }
 
