@@ -7,6 +7,7 @@ import { SessionID, MessageID, PartID } from "../../src/session/schema"
 import { Question } from "../../src/question"
 
 const sessionID = SessionID.make("session")
+const messageID = MessageID.make("msg_test")
 const providerID = ProviderID.make("test")
 const model: Provider.Model = {
   id: ModelID.make("test-model"),
@@ -97,6 +98,22 @@ function basePart(messageID: string, id: string) {
     messageID: MessageID.make(messageID),
   }
 }
+
+describe("session.message-v2.cursor", () => {
+  test("decodes already-parsed cursor values", () => {
+    expect(MessageV2.cursor.decodeValue({ id: messageID, time: 123 })).toEqual({
+      id: messageID,
+      time: 123,
+    })
+    expect(() => MessageV2.cursor.decodeValue({ id: messageID })).toThrow()
+  })
+
+  test("decodes opaque cursor strings through the same value boundary", () => {
+    const encoded = MessageV2.cursor.encode({ id: messageID, time: 123 })
+    expect(MessageV2.cursor.decode(encoded)).toEqual({ id: messageID, time: 123 })
+    expect(() => MessageV2.cursor.decode("not-valid-json")).toThrow("Invalid cursor")
+  })
+})
 
 describe("session.message-v2.toModelMessage", () => {
   test("filters out messages with no parts", async () => {

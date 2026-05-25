@@ -507,6 +507,9 @@ export namespace MessageV2 {
     encode(input: Cursor) {
       return Buffer.from(JSON.stringify(input)).toString("base64url")
     },
+    decodeValue(input: unknown): Cursor {
+      return Cursor.parse(input)
+    },
     decode(input: string): Cursor {
       // Wrap the base64 → JSON → Zod chain in a single try/catch so
       // any failure (truncated base64, invalid JSON, shape mismatch)
@@ -514,7 +517,7 @@ export namespace MessageV2 {
       // map to 400. Previously a corrupted cursor in the database or
       // a buggy client produced an unhandled exception and a 500.
       try {
-        return Cursor.parse(JSON.parse(Buffer.from(input, "base64url").toString("utf8")))
+        return this.decodeValue(JSON.parse(Buffer.from(input, "base64url").toString("utf8")))
       } catch {
         throw new Error("Invalid cursor")
       }
