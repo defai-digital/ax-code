@@ -17,7 +17,7 @@ import { TaskTool } from "@/tool/task"
 import { Tool } from "@/tool/tool"
 import { Permission } from "@/permission"
 import { SessionStatus } from "./status"
-import { agentInfo } from "./prompt-helpers"
+import { agentInfo } from "./prompt-agent-model-info"
 
 const log = Log.create({ service: "session.prompt.subtask" })
 

@@ -2,7 +2,7 @@ import { ulid } from "ulid"
 import { Session } from "."
 import { MessageV2 } from "./message-v2"
 import { MessageID, PartID, type SessionID } from "./schema"
-import { sessionAssistantPath, textPart, zeroTokenUsage } from "./prompt-helpers"
+import { sessionAssistantPath, textPart, zeroTokenUsage } from "./prompt-message-builders"
 import type { ModelID, ProviderID } from "../provider/schema"
 
 export async function createShellTurnMessages(input: {

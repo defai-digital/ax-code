@@ -61,13 +61,8 @@ import { loopMessages, remindQueuedMessages, scanLoopMessages } from "./prompt-l
 import { systemPrompt as getSystemPrompt } from "./prompt-system"
 import { createStructuredOutputTool } from "./prompt-structured-output"
 import { ensureTitle } from "./prompt-title"
-import {
-  findFallbackModel,
-  parseGoalArguments,
-  sessionAssistantPath,
-  textPart,
-  zeroTokenUsage,
-} from "./prompt-helpers"
+import { findFallbackModel, parseGoalArguments } from "./prompt-helpers"
+import { sessionAssistantPath, textPart, zeroTokenUsage } from "./prompt-message-builders"
 import { executeSubtask, type SubtaskContext } from "./prompt-subtask"
 import { resolveTools } from "./prompt-tools"
 import {

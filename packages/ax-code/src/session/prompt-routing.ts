@@ -8,7 +8,7 @@ import { ModelID, ProviderID } from "../provider/schema"
 import { Recorder } from "../replay/recorder"
 import { Log } from "../util/log"
 import { MessageID, SessionID } from "./schema"
-import { agentInfo } from "./prompt-helpers"
+import { agentInfo } from "./prompt-agent-model-info"
 
 const log = Log.create({ service: "session.prompt" })
 

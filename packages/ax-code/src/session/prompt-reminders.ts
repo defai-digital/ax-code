@@ -8,7 +8,7 @@ import { MessageV2 } from "./message-v2"
 import PROMPT_PLAN from "../session/prompt/plan.txt"
 import BUILD_SWITCH from "../session/prompt/build-switch.txt"
 import { autonomousDecisionLedgerReminder } from "./prompt-autonomous-ledger"
-import { syntheticTextPart } from "./prompt-helpers"
+import { syntheticTextPart } from "./prompt-message-builders"
 
 type InsertRemindersInput = {
   messages: MessageV2.WithParts[]
