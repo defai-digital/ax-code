@@ -8,9 +8,10 @@ import { Session } from "../../src/session"
 import { LLM } from "../../src/session/llm"
 import { SessionProcessor } from "../../src/session/processor"
 import { MessageV2 } from "../../src/session/message-v2"
+import { resolvePromptLoopErrorTransition } from "../../src/session/prompt-loop-errors"
 import { providerFallbackSwitchState } from "../../src/session/prompt-helpers"
 import { SessionRetry } from "../../src/session/retry"
-import { MessageID } from "../../src/session/schema"
+import { MessageID, SessionID } from "../../src/session/schema"
 import { tmpdir } from "../fixture/fixture"
 
 const model: Provider.Model = {
@@ -129,27 +130,58 @@ describe("session.processor", () => {
   })
 
   test("provider fallback only partially resets consecutive error budget", async () => {
-    const prompt = await Bun.file(path.join(import.meta.dir, "../../src/session/prompt.ts")).text()
-    expect(prompt).toContain("consecutiveErrors = fallbackSwitch.nextConsecutiveErrors")
-    expect(
-      providerFallbackSwitchState({
-        current: { providerID: "current" as any, modelID: "model-a" as any },
-        fallback: { providerID: "fallback" as any, modelID: "model-b" as any },
-        errorMessage: "rate limited",
-        consecutiveErrors: 5,
-      }).nextConsecutiveErrors,
-    ).toBe(2)
+    const fallbackSwitch = providerFallbackSwitchState({
+      current: { providerID: "current" as any, modelID: "model-a" as any },
+      fallback: { providerID: "fallback" as any, modelID: "model-b" as any },
+      errorMessage: "rate limited",
+      consecutiveErrors: 5,
+    })
+
+    const transition = await resolvePromptLoopErrorTransition(
+      {
+        sessionID: SessionID.descending(),
+        currentModel: { providerID: "current" as any, modelID: "model-a" as any },
+        error: new Error("rate limited"),
+        consecutiveErrors: 4,
+        fallbackModelOverride: undefined,
+        step: 1,
+      },
+      {
+        async handleError() {
+          return {
+            action: "fallback",
+            fallbackModel: { providerID: "fallback" as any, modelID: "model-b" as any },
+            consecutiveErrors: fallbackSwitch.nextConsecutiveErrors,
+          }
+        },
+      },
+    )
+
+    expect(fallbackSwitch.nextConsecutiveErrors).toBe(2)
+    expect(transition).toMatchObject({
+      action: "retry",
+      consecutiveErrors: 2,
+      fallbackModelOverride: { providerID: "fallback", modelID: "model-b" },
+      resetCachedModel: true,
+    })
   })
 
   test("successful fallback step returns later loops to the original model", async () => {
-    const src = await Bun.file(path.join(import.meta.dir, "../../src/session/prompt.ts")).text()
-    const successStart = src.indexOf("consecutiveErrors = 0 // Reset on success")
-    const nextBranch = src.indexOf('if (processorDecision.action === "compact")', successStart)
-    expect(successStart).toBeGreaterThan(-1)
-    expect(nextBranch).toBeGreaterThan(successStart)
-    const successBlock = src.slice(successStart, nextBranch)
-    expect(successBlock).toContain("fallbackModelOverride = undefined")
-    expect(successBlock).toContain("cachedModel = undefined")
+    const transition = await resolvePromptLoopErrorTransition({
+      sessionID: SessionID.descending(),
+      currentModel: { providerID: "current" as any, modelID: "model-a" as any },
+      error: undefined,
+      consecutiveErrors: 2,
+      fallbackModelOverride: { providerID: "fallback" as any, modelID: "model-b" as any },
+      step: 2,
+    })
+
+    expect(transition).toEqual({
+      action: "continue",
+      consecutiveErrors: 0,
+      fallbackModelOverride: undefined,
+      resetCachedModel: true,
+    })
   })
 
   test("marks tool-using steps as tool-calls even when provider finish reason is stop", async () => {

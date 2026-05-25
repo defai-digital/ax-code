@@ -28,6 +28,7 @@ import { createXai } from "@ai-sdk/xai"
 import { createOpenRouter } from "@openrouter/ai-sdk-provider"
 import { ProviderTransform } from "./transform"
 import { Installation } from "../installation"
+import { providerModelKey } from "./model-key"
 import { ModelID, ProviderID } from "./schema"
 import { levenshtein } from "@/util/levenshtein"
 import { isModelSupportedForProvider } from "./model-support"
@@ -1016,7 +1017,7 @@ export namespace Provider {
 
   export async function getLanguage(model: Model): Promise<Lang> {
     const s = await state()
-    const key = `${model.providerID}/${model.id}`
+    const key = providerModelKey({ providerID: model.providerID, modelID: model.id })
 
     const cached = s.models.get(key)
     if (cached) return cached
