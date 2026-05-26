@@ -3,7 +3,7 @@
 **PRD:** PRD-2026-05-26-html-dev-browser-integration.md
 **ADR:** ADR-021-html-dev-browser-boundary.md
 **Date:** 2026-05-26
-**Status:** Proposed
+**Status:** Implemented
 
 ---
 

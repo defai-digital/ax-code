@@ -17,6 +17,7 @@ import { Flag } from "@/flag/flag.ts"
 import { Shell } from "@/shell/shell"
 
 import { BashArity } from "@/permission/arity"
+import { Config } from "@/config/config"
 import { Truncate } from "./truncate"
 import { Plugin } from "@/plugin"
 import { Isolation } from "@/isolation"
@@ -204,7 +205,7 @@ export const BashTool = Tool.define("bash", async () => {
       if (hasDynamicRedirection(params.command)) throw new Error("Dynamic redirection targets are not allowed")
 
       const browserOpenIntercept = isBrowserOpenToLocal(params.command)
-      if (browserOpenIntercept) {
+      if (browserOpenIntercept && (await Config.get()).browser?.interceptOpen !== false) {
         log.info("browser open intercepted", {
           toolName: "bash",
           command: params.command,
