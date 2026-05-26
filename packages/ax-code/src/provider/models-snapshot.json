@@ -47124,6 +47124,33 @@
           "output": 384000
         }
       },
+      "qwen3.7-max": {
+        "id": "qwen3.7-max",
+        "name": "Qwen3.7 Max",
+        "family": "qwen3.7-max",
+        "attachment": false,
+        "reasoning": true,
+        "tool_call": true,
+        "temperature": true,
+        "release_date": "2026-05-21",
+        "last_updated": "2026-05-21",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 65536
+        },
+        "provider": {
+          "npm": "@ai-sdk/anthropic"
+        }
+      },
       "mimo-v2.5-pro": {
         "id": "mimo-v2.5-pro",
         "name": "MiMo V2.5 Pro",
