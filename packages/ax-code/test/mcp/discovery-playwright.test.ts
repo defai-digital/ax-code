@@ -17,8 +17,14 @@ describe("mcp.discovery playwright candidate", () => {
     const results = await discover()
     const playwright = results.find((s) => s.name === "playwright")
     expect(playwright).toBeDefined()
-    expect(playwright!.command).toBe("npx")
-    expect(playwright!.args).toContain("@playwright/mcp@latest")
+    // When not detected, defaults to npx with @playwright/mcp@latest
+    if (!playwright!.detected) {
+      expect(playwright!.command).toBe("npx")
+      expect(playwright!.args ?? []).toContain("@playwright/mcp@latest")
+    } else {
+      // Detected: either global binary (playwright-mcp) or npx
+      expect(["npx", "playwright-mcp"]).toContain(playwright!.command ?? "")
+    }
   })
 
   test("playwright candidate args contain either --cdp-url or --headless (never both)", async () => {

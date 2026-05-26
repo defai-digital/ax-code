@@ -44,8 +44,10 @@ const DEFAULT_TIMEOUT = Flag.AX_CODE_EXPERIMENTAL_BASH_DEFAULT_TIMEOUT_MS || 2 *
 // Browser-launcher command names on macOS, Linux, Windows.
 const BROWSER_OPEN_RE = /^(open|xdg-open|start|sensible-browser)\s+/
 
-// Matches local HTML file paths or localhost/127.0.0.1 URLs.
-const LOCAL_HTML_TARGET_RE = /(?:\.html?(?:\s*$|#|\?))|^https?:\/\/(?:localhost|127\.0\.0\.1)/i
+// Matches local HTML file paths OR localhost/127.0.0.1 URLs.
+// The first alternative uses a negative lookahead (?!https?://) to prevent
+// matching remote URLs that happen to end in .html (e.g. https://example.com/page.html).
+const LOCAL_HTML_TARGET_RE = /(?:^(?!https?:\/\/).*\.html?(?:\s*$|#|\?))|(?:^https?:\/\/(?:localhost|127\.0\.0\.1))/i
 
 // Patterns that identify intentional (non-development) browser opens.
 // These are allowed through even when targeting localhost/local files.

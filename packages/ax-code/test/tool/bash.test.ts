@@ -1054,6 +1054,33 @@ describe("tool.bash browser-open interception", () => {
     })
   })
 
+  test("does NOT intercept open targeting a remote URL with .html extension", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const bash = await BashTool.init()
+        let spawned = false
+        const trackCtx = {
+          ...ctx,
+          ask: async () => {
+            spawned = true
+            throw new Error("stop after permission")
+          },
+        }
+        try {
+          await bash.execute(
+            { command: "open https://example.com/page.html", description: "Open remote HTML page" },
+            trackCtx,
+          )
+        } catch {
+          // permission throw is expected
+        }
+        expect(spawned).toBe(true)
+      },
+    })
+  })
+
   test("emits TuiEvent.ToastShow when browser open is intercepted", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
