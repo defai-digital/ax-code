@@ -2,7 +2,7 @@ import z from "zod"
 import { Tool } from "./tool"
 import { ProviderID, ModelID } from "../provider/schema"
 import DESCRIPTION from "./batch.txt"
-import { toErrorMessage } from "@/util/error-message"
+import { toError, toErrorMessage } from "@/util/error-message"
 import { Log } from "@/util/log"
 
 const DISALLOWED = new Set(["batch", "task"])
@@ -223,7 +223,7 @@ export const BatchTool = Tool.define("batch", async () => {
             : {
                 success: false as const,
                 tool: toolCalls[idx].tool,
-                error: r.reason instanceof Error ? r.reason : new Error(String(r.reason)),
+                error: toError(r.reason),
               },
         ),
       )
