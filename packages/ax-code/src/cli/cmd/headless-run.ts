@@ -22,6 +22,9 @@ import path from "node:path"
 type FetchHandler = (request: Request) => Response | Promise<Response>
 
 function assertInternalUrl(url: URL) {
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    throw new Error(`Internal fetch rejected: unsupported protocol ${url.protocol}`)
+  }
   if (!isInternalHostname(url.hostname)) throw new Error(`Internal fetch rejected: ${url.hostname}`)
 }
 

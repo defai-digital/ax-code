@@ -59,6 +59,8 @@ test("headless-run keeps signal handlers installed until cleanup", async () => {
 test("headless-run attach mode rejects non-internal fetch targets", async () => {
   const src = await Bun.file(path.join(import.meta.dir, "../../src/cli/cmd/headless-run.ts")).text()
   expect(src).toContain("function assertInternalUrl(url: URL)")
+  expect(src).toContain('url.protocol !== "http:" && url.protocol !== "https:"')
+  expect(src).toContain("Internal fetch rejected: unsupported protocol")
   expect(src).toContain("function createInternalFetch")
   expect(src).toContain("assertInternalUrl(new URL(request.url))")
 

@@ -160,6 +160,53 @@ test("getLanguage retries model load when provider cache invalidates before the 
   }
 })
 
+test("getLanguage bounds retries when provider cache keeps invalidating during model load", async () => {
+  const providerID = ProviderID.make("retry-loop-provider")
+  const originalLoader = CUSTOM_LOADERS[providerID]
+  let calls = 0
+
+  CUSTOM_LOADERS[providerID] = (async () => ({
+    autoload: false,
+    async getModel() {
+      calls++
+      await Provider.invalidate()
+      return { id: `language-${calls}` } as any
+    },
+  })) satisfies CustomLoader
+
+  try {
+    await using tmp = await tmpdir({
+      config: {
+        provider: {
+          [providerID]: {
+            name: "Retry Loop Provider",
+            npm: "cli",
+            env: [],
+            models: {
+              "retry-loop-model": {
+                name: "Retry Loop Model",
+                limit: { context: 8192, output: 1024 },
+              },
+            },
+          },
+        },
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const model = await Provider.getModel(providerID, ModelID.make("retry-loop-model"))
+        await expect(Provider.getLanguage(model)).rejects.toThrow("Provider model cache repeatedly invalidated")
+        expect(calls).toBeGreaterThan(1)
+      },
+    })
+  } finally {
+    if (originalLoader) CUSTOM_LOADERS[providerID] = originalLoader
+    else delete CUSTOM_LOADERS[providerID]
+  }
+})
+
 test("wrapSSE cancels the underlying reader when the outer abort signal fires", async () => {
   let cancelReason: unknown
   let cancelResolve!: () => void
