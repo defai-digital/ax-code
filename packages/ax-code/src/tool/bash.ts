@@ -699,26 +699,15 @@ export const BashTool = Tool.define("bash", async () => {
           if (proc.pid) forgetTrackedPID(proc.pid)
         }
 
-        let closeFired = false
-        let exitFired = false
-
-        const tryFinish = () => {
-          if (closeFired && exitFired) {
-            exited = true
-            cleanup()
-            resolve()
-          }
-        }
-
         proc.once("exit", (code) => {
-          procExitCode = code
-          exitFired = true
-          tryFinish()
+          if (code != null) procExitCode = code
         })
 
-        proc.once("close", () => {
-          closeFired = true
-          tryFinish()
+        proc.once("close", (code) => {
+          if (procExitCode == null && code != null) procExitCode = code
+          exited = true
+          cleanup()
+          resolve()
         })
 
         proc.once("error", (error) => {
