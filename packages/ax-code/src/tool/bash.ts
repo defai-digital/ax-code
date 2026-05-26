@@ -564,6 +564,7 @@ export const BashTool = Tool.define("bash", async () => {
         detached: process.platform !== "win32",
         windowsHide: process.platform === "win32",
       })
+      proc.ref()
       if (proc.pid) {
         trackedPIDs.add(proc.pid)
       } else {
@@ -694,10 +695,32 @@ export const BashTool = Tool.define("bash", async () => {
         const cleanup = () => {
           clearTimeout(timeoutTimer)
           ctx.abort.removeEventListener("abort", abortHandler)
-          proc.stdout?.off("data", append)
-          proc.stderr?.off("data", append)
           if (proc.pid) forgetTrackedPID(proc.pid)
         }
+
+        let stdoutEnded = false
+        let stderrEnded = false
+        let closed = false
+
+        const tryFinish = () => {
+          if (closed && stdoutEnded && stderrEnded) {
+            proc.stdout?.off("data", append)
+            proc.stderr?.off("data", append)
+            exited = true
+            cleanup()
+            resolve()
+          }
+        }
+
+        proc.stdout?.once("end", () => {
+          stdoutEnded = true
+          tryFinish()
+        })
+
+        proc.stderr?.once("end", () => {
+          stderrEnded = true
+          tryFinish()
+        })
 
         proc.once("exit", (code) => {
           if (code != null) procExitCode = code
@@ -705,13 +728,14 @@ export const BashTool = Tool.define("bash", async () => {
 
         proc.once("close", (code) => {
           if (procExitCode == null && code != null) procExitCode = code
-          exited = true
-          cleanup()
-          resolve()
+          closed = true
+          tryFinish()
         })
 
         proc.once("error", (error) => {
           exited = true
+          proc.stdout?.off("data", append)
+          proc.stderr?.off("data", append)
           cleanup()
           reject(error)
         })
