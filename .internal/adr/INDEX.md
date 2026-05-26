@@ -25,3 +25,4 @@ This index tracks the active ADR set for `ax-code`. Retired ADRs are removed fro
 | [ADR-016](ADR-016-agent-routing-architecture.md) | Agent routing is keyword-only; no LLM tier, intent gates, or delegation modes | Accepted |
 | [ADR-017](ADR-017-effect-framework-freeze.md) | Freeze Effect framework usage at v2.11.0 boundaries | Accepted; enforced by CI |
 | [ADR-018](ADR-018-app-headless-sdk-boundary.md) | Promote Headless SDK as the Short-Term App Backend Boundary | Accepted; foundation implemented |
+| [ADR-019](ADR-019-graph-first-agent-context-boundary.md) | Make Graph-First Agent Context a Product Boundary | Accepted; implementation shipped |

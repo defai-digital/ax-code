@@ -13,9 +13,12 @@ Supported operations:
 - findReferences: Find every place that references the symbol with the given id (pass the id returned by findSymbol). Returns non-call references only — use findCallers for call sites.
 - findCallers: Find every function/method that calls the symbol with the given id. Depth is currently 1 (direct callers only).
 - findCallees: Find every function/method called by the symbol with the given id. Depth is currently 1.
+- buildContext: Build a graph-first context pack for a task or symbol. It composes symbol search, callers, callees, references, snippets, framework route hints, heuristic callback/event hints, freshness metadata, truncation metadata, and recommended next checks in one bounded response. Use this before broad grep/read exploration for architecture, "where is X", caller/callee, or impact questions.
 
 Every result carries an "explain" field with source, indexedAt, completeness ("full" | "partial" | "lsp-only"), and a queryId. "lsp-only" means the file was indexed for symbols but not yet for cross-references — call/reference queries may be incomplete for those files.
 
 Every result also carries an "envelope" field (Semantic Trust v2 §S4) with source="graph", a timestamp matching the graph's last full index, and a "degraded" flag when the graph cursor is missing or interrupted. Use this to decide whether graph results are fresh enough for your task — fresh symbol lookups are always safe to trust; references and call chains may be stale if the graph hasn't caught up to recent edits. When you need guaranteed-live references for a refactor, use the `lsp` tool's findReferences instead.
 
 If the graph has never been built for this project, queries return empty results. The graph is populated automatically when the project is indexed (background) or explicitly via the indexing subsystem.
+
+For structural questions, prefer buildContext first. Treat framework route and heuristic callback/event entries as navigation hints unless corroborated by source reads, tests, or live LSP. For rename/refactor/reference-sensitive edits, use graph context to narrow the files, then cross-check fresh references with the `lsp` tool when available.

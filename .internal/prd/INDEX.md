@@ -14,6 +14,7 @@ This index tracks the active PRD set for `ax-code`. Completed PRDs are removed f
 | --- | --- | --- | --- | --- |
 | [Stability Audit Remediation](PRD-2026-05-17-stability-audit-remediation.md) | Draft — remediation open | Findings open; no phase landed | 2026-05-25 | All C/H findings resolved or explicitly deferred with ADR coverage |
 | [App Headless SDK Foundation](PRD-2026-05-25-app-headless-sdk-foundation.md) | Implemented | All phases complete | 2026-05-25 | External app can use documented public headless SDK without CLI text parsing |
+| [Graph-First Agent Context](PRD-2026-05-26-graph-first-agent-context.md) | Implemented | All phases complete for context-pack scope | 2026-05-26 | Context composer, guidance, benchmark harness, and provenance-backed route/heuristic pilots shipped |
 | [Server Mode Hardening](PRD-server-mode-hardening.md) | Draft — policy decided, implementation pending | Phase 0 (docs/boundary) not started | 2026-05-25 | ADR-008 implementation phases 1–5 all landed and verified |
 | [Source + Bun Distribution Rollout](PRD-source-bun-distribution.md) | In progress | Phases 0–2 complete; Phase 3 gate pending | 2026-05-25 | Phase 3 default flip executed AND Phase 4 compiled binary retired |
 | [v5 Agent Control Plane](PRD-v5-agent-control-plane.md) | In progress — shadow mode complete | Phases 0–6 shadow; Phase 7 deferred | 2026-05-25 | ExecutionController wired into processor.ts; all phases at runtime enforcement parity |
