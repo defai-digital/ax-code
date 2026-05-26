@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test"
+import { mkdir } from "fs/promises"
 import path from "path"
 import { CodeIntelligenceTool } from "../../src/tool/code-intelligence"
 import { Instance } from "../../src/project/instance"
@@ -160,6 +161,28 @@ describe("tool.code_intelligence", () => {
         expect(result.output).toContain(" a ")
         expect(result.output).toContain(" b ")
         expect(result.output).not.toContain(" c ")
+
+        CodeIntelligence.__clearProject(projectID)
+      },
+    })
+  })
+
+  test("symbolsInFile accepts files in the worktree outside the current directory", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const subdir = path.join(tmp.path, "packages", "app")
+    await mkdir(subdir, { recursive: true })
+    await Instance.provide({
+      directory: subdir,
+      fn: async () => {
+        const projectID = Instance.project.id
+        CodeIntelligence.__clearProject(projectID)
+        const shared = seedSymbol(projectID, { name: "sharedThing", base: tmp.path, relFile: "shared.ts" })
+
+        const tool = await CodeIntelligenceTool.init()
+        const result = await tool.execute({ operation: "symbolsInFile", file: shared.file }, ctx)
+        expect(Instance.worktree).toBe(tmp.path)
+        expect(result.metadata.count).toBe(1)
+        expect(result.output).toContain("sharedThing")
 
         CodeIntelligence.__clearProject(projectID)
       },
@@ -518,6 +541,41 @@ describe("CodeIntelligence tool envelope (§S4)", () => {
         expect(result.metadata.count).toBe(1)
         expect(Array.isArray(result.metadata.snippets)).toBe(true)
         expect(Array.isArray(result.metadata.recommendations)).toBe(true)
+
+        CodeIntelligence.__clearProject(projectID)
+      },
+    })
+  })
+
+  test("buildContext accepts file seeds in the worktree outside the current directory", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const subdir = path.join(tmp.path, "packages", "app")
+    await mkdir(subdir, { recursive: true })
+    await Instance.provide({
+      directory: subdir,
+      fn: async () => {
+        const projectID = Instance.project.id as ProjectID
+        CodeIntelligence.__clearProject(projectID)
+        const file = path.join(tmp.path, "shared.ts")
+        await Bun.write(file, "export function sharedContextTarget() {\n  return true\n}\n")
+        seedSymbol(projectID, { name: "sharedContextTarget", base: tmp.path, relFile: "shared.ts" })
+        CodeGraphQuery.upsertCursor(projectID, "abc", 1, 0)
+
+        const tool = await CodeIntelligenceTool.init()
+        const result = await tool.execute(
+          {
+            operation: "buildContext",
+            query: "explain shared context",
+            seeds: [{ kind: "file", value: file }],
+            maxSymbols: 1,
+            maxSnippets: 1,
+          },
+          ctx,
+        )
+
+        expect(Instance.worktree).toBe(tmp.path)
+        expect(result.metadata.count).toBe(1)
+        expect(result.output).toContain("sharedContextTarget")
 
         CodeIntelligence.__clearProject(projectID)
       },

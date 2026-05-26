@@ -210,6 +210,24 @@ describe("tool.assertSymlinkInsideProject", () => {
     })
   })
 
+  test("rejects symlinks that escape the worktree outside the current directory", async () => {
+    await using project = await tmpdir({ git: true })
+    await using outside = await tmpdir()
+    const subdir = path.join(project.path, "packages", "app")
+    await fs.mkdir(subdir, { recursive: true })
+    await fs.writeFile(path.join(outside.path, "secret.txt"), "secret")
+    const link = path.join(project.path, "linked-secret.txt")
+    await fs.symlink(path.join(outside.path, "secret.txt"), link)
+
+    await Instance.provide({
+      directory: subdir,
+      fn: async () => {
+        expect(Instance.worktree).toBe(project.path)
+        await expect(assertSymlinkInsideProject(link)).rejects.toThrow("symlink target escapes project directory")
+      },
+    })
+  })
+
   test("allows paths that are entirely outside the project without error", async () => {
     await using project = await tmpdir()
     await using outside = await tmpdir()

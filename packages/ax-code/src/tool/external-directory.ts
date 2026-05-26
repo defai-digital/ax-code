@@ -20,9 +20,15 @@ type Options = {
  * them with regular files.
  */
 export async function assertSymlinkInsideProject(target: string): Promise<void> {
-  const projectRoot = path.resolve(Instance.directory)
   const targetPath = path.resolve(target)
-  if (!Filesystem.contains(projectRoot, targetPath)) return
+  const roots = [Instance.directory]
+  if (Instance.worktree !== "/") roots.push(Instance.worktree)
+  const projectRoot = roots
+    .map((root) => path.resolve(root))
+    .filter((root, index, all) => all.indexOf(root) === index)
+    .filter((root) => Filesystem.contains(root, targetPath))
+    .sort((a, b) => b.length - a.length)[0]
+  if (!projectRoot) return
   if (targetPath === projectRoot) return
 
   const lstat = await fs.lstat(targetPath).catch((err: NodeJS.ErrnoException) => {

@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, spyOn, test } from "bun:test"
+import { mkdir, symlink } from "fs/promises"
 import path from "path"
 import { setTimeout as sleep } from "node:timers/promises"
 import { ReadTool } from "../../src/tool/read"
@@ -58,6 +59,30 @@ describe("tool.read external_directory permission", () => {
         const read = await ReadTool.init()
         const result = await read.execute({ filePath: path.join(tmp.path, "subdir", "test.txt") }, ctx)
         expect(result.output).toContain("nested content")
+      },
+    })
+  })
+
+  test("rejects worktree symlink escapes outside the current directory", async () => {
+    await using outerTmp = await tmpdir({
+      init: async (dir) => {
+        await Bun.write(path.join(dir, "secret.txt"), "secret data")
+      },
+    })
+    await using tmp = await tmpdir({ git: true })
+    const subdir = path.join(tmp.path, "packages", "app")
+    await mkdir(subdir, { recursive: true })
+    const link = path.join(tmp.path, "linked-secret.txt")
+    await symlink(path.join(outerTmp.path, "secret.txt"), link)
+
+    await Instance.provide({
+      directory: subdir,
+      fn: async () => {
+        const read = await ReadTool.init()
+        expect(Instance.worktree).toBe(tmp.path)
+        await expect(read.execute({ filePath: link }, ctx)).rejects.toMatchObject({
+          name: "ReadSymlinkEscapeError",
+        })
       },
     })
   })
