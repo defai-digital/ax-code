@@ -166,6 +166,34 @@ Use this skill.
     }
   })
 
+  test("execute loads built-in skills without scanning build-machine paths", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    const home = process.env.AX_CODE_TEST_HOME
+    process.env.AX_CODE_TEST_HOME = tmp.path
+
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const tool = await SkillTool.init()
+          const ctx: Tool.Context = {
+            ...baseCtx,
+            ask: async () => {},
+          }
+
+          const result = await tool.execute({ name: "debug-only" }, ctx)
+
+          expect(result.metadata.dir).toBe("builtin://debug-only")
+          expect(result.output).toContain(`<skill_content name="debug-only">`)
+          expect(result.output).toContain("Base directory for this skill: builtin://debug-only/")
+        },
+      })
+    } finally {
+      process.env.AX_CODE_TEST_HOME = home
+    }
+  })
+
   test("execute escapes skill name in content attribute", async () => {
     await using tmp = await tmpdir({
       git: true,

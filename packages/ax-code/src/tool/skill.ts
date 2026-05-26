@@ -5,6 +5,7 @@ import { Tool } from "./tool"
 import { Skill } from "../skill"
 import { Ripgrep } from "../file/ripgrep"
 import { iife } from "@/util/iife"
+import { Filesystem } from "@/util/filesystem"
 
 function escapeXmlAttribute(value: string) {
   return value
@@ -71,10 +72,11 @@ export const SkillTool = Tool.define("skill", async (ctx) => {
       })
 
       const dir = path.dirname(skill.location)
-      const base = pathToFileURL(dir).href
+      const base = skill.builtin ? `builtin://${encodeURIComponent(skill.name)}/` : pathToFileURL(dir).href
 
       const limit = 10
       const files = await iife(async () => {
+        if (skill.builtin || !(await Filesystem.isDir(dir))) return []
         const arr = []
         for await (const file of Ripgrep.files({
           cwd: dir,
@@ -112,7 +114,7 @@ export const SkillTool = Tool.define("skill", async (ctx) => {
         ].join("\n"),
         metadata: {
           name: skill.name,
-          dir,
+          dir: skill.builtin ? `builtin://${skill.name}` : dir,
         },
       }
     },

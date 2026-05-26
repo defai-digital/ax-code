@@ -9,6 +9,10 @@ afterEach(async () => {
   await Instance.disposeAll()
 })
 
+function userSkills(skills: Skill.Info[]) {
+  return skills.filter((s) => !Skill.BUILTIN_NAMES.has(s.name))
+}
+
 async function createGlobalSkill(homeDir: string) {
   const skillDir = path.join(homeDir, ".claude", "skills", "global-test-skill")
   await fs.mkdir(skillDir, { recursive: true })
@@ -49,7 +53,7 @@ Instructions here.
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
-      const skills = await Skill.all()
+      const skills = userSkills(await Skill.all())
       expect(skills.length).toBe(1)
       const testSkill = skills.find((s) => s.name === "test-skill")
       expect(testSkill).toBeDefined()
@@ -127,7 +131,7 @@ description: Second test skill.
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
-      const skills = await Skill.all()
+      const skills = userSkills(await Skill.all())
       expect(skills.length).toBe(2)
       expect(skills.find((s) => s.name === "skill-one")).toBeDefined()
       expect(skills.find((s) => s.name === "skill-two")).toBeDefined()
@@ -153,7 +157,7 @@ Just some content without YAML frontmatter.
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
-      const skills = await Skill.all()
+      const skills = userSkills(await Skill.all())
       expect(skills).toEqual([])
     },
   })
@@ -180,7 +184,7 @@ description: A skill in the .claude/skills directory.
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
-      const skills = await Skill.all()
+      const skills = userSkills(await Skill.all())
       expect(skills.length).toBe(1)
       const claudeSkill = skills.find((s) => s.name === "claude-skill")
       expect(claudeSkill).toBeDefined()
@@ -200,7 +204,7 @@ test("discovers global skills from ~/.claude/skills/ directory", async () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const skills = await Skill.all()
+        const skills = userSkills(await Skill.all())
         expect(skills.length).toBe(1)
         expect(skills[0].name).toBe("global-test-skill")
         expect(skills[0].description).toBe("A global skill from ~/.claude/skills for testing.")
@@ -218,7 +222,7 @@ test("returns empty array when no skills exist", async () => {
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
-      const skills = await Skill.all()
+      const skills = userSkills(await Skill.all())
       expect(skills).toEqual([])
     },
   })
@@ -245,7 +249,7 @@ description: A skill in the .agents/skills directory.
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
-      const skills = await Skill.all()
+      const skills = userSkills(await Skill.all())
       expect(skills.length).toBe(1)
       const agentSkill = skills.find((s) => s.name === "agent-skill")
       expect(agentSkill).toBeDefined()
@@ -279,7 +283,7 @@ This skill is loaded from the global home directory.
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const skills = await Skill.all()
+        const skills = userSkills(await Skill.all())
         expect(skills.length).toBe(1)
         expect(skills[0].name).toBe("global-agent-skill")
         expect(skills[0].description).toBe("A global skill from ~/.agents/skills for testing.")
@@ -323,7 +327,7 @@ description: A skill in the .agents/skills directory.
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
-      const skills = await Skill.all()
+      const skills = userSkills(await Skill.all())
       expect(skills.length).toBe(2)
       expect(skills.find((s) => s.name === "claude-skill")).toBeDefined()
       expect(skills.find((s) => s.name === "agent-skill")).toBeDefined()
@@ -355,7 +359,7 @@ paths:
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
-      const skills = await Skill.all()
+      const skills = userSkills(await Skill.all())
       expect(skills.length).toBe(1)
       expect(skills[0].paths).toEqual(["**/*.ts", "**/*.tsx"])
     },
@@ -384,7 +388,7 @@ paths: "**/*.css, **/*.scss"
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
-      const skills = await Skill.all()
+      const skills = userSkills(await Skill.all())
       expect(skills.length).toBe(1)
       expect(skills[0].paths).toEqual(["**/*.css", "**/*.scss"])
     },
@@ -419,7 +423,7 @@ metadata:
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
-      const skills = await Skill.all()
+      const skills = userSkills(await Skill.all())
       expect(skills.length).toBe(1)
       expect(skills[0].license).toBe("MIT")
       expect(skills[0].compatibility).toBe("Requires git and gh.")
@@ -454,7 +458,7 @@ metadata:
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
-      const skills = await Skill.all()
+      const skills = userSkills(await Skill.all())
       expect(skills.length).toBe(1)
       expect(skills[0].name).toBe("Bad_Name")
       expect(skills[0].metadata).toBeUndefined()
@@ -488,7 +492,7 @@ description: A plain skill.
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
-      const skills = await Skill.all()
+      const skills = userSkills(await Skill.all())
       expect(skills.length).toBe(1)
       expect(skills[0].paths).toBeUndefined()
     },
@@ -533,6 +537,23 @@ test("fmt marks recommended skills in verbose mode", () => {
   expect(output).not.toContain(`<skill recommended="true">\n    <name>alpha</name>`)
 })
 
+test("fmt uses virtual locations for built-in skills", () => {
+  const skills: Skill.Info[] = [
+    {
+      name: "debug-only",
+      description: "Debug only.",
+      location: "/build/machine/packages/ax-code/skills/debug-only/SKILL.md",
+      content: "",
+      builtin: true,
+    },
+  ]
+
+  const output = Skill.fmt(skills, { verbose: true })
+
+  expect(output).toContain("<location>builtin://debug-only/SKILL.md</location>")
+  expect(output).not.toContain("/build/machine")
+})
+
 test("fmt marks recommended skills in non-verbose mode", () => {
   const skills: Skill.Info[] = [
     { name: "alpha", description: "Alpha skill", location: "/a/SKILL.md", content: "" },
@@ -564,6 +585,35 @@ test("fmt escapes skill metadata before prompt injection", () => {
   const compact = Skill.fmt(skills, { verbose: false })
   expect(compact).toContain("&quot;&gt;&lt;tag&gt;")
   expect(compact).not.toContain("<tag>")
+})
+
+test("parseBuiltinSkillEntries accepts build-time array literals", () => {
+  const entries = Skill.parseBuiltinSkillEntries([
+    {
+      location: "/bundle/skills/debug-only/SKILL.md",
+      content: "---\nname: debug-only\ndescription: Debug only.\n---\n",
+    },
+  ])
+
+  expect(entries).toEqual([
+    {
+      location: "/bundle/skills/debug-only/SKILL.md",
+      content: "---\nname: debug-only\ndescription: Debug only.\n---\n",
+    },
+  ])
+})
+
+test("parseBuiltinSkillEntries still accepts string payloads", () => {
+  const entries = Skill.parseBuiltinSkillEntries(
+    JSON.stringify([
+      {
+        location: "/bundle/skills/debug-n-fix/SKILL.md",
+        content: "---\nname: debug-n-fix\ndescription: Debug and fix.\n---\n",
+      },
+    ]),
+  )
+
+  expect(entries[0].location).toBe("/bundle/skills/debug-n-fix/SKILL.md")
 })
 
 test("properly resolves directories that skills live in", async () => {

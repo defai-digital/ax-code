@@ -67,6 +67,20 @@ const migrations = await Promise.all(
 )
 console.log(`Loaded ${migrations.length} migrations`)
 
+const skillsDir = path.join(dir, "skills")
+const builtinSkills = await (async () => {
+  const entries = await fs.promises.readdir(skillsDir, { withFileTypes: true }).catch(() => [] as fs.Dirent[])
+  const dirs = entries.filter((e) => e.isDirectory()).map((e) => e.name)
+  return Promise.all(
+    dirs.map(async (name) => {
+      const location = path.join(skillsDir, name, "SKILL.md")
+      const content = await Bun.file(location).text()
+      return { location, content }
+    }),
+  )
+})()
+console.log(`Loaded ${builtinSkills.length} built-in skills`)
+
 const singleFlag = process.argv.includes("--single")
 const baselineFlag = process.argv.includes("--baseline")
 const includeAbiFlag = process.argv.includes("--include-abi")
@@ -353,6 +367,7 @@ for (const item of targets) {
       define: {
         AX_CODE_VERSION: `'${buildVersion}'`,
         AX_CODE_MIGRATIONS: JSON.stringify(migrations),
+        AX_CODE_BUILTIN_SKILLS: JSON.stringify(builtinSkills),
         OTUI_TREE_SITTER_WORKER_PATH: bunfsRoot + workerRelativePath,
         AX_CODE_WORKER_PATH: compiledBunfsModulePath(bunfsRoot, workerPath),
         AX_CODE_CHANNEL: `'${buildChannel}'`,

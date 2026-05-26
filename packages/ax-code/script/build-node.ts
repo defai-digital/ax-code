@@ -40,6 +40,20 @@ const migrations = await Promise.all(
 )
 console.log(`Loaded ${migrations.length} migrations`)
 
+const skillsDir = path.join(dir, "skills")
+const builtinSkills = await (async () => {
+  const entries = await fs.promises.readdir(skillsDir, { withFileTypes: true }).catch(() => [] as fs.Dirent[])
+  const dirs = entries.filter((e) => e.isDirectory()).map((e) => e.name)
+  return Promise.all(
+    dirs.map(async (name) => {
+      const location = path.join(skillsDir, name, "SKILL.md")
+      const content = await Bun.file(location).text()
+      return { location, content }
+    }),
+  )
+})()
+console.log(`Loaded ${builtinSkills.length} built-in skills`)
+
 await Bun.build({
   target: "node",
   entrypoints: ["./src/node.ts"],
@@ -48,6 +62,7 @@ await Bun.build({
   external: ["jsonc-parser"],
   define: {
     AX_CODE_MIGRATIONS: JSON.stringify(migrations),
+    AX_CODE_BUILTIN_SKILLS: JSON.stringify(builtinSkills),
   },
 })
 
