@@ -9,6 +9,17 @@ import { Env } from "../../src/env"
 import { Auth } from "../../src/auth"
 import bundledSnapshot from "../../src/provider/models-snapshot.json"
 import { OPENROUTER_SUPPORTED_MODEL_IDS } from "../../src/provider/model-support"
+import { CUSTOM_LOADERS, type CustomLoader } from "../../src/provider/loaders"
+
+function deferred<T = void>() {
+  let resolve!: (value: T | PromiseLike<T>) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+  return { promise, resolve, reject }
+}
 
 test("provider loaded from env variable", async () => {
   await using tmp = await tmpdir({
@@ -79,12 +90,74 @@ test("getLanguage registers pending model loads before awaiting them", async () 
   const pendingCheck = body.indexOf("const pending = s.modelPending.get(key)")
   const promiseCreate = body.indexOf("const promise = Promise.resolve().then")
   const pendingSet = body.indexOf("s.modelPending.set(key, promise)")
-  const promiseAwait = body.indexOf("return await promise")
+  const promiseAwait = body.indexOf("const language = await promise")
 
   expect(pendingCheck).toBeGreaterThan(-1)
   expect(promiseCreate).toBeGreaterThan(pendingCheck)
   expect(pendingSet).toBeGreaterThan(promiseCreate)
   expect(pendingSet).toBeLessThan(promiseAwait)
+})
+
+test("getLanguage retries model load when provider cache invalidates before the loader resolves", async () => {
+  const providerID = ProviderID.make("race-provider")
+  const originalLoader = CUSTOM_LOADERS[providerID]
+  const firstStarted = deferred()
+  const releaseFirst = deferred()
+  const staleLanguage = { id: "stale-language" } as any
+  const freshLanguage = { id: "fresh-language" } as any
+  let calls = 0
+
+  CUSTOM_LOADERS[providerID] = (async () => ({
+    autoload: false,
+    async getModel() {
+      calls++
+      if (calls === 1) {
+        firstStarted.resolve()
+        await releaseFirst.promise
+        return staleLanguage
+      }
+      return freshLanguage
+    },
+  })) satisfies CustomLoader
+
+  try {
+    await using tmp = await tmpdir({
+      config: {
+        provider: {
+          [providerID]: {
+            name: "Race Provider",
+            npm: "cli",
+            env: [],
+            models: {
+              "race-model": {
+                name: "Race Model",
+                limit: { context: 8192, output: 1024 },
+              },
+            },
+          },
+        },
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const model = await Provider.getModel(providerID, ModelID.make("race-model"))
+        const pending = Provider.getLanguage(model)
+
+        await firstStarted.promise
+        await Provider.invalidate()
+        releaseFirst.resolve()
+
+        await expect(pending).resolves.toBe(freshLanguage)
+        expect(calls).toBe(2)
+        await expect(Provider.getLanguage(model)).resolves.toBe(freshLanguage)
+      },
+    })
+  } finally {
+    if (originalLoader) CUSTOM_LOADERS[providerID] = originalLoader
+    else delete CUSTOM_LOADERS[providerID]
+  }
 })
 
 test("wrapSSE cancels the underlying reader when the outer abort signal fires", async () => {

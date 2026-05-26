@@ -44,6 +44,7 @@ import {
 export namespace Provider {
   const log = Log.create({ service: "provider" })
   const supported = isModelSupportedForProvider
+  let modelCacheGeneration = 0
 
   function addLegacyXaiModelAliases(providerID: ProviderID, models: Record<string, Model>) {
     if (providerID !== ProviderID.xai) return
@@ -682,6 +683,7 @@ export namespace Provider {
     }
 
     return {
+      generation: modelCacheGeneration,
       models: languages,
       modelPending: new Map<string, Promise<Lang>>(),
       providers,
@@ -718,6 +720,7 @@ export namespace Provider {
   // auth-only change.
   export async function invalidate() {
     const currentState = await state()
+    modelCacheGeneration++
     currentState.models.clear()
     currentState.modelPending.clear()
     currentState.sdkPending.clear()
@@ -1041,9 +1044,13 @@ export namespace Provider {
     const key = languageCacheKey(model, provider)
 
     const cached = s.models.get(key)
-    if (cached) return cached
+    if (cached && s.generation === modelCacheGeneration) return cached
     const pending = s.modelPending.get(key)
-    if (pending) return pending
+    if (pending) {
+      const language = await pending
+      if (s.generation === modelCacheGeneration) return language
+      return getLanguage(model)
+    }
 
     const promise = Promise.resolve().then(async (): Promise<Lang> => {
       // CLI providers bypass SDK loading — their custom loaders handle everything
@@ -1052,7 +1059,7 @@ export namespace Provider {
           ...provider.options,
           ...model.options,
         })
-        s.models.set(key, language as Lang)
+        if (s.generation === modelCacheGeneration) s.models.set(key, language as Lang)
         return language as Lang
       }
 
@@ -1062,7 +1069,7 @@ export namespace Provider {
         const language = s.modelLoaders[model.providerID]
           ? await s.modelLoaders[model.providerID](sdk, model.api.id, { ...provider.options, ...model.options })
           : sdk.languageModel(model.api.id)
-        s.models.set(key, language as Lang)
+        if (s.generation === modelCacheGeneration) s.models.set(key, language as Lang)
         return language as Lang
       } catch (e) {
         if (e instanceof NoSuchModelError)
@@ -1079,7 +1086,9 @@ export namespace Provider {
     s.modelPending.set(key, promise)
 
     try {
-      return await promise
+      const language = await promise
+      if (s.generation === modelCacheGeneration) return language
+      return getLanguage(model)
     } finally {
       if (s.modelPending.get(key) === promise) {
         s.modelPending.delete(key)
