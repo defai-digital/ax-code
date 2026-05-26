@@ -29,8 +29,6 @@ import {
   hasDynamicRedirection,
   hasDynamicShellExpansion,
   isStaticPathArg,
-  refProcessIfAvailable,
-  safeUtf8PrefixLength,
   staticallyCheckablePathArgs,
   stripShellQuotes,
   truncateBashMetadata,
@@ -566,7 +564,6 @@ export const BashTool = Tool.define("bash", async () => {
         detached: process.platform !== "win32",
         windowsHide: process.platform === "win32",
       })
-      refProcessIfAvailable(proc)
       if (proc.pid) {
         trackedPIDs.add(proc.pid)
       } else {
