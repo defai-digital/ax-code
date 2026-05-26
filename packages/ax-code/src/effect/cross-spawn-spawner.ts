@@ -25,8 +25,7 @@ import { PassThrough } from "node:stream"
 import launch from "cross-spawn"
 import { Env } from "../util/env"
 import { Shell } from "../shell/shell"
-
-const toError = (err: unknown): Error => (err instanceof globalThis.Error ? err : new globalThis.Error(String(err)))
+import { toError } from "../util/error-message"
 
 const toTag = (err: NodeJS.ErrnoException): PlatformError.SystemErrorTag => {
   switch (err.code) {

@@ -1,6 +1,7 @@
 import { Cause, Effect, Exit, Layer, ManagedRuntime } from "effect"
 import * as ServiceMap from "effect/ServiceMap"
 import { registerDisposer } from "./instance-registry"
+import { toError } from "../util/error-message"
 
 export const memoMap = Layer.makeMemoMapUnsafe()
 
@@ -22,7 +23,7 @@ export function makeRunPromise<I, S, E>(service: ServiceMap.Service<I, S>, layer
     return rt.runPromiseExit(service.use(fn), options).then((exit) => {
       if (!Exit.isFailure(exit)) return exit.value
       const error = Cause.squash(exit.cause)
-      throw error instanceof Error ? error : new Error(String(error))
+      throw toError(error)
     })
   }
 }

@@ -12,7 +12,7 @@ import {
 import { Config } from "../config/config"
 import { Log } from "../util/log"
 import { Env } from "../util/env"
-import { toErrorMessage } from "../util/error-message"
+import { toError, toErrorMessage } from "../util/error-message"
 import { NamedError } from "@ax-code/util/error"
 import z from "zod/v4"
 import { Instance } from "../project/instance"
@@ -495,7 +495,7 @@ export namespace MCP {
           }
           break
         } catch (error) {
-          lastError = error instanceof Error ? error : new Error(String(error))
+          lastError = toError(error)
 
           // Handle OAuth-specific errors.
           // The SDK throws UnauthorizedError when auth() returns 'REDIRECT',

@@ -6,7 +6,7 @@ import { Log } from "../util/log"
 import { NativePerf } from "../perf/native"
 import { NativeAddon } from "../native/addon"
 import { Filesystem } from "../util/filesystem"
-import { toErrorMessage } from "../util/error-message"
+import { toError, toErrorMessage } from "../util/error-message"
 
 export namespace Patch {
   const log = Log.create({ service: "patch" })
@@ -720,7 +720,7 @@ export namespace Patch {
               } catch (error) {
                 return {
                   type: MaybeApplyPatchVerified.CorrectnessError,
-                  error: error instanceof Error ? error : new Error(String(error)),
+                  error: toError(error),
                 }
               }
               break
