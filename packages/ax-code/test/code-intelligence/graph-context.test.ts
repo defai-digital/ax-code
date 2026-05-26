@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { symlink } from "fs/promises"
+import { mkdir, symlink } from "fs/promises"
 import path from "path"
 import { tmpdir } from "../fixture/fixture"
 import { Instance } from "../../src/project/instance"
@@ -256,6 +256,39 @@ describe("GraphContext.build", () => {
         expect(pack.symbols[0].file).toBe(link)
         expect(pack.snippets).toHaveLength(0)
         expect(pack.output).not.toContain("outside-secret-token")
+
+        CodeIntelligence.__clearProject(projectID)
+      },
+    })
+  })
+
+  test("reads snippets from the discovered worktree when launched from a subdirectory", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const subdir = path.join(tmp.path, "packages", "app")
+    await mkdir(subdir, { recursive: true })
+    await Instance.provide({
+      directory: subdir,
+      fn: async () => {
+        const projectID = Instance.project.id
+        CodeIntelligence.__clearProject(projectID)
+        const file = path.join(tmp.path, "shared.ts")
+        await Bun.write(file, 'export function sharedThing() { return "shared-visible-token" }\n')
+
+        seedSymbol(projectID, { name: "sharedThing", file })
+        CodeGraphQuery.upsertCursor(projectID, "abc", 1, 0)
+
+        const pack = await GraphContext.build(projectID, {
+          query: "sharedThing",
+          maxSymbols: 1,
+          maxSnippets: 1,
+          scope: "worktree",
+        })
+
+        expect(Instance.directory).toBe(subdir)
+        expect(Instance.worktree).toBe(tmp.path)
+        expect(pack.symbols).toHaveLength(1)
+        expect(pack.snippets).toHaveLength(1)
+        expect(pack.output).toContain("shared-visible-token")
 
         CodeIntelligence.__clearProject(projectID)
       },
