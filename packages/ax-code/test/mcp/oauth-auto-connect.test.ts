@@ -208,6 +208,15 @@ beforeEach(() => {
 const { MCP } = await import("../../src/mcp/index")
 const { Instance } = await import("../../src/project/instance")
 const { tmpdir } = await import("../fixture/fixture")
+const { Config } = await import("../../src/config/config")
+const { McpTrust } = await import("../../src/mcp/trust")
+
+async function trustConfiguredMcp(name: string) {
+  const entry = await Config.mcpEntry(name)
+  if (!entry) throw new Error(`missing MCP config for ${name}`)
+  if (!("type" in entry.config)) throw new Error(`MCP config is disabled for ${name}`)
+  await McpTrust.trust(name, entry.config, entry.source)
+}
 
 test("first connect to OAuth server shows needs_auth instead of failed", async () => {
   await using tmp = await tmpdir({
@@ -410,6 +419,7 @@ test("startAuth reuses an existing saved oauth state", async () => {
     fn: async () => {
       const state = "existing-oauth-state"
       await McpAuth.updateOAuthState("test-oauth", state)
+      await trustConfiguredMcp("test-oauth")
 
       const result = await MCP.startAuth("test-oauth")
 
@@ -442,6 +452,8 @@ test("startAuth returns the oauth state used for the flow", async () => {
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
+      await trustConfiguredMcp("test-oauth-state")
+
       const result = await MCP.startAuth("test-oauth-state")
       expect(typeof result.oauthState).toBe("string")
       expect(result.oauthState).toBe(await McpAuth.getOAuthState("test-oauth-state"))
@@ -470,6 +482,8 @@ test("startAuth closes prior pending OAuth transport before creating a new one",
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
+      await trustConfiguredMcp("test-oauth-rotate")
+
       await MCP.startAuth("test-oauth-rotate")
       const firstTransport = transportInstances[0]
       const firstClient = clientInstances[0]
@@ -518,6 +532,7 @@ test("startAuth closes temporary client and transport when authentication is alr
     directory: tmp.path,
     fn: async () => {
       authenticatedUrls.add("https://example.com/mcp")
+      await trustConfiguredMcp("test-oauth-success")
 
       const result = await MCP.startAuth("test-oauth-success")
       expect(result.authorizationUrl).toBe("")
@@ -551,6 +566,8 @@ test("finishAuth closes the pending OAuth transport after reconnecting", async (
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
+      await trustConfiguredMcp("test-oauth-finish")
+
       await MCP.startAuth("test-oauth-finish")
       const pending = transportInstances[0]!
       expect(pending.closeCalls).toBe(0)
@@ -583,6 +600,8 @@ test("removeAuth closes the pending OAuth transport", async () => {
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
+      await trustConfiguredMcp("test-oauth-remove")
+
       await MCP.startAuth("test-oauth-remove")
       const pending = transportInstances[0]!
       expect(pending.closeCalls).toBe(0)
@@ -615,6 +634,8 @@ test("instance disposal closes pending OAuth transports", async () => {
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
+      await trustConfiguredMcp("test-oauth-dispose")
+
       await MCP.startAuth("test-oauth-dispose")
       pending = transportInstances[0]
       expect(pending?.closeCalls).toBe(0)

@@ -84,6 +84,8 @@ export const McpCommand = cmd({
       .command(McpListCommand)
       .command(McpAuthCommand)
       .command(McpLogoutCommand)
+      .command(McpTrustCommand)
+      .command(McpUntrustCommand)
       .command(McpDebugCommand)
       .demandCommand(),
   async handler() {},
@@ -169,6 +171,10 @@ export const McpListCommand = cmd({
           } else if (status.status === "needs_auth") {
             statusIcon = "⚠"
             statusText = "needs authentication"
+          } else if (status.status === "needs_trust") {
+            statusIcon = "⚠"
+            statusText = "needs trust"
+            hint = `\n    Source: ${status.source.kind}. Run: ax-code mcp trust ${name}`
           } else if (status.status === "needs_client_registration") {
             statusIcon = "✗"
             statusText = "needs client registration"
@@ -478,6 +484,66 @@ export const McpLogoutCommand = cmd({
 
         await MCP.removeAuth(serverName)
         prompts.log.success(`Removed OAuth credentials for ${serverName}`)
+        prompts.outro("Done")
+      },
+    })
+  },
+})
+
+export const McpTrustCommand = cmd({
+  command: "trust <name>",
+  describe: "trust an MCP server configured by the current project",
+  builder: (yargs) =>
+    yargs.positional("name", {
+      describe: "name of the MCP server",
+      type: "string",
+      demandOption: true,
+    }),
+  async handler(args) {
+    await Instance.provide({
+      directory: process.cwd(),
+      async fn() {
+        const name = args.name
+        if (!name) return
+        UI.empty()
+        prompts.intro("Trust MCP Server")
+        const status = await MCP.trust(name)
+        const next = status[name]
+        if (next?.status === "connected") {
+          prompts.log.success(`Trusted and connected MCP server "${name}"`)
+        } else if (next?.status === "needs_auth") {
+          prompts.log.success(`Trusted MCP server "${name}"`)
+          prompts.log.warn(`Authentication is still required. Run: ax-code mcp auth ${name}`)
+        } else if (next?.status === "failed") {
+          prompts.log.warn(`Trusted MCP server "${name}", but connection failed: ${next.error}`)
+        } else {
+          prompts.log.success(`Trusted MCP server "${name}"`)
+        }
+        prompts.outro("Done")
+      },
+    })
+  },
+})
+
+export const McpUntrustCommand = cmd({
+  command: "untrust <name>",
+  describe: "revoke trust for an MCP server in the current project",
+  builder: (yargs) =>
+    yargs.positional("name", {
+      describe: "name of the MCP server",
+      type: "string",
+      demandOption: true,
+    }),
+  async handler(args) {
+    await Instance.provide({
+      directory: process.cwd(),
+      async fn() {
+        const name = args.name
+        if (!name) return
+        UI.empty()
+        prompts.intro("Untrust MCP Server")
+        await MCP.untrust(name)
+        prompts.log.success(`Revoked trust for MCP server "${name}"`)
         prompts.outro("Done")
       },
     })

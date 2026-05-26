@@ -105,6 +105,8 @@ const { McpOAuthCallback } = await import("../../src/mcp/oauth-callback")
 const { Instance } = await import("../../src/project/instance")
 const { tmpdir } = await import("../fixture/fixture")
 const { Ssrf } = await import("../../src/util/ssrf")
+const { Config } = await import("../../src/config/config")
+const { McpTrust } = await import("../../src/mcp/trust")
 const originalAssertPublicUrl = Ssrf.assertPublicUrl
 
 afterAll(async () => {
@@ -135,6 +137,13 @@ beforeEach(() => {
   })
 })
 
+async function trustConfiguredMcp(name: string) {
+  const entry = await Config.mcpEntry(name)
+  if (!entry) throw new Error(`missing MCP config for ${name}`)
+  if (!("type" in entry.config)) throw new Error(`MCP config is disabled for ${name}`)
+  await McpTrust.trust(name, entry.config, entry.source)
+}
+
 test("BrowserOpenFailed event is published when open() throws", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
@@ -156,6 +165,7 @@ test("BrowserOpenFailed event is published when open() throws", async () => {
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
+      await trustConfiguredMcp("test-oauth-server")
       openShouldFail = true
 
       const events: Array<{ mcpName: string; url: string }> = []
@@ -205,6 +215,7 @@ test("BrowserOpenFailed event is NOT published when open() succeeds", async () =
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
+      await trustConfiguredMcp("test-oauth-server-2")
       openShouldFail = false
 
       const events: Array<{ mcpName: string; url: string }> = []
@@ -250,6 +261,7 @@ test("open() is called with the authorization URL", async () => {
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
+      await trustConfiguredMcp("test-oauth-server-3")
       openShouldFail = false
       openCalledWith = undefined
 

@@ -75,6 +75,42 @@ const DANGEROUS_WELLKNOWN_ENV_KEYS = new Set([
 
 export namespace Config {
   const log = Log.create({ service: "config" })
+  export const McpSourceKind = z.enum([
+    "wellknown",
+    "global",
+    "custom",
+    "project",
+    "config_directory",
+    "inline",
+    "account",
+    "managed",
+    "runtime",
+    "unknown",
+  ])
+  export type McpSourceKind = z.infer<typeof McpSourceKind>
+  export const McpSource = z.object({
+    kind: McpSourceKind,
+    trustedByDefault: z.boolean(),
+    path: z.string().optional(),
+    url: z.string().optional(),
+  })
+  export type McpSource = z.infer<typeof McpSource>
+
+  export function trustedMcpSource(kind: McpSourceKind, extra: Omit<McpSource, "kind" | "trustedByDefault"> = {}) {
+    return {
+      kind,
+      trustedByDefault: true,
+      ...extra,
+    } satisfies McpSource
+  }
+
+  function untrustedMcpSource(kind: McpSourceKind, extra: Omit<McpSource, "kind" | "trustedByDefault"> = {}) {
+    return {
+      kind,
+      trustedByDefault: false,
+      ...extra,
+    } satisfies McpSource
+  }
 
   export type PermissionEnvParseResult =
     | {
@@ -147,6 +183,19 @@ export namespace Config {
 
   export const state = Instance.state(async () => {
     const auth = await Auth.all()
+    const mcpSources: Record<string, McpSource> = {}
+
+    function recordMcpSources(config: Info, source: McpSource) {
+      if (!config.mcp) return
+      for (const key of Object.keys(config.mcp)) {
+        mcpSources[key] = source
+      }
+    }
+
+    function mergeFromSource(source: McpSource, config: Info) {
+      recordMcpSources(config, source)
+      result = mergeConfigConcatArrays(result, config)
+    }
 
     // Config loading order (low -> high precedence): https://github.com/defai-digital/ax-code#config-precedence-order
     // 1) Remote .well-known/ax-code (org defaults, with legacy .well-known/opencode fallback)
@@ -230,7 +279,7 @@ export namespace Config {
             trusted: false,
           })
           log.debug("loaded remote config from well-known", { command: "config.load", status: "ok", url })
-          return loaded
+              return { loaded, source: untrustedMcpSource("wellknown", { url }) }
         } catch (err) {
           log.warn("failed to load wellknown config", {
             command: "config.load",
@@ -244,15 +293,15 @@ export namespace Config {
       }),
     )
     for (const cfg of wellknownConfigs) {
-      if (cfg) result = mergeConfigConcatArrays(result, cfg)
+      if (cfg) mergeFromSource(cfg.source, cfg.loaded)
     }
 
     // Global user config overrides remote config.
-    result = mergeConfigConcatArrays(result, await global())
+    mergeFromSource(trustedMcpSource("global", { path: Global.Path.config }), await global())
 
     // Custom config path overrides global config.
     if (Flag.AX_CODE_CONFIG) {
-      result = mergeConfigConcatArrays(result, await loadFile(Flag.AX_CODE_CONFIG))
+      mergeFromSource(trustedMcpSource("custom", { path: Flag.AX_CODE_CONFIG }), await loadFile(Flag.AX_CODE_CONFIG))
       log.debug("loaded custom config", { command: "config.load", status: "ok", path: Flag.AX_CODE_CONFIG })
     }
 
@@ -268,7 +317,7 @@ export namespace Config {
         const cfg = configs[index]
         const filepath = projectFiles[index]
         if (cfg?.status === "fulfilled") {
-          result = mergeConfigConcatArrays(result, cfg.value)
+          mergeFromSource(untrustedMcpSource("project", { path: filepath }), cfg.value)
           continue
         }
         log.warn("failed to load project config", {
@@ -313,7 +362,10 @@ export namespace Config {
           log.debug(`loading config from ${path.join(dir, file)}`)
           const loaded = await loadFile(path.join(dir, file), { trusted })
           configuredPlugins.push(...(loaded.plugin ?? []))
-          result = mergeConfigConcatArrays(result, loaded)
+          mergeFromSource(
+            trusted ? trustedMcpSource("config_directory", { path: dir }) : untrustedMcpSource("config_directory", { path: dir }),
+            loaded,
+          )
           // to satisfy the type checker
           result.agent ??= {}
           result.mode ??= {}
@@ -342,8 +394,8 @@ export namespace Config {
 
     // Inline config content overrides all non-managed config sources.
     if (Flag.AX_CODE_CONFIG_CONTENT) {
-      result = mergeConfigConcatArrays(
-        result,
+      mergeFromSource(
+        trustedMcpSource("inline"),
         await load(Flag.AX_CODE_CONFIG_CONTENT, {
           dir: Instance.directory,
           source: "AX_CODE_CONFIG_CONTENT",
@@ -392,8 +444,8 @@ export namespace Config {
           // permissions, MCP server install) than reading
           // `/etc/shadow` via `{file:}`, so confining file refs
           // here isn't the right mitigation anyway.
-          result = mergeConfigConcatArrays(
-            result,
+          mergeFromSource(
+            trustedMcpSource("account", { url: active.url }),
             await load(JSON.stringify(config), {
               dir: Instance.directory,
               source: `${active.url}/api/config`,
@@ -414,7 +466,8 @@ export namespace Config {
     const managedDir = getManagedDir()
     if (existsSync(managedDir)) {
       for (const file of ["ax-code.jsonc", "ax-code.json"]) {
-        result = mergeConfigConcatArrays(result, await loadFile(path.join(managedDir, file)))
+        const filepath = path.join(managedDir, file)
+        mergeFromSource(trustedMcpSource("managed", { path: filepath }), await loadFile(filepath))
       }
     }
 
@@ -477,6 +530,7 @@ export namespace Config {
       config: result,
       directories,
       deps,
+      mcpSources,
     }
   })
 
@@ -945,6 +999,23 @@ export namespace Config {
 
   export async function get() {
     return state().then((x) => x.config)
+  }
+
+  export async function mcpEntries() {
+    const { config, mcpSources } = await state()
+    return Object.fromEntries(
+      Object.entries(config.mcp ?? {}).map(([name, mcp]) => [
+        name,
+        {
+          config: mcp,
+          source: mcpSources[name] ?? trustedMcpSource("unknown"),
+        },
+      ]),
+    )
+  }
+
+  export async function mcpEntry(name: string) {
+    return (await mcpEntries())[name]
   }
 
   export async function getGlobal() {
