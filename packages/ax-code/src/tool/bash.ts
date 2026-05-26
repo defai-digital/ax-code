@@ -29,6 +29,7 @@ import {
   hasDynamicRedirection,
   hasDynamicShellExpansion,
   isStaticPathArg,
+  safeUtf8PrefixLength,
   staticallyCheckablePathArgs,
   stripShellQuotes,
   truncateBashMetadata,
