@@ -159,10 +159,7 @@ export async function callHierarchyCallsEnvelope(
   )
 }
 
-export function hoverEnvelope(
-  input: PointInput,
-  runtime: PointEnvelopeRuntime,
-): Promise<SemanticEnvelope<unknown[]>> {
+export function hoverEnvelope(input: PointInput, runtime: PointEnvelopeRuntime): Promise<SemanticEnvelope<unknown[]>> {
   return requestSemanticArrayEnvelope(input, {
     metric: "hover",
     request: "textDocument/hover",

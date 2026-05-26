@@ -76,11 +76,7 @@ export function reset() {
   perfSamples.clear()
 }
 
-export async function metered<T>(
-  operation: string,
-  extra: Record<string, unknown>,
-  fn: () => Promise<T>,
-): Promise<T> {
+export async function metered<T>(operation: string, extra: Record<string, unknown>, fn: () => Promise<T>): Promise<T> {
   const started = performance.now()
   try {
     const result = await fn()

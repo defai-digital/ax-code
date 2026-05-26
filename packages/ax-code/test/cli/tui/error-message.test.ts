@@ -11,9 +11,7 @@ describe("tui error message decoding", () => {
     expect(errorPayloadMessage({ message: "top-level message" })).toBe("top-level message")
     expect(errorPayloadMessage({ error: "top-level error" })).toBe("top-level error")
     expect(errorPayloadMessage({ error: { message: "nested error message" } })).toBe("nested error message")
-    expect(errorPayloadMessage({ error: { data: { message: "nested data message" } } })).toBe(
-      "nested data message",
-    )
+    expect(errorPayloadMessage({ error: { data: { message: "nested data message" } } })).toBe("nested data message")
     expect(errorPayloadMessage({ data: { message: "direct data message" } })).toBe("direct data message")
   })
 

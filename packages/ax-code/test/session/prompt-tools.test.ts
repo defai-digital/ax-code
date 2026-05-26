@@ -9,10 +9,7 @@ describe("session.prompt-tools", () => {
     expect(shouldBypassAgentCheck(undefined)).toBe(false)
     expect(shouldBypassAgentCheck([{ type: "text", text: "hello" } as any])).toBe(false)
     expect(
-      shouldBypassAgentCheck([
-        { type: "text", text: "hello" } as any,
-        { type: "agent", name: "build" } as any,
-      ]),
+      shouldBypassAgentCheck([{ type: "text", text: "hello" } as any, { type: "agent", name: "build" } as any]),
     ).toBe(true)
   })
 

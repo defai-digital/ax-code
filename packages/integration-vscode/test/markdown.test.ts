@@ -3,9 +3,7 @@ import { escapeHtml, renderMarkdown, sanitizeHtml } from "../src/markdown"
 
 describe("escapeHtml", () => {
   test("escapes the five XML-significant characters", () => {
-    expect(escapeHtml(`<a href="x">'A&B'</a>`)).toBe(
-      "&lt;a href=&quot;x&quot;&gt;&#39;A&amp;B&#39;&lt;/a&gt;",
-    )
+    expect(escapeHtml(`<a href="x">'A&B'</a>`)).toBe("&lt;a href=&quot;x&quot;&gt;&#39;A&amp;B&#39;&lt;/a&gt;")
   })
 
   test("leaves plain text untouched", () => {

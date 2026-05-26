@@ -671,9 +671,7 @@ export namespace Provider {
         command: "provider.init",
         status: "partial",
         providers: providerCount,
-        failures: initFailures.map(
-          (f) => `${f.source}: ${toErrorMessage(f.error)}`,
-        ),
+        failures: initFailures.map((f) => `${f.source}: ${toErrorMessage(f.error)}`),
       })
     } else {
       log.info("provider init completed", {

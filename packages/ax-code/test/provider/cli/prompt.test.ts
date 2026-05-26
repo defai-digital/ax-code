@@ -9,9 +9,7 @@ describe("promptToText", () => {
   })
 
   test("adds Claude Code web search guidance", () => {
-    const prompt: LanguageModelV3Prompt = [
-      { role: "user", content: [{ type: "text", text: "What changed today?" }] },
-    ]
+    const prompt: LanguageModelV3Prompt = [{ role: "user", content: [{ type: "text", text: "What changed today?" }] }]
     const result = promptToText(prompt, { providerID: "claude-code" })
 
     expect(result).toContain("built-in web search or web fetch capability")
@@ -20,18 +18,14 @@ describe("promptToText", () => {
   })
 
   test("adds web search guidance for CLI providers with built-in search", () => {
-    const prompt: LanguageModelV3Prompt = [
-      { role: "user", content: [{ type: "text", text: "What changed today?" }] },
-    ]
+    const prompt: LanguageModelV3Prompt = [{ role: "user", content: [{ type: "text", text: "What changed today?" }] }]
 
     expect(promptToText(prompt, { providerID: "codex-cli" })).toContain("built-in web search")
     expect(promptToText(prompt, { providerID: "gemini-cli" })).toContain("built-in web search")
   })
 
   test("does not add Claude Code web search guidance for other CLI providers", () => {
-    const prompt: LanguageModelV3Prompt = [
-      { role: "user", content: [{ type: "text", text: "What changed today?" }] },
-    ]
+    const prompt: LanguageModelV3Prompt = [{ role: "user", content: [{ type: "text", text: "What changed today?" }] }]
 
     expect(promptToText(prompt, { providerID: "test-cli" })).toBe("What changed today?")
   })

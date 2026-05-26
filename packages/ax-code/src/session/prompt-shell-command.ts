@@ -247,7 +247,7 @@ export async function executeShellCommand(
       proc.once("close", (code, signal) => {
         exited = true
         exitSignal = signal ?? null
-        exitCode = signal !== null ? 1 : code ?? 0
+        exitCode = signal !== null ? 1 : (code ?? 0)
         resolve()
       })
       proc.once("error", (err) => {
@@ -270,7 +270,8 @@ export async function executeShellCommand(
   msg.time.completed = Date.now()
   await Session.updateMessage(msg)
   if (part.state.status === "running") {
-    const error = exitSignal === null ? `Process exited with code ${exitCode}` : `Process exited with signal ${exitSignal}`
+    const error =
+      exitSignal === null ? `Process exited with code ${exitCode}` : `Process exited with signal ${exitSignal}`
     part.state =
       exitCode !== 0 && !aborted
         ? {

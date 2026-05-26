@@ -137,7 +137,8 @@ export async function insertReminders(input: InsertRemindersInput) {
         syntheticTextPart({
           messageID: userMessage.info.id,
           sessionID: userMessage.info.sessionID,
-          text: BUILD_SWITCH + "\n\n" + `A plan file exists at ${plan}. You should execute on the plan defined within it`,
+          text:
+            BUILD_SWITCH + "\n\n" + `A plan file exists at ${plan}. You should execute on the plan defined within it`,
         }),
       )
       userMessage.parts.push(part)

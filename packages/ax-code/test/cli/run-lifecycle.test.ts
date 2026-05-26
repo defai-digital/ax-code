@@ -83,7 +83,7 @@ test("shell env loading uses shared process timeout cleanup", async () => {
 
   expect(body).toContain("timeout: shellTimeoutMs")
   expect(body).toContain("if (code === 124)")
-  expect(body).toContain("Log.Default.debug(\"shell env load failed\"")
+  expect(body).toContain('Log.Default.debug("shell env load failed"')
 })
 
 test("shell env loading starts after logging is configured", async () => {

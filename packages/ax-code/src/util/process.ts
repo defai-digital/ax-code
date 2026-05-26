@@ -139,7 +139,7 @@ export namespace Process {
 
       proc.once("exit", (code, signal) => {
         done()
-        resolve(timedOut ? 124 : code ?? (signal ? 1 : 0))
+        resolve(timedOut ? 124 : (code ?? (signal ? 1 : 0)))
       })
 
       proc.once("error", (error) => {

@@ -86,7 +86,9 @@ export namespace PromptCachePolicy {
         debugLines.push(`[cache=stable] ${block.label ?? "(unlabeled)"} (${block.content.length}ch)`)
       } else {
         rendered.push({ content: block.content })
-        debugLines.push(`[cache=${kind === "stable" ? "stable/off" : "skip"}] ${block.label ?? "(unlabeled)"} (${block.content.length}ch)`)
+        debugLines.push(
+          `[cache=${kind === "stable" ? "stable/off" : "skip"}] ${block.label ?? "(unlabeled)"} (${block.content.length}ch)`,
+        )
       }
     }
 

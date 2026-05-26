@@ -169,12 +169,7 @@ const TASK_MATRIX: EvalTaskSpec[] = [
 
 // ── Fixture runner ────────────────────────────────────────────────────────────
 
-function runFixtureTask(
-  spec: EvalTaskSpec,
-  providerID: string,
-  modelID: string,
-  tokenBudget: number,
-): EvalTaskResult {
+function runFixtureTask(spec: EvalTaskSpec, providerID: string, modelID: string, tokenBudget: number): EvalTaskResult {
   const start = Date.now()
 
   const touchedCount = spec.fixture?.touchedFiles?.length ?? 0
@@ -372,8 +367,7 @@ async function runLiveTask(
 function evaluatePromotionGate(tasks: EvalTaskResult[]): EvalReport["promotionGate"] {
   const verified = tasks.filter((t) => t.verificationStatus === "pass" || t.verificationStatus === "partial")
   const verifiedRate = tasks.length ? verified.length / tasks.length : 0
-  const avgCost =
-    verified.length ? verified.reduce((s, t) => s + t.estimatedCostUsd, 0) / verified.length : Infinity
+  const avgCost = verified.length ? verified.reduce((s, t) => s + t.estimatedCostUsd, 0) / verified.length : Infinity
   const severeFailures = tasks.filter((t) => t.verificationStatus === "fail" && t.repeatedFailureCount >= 3).length
   const notes: string[] = []
   if (verifiedRate < 0.8) notes.push("verified completion rate below 80% threshold")

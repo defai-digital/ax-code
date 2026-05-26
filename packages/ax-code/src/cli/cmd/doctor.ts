@@ -122,9 +122,7 @@ export async function getDuplicateProjectIdentityCheck(input: {
     return {
       name: "Project identity",
       status: "warn",
-      detail: `Could not inspect project identity for ${input.worktree}: ${
-        toErrorMessage(error)
-      }`,
+      detail: `Could not inspect project identity for ${input.worktree}: ${toErrorMessage(error)}`,
     }
   }
 }

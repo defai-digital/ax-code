@@ -98,7 +98,11 @@ export function aggregate(
 
   for (const { serverID, diagnostics: map } of inputs) {
     let contributed = false
-    const entries = opts.file ? (map.has(opts.file) ? ([[opts.file, map.get(opts.file)!]] as const) : []) : map.entries()
+    const entries = opts.file
+      ? map.has(opts.file)
+        ? ([[opts.file, map.get(opts.file)!]] as const)
+        : []
+      : map.entries()
     for (const [path, diags] of entries) {
       for (const d of diags) {
         const key = dedupKeyOf(path, d)

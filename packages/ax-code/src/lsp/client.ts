@@ -161,9 +161,7 @@ export namespace LSPClient {
     return value !== undefined && value !== null && value !== false
   }
 
-  function capabilityHintsFromInitialize(
-    capabilities: Record<string, unknown> | undefined,
-  ): LSPServer.CapabilityHints {
+  function capabilityHintsFromInitialize(capabilities: Record<string, unknown> | undefined): LSPServer.CapabilityHints {
     if (!capabilities) return {}
     const hints: LSPServer.CapabilityHints = {}
 

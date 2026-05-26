@@ -222,11 +222,11 @@ if (import.meta.main) {
   }
   if (effectViolations.length > 0) {
     failed = true
-    console.log("# Effect Guard Violations (outside src/effect, src/session, src/file/watcher.ts, src/util/effect-zod.ts)")
-    for (const item of effectViolations) console.log(`- ${EffectGuard.format(item)}`)
     console.log(
-      "\nNew code must use async/await + Zod + Result<T,E> instead of Effect (ARCHITECTURE.md).",
+      "# Effect Guard Violations (outside src/effect, src/session, src/file/watcher.ts, src/util/effect-zod.ts)",
     )
+    for (const item of effectViolations) console.log(`- ${EffectGuard.format(item)}`)
+    console.log("\nNew code must use async/await + Zod + Result<T,E> instead of Effect (ARCHITECTURE.md).")
   }
   if (staleEntries.length > 0) {
     failed = true

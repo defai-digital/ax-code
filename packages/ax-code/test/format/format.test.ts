@@ -190,7 +190,11 @@ describe("Format", () => {
 
   test("formatter help checks wait for process kill to complete on timeout", async () => {
     const originalSetTimeout = globalThis.setTimeout
-    const setTimeoutSpy = (handler: (...args: any[]) => void, timeout?: number, ...args: any[]): ReturnType<typeof setTimeout> => {
+    const setTimeoutSpy = (
+      handler: (...args: any[]) => void,
+      timeout?: number,
+      ...args: any[]
+    ): ReturnType<typeof setTimeout> => {
       if (timeout === 30_000 || timeout === 5_000) {
         return originalSetTimeout(handler, 1, ...args)
       }

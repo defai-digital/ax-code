@@ -129,10 +129,7 @@ describe("session prompt todo continuation helpers", () => {
     const decision = pendingTodoContinuationDecision(
       pendingTodoDecisionInput({
         todoRetries: 3,
-        pendingTodos: [
-          finishTaskTodo,
-          { status: "in_progress", priority: "medium", content: "verify task" },
-        ],
+        pendingTodos: [finishTaskTodo, { status: "in_progress", priority: "medium", content: "verify task" }],
       }),
     )
 

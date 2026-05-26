@@ -1123,7 +1123,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
         duration: 30000,
       })
 
-        const result = await sdk.client.global.upgrade({ target: version })
+      const result = await sdk.client.global.upgrade({ target: version })
       if (updateHandlerDisposed) return
 
       if (result.error || !result.data?.success) {

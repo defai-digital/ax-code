@@ -3,4 +3,3 @@ export function statusGlyph(status: string): string {
   if (status === "skipped") return "⏭"
   return "✗"
 }
-

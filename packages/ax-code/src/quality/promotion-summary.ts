@@ -7,4 +7,3 @@ export type GateLike = {
 export function overallStatusFromGates(gates: readonly GateLike[]): "pass" | "fail" {
   return gates.every((gate) => gate.status === "pass") ? "pass" : "fail"
 }
-

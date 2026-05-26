@@ -49,11 +49,7 @@ describe("classifyTaskForModelRoute", () => {
   })
 
   test("all classifications include a non-empty reason", () => {
-    for (const input of [
-      {},
-      { fileCount: 2 },
-      { isHighRiskRefactor: true },
-    ]) {
+    for (const input of [{}, { fileCount: 2 }, { isHighRiskRefactor: true }]) {
       expect(classifyTaskForModelRoute(input).reason.length).toBeGreaterThan(0)
     }
   })

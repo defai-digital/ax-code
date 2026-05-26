@@ -18,7 +18,10 @@ const defaultDeps: PromptLoopRecordingDeps = {
   resetBlastRadius: (sessionID) => BlastRadius.reset(sessionID),
 }
 
-export function beginPromptLoopRecording(sessionID: SessionID, deps: Pick<PromptLoopRecordingDeps, "begin"> = defaultDeps) {
+export function beginPromptLoopRecording(
+  sessionID: SessionID,
+  deps: Pick<PromptLoopRecordingDeps, "begin"> = defaultDeps,
+) {
   deps.begin(sessionID)
 }
 

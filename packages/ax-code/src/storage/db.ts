@@ -194,9 +194,10 @@ export namespace Database {
   // Fire-and-forget async work must be wrapped explicitly:
   // `Database.effect(() => { void doAsync().catch(log) })`.
   type Effect = () => void
-  type SyncEffect<F extends () => unknown> = ReturnType<F> extends Promise<unknown>
-    ? DrizzleTypeError<"Database.effect callbacks must be synchronous — wrap async work as `() => { void doAsync().catch(log) }`">
-    : F
+  type SyncEffect<F extends () => unknown> =
+    ReturnType<F> extends Promise<unknown>
+      ? DrizzleTypeError<"Database.effect callbacks must be synchronous — wrap async work as `() => { void doAsync().catch(log) }`">
+      : F
 
   const ctx = Context.create<{
     tx: TxOrDb
@@ -244,9 +245,7 @@ export namespace Database {
 
   function requireSyncTransactionResult<T>(result: T): T {
     if (result instanceof Promise) {
-      throw new Error(
-        "Database.transaction callback must be synchronous (do not pass async functions)."
-      )
+      throw new Error("Database.transaction callback must be synchronous (do not pass async functions).")
     }
     return result
   }

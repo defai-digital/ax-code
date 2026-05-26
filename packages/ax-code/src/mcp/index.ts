@@ -292,7 +292,10 @@ export namespace MCP {
         try {
           await killProcessTree(pid)
         } catch (error) {
-          log.debug("failed to kill MCP process tree", { pid, error: isErrnoException(error) ? error.code : toErrorMessage(error) })
+          log.debug("failed to kill MCP process tree", {
+            pid,
+            error: isErrnoException(error) ? error.code : toErrorMessage(error),
+          })
         }
       }
 

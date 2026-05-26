@@ -111,7 +111,6 @@ const cleanupDetachedProcesses = (hard = false) => {
   }
 }
 
-process.once("beforeExit", cleanupDetachedProcesses)
 process.once("exit", () => {
   cleanupDetachedProcesses(true)
   for (const timer of cleanupTimers.values()) clearTimeout(timer)

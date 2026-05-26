@@ -200,14 +200,7 @@ describe("builder.indexFile same-file edge resolution", () => {
         const filePath = path.join(tmp.path, "same-file.ts")
         await Bun.write(
           filePath,
-          [
-            "function target() {",
-            "  function caller() {",
-            "    target()",
-            "  }",
-            "}",
-            "",
-          ].join("\n"),
+          ["function target() {", "  function caller() {", "    target()", "  }", "}", ""].join("\n"),
         )
 
         const uri = pathToFileURL(filePath).href

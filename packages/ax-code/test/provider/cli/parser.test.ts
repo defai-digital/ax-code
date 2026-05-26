@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test"
-import { claudeCodeParser, codexCliParser, geminiCliParser, parseCliJsonEventLine } from "../../../src/provider/cli/parser"
+import {
+  claudeCodeParser,
+  codexCliParser,
+  geminiCliParser,
+  parseCliJsonEventLine,
+} from "../../../src/provider/cli/parser"
 
 describe("claudeCodeParser", () => {
   test("decodes CLI JSON event lines with non-JSON fallback", () => {
@@ -42,8 +47,12 @@ describe("claudeCodeParser", () => {
 
 describe("provider CLI parser nested content", () => {
   test("gemini parser narrows text fields before returning them", () => {
-    expect(geminiCliParser.parseStreamLine('{"type":"message","role":"assistant","content":123,"text":"OK"}')).toBe("OK")
-    expect(geminiCliParser.parseStreamLine('{"type":"message","role":"assistant","content":123,"text":false}')).toBeNull()
+    expect(geminiCliParser.parseStreamLine('{"type":"message","role":"assistant","content":123,"text":"OK"}')).toBe(
+      "OK",
+    )
+    expect(
+      geminiCliParser.parseStreamLine('{"type":"message","role":"assistant","content":123,"text":false}'),
+    ).toBeNull()
   })
 
   test("codex parser decodes item content blocks without accepting malformed text", () => {

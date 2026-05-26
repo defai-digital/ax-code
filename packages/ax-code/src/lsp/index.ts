@@ -49,8 +49,7 @@ export namespace LSP {
   const HEALTH_CHECK_INTERVAL_MS = 60_000
   const MAX_ROOT_CACHE_ENTRIES = 2_000
 
-  const hasProcessExited = (proc: ChildProcessWithoutNullStreams) =>
-    proc.exitCode !== null || proc.signalCode !== null
+  const hasProcessExited = (proc: ChildProcessWithoutNullStreams) => proc.exitCode !== null || proc.signalCode !== null
 
   async function stopLSPProcess(proc: ChildProcessWithoutNullStreams) {
     await Shell.killTree(proc, {

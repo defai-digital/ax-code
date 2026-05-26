@@ -13,9 +13,7 @@ describe("util.process-lock", () => {
 
   test("parseProcessLockBody decodes valid lock bodies and preserves extra fields", () => {
     expect(
-      parseProcessLockBody<{ token: string }>(
-        JSON.stringify({ pid: 123, startedAt: 456, host: "host", token: "t" }),
-      ),
+      parseProcessLockBody<{ token: string }>(JSON.stringify({ pid: 123, startedAt: 456, host: "host", token: "t" })),
     ).toEqual({
       pid: 123,
       startedAt: 456,

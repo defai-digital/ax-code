@@ -1248,9 +1248,7 @@ export namespace QualityModelRegistry {
         adoptionDissentResolution: input.adoptionDissentResolution
           ? adoptionDissentResolutionSummaryRecord(input.adoptionDissentResolution)
           : undefined,
-        adoptionDissentSupersessions: input.adoptionDissentSupersessions?.map(
-          adoptionDissentSupersessionRecordSummary,
-        ),
+        adoptionDissentSupersessions: input.adoptionDissentSupersessions?.map(adoptionDissentSupersessionRecordSummary),
         adoptionDissentSupersession: input.adoptionDissentSupersession
           ? adoptionDissentSupersessionSummaryRecord(input.adoptionDissentSupersession)
           : undefined,

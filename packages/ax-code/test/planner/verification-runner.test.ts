@@ -1,7 +1,12 @@
 import { describe, expect, test } from "bun:test"
 import * as fs from "fs/promises"
 import path from "path"
-import { decodePackageScripts, parsePackageScripts, resolveCommands, runCommand } from "../../src/planner/verification/runner"
+import {
+  decodePackageScripts,
+  parsePackageScripts,
+  resolveCommands,
+  runCommand,
+} from "../../src/planner/verification/runner"
 import { tmpdir } from "../fixture/fixture"
 
 async function writePackageJson(dir: string, scripts: Record<string, string>) {
