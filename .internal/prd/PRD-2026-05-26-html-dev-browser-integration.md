@@ -1,7 +1,7 @@
 # PRD: HTML Dev Browser Integration
 
 **Date:** 2026-05-26
-**Status:** Proposed
+**Status:** Implemented
 **Scope:** Internal
 **Owner:** ax-code maintainers
 **Related:** ADR-021 (HTML Dev Browser Boundary), ADR-020 (MCP Security Trust Boundary), `packages/ax-code/src/mcp/discovery.ts`, `packages/ax-code/src/tool/bash.ts`, `packages/ax-code/src/context/analyzer.ts`
@@ -89,29 +89,29 @@ Configure `@playwright/mcp` in CDP attach mode so it connects to the user's alre
 
 ### P0 (Layer 0 — must ship first)
 
-- [ ] Agent behavioral guidance updated: never autonomously call browser-open commands during active HTML development sessions.
-- [ ] System prompt includes explicit instruction for HTML/web projects: "report changes, do not open browser."
+- [x] Agent behavioral guidance updated: never autonomously call browser-open commands during active HTML development sessions.
+- [x] System prompt includes explicit instruction for HTML/web projects: "report changes, do not open browser."
 
 ### P1 (Layer 1 — bash tool)
 
-- [ ] Bash tool detects `open`, `xdg-open`, `start`, `sensible-browser` commands against local file paths or localhost URLs.
-- [ ] Instead of executing, emits a structured "preview available" event surfaced as a TUI notification with an optional `[open]` action.
-- [ ] Does not intercept browser opens for OAuth, account login, or DRE graph (those are intentional).
-- [ ] Detection pattern is configurable so users can opt out.
+- [x] Bash tool detects `open`, `xdg-open`, `start`, `sensible-browser` commands against local file paths or localhost URLs.
+- [x] Instead of executing, returns "preview available" message; OAuth/DRE/MCP flows excluded via passthrough regex.
+- [x] Does not intercept browser opens for OAuth, account login, or DRE graph (those are intentional).
+- [x] Detection pattern is configurable: `browser.interceptOpen: false` in `ax-code.json` disables interception.
 
 ### P1 (Layer 2 — MCP discovery)
 
-- [ ] `@playwright/mcp` added to `CANDIDATES` in `src/mcp/discovery.ts`.
-- [ ] Detection condition: project has `index.html` in root, OR `src/context/analyzer.ts` returns `web-app` project type, OR `package.json` contains a `playwright` dependency.
-- [ ] `mcp --discover` surfaces the Playwright server as a suggestion in web projects.
-- [ ] MCP trust gate (ADR-020) applied: `@playwright/mcp` from project config requires user trust before auto-connecting.
+- [x] `@playwright/mcp` added to `CANDIDATES` in `src/mcp/discovery.ts`.
+- [x] Detection condition: `index.html`/`index.htm` at root, OR `src/app`/`app` directory (web-app type), OR `playwright`/`@playwright/test` in `package.json`.
+- [x] `mcp --discover` surfaces the Playwright server as a suggestion in web projects.
+- [x] MCP trust gate (ADR-020) applied via existing infrastructure — project config sources require user trust before auto-connecting.
 
 ### P2 (Layer 3 — CDP + TUI)
 
-- [ ] `@playwright/mcp` launch config supports `--cdp-url` for attaching to an existing Chrome instance.
-- [ ] TUI renders `browser_screenshot` output inline using existing `media.ts` data URL pipeline.
-- [ ] Agent guidance updated: use `browser_screenshot` for verification instead of `open` for web projects where Playwright MCP is connected.
-- [ ] Auto-detection of Chrome CDP port (default 9222) as a discovery hint.
+- [x] `@playwright/mcp` launch config supports `--cdp-url` (CDP attach) when Chrome port 9222 is open, falls back to `--headless` otherwise. Auto-detected at discovery time via TCP probe.
+- [x] TUI renders `browser_screenshot` output inline: `collectMcpToolContent` converts MCP image blocks to `data:image/png;base64,...` `FilePart` URLs; TUI displays as `img` badge. Confirmed by integration tests.
+- [x] Agent guidance updated: `<html_dev_workflow>` in system prompt instructs use of `browser_screenshot` when playwright MCP is connected.
+- [x] Auto-detection of Chrome CDP port (default 9222) via `checkTcpPort` utility in `mcp/discovery.ts`.
 
 ## Success Metrics
 

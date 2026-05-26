@@ -39,6 +39,32 @@ describe("session.prompt-tools", () => {
     })
   })
 
+  test("image content block produces a valid data URL FilePart for TUI screenshot rendering", () => {
+    const b64 = Buffer.from("fake-png-bytes").toString("base64")
+    const result = collectMcpToolContent([{ type: "image", mimeType: "image/png", data: b64 }])
+
+    expect(result.textParts).toEqual(["[Image content: image/png]"])
+    expect(result.attachments).toHaveLength(1)
+
+    const attachment = result.attachments[0]!
+    expect(attachment.type).toBe("file")
+    expect(attachment.mime).toBe("image/png")
+    expect(attachment.url).toBe(`data:image/png;base64,${b64}`)
+    // Images have no filename — they render inline via the data URL
+    expect(attachment.filename).toBeUndefined()
+  })
+
+  test("browser_screenshot image block (no explicit mimeType) defaults to image/png", () => {
+    // @playwright/mcp browser_screenshot returns type:"image" without mimeType
+    const b64 = Buffer.from("screenshot-bytes").toString("base64")
+    const result = collectMcpToolContent([{ type: "image", data: b64 } as any])
+
+    expect(result.attachments).toHaveLength(1)
+    const attachment = result.attachments[0]!
+    expect(attachment.mime).toBe("image/png")
+    expect(attachment.url).toMatch(/^data:image\/png;base64,/)
+  })
+
   test("filters tools denied by the active agent ruleset", async () => {
     await using tmp = await tmpdir()
     await Instance.provide({

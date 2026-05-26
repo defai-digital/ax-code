@@ -763,6 +763,17 @@ export const Info = z
           .describe("Token buffer for compaction. Leaves enough window to avoid overflow during compaction."),
       })
       .optional(),
+    browser: z
+      .object({
+        interceptOpen: z
+          .boolean()
+          .optional()
+          .describe(
+            "Intercept browser-open commands (open/xdg-open/start) targeting local HTML files or localhost URLs to prevent unexpected focus-steals during HTML development. Defaults to true.",
+          ),
+      })
+      .optional()
+      .describe("Browser integration settings"),
     experimental: z
       .object({
         disable_paste_summary: z.boolean().optional(),

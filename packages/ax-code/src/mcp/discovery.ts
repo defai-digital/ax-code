@@ -7,7 +7,8 @@
  */
 
 import path from "path"
-import { access, constants } from "fs/promises"
+import net from "net"
+import { access, readFile, constants } from "fs/promises"
 import { Log } from "../util/log"
 import { Process } from "../util/process"
 import { Env } from "../util/env"
@@ -49,6 +50,62 @@ export async function spawnExitsCleanly(
   }
 }
 
+/**
+ * Probe a TCP port with a short timeout. Used to detect Chrome CDP.
+ * Exported for unit tests.
+ */
+export function checkTcpPort(port: number, host = "127.0.0.1", timeoutMs = 500): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = new net.Socket()
+    let settled = false
+    const done = (result: boolean) => {
+      if (settled) return
+      settled = true
+      socket.destroy()
+      resolve(result)
+    }
+    socket.setTimeout(timeoutMs)
+    socket.once("connect", () => done(true))
+    socket.once("error", () => done(false))
+    socket.once("timeout", () => done(false))
+    socket.connect(port, host)
+  })
+}
+
+/**
+ * Detect whether the given directory looks like an HTML/web project.
+ * Checks: index.html, index.htm, src/app, app directories, or a
+ * playwright dependency in package.json.
+ * Exported for unit tests.
+ */
+export async function isHtmlOrWebProject(cwd: string): Promise<boolean> {
+  const fileExists = (p: string) =>
+    access(p, constants.F_OK)
+      .then(() => true)
+      .catch(() => false)
+
+  if (await fileExists(path.join(cwd, "index.html"))) return true
+  if (await fileExists(path.join(cwd, "index.htm"))) return true
+  // web-app directory signals (mirrors analyzer.ts detectProjectType)
+  if (await fileExists(path.join(cwd, "src/app"))) return true
+  if (await fileExists(path.join(cwd, "app"))) return true
+
+  // playwright dependency in package.json
+  try {
+    const raw = await readFile(path.join(cwd, "package.json"), "utf8")
+    const pkg = JSON.parse(raw) as Record<string, unknown>
+    const allDeps = {
+      ...((pkg.dependencies as Record<string, unknown>) ?? {}),
+      ...((pkg.devDependencies as Record<string, unknown>) ?? {}),
+    }
+    if ("playwright" in allDeps || "@playwright/test" in allDeps) return true
+  } catch {
+    // no package.json or parse error — not a web project by this signal
+  }
+
+  return false
+}
+
 export interface DiscoveredServer {
   name: string
   description: string
@@ -66,6 +123,10 @@ interface Candidate {
   command: string
   args: string[]
   check: () => Promise<boolean>
+  // Optional: compute final args after check() passes. Allows runtime
+  // configuration (e.g. CDP vs headless) without changing the Candidate
+  // base shape or breaking existing candidates.
+  resolveArgs?: () => Promise<string[]>
 }
 
 const CANDIDATES: Candidate[] = [
@@ -107,17 +168,18 @@ const CANDIDATES: Candidate[] = [
     description: "Browser screenshot and automation for HTML/web development",
     type: "stdio",
     command: "npx",
+    // Default args — resolveArgs() below overrides these at discovery time
+    // based on whether Chrome is running with CDP on port 9222.
     args: ["-y", "@playwright/mcp@latest"],
     check: async () => {
       const cwd = process.cwd()
-      const hasHtml =
-        await access(path.join(cwd, "index.html"), constants.F_OK)
-          .then(() => true)
-          .catch(() => false) ||
-        await access(path.join(cwd, "index.htm"), constants.F_OK)
-          .then(() => true)
-          .catch(() => false)
-      return hasHtml && (await spawnExitsCleanly("npx", ["--help"]))
+      return (await isHtmlOrWebProject(cwd)) && (await spawnExitsCleanly("npx", ["--help"]))
+    },
+    resolveArgs: async () => {
+      const cdpOpen = await checkTcpPort(9222)
+      return cdpOpen
+        ? ["-y", "@playwright/mcp@latest", "--cdp-url", "http://localhost:9222"]
+        : ["-y", "@playwright/mcp@latest", "--browser", "chromium", "--headless"]
     },
   },
   {
@@ -152,23 +214,25 @@ export async function discover(): Promise<DiscoveredServer[]> {
     CANDIDATES.map(async (candidate) => {
       try {
         const detected = await candidate.check()
-        return { candidate, detected }
+        // Resolve dynamic args only when the candidate is actually detected
+        const args = detected && candidate.resolveArgs ? await candidate.resolveArgs() : candidate.args
+        return { candidate, detected, args }
       } catch {
-        return { candidate, detected: false }
+        return { candidate, detected: false, args: candidate.args }
       }
     }),
   )
 
   for (const result of checks) {
     if (result.status !== "fulfilled") continue
-    const { candidate, detected } = result.value
+    const { candidate, detected, args } = result.value
 
     results.push({
       name: candidate.name,
       description: candidate.description,
       type: candidate.type,
       command: candidate.command || undefined,
-      args: candidate.args.length > 0 ? candidate.args : undefined,
+      args: args.length > 0 ? args : undefined,
       url: candidate.type === "http" ? `https://mcp.${candidate.name}.ai/mcp` : undefined,
       detected,
     })
