@@ -22,6 +22,7 @@ import { Ssrf } from "@/util/ssrf"
 import { McpOAuthProvider } from "./oauth-provider"
 import { McpOAuthCallback } from "./oauth-callback"
 import { McpAuth } from "./auth"
+import { McpTrust } from "./trust"
 import { BusEvent } from "../bus/bus-event"
 import { Bus } from "@/bus"
 import { TuiEvent } from "@/cli/cmd/tui/event"
@@ -133,6 +134,19 @@ export namespace MCP {
         .meta({
           ref: "MCPStatusNeedsClientRegistration",
         }),
+      z
+        .object({
+          status: z.literal("needs_trust"),
+          fingerprint: z.string(),
+          source: z.object({
+            kind: Config.McpSourceKind,
+            path: z.string().optional(),
+            url: z.string().optional(),
+          }),
+        })
+        .meta({
+          ref: "MCPStatusNeedsTrust",
+        }),
     ])
     .meta({
       ref: "MCPStatus",
@@ -237,6 +251,7 @@ export namespace MCP {
     async () => {
       const cfg = await Config.get()
       const config = cfg.mcp ?? {}
+      const entries = await Config.mcpEntries()
       const clients: Record<string, MCPClient> = {}
       const status: Record<string, Status> = {}
 
@@ -250,6 +265,12 @@ export namespace MCP {
           // If disabled by config, mark as disabled without trying to connect
           if (mcp.enabled === false) {
             status[key] = { status: "disabled" }
+            return
+          }
+
+          const trust = await McpTrust.decision(key, mcp, entries[key]?.source ?? Config.trustedMcpSource("unknown"))
+          if (!trust.trusted) {
+            status[key] = needsTrustStatus(trust)
             return
           }
 
@@ -342,6 +363,23 @@ export namespace MCP {
       name: "ax-code",
       version: Installation.VERSION,
     })
+  }
+
+  function needsTrustStatus(decision: McpTrust.Decision): Status {
+    return {
+      status: "needs_trust",
+      fingerprint: decision.fingerprint,
+      source: {
+        kind: decision.source.kind,
+        path: decision.source.path,
+        url: decision.source.url,
+      },
+    }
+  }
+
+  async function trustDecision(name: string, mcp: Config.Mcp): Promise<McpTrust.Decision> {
+    const entry = await Config.mcpEntry(name)
+    return McpTrust.decision(name, mcp, entry?.source ?? Config.trustedMcpSource("unknown"))
   }
 
   // Generic helper for prompts/resources: fetch the array, log on
@@ -739,10 +777,20 @@ export namespace MCP {
       return
     }
 
+    const trust = await trustDecision(name, mcp)
+    if (!trust.trusted) {
+      const s = await state()
+      s.status[name] = needsTrustStatus(trust)
+      delete s.clients[name]
+      return
+    }
+
+    const s = await state()
+    if (s.status[name]?.status === "connected" && s.clients[name]) return
+
     const result = await create(name, { ...mcp, enabled: true })
 
     if (!result) {
-      const s = await state()
       s.status[name] = {
         status: "failed",
         error: "Unknown error during connection",
@@ -750,7 +798,6 @@ export namespace MCP {
       return
     }
 
-    const s = await state()
     s.status[name] = result.status
     if (result.mcpClient) {
       // Close existing client if present to prevent memory leaks
@@ -775,6 +822,39 @@ export namespace MCP {
       await closePendingOAuthTransport(name)
       s.status[name] = { status: "disabled" }
     })
+  }
+
+  export async function trust(name: string): Promise<Record<string, Status>> {
+    const entry = await Config.mcpEntry(name)
+    const mcp = entry?.config
+    if (!mcp || !isConfigured(mcp)) {
+      throw new Error(`MCP server not found: ${name}`)
+    }
+    await McpTrust.trust(name, mcp, entry.source)
+    await connect(name)
+    return status()
+  }
+
+  export async function untrust(name: string): Promise<Record<string, Status>> {
+    const entry = await Config.mcpEntry(name)
+    const mcp = entry?.config
+    if (!mcp || !isConfigured(mcp)) {
+      throw new Error(`MCP server not found: ${name}`)
+    }
+    const decision = await McpTrust.untrust(name, mcp)
+    await withConnectLock(name, "MCP untrust failed", async () => {
+      cachedTools = undefined
+      toolsCacheGeneration++
+      const s = await state()
+      const client = s.clients[name]
+      if (client) {
+        await closeIfPossible(client, name, "untrusting")
+        delete s.clients[name]
+      }
+      await closePendingOAuthTransport(name)
+      s.status[name] = needsTrustStatus(decision)
+    })
+    return status()
   }
 
   let cachedTools: Record<string, Tool> | undefined
@@ -1054,6 +1134,11 @@ export namespace MCP {
 
     if (mcpConfig.type !== "remote") {
       throw new Error(`MCP server ${mcpName} is not a remote server`)
+    }
+
+    const trust = await trustDecision(mcpName, mcpConfig)
+    if (!trust.trusted) {
+      throw new Error(`MCP server ${mcpName} requires trust before authentication`)
     }
 
     // SSRF guard: validate the URL before initiating OAuth flow (BUG-003)
