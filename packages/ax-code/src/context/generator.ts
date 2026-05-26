@@ -38,6 +38,10 @@ export function generate(info: ProjectInfo, config: Partial<GeneratorConfig> = {
   }
 
   sections.push(projectRules(info, cfg.externalRules))
+
+  const mcp = mcpSuggestions(info)
+  if (mcp) sections.push(mcp)
+
   sections.push(agentQualityLoop())
 
   if (
@@ -203,6 +207,15 @@ function projectRules(info: ProjectInfo, externalRules?: string[]): string {
     }
   }
 
+  return lines.join("\n")
+}
+
+function mcpSuggestions(info: ProjectInfo): string | undefined {
+  if (!info.suggestedMcp || info.suggestedMcp.length === 0) return undefined
+  const lines = ["## Suggested MCP Servers", "Run `ax-code mcp --discover` to auto-detect and add these servers:"]
+  for (const entry of info.suggestedMcp) {
+    lines.push(`- ${entry}`)
+  }
   return lines.join("\n")
 }
 

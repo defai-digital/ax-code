@@ -18,6 +18,8 @@ import { Shell } from "@/shell/shell"
 
 import { BashArity } from "@/permission/arity"
 import { Config } from "@/config/config"
+import { Bus } from "@/bus"
+import { TuiEvent } from "@/cli/cmd/tui/event"
 import { Truncate } from "./truncate"
 import { Plugin } from "@/plugin"
 import { Isolation } from "@/isolation"
@@ -211,6 +213,12 @@ export const BashTool = Tool.define("bash", async () => {
           command: params.command,
           status: "intercepted",
           durationMs: 0,
+        })
+        Bus.publishDetached(TuiEvent.ToastShow, {
+          title: "Browser preview ready",
+          message: `${browserOpenIntercept} — open manually when ready`,
+          variant: "info",
+          duration: 8000,
         })
         const msg = `[Browser open intercepted] Preview is ready at: ${browserOpenIntercept}\n\nThe browser was not opened automatically to avoid disrupting your active development session. Open it manually when ready, or ask to open it explicitly.`
         return {

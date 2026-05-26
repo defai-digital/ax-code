@@ -69,6 +69,7 @@ export interface ProjectInfo {
   cicdPlatform?: string
   gotchas: string[]
   runtimeTargets: string[]
+  suggestedMcp?: string[]
 }
 
 export interface PackageJson {
@@ -89,6 +90,7 @@ export interface PackageJson {
 export async function analyze(root: string): Promise<ProjectInfo> {
   const pkg = await readPackageJson(path.join(root, "package.json"))
 
+  const projectType = detectProjectType(root, pkg)
   const info: ProjectInfo = {
     schemaVersion: "2.0",
     name: pkg?.name ?? path.basename(root),
@@ -96,7 +98,7 @@ export async function analyze(root: string): Promise<ProjectInfo> {
     description: pkg?.description,
     primaryLanguage: detectLanguage(root),
     techStack: detectTechStack(root, pkg),
-    projectType: detectProjectType(root, pkg),
+    projectType,
     entryPoint: detectEntryPoint(pkg),
     directories: detectDirectories(root),
     keyFiles: detectKeyFiles(root),
@@ -107,6 +109,7 @@ export async function analyze(root: string): Promise<ProjectInfo> {
     cicdPlatform: detectCICD(root),
     gotchas: detectGotchas(root, pkg),
     runtimeTargets: detectRuntimeTargets(root, pkg),
+    suggestedMcp: detectSuggestedMcp(root, projectType, pkg),
   }
 
   info.complexity = await calculateComplexity(root, info)
@@ -368,6 +371,17 @@ function detectRuntimeTargets(root: string, pkg: PackageJson | null): string[] {
   if (pathExists(root, "deno.json") || pathExists(root, "deno.jsonc")) targets.push("deno")
   if (targets.length === 0) targets.push("node")
   return targets
+}
+
+function detectSuggestedMcp(root: string, projectType: string, pkg: PackageJson | null): string[] | undefined {
+  const isWeb =
+    projectType === "web-app" ||
+    pathExists(root, "index.html") ||
+    pathExists(root, "index.htm") ||
+    !!(pkg?.dependencies?.["playwright"] || pkg?.devDependencies?.["playwright"] ||
+       pkg?.dependencies?.["@playwright/test"] || pkg?.devDependencies?.["@playwright/test"])
+  if (!isWeb) return undefined
+  return ["@playwright/mcp — browser screenshot and automation (run: npx @playwright/mcp@latest)"]
 }
 
 async function calculateComplexity(root: string, info: ProjectInfo): Promise<ComplexityScore> {

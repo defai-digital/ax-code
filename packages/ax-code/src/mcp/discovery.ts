@@ -123,9 +123,10 @@ interface Candidate {
   command: string
   args: string[]
   check: () => Promise<boolean>
-  // Optional: compute final args after check() passes. Allows runtime
-  // configuration (e.g. CDP vs headless) without changing the Candidate
-  // base shape or breaking existing candidates.
+  // Optional: compute final command/args after check() passes. Allows runtime
+  // configuration (e.g. global binary vs npx, CDP vs headless) without
+  // changing the Candidate base shape or breaking existing candidates.
+  resolveCommand?: () => Promise<string>
   resolveArgs?: () => Promise<string[]>
 }
 
@@ -173,10 +174,23 @@ const CANDIDATES: Candidate[] = [
     args: ["-y", "@playwright/mcp@latest"],
     check: async () => {
       const cwd = process.cwd()
-      return (await isHtmlOrWebProject(cwd)) && (await spawnExitsCleanly("npx", ["--help"]))
+      if (!(await isHtmlOrWebProject(cwd))) return false
+      // Accept global install (playwright-mcp binary) or npx availability.
+      const globalInstalled = await spawnExitsCleanly("playwright-mcp", ["--help"], { timeoutMs: 3000 })
+      return globalInstalled || (await spawnExitsCleanly("npx", ["--help"]))
+    },
+    resolveCommand: async () => {
+      const useGlobal = await spawnExitsCleanly("playwright-mcp", ["--help"], { timeoutMs: 3000 })
+      return useGlobal ? "playwright-mcp" : "npx"
     },
     resolveArgs: async () => {
       const cdpOpen = await checkTcpPort(9222)
+      const useGlobal = await spawnExitsCleanly("playwright-mcp", ["--help"], { timeoutMs: 3000 })
+      if (useGlobal) {
+        return cdpOpen
+          ? ["--cdp-url", "http://localhost:9222"]
+          : ["--browser", "chromium", "--headless"]
+      }
       return cdpOpen
         ? ["-y", "@playwright/mcp@latest", "--cdp-url", "http://localhost:9222"]
         : ["-y", "@playwright/mcp@latest", "--browser", "chromium", "--headless"]
@@ -214,24 +228,25 @@ export async function discover(): Promise<DiscoveredServer[]> {
     CANDIDATES.map(async (candidate) => {
       try {
         const detected = await candidate.check()
-        // Resolve dynamic args only when the candidate is actually detected
+        // Resolve dynamic command/args only when the candidate is actually detected
+        const command = detected && candidate.resolveCommand ? await candidate.resolveCommand() : candidate.command
         const args = detected && candidate.resolveArgs ? await candidate.resolveArgs() : candidate.args
-        return { candidate, detected, args }
+        return { candidate, detected, command, args }
       } catch {
-        return { candidate, detected: false, args: candidate.args }
+        return { candidate, detected: false, command: candidate.command, args: candidate.args }
       }
     }),
   )
 
   for (const result of checks) {
     if (result.status !== "fulfilled") continue
-    const { candidate, detected, args } = result.value
+    const { candidate, detected, command, args } = result.value
 
     results.push({
       name: candidate.name,
       description: candidate.description,
       type: candidate.type,
-      command: candidate.command || undefined,
+      command: command || undefined,
       args: args.length > 0 ? args : undefined,
       url: candidate.type === "http" ? `https://mcp.${candidate.name}.ai/mcp` : undefined,
       detected,

@@ -72,6 +72,55 @@ MCP tool metadata and outputs are also bounded:
 - local MCP stderr logs are shortened and obvious secret patterns are redacted;
 - model-facing MCP tool content uses the same truncation result as the user-visible tool output.
 
+## Playwright MCP for HTML and Web Development
+
+When working on HTML games, web apps, or any project with an `index.html` at root, AX Code detects the project as a web project and prevents the agent from autonomously opening your browser. Instead, the agent reports changes and waits for you to refresh.
+
+For screenshot-based verification, connect the Playwright MCP server:
+
+```bash
+ax-code mcp --discover   # auto-suggests playwright in web projects
+```
+
+Or add it manually to `ax-code.json`:
+
+```json
+{
+  "mcp": {
+    "playwright": {
+      "command": "npx",
+      "args": ["-y", "@playwright/mcp@latest", "--cdp-url", "http://localhost:9222"]
+    }
+  }
+}
+```
+
+### CDP Attach Mode
+
+If Chrome is running with `--remote-debugging-port=9222`, AX Code auto-detects it and connects in CDP attach mode. The agent can call `browser_screenshot` to capture the live tab without opening a new window or stealing focus.
+
+To launch Chrome with CDP enabled:
+
+```bash
+# macOS
+/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222
+
+# Linux
+google-chrome --remote-debugging-port=9222
+```
+
+### Headless Fallback
+
+Without an open Chrome CDP port, `@playwright/mcp` launches a headless Chromium instance. Screenshots still render inline in the TUI.
+
+### Global Install
+
+If `@playwright/mcp` is installed globally (`npm install -g @playwright/mcp`), AX Code uses the `playwright-mcp` binary directly instead of running it via `npx`, which is faster on first use.
+
+### Security Note
+
+The Playwright MCP server gains significant capability over your browser. When sourced from project config (`ax-code.json`), it is untrusted until you explicitly grant trust with `ax-code mcp trust playwright`. Global user config entries auto-connect after first approval.
+
 ## Server Mode
 
 Mutating MCP HTTP routes require a process-local runtime authorization header in addition to general server protections. This protects local runtime-control actions such as adding, connecting, disconnecting, and authenticating MCP servers. Read-only MCP status remains available through `GET /mcp`.
