@@ -696,38 +696,19 @@ export const BashTool = Tool.define("bash", async () => {
           if (proc.pid) forgetTrackedPID(proc.pid)
         }
 
-        let stdoutEnded = false
-        let stderrEnded = false
-        let closed = false
-
-        const tryFinish = () => {
-          if (closed && stdoutEnded && stderrEnded) {
-            proc.stdout?.off("data", append)
-            proc.stderr?.off("data", append)
-            exited = true
-            cleanup()
-            resolve()
-          }
-        }
-
-        proc.stdout?.once("end", () => {
-          stdoutEnded = true
-          tryFinish()
-        })
-
-        proc.stderr?.once("end", () => {
-          stderrEnded = true
-          tryFinish()
-        })
-
+        // exit fires before close and reliably carries the numeric exit code
+        // on Linux/Bun (close may pass null even for normal exits).
         proc.once("exit", (code) => {
           if (code != null) procExitCode = code
         })
 
         proc.once("close", (code) => {
           if (procExitCode == null && code != null) procExitCode = code
-          closed = true
-          tryFinish()
+          proc.stdout?.off("data", append)
+          proc.stderr?.off("data", append)
+          exited = true
+          cleanup()
+          resolve()
         })
 
         proc.once("error", (error) => {
