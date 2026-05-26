@@ -57,11 +57,11 @@ test("Oxlint LSP detection retries after transient --help failures", async () =>
 test("ZLS managed install uses the shared verified GitHub release installer", async () => {
   const src = await Bun.file(path.join(import.meta.dir, "../../src/lsp/server-defs.ts")).text()
 
-    expect(src).toMatch(/export const Zls[\s\S]*?installPinnedGitHubReleaseAsset\(\{[\s\S]*?id: "zls"/)
-    expect(src).toMatch(/export const Zls[\s\S]*?repo: "zigtools\/zls"/)
-    expect(src).not.toMatch(/export const Zls[\s\S]*?fetchGitHubReleaseByTag/)
-    expect(src).not.toMatch(/export const Zls[\s\S]*?releaseAsset\(release\.assets/)
-  })
+  expect(src).toMatch(/export const Zls[\s\S]*?installPinnedGitHubReleaseAsset\(\{[\s\S]*?id: "zls"/)
+  expect(src).toMatch(/export const Zls[\s\S]*?repo: "zigtools\/zls"/)
+  expect(src).not.toMatch(/export const Zls[\s\S]*?fetchGitHubReleaseByTag/)
+  expect(src).not.toMatch(/export const Zls[\s\S]*?releaseAsset\(release\.assets/)
+})
 
 test("JavaScript-family server extensions stay aligned", () => {
   const runtime = [".ts", ".tsx", ".js", ".jsx", ".mjs"]

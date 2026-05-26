@@ -12,7 +12,7 @@ function emptySubagentGate(signature = "empty-subagent:call:task:inspect") {
     status: "blocked",
     reason: "empty_subagent_result",
     signature,
-    message: "A subagent for \"inspect\" completed without a usable final response.",
+    message: 'A subagent for "inspect" completed without a usable final response.',
     emptyResult: {
       callID: "call",
       taskID: "task",

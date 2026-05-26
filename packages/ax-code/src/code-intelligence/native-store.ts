@@ -177,9 +177,7 @@ export namespace NativeStore {
     const result = op("pruneOrphanFiles", { projectID, livePaths: livePaths.length, scopePrefix }, (store) =>
       store.pruneOrphanFiles(projectID, JSON.stringify(livePaths), scopePrefix),
     )
-    return result
-      ? parseNativeStoreJson(result, { files: 0, nodes: 0, edges: 0 })
-      : { files: 0, nodes: 0, edges: 0 }
+    return result ? parseNativeStoreJson(result, { files: 0, nodes: 0, edges: 0 }) : { files: 0, nodes: 0, edges: 0 }
   }
 
   // ─── Cursor operations ──────���─────────────────────────────────────

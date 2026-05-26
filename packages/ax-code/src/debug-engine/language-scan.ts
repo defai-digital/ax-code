@@ -154,7 +154,12 @@ export async function detectClippy(input: DetectClippyInput = {}): Promise<Langu
     const output = await runCommand("cargo", args, cwd, input.timeoutMs ?? 120_000)
     return languageScanSuccess("cargo-clippy", parseClippyOutput(output), t0)
   } catch (err) {
-    return languageScanError("cargo-clippy", err, t0, "cargo not found — install Rust toolchain to enable clippy scanning")
+    return languageScanError(
+      "cargo-clippy",
+      err,
+      t0,
+      "cargo not found — install Rust toolchain to enable clippy scanning",
+    )
   }
 }
 
@@ -248,7 +253,12 @@ export async function detectRuff(input: DetectRuffInput = {}): Promise<LanguageS
     const output = await runCommand("ruff", args, cwd, input.timeoutMs ?? 60_000)
     return languageScanSuccess("ruff", parseRuffOutput(output), t0)
   } catch (err) {
-    return languageScanError("ruff", err, t0, "ruff not found — install ruff (pip install ruff) to enable Python scanning")
+    return languageScanError(
+      "ruff",
+      err,
+      t0,
+      "ruff not found — install ruff (pip install ruff) to enable Python scanning",
+    )
   }
 }
 
@@ -343,7 +353,12 @@ export async function detectMypy(input: DetectMypyInput = {}): Promise<LanguageS
     const output = await runCommand("mypy", args, cwd, input.timeoutMs ?? 120_000)
     return languageScanSuccess("mypy", parseMypyOutput(output), t0)
   } catch (err) {
-    return languageScanError("mypy", err, t0, "mypy not found — install mypy (pip install mypy) to enable Python type checking")
+    return languageScanError(
+      "mypy",
+      err,
+      t0,
+      "mypy not found — install mypy (pip install mypy) to enable Python type checking",
+    )
   }
 }
 
@@ -422,9 +437,11 @@ function runCommand(cmd: string, args: string[], cwd: string, timeoutMs: number)
     const timer = setTimeout(() => {
       timedOut = true
       const error = new Error(`${cmd} timed out after ${timeoutMs}ms`)
-      void Process.killProcessTree(proc).catch(() => undefined).finally(() => {
-        finish(error)
-      })
+      void Process.killProcessTree(proc)
+        .catch(() => undefined)
+        .finally(() => {
+          finish(error)
+        })
     }, timeoutMs)
 
     proc.stdout.on("data", (d) => (stdout += d.toString()))

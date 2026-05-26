@@ -140,7 +140,11 @@ describe("CliLanguageModel", () => {
 
   test("doGenerate waits for CLI process kill before timing out", async () => {
     const originalSetTimeout = globalThis.setTimeout
-    const setTimeoutSpy = (handler: (...args: any[]) => void, timeout?: number, ...args: any[]): ReturnType<typeof setTimeout> => {
+    const setTimeoutSpy = (
+      handler: (...args: any[]) => void,
+      timeout?: number,
+      ...args: any[]
+    ): ReturnType<typeof setTimeout> => {
       if (timeout === 300_000) {
         return originalSetTimeout(handler, 1, ...args)
       }

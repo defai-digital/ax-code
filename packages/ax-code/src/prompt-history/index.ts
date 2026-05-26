@@ -11,11 +11,9 @@ export namespace PromptHistory {
 
   function id() {
     sequence = (sequence + 1) % 1_000_000
-    return [
-      Date.now().toString().padStart(13, "0"),
-      sequence.toString().padStart(6, "0"),
-      crypto.randomUUID(),
-    ].join("-")
+    return [Date.now().toString().padStart(13, "0"), sequence.toString().padStart(6, "0"), crypto.randomUUID()].join(
+      "-",
+    )
   }
 
   export function list(input: { limit?: number } = {}): PromptHistoryEntry[] {
@@ -30,22 +28,20 @@ export namespace PromptHistory {
         .all(),
     )
 
-    return rows
-      .reverse()
-      .flatMap((row) => {
-        const parsed = PromptHistoryEntry.safeParse({
-          input: row.input,
-          mode: row.mode ?? undefined,
-          parts: row.parts,
-        })
-        if (parsed.success) return [parsed.data]
-        log.warn("invalid prompt history row", {
-          id: row.id,
-          projectID: row.project_id,
-          issueCount: parsed.error.issues.length,
-        })
-        return []
+    return rows.reverse().flatMap((row) => {
+      const parsed = PromptHistoryEntry.safeParse({
+        input: row.input,
+        mode: row.mode ?? undefined,
+        parts: row.parts,
       })
+      if (parsed.success) return [parsed.data]
+      log.warn("invalid prompt history row", {
+        id: row.id,
+        projectID: row.project_id,
+        issueCount: parsed.error.issues.length,
+      })
+      return []
+    })
   }
 
   export function append(entry: PromptHistoryEntry): PromptHistoryEntry {

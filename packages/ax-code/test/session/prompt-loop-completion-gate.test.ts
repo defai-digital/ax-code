@@ -91,7 +91,7 @@ describe("prompt loop completion gate event emission", () => {
           status: "blocked",
           reason: "empty_subagent_result",
           signature: "empty-subagent:call:task:inspect",
-          message: "A subagent for \"inspect\" completed without a usable final response.",
+          message: 'A subagent for "inspect" completed without a usable final response.',
           emptyResult: {
             callID: "call",
             taskID: "task",
@@ -119,7 +119,7 @@ describe("prompt loop completion gate event emission", () => {
         stepIndex: 8,
         status: "blocked",
         reason: "empty_subagent_result",
-        message: "A subagent for \"inspect\" completed without a usable final response.",
+        message: 'A subagent for "inspect" completed without a usable final response.',
         retryCount: 1,
         maxRetries: 2,
       },

@@ -6,11 +6,7 @@ beforeEach(async () => {
   await Log.init({ print: false })
 })
 
-function client(input: {
-  serverID: string
-  open?: () => Promise<boolean>
-  close?: () => Promise<boolean>
-}) {
+function client(input: { serverID: string; open?: () => Promise<boolean>; close?: () => Promise<boolean> }) {
   return {
     serverID: input.serverID,
     notify: {

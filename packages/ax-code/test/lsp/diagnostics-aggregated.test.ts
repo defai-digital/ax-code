@@ -57,9 +57,7 @@ describe("aggregate diagnostics", () => {
       [
         {
           serverID: "typescript",
-          diagnostics: makeMap([
-            ["/a.ts", [diag({ startLine: 0, startCol: 0, endLine: 0, endCol: 1 }, "bad", 1)]],
-          ]),
+          diagnostics: makeMap([["/a.ts", [diag({ startLine: 0, startCol: 0, endLine: 0, endCol: 1 }, "bad", 1)]]]),
         },
       ] as any,
       "/a.ts",

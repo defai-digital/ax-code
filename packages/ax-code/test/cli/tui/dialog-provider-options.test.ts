@@ -31,7 +31,11 @@ describe("provider dialog options", () => {
     expect(
       providerDialogProviders({
         available: [],
-        configured: [provider("google", "Google"), provider("github-copilot", "GitHub Copilot"), provider("xai", "xAI")],
+        configured: [
+          provider("google", "Google"),
+          provider("github-copilot", "GitHub Copilot"),
+          provider("xai", "xAI"),
+        ],
       }).map((item) => item.id),
     ).toEqual(["xai"])
   })

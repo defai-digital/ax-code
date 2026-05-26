@@ -36,5 +36,7 @@ export function providerDialogConnected(input: {
   connected: string[]
   configured: ProviderDialogProvider[]
 }) {
-  return input.connected.includes(input.providerID) || input.configured.some((provider) => provider.id === input.providerID)
+  return (
+    input.connected.includes(input.providerID) || input.configured.some((provider) => provider.id === input.providerID)
+  )
 }

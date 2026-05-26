@@ -176,9 +176,12 @@ export const resolveManagedToolBin = async (input: {
   if (await (input.exists ?? pathExists)(input.managedBin)) return input.managedBin
 
   if (input.installedBin) {
-    log.warn(`using legacy unmanaged ${input.toolName} install; remove shared-bin copy to switch to pinned managed installs`, {
-      bin: input.installedBin,
-    })
+    log.warn(
+      `using legacy unmanaged ${input.toolName} install; remove shared-bin copy to switch to pinned managed installs`,
+      {
+        bin: input.installedBin,
+      },
+    )
     return input.installedBin
   }
 }

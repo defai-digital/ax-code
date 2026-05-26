@@ -23,7 +23,10 @@ describe("util.package-json", () => {
   test("extracts package JSON string maps and object keys defensively", () => {
     expect(packageJsonStringMap({ test: "bun test", build: 1 })).toEqual({ test: "bun test" })
     expect(packageJsonStringMap(null)).toEqual({})
-    expect(packageJsonObjectKeys({ dependencies: {}, devDependencies: {} })).toEqual(["dependencies", "devDependencies"])
+    expect(packageJsonObjectKeys({ dependencies: {}, devDependencies: {} })).toEqual([
+      "dependencies",
+      "devDependencies",
+    ])
     expect(packageJsonObjectKeys("not an object")).toEqual([])
   })
 })

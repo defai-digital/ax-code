@@ -334,9 +334,9 @@ export const make = Effect.gen(function* () {
         return Shell.killTree(
           {
             pid: proc.pid,
-              kill: (killSignal?: NodeJS.Signals | number) => {
-                return proc.kill(killSignal)
-              },
+            kill: (killSignal?: NodeJS.Signals | number) => {
+              return proc.kill(killSignal)
+            },
           },
           {
             exited: () => proc.exitCode !== null || proc.signalCode !== null,

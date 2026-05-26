@@ -788,9 +788,7 @@ const spawnJdtls = async (java: string, root: string, distPath: string, launcher
   }
 
   void proc.exited.finally(() => {
-    JdtlsDataDir.remove(dataDir).catch((err) =>
-      log.warn("failed to remove jdtls data dir", { dataDir, err }),
-    )
+    JdtlsDataDir.remove(dataDir).catch((err) => log.warn("failed to remove jdtls data dir", { dataDir, err }))
   })
 
   return { process: proc }
@@ -1341,11 +1339,6 @@ export const JuliaLS: Info = {
       log.info("julia not found, please install julia first (https://julialang.org/downloads/)")
       return
     }
-    return spawnInfo(julia, root, [
-      "--startup-file=no",
-      "--history-file=no",
-      "-e",
-      "using LanguageServer; runserver()",
-    ])
+    return spawnInfo(julia, root, ["--startup-file=no", "--history-file=no", "-e", "using LanguageServer; runserver()"])
   },
 }

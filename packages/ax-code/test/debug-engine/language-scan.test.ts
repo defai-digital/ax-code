@@ -442,10 +442,7 @@ describe("language-scan", () => {
     test("parseMypyFilesJson filters malformed file entries", () => {
       expect(
         parseMypyFilesJson({
-          files: [
-            { path: "src/clean.py" },
-            { messages: [{ severity: "error", message: "missing path" }] },
-          ],
+          files: [{ path: "src/clean.py" }, { messages: [{ severity: "error", message: "missing path" }] }],
         }).map((file) => file.path),
       ).toEqual(["src/clean.py"])
       expect(parseMypyFilesJson({ files: "not an array" })).toEqual([])

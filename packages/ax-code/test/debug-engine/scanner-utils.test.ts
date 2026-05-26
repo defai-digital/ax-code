@@ -70,11 +70,12 @@ describe("debug-engine scanner utils", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        expect(await collectScannerFiles({ files: [] }, { cwd: tmp.path, include: ["**/*.ts"], excludeTests: true }))
-          .toEqual({
-            incremental: true,
-            files: [],
-          })
+        expect(
+          await collectScannerFiles({ files: [] }, { cwd: tmp.path, include: ["**/*.ts"], excludeTests: true }),
+        ).toEqual({
+          incremental: true,
+          files: [],
+        })
       },
     })
   })
@@ -136,9 +137,7 @@ describe("debug-engine scanner utils", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        expect(
-          await collectScannerFiles({}, { cwd: tmp.path, include: ["**/*.ts"], excludeTests: true }),
-        ).toEqual({
+        expect(await collectScannerFiles({}, { cwd: tmp.path, include: ["**/*.ts"], excludeTests: true })).toEqual({
           incremental: false,
           files: [path.join(tmp.path, "src", "app.ts")],
         })

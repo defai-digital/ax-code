@@ -216,16 +216,17 @@ describe("session.prompt helpers", () => {
 
   test("lets the final placeholder absorb extra args", async () => {
     await expect(
-      commandTemplateText({ template: "review $1: $2", arguments: `src/app.ts missing null guard near submit handler` }),
-    ).resolves.toBe(
-      "review src/app.ts: missing null guard near submit handler",
-    )
+      commandTemplateText({
+        template: "review $1: $2",
+        arguments: `src/app.ts missing null guard near submit handler`,
+      }),
+    ).resolves.toBe("review src/app.ts: missing null guard near submit handler")
   })
 
   test("replaces arguments placeholder verbatim", async () => {
-    await expect(commandTemplateText({ template: "run this:\n$ARGUMENTS", arguments: `echo "hello world"` })).resolves.toBe(
-      'run this:\necho "hello world"',
-    )
+    await expect(
+      commandTemplateText({ template: "run this:\n$ARGUMENTS", arguments: `echo "hello world"` }),
+    ).resolves.toBe('run this:\necho "hello world"')
   })
 
   test("uses remaining args for $ARGUMENTS when numbered placeholders are also present", async () => {
@@ -234,15 +235,13 @@ describe("session.prompt helpers", () => {
     )
     await expect(
       commandTemplateText({ template: "compare $1 with $ARGUMENTS", arguments: 'left "right side" extra' }),
-    ).resolves.toBe(
-      "compare left with right side extra",
-    )
+    ).resolves.toBe("compare left with right side extra")
   })
 
   test("appends args when template has no placeholders", async () => {
-    await expect(
-      commandTemplateText({ template: "summarize this change", arguments: "focus on tests" }),
-    ).resolves.toBe("summarize this change\n\nfocus on tests")
+    await expect(commandTemplateText({ template: "summarize this change", arguments: "focus on tests" })).resolves.toBe(
+      "summarize this change\n\nfocus on tests",
+    )
   })
 
   test("drops missing numbered args", async () => {

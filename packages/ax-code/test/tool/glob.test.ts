@@ -10,11 +10,11 @@ describe("tool.glob", () => {
 
   test("parseNativeGlobEntries rejects malformed native output", () => {
     expect(() => parseNativeGlobEntries("{not json")).toThrow(SyntaxError)
-    expect(() =>
-      parseNativeGlobEntries(JSON.stringify({ path: "/repo/a.ts", mtime: 12, size: 34 })),
-    ).toThrow(SyntaxError)
-    expect(() =>
-      parseNativeGlobEntries(JSON.stringify([{ path: "/repo/a.ts", mtime: "12", size: 34 }])),
-    ).toThrow(SyntaxError)
+    expect(() => parseNativeGlobEntries(JSON.stringify({ path: "/repo/a.ts", mtime: 12, size: 34 }))).toThrow(
+      SyntaxError,
+    )
+    expect(() => parseNativeGlobEntries(JSON.stringify([{ path: "/repo/a.ts", mtime: "12", size: 34 }]))).toThrow(
+      SyntaxError,
+    )
   })
 })

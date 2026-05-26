@@ -14,7 +14,9 @@ describe("prompt frecency persistence", () => {
     expect(parseFrecencyLine("not json")).toBeUndefined()
     expect(parseFrecencyLine(JSON.stringify({ path: "", frequency: 2, lastOpen: 1234 }))).toBeUndefined()
     expect(parseFrecencyLine(JSON.stringify({ path: "/repo/file.ts", frequency: -1, lastOpen: 1234 }))).toBeUndefined()
-    expect(parseFrecencyLine(JSON.stringify({ path: "/repo/file.ts", frequency: 2, lastOpen: Number.NaN }))).toBeUndefined()
+    expect(
+      parseFrecencyLine(JSON.stringify({ path: "/repo/file.ts", frequency: 2, lastOpen: Number.NaN })),
+    ).toBeUndefined()
     expect(parseFrecencyLine(JSON.stringify(["/repo/file.ts", 2, 1234]))).toBeUndefined()
   })
 

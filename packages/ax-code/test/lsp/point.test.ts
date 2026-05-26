@@ -50,10 +50,14 @@ test("callHierarchyCallsForClient prepares items then flattens call results", as
   })
 
   await expect(
-    callHierarchyCallsForClient(client, { file: "/tmp/project/src/index.ts", line: 1, character: 2 }, {
-      request: "callHierarchy/incomingCalls",
-      timeoutMs: 1_000,
-    }),
+    callHierarchyCallsForClient(
+      client,
+      { file: "/tmp/project/src/index.ts", line: 1, character: 2 },
+      {
+        request: "callHierarchy/incomingCalls",
+        timeoutMs: 1_000,
+      },
+    ),
   ).resolves.toEqual([{ from: "caller" }, { from: "callee" }])
 })
 
@@ -63,10 +67,14 @@ test("callHierarchyCallsForClient returns empty when prepare has no items", asyn
   })
 
   await expect(
-    callHierarchyCallsForClient(client, { file: "/tmp/project/src/index.ts", line: 1, character: 2 }, {
-      request: "callHierarchy/outgoingCalls",
-      timeoutMs: 1_000,
-    }),
+    callHierarchyCallsForClient(
+      client,
+      { file: "/tmp/project/src/index.ts", line: 1, character: 2 },
+      {
+        request: "callHierarchy/outgoingCalls",
+        timeoutMs: 1_000,
+      },
+    ),
   ).resolves.toEqual([])
 })
 

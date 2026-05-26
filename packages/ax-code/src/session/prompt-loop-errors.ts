@@ -48,13 +48,16 @@ type PromptLoopErrorDeps = {
   publishError?: (input: { sessionID: SessionID; message: string }) => void
 }
 
-export async function handlePromptLoopError(input: {
-  sessionID: SessionID
-  currentModel: MessageV2.User["model"]
-  error: unknown
-  consecutiveErrors: number
-  step: number
-}, deps: PromptLoopErrorDeps = {}): Promise<PromptLoopErrorResult> {
+export async function handlePromptLoopError(
+  input: {
+    sessionID: SessionID
+    currentModel: MessageV2.User["model"]
+    error: unknown
+    consecutiveErrors: number
+    step: number
+  },
+  deps: PromptLoopErrorDeps = {},
+): Promise<PromptLoopErrorResult> {
   // Provider fallback: if the error is a provider API failure (rate limit,
   // no credit, auth error), try switching to another available provider
   // instead of retrying the same broken one.
@@ -63,7 +66,9 @@ export async function handlePromptLoopError(input: {
     error: input.error,
   })
   if (fallbackLookup.action === "lookup") {
-    const fallback = await (deps.findFallback ?? findFallbackModel)(input.currentModel.providerID).catch(() => undefined)
+    const fallback = await (deps.findFallback ?? findFallbackModel)(input.currentModel.providerID).catch(
+      () => undefined,
+    )
     if (fallback) {
       const fallbackSwitch = providerFallbackSwitchState({
         current: input.currentModel,

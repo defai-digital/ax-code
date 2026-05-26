@@ -270,6 +270,16 @@ describe("tui sync bootstrap plan", () => {
       }).map((task) => task()),
     )
 
-    expect(applied.sort()).toEqual(["debug", "formatter", "lsp", "mcp", "resource", "smart", "super-long", "vcs", "workspaces"])
+    expect(applied.sort()).toEqual([
+      "debug",
+      "formatter",
+      "lsp",
+      "mcp",
+      "resource",
+      "smart",
+      "super-long",
+      "vcs",
+      "workspaces",
+    ])
   })
 })

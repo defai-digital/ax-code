@@ -76,7 +76,14 @@ describe("headless SDK types", () => {
       { id: string; sessionID: string },
       { id: string; messageID: string }
     >()
-    const perm = { id: "req-1", sessionID: "sess-1", type: "bash", title: "Run command", description: "", command: "ls" } as any
+    const perm = {
+      id: "req-1",
+      sessionID: "sess-1",
+      type: "bash",
+      title: "Run command",
+      description: "",
+      command: "ls",
+    } as any
     applyHeadlessProjectionEvent(state, { type: "permission.asked", properties: perm })
     expect(state.permission["sess-1"]).toHaveLength(1)
   })
@@ -137,10 +144,7 @@ describe("headless SDK types", () => {
     await client.sendShell("sess-1", { command: "pwd" }, { mode: "sync" })
     await client.abort("sess-1")
 
-    expect(calls).toEqual([
-      "http://127.0.0.1:4096/session/sess-1/shell",
-      "http://127.0.0.1:4096/session/sess-1/abort",
-    ])
+    expect(calls).toEqual(["http://127.0.0.1:4096/session/sess-1/shell", "http://127.0.0.1:4096/session/sess-1/abort"])
   })
 
   test("createHeadlessClient command helpers are safe to destructure", async () => {
@@ -158,7 +162,6 @@ describe("headless SDK types", () => {
 
     expect(calls).toEqual(["http://127.0.0.1:4096/session/sess-1/command_async"])
   })
-
 
   test("parseHeadlessRuntimeResponseBody handles empty and invalid bodies", () => {
     expect(parseHeadlessRuntimeResponseBody("")).toBe(true)

@@ -72,12 +72,7 @@ function toolStateOutput(part: ToolPart): string | undefined {
   return undefined
 }
 
-function describeFilesystemSearchTool(input: {
-  label: string
-  pattern: string
-  rootPath?: string
-  matches?: number
-}) {
+function describeFilesystemSearchTool(input: { label: string; pattern: string; rootPath?: string; matches?: number }) {
   const suffix = input.rootPath ? `in ${normalizePath(input.rootPath)}` : ""
   const description =
     input.matches === undefined

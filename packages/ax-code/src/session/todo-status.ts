@@ -4,6 +4,8 @@ export function isActiveTodoStatus(status: unknown): status is "pending" | "in_p
   return typeof status === "string" && ACTIVE_TODO_STATUSES.has(status)
 }
 
-export function isActiveTodo<T extends { status?: unknown }>(todo: T): todo is T & { status: "pending" | "in_progress" } {
+export function isActiveTodo<T extends { status?: unknown }>(
+  todo: T,
+): todo is T & { status: "pending" | "in_progress" } {
   return isActiveTodoStatus(todo.status)
 }

@@ -464,7 +464,7 @@ export class CliLanguageModel implements LanguageModelV3 {
           .catch((err) => {
             clearTimeout(timer)
             if (closed()) return
-            fail(abort.isAborted ? abort.abortError : err ?? new Error("CLI process killed by signal"))
+            fail(abort.isAborted ? abort.abortError : (err ?? new Error("CLI process killed by signal")))
           })
       },
       cancel() {

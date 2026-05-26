@@ -378,8 +378,7 @@ export const SessionRoutes = lazy(() =>
       validator(
         "query",
         z.object({
-          deep: QueryBoolean
-            .optional()
+          deep: QueryBoolean.optional()
             .default(false)
             .meta({ description: "Include replay divergence signals in branch ranking" }),
         }),
@@ -552,8 +551,7 @@ export const SessionRoutes = lazy(() =>
       validator(
         "query",
         z.object({
-          deep: QueryBoolean
-            .optional()
+          deep: QueryBoolean.optional()
             .default(false)
             .meta({ description: "Include replay divergence signals in session comparison" }),
         }),

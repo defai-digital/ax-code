@@ -82,11 +82,14 @@ mock.module("../../src/mcp/oauth-callback", () => ({
           previous.reject(new Error("OAuth callback request superseded"))
         }
 
-        const timeout = setTimeout(() => {
-          pendingOauthStates.delete(oauthState)
-          if (mcpName) pendingOauthNames.delete(mcpName)
-          reject(new Error("OAuth callback timeout - authorization took too long"))
-        }, 5 * 60 * 1000)
+        const timeout = setTimeout(
+          () => {
+            pendingOauthStates.delete(oauthState)
+            if (mcpName) pendingOauthNames.delete(mcpName)
+            reject(new Error("OAuth callback timeout - authorization took too long"))
+          },
+          5 * 60 * 1000,
+        )
 
         pendingOauthStates.set(oauthState, { reject, timeout })
         if (mcpName) pendingOauthNames.set(mcpName, oauthState)

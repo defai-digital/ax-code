@@ -101,11 +101,7 @@ function isGrokProbe(probe: string): boolean {
 // filter — every other grok variant (older versions, beta aliases, vision-only,
 // etc.) is dropped. Match on the final segment so account-prefixed reseller ids
 // (e.g. "x-ai/grok-4.3") still resolve correctly.
-const GROK_ALLOWED_FINAL_SEGMENTS = new Set<string>([
-  "grok-4.3",
-  "grok-4-3",
-  "grok-code-fast-1",
-])
+const GROK_ALLOWED_FINAL_SEGMENTS = new Set<string>(["grok-4.3", "grok-4-3", "grok-code-fast-1"])
 function isAllowedGrokProbe(probe: string): boolean {
   return GROK_ALLOWED_FINAL_SEGMENTS.has(probe.split("/").pop() ?? "")
 }
@@ -136,7 +132,9 @@ function isUnsupportedModel(m: RawModel): boolean {
   if (probes.some((p) => p.includes("gpt-5.5") || p.includes("gpt-5-5") || p.includes("gpt55"))) return true
   return false
 }
-for (const [providerID, provider] of Object.entries(fetched) as Array<[string, { models?: Record<string, RawModel> }]>) {
+for (const [providerID, provider] of Object.entries(fetched) as Array<
+  [string, { models?: Record<string, RawModel> }]
+>) {
   if (!provider.models) continue
   for (const [mid, model] of Object.entries(provider.models)) {
     if (providerID === "openrouter" && !supportsOpenRouterModelID(mid)) {

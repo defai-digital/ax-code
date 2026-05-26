@@ -22,10 +22,7 @@ import { fn } from "@/util/fn"
 import { LLM } from "./llm"
 import { iife } from "@/util/iife"
 import { agentInfo, modelInfo } from "./prompt-agent-model-info"
-import {
-  processorLoopDecision,
-  assistantRespondedAfterUser,
-} from "./prompt-loop-decisions"
+import { processorLoopDecision, assistantRespondedAfterUser } from "./prompt-loop-decisions"
 import {
   maybeSchedulePreflightCompaction,
   maybeScheduleUsageCompaction,
@@ -42,11 +39,7 @@ import { handlePromptLoopTodoConvergence } from "./prompt-loop-todo-convergence"
 import { handlePromptLoopTodoContinuation } from "./prompt-loop-todo-continuation"
 import { loopMessages, scanLoopMessages } from "./prompt-loop-messages"
 import { finishPromptLoopQueue } from "./prompt-loop-queue"
-import {
-  beginPromptLoopRecording,
-  finishPromptLoopRecording,
-  type PromptLoopEndReason,
-} from "./prompt-loop-recording"
+import { beginPromptLoopRecording, finishPromptLoopRecording, type PromptLoopEndReason } from "./prompt-loop-recording"
 import { resolvePromptLoopResult } from "./prompt-loop-result"
 import { markPromptLoopBusy } from "./prompt-loop-status"
 import { handlePromptLoopGlobalStepLimit } from "./prompt-loop-step-limit"
@@ -56,10 +49,7 @@ import { executeSubtask, type SubtaskContext } from "./prompt-subtask"
 import { resolveTools, shouldBypassAgentCheck } from "./prompt-tools"
 import { clearPromptProcessorInstructions, createPromptProcessor } from "./prompt-processor"
 import { addPromptGoalUsage } from "./prompt-goal-usage"
-import {
-  isEmptyModelTurn,
-  modelTurnFinished,
-} from "./prompt-autonomous-decisions"
+import { isEmptyModelTurn, modelTurnFinished } from "./prompt-autonomous-decisions"
 import { insertReminders } from "./prompt-reminders"
 import { executeShellCommand } from "./prompt-shell-command"
 import { executePromptCommand } from "./prompt-command-execution"
@@ -184,13 +174,8 @@ export namespace SessionPrompt {
     const session = await Session.get(sessionID)
     // Pre-load expensive resources once before the loop
     const cfg = await Config.get()
-    const {
-      sessionStepLimit,
-      maxContinuations,
-      maxTodoRetries,
-      maxCompletionGateRetries,
-      maxEmptyModelTurnRetries,
-    } = promptLoopLimits(cfg)
+    const { sessionStepLimit, maxContinuations, maxTodoRetries, maxCompletionGateRetries, maxEmptyModelTurnRetries } =
+      promptLoopLimits(cfg)
     const autonomous = Flag.AX_CODE_AUTONOMOUS
     let todoRetries = 0
     let completionGateRetries = 0

@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test"
 import type { AssistantMessage, Part, UserMessage } from "@ax-code/sdk/v2"
-import { lastAssistantText, scrollDelta, scrollTo, transcriptItems } from "../../../src/cli/cmd/tui/routes/session/display"
+import {
+  lastAssistantText,
+  scrollDelta,
+  scrollTo,
+  transcriptItems,
+} from "../../../src/cli/cmd/tui/routes/session/display"
 
 function user(id: string): UserMessage {
   return {

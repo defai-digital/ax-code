@@ -28,7 +28,11 @@
 export { startHeadlessBackend } from "./headless/lifecycle.js"
 export type { HeadlessBackendOptions, HeadlessBackendHandle } from "./headless/lifecycle.js"
 
-export { createHeadlessClient, parseHeadlessRuntimeJsonBody, parseHeadlessRuntimeResponseBody } from "./headless/client.js"
+export {
+  createHeadlessClient,
+  parseHeadlessRuntimeJsonBody,
+  parseHeadlessRuntimeResponseBody,
+} from "./headless/client.js"
 export type {
   HeadlessClient,
   HeadlessClientOptions,
@@ -47,7 +51,11 @@ export type {
   HeadlessProjectionApplyResult,
 } from "./headless/projection.js"
 
-export { HEADLESS_RUNTIME_SCHEMA_VERSION, HEADLESS_RUNTIME_EVENT_TYPES, isHeadlessRuntimeEvent } from "./headless/event.js"
+export {
+  HEADLESS_RUNTIME_SCHEMA_VERSION,
+  HEADLESS_RUNTIME_EVENT_TYPES,
+  isHeadlessRuntimeEvent,
+} from "./headless/event.js"
 export type {
   HeadlessRuntimeEvent,
   HeadlessSessionEvent,

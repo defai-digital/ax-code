@@ -2,8 +2,9 @@ import { describe, expect, test } from "bun:test"
 
 describe("debug-engine native scan", () => {
   test("decodes native scan output with explicit schemas", async () => {
-    const { parseNativeDetectResult, parseNativeReadFilesBatchResult, parseNativeScanResult } =
-      await import("../../src/debug-engine/native-scan")
+    const { parseNativeDetectResult, parseNativeReadFilesBatchResult, parseNativeScanResult } = await import(
+      "../../src/debug-engine/native-scan"
+    )
 
     expect(
       parseNativeScanResult(
@@ -64,13 +65,14 @@ describe("debug-engine native scan", () => {
   })
 
   test("rejects malformed native scan output", async () => {
-    const { parseNativeDetectResult, parseNativeReadFilesBatchResult, parseNativeScanResult } =
-      await import("../../src/debug-engine/native-scan")
+    const { parseNativeDetectResult, parseNativeReadFilesBatchResult, parseNativeScanResult } = await import(
+      "../../src/debug-engine/native-scan"
+    )
 
     expect(() => parseNativeScanResult("{not json")).toThrow(SyntaxError)
-    expect(() =>
-      parseNativeScanResult(JSON.stringify({ matches: [], filesScanned: "3", elapsedMs: 4 })),
-    ).toThrow(SyntaxError)
+    expect(() => parseNativeScanResult(JSON.stringify({ matches: [], filesScanned: "3", elapsedMs: 4 }))).toThrow(
+      SyntaxError,
+    )
     expect(() => parseNativeReadFilesBatchResult(JSON.stringify([["/repo/a.ts", 123]]))).toThrow(SyntaxError)
     expect(() =>
       parseNativeDetectResult(JSON.stringify({ findings: [], filesScanned: 1, truncated: "false", elapsedMs: 2 })),

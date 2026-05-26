@@ -192,9 +192,11 @@ export function assistantRespondedAfterUser(input: AssistantTurnCursor): input i
   return Boolean(input.lastAssistant?.finish && input.lastUserID < input.lastAssistant.id)
 }
 
-export function assistantLoopExitDecision(input: AssistantTurnCursor & {
-  hasPendingSubtask: boolean
-}): AssistantLoopExitDecision {
+export function assistantLoopExitDecision(
+  input: AssistantTurnCursor & {
+    hasPendingSubtask: boolean
+  },
+): AssistantLoopExitDecision {
   if (!assistantRespondedAfterUser(input)) return { action: "continue" }
 
   const finish = input.lastAssistant.finish

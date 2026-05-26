@@ -117,10 +117,7 @@ type AgentStepLimitContinuationDecision =
       continuation: number
     }
 
-function nextContinuation(input: {
-  continuations: number
-  maxContinuations: number
-}): number | undefined {
+function nextContinuation(input: { continuations: number; maxContinuations: number }): number | undefined {
   return input.continuations < input.maxContinuations ? nextDecisionCount(input.continuations) : undefined
 }
 
