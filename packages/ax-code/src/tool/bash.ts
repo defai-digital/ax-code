@@ -29,6 +29,8 @@ import {
   hasDynamicRedirection,
   hasDynamicShellExpansion,
   isStaticPathArg,
+  refProcessIfAvailable,
+  safeUtf8PrefixLength,
   staticallyCheckablePathArgs,
   stripShellQuotes,
   truncateBashMetadata,
@@ -564,7 +566,7 @@ export const BashTool = Tool.define("bash", async () => {
         detached: process.platform !== "win32",
         windowsHide: process.platform === "win32",
       })
-      proc.ref()
+      refProcessIfAvailable(proc)
       if (proc.pid) {
         trackedPIDs.add(proc.pid)
       } else {
@@ -644,9 +646,7 @@ export const BashTool = Tool.define("bash", async () => {
             const text = chunk.toString()
             output += text
           } else {
-            let safeRemaining = remaining
-            while (safeRemaining > 0 && (chunk[safeRemaining]! & 0xc0) === 0x80) safeRemaining--
-            if (safeRemaining === 0 && chunk.length > 0 && (chunk[0]! & 0xc0) !== 0x80) safeRemaining = 1
+            const safeRemaining = safeUtf8PrefixLength(chunk, remaining)
             output += chunk.subarray(0, safeRemaining).toString() + "\n\n[output truncated at 10MB]"
             truncated = true
           }

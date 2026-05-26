@@ -73,12 +73,34 @@ function truncateUtf8ByBytes(input: string, maxBytes: number): string {
   const bytes = Buffer.from(input, "utf8")
   if (bytes.byteLength <= maxBytes) return input
 
-  let end = maxBytes
-  while (end > 0 && (bytes[end]! & 0xc0) === 0x80) end--
+  const end = safeUtf8PrefixLength(bytes, maxBytes)
   return bytes.subarray(0, end).toString("utf8")
 }
 
 export function truncateBashMetadata(input: string, maxBytes: number): string {
   if (Buffer.byteLength(input, "utf8") <= maxBytes) return input
   return truncateUtf8ByBytes(input, maxBytes) + "\n\n..."
+}
+
+export function safeUtf8PrefixLength(chunk: Buffer, maxBytes: number): number {
+  const bounded = Math.min(Math.max(0, maxBytes), chunk.length)
+  let end = 0
+  for (let index = 0; index < bounded; ) {
+    const byte = chunk[index]!
+    let width = 0
+    if ((byte & 0x80) === 0) width = 1
+    else if ((byte & 0xe0) === 0xc0) width = 2
+    else if ((byte & 0xf0) === 0xe0) width = 3
+    else if ((byte & 0xf8) === 0xf0) width = 4
+    if (width === 0 || index + width > bounded) break
+    end = index + width
+    index = end
+  }
+  return end
+}
+
+export function refProcessIfAvailable(proc: { ref?: unknown }): boolean {
+  if (typeof proc.ref !== "function") return false
+  proc.ref()
+  return true
 }

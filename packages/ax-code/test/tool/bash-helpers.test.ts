@@ -5,6 +5,8 @@ import {
   hasDynamicRedirection,
   hasDynamicShellExpansion,
   isStaticPathArg,
+  refProcessIfAvailable,
+  safeUtf8PrefixLength,
   staticallyCheckablePathArgs,
   stripShellQuotes,
   truncateBashMetadata,
@@ -69,5 +71,31 @@ describe("tool.bash helpers", () => {
 
     expect(result).toBe("你\n\n...")
     expect(result).not.toContain("\uFFFD")
+  })
+
+  test("keeps a valid leading byte when checking the next UTF-8 byte would overrun", () => {
+    const chunk = Buffer.from([0x61, 0x80])
+
+    expect(safeUtf8PrefixLength(chunk, 1)).toBe(1)
+  })
+
+  test("drops a partial multibyte lead byte at the truncation boundary", () => {
+    const chunk = Buffer.from("你", "utf8")
+
+    expect(safeUtf8PrefixLength(chunk, 1)).toBe(0)
+  })
+
+  test("drops a partial multibyte lead byte when the stream chunk ends at the boundary", () => {
+    const chunk = Buffer.from("你", "utf8").subarray(0, 1)
+
+    expect(safeUtf8PrefixLength(chunk, 1)).toBe(0)
+  })
+
+  test("refs child processes only when the runtime exposes ref()", () => {
+    let calls = 0
+
+    expect(refProcessIfAvailable({ ref: () => calls++ })).toBe(true)
+    expect(refProcessIfAvailable({})).toBe(false)
+    expect(calls).toBe(1)
   })
 })
