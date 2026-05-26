@@ -28,6 +28,7 @@ import type {
   SessionMessagesResponse,
 } from "@ax-code/sdk/v2/client"
 import { internalBaseUrl } from "../util/internal-url.js"
+import { toError } from "../util/error-message.js"
 import type {
   Agent,
   AgentOptions,
@@ -141,7 +142,7 @@ function withSdkTimeout<T>(
       try {
         reject(makeError())
       } catch (e) {
-        reject(e instanceof Error ? e : new Error(String(e)))
+        reject(toError(e))
       }
     }, ms)
     if (typeof timer === "object" && "unref" in timer) timer.unref()
@@ -338,7 +339,7 @@ async function withRetry<T>(
       return await fn()
     } catch (e) {
       if (signal?.aborted) throw new Error("Operation aborted")
-      lastError = e instanceof Error ? e : new Error(String(e))
+      lastError = toError(e)
       const isRetryable = (() => {
         if (e instanceof ProviderError) {
           return e.status !== undefined && [429, 500, 502, 503, 504].includes(e.status)
@@ -757,7 +758,7 @@ function createSessionHandle(
           })
         } catch (err) {
           await closeEvents(events)
-          throw err instanceof Error ? err : new Error(String(err))
+          throw toError(err)
         }
         return result
       }
@@ -812,7 +813,7 @@ function createSessionHandle(
               parts: [{ type: "text", text: message }],
             })
           } catch (err) {
-            yield { type: "error", error: err instanceof Error ? err : new Error(String(err)) } satisfies StreamEvent
+            yield { type: "error", error: toError(err) } satisfies StreamEvent
             return
           }
           yield* streamEvents(sdk, events, sessionID, opts.hooks)
@@ -1108,7 +1109,7 @@ export async function createAgent(options?: AgentOptions): Promise<Agent> {
         })
       } catch (err) {
         await closeEvents(events)
-        throw err instanceof Error ? err : new Error(String(err))
+        throw toError(err)
       }
       try {
         const result = await resultPromise

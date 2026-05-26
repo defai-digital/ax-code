@@ -6,6 +6,7 @@ import path from "path"
 import os from "os"
 import { DiagnosticLog } from "../../debug/diagnostic-log"
 import { Process } from "../../util/process"
+import { toErrorMessage } from "../../util/error-message"
 import { text } from "node:stream/consumers"
 
 export type Opts = {
@@ -159,7 +160,7 @@ async function loadShellEnv(env: Record<string, string | undefined>) {
       }
       result = [code, stdout, stderr]
     } catch (err) {
-      Log.Default.debug("shell env load failed", { error: err instanceof Error ? err.message : String(err) })
+      Log.Default.debug("shell env load failed", { error: toErrorMessage(err) })
       result = undefined
     }
     if (!result) return
