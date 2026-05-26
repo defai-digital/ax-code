@@ -16,9 +16,23 @@ describe("McpPermissionPattern.derive", () => {
     expect(result.durable).toBe(true)
   })
 
+  test("redacts URL credentials and secret query parameters in patterns", () => {
+    const result = McpPermissionPattern.derive("fetch", {
+      url: "https://user:pass@example.com/path?api_key=secret&query=ok#fragment",
+    })
+
+    expect(result.patterns).toEqual([
+      "url:https://%5Bredacted%5D:%5Bredacted%5D@example.com/path?api_key=%5Bredacted%5D&query=ok",
+    ])
+  })
+
   test("normalizes worktree-local paths as durable relative patterns", () => {
     const worktree = path.join(path.sep, "tmp", "repo")
-    const result = McpPermissionPattern.derive("fs_read", { filePath: path.join(worktree, "src", "index.ts") }, { worktree })
+    const result = McpPermissionPattern.derive(
+      "fs_read",
+      { filePath: path.join(worktree, "src", "index.ts") },
+      { worktree },
+    )
 
     expect(result.patterns).toEqual(["path:src/index.ts"])
     expect(result.always).toEqual(["path:src/index.ts"])

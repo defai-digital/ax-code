@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { Agent } from "../../src/agent/agent"
 import { Instance } from "../../src/project/instance"
-import { resolveTools, shouldBypassAgentCheck } from "../../src/session/prompt-tools"
+import { collectMcpToolContent, resolveTools, shouldBypassAgentCheck } from "../../src/session/prompt-tools"
 import { tmpdir } from "../fixture/fixture"
 
 describe("session.prompt-tools", () => {
@@ -11,6 +11,32 @@ describe("session.prompt-tools", () => {
     expect(
       shouldBypassAgentCheck([{ type: "text", text: "hello" } as any, { type: "agent", name: "build" } as any]),
     ).toBe(true)
+  })
+
+  test("collects MCP tool text with binary placeholders instead of raw model-facing blobs", () => {
+    const result = collectMcpToolContent([
+      { type: "text", text: "visible text" },
+      { type: "image", mimeType: "image/png", data: "abc123" },
+      {
+        type: "resource",
+        resource: {
+          uri: "secret://large",
+          mimeType: "application/octet-stream",
+          blob: "rawblob",
+        },
+      },
+    ])
+
+    expect(result.textParts).toEqual([
+      "visible text",
+      "[Image content: image/png]",
+      "[Binary MCP resource: secret://large (application/octet-stream)]",
+    ])
+    expect(result.attachments).toHaveLength(2)
+    expect(result.attachments[1]).toMatchObject({
+      filename: "secret://large",
+      mime: "application/octet-stream",
+    })
   })
 
   test("filters tools denied by the active agent ruleset", async () => {

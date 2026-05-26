@@ -1605,12 +1605,17 @@ export type McpStatusNeedsClientRegistration = {
   error: string
 }
 
+export type McpStatusNeedsTrust = {
+  status: "needs_trust"
+}
+
 export type McpStatus =
   | McpStatusConnected
   | McpStatusDisabled
   | McpStatusFailed
   | McpStatusNeedsAuth
   | McpStatusNeedsClientRegistration
+  | McpStatusNeedsTrust
 
 export type LspStatus = {
   id: string

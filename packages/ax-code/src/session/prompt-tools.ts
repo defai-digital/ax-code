@@ -64,6 +64,57 @@ export function shouldBypassAgentCheck(parts: MessageV2.Part[] | undefined): boo
   return parts?.some((part) => part.type === "agent") ?? false
 }
 
+type McpToolContentItem = {
+  type: string
+  text?: string
+  mimeType?: string
+  data?: string
+  resource?: {
+    text?: string
+    blob?: string
+    mimeType?: string
+    uri?: string
+  }
+}
+
+export function collectMcpToolContent(content: McpToolContentItem[]) {
+  const textParts: string[] = []
+  const attachments: Omit<MessageV2.FilePart, "id" | "sessionID" | "messageID">[] = []
+
+  for (const contentItem of content) {
+    if (contentItem.type === "text" && contentItem.text) {
+      textParts.push(contentItem.text)
+      continue
+    }
+    if (contentItem.type === "image" && contentItem.data) {
+      const mimeType = contentItem.mimeType ?? "image/png"
+      textParts.push(`[Image content: ${mimeType}]`)
+      attachments.push({
+        type: "file",
+        mime: mimeType,
+        url: `data:${mimeType};base64,${contentItem.data}`,
+      })
+      continue
+    }
+    if (contentItem.type === "resource" && contentItem.resource) {
+      const { resource } = contentItem
+      if (resource.text) textParts.push(resource.text)
+      if (resource.blob) {
+        const mimeType = resource.mimeType ?? "application/octet-stream"
+        textParts.push(`[Binary MCP resource: ${resource.uri ?? "unknown"} (${mimeType})]`)
+        attachments.push({
+          type: "file",
+          mime: mimeType,
+          url: `data:${mimeType};base64,${resource.blob}`,
+          filename: resource.uri,
+        })
+      }
+    }
+  }
+
+  return { textParts, attachments }
+}
+
 /**
  * Resolve and configure all available tools for a session turn.
  * Handles schema transformation, caching, isolation escalation, and MCP tools.
@@ -338,33 +389,7 @@ export async function resolveTools(input: ResolveToolsInput) {
         result,
       )
 
-      const textParts: string[] = []
-      const attachments: Omit<MessageV2.FilePart, "id" | "sessionID" | "messageID">[] = []
-
-      for (const contentItem of result.content) {
-        if (contentItem.type === "text") {
-          textParts.push(contentItem.text)
-        } else if (contentItem.type === "image") {
-          attachments.push({
-            type: "file",
-            mime: contentItem.mimeType,
-            url: `data:${contentItem.mimeType};base64,${contentItem.data}`,
-          })
-        } else if (contentItem.type === "resource") {
-          const { resource } = contentItem
-          if (resource.text) {
-            textParts.push(resource.text)
-          }
-          if (resource.blob) {
-            attachments.push({
-              type: "file",
-              mime: resource.mimeType ?? "application/octet-stream",
-              url: `data:${resource.mimeType ?? "application/octet-stream"};base64,${resource.blob}`,
-              filename: resource.uri,
-            })
-          }
-        }
-      }
+      const { textParts, attachments } = collectMcpToolContent(result.content as McpToolContentItem[])
 
       const outputText = textParts.length ? `[Untrusted MCP tool content from ${key}]\n\n${textParts.join("\n\n")}` : ""
       const truncated = await Truncate.output(outputText, {}, input.agent)
@@ -390,7 +415,7 @@ export async function resolveTools(input: ResolveToolsInput) {
           sessionID: ctx.sessionID,
           messageID: input.processor.message.id,
         })),
-        content: textParts.length ? ([{ type: "text", text: truncated.content }] as any) : result.content,
+        content: [{ type: "text", text: truncated.content }] as any,
       }
     }
     tools[key] = mcpTool
