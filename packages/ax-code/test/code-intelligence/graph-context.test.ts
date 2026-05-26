@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test"
+import { symlink } from "fs/promises"
 import path from "path"
 import { tmpdir } from "../fixture/fixture"
 import { Instance } from "../../src/project/instance"
@@ -162,6 +163,46 @@ describe("GraphContext.build", () => {
     })
   })
 
+  test("classifies Flask app.route decorators before generic FastAPI decorators", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        CodeIntelligence.__clearProject(projectID)
+        const file = path.join(tmp.path, "app.py")
+        await Bun.write(
+          file,
+          [
+            "from flask import Flask",
+            "app = Flask(__name__)",
+            '@app.route("/charge", methods=["POST"])',
+            "def charge_card():",
+            "    return 'ok'",
+          ].join("\n"),
+        )
+
+        seedSymbol(projectID, { name: "charge_card", file, startLine: 3, endLine: 4 })
+        CodeGraphQuery.upsertCursor(projectID, "abc", 1, 0)
+
+        const pack = await GraphContext.build(projectID, {
+          query: "where is charge_card routed",
+          maxSymbols: 1,
+          maxSnippets: 1,
+          scope: "worktree",
+        })
+
+        expect(pack.frameworkBindings).toHaveLength(1)
+        expect(pack.frameworkBindings[0].framework).toBe("flask")
+        expect(pack.frameworkBindings[0].method).toBe("POST")
+        expect(pack.frameworkBindings[0].route).toBe("/charge")
+        expect(pack.frameworkBindings[0].provenance.source).toBe("framework")
+
+        CodeIntelligence.__clearProject(projectID)
+      },
+    })
+  })
+
   test("keeps out-of-worktree seeds scoped out", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
@@ -182,6 +223,39 @@ describe("GraphContext.build", () => {
 
         expect(pack.symbols).toHaveLength(1)
         expect(pack.symbols[0].file).toBe(inside)
+
+        CodeIntelligence.__clearProject(projectID)
+      },
+    })
+  })
+
+  test("does not read snippets through symlinks that escape the worktree", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await using outside = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        CodeIntelligence.__clearProject(projectID)
+        const outsideFile = path.join(outside.path, "secret.ts")
+        const link = path.join(tmp.path, "linked-secret.ts")
+        await Bun.write(outsideFile, 'export function leakSecret() { return "outside-secret-token" }\n')
+        await symlink(outsideFile, link)
+
+        seedSymbol(projectID, { name: "leakSecret", file: link })
+        CodeGraphQuery.upsertCursor(projectID, "abc", 1, 0)
+
+        const pack = await GraphContext.build(projectID, {
+          query: "leakSecret",
+          maxSymbols: 1,
+          maxSnippets: 1,
+          scope: "worktree",
+        })
+
+        expect(pack.symbols).toHaveLength(1)
+        expect(pack.symbols[0].file).toBe(link)
+        expect(pack.snippets).toHaveLength(0)
+        expect(pack.output).not.toContain("outside-secret-token")
 
         CodeIntelligence.__clearProject(projectID)
       },

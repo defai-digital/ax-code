@@ -1,8 +1,10 @@
-import { readFile } from "fs/promises"
+import { readFile, realpath } from "fs/promises"
 import path from "path"
 import { CodeIntelligence } from "."
 import { CodeNodeID } from "./id"
+import { Instance } from "../project/instance"
 import type { ProjectID } from "../project/schema"
+import { Filesystem } from "../util/filesystem"
 import type { CodeNodeKind } from "./schema.sql"
 
 type Seed = { kind: "symbol"; value: string } | { kind: "file"; value: string } | { kind: "name"; value: string }
@@ -185,8 +187,26 @@ function lineRef(file: string, line: number): string {
   return `${file}:${line + 1}`
 }
 
-async function readSnippet(symbol: CodeIntelligence.Symbol): Promise<Snippet | undefined> {
+async function canReadGraphFile(file: string, scope: CodeIntelligence.Scope): Promise<boolean> {
+  if (scope !== "worktree") return true
+
+  const projectRoot = path.resolve(Instance.directory)
+  const targetPath = path.resolve(file)
+  if (!Filesystem.contains(projectRoot, targetPath)) return false
+
+  const [projectRootReal, targetReal] = await Promise.all([
+    realpath(projectRoot).catch(() => projectRoot),
+    realpath(targetPath).catch(() => undefined),
+  ])
+  return targetReal !== undefined && Filesystem.contains(projectRootReal, targetReal)
+}
+
+async function readSnippet(
+  symbol: CodeIntelligence.Symbol,
+  scope: CodeIntelligence.Scope,
+): Promise<Snippet | undefined> {
   try {
+    if (!(await canReadGraphFile(symbol.file, scope))) return undefined
     const text = await readFile(symbol.file, "utf8")
     const lines = text.split(/\r?\n/)
     const startLine = Math.max(0, symbol.range.start.line - 2)
@@ -209,8 +229,9 @@ async function readSnippet(symbol: CodeIntelligence.Symbol): Promise<Snippet | u
   }
 }
 
-async function readFileLines(file: string): Promise<string[] | undefined> {
+async function readFileLines(file: string, scope: CodeIntelligence.Scope): Promise<string[] | undefined> {
   try {
+    if (!(await canReadGraphFile(file, scope))) return undefined
     return (await readFile(file, "utf8")).split(/\r?\n/)
   } catch {
     return undefined
@@ -229,7 +250,8 @@ function routeBindings(symbol: CodeIntelligence.Symbol, lines: string[]): Framew
     "i",
   )
   const decorator = /^\s*@(app|router)\.(get|post|put|delete|patch|options|head|route)\s*\(\s*["']([^"']+)["']/i
-  const flaskDecorator = /^\s*@(?:app|bp|blueprint)\.route\s*\(\s*["']([^"']+)["'][^)]*(?:methods\s*=\s*\[([^\]]+)\])?/i
+  const flaskDecorator = /^\s*@(?:app|bp|blueprint)\.route\s*\(\s*["']([^"']+)["']/i
+  const flaskMethods = /methods\s*=\s*\[([^\]]+)\]/i
 
   for (let idx = 0; idx < lines.length; idx++) {
     const line = lines[idx] ?? ""
@@ -254,6 +276,30 @@ function routeBindings(symbol: CodeIntelligence.Symbol, lines: string[]): Framew
     const nearSymbol = idx < symbol.range.start.line && symbol.range.start.line - idx <= 3
     if (!nearSymbol) continue
 
+    const flask = line.match(flaskDecorator)
+    if (flask) {
+      const methods = line.match(flaskMethods)?.[1]
+      out.push({
+        framework: "flask",
+        method:
+          methods
+            ?.replace(/['"\s]/g, "")
+            .split(",")
+            .filter(Boolean)
+            .join(",") || "ROUTE",
+        route: flask[1] ?? "",
+        file: symbol.file,
+        line: idx,
+        symbolID: symbol.id,
+        provenance: {
+          source: "framework",
+          confidence: "medium",
+          explanation: "Matched a Flask-style route decorator immediately above the handler.",
+        },
+      })
+      continue
+    }
+
     const fastapi = line.match(decorator)
     if (fastapi) {
       out.push({
@@ -267,29 +313,6 @@ function routeBindings(symbol: CodeIntelligence.Symbol, lines: string[]): Framew
           source: "framework",
           confidence: "medium",
           explanation: "Matched a FastAPI-style decorator immediately above the handler.",
-        },
-      })
-      continue
-    }
-
-    const flask = line.match(flaskDecorator)
-    if (flask) {
-      out.push({
-        framework: "flask",
-        method:
-          flask[2]
-            ?.replace(/['"\s]/g, "")
-            .split(",")
-            .filter(Boolean)
-            .join(",") || "ROUTE",
-        route: flask[1] ?? "",
-        file: symbol.file,
-        line: idx,
-        symbolID: symbol.id,
-        provenance: {
-          source: "framework",
-          confidence: "medium",
-          explanation: "Matched a Flask-style route decorator immediately above the handler.",
         },
       })
     }
@@ -576,15 +599,15 @@ export namespace GraphContext {
       }
     }
 
-    const snippets = (await Promise.all(symbols.slice(0, maxSnippets).map((symbol) => readSnippet(symbol)))).filter(
-      (item): item is Snippet => item !== undefined,
-    )
+    const snippets = (
+      await Promise.all(symbols.slice(0, maxSnippets).map((symbol) => readSnippet(symbol, scope)))
+    ).filter((item): item is Snippet => item !== undefined)
 
     const frameworkBindings: FrameworkBinding[] = []
     const heuristicSignals: HeuristicBinding[] = []
     const linesByFile = new Map<string, string[] | undefined>()
     for (const symbol of symbols) {
-      if (!linesByFile.has(symbol.file)) linesByFile.set(symbol.file, await readFileLines(symbol.file))
+      if (!linesByFile.has(symbol.file)) linesByFile.set(symbol.file, await readFileLines(symbol.file, scope))
       const lines = linesByFile.get(symbol.file)
       if (!lines) continue
       frameworkBindings.push(...routeBindings(symbol, lines))
