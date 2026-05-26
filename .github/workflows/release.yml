@@ -22,8 +22,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-        with:
-          token: ${{ secrets.TAP_TOKEN || github.token }}
 
       - name: Setup Ax-code JS toolchain
         uses: ./.github/actions/setup-ax-code-toolchain
@@ -74,8 +72,6 @@ jobs:
       AX_CODE_DISABLE_PROJECT_CONFIG: "1"
     steps:
       - uses: actions/checkout@v6
-        with:
-          token: ${{ secrets.TAP_TOKEN || github.token }}
 
       - name: Set isolated home paths
         shell: bash
@@ -141,7 +137,6 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          token: ${{ secrets.TAP_TOKEN || github.token }}
           fetch-depth: 0
 
       - name: Download all build artifacts
@@ -152,7 +147,7 @@ jobs:
 
       - name: Create GitHub release
         env:
-          GH_TOKEN: ${{ secrets.TAP_TOKEN || secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CHANNEL: ${{ env.AX_CODE_RELEASE_CHANNEL }}
         run: |
           TAG="${{ github.ref_name }}"
@@ -183,7 +178,7 @@ jobs:
 
       - name: Upload release assets
         env:
-          GH_TOKEN: ${{ secrets.TAP_TOKEN || secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="${{ github.ref_name }}"
           for f in packages/ax-code/dist/*.tar.gz packages/ax-code/dist/*.zip; do
