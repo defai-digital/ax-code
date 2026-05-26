@@ -40,6 +40,8 @@ const DEFAULT_TIMEOUT = Flag.AX_CODE_EXPERIMENTAL_BASH_DEFAULT_TIMEOUT_MS || 2 *
 
 const log = Log.create({ service: "bash-tool" })
 const CLEANUP_KILL_TIMEOUT_MS = 250
+const isBunRuntime = Boolean((process.versions as Record<string, string | undefined>).bun)
+const useSetsidProcessGroup = process.platform === "linux" && isBunRuntime
 
 async function estimateFileLineDelta(filePath: string) {
   const stat = await fs.stat(filePath).catch(() => undefined)
@@ -47,9 +49,9 @@ async function estimateFileLineDelta(filePath: string) {
   return Math.max(1, Math.ceil(stat.size / 80))
 }
 
-// Track detached process groups so we can clean them up if the parent
+// Track child process groups so we can clean them up if the parent
 // process exits unexpectedly (crash, SIGKILL, etc.). Without this,
-// detached child processes become orphans that keep running.
+// background commands can become orphans that keep running.
 const trackedPIDs = new Set<number>()
 const cleanupTimers = new Map<number, ReturnType<typeof setTimeout>>()
 
@@ -555,16 +557,26 @@ export const BashTool = Tool.define("bash", async () => {
         ...process.env,
         ...shellEnv.env,
       })
-      const proc = spawn(params.command, {
-        shell,
-        cwd,
-        env: {
-          ...sanitizedEnv,
-        },
-        stdio: ["ignore", "pipe", "pipe"],
-        detached: process.platform !== "win32",
-        windowsHide: process.platform === "win32",
-      })
+      const proc = useSetsidProcessGroup
+        ? spawn("setsid", [shell, "-c", params.command], {
+            cwd,
+            env: {
+              ...sanitizedEnv,
+            },
+            stdio: ["ignore", "pipe", "pipe"],
+            detached: false,
+            windowsHide: process.platform === "win32",
+          })
+        : spawn(params.command, {
+            shell,
+            cwd,
+            env: {
+              ...sanitizedEnv,
+            },
+            stdio: ["ignore", "pipe", "pipe"],
+            detached: process.platform !== "win32",
+            windowsHide: process.platform === "win32",
+          })
       if (proc.pid) {
         trackedPIDs.add(proc.pid)
       } else {
