@@ -31,16 +31,13 @@ runs:
       uses: actions/checkout@v6
 
     - name: Setup pnpm
-      uses: pnpm/action-setup@v6
-      with:
-        version: ${{ inputs.pnpm-version }}
-        run_install: false
+      shell: bash
+      run: npm install -g pnpm@${{ inputs.pnpm-version }}
 
     - name: Setup Node.js
       uses: actions/setup-node@v6
       with:
         node-version: ${{ inputs.node-version }}
-        cache: pnpm
         registry-url: ${{ inputs.registry-url }}
 
     - name: Setup Bun
