@@ -53,4 +53,17 @@ describe("context generator", () => {
     expect(content).toContain("smallest scoped change")
     expect(content).toContain("Verify with the narrowest relevant test")
   })
+
+  test("includes MCP suggestions section when suggestedMcp is set", () => {
+    const info: ProjectInfo = { ...baseInfo, suggestedMcp: ["@playwright/mcp — browser screenshot"] }
+    const content = generate(info)
+    expect(content).toContain("## Suggested MCP Servers")
+    expect(content).toContain("@playwright/mcp")
+    expect(content).toContain("ax-code mcp --discover")
+  })
+
+  test("omits MCP suggestions section when suggestedMcp is absent", () => {
+    const content = generate(baseInfo)
+    expect(content).not.toContain("## Suggested MCP Servers")
+  })
 })

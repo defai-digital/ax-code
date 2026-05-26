@@ -11,6 +11,8 @@ import { Truncate } from "../../src/tool/truncate"
 import { Isolation } from "../../src/isolation"
 import { SessionID, MessageID } from "../../src/session/schema"
 import { BlastRadius } from "../../src/session/blast-radius"
+import { Bus } from "../../src/bus"
+import { TuiEvent } from "../../src/cli/cmd/tui/event"
 
 const ctx = {
   sessionID: SessionID.make("ses_test"),
@@ -1048,6 +1050,31 @@ describe("tool.bash browser-open interception", () => {
           // permission throw is expected
         }
         expect(spawned).toBe(true)
+      },
+    })
+  })
+
+  test("emits TuiEvent.ToastShow when browser open is intercepted", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const toasts: Array<{ title?: string; message: string; variant: string }> = []
+        const unsub = Bus.subscribe(TuiEvent.ToastShow, (event) => {
+          toasts.push(event.properties)
+        })
+        try {
+          const bash = await BashTool.init()
+          await bash.execute({ command: "open index.html", description: "Open HTML file" }, ctx)
+          // publishDetached is fire-and-forget — give the microtask queue a turn
+          await new Promise((r) => setTimeout(r, 10))
+          expect(toasts.length).toBeGreaterThan(0)
+          expect(toasts[0].title).toBe("Browser preview ready")
+          expect(toasts[0].variant).toBe("info")
+          expect(toasts[0].message).toContain("index.html")
+        } finally {
+          unsub()
+        }
       },
     })
   })
