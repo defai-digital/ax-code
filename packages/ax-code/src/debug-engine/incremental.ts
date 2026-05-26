@@ -1,6 +1,6 @@
-import { $ } from "bun"
 import path from "path"
 import { Instance } from "../project/instance"
+import { Process } from "../util/process"
 
 // incremental — Git-diff-aware file selection for scanner incremental mode.
 //
@@ -31,10 +31,13 @@ export namespace Incremental {
 
     // Get changed files from git. Use --diff-filter=ACMR to exclude
     // deleted files (D) — we can't scan files that no longer exist.
-    const result = await $`git diff --name-only --diff-filter=ACMR ${ref} -- ${includeGlobs}`
-      .cwd(cwd)
-      .text()
-      .catch(() => "")
+    const result = await Process.text(
+      ["git", "diff", "--name-only", "--diff-filter=ACMR", ref, "--", ...includeGlobs],
+      {
+        cwd,
+        nothrow: true,
+      },
+    ).then((out) => out.text)
     const relPaths = result
       .trim()
       .split("\n")
@@ -63,10 +66,10 @@ export namespace Incremental {
     // Use git log to find the commit closest to `seconds` ago, then
     // diff against it.
     const sinceDate = new Date(Date.now() - seconds * 1000).toISOString()
-    const ref = await $`git log --since=${sinceDate} --format=%H --reverse`
-      .cwd(cwd)
-      .text()
-      .catch(() => "")
+    const ref = await Process.text(["git", "log", `--since=${sinceDate}`, "--format=%H", "--reverse"], {
+      cwd,
+      nothrow: true,
+    }).then((out) => out.text)
     const firstCommit = ref.trim().split("\n")[0]
 
     if (!firstCommit) {
@@ -103,10 +106,13 @@ export namespace Incremental {
 
     // Use git grep for speed — it respects .gitignore automatically
     const pattern = patterns.join("|")
-    const result = await $`git grep -l -E "from\\s+['\"].*(?:${pattern})['\"]" -- ${includeGlobs}`
-      .cwd(cwd)
-      .text()
-      .catch(() => "")
+    const result = await Process.text(
+      ["git", "grep", "-l", "-E", `from\\s+['"].*(?:${pattern})['"]`, "--", ...includeGlobs],
+      {
+        cwd,
+        nothrow: true,
+      },
+    ).then((out) => out.text)
 
     const importers = result
       .trim()

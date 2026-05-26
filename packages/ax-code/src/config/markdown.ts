@@ -115,6 +115,10 @@ export namespace ConfigMarkdown {
     return Effect.runPromise(parseEffect(file))
   }
 
+  export function parseText(location: string, content: string) {
+    return Effect.runPromise(load(location, content))
+  }
+
   export const FrontmatterError = NamedError.create(
     "ConfigFrontmatterError",
     z.object({

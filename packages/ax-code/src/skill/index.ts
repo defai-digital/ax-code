@@ -37,6 +37,7 @@ export namespace Skill {
     allowedTools: z.array(z.string()).optional(),
     argumentHint: z.string().optional(),
     standardIssues: z.array(z.string()).optional(),
+    builtin: z.boolean().optional(),
   })
   export type Info = z.infer<typeof Info>
 
@@ -139,7 +140,56 @@ export namespace Skill {
       }),
     ).pipe(Effect.flatMap((matches) => Effect.forEach(matches, (match) => addSkill(state, match), { discard: true })))
 
+  export const BUILTIN_NAMES = new Set(["debug-only", "debug-n-fix", "improve-overall", "security-harden"])
+
   export class Service extends ServiceMap.Service<Service, Interface>()("@ax-code/Skill") {}
+
+  declare const AX_CODE_BUILTIN_SKILLS: unknown
+
+  const BuiltinSkillEntry = z.object({
+    location: z.string(),
+    content: z.string(),
+  })
+
+  export function parseBuiltinSkillEntries(input: unknown): Array<{ location: string; content: string }> {
+    const raw = typeof input === "string" ? JSON.parse(input) : input
+    return z.array(BuiltinSkillEntry).parse(raw)
+  }
+
+  async function loadBuiltinSkills(): Promise<Array<{ location: string; content: string }>> {
+    if (typeof AX_CODE_BUILTIN_SKILLS !== "undefined") {
+      return parseBuiltinSkillEntries(AX_CODE_BUILTIN_SKILLS)
+    }
+    const builtinDir = path.resolve(import.meta.dirname, "../../skills")
+    const entries = await Filesystem.isDir(builtinDir).then((exists) => {
+      if (!exists) return [] as string[]
+      return Glob.scan("*/SKILL.md", { cwd: builtinDir, absolute: true, include: "file" }).catch(() => [] as string[])
+    })
+    return Promise.all(
+      entries.map(async (location) => ({ location, content: await Filesystem.readText(location) })),
+    )
+  }
+
+  const addBuiltinSkill = (state: State, entry: { location: string; content: string }) =>
+    Effect.promise(async () => {
+      const md = await ConfigMarkdown.parseText(entry.location, entry.content).catch((err) => {
+        log.error("failed to load built-in skill", { location: entry.location, err })
+        return undefined
+      })
+      if (!md) return
+      const data = md.data as Record<string, unknown>
+      const parsed = Info.pick({ name: true, description: true }).safeParse(data)
+      if (!parsed.success) return
+      const argumentHint = typeof data["argument-hint"] === "string" ? data["argument-hint"] : undefined
+      state.skills[parsed.data.name] = {
+        name: parsed.data.name,
+        description: parsed.data.description,
+        location: entry.location,
+        content: md.content,
+        ...(argumentHint ? { argumentHint } : {}),
+        builtin: true,
+      }
+    })
 
   export const layer: Layer.Layer<Service, never, Discovery.Service> = Layer.effect(
     Service,
@@ -151,6 +201,9 @@ export namespace Skill {
             skills: {},
             dirs: new Set<string>(),
           }
+
+          const builtins = yield* Effect.promise(() => loadBuiltinSkills())
+          yield* Effect.forEach(builtins, (entry) => addBuiltinSkill(s, entry), { discard: true })
 
           if (!Flag.AX_CODE_DISABLE_EXTERNAL_SKILLS) {
             for (const dir of EXTERNAL_DIRS) {
@@ -259,6 +312,11 @@ export namespace Skill {
       .trim()
   }
 
+  function formatLocation(skill: Info) {
+    if (skill.builtin) return `builtin://${encodeURIComponent(skill.name)}/SKILL.md`
+    return pathToFileURL(skill.location).href
+  }
+
   export function fmt(list: Info[], opts: { verbose: boolean; recommended?: Set<string> }) {
     if (list.length === 0) return "No skills are currently available."
 
@@ -271,7 +329,7 @@ export namespace Skill {
             recommended ? `  <skill recommended="true">` : "  <skill>",
             `    <name>${escapeMetadata(skill.name)}</name>`,
             `    <description>${escapeMetadata(skill.description)}</description>`,
-            `    <location>${pathToFileURL(skill.location).href}</location>`,
+            `    <location>${formatLocation(skill)}</location>`,
             ...(recommended
               ? [`    <note>This skill matches files in the current context. Consider loading it.</note>`]
               : []),
