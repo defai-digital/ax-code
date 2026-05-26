@@ -946,3 +946,109 @@ describe("tool.bash isolation", () => {
     })
   })
 })
+
+describe("tool.bash browser-open interception", () => {
+
+  test("intercepts open targeting a local HTML file", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const bash = await BashTool.init()
+        const result = await bash.execute(
+          { command: "open index.html", description: "Open HTML file" },
+          ctx,
+        )
+        expect(result.output).toContain("[Browser open intercepted]")
+        expect(result.output).toContain("index.html")
+        expect(result.metadata.exit).toBe(0)
+      },
+    })
+  })
+
+  test("intercepts xdg-open targeting a local HTML file", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const bash = await BashTool.init()
+        const result = await bash.execute(
+          { command: "xdg-open game.html", description: "Open game" },
+          ctx,
+        )
+        expect(result.output).toContain("[Browser open intercepted]")
+        expect(result.output).toContain("game.html")
+      },
+    })
+  })
+
+  test("intercepts open targeting localhost URL", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const bash = await BashTool.init()
+        const result = await bash.execute(
+          { command: "open http://localhost:3000", description: "Open dev server" },
+          ctx,
+        )
+        expect(result.output).toContain("[Browser open intercepted]")
+        expect(result.output).toContain("localhost:3000")
+      },
+    })
+  })
+
+  test("does NOT intercept open targeting an oauth callback URL", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const bash = await BashTool.init()
+        let spawned = false
+        const trackCtx = {
+          ...ctx,
+          ask: async () => {
+            spawned = true
+            throw new Error("stop after permission")
+          },
+        }
+        try {
+          await bash.execute(
+            { command: "open http://localhost:9999/oauth/callback", description: "OAuth callback" },
+            trackCtx,
+          )
+        } catch {
+          // permission throw is expected
+        }
+        expect(spawned).toBe(true)
+      },
+    })
+  })
+
+  test("does NOT intercept open targeting a non-local URL", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const bash = await BashTool.init()
+        let spawned = false
+        const trackCtx = {
+          ...ctx,
+          ask: async () => {
+            spawned = true
+            throw new Error("stop after permission")
+          },
+        }
+        try {
+          await bash.execute(
+            { command: "open https://example.com", description: "Open external site" },
+            trackCtx,
+          )
+        } catch {
+          // permission throw is expected
+        }
+        expect(spawned).toBe(true)
+      },
+    })
+  })
+})

@@ -38,6 +38,29 @@ import {
 import { BASH_MAX_METADATA_LENGTH as MAX_METADATA_LENGTH } from "@/constants/network"
 const DEFAULT_TIMEOUT = Flag.AX_CODE_EXPERIMENTAL_BASH_DEFAULT_TIMEOUT_MS || 2 * 60 * 1000
 
+// Browser-launcher command names on macOS, Linux, Windows.
+const BROWSER_OPEN_RE = /^(open|xdg-open|start|sensible-browser)\s+/
+
+// Matches local HTML file paths or localhost/127.0.0.1 URLs.
+const LOCAL_HTML_TARGET_RE = /(?:\.html?(?:\s*$|#|\?))|^https?:\/\/(?:localhost|127\.0\.0\.1)/i
+
+// Patterns that identify intentional (non-development) browser opens.
+// These are allowed through even when targeting localhost/local files.
+const BROWSER_INTENT_PASSTHROUGH_RE = /(?:callback|oauth|auth|token|dre-graph|mcp)/i
+
+/**
+ * Returns the target argument if the command is a browser-open call targeting
+ * a local HTML file or localhost URL that should be intercepted. Returns null
+ * for OAuth flows, DRE graph, MCP auth, or non-local targets.
+ */
+function isBrowserOpenToLocal(command: string): string | null {
+  if (!BROWSER_OPEN_RE.test(command)) return null
+  const target = command.replace(BROWSER_OPEN_RE, "").trim()
+  if (!LOCAL_HTML_TARGET_RE.test(target)) return null
+  if (BROWSER_INTENT_PASSTHROUGH_RE.test(target)) return null
+  return target
+}
+
 const log = Log.create({ service: "bash-tool" })
 const CLEANUP_KILL_TIMEOUT_MS = 250
 const isBunRuntime = Boolean((process.versions as Record<string, string | undefined>).bun)
@@ -179,6 +202,40 @@ export const BashTool = Tool.define("bash", async () => {
       }
       if (params.command.includes("\x00")) throw new Error("Command contains null byte")
       if (hasDynamicRedirection(params.command)) throw new Error("Dynamic redirection targets are not allowed")
+
+      const browserOpenIntercept = isBrowserOpenToLocal(params.command)
+      if (browserOpenIntercept) {
+        log.info("browser open intercepted", {
+          toolName: "bash",
+          command: params.command,
+          status: "intercepted",
+          durationMs: 0,
+        })
+        const msg = `[Browser open intercepted] Preview is ready at: ${browserOpenIntercept}\n\nThe browser was not opened automatically to avoid disrupting your active development session. Open it manually when ready, or ask to open it explicitly.`
+        return {
+          title: params.description,
+          metadata: {
+            output: msg,
+            exit: 0,
+            description: params.description,
+            hang: {
+              processId: null,
+              signal: null,
+              timeoutMs: 0,
+              timedOut: false,
+              aborted: false,
+              outputBytes: Buffer.byteLength(msg),
+              outputTruncated: false,
+              lastOutputAt: null,
+              killStartedAt: null,
+              killCompletedAt: null,
+              killDurationMs: null,
+            },
+            truncated: false as const,
+          },
+          output: msg,
+        }
+      }
       const requestedCwd = params.workdir ? resolveToolFilePath(params.workdir, Instance.directory) : Instance.directory
       await assertSymlinkInsideProject(requestedCwd)
       const cwd = params.workdir
