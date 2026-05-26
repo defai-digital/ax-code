@@ -4,6 +4,7 @@ import { Tool } from "./tool"
 import DESCRIPTION from "./code-intelligence.txt"
 import { Instance } from "../project/instance"
 import { CodeIntelligence } from "../code-intelligence"
+import { GraphContext } from "../code-intelligence/graph-context"
 import { CodeNodeID } from "../code-intelligence/id"
 import { assertSymlinkInsideProject } from "./external-directory"
 import { Filesystem } from "../util/filesystem"
@@ -32,6 +33,7 @@ const operations = [
   "findReferences",
   "findCallers",
   "findCallees",
+  "buildContext",
 ] as const
 
 const NODE_KINDS = [
@@ -75,6 +77,16 @@ export const CodeIntelligenceTool = Tool.define("code_intelligence", {
       .string()
       .optional()
       .describe("Symbol id from a previous findSymbol call (for findReferences/findCallers/findCallees)"),
+    query: z.string().optional().describe("Natural-language task or symbol/topic string (for buildContext)"),
+    seeds: z
+      .array(
+        z.object({
+          kind: z.enum(["symbol", "file", "name"]),
+          value: z.string(),
+        }),
+      )
+      .optional()
+      .describe("Optional graph-context seeds: symbol id, absolute file path, or symbol name"),
     kind: z.enum(NODE_KINDS).optional().describe("Optional kind filter for findSymbol/findSymbolByPrefix"),
     limit: z
       .number()
@@ -83,6 +95,14 @@ export const CodeIntelligenceTool = Tool.define("code_intelligence", {
       .max(MAX_RESULTS)
       .optional()
       .describe(`Max results to return (default ${MAX_RESULTS})`),
+    maxSymbols: z.number().int().min(1).max(20).optional().describe("Max selected symbols for buildContext"),
+    maxSnippets: z.number().int().min(0).max(12).optional().describe("Max source snippets for buildContext"),
+    maxDepth: z.number().int().min(1).max(3).optional().describe("Max graph depth for buildContext impact summary"),
+    includeImpact: z.boolean().optional().describe("Whether buildContext should include a bounded impact summary"),
+    freshness: z
+      .enum(["preferGraph", "requireFresh", "allowStaleWithWarning"])
+      .optional()
+      .describe("Freshness policy hint for buildContext"),
   }),
   execute: async (args, ctx) => {
     await ctx.ask({
@@ -166,6 +186,51 @@ export const CodeIntelligenceTool = Tool.define("code_intelligence", {
           title: `findCallees ${args.symbolID}`,
           output: clipped.length === 0 ? `No callees found` : clipped.map(formatCallChainNode).join("\n"),
           metadata: { count: callees.length, truncated: callees.length > clipped.length, callees: clipped, envelope },
+        }
+      }
+      if (args.operation === "buildContext") {
+        if (!args.query) throw new Error("buildContext requires `query`")
+        const seeds = args.seeds?.map((seed) => {
+          if (seed.kind === "file") {
+            const file = resolveToolFilePath(seed.value, Instance.directory)
+            if (!Filesystem.contains(Instance.directory, file)) {
+              throw new Error("buildContext file seeds must be inside the project")
+            }
+            return { kind: seed.kind, value: file }
+          }
+          return seed
+        })
+        if (seeds) {
+          for (const seed of seeds) {
+            if (seed.kind !== "file") continue
+            await assertSymlinkInsideProject(seed.value)
+          }
+        }
+        const pack = await GraphContext.build(projectID, {
+          query: args.query,
+          seeds,
+          maxSymbols: args.maxSymbols ?? args.limit,
+          maxSnippets: args.maxSnippets,
+          maxDepth: args.maxDepth,
+          includeImpact: args.includeImpact,
+          freshness: args.freshness,
+          scope,
+        })
+        return {
+          title: `buildContext ${args.query}`,
+          output: pack.output,
+          metadata: {
+            count: pack.symbols.length,
+            symbols: pack.symbols,
+            relationships: pack.relationships,
+            snippets: pack.snippets,
+            frameworkBindings: pack.frameworkBindings,
+            heuristicBindings: pack.heuristicBindings,
+            impact: pack.impact,
+            omitted: pack.omitted,
+            recommendations: pack.recommendations,
+            envelope: pack.envelope,
+          },
         }
       }
       throw new Error(`Unknown operation: ${args.operation}`)

@@ -489,4 +489,38 @@ describe("CodeIntelligence tool envelope (§S4)", () => {
       },
     })
   })
+
+  test("buildContext returns graph-first context metadata", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id as ProjectID
+        CodeIntelligence.__clearProject(projectID)
+        const file = path.join(tmp.path, "ctx.ts")
+        await Bun.write(file, "export function buildContextTarget() {\n  return true\n}\n")
+        seedSymbol(projectID, { name: "buildContextTarget", base: tmp.path, relFile: "ctx.ts" })
+        CodeGraphQuery.upsertCursor(projectID, "abc", 1, 0)
+
+        const tool = await CodeIntelligenceTool.init()
+        const result = await tool.execute(
+          {
+            operation: "buildContext",
+            query: "explain buildContextTarget",
+            maxSymbols: 1,
+            maxSnippets: 1,
+          },
+          ctx,
+        )
+
+        expect(result.output).toContain("Graph Context")
+        expect(result.output).toContain("buildContextTarget")
+        expect(result.metadata.count).toBe(1)
+        expect(Array.isArray(result.metadata.snippets)).toBe(true)
+        expect(Array.isArray(result.metadata.recommendations)).toBe(true)
+
+        CodeIntelligence.__clearProject(projectID)
+      },
+    })
+  })
 })
