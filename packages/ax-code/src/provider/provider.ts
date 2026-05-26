@@ -45,6 +45,7 @@ export namespace Provider {
   const log = Log.create({ service: "provider" })
   const supported = isModelSupportedForProvider
   let modelCacheGeneration = 0
+  const MODEL_CACHE_INVALIDATION_RETRY_LIMIT = 8
 
   function addLegacyXaiModelAliases(providerID: ProviderID, models: Record<string, Model>) {
     if (providerID !== ProviderID.xai) return
@@ -1034,7 +1035,7 @@ export namespace Provider {
     return info
   }
 
-  export async function getLanguage(model: Model): Promise<Lang> {
+  export async function getLanguage(model: Model, retryDepth = 0): Promise<Lang> {
     const s = await state()
     const provider = s.providers[model.providerID]
     if (!provider) {
@@ -1042,6 +1043,12 @@ export namespace Provider {
     }
 
     const key = languageCacheKey(model, provider)
+    const retryAfterInvalidation = () => {
+      if (retryDepth >= MODEL_CACHE_INVALIDATION_RETRY_LIMIT) {
+        throw new Error(`Provider model cache repeatedly invalidated while loading ${model.providerID}/${model.id}`)
+      }
+      return getLanguage(model, retryDepth + 1)
+    }
 
     const cached = s.models.get(key)
     if (cached && s.generation === modelCacheGeneration) return cached
@@ -1049,7 +1056,7 @@ export namespace Provider {
     if (pending) {
       const language = await pending
       if (s.generation === modelCacheGeneration) return language
-      return getLanguage(model)
+      return retryAfterInvalidation()
     }
 
     const promise = Promise.resolve().then(async (): Promise<Lang> => {
@@ -1088,7 +1095,7 @@ export namespace Provider {
     try {
       const language = await promise
       if (s.generation === modelCacheGeneration) return language
-      return getLanguage(model)
+      return retryAfterInvalidation()
     } finally {
       if (s.modelPending.get(key) === promise) {
         s.modelPending.delete(key)
