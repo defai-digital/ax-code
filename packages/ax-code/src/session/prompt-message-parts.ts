@@ -66,6 +66,8 @@ export async function resolveUserMessageParts(input: {
         if (part.source?.type === "resource") {
           return resolveMcpResourcePart({
             sessionID: input.sessionID,
+            agentName: input.agentName,
+            agentPermission: input.agentPermission,
             part: { ...part, source: part.source },
             draftSyntheticTextPart,
             attachDraftContext,

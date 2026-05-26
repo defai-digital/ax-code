@@ -152,6 +152,7 @@ AX Code is a strong fit when you need one or more of these:
 - [Documentation Hub](docs/README.md): guides, architecture, specs, and reference docs
 - [Sandbox Mode](docs/sandbox.md): isolation modes, protected paths, and network controls
 - [Autonomous Mode](docs/autonomous.md): unattended execution behavior and safeguards
+- [MCP Integrations](docs/mcp.md): trust, permissions, and prompt/resource safety for MCP servers
 - [Auto-Route](docs/auto-route.md): keyword-based specialist routing and optional fast-model complexity routing
 - [Semantic Layer](docs/semantic-layer.md): provenance and replay boundaries for graph and LSP-backed answers
 

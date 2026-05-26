@@ -33,6 +33,7 @@ import { TodoWriteTool } from "../../tool/todo"
 import { Todo } from "../../session/todo"
 import { Locale } from "../../util/locale"
 import { internalBaseUrl, isInternalHostname } from "../../util/internal-url"
+import { ServerRuntimeAuth } from "../../server/runtime-auth"
 import { isNonEmptyRecord } from "../../util/record"
 
 type ToolProps<T extends Tool.Info> = {
@@ -697,6 +698,7 @@ export const RunCommand = cmd({
             const request = new Request(input, init)
             const url = new URL(request.url)
             if (!isInternalHostname(url.hostname)) throw new Error(`Internal fetch rejected: ${url.hostname}`)
+            ServerRuntimeAuth.apply(request.headers)
             return Server.Default().fetch(request)
           }) as typeof globalThis.fetch
           const sdk = createOpencodeClient({ baseUrl: internalBaseUrl(), fetch: fetchFn })

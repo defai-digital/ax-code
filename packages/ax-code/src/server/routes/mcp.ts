@@ -6,6 +6,7 @@ import { Config } from "../../config/config"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
 import { withRouteParam } from "./route-params"
+import { ServerRuntimeAuth } from "../runtime-auth"
 
 const MCP_NAME_PARAM = z
   .string()
@@ -27,6 +28,12 @@ async function oauthNotSupportedResponse(c: any, name: string) {
 
 export const McpRoutes = lazy(() =>
   new Hono()
+    .use(async (c, next) => {
+      if (c.req.method === "GET" || c.req.method === "OPTIONS") return next()
+      const unauthorized = ServerRuntimeAuth.require(c)
+      if (unauthorized) return unauthorized
+      return next()
+    })
     .get(
       "/",
       describeRoute({

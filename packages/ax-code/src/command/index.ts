@@ -46,6 +46,12 @@ export namespace Command {
       template: z.promise(z.string()).or(z.string()),
       subtask: z.boolean().optional(),
       hints: z.array(z.string()),
+      mcpPrompt: z
+        .object({
+          client: z.string(),
+          name: z.string(),
+        })
+        .optional(),
     })
     .meta({
       ref: "Command",
@@ -173,6 +179,10 @@ export namespace Command {
             name,
             source: "mcp",
             description: prompt.description,
+            mcpPrompt: {
+              client: prompt.client,
+              name: prompt.name,
+            },
             get template() {
               return (async () => {
                 const template = await MCP.getPrompt(

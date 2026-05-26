@@ -4,6 +4,7 @@ import { Bus } from "../bus"
 import { Log } from "../util/log"
 import { createOpencodeClient } from "@ax-code/sdk"
 import { Server } from "../server/server"
+import { ServerRuntimeAuth } from "../server/runtime-auth"
 import { BunProc } from "../bun"
 import { Flag } from "../flag/flag"
 import { Session } from "../session"
@@ -47,7 +48,10 @@ export namespace Plugin {
               Authorization: `Basic ${Buffer.from(`${Flag.AX_CODE_SERVER_USERNAME ?? "ax-code"}:${Flag.AX_CODE_SERVER_PASSWORD}`).toString("base64")}`,
             }
           : undefined,
-        fetch: async (...args) => Server.Default().fetch(...args),
+        fetch: async (request: Request) => {
+          ServerRuntimeAuth.apply(request.headers)
+          return Server.Default().fetch(request)
+        },
       })
       const cfg = await Config.get()
       const input: PluginInput = {

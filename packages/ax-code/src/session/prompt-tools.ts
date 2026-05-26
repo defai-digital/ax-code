@@ -17,6 +17,7 @@ import { PartID } from "./schema"
 import { ToolRegistry } from "../tool/registry"
 import { Tool } from "../tool/tool"
 import { MCP } from "../mcp"
+import { McpPermissionPattern } from "../mcp/permission-pattern"
 import { ProviderTransform } from "../provider/transform"
 import { Permission } from "@/permission"
 import { Isolation } from "@/isolation"
@@ -313,11 +314,15 @@ export async function resolveTools(input: ResolveToolsInput) {
         },
       )
 
+      const permissionPattern = McpPermissionPattern.derive(key, args, { worktree: Instance.worktree })
       await ctx.ask({
         permission: key,
-        metadata: {},
-        patterns: ["*"],
-        always: ["*"],
+        metadata: {
+          mcp: true,
+          ...permissionPattern.metadata,
+        },
+        patterns: permissionPattern.patterns,
+        always: permissionPattern.always,
       })
 
       const result = await execute(args, opts)
@@ -361,7 +366,8 @@ export async function resolveTools(input: ResolveToolsInput) {
         }
       }
 
-      const truncated = await Truncate.output(textParts.join("\n\n"), {}, input.agent)
+      const outputText = textParts.length ? `[Untrusted MCP tool content from ${key}]\n\n${textParts.join("\n\n")}` : ""
+      const truncated = await Truncate.output(outputText, {}, input.agent)
       const metadata = {
         ...(result.metadata ?? {}),
         truncated: truncated.truncated,
@@ -384,7 +390,7 @@ export async function resolveTools(input: ResolveToolsInput) {
           sessionID: ctx.sessionID,
           messageID: input.processor.message.id,
         })),
-        content: result.content, // directly return content to preserve ordering when outputting to model
+        content: textParts.length ? ([{ type: "text", text: truncated.content }] as any) : result.content,
       }
     }
     tools[key] = mcpTool

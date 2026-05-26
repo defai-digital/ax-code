@@ -28,6 +28,7 @@ import type {
   SessionMessagesResponse,
 } from "@ax-code/sdk/v2/client"
 import { internalBaseUrl } from "../util/internal-url.js"
+import { ServerRuntimeAuth } from "../server/runtime-auth.js"
 import { toError } from "../util/error-message.js"
 import type {
   Agent,
@@ -509,6 +510,7 @@ function fromSdkTool(sdkTool: SdkTool): Tool.Info {
 function createInProcessClient(directory: string): OpencodeClient {
   const fetchFn = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const request = new Request(input, init)
+    ServerRuntimeAuth.apply(request.headers)
     return Server.Default().fetch(request)
   }) as typeof globalThis.fetch
 

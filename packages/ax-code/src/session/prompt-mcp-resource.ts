@@ -1,5 +1,7 @@
 import { NamedError } from "@ax-code/util/error"
 import { MCP } from "../mcp"
+import { Permission } from "../permission"
+import { Truncate } from "../tool/truncate"
 import { Log } from "../util/log"
 import { MessageV2 } from "./message-v2"
 import type { SessionID } from "./schema"
@@ -17,6 +19,8 @@ type ResourceFilePart = Omit<MessageV2.FilePart, "id" | "messageID" | "sessionID
 
 export async function resolveMcpResourcePart(input: {
   sessionID: SessionID
+  agentName: string
+  agentPermission: Permission.Ruleset
   part: ResourceFilePart
   draftSyntheticTextPart: (text: string) => DraftTextPart
   attachDraftContext: (part: ResourceFilePart) => DraftFilePart
@@ -36,6 +40,23 @@ export async function resolveMcpResourcePart(input: {
   ]
 
   try {
+    const pattern = `uri:${uri}`
+    await Permission.ask({
+      sessionID: input.sessionID,
+      permission: MCP.permissionKey("mcp_resource", clientName),
+      patterns: [pattern],
+      always: [pattern],
+      metadata: {
+        mcp: true,
+        kind: "resource",
+        clientName,
+        uri,
+        filename: input.part.filename,
+      },
+      ruleset: input.agentPermission,
+      agent: input.agentName,
+    })
+
     const resourceContent = await MCP.readResource(clientName, uri)
     if (!resourceContent) {
       throw new Error(`Resource not found: ${clientName}/${uri}`)
@@ -44,7 +65,9 @@ export async function resolveMcpResourcePart(input: {
     const contents = Array.isArray(resourceContent.contents) ? resourceContent.contents : [resourceContent.contents]
     for (const content of contents) {
       if ("text" in content && content.text) {
-        pieces.push(input.draftSyntheticTextPart(content.text as string))
+        const text = `[Untrusted MCP resource content from ${clientName} (${uri})]\n\n${content.text as string}`
+        const truncated = await Truncate.output(text)
+        pieces.push(input.draftSyntheticTextPart(truncated.content))
       } else if ("blob" in content && content.blob) {
         const mimeType = "mimeType" in content ? content.mimeType : input.part.mime
         pieces.push(input.draftSyntheticTextPart(`[Binary content: ${mimeType}]`))
