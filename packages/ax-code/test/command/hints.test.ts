@@ -9,4 +9,15 @@ describe("Command.hints", () => {
   test("keeps the catch-all arguments hint after numbered placeholders", () => {
     expect(Command.hints("$ARGUMENTS with $10 and $2")).toEqual(["$2", "$10", "$ARGUMENTS"])
   })
+
+  test("labels and truncates MCP prompt templates as untrusted content", async () => {
+    const text = await Command.mcpPromptTemplateText({
+      client: "docs",
+      name: "summarize",
+      messages: [{ content: { type: "text", text: "Use this external context." } }],
+    })
+
+    expect(text).toContain("[Untrusted MCP prompt content from docs/summarize]")
+    expect(text).toContain("Use this external context.")
+  })
 })

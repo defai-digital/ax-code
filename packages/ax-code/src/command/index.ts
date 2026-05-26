@@ -7,6 +7,7 @@ import z from "zod"
 import { Config } from "../config/config"
 import { MCP } from "../mcp"
 import { Skill } from "../skill"
+import { Truncate } from "../tool/truncate"
 import { Policy } from "../quality/policy"
 import { Log } from "../util/log"
 import PROMPT_INITIALIZE from "./template/initialize.txt"
@@ -70,6 +71,18 @@ export namespace Command {
     }
     if (template.includes("$ARGUMENTS")) result.push("$ARGUMENTS")
     return result
+  }
+
+  export async function mcpPromptTemplateText(input: {
+    client: string
+    name: string
+    messages: Array<{ content?: { type?: string; text?: string } }>
+  }) {
+    const text = input.messages
+      .map((message) => (message.content?.type === "text" ? (message.content.text ?? "") : ""))
+      .join("\n")
+    return (await Truncate.output(`[Untrusted MCP prompt content from ${input.client}/${input.name}]\n\n${text}`))
+      .content
   }
 
   export const Default = {
@@ -192,11 +205,11 @@ export namespace Command {
                     ? Object.fromEntries(prompt.arguments.map((argument, i) => [argument.name, `$${i + 1}`]))
                     : {},
                 )
-                return (
-                  template?.messages
-                    .map((message) => (message.content?.type === "text" ? message.content.text : ""))
-                    .join("\n") || ""
-                )
+                return mcpPromptTemplateText({
+                  client: prompt.client,
+                  name: prompt.name,
+                  messages: template?.messages ?? [],
+                })
               })()
             },
             hints: prompt.arguments?.map((_, i) => `$${i + 1}`) ?? [],

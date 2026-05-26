@@ -15254,6 +15254,16 @@
         },
         "required": ["status", "error"]
       },
+      "MCPStatusNeedsTrust": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "const": "needs_trust"
+          }
+        },
+        "required": ["status"]
+      },
       "MCPStatus": {
         "oneOf": [
           {
@@ -15270,6 +15280,9 @@
           },
           {
             "$ref": "#/components/schemas/MCPStatusNeedsClientRegistration"
+          },
+          {
+            "$ref": "#/components/schemas/MCPStatusNeedsTrust"
           }
         ]
       },

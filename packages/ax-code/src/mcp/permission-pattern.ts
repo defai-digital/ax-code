@@ -32,7 +32,12 @@ function cap(value: string): string {
 function normalizeUrl(value: string): string | undefined {
   try {
     const parsed = new URL(value)
+    parsed.username = parsed.username ? "[redacted]" : ""
+    parsed.password = parsed.password ? "[redacted]" : ""
     parsed.hash = ""
+    for (const key of [...parsed.searchParams.keys()]) {
+      if (SECRET_KEY.test(key)) parsed.searchParams.set(key, "[redacted]")
+    }
     return parsed.toString()
   } catch {
     return undefined

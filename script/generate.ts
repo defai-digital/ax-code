@@ -8,4 +8,4 @@ await $`bun --env-file=../../.env --conditions=browser ./src/index.ts generate >
   "packages/ax-code",
 )
 
-await $`./script/format.ts`
+await $`bun run script/format.ts`
