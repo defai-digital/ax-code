@@ -6,6 +6,8 @@
  * Checks common locations: npx packages, local binaries, running services.
  */
 
+import path from "path"
+import { access, constants } from "fs/promises"
 import { Log } from "../util/log"
 import { Process } from "../util/process"
 import { Env } from "../util/env"
@@ -99,6 +101,24 @@ const CANDIDATES: Candidate[] = [
     args: ["-y", "@modelcontextprotocol/server-puppeteer"],
     check: () =>
       spawnExitsCleanly("npx", ["-y", "@modelcontextprotocol/server-puppeteer", "--help"], { timeoutMs: 5000 }),
+  },
+  {
+    name: "playwright",
+    description: "Browser screenshot and automation for HTML/web development",
+    type: "stdio",
+    command: "npx",
+    args: ["-y", "@playwright/mcp@latest"],
+    check: async () => {
+      const cwd = process.cwd()
+      const hasHtml =
+        await access(path.join(cwd, "index.html"), constants.F_OK)
+          .then(() => true)
+          .catch(() => false) ||
+        await access(path.join(cwd, "index.htm"), constants.F_OK)
+          .then(() => true)
+          .catch(() => false)
+      return hasHtml && (await spawnExitsCleanly("npx", ["--help"]))
+    },
   },
   {
     name: "exa",

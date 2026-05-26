@@ -27,3 +27,4 @@ This index tracks the active ADR set for `ax-code`. Retired ADRs are removed fro
 | [ADR-018](ADR-018-app-headless-sdk-boundary.md) | Promote Headless SDK as the Short-Term App Backend Boundary | Accepted; foundation implemented |
 | [ADR-019](ADR-019-graph-first-agent-context-boundary.md) | Make Graph-First Agent Context a Product Boundary | Accepted; implementation shipped |
 | [ADR-020](ADR-020-mcp-security-trust-boundary.md) | Make MCP Security a Trust-Boundary Contract | Accepted; implemented |
+| [ADR-021](ADR-021-html-dev-browser-boundary.md) | Establish HTML Dev Browser Boundary via Playwright MCP and Behavioral Policy | Proposed |

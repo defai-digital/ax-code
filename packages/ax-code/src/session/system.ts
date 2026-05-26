@@ -1,4 +1,5 @@
 import path from "path"
+import { existsSync } from "fs"
 
 import { Instance } from "../project/instance"
 
@@ -93,6 +94,26 @@ export namespace SystemPrompt {
           `</autonomous_workflow>`,
         ]
       : []
+    const isHtmlProject = (() => {
+      try {
+        const dir = Instance.directory
+        return existsSync(path.join(dir, "index.html")) || existsSync(path.join(dir, "index.htm"))
+      } catch {
+        return false
+      }
+    })()
+    const htmlDevWorkflow = isHtmlProject
+      ? [
+          `<html_dev_workflow>`,
+          `  You are working in an HTML development project (index.html detected).`,
+          `  IMPORTANT: Do NOT run \`open\`, \`xdg-open\`, \`start\`, or \`sensible-browser\` commands to verify your output.`,
+          `  After applying changes, report: "Changes applied — refresh your browser to see the update."`,
+          `  If the playwright MCP server is connected, use browser_screenshot to verify rendering without opening a new window.`,
+          `  Only open the browser when the user explicitly asks you to.`,
+          `</html_dev_workflow>`,
+        ]
+      : []
+
     const debugEngineWorkflow = Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE
       ? [
           `<debug_engine_workflow>`,
@@ -119,6 +140,7 @@ export namespace SystemPrompt {
         `</env>`,
         ...liveSearchBlock,
         ...autonomousWorkflow,
+        ...htmlDevWorkflow,
         ...debugEngineWorkflow,
       ].join("\n"),
     ]
