@@ -190,15 +190,20 @@ function lineRef(file: string, line: number): string {
 async function canReadGraphFile(file: string, scope: CodeIntelligence.Scope): Promise<boolean> {
   if (scope !== "worktree") return true
 
-  const projectRoot = path.resolve(Instance.directory)
   const targetPath = path.resolve(file)
-  if (!Filesystem.contains(projectRoot, targetPath)) return false
+  const roots = [Instance.directory]
+  if (Instance.worktree !== "/") roots.push(Instance.worktree)
 
-  const [projectRootReal, targetReal] = await Promise.all([
-    realpath(projectRoot).catch(() => projectRoot),
-    realpath(targetPath).catch(() => undefined),
-  ])
-  return targetReal !== undefined && Filesystem.contains(projectRootReal, targetReal)
+  const targetReal = await realpath(targetPath).catch(() => undefined)
+  if (!targetReal) return false
+
+  for (const root of roots) {
+    const rootPath = path.resolve(root)
+    if (!Filesystem.contains(rootPath, targetPath)) continue
+    const rootReal = await realpath(rootPath).catch(() => rootPath)
+    if (Filesystem.contains(rootReal, targetReal)) return true
+  }
+  return false
 }
 
 async function readSnippet(
