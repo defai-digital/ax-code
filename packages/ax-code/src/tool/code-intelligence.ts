@@ -7,7 +7,6 @@ import { CodeIntelligence } from "../code-intelligence"
 import { GraphContext } from "../code-intelligence/graph-context"
 import { CodeNodeID } from "../code-intelligence/id"
 import { assertSymlinkInsideProject } from "./external-directory"
-import { Filesystem } from "../util/filesystem"
 import type { CodeNodeKind } from "../code-intelligence/schema.sql"
 import { resolveToolFilePath } from "./file-path"
 
@@ -142,7 +141,7 @@ export const CodeIntelligenceTool = Tool.define("code_intelligence", {
       if (args.operation === "symbolsInFile") {
         if (!args.file) throw new Error("symbolsInFile requires `file`")
         const file = resolveToolFilePath(args.file, Instance.directory)
-        if (!Filesystem.contains(Instance.directory, file)) {
+        if (!Instance.containsPath(file)) {
           throw new Error("symbolsInFile requires a file inside the project")
         }
         await assertSymlinkInsideProject(file)
@@ -193,7 +192,7 @@ export const CodeIntelligenceTool = Tool.define("code_intelligence", {
         const seeds = args.seeds?.map((seed) => {
           if (seed.kind === "file") {
             const file = resolveToolFilePath(seed.value, Instance.directory)
-            if (!Filesystem.contains(Instance.directory, file)) {
+            if (!Instance.containsPath(file)) {
               throw new Error("buildContext file seeds must be inside the project")
             }
             return { kind: seed.kind, value: file }

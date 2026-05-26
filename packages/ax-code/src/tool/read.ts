@@ -99,12 +99,13 @@ export const ReadTool = Tool.define("read", {
       })
 
       // Resolve symlinks and re-check containment so a symlink inside
-      // the project pointing at e.g. `/etc/shadow` or `~/.ssh/id_rsa`
-      // can't be read through the symlink. Only enforce the check when
-      // the original path was inside the project — external reads are
-      // a separate workflow gated by `assertExternalDirectory` above
-      // and must still be allowed after the permission grant.
-      if (stat && Filesystem.contains(Instance.directory, filepath)) {
+      // the project/worktree pointing at e.g. `/etc/shadow` or
+      // `~/.ssh/id_rsa` can't be read through the symlink. Only enforce
+      // the check when the original path was inside the project boundary
+      // — external reads are a separate workflow gated by
+      // `assertExternalDirectory` above and must still be allowed after
+      // the permission grant.
+      if (stat && Instance.containsPath(filepath)) {
         await assertSymlinkInsideProject(filepath).catch((error) => {
           throw readError("ReadSymlinkEscapeError", toErrorMessage(error), error)
         })
