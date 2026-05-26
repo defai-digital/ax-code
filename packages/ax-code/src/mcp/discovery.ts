@@ -123,11 +123,11 @@ interface Candidate {
   command: string
   args: string[]
   check: () => Promise<boolean>
-  // Optional: compute final command/args after check() passes. Allows runtime
-  // configuration (e.g. global binary vs npx, CDP vs headless) without
-  // changing the Candidate base shape or breaking existing candidates.
-  resolveCommand?: () => Promise<string>
-  resolveArgs?: () => Promise<string[]>
+  // Optional: compute final command + args together after check() passes.
+  // Use this instead of separate resolveCommand/resolveArgs to avoid redundant
+  // process probes when both depend on the same runtime check (e.g. global
+  // binary detection). Returns { command, args } as a pair.
+  resolve?: () => Promise<{ command: string; args: string[] }>
 }
 
 const CANDIDATES: Candidate[] = [
@@ -179,21 +179,25 @@ const CANDIDATES: Candidate[] = [
       const globalInstalled = await spawnExitsCleanly("playwright-mcp", ["--help"], { timeoutMs: 3000 })
       return globalInstalled || (await spawnExitsCleanly("npx", ["--help"]))
     },
-    resolveCommand: async () => {
-      const useGlobal = await spawnExitsCleanly("playwright-mcp", ["--help"], { timeoutMs: 3000 })
-      return useGlobal ? "playwright-mcp" : "npx"
-    },
-    resolveArgs: async () => {
-      const cdpOpen = await checkTcpPort(9222)
-      const useGlobal = await spawnExitsCleanly("playwright-mcp", ["--help"], { timeoutMs: 3000 })
+    // Single resolve() probes global binary + CDP port once each, eliminating
+    // the redundant triple-spawn from having separate resolveCommand/resolveArgs.
+    resolve: async () => {
+      const [useGlobal, cdpOpen] = await Promise.all([
+        spawnExitsCleanly("playwright-mcp", ["--help"], { timeoutMs: 3000 }),
+        checkTcpPort(9222),
+      ])
       if (useGlobal) {
-        return cdpOpen
-          ? ["--cdp-url", "http://localhost:9222"]
-          : ["--browser", "chromium", "--headless"]
+        return {
+          command: "playwright-mcp",
+          args: cdpOpen ? ["--cdp-url", "http://localhost:9222"] : ["--browser", "chromium", "--headless"],
+        }
       }
-      return cdpOpen
-        ? ["-y", "@playwright/mcp@latest", "--cdp-url", "http://localhost:9222"]
-        : ["-y", "@playwright/mcp@latest", "--browser", "chromium", "--headless"]
+      return {
+        command: "npx",
+        args: cdpOpen
+          ? ["-y", "@playwright/mcp@latest", "--cdp-url", "http://localhost:9222"]
+          : ["-y", "@playwright/mcp@latest", "--browser", "chromium", "--headless"],
+      }
     },
   },
   {
@@ -228,9 +232,11 @@ export async function discover(): Promise<DiscoveredServer[]> {
     CANDIDATES.map(async (candidate) => {
       try {
         const detected = await candidate.check()
-        // Resolve dynamic command/args only when the candidate is actually detected
-        const command = detected && candidate.resolveCommand ? await candidate.resolveCommand() : candidate.command
-        const args = detected && candidate.resolveArgs ? await candidate.resolveArgs() : candidate.args
+        // Resolve dynamic command+args together only when detected, avoiding
+        // redundant probes that separate resolveCommand/resolveArgs would cause.
+        const resolved = detected && candidate.resolve ? await candidate.resolve() : undefined
+        const command = resolved?.command ?? candidate.command
+        const args = resolved?.args ?? candidate.args
         return { candidate, detected, command, args }
       } catch {
         return { candidate, detected: false, command: candidate.command, args: candidate.args }
