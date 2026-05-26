@@ -34,6 +34,10 @@ import { Shell } from "../shell/shell"
 export namespace MCP {
   const log = Log.create({ service: "mcp" })
   const DEFAULT_TIMEOUT = 30_000
+  const MAX_TOOL_DESCRIPTION = 4_000
+  const MAX_TOOL_SCHEMA_BYTES = 64 * 1024
+  const MAX_STDERR_LINE = 2_000
+  const SECRET_PATTERN = /(?:token|secret|password|credential|authorization|api[_-]?key)=?[^ \t\r\n]*/gi
   const isErrnoException = (error: unknown): error is NodeJS.ErrnoException =>
     error instanceof Error && "code" in error && typeof (error as NodeJS.ErrnoException).code === "string"
 
@@ -172,9 +176,17 @@ export namespace MCP {
       properties: (inputSchema.properties ?? {}) as JSONSchema7["properties"],
       additionalProperties: (inputSchema as JSONSchema7).additionalProperties ?? false,
     }
+    const schemaBytes = Buffer.byteLength(JSON.stringify(schema), "utf8")
+    if (schemaBytes > MAX_TOOL_SCHEMA_BYTES) {
+      throw new Error(`MCP tool schema too large: ${mcpTool.name}`)
+    }
+    const description =
+      (mcpTool.description ?? "").length > MAX_TOOL_DESCRIPTION
+        ? `${(mcpTool.description ?? "").slice(0, MAX_TOOL_DESCRIPTION)}...`
+        : (mcpTool.description ?? "")
 
     return dynamicTool({
-      description: mcpTool.description ?? "",
+      description,
       inputSchema: jsonSchema(schema),
       execute: async (args: unknown, opts: ToolCallOptions) => {
         try {
@@ -631,7 +643,11 @@ export namespace MCP {
         },
       })
       const onStderr = (chunk: Buffer) => {
-        const line = chunk.toString().trimEnd()
+        const line = chunk
+          .toString()
+          .trimEnd()
+          .replaceAll(SECRET_PATTERN, "[redacted]")
+          .slice(0, MAX_STDERR_LINE)
         if (line) log.info("mcp stderr", { key, line })
       }
       transport.stderr?.on("data", onStderr)

@@ -1,7 +1,7 @@
 # PRD: MCP Security Layer Hardening
 
 **Date:** 2026-05-26
-**Status:** In progress - Phase 1/2 trust-gate slice implemented
+**Status:** Implemented
 **Scope:** Internal
 **Owner:** ax-code maintainers
 **Related:** ADR-020 (MCP security trust boundary), ADR-008 (server operation mode boundary), ADR-004 (autonomous hardening), ADR-017 (Effect freeze), `packages/ax-code/src/mcp/`, `packages/ax-code/src/permission/`, `packages/ax-code/src/server/routes/mcp.ts`
@@ -24,15 +24,12 @@ Implemented on 2026-05-26:
 - MCP trust fingerprints are persisted outside the repository and invalidate when material server config changes.
 - Untrusted MCP entries do not instantiate transports, start local commands, connect remote URLs, or begin OAuth.
 - CLI support exists for `ax-code mcp trust <name>` and `ax-code mcp untrust <name>`.
-- Focused MCP trust tests and OAuth regression updates are in place.
-
-Still pending:
-
-- privileged authorization for mutating MCP HTTP routes;
-- argument-aware MCP permission patterns;
-- MCP prompt/resource permission gates and content labeling;
-- MCP metadata/schema/log/audit hardening;
-- public docs and release notes.
+- Mutating MCP HTTP routes require process-local runtime authorization.
+- MCP tool permission prompts derive stable URL, URI, path, repo, database, and resource patterns when possible.
+- MCP prompt use and resource reads are permission-gated, labeled as untrusted context, and truncated before model injection.
+- MCP tool descriptions, schemas, stderr, and model-facing output content are bounded or redacted.
+- Public MCP documentation describes trust, permissions, prompts/resources, and server-mode behavior.
+- Focused MCP, route, permission-pattern, and session helper tests are in place.
 
 ## Problem
 
@@ -498,7 +495,7 @@ Validation:
 
 ### Phase 3: Mutating Route Authorization
 
-Status: Not started
+Status: Implemented
 
 Tasks:
 
@@ -522,7 +519,7 @@ Validation:
 
 ### Phase 4: Argument-Aware Permission Patterns
 
-Status: Not started
+Status: Implemented
 
 Tasks:
 
@@ -546,7 +543,7 @@ Validation:
 
 ### Phase 5: Prompt And Resource Safety
 
-Status: Not started
+Status: Implemented
 
 Tasks:
 
@@ -570,7 +567,7 @@ Validation:
 
 ### Phase 6: Metadata, Output, And Log Safety
 
-Status: Not started
+Status: Implemented
 
 Tasks:
 
@@ -593,7 +590,7 @@ Validation:
 
 ### Phase 7: Documentation And Migration
 
-Status: Not started
+Status: Implemented
 
 Tasks:
 

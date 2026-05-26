@@ -13,6 +13,7 @@ import { Flag } from "@/flag/flag"
 import { writeHeapSnapshot } from "node:v8"
 import { DiagnosticLog } from "@/debug/diagnostic-log"
 import { internalBaseUrl } from "@/util/internal-url"
+import { ServerRuntimeAuth } from "@/server/runtime-auth"
 import path from "node:path"
 import { tmpdir } from "node:os"
 import { runResilientStream, type StreamConnectionStatus } from "./util/resilient-stream"
@@ -104,6 +105,7 @@ const startEventStream = async (input: { directory?: string }) => {
     const request = new Request(input, init)
     const auth = getAuthorizationHeader()
     if (auth) request.headers.set("Authorization", auth)
+    ServerRuntimeAuth.apply(request.headers)
     return Server.Default().fetch(request)
   }) as typeof globalThis.fetch
 
@@ -183,6 +185,7 @@ export const rpc = {
     if (auth && !headers["authorization"] && !headers["Authorization"]) {
       headers["Authorization"] = auth
     }
+    if (!headers[ServerRuntimeAuth.HEADER]) headers[ServerRuntimeAuth.HEADER] = ServerRuntimeAuth.headers()[ServerRuntimeAuth.HEADER]
     const request = new Request(input.url, {
       method: input.method,
       headers,

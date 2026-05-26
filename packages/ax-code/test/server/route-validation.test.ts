@@ -9,6 +9,7 @@ import { MessageV2 } from "../../src/session/message-v2"
 import { SessionPrompt } from "../../src/session/prompt"
 import { MessageID, PartID } from "../../src/session/schema"
 import { Log } from "../../src/util/log"
+import { ServerRuntimeAuth } from "../../src/server/runtime-auth"
 
 const root = path.join(__dirname, "../..")
 Log.init({ print: false })
@@ -151,7 +152,7 @@ describe("server route validation", () => {
       fn: async () => {
         const res = await Server.Default().request("/mcp", {
           method: "POST",
-          headers: { "content-type": "application/json" },
+          headers: { "content-type": "application/json", ...ServerRuntimeAuth.headers() },
           body: JSON.stringify({
             name: "../bad/name",
             config: {
@@ -162,6 +163,36 @@ describe("server route validation", () => {
           }),
         })
         expect(res.status).toBe(400)
+      },
+    })
+  })
+
+  test("mutating mcp routes require runtime authorization", async () => {
+    await Instance.provide({
+      directory: root,
+      fn: async () => {
+        const missing = await Server.Default().request("/mcp", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            name: "local",
+            config: {
+              type: "local",
+              command: ["node", "server.js"],
+              enabled: true,
+            },
+          }),
+        })
+        expect(missing.status).toBe(403)
+
+        const invalid = await Server.Default().request("/mcp/local/connect", {
+          method: "POST",
+          headers: { [ServerRuntimeAuth.HEADER]: "wrong" },
+        })
+        expect(invalid.status).toBe(403)
+
+        const readOnly = await Server.Default().request("/mcp")
+        expect(readOnly.status).toBe(200)
       },
     })
   })

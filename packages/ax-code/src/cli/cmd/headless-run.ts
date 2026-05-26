@@ -4,6 +4,7 @@ import { Filesystem } from "@/util/filesystem"
 import { internalBaseUrl, isInternalHostname } from "@/util/internal-url"
 import { buildAttachAuthHeaders } from "../attach-auth"
 import { Server } from "@/server/server"
+import { ServerRuntimeAuth } from "@/server/runtime-auth"
 import { Provider } from "@/provider/provider"
 import {
   createHeadlessAgentRuntime,
@@ -239,7 +240,10 @@ export const HeadlessRunCommand = cmd({
     }
 
     await bootstrap(directory ?? callerCwd, async () => {
-      const fetchFn = createInternalFetch((request) => Server.Default().fetch(request))
+      const fetchFn = createInternalFetch((request) => {
+        ServerRuntimeAuth.apply(request.headers)
+        return Server.Default().fetch(request)
+      })
 
       await runWithBackend({ baseUrl: internalBaseUrl(), fetch: fetchFn })
     })
