@@ -28,10 +28,10 @@ Built by [DEFAI Digital](https://github.com/defai-digital).
 ### Install
 
 ```bash
-# Homebrew (macOS / Linux)
+# Homebrew (macOS / Linux package-manager install)
 brew install defai-digital/ax-code/ax-code
 
-# Curl installer (Linux / CI)
+# GitHub release installer (Linux / CI)
 curl -fsSL https://raw.githubusercontent.com/defai-digital/ax-code/main/install | bash
 ```
 
@@ -43,10 +43,10 @@ ax-code doctor
 
 Look for the `Runtime` line:
 
-| Output                          | Meaning                                     |
-| ------------------------------- | ------------------------------------------- |
-| `Runtime: Bun X.Y.Z (compiled)` | Homebrew, curl installer, or local launcher |
-| `Runtime: Bun X.Y.Z (source)`   | Contributor source launcher or direct `bun` |
+| Output                          | Meaning                                               |
+| ------------------------------- | ----------------------------------------------------- |
+| `Runtime: Bun X.Y.Z (compiled)` | Homebrew, GitHub release installer, or local launcher |
+| `Runtime: Bun X.Y.Z (source)`   | Contributor source launcher or direct `bun`           |
 
 ### Run
 
@@ -63,6 +63,11 @@ ax-code
 
 That is it. No project setup or config file is required. Run `ax-code`, then use `/connect` inside the TUI to add or switch providers.
 
+Grok is exposed as two separate provider plans:
+
+- `Grok Cloud API` uses `XAI_API_KEY` and the hosted xAI API models, including `grok-build-0.1`.
+- `Grok Build CLI` uses the installed `grok` command from xAI's CLI and your local CLI login/session.
+
 ### Update
 
 `ax-code upgrade` and package-manager update commands apply to the compiled runtime shipped by supported installers.
@@ -75,7 +80,19 @@ curl -fsSL https://raw.githubusercontent.com/defai-digital/ax-code/main/install 
 
 ### Distribution note
 
-Supported user install paths are Homebrew and the GitHub release curl installer. npm packages, including the former source compatibility package, are no longer supported as install or upgrade channels.
+Supported user install paths are Homebrew and the GitHub release installer for Linux/CI. For security-sensitive environments, download and inspect the installer before running it:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/defai-digital/ax-code/main/install -o ax-code-install
+less ax-code-install
+bash ax-code-install
+```
+
+Use `--version <release>` in CI when the installed version must be pinned.
+
+Windows release binaries are built as GitHub release assets, but Windows does not yet have a documented first-class installer channel. The Windows path should be a native PowerShell installer with the same release-binary and smoke-test gates, not the Bash installer as the canonical user experience.
+
+npm packages, including the former source compatibility package, are no longer supported as install or upgrade channels.
 
 See [Installation and Runtime Channels](docs/install-runtime.md) for the full package, runtime-label, and local launcher matrix.
 
@@ -86,7 +103,7 @@ git clone https://github.com/defai-digital/ax-code.git
 cd ax-code && pnpm install && pnpm run setup:cli
 ```
 
-Requires [pnpm](https://pnpm.io) v10.33.4+ and [Bun](https://bun.sh) matching the root `package.json` engine (`^1.3.14` today). `setup:cli` installs a launcher for the same bundled runtime used by Homebrew and the curl installer. `ax-code doctor` should report `Runtime: Bun X.Y.Z (compiled)`.
+Requires [pnpm](https://pnpm.io) v10.33.4+ and [Bun](https://bun.sh) matching the root `package.json` engine (`^1.3.14` today). `setup:cli` installs a launcher for the same bundled runtime used by Homebrew and the GitHub release installer. `ax-code doctor` should report `Runtime: Bun X.Y.Z (compiled)`.
 
 Refresh the local bundled runtime after code changes:
 
@@ -145,6 +162,8 @@ AX Code is a strong fit when you need one or more of these:
 3. Run `ax-code init` so `AGENTS.md` captures project-specific instructions and conventions.
 4. Keep the default sandbox on for bounded execution, or use `/sandbox` / `--sandbox full-access` only when you intentionally need unrestricted access.
 5. Run `ax-code index` on larger repos for faster semantic and code-intelligence workflows.
+
+Grok has separate API and CLI provider plans in `/connect`: `Grok Cloud API` is the hosted xAI API path, while `Grok Build CLI` runs the local `grok` command installed by xAI's CLI installer.
 
 ## Documentation
 

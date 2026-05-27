@@ -9,8 +9,7 @@ import { useKeybind } from "../context/keybind"
 import * as fuzzysort from "fuzzysort"
 import { useConnected } from "./provider-state"
 import { modelDisplayInfo } from "./model-vision-label"
-
-const CLI_PROVIDERS = new Set(["claude-code", "gemini-cli", "codex-cli"])
+import { CLI_PROVIDERS } from "./dialog-provider-options"
 
 export function DialogModel(props: { providerID?: string }) {
   const local = useLocal()

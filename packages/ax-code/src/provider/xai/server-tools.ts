@@ -56,7 +56,7 @@ const DEFAULT_LIVE_SEARCH: LiveSearchConfig = {
 export function supportsLiveSearch(modelId: string): boolean {
   const id = modelId.toLowerCase()
   if (id.includes("multi-agent")) return false
-  return id.includes("grok-4") || id.includes("grok-code")
+  return id.includes("grok-4")
 }
 
 /**

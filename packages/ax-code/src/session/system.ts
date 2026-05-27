@@ -56,7 +56,7 @@ export namespace SystemPrompt {
     const providerID = model.providerID
     // Mirror the transform-side gate: only emit the hint when the request
     // pipeline will actually attach searchParameters. supportsLiveSearch
-    // excludes multi-agent variants and non-grok-4/grok-code xAI ids, so
+    // excludes multi-agent variants and non-grok-4 xAI ids, so
     // custom aliases pointing at e.g. grok-3 don't get a false "search is on"
     // claim from the system prompt.
     const isXaiSearch = model.api.npm === "@ai-sdk/xai" && supportsLiveSearch(model.api.id)

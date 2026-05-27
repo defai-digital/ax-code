@@ -19,12 +19,15 @@ function neutralProbes(modelID: string, family: string) {
 }
 
 describe("supportsGrok41OrAllowedCodingModel", () => {
-  // Grok is restricted to an explicit allow-list (grok-4.3 + grok-code-fast-1).
+  // Grok is restricted to an explicit allow-list.
   // Anything else with "grok" in its probes is dropped, regardless of version.
   test.each([
     ["grok-4.3", true],
     ["grok-4-3", true],
     ["grok-code-fast-1", true],
+    ["grok-code-fast", true],
+    ["grok-code-fast-1-0825", true],
+    ["grok-build-0.1", true],
   ])("accepts %s", (id, expected) => {
     expect(supportsGrok41OrAllowedCodingModel(probes(id))).toBe(expected)
   })
@@ -89,6 +92,7 @@ describe("isModelSupportedForProvider", () => {
     expect(isModelSupportedForProvider("openai", "gpt-4.1")).toBe(true)
     expect(isModelSupportedForProvider("openai", "gpt-3.5")).toBe(false)
     expect(isModelSupportedForProvider("xai", "grok-4.3")).toBe(true)
+    expect(isModelSupportedForProvider("xai", "grok-build-0.1")).toBe(true)
     expect(isModelSupportedForProvider("xai", "grok-4.2")).toBe(false)
     expect(isModelSupportedForProvider("zai", "glm-5.1")).toBe(true)
     expect(isModelSupportedForProvider("zhipuai", "glm-4.5")).toBe(false)
@@ -107,5 +111,9 @@ describe("xai Live Search gates for Grok 4.3", () => {
 
   test("multi-agent grok-4 variants still opt out of Live Search", () => {
     expect(supportsLiveSearch("grok-4.20-multi-agent-0309")).toBe(false)
+  })
+
+  test("grok-build does not auto-enable Live Search", () => {
+    expect(supportsLiveSearch("grok-build-0.1")).toBe(false)
   })
 })

@@ -97,4 +97,22 @@ describe("util.which", () => {
 
     same(which("mixed", envPath(bin)), file)
   })
+
+  test("searches common user CLI install directories", async () => {
+    if (process.platform === "win32") return
+
+    await using tmp = await tmpdir()
+    const original = process.env.AX_CODE_TEST_HOME
+    process.env.AX_CODE_TEST_HOME = tmp.path
+    try {
+      const bin = path.join(tmp.path, ".grok", "bin")
+      await fs.mkdir(bin, { recursive: true })
+      const file = await cmd(bin, "grok")
+
+      same(which("grok", env("")), file)
+    } finally {
+      if (original === undefined) delete process.env.AX_CODE_TEST_HOME
+      else process.env.AX_CODE_TEST_HOME = original
+    }
+  })
 })

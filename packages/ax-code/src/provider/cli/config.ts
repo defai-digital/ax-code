@@ -1,4 +1,4 @@
-import { claudeCodeParser, codexCliParser, geminiCliParser, type CliOutputParser } from "./parser"
+import { claudeCodeParser, codexCliParser, geminiCliParser, grokBuildCliParser, type CliOutputParser } from "./parser"
 
 export interface CliProviderDefinition {
   binary: string
@@ -27,6 +27,13 @@ export const CLI_PROVIDER_DEFINITIONS: Record<string, CliProviderDefinition> = {
     args: ["exec", "--json", "--skip-git-repo-check"],
     parser: codexCliParser,
     promptMode: "stdin",
+  },
+  "grok-build-cli": {
+    binary: "grok",
+    args: [],
+    parser: grokBuildCliParser,
+    promptMode: "arg",
+    promptFlag: "-p",
   },
 }
 

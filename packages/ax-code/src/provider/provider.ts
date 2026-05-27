@@ -47,6 +47,13 @@ export namespace Provider {
   let modelCacheGeneration = 0
   const MODEL_CACHE_INVALIDATION_RETRY_LIMIT = 8
 
+  function canonicalXaiApiModelID(modelID: string) {
+    if (modelID === "grok-code-fast" || modelID === "grok-code-fast-1" || modelID === "grok-code-fast-1-0825") {
+      return "grok-build-0.1"
+    }
+    return modelID
+  }
+
   function addLegacyXaiModelAliases(providerID: ProviderID, models: Record<string, Model>) {
     if (providerID !== ProviderID.xai) return
 
@@ -604,7 +611,10 @@ export namespace Provider {
 
       for (const [modelID, model] of Object.entries(provider.models)) {
         const supportModelID = model.api.id ?? model.id ?? modelID
-        model.api = { ...model.api, id: supportModelID }
+        model.api = {
+          ...model.api,
+          id: providerID === ProviderID.xai ? canonicalXaiApiModelID(supportModelID) : supportModelID,
+        }
         const filterID = providerID === "openrouter" ? modelID : supportModelID
         if (!supported(providerID, filterID, model)) {
           delete provider.models[modelID]

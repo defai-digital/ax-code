@@ -85,6 +85,15 @@ describe("CLI provider loaders", () => {
       discoveredModelIDs: ["gpt-5.4", "gpt-5.4-mini", "gpt-5.3-codex", "gpt-5.3-codex-spark"],
     })
   })
+
+  test("grok-build-cli configured provider does not discover runnable variants when binary missing", async () => {
+    await expectMissingCliProvider({
+      providerID: "grok-build-cli",
+      binary: "grok",
+      baseModelID: "grok-build-cli",
+      discoveredModelIDs: ["grok-build-0.1", "grok-code-fast-1"],
+    })
+  })
 })
 
 describe("online provider loaders", () => {

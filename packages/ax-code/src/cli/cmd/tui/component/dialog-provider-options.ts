@@ -9,10 +9,11 @@ export const CLI_BINARIES: Record<string, string> = {
   "claude-code": "claude",
   "gemini-cli": "gemini",
   "codex-cli": "codex",
+  "grok-build-cli": "grok",
 }
 
 export const OFFLINE_PROVIDERS = new Set(["ax-serving", "ollama", "lmstudio"])
-export const CLI_PROVIDERS = new Set(["claude-code", "gemini-cli", "codex-cli"])
+export const CLI_PROVIDERS = new Set(["claude-code", "gemini-cli", "codex-cli", "grok-build-cli"])
 
 const HIDDEN_PROVIDERS = new Set(["google", "github-copilot"])
 
@@ -29,6 +30,12 @@ export function providerDialogProviders(input: {
       (provider) => provider.name,
     ),
   )
+}
+
+export function providerDialogCategory(providerID: string) {
+  if (OFFLINE_PROVIDERS.has(providerID)) return "Local runtime"
+  if (CLI_PROVIDERS.has(providerID)) return "CLI plan"
+  return "API plan"
 }
 
 export function providerDialogConnected(input: {

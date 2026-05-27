@@ -46,12 +46,21 @@ describe("update-models script", () => {
     const data = await Bun.file(snapshotPath).json()
 
     // CLI providers should be preserved from the existing snapshot
-    const cliProviders = ["claude-code", "gemini-cli", "codex-cli"]
+    const cliProviders = ["claude-code", "gemini-cli", "codex-cli", "grok-build-cli"]
     for (const id of cliProviders) {
       if (data[id]) {
         expect(typeof data[id]).toBe("object")
       }
     }
+  })
+
+  test("preserves Grok API and CLI plan entries", async () => {
+    const snapshotPath = path.join(import.meta.dir, "../../src/provider/models-snapshot.json")
+    const data = await Bun.file(snapshotPath).json()
+
+    expect(data.xai?.name).toBe("Grok Cloud API")
+    expect(data.xai?.models?.["grok-build-0.1"]?.id).toBe("grok-build-0.1")
+    expect(data["grok-build-cli"]?.name).toBe("Grok Build CLI")
   })
 
   test("idempotent — running twice produces same result", async () => {

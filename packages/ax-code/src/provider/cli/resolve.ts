@@ -14,6 +14,7 @@ const DEFAULTS: Record<string, string> = {
   "claude-code": "claude-code",
   "gemini-cli": "gemini-cli",
   "codex-cli": "codex-cli",
+  "grok-build-cli": "grok-build-cli",
 }
 
 type JsonLike = CliJsonObject
@@ -103,6 +104,7 @@ const RESOLVERS: Record<string, () => Promise<CliModelInfo>> = {
   "claude-code": resolveClaudeModel,
   "gemini-cli": resolveGeminiModel,
   "codex-cli": resolveCodexModel,
+  "grok-build-cli": async () => ({ model: DEFAULTS["grok-build-cli"]!, source: "default" }),
 }
 
 export async function resolveCliModel(providerID: string): Promise<CliModelInfo> {

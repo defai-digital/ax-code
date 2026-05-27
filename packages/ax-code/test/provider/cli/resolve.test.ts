@@ -74,6 +74,12 @@ describe("resolveCliModel", () => {
     }
   })
 
+  test("returns default for grok-build-cli", async () => {
+    const info = await resolveCliModel("grok-build-cli")
+    expect(info.model).toBe("grok-build-cli")
+    expect(info.source).toBe("default")
+  })
+
   test("returns unknown for unrecognized provider", async () => {
     const info = await resolveCliModel("nonexistent")
     expect(info.model).toBe("unknown")

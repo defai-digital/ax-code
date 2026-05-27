@@ -33,6 +33,7 @@ describe("providers command", () => {
     expect(DEFAULT_LOGIN_PROVIDER_IDS.has("claude-code")).toBe(true)
     expect(DEFAULT_LOGIN_PROVIDER_IDS.has("gemini-cli")).toBe(true)
     expect(DEFAULT_LOGIN_PROVIDER_IDS.has("codex-cli")).toBe(true)
+    expect(DEFAULT_LOGIN_PROVIDER_IDS.has("grok-build-cli")).toBe(true)
   })
 
   test("providers list reports saved credentials", async () => {
@@ -46,8 +47,38 @@ describe("providers command", () => {
 
       expect(infoSpy).toHaveBeenCalled()
       expect(
-        infoSpy.mock.calls.some(([message]) => String(message).includes("xAI") || String(message).includes("xai")),
+        infoSpy.mock.calls.some(([message]) => String(message).includes("Grok Cloud API")),
       ).toBe(true)
+      expect(outroSpy).toHaveBeenCalledWith("1 credentials")
+    } finally {
+      introSpy.mockRestore()
+      outroSpy.mockRestore()
+      infoSpy.mockRestore()
+    }
+  })
+
+  test("providers list labels CLI credentials as cli", async () => {
+    const introSpy = spyOn(prompts, "intro").mockImplementation(() => {})
+    const outroSpy = spyOn(prompts, "outro").mockImplementation(() => {})
+    const infoSpy = spyOn(prompts.log, "info").mockImplementation(() => {})
+
+    try {
+      await Auth.set("grok-build-cli", { type: "api", key: "cli" })
+      await ProvidersListCommand.handler({} as any)
+
+      expect(infoSpy).toHaveBeenCalled()
+      expect(
+        infoSpy.mock.calls.some((args) => {
+          const message = String(args[0])
+          return message.includes("Grok Build CLI") && message.includes("cli")
+        }),
+      ).toBe(true)
+      expect(
+        infoSpy.mock.calls.some((args) => {
+          const message = String(args[0])
+          return message.includes("Grok Build CLI") && message.includes("api")
+        }),
+      ).toBe(false)
       expect(outroSpy).toHaveBeenCalledWith("1 credentials")
     } finally {
       introSpy.mockRestore()

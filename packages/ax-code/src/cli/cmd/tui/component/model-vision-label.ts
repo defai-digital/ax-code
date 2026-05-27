@@ -20,12 +20,7 @@ export function supportsWebSearch(model: DisplayCapableModel | undefined) {
   const apiNpm = model.api?.npm
 
   if (providerID === "claude-code" || providerID === "codex-cli" || providerID === "gemini-cli") return true
-  if (
-    apiNpm === "@ai-sdk/xai" &&
-    !apiID.includes("multi-agent") &&
-    (apiID.includes("grok-4") || apiID.includes("grok-code"))
-  )
-    return true
+  if (apiNpm === "@ai-sdk/xai" && !apiID.includes("multi-agent") && apiID.includes("grok-4")) return true
   if (
     apiNpm === "@ai-sdk/openai-compatible" &&
     (providerID?.startsWith("alibaba-coding-plan") || providerID?.startsWith("alibaba-token-plan")) &&

@@ -31,6 +31,7 @@ const NATIVE_PROVIDERS = new Set([
   "claude-code",
   "gemini-cli",
   "codex-cli",
+  "grok-build-cli",
 ])
 
 export const ProviderRoutes = lazy(() =>
