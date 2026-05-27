@@ -40,7 +40,7 @@ describe("provider routes", () => {
     expect(await del.json()).toBe(true)
   })
 
-  test("shows x.ai and z.ai providers on fresh config", async () => {
+  test("shows x.ai, z.ai, and CLI providers on fresh config", async () => {
     await using tmp = await tmpdir({ git: true })
 
     await Instance.provide({
@@ -53,6 +53,7 @@ describe("provider routes", () => {
         const ids = body.all.map((provider) => provider.id)
         expect(ids).toContain("xai")
         expect(ids).toContain("zai-coding-plan")
+        expect(ids).toContain("grok-build-cli")
       },
     })
   })

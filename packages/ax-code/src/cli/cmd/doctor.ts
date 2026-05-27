@@ -201,12 +201,12 @@ export const DoctorCommand: CommandModule = {
       })
     }
 
-    // 6. API keys — combine `ax-code providers login` entries (auth.json)
+    // 6. Credentials — combine `ax-code providers login` entries (auth.json)
     // with environment variable fallbacks. Previously we only checked
     // three hardcoded env vars (GOOGLE_GENERATIVE_AI_API_KEY, XAI_API_KEY,
     // GROQ_API_KEY) and ignored auth.json entirely, so users who set up
     // credentials via `ax-code providers login` saw a spurious
-    // "No API keys found in environment" warning on every doctor run.
+    // "No credentials found" warning on every doctor run.
     // The env list is now derived from models.dev (one line per provider
     // in the bundled snapshot) so new providers are picked up
     // automatically and doctor stays in sync with the rest of the app.
@@ -251,15 +251,15 @@ export const DoctorCommand: CommandModule = {
         parts.push(`${envKeys.length} in environment (${envKeys.map((k) => k.env).join(", ")})`)
       }
       checks.push({
-        name: "API keys",
+        name: "Credentials",
         status: "ok",
         detail: parts.join(" + "),
       })
     } else {
       checks.push({
-        name: "API keys",
+        name: "Credentials",
         status: "warn",
-        detail: "No API keys found. Run `ax-code providers login` or set a provider env var (e.g. ANTHROPIC_API_KEY)",
+        detail: "No credentials found. Run `ax-code providers login` or set a provider env var (e.g. ANTHROPIC_API_KEY)",
       })
     }
 

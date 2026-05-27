@@ -243,6 +243,7 @@ const CLI_DEFAULT_MODEL_NAMES: Record<string, string> = {
   "claude-code": "Claude Code default",
   "gemini-cli": "Gemini CLI default",
   "codex-cli": "Codex CLI default",
+  "grok-build-cli": "Grok Build CLI default",
 }
 
 function cliModels(providerID: string, provider: Provider.Info, resolved?: string): Record<string, Provider.Model> {
@@ -324,6 +325,7 @@ function cliLoader(opts: CliLoaderOpts): CustomLoader {
 const claudeCode = getCliProviderDefinition("claude-code")!
 const geminiCli = getCliProviderDefinition("gemini-cli")!
 const codexCli = getCliProviderDefinition("codex-cli")!
+const grokBuildCli = getCliProviderDefinition("grok-build-cli")!
 
 export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
   xai: async () => {
@@ -361,5 +363,13 @@ export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
     parser: codexCli.parser,
     promptMode: codexCli.promptMode,
     promptFlag: codexCli.promptFlag,
+  }),
+  "grok-build-cli": cliLoader({
+    providerID: "grok-build-cli",
+    binary: grokBuildCli.binary,
+    args: grokBuildCli.args,
+    parser: grokBuildCli.parser,
+    promptMode: grokBuildCli.promptMode,
+    promptFlag: grokBuildCli.promptFlag,
   }),
 }

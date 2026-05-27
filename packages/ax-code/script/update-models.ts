@@ -44,9 +44,64 @@ const existing = await Bun.file(snapshotPath)
   .catch(() => ({}))
 
 // Preserve local-only provider entries that models.dev doesn't include
-const localProviderIDs = ["claude-code", "gemini-cli", "codex-cli", "ollama", "ax-serving"]
+const localProviderIDs = ["claude-code", "gemini-cli", "codex-cli", "grok-build-cli", "ollama", "ax-serving"]
 for (const id of localProviderIDs) {
-  if (existing[id] && !fetched[id]) fetched[id] = existing[id]
+  if (existing[id] && !fetched[id]) fetched[id] = JSON.parse(JSON.stringify(existing[id]))
+}
+if (!fetched["grok-build-cli"]) {
+  fetched["grok-build-cli"] = {
+    id: "grok-build-cli",
+    name: "Grok Build CLI",
+    env: [],
+    npm: "cli",
+    models: {
+      "grok-build-cli": {
+        id: "grok-build-cli",
+        name: "Grok Build CLI",
+        family: "grok",
+        attachment: false,
+        reasoning: false,
+        tool_call: false,
+        temperature: false,
+        release_date: "2026-04-16",
+        modalities: {
+          input: ["text"],
+          output: ["text"],
+        },
+        limit: {
+          context: 256000,
+          output: 10000,
+        },
+        options: {},
+        status: "active",
+      },
+    },
+  }
+}
+if (!fetched["grok-build-cli"].models?.["grok-build-cli"]) {
+  fetched["grok-build-cli"].models = {
+    ...(fetched["grok-build-cli"].models ?? {}),
+    "grok-build-cli": {
+      id: "grok-build-cli",
+      name: "Grok Build CLI",
+      family: "grok",
+      attachment: false,
+      reasoning: false,
+      tool_call: false,
+      temperature: false,
+      release_date: "2026-04-16",
+      modalities: {
+        input: ["text"],
+        output: ["text"],
+      },
+      limit: {
+        context: 256000,
+        output: 10000,
+      },
+      options: {},
+      status: "active",
+    },
+  }
 }
 
 // Remove providers we don't support
@@ -71,7 +126,7 @@ for (const id of [
 // models.dev tags inconsistently across providers.
 //
 //   - Kimi (Moonshot): only the kimi-k2.6 version via the Alibaba plan.
-//   - Grok: only grok-4.3 plus the grok-code-fast-1 coding model.
+//   - Grok: only grok-4.3 plus the Grok Build coding model aliases.
 //     All other Grok variants (4.2/4.1, 4.0, beta aliases, 2/3) drop.
 //   - GLM (Z.AI): only non-vision v5+ (glm-5v and every glm-4.x / glm-3.x drop).
 //   - Gemini: only v3+ (Gemini 1.x/2.x drops from ax-code's model picker).
@@ -101,7 +156,15 @@ function isGrokProbe(probe: string): boolean {
 // filter — every other grok variant (older versions, beta aliases, vision-only,
 // etc.) is dropped. Match on the final segment so account-prefixed reseller ids
 // (e.g. "x-ai/grok-4.3") still resolve correctly.
-const GROK_ALLOWED_FINAL_SEGMENTS = new Set<string>(["grok-4.3", "grok-4-3", "grok-code-fast-1"])
+const GROK_ALLOWED_FINAL_SEGMENTS = new Set<string>([
+  "grok-4.3",
+  "grok-4-3",
+  "grok-code-fast-1",
+  "grok-code-fast",
+  "grok-code-fast-1-0825",
+  "grok-build-0.1",
+  "grok-build-cli",
+])
 function isAllowedGrokProbe(probe: string): boolean {
   return GROK_ALLOWED_FINAL_SEGMENTS.has(probe.split("/").pop() ?? "")
 }
@@ -142,6 +205,31 @@ for (const [providerID, provider] of Object.entries(fetched) as Array<
       continue
     }
     if (isUnsupportedModel(model)) delete provider.models[mid]
+  }
+}
+if (!fetched["grok-build-cli"].models?.["grok-build-cli"]) {
+  fetched["grok-build-cli"].models = {
+    ...(fetched["grok-build-cli"].models ?? {}),
+    "grok-build-cli": {
+      id: "grok-build-cli",
+      name: "Grok Build CLI",
+      family: "grok",
+      attachment: false,
+      reasoning: false,
+      tool_call: false,
+      temperature: false,
+      release_date: "2026-04-16",
+      modalities: {
+        input: ["text"],
+        output: ["text"],
+      },
+      limit: {
+        context: 256000,
+        output: 10000,
+      },
+      options: {},
+      status: "active",
+    },
   }
 }
 
@@ -221,13 +309,13 @@ for (const id of ["alibaba-coding-plan", "alibaba-coding-plan-cn", "alibaba-toke
   fetched[id].models = kept
 }
 
-// xAI ships grok-code-fast-1 as a permanent coding model, but models.dev
-// intermittently omits it from the xai provider block (it shows up only on
-// resellers like helicone and github-copilot). Re-inject from the existing
-// local snapshot or, failing that, from a known-good reseller — otherwise
-// regenerating the snapshot can silently drop xAI's coding model from the
-// picker between releases.
-const xaiInjectedModels = ["grok-code-fast-1"]
+// xAI ships Grok Build as the canonical coding model name, with the older
+// grok-code-fast ids as aliases. models.dev can lag or publish only reseller
+// copies, so re-inject both the legacy alias and the canonical model into the
+// xai provider block on every regeneration.
+const XAI_LEGACY_CODING_MODEL_ID = "grok-code-fast-1"
+const XAI_GROK_BUILD_MODEL_ID = "grok-build-0.1"
+const xaiInjectedModels = [XAI_LEGACY_CODING_MODEL_ID]
 const xaiInjectFallbackProviders = ["helicone", "github-copilot"]
 if (fetched["xai"]?.models) {
   const xaiModels = fetched["xai"].models as Record<string, RawModel>
@@ -243,6 +331,19 @@ if (fetched["xai"]?.models) {
       if (!fb) continue
       xaiModels[mid] = JSON.parse(JSON.stringify(fb))
       break
+    }
+  }
+  if (!xaiModels[XAI_GROK_BUILD_MODEL_ID]) {
+    const source =
+      existing["xai"]?.models?.[XAI_GROK_BUILD_MODEL_ID] ??
+      xaiModels[XAI_LEGACY_CODING_MODEL_ID] ??
+      existing["xai"]?.models?.[XAI_LEGACY_CODING_MODEL_ID]
+    if (source) {
+      xaiModels[XAI_GROK_BUILD_MODEL_ID] = {
+        ...JSON.parse(JSON.stringify(source)),
+        id: XAI_GROK_BUILD_MODEL_ID,
+        name: "xAI Grok Build 0.1",
+      }
     }
   }
 }
@@ -271,7 +372,9 @@ for (const provider of Object.values(fetched) as Array<{ models?: Record<string,
 }
 
 // Apply display name overrides
-const nameOverrides: Record<string, string> = {}
+const nameOverrides: Record<string, string> = {
+  xai: "Grok Cloud API",
+}
 for (const [id, name] of Object.entries(nameOverrides)) {
   if (fetched[id]) fetched[id].name = name
 }
@@ -326,11 +429,20 @@ function markSearch(model: { name?: string } | undefined) {
   if (model.name.endsWith(SEARCH_MARKER)) return
   model.name = model.name + SEARCH_MARKER
 }
-// xAI: grok-4.3 and grok-code-fast-1 are the two allow-listed Grok models;
-// both have Live Search wired via providerOptions.searchParameters.
-const xaiSearchModelIds = ["grok-4.3", "grok-4-3", "grok-code-fast-1"]
+function unmarkSearch(model: { name?: string } | undefined) {
+  if (!model?.name) return
+  if (model.name.startsWith(LEGACY_SEARCH_PREFIX)) {
+    model.name = model.name.slice(LEGACY_SEARCH_PREFIX.length)
+  }
+  if (model.name.endsWith(SEARCH_MARKER)) {
+    model.name = model.name.slice(0, -SEARCH_MARKER.length)
+  }
+}
+// xAI: only Grok 4.3 has Live Search wired via providerOptions.searchParameters.
+const xaiSearchModelIds = ["grok-4.3", "grok-4-3"]
 const xaiModels = fetched["xai"]?.models as Record<string, { name?: string }> | undefined
 if (xaiModels) {
+  for (const model of Object.values(xaiModels)) unmarkSearch(model)
   for (const mid of xaiSearchModelIds) markSearch(xaiModels[mid])
 }
 // Alibaba: every Qwen model on the four plan endpoints accepts `enable_search`.

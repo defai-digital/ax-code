@@ -131,3 +131,34 @@ export const codexCliParser: CliOutputParser = {
     return null
   },
 }
+
+export const grokBuildCliParser: CliOutputParser = {
+  parseComplete(output: string) {
+    const lines = output.split("\n")
+    const parts: string[] = []
+    for (const line of lines) {
+      const event = parseCliJsonEventLine(line)
+      if (!event) continue
+      if (event.type === "result") {
+        if (typeof event.text === "string") return { text: event.text }
+        if (typeof event.content === "string") return { text: event.content }
+        if (typeof event.result === "string") return { text: event.result }
+      }
+      if (typeof event.content === "string") parts.push(event.content)
+      if (typeof event.text === "string") parts.push(event.text)
+    }
+    return { text: parts.join("\n") || output.trim() }
+  },
+  parseStreamLine(line: string) {
+    const event = parseCliJsonEventLine(line)
+    if (!event) return line.trim() || null
+    if (event.type === "result") {
+      if (typeof event.content === "string") return event.content
+      if (typeof event.text === "string") return event.text
+      if (typeof event.result === "string") return event.result
+    }
+    if (typeof event.content === "string") return event.content
+    if (typeof event.text === "string") return event.text
+    return null
+  },
+}

@@ -71313,6 +71313,32 @@
           "npm": "@ai-sdk/openai"
         }
       },
+      "grok-build-0.1": {
+        "id": "grok-build-0.1",
+        "name": "Grok Build 0.1",
+        "family": "grok-build",
+        "attachment": true,
+        "reasoning": true,
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-05-20",
+        "last_updated": "2026-05-20",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 256000,
+          "output": 256000
+        }
+      },
       "trinity-large-preview-free": {
         "id": "trinity-large-preview-free",
         "name": "Trinity Large Preview",
@@ -83537,6 +83563,31 @@
           "output": 1000000
         }
       },
+      "xai/grok-build-0.1": {
+        "id": "xai/grok-build-0.1",
+        "name": "Grok Build 0.1",
+        "family": "grok-build",
+        "attachment": true,
+        "reasoning": true,
+        "tool_call": true,
+        "temperature": true,
+        "release_date": "2026-05-20",
+        "last_updated": "2026-05-21",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 256000,
+          "output": 256000
+        }
+      },
       "xai/grok-4.3": {
         "id": "xai/grok-4.3",
         "name": "Grok 4.3",
@@ -86527,6 +86578,32 @@
           "output": 32768
         }
       },
+      "grok-build-0-1": {
+        "id": "grok-build-0-1",
+        "name": "Grok Build 0.1",
+        "family": "grok-build",
+        "attachment": true,
+        "reasoning": true,
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-05-21",
+        "last_updated": "2026-05-22",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 256000,
+          "output": 65536
+        }
+      },
       "aion-labs-aion-2-0": {
         "id": "aion-labs-aion-2-0",
         "name": "Aion 2.0",
@@ -88978,9 +89055,36 @@
       "XAI_API_KEY"
     ],
     "npm": "@ai-sdk/xai",
-    "name": "xAI",
+    "name": "Grok Cloud API",
     "doc": "https://docs.x.ai/docs/models",
     "models": {
+      "grok-build-0.1": {
+        "id": "grok-build-0.1",
+        "name": "Grok Build 0.1",
+        "family": "grok-build",
+        "attachment": true,
+        "reasoning": true,
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-04-16",
+        "last_updated": "2026-04-16",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 256000,
+          "output": 256000
+        }
+      },
       "grok-4.3": {
         "id": "grok-4.3",
         "name": "Grok 4.3 🌐",
@@ -89009,7 +89113,7 @@
       },
       "grok-code-fast-1": {
         "id": "grok-code-fast-1",
-        "name": "Grok Code Fast 1 🌐",
+        "name": "Grok Code Fast 1 (alias)",
         "family": "grok",
         "attachment": false,
         "reasoning": false,
@@ -93452,6 +93556,38 @@
         "limit": {
           "context": 200000,
           "output": 16384
+        },
+        "options": {},
+        "status": "active"
+      }
+    }
+  },
+  "grok-build-cli": {
+    "id": "grok-build-cli",
+    "name": "Grok Build CLI",
+    "env": [],
+    "npm": "cli",
+    "models": {
+      "grok-build-cli": {
+        "id": "grok-build-cli",
+        "name": "Grok Build CLI",
+        "family": "grok",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": false,
+        "temperature": false,
+        "release_date": "2026-04-16",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "limit": {
+          "context": 256000,
+          "output": 10000
         },
         "options": {},
         "status": "active"

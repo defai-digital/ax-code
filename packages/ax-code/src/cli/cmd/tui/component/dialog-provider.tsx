@@ -19,6 +19,7 @@ import {
   CLI_BINARIES,
   CLI_PROVIDERS,
   OFFLINE_PROVIDERS,
+  providerDialogCategory,
   providerDialogConnected,
   providerDialogProviders,
 } from "./dialog-provider-options"
@@ -97,7 +98,7 @@ export function createDialogProviderOptions() {
           value: provider.id,
           description: isConnected ? "Connected" : isOfflineKind ? offlineProviderHint() : undefined,
           descriptionFg: isConnected ? theme.warning : isOfflineKind ? theme.textMuted : undefined,
-          category: isOfflineKind ? "Offline" : CLI_PROVIDERS.has(provider.id) ? "Online - CLI" : "Online",
+          category: providerDialogCategory(provider.id),
           onSelect() {
             runProviderDialogAction({
               providerID: provider.id,

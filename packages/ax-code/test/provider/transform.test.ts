@@ -860,14 +860,24 @@ describe("ProviderTransform.variants", () => {
       expect(result.searchParameters.sources).toEqual([{ type: "web" }, { type: "x" }, { type: "news" }])
     })
 
-    test("options() injects Live Search for grok-code-fast-1", () => {
+    test("options() skips Live Search for grok-code-fast-1 alias", () => {
       const model = createMockModel({
         id: "xai/grok-code-fast-1",
         providerID: "xai",
         api: { id: "grok-code-fast-1", url: "https://api.x.ai", npm: "@ai-sdk/xai" },
       })
       const result = ProviderTransform.options({ model, sessionID: "s1", providerOptions: {} })
-      expect(result.searchParameters?.mode).toBe("auto")
+      expect(result.searchParameters).toBeUndefined()
+    })
+
+    test("options() skips Live Search for grok-build-0.1", () => {
+      const model = createMockModel({
+        id: "xai/grok-build-0.1",
+        providerID: "xai",
+        api: { id: "grok-build-0.1", url: "https://api.x.ai", npm: "@ai-sdk/xai" },
+      })
+      const result = ProviderTransform.options({ model, sessionID: "s1", providerOptions: {} })
+      expect(result.searchParameters).toBeUndefined()
     })
 
     test("options() skips Live Search for multi-agent models", () => {

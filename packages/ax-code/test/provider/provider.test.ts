@@ -1412,6 +1412,18 @@ test("provider list filters GPT-5.5 from configured provider models", async () =
                   id: "grok-code-fast-1:optimized:free",
                   name: "Grok Code Fast 1 Optimized Free",
                 },
+                "grok-build-0.1": {
+                  id: "grok-build-0.1",
+                  name: "Grok Build 0.1",
+                },
+                "grok-code-fast": {
+                  id: "grok-code-fast",
+                  name: "Grok Code Fast",
+                },
+                "grok-code-fast-1-0825": {
+                  id: "grok-code-fast-1-0825",
+                  name: "Grok Code Fast 1 0825",
+                },
                 "grok-4.3": {
                   id: "grok-4.3",
                   name: "Grok 4.1 Fast",
@@ -1466,6 +1478,11 @@ test("provider list filters GPT-5.5 from configured provider models", async () =
       expect(providers[ProviderID.xai]?.models["my-grok-alias"]).toBeUndefined()
       expect(providers[ProviderID.xai]?.models["grok-code-fast-1"]).toBeDefined()
       expect(providers[ProviderID.xai]?.models["grok-code-fast-1:optimized:free"]).toBeUndefined()
+      expect(providers[ProviderID.xai]?.models["grok-build-0.1"]).toBeDefined()
+      expect(providers[ProviderID.xai]?.models["grok-code-fast"]).toBeDefined()
+      expect(providers[ProviderID.xai]?.models["grok-code-fast-1-0825"]).toBeDefined()
+      expect(providers[ProviderID.xai]?.models["grok-code-fast"]?.api.id).toBe("grok-build-0.1")
+      expect(providers[ProviderID.xai]?.models["grok-code-fast-1-0825"]?.api.id).toBe("grok-build-0.1")
       expect(providers[ProviderID.xai]?.models["grok-4.3"]).toBeDefined()
       expect(providers[ProviderID.make("zai-coding-plan")]?.models["glm-5v-turbo"]).toBeUndefined()
       expect(providers[ProviderID.make("zai-coding-plan")]?.models["my-glm-vision-alias"]).toBeUndefined()
@@ -1475,7 +1492,7 @@ test("provider list filters GPT-5.5 from configured provider models", async () =
   })
 })
 
-test("xai provider only exposes grok-4.3 and grok-code-fast-1", async () => {
+test("xai provider only exposes the allowed Grok models", async () => {
   await using tmp = await tmpdir()
   await Instance.provide({
     directory: tmp.path,
@@ -1487,14 +1504,21 @@ test("xai provider only exposes grok-4.3 and grok-code-fast-1", async () => {
       const xai = providers[ProviderID.xai]
       expect(xai).toBeDefined()
       const ids = Object.keys(xai.models)
-      expect(ids.sort()).toEqual(["grok-4.3", "grok-code-fast-1"])
+      expect(ids.sort()).toEqual(["grok-4.3", "grok-build-0.1", "grok-code-fast-1"])
 
       // grok-code-fast-1 must be a first-class entry, not a legacy alias that
-      // silently routes to grok-4.20-0309-reasoning on the wire — the alias
-      // would mislabel a different model. api.id is what gets sent to xAI.
+      // silently routes to grok-4.20-0309-reasoning on the wire. xAI now
+      // documents it as an alias of grok-build-0.1, so api.id uses the
+      // canonical model slug while keeping the old selectable model ID.
       const grokCodeFast = xai.models["grok-code-fast-1"]
-      expect(grokCodeFast.api.id).toBe("grok-code-fast-1")
+      expect(grokCodeFast.api.id).toBe("grok-build-0.1")
       expect(grokCodeFast.capabilities.toolcall).toBe(true)
+
+      const grokBuild = xai.models["grok-build-0.1"]
+      expect(grokBuild.api.id).toBe("grok-build-0.1")
+      expect(grokBuild.capabilities.toolcall).toBe(true)
+      expect(grokBuild.capabilities.reasoning).toBe(true)
+      expect(grokBuild.capabilities.input.image).toBe(true)
     },
   })
 })

@@ -1,5 +1,12 @@
 const GLM_MAJOR_VERSION = /glm-(\d+)/
-const GROK_ALLOWED_FINAL_SEGMENTS = new Set<string>(["grok-4.3", "grok-4-3", "grok-code-fast-1"])
+const GROK_ALLOWED_FINAL_SEGMENTS = new Set<string>([
+  "grok-4.3",
+  "grok-4-3",
+  "grok-code-fast-1",
+  "grok-code-fast",
+  "grok-code-fast-1-0825",
+  "grok-build-0.1",
+])
 const GLM_PROVIDER_IDS = new Set(["zhipuai", "zhipuai-coding-plan", "zai", "zai-coding-plan"])
 
 type ModelSupportProbeInput = {
@@ -86,9 +93,10 @@ export function supportsOpenAIGptModels(probes: readonly string[]) {
   return probes.some((probe) => probe.includes("gpt-4") || probe.includes("gpt-5"))
 }
 
-// Grok allow-list: only grok-4.3 and grok-code-fast-1 are kept. Everything else
-// (4.2/4.1/4.0, betas, unversioned aliases) is dropped. Final-segment match so
-// reseller-prefixed ids like "x-ai/grok-4.3" still resolve.
+// Grok allow-list: only explicitly validated Grok coding/chat models are kept.
+// Everything else (4.2/4.1/4.0, betas, unversioned aliases) is dropped.
+// Final-segment match so reseller-prefixed ids like "x-ai/grok-4.3" still
+// resolve.
 export function supportsGrok41OrAllowedCodingModel(probes: readonly string[]) {
   if (!probes.some((probe) => probe.includes("grok"))) return true
   return probes.some((probe) => GROK_ALLOWED_FINAL_SEGMENTS.has(probe.split("/").pop() ?? ""))

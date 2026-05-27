@@ -1,7 +1,7 @@
 import { test, expect, describe, spyOn } from "bun:test"
 import { buildCliCommand, CliLanguageModel } from "../../../src/provider/cli/cli-language-model"
 import { CLI_PROVIDER_DEFINITIONS } from "../../../src/provider/cli/config"
-import { claudeCodeParser, geminiCliParser, codexCliParser } from "../../../src/provider/cli/parser"
+import { claudeCodeParser, geminiCliParser, codexCliParser, grokBuildCliParser } from "../../../src/provider/cli/parser"
 import { usageSource } from "../../../src/provider/usage"
 import { Process } from "../../../src/util/process"
 import { Shell } from "../../../src/shell/shell"
@@ -574,5 +574,25 @@ describe("CliLanguageModel", () => {
     )
     expect(cmd).not.toContain("--model")
     expect(cmd.slice(-2)).toEqual(["-p", "write file"])
+  })
+
+  test("passes Grok Build CLI prompt through headless -p mode", () => {
+    const definition = CLI_PROVIDER_DEFINITIONS["grok-build-cli"]
+    expect(definition).toBeDefined()
+
+    const cmd = buildCliCommand(
+      {
+        providerID: "grok-build-cli",
+        modelID: "grok-build-cli",
+        binary: "grok",
+        args: definition?.args ?? [],
+        parser: grokBuildCliParser,
+        promptMode: definition?.promptMode ?? "arg",
+        promptFlag: definition?.promptFlag,
+      },
+      "write file",
+    )
+
+    expect(cmd).toEqual(["grok", "-p", "write file"])
   })
 })

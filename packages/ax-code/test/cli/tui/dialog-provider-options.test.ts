@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test"
 import {
+  CLI_BINARIES,
+  CLI_PROVIDERS,
+  providerDialogCategory,
   providerDialogConnected,
   providerDialogProviders,
 } from "../../../src/cli/cmd/tui/component/dialog-provider-options"
@@ -55,5 +58,16 @@ describe("provider dialog options", () => {
         configured: [],
       }),
     ).toBe(true)
+  })
+
+  test("includes Grok Build CLI as a CLI provider", () => {
+    expect(CLI_PROVIDERS.has("grok-build-cli")).toBe(true)
+    expect(CLI_BINARIES["grok-build-cli"]).toBe("grok")
+  })
+
+  test("separates API, CLI, and local provider categories", () => {
+    expect(providerDialogCategory("xai")).toBe("API plan")
+    expect(providerDialogCategory("grok-build-cli")).toBe("CLI plan")
+    expect(providerDialogCategory("ollama")).toBe("Local runtime")
   })
 })

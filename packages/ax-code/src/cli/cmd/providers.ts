@@ -225,6 +225,7 @@ export const DEFAULT_LOGIN_PROVIDER_IDS = new Set([
   "claude-code",
   "gemini-cli",
   "codex-cli",
+  "grok-build-cli",
 ])
 
 export const ProvidersCommand = cmd({
@@ -251,7 +252,8 @@ export const ProvidersListCommand = cmd({
 
     for (const [providerID, result] of results) {
       const name = database[providerID]?.name || providerID
-      prompts.log.info(`${name} ${UI.Style.TEXT_DIM}${result.type}`)
+      const type = getCliProviderDefinition(providerID) && result.type === "api" && result.key === "cli" ? "cli" : result.type
+      prompts.log.info(`${name} ${UI.Style.TEXT_DIM}${type}`)
     }
 
     prompts.outro(`${results.length} credentials`)
@@ -434,6 +436,7 @@ export const ProvidersLoginCommand = cmd({
           "ax-code": 0,
           google: 1,
           xai: 2,
+          "grok-build-cli": 3,
         }
         const pluginProviders = resolvePluginProviders({
           hooks: await Plugin.list(),

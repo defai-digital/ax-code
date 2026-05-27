@@ -9,24 +9,24 @@ The root [README](../README.md) is the shortest path to install and launch AX Co
 
 ## Entry Points
 
-| Need                                            | Go here                                                         | What you get                                                           |
-| ----------------------------------------------- | --------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| Understand what AX Code is and why teams use it | [Start Here](start-here.md)                                     | Product overview, value proposition, mental model, and next paths      |
-| Install and launch quickly                      | [Root README](../README.md)                                     | 60-second setup, supported installer channels, and main entrypoints    |
-| Compare install and runtime channels            | [Installation and Runtime Channels](install-runtime.md)         | Package names, runtime labels, and local launcher behavior             |
-| Embed AX Code in TypeScript or JavaScript       | [`@ax-code/sdk`](../packages/sdk/js/README.md)                  | `createAgent()`, streaming, custom tools, testing, and migration notes |
-| Use AX Code from Python, Go, Java, or services  | [HTTP and OpenAPI SDKs](sdk-http-openapi.md)                    | `ax-code serve`, OpenAPI generation, and cross-language guardrails     |
-| Use AX Code from VS Code                        | [VS Code integration](../packages/integration-vscode/README.md) | Editor commands, settings, and extension workflow                      |
+| Need                                            | Go here                                                         | What you get                                                                |
+| ----------------------------------------------- | --------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| Understand what AX Code is and why teams use it | [Start Here](start-here.md)                                     | Product overview, value proposition, mental model, and next paths           |
+| Install and launch quickly                      | [Root README](../README.md)                                     | 60-second setup, supported installer channels, and main entrypoints         |
+| Compare install and runtime channels            | [Installation and Runtime Channels](install-runtime.md)         | Platform policy, package names, runtime labels, and local launcher behavior |
+| Embed AX Code in TypeScript or JavaScript       | [`@ax-code/sdk`](../packages/sdk/js/README.md)                  | `createAgent()`, streaming, custom tools, testing, and migration notes      |
+| Use AX Code from Python, Go, Java, or services  | [HTTP and OpenAPI SDKs](sdk-http-openapi.md)                    | `ax-code serve`, OpenAPI generation, and cross-language guardrails          |
+| Use AX Code from VS Code                        | [VS Code integration](../packages/integration-vscode/README.md) | Editor commands, settings, and extension workflow                           |
 
 ## Guides
 
-| Document                                                | Summary                                                                                         |
-| ------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| [Sandbox Mode](sandbox.md)                              | Execution isolation, protected paths, network behavior, and configuration                       |
-| [Installation and Runtime Channels](install-runtime.md) | Package channels, `ax-code doctor` runtime labels, updates, and local launcher behavior         |
-| [Autonomous Mode](autonomous.md)                        | Unattended execution, approval behavior, headless usage, and safeguards                         |
-| [MCP Integrations](mcp.md)                              | MCP trust, permissions, prompt/resource handling, and server-route security                     |
-| [Auto-Route](auto-route.md)                             | Keyword-based specialist routing (active by default) and optional fast-model complexity routing |
+| Document                                                | Summary                                                                                                  |
+| ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| [Sandbox Mode](sandbox.md)                              | Execution isolation, protected paths, network behavior, and configuration                                |
+| [Installation and Runtime Channels](install-runtime.md) | Platform policy, package channels, `ax-code doctor` runtime labels, updates, and local launcher behavior |
+| [Autonomous Mode](autonomous.md)                        | Unattended execution, approval behavior, headless usage, and safeguards                                  |
+| [MCP Integrations](mcp.md)                              | MCP trust, permissions, prompt/resource handling, and server-route security                              |
+| [Auto-Route](auto-route.md)                             | Keyword-based specialist routing (active by default) and optional fast-model complexity routing          |
 
 ## Architecture
 
