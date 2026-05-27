@@ -703,6 +703,7 @@ describe("tui OpenTUI stability guardrails", () => {
     const displayCommands = await fs.readFile(DISPLAY_COMMANDS_SRC, "utf8")
 
     expect(autocomplete).toContain('new Set(["init", "review", "impact", "goal"])')
+    expect(autocomplete).not.toContain('serverCommand.source === "skill") continue')
     expect(displayCommands).toContain('title: "View session goal"')
     expect(displayCommands).toContain('value: "session.goal"')
     expect(displayCommands).not.toContain('name: "goal"')
