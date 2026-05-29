@@ -1246,6 +1246,24 @@ describe("ProviderTransform.maxOutputTokens", () => {
 
     expect(ProviderTransform.maxOutputTokens(model)).toBe(OUTPUT_TOKEN_MAX)
   })
+
+  test("raises output cap to 65 536 for qwen3.7-max on non-Alibaba routes", () => {
+    const model = {
+      id: "qwen3.7-max",
+      providerID: ProviderID.make("openrouter"),
+      limit: { output: 65_536 },
+    } as any
+    expect(ProviderTransform.maxOutputTokens(model)).toBe(65_536)
+  })
+
+  test("keeps Alibaba quota cap for qwen3.7-max on Alibaba routes", () => {
+    const model = {
+      id: "qwen3.7-max",
+      providerID: ProviderID.make("alibaba-coding-plan"),
+      limit: { output: 65_536 },
+    } as any
+    expect(ProviderTransform.maxOutputTokens(model)).toBe(4_096)
+  })
 })
 
 describe("ProviderTransform.options - Alibaba Token Plan Team Edition", () => {

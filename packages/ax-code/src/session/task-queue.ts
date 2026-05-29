@@ -1,0 +1,356 @@
+import z from "zod"
+import { HTTPException } from "hono/http-exception"
+import { Bus } from "@/bus"
+import { BusEvent } from "@/bus/bus-event"
+import { Instance } from "@/project/instance"
+import { ProjectID } from "@/project/schema"
+import { Database, NotFoundError, and, asc, desc, eq, inArray, sql } from "@/storage/db"
+import { Session } from "."
+import { SessionID, TaskQueueID } from "./schema"
+import { TaskQueueTable } from "./session.sql"
+
+export namespace TaskQueue {
+  export const Kind = z.enum(["prompt", "command", "shell", "followup", "subagent", "review", "automation"])
+  export type Kind = z.infer<typeof Kind>
+
+  export const Status = z.enum([
+    "queued",
+    "waiting_for_idle",
+    "running",
+    "blocked_permission",
+    "blocked_question",
+    "paused",
+    "failed",
+    "completed",
+    "cancelled",
+  ])
+  export type Status = z.infer<typeof Status>
+
+  export const Payload = z.record(z.string(), z.unknown())
+  export type Payload = z.infer<typeof Payload>
+
+  export const Info = z.object({
+    id: TaskQueueID.zod,
+    projectID: ProjectID.zod,
+    directory: z.string(),
+    sessionID: SessionID.zod.optional(),
+    kind: Kind,
+    status: Status,
+    priority: z.number().int(),
+    position: z.number().int().min(0),
+    title: z.string(),
+    agent: z.string().optional(),
+    model: z.unknown().optional(),
+    sourceMessageID: z.string().optional(),
+    sourceTaskID: z.string().optional(),
+    payload: Payload,
+    error: z.string().optional(),
+    time: z.object({
+      created: z.number(),
+      updated: z.number().optional(),
+      started: z.number().optional(),
+      completed: z.number().optional(),
+    }),
+  })
+  export type Info = z.infer<typeof Info>
+
+  export const EnqueueInput = z.object({
+    sessionID: SessionID.zod.optional(),
+    kind: Kind,
+    title: z.string().trim().min(1).max(200),
+    agent: z.string().optional(),
+    model: z.unknown().optional(),
+    sourceMessageID: z.string().optional(),
+    sourceTaskID: z.string().optional(),
+    payload: Payload.optional().default({}),
+    priority: z.number().int().min(-1000).max(1000).optional().default(0),
+  })
+  export type EnqueueInput = z.input<typeof EnqueueInput>
+
+  export const ListInput = z.object({
+    sessionID: SessionID.zod.optional(),
+    status: Status.optional(),
+    limit: z.number().int().positive().max(500).optional(),
+  })
+  export type ListInput = z.infer<typeof ListInput>
+
+  export const ReorderInput = z.object({
+    id: TaskQueueID.zod,
+    position: z.number().int().min(0),
+  })
+  export type ReorderInput = z.infer<typeof ReorderInput>
+
+  export const Event = {
+    Created: BusEvent.define("task.queue.created", z.object({ item: Info })),
+    Updated: BusEvent.define("task.queue.updated", z.object({ item: Info })),
+    Deleted: BusEvent.define(
+      "task.queue.deleted",
+      z.object({
+        id: TaskQueueID.zod,
+        projectID: ProjectID.zod,
+        sessionID: SessionID.zod.optional(),
+      }),
+    ),
+  }
+
+  function fromRow(row: typeof TaskQueueTable.$inferSelect): Info {
+    return Info.parse({
+      id: row.id,
+      projectID: row.project_id,
+      directory: row.directory,
+      sessionID: row.session_id ?? undefined,
+      kind: row.kind,
+      status: row.status,
+      priority: row.priority,
+      position: row.position,
+      title: row.title,
+      agent: row.agent ?? undefined,
+      model: row.model ?? undefined,
+      sourceMessageID: row.source_message_id ?? undefined,
+      sourceTaskID: row.source_task_id ?? undefined,
+      payload: row.payload,
+      error: row.error ?? undefined,
+      time: {
+        created: row.time_created,
+        updated: row.time_updated ?? undefined,
+        started: row.time_started ?? undefined,
+        completed: row.time_completed ?? undefined,
+      },
+    })
+  }
+
+  function publishCreated(item: Info) {
+    Bus.publishDetached(Event.Created, { item })
+  }
+
+  function publishUpdated(item: Info) {
+    Bus.publishDetached(Event.Updated, { item })
+  }
+
+  function publishDeleted(item: Pick<Info, "id" | "projectID" | "sessionID">) {
+    Bus.publishDetached(Event.Deleted, item)
+  }
+
+  async function assertSessionCompatible(sessionID: SessionID) {
+    const session = await Session.get(sessionID)
+    if (Session.isCompatibleWithCurrentProject(session)) return session
+    throw new HTTPException(409, {
+      message: `Session ${sessionID} belongs to a different project directory; queue work from that project instead.`,
+    })
+  }
+
+  function assertProjectItem(item: Info) {
+    if (item.projectID === Instance.project.id) return
+    throw new HTTPException(409, {
+      message: `Task queue item ${item.id} belongs to a different project.`,
+    })
+  }
+
+  function nextPosition(projectID: ProjectID) {
+    return Database.use((db) => {
+      const row = db
+        .select({ value: sql<number>`coalesce(max(${TaskQueueTable.position}), -1)` })
+        .from(TaskQueueTable)
+        .where(eq(TaskQueueTable.project_id, projectID))
+        .get()
+      return Number(row?.value ?? -1) + 1
+    })
+  }
+
+  export async function list(input: Partial<ListInput> = {}): Promise<Info[]> {
+    const parsed = ListInput.partial().parse(input)
+    if (parsed.sessionID) await assertSessionCompatible(parsed.sessionID)
+    const conditions = [eq(TaskQueueTable.project_id, Instance.project.id)]
+    if (parsed.sessionID) conditions.push(eq(TaskQueueTable.session_id, parsed.sessionID))
+    if (parsed.status) conditions.push(eq(TaskQueueTable.status, parsed.status))
+    return Database.use((db) => {
+      let query = db
+        .select()
+        .from(TaskQueueTable)
+        .where(and(...conditions))
+        .orderBy(asc(TaskQueueTable.position), desc(TaskQueueTable.time_created), desc(TaskQueueTable.id))
+        .$dynamic()
+      if (parsed.limit) query = query.limit(parsed.limit)
+      return query.all().map(fromRow)
+    })
+  }
+
+  export async function enqueue(input: EnqueueInput): Promise<Info> {
+    const parsed = EnqueueInput.parse(input)
+    if (parsed.sessionID) await assertSessionCompatible(parsed.sessionID)
+
+    const now = Date.now()
+    const projectID = Instance.project.id
+    const item = Database.transaction((db) => {
+      const values: typeof TaskQueueTable.$inferInsert = {
+        id: TaskQueueID.ascending(),
+        project_id: projectID,
+        session_id: parsed.sessionID,
+        directory: Instance.directory,
+        kind: parsed.kind,
+        status: "queued",
+        priority: parsed.priority,
+        position: nextPosition(projectID),
+        title: parsed.title,
+        agent: parsed.agent,
+        model: parsed.model,
+        source_message_id: parsed.sourceMessageID,
+        source_task_id: parsed.sourceTaskID,
+        payload: parsed.payload,
+        time_created: now,
+        time_updated: now,
+      }
+      const row = db.insert(TaskQueueTable).values(values).returning().get()
+      return fromRow(row)
+    })
+    publishCreated(item)
+    return item
+  }
+
+  export async function get(id: TaskQueueID): Promise<Info> {
+    const item = Database.use((db) => {
+      const row = db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, id)).get()
+      if (!row) throw new NotFoundError({ message: `Task queue item not found: ${id}` })
+      return fromRow(row)
+    })
+    assertProjectItem(item)
+    return item
+  }
+
+  export async function setStatus(input: { id: TaskQueueID; status: Status; error?: string }): Promise<Info> {
+    const current = await get(input.id)
+    const now = Date.now()
+    const updates: Partial<typeof TaskQueueTable.$inferInsert> = {
+      status: input.status,
+      error: input.error,
+      time_updated: now,
+    }
+    if (input.status === "running" && current.time.started === undefined) updates.time_started = now
+    if (input.status === "completed" || input.status === "cancelled" || input.status === "failed") {
+      updates.time_completed = now
+    }
+    const item = Database.use((db) => {
+      const row = db.update(TaskQueueTable).set(updates).where(eq(TaskQueueTable.id, input.id)).returning().get()
+      if (!row) throw new NotFoundError({ message: `Task queue item not found: ${input.id}` })
+      return fromRow(row)
+    })
+    assertProjectItem(item)
+    publishUpdated(item)
+    return item
+  }
+
+  export async function claimForExecution(id: TaskQueueID): Promise<Info | undefined> {
+    const current = await get(id)
+    if (current.status !== "queued" && current.status !== "waiting_for_idle") return undefined
+
+    const now = Date.now()
+    const item = Database.use((db) => {
+      const row = db
+        .update(TaskQueueTable)
+        .set({
+          status: "running",
+          time_updated: now,
+          time_started: current.time.started ?? now,
+        })
+        .where(
+          and(
+            eq(TaskQueueTable.id, id),
+            eq(TaskQueueTable.project_id, current.projectID),
+            inArray(TaskQueueTable.status, ["queued", "waiting_for_idle"]),
+          ),
+        )
+        .returning()
+        .get()
+      return row ? fromRow(row) : undefined
+    })
+    if (!item) return undefined
+    assertProjectItem(item)
+    publishUpdated(item)
+    return item
+  }
+
+  export async function pause(id: TaskQueueID): Promise<Info> {
+    return setStatus({ id, status: "paused" })
+  }
+
+  export async function resume(id: TaskQueueID): Promise<Info> {
+    return setStatus({ id, status: "queued" })
+  }
+
+  export async function cancel(id: TaskQueueID): Promise<Info> {
+    return setStatus({ id, status: "cancelled" })
+  }
+
+  export async function retry(id: TaskQueueID): Promise<Info> {
+    await get(id)
+    const now = Date.now()
+    const item = Database.use((db) => {
+      const row = db
+        .update(TaskQueueTable)
+        .set({
+          status: "queued",
+          error: null,
+          time_started: null,
+          time_completed: null,
+          time_updated: now,
+        })
+        .where(eq(TaskQueueTable.id, id))
+        .returning()
+        .get()
+      if (!row) throw new NotFoundError({ message: `Task queue item not found: ${id}` })
+      return fromRow(row)
+    })
+    assertProjectItem(item)
+    publishUpdated(item)
+    return item
+  }
+
+  export async function reorder(input: ReorderInput): Promise<Info> {
+    const parsed = ReorderInput.parse(input)
+    await get(parsed.id)
+    const item = Database.use((db) => {
+      const row = db
+        .update(TaskQueueTable)
+        .set({ position: parsed.position, time_updated: Date.now() })
+        .where(eq(TaskQueueTable.id, parsed.id))
+        .returning()
+        .get()
+      if (!row) throw new NotFoundError({ message: `Task queue item not found: ${parsed.id}` })
+      return fromRow(row)
+    })
+    assertProjectItem(item)
+    publishUpdated(item)
+    return item
+  }
+
+  export async function sendNow(id: TaskQueueID): Promise<Info> {
+    const current = await get(id)
+    const now = Date.now()
+    const item = Database.transaction((db) => {
+      db.update(TaskQueueTable)
+        .set({ position: sql`${TaskQueueTable.position} + 1` })
+        .where(eq(TaskQueueTable.project_id, current.projectID))
+        .run()
+      const row = db
+        .update(TaskQueueTable)
+        .set({ status: "queued", position: 0, time_updated: now })
+        .where(eq(TaskQueueTable.id, id))
+        .returning()
+        .get()
+      if (!row) throw new NotFoundError({ message: `Task queue item not found: ${id}` })
+      return fromRow(row)
+    })
+    assertProjectItem(item)
+    publishUpdated(item)
+    return item
+  }
+
+  export async function remove(id: TaskQueueID): Promise<boolean> {
+    const item = await get(id)
+    Database.use((db) => {
+      db.delete(TaskQueueTable).where(eq(TaskQueueTable.id, id)).run()
+    })
+    publishDeleted(item)
+    return true
+  }
+}
