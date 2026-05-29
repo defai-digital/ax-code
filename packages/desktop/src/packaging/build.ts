@@ -21,12 +21,19 @@ export async function buildDesktopArtifacts(
   const outDir = input.outDir ?? path.join(root, "dist")
   const sourceAppDist = input.appDist ?? path.resolve(root, "../app/dist")
   const packagedAppDist = path.join(outDir, "app")
+  const mainPath = path.join(outDir, "main.js")
+  const preloadPath = path.join(outDir, "preload.cjs")
   if (!existsSync(path.join(sourceAppDist, "index.html"))) {
     throw new Error(`Renderer build is missing: ${path.join(sourceAppDist, "index.html")}`)
   }
 
-  if (input.clean ?? true) rmSync(outDir, { recursive: true, force: true })
   mkdirSync(outDir, { recursive: true })
+  if (input.clean ?? true) {
+    rmSync(mainPath, { force: true })
+    rmSync(`${mainPath}.map`, { force: true })
+    rmSync(preloadPath, { force: true })
+    rmSync(packagedAppDist, { recursive: true, force: true })
+  }
 
   const result = await Bun.build({
     entrypoints: [path.join(root, "src/main.ts")],
@@ -42,13 +49,12 @@ export async function buildDesktopArtifacts(
     throw new Error(`Desktop main build failed${messages ? `:\n${messages}` : ""}`)
   }
 
-  const preloadPath = path.join(outDir, "preload.cjs")
   cpSync(path.join(root, "src/preload.cjs"), preloadPath)
   cpSync(sourceAppDist, packagedAppDist, { recursive: true })
 
   const artifacts = {
     outDir,
-    mainPath: path.join(outDir, "main.js"),
+    mainPath,
     preloadPath,
     appDist: packagedAppDist,
     appIndexPath: path.join(packagedAppDist, "index.html"),

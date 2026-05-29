@@ -31,6 +31,7 @@ describe("headless backend lifecycle", () => {
 
     const backend = await startHeadlessBackend({
       auth: { username: "app", password: "secret" },
+      reservePort: async () => 18456,
       fetch: (async (input: URL | RequestInfo, init?: RequestInit) => {
         const request = input instanceof Request ? input : new Request(input, init)
         healthRequests.push(request)
@@ -45,11 +46,37 @@ describe("headless backend lifecycle", () => {
     expect(healthRequests.map((request) => new URL(request.url).pathname)).toEqual(["/global/health"])
     expect(healthRequests[0].headers.get("authorization")).toBe(backend.headers.Authorization)
     expect(await waitForFile(fake.authFile)).toBe("app:secret\n")
-    expect(await waitForFile(fake.argsFile)).toContain("serve --hostname=127.0.0.1 --port=0")
+    const args = await waitForFile(fake.argsFile)
+    expect(args).toContain("serve --hostname=127.0.0.1 --port=")
+    expect(args).not.toContain("--port=0")
 
     await backend.close()
 
     await waitForProcessExit(Number(await waitForFile(fake.pidFile)))
+  })
+
+  test("preserves an explicit backend port", async () => {
+    await using fake = await createReadyFakeAxCode()
+
+    const backend = await startHeadlessBackend({
+      port: 18457,
+      fetch: (async () => jsonResponse({ healthy: true })) as typeof fetch,
+    })
+
+    expect(await waitForFile(fake.argsFile)).toContain("serve --hostname=127.0.0.1 --port=18457")
+
+    await backend.close()
+  })
+
+  test("reports an actionable error when random port reservation fails", async () => {
+    await expect(
+      startHeadlessBackend({
+        reservePort: async () => {
+          throw new Error("permission denied")
+        },
+        fetch: (async () => jsonResponse({ healthy: true })) as typeof fetch,
+      }),
+    ).rejects.toThrow("Failed to reserve loopback port for ax-code backend on 127.0.0.1: permission denied")
   })
 
   test("kills the backend when health readiness fails", async () => {
@@ -58,6 +85,7 @@ describe("headless backend lifecycle", () => {
     await expect(
       startHeadlessBackend({
         timeout: 1_000,
+        reservePort: async () => 18456,
         fetch: (async () => new Response("not ready", { status: 503 })) as typeof fetch,
       }),
     ).rejects.toThrow("ax-code backend health check failed (503): not ready")
@@ -92,7 +120,7 @@ describe("headless backend lifecycle", () => {
       return new Response("unexpected route", { status: 404 })
     }) as typeof fetch
 
-    const backend = await startHeadlessBackend({ fetch: fetchFn })
+    const backend = await startHeadlessBackend({ reservePort: async () => 18456, fetch: fetchFn })
     try {
       const client = createHeadlessClient({ baseUrl: backend.url, headers: backend.headers, fetch: fetchFn })
       const state = createHeadlessProjectionState<

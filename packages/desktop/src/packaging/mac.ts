@@ -25,6 +25,13 @@ export type MacPackagingResult = {
   smoke: PackagedDesktopSmokePlan
 }
 
+export type MacPackagingCommand = {
+  command: string
+  args: string[]
+}
+
+export type MacPackagingCommandRunner = (command: MacPackagingCommand) => void
+
 export async function packageMacApp(
   input: {
     outDir?: string
@@ -33,6 +40,7 @@ export async function packageMacApp(
     electronAppPath?: string
     iconSourcePath?: string
     version?: string
+    commandRunner?: MacPackagingCommandRunner
   } = {},
 ): Promise<MacPackagingResult> {
   const artifacts = await buildDesktopArtifacts({ outDir: input.outDir, appDist: input.appDist })
@@ -42,6 +50,7 @@ export async function packageMacApp(
     electronAppPath: input.electronAppPath,
     iconSourcePath: input.iconSourcePath,
     version: input.version,
+    commandRunner: input.commandRunner,
   })
   const smoke = createPackagedDesktopSmokePlan({
     appDist: path.join(bundle.appPayloadPath, "app"),
@@ -61,6 +70,7 @@ export function createMacAppBundle(input: {
   iconSourcePath?: string
   version?: string
   electronVersion?: string
+  commandRunner?: MacPackagingCommandRunner
 }): MacAppBundle {
   const bundleRoot = input.bundleRoot ?? path.join(input.artifacts.outDir, "mac")
   const sourceApp = input.electronAppPath ?? resolveElectronAppPath()
@@ -70,12 +80,14 @@ export function createMacAppBundle(input: {
   cpSync(sourceApp, bundlePath, { recursive: true })
 
   const version = input.version ?? "0.0.0"
+  const commandRunner = input.commandRunner ?? runMacPackagingCommand
   renameMacBundleExecutable(bundlePath)
   rewriteInfoPlist(path.join(bundlePath, "Contents/Info.plist"), { version })
   const resourcesPath = path.join(bundlePath, "Contents/Resources")
   const iconPath = installMacBundleIcon({
     resourcesPath,
     sourcePath: input.iconSourcePath ?? defaultMacIconSourcePath(),
+    commandRunner,
   })
   const appPayloadPath = path.join(resourcesPath, "app")
   rmSync(path.join(resourcesPath, "default_app.asar"), { force: true })
@@ -140,6 +152,7 @@ export function createMacAppBundle(input: {
     },
   }
   writeFileSync(releaseManifestPath, JSON.stringify(releaseManifest, null, 2))
+  adHocSignMacBundle(bundlePath, commandRunner)
 
   return {
     bundlePath,
@@ -171,6 +184,13 @@ function resolveElectronVersion() {
 
 const MAC_EXECUTABLE_NAME = "AX Code"
 const MAC_ICON_FILE = "ax-code.icns"
+const UNUSED_ELECTRON_PRIVACY_USAGE_KEYS = [
+  "NSAudioCaptureUsageDescription",
+  "NSBluetoothAlwaysUsageDescription",
+  "NSBluetoothPeripheralUsageDescription",
+  "NSCameraUsageDescription",
+  "NSMicrophoneUsageDescription",
+]
 
 function renameMacBundleExecutable(bundlePath: string) {
   const macosPath = path.join(bundlePath, "Contents/MacOS")
@@ -187,13 +207,17 @@ function renameMacBundleExecutable(bundlePath: string) {
 function rewriteInfoPlist(infoPath: string, input: { version: string }) {
   if (!existsSync(infoPath)) throw new Error(`Electron Info.plist is missing: ${infoPath}`)
   const original = readFileSync(infoPath, "utf8")
+  const sanitized = UNUSED_ELECTRON_PRIVACY_USAGE_KEYS.reduce(
+    (plist, key) => removePlistStringKey(plist, key),
+    removePlistDictKey(removePlistDictKey(original, "ElectronAsarIntegrity"), "NSAppTransportSecurity"),
+  )
   const updated = setPlistString(
     setPlistString(
       setPlistString(
         setPlistString(
           setPlistString(
             setPlistString(
-              removePlistDictKey(original, "ElectronAsarIntegrity"),
+              sanitized,
               "CFBundleIdentifier",
               "digital.defai.ax-code",
             ),
@@ -239,6 +263,11 @@ function removePlistDictKey(plist: string, key: string) {
   return `${plist.slice(0, match.index)}${plist.slice(dictEnd)}`
 }
 
+function removePlistStringKey(plist: string, key: string) {
+  const marker = `<key>${escapeRegExp(key)}</key>`
+  return plist.replace(new RegExp(`\\s*${marker}\\s*<string>[^<]*</string>`), "")
+}
+
 function matchingDictEnd(plist: string, dictStart: number) {
   const tags = /<\/?dict>/g
   tags.lastIndex = dictStart
@@ -258,7 +287,7 @@ function defaultMacIconSourcePath() {
   return path.resolve(import.meta.dirname, "../../../ui/src/assets/favicon/web-app-manifest-512x512.png")
 }
 
-function installMacBundleIcon(input: { resourcesPath: string; sourcePath: string }) {
+function installMacBundleIcon(input: { resourcesPath: string; sourcePath: string; commandRunner: MacPackagingCommandRunner }) {
   if (!existsSync(input.sourcePath)) throw new Error(`Mac app icon source is missing: ${input.sourcePath}`)
   const iconPath = path.join(input.resourcesPath, MAC_ICON_FILE)
   if (path.extname(input.sourcePath).toLowerCase() === ".icns") {
@@ -266,16 +295,20 @@ function installMacBundleIcon(input: { resourcesPath: string; sourcePath: string
     rmSync(path.join(input.resourcesPath, "electron.icns"), { force: true })
     return iconPath
   }
-  runMacPackagingCommand("sips", ["-s", "format", "icns", input.sourcePath, "--out", iconPath])
+  input.commandRunner({ command: "sips", args: ["-s", "format", "icns", input.sourcePath, "--out", iconPath] })
   rmSync(path.join(input.resourcesPath, "electron.icns"), { force: true })
   return iconPath
 }
 
-function runMacPackagingCommand(command: string, args: string[]) {
-  const result = spawnSync(command, args, { encoding: "utf8" })
+function adHocSignMacBundle(bundlePath: string, commandRunner: MacPackagingCommandRunner) {
+  commandRunner({ command: "/usr/bin/codesign", args: ["--force", "--deep", "--sign", "-", bundlePath] })
+}
+
+function runMacPackagingCommand(command: MacPackagingCommand) {
+  const result = spawnSync(command.command, command.args, { encoding: "utf8" })
   if (result.status === 0) return
   const detail = result.stderr?.trim() || result.stdout?.trim()
-  throw new Error(`${command} failed${detail ? `: ${detail}` : ""}`)
+  throw new Error(`${command.command} failed${detail ? `: ${detail}` : ""}`)
 }
 
 function copyIfExists(source: string, destination: string) {

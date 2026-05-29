@@ -1,3 +1,4 @@
+import { For, Show } from "solid-js"
 import type { AppDiagnosticsReport } from "./runtime/diagnostics"
 
 export function DiagnosticsPanel(props: {
@@ -7,6 +8,11 @@ export function DiagnosticsPanel(props: {
   logText?: string
   onRefresh: () => void
   onExportLogs: () => void
+  onDownloadUpdate: () => void
+  onRevealUpdate: () => void
+  onOpenUpdate: () => void
+  onShowStatusReport: () => void
+  statusReportBusy?: boolean
 }) {
   return (
     <section aria-label="Diagnostics">
@@ -33,6 +39,10 @@ export function DiagnosticsPanel(props: {
           messages
         </span>
         <span>
+          <strong>{props.report.catalog.skills.total}</strong>
+          skills
+        </span>
+        <span>
           <strong>{props.report.security.bridgeAvailable ? "desktop" : "browser"}</strong>
           bridge
         </span>
@@ -42,6 +52,13 @@ export function DiagnosticsPanel(props: {
           <strong>{props.report.renderer.name}</strong>
           <small>{props.report.renderer.version}</small>
         </div>
+        <Show when={props.report.desktop.capabilities?.app}>
+          {(app) => (
+            <p>
+              desktop {app().name ?? "@ax-code/desktop"} · {app().version ?? "unknown"}
+            </p>
+          )}
+        </Show>
         <p>
           {props.report.runtime.backendUrl ?? "fixture backend"} · {props.report.queue.total} queue items ·{" "}
           {props.report.eventStream.appliedEvents} events
@@ -51,13 +68,81 @@ export function DiagnosticsPanel(props: {
           {formatBoolean(props.report.security.nodeIntegration)}
         </p>
         <p>
+          tools terminal {formatBoolean(props.report.runtime.features.terminalPane)} · browser{" "}
+          {formatBoolean(props.report.runtime.features.browserPane)} · file{" "}
+          {formatBoolean(props.report.runtime.features.filePane)}
+        </p>
+        <p>
+          catalog {props.report.catalog.providers} providers · {props.report.catalog.models} models ·{" "}
+          {props.report.catalog.skills.total} skills · {props.report.catalog.skills.warnings} skill warnings
+        </p>
+        <p>
+          capability profiles {props.report.security.capabilityProfiles.enabled} enabled ·{" "}
+          {props.report.security.capabilityProfiles.disabled} disabled · preview bridge{" "}
+          {props.report.security.capabilityProfiles.previewBridge}
+        </p>
+        <p>
           {releaseLabel(props.report.desktop.capabilities?.release)} · updates{" "}
           {formatBoolean(props.report.desktop.capabilities?.release?.updaterConfigured)}
         </p>
+        <Show when={props.report.desktop.releaseReadiness}>
+          {(readiness) => (
+            <div class="diagnostics-readiness" data-status={readiness().status}>
+              <p>
+                release readiness <strong>{readiness().status}</strong> · {readiness().summary}
+              </p>
+              <Show when={readiness().blockedGates.length > 0}>
+                <ul>
+                  <For each={readiness().blockedGates}>
+                    {(gate) => (
+                      <li>
+                        {gate.name}
+                        {gate.reason ? ` · ${gate.reason}` : ""}
+                      </li>
+                    )}
+                  </For>
+                </ul>
+              </Show>
+            </div>
+          )}
+        </Show>
+        <p>
+          update check {props.report.desktop.capabilities?.update?.status ?? "not run"}
+          {props.report.desktop.capabilities?.update?.latestVersion
+            ? ` · latest ${props.report.desktop.capabilities.update.latestVersion}`
+            : ""}
+        </p>
+        <Show when={props.report.desktop.capabilities?.update?.artifactPath}>
+          {(artifactPath) => <p>downloaded {artifactPath()}</p>}
+        </Show>
       </div>
       <div class="diagnostics-actions">
         <button disabled={props.busy} onClick={props.onRefresh} type="button">
           Refresh
+        </button>
+        <button disabled={props.statusReportBusy} onClick={props.onShowStatusReport} type="button">
+          Status report
+        </button>
+        <button
+          disabled={props.busy || props.report.desktop.capabilities?.update?.status !== "available"}
+          onClick={props.onDownloadUpdate}
+          type="button"
+        >
+          Download update
+        </button>
+        <button
+          disabled={props.busy || !props.report.desktop.capabilities?.update?.artifactPath}
+          onClick={props.onRevealUpdate}
+          type="button"
+        >
+          Reveal update
+        </button>
+        <button
+          disabled={props.busy || props.report.desktop.capabilities?.update?.status !== "downloaded"}
+          onClick={props.onOpenUpdate}
+          type="button"
+        >
+          Open update
         </button>
         <button disabled={props.busy || !props.report.desktop.available} onClick={props.onExportLogs} type="button">
           Export logs

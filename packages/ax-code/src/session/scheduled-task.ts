@@ -328,7 +328,10 @@ export namespace ScheduledTask {
     if (state.initialized) return
     state.initialized = true
     const pollMs = Math.max(10, input.pollMs ?? 60_000)
-    const tick = () => {
+    // Bind the tick to the current Instance async context so that
+    // runDue() can access Instance.project when the interval fires
+    // outside the original provide() call.
+    const tick = Instance.bind(() => {
       if (state.running) return
       state.running = true
       void runDue()
@@ -338,7 +341,7 @@ export namespace ScheduledTask {
         .finally(() => {
           state.running = false
         })
-    }
+    })
     state.interval = setInterval(tick, pollMs)
     state.interval.unref?.()
     tick()

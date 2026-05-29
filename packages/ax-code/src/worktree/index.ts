@@ -48,6 +48,18 @@ export namespace Worktree {
 
   export type Info = z.infer<typeof Info>
 
+  export const ListItem = z
+    .object({
+      name: z.string(),
+      directory: z.string(),
+      branch: z.string().optional(),
+    })
+    .meta({
+      ref: "WorktreeListItem",
+    })
+
+  export type ListItem = z.infer<typeof ListItem>
+
   export const CreateInput = z
     .object({
       name: z.string().optional(),
@@ -266,6 +278,62 @@ export namespace Worktree {
     const real = await fs.realpath(abs).catch(() => abs)
     const normalized = path.normalize(real)
     return process.platform === "win32" ? normalized.toLowerCase() : normalized
+  }
+
+  function worktreeName(directory: string) {
+    return path.basename(directory) || directory
+  }
+
+  async function worktreeBranchMap() {
+    const result = await git(["worktree", "list", "--porcelain"], { cwd: Instance.worktree })
+    if (result.exitCode !== 0) {
+      log.warn("failed to read git worktree list", { message: errorText(result) })
+      return new Map<string, string>()
+    }
+
+    const map = new Map<string, string>()
+    const entries = outputText(result.stdout)
+      .split("\n")
+      .map((line) => line.trim())
+      .reduce<{ path?: string; branch?: string }[]>((acc, line) => {
+        if (!line) return acc
+        if (line.startsWith("worktree ")) {
+          acc.push({ path: line.slice("worktree ".length).trim() })
+          return acc
+        }
+        const current = acc[acc.length - 1]
+        if (!current) return acc
+        if (line.startsWith("branch ")) {
+          current.branch = line
+            .slice("branch ".length)
+            .trim()
+            .replace(/^refs\/heads\//, "")
+        }
+        return acc
+      }, [])
+
+    for (const entry of entries) {
+      if (!entry.path || !entry.branch) continue
+      map.set(await canonical(entry.path), entry.branch)
+    }
+    return map
+  }
+
+  export async function list(): Promise<ListItem[]> {
+    const sandboxes = await Project.sandboxes(Instance.project.id)
+    const branches = Instance.project.vcs === "git" ? await worktreeBranchMap() : new Map<string, string>()
+    const items = await Promise.all(
+      sandboxes.map(async (sandbox) => {
+        const directory = await canonical(sandbox)
+        const branch = branches.get(directory)
+        return ListItem.parse({
+          directory,
+          name: worktreeName(directory),
+          ...(branch ? { branch } : {}),
+        })
+      }),
+    )
+    return items
   }
 
   async function candidate(root: string, base?: string) {

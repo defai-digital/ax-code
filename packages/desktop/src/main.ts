@@ -2,10 +2,11 @@ import { parseArgs } from "node:util"
 import { DesktopBackendManager } from "./lifecycle/backend-manager"
 import { createElectronHostPlan } from "./electron/config"
 import { startElectronDesktopHost } from "./electron/host"
+import { desktopMainArgs } from "./main-args"
 import { desktopSecurityBaseline } from "./security/baseline"
 
 const { values } = parseArgs({
-  args: Bun.argv.slice(2),
+  args: desktopMainArgs(process.argv),
   options: {
     "dry-run": { type: "boolean", default: false },
     dev: { type: "boolean", default: false },
@@ -15,22 +16,30 @@ const { values } = parseArgs({
     "auth-header": { type: "string" },
     "package-target": { type: "string" },
   },
-  strict: true,
-  allowPositionals: false,
+  strict: false,
+  allowPositionals: true,
 })
 
-if (values["dry-run"]) {
+const dryRun = values["dry-run"] === true
+const dev = values.dev === true
+const rendererUrl = stringValue(values["renderer-url"])
+const directory = stringValue(values.directory)
+const attachUrl = stringValue(values["attach-url"])
+const authHeader = stringValue(values["auth-header"])
+const packageTarget = stringValue(values["package-target"])
+
+if (dryRun) {
   const backend = new DesktopBackendManager()
   const electron = createElectronHostPlan({
-    dev: Boolean(values.dev),
-    rendererUrl: values["renderer-url"],
+    dev,
+    rendererUrl,
   })
   console.log(
     JSON.stringify(
       {
         name: "@ax-code/desktop",
         mode: "electron-host-plan",
-        packageTarget: values["package-target"],
+        packageTarget,
         backend: backend.diagnostics(),
         electron,
         security: {
@@ -44,12 +53,15 @@ if (values["dry-run"]) {
       2,
     ),
   )
+  process.exit(0)
 } else {
-  await startElectronDesktopHost({
-    dev: values.dev,
-    rendererUrl: values["renderer-url"],
-    directory: values.directory,
-    attachUrl: values["attach-url"],
-    authHeader: values["auth-header"],
+  void startElectronDesktopHost({ dev, rendererUrl, directory, attachUrl, authHeader }).catch((cause) => {
+    const message = cause instanceof Error ? cause.stack || cause.message : String(cause)
+    console.error(`AX Code desktop host failed to start: ${message}`)
+    process.exitCode = 1
   })
+}
+
+function stringValue(value: string | boolean | undefined) {
+  return typeof value === "string" ? value : undefined
 }

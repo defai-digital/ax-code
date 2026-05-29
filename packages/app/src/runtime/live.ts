@@ -4,12 +4,19 @@ import {
   type HeadlessSessionEvidence,
   type HeadlessTaskQueueItem,
 } from "@ax-code/sdk/headless/client"
-import { isHeadlessRuntimeEvent } from "@ax-code/sdk/headless/event"
-import { applyHeadlessProjectionEvent, createHeadlessProjectionState } from "@ax-code/sdk/headless/projection"
+import { isHeadlessRuntimeEvent, type HeadlessRuntimeStatusEvent } from "@ax-code/sdk/headless/event"
+import {
+  applyHeadlessProjectionEvent,
+  createHeadlessProjectionState,
+  runtimeProbeKeysForEvent,
+  type HeadlessProjectionEffect,
+} from "@ax-code/sdk/headless/projection"
 import type { AxCodeAppRuntimeConfig } from "./config"
 import type {
   AppCommandCenterState,
   AppAgentOption,
+  AppArtifactPreview,
+  AppBranchRankEvidence,
   AppDreEvidence,
   AppHeadlessEvent,
   AppModelOption,
@@ -22,6 +29,7 @@ import type {
   AppSemanticEvidence,
   AppSession,
   AppSessionEvidence,
+  AppSkillOption,
   AppTerminal,
   AppWorktree,
 } from "../projection/types"
@@ -31,12 +39,26 @@ export type LiveHeadlessClientLike = {
   client: {
     session: {
       list(parameters?: { directory?: string; limit?: number }): Promise<{ data?: unknown }>
+      messages?(parameters: { sessionID: string; directory?: string; limit?: number }): Promise<{ data?: unknown }>
     }
     config?: {
+      get(parameters?: { directory?: string }): Promise<{ data?: unknown }>
       providers(parameters?: { directory?: string }): Promise<{ data?: unknown }>
     }
     agent?: {
       agents(parameters?: { directory?: string }): Promise<{ data?: unknown }>
+    }
+    app?: {
+      skills(parameters?: { directory?: string }): Promise<{ data?: unknown }>
+    }
+    mcp?: {
+      status(parameters?: { directory?: string }): Promise<{ data?: unknown }>
+    }
+    lsp?: {
+      status(parameters?: { directory?: string }): Promise<{ data?: unknown }>
+    }
+    debugEngine?: {
+      pendingPlans(parameters?: { directory?: string }): Promise<{ data?: unknown }>
     }
     worktree?: {
       list(parameters?: { directory?: string }): Promise<{ data?: unknown }>
@@ -52,14 +74,28 @@ export type LiveHeadlessClientLike = {
     list(parameters?: { limit?: number }): Promise<unknown>
   }
   sessionEvidence?: {
-    load(sessionID: string): Promise<unknown>
+    load(sessionID: string, parameters?: { includeBranchRank?: boolean; deepBranchRank?: boolean }): Promise<unknown>
   }
   subscribe?(options?: { signal?: AbortSignal }): AsyncGenerator<unknown>
+}
+
+export type AppRuntimeProbeKey = "mcp" | "lsp" | "debug-engine"
+
+export type LiveRuntimeApplyResult = {
+  applied: boolean
+  effects: HeadlessProjectionEffect[]
 }
 
 export type LiveBootstrapOptions = Extract<AxCodeAppRuntimeConfig, { mode: "live" }> & {
   client?: LiveHeadlessClientLike
 }
+
+export type LiveSessionMessages = {
+  messages: AppProjectionState["message"][string]
+  parts: AppProjectionState["part"]
+}
+
+const LIVE_SESSION_MESSAGE_LIMIT = 500
 
 export function createLiveHeadlessClient(config: Extract<AxCodeAppRuntimeConfig, { mode: "live" }>): HeadlessClient {
   return createHeadlessClient({
@@ -92,24 +128,37 @@ export async function bootstrapLiveCommandCenterState(options: LiveBootstrapOpti
     })
   }
 
+  const selectedSessionID = sessions[0]?.id
+  const [messages, evidence] = selectedSessionID
+    ? await Promise.all([
+        loadLiveSessionMessages(client, selectedSessionID, options.directory),
+        loadLiveSessionEvidence(client, selectedSessionID),
+      ])
+    : [emptyLiveSessionMessages(), undefined]
+  applyLiveSessionMessages(projection, messages)
+
   return {
     projection,
     queue,
-    evidence: sessions[0] ? { [sessions[0].id]: await loadLiveSessionEvidence(client, sessions[0].id) } : {},
+    evidence: selectedSessionID && evidence ? { [selectedSessionID]: evidence } : {},
     catalog,
     worktrees,
     terminals,
     scheduledTasks,
-    selectedSessionID: sessions[0]?.id ?? "",
+    selectedSessionID: selectedSessionID ?? "",
   }
 }
 
 export function applyLiveRuntimeEvent(state: AppCommandCenterState, event: unknown) {
-  if (!isHeadlessRuntimeEvent(event)) return false
-  if (applyTaskQueueEvent(state, event)) return true
-  if (applyScheduledTaskEvent(state, event)) return true
-  applyHeadlessProjectionEvent(state.projection, event as AppHeadlessEvent)
-  return true
+  return applyLiveRuntimeEventWithEffects(state, event).applied
+}
+
+export function applyLiveRuntimeEventWithEffects(state: AppCommandCenterState, event: unknown): LiveRuntimeApplyResult {
+  if (!isHeadlessRuntimeEvent(event)) return { applied: false, effects: [] }
+  if (applyTaskQueueEvent(state, event)) return { applied: true, effects: [] }
+  if (applyScheduledTaskEvent(state, event)) return { applied: true, effects: [] }
+  const result = applyHeadlessProjectionEvent(state.projection, event as AppHeadlessEvent)
+  return { applied: result.handled, effects: result.effects }
 }
 
 export async function followLiveCommandCenterEvents(
@@ -117,17 +166,189 @@ export async function followLiveCommandCenterEvents(
   client: Pick<LiveHeadlessClientLike, "subscribe">,
   options: {
     signal?: AbortSignal
+    probeClient?: LiveHeadlessClientLike
+    directory?: string
+    probeDelayMs?: number
     onEvent?: (event: unknown, applied: boolean) => void
+    onBootstrapReload?: () => void
+    onProbeRefresh?: (catalog: AppRuntimeCatalog, keys: AppRuntimeProbeKey[]) => void
+    onProbeRefreshError?: (error: unknown, keys: AppRuntimeProbeKey[]) => void
   } = {},
 ) {
   if (!client.subscribe) return 0
   let appliedCount = 0
-  for await (const event of client.subscribe({ signal: options.signal })) {
-    const applied = applyLiveRuntimeEvent(state, event)
-    if (applied) appliedCount++
-    options.onEvent?.(event, applied)
+  const probeScheduler = createRuntimeCatalogProbeScheduler(state, options)
+  try {
+    for await (const event of client.subscribe({ signal: options.signal })) {
+      const { applied, effects } = applyLiveRuntimeEventWithEffects(state, event)
+      if (applied) appliedCount++
+      if (applied) probeScheduler.schedule(runtimeProbeKeysForUnknownEvent(event))
+      if (effects.some((effect) => effect.type === "bootstrap.reload")) options.onBootstrapReload?.()
+      options.onEvent?.(event, applied)
+    }
+  } finally {
+    await probeScheduler.flush()
   }
   return appliedCount
+}
+
+export type LiveEventStreamFollowStatus = "connecting" | "connected" | "unavailable" | "error"
+
+export async function followLiveCommandCenterEventsWithReconnect(
+  state: AppCommandCenterState,
+  createClient: () => Pick<LiveHeadlessClientLike, "subscribe">,
+  options: {
+    signal?: AbortSignal
+    maxAttempts?: number
+    retryDelayMs?: number
+    probeClient?: LiveHeadlessClientLike
+    directory?: string
+    probeDelayMs?: number
+    onStatus?: (status: LiveEventStreamFollowStatus, metadata?: { attempt: number; error?: unknown }) => void
+    onEvent?: (event: unknown, applied: boolean) => void
+    onBootstrapReload?: () => void
+    onProbeRefresh?: (catalog: AppRuntimeCatalog, keys: AppRuntimeProbeKey[]) => void
+    onProbeRefreshError?: (error: unknown, keys: AppRuntimeProbeKey[]) => void
+  } = {},
+): Promise<{ appliedCount: number; attempts: number; status: LiveEventStreamFollowStatus }> {
+  const maxAttempts = options.maxAttempts ?? Number.POSITIVE_INFINITY
+  const retryDelayMs = options.retryDelayMs ?? 1_000
+  let appliedCount = 0
+  let attempt = 0
+  let status: LiveEventStreamFollowStatus = "connecting"
+
+  while (!options.signal?.aborted && attempt < maxAttempts) {
+    attempt++
+    status = "connecting"
+    options.onStatus?.(status, { attempt })
+    try {
+      const count = await followLiveCommandCenterEvents(state, createClient(), {
+        signal: options.signal,
+        probeClient: options.probeClient,
+        directory: options.directory,
+        probeDelayMs: options.probeDelayMs,
+        onBootstrapReload: options.onBootstrapReload,
+        onProbeRefresh: options.onProbeRefresh,
+        onProbeRefreshError: options.onProbeRefreshError,
+        onEvent: (event, applied) => {
+          if (applied) {
+            status = "connected"
+            options.onStatus?.(status, { attempt })
+          }
+          options.onEvent?.(event, applied)
+        },
+      })
+      appliedCount += count
+      if (options.signal?.aborted) break
+      if (appliedCount === 0) {
+        status = "unavailable"
+        options.onStatus?.(status, { attempt })
+      }
+      return { appliedCount, attempts: attempt, status }
+    } catch (error) {
+      if (options.signal?.aborted) break
+      status = "error"
+      options.onStatus?.(status, { attempt, error })
+      if (attempt >= maxAttempts) return { appliedCount, attempts: attempt, status }
+      await waitForReconnectDelay(retryDelayMs, options.signal)
+    }
+  }
+
+  return { appliedCount, attempts: attempt, status }
+}
+
+function waitForReconnectDelay(delayMs: number, signal?: AbortSignal) {
+  if (delayMs <= 0 || signal?.aborted) return Promise.resolve()
+  return new Promise<void>((resolve) => {
+    const timeout = setTimeout(resolve, delayMs)
+    signal?.addEventListener(
+      "abort",
+      () => {
+        clearTimeout(timeout)
+        resolve()
+      },
+      { once: true },
+    )
+  })
+}
+
+function createRuntimeCatalogProbeScheduler(
+  state: AppCommandCenterState,
+  options: {
+    signal?: AbortSignal
+    probeClient?: LiveHeadlessClientLike
+    directory?: string
+    probeDelayMs?: number
+    onProbeRefresh?: (catalog: AppRuntimeCatalog, keys: AppRuntimeProbeKey[]) => void
+    onProbeRefreshError?: (error: unknown, keys: AppRuntimeProbeKey[]) => void
+  },
+) {
+  const pending = new Set<AppRuntimeProbeKey>()
+  const delayMs = options.probeDelayMs ?? 250
+  let timer: ReturnType<typeof setTimeout> | undefined
+  let inFlight: Promise<void> | undefined
+
+  const clearTimer = () => {
+    if (!timer) return
+    clearTimeout(timer)
+    timer = undefined
+  }
+
+  const runPending = async () => {
+    if (!options.probeClient || options.signal?.aborted || pending.size === 0) return
+    const keys = Array.from(pending)
+    pending.clear()
+    try {
+      state.catalog = await refreshLiveRuntimeCatalog(state.catalog, options.probeClient, {
+        directory: options.directory,
+        keys,
+      })
+      options.onProbeRefresh?.(state.catalog, keys)
+    } catch (error) {
+      options.onProbeRefreshError?.(error, keys)
+    }
+  }
+
+  const start = () => {
+    if (inFlight) return
+    inFlight = runPending().finally(() => {
+      inFlight = undefined
+      if (pending.size > 0 && !options.signal?.aborted) start()
+    })
+  }
+
+  const schedule = (keys: AppRuntimeProbeKey[]) => {
+    if (!options.probeClient || options.signal?.aborted || keys.length === 0) return
+    for (const key of keys) pending.add(key)
+    if (timer || inFlight) return
+    timer = setTimeout(() => {
+      timer = undefined
+      start()
+    }, delayMs)
+  }
+
+  return {
+    schedule,
+    async flush() {
+      clearTimer()
+      if (pending.size > 0) start()
+      while (inFlight) await inFlight
+    },
+  }
+}
+
+function runtimeProbeKeysForUnknownEvent(event: unknown): AppRuntimeProbeKey[] {
+  if (!event || typeof event !== "object") return []
+  const type = (event as Record<string, unknown>)["type"]
+  if (
+    type !== "mcp.tools.changed" &&
+    type !== "lsp.updated" &&
+    type !== "code.index.progress" &&
+    type !== "code.index.state"
+  ) {
+    return []
+  }
+  return runtimeProbeKeysForEvent(event as HeadlessRuntimeStatusEvent)
 }
 
 export async function loadLiveSessionEvidence(
@@ -136,12 +357,46 @@ export async function loadLiveSessionEvidence(
 ): Promise<AppSessionEvidence> {
   if (!client.sessionEvidence) return emptySessionEvidence(sessionID)
   try {
-    return normalizeLiveSessionEvidence(await client.sessionEvidence.load(sessionID), sessionID)
+    return normalizeLiveSessionEvidence(
+      await client.sessionEvidence.load(sessionID, { includeBranchRank: true }),
+      sessionID,
+    )
   } catch (error) {
     return {
       ...emptySessionEvidence(sessionID),
       status: "error",
       errors: [error instanceof Error ? error.message : String(error)],
+    }
+  }
+}
+
+export async function loadLiveSessionMessages(
+  client: Pick<LiveHeadlessClientLike, "client">,
+  sessionID: string,
+  directory?: string,
+): Promise<LiveSessionMessages> {
+  if (!client.client.session.messages) return emptyLiveSessionMessages()
+  try {
+    const response = await client.client.session.messages({ sessionID, directory, limit: LIVE_SESSION_MESSAGE_LIMIT })
+    return normalizeLiveSessionMessages(response.data)
+  } catch {
+    return emptyLiveSessionMessages()
+  }
+}
+
+export function applyLiveSessionMessages(projection: AppProjectionState, messages: LiveSessionMessages) {
+  for (const message of messages.messages) {
+    applyHeadlessProjectionEvent(projection, {
+      type: "message.updated",
+      properties: { info: message },
+    })
+  }
+  for (const parts of Object.values(messages.parts)) {
+    for (const part of parts) {
+      applyHeadlessProjectionEvent(projection, {
+        type: "message.part.updated",
+        properties: { part },
+      })
     }
   }
 }
@@ -160,6 +415,10 @@ function createEmptyAppProjection(): AppProjectionState {
   >()
 }
 
+function emptyLiveSessionMessages(): LiveSessionMessages {
+  return { messages: [], parts: {} }
+}
+
 async function loadLiveTaskQueue(client: LiveHeadlessClientLike): Promise<AppQueueItem[]> {
   if (!client.taskQueue) return []
   const response = await client.taskQueue.list({ limit: 200 })
@@ -172,20 +431,73 @@ async function loadLiveScheduledTasks(client: LiveHeadlessClientLike): Promise<A
   return normalizeScheduledTaskList(response)
 }
 
-async function loadLiveRuntimeCatalog(
+export async function loadLiveRuntimeCatalog(
   client: LiveHeadlessClientLike,
   options: Pick<LiveBootstrapOptions, "directory">,
 ): Promise<AppRuntimeCatalog> {
-  const [providers, agents] = await Promise.all([
+  const [providers, agents, skills, lsp, debugEngine] = await Promise.all([
     client.client.config?.providers({ directory: options.directory }).catch(() => undefined),
     client.client.agent?.agents({ directory: options.directory }).catch(() => undefined),
+    client.client.app?.skills({ directory: options.directory }).catch(() => undefined),
+    client.client.lsp?.status({ directory: options.directory }).catch(() => undefined),
+    client.client.debugEngine?.pendingPlans({ directory: options.directory }).catch(() => undefined),
+  ])
+  const [config, mcp] = await Promise.all([
+    client.client.config?.get?.({ directory: options.directory }).catch(() => undefined),
+    client.client.mcp?.status({ directory: options.directory }).catch(() => undefined),
   ])
   const providerData = providers?.data
   return {
     providers: normalizeProviderStatuses(providerData),
     agents: normalizeAgentOptions(agents?.data),
+    skills: normalizeSkillOptions(skills?.data),
     models: normalizeModelOptions(providerData),
+    mcp: normalizeMcpStatusSummary(mcp?.data),
+    lsp: normalizeLspStatusSummary(lsp?.data),
+    codeIndex: normalizeCodeIndexSummary(debugEngine?.data),
+    permission: normalizePermissionSummary(config?.data),
   }
+}
+
+export async function refreshLiveRuntimeCatalog(
+  catalog: AppRuntimeCatalog,
+  client: LiveHeadlessClientLike,
+  options: Pick<LiveBootstrapOptions, "directory"> & { keys?: AppRuntimeProbeKey[] } = {},
+): Promise<AppRuntimeCatalog> {
+  const keys =
+    options.keys && options.keys.length > 0 ? [...new Set(options.keys)] : (["mcp", "lsp", "debug-engine"] as const)
+  const next: AppRuntimeCatalog = {
+    ...catalog,
+    mcp: { ...catalog.mcp },
+    lsp: { ...catalog.lsp },
+    codeIndex: { ...catalog.codeIndex },
+  }
+
+  await Promise.all(
+    keys.map(async (key) => {
+      switch (key) {
+        case "mcp": {
+          const response = await client.client.mcp?.status({ directory: options.directory }).catch(() => undefined)
+          if (response) next.mcp = normalizeMcpStatusSummary(response.data)
+          return
+        }
+        case "lsp": {
+          const response = await client.client.lsp?.status({ directory: options.directory }).catch(() => undefined)
+          if (response) next.lsp = normalizeLspStatusSummary(response.data)
+          return
+        }
+        case "debug-engine": {
+          const response = await client.client.debugEngine
+            ?.pendingPlans({ directory: options.directory })
+            .catch(() => undefined)
+          if (response) next.codeIndex = normalizeCodeIndexSummary(response.data)
+          return
+        }
+      }
+    }),
+  )
+
+  return next
 }
 
 async function loadLiveWorktrees(
@@ -207,11 +519,14 @@ export function normalizeWorktreeList(value: unknown): AppWorktree[] {
 }
 
 export function normalizeWorktree(value: unknown): AppWorktree | undefined {
-  const directory = typeof value === "string" ? value : readString(readRecord(value) ?? {}, "directory")
+  const record = readRecord(value) ?? {}
+  const directory = typeof value === "string" ? value : readString(record, "directory")
   if (!directory) return undefined
+  const branch = readString(record, "branch")
   return {
     directory,
-    name: readString(readRecord(value) ?? {}, "name") ?? directory.split(/[\\/]/).filter(Boolean).at(-1) ?? directory,
+    name: readString(record, "name") ?? directory.split(/[\\/]/).filter(Boolean).at(-1) ?? directory,
+    ...(branch ? { branch } : {}),
   }
 }
 
@@ -245,6 +560,8 @@ export function normalizeTerminal(value: unknown): AppTerminal | undefined {
     command: readString(record, "command") ?? "",
     cwd: readString(record, "cwd") ?? "",
     status: status === "running" || status === "exited" ? status : "unknown",
+    ...(readString(record, "sessionID") ? { sessionID: readString(record, "sessionID") } : {}),
+    ...(readString(record, "sessionTitle") ? { sessionTitle: readString(record, "sessionTitle") } : {}),
   }
 }
 
@@ -334,6 +651,8 @@ export function normalizeScheduledTask(value: unknown): AppScheduledTask | undef
     agent: readString(record, "agent"),
     model: record["model"],
     lastQueueID: readString(record, "lastQueueID"),
+    lastSessionID: readString(record, "lastSessionID") ?? readString(record, "sessionID"),
+    lastDurationMs: readNumber(record, "lastDurationMs") ?? readNumber(record, "durationMs"),
     error: readString(record, "error"),
     nextRunAt: readNumber(record, "nextRunAt"),
     lastRunAt: readNumber(record, "lastRunAt"),
@@ -362,6 +681,35 @@ function normalizeAgentOption(value: unknown): AppAgentOption | undefined {
   }
 }
 
+export function normalizeSkillOptions(value: unknown): AppSkillOption[] {
+  const list = Array.isArray(value)
+    ? value
+    : (readArrayProperty(value, "skills") ??
+      readArrayProperty(value, "items") ??
+      readArrayProperty(value, "data") ??
+      [])
+  return list.map(normalizeSkillOption).filter((skill): skill is AppSkillOption => Boolean(skill))
+}
+
+function normalizeSkillOption(value: unknown): AppSkillOption | undefined {
+  const record = readRecord(value)
+  if (!record) return undefined
+  const name = readString(record, "name") ?? readString(record, "id")
+  if (!name) return undefined
+  const issues = readStringArray(record["standardIssues"]).slice(0, 6)
+  const location = readString(record, "location")
+  const argumentHint = readString(record, "argumentHint")
+  return {
+    name,
+    description: readString(record, "description"),
+    ...(location ? { location } : {}),
+    ...(argumentHint ? { argumentHint } : {}),
+    ...(readBoolean(record, "builtin") === true ? { builtin: true } : {}),
+    status: issues.length > 0 ? "warn" : "ok",
+    issues,
+  }
+}
+
 function normalizeModelOptions(value: unknown): AppModelOption[] {
   const root = readRecord(value)
   const providers = Array.isArray(value)
@@ -380,6 +728,85 @@ function normalizeProviderStatuses(value: unknown): AppProviderStatus[] {
     .filter((provider): provider is AppProviderStatus => Boolean(provider))
 }
 
+function normalizeMcpStatusSummary(value: unknown): AppRuntimeCatalog["mcp"] {
+  const servers = Object.values(readRecord(value) ?? {})
+    .map((server) => {
+      const record = readRecord(server)
+      return record ? readString(record, "status") : undefined
+    })
+    .filter((status): status is string => Boolean(status))
+  return {
+    total: servers.length,
+    connected: servers.filter((status) => status === "connected").length,
+    disabled: servers.filter((status) => status === "disabled").length,
+    failed: servers.filter((status) => status === "failed").length,
+    needsAuth: servers.filter((status) => status === "needs_auth" || status === "needs_client_registration").length,
+    needsTrust: servers.filter((status) => status === "needs_trust").length,
+  }
+}
+
+export function normalizeLspStatusSummary(value: unknown): AppRuntimeCatalog["lsp"] {
+  const servers = (
+    Array.isArray(value) ? value : (readArrayProperty(value, "data") ?? readArrayProperty(value, "items") ?? [])
+  )
+    .map((server) => {
+      const record = readRecord(server)
+      return record ? readString(record, "status") : undefined
+    })
+    .filter((status): status is string => Boolean(status))
+  return {
+    total: servers.length,
+    connected: servers.filter((status) => status === "connected").length,
+    error: servers.filter((status) => status === "error").length,
+  }
+}
+
+export function normalizeCodeIndexSummary(value: unknown): AppRuntimeCatalog["codeIndex"] {
+  const record = readRecord(value) ?? {}
+  const graph = readRecord(record["graph"]) ?? {}
+  const state = readString(graph, "state")
+  const lastIndexedAt = readNumber(graph, "lastIndexedAt")
+  const error = readString(graph, "error")
+  return {
+    pendingPlans: readNumber(record, "count") ?? 0,
+    toolCount: readNumber(record, "toolCount") ?? 0,
+    nodeCount: readNumber(graph, "nodeCount") ?? 0,
+    edgeCount: readNumber(graph, "edgeCount") ?? 0,
+    state: state === "idle" || state === "indexing" || state === "failed" ? state : "unknown",
+    completed: readNumber(graph, "completed") ?? 0,
+    total: readNumber(graph, "total") ?? 0,
+    ...(lastIndexedAt == null ? {} : { lastIndexedAt }),
+    ...(error ? { error } : {}),
+  }
+}
+
+function normalizePermissionSummary(value: unknown): AppRuntimeCatalog["permission"] {
+  const config = readRecord(value)
+  const permission = readRecord(config?.["permission"]) ?? {}
+  const actions = flattenPermissionActions(permission)
+  const experimental = readRecord(config?.["experimental"])
+  return {
+    totalRules: actions.length,
+    allow: actions.filter((action) => action === "allow").length,
+    ask: actions.filter((action) => action === "ask").length,
+    deny: actions.filter((action) => action === "deny").length,
+    strictUnknown: readBoolean(experimental, "autonomous_strict_permission"),
+  }
+}
+
+function flattenPermissionActions(value: Record<string, unknown>): string[] {
+  const actions: string[] = []
+  for (const item of Object.values(value)) {
+    if (typeof item === "string") {
+      actions.push(item)
+      continue
+    }
+    const nested = readRecord(item)
+    if (nested) actions.push(...flattenPermissionActions(nested))
+  }
+  return actions
+}
+
 function normalizeProviderStatus(value: unknown, root?: Record<string, unknown>): AppProviderStatus | undefined {
   const provider = readRecord(value)
   if (!provider) return undefined
@@ -388,6 +815,11 @@ function normalizeProviderStatus(value: unknown, root?: Record<string, unknown>)
   const models = readModelArray(provider["models"])
   const defaultValue = readRecord(root?.["default"])?.[id]
   const defaultModelID = typeof defaultValue === "string" ? defaultValue : undefined
+  const reason =
+    readString(provider, "reason") ??
+    readString(provider, "error") ??
+    readString(provider, "message") ??
+    (models.length === 0 ? "No models returned by backend" : undefined)
   return {
     id,
     label: readString(provider, "name") ?? readString(provider, "label") ?? id,
@@ -395,6 +827,7 @@ function normalizeProviderStatus(value: unknown, root?: Record<string, unknown>)
     modelCount: models.length,
     ...(defaultModelID ? { defaultModelID } : {}),
     status: models.length > 0 ? "available" : "no_models",
+    ...(reason ? { reason } : {}),
   }
 }
 
@@ -446,11 +879,15 @@ export function normalizeLiveQueueItem(value: unknown): AppQueueItem | undefined
   const kind = readString(record, "kind")
   const status = readString(record, "status")
   if (!id || !title || !kind || !status) return undefined
+  const time = readRecord(record.time)
+  const startedAt = time ? readTime(time, "started") : undefined
+  const completedAt = time ? readTime(time, "completed") : undefined
   return {
     id,
     project:
       readString(record, "projectID") ?? readString(record, "project") ?? readString(record, "directory") ?? "project",
     directory: readString(record, "directory"),
+    worktree: readString(record, "worktree"),
     sessionID: readString(record, "sessionID"),
     title,
     kind: kind as AppQueueItem["kind"],
@@ -462,10 +899,10 @@ export function normalizeLiveQueueItem(value: unknown): AppQueueItem | undefined
     payload: readRecord(record.payload),
     sourceMessageID: readString(record, "sourceMessageID"),
     sourceTaskID: readString(record, "sourceTaskID"),
-    createdAt:
-      record.time && typeof record.time === "object"
-        ? (readTime(record.time as Record<string, unknown>, "created") ?? Date.now())
-        : Date.now(),
+    error: readString(record, "error"),
+    createdAt: time ? (readTime(time, "created") ?? Date.now()) : Date.now(),
+    ...(startedAt !== undefined ? { startedAt } : {}),
+    ...(completedAt !== undefined ? { completedAt } : {}),
   }
 }
 
@@ -475,6 +912,7 @@ export function normalizeLiveSessionEvidence(value: unknown, fallbackSessionID: 
   const sessionID = readString(record, "sessionID") ?? fallbackSessionID
   const riskRecord = readRecord(record["risk"])
   const dreRecord = readRecord(record["dre"])
+  const branchRankRecord = readRecord(record["branchRank"]) ?? readRecord(record["branch_rank"])
   const semanticRecord = readRecord(record["semantic"]) ?? readRecord(riskRecord?.["semantic"])
   const rollback = Array.isArray(record["rollback"]) ? record["rollback"] : []
 
@@ -484,6 +922,7 @@ export function normalizeLiveSessionEvidence(value: unknown, fallbackSessionID: 
     risk: riskRecord ? normalizeRiskEvidence(riskRecord) : undefined,
     semantic: semanticRecord ? normalizeSemanticEvidence(semanticRecord) : undefined,
     dre: dreRecord ? normalizeDreEvidence(dreRecord) : undefined,
+    branchRank: branchRankRecord ? normalizeBranchRankEvidence(branchRankRecord) : undefined,
     rollbackPoints: rollback.map(normalizeRollbackPoint).filter((point): point is AppRollbackPoint => Boolean(point)),
     artifactCounts: {
       findings: readArrayLength(riskRecord?.["findings"]),
@@ -492,10 +931,97 @@ export function normalizeLiveSessionEvidence(value: unknown, fallbackSessionID: 
       debugCases: readArrayLength(readRecord(riskRecord?.["debug"])?.["cases"]),
       decisionHints: countDecisionHints(riskRecord?.["decisionHints"]),
     },
+    artifactPreviews: {
+      findings: normalizeArtifactPreviewList(riskRecord?.["findings"], "finding"),
+      verificationEnvelopes: normalizeArtifactPreviewList(riskRecord?.["envelopes"], "verification"),
+      reviewResults: normalizeArtifactPreviewList(riskRecord?.["reviewResults"], "review"),
+      debugCases: normalizeArtifactPreviewList(readRecord(riskRecord?.["debug"])?.["cases"], "debug"),
+      decisionHints: normalizeDecisionHintPreviews(riskRecord?.["decisionHints"]),
+    },
     errors: Array.isArray(record["errors"])
       ? record["errors"].map(readEvidenceError).filter((error): error is string => Boolean(error))
       : [],
   }
+}
+
+function normalizeLiveSessionMessages(value: unknown): LiveSessionMessages {
+  const list = Array.isArray(value)
+    ? value
+    : (readArrayProperty(value, "items") ?? readArrayProperty(value, "messages") ?? [])
+  const result = emptyLiveSessionMessages()
+  for (const item of list) {
+    const normalized = normalizeLiveSessionMessageItem(item)
+    if (!normalized) continue
+    result.messages.push(normalized.message)
+    result.parts[normalized.message.id] = normalized.parts
+  }
+  return result
+}
+
+function normalizeLiveSessionMessageItem(
+  value: unknown,
+): { message: AppProjectionState["message"][string][number]; parts: AppProjectionState["part"][string] } | undefined {
+  const record = readRecord(value)
+  if (!record) return undefined
+  const info = readRecord(record["info"]) ?? record
+  const message = normalizeLiveMessage(info)
+  if (!message) return undefined
+  const parts =
+    readArrayProperty(record, "parts")
+      ?.map((part) => normalizeLivePart(part, message.id))
+      .filter((part): part is AppProjectionState["part"][string][number] => Boolean(part)) ?? []
+  return { message, parts }
+}
+
+function normalizeLiveMessage(
+  value: Record<string, unknown>,
+): AppProjectionState["message"][string][number] | undefined {
+  const id = readString(value, "id") ?? readString(value, "messageID")
+  const sessionID = readString(value, "sessionID")
+  const role = readString(value, "role")
+  if (!id || !sessionID || (role !== "user" && role !== "assistant")) return undefined
+  const time = readRecord(value["time"])
+  return {
+    id,
+    sessionID,
+    role,
+    createdAt: (time ? readTime(time, "created") : undefined) ?? readTime(value, "createdAt") ?? Date.now(),
+  }
+}
+
+function normalizeLivePart(
+  value: unknown,
+  fallbackMessageID: string,
+): AppProjectionState["part"][string][number] | undefined {
+  const record = readRecord(value)
+  if (!record) return undefined
+  const id = readString(record, "id") ?? readString(record, "partID")
+  const messageID = readString(record, "messageID") ?? fallbackMessageID
+  const type = readString(record, "type")
+  if (!id || !messageID) return undefined
+  if (type === "text" || type === "reasoning") {
+    return {
+      id,
+      messageID,
+      type,
+      text: readString(record, "text") ?? readString(record, "content"),
+    }
+  }
+  if (type === "tool") {
+    const state = readRecord(record["state"])
+    return {
+      id,
+      messageID,
+      type: "tool",
+      toolName: readString(record, "tool") ?? readString(record, "toolName"),
+      text:
+        readString(state ?? {}, "title") ??
+        readString(state ?? {}, "output") ??
+        readString(state ?? {}, "error") ??
+        readString(record, "text"),
+    }
+  }
+  return undefined
 }
 
 function emptySessionEvidence(sessionID: string): AppSessionEvidence {
@@ -510,7 +1036,18 @@ function emptySessionEvidence(sessionID: string): AppSessionEvidence {
       debugCases: 0,
       decisionHints: 0,
     },
+    artifactPreviews: emptyArtifactPreviews(),
     errors: [],
+  }
+}
+
+function emptyArtifactPreviews(): AppSessionEvidence["artifactPreviews"] {
+  return {
+    findings: [],
+    verificationEnvelopes: [],
+    reviewResults: [],
+    debugCases: [],
+    decisionHints: [],
   }
 }
 
@@ -579,6 +1116,44 @@ function normalizeDreEvidence(record: Record<string, unknown>): AppDreEvidence |
   }
 }
 
+function normalizeBranchRankEvidence(record: Record<string, unknown>): AppBranchRankEvidence | undefined {
+  const items = (Array.isArray(record["items"]) ? record["items"] : [])
+    .map(normalizeBranchRankItem)
+    .filter((item): item is AppBranchRankEvidence["items"][number] => Boolean(item))
+  const recommended = readRecord(record["recommended"]) ?? {}
+  const recommendedID = readString(record, "recommendedID") ?? readString(recommended, "id")
+  if (items.length === 0 && !recommendedID) return undefined
+  return {
+    currentID: readString(record, "currentID"),
+    recommendedID,
+    recommendedTitle:
+      readString(recommended, "title") ?? items.find((item) => item.id === recommendedID)?.title ?? recommendedID,
+    confidence: readNumber(record, "confidence"),
+    reasons: readStringArray(record["reasons"]).slice(0, 6),
+    items,
+  }
+}
+
+function normalizeBranchRankItem(value: unknown): AppBranchRankEvidence["items"][number] | undefined {
+  const record = readRecord(value)
+  if (!record) return undefined
+  const id = readString(record, "id")
+  const title = readString(record, "title")
+  if (!id || !title) return undefined
+  const risk = readRecord(record["risk"]) ?? {}
+  const decision = readRecord(record["decision"]) ?? {}
+  return {
+    id,
+    title,
+    current: readBoolean(record, "current") ?? false,
+    recommended: readBoolean(record, "recommended") ?? false,
+    headline: readString(record, "headline"),
+    riskLevel: readString(risk, "level"),
+    riskScore: readNumber(risk, "score"),
+    decisionScore: readNumber(decision, "total"),
+  }
+}
+
 function normalizeRollbackPoint(value: unknown): AppRollbackPoint | undefined {
   const record = readRecord(value)
   if (!record) return undefined
@@ -602,6 +1177,67 @@ function normalizeRollbackPoint(value: unknown): AppRollbackPoint | undefined {
     tools: readStringArray(record["tools"]),
     kinds: readStringArray(record["kinds"]),
   }
+}
+
+function normalizeArtifactPreviewList(value: unknown, fallbackKind: string): AppArtifactPreview[] {
+  if (!Array.isArray(value)) return []
+  return value
+    .map((item, index) => normalizeArtifactPreview(item, fallbackKind, index))
+    .filter((item): item is AppArtifactPreview => Boolean(item))
+    .slice(0, 5)
+}
+
+function normalizeArtifactPreview(value: unknown, fallbackKind: string, index: number): AppArtifactPreview | undefined {
+  if (typeof value === "string") return { title: value }
+  const record = readRecord(value)
+  if (!record) return undefined
+  const id =
+    readString(record, "id") ??
+    readString(record, "findingId") ??
+    readString(record, "findingID") ??
+    readString(record, "envelopeId") ??
+    readString(record, "envelopeID") ??
+    readString(record, "reviewId") ??
+    readString(record, "reviewID") ??
+    readString(record, "caseId") ??
+    readString(record, "caseID")
+  const title =
+    readString(record, "title") ??
+    readString(record, "summary") ??
+    readString(record, "message") ??
+    readString(record, "command") ??
+    readString(record, "workflow") ??
+    id ??
+    `${fallbackKind} ${index + 1}`
+  const status =
+    readString(record, "status") ??
+    readString(record, "severity") ??
+    readString(record, "classification") ??
+    readString(record, "outcome") ??
+    readString(record, "decision")
+  const detail =
+    readString(record, "file") ??
+    readString(record, "path") ??
+    readString(record, "body") ??
+    readString(record, "detail") ??
+    readString(record, "description")
+  return {
+    ...(id ? { id } : {}),
+    title,
+    ...(status ? { status } : {}),
+    ...(detail ? { detail } : {}),
+  }
+}
+
+function normalizeDecisionHintPreviews(value: unknown): AppArtifactPreview[] {
+  const record = readRecord(value)
+  if (!record) return []
+  for (const key of ["hints", "items", "decisions"]) {
+    const previews = normalizeArtifactPreviewList(record[key], "decision hint")
+    if (previews.length > 0) return previews
+  }
+  const count = readNumber(record, "count") ?? 0
+  return count > 0 ? [{ title: `${count} decision hints recorded` }] : []
 }
 
 function normalizeSessionList(value: unknown, fallbackProject?: string): AppSession[] {
@@ -644,6 +1280,11 @@ function readString(record: Record<string, unknown>, key: string) {
 function readNumber(record: Record<string, unknown>, key: string) {
   const value = record[key]
   return typeof value === "number" && Number.isFinite(value) ? value : undefined
+}
+
+function readBoolean(record: Record<string, unknown> | undefined, key: string) {
+  const value = record?.[key]
+  return typeof value === "boolean" ? value : undefined
 }
 
 function readStringArray(value: unknown) {

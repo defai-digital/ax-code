@@ -46,6 +46,7 @@ export type HeadlessTaskQueueItem = {
   id: string
   projectID: string
   directory: string
+  worktree?: string
   sessionID?: string
   kind: HeadlessTaskQueueKind
   status: HeadlessTaskQueueStatus
@@ -70,10 +71,20 @@ export type HeadlessTaskQueueEnqueueInput = {
   sessionID?: string
   kind: HeadlessTaskQueueKind
   title: string
+  worktree?: string
   agent?: string
   model?: unknown
   sourceMessageID?: string
   sourceTaskID?: string
+  payload?: Record<string, unknown>
+  priority?: number
+}
+
+export type HeadlessTaskQueueEditInput = {
+  title?: string
+  worktree?: string | null
+  agent?: string | null
+  model?: unknown
   payload?: Record<string, unknown>
   priority?: number
 }
@@ -230,14 +241,14 @@ export function createHeadlessClient(input: HeadlessClientOptions) {
           body,
         })
       },
-      setStatus(id: string, body: { status: HeadlessTaskQueueStatus; error?: string }) {
+      edit(id: string, body: HeadlessTaskQueueEditInput) {
         return requestJson<HeadlessTaskQueueItem>({
           baseUrl: input.baseUrl,
           fetch: fetchFn,
           headers: input.headers,
           directory: input.directory,
           experimental_workspaceID: input.experimental_workspaceID,
-          path: `/task-queue/${encodeURIComponent(id)}/status`,
+          path: `/task-queue/${encodeURIComponent(id)}/edit`,
           method: "POST",
           body,
         })

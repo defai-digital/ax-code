@@ -60778,6 +60778,7 @@
           "context": 262144,
           "output": 65536
         },
+        "status": "deprecated",
         "provider": {
           "npm": "@ai-sdk/anthropic"
         }

@@ -139,7 +139,7 @@ export function createInitialSyncState(): SyncStoreState {
     mcp_resource: {},
     formatter: [],
     vcs: undefined,
-    path: { state: "", config: "", worktree: "", directory: "" },
+    path: { home: "", state: "", config: "", worktree: "", directory: "" },
     workspaceList: [],
   }
 }

@@ -18,7 +18,7 @@ export type DesktopBackendPlan =
     }
 
 export function createStartBackendPlan(
-  options: Pick<HeadlessBackendOptions, "directory" | "port">,
+  options: Pick<HeadlessBackendOptions, "directory" | "port" | "env">,
 ): DesktopBackendPlan {
   return {
     mode: "start",
@@ -26,6 +26,7 @@ export function createStartBackendPlan(
       directory: options.directory,
       port: options.port ?? 0,
       hostname: "127.0.0.1",
+      env: options.env,
     },
     loopbackOnly: true,
     generatedAuth: true,
@@ -34,11 +35,17 @@ export function createStartBackendPlan(
 
 export function createAttachBackendPlan(input: { baseUrl: string; authHeader?: string }): DesktopBackendPlan {
   const url = new URL(input.baseUrl)
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    throw new Error("Attached desktop backend URL must use HTTP or HTTPS.")
+  }
+  if (!isLoopbackHost(url.hostname)) {
+    throw new Error("Attached desktop backend URL must use a loopback host.")
+  }
   return {
     mode: "attach",
     baseUrl: url.toString().replace(/\/$/, ""),
     headers: input.authHeader ? { authorization: input.authHeader } : {},
-    loopbackOnly: isLoopbackHost(url.hostname),
+    loopbackOnly: true,
     generatedAuth: false,
   }
 }

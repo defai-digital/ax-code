@@ -14,6 +14,7 @@ import { ShareNext } from "@/share/share-next"
 import { Config } from "../config/config"
 import { Session } from "../session"
 import { ScheduledTask } from "@/session/scheduled-task"
+import { TaskQueue } from "@/session/task-queue"
 import { Provider } from "../provider/provider"
 import { isHarmlessEffectInterrupt } from "@/effect/interrupt"
 import { toErrorMessage } from "@/util/error-message"
@@ -78,6 +79,11 @@ function background(input: {
 export async function InstanceBootstrap() {
   Log.Default.info("bootstrapping", { directory: Instance.directory })
   ShareNext.init()
+  await runtimeTask({
+    service: "TaskQueue.recoverInterrupted",
+    label: "task queue restart recovery",
+    task: () => TaskQueue.recoverInterrupted(),
+  })
   background({
     service: "Format.init",
     label: "format init",

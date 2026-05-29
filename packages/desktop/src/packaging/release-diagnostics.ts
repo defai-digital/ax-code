@@ -4,9 +4,21 @@ import path from "node:path"
 export const MAC_RELEASE_MANIFEST_NAME = "ax-code-release.json"
 
 export type MacReleaseGate = {
-  configured: false
-  status: "blocked"
-  reason: string
+  configured: boolean
+  status: "blocked" | "passed"
+  reason?: string
+  evidence?: string
+}
+
+export type MacReleaseUpdateFeed = {
+  url: string
+  manifestName?: string
+  manifestPath?: string
+  artifactPath?: string
+  artifactName?: string
+  artifactUrl?: string
+  sha256?: string
+  sizeBytes?: number
 }
 
 export type MacReleaseManifest = {
@@ -19,9 +31,10 @@ export type MacReleaseManifest = {
   preloadPath: string
   rendererIndexPath: string
   electronVersion: string
-  signed: false
-  notarized: false
-  updaterConfigured: false
+  signed: boolean
+  notarized: boolean
+  updaterConfigured: boolean
+  updateFeed?: MacReleaseUpdateFeed
   gates: {
     signing: MacReleaseGate
     notarization: MacReleaseGate
@@ -31,16 +44,24 @@ export type MacReleaseManifest = {
 
 export type DesktopReleaseDiagnostics = {
   status: "manifest-found" | "manifest-missing" | "manifest-invalid"
-  updatePolicy: "disabled-until-release-pipeline"
+  updatePolicy: "disabled-until-release-pipeline" | "feed-configured"
   manifestPath?: string
   productName?: string
   version?: string
   packageTarget?: string
+  updateFeed?: MacReleaseUpdateFeed
   signed: boolean
   notarized: boolean
   updaterConfigured: boolean
-  gates: Record<string, { configured: boolean; status: string; reason?: string }>
+  gates: Record<string, { configured: boolean; status: string; reason?: string; evidence?: string }>
   error?: string
+}
+
+export type DesktopReleaseWithPassedPipeline = DesktopReleaseDiagnostics & {
+  productName: "AX Code"
+  version: string
+  packageTarget: "mac"
+  updateFeed: MacReleaseUpdateFeed
 }
 
 export function readDesktopReleaseDiagnostics(input: { resourcesPath?: string } = {}): DesktopReleaseDiagnostics {
@@ -77,21 +98,67 @@ export function readDesktopReleaseDiagnostics(input: { resourcesPath?: string } 
 function normalizeReleaseManifest(manifest: unknown, manifestPath: string): DesktopReleaseDiagnostics {
   const record = readRecord(manifest)
   const gates = readRecord(record["gates"])
-  return {
+  const updateFeed = normalizeUpdateFeed(record["updateFeed"])
+  const signed = readBoolean(record, "signed") === true
+  const notarized = readBoolean(record, "notarized") === true
+  const updaterConfigured = readBoolean(record, "updaterConfigured") === true
+  const normalizedGates = {
+    signing: normalizeGate(gates["signing"]),
+    notarization: normalizeGate(gates["notarization"]),
+    updater: normalizeGate(gates["updater"]),
+  }
+  const diagnostics: DesktopReleaseDiagnostics = {
     status: "manifest-found",
     updatePolicy: "disabled-until-release-pipeline",
     manifestPath,
     productName: readString(record, "productName"),
     version: readString(record, "version"),
     packageTarget: readString(record, "packageTarget"),
-    signed: readBoolean(record, "signed") === true,
-    notarized: readBoolean(record, "notarized") === true,
-    updaterConfigured: readBoolean(record, "updaterConfigured") === true,
-    gates: {
-      signing: normalizeGate(gates["signing"]),
-      notarization: normalizeGate(gates["notarization"]),
-      updater: normalizeGate(gates["updater"]),
-    },
+    updateFeed,
+    signed,
+    notarized,
+    updaterConfigured,
+    gates: normalizedGates,
+  }
+  return {
+    ...diagnostics,
+    updatePolicy: hasPassedMacReleasePipeline(diagnostics) ? "feed-configured" : "disabled-until-release-pipeline",
+  }
+}
+
+export function hasPassedMacReleasePipeline(
+  release: DesktopReleaseDiagnostics,
+): release is DesktopReleaseWithPassedPipeline {
+  return (
+    release.productName === "AX Code" &&
+    release.packageTarget === "mac" &&
+    Boolean(release.version) &&
+    release.signed &&
+    release.notarized &&
+    release.updaterConfigured &&
+    hasConfiguredUpdateFeed(release.updateFeed) &&
+    hasPassedReleaseGate(release, "signing") &&
+    hasPassedReleaseGate(release, "notarization") &&
+    hasPassedReleaseGate(release, "updater")
+  )
+}
+
+function hasPassedReleaseGate(release: DesktopReleaseDiagnostics, name: "signing" | "notarization" | "updater") {
+  const gate = release.gates[name]
+  return gate?.configured === true && gate.status === "passed"
+}
+
+function hasConfiguredUpdateFeed(updateFeed: MacReleaseUpdateFeed | undefined) {
+  if (!updateFeed) return false
+  return isHttpsUrl(updateFeed.url) && Boolean(updateFeed.manifestName)
+}
+
+function isHttpsUrl(value: string | undefined) {
+  if (!value) return false
+  try {
+    return new URL(value).protocol === "https:"
+  } catch {
+    return false
   }
 }
 
@@ -101,6 +168,30 @@ function normalizeGate(value: unknown) {
     configured: readBoolean(record, "configured") === true,
     status: readString(record, "status") ?? "unknown",
     reason: readString(record, "reason"),
+    evidence: readString(record, "evidence"),
+  }
+}
+
+function normalizeUpdateFeed(value: unknown): MacReleaseUpdateFeed | undefined {
+  const record = readRecord(value)
+  const url = readString(record, "url")
+  const manifestName = readString(record, "manifestName")
+  const manifestPath = readString(record, "manifestPath")
+  const artifactPath = readString(record, "artifactPath")
+  const artifactName = readString(record, "artifactName")
+  const artifactUrl = readString(record, "artifactUrl")
+  const sha256 = readString(record, "sha256")
+  const sizeBytes = readNumber(record, "sizeBytes")
+  if (!url) return undefined
+  return {
+    url,
+    ...(manifestName ? { manifestName } : {}),
+    ...(manifestPath ? { manifestPath } : {}),
+    ...(artifactPath ? { artifactPath } : {}),
+    ...(artifactName ? { artifactName } : {}),
+    ...(artifactUrl ? { artifactUrl } : {}),
+    ...(sha256 ? { sha256 } : {}),
+    ...(sizeBytes === undefined ? {} : { sizeBytes }),
   }
 }
 
@@ -126,4 +217,9 @@ function readString(record: Record<string, unknown>, key: string) {
 function readBoolean(record: Record<string, unknown>, key: string) {
   const value = record[key]
   return typeof value === "boolean" ? value : undefined
+}
+
+function readNumber(record: Record<string, unknown>, key: string) {
+  const value = record[key]
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined
 }

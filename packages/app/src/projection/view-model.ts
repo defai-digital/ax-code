@@ -82,7 +82,9 @@ function multiRunGroups(queue: AppQueueItem[], sessionDiffs: Record<string, AppD
         completed,
         failed,
         sessions: uniqueStrings(sorted.map((item) => item.sessionID)),
-        worktrees: uniqueStrings(sorted.map((item) => readPayloadString(item, "worktree") ?? item.directory)),
+        worktrees: uniqueStrings(
+          sorted.map((item) => item.worktree ?? readPayloadString(item, "worktree") ?? item.directory),
+        ),
         conflictPaths,
         changedFiles: uniqueStrings(groupSessionDiffs.flatMap((item) => item.files)).sort(),
         sessionDiffs: groupSessionDiffs,

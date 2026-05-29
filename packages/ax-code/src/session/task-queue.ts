@@ -33,6 +33,7 @@ export namespace TaskQueue {
     id: TaskQueueID.zod,
     projectID: ProjectID.zod,
     directory: z.string(),
+    worktree: z.string().optional(),
     sessionID: SessionID.zod.optional(),
     kind: Kind,
     status: Status,
@@ -58,6 +59,7 @@ export namespace TaskQueue {
     sessionID: SessionID.zod.optional(),
     kind: Kind,
     title: z.string().trim().min(1).max(200),
+    worktree: z.string().trim().min(1).max(500).optional(),
     agent: z.string().optional(),
     model: z.unknown().optional(),
     sourceMessageID: z.string().optional(),
@@ -80,6 +82,23 @@ export namespace TaskQueue {
   })
   export type ReorderInput = z.infer<typeof ReorderInput>
 
+  export const EditBody = z
+    .object({
+      title: z.string().trim().min(1).max(200).optional(),
+      worktree: z.string().trim().min(1).max(500).nullable().optional(),
+      agent: z.string().trim().min(1).nullable().optional(),
+      model: z.unknown().optional(),
+      payload: Payload.optional(),
+      priority: z.number().int().min(-1000).max(1000).optional(),
+    })
+    .refine((input) => Object.keys(input).length > 0, {
+      message: "At least one editable queue field is required",
+    })
+  export type EditBody = z.infer<typeof EditBody>
+
+  export const EditInput = EditBody.and(z.object({ id: TaskQueueID.zod }))
+  export type EditInput = z.infer<typeof EditInput>
+
   export const Event = {
     Created: BusEvent.define("task.queue.created", z.object({ item: Info })),
     Updated: BusEvent.define("task.queue.updated", z.object({ item: Info })),
@@ -98,6 +117,7 @@ export namespace TaskQueue {
       id: row.id,
       projectID: row.project_id,
       directory: row.directory,
+      worktree: row.worktree ?? undefined,
       sessionID: row.session_id ?? undefined,
       kind: row.kind,
       status: row.status,
@@ -187,6 +207,7 @@ export namespace TaskQueue {
         project_id: projectID,
         session_id: parsed.sessionID,
         directory: Instance.directory,
+        worktree: parsed.worktree,
         kind: parsed.kind,
         status: "queued",
         priority: parsed.priority,
@@ -270,19 +291,26 @@ export namespace TaskQueue {
   }
 
   export async function pause(id: TaskQueueID): Promise<Info> {
+    const current = await get(id)
+    assertActionStatus(current, "pause", ["queued", "waiting_for_idle"])
     return setStatus({ id, status: "paused" })
   }
 
   export async function resume(id: TaskQueueID): Promise<Info> {
+    const current = await get(id)
+    assertActionStatus(current, "resume", ["paused"])
     return setStatus({ id, status: "queued" })
   }
 
   export async function cancel(id: TaskQueueID): Promise<Info> {
+    const current = await get(id)
+    assertActionStatus(current, "cancel", ["queued", "waiting_for_idle", "paused"])
     return setStatus({ id, status: "cancelled" })
   }
 
   export async function retry(id: TaskQueueID): Promise<Info> {
-    await get(id)
+    const current = await get(id)
+    assertActionStatus(current, "retry", ["failed", "cancelled"])
     const now = Date.now()
     const item = Database.use((db) => {
       const row = db
@@ -298,6 +326,90 @@ export namespace TaskQueue {
         .returning()
         .get()
       if (!row) throw new NotFoundError({ message: `Task queue item not found: ${id}` })
+      return fromRow(row)
+    })
+    assertProjectItem(item)
+    publishUpdated(item)
+    return item
+  }
+
+  export async function recoverInterrupted(): Promise<{ failed: Info[]; requeued: Info[] }> {
+    const now = Date.now()
+    const interruptedStatuses = ["running", "blocked_permission", "blocked_question"] as const
+    const recoverableStatuses = [...interruptedStatuses, "waiting_for_idle"] as const
+    const changed = Database.transaction((db) => {
+      const rows = db
+        .select()
+        .from(TaskQueueTable)
+        .where(
+          and(eq(TaskQueueTable.project_id, Instance.project.id), inArray(TaskQueueTable.status, recoverableStatuses)),
+        )
+        .all()
+
+      const failed: Info[] = []
+      const requeued: Info[] = []
+      for (const row of rows) {
+        if (row.status === "waiting_for_idle") {
+          const updated = db
+            .update(TaskQueueTable)
+            .set({
+              status: "queued",
+              error: null,
+              time_started: null,
+              time_completed: null,
+              time_updated: now,
+            })
+            .where(eq(TaskQueueTable.id, row.id))
+            .returning()
+            .get()
+          if (updated) requeued.push(fromRow(updated))
+          continue
+        }
+
+        const updated = db
+          .update(TaskQueueTable)
+          .set({
+            status: "failed",
+            error: "Task interrupted by backend restart; inspect output and retry when safe.",
+            time_completed: now,
+            time_updated: now,
+          })
+          .where(eq(TaskQueueTable.id, row.id))
+          .returning()
+          .get()
+        if (updated) failed.push(fromRow(updated))
+      }
+
+      return { failed, requeued }
+    })
+
+    for (const item of [...changed.failed, ...changed.requeued]) publishUpdated(item)
+    return changed
+  }
+
+  export async function edit(input: EditInput): Promise<Info> {
+    const parsed = EditInput.parse(input)
+    const current = await get(parsed.id)
+    if (!isEditableStatus(current.status)) {
+      throw new HTTPException(409, {
+        message: `Task queue item ${parsed.id} cannot be edited while it is ${current.status}.`,
+      })
+    }
+
+    const now = Date.now()
+    const updates: Partial<typeof TaskQueueTable.$inferInsert> = {
+      time_updated: now,
+    }
+    if (parsed.title !== undefined) updates.title = parsed.title
+    if ("worktree" in parsed) updates.worktree = parsed.worktree ?? null
+    if ("agent" in parsed) updates.agent = parsed.agent ?? null
+    if ("model" in parsed) updates.model = parsed.model ?? null
+    if (parsed.payload !== undefined) updates.payload = parsed.payload
+    if (parsed.priority !== undefined) updates.priority = parsed.priority
+
+    const item = Database.use((db) => {
+      const row = db.update(TaskQueueTable).set(updates).where(eq(TaskQueueTable.id, parsed.id)).returning().get()
+      if (!row) throw new NotFoundError({ message: `Task queue item not found: ${parsed.id}` })
       return fromRow(row)
     })
     assertProjectItem(item)
@@ -344,6 +456,7 @@ export namespace TaskQueue {
 
   export async function sendNow(id: TaskQueueID): Promise<Info> {
     const current = await get(id)
+    assertActionStatus(current, "send now", ["queued", "waiting_for_idle", "paused"])
     const now = Date.now()
     const item = Database.transaction((db) => {
       db.update(TaskQueueTable)
@@ -371,5 +484,22 @@ export namespace TaskQueue {
     })
     publishDeleted(item)
     return true
+  }
+
+  function isEditableStatus(status: Status) {
+    return (
+      status === "queued" ||
+      status === "waiting_for_idle" ||
+      status === "paused" ||
+      status === "failed" ||
+      status === "cancelled"
+    )
+  }
+
+  function assertActionStatus(item: Info, action: string, allowed: Status[]) {
+    if (allowed.includes(item.status)) return
+    throw new HTTPException(409, {
+      message: `Cannot ${action} task queue item ${item.id} while it is ${item.status}.`,
+    })
   }
 }

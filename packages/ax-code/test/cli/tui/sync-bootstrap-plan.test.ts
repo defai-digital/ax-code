@@ -192,8 +192,8 @@ describe("tui sync bootstrap plan", () => {
         applyProviderAuth: () => {
           applied.push("provider-auth")
         },
-        pathPromise: () => Promise.resolve({ data: { state: "", config: "", worktree: "", directory: "" } }),
-        pathFallback: { state: "", config: "", worktree: "", directory: "" },
+        pathPromise: () => Promise.resolve({ data: { home: "", state: "", config: "", worktree: "", directory: "" } }),
+        pathFallback: { home: "", state: "", config: "", worktree: "", directory: "" },
         applyPath: () => {
           applied.push("path")
         },

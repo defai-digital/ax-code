@@ -36,6 +36,7 @@ describe("TaskQueue", () => {
             sessionID: session.id,
             kind: "prompt",
             title: "Run desktop follow-up",
+            worktree: "wt-desktop",
             agent: "build",
             model: { providerID: "test", modelID: "test-model" },
             sourceMessageID: "msg_task_queue_source",
@@ -48,6 +49,7 @@ describe("TaskQueue", () => {
           expect(created.projectID).toBe(session.projectID)
           expect(created.sessionID).toBe(session.id)
           expect(created.status).toBe("queued")
+          expect(created.worktree).toBe("wt-desktop")
           expect(created.agent).toBe("build")
           expect(created.model).toEqual({ providerID: "test", modelID: "test-model" })
           expect(created.sourceMessageID).toBe("msg_task_queue_source")
@@ -55,9 +57,7 @@ describe("TaskQueue", () => {
 
           const list = await TaskQueue.list({ sessionID: session.id })
           expect(list.map((item) => item.id)).toEqual([created.id])
-
-          const running = await TaskQueue.setStatus({ id: created.id, status: "running" })
-          expect(running.time.started).toBeDefined()
+          expect(list[0]?.worktree).toBe("wt-desktop")
 
           const paused = await TaskQueue.pause(created.id)
           expect(paused.status).toBe("paused")
@@ -65,15 +65,22 @@ describe("TaskQueue", () => {
           const resumed = await TaskQueue.resume(created.id)
           expect(resumed.status).toBe("queued")
 
+          const running = await TaskQueue.setStatus({ id: created.id, status: "running" })
+          expect(running.time.started).toBeDefined()
+          await expect(TaskQueue.pause(created.id)).rejects.toThrow("Cannot pause")
+          await expect(TaskQueue.sendNow(created.id)).rejects.toThrow("Cannot send now")
+
           const failed = await TaskQueue.setStatus({ id: created.id, status: "failed", error: "model failed" })
           expect(failed.error).toBe("model failed")
           expect(failed.time.completed).toBeDefined()
+          await expect(TaskQueue.cancel(created.id)).rejects.toThrow("Cannot cancel")
 
           const retried = await TaskQueue.retry(created.id)
           expect(retried.status).toBe("queued")
           expect(retried.error).toBeUndefined()
           expect(retried.time.started).toBeUndefined()
           expect(retried.time.completed).toBeUndefined()
+          await expect(TaskQueue.retry(created.id)).rejects.toThrow("Cannot retry")
 
           const reordered = await TaskQueue.reorder({ id: created.id, position: 10 })
           expect(reordered.position).toBe(0)
@@ -81,6 +88,23 @@ describe("TaskQueue", () => {
           const sentNow = await TaskQueue.sendNow(created.id)
           expect(sentNow.status).toBe("queued")
           expect(sentNow.position).toBe(0)
+
+          const edited = await TaskQueue.edit({
+            id: created.id,
+            title: "Run edited desktop follow-up",
+            worktree: null,
+            agent: "review",
+            payload: { prompt: "continue with the edited queue item" },
+            priority: 3,
+          })
+          expect(edited.title).toBe("Run edited desktop follow-up")
+          expect(edited.worktree).toBeUndefined()
+          expect(edited.agent).toBe("review")
+          expect(edited.payload).toEqual({ prompt: "continue with the edited queue item" })
+          expect(edited.priority).toBe(3)
+
+          await TaskQueue.setStatus({ id: created.id, status: "running" })
+          await expect(TaskQueue.edit({ id: created.id, title: "Cannot edit running item" })).rejects.toThrow()
 
           expect(await TaskQueue.remove(created.id)).toBe(true)
           expect(await TaskQueue.list({ sessionID: session.id })).toEqual([])
@@ -96,6 +120,46 @@ describe("TaskQueue", () => {
           unsubscribeDeleted()
           await Session.remove(session.id)
         }
+      },
+    })
+  })
+
+  test("recovers interrupted active items after backend restart", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const running = await TaskQueue.enqueue({ kind: "prompt", title: "Interrupted prompt" })
+        const blocked = await TaskQueue.enqueue({ kind: "review", title: "Interrupted review" })
+        const waiting = await TaskQueue.enqueue({ kind: "automation", title: "Waiting for idle" })
+        const queued = await TaskQueue.enqueue({ kind: "followup", title: "Still queued" })
+
+        await TaskQueue.setStatus({ id: running.id, status: "running" })
+        await TaskQueue.setStatus({ id: blocked.id, status: "blocked_permission", error: "approval required" })
+        await TaskQueue.setStatus({ id: waiting.id, status: "waiting_for_idle" })
+
+        const recovered = await TaskQueue.recoverInterrupted()
+
+        expect(recovered.failed.map((item) => item.id).sort()).toEqual([blocked.id, running.id].sort())
+        expect(recovered.requeued.map((item) => item.id)).toEqual([waiting.id])
+
+        const failedRunning = await TaskQueue.get(running.id)
+        expect(failedRunning.status).toBe("failed")
+        expect(failedRunning.error).toContain("backend restart")
+        expect(failedRunning.time.completed).toBeDefined()
+
+        const failedBlocked = await TaskQueue.get(blocked.id)
+        expect(failedBlocked.status).toBe("failed")
+        expect(failedBlocked.error).toContain("backend restart")
+
+        const requeuedWaiting = await TaskQueue.get(waiting.id)
+        expect(requeuedWaiting.status).toBe("queued")
+        expect(requeuedWaiting.error).toBeUndefined()
+        expect(requeuedWaiting.time.started).toBeUndefined()
+        expect(requeuedWaiting.time.completed).toBeUndefined()
+
+        expect((await TaskQueue.get(queued.id)).status).toBe("queued")
       },
     })
   })

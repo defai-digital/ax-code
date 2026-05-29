@@ -16,9 +16,15 @@ const TaskQueueListQuery = z.object({
 })
 
 const TaskQueueEnqueueBody = TaskQueue.EnqueueInput
+const TaskQueueEditBody = TaskQueue.EditBody
 const TaskQueueStatusBody = z.object({
   status: TaskQueue.Status,
   error: z.string().optional(),
+})
+const INTERNAL_LIFECYCLE_HEADER = "x-ax-code-internal-task-queue-lifecycle"
+const INTERNAL_LIFECYCLE_VALUE = "1"
+const TaskQueueStatusHeaders = z.object({
+  [INTERNAL_LIFECYCLE_HEADER]: z.literal(INTERNAL_LIFECYCLE_VALUE),
 })
 const TaskQueueReorderBody = z.object({
   position: z.number().int().min(0),
@@ -103,7 +109,8 @@ export const TaskQueueRoutes = lazy(() =>
       "/:taskID/status",
       describeRoute({
         summary: "Update task queue status",
-        description: "Set a task queue item status and optional error message.",
+        description:
+          "Internal lifecycle hook for server-owned queue execution. App clients should use action routes instead.",
         operationId: "taskQueue.status",
         responses: {
           200: {
@@ -118,11 +125,30 @@ export const TaskQueueRoutes = lazy(() =>
         },
       }),
       validator("param", TASK_QUEUE_ID_PARAM),
+      validator("header", TaskQueueStatusHeaders),
       validator("json", TaskQueueStatusBody),
       async (c) => {
         const body = c.req.valid("json")
         return c.json(await TaskQueue.setStatus({ id: taskID(c), status: body.status, error: body.error }))
       },
+    )
+    .post(
+      "/:taskID/edit",
+      describeRoute({
+        summary: "Edit queued task",
+        description: "Edit mutable task queue fields before the task is actively running or completed.",
+        operationId: "taskQueue.edit",
+        responses: {
+          200: {
+            description: "Edited task queue item.",
+            content: { "application/json": { schema: resolver(TaskQueue.Info) } },
+          },
+          ...errors(400, 404, 409),
+        },
+      }),
+      validator("param", TASK_QUEUE_ID_PARAM),
+      validator("json", TaskQueueEditBody),
+      async (c) => c.json(await TaskQueue.edit({ id: taskID(c), ...c.req.valid("json") })),
     )
     .post(
       "/:taskID/pause",

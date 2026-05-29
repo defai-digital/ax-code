@@ -52,6 +52,7 @@ export type AppQueueItem = {
   id: string
   project: string
   directory?: string
+  worktree?: string
   sessionID?: string
   title: string
   kind: "prompt" | "command" | "shell" | "followup" | "subagent" | "review" | "automation"
@@ -73,6 +74,9 @@ export type AppQueueItem = {
   payload?: Record<string, unknown>
   sourceMessageID?: string
   sourceTaskID?: string
+  error?: string
+  startedAt?: number
+  completedAt?: number
 }
 
 export type AppMultiRunGroup = {
@@ -128,6 +132,24 @@ export type AppDreEvidence = {
   timeline: string[]
 }
 
+export type AppBranchRankEvidence = {
+  currentID?: string
+  recommendedID?: string
+  recommendedTitle?: string
+  confidence?: number
+  reasons: string[]
+  items: Array<{
+    id: string
+    title: string
+    current: boolean
+    recommended: boolean
+    headline?: string
+    riskLevel?: string
+    riskScore?: number
+    decisionScore?: number
+  }>
+}
+
 export type AppRollbackPoint = {
   step: number
   messageID?: string
@@ -141,12 +163,20 @@ export type AppRollbackPoint = {
   kinds: string[]
 }
 
+export type AppArtifactPreview = {
+  id?: string
+  title: string
+  status?: string
+  detail?: string
+}
+
 export type AppSessionEvidence = {
   sessionID: string
   status: "ready" | "loading" | "error"
   risk?: AppRiskEvidence
   semantic?: AppSemanticEvidence
   dre?: AppDreEvidence
+  branchRank?: AppBranchRankEvidence
   rollbackPoints: AppRollbackPoint[]
   artifactCounts: {
     findings: number
@@ -155,6 +185,13 @@ export type AppSessionEvidence = {
     debugCases: number
     decisionHints: number
   }
+  artifactPreviews: {
+    findings: AppArtifactPreview[]
+    verificationEnvelopes: AppArtifactPreview[]
+    reviewResults: AppArtifactPreview[]
+    debugCases: AppArtifactPreview[]
+    decisionHints: AppArtifactPreview[]
+  }
   errors: string[]
 }
 
@@ -162,6 +199,16 @@ export type AppAgentOption = {
   id: string
   label: string
   mode?: string
+}
+
+export type AppSkillOption = {
+  name: string
+  description?: string
+  location?: string
+  argumentHint?: string
+  builtin?: boolean
+  status: "ok" | "warn"
+  issues: string[]
 }
 
 export type AppModelOption = {
@@ -177,17 +224,51 @@ export type AppProviderStatus = {
   modelCount: number
   defaultModelID?: string
   status: "available" | "no_models"
+  reason?: string
 }
 
 export type AppRuntimeCatalog = {
   providers: AppProviderStatus[]
   agents: AppAgentOption[]
+  skills: AppSkillOption[]
   models: AppModelOption[]
+  lsp: {
+    total: number
+    connected: number
+    error: number
+  }
+  codeIndex: {
+    pendingPlans: number
+    toolCount: number
+    nodeCount: number
+    edgeCount: number
+    state: "idle" | "indexing" | "failed" | "unknown"
+    completed: number
+    total: number
+    lastIndexedAt?: number
+    error?: string
+  }
+  mcp: {
+    total: number
+    connected: number
+    disabled: number
+    failed: number
+    needsAuth: number
+    needsTrust: number
+  }
+  permission: {
+    totalRules: number
+    allow: number
+    ask: number
+    deny: number
+    strictUnknown?: boolean
+  }
 }
 
 export type AppWorktree = {
   directory: string
   name: string
+  branch?: string
 }
 
 export type AppTerminal = {
@@ -196,6 +277,8 @@ export type AppTerminal = {
   command: string
   cwd: string
   status: "running" | "exited" | "unknown"
+  sessionID?: string
+  sessionTitle?: string
 }
 
 export type AppScheduledTask = {
@@ -208,6 +291,8 @@ export type AppScheduledTask = {
   agent?: string
   model?: unknown
   lastQueueID?: string
+  lastSessionID?: string
+  lastDurationMs?: number
   error?: string
   nextRunAt?: number
   lastRunAt?: number
@@ -233,7 +318,8 @@ export type AppProjectionState = HeadlessProjectionState<
   AppMessage,
   AppPart,
   unknown,
-  AppGoal
+  AppGoal,
+  AppQueueItem
 >
 
 export type AppCommandCenterState = {

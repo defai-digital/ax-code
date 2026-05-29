@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
+import { lstatSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { describe, expect, test } from "bun:test"
@@ -48,6 +48,25 @@ describe("desktop window state", () => {
     })
     expect(JSON.parse(readFileSync(path.join(root, "window-state.json"), "utf8"))).toMatchObject({
       bounds: { width: 1320, height: 860 },
+    })
+  })
+
+  test("does not follow an existing window state symlink while saving", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "ax-code-window-state-symlink-"))
+    const outsideRoot = mkdtempSync(path.join(tmpdir(), "ax-code-window-state-outside-"))
+    const file = path.join(root, "window-state.json")
+    const outsideFile = path.join(outsideRoot, "outside.json")
+    writeFileSync(outsideFile, "do not overwrite")
+    symlinkSync(outsideFile, file)
+
+    const store = createWindowStateStore(root)
+    store.write({ bounds: { width: 1320, height: 860 }, updatedAt: 321 })
+
+    expect(lstatSync(file).isSymbolicLink()).toBe(false)
+    expect(readFileSync(outsideFile, "utf8")).toBe("do not overwrite")
+    expect(store.read()).toEqual({
+      bounds: { width: 1320, height: 860 },
+      updatedAt: 321,
     })
   })
 

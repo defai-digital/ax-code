@@ -154,7 +154,7 @@ try {
   shareId = await (async () => {
     if (useEnvShare() === false) return
     if (!useEnvShare() && repoData.data.private) return
-    await client.session.share<true>({ path: session })
+    await client.session.share<true>({ sessionID: session.id })
     return session.id.slice(-8)
   })()
   console.log("ax-code session", session.id)
@@ -278,11 +278,9 @@ async function assertAxCodeConnected() {
   do {
     try {
       await client.app.log<true>({
-        body: {
-          service: "github-workflow",
-          level: "info",
-          message: "Prepare to react to GitHub Workflow event",
-        },
+        service: "github-workflow",
+        level: "info",
+        message: "Prepare to react to GitHub Workflow event",
       })
       connected = true
       break
@@ -642,39 +640,35 @@ async function chat(text: string, files: PromptFiles = []) {
   const agent = await resolveAgent()
 
   const chat = await client.session.prompt<true>({
-    path: {
-      id: session.id,
+    sessionID: session.id,
+    model: {
+      providerID,
+      modelID,
     },
-    body: {
-      model: {
-        providerID,
-        modelID,
+    agent,
+    parts: [
+      {
+        type: "text",
+        text,
       },
-      agent,
-      parts: [
+      ...files.flatMap((f) => [
         {
-          type: "text",
-          text,
-        },
-        ...files.flatMap((f) => [
-          {
+          type: "file" as const,
+          mime: f.mime,
+          url: `data:${f.mime};base64,${f.content}`,
+          filename: f.filename,
+          source: {
             type: "file" as const,
-            mime: f.mime,
-            url: `data:${f.mime};base64,${f.content}`,
-            filename: f.filename,
-            source: {
-              type: "file" as const,
-              text: {
-                value: f.replacement,
-                start: f.start,
-                end: f.end,
-              },
-              path: f.filename,
+            text: {
+              value: f.replacement,
+              start: f.start,
+              end: f.end,
             },
+            path: f.filename,
           },
-        ]),
-      ],
-    },
+        },
+      ]),
+    ],
   })
 
   const match = chat.data?.parts?.findLast((part) => part.type === "text")

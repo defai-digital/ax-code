@@ -27,13 +27,29 @@ export const desktopSecurityBaseline = {
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",
     "font-src 'self' data:",
-    "connect-src 'self' http://127.0.0.1:* http://localhost:*",
-    "frame-src http://127.0.0.1:* http://localhost:*",
+    [
+      "connect-src 'self'",
+      "http://127.0.0.1:*",
+      "http://localhost:*",
+      "http://[::1]:*",
+      "https://127.0.0.1:*",
+      "https://localhost:*",
+      "https://[::1]:*",
+    ].join(" "),
+    [
+      "frame-src",
+      "http://127.0.0.1:*",
+      "http://localhost:*",
+      "http://[::1]:*",
+      "https://127.0.0.1:*",
+      "https://localhost:*",
+      "https://[::1]:*",
+    ].join(" "),
     "object-src 'none'",
     "base-uri 'none'",
     "frame-ancestors 'none'",
   ].join("; "),
-  navigationAllowlist: ["app://ax-code", "http://127.0.0.1", "http://localhost"],
+  navigationAllowlist: ["app://ax-code"],
   exposesRawElectron: false,
   exposesRawIpcRenderer: false,
   exposesFileSystem: false,
@@ -72,6 +88,16 @@ export function isNavigationAllowed(
     return false
   }
 
-  const origin = `${url.protocol}//${url.host}`
-  return allowlist.some((entry) => target.startsWith(entry) || origin === entry)
+  return allowlist.some((entry) => {
+    let allowed: URL
+    try {
+      allowed = new URL(entry)
+    } catch {
+      return false
+    }
+
+    if (url.protocol !== allowed.protocol || url.hostname !== allowed.hostname) return false
+    if (allowed.port && url.port !== allowed.port) return false
+    return true
+  })
 }

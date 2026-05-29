@@ -2,40 +2,64 @@ import { describe, expect, test } from "bun:test"
 import fs from "fs/promises"
 import path from "path"
 import os from "os"
-import { discover, checkTcpPort, isHtmlOrWebProject } from "../../src/mcp/discovery"
+import { checkTcpPort, discoverPlaywrightCandidate, isHtmlOrWebProject } from "../../src/mcp/discovery"
+
+async function withTempProject(setup: (dir: string) => Promise<void>, run: (dir: string) => Promise<void>) {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "ax-code-playwright-discovery-"))
+  try {
+    await setup(tmp)
+    await run(tmp)
+  } finally {
+    await fs.rm(tmp, { recursive: true, force: true })
+  }
+}
 
 describe("mcp.discovery playwright candidate", () => {
   test("playwright candidate is present in discovered server list", async () => {
-    const results = await discover()
-    const playwright = results.find((s) => s.name === "playwright")
-    expect(playwright).toBeDefined()
-    expect(playwright!.description).toContain("HTML/web development")
-    expect(playwright!.type).toBe("stdio")
+    await withTempProject(
+      async () => {},
+      async (cwd) => {
+        const playwright = await discoverPlaywrightCandidate({ cwd })
+        expect(playwright.name).toBe("playwright")
+        expect(playwright.description).toContain("HTML/web development")
+        expect(playwright.type).toBe("stdio")
+      },
+    )
   })
 
   test("playwright candidate has correct command and args structure", async () => {
-    const results = await discover()
-    const playwright = results.find((s) => s.name === "playwright")
-    expect(playwright).toBeDefined()
-    // When not detected, defaults to npx with @playwright/mcp@latest
-    if (!playwright!.detected) {
-      expect(playwright!.command).toBe("npx")
-      expect(playwright!.args ?? []).toContain("@playwright/mcp@latest")
-    } else {
-      // Detected: either global binary (playwright-mcp) or npx
-      expect(["npx", "playwright-mcp"]).toContain(playwright!.command ?? "")
-    }
+    await withTempProject(
+      async () => {},
+      async (cwd) => {
+        const playwright = await discoverPlaywrightCandidate({ cwd })
+        expect(playwright.detected).toBe(false)
+        expect(playwright.command).toBe("npx")
+        expect(playwright.args ?? []).toContain("@playwright/mcp@latest")
+      },
+    )
   })
 
   test("playwright candidate args contain either --cdp-url or --headless (never both)", async () => {
-    const results = await discover()
-    const playwright = results.find((s) => s.name === "playwright")
-    if (!playwright?.detected) return // skip if not detected in this environment
-    const args = playwright.args ?? []
-    const hasCdp = args.some((a) => a.includes("--cdp-url"))
-    const hasHeadless = args.includes("--headless")
-    // exactly one of the two modes must be set
-    expect(hasCdp !== hasHeadless).toBe(true)
+    await withTempProject(
+      async (cwd) => {
+        await fs.writeFile(path.join(cwd, "index.html"), "<!DOCTYPE html>")
+      },
+      async (cwd) => {
+        for (const cdpOpen of [true, false]) {
+          const playwright = await discoverPlaywrightCandidate({
+            cwd,
+            spawnExitsCleanly: async (command) => command === "npx",
+            checkTcpPort: async () => cdpOpen,
+          })
+          expect(playwright.detected).toBe(true)
+          expect(playwright.command).toBe("npx")
+          const args = playwright.args ?? []
+          const hasCdp = args.includes("--cdp-url")
+          const hasHeadless = args.includes("--headless")
+          expect(hasCdp !== hasHeadless).toBe(true)
+        }
+      },
+    )
   })
 })
 
