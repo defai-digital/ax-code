@@ -1,0 +1,47 @@
+name: integration-vscode
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/integration-vscode-ci.yml"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "packages/integration-vscode/**"
+      - "packages/sdk/**"
+  push:
+    branches:
+      - dev
+    paths:
+      - ".github/workflows/integration-vscode-ci.yml"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "packages/integration-vscode/**"
+      - "packages/sdk/**"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup Ax-code JS toolchain
+        uses: ./.github/actions/setup-ax-code-toolchain
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm --dir packages/integration-vscode run typecheck
+
+      - name: Lint
+        run: pnpm --dir packages/integration-vscode run lint
+
+      - name: Unit tests
+        run: pnpm --dir packages/integration-vscode run test:unit

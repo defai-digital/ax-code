@@ -122,7 +122,7 @@ describe("SessionClient server restart handling", () => {
       ...createSdkClient("default"),
       session: {
         ...createSdkClient("default").session,
-        get: async ({ signal }: { signal: AbortSignal }) => {
+        get: async (_params: unknown, { signal }: { signal: AbortSignal }) => {
           if (signal.aborted) {
             throw new DOMException("Aborted", "AbortError")
           }
