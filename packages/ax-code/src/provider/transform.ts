@@ -265,6 +265,12 @@ export namespace ProviderTransform {
     }
 
     switch (model.api.npm) {
+      case "@openrouter/ai-sdk-provider":
+        // OpenRouter uses a vendor-specific `reasoning` body field, not `reasoningEffort`.
+        // These options land in providerOptions.openrouter and are spread into the request
+        // body by the SDK, letting OpenRouter route them to the underlying model.
+        return Object.fromEntries(WIDELY_SUPPORTED_EFFORTS.map((effort) => [effort, { reasoning: { effort } }]))
+
       case "venice-ai-sdk-provider":
       // https://docs.venice.ai/overview/guides/reasoning-models#reasoning-effort
       case "@ai-sdk/openai-compatible":
