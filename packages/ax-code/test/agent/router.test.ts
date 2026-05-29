@@ -51,6 +51,8 @@ describe("v2-style keyword route", () => {
   test("routes explicit debug commands without requiring an error keyword", () => {
     expect(route("debug the login flow", "build")?.agent).toBe("debug")
     expect(route("please debug this behavior", "build")?.agent).toBe("debug")
+    expect(route("can you please debug the login flow", "build")?.agent).toBe("debug")
+    expect(route("could you debug the login flow", "build")?.agent).toBe("debug")
   })
 
   test("routes common debug failure plurals and timeout asks", () => {

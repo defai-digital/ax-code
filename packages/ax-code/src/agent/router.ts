@@ -116,7 +116,7 @@ const RULES: RouteRule[] = [
       "wrong output",
     ],
     patterns: [
-      /^\s*(?:please\s+)?(?:can\s+you\s+)?(?:help\s+me\s+)?debug\s+(?:this|that|the|my|our|a|an)\b/i,
+      /^\s*(?:please\s+)?(?:(?:can|could)\s+you\s+(?:please\s+)?)?(?:help\s+me\s+)?debug\s+(?:this|that|the|my|our|a|an)\b/i,
       /\b(help\s+)?debug(?:ging)?\b.*\b(bug|error|crash|issue|failure|regression|exception|stack\s+trace|broken|failing)\b/i,
       /\b(fix|find|trace|investigate|diagnos\w*|debug)\b.*\b(bugs?|errors?|crashes?|issues?|failures?|regressions?|exceptions?|stack\s+traces?|timeouts?|hangs?|deadlocks?)\b/i,
       /\broot\s+cause\b/i,
