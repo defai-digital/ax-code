@@ -35,6 +35,8 @@ export type {
   StreamEvent,
   StreamHandle,
   SessionHandle,
+  SdkMessage,
+  SdkMessagePart,
   ToolCallInfo,
   PermissionRequest,
   SdkTool,
