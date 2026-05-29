@@ -1,4 +1,4 @@
-import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { cpSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs"
 import { spawnSync } from "node:child_process"
 import { createRequire } from "node:module"
 import path from "node:path"
@@ -70,6 +70,7 @@ export function createMacAppBundle(input: {
   cpSync(sourceApp, bundlePath, { recursive: true })
 
   const version = input.version ?? "0.0.0"
+  renameMacBundleExecutable(bundlePath)
   rewriteInfoPlist(path.join(bundlePath, "Contents/Info.plist"), { version })
   const resourcesPath = path.join(bundlePath, "Contents/Resources")
   const iconPath = installMacBundleIcon({
@@ -168,7 +169,20 @@ function resolveElectronVersion() {
   return packageJson.version
 }
 
+const MAC_EXECUTABLE_NAME = "AX Code"
 const MAC_ICON_FILE = "ax-code.icns"
+
+function renameMacBundleExecutable(bundlePath: string) {
+  const macosPath = path.join(bundlePath, "Contents/MacOS")
+  const electronExecutablePath = path.join(macosPath, "Electron")
+  const axCodeExecutablePath = path.join(macosPath, MAC_EXECUTABLE_NAME)
+  if (!existsSync(electronExecutablePath)) {
+    if (!existsSync(axCodeExecutablePath)) throw new Error(`Electron executable is missing: ${electronExecutablePath}`)
+    return
+  }
+  rmSync(axCodeExecutablePath, { force: true })
+  renameSync(electronExecutablePath, axCodeExecutablePath)
+}
 
 function rewriteInfoPlist(infoPath: string, input: { version: string }) {
   if (!existsSync(infoPath)) throw new Error(`Electron Info.plist is missing: ${infoPath}`)
@@ -183,22 +197,23 @@ function rewriteInfoPlist(infoPath: string, input: { version: string }) {
               "CFBundleIdentifier",
               "digital.defai.ax-code",
             ),
-            "CFBundleName",
-            "AX Code",
+            "CFBundleExecutable",
+            MAC_EXECUTABLE_NAME,
           ),
-          "CFBundleIconFile",
-          MAC_ICON_FILE,
+          "CFBundleName",
+          "AX Code",
         ),
-        "CFBundleShortVersionString",
-        input.version,
+        "CFBundleIconFile",
+        MAC_ICON_FILE,
       ),
-      "CFBundleVersion",
+      "CFBundleShortVersionString",
       input.version,
     ),
-    "CFBundleDisplayName",
-    "AX Code",
+    "CFBundleVersion",
+    input.version,
   )
-  writeFileSync(infoPath, updated)
+  const branded = setPlistString(updated, "CFBundleDisplayName", "AX Code")
+  writeFileSync(infoPath, branded)
 }
 
 function setPlistString(plist: string, key: string, value: string) {

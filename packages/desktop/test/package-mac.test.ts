@@ -21,6 +21,8 @@ describe("mac desktop packaging", () => {
     })
 
     expect(existsSync(path.join(bundle.bundlePath, "Contents/Info.plist"))).toBe(true)
+    expect(existsSync(path.join(bundle.bundlePath, "Contents/MacOS/AX Code"))).toBe(true)
+    expect(existsSync(path.join(bundle.bundlePath, "Contents/MacOS/Electron"))).toBe(false)
     expect(existsSync(path.join(bundle.appPayloadPath, "main.js"))).toBe(true)
     expect(existsSync(path.join(bundle.appPayloadPath, "main.js.map"))).toBe(true)
     expect(existsSync(path.join(bundle.appPayloadPath, "preload.cjs"))).toBe(true)
@@ -30,7 +32,7 @@ describe("mac desktop packaging", () => {
     expect(existsSync(path.join(bundle.resourcesPath, "electron.icns"))).toBe(false)
 
     const infoPlist = readFileSync(path.join(bundle.bundlePath, "Contents/Info.plist"), "utf8")
-    expect(infoPlist).toContain("<key>CFBundleExecutable</key>\n\t<string>Electron</string>")
+    expect(infoPlist).toContain("<key>CFBundleExecutable</key>\n\t<string>AX Code</string>")
     expect(infoPlist).toContain("<string>digital.defai.ax-code</string>")
     expect(infoPlist).toContain("<key>CFBundleDisplayName</key>")
     expect(infoPlist).toContain("<key>CFBundleIconFile</key>\n\t<string>ax-code.icns</string>")
