@@ -60,6 +60,19 @@ describe("v2-style keyword route", () => {
     expect(route("diagnose the auth timeout", "build")?.agent).toBe("debug")
   })
 
+  test("routes concrete not-working failures to debug without reviving review-feedback false positives", () => {
+    expect(route("the app does not work", "build")?.agent).toBe("debug")
+    expect(route("the service is not working", "build")?.agent).toBe("debug")
+    expect(route("login does not work", "build")?.agent).toBe("debug")
+    expect(route("the CLI command does not run", "build")?.agent).toBe("debug")
+    expect(
+      route(
+        "some user feedback says auto agent switch is not working well; when they ask for review they see debug; please review whether this is real",
+        "build",
+      ),
+    ).toBeNull()
+  })
+
   test("keeps development-feature wording on the current agent instead of devops", () => {
     expect(route("fix the deployment button in the dev UI", "build")).toBeNull()
     expect(route("implement the developer workflow for local dev", "build")).toBeNull()
@@ -73,6 +86,14 @@ describe("v2-style keyword route", () => {
   test("routes failing-test maintenance to the test agent", () => {
     expect(route("fix the failing test", "build")?.agent).toBe("test")
     expect(route("the tests are failing", "build")?.agent).toBe("test")
+    expect(route("the tests do not pass", "build")?.agent).toBe("test")
+    expect(route("tests are not passing", "build")?.agent).toBe("test")
+  })
+
+  test("routes concrete build failures to debug", () => {
+    expect(route("the build fails", "build")?.agent).toBe("debug")
+    expect(route("the build failed after the change", "build")?.agent).toBe("debug")
+    expect(route("the build does not pass", "build")?.agent).toBe("debug")
   })
 
   test("multi-rule message picks the highest-confidence specialist", () => {

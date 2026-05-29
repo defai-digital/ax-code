@@ -1,6 +1,8 @@
+import { $ } from "bun"
 import { expect, spyOn, test } from "bun:test"
 import fs from "fs/promises"
 import path from "path"
+import { Instance } from "../../src/project/instance"
 import { Project } from "../../src/project/project"
 import { Server } from "../../src/server/server"
 import { Worktree } from "../../src/worktree"
@@ -71,5 +73,40 @@ test("experimental worktree delete removes sandbox using the canonical path", as
     removeSpy.mockRestore()
     sandboxSpy.mockRestore()
     await fs.unlink(link).catch(() => {})
+  }
+})
+
+test("experimental worktree list includes branch metadata", async () => {
+  await using tmp = await tmpdir({ git: true })
+  const branch = `list-branch-${Date.now()}`
+  const sandbox = path.join(tmp.path, "..", `${path.basename(tmp.path)}-branch`)
+
+  try {
+    await $`git worktree add ${sandbox} -b ${branch}`.cwd(tmp.path).quiet()
+    const sandboxRealpath = await fs.realpath(sandbox)
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await Project.addSandbox(Instance.project.id, sandboxRealpath)
+      },
+    })
+
+    const response = await Server.Default().request("/experimental/worktree", {
+      headers: {
+        "x-opencode-directory": tmp.path,
+      },
+    })
+
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as Array<{ name: string; directory: string; branch?: string }>
+    expect(body).toContainEqual({
+      name: path.basename(sandboxRealpath),
+      directory: sandboxRealpath,
+      branch,
+    })
+  } finally {
+    await $`git worktree remove --force ${sandbox}`.cwd(tmp.path).quiet().nothrow()
+    await fs.rm(sandbox, { recursive: true, force: true }).catch(() => {})
   }
 })

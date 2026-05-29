@@ -22,6 +22,7 @@ export type ElectronHostPlan = {
   window: ElectronWindowOptions
   csp: string
   allowedNavigation: readonly string[]
+  trustedBridgeOrigins: readonly string[]
   bridgeChannel: typeof DESKTOP_BRIDGE_CHANNEL
 }
 
@@ -59,7 +60,7 @@ export function createElectronHostPlan(
     input.dev || input.rendererUrl
       ? ({
           kind: "dev",
-          url: input.rendererUrl ?? "http://127.0.0.1:5173",
+          url: normalizeDevRendererUrl(input.rendererUrl ?? "http://127.0.0.1:5173"),
         } satisfies ElectronRendererMode)
       : ({
           kind: "packaged",
@@ -71,7 +72,8 @@ export function createElectronHostPlan(
     preloadPath,
     window: createElectronWindowOptions(preloadPath),
     csp: desktopSecurityBaseline.csp,
-    allowedNavigation: desktopSecurityBaseline.navigationAllowlist,
+    allowedNavigation: createAllowedNavigation(renderer),
+    trustedBridgeOrigins: createTrustedBridgeOrigins(renderer),
     bridgeChannel: DESKTOP_BRIDGE_CHANNEL,
   }
 }
@@ -99,6 +101,33 @@ export function createElectronWindowOptions(preloadPath: string): ElectronWindow
 export function rendererEntryUrl(renderer: ElectronRendererMode) {
   if (renderer.kind === "dev") return renderer.url
   return `${APP_PROTOCOL}://${APP_HOST}/index.html`
+}
+
+function createAllowedNavigation(renderer: ElectronRendererMode) {
+  if (renderer.kind !== "dev") return desktopSecurityBaseline.navigationAllowlist
+  return [...desktopSecurityBaseline.navigationAllowlist, new URL(renderer.url).origin]
+}
+
+function createTrustedBridgeOrigins(renderer: ElectronRendererMode) {
+  if (renderer.kind !== "dev") return []
+  return [new URL(renderer.url).origin]
+}
+
+function normalizeDevRendererUrl(value: string) {
+  let url: URL
+  try {
+    url = new URL(value)
+  } catch {
+    throw new Error("Desktop dev renderer URL must be a valid loopback HTTP(S) URL.")
+  }
+  if ((url.protocol !== "http:" && url.protocol !== "https:") || !isLoopbackHost(url.hostname)) {
+    throw new Error("Desktop dev renderer URL must be a loopback HTTP(S) URL.")
+  }
+  return url.toString().replace(/\/$/, "")
+}
+
+function isLoopbackHost(hostname: string) {
+  return hostname === "127.0.0.1" || hostname === "localhost" || hostname === "::1" || hostname === "[::1]"
 }
 
 export function isAppNavigationAllowed(target: string, plan: Pick<ElectronHostPlan, "allowedNavigation">) {

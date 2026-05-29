@@ -1,9 +1,19 @@
 import { describe, expect, test } from "bun:test"
 import {
   abortSessionTask,
+  attachToBackendUrl,
+  chooseAndStartProjectDirectory,
   compareReviewSessions,
+  createComposerAttachmentDraft,
   createScheduledTask,
+  createSessionAction,
+  editQueueItem,
   notifyScheduledTaskQueued,
+  openBrowserPreviewUrl,
+  openFileInEditor,
+  permissionAutoAcceptAllowed,
+  queueItemCommandAvailable,
+  queueBrowserVerificationTask,
   queueReviewComment,
   queueMultiRunTask,
   queueDraftTask,
@@ -17,9 +27,185 @@ import {
   runScheduledTaskCommand,
   runTerminalCommand,
   runWorktreeCommand,
+  updateProjectSettings,
 } from "../src/runtime/actions"
 
 describe("queue draft task action", () => {
+  test("allows permission auto-accept only when backend exposes always patterns", () => {
+    expect(permissionAutoAcceptAllowed({ always: ["pnpm test"] })).toBe(true)
+    expect(permissionAutoAcceptAllowed({ always: ["  "] })).toBe(false)
+    expect(permissionAutoAcceptAllowed({ always: [] })).toBe(false)
+    expect(permissionAutoAcceptAllowed({})).toBe(false)
+  })
+
+  test("creates fixture sessions as renderer-reconstructable local state", async () => {
+    const session = await createSessionAction({
+      config: { mode: "fixture" },
+      title: "  ",
+      targetDirectory: "/workspace/.ax-code/worktrees/wt-session",
+    })
+
+    expect(session).toMatchObject({
+      title: "New session",
+      project: "fixture",
+      worktree: "/workspace/.ax-code/worktrees/wt-session",
+    })
+    expect(session.id).toStartWith("ses_fixture_new_")
+    expect(session.updatedAt).toBeGreaterThan(0)
+  })
+
+  test("creates live sessions through the headless session contract", async () => {
+    const requests: unknown[] = []
+    const session = await createSessionAction({
+      config: { mode: "live", baseUrl: "http://127.0.0.1:4096", directory: "/workspace/ax-code" },
+      title: "  Investigate queue pressure  ",
+      targetDirectory: "/workspace/.ax-code/worktrees/wt-session",
+      client: {
+        createSession: async (input) => {
+          requests.push(input)
+          return {
+            id: "ses_created",
+            title: input?.title,
+            project: "ax-code",
+            updatedAt: 1_000,
+          }
+        },
+      },
+    })
+
+    expect(requests).toEqual([{ title: "Investigate queue pressure" }])
+    expect(session).toEqual({
+      id: "ses_created",
+      title: "Investigate queue pressure",
+      project: "ax-code",
+      worktree: "/workspace/.ax-code/worktrees/wt-session",
+      updatedAt: 1_000,
+    })
+  })
+
+  test("chooses a desktop project directory and reloads live app config", async () => {
+    const calls: unknown[] = []
+    const result = await chooseAndStartProjectDirectory({
+      client: {
+        desktopBridge: {
+          async invoke(name, payload) {
+            calls.push({ name, payload })
+            if (name === "dialog.chooseDirectory") return { canceled: false, path: "/workspace/new-project" }
+            if (name === "backend.start") return { url: "http://127.0.0.1:4555" }
+            if (name === "app.config") {
+              return {
+                mode: "live",
+                baseUrl: "http://127.0.0.1:4555",
+                headers: { Authorization: "Basic generated" },
+                directory: "/workspace/new-project",
+                features: { terminalPane: true, browserPane: false, filePane: true },
+                scheduledTaskExecution: { owner: "desktop-sidecar", stopsOnAppQuit: true },
+              }
+            }
+            throw new Error(`unexpected command ${name}`)
+          },
+        },
+      },
+    })
+
+    expect(calls).toEqual([
+      { name: "dialog.chooseDirectory", payload: { title: "Open AX Code project" } },
+      { name: "backend.start", payload: { directory: "/workspace/new-project" } },
+      { name: "app.config", payload: {} },
+    ])
+    expect(result).toEqual({
+      changed: true,
+      directory: "/workspace/new-project",
+      config: {
+        mode: "live",
+        baseUrl: "http://127.0.0.1:4555",
+        headers: { Authorization: "Basic generated" },
+        directory: "/workspace/new-project",
+        features: { terminalPane: true, browserPane: false, filePane: true },
+        scheduledTaskExecution: { owner: "desktop-sidecar", stopsOnAppQuit: true },
+      },
+    })
+  })
+
+  test("does not start a backend when desktop project selection is cancelled", async () => {
+    const calls: unknown[] = []
+    const result = await chooseAndStartProjectDirectory({
+      client: {
+        desktopBridge: {
+          async invoke(name, payload) {
+            calls.push({ name, payload })
+            return { canceled: true }
+          },
+        },
+      },
+    })
+
+    expect(result).toEqual({ changed: false, canceled: true })
+    expect(calls).toEqual([{ name: "dialog.chooseDirectory", payload: { title: "Open AX Code project" } }])
+  })
+
+  test("attaches to an existing loopback desktop backend and reloads live app config", async () => {
+    const calls: unknown[] = []
+    const result = await attachToBackendUrl({
+      baseUrl: " http://localhost:4555 ",
+      authHeader: " Bearer local-token ",
+      client: {
+        desktopBridge: {
+          async invoke(name, payload) {
+            calls.push({ name, payload })
+            if (name === "backend.attach") return { connected: true }
+            if (name === "app.config") {
+              return {
+                mode: "live",
+                baseUrl: "http://localhost:4555/",
+                headers: { Authorization: "Bearer local-token" },
+                directory: "/workspace/attached-project",
+                features: { terminalPane: true, browserPane: true, filePane: true },
+                scheduledTaskExecution: { owner: "attached-backend", stopsOnAppQuit: false },
+              }
+            }
+            throw new Error(`unexpected command ${name}`)
+          },
+        },
+      },
+    })
+
+    expect(calls).toEqual([
+      { name: "backend.attach", payload: { baseUrl: "http://localhost:4555/", authHeader: "Bearer local-token" } },
+      { name: "app.config", payload: {} },
+    ])
+    expect(result).toEqual({
+      changed: true,
+      baseUrl: "http://localhost:4555/",
+      config: {
+        mode: "live",
+        baseUrl: "http://localhost:4555/",
+        headers: { Authorization: "Bearer local-token" },
+        directory: "/workspace/attached-project",
+        features: { terminalPane: true, browserPane: true, filePane: true },
+        scheduledTaskExecution: { owner: "attached-backend", stopsOnAppQuit: false },
+      },
+    })
+  })
+
+  test("rejects non-loopback backend attach URLs before invoking desktop bridge", async () => {
+    const calls: unknown[] = []
+    await expect(
+      attachToBackendUrl({
+        baseUrl: "https://example.com",
+        client: {
+          desktopBridge: {
+            async invoke(name, payload) {
+              calls.push({ name, payload })
+              return {}
+            },
+          },
+        },
+      }),
+    ).rejects.toThrow("Attach backend URL must use http(s) loopback")
+    expect(calls).toEqual([])
+  })
+
   test("creates fixture queue items for local preview mode", async () => {
     const item = await queueDraftTask({
       config: { mode: "fixture" },
@@ -32,6 +218,7 @@ describe("queue draft task action", () => {
     expect(item).toMatchObject({
       sessionID: "ses_fixture",
       directory: "/workspace/.ax-code/worktrees/wt-gui",
+      worktree: "/workspace/.ax-code/worktrees/wt-gui",
       title: "Continue the desktop implementation",
       kind: "prompt",
       status: "queued",
@@ -96,6 +283,73 @@ describe("queue draft task action", () => {
     })
   })
 
+  test("preserves composer attachments in live prompt queue payloads", async () => {
+    const requests: unknown[] = []
+    const attachment = createComposerAttachmentDraft({
+      kind: "context",
+      path: "packages/app/src/App.tsx",
+      startLine: 10,
+      endLine: 20,
+    })
+
+    await queueDraftTask({
+      config: { mode: "live", baseUrl: "http://127.0.0.1:4096", directory: "/workspace/ax-code" },
+      mode: "prompt",
+      text: "Review this component",
+      sessionID: "ses_live",
+      attachments: [attachment],
+      client: {
+        taskQueue: {
+          enqueue: async (input) => {
+            requests.push(input)
+            return {
+              id: "tsk_live_attachment",
+              projectID: "project_live",
+              directory: "/workspace/ax-code",
+              sessionID: input.sessionID,
+              kind: input.kind,
+              status: "queued",
+              priority: input.priority ?? 0,
+              position: 0,
+              title: input.title,
+              payload: input.payload ?? {},
+              time: { created: 1_000 },
+            }
+          },
+        },
+      },
+    })
+
+    expect(requests).toEqual([
+      {
+        sessionID: "ses_live",
+        kind: "prompt",
+        title: "Review this component",
+        agent: undefined,
+        model: undefined,
+        payload: {
+          source: "app.composer",
+          mode: "prompt",
+          text: "Review this component",
+          attachments: [attachment],
+          body: {
+            parts: [
+              { type: "text", text: "Review this component" },
+              {
+                type: "file",
+                url: "file:///workspace/ax-code/packages/app/src/App.tsx?start=9&end=19",
+                mime: "text/plain",
+                filename: "App.tsx",
+              },
+            ],
+            agent: undefined,
+            model: undefined,
+          },
+        },
+      },
+    ])
+  })
+
   test("targets live queue drafts at a selected worktree directory", async () => {
     const originalFetch = globalThis.fetch
     const requests: Array<{ url: string; init?: RequestInit }> = []
@@ -138,6 +392,9 @@ describe("queue draft task action", () => {
       expect((requests[0]?.init?.headers as Record<string, string>)["x-opencode-directory"]).toBe(
         "/workspace/.ax-code/worktrees/wt-target",
       )
+      expect(JSON.parse(String(requests[0]?.init?.body))).toMatchObject({
+        worktree: "/workspace/.ax-code/worktrees/wt-target",
+      })
     } finally {
       globalThis.fetch = originalFetch
     }
@@ -176,6 +433,7 @@ describe("queue draft task action", () => {
               id: `tsk_variant_${target}`,
               projectID: "project_live",
               directory: `/workspace/.ax-code/worktrees/variant-${target}`,
+              worktree: input.worktree,
               kind: input.kind,
               status: "queued",
               priority: input.priority ?? 0,
@@ -200,6 +458,7 @@ describe("queue draft task action", () => {
     expect(queueCreates[0]).toMatchObject({
       kind: "prompt",
       title: "Compare two approaches",
+      worktree: "variant-1",
       agent: "build",
       sessionID: "ses_variant_1",
       payload: {
@@ -214,6 +473,7 @@ describe("queue draft task action", () => {
     expect(queueCreates[1]).toMatchObject({
       kind: "prompt",
       title: "Compare two approaches",
+      worktree: "variant-2",
       agent: "build",
       sessionID: "ses_variant_2",
       payload: {
@@ -236,6 +496,7 @@ describe("queue draft task action", () => {
       "/workspace/.ax-code/worktrees/variant-1",
       "/workspace/.ax-code/worktrees/variant-2",
     ])
+    expect(result.queue.map((item) => item.worktree)).toEqual(["variant-1", "variant-2"])
     expect(result.queue.map((item) => item.sessionID)).toEqual(["ses_variant_1", "ses_variant_2"])
   })
 
@@ -273,6 +534,101 @@ describe("queue draft task action", () => {
         options: { mode: "async" },
       },
     ])
+  })
+
+  test("runs live prompt and command drafts with supported attachments", async () => {
+    const calls: unknown[] = []
+    const textAttachment = createComposerAttachmentDraft({
+      kind: "file",
+      path: "README.md",
+    })
+    const imageAttachment = createComposerAttachmentDraft({
+      kind: "image",
+      path: "/workspace/ax-code/screenshot.png",
+    })
+
+    await runDraftTask({
+      config: { mode: "live", baseUrl: "http://127.0.0.1:4096", directory: "/workspace/ax-code" },
+      mode: "prompt",
+      text: "Explain the attached files",
+      sessionID: "ses_live",
+      attachments: [textAttachment, imageAttachment],
+      client: {
+        sendPrompt: async (sessionID, body, options) => {
+          calls.push({ type: "prompt", sessionID, body, options })
+        },
+      },
+    })
+    await runDraftTask({
+      config: { mode: "live", baseUrl: "http://127.0.0.1:4096", directory: "/workspace/ax-code" },
+      mode: "command",
+      text: "review",
+      sessionID: "ses_live",
+      attachments: [textAttachment],
+      client: {
+        sendCommand: async (sessionID, body, options) => {
+          calls.push({ type: "command", sessionID, body, options })
+        },
+      },
+    })
+
+    expect(calls).toEqual([
+      {
+        type: "prompt",
+        sessionID: "ses_live",
+        body: {
+          parts: [
+            { type: "text", text: "Explain the attached files" },
+            {
+              type: "file",
+              url: "file:///workspace/ax-code/README.md",
+              mime: "text/plain",
+              filename: "README.md",
+            },
+            {
+              type: "file",
+              url: "file:///workspace/ax-code/screenshot.png",
+              mime: "image/png",
+              filename: "screenshot.png",
+            },
+          ],
+          agent: undefined,
+          model: undefined,
+        },
+        options: { mode: "async" },
+      },
+      {
+        type: "command",
+        sessionID: "ses_live",
+        body: {
+          command: "review",
+          arguments: "",
+          agent: undefined,
+          model: undefined,
+          parts: [
+            {
+              type: "file",
+              url: "file:///workspace/ax-code/README.md",
+              mime: "text/plain",
+              filename: "README.md",
+            },
+          ],
+        },
+        options: { mode: "async" },
+      },
+    ])
+    await expect(
+      runDraftTask({
+        config: { mode: "live", baseUrl: "http://127.0.0.1:4096", directory: "/workspace/ax-code" },
+        mode: "shell",
+        text: "pnpm test",
+        sessionID: "ses_live",
+        attachments: [textAttachment],
+        client: {
+          sendShell: async () => {},
+        },
+      }),
+    ).rejects.toThrow("Shell drafts do not support attachments")
   })
 
   test("runs command and shell drafts with route-compatible payloads", async () => {
@@ -336,10 +692,20 @@ describe("queue draft task action", () => {
         },
       },
     })
+    await replyPermissionRequest({
+      config: { mode: "live", baseUrl: "http://127.0.0.1:4096" },
+      requestID: "per_live_always",
+      reply: "always",
+      client: {
+        replyPermission: async (body) => {
+          calls.push({ type: "permission", body })
+        },
+      },
+    })
     await replyQuestionRequest({
       config: { mode: "live", baseUrl: "http://127.0.0.1:4096" },
       requestID: "que_live",
-      answers: { target: "main" },
+      answers: [["main"]],
       client: {
         replyQuestion: async (body) => {
           calls.push({ type: "question", body })
@@ -349,7 +715,8 @@ describe("queue draft task action", () => {
 
     expect(calls).toEqual([
       { type: "permission", body: { requestID: "per_live", reply: "once" } },
-      { type: "question", body: { requestID: "que_live", answers: { target: "main" } } },
+      { type: "permission", body: { requestID: "per_live_always", reply: "always" } },
+      { type: "question", body: { requestID: "que_live", answers: [["main"]] } },
     ])
   })
 
@@ -385,6 +752,40 @@ describe("queue draft task action", () => {
     })
 
     expect(item).toMatchObject({ id: "tsk_live", status: "queued" })
+  })
+
+  test("guards queue item commands by lifecycle state before calling the backend", async () => {
+    const runningItem = {
+      id: "tsk_running",
+      project: "project_live",
+      title: "running work",
+      kind: "prompt" as const,
+      status: "running" as const,
+      priority: 0,
+      createdAt: 1_000,
+    }
+    let calls = 0
+
+    expect(queueItemCommandAvailable(runningItem, "pause")).toBe(false)
+    expect(queueItemCommandAvailable(runningItem, "cancel")).toBe(false)
+    expect(queueItemCommandAvailable({ ...runningItem, status: "failed" }, "retry")).toBe(true)
+
+    await expect(
+      runQueueItemCommand({
+        config: { mode: "live", baseUrl: "http://127.0.0.1:4096" },
+        command: "pause",
+        item: runningItem,
+        client: {
+          taskQueue: {
+            pause: async () => {
+              calls++
+              return runningItem
+            },
+          },
+        },
+      }),
+    ).rejects.toThrow("not available")
+    expect(calls).toBe(0)
   })
 
   test("reorders live queue items through the headless queue client", async () => {
@@ -442,6 +843,132 @@ describe("queue draft task action", () => {
     expect(item).toMatchObject({ id: "tsk_second", position: 0 })
   })
 
+  test("removes live queue items through the headless queue client", async () => {
+    const removed: string[] = []
+    const result = await runQueueItemCommand({
+      config: { mode: "live", baseUrl: "http://127.0.0.1:4096" },
+      command: "remove",
+      item: {
+        id: "tsk_remove",
+        project: "project_live",
+        title: "remove queued work",
+        kind: "prompt",
+        status: "queued",
+        priority: 0,
+        createdAt: 1_000,
+      },
+      client: {
+        taskQueue: {
+          remove: async (id) => {
+            removed.push(id)
+            return true
+          },
+        },
+      },
+    })
+
+    expect(removed).toEqual(["tsk_remove"])
+    expect(result).toEqual({ removed: true, id: "tsk_remove" })
+  })
+
+  test("edits live queue items through the headless queue client", async () => {
+    const calls: unknown[] = []
+    const item = await editQueueItem({
+      config: { mode: "live", baseUrl: "http://127.0.0.1:4096" },
+      item: {
+        id: "tsk_edit",
+        project: "project_live",
+        title: "old queued work",
+        kind: "prompt",
+        status: "queued",
+        priority: 0,
+        payload: {
+          source: "app.composer",
+          mode: "prompt",
+          text: "old text",
+          body: {
+            parts: [{ type: "text", text: "old text" }],
+          },
+        },
+        createdAt: 1_000,
+      },
+      title: "Edited queued work",
+      text: "edited text",
+      client: {
+        taskQueue: {
+          edit: async (id, input) => {
+            calls.push({ id, input })
+            return {
+              id,
+              projectID: "project_live",
+              directory: "/workspace/ax-code",
+              kind: "prompt",
+              status: "queued",
+              priority: 0,
+              position: 0,
+              title: input.title,
+              payload: input.payload,
+              time: { created: 1_000 },
+            }
+          },
+        },
+      },
+    })
+
+    expect(calls).toEqual([
+      {
+        id: "tsk_edit",
+        input: {
+          title: "Edited queued work",
+          payload: {
+            source: "app.composer",
+            mode: "prompt",
+            text: "edited text",
+            body: {
+              parts: [{ type: "text", text: "edited text" }],
+            },
+          },
+        },
+      },
+    ])
+    expect(item).toMatchObject({
+      id: "tsk_edit",
+      title: "Edited queued work",
+      payload: { text: "edited text" },
+    })
+  })
+
+  test("edits fixture queue items without leaving renderer-only state", async () => {
+    const item = await editQueueItem({
+      config: { mode: "fixture" },
+      item: {
+        id: "tsk_fixture_edit",
+        project: "fixture",
+        title: "old fixture work",
+        kind: "command",
+        status: "paused",
+        priority: 0,
+        payload: {
+          mode: "command",
+          text: "old command",
+          body: { command: "old command", arguments: "" },
+        },
+        createdAt: 1_000,
+      },
+      title: "Edited fixture work",
+      text: "edited command",
+    })
+
+    expect(item).toMatchObject({
+      id: "tsk_fixture_edit",
+      title: "Edited fixture work",
+      payload: {
+        text: "edited command",
+        body: { command: "edited command", arguments: "" },
+      },
+    })
+  })
+
   test("reorders fixture queue items by adjacent visible position", async () => {
     const queue = [
       {
@@ -474,6 +1001,24 @@ describe("queue draft task action", () => {
     })
 
     expect(moved).toMatchObject({ id: "tsk_first", position: 1 })
+  })
+
+  test("removes fixture queue items for local preview mode", async () => {
+    const result = await runQueueItemCommand({
+      config: { mode: "fixture" },
+      command: "remove",
+      item: {
+        id: "tsk_fixture_remove",
+        project: "fixture",
+        title: "remove fixture work",
+        kind: "prompt",
+        status: "queued",
+        priority: 0,
+        createdAt: 1_000,
+      },
+    })
+
+    expect(result).toEqual({ removed: true, id: "tsk_fixture_remove" })
   })
 
   test("aborts live sessions through the headless client", async () => {
@@ -557,6 +1102,9 @@ describe("queue draft task action", () => {
       config: { mode: "live", baseUrl: "http://127.0.0.1:4096" },
       command: "create",
       shellCommand: "pnpm dev",
+      cwd: "/workspace/ax-code/.worktrees/frontend",
+      sessionID: "ses_live",
+      sessionTitle: "Frontend fix",
       client: {
         pty: {
           create: async (input) => {
@@ -577,7 +1125,13 @@ describe("queue draft task action", () => {
         },
       },
     })
-    expect(terminal).toMatchObject({ id: "pty_live", title: "pnpm dev", status: "running" })
+    expect(terminal).toMatchObject({
+      id: "pty_live",
+      title: "pnpm dev",
+      status: "running",
+      sessionID: "ses_live",
+      sessionTitle: "Frontend fix",
+    })
 
     await runTerminalCommand({
       config: { mode: "live", baseUrl: "http://127.0.0.1:4096" },
@@ -612,7 +1166,10 @@ describe("queue draft task action", () => {
       mimeType: "text/typescript",
     })
     expect(calls).toEqual([
-      { type: "terminal.create", input: { command: "pnpm dev", title: "pnpm dev", cwd: undefined } },
+      {
+        type: "terminal.create",
+        input: { command: "pnpm dev", title: "pnpm dev", cwd: "/workspace/ax-code/.worktrees/frontend" },
+      },
       { type: "terminal.remove", id: "pty_live" },
       { type: "file.read", path: "packages/app/src/App.tsx" },
     ])
@@ -640,6 +1197,168 @@ describe("queue draft task action", () => {
         payload: { path: "packages/app/src/App.tsx" },
       },
     ])
+  })
+
+  test("opens file paths through the desktop editor bridge", async () => {
+    const calls: unknown[] = []
+    const result = await openFileInEditor({
+      config: { mode: "live", baseUrl: "http://127.0.0.1:4096" },
+      path: " packages/app/src/App.tsx ",
+      line: 12,
+      column: 3,
+      client: {
+        desktopBridge: {
+          async invoke(name, payload) {
+            calls.push({ name, payload })
+            return true
+          },
+        },
+      },
+    })
+
+    expect(result).toEqual({ opened: true, path: "packages/app/src/App.tsx", line: 12, column: 3 })
+    expect(calls).toEqual([
+      {
+        name: "editor.open",
+        payload: { path: "packages/app/src/App.tsx", line: 12, column: 3 },
+      },
+    ])
+    await expect(
+      openFileInEditor({
+        config: { mode: "live", baseUrl: "http://127.0.0.1:4096" },
+        path: "packages/app/src/App.tsx",
+        line: 0,
+        client: { desktopBridge: { async invoke() {} } },
+      }),
+    ).rejects.toThrow("Editor line must be a positive integer")
+  })
+
+  test("opens browser preview URLs through the desktop bridge", async () => {
+    const calls: unknown[] = []
+    const result = await openBrowserPreviewUrl({
+      config: { mode: "live", baseUrl: "http://127.0.0.1:4096" },
+      url: " http://127.0.0.1:3000/dashboard ",
+      client: {
+        desktopBridge: {
+          async invoke(name, payload) {
+            calls.push({ name, payload })
+            return true
+          },
+        },
+      },
+    })
+
+    expect(result).toEqual({ opened: true, url: "http://127.0.0.1:3000/dashboard" })
+    expect(calls).toEqual([
+      {
+        name: "external.open",
+        payload: { url: "http://127.0.0.1:3000/dashboard" },
+      },
+    ])
+    await expect(
+      openBrowserPreviewUrl({
+        config: { mode: "live", baseUrl: "http://127.0.0.1:4096" },
+        url: "file:///tmp/index.html",
+        client: { desktopBridge: { async invoke() {} } },
+      }),
+    ).rejects.toThrow("Browser preview URL must use http or https")
+  })
+
+  test("queues browser preview verification through the server-owned task queue", async () => {
+    const requests: unknown[] = []
+    const item = await queueBrowserVerificationTask({
+      config: { mode: "live", baseUrl: "http://127.0.0.1:4096", directory: "/workspace/ax-code" },
+      url: " http://127.0.0.1:5173/dashboard ",
+      sessionID: "ses_live",
+      targetDirectory: "/workspace/ax-code/.worktrees/frontend",
+      agent: "build",
+      model: { providerID: "openai", modelID: "gpt-5-codex" },
+      client: {
+        taskQueue: {
+          async enqueue(input) {
+            requests.push(input)
+            return {
+              id: "tsk_browser_verify",
+              projectID: "project_live",
+              sessionID: input.sessionID,
+              title: input.title,
+              kind: input.kind,
+              status: "queued",
+              worktree: input.worktree,
+              agent: input.agent,
+              model: input.model,
+              payload: input.payload,
+              createdAt: 1_000,
+            }
+          },
+        },
+      },
+    })
+
+    expect(requests).toEqual([
+      {
+        sessionID: "ses_live",
+        kind: "prompt",
+        title: "Verify browser preview",
+        worktree: "/workspace/ax-code/.worktrees/frontend",
+        agent: "build",
+        model: { providerID: "openai", modelID: "gpt-5-codex" },
+        payload: {
+          source: "app.browser-preview",
+          mode: "prompt",
+          text: expect.stringContaining("http://127.0.0.1:5173/dashboard"),
+          browserPreviewUrl: "http://127.0.0.1:5173/dashboard",
+          verification: "playwright-mcp",
+        },
+      },
+    ])
+    expect(item).toMatchObject({
+      id: "tsk_browser_verify",
+      sessionID: "ses_live",
+      title: "Verify browser preview",
+      kind: "prompt",
+      status: "queued",
+      worktree: "/workspace/ax-code/.worktrees/frontend",
+      payload: {
+        source: "app.browser-preview",
+        browserPreviewUrl: "http://127.0.0.1:5173/dashboard",
+        verification: "playwright-mcp",
+      },
+    })
+  })
+
+  test("rejects browser preview verification for non-http URLs", async () => {
+    await expect(
+      queueBrowserVerificationTask({
+        config: { mode: "fixture" },
+        url: "file:///tmp/index.html",
+      }),
+    ).rejects.toThrow("Browser verification URL must use http or https")
+  })
+
+  test("updates project settings through the live config client", async () => {
+    const calls: unknown[] = []
+    const result = await updateProjectSettings({
+      config: { mode: "live", baseUrl: "http://127.0.0.1:4096" },
+      model: { providerID: "openai", modelID: "gpt-5-codex" },
+      client: {
+        config: {
+          update: async (input) => {
+            calls.push(input)
+            return { model: input.model }
+          },
+        },
+      },
+    })
+
+    expect(result).toEqual({ updated: true, reloadRequired: true, model: "openai/gpt-5-codex" })
+    expect(calls).toEqual([{ model: "openai/gpt-5-codex" }])
+    await expect(
+      updateProjectSettings({
+        config: { mode: "live", baseUrl: "http://127.0.0.1:4096" },
+        client: { config: { async update() {} } },
+      }),
+    ).rejects.toThrow("Select at least one setting to apply")
   })
 
   test("sends scheduled task notifications through the desktop bridge", async () => {
@@ -778,6 +1497,61 @@ describe("queue draft task action", () => {
       },
     ])
     expect(task).toMatchObject({ id: "sch_live", title: "Daily review", status: "active", agent: "review" })
+  })
+
+  test("creates weekly, once, and cron scheduled prompts through the headless client", async () => {
+    const calls: unknown[] = []
+    const client = {
+      scheduledTask: {
+        create: async (input: {
+          title: string
+          prompt: string
+          schedule: unknown
+          agent?: string
+          model?: unknown
+        }) => {
+          calls.push(input)
+          return {
+            id: `sch_${calls.length}`,
+            projectID: "project_live",
+            directory: "/workspace/ax-code",
+            title: input.title,
+            prompt: input.prompt,
+            schedule: input.schedule,
+            status: "active",
+            time: { created: 1_000 },
+          }
+        },
+      },
+    }
+
+    await createScheduledTask({
+      config: { mode: "live", baseUrl: "http://127.0.0.1:4096" },
+      title: "Weekly review",
+      prompt: "Review branch",
+      schedule: { type: "weekly", day: 1, time: "10:30" },
+      client,
+    })
+    await createScheduledTask({
+      config: { mode: "live", baseUrl: "http://127.0.0.1:4096" },
+      title: "One-off review",
+      prompt: "Review branch",
+      schedule: { type: "once", runAt: 1_800_000_000_000 },
+      client,
+    })
+    await createScheduledTask({
+      config: { mode: "live", baseUrl: "http://127.0.0.1:4096" },
+      title: "Cron review",
+      prompt: "Review branch",
+      schedule: { type: "cron", expression: "0 9 * * 1-5" },
+      client,
+    })
+
+    expect(calls.map((call) => (call as { schedule: unknown }).schedule)).toEqual([
+      { type: "weekly", day: 1, time: "10:30" },
+      { type: "once", runAt: 1_800_000_000_000 },
+      { type: "cron", expression: "0 9 * * 1-5" },
+    ])
   })
 
   test("runs review rollback commands through the headless client", async () => {

@@ -36,6 +36,15 @@ jobs:
         env:
           AX_CODE_DISABLE_SHARE: "true"
 
+      - name: Upload deterministic test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ax-code-deterministic-test-report
+          path: packages/ax-code/.tmp/test-report/
+          if-no-files-found: warn
+          retention-days: 14
+
   build:
     needs: typecheck
     permissions:
@@ -184,3 +193,162 @@ jobs:
           for f in packages/ax-code/dist/*.tar.gz packages/ax-code/dist/*.zip; do
             [ -f "$f" ] && gh release upload "$TAG" "$f" --clobber || true
           done
+
+  desktop-mac-release:
+    needs: publish
+    runs-on: macos-latest
+    permissions:
+      contents: write
+    env:
+      AX_CODE_DISABLE_AUTOUPDATE: "1"
+      AX_CODE_DISABLE_AUTO_INDEX: "1"
+      AX_CODE_DISABLE_LSP_DOWNLOAD: "1"
+      AX_CODE_DISABLE_MODELS_FETCH: "1"
+      AX_CODE_DISABLE_PROJECT_CONFIG: "1"
+      APPLE_CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
+      APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+      APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set isolated home paths
+        shell: bash
+        run: |
+          {
+            echo "AX_CODE_TEST_HOME=$RUNNER_TEMP/ax-code-desktop-release-home"
+            echo "XDG_CONFIG_HOME=$RUNNER_TEMP/ax-code-desktop-release-home/.config"
+            echo "XDG_CACHE_HOME=$RUNNER_TEMP/ax-code-desktop-release-home/.cache"
+            echo "XDG_DATA_HOME=$RUNNER_TEMP/ax-code-desktop-release-home/.local/share"
+            echo "XDG_STATE_HOME=$RUNNER_TEMP/ax-code-desktop-release-home/.local/state"
+          } >> "$GITHUB_ENV"
+
+      - name: Setup Ax-code JS toolchain
+        uses: ./.github/actions/setup-ax-code-toolchain
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build renderer
+        run: pnpm --dir packages/app run build
+
+      - name: Validate desktop package
+        run: |
+          pnpm --dir packages/desktop run typecheck
+          pnpm --dir packages/desktop run test
+          pnpm --dir packages/desktop run package:mac
+          pnpm --dir packages/desktop run smoke:packaged
+          pnpm --dir packages/desktop run smoke:renderer
+
+      - name: Determine desktop release readiness
+        id: desktop_release
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -n "$APPLE_CERTIFICATE_BASE64" ] &&
+             [ -n "$APPLE_CERTIFICATE_PASSWORD" ] &&
+             [ -n "$APPLE_SIGNING_IDENTITY" ] &&
+             [ -n "$APPLE_ID" ] &&
+             [ -n "$APPLE_APP_SPECIFIC_PASSWORD" ] &&
+             [ -n "$APPLE_TEAM_ID" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "### Desktop macOS release skipped"
+              echo
+              echo "The CLI release completed, but desktop signing/notarization/update-feed credentials are not fully configured."
+              echo "Required secrets: APPLE_CERTIFICATE_BASE64, APPLE_CERTIFICATE_PASSWORD, APPLE_SIGNING_IDENTITY, APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, and APPLE_TEAM_ID."
+              echo "Update feed host: GitHub release assets at https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Import Apple signing certificate
+        if: steps.desktop_release.outputs.enabled == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          CERTIFICATE_PATH="$RUNNER_TEMP/ax-code-desktop-release.p12"
+          KEYCHAIN_PATH="$RUNNER_TEMP/ax-code-desktop-release.keychain-db"
+          echo -n "$APPLE_CERTIFICATE_BASE64" | base64 -D > "$CERTIFICATE_PATH"
+          security create-keychain -p "$APPLE_CERTIFICATE_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$APPLE_CERTIFICATE_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERTIFICATE_PATH" -P "$APPLE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH"
+          security default-keychain -s "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$APPLE_CERTIFICATE_PASSWORD" "$KEYCHAIN_PATH"
+
+      - name: Create Apple notarization profile
+        if: steps.desktop_release.outputs.enabled == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          NOTARY_PROFILE_NAME="ax-code-notary-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          xcrun notarytool store-credentials "$NOTARY_PROFILE_NAME" \
+            --apple-id "$APPLE_ID" \
+            --team-id "$APPLE_TEAM_ID" \
+            --password "$APPLE_APP_SPECIFIC_PASSWORD"
+          echo "AX_CODE_DESKTOP_NOTARY_PROFILE=$NOTARY_PROFILE_NAME" >> "$GITHUB_ENV"
+
+      - name: Preflight desktop macOS release
+        if: steps.desktop_release.outputs.enabled == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          DESKTOP_UPDATE_FEED_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/"
+          PREFLIGHT_REPORT_PATH="packages/desktop/dist/mac/ax-code-release-preflight.json"
+          NOTARY_ARGS=(--notary-profile "$AX_CODE_DESKTOP_NOTARY_PROFILE")
+          pnpm --dir packages/desktop run release:mac:preflight -- \
+            --signing-identity "$APPLE_SIGNING_IDENTITY" \
+            "${NOTARY_ARGS[@]}" \
+            --update-feed-url "$DESKTOP_UPDATE_FEED_URL" \
+            --output "$PREFLIGHT_REPORT_PATH"
+
+      - name: Sign, notarize, and write desktop update feed
+        if: steps.desktop_release.outputs.enabled == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          ARCHIVE_PATH="packages/desktop/dist/mac/AX-Code-${VERSION}-mac.zip"
+          UPDATE_MANIFEST_PATH="packages/desktop/dist/mac/ax-code-update-darwin.json"
+          READINESS_REPORT_PATH="packages/desktop/dist/mac/ax-code-release-readiness.json"
+          PACKAGED_SMOKE_REPORT_PATH="packages/desktop/dist/mac/ax-code-desktop-packaged-smoke.json"
+          RENDERER_SMOKE_REPORT_PATH="packages/desktop/dist/mac/ax-code-desktop-renderer-smoke.json"
+          DESKTOP_UPDATE_FEED_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/"
+          NOTARY_ARGS=(--notary-profile "$AX_CODE_DESKTOP_NOTARY_PROFILE")
+          pnpm --dir packages/desktop run release:mac -- \
+            --version "$VERSION" \
+            --signing-identity "$APPLE_SIGNING_IDENTITY" \
+            "${NOTARY_ARGS[@]}" \
+            --update-feed-url "$DESKTOP_UPDATE_FEED_URL" \
+            --archive-path "$ARCHIVE_PATH" \
+            --update-manifest-path "$UPDATE_MANIFEST_PATH"
+          pnpm --dir packages/desktop run beta:check -- \
+            --mac-bundle-path "packages/desktop/dist/mac/AX Code.app" \
+            --require-release-pipeline \
+            --update-manifest-path "$UPDATE_MANIFEST_PATH" \
+            --release-archive-path "$ARCHIVE_PATH" \
+            --output "$READINESS_REPORT_PATH"
+          pnpm --dir packages/desktop run smoke:packaged -- --output "$PACKAGED_SMOKE_REPORT_PATH"
+          pnpm --dir packages/desktop run smoke:renderer -- --output "$RENDERER_SMOKE_REPORT_PATH"
+
+      - name: Upload desktop release assets
+        if: steps.desktop_release.outputs.enabled == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          TAG="${GITHUB_REF_NAME}"
+          gh release upload "$TAG" \
+            "packages/desktop/dist/mac/AX-Code-${VERSION}-mac.zip" \
+            "packages/desktop/dist/mac/ax-code-update-darwin.json" \
+            "packages/desktop/dist/mac/ax-code-release-preflight.json" \
+            "packages/desktop/dist/mac/ax-code-release-readiness.json" \
+            "packages/desktop/dist/mac/ax-code-desktop-packaged-smoke.json" \
+            "packages/desktop/dist/mac/ax-code-desktop-renderer-smoke.json" \
+            --clobber

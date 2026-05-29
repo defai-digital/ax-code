@@ -1,23 +1,99 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { describe, expect, test } from "bun:test"
 import { createElectronHostPlan } from "../src/electron/config"
-import { createMacAppBundle } from "../src/packaging/mac"
+import { buildDesktopArtifacts } from "../src/packaging/build"
+import { createMacAppBundle, type MacPackagingCommand } from "../src/packaging/mac"
 import { readDesktopReleaseDiagnostics } from "../src/packaging/release-diagnostics"
 import { createPackagedDesktopSmokePlan } from "../src/packaging/smoke"
 
+const PACKAGED_MAIN_CONTRACT_FIXTURE = [
+  'const bridgeCommands = ["backend.start", "backend.attach", "diagnostics.read", "diagnostics.exportLogs"]',
+  "function createDesktopBridgeHandler() {}",
+  "function createStartBackendPlan(options) { return options }",
+  "function createAttachBackendPlan(input) { return input }",
+  "const backend = { connect(plan) { return plan }, reconnect(plan) { return plan } }",
+  'backend.reconnect(createStartBackendPlan("backend.start"))',
+  'backend.reconnect(createAttachBackendPlan("backend.attach"))',
+  'backend.connect(createStartBackendPlan({ directory: "fixture", port: 0 }))',
+  "backend.connect(createAttachBackendPlan({ port: 7373 }))",
+  "function recordStartupFailure() {}",
+  'console.log("backend sidecar failed: fixture")',
+  'console.log("render-process-gone did-fail-load renderer load failed")',
+  'console.log("proxy-bypass-list NO_PROXY no_proxy")',
+  'console.log("before-quit window-all-closed input.backend.close quitReady quitContinuation")',
+  "export {}",
+].join("\n")
+
+const PACKAGED_PRELOAD_CONTRACT_FIXTURE = [
+  'const { contextBridge, ipcRenderer } = require("electron")',
+  'const menuCommandChannel = "ax-code:menu-command"',
+  "const allowedCommands = new Set([",
+  '  "platform.capabilities",',
+  '  "release.checkUpdate",',
+  '  "release.downloadUpdate",',
+  '  "release.openDownloadedUpdate",',
+  '  "external.open",',
+  '  "dialog.chooseDirectory",',
+  '  "path.reveal",',
+  '  "editor.open",',
+  '  "notification.show",',
+  '  "diagnostics.exportLogs",',
+  '  "diagnostics.read",',
+  '  "app.config",',
+  '  "backend.attach",',
+  '  "backend.start",',
+  "])",
+  'const allowedMenuCommands = new Set(["session.new", "composer.focus", "composer.run", "composer.queue", "diagnostics.refresh"])',
+  'contextBridge.exposeInMainWorld("axCodeDesktop", {',
+  "  invoke(name, payload = {}) {",
+  "    if (!allowedCommands.has(name)) return Promise.reject(new Error('Unsupported desktop bridge command'))",
+  '    return ipcRenderer.invoke("ax-code:bridge", { name, payload })',
+  "  },",
+  "  onMenuCommand(callback) {",
+  "    const listener = (_event, payload) => {",
+  "      const command = payload && typeof payload === 'object' ? payload.command : undefined",
+  "      if (typeof command === 'string' && allowedMenuCommands.has(command)) callback(command)",
+  "    }",
+  "    ipcRenderer.on(menuCommandChannel, listener)",
+  "    return () => ipcRenderer.removeListener(menuCommandChannel, listener)",
+  "  },",
+  "})",
+].join("\n")
+
 describe("mac desktop packaging", () => {
+  test("rebuilds desktop artifacts without deleting existing mac bundles", async () => {
+    const root = path.join(tmpdir(), `ax-code-desktop-build-preserve-${Date.now()}`)
+    const sourceAppDist = path.join(root, "source-app")
+    const outDir = path.join(root, "dist")
+    const macBundleExecutable = path.join(outDir, "mac/AX Code.app/Contents/MacOS/AX Code")
+    mkdirSync(sourceAppDist, { recursive: true })
+    mkdirSync(path.dirname(macBundleExecutable), { recursive: true })
+    writeFileSync(path.join(sourceAppDist, "index.html"), '<div id="root"></div>')
+    writeFileSync(macBundleExecutable, "existing bundle")
+
+    const artifacts = await buildDesktopArtifacts({ outDir, appDist: sourceAppDist })
+
+    expect(existsSync(artifacts.mainPath)).toBe(true)
+    expect(existsSync(artifacts.preloadPath)).toBe(true)
+    expect(existsSync(artifacts.appIndexPath)).toBe(true)
+    expect(readFileSync(macBundleExecutable, "utf8")).toBe("existing bundle")
+  })
+
   test("creates an Electron .app bundle with runtime payload and closed release gates", () => {
     const root = path.join(tmpdir(), `ax-code-package-mac-${Date.now()}`)
     const artifacts = createBuildArtifacts(path.join(root, "build"))
     const electronAppPath = createElectronApp(path.join(root, "electron"))
+    const packagingCommands: MacPackagingCommand[] = []
     const bundle = createMacAppBundle({
       artifacts,
       electronAppPath,
+      iconSourcePath: path.join(electronAppPath, "Contents/Resources/electron.icns"),
       bundleRoot: path.join(root, "dist/mac"),
       version: "9.8.7",
       electronVersion: "42.3.0",
+      commandRunner: (command) => packagingCommands.push(command),
     })
 
     expect(existsSync(path.join(bundle.bundlePath, "Contents/Info.plist"))).toBe(true)
@@ -39,6 +115,13 @@ describe("mac desktop packaging", () => {
     expect(infoPlist).toContain("<key>CFBundleShortVersionString</key>\n\t<string>9.8.7</string>")
     expect(infoPlist).toContain("<key>CFBundleVersion</key>\n\t<string>9.8.7</string>")
     expect(infoPlist).not.toContain("ElectronAsarIntegrity")
+    expect(infoPlist).not.toContain("NSAppTransportSecurity")
+    expect(infoPlist).not.toContain("NSAllowsArbitraryLoads")
+    expect(infoPlist).not.toContain("NSAudioCaptureUsageDescription")
+    expect(infoPlist).not.toContain("NSBluetoothAlwaysUsageDescription")
+    expect(infoPlist).not.toContain("NSBluetoothPeripheralUsageDescription")
+    expect(infoPlist).not.toContain("NSCameraUsageDescription")
+    expect(infoPlist).not.toContain("NSMicrophoneUsageDescription")
 
     const appPackage = JSON.parse(readFileSync(bundle.appPackagePath, "utf8")) as {
       name: string
@@ -54,6 +137,12 @@ describe("mac desktop packaging", () => {
       notarized: false,
       updaterConfigured: false,
     })
+    expect(packagingCommands).toEqual([
+      {
+        command: "/usr/bin/codesign",
+        args: ["--force", "--deep", "--sign", "-", bundle.bundlePath],
+      },
+    ])
 
     const plan = createElectronHostPlan({ runtimeDir: bundle.appPayloadPath })
     expect(plan.preloadPath).toBe(path.join(bundle.appPayloadPath, "preload.cjs"))
@@ -73,6 +162,15 @@ describe("mac desktop packaging", () => {
 
     expect(smoke.checks.macBundle).toBe(true)
     expect(smoke.checks.releaseManifest).toBe(true)
+    expect(smoke.checks.backendLifecycleBridge).toBe(true)
+    expect(smoke.checks.diagnosticsLogExport).toBe(true)
+    expect(smoke.checks.startupFailureDiagnostics).toBe(true)
+    expect(smoke.checks.rendererCrashDiagnostics).toBe(true)
+    expect(smoke.checks.loopbackProxyBypass).toBe(true)
+    expect(smoke.checks.cleanShutdownLifecycle).toBe(true)
+    expect(smoke.checks.preloadBridgeAllowlist).toBe(true)
+    expect(smoke.checks.preloadNoRawIpcExposure).toBe(true)
+    expect(smoke.checks.preloadMenuCommandFilter).toBe(true)
     expect(smoke.releaseManifestPath).toBe(bundle.releaseManifestPath)
 
     expect(readDesktopReleaseDiagnostics({ resourcesPath: bundle.resourcesPath })).toMatchObject({
@@ -94,9 +192,9 @@ describe("mac desktop packaging", () => {
 function createBuildArtifacts(outDir: string) {
   const appDist = path.join(outDir, "app")
   mkdirSync(appDist, { recursive: true })
-  writeFileSync(path.join(outDir, "main.js"), "export {}")
+  writeFileSync(path.join(outDir, "main.js"), PACKAGED_MAIN_CONTRACT_FIXTURE)
   writeFileSync(path.join(outDir, "main.js.map"), "{}")
-  writeFileSync(path.join(outDir, "preload.cjs"), "module.exports = {}")
+  writeFileSync(path.join(outDir, "preload.cjs"), PACKAGED_PRELOAD_CONTRACT_FIXTURE)
   writeFileSync(path.join(appDist, "index.html"), '<div id="root"></div>')
   return {
     outDir,
@@ -113,7 +211,9 @@ function createElectronApp(root: string) {
   const resourcesPath = path.join(contentsPath, "Resources")
   mkdirSync(path.join(contentsPath, "MacOS"), { recursive: true })
   mkdirSync(resourcesPath, { recursive: true })
-  writeFileSync(path.join(contentsPath, "MacOS/Electron"), "")
+  const electronExecutable = path.join(contentsPath, "MacOS/Electron")
+  writeFileSync(electronExecutable, "")
+  chmodSync(electronExecutable, 0o755)
   writeFileSync(path.join(resourcesPath, "default_app.asar"), "")
   writeFileSync(path.join(resourcesPath, "electron.icns"), "")
   writeFileSync(path.join(root, "electron-package.json"), '{"version":"42.3.0"}')
@@ -135,6 +235,21 @@ function createElectronApp(root: string) {
       "\t<string>42.3.0</string>",
       "\t<key>CFBundleIconFile</key>",
       "\t<string>electron.icns</string>",
+      "\t<key>NSAppTransportSecurity</key>",
+      "\t<dict>",
+      "\t\t<key>NSAllowsArbitraryLoads</key>",
+      "\t\t<true/>",
+      "\t</dict>",
+      "\t<key>NSAudioCaptureUsageDescription</key>",
+      "\t<string>This app needs access to audio capture</string>",
+      "\t<key>NSBluetoothAlwaysUsageDescription</key>",
+      "\t<string>This app needs access to Bluetooth</string>",
+      "\t<key>NSBluetoothPeripheralUsageDescription</key>",
+      "\t<string>This app needs access to Bluetooth</string>",
+      "\t<key>NSCameraUsageDescription</key>",
+      "\t<string>This app needs access to the camera</string>",
+      "\t<key>NSMicrophoneUsageDescription</key>",
+      "\t<string>This app needs access to the microphone</string>",
       "\t<key>ElectronAsarIntegrity</key>",
       "\t<dict>",
       "\t\t<key>Resources/default_app.asar</key>",

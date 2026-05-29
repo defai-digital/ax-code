@@ -1,4 +1,5 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
+import { randomUUID } from "node:crypto"
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs"
 import path from "node:path"
 import type { ElectronWindowOptions } from "./config"
 
@@ -32,9 +33,21 @@ export function createWindowStateStore(userDataPath: string, fileName = "window-
       return readWindowStateFile(filePath)
     },
     write(state) {
-      mkdirSync(path.dirname(filePath), { recursive: true })
-      writeFileSync(filePath, JSON.stringify(sanitizeWindowState(state) ?? {}, null, 2))
+      writeWindowStateFile(filePath, state)
     },
+  }
+}
+
+export function writeWindowStateFile(filePath: string, state: DesktopWindowState) {
+  const directory = path.dirname(filePath)
+  mkdirSync(directory, { recursive: true })
+  const tempPath = path.join(directory, `.${path.basename(filePath)}.${randomUUID()}.tmp`)
+  try {
+    writeFileSync(tempPath, JSON.stringify(sanitizeWindowState(state) ?? {}, null, 2), { flag: "wx" })
+    renameSync(tempPath, filePath)
+  } catch (error) {
+    rmSync(tempPath, { force: true })
+    throw error
   }
 }
 

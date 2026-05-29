@@ -28,23 +28,54 @@ describe("task queue routes", () => {
             sessionID: session.id,
             kind: "prompt",
             title: "Queue a route-level task",
+            worktree: "wt-route",
             payload: { prompt: "ship gui" },
           }),
         })
         expect(createdResponse.status).toBe(200)
-        const created = (await createdResponse.json()) as { id: string; sessionID: string; status: string }
+        const created = (await createdResponse.json()) as {
+          id: string
+          sessionID: string
+          status: string
+          worktree?: string
+        }
         expect(created.id).toStartWith("tsk_")
         expect(created.sessionID).toBe(session.id)
         expect(created.status).toBe("queued")
+        expect(created.worktree).toBe("wt-route")
 
         const listResponse = await app.request(`/task-queue?${directoryQuery}&sessionID=${created.sessionID}`)
         expect(listResponse.status).toBe(200)
-        const list = (await listResponse.json()) as Array<{ id: string }>
+        const list = (await listResponse.json()) as Array<{ id: string; worktree?: string }>
         expect(list.map((item) => item.id)).toEqual([created.id])
+        expect(list[0]?.worktree).toBe("wt-route")
+
+        const editResponse = await app.request(`/task-queue/${created.id}/edit?${directoryQuery}`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            title: "Edited route-level task",
+            worktree: null,
+            payload: { prompt: "ship edited gui" },
+          }),
+        })
+        expect(editResponse.status).toBe(200)
+        expect(await editResponse.json()).toMatchObject({
+          id: created.id,
+          title: "Edited route-level task",
+          payload: { prompt: "ship edited gui" },
+        })
+
+        const externalStatusResponse = await app.request(`/task-queue/${created.id}/status?${directoryQuery}`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ status: "running" }),
+        })
+        expect(externalStatusResponse.status).toBe(400)
 
         const statusResponse = await app.request(`/task-queue/${created.id}/status?${directoryQuery}`, {
           method: "POST",
-          headers: { "content-type": "application/json" },
+          headers: { "content-type": "application/json", "x-ax-code-internal-task-queue-lifecycle": "1" },
           body: JSON.stringify({ status: "blocked_permission", error: "approval required" }),
         })
         expect(statusResponse.status).toBe(200)
@@ -53,6 +84,18 @@ describe("task queue routes", () => {
           status: "blocked_permission",
           error: "approval required",
         })
+
+        const blockedRetryResponse = await app.request(`/task-queue/${created.id}/retry?${directoryQuery}`, {
+          method: "POST",
+        })
+        expect(blockedRetryResponse.status).toBe(409)
+
+        const failedStatusResponse = await app.request(`/task-queue/${created.id}/status?${directoryQuery}`, {
+          method: "POST",
+          headers: { "content-type": "application/json", "x-ax-code-internal-task-queue-lifecycle": "1" },
+          body: JSON.stringify({ status: "failed", error: "model failed" }),
+        })
+        expect(failedStatusResponse.status).toBe(200)
 
         const retryResponse = await app.request(`/task-queue/${created.id}/retry?${directoryQuery}`, {
           method: "POST",
@@ -74,6 +117,48 @@ describe("task queue routes", () => {
 
         await Session.remove(session.id)
       },
+    })
+  })
+
+  test("recovers interrupted queue items when the backend instance restarts", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const app = Server.Default()
+    const directoryQuery = `directory=${encodeURIComponent(tmp.path)}`
+
+    const create = async (title: string) => {
+      const response = await app.request(`/task-queue?${directoryQuery}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ kind: "prompt", title, payload: { prompt: title } }),
+      })
+      expect(response.status).toBe(200)
+      return (await response.json()) as { id: string }
+    }
+    const setStatus = async (id: string, status: string) => {
+      const response = await app.request(`/task-queue/${id}/status?${directoryQuery}`, {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-ax-code-internal-task-queue-lifecycle": "1" },
+        body: JSON.stringify({ status }),
+      })
+      expect(response.status).toBe(200)
+    }
+
+    const running = await create("Interrupted prompt")
+    const waiting = await create("Waiting prompt")
+    await setStatus(running.id, "running")
+    await setStatus(waiting.id, "waiting_for_idle")
+
+    await Instance.disposeAll()
+
+    const listResponse = await app.request(`/task-queue?${directoryQuery}`)
+    expect(listResponse.status).toBe(200)
+    const list = (await listResponse.json()) as Array<{ id: string; status: string; error?: string }>
+    expect(list.find((item) => item.id === running.id)).toMatchObject({
+      status: "failed",
+      error: "Task interrupted by backend restart; inspect output and retry when safe.",
+    })
+    expect(list.find((item) => item.id === waiting.id)).toMatchObject({
+      status: "queued",
     })
   })
 

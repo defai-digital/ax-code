@@ -75,14 +75,14 @@ export class SessionClient {
     await this.ensureSession(signal)
     const client = this.requireClient()
 
-    const { data, error, response } = await client.session.prompt({
-      path: { id: this.sessionId! },
-      body: {
+    const { data, error, response } = await client.session.prompt(
+      {
+        sessionID: this.sessionId!,
         parts: [{ type: "text", text }],
         ...(model ? { model } : {}),
       } as any,
-      signal,
-    })
+      { signal },
+    )
 
     if (error || !response.ok) {
       throw new ServerError(response.status, typeof error === "string" ? error : JSON.stringify(error ?? {}))
@@ -110,7 +110,7 @@ export class SessionClient {
     }
     const client = this.requireClient()
     try {
-      await client.session.abort({ path: { id: this.sessionId } })
+      await client.session.abort({ sessionID: this.sessionId })
     } catch {
       // Best effort — abort can race with server shutdown.
     }
@@ -155,7 +155,7 @@ export class SessionClient {
   private async ensureSession(signal: AbortSignal): Promise<void> {
     const client = this.requireClient()
     if (this.sessionId && !this.sessionValidated) {
-      const { data, error } = await client.session.get({ path: { id: this.sessionId }, signal })
+      const { data, error } = await client.session.get({ sessionID: this.sessionId }, { signal })
       if (error || !data) {
         // Stale ID from a previous server instance — drop it.
         this.sessionId = null
@@ -165,7 +165,7 @@ export class SessionClient {
       }
     }
     if (!this.sessionId) {
-      const { data, error } = await client.session.create({ signal })
+      const { data, error } = await client.session.create(undefined, { signal })
       if (error || !data) {
         throw new Error(`Failed to create session: ${JSON.stringify(error ?? {})}`)
       }
@@ -185,7 +185,7 @@ export class SessionClient {
 
     void (async () => {
       try {
-        const result = await client.event.subscribe({ signal: controller.signal })
+        const result = await client.event.subscribe(undefined, { signal: controller.signal })
         for await (const event of result.stream) {
           this.handleBusEvent(event)
         }

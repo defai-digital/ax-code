@@ -130,6 +130,53 @@ interface Candidate {
   resolve?: () => Promise<{ command: string; args: string[] }>
 }
 
+interface PlaywrightDiscoveryOptions {
+  cwd?: string
+  spawnExitsCleanly?: typeof spawnExitsCleanly
+  checkTcpPort?: typeof checkTcpPort
+}
+
+const PLAYWRIGHT_DESCRIPTION = "Browser screenshot and automation for HTML/web development"
+const PLAYWRIGHT_DEFAULT_ARGS = ["-y", "@playwright/mcp@latest"]
+
+export async function discoverPlaywrightCandidate(options: PlaywrightDiscoveryOptions = {}): Promise<DiscoveredServer> {
+  const cwd = options.cwd ?? process.cwd()
+  const spawnProbe = options.spawnExitsCleanly ?? spawnExitsCleanly
+  const tcpProbe = options.checkTcpPort ?? checkTcpPort
+  const base: DiscoveredServer = {
+    name: "playwright",
+    description: PLAYWRIGHT_DESCRIPTION,
+    type: "stdio",
+    command: "npx",
+    args: PLAYWRIGHT_DEFAULT_ARGS,
+    detected: false,
+  }
+
+  if (!(await isHtmlOrWebProject(cwd))) return base
+
+  const globalInstalled = await spawnProbe("playwright-mcp", ["--help"], { timeoutMs: 3000 })
+  const npxAvailable = globalInstalled || (await spawnProbe("npx", ["--help"]))
+  if (!npxAvailable) return base
+
+  const cdpOpen = await tcpProbe(9222)
+  if (globalInstalled) {
+    return {
+      ...base,
+      command: "playwright-mcp",
+      args: cdpOpen ? ["--cdp-url", "http://localhost:9222"] : ["--browser", "chromium", "--headless"],
+      detected: true,
+    }
+  }
+
+  return {
+    ...base,
+    args: cdpOpen
+      ? [...PLAYWRIGHT_DEFAULT_ARGS, "--cdp-url", "http://localhost:9222"]
+      : [...PLAYWRIGHT_DEFAULT_ARGS, "--browser", "chromium", "--headless"],
+    detected: true,
+  }
+}
+
 const CANDIDATES: Candidate[] = [
   {
     name: "filesystem",
@@ -166,38 +213,18 @@ const CANDIDATES: Candidate[] = [
   },
   {
     name: "playwright",
-    description: "Browser screenshot and automation for HTML/web development",
+    description: PLAYWRIGHT_DESCRIPTION,
     type: "stdio",
     command: "npx",
     // Default args — resolveArgs() below overrides these at discovery time
     // based on whether Chrome is running with CDP on port 9222.
-    args: ["-y", "@playwright/mcp@latest"],
-    check: async () => {
-      const cwd = process.cwd()
-      if (!(await isHtmlOrWebProject(cwd))) return false
-      // Accept global install (playwright-mcp binary) or npx availability.
-      const globalInstalled = await spawnExitsCleanly("playwright-mcp", ["--help"], { timeoutMs: 3000 })
-      return globalInstalled || (await spawnExitsCleanly("npx", ["--help"]))
-    },
+    args: PLAYWRIGHT_DEFAULT_ARGS,
+    check: async () => (await discoverPlaywrightCandidate()).detected,
     // Single resolve() probes global binary + CDP port once each, eliminating
     // the redundant triple-spawn from having separate resolveCommand/resolveArgs.
     resolve: async () => {
-      const [useGlobal, cdpOpen] = await Promise.all([
-        spawnExitsCleanly("playwright-mcp", ["--help"], { timeoutMs: 3000 }),
-        checkTcpPort(9222),
-      ])
-      if (useGlobal) {
-        return {
-          command: "playwright-mcp",
-          args: cdpOpen ? ["--cdp-url", "http://localhost:9222"] : ["--browser", "chromium", "--headless"],
-        }
-      }
-      return {
-        command: "npx",
-        args: cdpOpen
-          ? ["-y", "@playwright/mcp@latest", "--cdp-url", "http://localhost:9222"]
-          : ["-y", "@playwright/mcp@latest", "--browser", "chromium", "--headless"],
-      }
+      const candidate = await discoverPlaywrightCandidate()
+      return { command: candidate.command ?? "npx", args: candidate.args ?? PLAYWRIGHT_DEFAULT_ARGS }
     },
   },
   {

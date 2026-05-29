@@ -2,6 +2,8 @@ export type DesktopHostCapabilities = {
   openExternal(url: string): Promise<void>
   chooseDirectory(input: { title?: string }): Promise<{ path?: string; canceled: boolean }>
   revealPath(path: string): Promise<void>
+  openEditor(input: { path: string; line?: number; column?: number }): Promise<void>
+  openUpdateArtifact(path: string): Promise<void>
   showNotification(input: { title: string; body?: string; silent?: boolean }): Promise<boolean>
 }
 
@@ -15,6 +17,12 @@ export function missingDesktopHostCapabilities(): DesktopHostCapabilities {
     },
     async revealPath() {
       throw new Error("path.reveal is not available without a desktop host")
+    },
+    async openEditor() {
+      throw new Error("editor.open is not available without a desktop host")
+    },
+    async openUpdateArtifact() {
+      throw new Error("release.openDownloadedUpdate is not available without a desktop host")
     },
     async showNotification() {
       throw new Error("notification.show is not available without a desktop host")

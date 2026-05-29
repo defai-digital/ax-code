@@ -9,6 +9,8 @@
     "dev": "vite --host 127.0.0.1",
     "build": "vite build",
     "perf:smoke": "bun ./src/performance/smoke.ts",
+    "qa:beta": "bun ./src/performance/beta-qa.ts",
+    "qa:live": "bun ./src/performance/live-backend-qa.ts",
     "typecheck": "tsgo --noEmit",
     "test": "bun test",
     "test:e2e": "bun test test/e2e"

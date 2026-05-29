@@ -47,13 +47,6 @@ export type EventProjectUpdated = {
   properties: Project
 }
 
-export type EventServerInstanceDisposed = {
-  type: "server.instance.disposed"
-  properties: {
-    directory: string
-  }
-}
-
 export type EventServerConnected = {
   type: "server.connected"
   properties: {
@@ -65,6 +58,13 @@ export type EventGlobalDisposed = {
   type: "global.disposed"
   properties: {
     [key: string]: unknown
+  }
+}
+
+export type EventServerInstanceDisposed = {
+  type: "server.instance.disposed"
+  properties: {
+    directory: string
   }
 }
 
@@ -721,14 +721,8 @@ export type Todo = {
    * Brief description of the task
    */
   content: string
-  /**
-   * Current status of the task: pending, in_progress, completed, cancelled
-   */
-  status: string
-  /**
-   * Priority level of the task: high, medium, low
-   */
-  priority: string
+  status: "pending" | "in_progress" | "completed" | "cancelled"
+  priority: "high" | "medium" | "low"
 }
 
 export type EventTodoUpdated = {
@@ -736,6 +730,26 @@ export type EventTodoUpdated = {
   properties: {
     sessionID: string
     todos: Array<Todo>
+  }
+}
+
+export type EventSessionGoal = {
+  type: "session.goal"
+  properties: {
+    sessionID: string
+    goal: {
+      sessionID: string
+      objective: string
+      status: "active" | "paused" | "complete" | "blocked" | "budget_limited"
+      tokenBudget?: number
+      tokensUsed: number
+      timeUsedSeconds: number
+      time: {
+        created: number
+        updated?: number
+      }
+      remainingTokens?: number
+    } | null
   }
 }
 
@@ -911,6 +925,97 @@ export type EventVcsBranchUpdated = {
   }
 }
 
+export type EventTaskQueueCreated = {
+  type: "task.queue.created"
+  properties: {
+    item: {
+      id: string
+      projectID: string
+      directory: string
+      worktree?: string
+      sessionID?: string
+      kind: "prompt" | "command" | "shell" | "followup" | "subagent" | "review" | "automation"
+      status:
+        | "queued"
+        | "waiting_for_idle"
+        | "running"
+        | "blocked_permission"
+        | "blocked_question"
+        | "paused"
+        | "failed"
+        | "completed"
+        | "cancelled"
+      priority: number
+      position: number
+      title: string
+      agent?: string
+      model?: unknown
+      sourceMessageID?: string
+      sourceTaskID?: string
+      payload: {
+        [key: string]: unknown
+      }
+      error?: string
+      time: {
+        created: number
+        updated?: number
+        started?: number
+        completed?: number
+      }
+    }
+  }
+}
+
+export type EventTaskQueueUpdated = {
+  type: "task.queue.updated"
+  properties: {
+    item: {
+      id: string
+      projectID: string
+      directory: string
+      worktree?: string
+      sessionID?: string
+      kind: "prompt" | "command" | "shell" | "followup" | "subagent" | "review" | "automation"
+      status:
+        | "queued"
+        | "waiting_for_idle"
+        | "running"
+        | "blocked_permission"
+        | "blocked_question"
+        | "paused"
+        | "failed"
+        | "completed"
+        | "cancelled"
+      priority: number
+      position: number
+      title: string
+      agent?: string
+      model?: unknown
+      sourceMessageID?: string
+      sourceTaskID?: string
+      payload: {
+        [key: string]: unknown
+      }
+      error?: string
+      time: {
+        created: number
+        updated?: number
+        started?: number
+        completed?: number
+      }
+    }
+  }
+}
+
+export type EventTaskQueueDeleted = {
+  type: "task.queue.deleted"
+  properties: {
+    id: string
+    projectID: string
+    sessionID?: string
+  }
+}
+
 export type Pty = {
   id: string
   title: string
@@ -965,13 +1070,111 @@ export type EventWorktreeFailed = {
   }
 }
 
+export type EventScheduledTaskCreated = {
+  type: "scheduled.task.created"
+  properties: {
+    task: {
+      id: string
+      projectID: string
+      directory: string
+      title: string
+      prompt: string
+      schedule:
+        | {
+            type: "once"
+            runAt: number
+          }
+        | {
+            type: "daily"
+            time: string
+            timezone?: string
+          }
+        | {
+            type: "weekly"
+            day: number
+            time: string
+            timezone?: string
+          }
+        | {
+            type: "cron"
+            expression: string
+            timezone?: string
+          }
+      status: "active" | "paused" | "disabled"
+      agent?: string
+      model?: unknown
+      lastQueueID?: string
+      error?: string
+      nextRunAt?: number
+      lastRunAt?: number
+      time: {
+        created: number
+        updated?: number
+      }
+    }
+  }
+}
+
+export type EventScheduledTaskUpdated = {
+  type: "scheduled.task.updated"
+  properties: {
+    task: {
+      id: string
+      projectID: string
+      directory: string
+      title: string
+      prompt: string
+      schedule:
+        | {
+            type: "once"
+            runAt: number
+          }
+        | {
+            type: "daily"
+            time: string
+            timezone?: string
+          }
+        | {
+            type: "weekly"
+            day: number
+            time: string
+            timezone?: string
+          }
+        | {
+            type: "cron"
+            expression: string
+            timezone?: string
+          }
+      status: "active" | "paused" | "disabled"
+      agent?: string
+      model?: unknown
+      lastQueueID?: string
+      error?: string
+      nextRunAt?: number
+      lastRunAt?: number
+      time: {
+        created: number
+        updated?: number
+      }
+    }
+  }
+}
+
+export type EventScheduledTaskDeleted = {
+  type: "scheduled.task.deleted"
+  properties: {
+    id: string
+    projectID: string
+  }
+}
+
 export type Event =
   | EventInstallationUpdated
   | EventInstallationUpdateAvailable
   | EventProjectUpdated
-  | EventServerInstanceDisposed
   | EventServerConnected
   | EventGlobalDisposed
+  | EventServerInstanceDisposed
   | EventLspClientDiagnostics
   | EventLspUpdated
   | EventFileWatcherUpdated
@@ -992,6 +1195,7 @@ export type Event =
   | EventQuestionRejected
   | EventSessionCompacted
   | EventTodoUpdated
+  | EventSessionGoal
   | EventTuiPromptAppend
   | EventTuiCommandExecute
   | EventTuiToastShow
@@ -1005,12 +1209,18 @@ export type Event =
   | EventSessionDiff
   | EventSessionError
   | EventVcsBranchUpdated
+  | EventTaskQueueCreated
+  | EventTaskQueueUpdated
+  | EventTaskQueueDeleted
   | EventPtyCreated
   | EventPtyUpdated
   | EventPtyExited
   | EventPtyDeleted
   | EventWorktreeReady
   | EventWorktreeFailed
+  | EventScheduledTaskCreated
+  | EventScheduledTaskUpdated
+  | EventScheduledTaskDeleted
 
 export type GlobalEvent = {
   directory: string
@@ -1497,6 +1707,10 @@ export type Config = {
    * Enable autonomous mode (default: true)
    */
   autonomous?: boolean
+  /**
+   * Enable Super-Long supervised long-run mode (default: on for Qwen3.7-Max, off otherwise)
+   */
+  super_long?: boolean
   isolation?: IsolationConfig
   /**
    * @deprecated Use 'permission' field instead
@@ -1530,6 +1744,10 @@ export type Config = {
      * In autonomous mode, how many times to auto-continue after hitting step limit (default: 3, 0 to disable)
      */
     max_continuations?: number
+    /**
+     * In autonomous mode, how many times to auto-continue when todos remain pending after the model stops (default: 10, 0 to disable)
+     */
+    max_todo_retries?: number
   }
   /**
    * Message-complexity routing for fast-model selection
@@ -1566,6 +1784,15 @@ export type Config = {
      */
     reserved?: number
   }
+  /**
+   * Browser integration settings
+   */
+  browser?: {
+    /**
+     * Intercept browser-open commands (open/xdg-open/start) targeting local HTML files or localhost URLs to prevent unexpected focus-steals during HTML development. Defaults to true.
+     */
+    interceptOpen?: boolean
+  }
   experimental?: {
     disable_paste_summary?: boolean
     /**
@@ -1593,7 +1820,7 @@ export type Config = {
      */
     autonomous_escalate_low_confidence?: boolean
     /**
-     * When autonomous mode encounters a permission whose risk class is unknown, prompt instead of auto-approving. Default: false.
+     * When autonomous mode encounters a permission whose risk class is unknown, prompt instead of auto-approving. Default: true. Set false only to preserve legacy compatibility.
      */
     autonomous_strict_permission?: boolean
     /**
@@ -1743,6 +1970,10 @@ export type SmartLlmState = {
   enabled: boolean
 }
 
+export type SuperLongState = {
+  enabled: boolean
+}
+
 export type ToolIds = Array<string>
 
 export type ToolListItem = {
@@ -1765,6 +1996,12 @@ export type WorktreeCreateInput = {
    * Additional startup script to run after the project's start command
    */
   startCommand?: string
+}
+
+export type WorktreeListItem = {
+  name: string
+  directory: string
+  branch?: string
 }
 
 export type WorktreeRemoveInput = {
@@ -2261,6 +2498,34 @@ export type SessionRiskDetail = {
       runId: string
     }
   }>
+  reviewResults?: Array<{
+    schemaVersion: 1
+    reviewId: string
+    workflow: "review"
+    decision: "approve" | "request_changes" | "needs_verification"
+    recommendedDecision: "approve" | "request_changes" | "needs_verification"
+    summary: string
+    findingIds: Array<string>
+    verificationEnvelopeIds: Array<string>
+    counts: {
+      CRITICAL: number
+      HIGH: number
+      MEDIUM: number
+      LOW: number
+      INFO: number
+      total: number
+    }
+    blockingFindingIds: Array<string>
+    missingVerification: boolean
+    verificationPolicyFailed?: boolean
+    overrideReason?: string
+    createdAt: string
+    source: {
+      tool: string
+      version: string
+      runId: string
+    }
+  }>
   debug?: {
     cases: Array<{
       schemaVersion: 1
@@ -2281,6 +2546,29 @@ export type SessionRiskDetail = {
       kind: "log_capture" | "instrumentation_result" | "stack_trace" | "graph_query"
       capturedAt: string
       content: string
+      planId?: string
+      source: {
+        tool: string
+        version: string
+        runId: string
+      }
+    }>
+    instrumentationPlans: Array<{
+      schemaVersion: 1
+      planId: string
+      caseId: string
+      purpose: string
+      targets: Array<{
+        file: string
+        anchor?: {
+          line?: number
+          symbol?: string
+        }
+        probe: string
+        removeInstruction: string
+      }>
+      status: "planned" | "applied" | "removed"
+      createdAt: string
       source: {
         tool: string
         version: string
@@ -2305,6 +2593,38 @@ export type SessionRiskDetail = {
         version: string
         runId: string
       }
+    }>
+    rollups: Array<{
+      schemaVersion: 1
+      caseId: string
+      problem: string
+      status: "open" | "investigating" | "resolved" | "unresolved"
+      createdAt: string
+      source: {
+        tool: string
+        version: string
+        runId: string
+      }
+      effectiveStatus: "open" | "investigating" | "resolved" | "unresolved"
+      planSummary?: {
+        total: number
+        applied: number
+        removed: number
+      }
+    }>
+  }
+  decisionHints?: {
+    source: "replay" | "messages" | "none"
+    readiness: "clear" | "needs_validation" | "blocked"
+    actionCount: number
+    hintCount: number
+    hints: Array<{
+      id: string
+      category: "missing_verification" | "failed_validation" | "missing_review_completion"
+      confidence: number
+      title: string
+      body: string
+      evidence: Array<string>
     }>
   }
 }
@@ -2566,6 +2886,22 @@ export type McpStatusNeedsClientRegistration = {
 
 export type McpStatusNeedsTrust = {
   status: "needs_trust"
+  fingerprint: string
+  source: {
+    kind:
+      | "wellknown"
+      | "global"
+      | "custom"
+      | "project"
+      | "config_directory"
+      | "inline"
+      | "account"
+      | "managed"
+      | "runtime"
+      | "unknown"
+    path?: string
+    url?: string
+  }
 }
 
 export type McpStatus =
@@ -2597,6 +2933,10 @@ export type Command = {
   template: string
   subtask?: boolean
   hints: Array<string>
+  mcpPrompt?: {
+    client: string
+    name: string
+  }
 }
 
 export type Agent = {
@@ -2766,6 +3106,9 @@ export type GlobalUpgradeResponse = GlobalUpgradeResponses[keyof GlobalUpgradeRe
 export type AuthRemoveData = {
   body?: never
   path: {
+    /**
+     * Provider ID
+     */
     providerID: string
   }
   query?: never
@@ -2793,6 +3136,9 @@ export type AuthRemoveResponse = AuthRemoveResponses[keyof AuthRemoveResponses]
 export type AuthSetData = {
   body?: Auth
   path: {
+    /**
+     * Provider ID
+     */
     providerID: string
   }
   query?: never
@@ -3274,6 +3620,1711 @@ export type SmartLlmSetResponses = {
 
 export type SmartLlmSetResponse = SmartLlmSetResponses[keyof SmartLlmSetResponses]
 
+export type SuperLongGetData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/super-long"
+}
+
+export type SuperLongGetResponses = {
+  /**
+   * Super-Long mode state
+   */
+  200: SuperLongState
+}
+
+export type SuperLongGetResponse = SuperLongGetResponses[keyof SuperLongGetResponses]
+
+export type SuperLongSetData = {
+  body?: {
+    enabled: boolean
+  }
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/super-long"
+}
+
+export type SuperLongSetResponses = {
+  /**
+   * Updated Super-Long state
+   */
+  200: SuperLongState
+}
+
+export type SuperLongSetResponse = SuperLongSetResponses[keyof SuperLongSetResponses]
+
+export type PromptHistoryListData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    limit?: number
+  }
+  url: "/prompt-history"
+}
+
+export type PromptHistoryListErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type PromptHistoryListError = PromptHistoryListErrors[keyof PromptHistoryListErrors]
+
+export type PromptHistoryListResponses = {
+  /**
+   * Project-scoped prompt history entries.
+   */
+  200: Array<{
+    input: string
+    mode?: "normal" | "shell"
+    parts?: Array<
+      {
+        [key: string]: unknown
+      } & {
+        type: string
+      }
+    >
+    [key: string]:
+      | unknown
+      | string
+      | "normal"
+      | "shell"
+      | Array<
+          {
+            [key: string]: unknown
+          } & {
+            type: string
+          }
+        >
+      | undefined
+  }>
+}
+
+export type PromptHistoryListResponse = PromptHistoryListResponses[keyof PromptHistoryListResponses]
+
+export type PromptHistoryAppendData = {
+  body?: {
+    input: string
+    mode?: "normal" | "shell"
+    parts?: Array<
+      {
+        [key: string]: unknown
+      } & {
+        type: string
+      }
+    >
+    [key: string]:
+      | unknown
+      | string
+      | "normal"
+      | "shell"
+      | Array<
+          {
+            [key: string]: unknown
+          } & {
+            type: string
+          }
+        >
+      | undefined
+  }
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/prompt-history"
+}
+
+export type PromptHistoryAppendErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type PromptHistoryAppendError = PromptHistoryAppendErrors[keyof PromptHistoryAppendErrors]
+
+export type PromptHistoryAppendResponses = {
+  /**
+   * Stored prompt history entry.
+   */
+  200: {
+    input: string
+    mode?: "normal" | "shell"
+    parts?: Array<
+      {
+        [key: string]: unknown
+      } & {
+        type: string
+      }
+    >
+    [key: string]:
+      | unknown
+      | string
+      | "normal"
+      | "shell"
+      | Array<
+          {
+            [key: string]: unknown
+          } & {
+            type: string
+          }
+        >
+      | undefined
+  }
+}
+
+export type PromptHistoryAppendResponse = PromptHistoryAppendResponses[keyof PromptHistoryAppendResponses]
+
+export type TaskQueueListData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    sessionID?: string
+    status?:
+      | "queued"
+      | "waiting_for_idle"
+      | "running"
+      | "blocked_permission"
+      | "blocked_question"
+      | "paused"
+      | "failed"
+      | "completed"
+      | "cancelled"
+    limit?: number
+  }
+  url: "/task-queue"
+}
+
+export type TaskQueueListErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type TaskQueueListError = TaskQueueListErrors[keyof TaskQueueListErrors]
+
+export type TaskQueueListResponses = {
+  /**
+   * Project-scoped task queue items.
+   */
+  200: Array<{
+    id: string
+    projectID: string
+    directory: string
+    worktree?: string
+    sessionID?: string
+    kind: "prompt" | "command" | "shell" | "followup" | "subagent" | "review" | "automation"
+    status:
+      | "queued"
+      | "waiting_for_idle"
+      | "running"
+      | "blocked_permission"
+      | "blocked_question"
+      | "paused"
+      | "failed"
+      | "completed"
+      | "cancelled"
+    priority: number
+    position: number
+    title: string
+    agent?: string
+    model?: unknown
+    sourceMessageID?: string
+    sourceTaskID?: string
+    payload: {
+      [key: string]: unknown
+    }
+    error?: string
+    time: {
+      created: number
+      updated?: number
+      started?: number
+      completed?: number
+    }
+  }>
+}
+
+export type TaskQueueListResponse = TaskQueueListResponses[keyof TaskQueueListResponses]
+
+export type TaskQueueEnqueueData = {
+  body?: {
+    sessionID?: string
+    kind: "prompt" | "command" | "shell" | "followup" | "subagent" | "review" | "automation"
+    title: string
+    worktree?: string
+    agent?: string
+    model?: unknown
+    sourceMessageID?: string
+    sourceTaskID?: string
+    payload?: {
+      [key: string]: unknown
+    }
+    priority?: number
+  }
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/task-queue"
+}
+
+export type TaskQueueEnqueueErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type TaskQueueEnqueueError = TaskQueueEnqueueErrors[keyof TaskQueueEnqueueErrors]
+
+export type TaskQueueEnqueueResponses = {
+  /**
+   * Created task queue item.
+   */
+  200: {
+    id: string
+    projectID: string
+    directory: string
+    worktree?: string
+    sessionID?: string
+    kind: "prompt" | "command" | "shell" | "followup" | "subagent" | "review" | "automation"
+    status:
+      | "queued"
+      | "waiting_for_idle"
+      | "running"
+      | "blocked_permission"
+      | "blocked_question"
+      | "paused"
+      | "failed"
+      | "completed"
+      | "cancelled"
+    priority: number
+    position: number
+    title: string
+    agent?: string
+    model?: unknown
+    sourceMessageID?: string
+    sourceTaskID?: string
+    payload: {
+      [key: string]: unknown
+    }
+    error?: string
+    time: {
+      created: number
+      updated?: number
+      started?: number
+      completed?: number
+    }
+  }
+}
+
+export type TaskQueueEnqueueResponse = TaskQueueEnqueueResponses[keyof TaskQueueEnqueueResponses]
+
+export type TaskQueueDeleteData = {
+  body?: never
+  path: {
+    taskID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/task-queue/{taskID}"
+}
+
+export type TaskQueueDeleteErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type TaskQueueDeleteError = TaskQueueDeleteErrors[keyof TaskQueueDeleteErrors]
+
+export type TaskQueueDeleteResponses = {
+  /**
+   * Task queue item deleted.
+   */
+  200: boolean
+}
+
+export type TaskQueueDeleteResponse = TaskQueueDeleteResponses[keyof TaskQueueDeleteResponses]
+
+export type TaskQueueGetData = {
+  body?: never
+  path: {
+    taskID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/task-queue/{taskID}"
+}
+
+export type TaskQueueGetErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type TaskQueueGetError = TaskQueueGetErrors[keyof TaskQueueGetErrors]
+
+export type TaskQueueGetResponses = {
+  /**
+   * Task queue item.
+   */
+  200: {
+    id: string
+    projectID: string
+    directory: string
+    worktree?: string
+    sessionID?: string
+    kind: "prompt" | "command" | "shell" | "followup" | "subagent" | "review" | "automation"
+    status:
+      | "queued"
+      | "waiting_for_idle"
+      | "running"
+      | "blocked_permission"
+      | "blocked_question"
+      | "paused"
+      | "failed"
+      | "completed"
+      | "cancelled"
+    priority: number
+    position: number
+    title: string
+    agent?: string
+    model?: unknown
+    sourceMessageID?: string
+    sourceTaskID?: string
+    payload: {
+      [key: string]: unknown
+    }
+    error?: string
+    time: {
+      created: number
+      updated?: number
+      started?: number
+      completed?: number
+    }
+  }
+}
+
+export type TaskQueueGetResponse = TaskQueueGetResponses[keyof TaskQueueGetResponses]
+
+export type TaskQueueStatusData = {
+  body?: {
+    status:
+      | "queued"
+      | "waiting_for_idle"
+      | "running"
+      | "blocked_permission"
+      | "blocked_question"
+      | "paused"
+      | "failed"
+      | "completed"
+      | "cancelled"
+    error?: string
+  }
+  headers: {
+    "x-ax-code-internal-task-queue-lifecycle": "1"
+  }
+  path: {
+    taskID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/task-queue/{taskID}/status"
+}
+
+export type TaskQueueStatusErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type TaskQueueStatusError = TaskQueueStatusErrors[keyof TaskQueueStatusErrors]
+
+export type TaskQueueStatusResponses = {
+  /**
+   * Updated task queue item.
+   */
+  200: {
+    id: string
+    projectID: string
+    directory: string
+    worktree?: string
+    sessionID?: string
+    kind: "prompt" | "command" | "shell" | "followup" | "subagent" | "review" | "automation"
+    status:
+      | "queued"
+      | "waiting_for_idle"
+      | "running"
+      | "blocked_permission"
+      | "blocked_question"
+      | "paused"
+      | "failed"
+      | "completed"
+      | "cancelled"
+    priority: number
+    position: number
+    title: string
+    agent?: string
+    model?: unknown
+    sourceMessageID?: string
+    sourceTaskID?: string
+    payload: {
+      [key: string]: unknown
+    }
+    error?: string
+    time: {
+      created: number
+      updated?: number
+      started?: number
+      completed?: number
+    }
+  }
+}
+
+export type TaskQueueStatusResponse = TaskQueueStatusResponses[keyof TaskQueueStatusResponses]
+
+export type TaskQueueEditData = {
+  body?: {
+    title?: string
+    worktree?: string | null
+    agent?: string | null
+    model?: unknown
+    payload?: {
+      [key: string]: unknown
+    }
+    priority?: number
+  }
+  path: {
+    taskID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/task-queue/{taskID}/edit"
+}
+
+export type TaskQueueEditErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type TaskQueueEditError = TaskQueueEditErrors[keyof TaskQueueEditErrors]
+
+export type TaskQueueEditResponses = {
+  /**
+   * Edited task queue item.
+   */
+  200: {
+    id: string
+    projectID: string
+    directory: string
+    worktree?: string
+    sessionID?: string
+    kind: "prompt" | "command" | "shell" | "followup" | "subagent" | "review" | "automation"
+    status:
+      | "queued"
+      | "waiting_for_idle"
+      | "running"
+      | "blocked_permission"
+      | "blocked_question"
+      | "paused"
+      | "failed"
+      | "completed"
+      | "cancelled"
+    priority: number
+    position: number
+    title: string
+    agent?: string
+    model?: unknown
+    sourceMessageID?: string
+    sourceTaskID?: string
+    payload: {
+      [key: string]: unknown
+    }
+    error?: string
+    time: {
+      created: number
+      updated?: number
+      started?: number
+      completed?: number
+    }
+  }
+}
+
+export type TaskQueueEditResponse = TaskQueueEditResponses[keyof TaskQueueEditResponses]
+
+export type TaskQueuePauseData = {
+  body?: never
+  path: {
+    taskID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/task-queue/{taskID}/pause"
+}
+
+export type TaskQueuePauseErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type TaskQueuePauseError = TaskQueuePauseErrors[keyof TaskQueuePauseErrors]
+
+export type TaskQueuePauseResponses = {
+  /**
+   * Paused task queue item.
+   */
+  200: {
+    id: string
+    projectID: string
+    directory: string
+    worktree?: string
+    sessionID?: string
+    kind: "prompt" | "command" | "shell" | "followup" | "subagent" | "review" | "automation"
+    status:
+      | "queued"
+      | "waiting_for_idle"
+      | "running"
+      | "blocked_permission"
+      | "blocked_question"
+      | "paused"
+      | "failed"
+      | "completed"
+      | "cancelled"
+    priority: number
+    position: number
+    title: string
+    agent?: string
+    model?: unknown
+    sourceMessageID?: string
+    sourceTaskID?: string
+    payload: {
+      [key: string]: unknown
+    }
+    error?: string
+    time: {
+      created: number
+      updated?: number
+      started?: number
+      completed?: number
+    }
+  }
+}
+
+export type TaskQueuePauseResponse = TaskQueuePauseResponses[keyof TaskQueuePauseResponses]
+
+export type TaskQueueResumeData = {
+  body?: never
+  path: {
+    taskID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/task-queue/{taskID}/resume"
+}
+
+export type TaskQueueResumeErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type TaskQueueResumeError = TaskQueueResumeErrors[keyof TaskQueueResumeErrors]
+
+export type TaskQueueResumeResponses = {
+  /**
+   * Resumed task queue item.
+   */
+  200: {
+    id: string
+    projectID: string
+    directory: string
+    worktree?: string
+    sessionID?: string
+    kind: "prompt" | "command" | "shell" | "followup" | "subagent" | "review" | "automation"
+    status:
+      | "queued"
+      | "waiting_for_idle"
+      | "running"
+      | "blocked_permission"
+      | "blocked_question"
+      | "paused"
+      | "failed"
+      | "completed"
+      | "cancelled"
+    priority: number
+    position: number
+    title: string
+    agent?: string
+    model?: unknown
+    sourceMessageID?: string
+    sourceTaskID?: string
+    payload: {
+      [key: string]: unknown
+    }
+    error?: string
+    time: {
+      created: number
+      updated?: number
+      started?: number
+      completed?: number
+    }
+  }
+}
+
+export type TaskQueueResumeResponse = TaskQueueResumeResponses[keyof TaskQueueResumeResponses]
+
+export type TaskQueueCancelData = {
+  body?: never
+  path: {
+    taskID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/task-queue/{taskID}/cancel"
+}
+
+export type TaskQueueCancelErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type TaskQueueCancelError = TaskQueueCancelErrors[keyof TaskQueueCancelErrors]
+
+export type TaskQueueCancelResponses = {
+  /**
+   * Cancelled task queue item.
+   */
+  200: {
+    id: string
+    projectID: string
+    directory: string
+    worktree?: string
+    sessionID?: string
+    kind: "prompt" | "command" | "shell" | "followup" | "subagent" | "review" | "automation"
+    status:
+      | "queued"
+      | "waiting_for_idle"
+      | "running"
+      | "blocked_permission"
+      | "blocked_question"
+      | "paused"
+      | "failed"
+      | "completed"
+      | "cancelled"
+    priority: number
+    position: number
+    title: string
+    agent?: string
+    model?: unknown
+    sourceMessageID?: string
+    sourceTaskID?: string
+    payload: {
+      [key: string]: unknown
+    }
+    error?: string
+    time: {
+      created: number
+      updated?: number
+      started?: number
+      completed?: number
+    }
+  }
+}
+
+export type TaskQueueCancelResponse = TaskQueueCancelResponses[keyof TaskQueueCancelResponses]
+
+export type TaskQueueRetryData = {
+  body?: never
+  path: {
+    taskID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/task-queue/{taskID}/retry"
+}
+
+export type TaskQueueRetryErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type TaskQueueRetryError = TaskQueueRetryErrors[keyof TaskQueueRetryErrors]
+
+export type TaskQueueRetryResponses = {
+  /**
+   * Retried task queue item.
+   */
+  200: {
+    id: string
+    projectID: string
+    directory: string
+    worktree?: string
+    sessionID?: string
+    kind: "prompt" | "command" | "shell" | "followup" | "subagent" | "review" | "automation"
+    status:
+      | "queued"
+      | "waiting_for_idle"
+      | "running"
+      | "blocked_permission"
+      | "blocked_question"
+      | "paused"
+      | "failed"
+      | "completed"
+      | "cancelled"
+    priority: number
+    position: number
+    title: string
+    agent?: string
+    model?: unknown
+    sourceMessageID?: string
+    sourceTaskID?: string
+    payload: {
+      [key: string]: unknown
+    }
+    error?: string
+    time: {
+      created: number
+      updated?: number
+      started?: number
+      completed?: number
+    }
+  }
+}
+
+export type TaskQueueRetryResponse = TaskQueueRetryResponses[keyof TaskQueueRetryResponses]
+
+export type TaskQueueSendNowData = {
+  body?: never
+  path: {
+    taskID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/task-queue/{taskID}/send-now"
+}
+
+export type TaskQueueSendNowErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type TaskQueueSendNowError = TaskQueueSendNowErrors[keyof TaskQueueSendNowErrors]
+
+export type TaskQueueSendNowResponses = {
+  /**
+   * Prioritized task queue item.
+   */
+  200: {
+    id: string
+    projectID: string
+    directory: string
+    worktree?: string
+    sessionID?: string
+    kind: "prompt" | "command" | "shell" | "followup" | "subagent" | "review" | "automation"
+    status:
+      | "queued"
+      | "waiting_for_idle"
+      | "running"
+      | "blocked_permission"
+      | "blocked_question"
+      | "paused"
+      | "failed"
+      | "completed"
+      | "cancelled"
+    priority: number
+    position: number
+    title: string
+    agent?: string
+    model?: unknown
+    sourceMessageID?: string
+    sourceTaskID?: string
+    payload: {
+      [key: string]: unknown
+    }
+    error?: string
+    time: {
+      created: number
+      updated?: number
+      started?: number
+      completed?: number
+    }
+  }
+}
+
+export type TaskQueueSendNowResponse = TaskQueueSendNowResponses[keyof TaskQueueSendNowResponses]
+
+export type TaskQueueReorderData = {
+  body?: {
+    position: number
+  }
+  path: {
+    taskID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/task-queue/{taskID}/reorder"
+}
+
+export type TaskQueueReorderErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type TaskQueueReorderError = TaskQueueReorderErrors[keyof TaskQueueReorderErrors]
+
+export type TaskQueueReorderResponses = {
+  /**
+   * Reordered task queue item.
+   */
+  200: {
+    id: string
+    projectID: string
+    directory: string
+    worktree?: string
+    sessionID?: string
+    kind: "prompt" | "command" | "shell" | "followup" | "subagent" | "review" | "automation"
+    status:
+      | "queued"
+      | "waiting_for_idle"
+      | "running"
+      | "blocked_permission"
+      | "blocked_question"
+      | "paused"
+      | "failed"
+      | "completed"
+      | "cancelled"
+    priority: number
+    position: number
+    title: string
+    agent?: string
+    model?: unknown
+    sourceMessageID?: string
+    sourceTaskID?: string
+    payload: {
+      [key: string]: unknown
+    }
+    error?: string
+    time: {
+      created: number
+      updated?: number
+      started?: number
+      completed?: number
+    }
+  }
+}
+
+export type TaskQueueReorderResponse = TaskQueueReorderResponses[keyof TaskQueueReorderResponses]
+
+export type ScheduledTaskListData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    status?: "active" | "paused" | "disabled"
+    dueBefore?: number
+    limit?: number
+  }
+  url: "/scheduled-task"
+}
+
+export type ScheduledTaskListErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type ScheduledTaskListError = ScheduledTaskListErrors[keyof ScheduledTaskListErrors]
+
+export type ScheduledTaskListResponses = {
+  /**
+   * Project scheduled tasks.
+   */
+  200: Array<{
+    id: string
+    projectID: string
+    directory: string
+    title: string
+    prompt: string
+    schedule:
+      | {
+          type: "once"
+          runAt: number
+        }
+      | {
+          type: "daily"
+          time: string
+          timezone?: string
+        }
+      | {
+          type: "weekly"
+          day: number
+          time: string
+          timezone?: string
+        }
+      | {
+          type: "cron"
+          expression: string
+          timezone?: string
+        }
+    status: "active" | "paused" | "disabled"
+    agent?: string
+    model?: unknown
+    lastQueueID?: string
+    error?: string
+    nextRunAt?: number
+    lastRunAt?: number
+    time: {
+      created: number
+      updated?: number
+    }
+  }>
+}
+
+export type ScheduledTaskListResponse = ScheduledTaskListResponses[keyof ScheduledTaskListResponses]
+
+export type ScheduledTaskCreateData = {
+  body?: {
+    title: string
+    prompt: string
+    schedule:
+      | {
+          type: "once"
+          runAt: number
+        }
+      | {
+          type: "daily"
+          time: string
+          timezone?: string
+        }
+      | {
+          type: "weekly"
+          day: number
+          time: string
+          timezone?: string
+        }
+      | {
+          type: "cron"
+          expression: string
+          timezone?: string
+        }
+    agent?: string
+    model?: unknown
+  }
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/scheduled-task"
+}
+
+export type ScheduledTaskCreateErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type ScheduledTaskCreateError = ScheduledTaskCreateErrors[keyof ScheduledTaskCreateErrors]
+
+export type ScheduledTaskCreateResponses = {
+  /**
+   * Created scheduled task.
+   */
+  200: {
+    id: string
+    projectID: string
+    directory: string
+    title: string
+    prompt: string
+    schedule:
+      | {
+          type: "once"
+          runAt: number
+        }
+      | {
+          type: "daily"
+          time: string
+          timezone?: string
+        }
+      | {
+          type: "weekly"
+          day: number
+          time: string
+          timezone?: string
+        }
+      | {
+          type: "cron"
+          expression: string
+          timezone?: string
+        }
+    status: "active" | "paused" | "disabled"
+    agent?: string
+    model?: unknown
+    lastQueueID?: string
+    error?: string
+    nextRunAt?: number
+    lastRunAt?: number
+    time: {
+      created: number
+      updated?: number
+    }
+  }
+}
+
+export type ScheduledTaskCreateResponse = ScheduledTaskCreateResponses[keyof ScheduledTaskCreateResponses]
+
+export type ScheduledTaskDeleteData = {
+  body?: never
+  path: {
+    scheduledTaskID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/scheduled-task/{scheduledTaskID}"
+}
+
+export type ScheduledTaskDeleteErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type ScheduledTaskDeleteError = ScheduledTaskDeleteErrors[keyof ScheduledTaskDeleteErrors]
+
+export type ScheduledTaskDeleteResponses = {
+  /**
+   * Scheduled task deleted.
+   */
+  200: boolean
+}
+
+export type ScheduledTaskDeleteResponse = ScheduledTaskDeleteResponses[keyof ScheduledTaskDeleteResponses]
+
+export type ScheduledTaskGetData = {
+  body?: never
+  path: {
+    scheduledTaskID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/scheduled-task/{scheduledTaskID}"
+}
+
+export type ScheduledTaskGetErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type ScheduledTaskGetError = ScheduledTaskGetErrors[keyof ScheduledTaskGetErrors]
+
+export type ScheduledTaskGetResponses = {
+  /**
+   * Scheduled task.
+   */
+  200: {
+    id: string
+    projectID: string
+    directory: string
+    title: string
+    prompt: string
+    schedule:
+      | {
+          type: "once"
+          runAt: number
+        }
+      | {
+          type: "daily"
+          time: string
+          timezone?: string
+        }
+      | {
+          type: "weekly"
+          day: number
+          time: string
+          timezone?: string
+        }
+      | {
+          type: "cron"
+          expression: string
+          timezone?: string
+        }
+    status: "active" | "paused" | "disabled"
+    agent?: string
+    model?: unknown
+    lastQueueID?: string
+    error?: string
+    nextRunAt?: number
+    lastRunAt?: number
+    time: {
+      created: number
+      updated?: number
+    }
+  }
+}
+
+export type ScheduledTaskGetResponse = ScheduledTaskGetResponses[keyof ScheduledTaskGetResponses]
+
+export type ScheduledTaskUpdateData = {
+  body?: {
+    title?: string
+    prompt?: string
+    schedule?:
+      | {
+          type: "once"
+          runAt: number
+        }
+      | {
+          type: "daily"
+          time: string
+          timezone?: string
+        }
+      | {
+          type: "weekly"
+          day: number
+          time: string
+          timezone?: string
+        }
+      | {
+          type: "cron"
+          expression: string
+          timezone?: string
+        }
+    status?: "active" | "paused" | "disabled"
+    agent?: string
+    model?: unknown
+  }
+  path: {
+    scheduledTaskID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/scheduled-task/{scheduledTaskID}/update"
+}
+
+export type ScheduledTaskUpdateErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type ScheduledTaskUpdateError = ScheduledTaskUpdateErrors[keyof ScheduledTaskUpdateErrors]
+
+export type ScheduledTaskUpdateResponses = {
+  /**
+   * Updated scheduled task.
+   */
+  200: {
+    id: string
+    projectID: string
+    directory: string
+    title: string
+    prompt: string
+    schedule:
+      | {
+          type: "once"
+          runAt: number
+        }
+      | {
+          type: "daily"
+          time: string
+          timezone?: string
+        }
+      | {
+          type: "weekly"
+          day: number
+          time: string
+          timezone?: string
+        }
+      | {
+          type: "cron"
+          expression: string
+          timezone?: string
+        }
+    status: "active" | "paused" | "disabled"
+    agent?: string
+    model?: unknown
+    lastQueueID?: string
+    error?: string
+    nextRunAt?: number
+    lastRunAt?: number
+    time: {
+      created: number
+      updated?: number
+    }
+  }
+}
+
+export type ScheduledTaskUpdateResponse = ScheduledTaskUpdateResponses[keyof ScheduledTaskUpdateResponses]
+
+export type ScheduledTaskPauseData = {
+  body?: never
+  path: {
+    scheduledTaskID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/scheduled-task/{scheduledTaskID}/pause"
+}
+
+export type ScheduledTaskPauseErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type ScheduledTaskPauseError = ScheduledTaskPauseErrors[keyof ScheduledTaskPauseErrors]
+
+export type ScheduledTaskPauseResponses = {
+  /**
+   * Paused scheduled task.
+   */
+  200: {
+    id: string
+    projectID: string
+    directory: string
+    title: string
+    prompt: string
+    schedule:
+      | {
+          type: "once"
+          runAt: number
+        }
+      | {
+          type: "daily"
+          time: string
+          timezone?: string
+        }
+      | {
+          type: "weekly"
+          day: number
+          time: string
+          timezone?: string
+        }
+      | {
+          type: "cron"
+          expression: string
+          timezone?: string
+        }
+    status: "active" | "paused" | "disabled"
+    agent?: string
+    model?: unknown
+    lastQueueID?: string
+    error?: string
+    nextRunAt?: number
+    lastRunAt?: number
+    time: {
+      created: number
+      updated?: number
+    }
+  }
+}
+
+export type ScheduledTaskPauseResponse = ScheduledTaskPauseResponses[keyof ScheduledTaskPauseResponses]
+
+export type ScheduledTaskResumeData = {
+  body?: never
+  path: {
+    scheduledTaskID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/scheduled-task/{scheduledTaskID}/resume"
+}
+
+export type ScheduledTaskResumeErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type ScheduledTaskResumeError = ScheduledTaskResumeErrors[keyof ScheduledTaskResumeErrors]
+
+export type ScheduledTaskResumeResponses = {
+  /**
+   * Resumed scheduled task.
+   */
+  200: {
+    id: string
+    projectID: string
+    directory: string
+    title: string
+    prompt: string
+    schedule:
+      | {
+          type: "once"
+          runAt: number
+        }
+      | {
+          type: "daily"
+          time: string
+          timezone?: string
+        }
+      | {
+          type: "weekly"
+          day: number
+          time: string
+          timezone?: string
+        }
+      | {
+          type: "cron"
+          expression: string
+          timezone?: string
+        }
+    status: "active" | "paused" | "disabled"
+    agent?: string
+    model?: unknown
+    lastQueueID?: string
+    error?: string
+    nextRunAt?: number
+    lastRunAt?: number
+    time: {
+      created: number
+      updated?: number
+    }
+  }
+}
+
+export type ScheduledTaskResumeResponse = ScheduledTaskResumeResponses[keyof ScheduledTaskResumeResponses]
+
+export type ScheduledTaskRunNowData = {
+  body?: never
+  path: {
+    scheduledTaskID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/scheduled-task/{scheduledTaskID}/run-now"
+}
+
+export type ScheduledTaskRunNowErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type ScheduledTaskRunNowError = ScheduledTaskRunNowErrors[keyof ScheduledTaskRunNowErrors]
+
+export type ScheduledTaskRunNowResponses = {
+  /**
+   * Run-now result with updated scheduled task and created queue item.
+   */
+  200: {
+    task: {
+      id: string
+      projectID: string
+      directory: string
+      title: string
+      prompt: string
+      schedule:
+        | {
+            type: "once"
+            runAt: number
+          }
+        | {
+            type: "daily"
+            time: string
+            timezone?: string
+          }
+        | {
+            type: "weekly"
+            day: number
+            time: string
+            timezone?: string
+          }
+        | {
+            type: "cron"
+            expression: string
+            timezone?: string
+          }
+      status: "active" | "paused" | "disabled"
+      agent?: string
+      model?: unknown
+      lastQueueID?: string
+      error?: string
+      nextRunAt?: number
+      lastRunAt?: number
+      time: {
+        created: number
+        updated?: number
+      }
+    }
+    queueItem: {
+      id: string
+      projectID: string
+      directory: string
+      worktree?: string
+      sessionID?: string
+      kind: "prompt" | "command" | "shell" | "followup" | "subagent" | "review" | "automation"
+      status:
+        | "queued"
+        | "waiting_for_idle"
+        | "running"
+        | "blocked_permission"
+        | "blocked_question"
+        | "paused"
+        | "failed"
+        | "completed"
+        | "cancelled"
+      priority: number
+      position: number
+      title: string
+      agent?: string
+      model?: unknown
+      sourceMessageID?: string
+      sourceTaskID?: string
+      payload: {
+        [key: string]: unknown
+      }
+      error?: string
+      time: {
+        created: number
+        updated?: number
+        started?: number
+        completed?: number
+      }
+    }
+  }
+}
+
+export type ScheduledTaskRunNowResponse = ScheduledTaskRunNowResponses[keyof ScheduledTaskRunNowResponses]
+
+export type ScheduledTaskRunDueData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    now?: number
+  }
+  url: "/scheduled-task/run-due"
+}
+
+export type ScheduledTaskRunDueErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type ScheduledTaskRunDueError = ScheduledTaskRunDueErrors[keyof ScheduledTaskRunDueErrors]
+
+export type ScheduledTaskRunDueResponses = {
+  /**
+   * Run-now results.
+   */
+  200: Array<{
+    task: {
+      id: string
+      projectID: string
+      directory: string
+      title: string
+      prompt: string
+      schedule:
+        | {
+            type: "once"
+            runAt: number
+          }
+        | {
+            type: "daily"
+            time: string
+            timezone?: string
+          }
+        | {
+            type: "weekly"
+            day: number
+            time: string
+            timezone?: string
+          }
+        | {
+            type: "cron"
+            expression: string
+            timezone?: string
+          }
+      status: "active" | "paused" | "disabled"
+      agent?: string
+      model?: unknown
+      lastQueueID?: string
+      error?: string
+      nextRunAt?: number
+      lastRunAt?: number
+      time: {
+        created: number
+        updated?: number
+      }
+    }
+    queueItem: {
+      id: string
+      projectID: string
+      directory: string
+      worktree?: string
+      sessionID?: string
+      kind: "prompt" | "command" | "shell" | "followup" | "subagent" | "review" | "automation"
+      status:
+        | "queued"
+        | "waiting_for_idle"
+        | "running"
+        | "blocked_permission"
+        | "blocked_question"
+        | "paused"
+        | "failed"
+        | "completed"
+        | "cancelled"
+      priority: number
+      position: number
+      title: string
+      agent?: string
+      model?: unknown
+      sourceMessageID?: string
+      sourceTaskID?: string
+      payload: {
+        [key: string]: unknown
+      }
+      error?: string
+      time: {
+        created: number
+        updated?: number
+        started?: number
+        completed?: number
+      }
+    }
+  }>
+}
+
+export type ScheduledTaskRunDueResponse = ScheduledTaskRunDueResponses[keyof ScheduledTaskRunDueResponses]
+
 export type ToolIdsData = {
   body?: never
   path?: never
@@ -3368,9 +5419,9 @@ export type WorktreeListData = {
 
 export type WorktreeListResponses = {
   /**
-   * List of worktree directories
+   * List of sandbox worktrees
    */
-  200: Array<string>
+  200: Array<WorktreeListItem>
 }
 
 export type WorktreeListResponse = WorktreeListResponses[keyof WorktreeListResponses]
@@ -3697,6 +5748,51 @@ export type SessionUpdateResponses = {
 
 export type SessionUpdateResponse = SessionUpdateResponses[keyof SessionUpdateResponses]
 
+export type SessionGoalData = {
+  body?: never
+  path: {
+    sessionID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/session/{sessionID}/goal"
+}
+
+export type SessionGoalErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type SessionGoalError = SessionGoalErrors[keyof SessionGoalErrors]
+
+export type SessionGoalResponses = {
+  /**
+   * Current session goal, or null when no goal is set.
+   */
+  200: {
+    sessionID: string
+    objective: string
+    status: "active" | "paused" | "complete" | "blocked" | "budget_limited"
+    tokenBudget?: number
+    tokensUsed: number
+    timeUsedSeconds: number
+    time: {
+      created: number
+      updated?: number
+    }
+    remainingTokens?: number
+  } | null
+}
+
+export type SessionGoalResponse = SessionGoalResponses[keyof SessionGoalResponses]
+
 export type SessionChildrenData = {
   body?: never
   path: {
@@ -3853,9 +5949,17 @@ export type SessionRiskData = {
      */
     envelopes?: boolean
     /**
+     * Include the validated ReviewResult[] emitted by review_complete tool calls in this session
+     */
+    reviewResults?: boolean
+    /**
      * Include the validated DebugCase / DebugEvidence / DebugHypothesis bundles emitted by Phase 3 runtime debug tools
      */
     debug?: boolean
+    /**
+     * Include advisory decision-hint readiness derived from recent replay tool evidence
+     */
+    hints?: boolean
   }
   url: "/session/{sessionID}/risk"
 }
@@ -4295,6 +6399,10 @@ export type SessionPromptData = {
      * @deprecated Agent auto-routing was removed. Field accepted for backwards compatibility but ignored.
      */
     userSelectedAgent?: boolean
+    /**
+     * Controls specialist agent auto-routing. Use preserve for synthetic continuation prompts.
+     */
+    agentRouting?: "auto" | "preserve"
     noReply?: boolean
     /**
      * @deprecated tools and permissions have been merged, you can set permissions on the session itself now
@@ -4494,6 +6602,10 @@ export type SessionPromptAsyncData = {
      * @deprecated Agent auto-routing was removed. Field accepted for backwards compatibility but ignored.
      */
     userSelectedAgent?: boolean
+    /**
+     * Controls specialist agent auto-routing. Use preserve for synthetic continuation prompts.
+     */
+    agentRouting?: "auto" | "preserve"
     noReply?: boolean
     /**
      * @deprecated tools and permissions have been merged, you can set permissions on the session itself now
@@ -4543,14 +6655,7 @@ export type SessionCommandAsyncData = {
     arguments: string
     command: string
     variant?: string
-    parts?: Array<{
-      id?: string
-      type: "file"
-      mime: string
-      filename?: string
-      url: string
-      source?: FilePartSource
-    }>
+    parts?: Array<FilePartInput>
   }
   path: {
     sessionID: string
@@ -4589,14 +6694,7 @@ export type SessionCommandData = {
     arguments: string
     command: string
     variant?: string
-    parts?: Array<{
-      id?: string
-      type: "file"
-      mime: string
-      filename?: string
-      url: string
-      source?: FilePartSource
-    }>
+    parts?: Array<FilePartInput>
   }
   path: {
     sessionID: string
@@ -5473,6 +7571,9 @@ export type McpStatusResponse = McpStatusResponses[keyof McpStatusResponses]
 export type McpAddData = {
   body?: {
     name: string
+    /**
+     * MCP server config. Tools surface as permission keys `<server>_<tool>` — use the top-level `permission` map (with wildcards) to allow / deny them, or scope them per agent via `agent.<name>.permission`.
+     */
     config: McpLocalConfig | McpRemoteConfig
   }
   path?: never
@@ -6235,6 +8336,15 @@ export type AppSkillsResponses = {
     location: string
     content: string
     paths?: Array<string>
+    license?: string
+    compatibility?: string
+    metadata?: {
+      [key: string]: string
+    }
+    allowedTools?: Array<string>
+    argumentHint?: string
+    standardIssues?: Array<string>
+    builtin?: boolean
   }>
 }
 

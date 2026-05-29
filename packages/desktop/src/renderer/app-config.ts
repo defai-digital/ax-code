@@ -5,6 +5,11 @@ export type DesktopRendererAppConfig = {
   baseUrl: string
   headers?: Record<string, string>
   directory?: string
+  features: {
+    terminalPane: boolean
+    browserPane: boolean
+    filePane: boolean
+  }
   scheduledTaskExecution: {
     owner: "desktop-sidecar" | "attached-backend"
     stopsOnAppQuit: boolean
@@ -17,6 +22,11 @@ export function createDesktopRendererAppConfig(connection: DesktopBackendConnect
     baseUrl: connection.url,
     headers: Object.keys(connection.headers).length > 0 ? { ...connection.headers } : undefined,
     directory: connection.directory,
+    features: {
+      terminalPane: true,
+      browserPane: true,
+      filePane: true,
+    },
     scheduledTaskExecution:
       connection.mode === "start"
         ? { owner: "desktop-sidecar", stopsOnAppQuit: true }

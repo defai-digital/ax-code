@@ -127,22 +127,22 @@ export const ExperimentalRoutes = lazy(() =>
       "/worktree",
       describeRoute({
         summary: "List worktrees",
-        description: "List all sandbox worktrees for the current project.",
+        description:
+          "List all sandbox worktrees for the current project, including git branch metadata when available.",
         operationId: "worktree.list",
         responses: {
           200: {
-            description: "List of worktree directories",
+            description: "List of sandbox worktrees",
             content: {
               "application/json": {
-                schema: resolver(z.array(z.string())),
+                schema: resolver(Worktree.ListItem.array()),
               },
             },
           },
         },
       }),
       async (c) => {
-        const sandboxes = await Project.sandboxes(Instance.project.id)
-        return c.json(sandboxes)
+        return c.json(await Worktree.list())
       },
     )
     .delete(

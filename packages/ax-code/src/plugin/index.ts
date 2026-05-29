@@ -40,6 +40,10 @@ export namespace Plugin {
     async () => {
       const hooks: Hooks[] = []
       const ctx = Instance.current
+      const localFetch = (async (request: Request) => {
+        ServerRuntimeAuth.apply(request.headers)
+        return Server.Default().fetch(request)
+      }) as typeof fetch
       const client = createOpencodeClient({
         baseUrl: "http://localhost:4096",
         directory: ctx.directory,
@@ -48,10 +52,7 @@ export namespace Plugin {
               Authorization: `Basic ${Buffer.from(`${Flag.AX_CODE_SERVER_USERNAME ?? "ax-code"}:${Flag.AX_CODE_SERVER_PASSWORD}`).toString("base64")}`,
             }
           : undefined,
-        fetch: async (request: Request) => {
-          ServerRuntimeAuth.apply(request.headers)
-          return Server.Default().fetch(request)
-        },
+        fetch: localFetch,
       })
       const cfg = await Config.get()
       const input: PluginInput = {

@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process"
 import { randomBytes } from "node:crypto"
+import { createServer } from "node:net"
 
 const SIGKILL_GRACE_MS = 300
 const EXIT_WAIT_MS = 2_000
@@ -15,6 +16,8 @@ export type HeadlessBackendOptions = {
   env?: Record<string, string>
   onStdout?: (line: string) => void
   onStderr?: (line: string) => void
+  /** @internal test seam for environments where loopback bind is sandboxed. */
+  reservePort?: (hostname: string) => Promise<number>
   config?: Record<string, unknown>
   auth?: {
     username?: string
@@ -31,7 +34,16 @@ export type HeadlessBackendHandle = {
 
 export async function startHeadlessBackend(options: HeadlessBackendOptions = {}): Promise<HeadlessBackendHandle> {
   const hostname = options.hostname ?? "127.0.0.1"
-  const port = options.port ?? 0
+  const reservePort = options.reservePort ?? reserveLoopbackPort
+  const port =
+    options.port && options.port > 0
+      ? options.port
+      : await reservePort(hostname).catch((error) => {
+          const message = error instanceof Error ? error.message : String(error)
+          throw new Error(`Failed to reserve loopback port for ax-code backend on ${hostname}: ${message}`, {
+            cause: error,
+          })
+        })
   const timeout = options.timeout ?? STARTUP_TIMEOUT_MS
   const fetchFn = options.fetch ?? fetch
 
@@ -160,6 +172,39 @@ export async function startHeadlessBackend(options: HeadlessBackendOptions = {})
       await killProc(proc)
     },
   }
+}
+
+async function reserveLoopbackPort(hostname: string): Promise<number> {
+  return new Promise<number>((resolve, reject) => {
+    const server = createServer()
+    server.unref()
+
+    const cleanup = () => {
+      server.off("error", onError)
+    }
+    const onError = (error: Error) => {
+      cleanup()
+      reject(error)
+    }
+
+    server.once("error", onError)
+    server.listen(0, hostname, () => {
+      const address = server.address()
+      const port = typeof address === "object" && address ? address.port : undefined
+      server.close((error) => {
+        cleanup()
+        if (error) {
+          reject(error)
+          return
+        }
+        if (!port) {
+          reject(new Error("Failed to reserve a loopback port for ax-code backend"))
+          return
+        }
+        resolve(port)
+      })
+    })
+  })
 }
 
 async function waitForBackendHealth(input: { url: string; headers: Record<string, string>; fetch: typeof fetch }) {

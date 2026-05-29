@@ -26,7 +26,7 @@ function createState() {
     mcp_resource: {},
     formatter: [],
     vcs: undefined,
-    path: { state: "", config: "", worktree: "", directory: "" },
+    path: { home: "", state: "", config: "", worktree: "", directory: "" },
   })
 }
 
@@ -42,7 +42,7 @@ function createRequests(overrides: Partial<SyncBootstrapAssemblyRequests> = {}):
     questionPromise: async () => ({ data: [] }),
     sessionStatusPromise: async () => ({ data: {} }),
     providerAuthPromise: async () => ({ data: {} }),
-    pathPromise: async () => ({ data: { state: "", config: "", worktree: "", directory: "" } }),
+    pathPromise: async () => ({ data: { home: "", state: "", config: "", worktree: "", directory: "" } }),
     isolationTask: async () => undefined,
     autonomousTask: async () => undefined,
     lspPromise: async () => ({ data: [] }),
@@ -110,7 +110,7 @@ describe("tui sync bootstrap assembly", () => {
         sessionStatusPromise: async () => ({ data: { ses_1: "working" as never } }),
         providerAuthPromise: async () => ({ data: { openai: [{ type: "api", label: "API key" } as never] } }),
         pathPromise: async () => ({
-          data: { state: "/state", config: "/config", worktree: "/worktree", directory: "/repo" },
+          data: { home: "/home", state: "/state", config: "/config", worktree: "/worktree", directory: "/repo" },
         }),
         isolationTask: async () => {
           calls.push("isolation")
@@ -159,7 +159,13 @@ describe("tui sync bootstrap assembly", () => {
     expect(store.question.ses_1).toHaveLength(1)
     expect(store.session_status.ses_1 as unknown).toBe("working")
     expect(store.provider_auth.openai).toHaveLength(1)
-    expect(store.path).toEqual({ state: "/state", config: "/config", worktree: "/worktree", directory: "/repo" })
+    expect(store.path).toEqual({
+      home: "/home",
+      state: "/state",
+      config: "/config",
+      worktree: "/worktree",
+      directory: "/repo",
+    })
     expect(store.lsp).toHaveLength(1)
     expect(store.mcp).toHaveProperty("server")
     expect(store.mcp_resource).toHaveProperty("resource")

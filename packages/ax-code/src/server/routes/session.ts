@@ -220,6 +220,7 @@ async function startAsyncSessionHandler<TBody>(
     sessionID,
     kind: input.kind,
     title: asyncTaskQueueTitle(input.kind, body),
+    worktree: asyncTaskQueueWorktree(body),
     agent: asyncTaskQueueAgent(body),
     model: asyncTaskQueueModel(body),
     sourceMessageID: asyncTaskQueueSourceMessageID(body),
@@ -273,6 +274,12 @@ function asyncTaskQueueAgent(body: unknown) {
   if (!body || typeof body !== "object") return undefined
   const agent = (body as Record<string, unknown>)["agent"]
   return typeof agent === "string" ? agent : undefined
+}
+
+function asyncTaskQueueWorktree(body: unknown) {
+  if (!body || typeof body !== "object") return undefined
+  const worktree = (body as Record<string, unknown>)["worktree"]
+  return typeof worktree === "string" && worktree.trim().length > 0 ? worktree.trim() : undefined
 }
 
 function asyncTaskQueueModel(body: unknown) {

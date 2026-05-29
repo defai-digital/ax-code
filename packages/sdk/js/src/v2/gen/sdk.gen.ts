@@ -38,7 +38,6 @@ import type {
   ExperimentalSessionListResponses,
   FileListResponses,
   FilePartInput,
-  FilePartSource,
   FileReadResponses,
   FileStatusResponses,
   FindFilesResponses,
@@ -97,6 +96,10 @@ import type {
   ProjectListResponses,
   ProjectUpdateErrors,
   ProjectUpdateResponses,
+  PromptHistoryAppendErrors,
+  PromptHistoryAppendResponses,
+  PromptHistoryListErrors,
+  PromptHistoryListResponses,
   ProviderAuthResponses,
   ProviderListResponses,
   ProviderOauthAuthorizeErrors,
@@ -120,6 +123,24 @@ import type {
   QuestionRejectResponses,
   QuestionReplyErrors,
   QuestionReplyResponses,
+  ScheduledTaskCreateErrors,
+  ScheduledTaskCreateResponses,
+  ScheduledTaskDeleteErrors,
+  ScheduledTaskDeleteResponses,
+  ScheduledTaskGetErrors,
+  ScheduledTaskGetResponses,
+  ScheduledTaskListErrors,
+  ScheduledTaskListResponses,
+  ScheduledTaskPauseErrors,
+  ScheduledTaskPauseResponses,
+  ScheduledTaskResumeErrors,
+  ScheduledTaskResumeResponses,
+  ScheduledTaskRunDueErrors,
+  ScheduledTaskRunDueResponses,
+  ScheduledTaskRunNowErrors,
+  ScheduledTaskRunNowResponses,
+  ScheduledTaskUpdateErrors,
+  ScheduledTaskUpdateResponses,
   SessionAbortErrors,
   SessionAbortResponses,
   SessionBranchRankErrors,
@@ -144,6 +165,8 @@ import type {
   SessionForkResponses,
   SessionGetErrors,
   SessionGetResponses,
+  SessionGoalErrors,
+  SessionGoalResponses,
   SessionGraphErrors,
   SessionGraphResponses,
   SessionInitErrors,
@@ -186,6 +209,32 @@ import type {
   SmartLlmGetResponses,
   SmartLlmSetResponses,
   SubtaskPartInput,
+  SuperLongGetResponses,
+  SuperLongSetResponses,
+  TaskQueueCancelErrors,
+  TaskQueueCancelResponses,
+  TaskQueueDeleteErrors,
+  TaskQueueDeleteResponses,
+  TaskQueueEditErrors,
+  TaskQueueEditResponses,
+  TaskQueueEnqueueErrors,
+  TaskQueueEnqueueResponses,
+  TaskQueueGetErrors,
+  TaskQueueGetResponses,
+  TaskQueueListErrors,
+  TaskQueueListResponses,
+  TaskQueuePauseErrors,
+  TaskQueuePauseResponses,
+  TaskQueueReorderErrors,
+  TaskQueueReorderResponses,
+  TaskQueueResumeErrors,
+  TaskQueueResumeResponses,
+  TaskQueueRetryErrors,
+  TaskQueueRetryResponses,
+  TaskQueueSendNowErrors,
+  TaskQueueSendNowResponses,
+  TaskQueueStatusErrors,
+  TaskQueueStatusResponses,
   TextPartInput,
   ToolIdsErrors,
   ToolIdsResponses,
@@ -973,6 +1022,947 @@ export class SmartLlm extends HeyApiClient {
   }
 }
 
+export class SuperLong extends HeyApiClient {
+  /**
+   * Get Super-Long mode state
+   *
+   * Returns whether Super-Long mode is enabled.
+   */
+  public get<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).get<SuperLongGetResponses, unknown, ThrowOnError>({
+      url: "/super-long",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Set Super-Long mode
+   *
+   * Toggle Super-Long mode on or off for the current runtime session.
+   */
+  public set<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      enabled?: boolean
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "body", key: "enabled" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).put<SuperLongSetResponses, unknown, ThrowOnError>({
+      url: "/super-long",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+}
+
+export class PromptHistory extends HeyApiClient {
+  /**
+   * List prompt history
+   *
+   * Return prompt recall history scoped to the current project.
+   */
+  public list<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      limit?: number
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "limit" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<PromptHistoryListResponses, PromptHistoryListErrors, ThrowOnError>({
+      url: "/prompt-history",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Append prompt history
+   *
+   * Append one prompt recall entry to the current project history.
+   */
+  public append<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      input?: string
+      mode?: "normal" | "shell"
+      parts?: Array<
+        {
+          [key: string]: unknown
+        } & {
+          type: string
+        }
+      >
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "body", key: "input" },
+            { in: "body", key: "mode" },
+            { in: "body", key: "parts" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<PromptHistoryAppendResponses, PromptHistoryAppendErrors, ThrowOnError>(
+      {
+        url: "/prompt-history",
+        ...options,
+        ...params,
+        headers: {
+          "Content-Type": "application/json",
+          ...options?.headers,
+          ...params.headers,
+        },
+      },
+    )
+  }
+}
+
+export class TaskQueue extends HeyApiClient {
+  /**
+   * List task queue items
+   *
+   * Return server-owned task queue items scoped to the current project.
+   */
+  public list<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      sessionID?: string
+      status?:
+        | "queued"
+        | "waiting_for_idle"
+        | "running"
+        | "blocked_permission"
+        | "blocked_question"
+        | "paused"
+        | "failed"
+        | "completed"
+        | "cancelled"
+      limit?: number
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "sessionID" },
+            { in: "query", key: "status" },
+            { in: "query", key: "limit" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<TaskQueueListResponses, TaskQueueListErrors, ThrowOnError>({
+      url: "/task-queue",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Enqueue task
+   *
+   * Add a durable server-owned task queue item for the current project.
+   */
+  public enqueue<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      sessionID?: string
+      kind?: "prompt" | "command" | "shell" | "followup" | "subagent" | "review" | "automation"
+      title?: string
+      worktree?: string
+      agent?: string
+      model?: unknown
+      sourceMessageID?: string
+      sourceTaskID?: string
+      payload?: {
+        [key: string]: unknown
+      }
+      priority?: number
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "body", key: "sessionID" },
+            { in: "body", key: "kind" },
+            { in: "body", key: "title" },
+            { in: "body", key: "worktree" },
+            { in: "body", key: "agent" },
+            { in: "body", key: "model" },
+            { in: "body", key: "sourceMessageID" },
+            { in: "body", key: "sourceTaskID" },
+            { in: "body", key: "payload" },
+            { in: "body", key: "priority" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<TaskQueueEnqueueResponses, TaskQueueEnqueueErrors, ThrowOnError>({
+      url: "/task-queue",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Remove task queue item
+   *
+   * Delete a task queue item from the current project queue.
+   */
+  public delete<ThrowOnError extends boolean = false>(
+    parameters: {
+      taskID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "taskID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).delete<TaskQueueDeleteResponses, TaskQueueDeleteErrors, ThrowOnError>({
+      url: "/task-queue/{taskID}",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Get task queue item
+   *
+   * Return a single task queue item scoped to the current project.
+   */
+  public get<ThrowOnError extends boolean = false>(
+    parameters: {
+      taskID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "taskID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<TaskQueueGetResponses, TaskQueueGetErrors, ThrowOnError>({
+      url: "/task-queue/{taskID}",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Update task queue status
+   *
+   * Internal lifecycle hook for server-owned queue execution. App clients should use action routes instead.
+   */
+  public status<ThrowOnError extends boolean = false>(
+    parameters: {
+      "x-ax-code-internal-task-queue-lifecycle": "1"
+      taskID: string
+      directory?: string
+      status?:
+        | "queued"
+        | "waiting_for_idle"
+        | "running"
+        | "blocked_permission"
+        | "blocked_question"
+        | "paused"
+        | "failed"
+        | "completed"
+        | "cancelled"
+      error?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "headers", key: "x-ax-code-internal-task-queue-lifecycle" },
+            { in: "path", key: "taskID" },
+            { in: "query", key: "directory" },
+            { in: "body", key: "status" },
+            { in: "body", key: "error" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<TaskQueueStatusResponses, TaskQueueStatusErrors, ThrowOnError>({
+      url: "/task-queue/{taskID}/status",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Edit queued task
+   *
+   * Edit mutable task queue fields before the task is actively running or completed.
+   */
+  public edit<ThrowOnError extends boolean = false>(
+    parameters: {
+      taskID: string
+      directory?: string
+      title?: string
+      worktree?: string | null
+      agent?: string | null
+      model?: unknown
+      payload?: {
+        [key: string]: unknown
+      }
+      priority?: number
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "taskID" },
+            { in: "query", key: "directory" },
+            { in: "body", key: "title" },
+            { in: "body", key: "worktree" },
+            { in: "body", key: "agent" },
+            { in: "body", key: "model" },
+            { in: "body", key: "payload" },
+            { in: "body", key: "priority" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<TaskQueueEditResponses, TaskQueueEditErrors, ThrowOnError>({
+      url: "/task-queue/{taskID}/edit",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Pause queued task
+   *
+   * Mark a task queue item as paused.
+   */
+  public pause<ThrowOnError extends boolean = false>(
+    parameters: {
+      taskID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "taskID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<TaskQueuePauseResponses, TaskQueuePauseErrors, ThrowOnError>({
+      url: "/task-queue/{taskID}/pause",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Resume paused task
+   *
+   * Return a paused task queue item to queued state.
+   */
+  public resume<ThrowOnError extends boolean = false>(
+    parameters: {
+      taskID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "taskID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<TaskQueueResumeResponses, TaskQueueResumeErrors, ThrowOnError>({
+      url: "/task-queue/{taskID}/resume",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Cancel task
+   *
+   * Mark a task queue item as cancelled.
+   */
+  public cancel<ThrowOnError extends boolean = false>(
+    parameters: {
+      taskID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "taskID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<TaskQueueCancelResponses, TaskQueueCancelErrors, ThrowOnError>({
+      url: "/task-queue/{taskID}/cancel",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Retry task
+   *
+   * Return a failed or cancelled task queue item to queued state.
+   */
+  public retry<ThrowOnError extends boolean = false>(
+    parameters: {
+      taskID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "taskID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<TaskQueueRetryResponses, TaskQueueRetryErrors, ThrowOnError>({
+      url: "/task-queue/{taskID}/retry",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Send task now
+   *
+   * Move a task queue item to the front of the queue and mark it queued.
+   */
+  public sendNow<ThrowOnError extends boolean = false>(
+    parameters: {
+      taskID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "taskID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<TaskQueueSendNowResponses, TaskQueueSendNowErrors, ThrowOnError>({
+      url: "/task-queue/{taskID}/send-now",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Reorder task
+   *
+   * Set the queue position for a task queue item.
+   */
+  public reorder<ThrowOnError extends boolean = false>(
+    parameters: {
+      taskID: string
+      directory?: string
+      position?: number
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "taskID" },
+            { in: "query", key: "directory" },
+            { in: "body", key: "position" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<TaskQueueReorderResponses, TaskQueueReorderErrors, ThrowOnError>({
+      url: "/task-queue/{taskID}/reorder",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+}
+
+export class ScheduledTask extends HeyApiClient {
+  /**
+   * List scheduled tasks
+   *
+   * Return project-scoped scheduled automation tasks.
+   */
+  public list<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      status?: "active" | "paused" | "disabled"
+      dueBefore?: number
+      limit?: number
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "status" },
+            { in: "query", key: "dueBefore" },
+            { in: "query", key: "limit" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<ScheduledTaskListResponses, ScheduledTaskListErrors, ThrowOnError>({
+      url: "/scheduled-task",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Create scheduled task
+   *
+   * Create a project-scoped scheduled automation task.
+   */
+  public create<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      title?: string
+      prompt?: string
+      schedule?:
+        | {
+            type: "once"
+            runAt: number
+          }
+        | {
+            type: "daily"
+            time: string
+            timezone?: string
+          }
+        | {
+            type: "weekly"
+            day: number
+            time: string
+            timezone?: string
+          }
+        | {
+            type: "cron"
+            expression: string
+            timezone?: string
+          }
+      agent?: string
+      model?: unknown
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "body", key: "title" },
+            { in: "body", key: "prompt" },
+            { in: "body", key: "schedule" },
+            { in: "body", key: "agent" },
+            { in: "body", key: "model" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<ScheduledTaskCreateResponses, ScheduledTaskCreateErrors, ThrowOnError>(
+      {
+        url: "/scheduled-task",
+        ...options,
+        ...params,
+        headers: {
+          "Content-Type": "application/json",
+          ...options?.headers,
+          ...params.headers,
+        },
+      },
+    )
+  }
+
+  /**
+   * Delete scheduled task
+   *
+   * Delete a scheduled automation task.
+   */
+  public delete<ThrowOnError extends boolean = false>(
+    parameters: {
+      scheduledTaskID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "scheduledTaskID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).delete<
+      ScheduledTaskDeleteResponses,
+      ScheduledTaskDeleteErrors,
+      ThrowOnError
+    >({
+      url: "/scheduled-task/{scheduledTaskID}",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Get scheduled task
+   *
+   * Return one scheduled automation task.
+   */
+  public get<ThrowOnError extends boolean = false>(
+    parameters: {
+      scheduledTaskID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "scheduledTaskID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<ScheduledTaskGetResponses, ScheduledTaskGetErrors, ThrowOnError>({
+      url: "/scheduled-task/{scheduledTaskID}",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Update scheduled task
+   *
+   * Update a scheduled automation task.
+   */
+  public update<ThrowOnError extends boolean = false>(
+    parameters: {
+      scheduledTaskID: string
+      directory?: string
+      title?: string
+      prompt?: string
+      schedule?:
+        | {
+            type: "once"
+            runAt: number
+          }
+        | {
+            type: "daily"
+            time: string
+            timezone?: string
+          }
+        | {
+            type: "weekly"
+            day: number
+            time: string
+            timezone?: string
+          }
+        | {
+            type: "cron"
+            expression: string
+            timezone?: string
+          }
+      status?: "active" | "paused" | "disabled"
+      agent?: string
+      model?: unknown
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "scheduledTaskID" },
+            { in: "query", key: "directory" },
+            { in: "body", key: "title" },
+            { in: "body", key: "prompt" },
+            { in: "body", key: "schedule" },
+            { in: "body", key: "status" },
+            { in: "body", key: "agent" },
+            { in: "body", key: "model" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<ScheduledTaskUpdateResponses, ScheduledTaskUpdateErrors, ThrowOnError>(
+      {
+        url: "/scheduled-task/{scheduledTaskID}/update",
+        ...options,
+        ...params,
+        headers: {
+          "Content-Type": "application/json",
+          ...options?.headers,
+          ...params.headers,
+        },
+      },
+    )
+  }
+
+  /**
+   * Pause scheduled task
+   *
+   * Pause a scheduled automation task.
+   */
+  public pause<ThrowOnError extends boolean = false>(
+    parameters: {
+      scheduledTaskID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "scheduledTaskID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<ScheduledTaskPauseResponses, ScheduledTaskPauseErrors, ThrowOnError>({
+      url: "/scheduled-task/{scheduledTaskID}/pause",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Resume scheduled task
+   *
+   * Resume a scheduled automation task.
+   */
+  public resume<ThrowOnError extends boolean = false>(
+    parameters: {
+      scheduledTaskID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "scheduledTaskID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<ScheduledTaskResumeResponses, ScheduledTaskResumeErrors, ThrowOnError>(
+      {
+        url: "/scheduled-task/{scheduledTaskID}/resume",
+        ...options,
+        ...params,
+      },
+    )
+  }
+
+  /**
+   * Run scheduled task now
+   *
+   * Create a server-owned automation queue item from a scheduled task.
+   */
+  public runNow<ThrowOnError extends boolean = false>(
+    parameters: {
+      scheduledTaskID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "scheduledTaskID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<ScheduledTaskRunNowResponses, ScheduledTaskRunNowErrors, ThrowOnError>(
+      {
+        url: "/scheduled-task/{scheduledTaskID}/run-now",
+        ...options,
+        ...params,
+      },
+    )
+  }
+
+  /**
+   * Run due scheduled tasks
+   *
+   * Create automation queue items for due active scheduled tasks.
+   */
+  public runDue<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      now?: number
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "now" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<ScheduledTaskRunDueResponses, ScheduledTaskRunDueErrors, ThrowOnError>(
+      {
+        url: "/scheduled-task/run-due",
+        ...options,
+        ...params,
+      },
+    )
+  }
+}
+
 export class Tool extends HeyApiClient {
   /**
    * List tool IDs
@@ -1065,7 +2055,7 @@ export class Worktree extends HeyApiClient {
   /**
    * List worktrees
    *
-   * List all sandbox worktrees for the current project.
+   * List all sandbox worktrees for the current project, including git branch metadata when available.
    */
   public list<ThrowOnError extends boolean = false>(
     parameters?: {
@@ -1426,6 +2416,36 @@ export class Session2 extends HeyApiClient {
   }
 
   /**
+   * Get session goal
+   *
+   * Retrieve the durable goal state associated with a specific ax-code session.
+   */
+  public goal<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<SessionGoalResponses, SessionGoalErrors, ThrowOnError>({
+      url: "/session/{sessionID}/goal",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
    * Get session children
    *
    * Retrieve all child sessions that were forked from the specified parent session.
@@ -1550,7 +2570,7 @@ export class Session2 extends HeyApiClient {
   /**
    * Get session risk detail
    *
-   * Return the explainable risk assessment, breakdown, and semantic change summary for a session. Optionally include replay readiness for review/debug/qa workflows.
+   * Return the explainable risk assessment, breakdown, and semantic change summary for a session. Optionally include replay readiness and structured assurance artifacts for review/debug/qa workflows.
    */
   public risk<ThrowOnError extends boolean = false>(
     parameters: {
@@ -1559,7 +2579,9 @@ export class Session2 extends HeyApiClient {
       quality?: boolean
       findings?: boolean
       envelopes?: boolean
+      reviewResults?: boolean
       debug?: boolean
+      hints?: boolean
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -1573,7 +2595,9 @@ export class Session2 extends HeyApiClient {
             { in: "query", key: "quality" },
             { in: "query", key: "findings" },
             { in: "query", key: "envelopes" },
+            { in: "query", key: "reviewResults" },
             { in: "query", key: "debug" },
+            { in: "query", key: "hints" },
           ],
         },
       ],
@@ -1993,7 +3017,7 @@ export class Session2 extends HeyApiClient {
   /**
    * Send message
    *
-   * Create and send a new message to a session, streaming the AI response.
+   * Create and send a new message to a session, returning the final assistant response.
    */
   public prompt<ThrowOnError extends boolean = false>(
     parameters: {
@@ -2006,6 +3030,7 @@ export class Session2 extends HeyApiClient {
       }
       agent?: string
       userSelectedAgent?: boolean
+      agentRouting?: "auto" | "preserve"
       noReply?: boolean
       tools?: {
         [key: string]: boolean
@@ -2028,6 +3053,7 @@ export class Session2 extends HeyApiClient {
             { in: "body", key: "model" },
             { in: "body", key: "agent" },
             { in: "body", key: "userSelectedAgent" },
+            { in: "body", key: "agentRouting" },
             { in: "body", key: "noReply" },
             { in: "body", key: "tools" },
             { in: "body", key: "format" },
@@ -2134,6 +3160,7 @@ export class Session2 extends HeyApiClient {
       }
       agent?: string
       userSelectedAgent?: boolean
+      agentRouting?: "auto" | "preserve"
       noReply?: boolean
       tools?: {
         [key: string]: boolean
@@ -2156,6 +3183,7 @@ export class Session2 extends HeyApiClient {
             { in: "body", key: "model" },
             { in: "body", key: "agent" },
             { in: "body", key: "userSelectedAgent" },
+            { in: "body", key: "agentRouting" },
             { in: "body", key: "noReply" },
             { in: "body", key: "tools" },
             { in: "body", key: "format" },
@@ -2193,14 +3221,7 @@ export class Session2 extends HeyApiClient {
       arguments?: string
       command?: string
       variant?: string
-      parts?: Array<{
-        id?: string
-        type: "file"
-        mime: string
-        filename?: string
-        url: string
-        source?: FilePartSource
-      }>
+      parts?: Array<FilePartInput>
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -2251,14 +3272,7 @@ export class Session2 extends HeyApiClient {
       arguments?: string
       command?: string
       variant?: string
-      parts?: Array<{
-        id?: string
-        type: "file"
-        mime: string
-        filename?: string
-        url: string
-        source?: FilePartSource
-      }>
+      parts?: Array<FilePartInput>
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -4199,6 +5213,26 @@ export class OpencodeClient extends HeyApiClient {
   private _smartLlm?: SmartLlm
   get smartLlm(): SmartLlm {
     return (this._smartLlm ??= new SmartLlm({ client: this.client }))
+  }
+
+  private _superLong?: SuperLong
+  get superLong(): SuperLong {
+    return (this._superLong ??= new SuperLong({ client: this.client }))
+  }
+
+  private _promptHistory?: PromptHistory
+  get promptHistory(): PromptHistory {
+    return (this._promptHistory ??= new PromptHistory({ client: this.client }))
+  }
+
+  private _taskQueue?: TaskQueue
+  get taskQueue(): TaskQueue {
+    return (this._taskQueue ??= new TaskQueue({ client: this.client }))
+  }
+
+  private _scheduledTask?: ScheduledTask
+  get scheduledTask(): ScheduledTask {
+    return (this._scheduledTask ??= new ScheduledTask({ client: this.client }))
   }
 
   private _tool?: Tool

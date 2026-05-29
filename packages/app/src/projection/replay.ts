@@ -1,5 +1,6 @@
 import { applyHeadlessProjectionEvent, createHeadlessProjectionState } from "@ax-code/sdk/headless/projection"
 import {
+  fixtureScenarioByName,
   fixtureHeadlessEvents,
   fixtureQueueItems,
   fixtureRuntimeCatalog,
@@ -8,6 +9,8 @@ import {
   fixtureSessionEvidence,
   fixtureTerminals,
   fixtureWorktrees,
+  type AppFixtureScenario,
+  type AppFixtureScenarioName,
 } from "../fixtures/headless"
 import type { AppCommandCenterState, AppHeadlessEvent, AppProjectionState, AppQueueItem } from "./types"
 
@@ -20,14 +23,33 @@ export function replayAppProjection(events: readonly AppHeadlessEvent[]): AppPro
     AppProjectionState["message"][string][number],
     AppProjectionState["part"][string][number],
     unknown,
-    NonNullable<AppProjectionState["session_goal"][string]>
+    NonNullable<AppProjectionState["session_goal"][string]>,
+    AppQueueItem
   >()
 
   for (const event of events) {
-    applyHeadlessProjectionEvent(state, event)
+    applyHeadlessProjectionEvent(state, structuredClone(event))
   }
 
   return state
+}
+
+export function createFixtureCommandCenterStateFromScenario(
+  input: AppFixtureScenarioName | AppFixtureScenario,
+): AppCommandCenterState {
+  const scenario = typeof input === "string" ? fixtureScenarioByName(input) : input
+  const projection = replayAppProjection(scenario.events)
+
+  return {
+    projection,
+    queue: [...(scenario.queue ?? projection.task_queue)],
+    evidence: { ...(scenario.evidence ?? {}) },
+    catalog: scenario.catalog ?? fixtureRuntimeCatalog,
+    worktrees: [...(scenario.worktrees ?? [])],
+    terminals: [...(scenario.terminals ?? [])],
+    scheduledTasks: [...(scenario.scheduledTasks ?? [])],
+    selectedSessionID: scenario.selectedSessionID,
+  }
 }
 
 export function createFixtureCommandCenterState(): AppCommandCenterState {
