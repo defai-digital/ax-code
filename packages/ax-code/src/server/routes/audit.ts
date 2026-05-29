@@ -4,11 +4,33 @@ import z from "zod"
 import { AuditExport } from "../../audit/export"
 import { parseAuditJsonLineResult } from "../../audit/json"
 import { Replay } from "../../replay/replay"
+import type { SessionID } from "../../session/schema"
 import { lazy } from "../../util/lazy"
 import { Log } from "../../util/log"
 import { SESSION_ID_PARAM, parseSessionID } from "./route-params"
 
 const log = Log.create({ service: "audit.routes" })
+const AUDIT_EXPORT_DEFAULT_LIMIT = 10_000
+const AUDIT_EXPORT_MAX_LIMIT = 10_000
+
+const AuditExportLimitQuery = z.object({
+  limit: z.coerce.number().int().min(1).max(AUDIT_EXPORT_MAX_LIMIT).optional().default(AUDIT_EXPORT_DEFAULT_LIMIT),
+})
+
+const AuditExportAllQuery = AuditExportLimitQuery.extend({
+  since: z.coerce.number().int().min(0).optional(),
+  risk: z
+    .enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"])
+    .optional()
+    .meta({ description: "Filter sessions by minimum risk level" }),
+  type: z.string().optional().meta({ description: "Filter by event type (e.g. tool.call, agent.route)" }),
+})
+
+type AuditRecord = { session_id: string; event_type: string; [key: string]: unknown }
+
+function isAuditRecord(value: unknown): value is AuditRecord {
+  return value !== null && typeof value === "object" && "session_id" in value && "event_type" in value
+}
 
 // Parse a JSON-Lines entry and return null on failure instead of throwing.
 // One corrupt line (partial write, truncation) previously blew up the
@@ -21,6 +43,40 @@ export function parseAuditJsonLine(line: string): unknown | null {
     return null
   }
   return parsed.value
+}
+
+export async function collectAuditExportRecords(
+  lines: Iterable<string>,
+  options: {
+    limit: number
+    risk?: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL"
+    type?: string
+  },
+): Promise<AuditRecord[]> {
+  const records: AuditRecord[] = []
+  const riskOrder = { LOW: 0, MEDIUM: 1, HIGH: 2, CRITICAL: 3 } as const
+  const minLevel = options.risk ? riskOrder[options.risk] : undefined
+  const sessionRisks = new Map<string, number>()
+  const RiskEngine = options.risk ? (await import("../../risk/score")).Risk : undefined
+
+  for (const line of lines) {
+    const record = parseAuditJsonLine(line)
+    if (!isAuditRecord(record)) continue
+    if (options.type && record.event_type !== options.type) continue
+    if (RiskEngine && minLevel !== undefined) {
+      let level = sessionRisks.get(record.session_id)
+      if (level === undefined) {
+        const assessment = RiskEngine.fromSession(record.session_id as SessionID)
+        level = riskOrder[assessment.level]
+        sessionRisks.set(record.session_id, level)
+      }
+      if (level < minLevel) continue
+    }
+    records.push(record)
+    if (records.length >= options.limit) break
+  }
+
+  return records
 }
 
 export const AuditRoutes = lazy(() =>
@@ -36,10 +92,12 @@ export const AuditRoutes = lazy(() =>
         },
       }),
       validator("param", SESSION_ID_PARAM),
+      validator("query", AuditExportLimitQuery),
       async (c) => {
         const sessionID = parseSessionID(c)
-        const lines = [...AuditExport.stream(sessionID)]
-        return c.json({ data: lines.map(parseAuditJsonLine).filter((x) => x !== null) })
+        const { limit } = c.req.valid("query")
+        const records = await collectAuditExportRecords(AuditExport.stream(sessionID), { limit })
+        return c.json({ data: records })
       },
     )
     .get(
@@ -52,37 +110,10 @@ export const AuditRoutes = lazy(() =>
           200: { description: "JSON Lines audit export" },
         },
       }),
-      validator(
-        "query",
-        z.object({
-          since: z.coerce.number().int().min(0).optional(),
-          risk: z
-            .enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"])
-            .optional()
-            .meta({ description: "Filter sessions by minimum risk level" }),
-          type: z.string().optional().meta({ description: "Filter by event type (e.g. tool.call, agent.route)" }),
-        }),
-      ),
+      validator("query", AuditExportAllQuery),
       async (c) => {
-        const { since, risk, type } = c.req.valid("query")
-        type AuditRecord = { session_id: string; event_type: string; [key: string]: unknown }
-        let records = [...AuditExport.streamAll({ since })]
-          .map(parseAuditJsonLine)
-          .filter((x): x is AuditRecord => x !== null && typeof x === "object" && "session_id" in (x as object))
-        if (type) records = records.filter((r) => r.event_type === type)
-        if (risk) {
-          const { Risk: RiskEngine } = await import("../../risk/score")
-          const riskOrder = { LOW: 0, MEDIUM: 1, HIGH: 2, CRITICAL: 3 } as const
-          const minLevel = riskOrder[risk]
-          const sessionRisks = new Map<string, number>()
-          for (const r of records) {
-            if (!sessionRisks.has(r.session_id)) {
-              const assessment = RiskEngine.fromSession(r.session_id as any)
-              sessionRisks.set(r.session_id, riskOrder[assessment.level])
-            }
-          }
-          records = records.filter((r) => (sessionRisks.get(r.session_id) ?? 0) >= minLevel)
-        }
+        const { since, risk, type, limit } = c.req.valid("query")
+        const records = await collectAuditExportRecords(AuditExport.streamAll({ since }), { limit, risk, type })
         return c.json({ data: records })
       },
     )

@@ -204,6 +204,12 @@ describe("server route validation", () => {
     expect(src).toContain("ws.close()")
   })
 
+  test("pty websocket route reports missing sessions as not found", async () => {
+    const src = await Bun.file(path.join(import.meta.dir, "../../src/server/routes/pty.ts")).text()
+    expect(src).toContain('throw new NotFoundError({ message: "Session not found" })')
+    expect(src).not.toContain('throw new Error("Session not found")')
+  })
+
   test("sse stop handlers always close their queues even if unsubscribe throws", async () => {
     const eventSrc = await Bun.file(path.join(import.meta.dir, "../../src/server/routes/event.ts")).text()
     const globalSrc = await Bun.file(path.join(import.meta.dir, "../../src/server/routes/global.ts")).text()

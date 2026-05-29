@@ -333,19 +333,34 @@ fn find_function_scopes(content: &str) -> Vec<FunctionScope> {
     let mut scopes = Vec::new();
     let mut depth: i32 = 0;
     let mut scope_start: Option<usize> = None;
+    let mut in_block_comment = false;
 
     for (i, line) in lines.iter().enumerate() {
         if scope_start.is_none() && func_re.is_match(line) && !control_re.is_match(line) {
             scope_start = Some(i);
             depth = 0;
+            in_block_comment = false;
         }
         if scope_start.is_some() {
             let bytes = line.as_bytes();
             let len = bytes.len();
             let mut j = 0;
             while j < len {
+                if in_block_comment {
+                    if j + 1 < len && bytes[j] == b'*' && bytes[j + 1] == b'/' {
+                        in_block_comment = false;
+                        j += 2;
+                    } else {
+                        j += 1;
+                    }
+                    continue;
+                }
                 match bytes[j] {
                     b'/' if j + 1 < len && bytes[j + 1] == b'/' => break, // line comment
+                    b'/' if j + 1 < len && bytes[j + 1] == b'*' => {
+                        in_block_comment = true;
+                        j += 1;
+                    }
                     b'"' | b'\'' | b'`' => {
                         let quote = bytes[j];
                         j += 1;
@@ -377,6 +392,7 @@ fn find_function_scopes(content: &str) -> Vec<FunctionScope> {
                 }
                 scope_start = None;
                 depth = 0;
+                in_block_comment = false;
             }
         }
     }
@@ -439,8 +455,6 @@ fn scan_lifecycle(
     // Unbounded map growth detection
     if enabled.contains("map_growth") && findings.len() < max {
         let map_set_re = Regex::new(r"(\w+)\.set\s*\(").unwrap();
-        let map_delete_re = Regex::new(r"\.delete\s*\(").unwrap();
-        let map_size_re = Regex::new(r"\.size\s*[><=!]").unwrap();
         let mut set_names: HashMap<String, usize> = HashMap::new();
         for mat in map_set_re.captures_iter(content) {
             let name = mat.get(1).unwrap().as_str().to_string();
@@ -451,6 +465,11 @@ fn scan_lifecycle(
             if findings.len() >= max {
                 break;
             }
+            let escaped_name = regex::escape(name);
+            let map_delete_re =
+                Regex::new(&format!(r"\b{}\s*\.\s*delete\s*\(", escaped_name)).unwrap();
+            let map_size_re =
+                Regex::new(&format!(r"\b{}\s*\.\s*size\s*[><=!]", escaped_name)).unwrap();
             if map_delete_re.is_match(content) || map_size_re.is_match(content) {
                 continue;
             }
@@ -575,6 +594,23 @@ fn is_const_assignment(line: &str) -> bool {
     re.is_match(line)
 }
 
+fn truncate_with_ellipsis(value: &str, max_bytes: usize) -> String {
+    let suffix = "...";
+    if value.len() <= max_bytes {
+        return value.to_string();
+    }
+    let prefix_limit = max_bytes.saturating_sub(suffix.len());
+    let mut end = 0;
+    for (idx, ch) in value.char_indices() {
+        let next = idx + ch.len_utf8();
+        if next > prefix_limit {
+            break;
+        }
+        end = next;
+    }
+    format!("{}{}", &value[..end], suffix)
+}
+
 fn scan_hardcodes(
     content: &str,
     file: &str,
@@ -687,11 +723,7 @@ fn scan_hardcodes(
                     line: i + 1,
                     column: mat.start() + 1,
                     kind: "inline_url".into(),
-                    value: if val.len() > 120 {
-                        format!("{}...", &val[..117])
-                    } else {
-                        val.to_string()
-                    },
+                    value: truncate_with_ellipsis(val, 120),
                     suggestion: "Move URL to configuration or environment variable".into(),
                     severity: sev.into(),
                 });
@@ -713,11 +745,7 @@ fn scan_hardcodes(
                     line: i + 1,
                     column: caps.get(0).unwrap().start() + 1,
                     kind: "inline_path".into(),
-                    value: if val.len() > 120 {
-                        format!("{}...", &val[..117])
-                    } else {
-                        val.to_string()
-                    },
+                    value: truncate_with_ellipsis(val, 120),
                     suggestion: "Use path.join() with a configurable base directory".into(),
                     severity: "medium".into(),
                 });
@@ -996,6 +1024,69 @@ pub fn detect_hardcodes_native(input_json: &str) -> Result<String, String> {
         heuristics,
     };
     serde_json::to_string(&result).map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn enabled(patterns: &[&str]) -> HashSet<String> {
+        patterns
+            .iter()
+            .map(|pattern| (*pattern).to_string())
+            .collect()
+    }
+
+    #[test]
+    fn hardcode_truncation_preserves_utf8_boundaries() {
+        let mut hardcoded_path = "/Users/deploy/".to_string();
+        while hardcoded_path.len() < 116 {
+            hardcoded_path.push('a');
+        }
+        hardcoded_path.push('世');
+        hardcoded_path.push_str("tail");
+
+        let content = format!("const path = \"{}\";", hardcoded_path);
+        let findings = scan_hardcodes(&content, "src/app.ts", &enabled(&["inline_path"]), 10);
+
+        assert_eq!(findings.len(), 1);
+        assert!(findings[0].value.ends_with("..."));
+        assert!(findings[0].value.is_char_boundary(findings[0].value.len()));
+    }
+
+    #[test]
+    fn lifecycle_map_growth_cleanup_is_checked_per_map_variable() {
+        let content = r#"
+const cache = new Map()
+cache.set(key, value)
+
+const limited = new Map()
+limited.set(other, value)
+limited.delete(other)
+"#;
+
+        let findings = scan_lifecycle(content, "src/cache.ts", &enabled(&["map_growth"]), 10);
+
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].resource_type, "map_growth");
+        assert!(findings[0].description.contains("cache"));
+    }
+
+    #[test]
+    fn lifecycle_scope_detection_ignores_block_comment_braces() {
+        let content = r#"
+function run() {
+  /* } */
+  setInterval(() => {}, 1000)
+}
+"#;
+
+        let findings = scan_lifecycle(content, "src/run.ts", &enabled(&["timer"]), 10);
+
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].resource_type, "timer");
+        assert_eq!(findings[0].line, 5);
+    }
 }
 
 // ─── Shared file collection ────────────────────────────────────────
