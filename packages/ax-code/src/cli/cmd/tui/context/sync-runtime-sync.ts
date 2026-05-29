@@ -13,9 +13,11 @@ export interface RuntimeSyncResponse<T> {
   data: T | undefined
 }
 
+export type RuntimeSyncWorktree = string | { directory?: string }
+
 export interface RuntimeSyncClient {
   worktree: {
-    list: () => Promise<RuntimeSyncResponse<string[]>>
+    list: () => Promise<RuntimeSyncResponse<RuntimeSyncWorktree[]>>
   }
   mcp: {
     status: () => Promise<RuntimeSyncResponse<Record<string, McpStatus>>>
@@ -56,6 +58,14 @@ export function createRuntimeSyncActions(input: {
   applySuperLong: (value: boolean) => void
   applyIsolation: (value: ReturnType<typeof normalizeIsolationState>) => void
 }): RuntimeSyncActions {
+  function normalizeWorkspaceList(input: RuntimeSyncWorktree[]) {
+    return input.flatMap((item) => {
+      if (typeof item === "string" && item.length > 0) return [item]
+      if (typeof item === "object" && item?.directory) return [item.directory]
+      return []
+    })
+  }
+
   async function fetchOptionalRuntimeJson<T>(pathname: string, init?: RequestInit) {
     try {
       const path = pathname.startsWith("/") ? pathname : `/${pathname}`
@@ -87,7 +97,7 @@ export function createRuntimeSyncActions(input: {
     async syncWorkspaces() {
       const result = await input.client.worktree.list().catch(() => undefined)
       if (!result?.data) return
-      input.applyWorkspaceList(result.data)
+      input.applyWorkspaceList(normalizeWorkspaceList(result.data))
     },
     async syncMcpStatus() {
       const result = await input.client.mcp.status().catch(() => undefined)
