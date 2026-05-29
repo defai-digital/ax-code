@@ -42,6 +42,35 @@ test("waitForCallback keeps the latest waiter for duplicate states", async () =>
   expect(newRejected).toBe(true)
 }, 5000)
 
+test("timeout for superseded OAuth flow does not clear the active MCP name mapping", async () => {
+  const McpOAuthCallback = await getCallbackModule()
+  const originalSetTimeout = globalThis.setTimeout
+  const originalClearTimeout = globalThis.clearTimeout
+  const timeouts: Array<() => void> = []
+
+  ;(globalThis as any).setTimeout = (handler: TimerHandler) => {
+    timeouts.push(() => {
+      if (typeof handler === "function") handler()
+    })
+    return { __fakeTimer: timeouts.length }
+  }
+  ;(globalThis as any).clearTimeout = () => undefined
+
+  try {
+    const old = McpOAuthCallback.waitForCallback("state-old", "github").catch((error) => error)
+    const active = McpOAuthCallback.waitForCallback("state-active", "github")
+
+    timeouts[0]?.()
+    await expect(old).resolves.toThrow("OAuth callback timeout")
+
+    McpOAuthCallback.cancelPending("github")
+    await expect(active).rejects.toThrow("Authorization cancelled")
+  } finally {
+    globalThis.setTimeout = originalSetTimeout
+    globalThis.clearTimeout = originalClearTimeout
+  }
+}, 5000)
+
 test("isPortInUse reflects callback server state", async () => {
   const McpOAuthCallback = await getCallbackModule()
   const isPortInUse = "isPortInUse" in McpOAuthCallback ? McpOAuthCallback.isPortInUse : null

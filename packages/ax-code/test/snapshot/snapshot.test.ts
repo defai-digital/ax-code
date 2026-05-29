@@ -873,6 +873,18 @@ test("restore function", async () => {
   })
 })
 
+test("restore rolls back the snapshot index when checkout-index fails", async () => {
+  const source = await Bun.file(path.join(import.meta.dir, "../../src/snapshot/index.ts")).text()
+  const restoreStart = source.indexOf("export async function restore")
+  const diffStart = source.indexOf("export async function diffFull")
+  const body = source.slice(restoreStart, diffStart)
+
+  expect(body.indexOf('["write-tree"]')).toBeGreaterThan(-1)
+  expect(body.indexOf('["write-tree"]')).toBeLessThan(body.indexOf('["read-tree", snapshot]'))
+  expect(body).toContain('["read-tree", rollbackTree]')
+  expect(body).toContain("failed to rollback snapshot index after restore failure")
+})
+
 test("revert should not delete files that existed but were deleted in snapshot", async () => {
   await using tmp = await bootstrap()
   await Instance.provide({
@@ -984,6 +996,19 @@ test("diffFull sets status based on git change type", async () => {
       expect(trim!.deletions).toBeGreaterThan(0)
     },
   })
+})
+
+test("diffFull holds the snapshot operation lock across its two diff phases", async () => {
+  const source = await Bun.file(path.join(import.meta.dir, "../../src/snapshot/index.ts")).text()
+  const body = source.slice(source.indexOf("export async function diffFull"))
+
+  expect(body).toContain("return withOperationLock(current, async () => {")
+  expect(body.indexOf("return withOperationLock")).toBeLessThan(
+    body.indexOf('["diff", "--no-ext-diff", "--name-status"'),
+  )
+  expect(body.indexOf("return withOperationLock")).toBeLessThan(
+    body.indexOf('["diff", "--no-ext-diff", "--no-renames", "--numstat"'),
+  )
 })
 
 test("diffFull with new file additions", async () => {
