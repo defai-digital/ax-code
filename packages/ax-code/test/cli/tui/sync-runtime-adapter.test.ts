@@ -36,7 +36,11 @@ describe("tui sync runtime adapter", () => {
       url: "http://localhost",
       fetch: async () => okJson({}),
       client: createClient({
-        worktree: { list: async () => ({ data: ["repo-a", "repo-b"] }) },
+        worktree: {
+          list: async () => ({
+            data: ["repo-a", { directory: "repo-b", name: "repo-b", branch: "ax-code/repo-b" }],
+          }),
+        },
         mcp: { status: async () => ({ data: { server: { connected: true } as unknown as never } }) },
         lsp: { status: async () => ({ data: [{ root: "/repo", healthy: true } as unknown as never] }) },
       }),
