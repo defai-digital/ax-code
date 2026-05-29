@@ -343,7 +343,7 @@ export class CliLanguageModel implements LanguageModelV3 {
         // stdout.on("data") handler and tear down the host process —
         // stdout.on("error") only catches transport errors, not synchronous
         // throws.
-        const safeParse = (line: string): ReturnType<typeof parser.parseStreamLine> => {
+        const safeParse = (line: string): ReturnType<typeof parser.parseStreamLine> | null => {
           try {
             return parser.parseStreamLine(line)
           } catch (err) {
@@ -351,7 +351,7 @@ export class CliLanguageModel implements LanguageModelV3 {
               error: toErrorMessage(err),
               line: line.length > 200 ? line.slice(0, 200) + "…" : line,
             })
-            return null as ReturnType<typeof parser.parseStreamLine>
+            return null
           }
         }
         const processStdoutText = (textChunk: string) => {

@@ -4,6 +4,13 @@
 
 None.
 
+## Resolved (2026-05-29)
+
+| ID | Severity | Resolution | Module | Summary |
+|----|----------|------------|--------|---------|
+| BUG-011 | MEDIUM | fixed | mcp | Removed dead `status` assignment before returning the `listTools()` failure status |
+| BUG-012 | LOW | fixed | provider/cli | Removed the misleading `null as ReturnType<...>` cast and kept parser errors explicitly nullable |
+
 ## Resolved (2026-05-28)
 
 | ID | Severity | Resolution | Module | Summary |
