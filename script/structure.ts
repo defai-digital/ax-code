@@ -3,69 +3,21 @@
 import fs from "fs"
 import path from "path"
 import { V4Guardrails } from "../packages/ax-code/script/check-no-effect-solid-in-v4"
-import {
-  desktopCapabilityProfiles,
-  remoteSurfaceRequiredSecurityReviews,
-} from "../packages/desktop/src/security/capability-profiles"
 
 const root = path.resolve(import.meta.dir, "..")
 
 const note = [
   "packages/integration-github/ARCHITECTURE.md",
   "packages/integration-vscode/ARCHITECTURE.md",
-  "packages/app/ARCHITECTURE.md",
-  "packages/desktop/ARCHITECTURE.md",
   "packages/ax-code/ARCHITECTURE.md",
-  "packages/ui/ARCHITECTURE.md",
   "packages/util/ARCHITECTURE.md",
   "packages/plugin/ARCHITECTURE.md",
   "packages/sdk/js/ARCHITECTURE.md",
 ]
 
-const rule = [
-  {
-    name: "ax-code",
-    dir: "packages/ax-code/src",
-    bad: ["@ax-code/ui"],
-  },
-  {
-    name: "util",
-    dir: "packages/util/src",
-    bad: ["@ax-code/ui"],
-  },
-  {
-    name: "plugin",
-    dir: "packages/plugin/src",
-    bad: ["@ax-code/ui"],
-  },
-  {
-    name: "sdk",
-    dir: "packages/sdk/js/src",
-    bad: ["@ax-code/ui"],
-  },
-  {
-    name: "integration-github",
-    dir: "packages/integration-github",
-    bad: ["@ax-code/ui"],
-  },
-  {
-    name: "integration-vscode",
-    dir: "packages/integration-vscode/src",
-    bad: ["@ax-code/ui"],
-  },
-  {
-    name: "app",
-    dir: "packages/app/src",
-    bad: ["packages/ax-code/src", "../ax-code/src", "../../ax-code/src"],
-  },
-  {
-    name: "desktop",
-    dir: "packages/desktop/src",
-    bad: ["packages/ax-code/src", "../ax-code/src", "../../ax-code/src"],
-  },
-]
+const rule = [] as { name: string; dir: string; bad: string[] }[]
 
-const hot = ["packages/ax-code/src/cli/cmd", "packages/ui/src/components"]
+const hot = ["packages/ax-code/src/cli/cmd"]
 const workspacePackageRoots = ["packages", "packages/sdk/js"]
 const dependencyFields = ["dependencies", "devDependencies", "peerDependencies", "optionalDependencies"] as const
 
@@ -168,9 +120,6 @@ async function deep() {
     "packages/sdk/js/src",
     "packages/integration-github",
     "packages/integration-vscode/src",
-    "packages/app/src",
-    "packages/desktop/src",
-    "packages/ui/src",
     "packages/util/src",
   ]) {
     for (const file of await list(dir)) {
@@ -224,10 +173,7 @@ async function lines(dir: string) {
 }
 
 async function size() {
-  const out = [] as { file: string; lines: number }[]
-  for (const dir of ["packages/ax-code/src", "packages/ui/src"]) {
-    out.push(...(await lines(dir)))
-  }
+  const out = await lines("packages/ax-code/src")
   return out.sort((a, b) => b.lines - a.lines)
 }
 
@@ -356,72 +302,12 @@ function roots() {
     .sort()
 }
 
-function desktopCapabilityProfileViolations() {
-  const out = [] as string[]
-  const profiles = new Map(desktopCapabilityProfiles.map((profile) => [profile.id, profile]))
-  const expectedRemoteGates = {
-    "remote-host": "ADR-023 RSG-1",
-    tunnel: "ADR-023 RSG-2",
-    "pwa-network": "ADR-023 RSG-3",
-    "vscode-webview": "ADR-023 RSG-4",
-  } as const
-
-  const trusted = profiles.get("trusted-local-app")
-  if (!trusted) {
-    out.push("trusted-local-app capability profile is missing")
-  } else {
-    if (trusted.status !== "enabled") out.push("trusted-local-app capability profile must be enabled")
-    if (trusted.bridge !== "trusted-desktop") out.push("trusted-local-app must be the trusted desktop bridge profile")
-    if (trusted.commands.length === 0) out.push("trusted-local-app must declare desktop bridge commands")
-  }
-
-  const preview = profiles.get("browser-preview")
-  if (!preview) {
-    out.push("browser-preview capability profile is missing")
-  } else {
-    if (preview.bridge !== "none") out.push("browser-preview must not expose desktop bridge commands")
-    if (preview.commands.length > 0) out.push("browser-preview must keep desktop bridge commands empty")
-    if (preview.localResources !== "none") out.push("browser-preview must not receive desktop local-resource access")
-  }
-
-  for (const [id, gate] of Object.entries(expectedRemoteGates)) {
-    const profile = profiles.get(id as keyof typeof expectedRemoteGates)
-    if (!profile) {
-      out.push(`${id} capability profile is missing`)
-      continue
-    }
-    if (profile.status !== "disabled") out.push(`${id} capability profile must stay disabled by default`)
-    if (profile.bridge !== "none") out.push(`${id} capability profile must not expose the trusted desktop bridge`)
-    if (profile.commands.length > 0) out.push(`${id} capability profile must keep desktop bridge commands empty`)
-    if (profile.gate !== gate) out.push(`${id} capability profile must be gated by ${gate}`)
-    if (!profile.threatModel || profile.threatModel.length < 40) {
-      out.push(`${id} capability profile must include threat-model metadata`)
-    }
-    for (const review of remoteSurfaceRequiredSecurityReviews) {
-      if (!profile.securityReviews?.includes(review)) out.push(`${id} capability profile must include ${review} review`)
-    }
-  }
-
-  for (const profile of desktopCapabilityProfiles) {
-    if (profile.id === "trusted-local-app") continue
-    if (profile.bridge === "trusted-desktop") {
-      out.push(`${profile.id} must not reuse the trusted desktop bridge`)
-    }
-    if (profile.commands.length > 0) {
-      out.push(`${profile.id} must not declare desktop bridge commands`)
-    }
-  }
-
-  return out
-}
-
 async function main() {
   const miss = await docs()
   const hit = await deps()
   const raw = await deep()
   const sdkRaw = await sdkSourceImports()
   const cycles = dependencyCycles()
-  const capabilityProfileViolations = desktopCapabilityProfileViolations()
   const v4 = await V4Guardrails.check(path.join(root, "packages/ax-code"))
   const all = await size()
   const top10 = all.slice(0, 10)
@@ -464,13 +350,6 @@ async function main() {
     for (const cycle of cycles) out.push(`- ${cycle}`)
   } else {
     out.push("- ok: no workspace package manifest cycles found")
-  }
-  out.push("")
-  out.push("## Desktop Capability Profiles")
-  if (capabilityProfileViolations.length) {
-    for (const item of capabilityProfileViolations) out.push(`- ${item}`)
-  } else {
-    out.push("- ok: browser, PWA, VS Code, tunnel, and remote surfaces cannot reuse the trusted desktop bridge")
   }
   out.push("")
   out.push("## V4 Guardrails")
@@ -520,15 +399,7 @@ async function main() {
     await Bun.write(file, `${prev}${text}\n`)
   }
 
-  if (
-    miss.length ||
-    hit.length ||
-    raw.length ||
-    capabilityProfileViolations.length ||
-    v4.length ||
-    stale.length ||
-    drift.length
-  ) {
+  if (miss.length || hit.length || raw.length || v4.length || stale.length || drift.length) {
     process.exit(1)
   }
 }
