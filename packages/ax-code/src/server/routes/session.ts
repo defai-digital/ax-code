@@ -55,12 +55,13 @@ function startDetachedSessionTask(task: () => Promise<void>) {
   // setTimeout with 0ms delay keeps the event loop alive until the callback
   // fires and the resulting promise from task() settles, which prevents
   // packaged stdio backends from going idle before the first turn starts.
-  setTimeout(() => {
+  const timer = setTimeout(() => {
     void task().catch((error) => {
       DiagnosticLog.recordProcess("server.sessionAsyncTaskUnhandledFailure", { error })
       log.error("detached session task failed", { error })
     })
   }, 0)
+  void timer
 }
 
 function recordAsyncSessionTask(input: {
