@@ -85,7 +85,7 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
 
     for (const hunk of hunks) {
       const filePath = resolvePatchPath(hunk.path)
-      if (hunk.type === "update" && hunk.move_path) resolvePatchPath(hunk.move_path)
+      const movePath = hunk.type === "update" && hunk.move_path ? resolvePatchPath(hunk.move_path) : undefined
       await assertExternalDirectory(ctx, filePath)
       // BUG-293 DEFERRED: The symlink check and subsequent file write
       // are not atomic (TOCTOU). A true atomic fix requires OS-level
@@ -95,6 +95,13 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
       Isolation.assertWrite(ctx.extra?.isolation, filePath, Instance.directory, Instance.worktree)
       const fileRelativePath = normalizeToWorkspacePath(filePath, Instance.worktree)
       BlastRadius.assertWritable(ctx.sessionID, fileRelativePath)
+      if (movePath) {
+        await assertExternalDirectory(ctx, movePath)
+        await assertSymlinkInsideProject(movePath)
+        Isolation.assertWrite(ctx.extra?.isolation, movePath, Instance.directory, Instance.worktree)
+        const moveRelativePath = normalizeToWorkspacePath(movePath, Instance.worktree)
+        BlastRadius.assertWritable(ctx.sessionID, moveRelativePath)
+      }
 
       switch (hunk.type) {
         case "add": {
@@ -443,6 +450,7 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
               await fs.unlink(change.filePath).catch((error: any) => {
                 if (error?.code !== "ENOENT") throw error
               })
+              await FileTime.read(ctx.sessionID, change.filePath)
             })
             updates.push({ file: change.filePath, event: "unlink" })
             break

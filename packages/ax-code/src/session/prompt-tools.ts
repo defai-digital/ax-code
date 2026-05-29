@@ -342,10 +342,9 @@ export async function resolveTools(input: ResolveToolsInput) {
       schemaCache.delete(mcpCacheKey)
       schemaCache.set(mcpCacheKey, transformed)
     } else {
-      transformed = ProviderTransform.schema(
-        input.model,
-        await Promise.resolve(asSchema(mcpTool.inputSchema).jsonSchema),
-      )
+      const schemaJson = await Promise.resolve(asSchema(mcpTool.inputSchema).jsonSchema)
+      // Re-check after await — a concurrent session may have computed and cached already
+      transformed = schemaCache.get(mcpCacheKey) ?? ProviderTransform.schema(input.model, schemaJson)
       schemaCache.set(mcpCacheKey, transformed)
     }
     mcpTool.inputSchema = jsonSchema(transformed)
