@@ -216,7 +216,7 @@ export namespace McpOAuthCallback {
         const current = pendingAuths.get(oauthState)
         if (current?.timeout === timeout) {
           pendingAuths.delete(oauthState)
-          if (mcpName) pendingStates.delete(mcpName)
+          if (mcpName && pendingStates.get(mcpName) === oauthState) pendingStates.delete(mcpName)
           reject(new Error("OAuth callback timeout - authorization took too long"))
         }
       }, CALLBACK_TIMEOUT_MS)

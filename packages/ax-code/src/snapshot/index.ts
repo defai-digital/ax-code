@@ -378,12 +378,33 @@ export namespace Snapshot {
         return
       }
       log.info("restore", { commit: snapshot })
+      const savedTree = await runGit([...core, ...args(current, ["write-tree"])], { cwd: current.worktree })
+      if (savedTree.code !== 0) {
+        log.error("failed to prepare snapshot restore rollback", {
+          snapshot,
+          exitCode: savedTree.code,
+          stderr: savedTree.stderr,
+        })
+        throw new Error(`Snapshot restore failed: write-tree exited with code ${savedTree.code}`)
+      }
+      const rollbackTree = savedTree.text.trim()
       const result = await runGit([...core, ...args(current, ["read-tree", snapshot])], { cwd: current.worktree })
       if (result.code === 0) {
         const checkout = await runGit([...core, ...args(current, ["checkout-index", "-a", "-f"])], {
           cwd: current.worktree,
         })
         if (checkout.code === 0) return
+        const rollback = await runGit([...core, ...args(current, ["read-tree", rollbackTree])], {
+          cwd: current.worktree,
+        })
+        if (rollback.code !== 0) {
+          log.error("failed to rollback snapshot index after restore failure", {
+            snapshot,
+            rollbackTree,
+            exitCode: rollback.code,
+            stderr: rollback.stderr,
+          })
+        }
         log.error("failed to restore snapshot", {
           snapshot,
           exitCode: checkout.code,
@@ -457,46 +478,48 @@ export namespace Snapshot {
 
   export async function diffFull(from: string, to: string) {
     const current = await state()
-    if (!valid(from) || !valid(to)) return []
+    return withOperationLock(current, async () => {
+      if (!valid(from) || !valid(to)) return []
 
-    const result: Snapshot.FileDiff[] = []
-    const status = new Map<string, "added" | "deleted" | "modified">()
+      const result: Snapshot.FileDiff[] = []
+      const status = new Map<string, "added" | "deleted" | "modified">()
 
-    const statuses = await runGit(
-      [...quote, ...args(current, ["diff", "--no-ext-diff", "--name-status", "--no-renames", from, to, "--", "."])],
-      { cwd: current.directory },
-    )
+      const statuses = await runGit(
+        [...quote, ...args(current, ["diff", "--no-ext-diff", "--name-status", "--no-renames", from, to, "--", "."])],
+        { cwd: current.directory },
+      )
 
-    for (const line of statuses.text.trim().split("\n")) {
-      if (!line) continue
-      const parsed = parseNameStatusLine(line)
-      if (!parsed) continue
-      const { code, file } = parsed
-      status.set(file, code.startsWith("A") ? "added" : code.startsWith("D") ? "deleted" : "modified")
-    }
+      for (const line of statuses.text.trim().split("\n")) {
+        if (!line) continue
+        const parsed = parseNameStatusLine(line)
+        if (!parsed) continue
+        const { code, file } = parsed
+        status.set(file, code.startsWith("A") ? "added" : code.startsWith("D") ? "deleted" : "modified")
+      }
 
-    const numstat = await runGit(
-      [...quote, ...args(current, ["diff", "--no-ext-diff", "--no-renames", "--numstat", from, to, "--", "."])],
-      { cwd: current.directory },
-    )
+      const numstat = await runGit(
+        [...quote, ...args(current, ["diff", "--no-ext-diff", "--no-renames", "--numstat", from, to, "--", "."])],
+        { cwd: current.directory },
+      )
 
-    for (const line of numstat.text.trim().split("\n")) {
-      if (!line) continue
-      const parsed = parseNumstatLine(line)
-      if (!parsed) continue
-      const [before, after] = parsed.binary
-        ? ["", ""]
-        : await Promise.all([show(current, from, parsed.file), show(current, to, parsed.file)])
-      result.push({
-        file: parsed.file,
-        before,
-        after,
-        additions: parsed.additions,
-        deletions: parsed.deletions,
-        status: status.get(parsed.file) ?? "modified",
-      })
-    }
+      for (const line of numstat.text.trim().split("\n")) {
+        if (!line) continue
+        const parsed = parseNumstatLine(line)
+        if (!parsed) continue
+        const [before, after] = parsed.binary
+          ? ["", ""]
+          : await Promise.all([show(current, from, parsed.file), show(current, to, parsed.file)])
+        result.push({
+          file: parsed.file,
+          before,
+          after,
+          additions: parsed.additions,
+          deletions: parsed.deletions,
+          status: status.get(parsed.file) ?? "modified",
+        })
+      }
 
-    return result
+      return result
+    })
   }
 }

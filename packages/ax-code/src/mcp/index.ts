@@ -212,15 +212,36 @@ export namespace MCP {
 
   // Store transports for OAuth servers to allow finishing auth
   type TransportWithAuth = StreamableHTTPClientTransport | SSEClientTransport
-  function closeIfPossible(
-    target: { close?: (() => Promise<unknown>) | undefined } | undefined,
-    mcpName: string,
-    context: string,
-  ) {
+  type ClosableMcpObject = {
+    close?: (() => Promise<unknown>) | undefined
+    transport?: unknown
+    pid?: unknown
+  }
+
+  function processTreePid(target: ClosableMcpObject) {
+    if (typeof target.pid === "number") return target.pid
+    const transport = isRecord(target.transport) ? target.transport : undefined
+    return typeof transport?.pid === "number" ? transport.pid : undefined
+  }
+
+  async function closeIfPossible(target: ClosableMcpObject | undefined, mcpName: string, context: string) {
     if (!target || typeof target.close !== "function") {
-      return Promise.resolve()
+      return
     }
-    return target.close().catch((error) => {
+    const pid = processTreePid(target)
+    if (typeof pid === "number") {
+      try {
+        await killProcessTree(pid)
+      } catch (error) {
+        log.debug("failed to kill MCP process tree", {
+          mcpName,
+          context,
+          pid,
+          error: isErrnoException(error) ? error.code : toErrorMessage(error),
+        })
+      }
+    }
+    await target.close().catch((error) => {
       log.debug("failed to close MCP object", { mcpName, context, error })
     })
   }
@@ -314,32 +335,8 @@ export namespace MCP {
       }
     },
     async (state) => {
-      // The MCP SDK only signals the direct child process on close.
-      // Servers like chrome-devtools-mcp spawn grandchild processes
-      // (e.g. Chrome) that the SDK never reaches, leaving them orphaned.
-      // Kill the full descendant tree first so the server exits promptly
-      // and no processes are left behind.
-      for (const client of Object.values(state.clients)) {
-        const pid = (client.transport as { pid?: number })?.pid
-        if (typeof pid !== "number") continue
-        try {
-          await killProcessTree(pid)
-        } catch (error) {
-          log.debug("failed to kill MCP process tree", {
-            pid,
-            error: isErrnoException(error) ? error.code : toErrorMessage(error),
-          })
-        }
-      }
-
       await Promise.all(
-        Object.values(state.clients).map((client) =>
-          client.close().catch((error) => {
-            log.error("Failed to close MCP client", {
-              error,
-            })
-          }),
-        ),
+        Object.entries(state.clients).map(([mcpName, client]) => closeIfPossible(client, mcpName, "instance shutdown")),
       )
       toolsCacheUnsub?.()
       toolsCacheUnsub = undefined
@@ -375,6 +372,10 @@ export namespace MCP {
       name: "ax-code",
       version: Installation.VERSION,
     })
+  }
+
+  function rememberClientTransport(client: MCPClient, transport: unknown) {
+    ;(client as { transport?: unknown }).transport ??= transport
   }
 
   function needsTrustStatus(decision: McpTrust.Decision): Status {
@@ -445,9 +446,7 @@ export namespace MCP {
       // Close existing client if present to prevent memory leaks
       const existingClient = s.clients[name]
       if (existingClient) {
-        await existingClient.close().catch((error) => {
-          log.error("Failed to close existing MCP client", { name, error })
-        })
+        await closeIfPossible(existingClient, name, "replacing existing client")
       }
       s.clients[name] = result.mcpClient
       s.status[name] = result.status
@@ -533,6 +532,7 @@ export namespace MCP {
         try {
           client = createClient()
           await withTimeout(client.connect(transport), connectTimeout)
+          rememberClientTransport(client, transport)
           registerNotificationHandlers(client, key)
           mcpClient = client
           log.info("connected", { key, transport: name })
@@ -643,11 +643,7 @@ export namespace MCP {
         },
       })
       const onStderr = (chunk: Buffer) => {
-        const line = chunk
-          .toString()
-          .trimEnd()
-          .replaceAll(SECRET_PATTERN, "[redacted]")
-          .slice(0, MAX_STDERR_LINE)
+        const line = chunk.toString().trimEnd().replaceAll(SECRET_PATTERN, "[redacted]").slice(0, MAX_STDERR_LINE)
         if (line) log.info("mcp stderr", { key, line })
       }
       transport.stderr?.on("data", onStderr)
@@ -659,6 +655,7 @@ export namespace MCP {
       try {
         const client = createClient()
         await withTimeout(client.connect(transport), connectTimeout)
+        rememberClientTransport(client, transport)
         registerNotificationHandlers(client, key)
         const close = client.close.bind(client)
         client.close = async () => {
@@ -711,11 +708,7 @@ export namespace MCP {
       return undefined
     })
     if (!result) {
-      await mcpClient.close().catch((error) => {
-        log.error("Failed to close MCP client", {
-          error,
-        })
-      })
+      await closeIfPossible(mcpClient, key, "initial listTools failed")
       return {
         mcpClient: undefined,
         status: {
@@ -921,12 +914,15 @@ export namespace MCP {
       )
 
       // Apply state mutations after all concurrent reads complete (BUG-021)
-      for (const { clientName, toolsResult } of toolsResults) {
+      for (const { clientName, client, toolsResult } of toolsResults) {
         if (toolsResult && "_failed" in toolsResult) {
           if (s.status[clientName]?.status !== "disabled") {
             s.status[clientName] = { status: "failed" as const, error: (toolsResult as { error: string }).error }
           }
-          delete s.clients[clientName]
+          if (s.clients[clientName] === client) {
+            delete s.clients[clientName]
+          }
+          await closeIfPossible(client, clientName, "listTools failed")
         }
       }
 

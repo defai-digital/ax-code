@@ -5,6 +5,8 @@ let connectStarted!: Promise<void>
 let resolveConnectStarted!: () => void
 let releaseConnect!: () => void
 let connectRelease!: Promise<void>
+let failListTools = false
+let nextTransportPid = 5001
 
 function resetGate() {
   connectStarted = new Promise((resolve) => {
@@ -13,18 +15,24 @@ function resetGate() {
   connectRelease = new Promise((resolve) => {
     releaseConnect = resolve
   })
+  failListTools = false
+  nextTransportPid = 5001
 }
 
 resetGate()
 
 mock.module("@modelcontextprotocol/sdk/client/index.js", () => ({
   Client: class MockClient {
-    async connect() {
+    transport?: unknown
+
+    async connect(transport: unknown) {
+      this.transport = transport
       resolveConnectStarted()
       await connectRelease
     }
 
     async listTools() {
+      if (failListTools) throw new Error("list failed")
       return { tools: [] }
     }
 
@@ -34,6 +42,7 @@ mock.module("@modelcontextprotocol/sdk/client/index.js", () => ({
 
 mock.module("@modelcontextprotocol/sdk/client/stdio.js", () => ({
   StdioClientTransport: class MockStdioTransport {
+    pid = nextTransportPid++
     stderr = {
       on() {},
       off() {},
@@ -75,6 +84,41 @@ test("disconnect waits for an in-flight connect before disabling the MCP server"
 
       const clients = await MCP.clients()
       expect(clients.race).toBeUndefined()
+    },
+  })
+})
+
+test("MCP client teardown kills process trees before closing clients", async () => {
+  const source = await Bun.file(new URL("../../src/mcp/index.ts", import.meta.url)).text()
+
+  expect(source).toContain("await killProcessTree(pid)")
+  expect(source).toContain("rememberClientTransport(client, transport)")
+  expect(source).toContain('await closeIfPossible(client, name, "disconnecting")')
+  expect(source).toContain('await closeIfPossible(existingClient, name, "replacing existing client")')
+})
+
+test("tools closes and kills MCP clients when listTools fails", async () => {
+  await using tmp = await tmpdir({ git: true })
+  const source = await Bun.file(new URL("../../src/mcp/index.ts", import.meta.url)).text()
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const add = MCP.add("failing-tools", {
+        type: "local",
+        command: ["mock-mcp-server"],
+      })
+
+      await connectStarted
+      releaseConnect()
+      await add
+
+      failListTools = true
+      await MCP.tools()
+
+      const clients = await MCP.clients()
+      expect(clients["failing-tools"]).toBeUndefined()
+      expect(source).toContain('await closeIfPossible(client, clientName, "listTools failed")')
     },
   })
 })
