@@ -23,16 +23,7 @@ import { withTimeout } from "./timeout"
 // the original Host header — preventing a second resolution that
 // could return a different address.
 
-// Swappable fetch for tests — avoids relying on globalThis.fetch override,
-// which Bun's module bundler may resolve statically at compile time.
 type FetchFn = (...args: Parameters<typeof globalThis.fetch>) => ReturnType<typeof globalThis.fetch>
-let _fetchImpl: FetchFn | undefined
-export function _testInjectFetch(fn: FetchFn | undefined) {
-  _fetchImpl = fn
-}
-function callFetch(...args: Parameters<typeof globalThis.fetch>) {
-  return (_fetchImpl ?? globalThis.fetch)(...args)
-}
 
 export namespace Ssrf {
   type PinnedFetchInit = RequestInit & { label?: string }
@@ -138,7 +129,7 @@ export namespace Ssrf {
    * The URL is rewritten to use the resolved IP, and the original Host
    * header is set so TLS SNI and virtual hosting work correctly.
    */
-  async function pinnedFetchOnce(url: string, init: PinnedFetchInit | undefined, label: string): Promise<Response> {
+  async function pinnedFetchOnce(url: string, init: PinnedFetchInit | undefined, label: string, fetchFn?: FetchFn): Promise<Response> {
     const parsed = new URL(url)
     if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
       throw new Error(`${label}: unsupported URL scheme: ${parsed.protocol}`)
@@ -151,7 +142,7 @@ export namespace Ssrf {
       const bad = net.isIP(hostname) === 4 ? isPrivateIPv4(hostname) : isPrivateIPv6(hostname)
       if (bad) throw new Error(`${label}: refusing to fetch private/reserved address: ${hostname}`)
       const { label: _, ...fetchInit } = init ?? {}
-      return callFetch(url, { ...fetchInit, redirect: "manual" })
+      return (fetchFn ?? globalThis.fetch)(url, { ...fetchInit, redirect: "manual" })
     }
 
     // Resolve DNS once
@@ -190,7 +181,7 @@ export namespace Ssrf {
     }
 
     const { label: _, ...fetchInit } = init ?? {}
-    return callFetch(pinnedUrl.toString(), {
+    return (fetchFn ?? globalThis.fetch)(pinnedUrl.toString(), {
       ...fetchInit,
       headers,
       redirect: "manual",
@@ -200,14 +191,14 @@ export namespace Ssrf {
     } as RequestInit)
   }
 
-  export async function pinnedFetch(url: string, init?: PinnedFetchInit): Promise<Response> {
+  export async function pinnedFetch(url: string, init?: PinnedFetchInit, fetchFn?: FetchFn): Promise<Response> {
     const label = init?.label ?? "ssrf"
     const redirectMode = init?.redirect ?? "follow"
     let currentUrl = url
     let currentInit = { ...init, redirect: "manual" } as PinnedFetchInit
 
     for (let redirectCount = 0; redirectCount <= MAX_REDIRECTS; redirectCount++) {
-      const response = await pinnedFetchOnce(currentUrl, currentInit, label)
+      const response = await pinnedFetchOnce(currentUrl, currentInit, label, fetchFn)
       if (!isRedirect(response.status)) return response
       if (redirectMode === "manual") return response
       if (redirectMode === "error") throw new Error(`${label}: redirect refused: ${currentUrl}`)
