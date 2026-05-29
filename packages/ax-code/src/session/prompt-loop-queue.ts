@@ -21,13 +21,22 @@ export function finishPromptLoopQueue(input: {
     return input.cancel(input.sessionID).then(() => undefined)
   }
   input.markIdle(input.sessionID)
-  input.resumeLoop({ sessionID: input.sessionID, resume_existing: true }).catch((error) => {
+  input.resumeLoop({ sessionID: input.sessionID, resume_existing: true }).catch(async (error) => {
     log.error("session loop failed to resume for queued messages", {
       command: "session.prompt.loop",
       status: "error",
       sessionID: input.sessionID,
       error,
     })
-    input.cancel(input.sessionID)
+    try {
+      await input.cancel(input.sessionID)
+    } catch (cancelError) {
+      log.error("cancel also failed after resume error", {
+        command: "session.prompt.loop",
+        status: "error",
+        sessionID: input.sessionID,
+        error: cancelError,
+      })
+    }
   })
 }

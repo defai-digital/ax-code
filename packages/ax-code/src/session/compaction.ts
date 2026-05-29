@@ -280,6 +280,7 @@ export namespace SessionCompaction {
     }
 
     const agent = await Agent.get("compaction")
+    if (!agent) throw new Error("Compaction agent is not configured or has been disabled")
     const model = agent?.model
       ? await Provider.getModel(agent.model.providerID, agent.model.modelID)
       : await Provider.getModel(userMessage.model.providerID, userMessage.model.modelID)
