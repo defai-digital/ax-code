@@ -23,6 +23,16 @@ import { withTimeout } from "./timeout"
 // the original Host header — preventing a second resolution that
 // could return a different address.
 
+// Swappable fetch for tests — avoids relying on globalThis.fetch override,
+// which Bun's module bundler may resolve statically at compile time.
+let _fetchImpl: typeof globalThis.fetch | undefined
+export function _testInjectFetch(fn: typeof globalThis.fetch | undefined) {
+  _fetchImpl = fn
+}
+function callFetch(...args: Parameters<typeof globalThis.fetch>) {
+  return (_fetchImpl ?? globalThis.fetch)(...args)
+}
+
 export namespace Ssrf {
   type PinnedFetchInit = RequestInit & { label?: string }
   type ResolvedAddress = { address: string; family: number }
@@ -140,7 +150,7 @@ export namespace Ssrf {
       const bad = net.isIP(hostname) === 4 ? isPrivateIPv4(hostname) : isPrivateIPv6(hostname)
       if (bad) throw new Error(`${label}: refusing to fetch private/reserved address: ${hostname}`)
       const { label: _, ...fetchInit } = init ?? {}
-      return globalThis.fetch(url, { ...fetchInit, redirect: "manual" })
+      return callFetch(url, { ...fetchInit, redirect: "manual" })
     }
 
     // Resolve DNS once
@@ -179,7 +189,7 @@ export namespace Ssrf {
     }
 
     const { label: _, ...fetchInit } = init ?? {}
-    return globalThis.fetch(pinnedUrl.toString(), {
+    return callFetch(pinnedUrl.toString(), {
       ...fetchInit,
       headers,
       redirect: "manual",
