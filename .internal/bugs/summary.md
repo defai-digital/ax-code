@@ -8,6 +8,9 @@ None.
 
 | ID | Severity | Resolution | Module | Summary |
 |----|----------|------------|--------|---------|
+| BUG-013 | MEDIUM | fixed | cli/cmd/storage/import | Preserved distinct read errors for missing, corrupt, and otherwise unreadable transfer files |
+| BUG-014 | MEDIUM | fixed | tool/scan-coverage | Continued source detection after individual glob scan failures instead of short-circuiting |
+| BUG-015 | MEDIUM | fixed | cli/cmd/run | Logged tool renderer fallback failures before degrading to generic output |
 | BUG-011 | MEDIUM | fixed | mcp | Removed dead `status` assignment before returning the `listTools()` failure status |
 | BUG-012 | LOW | fixed | provider/cli | Removed the misleading `null as ReturnType<...>` cast and kept parser errors explicitly nullable |
 

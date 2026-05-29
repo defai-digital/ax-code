@@ -78,13 +78,20 @@ async function anyExists(candidates: string[]) {
   return false
 }
 
-function hasSourceFile(patterns: string[]) {
+type SourceGlob = {
+  scanSync(options: { cwd: string; onlyFiles: true }): Iterable<unknown>
+}
+
+export function hasSourceFile(
+  patterns: string[],
+  createGlob: (pattern: string) => SourceGlob = (pattern) => new Bun.Glob(pattern),
+) {
   for (const pattern of patterns) {
     try {
-      const glob = new Bun.Glob(pattern)
+      const glob = createGlob(pattern)
       for (const _ of glob.scanSync({ cwd: Instance.directory, onlyFiles: true })) return true
     } catch {
-      return false
+      continue
     }
   }
   return false

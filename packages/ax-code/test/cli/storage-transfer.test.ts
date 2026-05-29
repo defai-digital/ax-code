@@ -1,13 +1,28 @@
 import { describe, expect, test } from "bun:test"
+import path from "path"
 import { EventQuery } from "../../src/replay/query"
 import { Recorder } from "../../src/replay/recorder"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
 import { SessionPrompt } from "../../src/session/prompt"
+import { readSessionTransferFile } from "../../src/cli/cmd/storage/import"
 import { buildTransfer, writeTransfer } from "../../src/cli/cmd/storage/transfer"
 import { tmpdir } from "../fixture/fixture"
 
 describe("storage transfer", () => {
+  test("reports corrupt import files as read failures, not missing files", async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await Bun.write(path.join(dir, "corrupt.json"), "{not json")
+      },
+    })
+
+    const result = await readSessionTransferFile(path.join(tmp.path, "corrupt.json"))
+
+    expect(result.error).toStartWith("Failed to read ")
+    expect(result.error).not.toContain("File not found")
+  })
+
   test("exports and reimports replay events with the session payload", async () => {
     await using tmp = await tmpdir({
       git: true,

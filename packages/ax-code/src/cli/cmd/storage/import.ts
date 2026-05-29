@@ -86,6 +86,28 @@ export function transformShareData(shareData: ShareData[]): {
   }
 }
 
+export async function readSessionTransferFile(file: string): Promise<
+  | {
+      data: SessionTransfer
+      error?: undefined
+    }
+  | {
+      data?: undefined
+      error: string
+    }
+> {
+  try {
+    return { data: await Filesystem.readJson<SessionTransfer>(file) }
+  } catch (error) {
+    const code = typeof error === "object" && error !== null && "code" in error ? error.code : undefined
+    if (code === "ENOENT") {
+      return { error: `File not found: ${file}` }
+    }
+    const message = error instanceof Error ? error.message : String(error)
+    return { error: `Failed to read ${file}: ${message}` }
+  }
+}
+
 export const ImportCommand = cmd({
   command: "import <file>",
   describe: "import session data from JSON file or URL",
@@ -161,12 +183,13 @@ export const ImportCommand = cmd({
 
         exportData = transformed
       } else {
-        exportData = await Filesystem.readJson<SessionTransfer>(args.file).catch(() => undefined)
-        if (!exportData) {
-          process.stdout.write(`File not found: ${args.file}`)
+        const result = await readSessionTransferFile(args.file)
+        if (result.error) {
+          process.stdout.write(result.error)
           process.stdout.write(EOL)
           return
         }
+        exportData = result.data
       }
 
       if (!exportData) {
