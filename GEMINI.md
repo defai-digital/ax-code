@@ -17,7 +17,6 @@ AX Code is an AI coding runtime and execution engine designed for teams that nee
 The project is a **pnpm workspace** monorepo:
 
 - `packages/ax-code`: Main CLI, TUI, server, and core backend logic.
-- `packages/ui`: Shared UI components and visual infrastructure (SolidJS).
 - `packages/util`: Shared utilities with minimal dependencies.
 - `packages/sdk/js`: Programmatic and HTTP SDK.
 - `packages/integration-vscode`: VS Code extension.
@@ -49,7 +48,6 @@ The project is a **pnpm workspace** monorepo:
 - **File Scope**: Preferred file size is under 300 lines. Files exceeding 500 lines are flagged for review, and 800+ lines generally require splitting.
 - **Layering**:
   - Business logic lives in domain folders (e.g., `session`, `project`, `provider`).
-  - `ax-code` must not depend on `ui` (clean separation of runtime and presentation).
 - **Testing**:
   - `packages/ax-code` uses a mirrored `test/` tree for integration coverage.
   - Shared packages colocate tests near the source.

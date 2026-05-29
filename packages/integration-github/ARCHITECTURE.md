@@ -7,7 +7,6 @@
 ## Allowed Dependencies
 
 - may depend on `@ax-code/sdk`
-- must not depend on `@ax-code/ui`
 
 ## Placement
 
