@@ -1,10 +1,8 @@
 import { afterEach, expect, mock, test } from "bun:test"
-import { Ssrf } from "../../src/util/ssrf"
-
-const originalFetch = globalThis.fetch
+import { Ssrf, _testInjectFetch } from "../../src/util/ssrf"
 
 afterEach(() => {
-  globalThis.fetch = originalFetch
+  _testInjectFetch(undefined)
 })
 
 test("pinnedFetch rejects non-http redirect targets before following them", async () => {
@@ -16,7 +14,7 @@ test("pinnedFetch rejects non-http redirect targets before following them", asyn
       },
     })
   })
-  globalThis.fetch = fetchMock as unknown as typeof fetch
+  _testInjectFetch(fetchMock)
 
   await expect(Ssrf.pinnedFetch("http://93.184.216.34/start", { label: "ssrf-test" })).rejects.toThrow(
     "ssrf-test: redirect to unsupported URL scheme: file:",
