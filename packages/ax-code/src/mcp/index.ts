@@ -716,10 +716,6 @@ export namespace MCP {
           error,
         })
       })
-      status = {
-        status: "failed",
-        error: "Failed to get tools",
-      }
       return {
         mcpClient: undefined,
         status: {
