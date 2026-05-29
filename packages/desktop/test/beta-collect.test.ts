@@ -70,6 +70,34 @@ describe("desktop beta evidence collection", () => {
     ).toBe(true)
   })
 
+  test("removes stale command output before collecting fresh evidence", async () => {
+    const root = createRoot("ax-code-beta-collect-stale-output")
+    const appPath = path.join(root, "AX Code.app")
+    const outputDir = path.join(root, "evidence")
+    writeReleaseManifest(path.join(appPath, "Contents/Resources"))
+    writeJson(path.join(outputDir, "renderer-smoke.json"), rendererSmokeEvidence())
+
+    const result = await runDesktopBetaCollect({
+      outputDir,
+      macBundlePath: appPath,
+      runner: async (spec) => {
+        if (spec.outputPath && spec.name !== "desktop:smoke:renderer") writeEvidenceForCommand(spec, spec.outputPath)
+        return {
+          exitCode: spec.name === "desktop:smoke:renderer" ? 1 : 0,
+          stdout: `${spec.name} stdout\n`,
+          stderr: spec.name === "desktop:smoke:renderer" ? "renderer smoke failed\n" : "",
+        }
+      },
+    })
+
+    expect(result.bundle.ready).toBe(false)
+    expect(result.bundle.checks["renderer-smoke"]).toMatchObject({
+      status: "failed",
+      reason: "renderer-smoke file is missing.",
+    })
+    expect(result.bundle.checks["command-evidence"].reason ?? "").toContain("failed desktop:smoke:renderer")
+  })
+
   test("can collect attach QA from a harness-started sidecar without exposing an auth header", async () => {
     const root = createRoot("ax-code-beta-collect-attach-harness")
     const appPath = path.join(root, "AX Code.app")

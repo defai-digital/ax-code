@@ -242,6 +242,7 @@ describe("R21: SIEM-compatible audit schema", () => {
       directory: tmp.path,
       fn: async () => {
         const session = await Session.create({})
+        const since = Date.now()
         Recorder.begin(session.id)
         for (let i = 0; i < EventQuery.ALL_SINCE_LIMIT + 25; i++) {
           Recorder.emit({
@@ -253,7 +254,7 @@ describe("R21: SIEM-compatible audit schema", () => {
         Recorder.end(session.id)
         await new Promise((r) => setTimeout(r, 50))
 
-        const lines = [...AuditExport.streamAll({ since: 0 })]
+        const lines = [...AuditExport.streamAll({ since })]
         expect(lines).toHaveLength(EventQuery.ALL_SINCE_LIMIT + 25)
 
         EventQuery.deleteBySession(session.id)
