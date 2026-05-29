@@ -417,6 +417,7 @@ export namespace Snapshot {
         exitCode: result.code,
         stderr: result.stderr,
       })
+      throw new Error(`Snapshot restore failed: read-tree exited with code ${result.code}`)
     })
   }
 
