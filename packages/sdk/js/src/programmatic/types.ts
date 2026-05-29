@@ -2,6 +2,8 @@
  * Types for the ax-code Programmatic SDK
  */
 
+import type { Message as ApiMessage, Part as ApiPart } from "../v2/gen/types.gen.js"
+
 // ============================================================
 // Error Classes
 // ============================================================
@@ -243,24 +245,11 @@ export interface StreamHandle extends AsyncIterable<StreamEvent> {
 // ============================================================
 
 /** A single content part within a message */
-export interface SdkMessagePart {
-  id: string
-  type: "text" | "tool-call" | "tool-result" | "reasoning" | "file"
-  /** Text content (present for "text" and "reasoning" parts) */
-  text?: string
-  /** Tool name (present for "tool-call" and "tool-result" parts) */
-  tool?: string
-  /** Tool input (present for "tool-call" parts) */
-  input?: unknown
-  /** Tool output (present for "tool-result" parts) */
-  output?: string
-}
+export type SdkMessagePart = ApiPart
 
 /** A message in a session's history */
 export interface SdkMessage {
-  id: string
-  sessionID: string
-  role: "user" | "assistant"
+  info: ApiMessage
   parts: SdkMessagePart[]
 }
 

@@ -12,14 +12,15 @@ export function createAxCodeClient(config?: Config & { directory?: string; exper
     // Bun extends Request with a `timeout` property (false = no per-request
     // timeout). Disable it so SSE connections and long agent sessions are not
     // killed by Bun's default connection timeout.
+    const noTimeoutFetch = ((input: URL | RequestInfo, init?: RequestInit) => {
+      if (input instanceof Request) {
+        ;(input as Request & { timeout?: boolean }).timeout = false
+      }
+      return fetch(input, init)
+    }) as typeof fetch
     config = {
       ...config,
-      fetch: (input: URL | RequestInfo, init?: RequestInit) => {
-        if (input instanceof Request) {
-          ;(input as Request & { timeout?: boolean }).timeout = false
-        }
-        return fetch(input, init)
-      },
+      fetch: noTimeoutFetch,
     }
   }
 
