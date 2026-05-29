@@ -139,6 +139,17 @@ export const buildAxCodeStatusReport = async (input: {
   lines.push(`Directory: ${directory ?? "(none)"}`)
   lines.push(`Platform: ${platform}`)
 
+  const isLikelyMac = /Mac OS X|Macintosh/.test(platform)
+  const injectedMacOsMajor =
+    typeof window !== "undefined"
+      ? (window as unknown as { __AX_CODE_MACOS_MAJOR__?: unknown }).__AX_CODE_MACOS_MAJOR__
+      : undefined
+  if (isLikelyMac) {
+    if (typeof injectedMacOsMajor === "number" && Number.isFinite(injectedMacOsMajor) && injectedMacOsMajor > 0) {
+      lines.push(`macOS major: ${injectedMacOsMajor}`)
+    }
+  }
+
   lines.push("")
   if (input.desktop?.available) {
     lines.push("Desktop backend:")
@@ -170,6 +181,30 @@ export const buildAxCodeStatusReport = async (input: {
     }
     for (const err of input.desktop.errors) {
       lines.push(`- desktop-error: ${err}`)
+    }
+
+    if (isLikelyMac && caps) {
+      lines.push("")
+      lines.push("ax-code macOS launch context:")
+      lines.push(`- app name: ${caps.app?.name ?? "@ax-code/desktop"}`)
+      lines.push(`- app version: ${caps.app?.version ?? "(unknown)"}`)
+      lines.push(`- platform: ${caps.platform ?? "(unknown)"}`)
+      lines.push(`- arch: ${caps.arch ?? "(unknown)"}`)
+      const rel = caps.release
+      if (rel) {
+        lines.push(`- package-target: ${rel.packageTarget ?? "dev"}`)
+        lines.push(`- signed: ${rel.signed ? "yes" : "no"}`)
+        lines.push(`- notarized: ${rel.notarized ? "yes" : "no"}`)
+        lines.push(`- updater-configured: ${rel.updaterConfigured ? "yes" : "no"}`)
+        if (rel.updateFeed?.url) lines.push(`- update-feed: ${rel.updateFeed.url}`)
+      }
+      const sec = caps.security
+      if (sec) {
+        lines.push(`- content-origin: ${sec.contentOrigin ?? "(unknown)"}`)
+        lines.push(`- context-isolation: ${sec.contextIsolation ? "yes" : "no"}`)
+        lines.push(`- sandbox: ${sec.sandbox ? "yes" : "no"}`)
+        lines.push(`- node-integration: ${sec.nodeIntegration ? "yes" : "no"}`)
+      }
     }
   } else {
     lines.push("Desktop backend: not available (browser mode)")

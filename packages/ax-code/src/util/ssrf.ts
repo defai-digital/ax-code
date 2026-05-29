@@ -140,7 +140,7 @@ export namespace Ssrf {
       const bad = net.isIP(hostname) === 4 ? isPrivateIPv4(hostname) : isPrivateIPv6(hostname)
       if (bad) throw new Error(`${label}: refusing to fetch private/reserved address: ${hostname}`)
       const { label: _, ...fetchInit } = init ?? {}
-      return fetch(url, { ...fetchInit, redirect: "manual" })
+      return globalThis.fetch(url, { ...fetchInit, redirect: "manual" })
     }
 
     // Resolve DNS once
@@ -179,7 +179,7 @@ export namespace Ssrf {
     }
 
     const { label: _, ...fetchInit } = init ?? {}
-    return fetch(pinnedUrl.toString(), {
+    return globalThis.fetch(pinnedUrl.toString(), {
       ...fetchInit,
       headers,
       redirect: "manual",

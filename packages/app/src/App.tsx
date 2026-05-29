@@ -16,6 +16,8 @@ import { createCommandCenterViewModel } from "./projection/view-model"
 import { ComposerAttachments } from "./ComposerAttachments"
 import { DiagnosticsPanel } from "./DiagnosticsPanel"
 import { AxCodeStatusDialog } from "./AxCodeStatusDialog"
+import { SessionStatusRow } from "./SessionStatusRow"
+import { computeAssistantStatus } from "./runtime/assistant-status"
 import {
   abortSessionTask,
   attachToBackendUrl,
@@ -283,6 +285,20 @@ export function App() {
   )
   const selectedModel = createMemo(() => modelFromKey(selectedModelKey(), view().catalog.models))
   const settingsModel = createMemo(() => modelFromKey(settingsModelKey(), view().catalog.models))
+  const assistantStatus = createMemo(() => {
+    const v = view()
+    const sessionId = v.selectedSession?.id
+    const lastAssistantMessage = [...(v.messages ?? [])].reverse().find((m) => m.role === "assistant")
+    const lastAssistantParts = lastAssistantMessage ? lastAssistantMessage.parts : []
+    return computeAssistantStatus({
+      status: v.status,
+      lastAssistantParts,
+      sessionId,
+      pendingPermissions: v.permissions,
+      pendingQuestions: v.questions,
+      abortBusy: abortBusy(),
+    })
+  })
   const composerAttachmentsUnsupported = createMemo(
     () => composerMode() === "shell" && composerAttachments().length > 0,
   )
@@ -1581,6 +1597,11 @@ export function App() {
               </article>
             )}
           </For>
+          <SessionStatusRow
+            snapshot={assistantStatus()}
+            onAbort={abortSelectedSession}
+            abortDisabled={!view().selectedSession || abortBusy()}
+          />
         </section>
 
         <section class="tool-pane" aria-label="Terminal, browser, and file preview">

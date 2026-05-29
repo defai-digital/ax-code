@@ -492,6 +492,119 @@ h3 {
   font-size: 12px;
 }
 
+.session-status-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid #d8ddd2;
+  border-radius: 8px;
+  background: #f8fbf8;
+  font-size: 13px;
+  color: #4a5349;
+  min-height: 36px;
+}
+
+.session-status-row[data-activity="tooling"] {
+  border-color: #c5d4c2;
+  background: #f2f8f2;
+}
+
+.session-status-row[data-activity="permission"] {
+  border-color: #d4c5a5;
+  background: #fdf8ee;
+  color: #6b5a2e;
+}
+
+.session-status-row[data-activity="question"] {
+  border-color: #d4c5a5;
+  background: #fdf8ee;
+  color: #6b5a2e;
+}
+
+@keyframes status-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.session-status-spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid #c0cbbf;
+  border-top-color: #3d7d5f;
+  border-radius: 50%;
+  flex-shrink: 0;
+  animation: status-spin 0.7s linear infinite;
+}
+
+.session-status-aborted-icon {
+  flex-shrink: 0;
+  color: #b03030;
+  font-size: 11px;
+}
+
+.session-status-text {
+  flex: 1;
+  font-weight: 500;
+  color: #202124;
+}
+
+.session-status-progress {
+  font-size: 12px;
+  color: #59625a;
+  background: #eef2ec;
+  border-radius: 4px;
+  padding: 2px 6px;
+  flex-shrink: 0;
+}
+
+.session-status-wait-state {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 6px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.session-status-wait-state[data-wait="llm"] {
+  background: #e8f0fe;
+  color: #1a56db;
+}
+
+.session-status-wait-state[data-wait="tool"] {
+  background: #e8f5e9;
+  color: #1b6b3a;
+}
+
+.session-status-abort {
+  margin-left: auto;
+  border: 1px solid #d8a8a8;
+  border-radius: 6px;
+  background: #fff5f5;
+  color: #b03030;
+  padding: 3px 8px;
+  min-height: 24px;
+  font-size: 12px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.session-status-abort:hover:not(:disabled) {
+  background: #ffe0e0;
+}
+
+.session-status-abort:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
 .thread-message {
   border: 1px solid #dfe4dc;
   border-radius: 8px;

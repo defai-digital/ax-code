@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs"
-import { mkdir, writeFile } from "node:fs/promises"
+import { mkdir, rm, writeFile } from "node:fs/promises"
 import path from "node:path"
 import { parseArgs } from "node:util"
 import {
@@ -360,6 +360,7 @@ async function runEvidenceCommand(input: {
       outputPath: spec.outputPath,
     }
   }
+  if (spec.outputPath) await rm(spec.outputPath, { force: true })
   const started = performance.now()
   const result = await input.runner(spec, { outputDir: input.outputDir, repoRoot: input.repoRoot })
   const durationMs = Math.round(performance.now() - started)
