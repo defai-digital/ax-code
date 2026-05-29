@@ -4,7 +4,7 @@ This index tracks the active PRD set for `ax-code`. Completed PRDs are removed f
 
 **Maintenance rule:** When editing any PRD, update its row here — Status, Phase, Last Reviewed. When the "Done When" condition is met, delete the file and remove the row.
 
-**Last reviewed:** 2026-05-25
+**Last reviewed:** 2026-05-28
 
 ---
 
@@ -17,6 +17,7 @@ This index tracks the active PRD set for `ax-code`. Completed PRDs are removed f
 | [Graph-First Agent Context](PRD-2026-05-26-graph-first-agent-context.md) | Implemented | All phases complete for context-pack scope | 2026-05-26 | Context composer, guidance, benchmark harness, and provenance-backed route/heuristic pilots shipped |
 | [MCP Security Layer Hardening](PRD-2026-05-26-mcp-security-layer-hardening.md) | Implemented | Phases 0–7 implemented | 2026-05-26 | MCP trust gate, route hardening, argument-aware permissions, prompt/resource safety, and focused tests shipped |
 | [HTML Dev Browser Integration](PRD-2026-05-26-html-dev-browser-integration.md) | Implemented | Phases 0–3 complete | 2026-05-26 | Bash intercept, Playwright MCP discovery, CDP attach, and TUI screenshot rendering shipped and tested |
+| [Codex-Like AX Code Desktop App](PRD-2026-05-28-codex-like-desktop-app.md) | Draft — implementation underway | Phase 3/4 foundation plus Phase 5/6 executable queue, first Phase 7 evidence panel, Phase 8 worktree/tool panes, Phase 11 settings diagnostics, and first Phase 12 scheduled automation slice in progress | 2026-05-28 | First-party desktop app beta starts/attaches to local backend, shows command-center UI, supports supervised queue/review workflows |
 | [Server Mode Hardening](PRD-server-mode-hardening.md) | Draft — policy decided, implementation pending | Phase 0 (docs/boundary) not started | 2026-05-25 | ADR-008 implementation phases 1–5 all landed and verified |
 | [Source + Bun Distribution Rollout](PRD-source-bun-distribution.md) | In progress | Phases 0–2 complete; Phase 3 gate pending | 2026-05-25 | Phase 3 default flip executed AND Phase 4 compiled binary retired |
 | [v5 Agent Control Plane](PRD-v5-agent-control-plane.md) | In progress — shadow mode complete | Phases 0–6 shadow; Phase 7 deferred | 2026-05-25 | ExecutionController wired into processor.ts; all phases at runtime enforcement parity |

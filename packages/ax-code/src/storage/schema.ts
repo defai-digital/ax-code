@@ -6,6 +6,8 @@ export {
   PartTable,
   TodoTable,
   SessionGoalTable,
+  TaskQueueTable,
+  ScheduledTaskTable,
   PermissionTable,
 } from "../session/session.sql"
 export { SessionShareTable } from "../share/share.sql"
