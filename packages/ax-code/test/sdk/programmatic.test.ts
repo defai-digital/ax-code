@@ -18,6 +18,23 @@ test("programmatic stream removes abort listeners when prompt fails", async () =
   )
 })
 
+test("programmatic stream handle exposes cancel cleanup", async () => {
+  const src = await Bun.file(path.join(import.meta.dir, "../../src/sdk/programmatic.ts")).text()
+  const start = src.indexOf("function createStreamHandle(")
+  const end = src.indexOf("// ============================================================\n// RETRY LOGIC", start)
+  expect(start).toBeGreaterThan(-1)
+  expect(end).toBeGreaterThan(start)
+  const block = src.slice(start, end)
+
+  expect(block).toContain("let cancelled = false")
+  expect(block).toContain("if (cancelled) return")
+  expect(block).toContain("sourceStarted && !completed && onInterrupted")
+  expect(block).toContain("cancel(): void")
+  expect(block).toContain("cancelled = true")
+  expect(block).toContain("current")
+  expect(block).toContain(".return(undefined)")
+})
+
 test("programmatic agent dispose aborts sessions created by the agent", async () => {
   const src = await Bun.file(path.join(import.meta.dir, "../../src/sdk/programmatic.ts")).text()
   const start = src.indexOf("export async function createAgent(")
