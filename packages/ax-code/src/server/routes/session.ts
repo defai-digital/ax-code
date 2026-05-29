@@ -85,6 +85,7 @@ function startObservedAsyncSessionTask(input: {
   task: () => Promise<unknown>
   onError: (error: unknown) => void
 }) {
+  TaskQueueExecutor.initSessionBlockObservers()
   recordAsyncSessionTask({ event: "server.sessionAsyncAccepted", sessionID: input.sessionID, kind: input.kind })
   startDetachedSessionTask(async () => {
     const startedAt = performance.now()

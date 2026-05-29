@@ -13,6 +13,7 @@ import { Log } from "@/util/log"
 import { ShareNext } from "@/share/share-next"
 import { Config } from "../config/config"
 import { Session } from "../session"
+import { ScheduledTask } from "@/session/scheduled-task"
 import { Provider } from "../provider/provider"
 import { isHarmlessEffectInterrupt } from "@/effect/interrupt"
 import { toErrorMessage } from "@/util/error-message"
@@ -157,4 +158,5 @@ export async function InstanceBootstrap() {
       task: () => Session.pruneExpired(ttlDays),
     })
   }
+  ScheduledTask.initScheduler()
 }

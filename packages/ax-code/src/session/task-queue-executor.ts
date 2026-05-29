@@ -1,4 +1,8 @@
+import { Bus } from "@/bus"
 import { DiagnosticLog } from "@/debug/diagnostic-log"
+import { Permission } from "@/permission"
+import { Instance } from "@/project/instance"
+import { Question } from "@/question"
 import { Log } from "@/util/log"
 import { NamedError } from "@ax-code/util/error"
 import { lazy } from "../util/lazy"
@@ -19,13 +23,32 @@ type QueueExecution = {
   run: () => Promise<unknown>
 }
 
+const activeStatuses = ["running", "blocked_permission", "blocked_question"] as const
+
+const blockObserverState = Instance.state(
+  () => ({
+    initialized: false,
+    unsubscribe: [] as Array<() => void>,
+  }),
+  async (state) => {
+    for (const unsubscribe of state.unsubscribe) unsubscribe()
+    state.unsubscribe = []
+    state.initialized = false
+  },
+)
+
 export namespace TaskQueueExecutor {
+  export function initSessionBlockObservers() {
+    ensureSessionBlockObservers()
+  }
+
   export async function sendNow(id: TaskQueueID): Promise<TaskQueue.Info> {
     const item = await TaskQueue.sendNow(id)
     return start(item)
   }
 
   export async function start(item: TaskQueue.Info): Promise<TaskQueue.Info> {
+    ensureSessionBlockObservers()
     const execution = queueItemExecution(item)
     if (!execution) return item
     if (item.status !== "queued" && item.status !== "waiting_for_idle") return item
@@ -90,7 +113,7 @@ async function finishIfRunning(
   input: { status: Extract<TaskQueue.Status, "completed" | "failed">; error?: string },
 ) {
   const current = await TaskQueue.get(item.id)
-  if (current.status !== "running") return current
+  if (!isActiveQueueStatus(current.status)) return current
   return TaskQueue.setStatus({ id: item.id, status: input.status, error: input.error })
 }
 
@@ -105,8 +128,8 @@ function startDetachedQueueTask(task: () => Promise<void>) {
 
 async function shouldWaitForIdle(sessionID: SessionID, currentTaskID: TaskQueueID) {
   if (sessionPromptBusy(sessionID)) return true
-  const running = await TaskQueue.list({ sessionID, status: "running", limit: 2 })
-  return running.some((item) => item.id !== currentTaskID)
+  const active = await activeSessionItems(sessionID)
+  return active.some((item) => item.id !== currentTaskID)
 }
 
 function sessionPromptBusy(sessionID: SessionID) {
@@ -124,6 +147,61 @@ async function pendingSessionItems(sessionID: SessionID) {
     TaskQueue.list({ sessionID, status: "waiting_for_idle", limit: 100 }),
   ])
   return [...queued, ...waiting].sort(compareQueueItems)
+}
+
+async function activeSessionItems(sessionID: SessionID) {
+  const items = await Promise.all(activeStatuses.map((status) => TaskQueue.list({ sessionID, status, limit: 100 })))
+  return items.flat()
+}
+
+function isActiveQueueStatus(status: TaskQueue.Status) {
+  return activeStatuses.includes(status as (typeof activeStatuses)[number])
+}
+
+function ensureSessionBlockObservers() {
+  const state = blockObserverState()
+  if (state.initialized) return
+  state.initialized = true
+  state.unsubscribe.push(
+    Bus.subscribe(Permission.Event.Asked, (event) => {
+      void refreshSessionBlockStatus(event.properties.sessionID)
+    }),
+    Bus.subscribe(Permission.Event.Replied, (event) => {
+      void refreshSessionBlockStatus(event.properties.sessionID)
+    }),
+    Bus.subscribe(Question.Event.Asked, (event) => {
+      void refreshSessionBlockStatus(event.properties.sessionID)
+    }),
+    Bus.subscribe(Question.Event.Replied, (event) => {
+      void refreshSessionBlockStatus(event.properties.sessionID)
+    }),
+    Bus.subscribe(Question.Event.Rejected, (event) => {
+      void refreshSessionBlockStatus(event.properties.sessionID)
+    }),
+  )
+}
+
+async function refreshSessionBlockStatus(sessionID: SessionID) {
+  try {
+    const target = await sessionBlockStatus(sessionID)
+    const active = await activeSessionItems(sessionID)
+    await Promise.all(
+      active.map((item) => {
+        const status = target ?? "running"
+        return item.status === status ? item : TaskQueue.setStatus({ id: item.id, status })
+      }),
+    )
+  } catch (error) {
+    DiagnosticLog.recordProcess("server.taskQueueBlockRefreshFailed", { sessionID, error })
+    log.warn("failed to refresh task queue block status", { sessionID, error })
+  }
+}
+
+async function sessionBlockStatus(sessionID: SessionID): Promise<TaskQueue.Status | undefined> {
+  const [permissions, questions] = await Promise.all([Permission.list(), Question.list()])
+  if (permissions.some((request) => request.sessionID === sessionID)) return "blocked_permission"
+  if (questions.some((request) => request.sessionID === sessionID)) return "blocked_question"
+  return undefined
 }
 
 function compareQueueItems(a: TaskQueue.Info, b: TaskQueue.Info) {

@@ -307,19 +307,38 @@ export namespace TaskQueue {
 
   export async function reorder(input: ReorderInput): Promise<Info> {
     const parsed = ReorderInput.parse(input)
-    await get(parsed.id)
-    const item = Database.use((db) => {
-      const row = db
-        .update(TaskQueueTable)
-        .set({ position: parsed.position, time_updated: Date.now() })
-        .where(eq(TaskQueueTable.id, parsed.id))
-        .returning()
-        .get()
-      if (!row) throw new NotFoundError({ message: `Task queue item not found: ${parsed.id}` })
-      return fromRow(row)
+    const current = await get(parsed.id)
+    const now = Date.now()
+    const changed = Database.transaction((db) => {
+      const rows = db
+        .select()
+        .from(TaskQueueTable)
+        .where(eq(TaskQueueTable.project_id, current.projectID))
+        .orderBy(asc(TaskQueueTable.position), desc(TaskQueueTable.time_created), desc(TaskQueueTable.id))
+        .all()
+      const currentIndex = rows.findIndex((row) => row.id === parsed.id)
+      if (currentIndex < 0) throw new NotFoundError({ message: `Task queue item not found: ${parsed.id}` })
+
+      const [row] = rows.splice(currentIndex, 1)
+      const nextIndex = Math.min(parsed.position, rows.length)
+      rows.splice(nextIndex, 0, row!)
+
+      const changedItems: Info[] = []
+      for (let index = 0; index < rows.length; index++) {
+        const currentRow = rows[index]!
+        if (currentRow.position === index && currentRow.id !== parsed.id) continue
+        const updated = db
+          .update(TaskQueueTable)
+          .set({ position: index, time_updated: now })
+          .where(eq(TaskQueueTable.id, currentRow.id))
+          .returning()
+          .get()
+        if (updated) changedItems.push(fromRow(updated))
+      }
+      return changedItems
     })
-    assertProjectItem(item)
-    publishUpdated(item)
+    for (const item of changed) publishUpdated(item)
+    const item = changed.find((candidate) => candidate.id === parsed.id) ?? (await get(parsed.id))
     return item
   }
 

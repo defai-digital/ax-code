@@ -5,11 +5,14 @@ import { BusEvent } from "@/bus/bus-event"
 import { Instance } from "@/project/instance"
 import { ProjectID } from "@/project/schema"
 import { Database, NotFoundError, and, asc, desc, eq, lte } from "@/storage/db"
+import { Log } from "@/util/log"
 import { ScheduledTaskID } from "./schema"
 import { ScheduledTaskTable } from "./session.sql"
 import { TaskQueue } from "./task-queue"
 
 export namespace ScheduledTask {
+  const log = Log.create({ service: "session.scheduled-task" })
+
   export const Status = z.enum(["active", "paused", "disabled"])
   export type Status = z.infer<typeof Status>
 
@@ -103,6 +106,20 @@ export namespace ScheduledTask {
       }),
     ),
   }
+
+  const schedulerState = Instance.state(
+    () => ({
+      initialized: false,
+      running: false,
+      interval: undefined as ReturnType<typeof setInterval> | undefined,
+    }),
+    async (state) => {
+      if (state.interval) clearInterval(state.interval)
+      state.interval = undefined
+      state.initialized = false
+      state.running = false
+    },
+  )
 
   function fromRow(row: typeof ScheduledTaskTable.$inferSelect): Info {
     return Info.parse({
@@ -306,6 +323,27 @@ export namespace ScheduledTask {
     return results
   }
 
+  export function initScheduler(input: { pollMs?: number } = {}) {
+    const state = schedulerState()
+    if (state.initialized) return
+    state.initialized = true
+    const pollMs = Math.max(10, input.pollMs ?? 60_000)
+    const tick = () => {
+      if (state.running) return
+      state.running = true
+      void runDue()
+        .catch((error) => {
+          log.warn("scheduled task due run failed", { error })
+        })
+        .finally(() => {
+          state.running = false
+        })
+    }
+    state.interval = setInterval(tick, pollMs)
+    state.interval.unref?.()
+    tick()
+  }
+
   async function updateNextRunAt(id: ScheduledTaskID, next: number | undefined): Promise<Info> {
     const now = Date.now()
     const task = Database.use((db) => {
@@ -352,12 +390,10 @@ function makeTzFormatter(timezone: string) {
 const TZ_WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
 
 function tzComponents(ms: number, fmt: Intl.DateTimeFormat) {
-  const parts = fmt
-    .formatToParts(new Date(ms))
-    .reduce<Record<string, string>>((acc, p) => {
-      acc[p.type] = p.value
-      return acc
-    }, {})
+  const parts = fmt.formatToParts(new Date(ms)).reduce<Record<string, string>>((acc, p) => {
+    acc[p.type] = p.value
+    return acc
+  }, {})
   return {
     hour: Number(parts.hour) % 24, // hour12:false may emit "24" for midnight
     minute: Number(parts.minute),

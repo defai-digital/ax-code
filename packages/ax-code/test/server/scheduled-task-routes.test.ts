@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { Instance } from "../../src/project/instance"
 import { Server } from "../../src/server/server"
+import { ScheduledTask } from "../../src/session/scheduled-task"
+import { TaskQueueID } from "../../src/session/schema"
 import { TaskQueue } from "../../src/session/task-queue"
 import { tmpdir } from "../fixture/fixture"
 
@@ -93,4 +95,45 @@ describe("scheduled task routes", () => {
       },
     })
   })
+
+  test("scheduler loop creates queue items for due scheduled tasks", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const task = await ScheduledTask.create({
+          title: "Due GUI review",
+          prompt: "Review the branch after the scheduler fires.",
+          schedule: { type: "once", runAt: Date.now() + 20 },
+        })
+
+        ScheduledTask.initScheduler({ pollMs: 10 })
+
+        const queueItem = await waitForValue(async () => {
+          const refreshed = await ScheduledTask.get(task.id)
+          if (!refreshed.lastQueueID) return undefined
+          return TaskQueue.get(TaskQueueID.make(refreshed.lastQueueID))
+        })
+
+        expect(queueItem).toMatchObject({
+          kind: "automation",
+          status: "queued",
+          sourceTaskID: task.id,
+        })
+        const refreshed = await ScheduledTask.get(task.id)
+        expect(refreshed.lastRunAt).toBeGreaterThan(0)
+        expect(refreshed.nextRunAt).toBeUndefined()
+      },
+    })
+  })
 })
+
+async function waitForValue<T>(read: () => T | undefined | Promise<T | undefined>): Promise<T> {
+  for (let attempt = 0; attempt < 50; attempt++) {
+    const value = await read()
+    if (value !== undefined) return value
+    await new Promise((resolve) => setTimeout(resolve, 10))
+  }
+  throw new Error("Timed out waiting for scheduled task value")
+}

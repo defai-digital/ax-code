@@ -28,4 +28,6 @@ This index tracks the active ADR set for `ax-code`. Retired ADRs are removed fro
 | [ADR-019](ADR-019-graph-first-agent-context-boundary.md) | Make Graph-First Agent Context a Product Boundary | Accepted; implementation shipped |
 | [ADR-020](ADR-020-mcp-security-trust-boundary.md) | Make MCP Security a Trust-Boundary Contract | Accepted; implemented |
 | [ADR-021](ADR-021-html-dev-browser-boundary.md) | Establish HTML Dev Browser Boundary via Playwright MCP and Behavioral Policy | Accepted; implemented |
-| [ADR-022](ADR-022-codex-like-desktop-app-from-openchamber-baseline.md) | Build a Codex-Like Desktop App from an OpenChamber Product Baseline | Accepted for staged implementation |
+| [ADR-022](ADR-022-codex-like-desktop-app-from-openchamber-baseline.md) | Build a Codex-Like Desktop App from an OpenChamber Product Baseline | Accepted; staged implementation underway, macOS bundle and renderer smoke gates added |
+| [ADR-023](ADR-023-remote-surface-security-gates.md) | Gate Remote Surfaces Behind Separate Security Reviews | Accepted |
+| [ADR-024](ADR-024-skill-evaluation-optimization-boundary.md) | Make Skill Evaluation and Optimization an Offline Boundary | Proposed |
