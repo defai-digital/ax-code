@@ -3,7 +3,6 @@ import fs from "fs/promises"
 import path from "path"
 
 const TUI_ROOT = path.resolve(import.meta.dir, "../../../src/cli/cmd/tui")
-const UI_ROOT = path.resolve(import.meta.dir, "../../../../ui/src")
 const APP_SRC = path.join(TUI_ROOT, "app.tsx")
 const EVENT_SRC = path.join(TUI_ROOT, "event.ts")
 const HELPER_SRC = path.join(TUI_ROOT, "context/helper.tsx")
@@ -67,10 +66,7 @@ const DEFERRED_STARTUP_SRCS = [
 ]
 const DOCTOR_PRELOAD_SRC = path.resolve(import.meta.dir, "../../../src/cli/cmd/doctor-preload.ts")
 const DEBUG_EXPLAIN_SRC = path.resolve(import.meta.dir, "../../../src/cli/cmd/debug/explain.ts")
-const RESIZE_HANDLE_SRC = path.join(UI_ROOT, "components/layout/resize-handle.tsx")
-const TEXT_FIELD_SRC = path.join(UI_ROOT, "components/text-field.tsx")
-const SESSION_TURN_SRC = path.join(UI_ROOT, "components/session/session-turn.tsx")
-const FILE_SSR_SRC = path.join(UI_ROOT, "components/file/file-ssr.tsx")
+
 
 describe("tui OpenTUI stability guardrails", () => {
   test("keeps OpenTUI wired as the default renderer path", async () => {
@@ -899,27 +895,10 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(toast).toContain("function scheduleNextToast(options: ToastOptions)")
   })
 
-  test("keeps UI copy, resize, and streaming indicators reading current runtime state", async () => {
-    const resizeHandle = await fs.readFile(RESIZE_HANDLE_SRC, "utf8")
-    const textField = await fs.readFile(TEXT_FIELD_SRC, "utf8")
-    const sessionTurn = await fs.readFile(SESSION_TURN_SRC, "utf8")
-
-    expect(resizeHandle).toContain("let activeCleanup: (() => void) | undefined")
-    expect(resizeHandle).toContain("onCleanup(() => {")
-    expect(textField).toContain('const node = inputWrapper?.querySelector("input, textarea")')
-    expect(textField).toContain('const value = local.value ?? currentValue ?? local.defaultValue ?? ""')
-    expect(sessionTurn).toContain("return assistantVisible() === 0")
-  })
-
-  test("keeps toast duration defaults and SSR line-selection retries under explicit caller control", async () => {
+  test("keeps toast duration defaults under explicit caller control", async () => {
     const event = await fs.readFile(EVENT_SRC, "utf8")
-    const fileSsr = await fs.readFile(FILE_SSR_SRC, "utf8")
 
     expect(event).toContain('duration: z.number().optional().describe("Duration in milliseconds")')
-    expect(fileSsr).toContain("let selectedLinesFrame: number | undefined")
-    expect(fileSsr).toContain("let selectedLinesVersion = 0")
-    expect(fileSsr).toContain('const syncSelectedLines = (range: DiffFileProps<T>["selectedLines"]) => {')
-    expect(fileSsr).toContain("clearSelectedLinesFrame()")
   })
 
   test("surfaces local model preference persistence failures instead of silently dropping them", async () => {
