@@ -25,8 +25,9 @@ import { withTimeout } from "./timeout"
 
 // Swappable fetch for tests — avoids relying on globalThis.fetch override,
 // which Bun's module bundler may resolve statically at compile time.
-let _fetchImpl: typeof globalThis.fetch | undefined
-export function _testInjectFetch(fn: typeof globalThis.fetch | undefined) {
+type FetchFn = (...args: Parameters<typeof globalThis.fetch>) => ReturnType<typeof globalThis.fetch>
+let _fetchImpl: FetchFn | undefined
+export function _testInjectFetch(fn: FetchFn | undefined) {
   _fetchImpl = fn
 }
 function callFetch(...args: Parameters<typeof globalThis.fetch>) {
