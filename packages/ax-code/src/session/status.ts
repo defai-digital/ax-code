@@ -72,12 +72,42 @@ export namespace SessionStatus {
     }
 
     data.set(sessionID, status)
+    trimOldStatusEntries(data, sessionID)
+    Bus.publishDetached(Event.Status, { sessionID, status })
+  }
+
+  function trimOldStatusEntries(data: Map<SessionID, Info>, protectedSessionID: SessionID) {
     while (data.size > MAX_SESSIONS) {
-      const oldest = data.keys().next().value
-      if (!oldest || oldest === sessionID) break
+      const oldest = oldestStatusEntry(data, protectedSessionID)
+      if (!oldest) break
       data.delete(oldest)
     }
-    Bus.publishDetached(Event.Status, { sessionID, status })
+  }
+
+  function oldestStatusEntry(data: Map<SessionID, Info>, protectedSessionID: SessionID) {
+    let oldestID: SessionID | undefined
+    let oldestTime = Infinity
+
+    for (const [sessionID, status] of data) {
+      if (sessionID === protectedSessionID) continue
+      const time = statusActivityTime(status)
+      if (time >= oldestTime) continue
+      oldestID = sessionID
+      oldestTime = time
+    }
+
+    return oldestID
+  }
+
+  function statusActivityTime(status: Info) {
+    switch (status.type) {
+      case "busy":
+        return status.lastActivityAt ?? status.startedAt ?? 0
+      case "retry":
+        return status.next
+      case "idle":
+        return 0
+    }
   }
 
   /**
