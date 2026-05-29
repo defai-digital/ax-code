@@ -9,6 +9,10 @@ on:
       - "pnpm-workspace.yaml"
       - "turbo.json"
       - "packages/ax-code/**"
+      - "packages/sdk/**"
+      - "packages/util/**"
+      - "packages/plugin/**"
+      - "packages/script/**"
   push:
     branches:
       - dev
@@ -19,6 +23,10 @@ on:
       - "pnpm-workspace.yaml"
       - "turbo.json"
       - "packages/ax-code/**"
+      - "packages/sdk/**"
+      - "packages/util/**"
+      - "packages/plugin/**"
+      - "packages/script/**"
   workflow_dispatch:
     inputs:
       live:
