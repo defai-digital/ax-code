@@ -9,14 +9,17 @@ export { type Config as AxCodeClientConfig, OpencodeClient as AxCodeClient }
 
 export function createAxCodeClient(config?: Config & { directory?: string }) {
   if (!config?.fetch) {
-    const customFetch: any = (req: any) => {
-      // @ts-ignore
-      req.timeout = false
-      return fetch(req)
-    }
+    // Bun extends Request with a `timeout` property (false = no per-request
+    // timeout). Disable it so SSE connections and long agent sessions are not
+    // killed by Bun's default connection timeout.
     config = {
       ...config,
-      fetch: customFetch,
+      fetch: (input: URL | RequestInfo, init?: RequestInit) => {
+        if (input instanceof Request) {
+          ;(input as Request & { timeout?: boolean }).timeout = false
+        }
+        return fetch(input, init)
+      },
     }
   }
 

@@ -27,6 +27,7 @@ import type {
   Agent,
   RunOptions,
   RunResult,
+  SdkMessage,
   StreamEvent,
   StreamHandle,
   SessionHandle,
@@ -58,12 +59,15 @@ function makeMockResult(text: string, toolCalls: ToolCallInfo[]): RunResult {
 function makeMockStreamHandle(text: string, toolCalls: ToolCallInfo[]): StreamHandle {
   const result = makeMockResult(text, toolCalls)
   const listeners: Record<string, Function[]> = {}
+  let cancelled = false
 
   async function* gen(): AsyncGenerator<StreamEvent> {
     for (const tc of toolCalls) {
+      if (cancelled) return
       const event: StreamEvent = { type: "tool-call", tool: tc.tool, input: tc.input, id: `tc-${tc.tool}` }
       for (const cb of listeners["tool-call"] ?? []) cb(tc.tool, tc.input)
       yield event
+      if (cancelled) return
       const resultEvent: StreamEvent = {
         type: "tool-result",
         tool: tc.tool,
@@ -74,8 +78,10 @@ function makeMockStreamHandle(text: string, toolCalls: ToolCallInfo[]): StreamHa
       for (const cb of listeners["tool-result"] ?? []) cb(tc.tool, tc.output, tc.status)
       yield resultEvent
     }
+    if (cancelled) return
     for (const cb of listeners["text"] ?? []) cb(text)
     yield { type: "text", text }
+    if (cancelled) return
     for (const cb of listeners["done"] ?? []) cb(result)
     yield { type: "done", result }
   }
@@ -96,10 +102,12 @@ function makeMockStreamHandle(text: string, toolCalls: ToolCallInfo[]): StreamHa
       return handle
     },
     async done() {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       for await (const _ of handle) {
         /* consume */
       }
+    },
+    cancel() {
+      cancelled = true
     },
   }
   return handle
@@ -139,17 +147,17 @@ export function createMockAgent(options: MockAgentOptions): Agent {
       const sessionCallIndex = { value: 0 }
       const handle: SessionHandle = {
         id: `mock-session-${Date.now()}`,
-        async run(message: string, runOptions?: RunOptions): Promise<RunResult> {
+        async run(_message: string, _options?: RunOptions): Promise<RunResult> {
           const idx = sessionCallIndex.value % options.replies.length
           sessionCallIndex.value++
           return makeMockResult(options.replies[idx], toolCallStubs)
         },
-        stream(message: string, runOptions?: RunOptions): StreamHandle {
+        stream(_message: string, _options?: RunOptions): StreamHandle {
           const idx = sessionCallIndex.value % options.replies.length
           sessionCallIndex.value++
           return makeMockStreamHandle(options.replies[idx], toolCallStubs)
         },
-        async messages() {
+        async messages(): Promise<SdkMessage[]> {
           return []
         },
         async fork(): Promise<SessionHandle> {

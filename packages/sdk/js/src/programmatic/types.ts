@@ -234,6 +234,34 @@ export interface StreamHandle extends AsyncIterable<StreamEvent> {
   on(event: "done", callback: (result: RunResult) => void): StreamHandle
   /** Wait for the stream to complete (use after .on() callbacks) */
   done(): Promise<void>
+  /** Cancel the stream. Any in-progress iteration stops; pending callbacks are not fired. */
+  cancel(): void
+}
+
+// ============================================================
+// Message types
+// ============================================================
+
+/** A single content part within a message */
+export interface SdkMessagePart {
+  id: string
+  type: "text" | "tool-call" | "tool-result" | "reasoning" | "file"
+  /** Text content (present for "text" and "reasoning" parts) */
+  text?: string
+  /** Tool name (present for "tool-call" and "tool-result" parts) */
+  tool?: string
+  /** Tool input (present for "tool-call" parts) */
+  input?: unknown
+  /** Tool output (present for "tool-result" parts) */
+  output?: string
+}
+
+/** A message in a session's history */
+export interface SdkMessage {
+  id: string
+  sessionID: string
+  role: "user" | "assistant"
+  parts: SdkMessagePart[]
 }
 
 // ============================================================
@@ -248,7 +276,7 @@ export interface SessionHandle {
   /** Send a prompt and stream events */
   stream(message: string, options?: RunOptions): StreamHandle
   /** Get all messages in this session */
-  messages(): Promise<unknown[]>
+  messages(): Promise<SdkMessage[]>
   /** Fork this session into a new branch */
   fork(): Promise<SessionHandle>
   /** Abort the current execution */
