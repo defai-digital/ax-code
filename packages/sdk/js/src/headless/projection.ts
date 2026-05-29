@@ -10,6 +10,7 @@ export interface HeadlessProjectionState<
   TPart extends { id: string; messageID: string },
   TRisk = unknown,
   TGoal = unknown,
+  TTaskQueueItem extends { id: string } = { id: string },
 > {
   permission: Record<string, PermissionRequest[]>
   question: Record<string, QuestionRequest[]>
@@ -19,6 +20,7 @@ export interface HeadlessProjectionState<
   session_error: Record<string, unknown>
   session_risk: Record<string, TRisk>
   session_goal: Record<string, TGoal | null>
+  task_queue: TTaskQueueItem[]
   session: TSession[]
   message: Record<string, TMessage[]>
   part: Record<string, TPart[]>
@@ -45,7 +47,8 @@ export function createHeadlessProjectionState<
   TPart extends { id: string; messageID: string },
   TRisk = unknown,
   TGoal = unknown,
->(): HeadlessProjectionState<TSession, TTodo, TDiff, TStatus, TMessage, TPart, TRisk, TGoal> {
+  TTaskQueueItem extends { id: string } = { id: string },
+>(): HeadlessProjectionState<TSession, TTodo, TDiff, TStatus, TMessage, TPart, TRisk, TGoal, TTaskQueueItem> {
   return {
     permission: {},
     question: {},
@@ -55,6 +58,7 @@ export function createHeadlessProjectionState<
     session_error: {},
     session_risk: {},
     session_goal: {},
+    task_queue: [],
     session: [],
     message: {},
     part: {},
@@ -71,9 +75,10 @@ export function applyHeadlessProjectionEvent<
   TPart extends { id: string; messageID: string },
   TRisk = unknown,
   TGoal = unknown,
+  TTaskQueueItem extends { id: string } = { id: string },
 >(
-  state: HeadlessProjectionState<TSession, TTodo, TDiff, TStatus, TMessage, TPart, TRisk, TGoal>,
-  event: HeadlessRuntimeEvent<TSession, TTodo, TDiff, TStatus, TMessage, TPart, TGoal>,
+  state: HeadlessProjectionState<TSession, TTodo, TDiff, TStatus, TMessage, TPart, TRisk, TGoal, TTaskQueueItem>,
+  event: HeadlessRuntimeEvent<TSession, TTodo, TDiff, TStatus, TMessage, TPart, TGoal, TTaskQueueItem>,
   options: {
     autonomous?: boolean
     maxSessionMessages?: number
@@ -140,6 +145,20 @@ export function applyHeadlessProjectionEvent<
         state.session_error[event.properties.sessionID] = event.properties.error
       }
       return { handled: true, effects }
+
+    case "task.queue.created":
+    case "task.queue.updated":
+      upsertByID(state.task_queue, event.properties.item)
+      return { handled: true, effects }
+
+    case "task.queue.deleted":
+      removeByID(state.task_queue, event.properties.id)
+      return { handled: true, effects }
+
+    case "scheduled.task.created":
+    case "scheduled.task.updated":
+    case "scheduled.task.deleted":
+      return { handled: false, effects }
 
     case "session.created":
     case "session.updated":

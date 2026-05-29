@@ -22,6 +22,8 @@ export namespace Identifier {
     embedding_cache: "ebc",
     audit_semantic_call: "asc",
     debug_pattern: "dpt",
+    task_queue: "tsk",
+    scheduled_task: "sch",
   } as const
 
   export function schema(prefix: keyof typeof prefixes) {

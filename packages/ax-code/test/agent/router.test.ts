@@ -29,9 +29,48 @@ describe("v2-style keyword route", () => {
     expect(route("debug this crash", "debug")).toBeNull()
   })
 
-  test("substring matching is intentional — accepts plural / suffixed forms", () => {
+  test("word-aware matching accepts explicit plural / suffixed keywords", () => {
     expect(route("dependencies are tangled, refactor the architecture", "build")?.agent).toBe("architect")
     expect(route("there are vulnerabilities in our auth", "build")?.agent).toBe("security")
+  })
+
+  test("does not route review feedback to debug just because debug terms are mentioned", () => {
+    expect(
+      route(
+        "some user feedback says auto agent switch is not working well; when they ask for review they see debug; please review whether this is real",
+        "build",
+      ),
+    ).toBeNull()
+    expect(route("please review this change; it is not working very well", "build")).toBeNull()
+  })
+
+  test("does not substring-match debug keywords inside other words", () => {
+    expect(route("the status chip showed debug when the user asked for review", "build")).toBeNull()
+  })
+
+  test("routes explicit debug commands without requiring an error keyword", () => {
+    expect(route("debug the login flow", "build")?.agent).toBe("debug")
+    expect(route("please debug this behavior", "build")?.agent).toBe("debug")
+  })
+
+  test("routes common debug failure plurals and timeout asks", () => {
+    expect(route("find the bugs in the parser", "build")?.agent).toBe("debug")
+    expect(route("diagnose the auth timeout", "build")?.agent).toBe("debug")
+  })
+
+  test("keeps development-feature wording on the current agent instead of devops", () => {
+    expect(route("fix the deployment button in the dev UI", "build")).toBeNull()
+    expect(route("implement the developer workflow for local dev", "build")).toBeNull()
+  })
+
+  test("still routes explicit deployment operations to devops", () => {
+    expect(route("deploy the service to prod", "build")?.agent).toBe("devops")
+    expect(route("set up the Dockerfile and CI/CD pipeline", "build")?.agent).toBe("devops")
+  })
+
+  test("routes failing-test maintenance to the test agent", () => {
+    expect(route("fix the failing test", "build")?.agent).toBe("test")
+    expect(route("the tests are failing", "build")?.agent).toBe("test")
   })
 
   test("multi-rule message picks the highest-confidence specialist", () => {

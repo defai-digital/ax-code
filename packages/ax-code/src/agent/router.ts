@@ -30,6 +30,8 @@ interface RouteRule {
   confidence: number
 }
 
+const ROUTE_CONFIDENCE_THRESHOLD = 0.4
+
 const RULES: RouteRule[] = [
   {
     agent: "security",
@@ -92,27 +94,31 @@ const RULES: RouteRule[] = [
   {
     agent: "debug",
     keywords: [
-      "debug",
       "bug",
+      "bugs",
       "error",
+      "errors",
       "crash",
+      "crashes",
       "failing",
       "broken",
-      "not working",
-      "doesn't work",
       "stack trace",
       "exception",
+      "exceptions",
       "root cause",
-      "investigate",
       "diagnose",
       "troubleshoot",
       "regression",
+      "regressions",
+      "timeout",
+      "hang",
+      "deadlock",
       "wrong output",
     ],
     patterns: [
-      /\bdebug\b/i,
-      /\b(fix|find|trace|investigate)\b.*\b(bug|error|crash|issue)/i,
-      /\b(not|doesn.t|isn.t)\s+(work|function|run)/i,
+      /^\s*(?:please\s+)?(?:can\s+you\s+)?(?:help\s+me\s+)?debug\s+(?:this|that|the|my|our|a|an)\b/i,
+      /\b(help\s+)?debug(?:ging)?\b.*\b(bug|error|crash|issue|failure|regression|exception|stack\s+trace|broken|failing)\b/i,
+      /\b(fix|find|trace|investigate|diagnos\w*|debug)\b.*\b(bugs?|errors?|crashes?|issues?|failures?|regressions?|exceptions?|stack\s+traces?|timeouts?|hangs?|deadlocks?)\b/i,
       /\broot\s+cause\b/i,
       /\btroubleshoot/i,
       /\bstack\s+trace\b/i,
@@ -154,8 +160,6 @@ const RULES: RouteRule[] = [
       "github actions",
       "gitlab ci",
       "jenkins",
-      "deploy",
-      "deployment",
       "infrastructure",
       "terraform",
       "pulumi",
@@ -169,7 +173,9 @@ const RULES: RouteRule[] = [
       /\bdocker(file|compose)?\b/i,
       /\bk(ubernetes|8s)\b/i,
       /\bci\/?cd\b/i,
-      /\b(deploy|deployment|rollback)\b/i,
+      /\bdeploy(?:ing)?\b.*\b(production|prod|staging|service|app|application|server|cluster|k8s|kubernetes|docker|container|pipeline|ci|workflow|release)\b/i,
+      /\bdeployment\s+(pipeline|config|configuration|manifest|script|workflow|job|environment|strategy|rollback|canary|cluster)\b/i,
+      /\brollback\b.*\b(deploy|deployment|release|migration|production|prod|staging)\b/i,
       /\b(terraform|pulumi|cloudformation|cdk)\b/i,
       /\bgithub\s+actions?\b/i,
       /\b(infra(structure)?|devops)\b/i,
@@ -191,6 +197,13 @@ const RULES: RouteRule[] = [
       "missing tests",
       "untested",
       "test failure",
+      "test failures",
+      "failing test",
+      "failing tests",
+      "failed test",
+      "failed tests",
+      "flaky test",
+      "flaky tests",
       "snapshot test",
       "regression test",
       "e2e test",
@@ -198,6 +211,8 @@ const RULES: RouteRule[] = [
     patterns: [
       /\b(write|add|create|generate)\b.*\btests?\b/i,
       /\btest\s+(coverage|suite|file|case|plan|strategy)\b/i,
+      /\btests?\s+(?:are\s+|is\s+|keep\s+|keeps\s+)?(fail|fails|failed|failing|flaky)\b/i,
+      /\b(failing|failed|broken|flaky)\s+tests?\b/i,
       /\b(unit|integration|regression|e2e|snapshot)\s+tests?\b/i,
       /\btdd\b/i,
       /\buntested\b/i,
@@ -206,6 +221,11 @@ const RULES: RouteRule[] = [
     confidence: 0.7,
   },
 ]
+
+function matchesKeyword(message: string, keyword: string) {
+  const escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+  return new RegExp(`(^|[^\\p{L}\\p{N}_])${escaped}($|[^\\p{L}\\p{N}_])`, "iu").test(message)
+}
 
 export interface RouteResult {
   agent: string
@@ -219,7 +239,6 @@ export interface RouteResult {
  * the current agent (no change needed).
  */
 export function route(message: string, currentAgent: string): RouteResult | null {
-  const lower = message.toLowerCase()
   let best: RouteResult | null = null
 
   for (const rule of RULES) {
@@ -228,7 +247,7 @@ export function route(message: string, currentAgent: string): RouteResult | null
     let score = 0
 
     for (const kw of rule.keywords) {
-      if (lower.includes(kw)) {
+      if (matchesKeyword(message, kw)) {
         matched.push(kw)
         score += 1
       }
@@ -247,7 +266,7 @@ export function route(message: string, currentAgent: string): RouteResult | null
     }
   }
 
-  if (best && best.confidence >= 0.4) {
+  if (best && best.confidence >= ROUTE_CONFIDENCE_THRESHOLD) {
     log.info("keyword-route", { agent: best.agent, confidence: best.confidence, matched: best.matched })
     return best
   }

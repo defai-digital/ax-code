@@ -9,6 +9,8 @@ const root = path.resolve(import.meta.dir, "..")
 const note = [
   "packages/integration-github/ARCHITECTURE.md",
   "packages/integration-vscode/ARCHITECTURE.md",
+  "packages/app/ARCHITECTURE.md",
+  "packages/desktop/ARCHITECTURE.md",
   "packages/ax-code/ARCHITECTURE.md",
   "packages/ui/ARCHITECTURE.md",
   "packages/util/ARCHITECTURE.md",
@@ -46,6 +48,16 @@ const rule = [
     name: "integration-vscode",
     dir: "packages/integration-vscode/src",
     bad: ["@ax-code/ui"],
+  },
+  {
+    name: "app",
+    dir: "packages/app/src",
+    bad: ["packages/ax-code/src", "../ax-code/src", "../../ax-code/src"],
+  },
+  {
+    name: "desktop",
+    dir: "packages/desktop/src",
+    bad: ["packages/ax-code/src", "../ax-code/src", "../../ax-code/src"],
   },
 ]
 
@@ -152,6 +164,8 @@ async function deep() {
     "packages/sdk/js/src",
     "packages/integration-github",
     "packages/integration-vscode/src",
+    "packages/app/src",
+    "packages/desktop/src",
     "packages/ui/src",
     "packages/util/src",
   ]) {

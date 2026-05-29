@@ -37,7 +37,21 @@ export type {
   HeadlessClient,
   HeadlessClientOptions,
   HeadlessCreateSessionInput,
+  HeadlessSessionEvidence,
+  HeadlessSessionEvidenceInput,
+  HeadlessScheduledTask,
+  HeadlessScheduledTaskCreateInput,
+  HeadlessScheduledTaskListInput,
+  HeadlessScheduledTaskRunNowResult,
+  HeadlessScheduledTaskSchedule,
+  HeadlessScheduledTaskStatus,
+  HeadlessScheduledTaskUpdateInput,
   HeadlessSubscribeOptions,
+  HeadlessTaskQueueEnqueueInput,
+  HeadlessTaskQueueItem,
+  HeadlessTaskQueueKind,
+  HeadlessTaskQueueListInput,
+  HeadlessTaskQueueStatus,
 } from "./headless/client.js"
 
 export {
@@ -62,6 +76,8 @@ export type {
   HeadlessMessageEvent,
   HeadlessRequestEvent,
   HeadlessRuntimeStatusEvent,
+  HeadlessScheduledTaskEvent,
+  HeadlessTaskQueueEvent,
   HeadlessControlEvent,
 } from "./headless/event.js"
 

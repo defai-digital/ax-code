@@ -4,7 +4,7 @@ import type { MessageV2 } from "./message-v2"
 import type { Snapshot } from "../snapshot"
 import type { Permission } from "../permission"
 import type { ProjectID } from "../project/schema"
-import type { SessionID, MessageID, PartID } from "./schema"
+import type { SessionID, MessageID, PartID, TaskQueueID, ScheduledTaskID } from "./schema"
 import type { WorkspaceID } from "../control-plane/schema"
 import { WorkspaceTable } from "../control-plane/workspace.sql"
 import { Timestamps } from "../storage/schema.sql"
@@ -126,6 +126,69 @@ export const SessionGoalTable = sqliteTable(
     ...Timestamps,
   },
   (table) => [index("session_goal_status_idx").on(table.status)],
+)
+
+export const TaskQueueTable = sqliteTable(
+  "task_queue",
+  {
+    id: text().$type<TaskQueueID>().primaryKey(),
+    project_id: text()
+      .$type<ProjectID>()
+      .notNull()
+      .references(() => ProjectTable.id, { onDelete: "cascade" }),
+    session_id: text()
+      .$type<SessionID>()
+      .references(() => SessionTable.id, { onDelete: "cascade" }),
+    directory: text().notNull(),
+    kind: text().notNull(),
+    status: text().notNull(),
+    priority: integer().notNull().default(0),
+    position: integer().notNull(),
+    title: text().notNull(),
+    agent: text(),
+    model: text({ mode: "json" }).$type<unknown>(),
+    source_message_id: text(),
+    source_task_id: text(),
+    payload: text({ mode: "json" }).notNull().$type<Record<string, unknown>>(),
+    error: text(),
+    time_started: integer(),
+    time_completed: integer(),
+    ...Timestamps,
+  },
+  (table) => [
+    index("task_queue_project_position_idx").on(table.project_id, table.position, table.id),
+    index("task_queue_project_status_idx").on(table.project_id, table.status),
+    index("task_queue_session_idx").on(table.session_id),
+  ],
+)
+
+export const ScheduledTaskTable = sqliteTable(
+  "scheduled_task",
+  {
+    id: text().$type<ScheduledTaskID>().primaryKey(),
+    project_id: text()
+      .$type<ProjectID>()
+      .notNull()
+      .references(() => ProjectTable.id, { onDelete: "cascade" }),
+    directory: text().notNull(),
+    title: text().notNull(),
+    prompt: text().notNull(),
+    schedule: text({ mode: "json" }).notNull().$type<Record<string, unknown>>(),
+    status: text().notNull(),
+    agent: text(),
+    model: text({ mode: "json" }).$type<unknown>(),
+    last_queue_id: text()
+      .$type<TaskQueueID>()
+      .references(() => TaskQueueTable.id, { onDelete: "set null" }),
+    error: text(),
+    next_run_at: integer(),
+    last_run_at: integer(),
+    ...Timestamps,
+  },
+  (table) => [
+    index("scheduled_task_project_status_idx").on(table.project_id, table.status),
+    index("scheduled_task_project_next_run_idx").on(table.project_id, table.next_run_at),
+  ],
 )
 
 export const PermissionTable = sqliteTable("permission", {

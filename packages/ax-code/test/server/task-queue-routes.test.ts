@@ -134,7 +134,9 @@ describe("task queue routes", () => {
       directory: tmp.path,
       fn: async () => {
         const session = await Session.create({})
-        const promptSpy = spyOn(SessionPrompt, "prompt").mockImplementation((async (input: SessionPrompt.PromptInput) => {
+        const promptSpy = spyOn(SessionPrompt, "prompt").mockImplementation((async (
+          input: SessionPrompt.PromptInput,
+        ) => {
           promptInputs.push(input)
           return {} as any
         }) as any)
@@ -199,7 +201,9 @@ describe("task queue routes", () => {
           })
           return {} as any
         })
-        const promptSpy = spyOn(SessionPrompt, "prompt").mockImplementation((async (input: SessionPrompt.PromptInput) => {
+        const promptSpy = spyOn(SessionPrompt, "prompt").mockImplementation((async (
+          input: SessionPrompt.PromptInput,
+        ) => {
           promptInputs.push(input)
           return {} as any
         }) as any)
@@ -265,7 +269,9 @@ describe("task queue routes", () => {
           })
           return {} as any
         })
-        const promptSpy = spyOn(SessionPrompt, "prompt").mockImplementation((async (input: SessionPrompt.PromptInput) => {
+        const promptSpy = spyOn(SessionPrompt, "prompt").mockImplementation((async (
+          input: SessionPrompt.PromptInput,
+        ) => {
           promptInputs.push(input)
           return {} as any
         }) as any)
