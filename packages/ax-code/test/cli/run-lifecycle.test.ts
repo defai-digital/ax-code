@@ -33,6 +33,14 @@ test("run command restores cwd after a requested directory run", async () => {
   expect(src).toContain("process.chdir(previousCwd)")
 })
 
+test("run command logs tool renderer fallback errors", async () => {
+  const src = await Bun.file(path.join(import.meta.dir, "../../src/cli/cmd/run.ts")).text()
+
+  expect(src).toContain('Log.Default.debug("tool renderer fallback"')
+  expect(src).toContain("error: toErrorMessage(error)")
+  expect(src).toContain("stack: error instanceof Error ? error.stack : undefined")
+})
+
 test("headless-run clears the idle timer before checking timeout state", async () => {
   const src = await Bun.file(path.join(import.meta.dir, "../../src/cli/cmd/headless-run.ts")).text()
   const runStart = src.indexOf("await runHeadlessSession({")

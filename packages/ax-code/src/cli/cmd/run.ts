@@ -458,7 +458,12 @@ export const RunCommand = cmd({
           if (part.tool === "todowrite") return todo(props<typeof TodoWriteTool>(part))
           if (part.tool === "skill") return skill(props<typeof SkillTool>(part))
           return fallback(part)
-        } catch {
+        } catch (error) {
+          Log.Default.debug("tool renderer fallback", {
+            tool: part.tool,
+            error: toErrorMessage(error),
+            stack: error instanceof Error ? error.stack : undefined,
+          })
           return fallback(part)
         }
       }

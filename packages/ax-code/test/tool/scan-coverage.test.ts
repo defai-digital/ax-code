@@ -4,6 +4,7 @@ import { Instance } from "../../src/project/instance"
 import {
   buildScanToolResult,
   dedupCoverageNotice,
+  hasSourceFile,
   scanCoverageNotice,
   scanToolCommonDetectInput,
 } from "../../src/tool/scan-coverage"
@@ -24,6 +25,24 @@ describe("scan coverage notices", () => {
       maxFiles: 12,
       maxFindingsPerFile: 3,
       scope: "worktree",
+    })
+  })
+
+  test("continues source detection after one glob pattern fails", async () => {
+    await using tmp = await tmpdir()
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const found = hasSourceFile(["bad-pattern", "src/**/*.py"], (pattern) => ({
+          scanSync: () => {
+            if (pattern === "bad-pattern") throw new Error("scan failed")
+            return ["src/app.py"]
+          },
+        }))
+
+        expect(found).toBe(true)
+      },
     })
   })
 
