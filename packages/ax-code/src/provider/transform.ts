@@ -6,6 +6,7 @@ import type { ModelsDev } from "./models"
 import { Flag } from "@/flag/flag"
 import { isRecord } from "@/util/record"
 import { buildSearchParameters, type LiveSearchConfig } from "./xai/server-tools"
+import { isQwen37MaxModel } from "./qwen37-readiness"
 
 type Modality = NonNullable<ModelsDev.Model["modalities"]>["input"][number]
 
@@ -19,6 +20,11 @@ function mimeToModality(mime: string): Modality | undefined {
 
 export namespace ProviderTransform {
   export const OUTPUT_TOKEN_MAX = Flag.AX_CODE_EXPERIMENTAL_OUTPUT_TOKEN_MAX || 32_000
+  // Qwen 3.7 Max's documented output limit is 65 536 tokens across all
+  // non-Alibaba routes (OpenRouter, TogetherAI, Vercel). We raise the cap
+  // specifically for this model so callers get the full generation budget
+  // without lifting OUTPUT_TOKEN_MAX for every other model.
+  const QWEN37_MAX_OUTPUT_TOKENS = 65_536
   // DashScope and Token Plan both reserve `prompt + max_tokens` against a
   // sliding short-window quota *before* generation. Defaulting to 4k keeps
   // headroom for parallel agents and long-context requests while still letting
@@ -454,7 +460,8 @@ export namespace ProviderTransform {
       return Math.min(limit, OUTPUT_TOKEN_MAX, ALIBABA_OUTPUT_TOKEN_MAX)
     }
     const limit = model.limit.output
-    return limit > 0 ? Math.min(limit, OUTPUT_TOKEN_MAX) : OUTPUT_TOKEN_MAX
+    const cap = isQwen37MaxModel(model.id ?? "") ? QWEN37_MAX_OUTPUT_TOKENS : OUTPUT_TOKEN_MAX
+    return limit > 0 ? Math.min(limit, cap) : cap
   }
 
   export function schema(model: Provider.Model, schema: JSONSchema.BaseSchema | JSONSchema7): JSONSchema7 {

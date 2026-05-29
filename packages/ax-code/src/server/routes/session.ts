@@ -1,7 +1,7 @@
 import { Hono, type Context } from "hono"
 import { describeRoute, validator, resolver } from "hono-openapi"
 import { HTTPException } from "hono/http-exception"
-import { SessionID, MessageID, PartID } from "@/session/schema"
+import { SessionID, MessageID, PartID, TaskQueueID } from "@/session/schema"
 import z from "zod"
 import { Session } from "../../session"
 import { MessageV2 } from "../../session/message-v2"
@@ -18,6 +18,8 @@ import { SessionRisk } from "../../session/risk"
 import { SessionRollback } from "../../session/rollback"
 import { SessionSemanticDiff } from "../../session/semantic-diff"
 import { SessionGoal } from "../../session/goal"
+import { TaskQueue } from "../../session/task-queue"
+import { TaskQueueExecutor } from "../../session/task-queue-executor"
 import { Todo } from "../../session/todo"
 import { Agent } from "../../agent/agent"
 import { Snapshot } from "@/snapshot"
@@ -50,11 +52,10 @@ const SESSION_PERMISSION_PARAM = z.object({
 })
 
 function startDetachedSessionTask(task: () => Promise<void>) {
-  // Async prompt routes return 202 before the model loop starts, but the
-  // accepted prompt is authoritative work, not best-effort telemetry. Keep
-  // the startup timer ref'ed so packaged stdio backends cannot go idle before
-  // the task gets its first turn.
-  const timer = setTimeout(() => {
+  // setTimeout with 0ms delay keeps the event loop alive until the callback
+  // fires and the resulting promise from task() settles, which prevents
+  // packaged stdio backends from going idle before the first turn starts.
+  setTimeout(() => {
     void task().catch((error) => {
       DiagnosticLog.recordProcess("server.sessionAsyncTaskUnhandledFailure", { error })
       log.error("detached session task failed", { error })
@@ -78,8 +79,9 @@ function recordAsyncSessionTask(input: {
 }
 
 function startObservedAsyncSessionTask(input: {
-  sessionID: string
+  sessionID: SessionID
   kind: "prompt" | "command" | "shell"
+  queueID?: string
   task: () => Promise<unknown>
   onError: (error: unknown) => void
 }) {
@@ -92,8 +94,10 @@ function startObservedAsyncSessionTask(input: {
       kind: input.kind,
       startedAt,
     })
+    await updateAsyncTaskQueueStatus(input.queueID, { status: "running" })
     try {
       await input.task()
+      await updateAsyncTaskQueueStatus(input.queueID, { status: "completed" })
       recordAsyncSessionTask({
         event: "server.sessionAsyncSucceeded",
         sessionID: input.sessionID,
@@ -108,6 +112,10 @@ function startObservedAsyncSessionTask(input: {
         startedAt,
         error,
       })
+      await updateAsyncTaskQueueStatus(input.queueID, {
+        status: "failed",
+        error: NamedError.message(error),
+      })
       try {
         input.onError(error)
       } catch (handlerError) {
@@ -119,6 +127,18 @@ function startObservedAsyncSessionTask(input: {
         log.error("detached session task error handler failed", { error: handlerError })
       }
     } finally {
+      await TaskQueueExecutor.drainNextForSession(input.sessionID).catch((error) => {
+        DiagnosticLog.recordProcess("server.sessionAsyncDrainFailed", {
+          sessionID: input.sessionID,
+          kind: input.kind,
+          error,
+        })
+        log.warn("failed to drain task queue after async session task settled", {
+          sessionID: input.sessionID,
+          kind: input.kind,
+          error,
+        })
+      })
       recordAsyncSessionTask({
         event: "server.sessionAsyncSettled",
         sessionID: input.sessionID,
@@ -139,12 +159,33 @@ function createAsyncSessionErrorHandler(sessionID: SessionID, kind: "prompt" | "
 function startAsyncSessionTask(input: {
   sessionID: SessionID
   kind: "prompt" | "command" | "shell"
+  queueID?: string
   task: () => Promise<unknown>
 }) {
   startObservedAsyncSessionTask({
     ...input,
     onError: createAsyncSessionErrorHandler(input.sessionID, input.kind),
   })
+}
+
+async function updateAsyncTaskQueueStatus(
+  queueID: string | undefined,
+  input: { status: TaskQueue.Status; error?: string },
+) {
+  if (!queueID) return
+  try {
+    await TaskQueue.setStatus({
+      id: TaskQueueID.make(queueID),
+      status: input.status,
+      error: input.error,
+    })
+  } catch (error) {
+    log.warn("failed to update async task queue status", {
+      queueID,
+      status: input.status,
+      error,
+    })
+  }
 }
 
 type SessionJSONRouteContext = {
@@ -173,12 +214,74 @@ async function startAsyncSessionHandler<TBody>(
   },
 ) {
   const { sessionID, body } = await parseSessionJSONInput<TBody>(c as SessionJSONRouteContext)
+  const queueItem = await TaskQueue.enqueue({
+    sessionID,
+    kind: input.kind,
+    title: asyncTaskQueueTitle(input.kind, body),
+    agent: asyncTaskQueueAgent(body),
+    model: asyncTaskQueueModel(body),
+    sourceMessageID: asyncTaskQueueSourceMessageID(body),
+    payload: asyncTaskQueuePayload(input.kind, body),
+  })
   startAsyncSessionTask({
     sessionID,
     kind: input.kind,
+    queueID: queueItem.id,
     task: () => input.start({ ...body, sessionID }),
   })
   return c.body(null, 202)
+}
+
+function asyncTaskQueueTitle(kind: "prompt" | "command" | "shell", body: unknown) {
+  const text = asyncTaskQueueSummaryText(kind, body)
+  if (!text) return kind === "prompt" ? "Prompt" : kind === "command" ? "Command" : "Shell command"
+  return text.length > 120 ? `${text.slice(0, 117)}...` : text
+}
+
+function asyncTaskQueueSummaryText(kind: "prompt" | "command" | "shell", body: unknown) {
+  if (!body || typeof body !== "object") return undefined
+  const record = body as Record<string, unknown>
+  if (kind === "prompt") return promptPartsSummary(record["parts"])
+  const command = typeof record["command"] === "string" ? record["command"].trim() : ""
+  const args = typeof record["arguments"] === "string" ? record["arguments"].trim() : ""
+  return [command, args].filter(Boolean).join(" ").trim() || undefined
+}
+
+function promptPartsSummary(parts: unknown) {
+  if (!Array.isArray(parts)) return undefined
+  return parts
+    .map((part) => {
+      if (!part || typeof part !== "object") return undefined
+      const text = (part as Record<string, unknown>)["text"]
+      return typeof text === "string" ? text.trim() : undefined
+    })
+    .filter((text): text is string => Boolean(text))
+    .join(" ")
+    .trim()
+}
+
+function asyncTaskQueuePayload(kind: "prompt" | "command" | "shell", body: unknown): Record<string, unknown> {
+  return {
+    kind,
+    body: body && typeof body === "object" ? (body as Record<string, unknown>) : {},
+  }
+}
+
+function asyncTaskQueueAgent(body: unknown) {
+  if (!body || typeof body !== "object") return undefined
+  const agent = (body as Record<string, unknown>)["agent"]
+  return typeof agent === "string" ? agent : undefined
+}
+
+function asyncTaskQueueModel(body: unknown) {
+  if (!body || typeof body !== "object") return undefined
+  return (body as Record<string, unknown>)["model"]
+}
+
+function asyncTaskQueueSourceMessageID(body: unknown) {
+  if (!body || typeof body !== "object") return undefined
+  const messageID = (body as Record<string, unknown>)["messageID"]
+  return typeof messageID === "string" ? messageID : undefined
 }
 
 async function runSessionRequest<TBody>(
