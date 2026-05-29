@@ -214,6 +214,8 @@ function createStreamHandle(source: AsyncIterable<StreamEvent>, onInterrupted?: 
   let cachedResult: RunResult | undefined
   let iteratorStarted = false
   let completed = false
+  let cancelled = false
+  let sourceStarted = false
   let resolveCompletion: (() => void) | undefined
   const streamLog = Log.create({ service: "sdk.stream" })
   const completionPromise = new Promise<void>((r) => {
@@ -234,7 +236,10 @@ function createStreamHandle(source: AsyncIterable<StreamEvent>, onInterrupted?: 
 
   async function* wrappedIterator(): AsyncGenerator<StreamEvent> {
     try {
+      if (cancelled) return
+      sourceStarted = true
       for await (const event of source) {
+        if (cancelled) return
         // Fire registered callbacks
         if (event.type === "text") {
           emit("text", (cb) => cb(event.text))
@@ -251,6 +256,7 @@ function createStreamHandle(source: AsyncIterable<StreamEvent>, onInterrupted?: 
         if (event.type === "error") {
           emit("error", (cb) => cb(event.error))
         }
+        if (cancelled) return
         if (event.type === "done") {
           cachedResult = event.result
           completed = true
@@ -261,7 +267,7 @@ function createStreamHandle(source: AsyncIterable<StreamEvent>, onInterrupted?: 
         yield event
       }
     } finally {
-      if (!completed && onInterrupted) {
+      if (sourceStarted && !completed && onInterrupted) {
         try {
           await onInterrupted()
         } catch (error) {
@@ -317,6 +323,24 @@ function createStreamHandle(source: AsyncIterable<StreamEvent>, onInterrupted?: 
         return
       }
       return completionPromise
+    },
+
+    cancel(): void {
+      if (cancelled) return
+      cancelled = true
+      const current = generator
+      if (!current) {
+        resolveCompletion?.()
+        return
+      }
+      void current
+        .return(undefined)
+        .catch((error) => {
+          streamLog.error("sdk stream cancel failed", { error })
+        })
+        .finally(() => {
+          resolveCompletion?.()
+        })
     },
   }
 
