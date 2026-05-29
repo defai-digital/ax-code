@@ -91,7 +91,7 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(renderer).toContain("createTuiRenderOptionsFromProfile")
     expect(renderer).toContain("targetFps: 60")
     expect(renderer).toContain("exitOnCtrlC: false")
-    expect(renderer).toContain("testing: false")
+    expect(renderer).not.toContain("testing:")
     expect(renderer).toContain("useThread: advancedTerminal")
     expect(renderer).toContain('screenMode: advancedTerminal ? "alternate-screen" : "main-screen"')
     expect(renderer).toContain("allowTerminalTitle: advancedTerminal && !terminalTitleDisabled")

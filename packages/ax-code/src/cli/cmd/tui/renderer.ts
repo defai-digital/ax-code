@@ -19,7 +19,6 @@ export type TuiDestroyRenderer = TuiTerminalTitleRenderer & {
 export type TuiRenderProfile = {
   advancedTerminal: boolean
   profile: "advanced" | "compatible"
-  testing: boolean
   exitOnCtrlC: boolean
   useThread: boolean
   useMouse: boolean
@@ -36,7 +35,6 @@ export function resolveTuiRenderProfile(input: {
   return {
     advancedTerminal,
     profile: advancedTerminal ? "advanced" : "compatible",
-    testing: false,
     // Keep Ctrl+C routed through ax-code's keybind layer. The app already
     // overloads Ctrl+C for input-clear, selection-copy, and exit flows.
     // Letting OpenTUI destroy the renderer directly bypasses that routing.
@@ -74,10 +72,6 @@ export function createTuiRenderOptionsFromProfile(
     // protocol negotiation on the real TTY, which has been a source of
     // install-time hangs on some terminals. Users who need the old
     // behavior can opt back in with AX_CODE_TUI_ADVANCED_TERMINAL=1.
-    // Never enable OpenTUI testing mode in production. It disables
-    // parts of the real terminal pipeline and can suppress frame output
-    // entirely, which looks exactly like a startup hang.
-    testing: profile.testing,
     exitOnCtrlC: profile.exitOnCtrlC,
     useThread: profile.useThread,
     useMouse: profile.useMouse,

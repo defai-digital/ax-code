@@ -21,10 +21,8 @@ describe("tui renderer profile", () => {
     const options = createTuiRenderOptionsFromProfile(profile)
 
     expect(profile.profile).toBe("compatible")
-    expect(profile.testing).toBeFalse()
     expect(profile.exitOnCtrlC).toBeFalse()
     expect(profile.allowTerminalTitle).toBeFalse()
-    expect(options.testing).toBeFalse()
     expect(options.exitOnCtrlC).toBeFalse()
     expect(options.useThread).toBeFalse()
     expect(options.useMouse).toBeTrue()
@@ -40,10 +38,8 @@ describe("tui renderer profile", () => {
     const options = createTuiRenderOptionsFromProfile(profile)
 
     expect(profile.profile).toBe("advanced")
-    expect(profile.testing).toBeFalse()
     expect(profile.exitOnCtrlC).toBeFalse()
     expect(profile.allowTerminalTitle).toBeTrue()
-    expect(options.testing).toBeFalse()
     expect(options.exitOnCtrlC).toBeFalse()
     expect(options.useThread).toBeTrue()
     expect(options.useMouse).toBeTrue()
