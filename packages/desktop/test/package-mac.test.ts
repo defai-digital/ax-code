@@ -25,15 +25,25 @@ describe("mac desktop packaging", () => {
     expect(existsSync(path.join(bundle.appPayloadPath, "main.js.map"))).toBe(true)
     expect(existsSync(path.join(bundle.appPayloadPath, "preload.cjs"))).toBe(true)
     expect(existsSync(path.join(bundle.appPayloadPath, "app/index.html"))).toBe(true)
+    expect(existsSync(bundle.iconPath)).toBe(true)
     expect(existsSync(path.join(bundle.resourcesPath, "default_app.asar"))).toBe(false)
+    expect(existsSync(path.join(bundle.resourcesPath, "electron.icns"))).toBe(false)
 
     const infoPlist = readFileSync(path.join(bundle.bundlePath, "Contents/Info.plist"), "utf8")
     expect(infoPlist).toContain("<key>CFBundleExecutable</key>\n\t<string>Electron</string>")
     expect(infoPlist).toContain("<string>digital.defai.ax-code</string>")
     expect(infoPlist).toContain("<key>CFBundleDisplayName</key>")
+    expect(infoPlist).toContain("<key>CFBundleIconFile</key>\n\t<string>ax-code.icns</string>")
+    expect(infoPlist).toContain("<key>CFBundleShortVersionString</key>\n\t<string>9.8.7</string>")
+    expect(infoPlist).toContain("<key>CFBundleVersion</key>\n\t<string>9.8.7</string>")
+    expect(infoPlist).not.toContain("ElectronAsarIntegrity")
 
-    const appPackage = JSON.parse(readFileSync(bundle.appPackagePath, "utf8")) as { name: string; main: string }
-    expect(appPackage).toMatchObject({ name: "@ax-code/desktop", main: "main.js" })
+    const appPackage = JSON.parse(readFileSync(bundle.appPackagePath, "utf8")) as {
+      name: string
+      main: string
+      version: string
+    }
+    expect(appPackage).toMatchObject({ name: "@ax-code/desktop", main: "main.js", version: "9.8.7" })
     expect(bundle.releaseManifest).toMatchObject({
       productName: "AX Code",
       version: "9.8.7",
@@ -103,6 +113,7 @@ function createElectronApp(root: string) {
   mkdirSync(resourcesPath, { recursive: true })
   writeFileSync(path.join(contentsPath, "MacOS/Electron"), "")
   writeFileSync(path.join(resourcesPath, "default_app.asar"), "")
+  writeFileSync(path.join(resourcesPath, "electron.icns"), "")
   writeFileSync(path.join(root, "electron-package.json"), '{"version":"42.3.0"}')
   writeFileSync(
     path.join(contentsPath, "Info.plist"),
@@ -116,6 +127,20 @@ function createElectronApp(root: string) {
       "\t<string>com.github.Electron</string>",
       "\t<key>CFBundleName</key>",
       "\t<string>Electron</string>",
+      "\t<key>CFBundleShortVersionString</key>",
+      "\t<string>42.3.0</string>",
+      "\t<key>CFBundleVersion</key>",
+      "\t<string>42.3.0</string>",
+      "\t<key>CFBundleIconFile</key>",
+      "\t<string>electron.icns</string>",
+      "\t<key>ElectronAsarIntegrity</key>",
+      "\t<dict>",
+      "\t\t<key>Resources/default_app.asar</key>",
+      "\t\t<dict>",
+      "\t\t\t<key>algorithm</key>",
+      "\t\t\t<string>SHA256</string>",
+      "\t\t</dict>",
+      "\t</dict>",
       "</dict>",
       "</plist>",
     ].join("\n"),

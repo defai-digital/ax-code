@@ -1,4 +1,5 @@
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { spawnSync } from "node:child_process"
 import { createRequire } from "node:module"
 import path from "node:path"
 import { parseArgs } from "node:util"
@@ -13,6 +14,7 @@ export type MacAppBundle = {
   resourcesPath: string
   appPayloadPath: string
   appPackagePath: string
+  iconPath: string
   releaseManifestPath: string
   releaseManifest: MacReleaseManifest
 }
@@ -29,6 +31,7 @@ export async function packageMacApp(
     appDist?: string
     bundleRoot?: string
     electronAppPath?: string
+    iconSourcePath?: string
     version?: string
   } = {},
 ): Promise<MacPackagingResult> {
@@ -37,6 +40,7 @@ export async function packageMacApp(
     artifacts,
     bundleRoot: input.bundleRoot,
     electronAppPath: input.electronAppPath,
+    iconSourcePath: input.iconSourcePath,
     version: input.version,
   })
   const smoke = createPackagedDesktopSmokePlan({
@@ -54,6 +58,7 @@ export function createMacAppBundle(input: {
   artifacts: DesktopBuildArtifacts
   bundleRoot?: string
   electronAppPath?: string
+  iconSourcePath?: string
   version?: string
   electronVersion?: string
 }): MacAppBundle {
@@ -64,8 +69,13 @@ export function createMacAppBundle(input: {
   mkdirSync(bundleRoot, { recursive: true })
   cpSync(sourceApp, bundlePath, { recursive: true })
 
-  rewriteInfoPlist(path.join(bundlePath, "Contents/Info.plist"))
+  const version = input.version ?? "0.0.0"
+  rewriteInfoPlist(path.join(bundlePath, "Contents/Info.plist"), { version })
   const resourcesPath = path.join(bundlePath, "Contents/Resources")
+  const iconPath = installMacBundleIcon({
+    resourcesPath,
+    sourcePath: input.iconSourcePath ?? defaultMacIconSourcePath(),
+  })
   const appPayloadPath = path.join(resourcesPath, "app")
   rmSync(path.join(resourcesPath, "default_app.asar"), { force: true })
   rmSync(appPayloadPath, { recursive: true, force: true })
@@ -86,7 +96,7 @@ export function createMacAppBundle(input: {
       {
         name: "@ax-code/desktop",
         productName: "AX Code",
-        version: input.version ?? "0.0.0",
+        version,
         type: "module",
         main: "main.js",
         private: true,
@@ -99,7 +109,7 @@ export function createMacAppBundle(input: {
   const releaseManifestPath = path.join(resourcesPath, MAC_RELEASE_MANIFEST_NAME)
   const releaseManifest: MacReleaseManifest = {
     productName: "AX Code",
-    version: input.version ?? "0.0.0",
+    version,
     packageTarget: "mac",
     appPath: bundlePath,
     resourcesAppPath: appPayloadPath,
@@ -135,6 +145,7 @@ export function createMacAppBundle(input: {
     resourcesPath,
     appPayloadPath,
     appPackagePath,
+    iconPath,
     releaseManifestPath,
     releaseManifest,
   }
@@ -157,11 +168,33 @@ function resolveElectronVersion() {
   return packageJson.version
 }
 
-function rewriteInfoPlist(infoPath: string) {
+const MAC_ICON_FILE = "ax-code.icns"
+
+function rewriteInfoPlist(infoPath: string, input: { version: string }) {
   if (!existsSync(infoPath)) throw new Error(`Electron Info.plist is missing: ${infoPath}`)
   const original = readFileSync(infoPath, "utf8")
   const updated = setPlistString(
-    setPlistString(setPlistString(original, "CFBundleIdentifier", "digital.defai.ax-code"), "CFBundleName", "AX Code"),
+    setPlistString(
+      setPlistString(
+        setPlistString(
+          setPlistString(
+            setPlistString(
+              removePlistDictKey(original, "ElectronAsarIntegrity"),
+              "CFBundleIdentifier",
+              "digital.defai.ax-code",
+            ),
+            "CFBundleName",
+            "AX Code",
+          ),
+          "CFBundleIconFile",
+          MAC_ICON_FILE,
+        ),
+        "CFBundleShortVersionString",
+        input.version,
+      ),
+      "CFBundleVersion",
+      input.version,
+    ),
     "CFBundleDisplayName",
     "AX Code",
   )
@@ -178,6 +211,58 @@ function escapeRegExp(input: string) {
   return input.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
 }
 
+function removePlistDictKey(plist: string, key: string) {
+  const marker = `<key>${escapeRegExp(key)}</key>`
+  const pattern = new RegExp(`\\s*${marker}\\s*`)
+  const match = pattern.exec(plist)
+  if (!match) return plist
+  const dictStart = plist.indexOf("<dict>", match.index + match[0].length)
+  if (dictStart < 0) return plist
+  if (plist.slice(match.index + match[0].length, dictStart).trim()) return plist
+  const dictEnd = matchingDictEnd(plist, dictStart)
+  if (dictEnd === undefined) return plist
+  return `${plist.slice(0, match.index)}${plist.slice(dictEnd)}`
+}
+
+function matchingDictEnd(plist: string, dictStart: number) {
+  const tags = /<\/?dict>/g
+  tags.lastIndex = dictStart
+  let depth = 0
+  for (let match = tags.exec(plist); match; match = tags.exec(plist)) {
+    if (match[0] === "<dict>") {
+      depth++
+      continue
+    }
+    depth--
+    if (depth === 0) return tags.lastIndex
+  }
+  return undefined
+}
+
+function defaultMacIconSourcePath() {
+  return path.resolve(import.meta.dirname, "../../../ui/src/assets/favicon/web-app-manifest-512x512.png")
+}
+
+function installMacBundleIcon(input: { resourcesPath: string; sourcePath: string }) {
+  if (!existsSync(input.sourcePath)) throw new Error(`Mac app icon source is missing: ${input.sourcePath}`)
+  const iconPath = path.join(input.resourcesPath, MAC_ICON_FILE)
+  if (path.extname(input.sourcePath).toLowerCase() === ".icns") {
+    cpSync(input.sourcePath, iconPath)
+    rmSync(path.join(input.resourcesPath, "electron.icns"), { force: true })
+    return iconPath
+  }
+  runMacPackagingCommand("sips", ["-s", "format", "icns", input.sourcePath, "--out", iconPath])
+  rmSync(path.join(input.resourcesPath, "electron.icns"), { force: true })
+  return iconPath
+}
+
+function runMacPackagingCommand(command: string, args: string[]) {
+  const result = spawnSync(command, args, { encoding: "utf8" })
+  if (result.status === 0) return
+  const detail = result.stderr?.trim() || result.stdout?.trim()
+  throw new Error(`${command} failed${detail ? `: ${detail}` : ""}`)
+}
+
 function copyIfExists(source: string, destination: string) {
   if (existsSync(source)) cpSync(source, destination)
 }
@@ -190,6 +275,7 @@ if (import.meta.main) {
       "app-dist": { type: "string" },
       "bundle-root": { type: "string" },
       "electron-app": { type: "string" },
+      "icon-source": { type: "string" },
       version: { type: "string" },
     },
     strict: true,
@@ -200,6 +286,7 @@ if (import.meta.main) {
     appDist: values["app-dist"],
     bundleRoot: values["bundle-root"],
     electronAppPath: values["electron-app"],
+    iconSourcePath: values["icon-source"],
     version: values.version,
   })
   console.log(JSON.stringify(result, null, 2))
