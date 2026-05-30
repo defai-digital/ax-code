@@ -46,9 +46,7 @@ describe("providers command", () => {
       await ProvidersListCommand.handler({} as any)
 
       expect(infoSpy).toHaveBeenCalled()
-      expect(
-        infoSpy.mock.calls.some(([message]) => String(message).includes("Grok Cloud API")),
-      ).toBe(true)
+      expect(infoSpy.mock.calls.some(([message]) => String(message).includes("Grok Cloud API"))).toBe(true)
       expect(outroSpy).toHaveBeenCalledWith("1 credentials")
     } finally {
       introSpy.mockRestore()

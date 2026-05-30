@@ -950,17 +950,13 @@ describe("tool.bash isolation", () => {
 })
 
 describe("tool.bash browser-open interception", () => {
-
   test("intercepts open targeting a local HTML file", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         const bash = await BashTool.init()
-        const result = await bash.execute(
-          { command: "open index.html", description: "Open HTML file" },
-          ctx,
-        )
+        const result = await bash.execute({ command: "open index.html", description: "Open HTML file" }, ctx)
         expect(result.output).toContain("[Browser open intercepted]")
         expect(result.output).toContain("index.html")
         expect(result.metadata.exit).toBe(0)
@@ -974,10 +970,7 @@ describe("tool.bash browser-open interception", () => {
       directory: tmp.path,
       fn: async () => {
         const bash = await BashTool.init()
-        const result = await bash.execute(
-          { command: "xdg-open game.html", description: "Open game" },
-          ctx,
-        )
+        const result = await bash.execute({ command: "xdg-open game.html", description: "Open game" }, ctx)
         expect(result.output).toContain("[Browser open intercepted]")
         expect(result.output).toContain("game.html")
       },
@@ -1042,10 +1035,7 @@ describe("tool.bash browser-open interception", () => {
           },
         }
         try {
-          await bash.execute(
-            { command: "open https://example.com", description: "Open external site" },
-            trackCtx,
-          )
+          await bash.execute({ command: "open https://example.com", description: "Open external site" }, trackCtx)
         } catch {
           // permission throw is expected
         }

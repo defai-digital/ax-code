@@ -252,7 +252,8 @@ export const ProvidersListCommand = cmd({
 
     for (const [providerID, result] of results) {
       const name = database[providerID]?.name || providerID
-      const type = getCliProviderDefinition(providerID) && result.type === "api" && result.key === "cli" ? "cli" : result.type
+      const type =
+        getCliProviderDefinition(providerID) && result.type === "api" && result.key === "cli" ? "cli" : result.type
       prompts.log.info(`${name} ${UI.Style.TEXT_DIM}${type}`)
     }
 

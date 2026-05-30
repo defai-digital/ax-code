@@ -198,7 +198,12 @@ export namespace Ssrf {
     } as RequestInit)
   }
 
-  export async function pinnedFetch(url: string, init?: PinnedFetchInit, fetchFn?: FetchFn, dnsResolveFn?: DnsResolveFn): Promise<Response> {
+  export async function pinnedFetch(
+    url: string,
+    init?: PinnedFetchInit,
+    fetchFn?: FetchFn,
+    dnsResolveFn?: DnsResolveFn,
+  ): Promise<Response> {
     const label = init?.label ?? "ssrf"
     const redirectMode = init?.redirect ?? "follow"
     let currentUrl = url

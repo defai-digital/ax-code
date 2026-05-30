@@ -185,7 +185,8 @@ export const rpc = {
     if (auth && !headers["authorization"] && !headers["Authorization"]) {
       headers["Authorization"] = auth
     }
-    if (!headers[ServerRuntimeAuth.HEADER]) headers[ServerRuntimeAuth.HEADER] = ServerRuntimeAuth.headers()[ServerRuntimeAuth.HEADER]
+    if (!headers[ServerRuntimeAuth.HEADER])
+      headers[ServerRuntimeAuth.HEADER] = ServerRuntimeAuth.headers()[ServerRuntimeAuth.HEADER]
     const request = new Request(input.url, {
       method: input.method,
       headers,

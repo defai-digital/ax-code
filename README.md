@@ -27,11 +27,11 @@ Built by [DEFAI Digital](https://github.com/defai-digital).
 
 **1. Install**
 
-| Platform | Command |
-| --- | --- |
-| macOS | `brew install defai-digital/ax-code/ax-code` |
-| Linux / CI | `curl -fsSL https://raw.githubusercontent.com/defai-digital/ax-code/main/install \| bash` |
-| Windows | `powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/defai-digital/ax-code/main/install.ps1 \| iex"` |
+| Platform   | Command                                                                                                                                        |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| macOS      | `brew install defai-digital/ax-code/ax-code`                                                                                                   |
+| Linux / CI | `curl -fsSL https://raw.githubusercontent.com/defai-digital/ax-code/main/install \| bash`                                                      |
+| Windows    | `powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/defai-digital/ax-code/main/install.ps1 \| iex"` |
 
 **2. Run**
 

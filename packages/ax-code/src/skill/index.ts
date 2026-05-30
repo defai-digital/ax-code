@@ -165,9 +165,7 @@ export namespace Skill {
       if (!exists) return [] as string[]
       return Glob.scan("*/SKILL.md", { cwd: builtinDir, absolute: true, include: "file" }).catch(() => [] as string[])
     })
-    return Promise.all(
-      entries.map(async (location) => ({ location, content: await Filesystem.readText(location) })),
-    )
+    return Promise.all(entries.map(async (location) => ({ location, content: await Filesystem.readText(location) })))
   }
 
   const addBuiltinSkill = (state: State, entry: { location: string; content: string }) =>

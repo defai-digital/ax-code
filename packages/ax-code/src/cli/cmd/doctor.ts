@@ -259,7 +259,8 @@ export const DoctorCommand: CommandModule = {
       checks.push({
         name: "Credentials",
         status: "warn",
-        detail: "No credentials found. Run `ax-code providers login` or set a provider env var (e.g. ANTHROPIC_API_KEY)",
+        detail:
+          "No credentials found. Run `ax-code providers login` or set a provider env var (e.g. ANTHROPIC_API_KEY)",
       })
     }
 

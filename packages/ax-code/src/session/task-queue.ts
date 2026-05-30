@@ -527,8 +527,6 @@ export namespace TaskQueue {
   async function syncWorkflowStatusIfNeeded(item: Info) {
     const workflow = item.payload["workflow"]
     if (!workflow || typeof workflow !== "object") return
-    await import("../workflow/task-queue")
-      .then((mod) => mod.WorkflowTaskQueue.syncItem(item))
-      .catch(() => undefined)
+    await import("../workflow/task-queue").then((mod) => mod.WorkflowTaskQueue.syncItem(item)).catch(() => undefined)
   }
 }

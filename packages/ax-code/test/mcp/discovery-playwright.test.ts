@@ -116,10 +116,7 @@ describe("mcp.discovery isHtmlOrWebProject", () => {
   test("returns true when package.json has playwright dependency", async () => {
     const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "ax-code-html-detect-"))
     try {
-      await fs.writeFile(
-        path.join(tmp, "package.json"),
-        JSON.stringify({ devDependencies: { playwright: "^1.0.0" } }),
-      )
+      await fs.writeFile(path.join(tmp, "package.json"), JSON.stringify({ devDependencies: { playwright: "^1.0.0" } }))
       expect(await isHtmlOrWebProject(tmp)).toBe(true)
     } finally {
       await fs.rm(tmp, { recursive: true, force: true })

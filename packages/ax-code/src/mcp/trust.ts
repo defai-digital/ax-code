@@ -52,7 +52,9 @@ export namespace McpTrust {
   }
 
   function sha256(value: unknown): string {
-    return createHash("sha256").update(JSON.stringify(canonical(value))).digest("hex")
+    return createHash("sha256")
+      .update(JSON.stringify(canonical(value)))
+      .digest("hex")
   }
 
   function secretRecordHash(record: Record<string, string> | undefined) {

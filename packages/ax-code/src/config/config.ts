@@ -279,7 +279,7 @@ export namespace Config {
             trusted: false,
           })
           log.debug("loaded remote config from well-known", { command: "config.load", status: "ok", url })
-              return { loaded, source: untrustedMcpSource("wellknown", { url }) }
+          return { loaded, source: untrustedMcpSource("wellknown", { url }) }
         } catch (err) {
           log.warn("failed to load wellknown config", {
             command: "config.load",
@@ -363,7 +363,9 @@ export namespace Config {
           const loaded = await loadFile(path.join(dir, file), { trusted })
           configuredPlugins.push(...(loaded.plugin ?? []))
           mergeFromSource(
-            trusted ? trustedMcpSource("config_directory", { path: dir }) : untrustedMcpSource("config_directory", { path: dir }),
+            trusted
+              ? trustedMcpSource("config_directory", { path: dir })
+              : untrustedMcpSource("config_directory", { path: dir }),
             loaded,
           )
           // to satisfy the type checker

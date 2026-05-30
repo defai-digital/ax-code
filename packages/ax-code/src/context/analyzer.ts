@@ -378,8 +378,12 @@ function detectSuggestedMcp(root: string, projectType: string, pkg: PackageJson 
     projectType === "web-app" ||
     pathExists(root, "index.html") ||
     pathExists(root, "index.htm") ||
-    !!(pkg?.dependencies?.["playwright"] || pkg?.devDependencies?.["playwright"] ||
-       pkg?.dependencies?.["@playwright/test"] || pkg?.devDependencies?.["@playwright/test"])
+    !!(
+      pkg?.dependencies?.["playwright"] ||
+      pkg?.devDependencies?.["playwright"] ||
+      pkg?.dependencies?.["@playwright/test"] ||
+      pkg?.devDependencies?.["@playwright/test"]
+    )
   if (!isWeb) return undefined
   return ["@playwright/mcp — browser screenshot and automation (run: npx @playwright/mcp@latest)"]
 }

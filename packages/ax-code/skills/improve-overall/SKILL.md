@@ -19,6 +19,7 @@ Find near-identical logic appearing in multiple places. Extract a shared helper 
 ### 3. Module boundary leakage
 
 Identify code that is in the wrong layer:
+
 - Domain logic (session, provider, tool, permission, etc.) inside `src/cli/` or `src/server/` -> move to the correct domain folder.
 - Storage access outside `src/storage/` -> route through the storage layer.
 - Cross-domain direct imports where an interface boundary should exist.
@@ -28,6 +29,7 @@ Make the minimal interface change needed to move the code without changing behav
 ### 4. Overengineering
 
 Simplify:
+
 - Abstractions with a single call site - inline them.
 - Configuration flags for hypothetical future behaviour with no current use.
 - Premature generalization where a concrete implementation would be shorter and clearer.
