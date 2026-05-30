@@ -2,6 +2,7 @@ import { EOL } from "os"
 import type { Argv } from "yargs"
 import { bootstrap } from "../bootstrap"
 import { cmd } from "./cmd"
+import { compactWorkflowArtifact } from "../../workflow/artifact"
 import { WorkflowRun } from "../../workflow/run"
 import { WorkflowRoutineTrigger } from "../../workflow/routine"
 import { WorkflowScheduler } from "../../workflow/scheduler"
@@ -9,7 +10,7 @@ import { isWorkflowRuntimeEnabled } from "../../workflow/spec"
 import type { WorkflowModelPolicyOverride } from "../../workflow/spec"
 import { WorkflowTemplate } from "../../workflow/template"
 import type { SessionID } from "../../session/schema"
-import type { WorkflowRunDetail, WorkflowRunID } from "../../workflow/state"
+import type { WorkflowArtifactRecord, WorkflowRunDetail, WorkflowRunID } from "../../workflow/state"
 import { summarizeWorkflowRunDetail, type WorkflowRunProjection } from "../../workflow/projection"
 import {
   evaluateWorkflowEvalCaseRun,
@@ -48,6 +49,13 @@ type RunIDOptions = JsonOption & {
 
 type EvalCaseOptions = RunIDOptions & {
   caseId?: string
+}
+
+type ArtifactOptions = RunIDOptions & {
+  phaseId?: string
+  childId?: string
+  kind?: WorkflowRun.ArtifactKind
+  includePayload?: boolean
 }
 
 type SaveTemplateOptions = RunIDOptions & {
@@ -166,6 +174,27 @@ export function formatWorkflowEvalCaseRunSummary(result: WorkflowEvalCaseRunSumm
     lines.push("")
     lines.push("Reasons")
     for (const reason of result.reasons) lines.push(`  - ${reason}`)
+  }
+  return lines.join(EOL).concat(EOL)
+}
+
+export function formatWorkflowArtifactList(artifacts: WorkflowArtifactRecord[]) {
+  if (artifacts.length === 0) return `No workflow artifacts found.${EOL}`
+  const lines: string[] = []
+  for (const artifact of artifacts) {
+    const phase = artifact.phaseID ? ` phase=${artifact.phaseID}` : ""
+    const child = artifact.childID ? ` child=${artifact.childID}` : ""
+    const spec = artifact.specArtifactID ? ` spec=${artifact.specArtifactID}` : ""
+    const exposed = artifact.exposeToMainContext ? " exposed" : ""
+    const redaction = artifact.redaction?.status ? ` redaction=${artifact.redaction.status}` : ""
+    lines.push(
+      `${artifact.id} ${artifact.kind} retention=${artifact.retention}${phase}${child}${spec}${exposed}${redaction}`,
+    )
+    if (artifact.summary) lines.push(`  summary: ${artifact.summary}`)
+    if (artifact.evidenceRefs.length) {
+      lines.push(`  evidence: ${artifact.evidenceRefs.map((ref) => `${ref.kind}:${ref.id}`).join(", ")}`)
+    }
+    if (artifact.payload !== undefined) lines.push(`  payload: ${formatArtifactPayload(artifact.payload)}`)
   }
   return lines.join(EOL).concat(EOL)
 }
@@ -594,6 +623,54 @@ const WorkflowRunStatusCommand = cmd({
   },
 })
 
+const WorkflowRunArtifactsCommand = cmd({
+  command: "artifacts <runID>",
+  describe: "list workflow artifacts with optional payload drill-down",
+  builder: (yargs: Argv) =>
+    yargs
+      .positional("runID", {
+        type: "string",
+        demandOption: true,
+        describe: "workflow run id",
+      })
+      .option("phase-id", {
+        type: "string",
+        describe: "filter artifacts by workflow phase id",
+      })
+      .option("child-id", {
+        type: "string",
+        describe: "filter artifacts by workflow child id",
+      })
+      .option("kind", {
+        type: "string",
+        choices: ["summary", "finding", "patch", "verification", "metric", "log"] as const,
+        describe: "filter artifacts by kind",
+      })
+      .option("include-payload", {
+        type: "boolean",
+        default: false,
+        describe: "include raw artifact payloads in the output",
+      })
+      .option("json", jsonOption()),
+  async handler(args) {
+    await withWorkflowRuntime(async () => {
+      const options = args as unknown as ArtifactOptions
+      const detail = await WorkflowRun.getDetail(options.runID as WorkflowRunID)
+      const artifacts = detail.artifacts
+        .filter((artifact) => (options.phaseId ? artifact.phaseID === options.phaseId : true))
+        .filter((artifact) => (options.childId ? artifact.childID === options.childId : true))
+        .filter((artifact) => (options.kind ? artifact.kind === options.kind : true))
+        .map((artifact) => (options.includePayload ? artifact : compactWorkflowArtifact(artifact)))
+
+      if (options.json) {
+        writeJson(artifacts)
+        return
+      }
+      process.stdout.write(formatWorkflowArtifactList(artifacts))
+    })
+  },
+})
+
 const WorkflowRunSaveTemplateCommand = cmd({
   command: "save-template <runID>",
   describe: "save a workflow run spec snapshot as a candidate template",
@@ -651,6 +728,7 @@ export const WorkflowCommand = cmd({
       .command(WorkflowRunStartCommand)
       .command(WorkflowRoutineRunCommand)
       .command(WorkflowRunStatusCommand)
+      .command(WorkflowRunArtifactsCommand)
       .command(WorkflowRunSaveTemplateCommand)
       .command(WorkflowRunPauseCommand)
       .command(WorkflowRunResumeCommand)
@@ -779,4 +857,14 @@ function formatPercent(value: number | null) {
 function formatUsd(value: number | null) {
   if (value === null) return "-"
   return `$${value.toFixed(4)}`
+}
+
+function formatArtifactPayload(payload: unknown) {
+  if (typeof payload === "string") return truncate(payload, 240)
+  if (typeof payload === "number" || typeof payload === "boolean" || payload === null) return String(payload)
+  try {
+    return truncate(JSON.stringify(payload), 240)
+  } catch {
+    return truncate(String(payload), 240)
+  }
 }

@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import {
+  formatWorkflowArtifactList,
   formatWorkflowEvalCaseList,
   formatWorkflowEvalCaseRunSummary,
   formatWorkflowRunDashboard,
@@ -14,6 +15,7 @@ import { getParsedWorkflowFixtureSpec } from "../../src/workflow/fixtures"
 import type { WorkflowRunProjection } from "../../src/workflow/projection"
 import type {
   WorkflowArtifactID,
+  WorkflowArtifactRecord,
   WorkflowChildID,
   WorkflowPhaseID,
   WorkflowRunDetail,
@@ -252,6 +254,36 @@ describe("workflow command helpers", () => {
     expect(output).toContain("costPerConfirmedFindingUsd: $0.0400")
     expect(output).toContain("missingSeeds: text-content-xss-rejected")
     expect(output).toContain("expected false-positive rejections are missing")
+  })
+
+  test("formats workflow artifacts with optional payload drill-down", () => {
+    const artifact = {
+      id: artifactID,
+      runID,
+      phaseID,
+      childID,
+      specArtifactID: "candidate-findings",
+      kind: "finding",
+      retention: "session",
+      exposeToMainContext: true,
+      summary: "confirmed finding",
+      payload: { status: "confirmed", file: "src/auth.ts" },
+      redaction: { status: "redacted", summary: "paths normalized" },
+      evidenceRefs: [{ kind: "verification", id: "ver_01" }],
+      time: { created: 1, updated: 2 },
+    } satisfies WorkflowArtifactRecord
+
+    const compact = formatWorkflowArtifactList([{ ...artifact, payload: undefined }])
+    expect(compact).toContain("workflow_artifact_01 finding")
+    expect(compact).toContain("phase=workflow_phase_01")
+    expect(compact).toContain("child=workflow_child_01")
+    expect(compact).toContain("spec=candidate-findings")
+    expect(compact).toContain("redaction=redacted")
+    expect(compact).toContain("evidence: verification:ver_01")
+    expect(compact).not.toContain("payload:")
+
+    const detailed = formatWorkflowArtifactList([artifact])
+    expect(detailed).toContain('payload: {"status":"confirmed","file":"src/auth.ts"}')
   })
 
   test("formats run detail counts", () => {
