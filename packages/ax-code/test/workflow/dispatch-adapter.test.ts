@@ -197,7 +197,7 @@ describe("WorkflowDispatchAdapter", () => {
     }
   })
 
-  test("maps vote-with-critic workflow phases to majority dispatch semantics", async () => {
+  test("requires vote-with-critic direct dispatch confirmation", async () => {
     await using tmp = await tmpdir({ git: true })
     const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
     process.env.AX_CODE_WORKFLOW_RUNTIME = "1"
@@ -209,7 +209,7 @@ describe("WorkflowDispatchAdapter", () => {
             schemaVersion: 1,
             id: "critic-vote-dispatch",
             name: "Critic Vote Dispatch",
-            description: "Read-only direct dispatch that treats vote-with-critic as majority consensus.",
+            description: "Read-only direct dispatch that requires the final critic child to confirm consensus.",
             budget: {
               maxTotalTokens: 100,
               maxConcurrentAgents: 3,
@@ -240,12 +240,13 @@ describe("WorkflowDispatchAdapter", () => {
             },
           })
 
-          expect(result.status).toBe("completed")
-          expect(result.phases[0]?.status).toBe("completed")
+          expect(result.status).toBe("failed")
+          expect(result.error).toBe("critic rejected")
+          expect(result.phases[0]?.status).toBe("failed")
           expect(result.children).toHaveLength(3)
           expect(result.artifacts.find((artifact) => artifact.kind === "summary")?.payload).toMatchObject({
             mergeStrategy: "vote-with-critic",
-            counts: { completed: 2 },
+            counts: { completed: 2, failed: 1 },
           })
         },
       })

@@ -172,7 +172,7 @@ function assertReadOnly(spec: WorkflowSpecV1) {
 
 function dispatchMergeStrategy(strategy: WorkflowPhase["mergeStrategy"]): MergeStrategy {
   if (strategy === "first-success" || strategy === "majority") return strategy
-  if (strategy === "vote-with-critic" || strategy === "critic-confirmation") return "majority"
+  if (isCriticMergeStrategy(strategy)) return "all"
   if (strategy === "custom-reducer") throw new WorkflowDispatchUnsupportedMergeStrategyError(strategy)
   return "all"
 }
@@ -188,17 +188,25 @@ function phaseStatusFromResults(
   results: DispatchResult[],
 ): WorkflowRun.PhaseStatus {
   if (results.length === 0) return "completed"
+  if (isCriticMergeStrategy(strategy)) return criticPhaseStatusFromResults(results)
   const completed = results.filter((result) => result.status === "completed").length
   if (strategy === "first-success" && completed > 0) return "completed"
-  if (
-    (strategy === "majority" || strategy === "vote-with-critic" || strategy === "critic-confirmation") &&
-    completed > results.length / 2
-  ) {
-    return "completed"
-  }
+  if (strategy === "majority" && completed > results.length / 2) return "completed"
   if (results.every((result) => result.status === "completed")) return "completed"
   if (results.every((result) => result.status === "cancelled")) return "cancelled"
   return "failed"
+}
+
+function criticPhaseStatusFromResults(results: DispatchResult[]): WorkflowRun.PhaseStatus {
+  if (results.every((result) => result.status === "cancelled")) return "cancelled"
+  const completed = results.filter((result) => result.status === "completed").length
+  const critic = results.at(-1)
+  if (critic?.status === "completed" && completed > results.length / 2) return "completed"
+  return "failed"
+}
+
+function isCriticMergeStrategy(strategy: WorkflowPhase["mergeStrategy"]) {
+  return strategy === "vote-with-critic" || strategy === "critic-confirmation"
 }
 
 function exposesPhaseSummary(spec: WorkflowSpecV1, phase: WorkflowPhase) {

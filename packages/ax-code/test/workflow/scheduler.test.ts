@@ -1067,7 +1067,7 @@ describe("WorkflowScheduler", () => {
                 name: "Vote",
                 kind: "fanout",
                 inputs: ["a", "b", "c"],
-                mergeStrategy: "vote-with-critic",
+                mergeStrategy: "majority",
               },
             ],
           })
@@ -1090,6 +1090,58 @@ describe("WorkflowScheduler", () => {
           expect(detail.children.filter((child) => child.status === "completed")).toHaveLength(2)
           expect(detail.children.filter((child) => child.status === "cancelled")).toHaveLength(1)
           expect((await TaskQueue.get(queue[2]!.id)).status).toBe("cancelled")
+        },
+      })
+    } finally {
+      if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME
+      else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
+    }
+  })
+
+  test("waits for durable critic confirmation after majority succeeds", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
+    process.env.AX_CODE_WORKFLOW_RUNTIME = "1"
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const spec = parseWorkflowSpecV1({
+            schemaVersion: 1,
+            id: "durable-critic-confirmation",
+            name: "Durable Critic Confirmation",
+            description: "A durable queue workflow that waits for the final critic child before merging.",
+            phases: [
+              {
+                id: "vote",
+                name: "Vote",
+                kind: "fanout",
+                inputs: ["worker-a", "worker-b", "critic"],
+                mergeStrategy: "vote-with-critic",
+              },
+            ],
+          })
+          const run = await WorkflowRun.create({ spec })
+          await WorkflowScheduler.start(run.id)
+          const { TaskQueue } = await import("../../src/session/task-queue")
+          const queue = await TaskQueue.list()
+          expect(queue).toHaveLength(3)
+
+          await TaskQueue.setStatus({ id: queue[0]!.id, status: "completed" })
+          await TaskQueue.setStatus({ id: queue[1]!.id, status: "completed" })
+
+          let detail = await WorkflowRun.getDetail(run.id)
+          expect(detail.status).toBe("running")
+          expect(detail.phases[0]?.status).toBe("running")
+          expect(detail.children.filter((child) => child.status === "completed")).toHaveLength(2)
+          expect((await TaskQueue.get(queue[2]!.id)).status).toBe("queued")
+
+          await TaskQueue.setStatus({ id: queue[2]!.id, status: "completed" })
+
+          detail = await WorkflowRun.getDetail(run.id)
+          expect(detail.status).toBe("completed")
+          expect(detail.phases[0]?.status).toBe("completed")
+          expect(detail.children.filter((child) => child.status === "completed")).toHaveLength(3)
         },
       })
     } finally {

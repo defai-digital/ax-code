@@ -132,6 +132,7 @@ function aggregatePhaseStatus(
     if (children.some((child) => child.status === "paused")) return "paused"
     return "running"
   }
+  if (isCriticMergeStrategy(mergeStrategy)) return aggregateCriticPhaseStatus(children)
   if (isMajorityMergeStrategy(mergeStrategy)) {
     const completed = children.filter((child) => child.status === "completed").length
     if (completed > children.length / 2) return "completed"
@@ -191,7 +192,30 @@ function mergeStrategyForPhase(
 }
 
 function isMajorityMergeStrategy(strategy: WorkflowPhaseMergeStrategy) {
-  return strategy === "majority" || strategy === "vote-with-critic" || strategy === "critic-confirmation"
+  return strategy === "majority"
+}
+
+function aggregateCriticPhaseStatus(children: WorkflowChildRecord[]): WorkflowRun.PhaseStatus {
+  const critic = children.at(-1)
+  const completed = children.filter((child) => child.status === "completed").length
+  if (children.every((child) => child.status === "cancelled")) return "cancelled"
+  if (critic?.status === "completed" && completed > children.length / 2) return "completed"
+  if (critic && isTerminalChildStatus(critic.status)) return "failed"
+
+  const failedOrCancelled = children.filter(
+    (child) => child.status === "failed" || child.status === "cancelled",
+  ).length
+  if (failedOrCancelled > children.length / 2) return "failed"
+  if (children.some((child) => child.status === "blocked_permission" || child.status === "blocked_question")) {
+    return "blocked"
+  }
+  if (children.every((child) => isTerminalChildStatus(child.status))) return "failed"
+  if (children.some((child) => child.status === "paused")) return "paused"
+  return "running"
+}
+
+function isCriticMergeStrategy(strategy: WorkflowPhaseMergeStrategy) {
+  return strategy === "vote-with-critic" || strategy === "critic-confirmation"
 }
 
 function isTerminalChildStatus(status: WorkflowRun.ChildStatus) {
