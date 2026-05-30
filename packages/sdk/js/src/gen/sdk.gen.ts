@@ -268,6 +268,10 @@ import type {
   WorkflowRunCreateResponses,
   WorkflowRunDashboardErrors,
   WorkflowRunDashboardResponses,
+  WorkflowRunEvalCaseErrors,
+  WorkflowRunEvalCaseResponses,
+  WorkflowRunEvalCasesErrors,
+  WorkflowRunEvalCasesResponses,
   WorkflowRunEvalSummaryErrors,
   WorkflowRunEvalSummaryResponses,
   WorkflowRunGetErrors,
@@ -2111,6 +2115,8 @@ export class WorkflowRun extends HeyApiClient {
         }
         budget?: {
           maxTotalTokens?: number
+          maxInputTokensPerChild?: number
+          maxOutputTokensPerChild?: number
           maxWallTimeMs?: number
           maxConcurrentAgents?: number
           maxTotalAgents?: number
@@ -2167,7 +2173,13 @@ export class WorkflowRun extends HeyApiClient {
           outputs?: Array<string>
           dependsOn?: Array<string>
           maxParallel?: number
-          mergeStrategy?: "all" | "first-success" | "majority" | "critic-confirmation"
+          mergeStrategy?:
+            | "all"
+            | "first-success"
+            | "majority"
+            | "vote-with-critic"
+            | "critic-confirmation"
+            | "custom-reducer"
           modelPolicy?: {
             plannerModel?: string
             workerModel?: string
@@ -2181,6 +2193,8 @@ export class WorkflowRun extends HeyApiClient {
           }
           budget?: {
             maxTotalTokens?: number
+            maxInputTokensPerChild?: number
+            maxOutputTokensPerChild?: number
             maxWallTimeMs?: number
             maxConcurrentAgents?: number
             maxTotalAgents?: number
@@ -2273,6 +2287,29 @@ export class WorkflowRun extends HeyApiClient {
       ThrowOnError
     >({
       url: "/workflow-runs/dashboard",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * List workflow evaluation cases
+   *
+   * Return built-in local workflow evaluation cases used for preview promotion gates.
+   */
+  public evalCases<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).get<
+      WorkflowRunEvalCasesResponses,
+      WorkflowRunEvalCasesErrors,
+      ThrowOnError
+    >({
+      url: "/workflow-runs/eval-cases",
       ...options,
       ...params,
     })
@@ -2413,6 +2450,47 @@ export class WorkflowRun extends HeyApiClient {
         ...params.headers,
       },
     })
+  }
+
+  /**
+   * Evaluate workflow run against a local case
+   *
+   * Compare a workflow run against a seeded local eval case and single-agent baseline.
+   */
+  public evalCase<ThrowOnError extends boolean = false>(
+    parameters: {
+      runID: string
+      directory?: string
+      caseID?: "verified-bug-sweep-seeded"
+      now?: number
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "runID" },
+            { in: "query", key: "directory" },
+            { in: "body", key: "caseID" },
+            { in: "body", key: "now" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<WorkflowRunEvalCaseResponses, WorkflowRunEvalCaseErrors, ThrowOnError>(
+      {
+        url: "/workflow-runs/{runID}/eval-case",
+        ...options,
+        ...params,
+        headers: {
+          "Content-Type": "application/json",
+          ...options?.headers,
+          ...params.headers,
+        },
+      },
+    )
   }
 
   /**
@@ -2598,6 +2676,7 @@ export class WorkflowRun extends HeyApiClient {
     parameters: {
       runID: string
       directory?: string
+      phaseID?: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -2608,6 +2687,7 @@ export class WorkflowRun extends HeyApiClient {
           args: [
             { in: "path", key: "runID" },
             { in: "query", key: "directory" },
+            { in: "query", key: "phaseID" },
           ],
         },
       ],
@@ -2702,6 +2782,8 @@ export class WorkflowTemplate extends HeyApiClient {
         }
         budget?: {
           maxTotalTokens?: number
+          maxInputTokensPerChild?: number
+          maxOutputTokensPerChild?: number
           maxWallTimeMs?: number
           maxConcurrentAgents?: number
           maxTotalAgents?: number
@@ -2758,7 +2840,13 @@ export class WorkflowTemplate extends HeyApiClient {
           outputs?: Array<string>
           dependsOn?: Array<string>
           maxParallel?: number
-          mergeStrategy?: "all" | "first-success" | "majority" | "critic-confirmation"
+          mergeStrategy?:
+            | "all"
+            | "first-success"
+            | "majority"
+            | "vote-with-critic"
+            | "critic-confirmation"
+            | "custom-reducer"
           modelPolicy?: {
             plannerModel?: string
             workerModel?: string
@@ -2772,6 +2860,8 @@ export class WorkflowTemplate extends HeyApiClient {
           }
           budget?: {
             maxTotalTokens?: number
+            maxInputTokensPerChild?: number
+            maxOutputTokensPerChild?: number
             maxWallTimeMs?: number
             maxConcurrentAgents?: number
             maxTotalAgents?: number
