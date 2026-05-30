@@ -86,6 +86,89 @@ describe("WorkflowScheduler", () => {
     }
   })
 
+  test("syncs TaskQueue lifecycle back into workflow child and phase state", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
+    process.env.AX_CODE_WORKFLOW_RUNTIME = "1"
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const run = await WorkflowRun.create({ spec: parseWorkflowSpecV1(WorkflowFixtureSpecs.issueTriage) })
+          const started = await WorkflowScheduler.start(run.id, { allowScaleBeyondDefaults: true })
+          const { TaskQueue } = await import("../../src/session/task-queue")
+          const [first] = await TaskQueue.list()
+          expect(first).toBeDefined()
+
+          await TaskQueue.setStatus({ id: first!.id, status: "running" })
+          let detail = await WorkflowRun.getDetail(run.id)
+          expect(detail.status).toBe("running")
+          expect(detail.phases[0]?.status).toBe("running")
+          expect(detail.children.find((child) => child.taskQueueID === first!.id)?.status).toBe("running")
+
+          await TaskQueue.setStatus({ id: first!.id, status: "blocked_permission", error: "approval required" })
+          detail = await WorkflowRun.getDetail(run.id)
+          expect(detail.status).toBe("blocked")
+          expect(detail.phases[0]?.status).toBe("blocked")
+          expect(detail.children.find((child) => child.taskQueueID === first!.id)?.status).toBe("blocked_permission")
+
+          await TaskQueue.setStatus({ id: first!.id, status: "running" })
+          detail = await WorkflowRun.getDetail(run.id)
+          expect(detail.status).toBe("running")
+          expect(detail.phases[0]?.status).toBe("running")
+          expect(detail.children).toHaveLength(started.children.length)
+        },
+      })
+    } finally {
+      if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME
+      else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
+    }
+  })
+
+  test("advances to the next phase after all queued workflow children complete", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
+    process.env.AX_CODE_WORKFLOW_RUNTIME = "1"
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const run = await WorkflowRun.create({ spec: parseWorkflowSpecV1(WorkflowFixtureSpecs.issueTriage) })
+          await WorkflowScheduler.start(run.id, { allowScaleBeyondDefaults: true })
+          const { TaskQueue } = await import("../../src/session/task-queue")
+          const firstPhaseQueue = await TaskQueue.list()
+
+          for (const item of firstPhaseQueue) {
+            await TaskQueue.setStatus({ id: item.id, status: "completed" })
+          }
+
+          let detail = await WorkflowRun.getDetail(run.id)
+          expect(detail.status).toBe("running")
+          expect(detail.phases[0]?.status).toBe("completed")
+          expect(detail.phases[1]?.status).toBe("running")
+          expect(detail.children).toHaveLength(firstPhaseQueue.length + 1)
+
+          const nextQueue = (await TaskQueue.list()).filter((item) => item.status === "queued")
+          expect(nextQueue).toHaveLength(1)
+          expect(nextQueue[0]?.payload.workflow).toMatchObject({
+            runID: run.id,
+            phaseID: detail.phases[1]?.id,
+            specPhaseID: "synthesize-triage",
+          })
+
+          await TaskQueue.setStatus({ id: nextQueue[0]!.id, status: "completed" })
+          detail = await WorkflowRun.getDetail(run.id)
+          expect(detail.status).toBe("completed")
+          expect(detail.phases.every((phase) => phase.status === "completed")).toBe(true)
+          expect(detail.children.every((child) => child.status === "completed")).toBe(true)
+        },
+      })
+    } finally {
+      if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME
+      else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
+    }
+  })
+
   test("cancels queued workflow children and linked queue items", async () => {
     await using tmp = await tmpdir({ git: true })
     const previous = process.env.AX_CODE_WORKFLOW_RUNTIME

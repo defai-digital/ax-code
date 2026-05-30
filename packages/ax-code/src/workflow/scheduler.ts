@@ -70,6 +70,7 @@ export namespace WorkflowScheduler {
                 phaseID: phase.id,
                 childID: child.id,
                 specPhaseID: phase.specPhaseID,
+                startOptions: parsed,
               },
               prompt: childPlan.prompt,
               budgetSlice: childPlan.budgetSlice,

@@ -257,6 +257,7 @@ export namespace TaskQueue {
     })
     assertProjectItem(item)
     publishUpdated(item)
+    await syncWorkflowStatusIfNeeded(item)
     return item
   }
 
@@ -287,6 +288,7 @@ export namespace TaskQueue {
     if (!item) return undefined
     assertProjectItem(item)
     publishUpdated(item)
+    await syncWorkflowStatusIfNeeded(item)
     return item
   }
 
@@ -330,6 +332,7 @@ export namespace TaskQueue {
     })
     assertProjectItem(item)
     publishUpdated(item)
+    await syncWorkflowStatusIfNeeded(item)
     return item
   }
 
@@ -383,7 +386,10 @@ export namespace TaskQueue {
       return { failed, requeued }
     })
 
-    for (const item of [...changed.failed, ...changed.requeued]) publishUpdated(item)
+    for (const item of [...changed.failed, ...changed.requeued]) {
+      publishUpdated(item)
+      await syncWorkflowStatusIfNeeded(item)
+    }
     return changed
   }
 
@@ -414,6 +420,7 @@ export namespace TaskQueue {
     })
     assertProjectItem(item)
     publishUpdated(item)
+    await syncWorkflowStatusIfNeeded(item)
     return item
   }
 
@@ -501,5 +508,13 @@ export namespace TaskQueue {
     throw new HTTPException(409, {
       message: `Cannot ${action} task queue item ${item.id} while it is ${item.status}.`,
     })
+  }
+
+  async function syncWorkflowStatusIfNeeded(item: Info) {
+    const workflow = item.payload["workflow"]
+    if (!workflow || typeof workflow !== "object") return
+    await import("../workflow/task-queue")
+      .then((mod) => mod.WorkflowTaskQueue.syncItem(item))
+      .catch(() => undefined)
   }
 }
