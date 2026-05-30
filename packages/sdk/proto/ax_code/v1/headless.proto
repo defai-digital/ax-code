@@ -51,6 +51,12 @@ service AxCodeHeadless {
   rpc GetConfig(QueryRequest) returns (JsonResponse);
   rpc UpdateConfig(JsonRequest) returns (JsonResponse);
   rpc ListConfigProviders(QueryRequest) returns (JsonResponse);
+  rpc GetAutonomousMode(QueryRequest) returns (JsonResponse);
+  rpc SetAutonomousMode(JsonRequest) returns (JsonResponse);
+  rpc GetIsolationMode(QueryRequest) returns (JsonResponse);
+  rpc SetIsolationMode(JsonRequest) returns (JsonResponse);
+  rpc GetSmartLlmRouting(QueryRequest) returns (JsonResponse);
+  rpc SetSmartLlmRouting(JsonRequest) returns (JsonResponse);
   rpc ListProviders(QueryRequest) returns (JsonResponse);
   rpc GetProviderAuth(QueryRequest) returns (JsonResponse);
   rpc SetAuth(ProviderAuthRequest) returns (JsonResponse);

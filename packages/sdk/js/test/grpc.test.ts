@@ -39,6 +39,12 @@ describe("gRPC SDK facade", () => {
         if (method === AX_CODE_GRPC_METHOD.ListQuestions) return { value: [{ id: "question-1" }] }
         if (method === AX_CODE_GRPC_METHOD.ReplyQuestion) return { value: true }
         if (method === AX_CODE_GRPC_METHOD.RejectQuestion) return { value: true }
+        if (method === AX_CODE_GRPC_METHOD.GetAutonomousMode) return { value: { enabled: true } }
+        if (method === AX_CODE_GRPC_METHOD.SetAutonomousMode) return { value: { enabled: false } }
+        if (method === AX_CODE_GRPC_METHOD.GetIsolationMode) return { value: { mode: "workspace-write", network: false } }
+        if (method === AX_CODE_GRPC_METHOD.SetIsolationMode) return { value: { mode: "read-only", network: false } }
+        if (method === AX_CODE_GRPC_METHOD.GetSmartLlmRouting) return { value: { enabled: true } }
+        if (method === AX_CODE_GRPC_METHOD.SetSmartLlmRouting) return { value: { enabled: false } }
         if (method === AX_CODE_GRPC_METHOD.GetProviderAuth) return { value: { anthropic: [{ type: "api" }] } }
         if (method === AX_CODE_GRPC_METHOD.SetAuth) return { value: true }
         if (method === AX_CODE_GRPC_METHOD.CreatePty) return { value: { id: "pty_1", title: "Terminal" } }
@@ -71,6 +77,12 @@ describe("gRPC SDK facade", () => {
     expect(await client.question.list()).toEqual([{ id: "question-1" }])
     expect(await client.question.reply("question-1", { answers: [{ label: "Yes" }] })).toBe(true)
     expect(await client.question.reject("question-1")).toBe(true)
+    expect(await client.runtime.autonomous.get()).toEqual({ enabled: true })
+    expect(await client.runtime.autonomous.set(false)).toEqual({ enabled: false })
+    expect(await client.runtime.isolation.get()).toEqual({ mode: "workspace-write", network: false })
+    expect(await client.runtime.isolation.set("read-only")).toEqual({ mode: "read-only", network: false })
+    expect(await client.runtime.smartLlm.get()).toEqual({ enabled: true })
+    expect(await client.runtime.smartLlm.set(false)).toEqual({ enabled: false })
     expect(await client.provider.auth()).toEqual({ anthropic: [{ type: "api" }] })
     expect(await client.auth.set("anthropic", { type: "api", key: "secret" })).toBe(true)
     expect(await client.pty.create({ title: "Terminal" })).toEqual({ id: "pty_1", title: "Terminal" })
@@ -92,6 +104,12 @@ describe("gRPC SDK facade", () => {
       AX_CODE_GRPC_METHOD.ListQuestions,
       AX_CODE_GRPC_METHOD.ReplyQuestion,
       AX_CODE_GRPC_METHOD.RejectQuestion,
+      AX_CODE_GRPC_METHOD.GetAutonomousMode,
+      AX_CODE_GRPC_METHOD.SetAutonomousMode,
+      AX_CODE_GRPC_METHOD.GetIsolationMode,
+      AX_CODE_GRPC_METHOD.SetIsolationMode,
+      AX_CODE_GRPC_METHOD.GetSmartLlmRouting,
+      AX_CODE_GRPC_METHOD.SetSmartLlmRouting,
       AX_CODE_GRPC_METHOD.GetProviderAuth,
       AX_CODE_GRPC_METHOD.SetAuth,
       AX_CODE_GRPC_METHOD.CreatePty,
@@ -479,6 +497,49 @@ describe("gRPC SDK facade", () => {
     ])
   })
 
+  test("HTTP bridge maps runtime setting calls to the headless backend", async () => {
+    const calls: Array<{ path: string; method: string; body: string }> = []
+    const client = createAxCodeGrpcClientFromHttp({
+      baseUrl: "http://127.0.0.1:4096",
+      fetch: (async (url: URL | RequestInfo, init?: RequestInit) => {
+        const request = url instanceof Request ? url : new Request(url, init)
+        const parsed = new URL(request.url)
+        calls.push({
+          path: parsed.pathname,
+          method: request.method,
+          body: request.body ? await new Response(request.body).text() : "",
+        })
+        if (parsed.pathname === "/autonomous" && request.method === "GET") return Response.json({ enabled: true })
+        if (parsed.pathname === "/autonomous" && request.method === "PUT") return Response.json({ enabled: false })
+        if (parsed.pathname === "/isolation" && request.method === "GET") {
+          return Response.json({ mode: "workspace-write", network: false })
+        }
+        if (parsed.pathname === "/isolation" && request.method === "PUT") {
+          return Response.json({ mode: "read-only", network: false })
+        }
+        if (parsed.pathname === "/smart-llm" && request.method === "GET") return Response.json({ enabled: true })
+        if (parsed.pathname === "/smart-llm" && request.method === "PUT") return Response.json({ enabled: false })
+        return new Response("not found", { status: 404 })
+      }) as typeof fetch,
+    })
+
+    await expect(client.runtime.autonomous.get()).resolves.toEqual({ enabled: true })
+    await expect(client.runtime.autonomous.set(false)).resolves.toEqual({ enabled: false })
+    await expect(client.runtime.isolation.get()).resolves.toEqual({ mode: "workspace-write", network: false })
+    await expect(client.runtime.isolation.set("read-only")).resolves.toEqual({ mode: "read-only", network: false })
+    await expect(client.runtime.smartLlm.get()).resolves.toEqual({ enabled: true })
+    await expect(client.runtime.smartLlm.set(false)).resolves.toEqual({ enabled: false })
+
+    expect(calls).toEqual([
+      { path: "/autonomous", method: "GET", body: "" },
+      { path: "/autonomous", method: "PUT", body: JSON.stringify({ enabled: false }) },
+      { path: "/isolation", method: "GET", body: "" },
+      { path: "/isolation", method: "PUT", body: JSON.stringify({ mode: "read-only" }) },
+      { path: "/smart-llm", method: "GET", body: "" },
+      { path: "/smart-llm", method: "PUT", body: JSON.stringify({ enabled: false }) },
+    ])
+  })
+
   test("HTTP bridge filters event streams for GUI subscriptions", async () => {
     const calls: string[] = []
     const client = createAxCodeGrpcClientFromHttp({
@@ -785,6 +846,12 @@ describe("gRPC SDK facade", () => {
     expect(proto).toContain("rpc ListQuestions")
     expect(proto).toContain("rpc ReplyQuestion")
     expect(proto).toContain("rpc RejectQuestion")
+    expect(proto).toContain("rpc GetAutonomousMode")
+    expect(proto).toContain("rpc SetAutonomousMode")
+    expect(proto).toContain("rpc GetIsolationMode")
+    expect(proto).toContain("rpc SetIsolationMode")
+    expect(proto).toContain("rpc GetSmartLlmRouting")
+    expect(proto).toContain("rpc SetSmartLlmRouting")
     expect(proto).toContain("rpc SetAuth")
     expect(proto).toContain("rpc ProviderOauthAuthorize")
     expect(proto).toContain("rpc ConnectPty")

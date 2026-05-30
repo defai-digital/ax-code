@@ -59,6 +59,12 @@ export const AX_CODE_GRPC_METHOD = {
   GetConfig: `/${AX_CODE_GRPC_SERVICE}/GetConfig`,
   UpdateConfig: `/${AX_CODE_GRPC_SERVICE}/UpdateConfig`,
   ListConfigProviders: `/${AX_CODE_GRPC_SERVICE}/ListConfigProviders`,
+  GetAutonomousMode: `/${AX_CODE_GRPC_SERVICE}/GetAutonomousMode`,
+  SetAutonomousMode: `/${AX_CODE_GRPC_SERVICE}/SetAutonomousMode`,
+  GetIsolationMode: `/${AX_CODE_GRPC_SERVICE}/GetIsolationMode`,
+  SetIsolationMode: `/${AX_CODE_GRPC_SERVICE}/SetIsolationMode`,
+  GetSmartLlmRouting: `/${AX_CODE_GRPC_SERVICE}/GetSmartLlmRouting`,
+  SetSmartLlmRouting: `/${AX_CODE_GRPC_SERVICE}/SetSmartLlmRouting`,
   ListProviders: `/${AX_CODE_GRPC_SERVICE}/ListProviders`,
   GetProviderAuth: `/${AX_CODE_GRPC_SERVICE}/GetProviderAuth`,
   SetAuth: `/${AX_CODE_GRPC_SERVICE}/SetAuth`,
@@ -690,6 +696,44 @@ export function createAxCodeGrpcClient(input: AxCodeGrpcClientOptions) {
         return value(AX_CODE_GRPC_METHOD.ListConfigProviders, { parameters }, options)
       },
     },
+    runtime: {
+      autonomous: {
+        get(
+          parameters?: Parameters<HeadlessHttpClient["client"]["autonomous"]["get"]>[0],
+          options?: AxCodeGrpcCallOptions,
+        ) {
+          return value(AX_CODE_GRPC_METHOD.GetAutonomousMode, { parameters }, options)
+        },
+        set(enabled: boolean, options?: AxCodeGrpcCallOptions) {
+          return value(AX_CODE_GRPC_METHOD.SetAutonomousMode, { body: { enabled } }, options)
+        },
+      },
+      isolation: {
+        get(
+          parameters?: Parameters<HeadlessHttpClient["client"]["isolation"]["get"]>[0],
+          options?: AxCodeGrpcCallOptions,
+        ) {
+          return value(AX_CODE_GRPC_METHOD.GetIsolationMode, { parameters }, options)
+        },
+        set(
+          mode: NonNullable<Parameters<HeadlessHttpClient["client"]["isolation"]["set"]>[0]>["mode"],
+          options?: AxCodeGrpcCallOptions,
+        ) {
+          return value(AX_CODE_GRPC_METHOD.SetIsolationMode, { body: { mode } }, options)
+        },
+      },
+      smartLlm: {
+        get(
+          parameters?: Parameters<HeadlessHttpClient["client"]["smartLlm"]["get"]>[0],
+          options?: AxCodeGrpcCallOptions,
+        ) {
+          return value(AX_CODE_GRPC_METHOD.GetSmartLlmRouting, { parameters }, options)
+        },
+        set(enabled: boolean, options?: AxCodeGrpcCallOptions) {
+          return value(AX_CODE_GRPC_METHOD.SetSmartLlmRouting, { body: { enabled } }, options)
+        },
+      },
+    },
     provider: {
       list(parameters?: Parameters<HeadlessHttpClient["client"]["provider"]["list"]>[0], options?: AxCodeGrpcCallOptions) {
         return value(AX_CODE_GRPC_METHOD.ListProviders, { parameters }, options)
@@ -1138,6 +1182,18 @@ async function handleHttpBridgeUnary(
       return wrap(unwrapHttpSdkResponse(await client.client.config.update(body.body, { throwOnError: true })))
     case AX_CODE_GRPC_METHOD.ListConfigProviders:
       return wrap(unwrapHttpSdkResponse(await client.client.config.providers(body.parameters)))
+    case AX_CODE_GRPC_METHOD.GetAutonomousMode:
+      return wrap(unwrapHttpSdkResponse(await client.client.autonomous.get(body.parameters)))
+    case AX_CODE_GRPC_METHOD.SetAutonomousMode:
+      return wrap(unwrapHttpSdkResponse(await client.client.autonomous.set(body.body, { throwOnError: true })))
+    case AX_CODE_GRPC_METHOD.GetIsolationMode:
+      return wrap(unwrapHttpSdkResponse(await client.client.isolation.get(body.parameters)))
+    case AX_CODE_GRPC_METHOD.SetIsolationMode:
+      return wrap(unwrapHttpSdkResponse(await client.client.isolation.set(body.body, { throwOnError: true })))
+    case AX_CODE_GRPC_METHOD.GetSmartLlmRouting:
+      return wrap(unwrapHttpSdkResponse(await client.client.smartLlm.get(body.parameters)))
+    case AX_CODE_GRPC_METHOD.SetSmartLlmRouting:
+      return wrap(unwrapHttpSdkResponse(await client.client.smartLlm.set(body.body, { throwOnError: true })))
     case AX_CODE_GRPC_METHOD.ListProviders:
       return wrap(unwrapHttpSdkResponse(await client.client.provider.list(body.parameters)))
     case AX_CODE_GRPC_METHOD.GetProviderAuth:
