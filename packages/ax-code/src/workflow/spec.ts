@@ -38,6 +38,10 @@ export const WorkflowTrigger = z.discriminatedUnion("kind", [
     enabled: z.boolean().default(false),
   }),
   z.object({
+    kind: z.literal("command"),
+    command: NonEmptyString.optional(),
+  }),
+  z.object({
     kind: z.literal("api"),
     route: NonEmptyString.optional(),
     enabled: z.boolean().default(false),

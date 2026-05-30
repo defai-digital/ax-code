@@ -134,6 +134,31 @@ describe("workflow spec v1", () => {
     })
   })
 
+  test("accepts command workflow triggers", () => {
+    const spec = parseWorkflowSpecV1({
+      schemaVersion: 1,
+      id: "command-trigger",
+      name: "Command Trigger",
+      description: "A workflow that can be launched from an explicit command trigger.",
+      trigger: {
+        kind: "command",
+        command: "workflow:bug-sweep",
+      },
+      phases: [
+        {
+          id: "noop",
+          name: "Noop",
+          kind: "noop",
+        },
+      ],
+    })
+
+    expect(spec.trigger).toEqual({
+      kind: "command",
+      command: "workflow:bug-sweep",
+    })
+  })
+
   test("accepts model aliases and provider allowlists", () => {
     const spec = parseWorkflowSpecV1({
       schemaVersion: 1,
