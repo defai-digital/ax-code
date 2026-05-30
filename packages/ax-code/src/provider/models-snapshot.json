@@ -143,8 +143,8 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 262142,
-          "output": 262142
+          "context": 262144,
+          "output": 262144
         }
       },
       "mistralai/completion/models/Ministral-3-14B-Reasoning-2512": {
@@ -65267,6 +65267,32 @@
           "context": 8192,
           "output": 8192
         }
+      },
+      "anthropic/claude-opus-4-8": {
+        "id": "anthropic/claude-opus-4-8",
+        "name": "Claude Opus 4.8",
+        "family": "claude-opus",
+        "attachment": true,
+        "reasoning": true,
+        "tool_call": true,
+        "temperature": false,
+        "release_date": "2026-05-28",
+        "last_updated": "2026-05-28",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        }
       }
     }
   },
@@ -69947,7 +69973,7 @@
     ],
     "npm": "@ai-sdk/openai-compatible",
     "api": "https://api.stepfun.com/v1",
-    "name": "StepFun",
+    "name": "StepFun (China)",
     "doc": "https://platform.stepfun.com/docs/zh/overview/concept",
     "models": {
       "step-2-16k": {
