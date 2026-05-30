@@ -740,10 +740,13 @@ export type AxCodeGrpcMcpAuthCallbackRequest = AxCodeGrpcNamedRequest & {
   code?: string
 }
 
+type AxCodeGrpcWorkflowRunStartInput = Parameters<HeadlessHttpClient["workflowRun"]["start"]>[1]
+type AxCodeGrpcWorkflowRunRetryInput = Parameters<HeadlessHttpClient["workflowRun"]["retry"]>[1]
+
 export type AxCodeGrpcWorkflowRunCommandRequest = {
   runID: string
   command: "start" | "pause" | "resume" | "cancel" | "retry"
-  body?: Parameters<HeadlessHttpClient["workflowRun"]["start"]>[1]
+  body?: AxCodeGrpcWorkflowRunStartInput | AxCodeGrpcWorkflowRunRetryInput
 }
 
 export type AxCodeGrpcClientOptions = {
@@ -1668,7 +1671,7 @@ export function createAxCodeGrpcClient(input: AxCodeGrpcClientOptions) {
       ) {
         return workflowRunCommand(runID, command, body, options)
       },
-      start(runID: string, body?: AxCodeGrpcWorkflowRunCommandRequest["body"], options?: AxCodeGrpcCallOptions) {
+      start(runID: string, body?: AxCodeGrpcWorkflowRunStartInput, options?: AxCodeGrpcCallOptions) {
         return workflowRunCommand(runID, "start", body, options)
       },
       pause(runID: string, options?: AxCodeGrpcCallOptions) {
@@ -1680,8 +1683,13 @@ export function createAxCodeGrpcClient(input: AxCodeGrpcClientOptions) {
       cancel(runID: string, options?: AxCodeGrpcCallOptions) {
         return workflowRunCommand(runID, "cancel", undefined, options)
       },
-      retry(runID: string, options?: AxCodeGrpcCallOptions) {
-        return workflowRunCommand(runID, "retry", undefined, options)
+      retry(
+        runID: string,
+        parametersOrOptions?: AxCodeGrpcWorkflowRunRetryInput | AxCodeGrpcCallOptions,
+        options?: AxCodeGrpcCallOptions,
+      ) {
+        const retry = splitWorkflowRunRetryArgs(parametersOrOptions, options)
+        return workflowRunCommand(runID, "retry", retry.parameters, retry.options)
       },
     },
     workflowRoutine: {
@@ -2494,7 +2502,7 @@ function callWorkflowRunCommand(
 ) {
   switch (command) {
     case "start":
-      return client.workflowRun.start(runID, body)
+      return client.workflowRun.start(runID, body as AxCodeGrpcWorkflowRunStartInput)
     case "pause":
       return client.workflowRun.pause(runID)
     case "resume":
@@ -2502,8 +2510,23 @@ function callWorkflowRunCommand(
     case "cancel":
       return client.workflowRun.cancel(runID)
     case "retry":
-      return client.workflowRun.retry(runID)
+      return client.workflowRun.retry(runID, body as AxCodeGrpcWorkflowRunRetryInput)
   }
+}
+
+function splitWorkflowRunRetryArgs(
+  parametersOrOptions?: AxCodeGrpcWorkflowRunRetryInput | AxCodeGrpcCallOptions,
+  options?: AxCodeGrpcCallOptions,
+) {
+  if (isAxCodeGrpcCallOptions(parametersOrOptions)) {
+    return { parameters: undefined, options: parametersOrOptions }
+  }
+  return { parameters: parametersOrOptions, options }
+}
+
+function isAxCodeGrpcCallOptions(value: unknown): value is AxCodeGrpcCallOptions {
+  if (!value || typeof value !== "object") return false
+  return "signal" in value || "timeoutMs" in value || "metadata" in value
 }
 
 function wrap<T>(value: T): AxCodeGrpcJsonResponse<T> {

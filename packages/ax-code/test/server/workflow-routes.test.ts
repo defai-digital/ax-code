@@ -82,7 +82,7 @@ describe("workflow routes", () => {
       const started = (await startResponse.json()) as {
         status: string
         children: unknown[]
-        phases: Array<{ status: string }>
+        phases: Array<{ id: string; status: string }>
       }
       expect(started.status).toBe("running")
       expect(started.phases[0]?.status).toBe("running")
@@ -119,9 +119,20 @@ describe("workflow routes", () => {
       expect(cancelResponse.status).toBe(200)
       expect(await cancelResponse.json()).toMatchObject({ status: "cancelled" })
 
+      const retryResponse = await app.request(
+        `/workflow-runs/${created.id}/retry?${directoryQuery}&phaseID=${started.phases[0]!.id}`,
+        {
+          method: "POST",
+        },
+      )
+      expect(retryResponse.status).toBe(200)
+      const retried = (await retryResponse.json()) as { status: string; phases: Array<{ id: string; status: string }> }
+      expect(retried.status).toBe("running")
+      expect(retried.phases.find((phase) => phase.id === started.phases[0]!.id)?.status).toBe("running")
+
       const getResponse = await app.request(`/workflow-runs/${created.id}?${directoryQuery}`)
       expect(getResponse.status).toBe(200)
-      expect(await getResponse.json()).toMatchObject({ id: created.id, status: "cancelled" })
+      expect(await getResponse.json()).toMatchObject({ id: created.id, status: "running" })
     } finally {
       if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME
       else process.env.AX_CODE_WORKFLOW_RUNTIME = previous

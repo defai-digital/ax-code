@@ -24,6 +24,7 @@ import type {
   WorkflowRunPauseResponse,
   WorkflowRunResumeResponse,
   WorkflowRunCancelResponse,
+  WorkflowRunRetryData,
   WorkflowRunRetryResponse,
   WorkflowRunSaveTemplateData,
   WorkflowRunSaveTemplateResponse,
@@ -188,6 +189,7 @@ export type HeadlessWorkflowRunCreateInput = NonNullable<WorkflowRunCreateData["
 export type HeadlessWorkflowRunEvalSummaryInput = NonNullable<WorkflowRunEvalSummaryData["body"]>
 export type HeadlessWorkflowRunSaveTemplateInput = NonNullable<WorkflowRunSaveTemplateData["body"]>
 export type HeadlessWorkflowArtifactListInput = Omit<NonNullable<WorkflowRunArtifactsData["query"]>, "directory">
+export type HeadlessWorkflowRunRetryInput = Omit<NonNullable<WorkflowRunRetryData["query"]>, "directory">
 export type HeadlessWorkflowTemplateSaveInput = NonNullable<WorkflowTemplateSaveData["body"]>
 export type HeadlessWorkflowRoutineCreateInput = NonNullable<WorkflowRoutineCreateData["body"]>
 export type HeadlessWorkflowRoutineRunInput = NonNullable<WorkflowRoutineRunData["body"]>
@@ -459,8 +461,17 @@ export function createHeadlessClient(input: HeadlessClientOptions) {
       cancel(runID: string) {
         return workflowRunCommand<WorkflowRunCancelResponse>(input, fetchFn, runID, "POST", "cancel")
       },
-      retry(runID: string) {
-        return workflowRunCommand<WorkflowRunRetryResponse>(input, fetchFn, runID, "POST", "retry")
+      retry(runID: string, parameters?: HeadlessWorkflowRunRetryInput) {
+        return requestJson<WorkflowRunRetryResponse>({
+          baseUrl: input.baseUrl,
+          fetch: fetchFn,
+          headers: input.headers,
+          directory: input.directory,
+          experimental_workspaceID: input.experimental_workspaceID,
+          path: `/workflow-runs/${encodeURIComponent(runID)}/retry`,
+          method: "POST",
+          query: parameters,
+        })
       },
     },
     workflowRoutine: {

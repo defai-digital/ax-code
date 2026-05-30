@@ -267,12 +267,12 @@ describe("headless SDK types", () => {
   })
 
   test("createHeadlessClient exposes workflow commands", async () => {
-    const calls: Array<{ pathname: string; method?: string; body?: BodyInit | null }> = []
+    const calls: Array<{ pathname: string; search: string; method?: string; body?: BodyInit | null }> = []
     const client = createHeadlessClient({
       baseUrl: "http://127.0.0.1:4096",
       fetch: (async (url: URL | RequestInfo, init?: RequestInit) => {
         const parsed = new URL(url.toString())
-        calls.push({ pathname: parsed.pathname, method: init?.method, body: init?.body })
+        calls.push({ pathname: parsed.pathname, search: parsed.search, method: init?.method, body: init?.body })
         if (parsed.pathname === "/workflow-templates" && init?.method === "POST") {
           return new Response(JSON.stringify({ id: "project:route-noop", trust: "candidate" }), { status: 200 })
         }
@@ -361,6 +361,9 @@ describe("headless SDK types", () => {
     await client.workflowRun.saveTemplate("wfr_live", { scope: "project" })
     await client.workflowRun.start("wfr_live", { enqueueChildren: false })
     await client.workflowRun.pause("wfr_live")
+    await client.workflowRun.resume("wfr_live")
+    await client.workflowRun.cancel("wfr_live")
+    await client.workflowRun.retry("wfr_live", { phaseID: "wfp_live" })
 
     expect(calls.map((call) => [call.method, call.pathname])).toEqual([
       ["GET", "/workflow-templates"],
@@ -379,7 +382,11 @@ describe("headless SDK types", () => {
       ["POST", "/workflow-runs/wfr_live/save-template"],
       ["POST", "/workflow-runs/wfr_live/start"],
       ["POST", "/workflow-runs/wfr_live/pause"],
+      ["POST", "/workflow-runs/wfr_live/resume"],
+      ["POST", "/workflow-runs/wfr_live/cancel"],
+      ["POST", "/workflow-runs/wfr_live/retry"],
     ])
+    expect(calls.at(-1)?.search).toBe("?phaseID=wfp_live")
     expect(calls[2].body).toBe(JSON.stringify({ scope: "project", spec: templateSpec }))
     expect(calls[4].body).toBe(
       JSON.stringify({

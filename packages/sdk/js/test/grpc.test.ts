@@ -167,6 +167,7 @@ describe("gRPC SDK facade", () => {
         if (method === AX_CODE_GRPC_METHOD.WorkflowRunDashboard) return { value: [{ id: "run-1" }] }
         if (method === AX_CODE_GRPC_METHOD.WorkflowRunEvalCases) return { value: [{ id: "case-1" }] }
         if (method === AX_CODE_GRPC_METHOD.WorkflowRunEvalCase) return { value: { caseID: "case-1" } }
+        if (method === AX_CODE_GRPC_METHOD.WorkflowRunCommand) return { value: { id: "run-1", status: "running" } }
         throw new Error(`unexpected method ${method}`)
       },
       async *serverStream() {
@@ -229,6 +230,7 @@ describe("gRPC SDK facade", () => {
     expect(await client.workflowRun.dashboard({ limit: 5 })).toEqual([{ id: "run-1" }])
     expect(await client.workflowRun.evalCases()).toEqual([{ id: "case-1" }])
     expect(await client.workflowRun.evalCase("run-1", { caseID: "case-1" })).toEqual({ caseID: "case-1" })
+    expect(await client.workflowRun.retry("run-1", { phaseID: "phase-1" })).toEqual({ id: "run-1", status: "running" })
     expect(calls.map((call) => call.method)).toEqual([
       AX_CODE_GRPC_METHOD.Health,
       AX_CODE_GRPC_METHOD.CreateSession,
@@ -278,7 +280,13 @@ describe("gRPC SDK facade", () => {
       AX_CODE_GRPC_METHOD.WorkflowRunDashboard,
       AX_CODE_GRPC_METHOD.WorkflowRunEvalCases,
       AX_CODE_GRPC_METHOD.WorkflowRunEvalCase,
+      AX_CODE_GRPC_METHOD.WorkflowRunCommand,
     ])
+    expect(calls.at(-1)?.request).toEqual({
+      runID: "run-1",
+      command: "retry",
+      body: { phaseID: "phase-1" },
+    })
   })
 
   test("high-level client exposes PTY bidirectional streaming", async () => {
@@ -1156,6 +1164,7 @@ describe("gRPC SDK facade", () => {
         if (parsed.pathname === "/workflow-runs/dashboard") return Response.json([{ id: "run-1" }])
         if (parsed.pathname === "/workflow-runs/eval-cases") return Response.json([{ id: "case-1" }])
         if (parsed.pathname === "/workflow-runs/run-1/eval-case") return Response.json({ caseID: "case-1" })
+        if (parsed.pathname === "/workflow-runs/run-1/retry") return Response.json({ id: "run-1", status: "running" })
         return new Response("not found", { status: 404 })
       }) as typeof fetch,
     })
@@ -1163,11 +1172,16 @@ describe("gRPC SDK facade", () => {
     await expect(client.workflowRun.dashboard({ limit: 10 })).resolves.toEqual([{ id: "run-1" }])
     await expect(client.workflowRun.evalCases()).resolves.toEqual([{ id: "case-1" }])
     await expect(client.workflowRun.evalCase("run-1", { caseID: "case-1" })).resolves.toEqual({ caseID: "case-1" })
+    await expect(client.workflowRun.retry("run-1", { phaseID: "phase-1" })).resolves.toEqual({
+      id: "run-1",
+      status: "running",
+    })
 
     expect(calls).toEqual([
       { path: "/workflow-runs/dashboard?limit=10", method: "GET", body: "" },
       { path: "/workflow-runs/eval-cases", method: "GET", body: "" },
       { path: "/workflow-runs/run-1/eval-case", method: "POST", body: JSON.stringify({ caseID: "case-1" }) },
+      { path: "/workflow-runs/run-1/retry?phaseID=phase-1", method: "POST", body: "" },
     ])
   })
 
