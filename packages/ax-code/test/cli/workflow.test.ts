@@ -79,7 +79,7 @@ describe("workflow command helpers", () => {
       spec,
       budget: spec.budget,
       budgetUsage: { ...emptyUsage(), totalTokens: 123, childAgents: 2 },
-      verificationEnvelopeIDs: [],
+      verificationEnvelopeIDs: ["ver_01"],
       time: { created: 1, updated: 2 },
       phases: [
         {
@@ -100,8 +100,11 @@ describe("workflow command helpers", () => {
           runID,
           phaseID,
           status: "queued",
+          agent: "worker",
+          model: "cheap-model",
           artifactIDs: [],
           evidenceRefs: [],
+          outputSummary: "queued for inspection",
           time: { created: 1, updated: 2 },
         },
       ],
@@ -112,6 +115,7 @@ describe("workflow command helpers", () => {
           kind: "summary",
           retention: "session",
           exposeToMainContext: true,
+          summary: "phase summary",
           evidenceRefs: [],
           time: { created: 1, updated: 2 },
         },
@@ -124,6 +128,11 @@ describe("workflow command helpers", () => {
     expect(output).toContain("phases: running=1")
     expect(output).toContain("children: queued=1")
     expect(output).toContain("artifacts: summary=1")
+    expect(output).toContain("verification: ver_01")
+    expect(output).toContain("Children")
+    expect(output).toContain("agent=worker")
+    expect(output).toContain("Artifacts")
+    expect(output).toContain("phase summary")
   })
 })
 

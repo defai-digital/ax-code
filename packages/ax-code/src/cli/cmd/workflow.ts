@@ -73,11 +73,37 @@ export function formatWorkflowRunDetail(detail: WorkflowRunDetail) {
   ]
 
   if (detail.error) lines.push(`error: ${detail.error}`)
+  if (detail.verificationEnvelopeIDs.length) {
+    lines.push(`verification: ${detail.verificationEnvelopeIDs.join(", ")}`)
+  }
   if (detail.phases.length) {
     lines.push("")
     lines.push("Phases")
     for (const phase of detail.phases) {
       lines.push(`  ${phase.position + 1}. ${phase.name} [${phase.kind}] ${phase.status}`)
+    }
+  }
+  if (detail.children.length) {
+    lines.push("")
+    lines.push("Children")
+    for (const child of detail.children) {
+      const agent = child.agent ? ` agent=${child.agent}` : ""
+      const model = typeof child.model === "string" ? ` model=${child.model}` : ""
+      const task = child.taskQueueID ? ` task=${child.taskQueueID}` : ""
+      lines.push(`  ${child.id} phase=${child.phaseID} status=${child.status}${agent}${model}${task}`)
+      if (child.outputSummary) lines.push(`    ${child.outputSummary}`)
+      if (child.error) lines.push(`    error: ${child.error}`)
+    }
+  }
+  if (detail.artifacts.length) {
+    lines.push("")
+    lines.push("Artifacts")
+    for (const artifact of detail.artifacts) {
+      const phase = artifact.phaseID ? ` phase=${artifact.phaseID}` : ""
+      const child = artifact.childID ? ` child=${artifact.childID}` : ""
+      const exposed = artifact.exposeToMainContext ? " exposed" : ""
+      lines.push(`  ${artifact.id} ${artifact.kind}${phase}${child}${exposed}`)
+      if (artifact.summary) lines.push(`    ${artifact.summary}`)
     }
   }
   return lines.join(EOL).concat(EOL)
