@@ -184,10 +184,7 @@ async function setPhaseStatus(input: WorkflowRunState.SetPhaseStatusInput): Prom
     const row = db.update(WorkflowPhaseTable).set(updates).where(eq(WorkflowPhaseTable.id, parsed.id)).returning().get()
     if (!row) throw new NotFoundError({ message: `Workflow phase not found: ${parsed.id}` })
     db.update(WorkflowRunTable)
-      .set({
-        current_phase_id: row.id,
-        time_updated: now,
-      })
+      .set(parsed.status === "running" ? { current_phase_id: row.id, time_updated: now } : { time_updated: now })
       .where(eq(WorkflowRunTable.id, row.run_id))
       .run()
     return fromPhaseRow(row)
@@ -370,13 +367,14 @@ async function attachVerificationEnvelopeIDs(
   input: WorkflowRunState.AttachVerificationInput,
 ): Promise<WorkflowRunState.Info> {
   const parsed = WorkflowRunState.AttachVerificationInput.parse(input)
-  const current = await get(parsed.id)
   const now = Date.now()
-  const run = Database.use((db) => {
+  const run = Database.transaction((db) => {
+    const existing = db.select().from(WorkflowRunTable).where(eq(WorkflowRunTable.id, parsed.id)).get()
+    if (!existing) throw new NotFoundError({ message: `Workflow run not found: ${parsed.id}` })
     const row = db
       .update(WorkflowRunTable)
       .set({
-        verification_envelope_ids: unique([...current.verificationEnvelopeIDs, ...parsed.envelopeIDs]),
+        verification_envelope_ids: unique([...existing.verification_envelope_ids, ...parsed.envelopeIDs]),
         time_updated: now,
       })
       .where(eq(WorkflowRunTable.id, parsed.id))
