@@ -584,6 +584,8 @@ async function ensureFinalReportArtifact(runID: WorkflowRunID): Promise<Workflow
     `Verification: ${verification.status} (${verification.mode})`,
     ...verification.summaryLines,
     `Evidence refs: ${formatEvidenceRefs(evidenceRefs)}`,
+    `Budget limits: ${formatWorkflowBudgetLimit(detail.budget)}`,
+    `Pacing: ${formatWorkflowPacing(detail.spec.pacing)}`,
     findingSummaryLine(findings),
     ...findingBucketSummaryLines(findings),
     `Phases: ${detail.phases.length} total, ${phaseCounts.completed ?? 0} completed, ${phaseCounts.failed ?? 0} failed, ${phaseCounts.cancelled ?? 0} cancelled.`,
@@ -614,6 +616,8 @@ async function ensureFinalReportArtifact(runID: WorkflowRunID): Promise<Workflow
       evidenceRefs,
       verification,
       findings,
+      budgetLimit: detail.budget,
+      pacing: detail.spec.pacing,
       budgetUsage: detail.budgetUsage,
       budgetLedger: detail.budgetLedger.map(compactBudgetLedgerEntry),
       verificationEnvelopeIDs: detail.verificationEnvelopeIDs,
@@ -652,6 +656,28 @@ function formatEvidenceRefs(evidenceRefs: WorkflowArtifactRecord["evidenceRefs"]
   const shown = evidenceRefs.slice(0, max).map((ref) => `${ref.kind}:${ref.id}`)
   const suffix = evidenceRefs.length > max ? `, +${evidenceRefs.length - max} more` : ""
   return `${shown.join(", ")}${suffix}.`
+}
+
+function formatWorkflowBudgetLimit(budget: WorkflowRunDetail["budget"]) {
+  return [
+    `tokens ${budget.maxTotalTokens}`,
+    `child agents ${budget.maxTotalAgents}`,
+    `concurrent ${budget.maxConcurrentAgents}`,
+    `tool calls ${budget.maxToolCalls}`,
+    `retries ${budget.maxRetries}`,
+    `wall ${formatDurationMs(budget.maxWallTimeMs)}`,
+  ].join(", ")
+}
+
+function formatWorkflowPacing(pacing: WorkflowRunDetail["spec"]["pacing"]) {
+  return `requests/min ${pacing.maxRequestsPerMinute}, tokens/min ${pacing.maxTokensPerMinute}.`
+}
+
+function formatDurationMs(ms: number) {
+  const seconds = Math.max(0, Math.round(ms / 1000))
+  if (seconds % 3600 === 0) return `${seconds / 3600}h`
+  if (seconds % 60 === 0) return `${seconds / 60}m`
+  return `${seconds}s`
 }
 
 async function syncFinalReportToParentSession(detail: WorkflowRunDetail, artifact: WorkflowArtifactRecord) {
@@ -771,6 +797,8 @@ function formatParentFinalReport(detail: WorkflowRunDetail, artifact: WorkflowAr
     `Run: ${detail.id}`,
     `Final artifact: ${artifact.id}`,
     `Linked evidence refs: ${formatEvidenceRefs(artifact.evidenceRefs)}`,
+    `Budget limits: ${formatWorkflowBudgetLimit(detail.budget)}`,
+    `Pacing: ${formatWorkflowPacing(detail.spec.pacing)}`,
     `Budget used: ${usage.totalTokens} tokens, ${usage.toolCalls} tool calls, ${usage.childAgents} child agents${cost}.`,
   ].join("\n")
 }

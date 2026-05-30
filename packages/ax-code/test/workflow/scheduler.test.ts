@@ -73,8 +73,19 @@ describe("WorkflowScheduler", () => {
           })
           expect(finalReport?.summary).toContain("Verification: not_run (optional)")
           expect(finalReport?.summary).toContain("Evidence refs: artifact:wfa_")
+          expect(finalReport?.summary).toContain("Budget limits: tokens 100000")
+          expect(finalReport?.summary).toContain("Pacing: requests/min 12, tokens/min 200000.")
           expect(finalReport?.evidenceRefs).toHaveLength(2)
           expect(finalReport?.payload).toMatchObject({
+            budgetLimit: {
+              maxTotalTokens: 100_000,
+              maxConcurrentAgents: 3,
+              maxTotalAgents: 25,
+            },
+            pacing: {
+              maxRequestsPerMinute: 12,
+              maxTokensPerMinute: 200_000,
+            },
             evidenceRefs: [
               expect.objectContaining({ kind: "artifact" }),
               expect.objectContaining({ kind: "artifact" }),
@@ -121,6 +132,8 @@ describe("WorkflowScheduler", () => {
           expect(report.text).toContain("Workflow final report: Noop Dry Run")
           expect(report.text).toContain("Final artifact: wfa_")
           expect(report.text).toContain("Linked evidence refs: artifact:wfa_")
+          expect(report.text).toContain("Budget limits: tokens 100000")
+          expect(report.text).toContain("Pacing: requests/min 12, tokens/min 200000.")
           expect(report.text).toContain("Budget used: 0 tokens, 0 tool calls, 0 child agents.")
           expect(report.text).not.toContain("Noop phase completed")
           expect(report.metadata?.workflowFinalReport).toMatchObject({

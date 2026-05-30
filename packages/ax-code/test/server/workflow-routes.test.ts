@@ -236,10 +236,24 @@ describe("workflow routes", () => {
         (artifact) => artifact.specArtifactID === "workflow-final-report",
       )
       const finalReportPayload = finalReport?.payload as
-        | { kind?: string; budgetLedger?: unknown[]; evidenceRefs?: Array<{ kind?: string; id?: string }> }
+        | {
+            kind?: string
+            budgetLedger?: unknown[]
+            evidenceRefs?: Array<{ kind?: string; id?: string }>
+            budgetLimit?: { maxTotalTokens?: number; maxConcurrentAgents?: number }
+            pacing?: { maxRequestsPerMinute?: number; maxTokensPerMinute?: number }
+          }
         | undefined
       expect(finalReportPayload).toMatchObject({
         kind: "workflow-final-report",
+        budgetLimit: {
+          maxTotalTokens: 100_000,
+          maxConcurrentAgents: 3,
+        },
+        pacing: {
+          maxRequestsPerMinute: 12,
+          maxTokensPerMinute: 200_000,
+        },
         budgetLedger: [],
       })
       const hasArtifactEvidenceRef = finalReportPayload?.evidenceRefs?.some(
