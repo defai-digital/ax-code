@@ -899,6 +899,7 @@ describe("WorkflowScheduler", () => {
           })
           expect(finalReport?.summary).toContain("Workflow final report: Issue Triage")
           expect(finalReport?.summary).toContain("Verification: not_run (optional)")
+          expect(finalReport?.summary).toContain("Redaction: none=0, redacted=0, pending=")
           expect(finalReport?.payload).toMatchObject({
             kind: "workflow-final-report",
             status: "completed",
@@ -911,12 +912,20 @@ describe("WorkflowScheduler", () => {
             },
           })
           const finalPayload = finalReport?.payload as
-            | { budgetLedger?: Array<{ kind: string; usageDelta?: { childAgents?: number } }> }
+            | {
+                budgetLedger?: Array<{ kind: string; usageDelta?: { childAgents?: number } }>
+                redactionSummary?: {
+                  counts?: { none?: number; redacted?: number; pending?: number }
+                  summaries?: string[]
+                }
+              }
             | undefined
           expect(Array.isArray(finalPayload?.budgetLedger)).toBe(true)
           expect(finalPayload?.budgetLedger).toHaveLength(detail.budgetLedger.length)
           expect(finalPayload?.budgetLedger?.some((entry) => entry.kind === "reserve")).toBe(true)
           expect(finalPayload?.budgetLedger?.some((entry) => entry.usageDelta?.childAgents === 1)).toBe(true)
+          expect(finalPayload?.redactionSummary?.counts?.pending).toBeGreaterThan(0)
+          expect(finalPayload?.redactionSummary?.summaries?.some((item) => item.includes("payload omitted"))).toBe(true)
 
           await WorkflowScheduler.start(run.id, { allowScaleBeyondDefaults: true })
           const finalDetail = await WorkflowRun.getDetail(run.id)

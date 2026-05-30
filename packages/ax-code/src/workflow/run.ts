@@ -580,6 +580,7 @@ async function ensureFinalReportArtifact(runID: WorkflowRunID): Promise<Workflow
   const findings = finalReportFindings(detail)
   const evidenceRefs = finalReportEvidenceRefs(detail)
   const evaluation = evaluateWorkflowRun({ run: detail, now: detail.time.completed ?? Date.now() })
+  const redactionSummary = finalReportRedactionSummary(detail)
   const summary = [
     `Workflow final report: ${detail.spec.name}`,
     `Status: ${detail.status}`,
@@ -594,6 +595,7 @@ async function ensureFinalReportArtifact(runID: WorkflowRunID): Promise<Workflow
     `Phases: ${detail.phases.length} total, ${phaseCounts.completed ?? 0} completed, ${phaseCounts.failed ?? 0} failed, ${phaseCounts.cancelled ?? 0} cancelled.`,
     `Children: ${detail.children.length} total, ${childCounts.completed ?? 0} completed, ${childCounts.failed ?? 0} failed, ${childCounts.cancelled ?? 0} cancelled.`,
     `Artifacts: ${detail.artifacts.length} existing, verification envelopes: ${detail.verificationEnvelopeIDs.length}.`,
+    `Redaction: ${formatRedactionSummary(redactionSummary)}`,
   ].join("\n")
 
   const artifact = await appendArtifact({
@@ -620,6 +622,7 @@ async function ensureFinalReportArtifact(runID: WorkflowRunID): Promise<Workflow
       verification,
       findings,
       evaluation,
+      redactionSummary,
       budgetLimit: detail.budget,
       pacing: detail.spec.pacing,
       budgetUsage: detail.budgetUsage,
@@ -653,6 +656,36 @@ function finalReportEvidenceRefs(detail: WorkflowRunDetail): WorkflowArtifactRec
     ...detail.artifacts.map((artifact) => ({ kind: "artifact" as const, id: artifact.id })),
     ...detail.verificationEnvelopeIDs.map((id) => ({ kind: "verification" as const, id })),
   ])
+}
+
+function finalReportRedactionSummary(detail: WorkflowRunDetail) {
+  const counts: Record<WorkflowArtifactRedactionStatus, number> = {
+    none: 0,
+    redacted: 0,
+    pending: 0,
+  }
+  const summaries: string[] = []
+
+  for (const artifact of detail.artifacts) {
+    const redaction = artifact.redaction ?? defaultWorkflowArtifactRedaction(artifact)
+    counts[redaction.status]++
+    if (redaction.summary) summaries.push(`${artifact.specArtifactID ?? artifact.id}: ${redaction.summary}`)
+  }
+
+  return {
+    counts,
+    summaries: summaries.slice(0, 12),
+    omittedSummaryCount: Math.max(0, summaries.length - 12),
+  }
+}
+
+type WorkflowArtifactRedactionStatus = NonNullable<WorkflowArtifactRecord["redaction"]>["status"]
+
+function formatRedactionSummary(summary: ReturnType<typeof finalReportRedactionSummary>) {
+  const base = `none=${summary.counts.none}, redacted=${summary.counts.redacted}, pending=${summary.counts.pending}`
+  if (summary.summaries.length === 0) return `${base}.`
+  const suffix = summary.omittedSummaryCount > 0 ? `; +${summary.omittedSummaryCount} more summaries` : ""
+  return `${base}; ${summary.summaries.join("; ")}${suffix}.`
 }
 
 function formatEvidenceRefs(evidenceRefs: WorkflowArtifactRecord["evidenceRefs"], max = 12) {
