@@ -99,9 +99,11 @@ describe("bug report lifecycle visibility guards", () => {
     expect(worktree).not.toContain("fs.rmdir(info.directory)")
 
     const cleanupIndex = worktree.indexOf("await cleanupInstanceAndSandbox()")
-    const cleanIndex = worktree.indexOf("await clean(directory)", cleanupIndex)
+    const cleanIndexes = ["await clean(directory)", "await clean(entry.path)"]
+      .map((needle) => worktree.indexOf(needle, cleanupIndex))
+      .filter((index) => index !== -1)
     expect(cleanupIndex).toBeGreaterThan(-1)
-    expect(cleanIndex).toBeGreaterThan(cleanupIndex)
+    expect(cleanIndexes.some((index) => index > cleanupIndex)).toBe(true)
   })
 
   test("keeps Rust daemon and watcher send failures visible", async () => {

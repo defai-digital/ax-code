@@ -24,6 +24,7 @@ import { withTimeout } from "./timeout"
 // could return a different address.
 
 type FetchFn = (...args: Parameters<typeof globalThis.fetch>) => ReturnType<typeof globalThis.fetch>
+type DnsResolveFn = (hostname: string) => Promise<{ address: string; family: number }[]>
 
 export namespace Ssrf {
   type PinnedFetchInit = RequestInit & { label?: string }
@@ -129,7 +130,13 @@ export namespace Ssrf {
    * The URL is rewritten to use the resolved IP, and the original Host
    * header is set so TLS SNI and virtual hosting work correctly.
    */
-  async function pinnedFetchOnce(url: string, init: PinnedFetchInit | undefined, label: string, fetchFn?: FetchFn): Promise<Response> {
+  async function pinnedFetchOnce(
+    url: string,
+    init: PinnedFetchInit | undefined,
+    label: string,
+    fetchFn?: FetchFn,
+    dnsResolveFn?: DnsResolveFn,
+  ): Promise<Response> {
     const parsed = new URL(url)
     if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
       throw new Error(`${label}: unsupported URL scheme: ${parsed.protocol}`)
@@ -148,7 +155,7 @@ export namespace Ssrf {
     // Resolve DNS once
     const emptyAddresses: ResolvedAddress[] = []
     const addresses = await withTimeout(
-      dns.lookup(hostname, { all: true }),
+      dnsResolveFn ? dnsResolveFn(hostname) : dns.lookup(hostname, { all: true }),
       5_000,
       `${label}: DNS lookup timed out after 5s: ${hostname}`,
     ).catch((err) => {
@@ -191,14 +198,14 @@ export namespace Ssrf {
     } as RequestInit)
   }
 
-  export async function pinnedFetch(url: string, init?: PinnedFetchInit, fetchFn?: FetchFn): Promise<Response> {
+  export async function pinnedFetch(url: string, init?: PinnedFetchInit, fetchFn?: FetchFn, dnsResolveFn?: DnsResolveFn): Promise<Response> {
     const label = init?.label ?? "ssrf"
     const redirectMode = init?.redirect ?? "follow"
     let currentUrl = url
     let currentInit = { ...init, redirect: "manual" } as PinnedFetchInit
 
     for (let redirectCount = 0; redirectCount <= MAX_REDIRECTS; redirectCount++) {
-      const response = await pinnedFetchOnce(currentUrl, currentInit, label, fetchFn)
+      const response = await pinnedFetchOnce(currentUrl, currentInit, label, fetchFn, dnsResolveFn)
       if (!isRedirect(response.status)) return response
       if (redirectMode === "manual") return response
       if (redirectMode === "error") throw new Error(`${label}: redirect refused: ${currentUrl}`)
