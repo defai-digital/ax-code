@@ -180,7 +180,7 @@ async function setStatus(input: WorkflowRunState.SetStatusInput): Promise<Workfl
     return fromRunRow(row)
   })
   assertProjectRun(run)
-  publishUpdated(run)
+  publishUpdated(run, current.status)
   return run
 }
 
@@ -206,7 +206,7 @@ async function setPhaseStatus(input: WorkflowRunState.SetPhaseStatusInput): Prom
     return fromPhaseRow(row)
   })
   assertProjectRun(await get(phase.runID))
-  publishPhaseUpdated(phase)
+  publishPhaseUpdated(phase, current.status)
   return phase
 }
 
@@ -265,7 +265,7 @@ async function setChildStatus(input: WorkflowRunState.SetChildStatusInput): Prom
     touchRun(db, row.run_id, now)
     return fromChildRow(row)
   })
-  publishChildUpdated(child)
+  publishChildUpdated(child, current.status)
   return child
 }
 
@@ -378,7 +378,9 @@ async function appendBudgetUsage(input: WorkflowRunState.AppendBudgetUsageInput)
     let exceededEntry: WorkflowBudgetLedgerEntry | undefined
     let failedRun: WorkflowRunState.Info | undefined
     let failedPhase: WorkflowPhaseRecord | undefined
+    let failedPhasePreviousStatus: WorkflowRun.PhaseStatus | undefined
     let failedChild: WorkflowChildRecord | undefined
+    let failedChildPreviousStatus: WorkflowRun.ChildStatus | undefined
 
     if (budgetExceeded && stopMessage && !isTerminalRunStatus(run.status)) {
       if (parsed.kind !== "exceeded") {
@@ -403,6 +405,7 @@ async function appendBudgetUsage(input: WorkflowRunState.AppendBudgetUsageInput)
       if (parsed.childID) {
         const child = db.select().from(WorkflowChildTable).where(eq(WorkflowChildTable.id, parsed.childID)).get()
         if (child && !isTerminalChildStatus(child.status)) {
+          failedChildPreviousStatus = child.status
           const failedChildRow = db
             .update(WorkflowChildTable)
             .set({
@@ -421,6 +424,7 @@ async function appendBudgetUsage(input: WorkflowRunState.AppendBudgetUsageInput)
       if (parsed.phaseID) {
         const phase = db.select().from(WorkflowPhaseTable).where(eq(WorkflowPhaseTable.id, parsed.phaseID)).get()
         if (phase && !isTerminalPhaseStatus(phase.status)) {
+          failedPhasePreviousStatus = phase.status
           const failedPhaseRow = db
             .update(WorkflowPhaseTable)
             .set({
@@ -463,15 +467,23 @@ async function appendBudgetUsage(input: WorkflowRunState.AppendBudgetUsageInput)
       entry: fromBudgetLedgerRow(row),
       exceededEntry,
       failedRun,
+      failedRunPreviousStatus: run.status,
       failedPhase,
+      failedPhasePreviousStatus,
       failedChild,
+      failedChildPreviousStatus,
+      evaluation,
     }
   })
   publishBudgetAppended(changed.entry)
+  if (changed.evaluation.warnings.length > 0) publishBudgetWarning(changed.entry, changed.evaluation.warnings)
   if (changed.exceededEntry) publishBudgetAppended(changed.exceededEntry)
-  if (changed.failedChild) publishChildUpdated(changed.failedChild)
-  if (changed.failedPhase) publishPhaseUpdated(changed.failedPhase)
-  if (changed.failedRun) publishUpdated(changed.failedRun)
+  if (changed.evaluation.exceeded.length > 0) {
+    publishBudgetExceeded(changed.exceededEntry ?? changed.entry, changed.evaluation.exceeded)
+  }
+  if (changed.failedChild) publishChildUpdated(changed.failedChild, changed.failedChildPreviousStatus)
+  if (changed.failedPhase) publishPhaseUpdated(changed.failedPhase, changed.failedPhasePreviousStatus)
+  if (changed.failedRun) publishUpdated(changed.failedRun, changed.failedRunPreviousStatus)
   return changed.entry
 }
 
@@ -902,20 +914,23 @@ function publishCreated(run: WorkflowRun.Info) {
   Bus.publishDetached(WorkflowRun.Event.Created, { run })
 }
 
-function publishUpdated(run: WorkflowRun.Info) {
+function publishUpdated(run: WorkflowRun.Info, previousStatus?: WorkflowRun.Status) {
   Bus.publishDetached(WorkflowRun.Event.Updated, { run })
+  if (previousStatus && previousStatus !== run.status) publishRunStatusChanged(run, previousStatus)
 }
 
-function publishPhaseUpdated(phase: WorkflowPhaseRecord) {
+function publishPhaseUpdated(phase: WorkflowPhaseRecord, previousStatus?: WorkflowRun.PhaseStatus) {
   Bus.publishDetached(WorkflowRun.Event.PhaseUpdated, { phase })
+  if (previousStatus && previousStatus !== phase.status) publishPhaseStatusChanged(phase)
 }
 
 function publishChildCreated(child: WorkflowChildRecord) {
   Bus.publishDetached(WorkflowRun.Event.ChildCreated, { child })
 }
 
-function publishChildUpdated(child: WorkflowChildRecord) {
+function publishChildUpdated(child: WorkflowChildRecord, previousStatus?: WorkflowRun.ChildStatus) {
   Bus.publishDetached(WorkflowRun.Event.ChildUpdated, { child })
+  if (previousStatus && previousStatus !== child.status) publishChildStatusChanged(child)
 }
 
 function publishArtifactWritten(artifact: WorkflowArtifactRecord) {
@@ -926,6 +941,14 @@ function publishBudgetAppended(entry: WorkflowBudgetLedgerEntry) {
   Bus.publishDetached(WorkflowRun.Event.BudgetAppended, { entry })
 }
 
+function publishBudgetWarning(entry: WorkflowBudgetLedgerEntry, warnings: string[]) {
+  Bus.publishDetached(WorkflowRun.Event.BudgetWarning, { entry, warnings })
+}
+
+function publishBudgetExceeded(entry: WorkflowBudgetLedgerEntry, exceeded: string[]) {
+  Bus.publishDetached(WorkflowRun.Event.BudgetExceeded, { entry, exceeded })
+}
+
 function publishVerificationAttached(run: WorkflowRun.Info, envelopeIDs: string[]) {
   Bus.publishDetached(WorkflowRun.Event.VerificationAttached, {
     verification: {
@@ -934,4 +957,29 @@ function publishVerificationAttached(run: WorkflowRun.Info, envelopeIDs: string[
       run,
     },
   })
+}
+
+function publishRunStatusChanged(run: WorkflowRun.Info, previousStatus: WorkflowRun.Status) {
+  if (run.status === "running") {
+    Bus.publishDetached(previousStatus === "paused" ? WorkflowRun.Event.Resumed : WorkflowRun.Event.Started, { run })
+    return
+  }
+  if (run.status === "blocked") Bus.publishDetached(WorkflowRun.Event.Blocked, { run })
+  if (run.status === "paused") Bus.publishDetached(WorkflowRun.Event.Paused, { run })
+  if (run.status === "completed") Bus.publishDetached(WorkflowRun.Event.Completed, { run })
+  if (run.status === "failed") Bus.publishDetached(WorkflowRun.Event.Failed, { run })
+  if (run.status === "cancelled") Bus.publishDetached(WorkflowRun.Event.Cancelled, { run })
+}
+
+function publishPhaseStatusChanged(phase: WorkflowPhaseRecord) {
+  if (phase.status === "running") Bus.publishDetached(WorkflowRun.Event.PhaseStarted, { phase })
+  if (phase.status === "completed") Bus.publishDetached(WorkflowRun.Event.PhaseCompleted, { phase })
+  if (phase.status === "failed") Bus.publishDetached(WorkflowRun.Event.PhaseFailed, { phase })
+}
+
+function publishChildStatusChanged(child: WorkflowChildRecord) {
+  if (child.status === "running") Bus.publishDetached(WorkflowRun.Event.ChildStarted, { child })
+  if (child.status === "completed") Bus.publishDetached(WorkflowRun.Event.ChildCompleted, { child })
+  if (child.status === "failed") Bus.publishDetached(WorkflowRun.Event.ChildFailed, { child })
+  if (child.status === "cancelled") Bus.publishDetached(WorkflowRun.Event.ChildCancelled, { child })
 }

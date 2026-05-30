@@ -25,14 +25,29 @@ describe("WorkflowRun state", () => {
           Bus.subscribe(WorkflowRun.Event.Updated, (event) => {
             events.push(`${event.type}:${event.properties.run.status}`)
           }),
+          Bus.subscribe(WorkflowRun.Event.Started, (event) => {
+            events.push(event.type)
+          }),
+          Bus.subscribe(WorkflowRun.Event.Completed, (event) => {
+            events.push(event.type)
+          }),
           Bus.subscribe(WorkflowRun.Event.PhaseUpdated, (event) => {
             events.push(`${event.type}:${event.properties.phase.status}`)
+          }),
+          Bus.subscribe(WorkflowRun.Event.PhaseStarted, (event) => {
+            events.push(event.type)
+          }),
+          Bus.subscribe(WorkflowRun.Event.PhaseCompleted, (event) => {
+            events.push(event.type)
           }),
           Bus.subscribe(WorkflowRun.Event.ChildCreated, (event) => {
             events.push(`${event.type}:${event.properties.child.status}`)
           }),
           Bus.subscribe(WorkflowRun.Event.ChildUpdated, (event) => {
             events.push(`${event.type}:${event.properties.child.status}`)
+          }),
+          Bus.subscribe(WorkflowRun.Event.ChildCompleted, (event) => {
+            events.push(event.type)
           }),
           Bus.subscribe(WorkflowRun.Event.ArtifactWritten, (event) => {
             events.push(`${event.type}:${event.properties.artifact.kind}`)
@@ -154,17 +169,78 @@ describe("WorkflowRun state", () => {
           await new Promise((resolve) => setTimeout(resolve, 0))
           expect(events).toContain("workflow.run.created")
           expect(events).toContain("workflow.run.updated:running")
+          expect(events).toContain("workflow.run.started")
           expect(events).toContain("workflow.run.updated:completed")
+          expect(events).toContain("workflow.run.completed")
           expect(events).toContain("workflow.phase.updated:running")
+          expect(events).toContain("workflow.phase.started")
           expect(events).toContain("workflow.phase.updated:completed")
+          expect(events).toContain("workflow.phase.completed")
           expect(events).toContain("workflow.child.created:queued")
           expect(events).toContain("workflow.child.updated:completed")
+          expect(events).toContain("workflow.child.completed")
           expect(events).toContain("workflow.artifact.written:summary")
           expect(events).toContain("workflow.budget.appended:consume")
           expect(events).toContain("workflow.verification.attached:0123456789abcdef")
         } finally {
           for (const unsubscribe of unsubscribers) unsubscribe()
           await Session.remove(session.id)
+        }
+      },
+    })
+  })
+
+  test("publishes budget warning and exceeded events", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const events: string[] = []
+        const unsubscribers = [
+          Bus.subscribe(WorkflowRun.Event.BudgetWarning, (event) => {
+            events.push(`${event.type}:${event.properties.warnings.join(";")}`)
+          }),
+          Bus.subscribe(WorkflowRun.Event.BudgetExceeded, (event) => {
+            events.push(`${event.type}:${event.properties.exceeded.join(";")}`)
+          }),
+          Bus.subscribe(WorkflowRun.Event.Failed, (event) => {
+            events.push(`${event.type}:${event.properties.run.status}`)
+          }),
+        ]
+
+        try {
+          const run = await WorkflowRun.create({
+            spec: parseWorkflowSpecV1({
+              ...WorkflowFixtureSpecs.noopDryRun,
+              budget: {
+                maxTotalTokens: 100,
+                maxWallTimeMs: 600_000,
+                maxConcurrentAgents: 3,
+                maxTotalAgents: 25,
+                maxToolCalls: 100,
+                maxRetries: 2,
+              },
+            }),
+          })
+
+          await WorkflowRun.appendBudgetUsage({
+            runID: run.id,
+            kind: "consume",
+            usageDelta: { totalTokens: 80 },
+          })
+          await WorkflowRun.appendBudgetUsage({
+            runID: run.id,
+            kind: "consume",
+            usageDelta: { totalTokens: 21 },
+          })
+
+          await new Promise((resolve) => setTimeout(resolve, 0))
+          expect(events).toContain("workflow.budget.warning:total tokens 80/100")
+          expect(events).toContain("workflow.budget.exceeded:total tokens 101/100")
+          expect(events).toContain("workflow.run.failed:failed")
+        } finally {
+          for (const unsubscribe of unsubscribers) unsubscribe()
         }
       },
     })
