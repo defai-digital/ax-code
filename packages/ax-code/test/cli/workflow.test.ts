@@ -133,6 +133,15 @@ describe("workflow command helpers", () => {
         verificationEnvelopeCount: 1,
         evidenceRefCount: 3,
         exposedArtifactCount: 2,
+        evaluation: workflowProjectionEvaluation({
+          decision: "hold",
+          metrics: {
+            ...workflowProjectionEvaluation().metrics,
+            status: "blocked",
+            totalTokens: 2500,
+            childAgents: 4,
+          },
+        }),
         blockedReason: "approval required before continuing the workflow",
       },
     ] satisfies WorkflowRunProjection[])
@@ -145,6 +154,7 @@ describe("workflow command helpers", () => {
     expect(output).toContain("2/2/4")
     expect(output).toContain("2500/10000")
     expect(output).toContain("3/1/4")
+    expect(output).toContain("hold/-")
     expect(output).toContain("approval required before continui...")
   })
 
@@ -444,5 +454,43 @@ function emptyUsage() {
     childAgents: 0,
     retries: 0,
     estimatedCostUsd: 0,
+  }
+}
+
+function workflowProjectionEvaluation(
+  input: Partial<WorkflowRunProjection["evaluation"]> = {},
+): WorkflowRunProjection["evaluation"] {
+  return {
+    runID,
+    decision: "hold",
+    reasons: ["workflow status is blocked"],
+    metrics: {
+      status: "blocked",
+      elapsedMs: 0,
+      totalTokens: 0,
+      inputTokens: 0,
+      outputTokens: 0,
+      toolCalls: 0,
+      childAgents: 0,
+      retries: 0,
+      estimatedCostUsd: 0,
+      costPerConfirmedFindingUsd: null,
+      verifiedCompletionCount: 0,
+      costPerVerifiedCompletionUsd: null,
+      confirmedFindings: 0,
+      likelyFindings: 0,
+      rejectedFindings: 0,
+      unverifiedFindings: 0,
+      falsePositiveFindings: 0,
+      artifactCount: 0,
+      exposedArtifactCount: 0,
+      verificationEnvelopeCount: 0,
+      interventionCount: 0,
+    },
+    budgetStatus: "ok",
+    budgetWarnings: [],
+    budgetExceeded: [],
+    verificationSatisfied: false,
+    ...input,
   }
 }

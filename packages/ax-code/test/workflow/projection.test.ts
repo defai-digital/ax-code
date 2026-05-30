@@ -68,6 +68,14 @@ describe("workflow projections", () => {
           expect(projection.budgetLimit.maxConcurrentAgents).toBe(8)
           expect(projection.budgetLimit.maxInputTokensPerChild).toBe(50_000)
           expect(projection.budgetLimit.maxOutputTokensPerChild).toBe(8_000)
+          expect(projection.evaluation).toMatchObject({
+            decision: "hold",
+            metrics: {
+              status: "running",
+              childAgents: 8,
+              costPerVerifiedCompletionUsd: null,
+            },
+          })
           expect(projection.elapsedMs).toBeGreaterThanOrEqual(0)
         },
       })

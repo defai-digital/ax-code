@@ -355,6 +355,7 @@ function workflowDashboardRun(input: Partial<WorkflowDashboardRun> = {}): Workfl
     verificationEnvelopeCount: 2,
     evidenceRefCount: 3,
     exposedArtifactCount: 1,
+    evaluation: workflowEvalSummary(),
     ...input,
   }
 }

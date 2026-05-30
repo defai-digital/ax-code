@@ -138,7 +138,43 @@ function workflowRun(input: WorkflowRunInput) {
     verificationEnvelopeCount: input.verificationEnvelopeCount ?? 0,
     evidenceRefCount: input.evidenceRefCount ?? 0,
     exposedArtifactCount: input.exposedArtifactCount ?? 0,
+    evaluation: input.evaluation ?? workflowEvaluation(input),
     blockedReason: input.blockedReason,
     currentPhaseName: input.currentPhaseName,
   } satisfies WorkflowDashboardRun
+}
+
+function workflowEvaluation(input: WorkflowRunInput): WorkflowDashboardRun["evaluation"] {
+  return {
+    runID: input.runID,
+    decision: input.status === "completed" ? "promote" : "hold",
+    reasons: input.status === "completed" ? [] : [`workflow status is ${input.status}`],
+    metrics: {
+      status: input.status,
+      elapsedMs: input.elapsedMs ?? 0,
+      totalTokens: input.budgetUsage?.totalTokens ?? 0,
+      inputTokens: input.budgetUsage?.inputTokens ?? 0,
+      outputTokens: input.budgetUsage?.outputTokens ?? 0,
+      toolCalls: input.budgetUsage?.toolCalls ?? 0,
+      childAgents: input.budgetUsage?.childAgents ?? 0,
+      retries: input.budgetUsage?.retries ?? 0,
+      estimatedCostUsd: input.budgetUsage?.estimatedCostUsd ?? 0,
+      costPerConfirmedFindingUsd: null,
+      verifiedCompletionCount: input.status === "completed" ? 1 : 0,
+      costPerVerifiedCompletionUsd: input.status === "completed" ? 0 : null,
+      confirmedFindings: 0,
+      likelyFindings: 0,
+      rejectedFindings: 0,
+      unverifiedFindings: 0,
+      falsePositiveFindings: 0,
+      artifactCount: 0,
+      exposedArtifactCount: 0,
+      verificationEnvelopeCount: input.verificationEnvelopeCount ?? 0,
+      interventionCount: input.status === "blocked" || input.status === "failed" ? 1 : 0,
+    },
+    budgetStatus: "ok",
+    budgetWarnings: [],
+    budgetExceeded: [],
+    verificationSatisfied: input.status === "completed",
+  }
 }

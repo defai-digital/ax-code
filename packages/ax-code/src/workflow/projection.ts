@@ -1,4 +1,5 @@
 import z from "zod"
+import { evaluateWorkflowRun, WorkflowEvalSummary } from "./eval"
 import { WorkflowRunDetail, WorkflowUsageDelta } from "./state"
 
 const StatusCount = z.number().int().min(0)
@@ -72,6 +73,7 @@ export const WorkflowRunProjection = z.object({
   verificationEnvelopeCount: z.number().int().min(0),
   evidenceRefCount: z.number().int().min(0),
   exposedArtifactCount: z.number().int().min(0),
+  evaluation: WorkflowEvalSummary,
   blockedReason: z.string().optional(),
 })
 export type WorkflowRunProjection = z.infer<typeof WorkflowRunProjection>
@@ -111,6 +113,7 @@ export function summarizeWorkflowRunDetail(
     verificationEnvelopeCount: detail.verificationEnvelopeIDs.length,
     evidenceRefCount: countEvidenceRefs(detail),
     exposedArtifactCount: detail.artifacts.filter((artifact) => artifact.exposeToMainContext).length,
+    evaluation: evaluateWorkflowRun({ run: detail, now }),
     blockedReason: blockedReason(detail),
   })
 }

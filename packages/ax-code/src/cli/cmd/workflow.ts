@@ -114,6 +114,7 @@ export function formatWorkflowRunDashboard(runs: WorkflowRunProjection[]) {
     const childSummary = `${activeChildren}/${queuedChildren}/${run.budgetUsage.childAgents}`
     const budgetSummary = `${run.budgetUsage.totalTokens}/${run.budgetLimit.maxTotalTokens}`
     const evidenceSummary = `${run.evidenceRefCount}/${run.verificationEnvelopeCount}/${totalArtifacts(run)}`
+    const evalSummary = `${run.evaluation.decision}/${formatUsd(run.evaluation.metrics.costPerVerifiedCompletionUsd)}`
     const blocker = run.blockedReason ? truncate(run.blockedReason, 36) : "-"
     const models = truncate(formatNamedModels(run.models) || "-", 32)
     return [
@@ -126,12 +127,13 @@ export function formatWorkflowRunDashboard(runs: WorkflowRunProjection[]) {
       childSummary.padEnd(13),
       budgetSummary.padEnd(18),
       evidenceSummary.padEnd(17),
+      evalSummary.padEnd(17),
       blocker,
     ].join(" ")
   })
   return (
     [
-      "status     run                          name                     phase                  effort       models                           active/queued/total tokens             evidence/ver/art blocker",
+      "status     run                          name                     phase                  effort       models                           active/queued/total tokens             evidence/ver/art  eval/cost        blocker",
       ...lines,
     ].join(EOL) + EOL
   )

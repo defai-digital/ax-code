@@ -6286,6 +6286,48 @@ export type WorkflowRunDashboardResponses = {
     verificationEnvelopeCount: number
     evidenceRefCount: number
     exposedArtifactCount: number
+    evaluation: {
+      runID: string
+      sourceTemplateID?: string
+      decision: "promote" | "hold" | "rollback"
+      reasons: Array<string>
+      metrics: {
+        status: "queued" | "running" | "blocked" | "paused" | "failed" | "completed" | "cancelled"
+        elapsedMs: number
+        totalTokens: number
+        inputTokens: number
+        outputTokens: number
+        toolCalls: number
+        childAgents: number
+        retries: number
+        estimatedCostUsd: number
+        costPerConfirmedFindingUsd: number | null
+        verifiedCompletionCount: number
+        costPerVerifiedCompletionUsd: number | null
+        confirmedFindings: number
+        likelyFindings: number
+        rejectedFindings: number
+        unverifiedFindings: number
+        falsePositiveFindings: number
+        artifactCount: number
+        exposedArtifactCount: number
+        verificationEnvelopeCount: number
+        interventionCount: number
+      }
+      budgetStatus: "ok" | "warning" | "exceeded"
+      budgetWarnings: Array<string>
+      budgetExceeded: Array<string>
+      verificationSatisfied: boolean
+      comparison?: {
+        baselineLabel: string
+        confirmedFindingsDelta: number
+        falsePositiveFindingsDelta: number
+        totalTokensDelta?: number
+        elapsedMsDelta?: number
+        estimatedCostUsdDelta?: number
+        interventionCountDelta?: number
+      }
+    }
     blockedReason?: string
   }>
 }
