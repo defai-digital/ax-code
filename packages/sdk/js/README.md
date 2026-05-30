@@ -252,6 +252,11 @@ return `server.headers` for clients that need to call the server directly. Prefe
 integrations. SDK server helpers bind the HTTP API to loopback hostnames by default; pass `allowNetworkBind: true` only
 when the caller explicitly owns network transport security and authentication.
 
+HTTP client/server runtime values are not exported from the top-level `@ax-code/sdk` entrypoint. Use the explicit
+`@ax-code/sdk/http`, `@ax-code/sdk/client`, or `@ax-code/sdk/server` subpaths for HTTP integrations. The top-level
+entrypoint still exports generated route types such as `Project`, `Provider`, `Message`, and `Part` for downstream type
+imports.
+
 ## Cross-language integrations
 
 Use this package for first-party TypeScript and JavaScript integrations. For first-party desktop/native GUI work, prefer `@ax-code/sdk/grpc` and keep HTTP/SSE as the compatibility and debug fallback. For Python, Go, Java, Rust, or other non-JavaScript runtimes, run `ax-code serve` and generate a client from the OpenAPI snapshot at [`../openapi.json`](../openapi.json) unless the integration is owned as part of the native GUI transport.
@@ -263,6 +268,8 @@ See [HTTP and OpenAPI SDKs](../../../docs/sdk-http-openapi.md) for the supported
 | Before (1.4.0)                                            | After (2.0.0)                                                          |
 | --------------------------------------------------------- | ---------------------------------------------------------------------- |
 | `import { createAxCode } from "@ax-code/sdk"`             | `import { createAxCode } from "@ax-code/sdk/http"`                     |
+| `import { createAxCodeClient } from "@ax-code/sdk"`       | `import { createAxCodeClient } from "@ax-code/sdk/client"`             |
+| `import { createAxCodeServer } from "@ax-code/sdk"`       | `import { createAxCodeServer } from "@ax-code/sdk/server"`             |
 | `import { createAgent } from "@ax-code/sdk/programmatic"` | `import { createAgent } from "@ax-code/sdk"`                           |
 | No custom tools                                           | `import { tool } from "@ax-code/sdk"` + `tools: [...]` on AgentOptions |
 | No testing utilities                                      | `import { createMockAgent } from "@ax-code/sdk/testing"`               |

@@ -56,13 +56,11 @@ export {
 // ── Version ──────────────────────────────────────────────────────────
 export { SDK_VERSION, isSDKVersionCompatible } from "./version.js"
 
-// ── Backward-compatible re-exports ───────────────────────────────────
-// The 1.4.0 top-level export included the HTTP client factory and
-// all the generated v2 types. Plugin packages and downstream consumers
-// import types like `Project`, `Provider`, `Message`, `Part` etc.
-// from `@ax-code/sdk`. Keep those accessible so the migration from
-// 1.4.0 → 2.0.0 doesn't break type imports — the only breaking
-// change is that the _default function_ moved from `createAxCode` to
-// `createAgent`.
-export * from "./client.js"
-export * from "./server.js"
+// ── Generated HTTP route types ───────────────────────────────────────
+// Keep OpenAPI-derived types like `Project`, `Provider`, `Message`,
+// and `Part` available from the top-level package for downstream type
+// imports. HTTP client/server values intentionally live behind explicit
+// subpaths (`@ax-code/sdk/http`, `@ax-code/sdk/client`,
+// `@ax-code/sdk/server`) so desktop apps do not accidentally choose the
+// HTTP boundary over the in-process or gRPC/native SDK.
+export type * from "./gen/types.gen.js"

@@ -51,6 +51,10 @@ v2 server helper refuse network hostnames such as `0.0.0.0` unless the caller pa
 escape hatch only for a deliberately secured service integration; first-party desktop GUI shells should prefer
 `@ax-code/sdk/grpc` or an in-process SDK boundary.
 
+HTTP runtime helpers are intentionally behind explicit SDK subpaths. Import `createAxCode()` from `@ax-code/sdk/http`,
+`createAxCodeClient()` from `@ax-code/sdk/client`, or `createAxCodeServer()` from `@ax-code/sdk/server`; the top-level
+`@ax-code/sdk` entrypoint is reserved for the in-process agent API plus generated route types.
+
 Check server health:
 
 ```bash
