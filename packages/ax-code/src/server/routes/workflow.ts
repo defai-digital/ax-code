@@ -2,45 +2,66 @@ import { Hono } from "hono"
 import { HTTPException } from "hono/http-exception"
 import { describeRoute, resolver, validator } from "hono-openapi"
 import z from "zod"
+import { WorkflowRun } from "@/workflow/run"
+import { WorkflowScheduler } from "@/workflow/scheduler"
+import { WorkflowSpecV1, isWorkflowRuntimeEnabled } from "@/workflow/spec"
+import { WorkflowTemplate } from "@/workflow/template"
 import {
-  WorkflowRun,
-  WorkflowRunDetail,
-  WorkflowRunID,
-  WorkflowScheduler,
-  WorkflowSpecV1,
-  WorkflowTemplate,
-  isWorkflowRuntimeEnabled,
-} from "@/workflow"
-import { SessionID } from "@/session/schema"
+  WorkflowArtifactEventRecord,
+  WorkflowBudgetLedgerEventEntry,
+  WorkflowChildEventRecord,
+  WorkflowPhaseEventRecord,
+  WorkflowRunEventRecord,
+  type WorkflowRunID,
+} from "@/workflow/state"
+import type { SessionID } from "@/session/schema"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
 
-const WORKFLOW_RUN_ID_PARAM = z.object({ runID: WorkflowRunID.zod })
-const WORKFLOW_TEMPLATE_ID_PARAM = z.object({ templateID: WorkflowTemplate.ID })
+const WorkflowTemplateIDSchema = z.string().min(1).max(120).regex(/^builtin:[a-z][a-z0-9-]*$/)
+const WORKFLOW_RUN_ID_PARAM = z.object({ runID: z.string().min(1) })
+const WORKFLOW_TEMPLATE_ID_PARAM = z.object({ templateID: WorkflowTemplateIDSchema })
 
 const WorkflowRunListQuery = z.object({
-  parentSessionID: SessionID.zod.optional(),
+  parentSessionID: z.string().min(1).optional(),
   status: WorkflowRun.Status.optional(),
   limit: z.coerce.number().int().positive().max(500).optional(),
 })
 
 const WorkflowRunCreateBody = z
   .object({
-    parentSessionID: SessionID.zod.optional(),
+    parentSessionID: z.string().min(1).optional(),
     sourceTemplateID: z.string().trim().min(1).optional(),
-    templateID: WorkflowTemplate.ID.optional(),
+    templateID: WorkflowTemplateIDSchema.optional(),
     spec: WorkflowSpecV1.optional(),
   })
   .refine((input) => (input.templateID ? 1 : 0) + (input.spec ? 1 : 0) === 1, {
     message: "Exactly one of templateID or spec is required",
   })
 
-function runID(c: { req: { valid: (input: "param") => { runID: WorkflowRunID } } }) {
-  return c.req.valid("param").runID
+const WorkflowRunResponse = WorkflowRunEventRecord
+const WorkflowRunDetailResponse = WorkflowRunEventRecord.extend({
+  phases: z.array(WorkflowPhaseEventRecord),
+  children: z.array(WorkflowChildEventRecord),
+  artifacts: z.array(WorkflowArtifactEventRecord),
+  budgetLedger: z.array(WorkflowBudgetLedgerEventEntry),
+})
+
+const WorkflowTemplateResponse = z.object({
+  id: z.string(),
+  source: z.enum(["builtin"]),
+  name: z.string(),
+  description: z.string(),
+  tags: z.array(z.string()),
+  spec: WorkflowSpecV1,
+})
+
+function runID(c: { req: { valid: (input: "param") => { runID: string } } }) {
+  return c.req.valid("param").runID as WorkflowRunID
 }
 
-function templateID(c: { req: { valid: (input: "param") => { templateID: WorkflowTemplate.ID } } }) {
-  return c.req.valid("param").templateID
+function templateID(c: { req: { valid: (input: "param") => { templateID: string } } }) {
+  return c.req.valid("param").templateID as WorkflowTemplate.ID
 }
 
 function assertWorkflowRoutesEnabled() {
@@ -65,13 +86,21 @@ export const WorkflowRunRoutes = lazy(() =>
         responses: {
           200: {
             description: "Project-scoped workflow runs.",
-            content: { "application/json": { schema: resolver(WorkflowRun.Record.array()) } },
+            content: { "application/json": { schema: resolver(WorkflowRunResponse.array()) } },
           },
           ...errors(400, 404),
         },
       }),
       validator("query", WorkflowRunListQuery),
-      async (c) => c.json(await WorkflowRun.list(c.req.valid("query"))),
+      async (c) => {
+        const query = c.req.valid("query")
+        return c.json(
+          await WorkflowRun.list({
+            ...query,
+            parentSessionID: query.parentSessionID as SessionID | undefined,
+          }),
+        )
+      },
     )
     .post(
       "/",
@@ -82,7 +111,7 @@ export const WorkflowRunRoutes = lazy(() =>
         responses: {
           200: {
             description: "Created workflow run.",
-            content: { "application/json": { schema: resolver(WorkflowRun.Record) } },
+            content: { "application/json": { schema: resolver(WorkflowRunResponse) } },
           },
           ...errors(400, 404),
         },
@@ -91,11 +120,16 @@ export const WorkflowRunRoutes = lazy(() =>
       async (c) => {
         const body = c.req.valid("json")
         if (body.templateID) {
-          return c.json(await WorkflowTemplate.createRun({ templateID: body.templateID, parentSessionID: body.parentSessionID }))
+          return c.json(
+            await WorkflowTemplate.createRun({
+              templateID: body.templateID as WorkflowTemplate.ID,
+              parentSessionID: body.parentSessionID as SessionID | undefined,
+            }),
+          )
         }
         return c.json(
           await WorkflowRun.create({
-            parentSessionID: body.parentSessionID,
+            parentSessionID: body.parentSessionID as SessionID | undefined,
             sourceTemplateID: body.sourceTemplateID,
             spec: body.spec!,
           }),
@@ -111,7 +145,7 @@ export const WorkflowRunRoutes = lazy(() =>
         responses: {
           200: {
             description: "Workflow run detail.",
-            content: { "application/json": { schema: resolver(WorkflowRunDetail) } },
+            content: { "application/json": { schema: resolver(WorkflowRunDetailResponse) } },
           },
           ...errors(400, 404),
         },
@@ -128,7 +162,7 @@ export const WorkflowRunRoutes = lazy(() =>
         responses: {
           200: {
             description: "Started workflow run detail.",
-            content: { "application/json": { schema: resolver(WorkflowRunDetail) } },
+            content: { "application/json": { schema: resolver(WorkflowRunDetailResponse) } },
           },
           ...errors(400, 404, 409),
         },
@@ -146,7 +180,7 @@ export const WorkflowRunRoutes = lazy(() =>
         responses: {
           200: {
             description: "Paused workflow run detail.",
-            content: { "application/json": { schema: resolver(WorkflowRunDetail) } },
+            content: { "application/json": { schema: resolver(WorkflowRunDetailResponse) } },
           },
           ...errors(400, 404, 409),
         },
@@ -163,7 +197,7 @@ export const WorkflowRunRoutes = lazy(() =>
         responses: {
           200: {
             description: "Resumed workflow run detail.",
-            content: { "application/json": { schema: resolver(WorkflowRunDetail) } },
+            content: { "application/json": { schema: resolver(WorkflowRunDetailResponse) } },
           },
           ...errors(400, 404, 409),
         },
@@ -180,7 +214,7 @@ export const WorkflowRunRoutes = lazy(() =>
         responses: {
           200: {
             description: "Cancelled workflow run detail.",
-            content: { "application/json": { schema: resolver(WorkflowRunDetail) } },
+            content: { "application/json": { schema: resolver(WorkflowRunDetailResponse) } },
           },
           ...errors(400, 404, 409),
         },
@@ -197,7 +231,7 @@ export const WorkflowRunRoutes = lazy(() =>
         responses: {
           200: {
             description: "Retried workflow run detail.",
-            content: { "application/json": { schema: resolver(WorkflowRunDetail) } },
+            content: { "application/json": { schema: resolver(WorkflowRunDetailResponse) } },
           },
           ...errors(400, 404, 409),
         },
@@ -222,7 +256,7 @@ export const WorkflowTemplateRoutes = lazy(() =>
         responses: {
           200: {
             description: "Workflow templates.",
-            content: { "application/json": { schema: resolver(WorkflowTemplate.Info.array()) } },
+            content: { "application/json": { schema: resolver(WorkflowTemplateResponse.array()) } },
           },
           ...errors(400, 404),
         },
@@ -238,7 +272,7 @@ export const WorkflowTemplateRoutes = lazy(() =>
         responses: {
           200: {
             description: "Workflow template.",
-            content: { "application/json": { schema: resolver(WorkflowTemplate.Info) } },
+            content: { "application/json": { schema: resolver(WorkflowTemplateResponse) } },
           },
           ...errors(400, 404),
         },

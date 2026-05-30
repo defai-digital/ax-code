@@ -198,6 +198,99 @@ export const WorkflowBudgetLedgerEntry = z.object({
 })
 export type WorkflowBudgetLedgerEntry = z.infer<typeof WorkflowBudgetLedgerEntry>
 
+const WorkflowWireID = z.string().min(1)
+
+export const WorkflowRunEventRecord = z
+  .object({
+    id: WorkflowWireID,
+    projectID: WorkflowWireID,
+    directory: z.string(),
+    parentSessionID: WorkflowWireID.optional(),
+    sourceTemplateID: z.string().optional(),
+    status: WorkflowRun.Status,
+    currentPhaseID: WorkflowWireID.optional(),
+    spec: WorkflowSpecV1,
+    budget: z.record(z.string(), z.unknown()),
+    budgetUsage: WorkflowUsageDelta,
+    verificationEnvelopeIDs: z.array(z.string()),
+    error: z.string().optional(),
+    time: TimestampInfo,
+  })
+  .meta({ ref: "WorkflowRunEventRecord" })
+
+export const WorkflowPhaseEventRecord = z
+  .object({
+    id: WorkflowWireID,
+    runID: WorkflowWireID,
+    specPhaseID: z.string().min(1),
+    position: z.number().int().min(0),
+    name: z.string().min(1),
+    kind: z.enum(["fanout", "sequential", "synthesis", "verification", "noop"]),
+    status: WorkflowRun.PhaseStatus,
+    agent: z.string().optional(),
+    modelPolicy: z.unknown().optional(),
+    budget: z.unknown().optional(),
+    outputs: z.array(z.string()),
+    error: z.string().optional(),
+    time: TimestampInfo,
+  })
+  .meta({ ref: "WorkflowPhaseEventRecord" })
+
+export const WorkflowChildEventRecord = z
+  .object({
+    id: WorkflowWireID,
+    runID: WorkflowWireID,
+    phaseID: WorkflowWireID,
+    taskQueueID: WorkflowWireID.optional(),
+    sessionID: WorkflowWireID.optional(),
+    status: WorkflowRun.ChildStatus,
+    agent: z.string().optional(),
+    model: z.unknown().optional(),
+    budgetSlice: z.unknown().optional(),
+    artifactIDs: z.array(WorkflowWireID),
+    evidenceRefs: z.array(WorkflowEvidenceRef),
+    outputSummary: z.string().optional(),
+    error: z.string().optional(),
+    time: TimestampInfo,
+  })
+  .meta({ ref: "WorkflowChildEventRecord" })
+
+export const WorkflowArtifactEventRecord = z
+  .object({
+    id: WorkflowWireID,
+    runID: WorkflowWireID,
+    phaseID: WorkflowWireID.optional(),
+    childID: WorkflowWireID.optional(),
+    kind: WorkflowRun.ArtifactKind,
+    retention: WorkflowRun.ArtifactRetention,
+    exposeToMainContext: z.boolean(),
+    summary: z.string().optional(),
+    payload: z.unknown().optional(),
+    redaction: WorkflowArtifactRecord.shape.redaction,
+    evidenceRefs: z.array(WorkflowEvidenceRef),
+    time: z.object({
+      created: z.number(),
+      updated: z.number(),
+    }),
+  })
+  .meta({ ref: "WorkflowArtifactEventRecord" })
+
+export const WorkflowBudgetLedgerEventEntry = z
+  .object({
+    id: WorkflowWireID,
+    runID: WorkflowWireID,
+    phaseID: WorkflowWireID.optional(),
+    childID: WorkflowWireID.optional(),
+    kind: WorkflowRun.BudgetLedgerKind,
+    usageDelta: WorkflowUsageDelta,
+    message: z.string().optional(),
+    time: z.object({
+      created: z.number(),
+      updated: z.number(),
+    }),
+  })
+  .meta({ ref: "WorkflowBudgetLedgerEventEntry" })
+
 export const WorkflowRunDetail = WorkflowRun.Record.extend({
   phases: z.array(WorkflowPhaseRecord),
   children: z.array(WorkflowChildRecord),
@@ -293,12 +386,12 @@ export namespace WorkflowRun {
   export type AttachVerificationInput = z.infer<typeof AttachVerificationInput>
 
   export const Event = {
-    Created: BusEvent.define("workflow.run.created", z.object({ run: Record })),
-    Updated: BusEvent.define("workflow.run.updated", z.object({ run: Record })),
-    PhaseUpdated: BusEvent.define("workflow.phase.updated", z.object({ phase: WorkflowPhaseRecord })),
-    ChildCreated: BusEvent.define("workflow.child.created", z.object({ child: WorkflowChildRecord })),
-    ChildUpdated: BusEvent.define("workflow.child.updated", z.object({ child: WorkflowChildRecord })),
-    ArtifactWritten: BusEvent.define("workflow.artifact.written", z.object({ artifact: WorkflowArtifactRecord })),
-    BudgetAppended: BusEvent.define("workflow.budget.appended", z.object({ entry: WorkflowBudgetLedgerEntry })),
+    Created: BusEvent.define("workflow.run.created", z.object({ run: WorkflowRunEventRecord })),
+    Updated: BusEvent.define("workflow.run.updated", z.object({ run: WorkflowRunEventRecord })),
+    PhaseUpdated: BusEvent.define("workflow.phase.updated", z.object({ phase: WorkflowPhaseEventRecord })),
+    ChildCreated: BusEvent.define("workflow.child.created", z.object({ child: WorkflowChildEventRecord })),
+    ChildUpdated: BusEvent.define("workflow.child.updated", z.object({ child: WorkflowChildEventRecord })),
+    ArtifactWritten: BusEvent.define("workflow.artifact.written", z.object({ artifact: WorkflowArtifactEventRecord })),
+    BudgetAppended: BusEvent.define("workflow.budget.appended", z.object({ entry: WorkflowBudgetLedgerEventEntry })),
   }
 }

@@ -256,6 +256,26 @@ import type {
   TuiShowToastResponses,
   TuiSubmitPromptResponses,
   VcsGetResponses,
+  WorkflowRunCancelErrors,
+  WorkflowRunCancelResponses,
+  WorkflowRunCreateErrors,
+  WorkflowRunCreateResponses,
+  WorkflowRunGetErrors,
+  WorkflowRunGetResponses,
+  WorkflowRunListErrors,
+  WorkflowRunListResponses,
+  WorkflowRunPauseErrors,
+  WorkflowRunPauseResponses,
+  WorkflowRunResumeErrors,
+  WorkflowRunResumeResponses,
+  WorkflowRunRetryErrors,
+  WorkflowRunRetryResponses,
+  WorkflowRunStartErrors,
+  WorkflowRunStartResponses,
+  WorkflowTemplateGetErrors,
+  WorkflowTemplateGetResponses,
+  WorkflowTemplateListErrors,
+  WorkflowTemplateListResponses,
   WorktreeCreateErrors,
   WorktreeCreateInput,
   WorktreeCreateResponses,
@@ -1963,6 +1983,427 @@ export class ScheduledTask extends HeyApiClient {
   }
 }
 
+export class WorkflowRun extends HeyApiClient {
+  /**
+   * List workflow runs
+   *
+   * Return durable workflow runs scoped to the current project.
+   */
+  public list<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      parentSessionID?: string
+      status?: "queued" | "running" | "blocked" | "paused" | "failed" | "completed" | "cancelled"
+      limit?: number
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "parentSessionID" },
+            { in: "query", key: "status" },
+            { in: "query", key: "limit" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<WorkflowRunListResponses, WorkflowRunListErrors, ThrowOnError>({
+      url: "/workflow-runs",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Create workflow run
+   *
+   * Create a workflow run from a spec snapshot or a built-in workflow template.
+   */
+  public create<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      parentSessionID?: string
+      sourceTemplateID?: string
+      templateID?: string
+      spec?: {
+        schemaVersion: 1
+        id: string
+        name: string
+        description: string
+        tags?: Array<string>
+        trigger?:
+          | {
+              kind: "manual"
+              source?: "prompt" | "command" | "api"
+            }
+          | {
+              kind: "scheduled"
+              schedule: string
+              timezone?: string
+              enabled?: boolean
+            }
+          | {
+              kind: "api"
+              route?: string
+              enabled?: boolean
+            }
+          | {
+              kind: "webhook"
+              event: string
+              enabled?: false
+              securityGate?: "required"
+            }
+        budget?: {
+          maxTotalTokens?: number
+          maxWallTimeMs?: number
+          maxConcurrentAgents?: number
+          maxTotalAgents?: number
+          maxToolCalls?: number
+          maxRetries?: number
+        }
+        modelPolicy?: {
+          plannerModel?: string
+          workerModel?: string
+          verifierModel?: string
+          synthesizerModel?: string
+          effort?: "normal" | "deep" | "workflow" | "max-workflow"
+          routing?: Array<{
+            phaseKind?: "fanout" | "sequential" | "synthesis" | "verification" | "noop"
+            use: "planner" | "worker" | "verifier" | "synthesizer"
+          }>
+        }
+        permissions?: {
+          writePolicy?: "read-only" | "serialized" | "worktree-required"
+          allowedTools?: Array<string>
+          networkPolicy?: "inherit" | "disabled" | "allowed"
+          escalationPolicy?: "inherit" | "ask" | "deny"
+        }
+        artifacts?: Array<{
+          id: string
+          kind: "summary" | "finding" | "patch" | "verification" | "metric" | "log"
+          retention?: "ephemeral" | "session" | "durable"
+          exposeToMainContext?: boolean
+        }>
+        verification?: {
+          mode?: "required" | "optional" | "deferred" | "skipped"
+          workflow?: "review" | "debug" | "qa"
+          commands?: Array<string>
+          requiredArtifactIds?: Array<string>
+        }
+        phases: Array<{
+          id: string
+          name: string
+          kind: "fanout" | "sequential" | "synthesis" | "verification" | "noop"
+          prompt?: string
+          agent?: string
+          inputs?: Array<string>
+          outputs?: Array<string>
+          dependsOn?: Array<string>
+          maxParallel?: number
+          mergeStrategy?: "all" | "first-success" | "majority" | "critic-confirmation"
+          modelPolicy?: {
+            plannerModel?: string
+            workerModel?: string
+            verifierModel?: string
+            synthesizerModel?: string
+            effort?: "normal" | "deep" | "workflow" | "max-workflow"
+            routing?: Array<{
+              phaseKind?: "fanout" | "sequential" | "synthesis" | "verification" | "noop"
+              use: "planner" | "worker" | "verifier" | "synthesizer"
+            }>
+          }
+          budget?: {
+            maxTotalTokens?: number
+            maxWallTimeMs?: number
+            maxConcurrentAgents?: number
+            maxTotalAgents?: number
+            maxToolCalls?: number
+            maxRetries?: number
+          }
+        }>
+      }
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "body", key: "parentSessionID" },
+            { in: "body", key: "sourceTemplateID" },
+            { in: "body", key: "templateID" },
+            { in: "body", key: "spec" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<WorkflowRunCreateResponses, WorkflowRunCreateErrors, ThrowOnError>({
+      url: "/workflow-runs",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Get workflow run detail
+   *
+   * Return a workflow run with phase, child, artifact, and budget state.
+   */
+  public get<ThrowOnError extends boolean = false>(
+    parameters: {
+      runID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "runID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<WorkflowRunGetResponses, WorkflowRunGetErrors, ThrowOnError>({
+      url: "/workflow-runs/{runID}",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Start workflow run
+   *
+   * Start or advance a workflow run through the scheduler.
+   */
+  public start<ThrowOnError extends boolean = false>(
+    parameters: {
+      runID: string
+      directory?: string
+      allowScaleBeyondDefaults?: boolean
+      allowWriteWorkflows?: boolean
+      durableChildren?: boolean
+      enqueueChildren?: boolean
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "runID" },
+            { in: "query", key: "directory" },
+            { in: "body", key: "allowScaleBeyondDefaults" },
+            { in: "body", key: "allowWriteWorkflows" },
+            { in: "body", key: "durableChildren" },
+            { in: "body", key: "enqueueChildren" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<WorkflowRunStartResponses, WorkflowRunStartErrors, ThrowOnError>({
+      url: "/workflow-runs/{runID}/start",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Pause workflow run
+   *
+   * Pause queued workflow children where the queue supports pausing.
+   */
+  public pause<ThrowOnError extends boolean = false>(
+    parameters: {
+      runID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "runID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<WorkflowRunPauseResponses, WorkflowRunPauseErrors, ThrowOnError>({
+      url: "/workflow-runs/{runID}/pause",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Resume workflow run
+   *
+   * Resume paused workflow queue children.
+   */
+  public resume<ThrowOnError extends boolean = false>(
+    parameters: {
+      runID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "runID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<WorkflowRunResumeResponses, WorkflowRunResumeErrors, ThrowOnError>({
+      url: "/workflow-runs/{runID}/resume",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Cancel workflow run
+   *
+   * Cancel queued workflow children and mark the workflow cancelled.
+   */
+  public cancel<ThrowOnError extends boolean = false>(
+    parameters: {
+      runID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "runID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<WorkflowRunCancelResponses, WorkflowRunCancelErrors, ThrowOnError>({
+      url: "/workflow-runs/{runID}/cancel",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Retry workflow run
+   *
+   * Retry failed or cancelled workflow queue children.
+   */
+  public retry<ThrowOnError extends boolean = false>(
+    parameters: {
+      runID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "runID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<WorkflowRunRetryResponses, WorkflowRunRetryErrors, ThrowOnError>({
+      url: "/workflow-runs/{runID}/retry",
+      ...options,
+      ...params,
+    })
+  }
+}
+
+export class WorkflowTemplate extends HeyApiClient {
+  /**
+   * List workflow templates
+   *
+   * Return built-in workflow templates available for the current runtime.
+   */
+  public list<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).get<
+      WorkflowTemplateListResponses,
+      WorkflowTemplateListErrors,
+      ThrowOnError
+    >({
+      url: "/workflow-templates",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Get workflow template
+   *
+   * Return one workflow template by id.
+   */
+  public get<ThrowOnError extends boolean = false>(
+    parameters: {
+      templateID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "templateID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<WorkflowTemplateGetResponses, WorkflowTemplateGetErrors, ThrowOnError>({
+      url: "/workflow-templates/{templateID}",
+      ...options,
+      ...params,
+    })
+  }
+}
+
 export class Tool extends HeyApiClient {
   /**
    * List tool IDs
@@ -3648,6 +4089,7 @@ export class Audit extends HeyApiClient {
     parameters: {
       sessionID: string
       directory?: string
+      limit?: number
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -3658,6 +4100,7 @@ export class Audit extends HeyApiClient {
           args: [
             { in: "path", key: "sessionID" },
             { in: "query", key: "directory" },
+            { in: "query", key: "limit" },
           ],
         },
       ],
@@ -3677,6 +4120,7 @@ export class Audit extends HeyApiClient {
   public exportAll<ThrowOnError extends boolean = false>(
     parameters?: {
       directory?: string
+      limit?: number
       since?: number
       risk?: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL"
       type?: string
@@ -3689,6 +4133,7 @@ export class Audit extends HeyApiClient {
         {
           args: [
             { in: "query", key: "directory" },
+            { in: "query", key: "limit" },
             { in: "query", key: "since" },
             { in: "query", key: "risk" },
             { in: "query", key: "type" },
@@ -5233,6 +5678,16 @@ export class OpencodeClient extends HeyApiClient {
   private _scheduledTask?: ScheduledTask
   get scheduledTask(): ScheduledTask {
     return (this._scheduledTask ??= new ScheduledTask({ client: this.client }))
+  }
+
+  private _workflowRun?: WorkflowRun
+  get workflowRun(): WorkflowRun {
+    return (this._workflowRun ??= new WorkflowRun({ client: this.client }))
+  }
+
+  private _workflowTemplate?: WorkflowTemplate
+  get workflowTemplate(): WorkflowTemplate {
+    return (this._workflowTemplate ??= new WorkflowTemplate({ client: this.client }))
   }
 
   private _tool?: Tool
