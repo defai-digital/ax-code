@@ -58,14 +58,8 @@
     "@ax-code/index-core",
     "@ax-code/terminal",
     "@ax-code/parser",
-    "@ibm/plex",
-    "better-sqlite3",
-    "electron",
-    "electron-winstaller",
     "esbuild",
-    "node-pty",
     "protobufjs",
-    "sharp",
     "tree-sitter",
     "tree-sitter-bash",
     "web-tree-sitter"
@@ -88,15 +82,7 @@
       "ip-address@<10.1.1": "10.1.1",
       "qs@<6.15.2": "6.15.2",
       "uuid@<14.0.0": "14.0.0"
-    },
-    "onlyBuiltDependencies": [
-      "@ibm/plex",
-      "electron",
-      "electron-winstaller",
-      "esbuild",
-      "node-pty",
-      "sharp"
-    ]
+    }
   },
   "patchedDependencies": {
     "@standard-community/standard-openapi@0.2.9": "patches/@standard-community%2Fstandard-openapi@0.2.9.patch"
