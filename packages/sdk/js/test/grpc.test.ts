@@ -12,8 +12,10 @@ import {
   createAxCodeGrpcClientFromHttp,
   createAxCodeGrpcClientFromNativeBridge,
   createAxCodeGrpcClientFromNativeHandlers,
+  createAxCodeGrpcClientFromNativeIpc,
   createAxCodeGrpcHttpBridge,
   createAxCodeGrpcNativeBridgeFromHandlers,
+  createAxCodeGrpcNativeIpcTransport,
   getAxCodeGrpcMethodDescriptor,
   listMissingAxCodeGrpcNativeHandlers,
   listAxCodeGrpcMethods,
@@ -404,6 +406,80 @@ describe("gRPC SDK facade", () => {
       },
       "pwd\n",
     ])
+  })
+
+  test("native IPC bridge uses structured-clone friendly calls", async () => {
+    const calls: unknown[] = []
+    const client = createAxCodeGrpcClientFromNativeIpc({
+      async unary(call) {
+        calls.push(call)
+        return { value: { id: "sess-1" } }
+      },
+      async *serverStream(call) {
+        calls.push(call)
+        yield { type: "server.connected", properties: {} }
+      },
+      async *bidiStream(call, input) {
+        calls.push(call)
+        for await (const frame of input) calls.push(frame)
+        yield { type: "output", data: "ready" }
+      },
+    })
+    const abort = new AbortController()
+    const events = []
+
+    await expect(
+      client.session.get("sess-1", {
+        metadata: { "x-native-host": "tauri" },
+        signal: abort.signal,
+        timeoutMs: 250,
+      }),
+    ).resolves.toEqual({ id: "sess-1" })
+    for await (const event of client.subscribeEvents({ metadata: { "x-native-host": "tauri" } })) events.push(event)
+    for await (const event of client.pty.connect("pty_1", asyncFrames({ type: "input" as const, data: "pwd\n" }))) {
+      events.push(event)
+    }
+
+    expect(events).toEqual([
+      { type: "server.connected", properties: {} },
+      { type: "output", data: "ready" },
+    ])
+    expect(calls).toEqual([
+      {
+        method: AX_CODE_GRPC_METHOD.GetSession,
+        request: { sessionID: "sess-1" },
+        metadata: { "x-native-host": "tauri" },
+        timeoutMs: 250,
+      },
+      {
+        method: AX_CODE_GRPC_METHOD.SubscribeEvents,
+        request: {},
+        metadata: { "x-native-host": "tauri" },
+        timeoutMs: undefined,
+      },
+      {
+        method: AX_CODE_GRPC_METHOD.ConnectPty,
+        request: { id: "pty_1", cursor: undefined },
+        metadata: undefined,
+        timeoutMs: undefined,
+      },
+      { type: "input", data: "pwd\n" },
+    ])
+  })
+
+  test("native IPC bridge reports missing stream support clearly", () => {
+    const transport = createAxCodeGrpcNativeIpcTransport({
+      async unary() {
+        return {}
+      },
+    })
+
+    expect(() => transport.serverStream(AX_CODE_GRPC_METHOD.SubscribeEvents, {})).toThrow(
+      "AX Code native IPC bridge does not support server streaming",
+    )
+    expect(() => transport.bidiStream?.(AX_CODE_GRPC_METHOD.ConnectPty, { id: "pty_1" }, asyncFrames())).toThrow(
+      "AX Code native IPC bridge does not support bidirectional streaming",
+    )
   })
 
   test("native handler map can back a renderer client without HTTP dispatch glue", async () => {

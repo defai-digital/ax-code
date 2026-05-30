@@ -104,21 +104,26 @@ try {
 }
 ```
 
-Use a native bridge when the desktop host owns the privileged runtime boundary:
+Use a native IPC bridge when the desktop host owns the privileged runtime boundary through Electron preload, Tauri
+commands, or another structured-clone boundary. IPC calls intentionally omit `AbortSignal` and keep the bidirectional
+input stream outside the call payload so the call object can cross renderer/host boundaries cleanly:
 
 ```ts
-const client = createAxCodeGrpcClientFromNativeBridge({
+const client = createAxCodeGrpcClientFromNativeIpc({
   unary(call) {
     return window.axCodeNative.unary(call)
   },
   serverStream(call) {
     return window.axCodeNative.serverStream(call)
   },
-  bidiStream(call) {
-    return window.axCodeNative.bidiStream(call)
+  bidiStream(call, input) {
+    return window.axCodeNative.bidiStream(call, input)
   },
 })
 ```
+
+Use `createAxCodeGrpcClientFromNativeBridge()` only when both sides are in the same JavaScript realm and can safely pass
+`AbortSignal` and async iterables directly in the call object.
 
 Native hosts can also expose a handler map instead of hand-writing a method switch. This is useful for Rust/Tauri
 commands, Electron preload APIs, or a real local gRPC server that wants to bind AX Code runtime operations method by
