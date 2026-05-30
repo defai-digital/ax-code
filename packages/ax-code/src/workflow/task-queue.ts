@@ -64,6 +64,7 @@ export namespace WorkflowTaskQueue {
             status: runStatus,
             error: runStatus === "failed" || runStatus === "blocked" ? item.error : undefined,
           })
+    if (run.status === "completed") await WorkflowRun.ensureFinalReportArtifact(latest.id)
 
     if (phaseStatus === "completed" && runStatus === "running") {
       return WorkflowScheduler.start(latest.id, payload.workflow.startOptions)

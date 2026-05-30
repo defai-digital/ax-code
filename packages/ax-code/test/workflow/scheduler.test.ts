@@ -6,6 +6,7 @@ import {
   WorkflowRunID,
   WorkflowScheduler,
   WorkflowSchedulerDisabledError,
+  WORKFLOW_FINAL_REPORT_SPEC_ARTIFACT_ID,
   parseWorkflowSpecV1,
 } from "../../src/workflow"
 import { tmpdir } from "../fixture/fixture"
@@ -40,6 +41,12 @@ describe("WorkflowScheduler", () => {
           expect(result.status).toBe("completed")
           expect(result.phases[0]?.status).toBe("completed")
           expect(result.artifacts[0]?.kind).toBe("summary")
+          expect(
+            result.artifacts.find((artifact) => artifact.specArtifactID === WORKFLOW_FINAL_REPORT_SPEC_ARTIFACT_ID),
+          ).toMatchObject({
+            kind: "summary",
+            exposeToMainContext: true,
+          })
           expect(result.children).toEqual([])
           const { TaskQueue } = await import("../../src/session/task-queue")
           expect(await TaskQueue.list()).toEqual([])
@@ -276,6 +283,27 @@ describe("WorkflowScheduler", () => {
           expect(detail.status).toBe("completed")
           expect(detail.phases.every((phase) => phase.status === "completed")).toBe(true)
           expect(detail.children.every((child) => child.status === "completed")).toBe(true)
+          const finalReport = detail.artifacts.find(
+            (artifact) => artifact.specArtifactID === WORKFLOW_FINAL_REPORT_SPEC_ARTIFACT_ID,
+          )
+          expect(finalReport).toMatchObject({
+            kind: "summary",
+            exposeToMainContext: true,
+          })
+          expect(finalReport?.summary).toContain("Workflow final report: Issue Triage")
+          expect(finalReport?.payload).toMatchObject({
+            kind: "workflow-final-report",
+            status: "completed",
+            childCounts: { completed: detail.children.length },
+          })
+
+          await WorkflowScheduler.start(run.id, { allowScaleBeyondDefaults: true })
+          const finalDetail = await WorkflowRun.getDetail(run.id)
+          expect(
+            finalDetail.artifacts.filter(
+              (artifact) => artifact.specArtifactID === WORKFLOW_FINAL_REPORT_SPEC_ARTIFACT_ID,
+            ),
+          ).toHaveLength(1)
         },
       })
     } finally {

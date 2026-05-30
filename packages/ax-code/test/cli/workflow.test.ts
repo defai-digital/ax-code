@@ -3,6 +3,7 @@ import {
   formatWorkflowRunDashboard,
   formatWorkflowRunDetail,
   formatWorkflowRunList,
+  formatWorkflowRoutineList,
   formatWorkflowTemplateList,
   parseWorkflowInputArguments,
 } from "../../src/cli/cmd/workflow"
@@ -135,6 +136,36 @@ describe("workflow command helpers", () => {
     expect(output).toContain("2/2/4")
     expect(output).toContain("2500/10000")
     expect(output).toContain("approval required before continui...")
+  })
+
+  test("formats routine list rows", () => {
+    const output = formatWorkflowRoutineList([
+      {
+        route: "workflow/route-noop",
+        templateID: "project:route-noop",
+        templateName: "Route Noop",
+        source: "project",
+        trust: "trusted",
+        enabled: true,
+        mode: "api",
+        securityGate: "local-only",
+      },
+      {
+        route: "workflow/candidate",
+        templateID: "project:candidate",
+        templateName: "Candidate",
+        source: "project",
+        trust: "candidate",
+        enabled: true,
+        mode: "api",
+        securityGate: "local-only",
+      },
+    ])
+
+    expect(output).toContain("workflow/route-noop")
+    expect(output).toContain("project:route-noop")
+    expect(output).toContain("enabled")
+    expect(output).toContain("disabled")
   })
 
   test("formats run detail counts", () => {

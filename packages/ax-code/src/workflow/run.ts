@@ -29,6 +29,8 @@ import {
   WorkflowRunTable,
 } from "./workflow.sql"
 
+export const WORKFLOW_FINAL_REPORT_SPEC_ARTIFACT_ID = "workflow-final-report"
+
 async function create(input: WorkflowRunState.CreateInput): Promise<WorkflowRunState.Info> {
   const parsed = WorkflowRunState.CreateInput.parse(input)
   if (parsed.parentSessionID) await assertSessionCompatible(parsed.parentSessionID)
@@ -501,6 +503,58 @@ async function attachVerificationEnvelopeIDs(
   return changed.run
 }
 
+async function ensureFinalReportArtifact(runID: WorkflowRunID): Promise<WorkflowArtifactRecord | undefined> {
+  const detail = await getDetail(runID)
+  const existing = detail.artifacts.find(
+    (artifact) => artifact.specArtifactID === WORKFLOW_FINAL_REPORT_SPEC_ARTIFACT_ID,
+  )
+  if (existing) return existing
+
+  const phaseCounts = countByStatus(detail.phases.map((phase) => phase.status))
+  const childCounts = countByStatus(detail.children.map((child) => child.status))
+  const artifactCounts = countByStatus(detail.artifacts.map((artifact) => artifact.kind))
+  const summary = [
+    `Workflow final report: ${detail.spec.name}`,
+    `Status: ${detail.status}`,
+    `Phases: ${detail.phases.length} total, ${phaseCounts.completed ?? 0} completed, ${phaseCounts.failed ?? 0} failed, ${phaseCounts.cancelled ?? 0} cancelled.`,
+    `Children: ${detail.children.length} total, ${childCounts.completed ?? 0} completed, ${childCounts.failed ?? 0} failed, ${childCounts.cancelled ?? 0} cancelled.`,
+    `Artifacts: ${detail.artifacts.length} existing, verification envelopes: ${detail.verificationEnvelopeIDs.length}.`,
+  ].join("\n")
+
+  return appendArtifact({
+    runID,
+    specArtifactID: WORKFLOW_FINAL_REPORT_SPEC_ARTIFACT_ID,
+    kind: "summary",
+    retention: "session",
+    exposeToMainContext: detail.spec.synthesis.exposeToMainContext,
+    summary,
+    payload: {
+      kind: "workflow-final-report",
+      runID: detail.id,
+      status: detail.status,
+      sourceTemplateID: detail.sourceTemplateID,
+      spec: {
+        id: detail.spec.id,
+        name: detail.spec.name,
+        tags: detail.spec.tags,
+      },
+      phaseCounts,
+      childCounts,
+      artifactCounts,
+      budgetUsage: detail.budgetUsage,
+      verificationEnvelopeIDs: detail.verificationEnvelopeIDs,
+      exposedArtifactIDs: detail.artifacts
+        .filter((artifact) => artifact.exposeToMainContext)
+        .map((artifact) => artifact.id),
+    },
+    redaction: { status: "pending", summary: "Generated compact workflow final report from durable run state." },
+    evidenceRefs: [
+      ...detail.artifacts.map((artifact) => ({ kind: "artifact" as const, id: artifact.id })),
+      ...detail.verificationEnvelopeIDs.map((id) => ({ kind: "verification" as const, id })),
+    ],
+  })
+}
+
 async function recoverInterrupted(): Promise<{ failed: WorkflowRunState.Info[] }> {
   const now = Date.now()
   const interruptedRunStatuses = ["running", "blocked"] as const
@@ -570,6 +624,7 @@ export const WorkflowRun = {
   appendArtifact,
   appendBudgetUsage,
   attachVerificationEnvelopeIDs,
+  ensureFinalReportArtifact,
   recoverInterrupted,
 }
 
@@ -758,6 +813,12 @@ function touchRun(db: Database.TxOrDb, runID: WorkflowRunID, now: number) {
 
 function unique<T>(items: T[]): T[] {
   return [...new Set(items)]
+}
+
+function countByStatus(values: string[]): Record<string, number> {
+  const counts: Record<string, number> = {}
+  for (const value of values) counts[value] = (counts[value] ?? 0) + 1
+  return counts
 }
 
 function isTerminalRunStatus(status: WorkflowRun.Status) {

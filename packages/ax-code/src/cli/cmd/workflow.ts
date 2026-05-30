@@ -3,6 +3,7 @@ import type { Argv } from "yargs"
 import { bootstrap } from "../bootstrap"
 import { cmd } from "./cmd"
 import { WorkflowRun } from "../../workflow/run"
+import { WorkflowRoutineTrigger } from "../../workflow/routine"
 import { WorkflowScheduler } from "../../workflow/scheduler"
 import { isWorkflowRuntimeEnabled } from "../../workflow/spec"
 import type { WorkflowModelPolicyOverride } from "../../workflow/spec"
@@ -28,6 +29,10 @@ type StartOptions = JsonOption & {
   verifierModel?: string
   synthesizerModel?: string
   input?: unknown
+}
+
+type RoutineRunOptions = Omit<StartOptions, "templateID"> & {
+  route: string
 }
 
 type RunIDOptions = JsonOption & {
@@ -86,6 +91,23 @@ export function formatWorkflowRunDashboard(runs: WorkflowRunProjection[]) {
       "status     run                          name                     phase                  effort       active/queued/total tokens             blocker",
       ...lines,
     ].join(EOL) + EOL
+  )
+}
+
+export function formatWorkflowRoutineList(routines: WorkflowRoutineTrigger.Info[]) {
+  if (routines.length === 0) return `No workflow routines found.${EOL}`
+  const lines = routines.map((routine) => {
+    const status = routine.enabled && routine.trust === "trusted" ? "enabled" : "disabled"
+    return [
+      status.padEnd(8),
+      routine.route.padEnd(28),
+      routine.templateID.padEnd(32),
+      routine.mode.padEnd(9),
+      routine.securityGate,
+    ].join(" ")
+  })
+  return (
+    ["status   route                        template                         mode      gate", ...lines].join(EOL) + EOL
   )
 }
 
@@ -222,6 +244,22 @@ const WorkflowRunDashboardCommand = cmd({
   },
 })
 
+const WorkflowRoutineListCommand = cmd({
+  command: "routines",
+  describe: "list local workflow routines",
+  builder: (yargs: Argv) => yargs.option("json", jsonOption()),
+  async handler(args) {
+    await withWorkflowRuntime(async () => {
+      const routines = await WorkflowRoutineTrigger.list()
+      if (args.json) {
+        writeJson(routines)
+        return
+      }
+      process.stdout.write(formatWorkflowRoutineList(routines))
+    })
+  },
+})
+
 const WorkflowRunStartCommand = cmd({
   command: "start <templateID>",
   describe: "create and start a workflow run from a template",
@@ -304,7 +342,91 @@ const WorkflowRunStartCommand = cmd({
   },
 })
 
-function modelPolicyFromStartOptions(options: StartOptions): WorkflowModelPolicyOverride | undefined {
+const WorkflowRoutineRunCommand = cmd({
+  command: "run-routine <route>",
+  describe: "run a trusted local workflow routine",
+  builder: (yargs: Argv) =>
+    yargs
+      .positional("route", {
+        type: "string",
+        demandOption: true,
+        describe: "workflow routine route, for example workflow/issue-triage",
+      })
+      .option("parent-session", {
+        type: "string",
+        describe: "parent session id for spawned workflow child sessions",
+      })
+      .option("allow-scale", {
+        type: "boolean",
+        describe: "allow plans beyond conservative default scale limits",
+      })
+      .option("allow-write", {
+        type: "boolean",
+        describe: "allow workflow specs with write-capable phases",
+      })
+      .option("enqueue", {
+        type: "boolean",
+        default: true,
+        describe: "enqueue child-agent work items",
+      })
+      .option("durable-children", {
+        type: "boolean",
+        default: true,
+        describe: "persist child-agent execution state",
+      })
+      .option("effort", {
+        type: "string",
+        choices: ["normal", "deep", "workflow", "max-workflow"] as const,
+        describe: "override workflow model effort preset",
+      })
+      .option("planner-model", {
+        type: "string",
+        describe: "override planner model",
+      })
+      .option("worker-model", {
+        type: "string",
+        describe: "override worker model",
+      })
+      .option("verifier-model", {
+        type: "string",
+        describe: "override verifier model",
+      })
+      .option("synthesizer-model", {
+        type: "string",
+        describe: "override synthesizer model",
+      })
+      .option("input", {
+        type: "array",
+        describe: "workflow input assignment as key=JSON; repeat for multiple inputs",
+      })
+      .option("json", jsonOption()),
+  async handler(args) {
+    await withWorkflowRuntime(async () => {
+      const options = args as unknown as RoutineRunOptions
+      const result = await WorkflowRoutineTrigger.run({
+        route: options.route,
+        parentSessionID: options.parentSession as SessionID | undefined,
+        modelPolicy: modelPolicyFromStartOptions(options),
+        inputValues: parseWorkflowInputArguments(options.input),
+        startOptions: {
+          allowScaleBeyondDefaults: options.allowScale,
+          allowWriteWorkflows: options.allowWrite,
+          durableChildren: options.durableChildren,
+          enqueueChildren: options.enqueue,
+        },
+      })
+      if (options.json) {
+        writeJson(result)
+        return
+      }
+      process.stdout.write(formatWorkflowRunDetail(result.run))
+    })
+  },
+})
+
+function modelPolicyFromStartOptions(
+  options: Pick<StartOptions, "effort" | "plannerModel" | "workerModel" | "verifierModel" | "synthesizerModel">,
+): WorkflowModelPolicyOverride | undefined {
   const modelPolicy: WorkflowModelPolicyOverride = {}
   if (options.effort) modelPolicy.effort = options.effort
   if (options.plannerModel) modelPolicy.plannerModel = options.plannerModel
@@ -413,7 +535,9 @@ export const WorkflowCommand = cmd({
       .command(WorkflowTemplateListCommand)
       .command(WorkflowRunListCommand)
       .command(WorkflowRunDashboardCommand)
+      .command(WorkflowRoutineListCommand)
       .command(WorkflowRunStartCommand)
+      .command(WorkflowRoutineRunCommand)
       .command(WorkflowRunStatusCommand)
       .command(WorkflowRunSaveTemplateCommand)
       .command(WorkflowRunPauseCommand)

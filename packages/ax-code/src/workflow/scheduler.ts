@@ -130,7 +130,8 @@ export namespace WorkflowScheduler {
       return WorkflowRun.getDetail(runID)
     }
 
-    await WorkflowRun.setStatus({ id: runID, status: "completed" })
+    const completed = await WorkflowRun.setStatus({ id: runID, status: "completed" })
+    if (completed.status === "completed") await WorkflowRun.ensureFinalReportArtifact(runID)
     return WorkflowRun.getDetail(runID)
   }
 
@@ -237,7 +238,8 @@ function isTerminalChildStatus(status: WorkflowRun.ChildStatus) {
 async function refreshPausedRunState(runID: WorkflowRunID) {
   const detail = await WorkflowRun.getDetail(runID)
   const active = detail.children.some(
-    (child) => child.status === "running" || child.status === "blocked_permission" || child.status === "blocked_question",
+    (child) =>
+      child.status === "running" || child.status === "blocked_permission" || child.status === "blocked_question",
   )
   if (active) return
   for (const phase of detail.phases) {
