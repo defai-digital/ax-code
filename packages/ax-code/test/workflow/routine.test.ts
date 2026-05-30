@@ -154,6 +154,59 @@ describe("WorkflowRoutineTrigger", () => {
     })
   })
 
+  test("creates disabled webhook routine trigger metadata from templates", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const routine = await WorkflowRoutineTrigger.create({
+          templateID: "builtin:noop-dry-run",
+          scope: "project",
+          trust: "candidate",
+          mode: "webhook",
+          webhookEvent: "github.issue.opened",
+        })
+
+        expect(routine).toMatchObject({
+          route: "workflow/noop-dry-run",
+          templateID: "project:noop-dry-run",
+          source: "project",
+          trust: "candidate",
+          enabled: false,
+          mode: "webhook",
+          webhookEvent: "github.issue.opened",
+          securityGate: "required",
+        })
+        expect(routine.scheduledTaskID).toBeUndefined()
+
+        const template = await WorkflowTemplate.get("project:noop-dry-run")
+        expect(template.spec.trigger).toEqual({
+          kind: "webhook",
+          event: "github.issue.opened",
+          enabled: false,
+          securityGate: "required",
+        })
+        expect(template.spec.routine).toMatchObject({
+          enabled: false,
+          mode: "webhook",
+          webhookEvent: "github.issue.opened",
+          securityGate: "required",
+        })
+
+        await expect(
+          WorkflowRoutineTrigger.create({
+            templateID: "builtin:noop-dry-run",
+            scope: "project",
+            mode: "webhook",
+            webhookEvent: "github.issue.opened",
+            enabled: true,
+          }),
+        ).rejects.toThrow("webhook routines must remain disabled")
+      },
+    })
+  })
+
   test("lists and runs trusted local API routines", async () => {
     await using tmp = await tmpdir({ git: true })
     const previous = process.env.AX_CODE_WORKFLOW_RUNTIME

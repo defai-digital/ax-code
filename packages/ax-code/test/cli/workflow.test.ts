@@ -182,6 +182,17 @@ describe("workflow command helpers", () => {
         timezone: "America/Toronto",
         securityGate: "local-only",
       },
+      {
+        route: "workflow/webhook",
+        templateID: "project:webhook",
+        templateName: "Webhook",
+        source: "project",
+        trust: "candidate",
+        enabled: false,
+        mode: "webhook",
+        webhookEvent: "github.issue.opened",
+        securityGate: "required",
+      },
     ])
 
     expect(output).toContain("workflow/route-noop")
@@ -189,6 +200,7 @@ describe("workflow command helpers", () => {
     expect(output).toContain("enabled")
     expect(output).toContain("disabled")
     expect(output).toContain("0 9 * * *@America/Toronto")
+    expect(output).toContain("github.issue.opened")
   })
 
   test("formats workflow eval case rows", () => {

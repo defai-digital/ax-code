@@ -38,12 +38,13 @@ export namespace WorkflowRoutineTrigger {
       templateID: WorkflowTemplate.ID,
       scope: WorkflowTemplate.Source.exclude(["builtin"]),
       trust: WorkflowTemplate.Trust.default("candidate"),
-      mode: z.enum(["api", "scheduled"]).default("api"),
+      mode: z.enum(["api", "scheduled", "webhook"]).default("api"),
       route: Route.optional(),
       schedule: Schedule.optional(),
       timezone: z.string().trim().min(1).max(120).optional(),
+      webhookEvent: z.string().trim().min(1).max(160).optional(),
       enabled: z.boolean().default(false),
-      securityGate: z.literal("local-only").default("local-only"),
+      securityGate: z.enum(["local-only", "required"]).optional(),
     })
     .superRefine((input, ctx) => {
       if (input.mode === "api" && !input.route) {
@@ -58,6 +59,27 @@ export namespace WorkflowRoutineTrigger {
           code: z.ZodIssueCode.custom,
           message: "scheduled routines must declare a schedule",
           path: ["schedule"],
+        })
+      }
+      if (input.mode === "webhook" && !input.webhookEvent) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "webhook routines must declare an event",
+          path: ["webhookEvent"],
+        })
+      }
+      if (input.mode === "webhook" && input.enabled) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "webhook routines must remain disabled until remote security gates ship",
+          path: ["enabled"],
+        })
+      }
+      if (input.mode !== "webhook" && input.securityGate === "required") {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "api and scheduled routines must use local-only security gates in workflow runtime preview",
+          path: ["securityGate"],
         })
       }
     })
@@ -85,32 +107,22 @@ export namespace WorkflowRoutineTrigger {
     const parsed = CreateInput.parse(input)
     const template = await WorkflowTemplate.get(parsed.templateID)
     const route = parsed.route ?? `workflow/${template.spec.id}`
+    const securityGate = parsed.mode === "webhook" ? "required" : "local-only"
     const saved = await WorkflowTemplate.save({
       scope: parsed.scope,
       trust: parsed.trust,
       spec: {
         ...template.spec,
-        trigger:
-          parsed.mode === "scheduled"
-            ? {
-                kind: "scheduled",
-                schedule: parsed.schedule!,
-                timezone: parsed.timezone,
-                enabled: parsed.enabled,
-              }
-            : {
-                kind: "api",
-                route,
-                enabled: parsed.enabled,
-              },
+        trigger: triggerForCreateInput({ ...parsed, route, securityGate }),
         routine: {
           ...(template.spec.routine ?? {}),
           enabled: parsed.enabled,
           mode: parsed.mode,
-          apiRoute: route,
+          apiRoute: parsed.mode === "webhook" ? undefined : route,
           schedule: parsed.mode === "scheduled" ? parsed.schedule : undefined,
           timezone: parsed.mode === "scheduled" ? parsed.timezone : undefined,
-          securityGate: parsed.securityGate,
+          webhookEvent: parsed.mode === "webhook" ? parsed.webhookEvent : undefined,
+          securityGate,
         },
       },
     })
@@ -124,6 +136,32 @@ export namespace WorkflowRoutineTrigger {
     const routine = routineInfo(saved, scheduledTask)
     if (!routine) throw new WorkflowRoutineNotFoundError(route)
     return routine
+  }
+
+  function triggerForCreateInput(
+    input: z.output<typeof CreateInput> & { route: string; securityGate: "local-only" | "required" },
+  ) {
+    if (input.mode === "scheduled") {
+      return {
+        kind: "scheduled" as const,
+        schedule: input.schedule!,
+        timezone: input.timezone,
+        enabled: input.enabled,
+      }
+    }
+    if (input.mode === "webhook") {
+      return {
+        kind: "webhook" as const,
+        event: input.webhookEvent!,
+        enabled: false as const,
+        securityGate: input.securityGate as "required",
+      }
+    }
+    return {
+      kind: "api" as const,
+      route: input.route,
+      enabled: input.enabled,
+    }
   }
 
   export async function run(input: RunInput) {

@@ -50,10 +50,11 @@ type RoutineRunOptions = Omit<StartOptions, "templateID"> & {
 type RoutineCreateOptions = JsonOption & {
   templateID: string
   scope: "user" | "project"
-  mode?: "api" | "scheduled"
+  mode?: "api" | "scheduled" | "webhook"
   route?: string
   schedule?: string
   timezone?: string
+  webhookEvent?: string
   enabled?: boolean
   trusted?: boolean
 }
@@ -143,6 +144,8 @@ export function formatWorkflowRoutineList(routines: WorkflowRoutineTrigger.Info[
     const schedule =
       routine.mode === "scheduled" && routine.schedule
         ? truncate([routine.schedule, routine.timezone].filter(Boolean).join("@"), 28)
+        : routine.mode === "webhook" && routine.webhookEvent
+          ? truncate(routine.webhookEvent, 28)
         : "-"
     return [
       status.padEnd(8),
@@ -447,7 +450,7 @@ const WorkflowRoutineCreateCommand = cmd({
       })
       .option("mode", {
         type: "string",
-        choices: ["api", "scheduled"] as const,
+        choices: ["api", "scheduled", "webhook"] as const,
         default: "api" as const,
         describe: "routine trigger mode",
       })
@@ -458,6 +461,10 @@ const WorkflowRoutineCreateCommand = cmd({
       .option("timezone", {
         type: "string",
         describe: "IANA timezone for scheduled workflow routines",
+      })
+      .option("webhook-event", {
+        type: "string",
+        describe: "webhook event name for disabled future webhook routines",
       })
       .option("enabled", {
         type: "boolean",
@@ -480,6 +487,7 @@ const WorkflowRoutineCreateCommand = cmd({
         route: options.route,
         schedule: options.schedule,
         timezone: options.timezone,
+        webhookEvent: options.webhookEvent,
         enabled: options.enabled,
         trust: options.trusted ? "trusted" : "candidate",
       })

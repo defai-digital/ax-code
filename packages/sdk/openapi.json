@@ -21776,7 +21776,8 @@
                     "type": "string",
                     "enum": [
                       "api",
-                      "scheduled"
+                      "scheduled",
+                      "webhook"
                     ]
                   },
                   "route": {
@@ -21795,14 +21796,21 @@
                     "minLength": 1,
                     "maxLength": 120
                   },
+                  "webhookEvent": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 160
+                  },
                   "enabled": {
                     "default": false,
                     "type": "boolean"
                   },
                   "securityGate": {
-                    "default": "local-only",
                     "type": "string",
-                    "const": "local-only"
+                    "enum": [
+                      "local-only",
+                      "required"
+                    ]
                   }
                 },
                 "required": [

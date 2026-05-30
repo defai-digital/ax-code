@@ -640,4 +640,52 @@ describe("workflow routes", () => {
       else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
     }
   })
+
+  test("creates disabled webhook workflow routine metadata from templates", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
+    process.env.AX_CODE_WORKFLOW_RUNTIME = "1"
+    try {
+      const app = Server.Default()
+      const directoryQuery = `directory=${encodeURIComponent(tmp.path)}`
+
+      const createResponse = await app.request(`/workflow-routines?${directoryQuery}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          templateID: "builtin:noop-dry-run",
+          scope: "project",
+          mode: "webhook",
+          webhookEvent: "github.issue.opened",
+          trust: "candidate",
+        }),
+      })
+      expect(createResponse.status).toBe(200)
+      expect(await createResponse.json()).toMatchObject({
+        route: "workflow/noop-dry-run",
+        templateID: "project:noop-dry-run",
+        trust: "candidate",
+        enabled: false,
+        mode: "webhook",
+        webhookEvent: "github.issue.opened",
+        securityGate: "required",
+      })
+
+      const enabledResponse = await app.request(`/workflow-routines?${directoryQuery}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          templateID: "builtin:noop-dry-run",
+          scope: "project",
+          mode: "webhook",
+          webhookEvent: "github.issue.opened",
+          enabled: true,
+        }),
+      })
+      expect(enabledResponse.status).toBe(400)
+    } finally {
+      if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME
+      else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
+    }
+  })
 })

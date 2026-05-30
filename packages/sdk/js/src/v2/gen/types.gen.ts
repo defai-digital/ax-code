@@ -9150,12 +9150,13 @@ export type WorkflowRoutineCreateData = {
     templateID: string
     scope: "user" | "project"
     trust?: "candidate" | "trusted"
-    mode?: "api" | "scheduled"
+    mode?: "api" | "scheduled" | "webhook"
     route?: string
     schedule?: string
     timezone?: string
+    webhookEvent?: string
     enabled?: boolean
-    securityGate?: "local-only"
+    securityGate?: "local-only" | "required"
   }
   path?: never
   query?: {

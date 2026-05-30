@@ -3041,12 +3041,13 @@ export class WorkflowRoutine extends HeyApiClient {
       templateID?: string
       scope?: "user" | "project"
       trust?: "candidate" | "trusted"
-      mode?: "api" | "scheduled"
+      mode?: "api" | "scheduled" | "webhook"
       route?: string
       schedule?: string
       timezone?: string
+      webhookEvent?: string
       enabled?: boolean
-      securityGate?: "local-only"
+      securityGate?: "local-only" | "required"
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -3063,6 +3064,7 @@ export class WorkflowRoutine extends HeyApiClient {
             { in: "body", key: "route" },
             { in: "body", key: "schedule" },
             { in: "body", key: "timezone" },
+            { in: "body", key: "webhookEvent" },
             { in: "body", key: "enabled" },
             { in: "body", key: "securityGate" },
           ],
