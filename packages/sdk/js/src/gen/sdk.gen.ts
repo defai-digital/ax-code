@@ -262,6 +262,8 @@ import type {
   WorkflowRunCancelResponses,
   WorkflowRunCreateErrors,
   WorkflowRunCreateResponses,
+  WorkflowRunDashboardErrors,
+  WorkflowRunDashboardResponses,
   WorkflowRunEvalSummaryErrors,
   WorkflowRunEvalSummaryResponses,
   WorkflowRunGetErrors,
@@ -2190,6 +2192,46 @@ export class WorkflowRun extends HeyApiClient {
         ...options?.headers,
         ...params.headers,
       },
+    })
+  }
+
+  /**
+   * List workflow dashboard summaries
+   *
+   * Return compact workflow run projections for TUI and desktop supervision surfaces.
+   */
+  public dashboard<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      parentSessionID?: string
+      status?: "queued" | "running" | "blocked" | "paused" | "failed" | "completed" | "cancelled"
+      limit?: number
+      now?: number
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "parentSessionID" },
+            { in: "query", key: "status" },
+            { in: "query", key: "limit" },
+            { in: "query", key: "now" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<
+      WorkflowRunDashboardResponses,
+      WorkflowRunDashboardErrors,
+      ThrowOnError
+    >({
+      url: "/workflow-runs/dashboard",
+      ...options,
+      ...params,
     })
   }
 

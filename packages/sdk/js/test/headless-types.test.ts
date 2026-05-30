@@ -286,6 +286,9 @@ describe("headless SDK types", () => {
         if (parsed.pathname === "/workflow-runs") {
           return new Response(JSON.stringify({ id: "wfr_live", status: "queued" }), { status: 200 })
         }
+        if (parsed.pathname === "/workflow-runs/dashboard") {
+          return new Response(JSON.stringify([{ runID: "wfr_live", status: "running" }]), { status: 200 })
+        }
         if (parsed.pathname.endsWith("/artifacts")) return new Response(JSON.stringify([]), { status: 200 })
         if (parsed.pathname.endsWith("/eval-summary")) {
           return new Response(JSON.stringify({ runID: "wfr_live", decision: "promote" }), { status: 200 })
@@ -310,6 +313,7 @@ describe("headless SDK types", () => {
       templateID: "builtin:noop-dry-run",
       modelPolicy: { effort: "workflow", workerModel: "cheap-headless" },
     })
+    await client.workflowRun.dashboard({ status: "running", limit: 10 })
     await client.workflowRun.artifacts("wfr_live", { kind: "summary", includePayload: "false" })
     await client.workflowRun.evalSummary("wfr_live", {
       baseline: { label: "single-agent", metrics: { confirmedFindings: 0, falsePositiveFindings: 0 } },
@@ -323,6 +327,7 @@ describe("headless SDK types", () => {
       ["POST", "/workflow-templates"],
       ["POST", "/workflow-templates/project%3Aroute-noop/promote"],
       ["POST", "/workflow-runs"],
+      ["GET", "/workflow-runs/dashboard"],
       ["GET", "/workflow-runs/wfr_live/artifacts"],
       ["POST", "/workflow-runs/wfr_live/eval-summary"],
       ["POST", "/workflow-runs/wfr_live/start"],
@@ -335,12 +340,12 @@ describe("headless SDK types", () => {
         modelPolicy: { effort: "workflow", workerModel: "cheap-headless" },
       }),
     )
-    expect(calls[6].body).toBe(
+    expect(calls[7].body).toBe(
       JSON.stringify({
         baseline: { label: "single-agent", metrics: { confirmedFindings: 0, falsePositiveFindings: 0 } },
       }),
     )
-    expect(calls[7].body).toBe(JSON.stringify({ enqueueChildren: false }))
+    expect(calls[8].body).toBe(JSON.stringify({ enqueueChildren: false }))
   })
 
   test("parseHeadlessRuntimeResponseBody handles empty and invalid bodies", () => {

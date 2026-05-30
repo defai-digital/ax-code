@@ -9,6 +9,8 @@ import type {
   WorkflowRunArtifactsResponse,
   WorkflowRunCreateData,
   WorkflowRunCreateResponse,
+  WorkflowRunDashboardData,
+  WorkflowRunDashboardResponse,
   WorkflowRunEvalSummaryData,
   WorkflowRunEvalSummaryResponse,
   WorkflowRunGetResponse,
@@ -174,6 +176,7 @@ export type HeadlessScheduledTaskRunNowResult = {
 }
 
 export type HeadlessWorkflowRunListInput = Omit<NonNullable<WorkflowRunListData["query"]>, "directory">
+export type HeadlessWorkflowRunDashboardInput = Omit<NonNullable<WorkflowRunDashboardData["query"]>, "directory">
 export type HeadlessWorkflowRunCreateInput = NonNullable<WorkflowRunCreateData["body"]>
 export type HeadlessWorkflowRunEvalSummaryInput = NonNullable<WorkflowRunEvalSummaryData["body"]>
 export type HeadlessWorkflowArtifactListInput = Omit<NonNullable<WorkflowRunArtifactsData["query"]>, "directory">
@@ -311,6 +314,18 @@ export function createHeadlessClient(input: HeadlessClientOptions) {
           directory: input.directory,
           experimental_workspaceID: input.experimental_workspaceID,
           path: "/workflow-runs",
+          method: "GET",
+          query: parameters,
+        })
+      },
+      dashboard(parameters?: HeadlessWorkflowRunDashboardInput) {
+        return requestJson<WorkflowRunDashboardResponse>({
+          baseUrl: input.baseUrl,
+          fetch: fetchFn,
+          headers: input.headers,
+          directory: input.directory,
+          experimental_workspaceID: input.experimental_workspaceID,
+          path: "/workflow-runs/dashboard",
           method: "GET",
           query: parameters,
         })

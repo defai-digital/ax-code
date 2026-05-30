@@ -5916,6 +5916,104 @@ export type WorkflowRunCreateResponses = {
 
 export type WorkflowRunCreateResponse = WorkflowRunCreateResponses[keyof WorkflowRunCreateResponses]
 
+export type WorkflowRunDashboardData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    parentSessionID?: string
+    status?: "queued" | "running" | "blocked" | "paused" | "failed" | "completed" | "cancelled"
+    limit?: number
+    now?: number
+  }
+  url: "/workflow-runs/dashboard"
+}
+
+export type WorkflowRunDashboardErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type WorkflowRunDashboardError = WorkflowRunDashboardErrors[keyof WorkflowRunDashboardErrors]
+
+export type WorkflowRunDashboardResponses = {
+  /**
+   * Compact workflow dashboard summaries.
+   */
+  200: Array<{
+    runID: string
+    status: "queued" | "running" | "blocked" | "paused" | "failed" | "completed" | "cancelled"
+    name: string
+    sourceTemplateID?: string
+    currentPhaseID?: string
+    currentPhaseName?: string
+    currentPhaseStatus?: "queued" | "running" | "blocked" | "paused" | "failed" | "completed" | "cancelled"
+    elapsedMs: number
+    effort: "normal" | "deep" | "workflow" | "max-workflow"
+    models: {
+      planner?: string
+      worker?: string
+      verifier?: string
+      synthesizer?: string
+    }
+    budgetUsage: {
+      totalTokens?: number
+      inputTokens?: number
+      outputTokens?: number
+      toolCalls?: number
+      childAgents?: number
+      retries?: number
+      estimatedCostUsd?: number
+    }
+    budgetLimit: {
+      maxTotalTokens: number
+      maxWallTimeMs: number
+      maxConcurrentAgents: number
+      maxTotalAgents: number
+      maxToolCalls: number
+      maxRetries: number
+    }
+    phaseCounts: {
+      queued: number
+      running: number
+      blocked: number
+      paused: number
+      failed: number
+      completed: number
+      cancelled: number
+    }
+    childCounts: {
+      queued: number
+      running: number
+      blockedPermission: number
+      blockedQuestion: number
+      paused: number
+      failed: number
+      completed: number
+      cancelled: number
+    }
+    artifactCounts: {
+      summary: number
+      finding: number
+      patch: number
+      verification: number
+      metric: number
+      log: number
+    }
+    verificationEnvelopeCount: number
+    exposedArtifactCount: number
+    blockedReason?: string
+  }>
+}
+
+export type WorkflowRunDashboardResponse = WorkflowRunDashboardResponses[keyof WorkflowRunDashboardResponses]
+
 export type WorkflowRunGetData = {
   body?: never
   path: {

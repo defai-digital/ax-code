@@ -78,6 +78,19 @@ describe("workflow routes", () => {
       expect(started.phases[0]?.status).toBe("running")
       expect(started.children).toHaveLength(8)
 
+      const dashboardResponse = await app.request(`/workflow-runs/dashboard?${directoryQuery}`)
+      expect(dashboardResponse.status).toBe(200)
+      expect(await dashboardResponse.json()).toEqual([
+        expect.objectContaining({
+          runID: created.id,
+          status: "running",
+          currentPhaseName: "Collect Issues",
+          effort: "max-workflow",
+          childCounts: expect.objectContaining({ queued: 8 }),
+          budgetUsage: expect.objectContaining({ childAgents: 8 }),
+        }),
+      ])
+
       const pauseResponse = await app.request(`/workflow-runs/${created.id}/pause?${directoryQuery}`, {
         method: "POST",
       })

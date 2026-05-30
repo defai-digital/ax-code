@@ -3,6 +3,7 @@ import { HTTPException } from "hono/http-exception"
 import { describeRoute, resolver, validator } from "hono-openapi"
 import z from "zod"
 import { WorkflowEvalBaseline, WorkflowEvalSummary, evaluateWorkflowRun } from "@/workflow/eval"
+import { WorkflowRunProjection, summarizeWorkflowRunDetail } from "@/workflow/projection"
 import { WorkflowRun } from "@/workflow/run"
 import { WorkflowScheduler } from "@/workflow/scheduler"
 import {
@@ -37,6 +38,10 @@ const WorkflowRunListQuery = z.object({
   parentSessionID: z.string().min(1).optional(),
   status: WorkflowRunState.Status.optional(),
   limit: z.coerce.number().int().positive().max(500).optional(),
+})
+
+const WorkflowRunDashboardQuery = WorkflowRunListQuery.extend({
+  now: z.coerce.number().int().min(0).optional(),
 })
 
 const WorkflowRunCreateBody = z
@@ -175,6 +180,34 @@ export const WorkflowRunRoutes = lazy(() =>
             spec: applyWorkflowModelPolicyOverride(body.spec!, body.modelPolicy),
           }),
         )
+      },
+    )
+    .get(
+      "/dashboard",
+      describeRoute({
+        summary: "List workflow dashboard summaries",
+        description: "Return compact workflow run projections for TUI and desktop supervision surfaces.",
+        operationId: "workflowRun.dashboard",
+        responses: {
+          200: {
+            description: "Compact workflow dashboard summaries.",
+            content: { "application/json": { schema: resolver(WorkflowRunProjection.array()) } },
+          },
+          ...errors(400, 404),
+        },
+      }),
+      validator("query", WorkflowRunDashboardQuery),
+      async (c) => {
+        const query = c.req.valid("query")
+        const runs = await WorkflowRun.list({
+          parentSessionID: query.parentSessionID as SessionID | undefined,
+          status: query.status,
+          limit: query.limit,
+        })
+        const summaries = await Promise.all(
+          runs.map(async (run) => summarizeWorkflowRunDetail(await WorkflowRun.getDetail(run.id), query.now)),
+        )
+        return c.json(summaries)
       },
     )
     .get(
