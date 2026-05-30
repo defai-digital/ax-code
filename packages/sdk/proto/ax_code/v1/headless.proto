@@ -12,6 +12,23 @@ service AxCodeHeadless {
   rpc LoadBootstrap(BootstrapRequest) returns (JsonResponse);
   rpc LoadSessionEvidence(LoadSessionEvidenceRequest) returns (JsonResponse);
 
+  rpc ListSessions(QueryRequest) returns (JsonResponse);
+  rpc GetSessionStatus(QueryRequest) returns (JsonResponse);
+  rpc GetSession(SessionRequest) returns (JsonResponse);
+  rpc UpdateSession(SessionJsonRequest) returns (JsonResponse);
+  rpc DeleteSession(SessionRequest) returns (JsonResponse);
+  rpc ListSessionMessages(SessionQueryRequest) returns (JsonResponse);
+  rpc GetSessionMessage(SessionMessageRequest) returns (JsonResponse);
+  rpc DeleteSessionMessage(SessionMessageRequest) returns (JsonResponse);
+  rpc ListSessionChildren(SessionRequest) returns (JsonResponse);
+  rpc GetSessionGoal(SessionRequest) returns (JsonResponse);
+  rpc GetSessionTodo(SessionRequest) returns (JsonResponse);
+  rpc GetSessionDiff(SessionQueryRequest) returns (JsonResponse);
+  rpc ForkSession(SessionJsonRequest) returns (JsonResponse);
+  rpc ShareSession(SessionRequest) returns (JsonResponse);
+  rpc UnshareSession(SessionRequest) returns (JsonResponse);
+  rpc SummarizeSession(SessionJsonRequest) returns (JsonResponse);
+
   rpc ListPty(QueryRequest) returns (JsonResponse);
   rpc CreatePty(JsonRequest) returns (JsonResponse);
   rpc GetPty(IdRequest) returns (JsonResponse);
@@ -80,6 +97,25 @@ message RuntimeCommandResponse {
 message LoadSessionEvidenceRequest {
   string session_id = 1;
   google.protobuf.Struct parameters = 2;
+}
+
+message SessionRequest {
+  string session_id = 1;
+}
+
+message SessionQueryRequest {
+  string session_id = 1;
+  google.protobuf.Struct parameters = 2;
+}
+
+message SessionJsonRequest {
+  string session_id = 1;
+  google.protobuf.Struct body = 2;
+}
+
+message SessionMessageRequest {
+  string session_id = 1;
+  string message_id = 2;
 }
 
 message BootstrapRequest {

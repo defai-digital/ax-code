@@ -27,6 +27,8 @@ describe("gRPC SDK facade", () => {
         if (method === AX_CODE_GRPC_METHOD.CreateSession) return { value: { id: "sess-1" } }
         if (method === AX_CODE_GRPC_METHOD.SendRuntimeCommand) return { accepted: true, status: 202 }
         if (method === AX_CODE_GRPC_METHOD.LoadBootstrap) return { value: { path: { root: "/repo" }, errors: [] } }
+        if (method === AX_CODE_GRPC_METHOD.GetSession) return { value: { id: "sess-1", title: "GUI" } }
+        if (method === AX_CODE_GRPC_METHOD.ListSessionMessages) return { value: [{ id: "msg-1" }] }
         if (method === AX_CODE_GRPC_METHOD.CreatePty) return { value: { id: "pty_1", title: "Terminal" } }
         if (method === AX_CODE_GRPC_METHOD.TaskQueueCommand) return { value: { id: "task-1", status: "paused" } }
         throw new Error(`unexpected method ${method}`)
@@ -45,6 +47,8 @@ describe("gRPC SDK facade", () => {
       status: 202,
     })
     expect(await client.bootstrap.load({ include: { path: true } })).toEqual({ path: { root: "/repo" }, errors: [] })
+    expect(await client.session.get("sess-1")).toEqual({ id: "sess-1", title: "GUI" })
+    expect(await client.session.messages("sess-1", { limit: 10 })).toEqual([{ id: "msg-1" }])
     expect(await client.pty.create({ title: "Terminal" })).toEqual({ id: "pty_1", title: "Terminal" })
     expect(await pause("task-1")).toEqual({ id: "task-1", status: "paused" })
     expect(calls.map((call) => call.method)).toEqual([
@@ -52,6 +56,8 @@ describe("gRPC SDK facade", () => {
       AX_CODE_GRPC_METHOD.CreateSession,
       AX_CODE_GRPC_METHOD.SendRuntimeCommand,
       AX_CODE_GRPC_METHOD.LoadBootstrap,
+      AX_CODE_GRPC_METHOD.GetSession,
+      AX_CODE_GRPC_METHOD.ListSessionMessages,
       AX_CODE_GRPC_METHOD.CreatePty,
       AX_CODE_GRPC_METHOD.TaskQueueCommand,
     ])
@@ -111,6 +117,51 @@ describe("gRPC SDK facade", () => {
     expect(await new Response(calls[1].init.body).text()).toBe(
       JSON.stringify({ parts: [{ type: "text", text: "hello" }] }),
     )
+  })
+
+  test("HTTP bridge maps session history calls to the headless backend", async () => {
+    const calls: Array<{ path: string; method: string; body: string }> = []
+    const client = createAxCodeGrpcClientFromHttp({
+      baseUrl: "http://127.0.0.1:4096",
+      fetch: (async (url: URL | RequestInfo, init?: RequestInit) => {
+        const request = url instanceof Request ? url : new Request(url, init)
+        const parsed = new URL(request.url)
+        calls.push({
+          path: `${parsed.pathname}${parsed.search}`,
+          method: request.method,
+          body: request.body ? await new Response(request.body).text() : "",
+        })
+        if (parsed.pathname === "/session") return Response.json([{ id: "sess-1" }])
+        if (parsed.pathname === "/session/status") return Response.json({ "sess-1": { type: "idle" } })
+        if (parsed.pathname === "/session/sess-1") return Response.json({ id: "sess-1", title: "GUI" })
+        if (parsed.pathname === "/session/sess-1/message") return Response.json([{ id: "msg-1" }])
+        if (parsed.pathname === "/session/sess-1/message/msg-1") return Response.json({ id: "msg-1" })
+        if (parsed.pathname === "/session/sess-1/children") return Response.json([{ id: "child-1" }])
+        if (parsed.pathname === "/session/sess-1/diff") return Response.json({ files: [] })
+        if (parsed.pathname === "/session/sess-1/todo") return Response.json([])
+        return new Response("not found", { status: 404 })
+      }) as typeof fetch,
+    })
+
+    await expect(client.session.list({ limit: 5 })).resolves.toEqual([{ id: "sess-1" }])
+    await expect(client.session.status()).resolves.toEqual({ "sess-1": { type: "idle" } })
+    await expect(client.session.get("sess-1")).resolves.toEqual({ id: "sess-1", title: "GUI" })
+    await expect(client.session.messages("sess-1", { limit: 20 })).resolves.toEqual([{ id: "msg-1" }])
+    await expect(client.session.message("sess-1", "msg-1")).resolves.toEqual({ id: "msg-1" })
+    await expect(client.session.children("sess-1")).resolves.toEqual([{ id: "child-1" }])
+    await expect(client.session.diff("sess-1", { messageID: "msg-1" })).resolves.toEqual({ files: [] })
+    await expect(client.session.todo("sess-1")).resolves.toEqual([])
+
+    expect(calls).toEqual([
+      { path: "/session?limit=5", method: "GET", body: "" },
+      { path: "/session/status", method: "GET", body: "" },
+      { path: "/session/sess-1", method: "GET", body: "" },
+      { path: "/session/sess-1/message?limit=20", method: "GET", body: "" },
+      { path: "/session/sess-1/message/msg-1", method: "GET", body: "" },
+      { path: "/session/sess-1/children", method: "GET", body: "" },
+      { path: "/session/sess-1/diff?messageID=msg-1", method: "GET", body: "" },
+      { path: "/session/sess-1/todo", method: "GET", body: "" },
+    ])
   })
 
   test("HTTP bridge maps PTY management calls to the headless backend", async () => {
@@ -260,6 +311,7 @@ describe("gRPC SDK facade", () => {
     expect(proto).toContain("service AxCodeHeadless")
     expect(proto).toContain("rpc SendRuntimeCommand")
     expect(proto).toContain("rpc LoadBootstrap")
+    expect(proto).toContain("rpc ListSessionMessages")
     expect(proto).toContain("rpc ConnectPty")
     expect(proto).toContain("rpc SubscribeEvents")
   })

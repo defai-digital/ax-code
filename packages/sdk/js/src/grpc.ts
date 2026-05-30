@@ -23,6 +23,22 @@ export const AX_CODE_GRPC_METHOD = {
   SendRuntimeCommand: `/${AX_CODE_GRPC_SERVICE}/SendRuntimeCommand`,
   LoadBootstrap: `/${AX_CODE_GRPC_SERVICE}/LoadBootstrap`,
   LoadSessionEvidence: `/${AX_CODE_GRPC_SERVICE}/LoadSessionEvidence`,
+  ListSessions: `/${AX_CODE_GRPC_SERVICE}/ListSessions`,
+  GetSessionStatus: `/${AX_CODE_GRPC_SERVICE}/GetSessionStatus`,
+  GetSession: `/${AX_CODE_GRPC_SERVICE}/GetSession`,
+  UpdateSession: `/${AX_CODE_GRPC_SERVICE}/UpdateSession`,
+  DeleteSession: `/${AX_CODE_GRPC_SERVICE}/DeleteSession`,
+  ListSessionMessages: `/${AX_CODE_GRPC_SERVICE}/ListSessionMessages`,
+  GetSessionMessage: `/${AX_CODE_GRPC_SERVICE}/GetSessionMessage`,
+  DeleteSessionMessage: `/${AX_CODE_GRPC_SERVICE}/DeleteSessionMessage`,
+  ListSessionChildren: `/${AX_CODE_GRPC_SERVICE}/ListSessionChildren`,
+  GetSessionGoal: `/${AX_CODE_GRPC_SERVICE}/GetSessionGoal`,
+  GetSessionTodo: `/${AX_CODE_GRPC_SERVICE}/GetSessionTodo`,
+  GetSessionDiff: `/${AX_CODE_GRPC_SERVICE}/GetSessionDiff`,
+  ForkSession: `/${AX_CODE_GRPC_SERVICE}/ForkSession`,
+  ShareSession: `/${AX_CODE_GRPC_SERVICE}/ShareSession`,
+  UnshareSession: `/${AX_CODE_GRPC_SERVICE}/UnshareSession`,
+  SummarizeSession: `/${AX_CODE_GRPC_SERVICE}/SummarizeSession`,
   ListPty: `/${AX_CODE_GRPC_SERVICE}/ListPty`,
   CreatePty: `/${AX_CODE_GRPC_SERVICE}/CreatePty`,
   GetPty: `/${AX_CODE_GRPC_SERVICE}/GetPty`,
@@ -108,6 +124,21 @@ export type AxCodeGrpcCreateSessionRequest = {
 export type AxCodeGrpcLoadSessionEvidenceRequest = {
   sessionID: string
   parameters?: HeadlessSessionEvidenceInput
+}
+
+export type AxCodeGrpcSessionRequest<TParameters = unknown> = {
+  sessionID: string
+  parameters?: TParameters
+}
+
+export type AxCodeGrpcSessionBodyRequest<TBody = unknown> = {
+  sessionID: string
+  body?: TBody
+}
+
+export type AxCodeGrpcSessionMessageRequest = {
+  sessionID: string
+  messageID: string
 }
 
 export type AxCodeGrpcBootstrapField =
@@ -280,6 +311,87 @@ export function createAxCodeGrpcClient(input: AxCodeGrpcClientOptions) {
     },
     replyQuestion(body: HeadlessQuestionReplyBody, options?: AxCodeGrpcCallOptions) {
       return send({ type: "question.reply", body }, options)
+    },
+    session: {
+      list(parameters?: Parameters<HeadlessHttpClient["client"]["session"]["list"]>[0], options?: AxCodeGrpcCallOptions) {
+        return value(AX_CODE_GRPC_METHOD.ListSessions, { parameters }, options)
+      },
+      create(session?: HeadlessCreateSessionInput, options?: AxCodeGrpcCallOptions) {
+        return value<AxCodeGrpcCreateSessionRequest, unknown>(AX_CODE_GRPC_METHOD.CreateSession, { session }, options)
+      },
+      status(parameters?: Parameters<HeadlessHttpClient["client"]["session"]["status"]>[0], options?: AxCodeGrpcCallOptions) {
+        return value(AX_CODE_GRPC_METHOD.GetSessionStatus, { parameters }, options)
+      },
+      get(sessionID: string, options?: AxCodeGrpcCallOptions) {
+        return value<AxCodeGrpcSessionRequest, unknown>(AX_CODE_GRPC_METHOD.GetSession, { sessionID }, options)
+      },
+      update(
+        sessionID: string,
+        body: Omit<Parameters<HeadlessHttpClient["client"]["session"]["update"]>[0], "sessionID" | "directory">,
+        options?: AxCodeGrpcCallOptions,
+      ) {
+        return value(AX_CODE_GRPC_METHOD.UpdateSession, { sessionID, body }, options)
+      },
+      delete(sessionID: string, options?: AxCodeGrpcCallOptions) {
+        return value<AxCodeGrpcSessionRequest, unknown>(AX_CODE_GRPC_METHOD.DeleteSession, { sessionID }, options)
+      },
+      messages(
+        sessionID: string,
+        parameters?: Omit<Parameters<HeadlessHttpClient["client"]["session"]["messages"]>[0], "sessionID" | "directory">,
+        options?: AxCodeGrpcCallOptions,
+      ) {
+        return value(AX_CODE_GRPC_METHOD.ListSessionMessages, { sessionID, parameters }, options)
+      },
+      message(sessionID: string, messageID: string, options?: AxCodeGrpcCallOptions) {
+        return value<AxCodeGrpcSessionMessageRequest, unknown>(
+          AX_CODE_GRPC_METHOD.GetSessionMessage,
+          { sessionID, messageID },
+          options,
+        )
+      },
+      deleteMessage(sessionID: string, messageID: string, options?: AxCodeGrpcCallOptions) {
+        return value<AxCodeGrpcSessionMessageRequest, unknown>(
+          AX_CODE_GRPC_METHOD.DeleteSessionMessage,
+          { sessionID, messageID },
+          options,
+        )
+      },
+      children(sessionID: string, options?: AxCodeGrpcCallOptions) {
+        return value<AxCodeGrpcSessionRequest, unknown>(AX_CODE_GRPC_METHOD.ListSessionChildren, { sessionID }, options)
+      },
+      goal(sessionID: string, options?: AxCodeGrpcCallOptions) {
+        return value<AxCodeGrpcSessionRequest, unknown>(AX_CODE_GRPC_METHOD.GetSessionGoal, { sessionID }, options)
+      },
+      todo(sessionID: string, options?: AxCodeGrpcCallOptions) {
+        return value<AxCodeGrpcSessionRequest, unknown>(AX_CODE_GRPC_METHOD.GetSessionTodo, { sessionID }, options)
+      },
+      diff(
+        sessionID: string,
+        parameters?: Omit<Parameters<HeadlessHttpClient["client"]["session"]["diff"]>[0], "sessionID" | "directory">,
+        options?: AxCodeGrpcCallOptions,
+      ) {
+        return value(AX_CODE_GRPC_METHOD.GetSessionDiff, { sessionID, parameters }, options)
+      },
+      fork(
+        sessionID: string,
+        body?: Omit<Parameters<HeadlessHttpClient["client"]["session"]["fork"]>[0], "sessionID" | "directory">,
+        options?: AxCodeGrpcCallOptions,
+      ) {
+        return value(AX_CODE_GRPC_METHOD.ForkSession, { sessionID, body }, options)
+      },
+      share(sessionID: string, options?: AxCodeGrpcCallOptions) {
+        return value<AxCodeGrpcSessionRequest, unknown>(AX_CODE_GRPC_METHOD.ShareSession, { sessionID }, options)
+      },
+      unshare(sessionID: string, options?: AxCodeGrpcCallOptions) {
+        return value<AxCodeGrpcSessionRequest, unknown>(AX_CODE_GRPC_METHOD.UnshareSession, { sessionID }, options)
+      },
+      summarize(
+        sessionID: string,
+        body?: Omit<Parameters<HeadlessHttpClient["client"]["session"]["summarize"]>[0], "sessionID" | "directory">,
+        options?: AxCodeGrpcCallOptions,
+      ) {
+        return value(AX_CODE_GRPC_METHOD.SummarizeSession, { sessionID, body }, options)
+      },
     },
     bootstrap: {
       load(request: AxCodeGrpcBootstrapRequest = {}, options?: AxCodeGrpcCallOptions) {
@@ -543,6 +655,82 @@ async function handleHttpBridgeUnary(
       return wrap(await loadBootstrap(client, body))
     case AX_CODE_GRPC_METHOD.LoadSessionEvidence:
       return wrap(await client.sessionEvidence.load(body.sessionID, body.parameters))
+    case AX_CODE_GRPC_METHOD.ListSessions:
+      return wrap(unwrapHttpSdkResponse(await client.client.session.list(body.parameters)))
+    case AX_CODE_GRPC_METHOD.GetSessionStatus:
+      return wrap(unwrapHttpSdkResponse(await client.client.session.status(body.parameters)))
+    case AX_CODE_GRPC_METHOD.GetSession:
+      return wrap(
+        unwrapHttpSdkResponse(await client.client.session.get({ sessionID: body.sessionID }, { throwOnError: true })),
+      )
+    case AX_CODE_GRPC_METHOD.UpdateSession:
+      return wrap(
+        unwrapHttpSdkResponse(
+          await client.client.session.update({ sessionID: body.sessionID, ...body.body }, { throwOnError: true }),
+        ),
+      )
+    case AX_CODE_GRPC_METHOD.DeleteSession:
+      return wrap(
+        unwrapHttpSdkResponse(await client.client.session.delete({ sessionID: body.sessionID }, { throwOnError: true })),
+      )
+    case AX_CODE_GRPC_METHOD.ListSessionMessages:
+      return wrap(
+        unwrapHttpSdkResponse(await client.client.session.messages({ sessionID: body.sessionID, ...body.parameters })),
+      )
+    case AX_CODE_GRPC_METHOD.GetSessionMessage:
+      return wrap(
+        unwrapHttpSdkResponse(
+          await client.client.session.message(
+            { sessionID: body.sessionID, messageID: body.messageID },
+            { throwOnError: true },
+          ),
+        ),
+      )
+    case AX_CODE_GRPC_METHOD.DeleteSessionMessage:
+      return wrap(
+        unwrapHttpSdkResponse(
+          await client.client.session.deleteMessage(
+            { sessionID: body.sessionID, messageID: body.messageID },
+            { throwOnError: true },
+          ),
+        ),
+      )
+    case AX_CODE_GRPC_METHOD.ListSessionChildren:
+      return wrap(
+        unwrapHttpSdkResponse(await client.client.session.children({ sessionID: body.sessionID }, { throwOnError: true })),
+      )
+    case AX_CODE_GRPC_METHOD.GetSessionGoal:
+      return wrap(
+        unwrapHttpSdkResponse(await client.client.session.goal({ sessionID: body.sessionID }, { throwOnError: true })),
+      )
+    case AX_CODE_GRPC_METHOD.GetSessionTodo:
+      return wrap(
+        unwrapHttpSdkResponse(await client.client.session.todo({ sessionID: body.sessionID }, { throwOnError: true })),
+      )
+    case AX_CODE_GRPC_METHOD.GetSessionDiff:
+      return wrap(
+        unwrapHttpSdkResponse(await client.client.session.diff({ sessionID: body.sessionID, ...body.parameters })),
+      )
+    case AX_CODE_GRPC_METHOD.ForkSession:
+      return wrap(
+        unwrapHttpSdkResponse(
+          await client.client.session.fork({ sessionID: body.sessionID, ...body.body }, { throwOnError: true }),
+        ),
+      )
+    case AX_CODE_GRPC_METHOD.ShareSession:
+      return wrap(
+        unwrapHttpSdkResponse(await client.client.session.share({ sessionID: body.sessionID }, { throwOnError: true })),
+      )
+    case AX_CODE_GRPC_METHOD.UnshareSession:
+      return wrap(
+        unwrapHttpSdkResponse(await client.client.session.unshare({ sessionID: body.sessionID }, { throwOnError: true })),
+      )
+    case AX_CODE_GRPC_METHOD.SummarizeSession:
+      return wrap(
+        unwrapHttpSdkResponse(
+          await client.client.session.summarize({ sessionID: body.sessionID, ...body.body }, { throwOnError: true }),
+        ),
+      )
     case AX_CODE_GRPC_METHOD.ListPty:
       return wrap(unwrapHttpSdkResponse(await client.client.pty.list(body.parameters)))
     case AX_CODE_GRPC_METHOD.CreatePty:
