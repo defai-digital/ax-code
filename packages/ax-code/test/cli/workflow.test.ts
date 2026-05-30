@@ -170,12 +170,25 @@ describe("workflow command helpers", () => {
         mode: "api",
         securityGate: "local-only",
       },
+      {
+        route: "workflow/scheduled",
+        templateID: "project:scheduled",
+        templateName: "Scheduled",
+        source: "project",
+        trust: "trusted",
+        enabled: true,
+        mode: "scheduled",
+        schedule: "0 9 * * *",
+        timezone: "America/Toronto",
+        securityGate: "local-only",
+      },
     ])
 
     expect(output).toContain("workflow/route-noop")
     expect(output).toContain("project:route-noop")
     expect(output).toContain("enabled")
     expect(output).toContain("disabled")
+    expect(output).toContain("0 9 * * *@America/Toronto")
   })
 
   test("formats workflow eval case rows", () => {

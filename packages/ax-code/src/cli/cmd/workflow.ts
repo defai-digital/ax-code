@@ -50,7 +50,10 @@ type RoutineRunOptions = Omit<StartOptions, "templateID"> & {
 type RoutineCreateOptions = JsonOption & {
   templateID: string
   scope: "user" | "project"
-  route: string
+  mode?: "api" | "scheduled"
+  route?: string
+  schedule?: string
+  timezone?: string
   enabled?: boolean
   trusted?: boolean
 }
@@ -137,16 +140,21 @@ export function formatWorkflowRoutineList(routines: WorkflowRoutineTrigger.Info[
   if (routines.length === 0) return `No workflow routines found.${EOL}`
   const lines = routines.map((routine) => {
     const status = routine.enabled && routine.trust === "trusted" ? "enabled" : "disabled"
+    const schedule =
+      routine.mode === "scheduled" && routine.schedule
+        ? truncate([routine.schedule, routine.timezone].filter(Boolean).join("@"), 28)
+        : "-"
     return [
       status.padEnd(8),
       routine.route.padEnd(28),
       routine.templateID.padEnd(32),
       routine.mode.padEnd(9),
+      schedule.padEnd(28),
       routine.securityGate,
     ].join(" ")
   })
   return (
-    ["status   route                        template                         mode      gate", ...lines].join(EOL) + EOL
+    ["status   route                        template                         mode      schedule                     gate", ...lines].join(EOL) + EOL
   )
 }
 
@@ -435,8 +443,21 @@ const WorkflowRoutineCreateCommand = cmd({
       })
       .option("route", {
         type: "string",
-        demandOption: true,
         describe: "local routine route, for example workflow/daily-review",
+      })
+      .option("mode", {
+        type: "string",
+        choices: ["api", "scheduled"] as const,
+        default: "api" as const,
+        describe: "routine trigger mode",
+      })
+      .option("schedule", {
+        type: "string",
+        describe: "cron expression for scheduled workflow routines",
+      })
+      .option("timezone", {
+        type: "string",
+        describe: "IANA timezone for scheduled workflow routines",
       })
       .option("enabled", {
         type: "boolean",
@@ -455,7 +476,10 @@ const WorkflowRoutineCreateCommand = cmd({
       const routine = await WorkflowRoutineTrigger.create({
         templateID: options.templateID as WorkflowTemplate.ID,
         scope: options.scope,
+        mode: options.mode,
         route: options.route,
+        schedule: options.schedule,
+        timezone: options.timezone,
         enabled: options.enabled,
         trust: options.trusted ? "trusted" : "candidate",
       })
