@@ -37,6 +37,7 @@ The TypeScript facade lives at `@ax-code/sdk/grpc` and covers:
 - GUI bootstrap snapshots for providers, sessions, permissions, questions, path, VCS, LSP, MCP, formatter, and command state
 - session list, detail, message history, message detail, children, goal, todo, diff, fork, share, and summarize operations
 - GUI discovery and workspace navigation for agents, skills, projects, file tree/content/status, text/file/symbol search, and tool schemas
+- pending permission and question list/reply/reject operations for supervised GUI flows
 - provider, config, API-key auth, and provider OAuth settings for GUI settings screens
 - PTY terminal management and bidirectional terminal streaming
 - session evidence for review/debug UI

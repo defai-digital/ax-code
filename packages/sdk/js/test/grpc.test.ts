@@ -34,6 +34,11 @@ describe("gRPC SDK facade", () => {
         if (method === AX_CODE_GRPC_METHOD.ListSessionMessages) return { value: [{ id: "msg-1" }] }
         if (method === AX_CODE_GRPC_METHOD.ListSkills) return { value: [{ id: "security-harden" }] }
         if (method === AX_CODE_GRPC_METHOD.ReadFile) return { value: { content: "hello" } }
+        if (method === AX_CODE_GRPC_METHOD.ListPermissions) return { value: [{ id: "perm-1" }] }
+        if (method === AX_CODE_GRPC_METHOD.ReplyPermission) return { value: true }
+        if (method === AX_CODE_GRPC_METHOD.ListQuestions) return { value: [{ id: "question-1" }] }
+        if (method === AX_CODE_GRPC_METHOD.ReplyQuestion) return { value: true }
+        if (method === AX_CODE_GRPC_METHOD.RejectQuestion) return { value: true }
         if (method === AX_CODE_GRPC_METHOD.GetProviderAuth) return { value: { anthropic: [{ type: "api" }] } }
         if (method === AX_CODE_GRPC_METHOD.SetAuth) return { value: true }
         if (method === AX_CODE_GRPC_METHOD.CreatePty) return { value: { id: "pty_1", title: "Terminal" } }
@@ -58,6 +63,11 @@ describe("gRPC SDK facade", () => {
     expect(await client.session.messages("sess-1", { limit: 10 })).toEqual([{ id: "msg-1" }])
     expect(await client.app.skills()).toEqual([{ id: "security-harden" }])
     expect(await client.file.read("README.md")).toEqual({ content: "hello" })
+    expect(await client.permission.list()).toEqual([{ id: "perm-1" }])
+    expect(await client.permission.reply("perm-1", { reply: "once" })).toBe(true)
+    expect(await client.question.list()).toEqual([{ id: "question-1" }])
+    expect(await client.question.reply("question-1", { answers: [{ label: "Yes" }] })).toBe(true)
+    expect(await client.question.reject("question-1")).toBe(true)
     expect(await client.provider.auth()).toEqual({ anthropic: [{ type: "api" }] })
     expect(await client.auth.set("anthropic", { type: "api", key: "secret" })).toBe(true)
     expect(await client.pty.create({ title: "Terminal" })).toEqual({ id: "pty_1", title: "Terminal" })
@@ -71,6 +81,11 @@ describe("gRPC SDK facade", () => {
       AX_CODE_GRPC_METHOD.ListSessionMessages,
       AX_CODE_GRPC_METHOD.ListSkills,
       AX_CODE_GRPC_METHOD.ReadFile,
+      AX_CODE_GRPC_METHOD.ListPermissions,
+      AX_CODE_GRPC_METHOD.ReplyPermission,
+      AX_CODE_GRPC_METHOD.ListQuestions,
+      AX_CODE_GRPC_METHOD.ReplyQuestion,
+      AX_CODE_GRPC_METHOD.RejectQuestion,
       AX_CODE_GRPC_METHOD.GetProviderAuth,
       AX_CODE_GRPC_METHOD.SetAuth,
       AX_CODE_GRPC_METHOD.CreatePty,
@@ -374,6 +389,50 @@ describe("gRPC SDK facade", () => {
     ])
   })
 
+  test("HTTP bridge maps GUI supervision calls to the headless backend", async () => {
+    const calls: Array<{ path: string; method: string; body: string }> = []
+    const client = createAxCodeGrpcClientFromHttp({
+      baseUrl: "http://127.0.0.1:4096",
+      fetch: (async (url: URL | RequestInfo, init?: RequestInit) => {
+        const request = url instanceof Request ? url : new Request(url, init)
+        const parsed = new URL(request.url)
+        calls.push({
+          path: parsed.pathname,
+          method: request.method,
+          body: request.body ? await new Response(request.body).text() : "",
+        })
+        if (parsed.pathname === "/permission") return Response.json([{ id: "perm-1" }])
+        if (parsed.pathname === "/permission/perm-1/reply") return Response.json(true)
+        if (parsed.pathname === "/question") return Response.json([{ id: "question-1" }])
+        if (parsed.pathname === "/question/question-1/reply") return Response.json(true)
+        if (parsed.pathname === "/question/question-1/reject") return Response.json(true)
+        return new Response("not found", { status: 404 })
+      }) as typeof fetch,
+    })
+
+    await expect(client.permission.list()).resolves.toEqual([{ id: "perm-1" }])
+    await expect(client.permission.reply("perm-1", { reply: "once", message: "approved" })).resolves.toBe(true)
+    await expect(client.question.list()).resolves.toEqual([{ id: "question-1" }])
+    await expect(client.question.reply("question-1", { answers: [{ label: "Yes" }] })).resolves.toBe(true)
+    await expect(client.question.reject("question-1")).resolves.toBe(true)
+
+    expect(calls).toEqual([
+      { path: "/permission", method: "GET", body: "" },
+      {
+        path: "/permission/perm-1/reply",
+        method: "POST",
+        body: JSON.stringify({ reply: "once", message: "approved" }),
+      },
+      { path: "/question", method: "GET", body: "" },
+      {
+        path: "/question/question-1/reply",
+        method: "POST",
+        body: JSON.stringify({ answers: [{ label: "Yes" }] }),
+      },
+      { path: "/question/question-1/reject", method: "POST", body: "" },
+    ])
+  })
+
   test("HTTP bridge maps provider auth settings to the headless backend", async () => {
     const calls: Array<{ path: string; method: string; body: string }> = []
     const client = createAxCodeGrpcClientFromHttp({
@@ -578,6 +637,11 @@ describe("gRPC SDK facade", () => {
     expect(proto).toContain("rpc ListSessionMessages")
     expect(proto).toContain("rpc ListSkills")
     expect(proto).toContain("rpc FindFiles")
+    expect(proto).toContain("rpc ListPermissions")
+    expect(proto).toContain("rpc ReplyPermission")
+    expect(proto).toContain("rpc ListQuestions")
+    expect(proto).toContain("rpc ReplyQuestion")
+    expect(proto).toContain("rpc RejectQuestion")
     expect(proto).toContain("rpc SetAuth")
     expect(proto).toContain("rpc ProviderOauthAuthorize")
     expect(proto).toContain("rpc ConnectPty")

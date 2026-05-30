@@ -42,6 +42,12 @@ service AxCodeHeadless {
   rpc ListToolIDs(QueryRequest) returns (JsonResponse);
   rpc ListTools(QueryRequest) returns (JsonResponse);
 
+  rpc ListPermissions(QueryRequest) returns (JsonResponse);
+  rpc ReplyPermission(RequestJsonRequest) returns (JsonResponse);
+  rpc ListQuestions(QueryRequest) returns (JsonResponse);
+  rpc ReplyQuestion(RequestJsonRequest) returns (JsonResponse);
+  rpc RejectQuestion(RequestRequest) returns (JsonResponse);
+
   rpc GetConfig(QueryRequest) returns (JsonResponse);
   rpc UpdateConfig(JsonRequest) returns (JsonResponse);
   rpc ListConfigProviders(QueryRequest) returns (JsonResponse);
@@ -152,6 +158,15 @@ message JsonRequest {
 
 message JsonResponse {
   google.protobuf.Value value = 1;
+}
+
+message RequestRequest {
+  string request_id = 1;
+}
+
+message RequestJsonRequest {
+  string request_id = 1;
+  google.protobuf.Struct body = 2;
 }
 
 message ProviderRequest {

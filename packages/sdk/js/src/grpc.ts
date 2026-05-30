@@ -51,6 +51,11 @@ export const AX_CODE_GRPC_METHOD = {
   FindSymbols: `/${AX_CODE_GRPC_SERVICE}/FindSymbols`,
   ListToolIDs: `/${AX_CODE_GRPC_SERVICE}/ListToolIDs`,
   ListTools: `/${AX_CODE_GRPC_SERVICE}/ListTools`,
+  ListPermissions: `/${AX_CODE_GRPC_SERVICE}/ListPermissions`,
+  ReplyPermission: `/${AX_CODE_GRPC_SERVICE}/ReplyPermission`,
+  ListQuestions: `/${AX_CODE_GRPC_SERVICE}/ListQuestions`,
+  ReplyQuestion: `/${AX_CODE_GRPC_SERVICE}/ReplyQuestion`,
+  RejectQuestion: `/${AX_CODE_GRPC_SERVICE}/RejectQuestion`,
   GetConfig: `/${AX_CODE_GRPC_SERVICE}/GetConfig`,
   UpdateConfig: `/${AX_CODE_GRPC_SERVICE}/UpdateConfig`,
   ListConfigProviders: `/${AX_CODE_GRPC_SERVICE}/ListConfigProviders`,
@@ -220,6 +225,15 @@ export type AxCodeGrpcSessionBodyRequest<TBody = unknown> = {
 export type AxCodeGrpcSessionMessageRequest = {
   sessionID: string
   messageID: string
+}
+
+export type AxCodeGrpcRequestIDRequest = {
+  requestID: string
+}
+
+export type AxCodeGrpcRequestBodyRequest<TBody = unknown> = {
+  requestID: string
+  body?: TBody
 }
 
 export type AxCodeGrpcBootstrapField =
@@ -603,6 +617,47 @@ export function createAxCodeGrpcClient(input: AxCodeGrpcClientOptions) {
         options?: AxCodeGrpcCallOptions,
       ) {
         return value(AX_CODE_GRPC_METHOD.ListTools, { parameters: { provider, model } }, options)
+      },
+    },
+    permission: {
+      list(
+        parameters?: Parameters<HeadlessHttpClient["client"]["permission"]["list"]>[0],
+        options?: AxCodeGrpcCallOptions,
+      ) {
+        return value(AX_CODE_GRPC_METHOD.ListPermissions, { parameters }, options)
+      },
+      reply(
+        requestID: string,
+        body?: Omit<HeadlessPermissionReplyBody, "requestID">,
+        options?: AxCodeGrpcCallOptions,
+      ) {
+        return value<AxCodeGrpcRequestBodyRequest<Omit<HeadlessPermissionReplyBody, "requestID">>, unknown>(
+          AX_CODE_GRPC_METHOD.ReplyPermission,
+          { requestID, body },
+          options,
+        )
+      },
+    },
+    question: {
+      list(
+        parameters?: Parameters<HeadlessHttpClient["client"]["question"]["list"]>[0],
+        options?: AxCodeGrpcCallOptions,
+      ) {
+        return value(AX_CODE_GRPC_METHOD.ListQuestions, { parameters }, options)
+      },
+      reply(
+        requestID: string,
+        body: Omit<HeadlessQuestionReplyBody, "requestID">,
+        options?: AxCodeGrpcCallOptions,
+      ) {
+        return value<AxCodeGrpcRequestBodyRequest<Omit<HeadlessQuestionReplyBody, "requestID">>, unknown>(
+          AX_CODE_GRPC_METHOD.ReplyQuestion,
+          { requestID, body },
+          options,
+        )
+      },
+      reject(requestID: string, options?: AxCodeGrpcCallOptions) {
+        return value<AxCodeGrpcRequestIDRequest, unknown>(AX_CODE_GRPC_METHOD.RejectQuestion, { requestID }, options)
       },
     },
     config: {
@@ -1020,6 +1075,26 @@ async function handleHttpBridgeUnary(
       return wrap(unwrapHttpSdkResponse(await client.client.tool.ids(body.parameters)))
     case AX_CODE_GRPC_METHOD.ListTools:
       return wrap(unwrapHttpSdkResponse(await client.client.tool.list(body.parameters, { throwOnError: true })))
+    case AX_CODE_GRPC_METHOD.ListPermissions:
+      return wrap(unwrapHttpSdkResponse(await client.client.permission.list(body.parameters)))
+    case AX_CODE_GRPC_METHOD.ReplyPermission:
+      return wrap(
+        unwrapHttpSdkResponse(
+          await client.client.permission.reply({ requestID: body.requestID, ...body.body }, { throwOnError: true }),
+        ),
+      )
+    case AX_CODE_GRPC_METHOD.ListQuestions:
+      return wrap(unwrapHttpSdkResponse(await client.client.question.list(body.parameters)))
+    case AX_CODE_GRPC_METHOD.ReplyQuestion:
+      return wrap(
+        unwrapHttpSdkResponse(
+          await client.client.question.reply({ requestID: body.requestID, ...body.body }, { throwOnError: true }),
+        ),
+      )
+    case AX_CODE_GRPC_METHOD.RejectQuestion:
+      return wrap(
+        unwrapHttpSdkResponse(await client.client.question.reject({ requestID: body.requestID }, { throwOnError: true })),
+      )
     case AX_CODE_GRPC_METHOD.GetConfig:
       return wrap(unwrapHttpSdkResponse(await client.client.config.get(body.parameters)))
     case AX_CODE_GRPC_METHOD.UpdateConfig:
