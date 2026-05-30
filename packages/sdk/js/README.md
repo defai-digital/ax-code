@@ -199,6 +199,31 @@ App UIs should treat `permission`, `question`, `session_diff`, `todo`, `session_
 
 See [`example/headless-app.ts`](./example/headless-app.ts) for a minimal app-style integration that starts a local backend, creates a session, sends a prompt, projects events, and shuts the backend down.
 
+## gRPC/native desktop SDK
+
+Use `@ax-code/sdk/grpc` for first-party desktop or native GUI integrations that want a gRPC-shaped command/event contract without exposing the full HTTP route tree to the app shell.
+
+```ts
+import { startHeadlessBackend } from "@ax-code/sdk/headless"
+import { createAxCodeGrpcClientFromHttp } from "@ax-code/sdk/grpc"
+
+const backend = await startHeadlessBackend({ directory: "/path/to/workspace" })
+try {
+  const client = createAxCodeGrpcClientFromHttp({
+    baseUrl: backend.url,
+    headers: backend.headers,
+    directory: "/path/to/workspace",
+  })
+
+  const session = (await client.createSession({ title: "Desktop session" })) as { id: string }
+  await client.sendPrompt(session.id, { parts: [{ type: "text", text: "Review this project" }] })
+} finally {
+  await backend.close()
+}
+```
+
+`createAxCodeGrpcClientFromHttp()` is a compatibility bridge over the current headless HTTP/SSE backend. Native hosts can implement the same transport interface and pass it to `createAxCodeGrpcClient({ transport })`. The proto contract is published at [`../proto/ax_code/v1/headless.proto`](../proto/ax_code/v1/headless.proto).
+
 ## HTTP client (server-based)
 
 The 1.4.0 default entry point (`createAxCode`) is still available at a subpath:
@@ -212,7 +237,7 @@ const sessions = await client.session.list()
 
 ## Cross-language integrations
 
-Use this package for first-party TypeScript and JavaScript integrations. For Python, Go, Java, Rust, or other non-JavaScript runtimes, run `ax-code serve` and generate a client from the OpenAPI snapshot at [`../openapi.json`](../openapi.json).
+Use this package for first-party TypeScript and JavaScript integrations. For first-party desktop/native GUI work, prefer `@ax-code/sdk/grpc` and keep HTTP/SSE as the compatibility and debug fallback. For Python, Go, Java, Rust, or other non-JavaScript runtimes, run `ax-code serve` and generate a client from the OpenAPI snapshot at [`../openapi.json`](../openapi.json) unless the integration is owned as part of the native GUI transport.
 
 See [HTTP and OpenAPI SDKs](../../../docs/sdk-http-openapi.md) for the supported cross-language integration path and the criteria for promoting a generated client into a first-party package.
 

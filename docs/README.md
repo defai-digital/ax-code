@@ -15,6 +15,7 @@ The root [README](../README.md) is the shortest path to install and launch AX Co
 | Install and launch quickly                      | [Root README](../README.md)                                     | 60-second setup, supported installer channels, and main entrypoints         |
 | Compare install and runtime channels            | [Installation and Runtime Channels](install-runtime.md)         | Platform policy, package names, runtime labels, and local launcher behavior |
 | Embed AX Code in TypeScript or JavaScript       | [`@ax-code/sdk`](../packages/sdk/js/README.md)                  | `createAgent()`, streaming, custom tools, testing, and migration notes      |
+| Build a desktop/native GUI                      | [gRPC and Native SDK Transport](sdk-grpc-native.md)             | Optional gRPC-shaped headless contract, native transport guidance, fallback |
 | Use AX Code from Python, Go, Java, or services  | [HTTP and OpenAPI SDKs](sdk-http-openapi.md)                    | `ax-code serve`, OpenAPI generation, and cross-language guardrails          |
 | Use AX Code from VS Code                        | [VS Code integration](../packages/integration-vscode/README.md) | Editor commands, settings, and extension workflow                           |
 
@@ -36,11 +37,12 @@ The root [README](../README.md) is the shortest path to install and launch AX Co
 
 ## Specs and Reference
 
-| Document                                     | Summary                                                       |
-| -------------------------------------------- | ------------------------------------------------------------- |
-| [Project API Spec](specs/project.md)         | Current project and session API shape                         |
-| [HTTP and OpenAPI SDKs](sdk-http-openapi.md) | Cross-language HTTP integration and generated-client guidance |
-| [Security Policy](../SECURITY.md)            | Threat model, credential storage, and server security posture |
+| Document                                            | Summary                                                       |
+| --------------------------------------------------- | ------------------------------------------------------------- |
+| [Project API Spec](specs/project.md)                | Current project and session API shape                         |
+| [gRPC and Native SDK Transport](sdk-grpc-native.md) | Desktop/native GUI transport contract and security posture    |
+| [HTTP and OpenAPI SDKs](sdk-http-openapi.md)        | Cross-language HTTP integration and generated-client guidance |
+| [Security Policy](../SECURITY.md)                   | Threat model, credential storage, and server security posture |
 
 ## Policies
 

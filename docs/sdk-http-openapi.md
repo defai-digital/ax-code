@@ -9,21 +9,24 @@ AX Code has two integration paths:
 
 - Use [`@ax-code/sdk`](../packages/sdk/js/README.md) for first-party TypeScript and JavaScript embedding.
 - Use `ax-code serve` plus the OpenAPI contract when another language or process boundary is required.
+- Use [gRPC and Native SDK Transport](sdk-grpc-native.md) for first-party desktop GUI work where AX Code owns both ends of the transport.
 
-The HTTP/OpenAPI path is the recommended cross-language integration surface today. It lets Python, Go, Java, Rust, and other clients call the same server API without AX Code committing to maintain a full official package for every language.
+The HTTP/OpenAPI path is the recommended compatibility and generated-client surface today. It lets Python, Go, Java, Rust, and other clients call the same server API without AX Code committing to maintain a full official package for every language. It should not be treated as the preferred privileged bridge inside a first-party desktop GUI when the gRPC/native contract is available.
 
 ## Choose a Path
 
-| Need                                             | Recommended path                                   | Why                                                                                             |
-| ------------------------------------------------ | -------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| TypeScript or JavaScript in the same process     | `@ax-code/sdk` with `createAgent()`                | Lowest startup overhead and access to programmatic helpers, custom tools, and testing utilities |
-| TypeScript or JavaScript with a service boundary | `@ax-code/sdk/http` or `createAxCodeClient()`      | Keeps typed client ergonomics while using `ax-code serve`                                       |
-| Python, Go, Java, Rust, or another runtime       | Generate a client from `packages/sdk/openapi.json` | Reuses the HTTP contract without adding first-party package maintenance for every language      |
-| CI, automation, or one-off scripts               | HTTP calls against `ax-code serve`                 | Simple deployment model and easy process isolation                                              |
+| Need                                             | Recommended path                                   | Why                                                                                                 |
+| ------------------------------------------------ | -------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| TypeScript or JavaScript in the same process     | `@ax-code/sdk` with `createAgent()`                | Lowest startup overhead and access to programmatic helpers, custom tools, and testing utilities     |
+| First-party desktop/native GUI                   | `@ax-code/sdk/grpc`                                | Narrower headless contract, server streaming, metadata/deadline friendly, and less WebView exposure |
+| TypeScript or JavaScript with a service boundary | `@ax-code/sdk/http` or `createAxCodeClient()`      | Keeps typed client ergonomics while using `ax-code serve`                                           |
+| Python, Go, Java, Rust, or another runtime       | Generate a client from `packages/sdk/openapi.json` | Reuses the HTTP contract without adding first-party package maintenance for every language          |
+| CI, automation, or one-off scripts               | HTTP calls against `ax-code serve`                 | Simple deployment model and easy process isolation                                                  |
 
 ## What Is Official Today
 
 - `@ax-code/sdk` is the first-party TypeScript and JavaScript SDK.
+- `@ax-code/sdk/grpc` is the first-party optional desktop/native headless transport facade.
 - `@ax-code/sdk/http` is the first-party TypeScript and JavaScript client for the server path.
 - `packages/sdk/openapi.json` is the OpenAPI snapshot for generated HTTP clients.
 - Generated non-JavaScript clients are supported as integrations over HTTP, but they are not first-party published packages unless a package owner, tests, and release workflow exist.

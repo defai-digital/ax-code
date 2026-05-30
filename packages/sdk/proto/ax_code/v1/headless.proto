@@ -1,0 +1,141 @@
+syntax = "proto3";
+
+package axcode.v1;
+
+import "google/protobuf/struct.proto";
+
+service AxCodeHeadless {
+  rpc Health(HealthRequest) returns (HealthResponse);
+
+  rpc CreateSession(CreateSessionRequest) returns (JsonResponse);
+  rpc SendRuntimeCommand(SendRuntimeCommandRequest) returns (RuntimeCommandResponse);
+  rpc LoadSessionEvidence(LoadSessionEvidenceRequest) returns (JsonResponse);
+
+  rpc ListTaskQueue(QueryRequest) returns (JsonResponse);
+  rpc EnqueueTaskQueue(JsonRequest) returns (JsonResponse);
+  rpc EditTaskQueue(IdJsonRequest) returns (JsonResponse);
+  rpc TaskQueueCommand(CommandRequest) returns (JsonResponse);
+  rpc ReorderTaskQueue(ReorderRequest) returns (JsonResponse);
+  rpc RemoveTaskQueue(IdRequest) returns (JsonResponse);
+
+  rpc ListScheduledTasks(QueryRequest) returns (JsonResponse);
+  rpc CreateScheduledTask(JsonRequest) returns (JsonResponse);
+  rpc UpdateScheduledTask(IdJsonRequest) returns (JsonResponse);
+  rpc ScheduledTaskCommand(CommandRequest) returns (JsonResponse);
+  rpc RunScheduledTaskNow(IdRequest) returns (JsonResponse);
+  rpc RemoveScheduledTask(IdRequest) returns (JsonResponse);
+
+  rpc ListWorkflowTemplates(EmptyRequest) returns (JsonResponse);
+  rpc GetWorkflowTemplate(TemplateRequest) returns (JsonResponse);
+  rpc SaveWorkflowTemplate(JsonRequest) returns (JsonResponse);
+  rpc PromoteWorkflowTemplate(TemplateRequest) returns (JsonResponse);
+
+  rpc ListWorkflowRuns(QueryRequest) returns (JsonResponse);
+  rpc CreateWorkflowRun(JsonRequest) returns (JsonResponse);
+  rpc GetWorkflowRun(RunRequest) returns (JsonResponse);
+  rpc WorkflowRunArtifacts(RunQueryRequest) returns (JsonResponse);
+  rpc WorkflowRunEvalSummary(RunJsonRequest) returns (JsonResponse);
+  rpc SaveWorkflowRunTemplate(RunJsonRequest) returns (JsonResponse);
+  rpc WorkflowRunCommand(WorkflowRunCommandRequest) returns (JsonResponse);
+
+  rpc ListWorkflowRoutines(EmptyRequest) returns (JsonResponse);
+  rpc RunWorkflowRoutine(JsonRequest) returns (JsonResponse);
+
+  rpc SubscribeEvents(SubscribeEventsRequest) returns (stream RuntimeEvent);
+}
+
+message EmptyRequest {}
+
+message HealthRequest {}
+
+message HealthResponse {
+  string status = 1;
+}
+
+message CreateSessionRequest {
+  google.protobuf.Struct session = 1;
+}
+
+message SendRuntimeCommandRequest {
+  string type = 1;
+  string mode = 2;
+  string session_id = 3;
+  google.protobuf.Struct body = 4;
+}
+
+message RuntimeCommandResponse {
+  bool accepted = 1;
+  uint32 status = 2;
+  google.protobuf.Value body = 3;
+}
+
+message LoadSessionEvidenceRequest {
+  string session_id = 1;
+  google.protobuf.Struct parameters = 2;
+}
+
+message JsonRequest {
+  google.protobuf.Struct body = 1;
+}
+
+message JsonResponse {
+  google.protobuf.Value value = 1;
+}
+
+message IdRequest {
+  string id = 1;
+}
+
+message IdJsonRequest {
+  string id = 1;
+  google.protobuf.Struct body = 2;
+}
+
+message QueryRequest {
+  google.protobuf.Struct parameters = 1;
+}
+
+message CommandRequest {
+  string id = 1;
+  string command = 2;
+}
+
+message ReorderRequest {
+  string id = 1;
+  int32 position = 2;
+}
+
+message TemplateRequest {
+  string template_id = 1;
+}
+
+message RunRequest {
+  string run_id = 1;
+}
+
+message RunQueryRequest {
+  string run_id = 1;
+  google.protobuf.Struct parameters = 2;
+}
+
+message RunJsonRequest {
+  string run_id = 1;
+  google.protobuf.Struct body = 2;
+}
+
+message WorkflowRunCommandRequest {
+  string run_id = 1;
+  string command = 2;
+  google.protobuf.Struct body = 3;
+}
+
+message SubscribeEventsRequest {
+  repeated string types = 1;
+  string session_id = 2;
+}
+
+message RuntimeEvent {
+  string type = 1;
+  google.protobuf.Value properties = 2;
+  google.protobuf.Value event = 3;
+}

@@ -13,6 +13,7 @@ This directory owns the SDK and OpenAPI integration surfaces for AX Code. Use it
 | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
 | [`js/`](js/README.md)          | First-party TypeScript and JavaScript SDK, including in-process `createAgent()`, headless app helpers, and HTTP clients |
 | [`openapi.json`](openapi.json) | OpenAPI snapshot for HTTP clients and generated cross-language integrations                                             |
+| [`proto/`](proto/)             | Optional gRPC/native headless contract for first-party desktop GUI integrations                                         |
 
 The first-party package today is `@ax-code/sdk`. Other languages should integrate through `ax-code serve` and generated clients based on `openapi.json` until a language has an owner, tests, and a release workflow.
 
@@ -21,6 +22,7 @@ The first-party package today is `@ax-code/sdk`. Other languages should integrat
 | Need                                            | Recommended path                              |
 | ----------------------------------------------- | --------------------------------------------- |
 | TypeScript or JavaScript in the same process    | `js/README.md` and `createAgent()`            |
+| First-party desktop/native GUI                  | `@ax-code/sdk/grpc`                           |
 | App UI with a local process-isolated AX backend | `@ax-code/sdk/headless`                       |
 | TypeScript or JavaScript over raw HTTP          | `@ax-code/sdk/http` with `ax-code serve`      |
 | Python, Go, Java, Rust, or another runtime      | Generate a client from `openapi.json`         |
@@ -30,4 +32,4 @@ Keep this page short. Detailed cross-language guidance belongs in `docs/sdk-http
 
 ## Cross-Language Policy
 
-Use OpenAPI as the contract for Python, Go, Java, Rust, and other non-JavaScript integrations. Keep generated clients replaceable, pin them to the AX Code version they target, and promote them to first-party packages only when there is sustained demand and an explicit maintenance owner.
+Use OpenAPI as the compatibility contract for Python, Go, Java, Rust, and other non-JavaScript integrations. Prefer the gRPC/native contract for first-party desktop GUI work where AX Code owns both ends of the transport. Keep generated clients replaceable, pin them to the AX Code version they target, and promote them to first-party packages only when there is sustained demand and an explicit maintenance owner.
