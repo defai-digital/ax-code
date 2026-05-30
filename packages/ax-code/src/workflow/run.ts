@@ -4,7 +4,7 @@ import { Instance } from "../project/instance"
 import { Session } from "../session"
 import { SessionID } from "../session/schema"
 import { Database, NotFoundError, and, asc, desc, eq, inArray } from "../storage/db"
-import { addWorkflowBudgetUsage } from "./budget"
+import { addWorkflowBudgetUsage, evaluateWorkflowBudget } from "./budget"
 import {
   EmptyWorkflowBudgetUsage,
   WorkflowArtifactID,
@@ -331,10 +331,17 @@ async function appendBudgetUsage(input: WorkflowRunState.AppendBudgetUsageInput)
   if (parsed.childID) await assertChildBelongsToRun(parsed.childID, parsed.runID)
 
   const now = Date.now()
-  const entry = Database.transaction((db) => {
+  const changed = Database.transaction((db) => {
     const run = db.select().from(WorkflowRunTable).where(eq(WorkflowRunTable.id, parsed.runID)).get()
     if (!run) throw new NotFoundError({ message: `Workflow run not found: ${parsed.runID}` })
     const nextUsage = addWorkflowBudgetUsage(run.budget_usage, parsed.usageDelta)
+    const evaluation = evaluateWorkflowBudget({
+      budget: run.budget,
+      usage: nextUsage,
+      elapsedMs: now - run.time_created,
+    })
+    const budgetExceeded = evaluation.exceeded.length > 0
+    const stopMessage = budgetExceeded ? `Workflow budget exceeded: ${evaluation.exceeded.join("; ")}` : undefined
     const row = db
       .insert(WorkflowBudgetLedgerTable)
       .values({
@@ -350,17 +357,105 @@ async function appendBudgetUsage(input: WorkflowRunState.AppendBudgetUsageInput)
       })
       .returning()
       .get()
-    db.update(WorkflowRunTable)
-      .set({
-        budget_usage: nextUsage,
-        time_updated: now,
-      })
-      .where(eq(WorkflowRunTable.id, parsed.runID))
-      .run()
-    return fromBudgetLedgerRow(row)
+
+    let exceededEntry: WorkflowBudgetLedgerEntry | undefined
+    let failedRun: WorkflowRunState.Info | undefined
+    let failedPhase: WorkflowPhaseRecord | undefined
+    let failedChild: WorkflowChildRecord | undefined
+
+    if (budgetExceeded && stopMessage && !isTerminalRunStatus(run.status)) {
+      if (parsed.kind !== "exceeded") {
+        const exceededRow = db
+          .insert(WorkflowBudgetLedgerTable)
+          .values({
+            id: WorkflowBudgetLedgerID.ascending(),
+            run_id: parsed.runID,
+            phase_id: parsed.phaseID,
+            child_id: parsed.childID,
+            kind: "exceeded",
+            usage_delta: EmptyWorkflowBudgetUsage,
+            message: stopMessage,
+            time_created: now,
+            time_updated: now,
+          })
+          .returning()
+          .get()
+        exceededEntry = fromBudgetLedgerRow(exceededRow)
+      }
+
+      if (parsed.childID) {
+        const child = db.select().from(WorkflowChildTable).where(eq(WorkflowChildTable.id, parsed.childID)).get()
+        if (child && !isTerminalChildStatus(child.status)) {
+          const failedChildRow = db
+            .update(WorkflowChildTable)
+            .set({
+              status: "failed",
+              error: stopMessage,
+              time_completed: now,
+              time_updated: now,
+            })
+            .where(eq(WorkflowChildTable.id, parsed.childID))
+            .returning()
+            .get()
+          if (failedChildRow) failedChild = fromChildRow(failedChildRow)
+        }
+      }
+
+      if (parsed.phaseID) {
+        const phase = db.select().from(WorkflowPhaseTable).where(eq(WorkflowPhaseTable.id, parsed.phaseID)).get()
+        if (phase && !isTerminalPhaseStatus(phase.status)) {
+          const failedPhaseRow = db
+            .update(WorkflowPhaseTable)
+            .set({
+              status: "failed",
+              error: stopMessage,
+              time_completed: now,
+              time_updated: now,
+            })
+            .where(eq(WorkflowPhaseTable.id, parsed.phaseID))
+            .returning()
+            .get()
+          if (failedPhaseRow) failedPhase = fromPhaseRow(failedPhaseRow)
+        }
+      }
+
+      const failedRunRow = db
+        .update(WorkflowRunTable)
+        .set({
+          status: "failed",
+          error: stopMessage,
+          budget_usage: nextUsage,
+          time_completed: now,
+          time_updated: now,
+        })
+        .where(eq(WorkflowRunTable.id, parsed.runID))
+        .returning()
+        .get()
+      if (failedRunRow) failedRun = fromRunRow(failedRunRow)
+    } else {
+      db.update(WorkflowRunTable)
+        .set({
+          budget_usage: nextUsage,
+          time_updated: now,
+        })
+        .where(eq(WorkflowRunTable.id, parsed.runID))
+        .run()
+    }
+
+    return {
+      entry: fromBudgetLedgerRow(row),
+      exceededEntry,
+      failedRun,
+      failedPhase,
+      failedChild,
+    }
   })
-  publishBudgetAppended(entry)
-  return entry
+  publishBudgetAppended(changed.entry)
+  if (changed.exceededEntry) publishBudgetAppended(changed.exceededEntry)
+  if (changed.failedChild) publishChildUpdated(changed.failedChild)
+  if (changed.failedPhase) publishPhaseUpdated(changed.failedPhase)
+  if (changed.failedRun) publishUpdated(changed.failedRun)
+  return changed.entry
 }
 
 async function attachVerificationEnvelopeIDs(

@@ -92,4 +92,47 @@ describe("WorkflowDispatchAdapter", () => {
       else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
     }
   })
+
+  test("stops direct dispatch when token budget is exceeded", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
+    process.env.AX_CODE_WORKFLOW_RUNTIME = "1"
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const spec = parseWorkflowSpecV1({
+            schemaVersion: 1,
+            id: "budget-stop",
+            name: "Budget Stop",
+            description: "Fixture that must stop when direct dispatch exceeds its token budget.",
+            budget: {
+              maxTotalTokens: 10,
+              maxConcurrentAgents: 1,
+              maxTotalAgents: 1,
+              maxToolCalls: 100,
+            },
+            phases: [{ id: "scan", name: "Scan", kind: "fanout", prompt: "Spend too many tokens." }],
+          })
+          const run = await WorkflowRun.create({ spec })
+
+          const result = await WorkflowScheduler.start(run.id, {
+            enqueueChildren: false,
+            dispatchExecutor: async () => ({ output: "too expensive", tokensUsed: 20 }),
+          })
+
+          expect(result.status).toBe("failed")
+          expect(result.error).toContain("Workflow budget exceeded")
+          expect(result.phases[0]?.status).toBe("failed")
+          expect(result.children[0]?.status).toBe("failed")
+          expect(result.budgetUsage.totalTokens).toBe(20)
+          expect(result.budgetLedger.map((entry) => entry.kind)).toEqual(["reserve", "consume", "exceeded"])
+          expect(result.budgetLedger.at(-1)?.message).toContain("total tokens 20/10")
+        },
+      })
+    } finally {
+      if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME
+      else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
+    }
+  })
 })

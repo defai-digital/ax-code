@@ -90,6 +90,11 @@ export namespace WorkflowDispatchAdapter {
         kind: "consume",
         usageDelta: { totalTokens: result.tokensUsed },
       })
+      const budgetChecked = await WorkflowRun.getDetail(input.runID)
+      if (budgetChecked.status === "failed") {
+        const failedPhase = budgetChecked.phases.find((candidate) => candidate.id === input.phase.id) ?? input.phase
+        return { phase: failedPhase, results }
+      }
       await WorkflowRun.setChildStatus({
         id: child.id,
         status: childStatus(result),
