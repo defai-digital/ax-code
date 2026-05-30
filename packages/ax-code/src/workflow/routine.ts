@@ -5,6 +5,14 @@ import { WorkflowInputValues, WorkflowModelPolicyOverride } from "./spec"
 import { WorkflowTemplate } from "./template"
 
 export namespace WorkflowRoutineTrigger {
+  const Route = z
+    .string()
+    .trim()
+    .min(1)
+    .max(160)
+    .regex(/^workflow\/[a-z][a-z0-9-/]*$/, "routine route must start with workflow/ and use kebab-case segments")
+  const Schedule = z.string().trim().min(1).max(160)
+
   export const Info = z.object({
     route: z.string().min(1),
     templateID: WorkflowTemplate.ID,
@@ -13,23 +21,41 @@ export namespace WorkflowRoutineTrigger {
     trust: WorkflowTemplate.Trust,
     enabled: z.boolean(),
     mode: z.enum(["manual", "scheduled", "api", "webhook"]),
+    schedule: z.string().min(1).optional(),
+    timezone: z.string().min(1).optional(),
+    webhookEvent: z.string().min(1).optional(),
     securityGate: z.enum(["local-only", "required"]),
   })
   export type Info = z.infer<typeof Info>
 
-  export const CreateInput = z.object({
-    templateID: WorkflowTemplate.ID,
-    scope: WorkflowTemplate.Source.exclude(["builtin"]),
-    trust: WorkflowTemplate.Trust.default("candidate"),
-    route: z
-      .string()
-      .trim()
-      .min(1)
-      .max(160)
-      .regex(/^workflow\/[a-z][a-z0-9-/]*$/, "routine route must start with workflow/ and use kebab-case segments"),
-    enabled: z.boolean().default(false),
-    securityGate: z.literal("local-only").default("local-only"),
-  })
+  export const CreateInput = z
+    .object({
+      templateID: WorkflowTemplate.ID,
+      scope: WorkflowTemplate.Source.exclude(["builtin"]),
+      trust: WorkflowTemplate.Trust.default("candidate"),
+      mode: z.enum(["api", "scheduled"]).default("api"),
+      route: Route.optional(),
+      schedule: Schedule.optional(),
+      timezone: z.string().trim().min(1).max(120).optional(),
+      enabled: z.boolean().default(false),
+      securityGate: z.literal("local-only").default("local-only"),
+    })
+    .superRefine((input, ctx) => {
+      if (input.mode === "api" && !input.route) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "api routines must declare a route",
+          path: ["route"],
+        })
+      }
+      if (input.mode === "scheduled" && !input.schedule) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "scheduled routines must declare a schedule",
+          path: ["schedule"],
+        })
+      }
+    })
   export type CreateInput = z.input<typeof CreateInput>
 
   export const RunInput = z.object({
@@ -52,22 +78,38 @@ export namespace WorkflowRoutineTrigger {
   export async function create(input: CreateInput): Promise<Info> {
     const parsed = CreateInput.parse(input)
     const template = await WorkflowTemplate.get(parsed.templateID)
+    const route = parsed.route ?? `workflow/${template.spec.id}`
     const saved = await WorkflowTemplate.save({
       scope: parsed.scope,
       trust: parsed.trust,
       spec: {
         ...template.spec,
+        trigger:
+          parsed.mode === "scheduled"
+            ? {
+                kind: "scheduled",
+                schedule: parsed.schedule!,
+                timezone: parsed.timezone,
+                enabled: parsed.enabled,
+              }
+            : {
+                kind: "api",
+                route,
+                enabled: parsed.enabled,
+              },
         routine: {
           ...(template.spec.routine ?? {}),
           enabled: parsed.enabled,
-          mode: "api",
-          apiRoute: parsed.route,
+          mode: parsed.mode,
+          apiRoute: route,
+          schedule: parsed.mode === "scheduled" ? parsed.schedule : undefined,
+          timezone: parsed.mode === "scheduled" ? parsed.timezone : undefined,
           securityGate: parsed.securityGate,
         },
       },
     })
     const routine = routineInfo(saved)
-    if (!routine) throw new WorkflowRoutineNotFoundError(parsed.route)
+    if (!routine) throw new WorkflowRoutineNotFoundError(route)
     return routine
   }
 
@@ -104,15 +146,19 @@ export namespace WorkflowRoutineTrigger {
 
   function routineInfo(template: WorkflowTemplate.Info): Info | undefined {
     const routine = template.spec.routine
-    if (!routine?.apiRoute) return undefined
+    if (!routine || routine.mode === "manual") return undefined
+    const route = routine.apiRoute ?? `workflow/${template.spec.id}`
     return Info.parse({
-      route: routine.apiRoute,
+      route,
       templateID: template.id,
       templateName: template.name,
       source: template.source,
       trust: template.trust,
       enabled: routine.enabled,
       mode: routine.mode,
+      schedule: routine.schedule,
+      timezone: routine.timezone,
+      webhookEvent: routine.webhookEvent,
       securityGate: routine.securityGate,
     })
   }

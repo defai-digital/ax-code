@@ -3,6 +3,7 @@ import { Instance } from "../../src/project/instance"
 import {
   WorkflowFixtureSpecs,
   WorkflowRoutineDisabledError,
+  WorkflowRoutineNotFoundError,
   WorkflowRoutineTrigger,
   WorkflowTemplate,
   parseWorkflowSpecV1,
@@ -55,6 +56,60 @@ describe("WorkflowRoutineTrigger", () => {
 
         const routines = await WorkflowRoutineTrigger.list()
         expect(routines).toContainEqual(expect.objectContaining({ route: "workflow/local-trusted-noop" }))
+      },
+    })
+  })
+
+  test("creates and lists scheduled routine triggers from templates", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const routine = await WorkflowRoutineTrigger.create({
+          templateID: "builtin:noop-dry-run",
+          scope: "project",
+          trust: "trusted",
+          mode: "scheduled",
+          schedule: "0 9 * * *",
+          timezone: "America/Toronto",
+          enabled: true,
+        })
+
+        expect(routine).toMatchObject({
+          route: "workflow/noop-dry-run",
+          templateID: "project:noop-dry-run",
+          source: "project",
+          trust: "trusted",
+          enabled: true,
+          mode: "scheduled",
+          schedule: "0 9 * * *",
+          timezone: "America/Toronto",
+          securityGate: "local-only",
+        })
+
+        const template = await WorkflowTemplate.get("project:noop-dry-run")
+        expect(template.spec.trigger).toEqual({
+          kind: "scheduled",
+          schedule: "0 9 * * *",
+          timezone: "America/Toronto",
+          enabled: true,
+        })
+        expect(template.spec.routine).toMatchObject({
+          enabled: true,
+          mode: "scheduled",
+          apiRoute: "workflow/noop-dry-run",
+          schedule: "0 9 * * *",
+          timezone: "America/Toronto",
+          securityGate: "local-only",
+        })
+
+        const routines = await WorkflowRoutineTrigger.list()
+        expect(routines).toContainEqual(expect.objectContaining({ route: "workflow/noop-dry-run", mode: "scheduled" }))
+
+        await expect(WorkflowRoutineTrigger.run({ route: "workflow/noop-dry-run" })).rejects.toThrow(
+          WorkflowRoutineNotFoundError,
+        )
       },
     })
   })

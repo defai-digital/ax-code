@@ -21522,6 +21522,18 @@
                           "webhook"
                         ]
                       },
+                      "schedule": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "timezone": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "webhookEvent": {
+                        "type": "string",
+                        "minLength": 1
+                      },
                       "securityGate": {
                         "type": "string",
                         "enum": [
@@ -21585,7 +21597,7 @@
           }
         ],
         "summary": "Create workflow routine",
-        "description": "Create a user-local or project-local API routine trigger from an existing workflow template.",
+        "description": "Create a user-local or project-local routine trigger from an existing workflow template. API routines can be run directly; scheduled routines are listed as reusable trigger metadata.",
         "responses": {
           "200": {
             "description": "Created workflow routine.",
@@ -21634,6 +21646,18 @@
                         "api",
                         "webhook"
                       ]
+                    },
+                    "schedule": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "timezone": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "webhookEvent": {
+                      "type": "string",
+                      "minLength": 1
                     },
                     "securityGate": {
                       "type": "string",
@@ -21705,11 +21729,29 @@
                       "trusted"
                     ]
                   },
+                  "mode": {
+                    "default": "api",
+                    "type": "string",
+                    "enum": [
+                      "api",
+                      "scheduled"
+                    ]
+                  },
                   "route": {
                     "type": "string",
                     "minLength": 1,
                     "maxLength": 160,
                     "pattern": "^workflow\\/[a-z][a-z0-9-/]*$"
+                  },
+                  "schedule": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 160
+                  },
+                  "timezone": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
                   },
                   "enabled": {
                     "default": false,
@@ -21723,8 +21765,7 @@
                 },
                 "required": [
                   "templateID",
-                  "scope",
-                  "route"
+                  "scope"
                 ]
               }
             }
@@ -21803,6 +21844,18 @@
                             "api",
                             "webhook"
                           ]
+                        },
+                        "schedule": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "timezone": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "webhookEvent": {
+                          "type": "string",
+                          "minLength": 1
                         },
                         "securityGate": {
                           "type": "string",

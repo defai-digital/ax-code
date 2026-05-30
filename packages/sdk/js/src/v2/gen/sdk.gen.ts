@@ -3033,7 +3033,7 @@ export class WorkflowRoutine extends HeyApiClient {
   /**
    * Create workflow routine
    *
-   * Create a user-local or project-local API routine trigger from an existing workflow template.
+   * Create a user-local or project-local routine trigger from an existing workflow template. API routines can be run directly; scheduled routines are listed as reusable trigger metadata.
    */
   public create<ThrowOnError extends boolean = false>(
     parameters?: {
@@ -3041,7 +3041,10 @@ export class WorkflowRoutine extends HeyApiClient {
       templateID?: string
       scope?: "user" | "project"
       trust?: "candidate" | "trusted"
+      mode?: "api" | "scheduled"
       route?: string
+      schedule?: string
+      timezone?: string
       enabled?: boolean
       securityGate?: "local-only"
     },
@@ -3056,7 +3059,10 @@ export class WorkflowRoutine extends HeyApiClient {
             { in: "body", key: "templateID" },
             { in: "body", key: "scope" },
             { in: "body", key: "trust" },
+            { in: "body", key: "mode" },
             { in: "body", key: "route" },
+            { in: "body", key: "schedule" },
+            { in: "body", key: "timezone" },
             { in: "body", key: "enabled" },
             { in: "body", key: "securityGate" },
           ],

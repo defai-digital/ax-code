@@ -9132,6 +9132,9 @@ export type WorkflowRoutineListResponses = {
     trust: "candidate" | "trusted"
     enabled: boolean
     mode: "manual" | "scheduled" | "api" | "webhook"
+    schedule?: string
+    timezone?: string
+    webhookEvent?: string
     securityGate: "local-only" | "required"
   }>
 }
@@ -9143,7 +9146,10 @@ export type WorkflowRoutineCreateData = {
     templateID: string
     scope: "user" | "project"
     trust?: "candidate" | "trusted"
-    route: string
+    mode?: "api" | "scheduled"
+    route?: string
+    schedule?: string
+    timezone?: string
     enabled?: boolean
     securityGate?: "local-only"
   }
@@ -9179,6 +9185,9 @@ export type WorkflowRoutineCreateResponses = {
     trust: "candidate" | "trusted"
     enabled: boolean
     mode: "manual" | "scheduled" | "api" | "webhook"
+    schedule?: string
+    timezone?: string
+    webhookEvent?: string
     securityGate: "local-only" | "required"
   }
 }
@@ -9247,6 +9256,9 @@ export type WorkflowRoutineRunResponses = {
       trust: "candidate" | "trusted"
       enabled: boolean
       mode: "manual" | "scheduled" | "api" | "webhook"
+      schedule?: string
+      timezone?: string
+      webhookEvent?: string
       securityGate: "local-only" | "required"
     }
     template: {

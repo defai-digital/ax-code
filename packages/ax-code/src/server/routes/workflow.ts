@@ -586,7 +586,8 @@ export const WorkflowRoutineRoutes = lazy(() =>
       "/",
       describeRoute({
         summary: "Create workflow routine",
-        description: "Create a user-local or project-local API routine trigger from an existing workflow template.",
+        description:
+          "Create a user-local or project-local routine trigger from an existing workflow template. API routines can be run directly; scheduled routines are listed as reusable trigger metadata.",
         operationId: "workflowRoutine.create",
         responses: {
           200: {

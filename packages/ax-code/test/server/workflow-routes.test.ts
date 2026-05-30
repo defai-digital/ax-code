@@ -587,4 +587,52 @@ describe("workflow routes", () => {
       else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
     }
   })
+
+  test("creates scheduled workflow routine triggers from templates", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
+    process.env.AX_CODE_WORKFLOW_RUNTIME = "1"
+    try {
+      const app = Server.Default()
+      const directoryQuery = `directory=${encodeURIComponent(tmp.path)}`
+
+      const createResponse = await app.request(`/workflow-routines?${directoryQuery}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          templateID: "builtin:noop-dry-run",
+          scope: "project",
+          mode: "scheduled",
+          schedule: "0 9 * * *",
+          timezone: "America/Toronto",
+          enabled: true,
+          trust: "trusted",
+        }),
+      })
+      expect(createResponse.status).toBe(200)
+      expect(await createResponse.json()).toMatchObject({
+        route: "workflow/noop-dry-run",
+        templateID: "project:noop-dry-run",
+        trust: "trusted",
+        enabled: true,
+        mode: "scheduled",
+        schedule: "0 9 * * *",
+        timezone: "America/Toronto",
+      })
+
+      const listResponse = await app.request(`/workflow-routines?${directoryQuery}`)
+      expect(listResponse.status).toBe(200)
+      expect(await listResponse.json()).toContainEqual(
+        expect.objectContaining({
+          route: "workflow/noop-dry-run",
+          templateID: "project:noop-dry-run",
+          mode: "scheduled",
+          schedule: "0 9 * * *",
+        }),
+      )
+    } finally {
+      if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME
+      else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
+    }
+  })
 })
