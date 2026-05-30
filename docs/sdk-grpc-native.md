@@ -56,6 +56,13 @@ The TypeScript facade lives at `@ax-code/sdk/grpc` and covers:
 
 The proto uses structured JSON payloads for command bodies and workflow/task payloads. That keeps the transport stable while AX Code runtime schemas continue to evolve quickly.
 
+`@ax-code/sdk/grpc` also exports `AX_CODE_GRPC_METHOD_DESCRIPTORS`, `listAxCodeGrpcMethods()`,
+`getAxCodeGrpcMethodDescriptor()`, and `assertAxCodeGrpcMethodSupported()`. Native hosts should use these descriptors as
+the canonical method catalog when building handler maps, gRPC service binders, preload allowlists, or coverage checks.
+Each descriptor includes the method name, fully qualified method path, stream kind, GUI domain, HTTP bridge availability,
+and current stability. This keeps the native transport boundary explicit without exposing or mirroring the full HTTP route
+tree.
+
 ## TypeScript Usage
 
 Use the HTTP bridge while the native gRPC server is being implemented:
@@ -118,10 +125,15 @@ const client = createAxCodeGrpcClientFromNativeBridge({
 
 Native hosts can also expose a handler map instead of hand-writing a method switch. This is useful for Rust/Tauri
 commands, Electron preload APIs, or a real local gRPC server that wants to bind AX Code runtime operations method by
-method:
+method. Use the method descriptors to validate that every expected domain is covered before handing the bridge to
+renderer code:
 
 ```ts
-import { AX_CODE_GRPC_METHOD, createAxCodeGrpcNativeBridgeFromHandlers } from "@ax-code/sdk/grpc"
+import {
+  AX_CODE_GRPC_METHOD,
+  createAxCodeGrpcNativeBridgeFromHandlers,
+  listAxCodeGrpcMethods,
+} from "@ax-code/sdk/grpc"
 
 const bridge = createAxCodeGrpcNativeBridgeFromHandlers({
   unary: {
@@ -140,6 +152,9 @@ const bridge = createAxCodeGrpcNativeBridgeFromHandlers({
     },
   },
 })
+
+const mcpMethods = listAxCodeGrpcMethods({ domain: "mcp" })
+const streamingMethods = listAxCodeGrpcMethods({ kind: "serverStream" })
 ```
 
 `bootstrap.load()` is intentionally a GUI-oriented snapshot rather than a one-to-one copy of every HTTP route. Use `include` to request only the state needed by the current view. Failed subrequests are reported in `errors` while successful fields are still returned, so a missing optional subsystem does not block the desktop shell from opening.

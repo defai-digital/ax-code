@@ -2,15 +2,19 @@ import { describe, expect, test } from "bun:test"
 import { existsSync, readFileSync } from "node:fs"
 import { resolve } from "node:path"
 import {
+  AX_CODE_GRPC_METHOD_DESCRIPTORS,
   AX_CODE_GRPC_METHOD,
   AX_CODE_GRPC_PROTO_PACKAGE_PATH,
   AX_CODE_GRPC_PROTO_PATH,
+  assertAxCodeGrpcMethodSupported,
   createAxCodeGrpcClient,
   createAxCodeGrpcClientFromHttp,
   createAxCodeGrpcClientFromNativeBridge,
   createAxCodeGrpcClientFromNativeHandlers,
   createAxCodeGrpcHttpBridge,
   createAxCodeGrpcNativeBridgeFromHandlers,
+  getAxCodeGrpcMethodDescriptor,
+  listAxCodeGrpcMethods,
   resolveAxCodeGrpcProtoUrl,
   type AxCodeGrpcTransport,
 } from "../src/grpc"
@@ -30,6 +34,46 @@ describe("gRPC SDK facade", () => {
     expect(existsSync(resolveAxCodeGrpcProtoUrl().pathname)).toBe(true)
     expect(resolveAxCodeGrpcProtoUrl("file:///app/node_modules/@ax-code/sdk/dist/grpc.js").pathname).toBe(
       "/app/node_modules/@ax-code/sdk/dist/proto/ax_code/v1/headless.proto",
+    )
+  })
+
+  test("describes every native transport method", () => {
+    const methods = Object.values(AX_CODE_GRPC_METHOD)
+    const describedMethods = AX_CODE_GRPC_METHOD_DESCRIPTORS.map((descriptor) => descriptor.method)
+
+    expect(AX_CODE_GRPC_METHOD_DESCRIPTORS).toHaveLength(methods.length)
+    expect(Object.isFrozen(AX_CODE_GRPC_METHOD_DESCRIPTORS)).toBe(true)
+    expect(Object.isFrozen(AX_CODE_GRPC_METHOD_DESCRIPTORS[0])).toBe(true)
+    expect(new Set(describedMethods).size).toBe(methods.length)
+    expect(describedMethods.toSorted()).toEqual(methods.toSorted())
+    expect(getAxCodeGrpcMethodDescriptor(AX_CODE_GRPC_METHOD.GetSession)).toMatchObject({
+      name: "GetSession",
+      kind: "unary",
+      domain: "session",
+      httpBridge: true,
+      stability: "active",
+    })
+    expect(assertAxCodeGrpcMethodSupported(AX_CODE_GRPC_METHOD.SubscribeEvents, "serverStream")).toMatchObject({
+      name: "SubscribeEvents",
+      kind: "serverStream",
+      domain: "events",
+    })
+    expect(getAxCodeGrpcMethodDescriptor(AX_CODE_GRPC_METHOD.ConnectPty)).toMatchObject({
+      name: "ConnectPty",
+      kind: "bidiStream",
+      domain: "pty",
+    })
+    expect(listAxCodeGrpcMethods({ domain: "mcp" }).map((descriptor) => descriptor.method)).toContain(
+      AX_CODE_GRPC_METHOD.GetMcpStatus,
+    )
+    expect(listAxCodeGrpcMethods({ kind: "bidiStream" })).toEqual([
+      expect.objectContaining({ method: AX_CODE_GRPC_METHOD.ConnectPty }),
+    ])
+    expect(() => assertAxCodeGrpcMethodSupported("/axcode.v1.AxCodeHeadless/Missing" as never)).toThrow(
+      "Unsupported AX Code gRPC method",
+    )
+    expect(() => assertAxCodeGrpcMethodSupported(AX_CODE_GRPC_METHOD.Health, "serverStream")).toThrow(
+      "is unary, not serverStream",
     )
   })
 

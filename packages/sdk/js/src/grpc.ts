@@ -134,6 +134,7 @@ export const AX_CODE_GRPC_METHOD = {
 type HeadlessHttpClient = ReturnType<typeof createHeadlessClient>
 type GrpcMethodMap = typeof AX_CODE_GRPC_METHOD
 
+export type AxCodeGrpcMethodName = keyof GrpcMethodMap
 export type AxCodeGrpcMethod = GrpcMethodMap[keyof GrpcMethodMap]
 export type AxCodeGrpcUnaryMethod = Exclude<
   AxCodeGrpcMethod,
@@ -141,9 +142,225 @@ export type AxCodeGrpcUnaryMethod = Exclude<
 >
 export type AxCodeGrpcStreamingMethod = typeof AX_CODE_GRPC_METHOD.SubscribeEvents
 export type AxCodeGrpcBidirectionalStreamingMethod = typeof AX_CODE_GRPC_METHOD.ConnectPty
+export type AxCodeGrpcMethodKind = "unary" | "serverStream" | "bidiStream"
+export type AxCodeGrpcMethodDomain =
+  | "health"
+  | "runtime"
+  | "bootstrap"
+  | "session"
+  | "app"
+  | "project"
+  | "workspace"
+  | "search"
+  | "tool"
+  | "supervision"
+  | "config"
+  | "mcp"
+  | "provider"
+  | "diagnostics"
+  | "pty"
+  | "taskQueue"
+  | "scheduledTask"
+  | "workflow"
+  | "events"
+export type AxCodeGrpcMethodDescriptor = {
+  readonly name: AxCodeGrpcMethodName
+  readonly method: AxCodeGrpcMethod
+  readonly kind: AxCodeGrpcMethodKind
+  readonly domain: AxCodeGrpcMethodDomain
+  readonly httpBridge: boolean
+  readonly stability: "active"
+}
+export type AxCodeGrpcMethodDescriptorFilter = {
+  kind?: AxCodeGrpcMethodKind
+  domain?: AxCodeGrpcMethodDomain
+  httpBridge?: boolean
+}
 export type AxCodeGrpcMetadata = Record<string, string>
 export type AxCodeGrpcJsonResponse<T = unknown> = { value: T }
 export type AxCodeGrpcRuntimeEvent = { type: string; properties?: unknown }
+
+export const AX_CODE_GRPC_METHOD_DESCRIPTORS: readonly AxCodeGrpcMethodDescriptor[] = Object.freeze(
+  Object.entries(AX_CODE_GRPC_METHOD).map(([name, method]) =>
+    Object.freeze({
+      name: name as AxCodeGrpcMethodName,
+      method: method as AxCodeGrpcMethod,
+      kind: axCodeGrpcMethodKind(method as AxCodeGrpcMethod),
+      domain: axCodeGrpcMethodDomain(name as AxCodeGrpcMethodName),
+      httpBridge: true,
+      stability: "active" as const,
+    }),
+  ),
+)
+
+const AX_CODE_GRPC_METHOD_DESCRIPTOR_BY_METHOD = new Map<AxCodeGrpcMethod, AxCodeGrpcMethodDescriptor>(
+  AX_CODE_GRPC_METHOD_DESCRIPTORS.map((descriptor) => [descriptor.method, descriptor]),
+)
+
+export function listAxCodeGrpcMethods(filter: AxCodeGrpcMethodDescriptorFilter = {}): AxCodeGrpcMethodDescriptor[] {
+  return AX_CODE_GRPC_METHOD_DESCRIPTORS.filter((descriptor) => {
+    if (filter.kind && descriptor.kind !== filter.kind) return false
+    if (filter.domain && descriptor.domain !== filter.domain) return false
+    if (filter.httpBridge !== undefined && descriptor.httpBridge !== filter.httpBridge) return false
+    return true
+  })
+}
+
+export function getAxCodeGrpcMethodDescriptor(method: AxCodeGrpcMethod): AxCodeGrpcMethodDescriptor | undefined {
+  return AX_CODE_GRPC_METHOD_DESCRIPTOR_BY_METHOD.get(method)
+}
+
+export function assertAxCodeGrpcMethodSupported(
+  method: AxCodeGrpcMethod,
+  kind?: AxCodeGrpcMethodKind,
+): AxCodeGrpcMethodDescriptor {
+  const descriptor = getAxCodeGrpcMethodDescriptor(method)
+  if (!descriptor) throw new Error(`Unsupported AX Code gRPC method: ${method}`)
+  if (kind && descriptor.kind !== kind) {
+    throw new Error(`AX Code gRPC method ${method} is ${descriptor.kind}, not ${kind}`)
+  }
+  return descriptor
+}
+
+function axCodeGrpcMethodKind(method: AxCodeGrpcMethod): AxCodeGrpcMethodKind {
+  if (method === AX_CODE_GRPC_METHOD.SubscribeEvents) return "serverStream"
+  if (method === AX_CODE_GRPC_METHOD.ConnectPty) return "bidiStream"
+  return "unary"
+}
+
+function axCodeGrpcMethodDomain(name: AxCodeGrpcMethodName): AxCodeGrpcMethodDomain {
+  switch (name) {
+    case "Health":
+      return "health"
+    case "SendRuntimeCommand":
+      return "runtime"
+    case "LoadBootstrap":
+      return "bootstrap"
+    case "CreateSession":
+    case "LoadSessionEvidence":
+    case "ListSessions":
+    case "GetSessionStatus":
+    case "GetSession":
+    case "UpdateSession":
+    case "DeleteSession":
+    case "ListSessionMessages":
+    case "GetSessionMessage":
+    case "DeleteSessionMessage":
+    case "ListSessionChildren":
+    case "GetSessionGoal":
+    case "GetSessionTodo":
+    case "GetSessionDiff":
+    case "ForkSession":
+    case "ShareSession":
+    case "UnshareSession":
+    case "SummarizeSession":
+      return "session"
+    case "ListAgents":
+    case "ListSkills":
+    case "WriteAppLog":
+    case "DisposeInstance":
+    case "RestartInstance":
+      return "app"
+    case "ListProjects":
+    case "GetCurrentProject":
+    case "GetProjectContext":
+    case "CreateProjectContextTemplate":
+    case "WarmupProjectMemory":
+    case "ClearProjectMemory":
+    case "GetDebugEnginePendingPlans":
+      return "project"
+    case "GetPath":
+    case "GetVcs":
+    case "ListCommands":
+    case "ListFiles":
+    case "ReadFile":
+    case "GetFileStatus":
+      return "workspace"
+    case "FindText":
+    case "FindFiles":
+    case "FindSymbols":
+      return "search"
+    case "ListToolIDs":
+    case "ListTools":
+      return "tool"
+    case "ListPermissions":
+    case "ReplyPermission":
+    case "ListQuestions":
+    case "ReplyQuestion":
+    case "RejectQuestion":
+      return "supervision"
+    case "GetConfig":
+    case "UpdateConfig":
+    case "ListConfigProviders":
+    case "GetAutonomousMode":
+    case "SetAutonomousMode":
+    case "GetIsolationMode":
+    case "SetIsolationMode":
+    case "GetSmartLlmRouting":
+    case "SetSmartLlmRouting":
+      return "config"
+    case "GetMcpStatus":
+    case "ListMcpResources":
+    case "AddMcpServer":
+    case "StartMcpAuth":
+    case "CompleteMcpAuth":
+    case "AuthenticateMcp":
+    case "RemoveMcpAuth":
+    case "ConnectMcp":
+    case "DisconnectMcp":
+      return "mcp"
+    case "ListProviders":
+    case "GetProviderAuth":
+    case "SetAuth":
+    case "RemoveAuth":
+    case "ProviderOauthAuthorize":
+    case "ProviderOauthCallback":
+      return "provider"
+    case "GetLspStatus":
+    case "GetFormatterStatus":
+      return "diagnostics"
+    case "ListPty":
+    case "CreatePty":
+    case "GetPty":
+    case "UpdatePty":
+    case "RemovePty":
+    case "ConnectPty":
+      return "pty"
+    case "ListTaskQueue":
+    case "EnqueueTaskQueue":
+    case "EditTaskQueue":
+    case "TaskQueueCommand":
+    case "ReorderTaskQueue":
+    case "RemoveTaskQueue":
+      return "taskQueue"
+    case "ListScheduledTasks":
+    case "CreateScheduledTask":
+    case "UpdateScheduledTask":
+    case "ScheduledTaskCommand":
+    case "RunScheduledTaskNow":
+    case "RemoveScheduledTask":
+      return "scheduledTask"
+    case "ListWorkflowTemplates":
+    case "GetWorkflowTemplate":
+    case "SaveWorkflowTemplate":
+    case "PromoteWorkflowTemplate":
+    case "ListWorkflowRuns":
+    case "WorkflowRunDashboard":
+    case "WorkflowRunEvalCases":
+    case "CreateWorkflowRun":
+    case "GetWorkflowRun":
+    case "WorkflowRunArtifacts":
+    case "WorkflowRunEvalSummary":
+    case "WorkflowRunEvalCase":
+    case "SaveWorkflowRunTemplate":
+    case "WorkflowRunCommand":
+    case "ListWorkflowRoutines":
+    case "RunWorkflowRoutine":
+      return "workflow"
+    case "SubscribeEvents":
+      return "events"
+  }
+}
 
 export type AxCodeGrpcCallOptions = {
   signal?: AbortSignal
