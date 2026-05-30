@@ -196,6 +196,34 @@ describe("workflow routes", () => {
         specPhaseID: "noop",
       })
 
+      const promptArtifactsResponse = await app.request(
+        `/workflow-runs/${created.id}/artifacts?${directoryQuery}&phaseID=${phaseID}&kind=log`,
+      )
+      expect(promptArtifactsResponse.status).toBe(200)
+      const promptArtifacts = (await promptArtifactsResponse.json()) as Array<{
+        payload?: unknown
+        specArtifactID?: string
+        redaction?: { status: string; summary?: string }
+      }>
+      expect(promptArtifacts).toHaveLength(1)
+      expect(promptArtifacts[0]?.specArtifactID).toBe("phase-prompt-noop")
+      expect(promptArtifacts[0]?.payload).toBeUndefined()
+      expect(promptArtifacts[0]?.redaction).toMatchObject({
+        status: "pending",
+        summary: expect.stringContaining("payload omitted"),
+      })
+
+      const rawPromptArtifactsResponse = await app.request(
+        `/workflow-runs/${created.id}/artifacts?${directoryQuery}&phaseID=${phaseID}&kind=log&includePayload=true`,
+      )
+      expect(rawPromptArtifactsResponse.status).toBe(200)
+      const rawPromptArtifacts = (await rawPromptArtifactsResponse.json()) as Array<{ payload?: unknown }>
+      expect(rawPromptArtifacts[0]?.payload).toMatchObject({
+        kind: "phase-prompt-summary",
+        specPhaseID: "noop",
+        promptSummary: "Return a deterministic dry-run summary without using tools.",
+      })
+
       const finalReportArtifactsResponse = await app.request(
         `/workflow-runs/${created.id}/artifacts?${directoryQuery}&kind=summary&includePayload=true`,
       )

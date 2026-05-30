@@ -4,7 +4,7 @@ import { Session } from "../session"
 import type { TaskQueueID } from "../session/schema"
 import { addWorkflowBudgetUsage, evaluateWorkflowBudget } from "./budget"
 import { isWorkflowRuntimeEnabled, type WorkflowSpecV1 } from "./spec"
-import { planWorkflowDryRun } from "./planner"
+import { planWorkflowDryRun, type WorkflowDryRunPhase } from "./planner"
 import { WorkflowRun } from "./run"
 import { WorkflowPhaseID, type WorkflowRunDetail, WorkflowRunID } from "./state"
 
@@ -59,6 +59,7 @@ export namespace WorkflowScheduler {
       if (phase.status === "completed") continue
       const phasePlan = plan.phases.find((item) => item.specPhaseID === phase.specPhaseID)
       if (!phasePlan) throw new Error(`No dry-run phase plan for workflow phase ${phase.specPhaseID}`)
+      await ensurePhasePromptArtifact(runID, initial.spec, phase, phasePlan)
 
       if (parsed.enqueueChildren) {
         const current = await WorkflowRun.getDetail(runID)
@@ -271,6 +272,57 @@ async function cancelWorkflowQueueItem(taskQueueID: TaskQueueID) {
     })
   }
   return item
+}
+
+async function ensurePhasePromptArtifact(
+  runID: WorkflowRunID,
+  spec: WorkflowSpecV1,
+  phase: WorkflowRunDetail["phases"][number],
+  phasePlan: WorkflowDryRunPhase,
+) {
+  const specArtifactID = phasePromptArtifactID(phase.specPhaseID)
+  const detail = await WorkflowRun.getDetail(runID)
+  if (detail.artifacts.some((artifact) => artifact.specArtifactID === specArtifactID)) return
+
+  const phaseSpec = spec.phases.find((item) => item.id === phase.specPhaseID)
+  await WorkflowRun.appendArtifact({
+    runID,
+    phaseID: phase.id,
+    specArtifactID,
+    kind: "log",
+    retention: "session",
+    summary: `Phase prompt summary: ${phase.name}`,
+    payload: {
+      kind: "phase-prompt-summary",
+      phaseID: phase.id,
+      specPhaseID: phase.specPhaseID,
+      phaseKind: phase.kind,
+      agent: phase.agent,
+      promptSummary: summarizePrompt(phaseSpec?.prompt),
+      outputs: phase.outputs,
+      dependsOn: phaseSpec?.dependsOn ?? [],
+      maxParallel: phasePlan.maxParallel,
+      estimatedChildren: phasePlan.estimatedChildren,
+      childPromptSummaries: phasePlan.children.map((child) => ({
+        index: child.index,
+        agent: child.agent,
+        modelRole: child.modelRole,
+        model: child.model,
+        promptSummary: summarizePrompt(child.prompt),
+        artifactRefs: child.artifactRefs,
+      })),
+    },
+  })
+}
+
+function phasePromptArtifactID(specPhaseID: string) {
+  return `phase-prompt-${specPhaseID}`
+}
+
+function summarizePrompt(prompt: string | undefined) {
+  if (!prompt) return "No prompt declared."
+  const compact = prompt.replace(/\s+/g, " ").trim()
+  return compact.length <= 500 ? compact : `${compact.slice(0, 497)}...`
 }
 
 async function retryChildren(runID: WorkflowRunID, phaseID?: WorkflowPhaseID) {

@@ -54,7 +54,16 @@ describe("WorkflowScheduler", () => {
 
           expect(result.status).toBe("completed")
           expect(result.phases[0]?.status).toBe("completed")
-          expect(result.artifacts[0]?.kind).toBe("summary")
+          expect(result.artifacts.some((artifact) => artifact.kind === "summary")).toBe(true)
+          expect(result.artifacts.find((artifact) => artifact.specArtifactID === "phase-prompt-noop")).toMatchObject({
+            kind: "log",
+            exposeToMainContext: false,
+            payload: {
+              kind: "phase-prompt-summary",
+              specPhaseID: "noop",
+              promptSummary: "Return a deterministic dry-run summary without using tools.",
+            },
+          })
           const finalReport = result.artifacts.find(
             (artifact) => artifact.specArtifactID === WORKFLOW_FINAL_REPORT_SPEC_ARTIFACT_ID,
           )
@@ -390,6 +399,17 @@ describe("WorkflowScheduler", () => {
           expect(result.children.every((child) => child.taskQueueID?.startsWith("tsk_"))).toBe(true)
           expect(result.children.every((child) => child.sessionID?.startsWith("ses_"))).toBe(true)
           expect(result.budgetUsage.childAgents).toBe(8)
+          expect(result.artifacts.find((artifact) => artifact.specArtifactID === "phase-prompt-collect-issues"))
+            .toMatchObject({
+              kind: "log",
+              exposeToMainContext: false,
+              payload: {
+                kind: "phase-prompt-summary",
+                specPhaseID: "collect-issues",
+                maxParallel: 8,
+                estimatedChildren: 8,
+              },
+            })
 
           const { TaskQueue } = await import("../../src/session/task-queue")
           const queue = await TaskQueue.list()
