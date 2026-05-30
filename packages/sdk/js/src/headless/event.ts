@@ -25,6 +25,32 @@ export type HeadlessRuntimeStatusEvent =
   | { type: "code.index.progress" }
   | { type: "code.index.state" }
   | { type: "vcs.branch.updated"; properties: { branch: string } }
+  | { type: "workflow.run.created"; properties: Record<string, unknown> }
+  | { type: "workflow.run.updated"; properties: Record<string, unknown> }
+  | { type: "workflow.run.started"; properties: Record<string, unknown> }
+  | { type: "workflow.run.blocked"; properties: Record<string, unknown> }
+  | { type: "workflow.run.paused"; properties: Record<string, unknown> }
+  | { type: "workflow.run.resumed"; properties: Record<string, unknown> }
+  | { type: "workflow.run.completed"; properties: Record<string, unknown> }
+  | { type: "workflow.run.failed"; properties: Record<string, unknown> }
+  | { type: "workflow.run.cancelled"; properties: Record<string, unknown> }
+  | { type: "workflow.phase.updated"; properties: Record<string, unknown> }
+  | { type: "workflow.phase.started"; properties: Record<string, unknown> }
+  | { type: "workflow.phase.completed"; properties: Record<string, unknown> }
+  | { type: "workflow.phase.failed"; properties: Record<string, unknown> }
+  | { type: "workflow.child.created"; properties: Record<string, unknown> }
+  | { type: "workflow.child.updated"; properties: Record<string, unknown> }
+  | { type: "workflow.child.started"; properties: Record<string, unknown> }
+  | { type: "workflow.child.completed"; properties: Record<string, unknown> }
+  | { type: "workflow.child.failed"; properties: Record<string, unknown> }
+  | { type: "workflow.child.cancelled"; properties: Record<string, unknown> }
+  | { type: "workflow.artifact.written"; properties: Record<string, unknown> }
+  | { type: "workflow.budget.appended"; properties: Record<string, unknown> }
+  | { type: "workflow.budget.warning"; properties: Record<string, unknown> }
+  | { type: "workflow.budget.exceeded"; properties: Record<string, unknown> }
+  | { type: "workflow.verification.attached"; properties: Record<string, unknown> }
+
+export type HeadlessRuntimeProbeKey = "mcp" | "lsp" | "debug-engine" | "workflow"
 
 export type HeadlessSessionEvent<TSession extends { id: string }, TTodo, TDiff, TStatus, TGoal = unknown> =
   | { type: "todo.updated"; properties: { sessionID: string; todos: TTodo[] } }
@@ -100,6 +126,30 @@ export const HEADLESS_RUNTIME_EVENT_TYPES = new Set<string>([
   "code.index.progress",
   "code.index.state",
   "vcs.branch.updated",
+  "workflow.run.created",
+  "workflow.run.updated",
+  "workflow.run.started",
+  "workflow.run.blocked",
+  "workflow.run.paused",
+  "workflow.run.resumed",
+  "workflow.run.completed",
+  "workflow.run.failed",
+  "workflow.run.cancelled",
+  "workflow.phase.updated",
+  "workflow.phase.started",
+  "workflow.phase.completed",
+  "workflow.phase.failed",
+  "workflow.child.created",
+  "workflow.child.updated",
+  "workflow.child.started",
+  "workflow.child.completed",
+  "workflow.child.failed",
+  "workflow.child.cancelled",
+  "workflow.artifact.written",
+  "workflow.budget.appended",
+  "workflow.budget.warning",
+  "workflow.budget.exceeded",
+  "workflow.verification.attached",
   "server.connected",
   "server.heartbeat",
   "server.instance.disposed",

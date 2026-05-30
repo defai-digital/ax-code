@@ -1,5 +1,5 @@
 import type { PermissionRequest, QuestionRequest } from "../v2/index.js"
-import type { HeadlessRuntimeEvent, HeadlessRuntimeStatusEvent } from "./event.js"
+import type { HeadlessRuntimeEvent, HeadlessRuntimeProbeKey, HeadlessRuntimeStatusEvent } from "./event.js"
 
 export interface HeadlessProjectionState<
   TSession extends { id: string },
@@ -30,7 +30,7 @@ export interface HeadlessProjectionState<
 export type HeadlessProjectionEffect =
   | { type: "permission.auto_reply"; requestID: string }
   | { type: "question.auto_reply"; requestID: string; questions: QuestionRequest["questions"] }
-  | { type: "runtime.probe"; key: "mcp" | "lsp" | "debug-engine" }
+  | { type: "runtime.probe"; key: HeadlessRuntimeProbeKey }
   | { type: "bootstrap.reload" }
 
 export type HeadlessProjectionApplyResult = {
@@ -207,13 +207,40 @@ export function applyHeadlessProjectionEvent<
     case "code.index.state":
       effects.push({ type: "runtime.probe", key: "debug-engine" })
       return { handled: true, effects }
+
+    case "workflow.run.created":
+    case "workflow.run.updated":
+    case "workflow.run.started":
+    case "workflow.run.blocked":
+    case "workflow.run.paused":
+    case "workflow.run.resumed":
+    case "workflow.run.completed":
+    case "workflow.run.failed":
+    case "workflow.run.cancelled":
+    case "workflow.phase.updated":
+    case "workflow.phase.started":
+    case "workflow.phase.completed":
+    case "workflow.phase.failed":
+    case "workflow.child.created":
+    case "workflow.child.updated":
+    case "workflow.child.started":
+    case "workflow.child.completed":
+    case "workflow.child.failed":
+    case "workflow.child.cancelled":
+    case "workflow.artifact.written":
+    case "workflow.budget.appended":
+    case "workflow.budget.warning":
+    case "workflow.budget.exceeded":
+    case "workflow.verification.attached":
+      effects.push({ type: "runtime.probe", key: "workflow" })
+      return { handled: true, effects }
   }
 
   const _exhaustive: never = event
   return { handled: false, effects: _exhaustive }
 }
 
-export function runtimeProbeKeysForEvent(event: HeadlessRuntimeStatusEvent): Array<"mcp" | "lsp" | "debug-engine"> {
+export function runtimeProbeKeysForEvent(event: HeadlessRuntimeStatusEvent): HeadlessRuntimeProbeKey[] {
   switch (event.type) {
     case "mcp.tools.changed":
       return ["mcp"]
@@ -224,6 +251,31 @@ export function runtimeProbeKeysForEvent(event: HeadlessRuntimeStatusEvent): Arr
       return ["debug-engine"]
     case "vcs.branch.updated":
       return []
+    case "workflow.run.created":
+    case "workflow.run.updated":
+    case "workflow.run.started":
+    case "workflow.run.blocked":
+    case "workflow.run.paused":
+    case "workflow.run.resumed":
+    case "workflow.run.completed":
+    case "workflow.run.failed":
+    case "workflow.run.cancelled":
+    case "workflow.phase.updated":
+    case "workflow.phase.started":
+    case "workflow.phase.completed":
+    case "workflow.phase.failed":
+    case "workflow.child.created":
+    case "workflow.child.updated":
+    case "workflow.child.started":
+    case "workflow.child.completed":
+    case "workflow.child.failed":
+    case "workflow.child.cancelled":
+    case "workflow.artifact.written":
+    case "workflow.budget.appended":
+    case "workflow.budget.warning":
+    case "workflow.budget.exceeded":
+    case "workflow.verification.attached":
+      return ["workflow"]
   }
   return []
 }

@@ -4,6 +4,7 @@ import {
   createHeadlessProjectionState,
   applyHeadlessProjectionEvent,
   isHeadlessRuntimeEvent,
+  runtimeProbeKeysForEvent,
   HEADLESS_RUNTIME_EVENT_TYPES,
   HEADLESS_RUNTIME_SCHEMA_VERSION,
   parseHeadlessRuntimeResponseBody,
@@ -13,6 +14,7 @@ describe("headless SDK types", () => {
   test("HEADLESS_RUNTIME_EVENT_TYPES includes session.error", () => {
     expect(HEADLESS_RUNTIME_EVENT_TYPES.has("session.error")).toBe(true)
     expect(HEADLESS_RUNTIME_EVENT_TYPES.has("scheduled.task.created")).toBe(true)
+    expect(HEADLESS_RUNTIME_EVENT_TYPES.has("workflow.verification.attached")).toBe(true)
   })
 
   test("exports a headless runtime schema version", () => {
@@ -22,6 +24,7 @@ describe("headless SDK types", () => {
   test("isHeadlessRuntimeEvent recognizes known types", () => {
     expect(isHeadlessRuntimeEvent({ type: "session.created", properties: {} })).toBe(true)
     expect(isHeadlessRuntimeEvent({ type: "session.error", properties: {} })).toBe(true)
+    expect(isHeadlessRuntimeEvent({ type: "workflow.budget.exceeded", properties: {} })).toBe(true)
     expect(isHeadlessRuntimeEvent({ type: "unknown.event" })).toBe(false)
     expect(isHeadlessRuntimeEvent(null)).toBe(false)
   })
@@ -107,6 +110,26 @@ describe("headless SDK types", () => {
     expect(result.effects).toHaveLength(1)
     expect(result.effects[0].type).toBe("permission.auto_reply")
     expect(state.permission["sess-1"] ?? []).toHaveLength(0)
+  })
+
+  test("workflow runtime events request workflow probe refreshes", () => {
+    const state = createHeadlessProjectionState<
+      { id: string },
+      unknown,
+      unknown,
+      unknown,
+      { id: string; sessionID: string },
+      { id: string; messageID: string }
+    >()
+    const event = {
+      type: "workflow.artifact.written",
+      properties: { artifact: { id: "wfa-1", runID: "wfr-1" } },
+    } as const
+
+    const result = applyHeadlessProjectionEvent(state, event)
+
+    expect(result).toEqual({ handled: true, effects: [{ type: "runtime.probe", key: "workflow" }] })
+    expect(runtimeProbeKeysForEvent(event)).toEqual(["workflow"])
   })
 
   test("createHeadlessClient sends async prompt commands through the headless route", async () => {

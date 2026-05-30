@@ -76,6 +76,7 @@ export type {
   HeadlessMessageEvent,
   HeadlessRequestEvent,
   HeadlessRuntimeStatusEvent,
+  HeadlessRuntimeProbeKey,
   HeadlessScheduledTaskEvent,
   HeadlessTaskQueueEvent,
   HeadlessControlEvent,
