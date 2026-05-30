@@ -91,6 +91,7 @@ export namespace WorkflowScheduler {
               },
               prompt: childPlan.prompt,
               budgetSlice: childPlan.budgetSlice,
+              pacing: childPlan.pacing,
               allowedTools: childPlan.allowedTools,
               writePolicy: childPlan.writePolicy,
               networkPolicy: childPlan.networkPolicy,

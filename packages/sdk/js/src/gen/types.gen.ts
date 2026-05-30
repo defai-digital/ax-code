@@ -1132,6 +1132,10 @@ export type WorkflowRunEventRecord = {
       maxToolCalls?: number
       maxRetries?: number
     }
+    pacing?: {
+      maxRequestsPerMinute?: number
+      maxTokensPerMinute?: number
+    }
     modelPolicy?: {
       plannerModel?: string
       workerModel?: string
@@ -1197,6 +1201,10 @@ export type WorkflowRunEventRecord = {
         maxTotalAgents?: number
         maxToolCalls?: number
         maxRetries?: number
+      }
+      pacing?: {
+        maxRequestsPerMinute?: number
+        maxTokensPerMinute?: number
       }
     }>
   }
@@ -5874,6 +5882,10 @@ export type WorkflowRunCreateData = {
         maxToolCalls?: number
         maxRetries?: number
       }
+      pacing?: {
+        maxRequestsPerMinute?: number
+        maxTokensPerMinute?: number
+      }
       modelPolicy?: {
         plannerModel?: string
         workerModel?: string
@@ -5939,6 +5951,10 @@ export type WorkflowRunCreateData = {
           maxTotalAgents?: number
           maxToolCalls?: number
           maxRetries?: number
+        }
+        pacing?: {
+          maxRequestsPerMinute?: number
+          maxTokensPerMinute?: number
         }
       }>
     }
@@ -6174,6 +6190,10 @@ export type WorkflowRunGetResponses = {
         maxToolCalls?: number
         maxRetries?: number
       }
+      pacing?: {
+        maxRequestsPerMinute?: number
+        maxTokensPerMinute?: number
+      }
       modelPolicy?: {
         plannerModel?: string
         workerModel?: string
@@ -6239,6 +6259,10 @@ export type WorkflowRunGetResponses = {
           maxTotalAgents?: number
           maxToolCalls?: number
           maxRetries?: number
+        }
+        pacing?: {
+          maxRequestsPerMinute?: number
+          maxTokensPerMinute?: number
         }
       }>
     }
@@ -6499,6 +6523,10 @@ export type WorkflowRunSaveTemplateResponses = {
         maxToolCalls?: number
         maxRetries?: number
       }
+      pacing?: {
+        maxRequestsPerMinute?: number
+        maxTokensPerMinute?: number
+      }
       modelPolicy?: {
         plannerModel?: string
         workerModel?: string
@@ -6564,6 +6592,10 @@ export type WorkflowRunSaveTemplateResponses = {
           maxTotalAgents?: number
           maxToolCalls?: number
           maxRetries?: number
+        }
+        pacing?: {
+          maxRequestsPerMinute?: number
+          maxTokensPerMinute?: number
         }
       }>
     }
@@ -6672,6 +6704,10 @@ export type WorkflowRunStartResponses = {
         maxToolCalls?: number
         maxRetries?: number
       }
+      pacing?: {
+        maxRequestsPerMinute?: number
+        maxTokensPerMinute?: number
+      }
       modelPolicy?: {
         plannerModel?: string
         workerModel?: string
@@ -6737,6 +6773,10 @@ export type WorkflowRunStartResponses = {
           maxTotalAgents?: number
           maxToolCalls?: number
           maxRetries?: number
+        }
+        pacing?: {
+          maxRequestsPerMinute?: number
+          maxTokensPerMinute?: number
         }
       }>
     }
@@ -6862,6 +6902,10 @@ export type WorkflowRunPauseResponses = {
         maxToolCalls?: number
         maxRetries?: number
       }
+      pacing?: {
+        maxRequestsPerMinute?: number
+        maxTokensPerMinute?: number
+      }
       modelPolicy?: {
         plannerModel?: string
         workerModel?: string
@@ -6927,6 +6971,10 @@ export type WorkflowRunPauseResponses = {
           maxTotalAgents?: number
           maxToolCalls?: number
           maxRetries?: number
+        }
+        pacing?: {
+          maxRequestsPerMinute?: number
+          maxTokensPerMinute?: number
         }
       }>
     }
@@ -7052,6 +7100,10 @@ export type WorkflowRunResumeResponses = {
         maxToolCalls?: number
         maxRetries?: number
       }
+      pacing?: {
+        maxRequestsPerMinute?: number
+        maxTokensPerMinute?: number
+      }
       modelPolicy?: {
         plannerModel?: string
         workerModel?: string
@@ -7117,6 +7169,10 @@ export type WorkflowRunResumeResponses = {
           maxTotalAgents?: number
           maxToolCalls?: number
           maxRetries?: number
+        }
+        pacing?: {
+          maxRequestsPerMinute?: number
+          maxTokensPerMinute?: number
         }
       }>
     }
@@ -7242,6 +7298,10 @@ export type WorkflowRunCancelResponses = {
         maxToolCalls?: number
         maxRetries?: number
       }
+      pacing?: {
+        maxRequestsPerMinute?: number
+        maxTokensPerMinute?: number
+      }
       modelPolicy?: {
         plannerModel?: string
         workerModel?: string
@@ -7307,6 +7367,10 @@ export type WorkflowRunCancelResponses = {
           maxTotalAgents?: number
           maxToolCalls?: number
           maxRetries?: number
+        }
+        pacing?: {
+          maxRequestsPerMinute?: number
+          maxTokensPerMinute?: number
         }
       }>
     }
@@ -7432,6 +7496,10 @@ export type WorkflowRunRetryResponses = {
         maxToolCalls?: number
         maxRetries?: number
       }
+      pacing?: {
+        maxRequestsPerMinute?: number
+        maxTokensPerMinute?: number
+      }
       modelPolicy?: {
         plannerModel?: string
         workerModel?: string
@@ -7497,6 +7565,10 @@ export type WorkflowRunRetryResponses = {
           maxTotalAgents?: number
           maxToolCalls?: number
           maxRetries?: number
+        }
+        pacing?: {
+          maxRequestsPerMinute?: number
+          maxTokensPerMinute?: number
         }
       }>
     }
@@ -7620,6 +7692,10 @@ export type WorkflowTemplateListResponses = {
         maxToolCalls?: number
         maxRetries?: number
       }
+      pacing?: {
+        maxRequestsPerMinute?: number
+        maxTokensPerMinute?: number
+      }
       modelPolicy?: {
         plannerModel?: string
         workerModel?: string
@@ -7685,6 +7761,10 @@ export type WorkflowTemplateListResponses = {
           maxTotalAgents?: number
           maxToolCalls?: number
           maxRetries?: number
+        }
+        pacing?: {
+          maxRequestsPerMinute?: number
+          maxTokensPerMinute?: number
         }
       }>
     }
@@ -7756,6 +7836,10 @@ export type WorkflowTemplateSaveData = {
         maxToolCalls?: number
         maxRetries?: number
       }
+      pacing?: {
+        maxRequestsPerMinute?: number
+        maxTokensPerMinute?: number
+      }
       modelPolicy?: {
         plannerModel?: string
         workerModel?: string
@@ -7821,6 +7905,10 @@ export type WorkflowTemplateSaveData = {
           maxTotalAgents?: number
           maxToolCalls?: number
           maxRetries?: number
+        }
+        pacing?: {
+          maxRequestsPerMinute?: number
+          maxTokensPerMinute?: number
         }
       }>
     }
@@ -7911,6 +7999,10 @@ export type WorkflowTemplateSaveResponses = {
         maxToolCalls?: number
         maxRetries?: number
       }
+      pacing?: {
+        maxRequestsPerMinute?: number
+        maxTokensPerMinute?: number
+      }
       modelPolicy?: {
         plannerModel?: string
         workerModel?: string
@@ -7976,6 +8068,10 @@ export type WorkflowTemplateSaveResponses = {
           maxTotalAgents?: number
           maxToolCalls?: number
           maxRetries?: number
+        }
+        pacing?: {
+          maxRequestsPerMinute?: number
+          maxTokensPerMinute?: number
         }
       }>
     }
@@ -8079,6 +8175,10 @@ export type WorkflowTemplateGetResponses = {
         maxToolCalls?: number
         maxRetries?: number
       }
+      pacing?: {
+        maxRequestsPerMinute?: number
+        maxTokensPerMinute?: number
+      }
       modelPolicy?: {
         plannerModel?: string
         workerModel?: string
@@ -8144,6 +8244,10 @@ export type WorkflowTemplateGetResponses = {
           maxTotalAgents?: number
           maxToolCalls?: number
           maxRetries?: number
+        }
+        pacing?: {
+          maxRequestsPerMinute?: number
+          maxTokensPerMinute?: number
         }
       }>
     }
@@ -8247,6 +8351,10 @@ export type WorkflowTemplatePromoteResponses = {
         maxToolCalls?: number
         maxRetries?: number
       }
+      pacing?: {
+        maxRequestsPerMinute?: number
+        maxTokensPerMinute?: number
+      }
       modelPolicy?: {
         plannerModel?: string
         workerModel?: string
@@ -8312,6 +8420,10 @@ export type WorkflowTemplatePromoteResponses = {
           maxTotalAgents?: number
           maxToolCalls?: number
           maxRetries?: number
+        }
+        pacing?: {
+          maxRequestsPerMinute?: number
+          maxTokensPerMinute?: number
         }
       }>
     }

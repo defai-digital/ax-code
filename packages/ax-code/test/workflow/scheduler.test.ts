@@ -142,6 +142,10 @@ describe("WorkflowScheduler", () => {
             phaseID: result.phases[0]?.id,
             specPhaseID: "collect-issues",
           })
+          expect(queue[0]?.payload.pacing).toEqual({
+            maxRequestsPerMinute: 12,
+            maxTokensPerMinute: 200_000,
+          })
         },
       })
     } finally {

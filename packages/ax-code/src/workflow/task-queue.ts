@@ -1,6 +1,7 @@
 import z from "zod"
 import type { TaskQueue } from "../session/task-queue"
 import { WorkflowRun } from "./run"
+import { WorkflowPacing } from "./spec"
 import { WorkflowChildID, WorkflowPhaseID, WorkflowRunID, type WorkflowChildRecord } from "./state"
 import { WorkflowScheduler } from "./scheduler"
 
@@ -13,6 +14,7 @@ export namespace WorkflowTaskQueue {
       specPhaseID: z.string().min(1),
       startOptions: WorkflowScheduler.StartOptions.partial().optional(),
     }),
+    pacing: WorkflowPacing.optional(),
   })
   export type Payload = z.infer<typeof Payload>
 

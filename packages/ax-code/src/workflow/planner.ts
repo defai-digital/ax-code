@@ -1,9 +1,12 @@
 import z from "zod"
 import {
   WORKFLOW_DEFAULT_MAX_CONCURRENT_AGENTS,
+  WORKFLOW_DEFAULT_MAX_REQUESTS_PER_MINUTE,
+  WORKFLOW_DEFAULT_MAX_TOKENS_PER_MINUTE,
   WORKFLOW_DEFAULT_MAX_TOTAL_AGENTS,
   WorkflowSpecV1,
   type WorkflowBudget,
+  type WorkflowPacing,
   type WorkflowPhase,
   type WorkflowSpecV1 as WorkflowSpec,
 } from "./spec"
@@ -17,6 +20,8 @@ export type WorkflowDryRunPlan = {
     maxConcurrentAgents: number
     maxTotalTokens: number
     maxToolCalls: number
+    maxRequestsPerMinute: number
+    maxTokensPerMinute: number
     writePolicy: WorkflowSpec["permissions"]["writePolicy"]
     verificationMode: WorkflowSpec["verification"]["mode"]
   }
@@ -29,6 +34,7 @@ export type WorkflowDryRunPhase = {
   name: string
   kind: WorkflowPhase["kind"]
   maxParallel: number
+  pacing: WorkflowPacing
   estimatedChildren: number
   children: WorkflowDryRunChild[]
 }
@@ -43,6 +49,7 @@ export type WorkflowDryRunChild = {
     maxTotalTokens: number
     maxToolCalls: number
   }
+  pacing: WorkflowPacing
   allowedTools: string[]
   writePolicy: WorkflowSpec["permissions"]["writePolicy"]
   networkPolicy: WorkflowSpec["permissions"]["networkPolicy"]
@@ -70,16 +77,19 @@ export function planWorkflowDryRun(input: WorkflowDryRunInput): WorkflowDryRunPl
 
   const tokenSlice = Math.max(1, Math.floor(parsed.spec.budget.maxTotalTokens / Math.max(1, estimatedChildAgents)))
   const toolCallSlice = Math.max(1, Math.floor(parsed.spec.budget.maxToolCalls / Math.max(1, estimatedChildAgents)))
+  assertPacingSafety(parsed, childCounts, tokenSlice)
   const warnings: string[] = []
   const phases = parsed.spec.phases.map((phase, phaseIndex): WorkflowDryRunPhase => {
     const estimatedChildren = childCounts[phaseIndex]!
     const maxParallel = effectiveMaxParallel(phase, parsed.spec.budget, estimatedChildren)
+    const pacing = effectivePacing(phase, parsed.spec)
     const route = modelRouteForPhase(phase, parsed.spec)
     return {
       specPhaseID: phase.id,
       name: phase.name,
       kind: phase.kind,
       maxParallel,
+      pacing,
       estimatedChildren,
       children: Array.from({ length: estimatedChildren }, (_, index) => ({
         index,
@@ -91,6 +101,7 @@ export function planWorkflowDryRun(input: WorkflowDryRunInput): WorkflowDryRunPl
           maxTotalTokens: tokenSlice,
           maxToolCalls: toolCallSlice,
         },
+        pacing,
         allowedTools: parsed.spec.permissions.allowedTools,
         writePolicy: parsed.spec.permissions.writePolicy,
         networkPolicy: parsed.spec.permissions.networkPolicy,
@@ -111,6 +122,8 @@ export function planWorkflowDryRun(input: WorkflowDryRunInput): WorkflowDryRunPl
       maxConcurrentAgents: parsed.spec.budget.maxConcurrentAgents,
       maxTotalTokens: parsed.spec.budget.maxTotalTokens,
       maxToolCalls: parsed.spec.budget.maxToolCalls,
+      maxRequestsPerMinute: parsed.spec.pacing.maxRequestsPerMinute,
+      maxTokensPerMinute: parsed.spec.pacing.maxTokensPerMinute,
       writePolicy: parsed.spec.permissions.writePolicy,
       verificationMode: parsed.spec.verification.mode,
     },
@@ -139,12 +152,63 @@ function assertPlannerSafety(input: z.infer<typeof WorkflowDryRunInput>) {
         `maxTotalAgents ${input.spec.budget.maxTotalAgents} exceeds safe default ${WORKFLOW_DEFAULT_MAX_TOTAL_AGENTS}`,
       )
     }
+    if (input.spec.pacing.maxRequestsPerMinute > WORKFLOW_DEFAULT_MAX_REQUESTS_PER_MINUTE) {
+      issues.push(
+        `maxRequestsPerMinute ${input.spec.pacing.maxRequestsPerMinute} exceeds safe default ${WORKFLOW_DEFAULT_MAX_REQUESTS_PER_MINUTE}`,
+      )
+    }
+    if (input.spec.pacing.maxTokensPerMinute > WORKFLOW_DEFAULT_MAX_TOKENS_PER_MINUTE) {
+      issues.push(
+        `maxTokensPerMinute ${input.spec.pacing.maxTokensPerMinute} exceeds safe default ${WORKFLOW_DEFAULT_MAX_TOKENS_PER_MINUTE}`,
+      )
+    }
+    for (const phase of input.spec.phases) {
+      if (
+        phase.pacing?.maxRequestsPerMinute !== undefined &&
+        phase.pacing.maxRequestsPerMinute > WORKFLOW_DEFAULT_MAX_REQUESTS_PER_MINUTE
+      ) {
+        issues.push(
+          `phase ${phase.id} maxRequestsPerMinute ${phase.pacing.maxRequestsPerMinute} exceeds safe default ${WORKFLOW_DEFAULT_MAX_REQUESTS_PER_MINUTE}`,
+        )
+      }
+      if (
+        phase.pacing?.maxTokensPerMinute !== undefined &&
+        phase.pacing.maxTokensPerMinute > WORKFLOW_DEFAULT_MAX_TOKENS_PER_MINUTE
+      ) {
+        issues.push(
+          `phase ${phase.id} maxTokensPerMinute ${phase.pacing.maxTokensPerMinute} exceeds safe default ${WORKFLOW_DEFAULT_MAX_TOKENS_PER_MINUTE}`,
+        )
+      }
+    }
   }
 
   if (!input.allowWriteWorkflows && input.spec.permissions.writePolicy !== "read-only") {
     issues.push(`writePolicy ${input.spec.permissions.writePolicy} requires explicit write workflow approval`)
   }
 
+  if (issues.length > 0) throw new WorkflowPlanError(issues)
+}
+
+function assertPacingSafety(
+  input: z.infer<typeof WorkflowDryRunInput>,
+  childCounts: number[],
+  tokenSlice: number,
+) {
+  const issues: string[] = []
+  for (const [index, phase] of input.spec.phases.entries()) {
+    const estimatedChildren = childCounts[index] ?? 1
+    const maxParallel = effectiveMaxParallel(phase, input.spec.budget, estimatedChildren)
+    const pacing = effectivePacing(phase, input.spec)
+    if (maxParallel > pacing.maxRequestsPerMinute) {
+      issues.push(
+        `phase ${phase.id} request burst ${maxParallel}/${pacing.maxRequestsPerMinute} exceeds maxRequestsPerMinute`,
+      )
+    }
+    const tokenBurst = maxParallel * tokenSlice
+    if (tokenBurst > pacing.maxTokensPerMinute) {
+      issues.push(`phase ${phase.id} token burst ${tokenBurst}/${pacing.maxTokensPerMinute} exceeds maxTokensPerMinute`)
+    }
+  }
   if (issues.length > 0) throw new WorkflowPlanError(issues)
 }
 
@@ -158,6 +222,13 @@ function estimatePhaseChildren(phase: WorkflowPhase, budget: WorkflowBudget) {
 function effectiveMaxParallel(phase: WorkflowPhase, budget: WorkflowBudget, estimatedChildren: number) {
   if (phase.kind !== "fanout" && phase.kind !== "verification") return 1
   return Math.min(phase.maxParallel ?? budget.maxConcurrentAgents, budget.maxConcurrentAgents, estimatedChildren)
+}
+
+function effectivePacing(phase: WorkflowPhase, spec: WorkflowSpec): WorkflowPacing {
+  return {
+    ...spec.pacing,
+    ...phase.pacing,
+  }
 }
 
 function modelRouteForPhase(phase: WorkflowPhase, spec: WorkflowSpec) {

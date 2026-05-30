@@ -2113,6 +2113,10 @@ export class WorkflowRun extends HeyApiClient {
           maxToolCalls?: number
           maxRetries?: number
         }
+        pacing?: {
+          maxRequestsPerMinute?: number
+          maxTokensPerMinute?: number
+        }
         modelPolicy?: {
           plannerModel?: string
           workerModel?: string
@@ -2178,6 +2182,10 @@ export class WorkflowRun extends HeyApiClient {
             maxTotalAgents?: number
             maxToolCalls?: number
             maxRetries?: number
+          }
+          pacing?: {
+            maxRequestsPerMinute?: number
+            maxTokensPerMinute?: number
           }
         }>
       }
@@ -2696,6 +2704,10 @@ export class WorkflowTemplate extends HeyApiClient {
           maxToolCalls?: number
           maxRetries?: number
         }
+        pacing?: {
+          maxRequestsPerMinute?: number
+          maxTokensPerMinute?: number
+        }
         modelPolicy?: {
           plannerModel?: string
           workerModel?: string
@@ -2761,6 +2773,10 @@ export class WorkflowTemplate extends HeyApiClient {
             maxTotalAgents?: number
             maxToolCalls?: number
             maxRetries?: number
+          }
+          pacing?: {
+            maxRequestsPerMinute?: number
+            maxTokensPerMinute?: number
           }
         }>
       }

@@ -3,6 +3,8 @@ import { Flag } from "../../src/flag/flag"
 import {
   InvalidWorkflowFixtureSpecs,
   WORKFLOW_DEFAULT_MAX_CONCURRENT_AGENTS,
+  WORKFLOW_DEFAULT_MAX_REQUESTS_PER_MINUTE,
+  WORKFLOW_DEFAULT_MAX_TOKENS_PER_MINUTE,
   WORKFLOW_DEFAULT_MAX_TOTAL_AGENTS,
   WorkflowFixtureSpecs,
   WorkflowInputValidationError,
@@ -108,6 +110,10 @@ describe("workflow spec v1", () => {
     expect(spec.budget.maxTotalAgents).toBe(WORKFLOW_DEFAULT_MAX_TOTAL_AGENTS)
     expect(spec.permissions.writePolicy).toBe("read-only")
     expect(spec.modelPolicy.effort).toBe("normal")
+    expect(spec.pacing).toEqual({
+      maxRequestsPerMinute: WORKFLOW_DEFAULT_MAX_REQUESTS_PER_MINUTE,
+      maxTokensPerMinute: WORKFLOW_DEFAULT_MAX_TOKENS_PER_MINUTE,
+    })
     expect(spec.inputs).toEqual([])
     expect(spec.routine).toBeUndefined()
     expect(spec.synthesis).toEqual({
@@ -160,6 +166,24 @@ describe("workflow spec v1", () => {
 
     expect(parsed.success).toBe(false)
     expect(parsed.error?.issues.some((issue) => issue.path.join(".") === "phases.0.maxParallel")).toBe(true)
+  })
+
+  test("rejects unsafe pacing limits", () => {
+    const parsed = WorkflowSpecV1.safeParse({
+      schemaVersion: 1,
+      id: "unsafe-pacing",
+      name: "Unsafe Pacing",
+      description: "Invalid provider pacing limits.",
+      pacing: {
+        maxRequestsPerMinute: 121,
+        maxTokensPerMinute: 2_000_001,
+      },
+      phases: [{ id: "noop", name: "Noop", kind: "noop" }],
+    })
+
+    expect(parsed.success).toBe(false)
+    expect(parsed.error?.issues.some((issue) => issue.path.join(".") === "pacing.maxRequestsPerMinute")).toBe(true)
+    expect(parsed.error?.issues.some((issue) => issue.path.join(".") === "pacing.maxTokensPerMinute")).toBe(true)
   })
 
   test("requires dependencies to point at earlier phases", () => {

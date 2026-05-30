@@ -10,6 +10,10 @@ export const WORKFLOW_DEFAULT_MAX_TOTAL_TOKENS = 100_000
 export const WORKFLOW_DEFAULT_MAX_WALL_TIME_MS = 60 * 60 * 1000
 export const WORKFLOW_DEFAULT_MAX_TOOL_CALLS = 500
 export const WORKFLOW_DEFAULT_MAX_RETRIES = 1
+export const WORKFLOW_DEFAULT_MAX_REQUESTS_PER_MINUTE = 12
+export const WORKFLOW_DEFAULT_MAX_TOKENS_PER_MINUTE = 200_000
+export const WORKFLOW_MAX_REQUESTS_PER_MINUTE = 120
+export const WORKFLOW_MAX_TOKENS_PER_MINUTE = 2_000_000
 
 const Identifier = z
   .string()
@@ -78,6 +82,26 @@ export type WorkflowBudget = z.infer<typeof WorkflowBudget>
 
 export const WorkflowPhaseBudget = z.object(WorkflowBudgetFields).partial()
 export type WorkflowPhaseBudget = z.infer<typeof WorkflowPhaseBudget>
+
+const WorkflowPacingFields = {
+  maxRequestsPerMinute: PositiveInteger.max(WORKFLOW_MAX_REQUESTS_PER_MINUTE).default(
+    WORKFLOW_DEFAULT_MAX_REQUESTS_PER_MINUTE,
+  ),
+  maxTokensPerMinute: PositiveInteger.max(WORKFLOW_MAX_TOKENS_PER_MINUTE).default(
+    WORKFLOW_DEFAULT_MAX_TOKENS_PER_MINUTE,
+  ),
+}
+
+const DefaultWorkflowPacing = {
+  maxRequestsPerMinute: WORKFLOW_DEFAULT_MAX_REQUESTS_PER_MINUTE,
+  maxTokensPerMinute: WORKFLOW_DEFAULT_MAX_TOKENS_PER_MINUTE,
+}
+
+export const WorkflowPacing = z.object(WorkflowPacingFields)
+export type WorkflowPacing = z.infer<typeof WorkflowPacing>
+
+export const WorkflowPhasePacing = z.object(WorkflowPacingFields).partial()
+export type WorkflowPhasePacing = z.infer<typeof WorkflowPhasePacing>
 
 export const WorkflowModelPolicy = z.object({
   plannerModel: NonEmptyString.optional(),
@@ -201,6 +225,7 @@ export const WorkflowPhase = z.object({
   mergeStrategy: z.enum(["all", "first-success", "majority", "critic-confirmation"]).default("all"),
   modelPolicy: WorkflowModelPolicy.partial().optional(),
   budget: WorkflowPhaseBudget.optional(),
+  pacing: WorkflowPhasePacing.optional(),
 })
 export type WorkflowPhase = z.infer<typeof WorkflowPhase>
 
@@ -215,6 +240,7 @@ export const WorkflowSpecV1 = z
     inputs: z.array(WorkflowInput).default([]),
     routine: WorkflowRoutine.optional(),
     budget: WorkflowBudget.default(DefaultWorkflowBudget),
+    pacing: WorkflowPacing.default(DefaultWorkflowPacing),
     modelPolicy: WorkflowModelPolicy.default({ effort: "normal", routing: [] }),
     permissions: WorkflowPermissions.default({
       writePolicy: "read-only",
