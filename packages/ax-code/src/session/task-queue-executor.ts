@@ -264,10 +264,9 @@ async function recordWorkflowSubagentUsage(item: TaskQueue.Info, result: unknown
   const workflow = workflowPayload(item)
   if (!workflow) return
   const usage = messageBudgetUsage(result)
-  if (!usage) return
 
   const { WorkflowRun } = await import("../workflow/run")
-  const outputArtifact = messageOutputArtifact(result, usage)
+  const outputArtifact = messageOutputArtifact(result, usage ?? EmptyWorkflowSubagentBudgetUsage)
   if (outputArtifact) {
     await WorkflowRun.appendArtifact({
       runID: workflow.runID as WorkflowRunID,
@@ -279,6 +278,7 @@ async function recordWorkflowSubagentUsage(item: TaskQueue.Info, result: unknown
       payload: outputArtifact.payload,
     })
   }
+  if (!usage) return
   await WorkflowRun.appendBudgetUsage({
     runID: workflow.runID as WorkflowRunID,
     phaseID: workflow.phaseID as WorkflowPhaseID,
@@ -518,6 +518,14 @@ type WorkflowSubagentBudgetUsage = {
   estimatedCostUsd: number
 }
 
+const EmptyWorkflowSubagentBudgetUsage: WorkflowSubagentBudgetUsage = {
+  totalTokens: 0,
+  inputTokens: 0,
+  outputTokens: 0,
+  toolCalls: 0,
+  estimatedCostUsd: 0,
+}
+
 function messageBudgetUsage(result: unknown): WorkflowSubagentBudgetUsage | undefined {
   const tokens = messageTokens(result)
   const toolCalls = messageToolCalls(result)
@@ -532,12 +540,10 @@ function messageBudgetUsage(result: unknown): WorkflowSubagentBudgetUsage | unde
   }
 }
 
-function messageOutputArtifact(
-  result: unknown,
-  usage: WorkflowSubagentBudgetUsage,
-) {
+function messageOutputArtifact(result: unknown, usage: WorkflowSubagentBudgetUsage) {
   if (!result || typeof result !== "object") return undefined
   const info = (result as { info?: unknown }).info
+  if (!info || typeof info !== "object" || (info as { role?: unknown }).role !== "assistant") return undefined
   const messageID = info && typeof info === "object" ? (info as { id?: unknown }).id : undefined
   const parts = (result as { parts?: unknown }).parts
   const output = messageTextOutput(parts)

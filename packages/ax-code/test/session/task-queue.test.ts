@@ -422,6 +422,82 @@ describe("TaskQueue", () => {
       },
     })
   })
+
+  test("persists workflow child text artifacts without token usage", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const run = await WorkflowRun.create({ spec: parseWorkflowSpecV1(WorkflowFixtureSpecs.noopDryRun) })
+        const detail = await WorkflowRun.getDetail(run.id)
+        const phase = detail.phases[0]!
+        await WorkflowRun.setStatus({ id: run.id, status: "running" })
+        await WorkflowRun.setPhaseStatus({ id: phase.id, status: "running" })
+        const child = await WorkflowRun.appendChild({
+          runID: run.id,
+          phaseID: phase.id,
+          sessionID: session.id,
+        })
+        const item = await TaskQueue.enqueue({
+          sessionID: session.id,
+          kind: "subagent",
+          title: "Run workflow child with text only",
+          payload: {
+            workflow: {
+              runID: run.id,
+              phaseID: phase.id,
+              childID: child.id,
+              specPhaseID: phase.specPhaseID,
+            },
+            body: {
+              agent: "build",
+              model: { providerID: "test", modelID: "test-model" },
+              parts: [{ type: "text", text: "Return text only." }],
+            },
+          },
+        })
+        const prompt = spyOn(SessionPrompt, "prompt").mockResolvedValue({
+          info: {
+            id: "msg_workflow_text_only",
+            role: "assistant",
+            sessionID: session.id,
+          },
+          parts: [
+            {
+              id: "prt_text_only",
+              sessionID: session.id,
+              messageID: "msg_workflow_text_only",
+              type: "text",
+              text: "Text only result.",
+            },
+          ],
+        } as any)
+
+        try {
+          await TaskQueueExecutor.start(item)
+          await waitForQueueStatus(item.id, "completed")
+
+          const completed = await WorkflowRun.getDetail(run.id)
+          expect(completed.children[0]?.status).toBe("completed")
+          expect(completed.budgetUsage.totalTokens).toBe(0)
+          expect(completed.artifacts[0]).toMatchObject({
+            childID: child.id,
+            kind: "summary",
+            summary: "Text only result.",
+            payload: {
+              messageID: "msg_workflow_text_only",
+              output: "Text only result.",
+              usage: { totalTokens: 0, inputTokens: 0, outputTokens: 0, toolCalls: 0, estimatedCostUsd: 0 },
+            },
+          })
+        } finally {
+          prompt.mockRestore()
+        }
+      },
+    })
+  })
 })
 
 async function waitForQueueStatus(id: TaskQueue.Info["id"], status: TaskQueue.Status) {
