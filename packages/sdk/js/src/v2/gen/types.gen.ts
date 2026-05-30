@@ -1166,6 +1166,7 @@ export type WorkflowRunEventRecord = {
       workflow?: "review" | "debug" | "qa"
       commands?: Array<string>
       requiredArtifactIds?: Array<string>
+      reason?: string
     }
     synthesis?: {
       agent?: string
@@ -6056,6 +6057,7 @@ export type WorkflowRunCreateData = {
         workflow?: "review" | "debug" | "qa"
         commands?: Array<string>
         requiredArtifactIds?: Array<string>
+        reason?: string
       }
       synthesis?: {
         agent?: string
@@ -6445,6 +6447,7 @@ export type WorkflowRunGetResponses = {
         workflow?: "review" | "debug" | "qa"
         commands?: Array<string>
         requiredArtifactIds?: Array<string>
+        reason?: string
       }
       synthesis?: {
         agent?: string
@@ -6892,6 +6895,7 @@ export type WorkflowRunSaveTemplateResponses = {
         workflow?: "review" | "debug" | "qa"
         commands?: Array<string>
         requiredArtifactIds?: Array<string>
+        reason?: string
       }
       synthesis?: {
         agent?: string
@@ -7083,6 +7087,7 @@ export type WorkflowRunStartResponses = {
         workflow?: "review" | "debug" | "qa"
         commands?: Array<string>
         requiredArtifactIds?: Array<string>
+        reason?: string
       }
       synthesis?: {
         agent?: string
@@ -7291,6 +7296,7 @@ export type WorkflowRunPauseResponses = {
         workflow?: "review" | "debug" | "qa"
         commands?: Array<string>
         requiredArtifactIds?: Array<string>
+        reason?: string
       }
       synthesis?: {
         agent?: string
@@ -7499,6 +7505,7 @@ export type WorkflowRunResumeResponses = {
         workflow?: "review" | "debug" | "qa"
         commands?: Array<string>
         requiredArtifactIds?: Array<string>
+        reason?: string
       }
       synthesis?: {
         agent?: string
@@ -7707,6 +7714,7 @@ export type WorkflowRunCancelResponses = {
         workflow?: "review" | "debug" | "qa"
         commands?: Array<string>
         requiredArtifactIds?: Array<string>
+        reason?: string
       }
       synthesis?: {
         agent?: string
@@ -7916,6 +7924,7 @@ export type WorkflowRunRetryResponses = {
         workflow?: "review" | "debug" | "qa"
         commands?: Array<string>
         requiredArtifactIds?: Array<string>
+        reason?: string
       }
       synthesis?: {
         agent?: string
@@ -8122,6 +8131,7 @@ export type WorkflowTemplateListResponses = {
         workflow?: "review" | "debug" | "qa"
         commands?: Array<string>
         requiredArtifactIds?: Array<string>
+        reason?: string
       }
       synthesis?: {
         agent?: string
@@ -8276,6 +8286,7 @@ export type WorkflowTemplateSaveData = {
         workflow?: "review" | "debug" | "qa"
         commands?: Array<string>
         requiredArtifactIds?: Array<string>
+        reason?: string
       }
       synthesis?: {
         agent?: string
@@ -8449,6 +8460,7 @@ export type WorkflowTemplateSaveResponses = {
         workflow?: "review" | "debug" | "qa"
         commands?: Array<string>
         requiredArtifactIds?: Array<string>
+        reason?: string
       }
       synthesis?: {
         agent?: string
@@ -8635,6 +8647,7 @@ export type WorkflowTemplateGetResponses = {
         workflow?: "review" | "debug" | "qa"
         commands?: Array<string>
         requiredArtifactIds?: Array<string>
+        reason?: string
       }
       synthesis?: {
         agent?: string
@@ -8821,6 +8834,7 @@ export type WorkflowTemplatePromoteResponses = {
         workflow?: "review" | "debug" | "qa"
         commands?: Array<string>
         requiredArtifactIds?: Array<string>
+        reason?: string
       }
       synthesis?: {
         agent?: string
@@ -9079,6 +9093,7 @@ export type WorkflowRoutineRunResponses = {
           workflow?: "review" | "debug" | "qa"
           commands?: Array<string>
           requiredArtifactIds?: Array<string>
+          reason?: string
         }
         synthesis?: {
           agent?: string
@@ -9233,6 +9248,7 @@ export type WorkflowRoutineRunResponses = {
           workflow?: "review" | "debug" | "qa"
           commands?: Array<string>
           requiredArtifactIds?: Array<string>
+          reason?: string
         }
         synthesis?: {
           agent?: string

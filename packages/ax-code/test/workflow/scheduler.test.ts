@@ -137,6 +137,95 @@ describe("WorkflowScheduler", () => {
     }
   })
 
+  test("states deferred verification plan and unresolved risk in the final report", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
+    process.env.AX_CODE_WORKFLOW_RUNTIME = "1"
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const spec = parseWorkflowSpecV1({
+            schemaVersion: 1,
+            id: "deferred-final-report",
+            name: "Deferred Final Report",
+            description: "A workflow that must state deferred verification risk.",
+            verification: {
+              mode: "deferred",
+              commands: ["bun test test/workflow/spec.test.ts"],
+            },
+            phases: [{ id: "noop", name: "Noop", kind: "noop" }],
+          })
+          const run = await WorkflowRun.create({ spec })
+          const result = await WorkflowScheduler.start(run.id)
+          const finalReport = result.artifacts.find(
+            (artifact) => artifact.specArtifactID === WORKFLOW_FINAL_REPORT_SPEC_ARTIFACT_ID,
+          )
+
+          expect(result.status).toBe("completed")
+          expect(finalReport?.summary).toContain("Verification: deferred (deferred)")
+          expect(finalReport?.summary).toContain("Deferred verification plan: bun test test/workflow/spec.test.ts.")
+          expect(finalReport?.summary).toContain("Unresolved risk: verification is deferred")
+          expect(finalReport?.payload).toMatchObject({
+            verification: {
+              mode: "deferred",
+              status: "deferred",
+              commands: ["bun test test/workflow/spec.test.ts"],
+            },
+          })
+        },
+      })
+    } finally {
+      if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME
+      else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
+    }
+  })
+
+  test("states skipped verification reason in the final report", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
+    process.env.AX_CODE_WORKFLOW_RUNTIME = "1"
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const spec = parseWorkflowSpecV1({
+            schemaVersion: 1,
+            id: "skipped-final-report",
+            name: "Skipped Final Report",
+            description: "A workflow that must state why verification was skipped.",
+            verification: {
+              mode: "skipped",
+              reason: "read-only exploratory pass with no candidate fix",
+            },
+            phases: [{ id: "noop", name: "Noop", kind: "noop" }],
+          })
+          const run = await WorkflowRun.create({ spec })
+          const result = await WorkflowScheduler.start(run.id)
+          const finalReport = result.artifacts.find(
+            (artifact) => artifact.specArtifactID === WORKFLOW_FINAL_REPORT_SPEC_ARTIFACT_ID,
+          )
+
+          expect(result.status).toBe("completed")
+          expect(finalReport?.summary).toContain("Verification: skipped (skipped)")
+          expect(finalReport?.summary).toContain(
+            "Verification skipped reason: read-only exploratory pass with no candidate fix.",
+          )
+          expect(finalReport?.payload).toMatchObject({
+            verification: {
+              mode: "skipped",
+              status: "skipped",
+              reason: "read-only exploratory pass with no candidate fix",
+            },
+          })
+        },
+      })
+    } finally {
+      if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME
+      else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
+    }
+  })
+
   test("blocks completion when required verification artifacts are missing", async () => {
     await using tmp = await tmpdir({ git: true })
     const previous = process.env.AX_CODE_WORKFLOW_RUNTIME

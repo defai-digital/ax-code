@@ -2155,6 +2155,7 @@ export class WorkflowRun extends HeyApiClient {
           workflow?: "review" | "debug" | "qa"
           commands?: Array<string>
           requiredArtifactIds?: Array<string>
+          reason?: string
         }
         synthesis?: {
           agent?: string
@@ -2822,6 +2823,7 @@ export class WorkflowTemplate extends HeyApiClient {
           workflow?: "review" | "debug" | "qa"
           commands?: Array<string>
           requiredArtifactIds?: Array<string>
+          reason?: string
         }
         synthesis?: {
           agent?: string

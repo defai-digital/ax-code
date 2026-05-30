@@ -574,6 +574,7 @@ async function ensureFinalReportArtifact(runID: WorkflowRunID): Promise<Workflow
     `Workflow final report: ${detail.spec.name}`,
     `Status: ${detail.status}`,
     `Verification: ${verification.status} (${verification.mode})`,
+    ...verification.summaryLines,
     `Phases: ${detail.phases.length} total, ${phaseCounts.completed ?? 0} completed, ${phaseCounts.failed ?? 0} failed, ${phaseCounts.cancelled ?? 0} cancelled.`,
     `Children: ${detail.children.length} total, ${childCounts.completed ?? 0} completed, ${childCounts.failed ?? 0} failed, ${childCounts.cancelled ?? 0} cancelled.`,
     `Artifacts: ${detail.artifacts.length} existing, verification envelopes: ${detail.verificationEnvelopeIDs.length}.`,
@@ -1024,8 +1025,30 @@ function finalReportVerification(detail: WorkflowRunDetail) {
     mode: detail.spec.verification.mode,
     status,
     requiredArtifactIds,
+    commands: detail.spec.verification.commands,
+    reason: detail.spec.verification.reason,
+    summaryLines: verificationSummaryLines(detail, status),
     verificationEnvelopeCount: detail.verificationEnvelopeIDs.length,
   }
+}
+
+function verificationSummaryLines(detail: WorkflowRunDetail, status: string) {
+  if (detail.spec.verification.mode === "deferred") {
+    const commands = detail.spec.verification.commands
+    return [
+      commands.length > 0
+        ? `Deferred verification plan: ${commands.join(" && ")}.`
+        : "Deferred verification plan: run targeted checks before relying on this workflow result.",
+      "Unresolved risk: verification is deferred and must be completed before treating findings as fully proven.",
+    ]
+  }
+  if (detail.spec.verification.mode === "skipped") {
+    return [`Verification skipped reason: ${detail.spec.verification.reason}.`]
+  }
+  if (detail.spec.verification.mode === "optional" && status === "not_run") {
+    return ["Optional verification did not run for this workflow."]
+  }
+  return []
 }
 
 function isTerminalRunStatus(status: WorkflowRun.Status) {

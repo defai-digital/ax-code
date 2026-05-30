@@ -311,6 +311,39 @@ describe("workflow spec v1", () => {
     expect(parsed.error?.issues.some((issue) => issue.path.join(".") === "synthesis.requiredArtifactIds")).toBe(true)
   })
 
+  test("requires skipped verification specs to state a reason", () => {
+    const skipped = WorkflowSpecV1.safeParse({
+      schemaVersion: 1,
+      id: "skipped-verification",
+      name: "Skipped Verification",
+      description: "Invalid because skipped verification needs an explicit reason.",
+      verification: {
+        mode: "skipped",
+      },
+      phases: [{ id: "noop", name: "Noop", kind: "noop" }],
+    })
+
+    expect(skipped.success).toBe(false)
+    expect(skipped.error?.issues.some((issue) => issue.path.join(".") === "verification.reason")).toBe(true)
+
+    expect(
+      parseWorkflowSpecV1({
+        schemaVersion: 1,
+        id: "deferred-verification",
+        name: "Deferred Verification",
+        description: "Deferred verification should carry commands as the verification plan.",
+        verification: {
+          mode: "deferred",
+          commands: ["bun test"],
+        },
+        phases: [{ id: "noop", name: "Noop", kind: "noop" }],
+      }).verification,
+    ).toMatchObject({
+      mode: "deferred",
+      commands: ["bun test"],
+    })
+  })
+
   test("keeps workflow runtime behind AX_CODE_WORKFLOW_RUNTIME", () => {
     const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
     try {

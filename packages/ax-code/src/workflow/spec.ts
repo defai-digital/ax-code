@@ -213,12 +213,23 @@ export const WorkflowArtifact = z.object({
 })
 export type WorkflowArtifact = z.infer<typeof WorkflowArtifact>
 
-export const WorkflowVerification = z.object({
-  mode: z.enum(["required", "optional", "deferred", "skipped"]).default("optional"),
-  workflow: z.enum(["review", "debug", "qa"]).optional(),
-  commands: z.array(NonEmptyString).default([]),
-  requiredArtifactIds: z.array(Identifier).default([]),
-})
+export const WorkflowVerification = z
+  .object({
+    mode: z.enum(["required", "optional", "deferred", "skipped"]).default("optional"),
+    workflow: z.enum(["review", "debug", "qa"]).optional(),
+    commands: z.array(NonEmptyString).default([]),
+    requiredArtifactIds: z.array(Identifier).default([]),
+    reason: NonEmptyString.max(500).optional(),
+  })
+  .superRefine((verification, ctx) => {
+    if (verification.mode === "skipped" && !verification.reason) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "skipped verification must state a reason",
+        path: ["reason"],
+      })
+    }
+  })
 export type WorkflowVerification = z.infer<typeof WorkflowVerification>
 
 export const WorkflowSynthesis = z.object({
