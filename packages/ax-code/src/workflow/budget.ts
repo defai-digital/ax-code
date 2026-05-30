@@ -17,6 +17,7 @@ export type WorkflowBudgetEvaluationInput = {
 export type WorkflowChildBudgetEvaluationInput = {
   budgetSlice: WorkflowPhaseBudget | undefined
   usage: Partial<WorkflowBudgetUsage>
+  elapsedMs?: number
   warningRatio?: number
 }
 
@@ -94,6 +95,9 @@ export function evaluateWorkflowChildBudget(input: WorkflowChildBudgetEvaluation
   }
   if (budgetSlice?.maxToolCalls !== undefined) {
     checkLimit("child tool calls", usage.toolCalls, budgetSlice.maxToolCalls, warningRatio, warnings, exceeded)
+  }
+  if (budgetSlice?.maxWallTimeMs !== undefined && input.elapsedMs !== undefined) {
+    checkLimit("child wall time", input.elapsedMs, budgetSlice.maxWallTimeMs, warningRatio, warnings, exceeded)
   }
 
   return {

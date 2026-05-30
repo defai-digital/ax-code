@@ -2,12 +2,20 @@ import { afterEach, describe, expect, test } from "bun:test"
 import { Bus } from "../../src/bus"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
-import { WorkflowFixtureSpecs, WorkflowRun, parseWorkflowSpecV1 } from "../../src/workflow"
+import { Database, eq } from "../../src/storage/db"
+import { WorkflowChildID, WorkflowFixtureSpecs, WorkflowRun, parseWorkflowSpecV1 } from "../../src/workflow"
+import { WorkflowChildTable } from "../../src/workflow/workflow.sql"
 import { tmpdir } from "../fixture/fixture"
 
 afterEach(async () => {
   await Instance.disposeAll()
 })
+
+function setWorkflowChildStartedAt(id: WorkflowChildID, startedAt: number) {
+  Database.use((db) => {
+    db.update(WorkflowChildTable).set({ time_started: startedAt }).where(eq(WorkflowChildTable.id, id)).run()
+  })
+}
 
 describe("WorkflowRun state", () => {
   test("persists run detail state and publishes lifecycle events", async () => {
@@ -374,6 +382,61 @@ describe("WorkflowRun state", () => {
           await new Promise((resolve) => setTimeout(resolve, 0))
           expect(events).toContain("workflow.budget.exceeded:child input tokens 35/30")
           expect(events.some((event) => event.includes("workflow.child.updated:failed"))).toBe(true)
+        } finally {
+          for (const unsubscribe of unsubscribers) unsubscribe()
+        }
+      },
+    })
+  })
+
+  test("fails a workflow when a child exceeds its wall-time slice", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const events: string[] = []
+        const unsubscribers = [
+          Bus.subscribe(WorkflowRun.Event.BudgetExceeded, (event) => {
+            events.push(`${event.type}:${event.properties.exceeded.join(";")}`)
+          }),
+        ]
+
+        try {
+          const run = await WorkflowRun.create({ spec: parseWorkflowSpecV1(WorkflowFixtureSpecs.noopDryRun) })
+          const detail = await WorkflowRun.getDetail(run.id)
+          const phase = detail.phases[0]!
+          await WorkflowRun.setStatus({ id: run.id, status: "running" })
+          await WorkflowRun.setPhaseStatus({ id: phase.id, status: "running" })
+          const child = await WorkflowRun.appendChild({
+            runID: run.id,
+            phaseID: phase.id,
+            agent: "worker",
+            budgetSlice: {
+              maxWallTimeMs: 100,
+            },
+          })
+          await WorkflowRun.setChildStatus({ id: child.id, status: "running" })
+          setWorkflowChildStartedAt(child.id, Date.now() - 250)
+
+          await WorkflowRun.appendBudgetUsage({
+            runID: run.id,
+            phaseID: phase.id,
+            childID: child.id,
+            kind: "consume",
+            usageDelta: {
+              totalTokens: 1,
+            },
+          })
+
+          const failed = await WorkflowRun.getDetail(run.id)
+          expect(failed.status).toBe("failed")
+          expect(failed.phases[0]?.status).toBe("failed")
+          expect(failed.children[0]?.status).toBe("failed")
+          expect(failed.error).toContain("child wall time")
+
+          await new Promise((resolve) => setTimeout(resolve, 0))
+          expect(events.some((event) => event.startsWith("workflow.budget.exceeded:child wall time"))).toBe(true)
         } finally {
           for (const unsubscribe of unsubscribers) unsubscribe()
         }

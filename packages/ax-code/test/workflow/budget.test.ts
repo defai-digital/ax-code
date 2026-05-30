@@ -67,22 +67,30 @@ describe("workflow budget helpers", () => {
     ).toThrow(WorkflowBudgetExceededError)
   })
 
-  test("evaluates child-level input and output token caps", () => {
+  test("evaluates child-level token, tool, and wall-time caps", () => {
     const evaluation = evaluateWorkflowChildBudget({
       budgetSlice: {
         maxTotalTokens: 1000,
         maxInputTokensPerChild: 500,
         maxOutputTokensPerChild: 250,
+        maxWallTimeMs: 1000,
+        maxToolCalls: 4,
       },
       usage: {
         totalTokens: 760,
         inputTokens: 510,
         outputTokens: 250,
+        toolCalls: 5,
       },
+      elapsedMs: 1200,
     })
 
     expect(evaluation.status).toBe("exceeded")
-    expect(evaluation.exceeded).toEqual(["child input tokens 510/500"])
+    expect(evaluation.exceeded).toEqual([
+      "child input tokens 510/500",
+      "child tool calls 5/4",
+      "child wall time 1200/1000",
+    ])
     expect(evaluation.warnings).toContain("child output tokens 250/250")
   })
 })

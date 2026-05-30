@@ -388,6 +388,7 @@ async function appendBudgetUsage(input: WorkflowRunState.AppendBudgetUsageInput)
     const childEvaluation = evaluateWorkflowChildBudget({
       budgetSlice: budgetChild?.budget_slice ?? undefined,
       usage: childUsage ?? EmptyWorkflowBudgetUsage,
+      elapsedMs: budgetChild ? now - (budgetChild.time_started ?? budgetChild.time_created) : undefined,
     })
     const budgetWarnings = [...workflowEvaluation.warnings, ...childEvaluation.warnings]
     const budgetExceededMessages = [...workflowEvaluation.exceeded, ...childEvaluation.exceeded]
