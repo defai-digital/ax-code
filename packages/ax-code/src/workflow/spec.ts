@@ -110,6 +110,9 @@ export const WorkflowInput = z.object({
 })
 export type WorkflowInput = z.infer<typeof WorkflowInput>
 
+export const WorkflowInputValues = z.record(z.string(), z.unknown()).default({})
+export type WorkflowInputValues = z.infer<typeof WorkflowInputValues>
+
 export const WorkflowRoutine = z
   .object({
     enabled: z.boolean().default(false),
@@ -326,6 +329,58 @@ export type WorkflowSpecV1 = z.infer<typeof WorkflowSpecV1>
 
 export function parseWorkflowSpecV1(input: unknown): WorkflowSpecV1 {
   return WorkflowSpecV1.parse(input)
+}
+
+export function resolveWorkflowInputValues(spec: WorkflowSpecV1, input: unknown): WorkflowInputValues {
+  const provided = WorkflowInputValues.parse(input)
+  const inputByID = new Map(spec.inputs.map((definition) => [definition.id, definition]))
+  const issues: string[] = []
+  const resolved: Record<string, unknown> = {}
+
+  for (const key of Object.keys(provided)) {
+    if (!inputByID.has(key)) issues.push(`unknown workflow input: ${key}`)
+  }
+
+  for (const definition of spec.inputs) {
+    const hasProvidedValue = Object.prototype.hasOwnProperty.call(provided, definition.id)
+    const value = hasProvidedValue ? provided[definition.id] : definition.default
+    if (value === undefined) {
+      if (definition.required) issues.push(`required workflow input is missing: ${definition.id}`)
+      continue
+    }
+    if (!inputValueMatchesType(value, definition.type)) {
+      issues.push(`workflow input ${definition.id} must be ${definition.type}`)
+      continue
+    }
+    resolved[definition.id] = value
+  }
+
+  if (issues.length > 0) throw new WorkflowInputValidationError(issues)
+  return resolved
+}
+
+export class WorkflowInputValidationError extends Error {
+  constructor(readonly issues: string[]) {
+    super(`Workflow input validation failed: ${issues.join("; ")}`)
+    this.name = "WorkflowInputValidationError"
+  }
+}
+
+function inputValueMatchesType(value: unknown, type: WorkflowInput["type"]) {
+  switch (type) {
+    case "string":
+    case "path":
+      return typeof value === "string"
+    case "number":
+      return typeof value === "number" && Number.isFinite(value)
+    case "boolean":
+      return typeof value === "boolean"
+    case "string-array":
+      return Array.isArray(value) && value.every((item) => typeof item === "string")
+    case "json":
+      return true
+  }
+  return false
 }
 
 export function safeParseWorkflowSpecV1(input: unknown) {

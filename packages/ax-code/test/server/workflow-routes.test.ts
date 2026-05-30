@@ -45,6 +45,9 @@ describe("workflow routes", () => {
             workerModel: "cheap-route",
             synthesizerModel: "strong-route",
           },
+          inputValues: {
+            "issue-limit": 5,
+          },
         }),
       })
       expect(createResponse.status).toBe(200)
@@ -52,11 +55,13 @@ describe("workflow routes", () => {
         id: string
         sourceTemplateID: string
         status: string
+        inputValues: Record<string, unknown>
         spec: { modelPolicy: { effort: string; workerModel: string; synthesizerModel: string } }
       }
       expect(created.id).toStartWith("wfr_")
       expect(created.sourceTemplateID).toBe("builtin:issue-triage")
       expect(created.status).toBe("queued")
+      expect(created.inputValues).toEqual({ "issue-limit": 5 })
       expect(created.spec.modelPolicy).toMatchObject({
         effort: "max-workflow",
         workerModel: "cheap-route",
@@ -151,10 +156,19 @@ describe("workflow routes", () => {
         `/workflow-runs/${created.id}/artifacts?${directoryQuery}&phaseID=${phaseID}&kind=summary&includePayload=false`,
       )
       expect(artifactsResponse.status).toBe(200)
-      const artifacts = (await artifactsResponse.json()) as Array<{ phaseID?: string; kind: string; payload?: unknown }>
+      const artifacts = (await artifactsResponse.json()) as Array<{
+        phaseID?: string
+        kind: string
+        payload?: unknown
+        redaction?: { status: string; summary?: string }
+      }>
       expect(artifacts).toHaveLength(1)
       expect(artifacts[0]).toMatchObject({ phaseID, kind: "summary" })
       expect(artifacts[0]?.payload).toBeUndefined()
+      expect(artifacts[0]?.redaction).toMatchObject({
+        status: "pending",
+        summary: expect.stringContaining("payload omitted"),
+      })
     } finally {
       if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME
       else process.env.AX_CODE_WORKFLOW_RUNTIME = previous

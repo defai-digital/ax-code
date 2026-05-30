@@ -2,11 +2,13 @@ import { Hono } from "hono"
 import { HTTPException } from "hono/http-exception"
 import { describeRoute, resolver, validator } from "hono-openapi"
 import z from "zod"
+import { compactWorkflowArtifact } from "@/workflow/artifact"
 import { WorkflowEvalBaseline, WorkflowEvalSummary, evaluateWorkflowRun } from "@/workflow/eval"
 import { WorkflowRunProjection, summarizeWorkflowRunDetail } from "@/workflow/projection"
 import { WorkflowRun } from "@/workflow/run"
 import { WorkflowScheduler } from "@/workflow/scheduler"
 import {
+  WorkflowInputValues,
   WorkflowModelPolicyOverride,
   WorkflowSpecV1,
   applyWorkflowModelPolicyOverride,
@@ -51,6 +53,7 @@ const WorkflowRunCreateBody = z
     templateID: WorkflowTemplateIDSchema.optional(),
     spec: WorkflowSpecV1.optional(),
     modelPolicy: WorkflowModelPolicyOverride.optional(),
+    inputValues: WorkflowInputValues,
   })
   .refine((input) => (input.templateID ? 1 : 0) + (input.spec ? 1 : 0) === 1, {
     message: "Exactly one of templateID or spec is required",
@@ -171,6 +174,7 @@ export const WorkflowRunRoutes = lazy(() =>
               templateID: body.templateID as WorkflowTemplate.ID,
               parentSessionID: body.parentSessionID as SessionID | undefined,
               modelPolicy: body.modelPolicy,
+              inputValues: body.inputValues,
             }),
           )
         }
@@ -179,6 +183,7 @@ export const WorkflowRunRoutes = lazy(() =>
             parentSessionID: body.parentSessionID as SessionID | undefined,
             sourceTemplateID: body.sourceTemplateID,
             spec: applyWorkflowModelPolicyOverride(body.spec!, body.modelPolicy),
+            inputValues: body.inputValues,
           }),
         )
       },
@@ -253,8 +258,7 @@ export const WorkflowRunRoutes = lazy(() =>
           .filter((artifact) => (query.kind ? artifact.kind === query.kind : true))
           .map((artifact) => {
             if (query.includePayload !== "false") return artifact
-            const { payload: _payload, ...compact } = artifact
-            return compact
+            return compactWorkflowArtifact(artifact)
           })
         return c.json(artifacts)
       },

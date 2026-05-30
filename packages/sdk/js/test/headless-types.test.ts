@@ -312,6 +312,7 @@ describe("headless SDK types", () => {
     await client.workflowRun.create({
       templateID: "builtin:noop-dry-run",
       modelPolicy: { effort: "workflow", workerModel: "cheap-headless" },
+      inputValues: { target: "src/index.ts" },
     })
     await client.workflowRun.dashboard({ status: "running", limit: 10 })
     await client.workflowRun.artifacts("wfr_live", { kind: "summary", includePayload: "false" })
@@ -338,6 +339,7 @@ describe("headless SDK types", () => {
       JSON.stringify({
         templateID: "builtin:noop-dry-run",
         modelPolicy: { effort: "workflow", workerModel: "cheap-headless" },
+        inputValues: { target: "src/index.ts" },
       }),
     )
     expect(calls[7].body).toBe(

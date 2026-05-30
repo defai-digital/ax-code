@@ -1200,6 +1200,9 @@ export type WorkflowRunEventRecord = {
       }
     }>
   }
+  inputValues?: {
+    [key: string]: unknown
+  }
   budget: {
     [key: string]: unknown
   }
@@ -5950,6 +5953,9 @@ export type WorkflowRunCreateData = {
         use: "planner" | "worker" | "verifier" | "synthesizer"
       }>
     }
+    inputValues?: {
+      [key: string]: unknown
+    }
   }
   path?: never
   query?: {
@@ -6235,6 +6241,9 @@ export type WorkflowRunGetResponses = {
           maxRetries?: number
         }
       }>
+    }
+    inputValues?: {
+      [key: string]: unknown
     }
     budget: {
       [key: string]: unknown
@@ -6561,6 +6570,9 @@ export type WorkflowRunStartResponses = {
         }
       }>
     }
+    inputValues?: {
+      [key: string]: unknown
+    }
     budget: {
       [key: string]: unknown
     }
@@ -6747,6 +6759,9 @@ export type WorkflowRunPauseResponses = {
           maxRetries?: number
         }
       }>
+    }
+    inputValues?: {
+      [key: string]: unknown
     }
     budget: {
       [key: string]: unknown
@@ -6935,6 +6950,9 @@ export type WorkflowRunResumeResponses = {
         }
       }>
     }
+    inputValues?: {
+      [key: string]: unknown
+    }
     budget: {
       [key: string]: unknown
     }
@@ -7122,6 +7140,9 @@ export type WorkflowRunCancelResponses = {
         }
       }>
     }
+    inputValues?: {
+      [key: string]: unknown
+    }
     budget: {
       [key: string]: unknown
     }
@@ -7308,6 +7329,9 @@ export type WorkflowRunRetryResponses = {
           maxRetries?: number
         }
       }>
+    }
+    inputValues?: {
+      [key: string]: unknown
     }
     budget: {
       [key: string]: unknown

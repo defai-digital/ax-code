@@ -57,6 +57,7 @@ describe("WorkflowRun state", () => {
           expect(run.projectID).toBe(session.projectID)
           expect(run.parentSessionID).toBe(session.id)
           expect(run.spec.id).toBe("noop-dry-run")
+          expect(run.inputValues).toEqual({})
           expect(run.currentPhaseID).toStartWith("wfp_")
 
           const listed = await WorkflowRun.list({ parentSessionID: session.id })
@@ -165,6 +166,29 @@ describe("WorkflowRun state", () => {
           for (const unsubscribe of unsubscribers) unsubscribe()
           await Session.remove(session.id)
         }
+      },
+    })
+  })
+
+  test("persists resolved workflow input values", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const spec = parseWorkflowSpecV1(WorkflowFixtureSpecs.issueTriage)
+        const defaulted = await WorkflowRun.create({ spec })
+        expect(defaulted.inputValues).toEqual({ "issue-limit": 10 })
+        expect((await WorkflowRun.getDetail(defaulted.id)).inputValues).toEqual({ "issue-limit": 10 })
+
+        const overridden = await WorkflowRun.create({
+          spec,
+          inputValues: {
+            "issue-limit": 3,
+          },
+        })
+        expect(overridden.inputValues).toEqual({ "issue-limit": 3 })
+        expect((await WorkflowRun.get(overridden.id)).inputValues).toEqual({ "issue-limit": 3 })
       },
     })
   })

@@ -4,7 +4,7 @@ import { Identifier } from "../id/id"
 import { ProjectID } from "../project/schema"
 import { ENVELOPE_ID_PATTERN } from "../quality/verification-envelope"
 import { SessionID, TaskQueueID } from "../session/schema"
-import { WorkflowSpecV1, type WorkflowBudget, type WorkflowPhaseBudget } from "./spec"
+import { WorkflowInputValues, WorkflowSpecV1, type WorkflowBudget, type WorkflowPhaseBudget } from "./spec"
 
 type Brand<T extends string> = string & { readonly __brand: T }
 
@@ -113,6 +113,7 @@ export namespace WorkflowRun {
     status: Status,
     currentPhaseID: WorkflowPhaseID.zod.optional(),
     spec: WorkflowSpecV1,
+    inputValues: WorkflowInputValues,
     budget: z.custom<WorkflowBudget>(),
     budgetUsage: WorkflowUsageDelta,
     verificationEnvelopeIDs: z.array(z.string().regex(ENVELOPE_ID_PATTERN)),
@@ -211,6 +212,7 @@ export const WorkflowRunEventRecord = z
     status: WorkflowRun.Status,
     currentPhaseID: WorkflowWireID.optional(),
     spec: WorkflowSpecV1,
+    inputValues: WorkflowInputValues,
     budget: z.record(z.string(), z.unknown()),
     budgetUsage: WorkflowUsageDelta,
     verificationEnvelopeIDs: z.array(z.string()),
@@ -314,6 +316,7 @@ export namespace WorkflowRun {
     parentSessionID: SessionID.zod.optional(),
     sourceTemplateID: z.string().trim().min(1).optional(),
     spec: WorkflowSpecV1,
+    inputValues: WorkflowInputValues,
   })
   export type CreateInput = z.input<typeof CreateInput>
 

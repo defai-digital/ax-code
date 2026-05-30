@@ -4,7 +4,9 @@ import { Instance } from "../project/instance"
 import { Session } from "../session"
 import { SessionID } from "../session/schema"
 import { Database, NotFoundError, and, asc, desc, eq, inArray } from "../storage/db"
+import { defaultWorkflowArtifactRedaction } from "./artifact"
 import { addWorkflowBudgetUsage, evaluateWorkflowBudget } from "./budget"
+import { WorkflowInputValidationError, resolveWorkflowInputValues } from "./spec"
 import {
   EmptyWorkflowBudgetUsage,
   WorkflowArtifactID,
@@ -30,6 +32,14 @@ import {
 async function create(input: WorkflowRunState.CreateInput): Promise<WorkflowRunState.Info> {
   const parsed = WorkflowRunState.CreateInput.parse(input)
   if (parsed.parentSessionID) await assertSessionCompatible(parsed.parentSessionID)
+  const inputValues = (() => {
+    try {
+      return resolveWorkflowInputValues(parsed.spec, parsed.inputValues)
+    } catch (error) {
+      if (error instanceof WorkflowInputValidationError) throw new HTTPException(400, { message: error.message })
+      throw error
+    }
+  })()
 
   const now = Date.now()
   const run = Database.transaction((db) => {
@@ -47,6 +57,7 @@ async function create(input: WorkflowRunState.CreateInput): Promise<WorkflowRunS
         status: "queued",
         current_phase_id: currentPhaseID,
         spec_snapshot: parsed.spec,
+        input_values: inputValues,
         budget: parsed.spec.budget,
         budget_usage: EmptyWorkflowBudgetUsage,
         verification_envelope_ids: [],
@@ -301,7 +312,7 @@ async function appendArtifact(input: WorkflowRunState.AppendArtifactInput): Prom
         expose_to_main_context: parsed.exposeToMainContext,
         summary: parsed.summary,
         payload: parsed.payload,
-        redaction: parsed.redaction,
+        redaction: parsed.redaction ?? defaultWorkflowArtifactRedaction(parsed),
         evidence_refs: parsed.evidenceRefs,
         time_created: now,
         time_updated: now,
@@ -592,6 +603,7 @@ function fromRunRow(row: typeof WorkflowRunTable.$inferSelect): WorkflowRunState
     status: row.status,
     currentPhaseID: row.current_phase_id ?? undefined,
     spec: row.spec_snapshot,
+    inputValues: row.input_values,
     budget: row.budget,
     budgetUsage: row.budget_usage,
     verificationEnvelopeIDs: row.verification_envelope_ids,

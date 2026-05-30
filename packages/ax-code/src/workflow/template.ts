@@ -9,6 +9,7 @@ import { Filesystem } from "../util/filesystem"
 import { WorkflowFixtureSpecs } from "./fixtures"
 import { WorkflowRun } from "./run"
 import {
+  WorkflowInputValues,
   WorkflowModelPolicyOverride,
   WorkflowSpecV1,
   applyWorkflowModelPolicyOverride,
@@ -63,8 +64,9 @@ export namespace WorkflowTemplate {
     templateID: ID,
     parentSessionID: SessionID.zod.optional(),
     modelPolicy: WorkflowModelPolicyOverride.optional(),
+    inputValues: WorkflowInputValues,
   })
-  export type CreateRunInput = z.infer<typeof CreateRunInput>
+  export type CreateRunInput = z.input<typeof CreateRunInput>
 
   export const SaveInput = z.object({
     scope: Source.exclude(["builtin"]),
@@ -162,6 +164,7 @@ export namespace WorkflowTemplate {
       parentSessionID: parsed.parentSessionID,
       sourceTemplateID: template.id,
       spec: applyWorkflowModelPolicyOverride(template.spec, parsed.modelPolicy),
+      inputValues: parsed.inputValues,
     })
   }
 

@@ -13,7 +13,7 @@ import type {
   WorkflowRunID,
   WorkflowRunRecord,
 } from "./state"
-import type { WorkflowBudget, WorkflowSpecV1 } from "./spec"
+import type { WorkflowBudget, WorkflowInputValues, WorkflowSpecV1 } from "./spec"
 
 export const WorkflowRunTable = sqliteTable(
   "workflow_run",
@@ -31,6 +31,7 @@ export const WorkflowRunTable = sqliteTable(
     status: text().$type<WorkflowRunRecord["status"]>().notNull(),
     current_phase_id: text(),
     spec_snapshot: text({ mode: "json" }).$type<WorkflowSpecV1>().notNull(),
+    input_values: text({ mode: "json" }).$type<WorkflowInputValues>().notNull(),
     budget: text({ mode: "json" }).$type<WorkflowBudget>().notNull(),
     budget_usage: text({ mode: "json" }).$type<WorkflowBudgetUsage>().notNull(),
     verification_envelope_ids: text({ mode: "json" }).$type<string[]>().notNull(),

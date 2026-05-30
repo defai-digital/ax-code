@@ -1,3 +1,4 @@
+export * from "./artifact"
 export * from "./fixtures"
 export * from "./budget"
 export * from "./eval"

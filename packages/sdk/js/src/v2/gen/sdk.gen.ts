@@ -2190,6 +2190,9 @@ export class WorkflowRun extends HeyApiClient {
           use: "planner" | "worker" | "verifier" | "synthesizer"
         }>
       }
+      inputValues?: {
+        [key: string]: unknown
+      }
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -2204,6 +2207,7 @@ export class WorkflowRun extends HeyApiClient {
             { in: "body", key: "templateID" },
             { in: "body", key: "spec" },
             { in: "body", key: "modelPolicy" },
+            { in: "body", key: "inputValues" },
           ],
         },
       ],

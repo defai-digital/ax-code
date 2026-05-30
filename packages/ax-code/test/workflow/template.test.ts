@@ -37,6 +37,7 @@ describe("WorkflowTemplate", () => {
         const run = await WorkflowTemplate.createRun({ templateID: "builtin:verified-bug-sweep" })
         expect(run.sourceTemplateID).toBe("builtin:verified-bug-sweep")
         expect(run.spec.id).toBe("verified-bug-sweep")
+        expect(run.inputValues).toEqual({})
         expect(run.status).toBe("queued")
       },
     })
@@ -55,6 +56,9 @@ describe("WorkflowTemplate", () => {
             workerModel: "cheap-local",
             synthesizerModel: "strong-cloud",
           },
+          inputValues: {
+            "issue-limit": 2,
+          },
         })
 
         expect(run.spec.modelPolicy).toMatchObject({
@@ -63,6 +67,7 @@ describe("WorkflowTemplate", () => {
           synthesizerModel: "strong-cloud",
         })
         expect(run.spec.modelPolicy.plannerModel).toBeUndefined()
+        expect(run.inputValues).toEqual({ "issue-limit": 2 })
       },
     })
   })

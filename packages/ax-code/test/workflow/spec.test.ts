@@ -5,10 +5,12 @@ import {
   WORKFLOW_DEFAULT_MAX_CONCURRENT_AGENTS,
   WORKFLOW_DEFAULT_MAX_TOTAL_AGENTS,
   WorkflowFixtureSpecs,
+  WorkflowInputValidationError,
   WorkflowSpecV1,
   getParsedWorkflowFixtureSpec,
   isWorkflowRuntimeEnabled,
   parseWorkflowSpecV1,
+  resolveWorkflowInputValues,
 } from "../../src/workflow"
 
 describe("workflow spec v1", () => {
@@ -49,6 +51,41 @@ describe("workflow spec v1", () => {
       securityGate: "local-only",
     })
     expect(parseWorkflowSpecV1(WorkflowFixtureSpecs.noopDryRun).id).toBe("noop-dry-run")
+  })
+
+  test("resolves workflow input values with defaults", () => {
+    const spec = parseWorkflowSpecV1(WorkflowFixtureSpecs.issueTriage)
+
+    expect(resolveWorkflowInputValues(spec, {})).toEqual({ "issue-limit": 10 })
+    expect(resolveWorkflowInputValues(spec, { "issue-limit": 25 })).toEqual({ "issue-limit": 25 })
+  })
+
+  test("rejects unknown, missing, and mistyped workflow input values", () => {
+    const spec = parseWorkflowSpecV1({
+      schemaVersion: 1,
+      id: "input-contract",
+      name: "Input Contract",
+      description: "Validates workflow run input values.",
+      inputs: [
+        { id: "target", type: "path", required: true },
+        { id: "dry-run", type: "boolean" },
+      ],
+      phases: [{ id: "noop", name: "Noop", kind: "noop" }],
+    })
+
+    let error: unknown
+    try {
+      resolveWorkflowInputValues(spec, { target: 42, extra: true })
+    } catch (caught) {
+      error = caught
+    }
+
+    expect(error).toBeInstanceOf(WorkflowInputValidationError)
+    expect((error as WorkflowInputValidationError).issues).toEqual([
+      "unknown workflow input: extra",
+      "workflow input target must be path",
+    ])
+    expect(() => resolveWorkflowInputValues(spec, {})).toThrow(WorkflowInputValidationError)
   })
 
   test("applies conservative defaults", () => {
