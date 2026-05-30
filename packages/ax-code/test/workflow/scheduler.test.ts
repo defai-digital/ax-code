@@ -41,11 +41,21 @@ describe("WorkflowScheduler", () => {
           expect(result.status).toBe("completed")
           expect(result.phases[0]?.status).toBe("completed")
           expect(result.artifacts[0]?.kind).toBe("summary")
-          expect(
-            result.artifacts.find((artifact) => artifact.specArtifactID === WORKFLOW_FINAL_REPORT_SPEC_ARTIFACT_ID),
-          ).toMatchObject({
+          const finalReport = result.artifacts.find(
+            (artifact) => artifact.specArtifactID === WORKFLOW_FINAL_REPORT_SPEC_ARTIFACT_ID,
+          )
+          expect(finalReport).toMatchObject({
             kind: "summary",
             exposeToMainContext: true,
+          })
+          expect(finalReport?.summary).toContain("Verification: not_run (optional)")
+          expect(finalReport?.payload).toMatchObject({
+            verification: {
+              mode: "optional",
+              status: "not_run",
+              requiredArtifactIds: [],
+              verificationEnvelopeCount: 0,
+            },
           })
           expect(result.children).toEqual([])
           const { TaskQueue } = await import("../../src/session/task-queue")
@@ -291,10 +301,17 @@ describe("WorkflowScheduler", () => {
             exposeToMainContext: true,
           })
           expect(finalReport?.summary).toContain("Workflow final report: Issue Triage")
+          expect(finalReport?.summary).toContain("Verification: not_run (optional)")
           expect(finalReport?.payload).toMatchObject({
             kind: "workflow-final-report",
             status: "completed",
             childCounts: { completed: detail.children.length },
+            verification: {
+              mode: "optional",
+              status: "not_run",
+              requiredArtifactIds: [],
+              verificationEnvelopeCount: 0,
+            },
           })
 
           await WorkflowScheduler.start(run.id, { allowScaleBeyondDefaults: true })
