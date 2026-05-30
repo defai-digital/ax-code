@@ -124,6 +124,65 @@ export namespace WorkflowScheduler {
     await WorkflowRun.setStatus({ id: runID, status: "cancelled" })
     return WorkflowRun.getDetail(runID)
   }
+
+  export async function pause(runID: WorkflowRunID) {
+    assertEnabled()
+    const TaskQueue = await loadTaskQueue()
+    const detail = await WorkflowRun.getDetail(runID)
+    for (const child of detail.children) {
+      if (isTerminalChildStatus(child.status) || child.status === "paused") continue
+      if (child.taskQueueID) {
+        const item = await TaskQueue.get(child.taskQueueID).catch(() => undefined)
+        if (item?.status === "queued" || item?.status === "waiting_for_idle") {
+          await TaskQueue.pause(child.taskQueueID)
+          continue
+        }
+      }
+      if (child.status === "queued") {
+        await WorkflowRun.setChildStatus({ id: child.id, status: "paused" })
+      }
+    }
+    await refreshPausedRunState(runID)
+    return WorkflowRun.getDetail(runID)
+  }
+
+  export async function resume(runID: WorkflowRunID) {
+    assertEnabled()
+    const TaskQueue = await loadTaskQueue()
+    const detail = await WorkflowRun.getDetail(runID)
+    for (const child of detail.children) {
+      if (child.status !== "paused") continue
+      if (child.taskQueueID) {
+        const item = await TaskQueue.get(child.taskQueueID).catch(() => undefined)
+        if (item?.status === "paused") {
+          await TaskQueue.resume(child.taskQueueID)
+          continue
+        }
+      }
+      await WorkflowRun.setChildStatus({ id: child.id, status: "queued" })
+    }
+    await refreshRunningRunState(runID)
+    return WorkflowRun.getDetail(runID)
+  }
+
+  export async function retry(runID: WorkflowRunID) {
+    assertEnabled()
+    const TaskQueue = await loadTaskQueue()
+    const detail = await WorkflowRun.getDetail(runID)
+    for (const child of detail.children) {
+      if (child.status !== "failed" && child.status !== "cancelled") continue
+      if (child.taskQueueID) {
+        const item = await TaskQueue.get(child.taskQueueID).catch(() => undefined)
+        if (item?.status === "failed" || item?.status === "cancelled") {
+          await TaskQueue.retry(child.taskQueueID)
+          continue
+        }
+      }
+      await WorkflowRun.setChildStatus({ id: child.id, status: "queued" })
+    }
+    await refreshRunningRunState(runID)
+    return WorkflowRun.getDetail(runID)
+  }
 }
 
 export class WorkflowSchedulerDisabledError extends Error {
@@ -143,6 +202,41 @@ function isTerminalPhaseStatus(status: WorkflowRun.PhaseStatus) {
 
 function isTerminalChildStatus(status: WorkflowRun.ChildStatus) {
   return status === "completed" || status === "failed" || status === "cancelled"
+}
+
+async function refreshPausedRunState(runID: WorkflowRunID) {
+  const detail = await WorkflowRun.getDetail(runID)
+  const active = detail.children.some(
+    (child) => child.status === "running" || child.status === "blocked_permission" || child.status === "blocked_question",
+  )
+  if (active) return
+  for (const phase of detail.phases) {
+    const phaseChildren = detail.children.filter((child) => child.phaseID === phase.id)
+    if (phaseChildren.some((child) => child.status === "paused") && !isTerminalPhaseStatus(phase.status)) {
+      await WorkflowRun.setPhaseStatus({ id: phase.id, status: "paused" })
+    }
+  }
+  await WorkflowRun.setStatus({ id: runID, status: "paused" })
+}
+
+async function refreshRunningRunState(runID: WorkflowRunID) {
+  const detail = await WorkflowRun.getDetail(runID)
+  for (const phase of detail.phases) {
+    const phaseChildren = detail.children.filter((child) => child.phaseID === phase.id)
+    const hasResumedChild = phaseChildren.some(
+      (child) =>
+        child.status === "queued" ||
+        child.status === "running" ||
+        child.status === "blocked_permission" ||
+        child.status === "blocked_question",
+    )
+    if (hasResumedChild && (phase.status === "paused" || phase.status === "failed" || phase.status === "cancelled")) {
+      await WorkflowRun.setPhaseStatus({ id: phase.id, status: "running" })
+    }
+  }
+  if (detail.status === "paused" || detail.status === "failed" || detail.status === "cancelled") {
+    await WorkflowRun.setStatus({ id: runID, status: "running" })
+  }
 }
 
 async function loadTaskQueue() {
