@@ -11,6 +11,7 @@ import {
   WorkflowBudgetLedgerEventEntry,
   WorkflowChildEventRecord,
   WorkflowPhaseEventRecord,
+  WorkflowRun as WorkflowRunState,
   WorkflowRunEventRecord,
   type WorkflowRunID,
 } from "@/workflow/state"
@@ -24,7 +25,7 @@ const WORKFLOW_TEMPLATE_ID_PARAM = z.object({ templateID: WorkflowTemplateIDSche
 
 const WorkflowRunListQuery = z.object({
   parentSessionID: z.string().min(1).optional(),
-  status: WorkflowRun.Status.optional(),
+  status: WorkflowRunState.Status.optional(),
   limit: z.coerce.number().int().positive().max(500).optional(),
 })
 
@@ -42,7 +43,7 @@ const WorkflowRunCreateBody = z
 const WorkflowArtifactListQuery = z.object({
   phaseID: z.string().min(1).optional(),
   childID: z.string().min(1).optional(),
-  kind: WorkflowRun.ArtifactKind.optional(),
+  kind: WorkflowRunState.ArtifactKind.optional(),
   includePayload: z.enum(["true", "false"]).optional(),
 })
 

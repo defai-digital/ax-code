@@ -5,6 +5,11 @@ import { planWorkflowDryRun } from "./planner"
 import { WorkflowRun } from "./run"
 import { WorkflowRunID } from "./state"
 
+type WorkflowDispatchExecutor = (
+  spec: { agent: string; prompt: string; constraints?: string[]; timeoutMs?: number },
+  signal: AbortSignal,
+) => Promise<{ output?: string; filesModified?: string[]; tokensUsed?: number }>
+
 export namespace WorkflowScheduler {
   export const StartOptions = z.object({
     allowScaleBeyondDefaults: z.boolean().default(false),
@@ -12,10 +17,15 @@ export namespace WorkflowScheduler {
     durableChildren: z.boolean().default(true),
     enqueueChildren: z.boolean().default(true),
   })
-  export type StartOptions = z.input<typeof StartOptions>
+  export type StartOptions = z.input<typeof StartOptions> & {
+    dispatchExecutor?: WorkflowDispatchExecutor
+    signal?: AbortSignal
+  }
 
   export async function start(runID: WorkflowRunID, options: StartOptions = {}) {
     assertEnabled()
+    const dispatchExecutor = options.dispatchExecutor
+    const signal = options.signal
     const parsed = StartOptions.parse(options)
     const initial = await WorkflowRun.getDetail(runID)
     if (initial.status === "completed" || initial.status === "cancelled" || initial.status === "failed") {
@@ -95,6 +105,25 @@ export namespace WorkflowScheduler {
             usageDelta: { childAgents: 1 },
           })
         }
+      } else {
+        const { WorkflowDispatchAdapter, WorkflowDispatchExecutorMissingError } = await import("./dispatch-adapter")
+        if (!dispatchExecutor) throw new WorkflowDispatchExecutorMissingError()
+        const phaseSpec = initial.spec.phases.find((item) => item.id === phase.specPhaseID)
+        if (!phaseSpec) throw new Error(`No workflow phase spec for ${phase.specPhaseID}`)
+        const executed = await WorkflowDispatchAdapter.executePhase({
+          runID,
+          spec: initial.spec,
+          phase,
+          phaseSpec,
+          phasePlan,
+          executor: dispatchExecutor,
+          signal,
+        })
+        if (executed.phase.status === "failed" || executed.phase.status === "cancelled") {
+          await WorkflowRun.setStatus({ id: runID, status: executed.phase.status, error: executed.phase.error })
+          return WorkflowRun.getDetail(runID)
+        }
+        continue
       }
 
       return WorkflowRun.getDetail(runID)
