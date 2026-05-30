@@ -478,6 +478,7 @@ describe("workflow routes", () => {
         id: "project:route-noop",
         source: "project",
         trust: "candidate",
+        revision: 1,
       })
 
       const promoteResponse = await app.request(`/workflow-templates/project:route-noop/promote?${directoryQuery}`, {
@@ -487,6 +488,7 @@ describe("workflow routes", () => {
       expect(await promoteResponse.json()).toMatchObject({
         id: "project:route-noop",
         trust: "trusted",
+        revision: 2,
       })
     } finally {
       if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME

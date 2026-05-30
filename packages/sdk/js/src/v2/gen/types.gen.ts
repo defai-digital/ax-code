@@ -6912,6 +6912,7 @@ export type WorkflowRunSaveTemplateResponses = {
     name: string
     description: string
     tags: Array<string>
+    revision: number
     specHash: string
     spec: {
       schemaVersion: 1
@@ -8225,6 +8226,7 @@ export type WorkflowTemplateListResponses = {
     name: string
     description: string
     tags: Array<string>
+    revision: number
     specHash: string
     spec: {
       schemaVersion: 1
@@ -8577,6 +8579,7 @@ export type WorkflowTemplateSaveResponses = {
     name: string
     description: string
     tags: Array<string>
+    revision: number
     specHash: string
     spec: {
       schemaVersion: 1
@@ -8776,6 +8779,7 @@ export type WorkflowTemplateGetResponses = {
     name: string
     description: string
     tags: Array<string>
+    revision: number
     specHash: string
     spec: {
       schemaVersion: 1
@@ -8975,6 +8979,7 @@ export type WorkflowTemplatePromoteResponses = {
     name: string
     description: string
     tags: Array<string>
+    revision: number
     specHash: string
     spec: {
       schemaVersion: 1
@@ -9322,6 +9327,7 @@ export type WorkflowRoutineRunResponses = {
       name: string
       description: string
       tags: Array<string>
+      revision: number
       specHash: string
       spec: {
         schemaVersion: 1

@@ -33,6 +33,7 @@ export namespace WorkflowTemplate {
 
   export const Stored = z.object({
     schemaVersion: z.literal(1),
+    revision: z.number().int().positive().default(1),
     trust: Trust.default("candidate"),
     spec: WorkflowSpecV1,
     time: z.object({
@@ -49,6 +50,7 @@ export namespace WorkflowTemplate {
     name: z.string().min(1),
     description: z.string().min(1),
     tags: z.array(z.string()),
+    revision: z.number().int().positive(),
     specHash: z.string().regex(/^sha256:[a-f0-9]{64}$/),
     spec: WorkflowSpecV1,
     path: z.string().optional(),
@@ -95,6 +97,7 @@ export namespace WorkflowTemplate {
           name: spec.name,
           description: spec.description,
           tags: spec.tags,
+          revision: 1,
           specHash: specHash(spec),
           spec,
         },
@@ -131,6 +134,7 @@ export namespace WorkflowTemplate {
     const current = existing ? Stored.safeParse(existing) : undefined
     const stored = Stored.parse({
       schemaVersion: 1,
+      revision: current?.success ? current.data.revision + 1 : 1,
       trust: parsed.trust,
       spec: parsed.spec,
       time: {
@@ -154,6 +158,7 @@ export namespace WorkflowTemplate {
     if (!stored) throw new WorkflowTemplateNotFoundError(parsed)
     const promoted = Stored.parse({
       ...stored,
+      revision: stored.revision + 1,
       trust: "trusted",
       time: {
         ...stored.time,
@@ -225,6 +230,7 @@ export namespace WorkflowTemplate {
       name: stored.spec.name,
       description: stored.spec.description,
       tags: stored.spec.tags,
+      revision: stored.revision,
       specHash: specHash(stored.spec),
       spec: stored.spec,
       path: file,

@@ -42,6 +42,7 @@ describe("workflow command helpers", () => {
         name: "Noop Dry Run",
         description: "Minimal workflow fixture.",
         tags: ["fixture", "dry-run"],
+        revision: 1,
         specHash: "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
         spec,
       },

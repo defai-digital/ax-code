@@ -27,6 +27,7 @@ describe("WorkflowTemplate", () => {
       "required",
     )
     expect(templates.find((template) => template.id === "builtin:verified-bug-sweep")?.trust).toBe("trusted")
+    expect(templates.find((template) => template.id === "builtin:verified-bug-sweep")?.revision).toBe(1)
   })
 
   test("creates workflow runs from built-in templates", async () => {
@@ -91,6 +92,7 @@ describe("WorkflowTemplate", () => {
           source: "project",
           trust: "candidate",
           name: "Local Noop",
+          revision: 1,
           specHash: WorkflowTemplate.specHash(spec),
         })
         expect(saved.path).toContain(".ax-code/workflow-template/local-noop.json")
@@ -98,6 +100,7 @@ describe("WorkflowTemplate", () => {
         const listed = await WorkflowTemplate.list()
         expect(listed.find((template) => template.id === "project:local-noop")).toMatchObject({
           trust: "candidate",
+          revision: 1,
           specHash: saved.specHash,
         })
 
@@ -108,10 +111,21 @@ describe("WorkflowTemplate", () => {
         const promoted = await WorkflowTemplate.promote(saved.id)
         expect(promoted.trust).toBe("trusted")
         expect(promoted.specHash).toBe(saved.specHash)
+        expect(promoted.revision).toBe(2)
 
         const run = await WorkflowTemplate.createRun({ templateID: promoted.id })
         expect(run.sourceTemplateID).toBe("project:local-noop")
         expect(run.spec.id).toBe("local-noop")
+
+        const updated = await WorkflowTemplate.save({
+          scope: "project",
+          spec: {
+            ...spec,
+            description: "Project-local workflow template with a tracked update.",
+          },
+        })
+        expect(updated.trust).toBe("candidate")
+        expect(updated.revision).toBe(3)
       },
     })
   })
