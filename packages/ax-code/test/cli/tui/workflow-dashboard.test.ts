@@ -5,11 +5,13 @@ import {
   workflowArtifactDetailItems,
   workflowArtifactIDFromDetailValue,
   workflowDashboardItems,
+  workflowEvalSummaryItems,
   workflowModelPolicyItems,
   workflowRunControlItems,
   workflowRunDetailItems,
   workflowTemplateSaveItems,
   type WorkflowDashboardRun,
+  type WorkflowEvalSummary,
   type WorkflowRunDetail,
 } from "../../../src/cli/cmd/tui/routes/session/workflow-dashboard"
 import {
@@ -160,6 +162,22 @@ describe("tui workflow dashboard view model", () => {
     expect(items[1]?.footer).toContain("reviewing the captured spec snapshot")
   })
 
+  test("renders workflow eval summary promotion gate and cost metrics", () => {
+    const items = workflowEvalSummaryItems(workflowEvalSummary())
+
+    expect(items.find((item) => item.value === "workflow.eval.decision")?.title).toBe("Decision hold")
+    expect(items.find((item) => item.value === "workflow.eval.decision")?.description).toContain(
+      "verification: missing",
+    )
+    expect(items.find((item) => item.value === "workflow.eval.decision")?.footer).toContain("cost: $0.0400")
+    expect(items.find((item) => item.value === "workflow.eval.findings")?.description).toContain("confirmed: 1")
+    expect(items.find((item) => item.value === "workflow.eval.comparison")?.footer).toContain("tokens -4000")
+    expect(items.some((item) => item.category === "Budget" && item.description?.includes("tokens 8000/7000"))).toBe(
+      true,
+    )
+    expect(items.some((item) => item.category === "Reasons" && item.description?.includes("verification"))).toBe(true)
+  })
+
   test("renders artifact drill-down rows with payload and evidence references", () => {
     const [artifact] = workflowRunDetail().artifacts
     const items = workflowArtifactDetailItems({
@@ -269,6 +287,48 @@ function workflowDashboardRun(input: Partial<WorkflowDashboardRun> = {}): Workfl
     },
     verificationEnvelopeCount: 2,
     exposedArtifactCount: 1,
+    ...input,
+  }
+}
+
+function workflowEvalSummary(input: Partial<WorkflowEvalSummary> = {}): WorkflowEvalSummary {
+  return {
+    runID: "wfr_1",
+    sourceTemplateID: "builtin:verified-bug-sweep",
+    decision: "hold",
+    reasons: ["required verification evidence is missing"],
+    metrics: {
+      status: "completed",
+      elapsedMs: 65_000,
+      totalTokens: 8_000,
+      inputTokens: 6_000,
+      outputTokens: 2_000,
+      toolCalls: 16,
+      childAgents: 6,
+      retries: 1,
+      estimatedCostUsd: 0.04,
+      confirmedFindings: 1,
+      likelyFindings: 1,
+      rejectedFindings: 1,
+      unverifiedFindings: 1,
+      falsePositiveFindings: 0,
+      artifactCount: 4,
+      exposedArtifactCount: 1,
+      verificationEnvelopeCount: 0,
+      interventionCount: 0,
+    },
+    budgetStatus: "warning",
+    budgetWarnings: ["tokens 8000/7000"],
+    budgetExceeded: [],
+    verificationSatisfied: false,
+    comparison: {
+      baselineLabel: "single-agent-review",
+      confirmedFindingsDelta: 0,
+      falsePositiveFindingsDelta: -1,
+      totalTokensDelta: -4_000,
+      estimatedCostUsdDelta: -0.02,
+      interventionCountDelta: 0,
+    },
     ...input,
   }
 }

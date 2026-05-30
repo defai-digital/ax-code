@@ -8,10 +8,12 @@ import {
   workflowArtifactDetailItems,
   workflowArtifactIDFromDetailValue,
   workflowDashboardItems,
+  workflowEvalSummaryItems,
   workflowRunControlItems,
   workflowRunDetailItems,
   workflowTemplateSaveItems,
   type WorkflowTemplateSaveScope,
+  type WorkflowEvalSummary,
   type WorkflowRunArtifact,
   type WorkflowRunControlAction,
   type WorkflowDashboardRun,
@@ -131,6 +133,15 @@ function DialogWorkflowDetail(props: { runID: string }) {
           setRefreshTick((tick) => tick + 1)
         },
       },
+      {
+        title: "View workflow eval summary",
+        value: "workflow.detail.eval-summary",
+        description: "Inspect promotion gate, budget, verification, cost, and finding outcome metrics.",
+        category: "Actions",
+        onSelect: (ctx) => {
+          ctx.replace(() => <DialogWorkflowEvalSummary runID={props.runID} />)
+        },
+      },
     ]
 
     if (!current) {
@@ -229,6 +240,82 @@ function DialogWorkflowDetail(props: { runID: string }) {
   }
 
   return <DialogSelect title="Workflow Run Detail" options={options()} skipFilter={false} />
+}
+
+function DialogWorkflowEvalSummary(props: { runID: string }) {
+  const dialog = useDialog()
+  const toast = useToast()
+  const sdk = useSDK()
+  const [refreshTick, setRefreshTick] = createSignal(0)
+
+  onMount(() => {
+    dialog.setSize("large")
+  })
+
+  const [summary] = createResource(
+    refreshTick,
+    createAbortableResourceFetcher<number, WorkflowEvalSummary | undefined>(async (_tick, signal, info) => {
+      try {
+        const result = await sdk.client.workflowRun.evalSummary({ runID: props.runID, now: Date.now() }, { signal })
+        if (result.error) {
+          toast.show({
+            message: workflowErrorMessage(result.error, "Failed to load workflow eval summary"),
+            variant: "error",
+          })
+          return info.value
+        }
+        return result.data
+      } catch (error) {
+        toast.show({
+          message: error instanceof Error ? error.message : "Failed to load workflow eval summary",
+          variant: "error",
+        })
+        return info.value
+      }
+    }),
+  )
+
+  const options = createMemo<DialogSelectOption<string>[]>(() => {
+    const current = summary()
+    const actions: DialogSelectOption<string>[] = [
+      {
+        title: "Back to workflow run",
+        value: "workflow.eval.back",
+        description: "Return to the workflow run detail.",
+        category: "Actions",
+        onSelect: (ctx) => {
+          ctx.replace(() => <DialogWorkflowDetail runID={props.runID} />)
+        },
+      },
+      {
+        title: summary.loading ? "Refreshing workflow eval summary" : "Refresh workflow eval summary",
+        value: "workflow.eval.refresh",
+        description: "Reload this workflow run's evaluation metrics.",
+        category: "Actions",
+        disabled: summary.loading,
+        onSelect: () => {
+          setRefreshTick((tick) => tick + 1)
+        },
+      },
+    ]
+
+    if (!current) {
+      return [
+        ...actions,
+        {
+          title: "Workflow eval summary unavailable",
+          value: "workflow.eval.empty",
+          description: "The workflow evaluation summary could not be loaded yet.",
+          category: "Overview",
+          disabled: true,
+        },
+      ]
+    }
+
+    return [...actions, ...workflowEvalSummaryItems(current)]
+  })
+
+  return <DialogSelect title="Workflow Eval Summary" options={options()} skipFilter={false} />
 }
 
 function DialogWorkflowArtifact(props: { runID: string; artifactID: string }) {

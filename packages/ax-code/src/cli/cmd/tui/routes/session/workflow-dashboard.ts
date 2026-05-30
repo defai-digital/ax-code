@@ -1,8 +1,14 @@
-import type { WorkflowArtifactEventRecord, WorkflowRunDashboardResponse, WorkflowRunGetResponse } from "@ax-code/sdk/v2"
+import type {
+  WorkflowArtifactEventRecord,
+  WorkflowRunDashboardResponse,
+  WorkflowRunEvalSummaryResponse,
+  WorkflowRunGetResponse,
+} from "@ax-code/sdk/v2"
 
 export type WorkflowDashboardRun = WorkflowRunDashboardResponse[number]
 export type WorkflowRunDetail = WorkflowRunGetResponse
 export type WorkflowRunArtifact = WorkflowArtifactEventRecord
+export type WorkflowEvalSummary = WorkflowRunEvalSummaryResponse
 export type WorkflowRunControlAction = "pause" | "resume" | "cancel" | "retry"
 export type WorkflowTemplateSaveScope = "project" | "user"
 
@@ -308,6 +314,127 @@ export function workflowTemplateSaveItems(detail: WorkflowRunDetail): WorkflowTe
   ]
 }
 
+export function workflowEvalSummaryItems(summary: WorkflowEvalSummary): WorkflowDashboardItem[] {
+  const metrics = summary.metrics
+  const items: WorkflowDashboardItem[] = [
+    {
+      title: truncate(`Decision ${summary.decision}`, MAX_TITLE),
+      value: "workflow.eval.decision",
+      description: truncate(
+        `verification: ${summary.verificationSatisfied ? "satisfied" : "missing"} | budget: ${summary.budgetStatus}`,
+        MAX_DESCRIPTION,
+      ),
+      footer: truncate(
+        `tokens: ${metrics.totalTokens} | cost: ${formatUsd(metrics.estimatedCostUsd)} | elapsed: ${formatWorkflowDuration(metrics.elapsedMs)}`,
+        MAX_FOOTER,
+      ),
+      category: "Gate",
+      disabled: true,
+    },
+    {
+      title: "Finding outcomes",
+      value: "workflow.eval.findings",
+      description: truncate(
+        `confirmed: ${metrics.confirmedFindings} | likely: ${metrics.likelyFindings} | rejected: ${metrics.rejectedFindings} | unverified: ${metrics.unverifiedFindings}`,
+        MAX_DESCRIPTION,
+      ),
+      footer: truncate(
+        `false positives: ${metrics.falsePositiveFindings} | artifacts: ${metrics.artifactCount} | exposed: ${metrics.exposedArtifactCount}`,
+        MAX_FOOTER,
+      ),
+      category: "Metrics",
+      disabled: true,
+    },
+    {
+      title: "Execution metrics",
+      value: "workflow.eval.execution",
+      description: truncate(
+        `children: ${metrics.childAgents} | tool calls: ${metrics.toolCalls} | retries: ${metrics.retries}`,
+        MAX_DESCRIPTION,
+      ),
+      footer: truncate(
+        `verification envelopes: ${metrics.verificationEnvelopeCount} | interventions: ${metrics.interventionCount}`,
+        MAX_FOOTER,
+      ),
+      category: "Metrics",
+      disabled: true,
+    },
+  ]
+
+  if (summary.comparison) {
+    items.push({
+      title: truncate(`Baseline ${summary.comparison.baselineLabel}`, MAX_TITLE),
+      value: "workflow.eval.comparison",
+      description: truncate(
+        `confirmed delta: ${formatDelta(summary.comparison.confirmedFindingsDelta)} | false-positive delta: ${formatDelta(
+          summary.comparison.falsePositiveFindingsDelta,
+        )}`,
+        MAX_DESCRIPTION,
+      ),
+      footer: truncate(
+        [
+          summary.comparison.totalTokensDelta !== undefined
+            ? `tokens ${formatDelta(summary.comparison.totalTokensDelta)}`
+            : undefined,
+          summary.comparison.estimatedCostUsdDelta !== undefined
+            ? `cost ${formatSignedUsd(summary.comparison.estimatedCostUsdDelta)}`
+            : undefined,
+          summary.comparison.interventionCountDelta !== undefined
+            ? `interventions ${formatDelta(summary.comparison.interventionCountDelta)}`
+            : undefined,
+        ]
+          .filter(Boolean)
+          .join(" | "),
+        MAX_FOOTER,
+      ),
+      category: "Comparison",
+      disabled: true,
+    })
+  }
+
+  for (const warning of summary.budgetWarnings) {
+    items.push({
+      title: "Budget warning",
+      value: `workflow.eval.budget.warning.${items.length}`,
+      description: truncate(warning, MAX_DESCRIPTION),
+      category: "Budget",
+      disabled: true,
+    })
+  }
+
+  for (const exceeded of summary.budgetExceeded) {
+    items.push({
+      title: "Budget exceeded",
+      value: `workflow.eval.budget.exceeded.${items.length}`,
+      description: truncate(exceeded, MAX_DESCRIPTION),
+      category: "Budget",
+      disabled: true,
+    })
+  }
+
+  if (summary.reasons.length === 0) {
+    items.push({
+      title: "No promotion blockers",
+      value: "workflow.eval.reasons.empty",
+      description: "The workflow evaluation summary did not report hold or rollback reasons.",
+      category: "Reasons",
+      disabled: true,
+    })
+  } else {
+    for (const reason of summary.reasons) {
+      items.push({
+        title: "Promotion reason",
+        value: `workflow.eval.reason.${items.length}`,
+        description: truncate(reason, MAX_DESCRIPTION),
+        category: "Reasons",
+        disabled: true,
+      })
+    }
+  }
+
+  return items
+}
+
 export function workflowArtifactDetailItems(artifact: WorkflowRunArtifact): WorkflowDashboardItem[] {
   const items: WorkflowDashboardItem[] = [
     {
@@ -428,6 +555,18 @@ export function formatWorkflowDuration(ms: number) {
 
 function formatWorkflowBudget(used: number, limit: number) {
   return `${used}/${limit}`
+}
+
+function formatDelta(value: number) {
+  return value > 0 ? `+${value}` : String(value)
+}
+
+function formatUsd(value: number) {
+  return `$${value.toFixed(4)}`
+}
+
+function formatSignedUsd(value: number) {
+  return value > 0 ? `+${formatUsd(value)}` : value < 0 ? `-${formatUsd(Math.abs(value))}` : formatUsd(value)
 }
 
 function totalArtifacts(run: WorkflowDashboardRun) {
