@@ -15,6 +15,14 @@ export namespace WorkflowTaskQueue {
       startOptions: WorkflowScheduler.StartOptions.partial().optional(),
     }),
     artifactRefs: z.array(z.string()).default([]),
+    worktree: z
+      .object({
+        mode: z.enum(["current", "dedicated"]),
+        directory: z.string().min(1),
+        name: z.string().optional(),
+        branch: z.string().optional(),
+      })
+      .optional(),
     budgetSlice: WorkflowPhaseBudget.optional(),
     pacing: WorkflowPacing.optional(),
     maxParallel: z.number().int().positive().optional(),

@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, spyOn, test } from "bun:test"
+import fs from "fs/promises"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
 import { Database, eq } from "../../src/storage/db"
+import { Worktree } from "../../src/worktree"
 import {
   WorkflowFixtureSpecs,
   WorkflowRun,
@@ -570,6 +572,7 @@ describe("WorkflowScheduler", () => {
           expect(queue[0]?.payload.escalationPolicy).toBe("ask")
           expect(WorkflowTaskQueue.readPayload(queue[0]!.payload)).toMatchObject({
             artifactRefs: [],
+            worktree: { mode: "current", directory: tmp.path },
             allowedTools: ["github.issue.view"],
             writePolicy: "read-only",
             networkPolicy: "inherit",
@@ -584,6 +587,79 @@ describe("WorkflowScheduler", () => {
     } finally {
       if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME
       else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
+    }
+  })
+
+  test("queues worktree-required child agents in dedicated worktrees", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
+    process.env.AX_CODE_WORKFLOW_RUNTIME = "1"
+    let dedicatedWorktree: string | undefined
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const spec = parseWorkflowSpecV1({
+            schemaVersion: 1,
+            id: "isolated-write-runtime",
+            name: "Isolated Write Runtime",
+            description: "A write workflow that must queue its child inside a dedicated worktree.",
+            permissions: {
+              writePolicy: "worktree-required",
+            },
+            budget: {
+              maxConcurrentAgents: 1,
+              maxTotalAgents: 1,
+            },
+            phases: [
+              {
+                id: "edit",
+                name: "Edit",
+                kind: "sequential",
+                prompt: "Make the isolated edit.",
+              },
+            ],
+          })
+          const run = await WorkflowRun.create({ spec })
+          const result = await WorkflowScheduler.start(run.id, { allowWriteWorkflows: true })
+
+          expect(result.status).toBe("running")
+          expect(result.children).toHaveLength(1)
+
+          const { TaskQueue } = await import("../../src/session/task-queue")
+          const queue = await TaskQueue.list()
+          expect(queue).toHaveLength(1)
+          const item = queue[0]!
+          expect(item.worktree).toBeDefined()
+          const itemWorktree = item.worktree!
+          dedicatedWorktree = itemWorktree
+          const itemDirectoryReal = await fs.realpath(item.directory)
+          const itemWorktreeReal = await fs.realpath(itemWorktree)
+          const parentReal = await fs.realpath(tmp.path)
+          expect(itemDirectoryReal).toBe(itemWorktreeReal)
+          expect(itemWorktreeReal).not.toBe(parentReal)
+          expect(item.payload.writePolicy).toBe("worktree-required")
+          expect(WorkflowTaskQueue.readPayload(item.payload)?.worktree).toMatchObject({
+            mode: "dedicated",
+            directory: itemWorktree,
+          })
+
+          const childSessionID = result.children[0]?.sessionID
+          expect(childSessionID).toBeDefined()
+          const childSession = await Session.get(childSessionID!)
+          expect(await fs.realpath(childSession.directory)).toBe(itemWorktreeReal)
+        },
+      })
+    } finally {
+      if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME
+      else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
+      if (dedicatedWorktree) {
+        const directory = dedicatedWorktree
+        await Instance.provide({
+          directory: tmp.path,
+          fn: () => Worktree.remove({ directory }),
+        }).catch(() => undefined)
+      }
     }
   })
 

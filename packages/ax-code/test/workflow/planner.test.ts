@@ -77,7 +77,7 @@ describe("workflow dry-run planner", () => {
     expect(plan.phases[0]?.children[0]?.writePolicy).toBe("serialized")
   })
 
-  test("rejects worktree-required workflows until child worktree isolation is available", () => {
+  test("allows worktree-required workflows when explicitly approved", () => {
     const spec = parseWorkflowSpecV1({
       schemaVersion: 1,
       id: "isolated-write-workflow",
@@ -95,7 +95,10 @@ describe("workflow dry-run planner", () => {
       ],
     })
 
-    expect(() => planWorkflowDryRun({ spec, allowWriteWorkflows: true })).toThrow(/worktree isolation/)
+    expect(() => planWorkflowDryRun({ spec })).toThrow(/writePolicy worktree-required/)
+    const plan = planWorkflowDryRun({ spec, allowWriteWorkflows: true })
+    expect(plan.summary.writePolicy).toBe("worktree-required")
+    expect(plan.phases[0]?.children[0]?.writePolicy).toBe("worktree-required")
   })
 
   test("rejects plans that estimate more children than the workflow budget allows", () => {

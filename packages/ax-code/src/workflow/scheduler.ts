@@ -85,43 +85,51 @@ export namespace WorkflowScheduler {
 
       if (parsed.enqueueChildren) {
         for (const childPlan of phasePlan.children) {
-          const session = await Session.create({
-            parentID: initial.parentSessionID,
-            title: `${initial.spec.name}: ${phase.name} #${childPlan.index + 1} (@${childPlan.agent ?? "workflow"} workflow child)`,
-          })
-          const child = await WorkflowRun.appendChild({
-            runID,
-            phaseID: phase.id,
-            sessionID: session.id,
-            agent: childPlan.agent,
-            model: childPlan.model,
-            budgetSlice: childPlan.budgetSlice,
-          })
-          const task = await TaskQueue.enqueue({
-            sessionID: session.id,
-            kind: "subagent",
-            title: `${initial.spec.name}: ${phase.name} #${childPlan.index + 1}`,
-            worktree: Instance.worktree,
-            agent: childPlan.agent,
-            model: childPlan.model,
-            sourceTaskID: initial.sourceTaskID,
-            payload: {
-              workflow: {
+          const target = await prepareChildRuntimeTarget(runID, phase, childPlan)
+          const { child, task } = await Instance.provide({
+            directory: target.directory,
+            fn: async () => {
+              const session = await Session.create({
+                parentID: initial.parentSessionID,
+                title: `${initial.spec.name}: ${phase.name} #${childPlan.index + 1} (@${childPlan.agent ?? "workflow"} workflow child)`,
+              })
+              const child = await WorkflowRun.appendChild({
                 runID,
                 phaseID: phase.id,
-                childID: child.id,
-                specPhaseID: phase.specPhaseID,
-                startOptions: parsed,
-              },
-              prompt: childPlan.prompt,
-              artifactRefs: childPlan.artifactRefs,
-              budgetSlice: childPlan.budgetSlice,
-              pacing: childPlan.pacing,
-              maxParallel: phasePlan.maxParallel,
-              allowedTools: childPlan.allowedTools,
-              writePolicy: childPlan.writePolicy,
-              networkPolicy: childPlan.networkPolicy,
-              escalationPolicy: childPlan.escalationPolicy,
+                sessionID: session.id,
+                agent: childPlan.agent,
+                model: childPlan.model,
+                budgetSlice: childPlan.budgetSlice,
+              })
+              const task = await TaskQueue.enqueue({
+                sessionID: session.id,
+                kind: "subagent",
+                title: `${initial.spec.name}: ${phase.name} #${childPlan.index + 1}`,
+                worktree: target.worktree,
+                agent: childPlan.agent,
+                model: childPlan.model,
+                sourceTaskID: initial.sourceTaskID,
+                payload: {
+                  workflow: {
+                    runID,
+                    phaseID: phase.id,
+                    childID: child.id,
+                    specPhaseID: phase.specPhaseID,
+                    startOptions: parsed,
+                  },
+                  worktree: target.payload,
+                  prompt: childPlan.prompt,
+                  artifactRefs: childPlan.artifactRefs,
+                  budgetSlice: childPlan.budgetSlice,
+                  pacing: childPlan.pacing,
+                  maxParallel: phasePlan.maxParallel,
+                  allowedTools: childPlan.allowedTools,
+                  writePolicy: childPlan.writePolicy,
+                  networkPolicy: childPlan.networkPolicy,
+                  escalationPolicy: childPlan.escalationPolicy,
+                },
+              })
+              return { child, task }
             },
           })
           await WorkflowRun.attachChildTaskQueueID({ id: child.id, taskQueueID: task.id })
@@ -231,6 +239,51 @@ export namespace WorkflowScheduler {
   export async function retryPhase(runID: WorkflowRunID, phaseID: WorkflowPhaseID) {
     assertEnabled()
     return retryChildren(runID, phaseID)
+  }
+}
+
+type WorkflowChildRuntimeTarget = {
+  directory: string
+  worktree: string
+  payload: {
+    mode: "current" | "dedicated"
+    directory: string
+    name?: string
+    branch?: string
+  }
+}
+
+async function prepareChildRuntimeTarget(
+  runID: WorkflowRunID,
+  phase: WorkflowRunDetail["phases"][number],
+  childPlan: WorkflowDryRunPhase["children"][number],
+): Promise<WorkflowChildRuntimeTarget> {
+  if (childPlan.writePolicy !== "worktree-required") {
+    return {
+      directory: Instance.directory,
+      worktree: Instance.worktree,
+      payload: {
+        mode: "current",
+        directory: Instance.worktree,
+      },
+    }
+  }
+
+  const { Worktree } = await import("../worktree")
+  const info = await Worktree.makeWorktreeInfo(
+    `workflow-${runID}-${phase.specPhaseID}-${childPlan.index + 1}`,
+  )
+  const bootstrap = await Worktree.createFromInfo(info)
+  await bootstrap()
+  return {
+    directory: info.directory,
+    worktree: info.directory,
+    payload: {
+      mode: "dedicated",
+      directory: info.directory,
+      name: info.name,
+      branch: info.branch,
+    },
   }
 }
 

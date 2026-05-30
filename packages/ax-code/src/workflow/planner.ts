@@ -211,10 +211,6 @@ function assertPlannerSafety(input: z.infer<typeof WorkflowDryRunInput>) {
   if (!input.allowWriteWorkflows && input.spec.permissions.writePolicy !== "read-only") {
     issues.push(`writePolicy ${input.spec.permissions.writePolicy} requires explicit write workflow approval`)
   }
-  if (input.spec.permissions.writePolicy === "worktree-required") {
-    issues.push("writePolicy worktree-required requires workflow child worktree isolation before execution")
-  }
-
   if (issues.length > 0) throw new WorkflowPlanError(issues)
 }
 

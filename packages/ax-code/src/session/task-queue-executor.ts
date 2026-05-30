@@ -60,6 +60,13 @@ export namespace TaskQueueExecutor {
   }
 
   export async function start(item: TaskQueue.Info): Promise<TaskQueue.Info> {
+    if (item.directory !== Instance.directory) {
+      return Instance.provide({
+        directory: item.directory,
+        fn: () => start(item),
+      })
+    }
+
     ensureSessionBlockObservers()
     const execution = queueItemExecution(item)
     if (!execution) return item
@@ -344,7 +351,8 @@ function queueItemExecution(item: TaskQueue.Info): QueueExecution | undefined {
       if (!body) return undefined
       return {
         sessionID: item.sessionID,
-        run: () => SessionPrompt.prompt({ ...body, sessionID: item.sessionID! }),
+        run: () =>
+          runInQueueItemInstance(item, () => SessionPrompt.prompt({ ...body, sessionID: item.sessionID! })),
       }
     }
     case "command": {
@@ -352,7 +360,8 @@ function queueItemExecution(item: TaskQueue.Info): QueueExecution | undefined {
       if (!body) return undefined
       return {
         sessionID: item.sessionID,
-        run: () => SessionPrompt.command({ ...body, sessionID: item.sessionID! }),
+        run: () =>
+          runInQueueItemInstance(item, () => SessionPrompt.command({ ...body, sessionID: item.sessionID! })),
       }
     }
     case "shell": {
@@ -360,7 +369,8 @@ function queueItemExecution(item: TaskQueue.Info): QueueExecution | undefined {
       if (!body) return undefined
       return {
         sessionID: item.sessionID,
-        run: () => SessionPrompt.shell({ ...body, sessionID: item.sessionID! }),
+        run: () =>
+          runInQueueItemInstance(item, () => SessionPrompt.shell({ ...body, sessionID: item.sessionID! })),
       }
     }
     case "subagent":
@@ -377,12 +387,21 @@ function workflowSubagentExecution(item: TaskQueue.Info): QueueExecution | undef
   if (!body) return undefined
   return {
     sessionID: item.sessionID!,
-    run: async () => {
-      const result = await SessionPrompt.prompt({ ...body, sessionID: item.sessionID! })
-      await recordWorkflowSubagentUsage(item, result)
-      return result
-    },
+    run: () =>
+      runInQueueItemInstance(item, async () => {
+        const result = await SessionPrompt.prompt({ ...body, sessionID: item.sessionID! })
+        await recordWorkflowSubagentUsage(item, result)
+        return result
+      }),
   }
+}
+
+async function runInQueueItemInstance<T>(item: TaskQueue.Info, run: () => Promise<T>): Promise<T> {
+  if (item.directory === Instance.directory) return run()
+  return Instance.provide({
+    directory: item.directory,
+    fn: run,
+  })
 }
 
 async function recordWorkflowSubagentUsage(item: TaskQueue.Info, result: unknown) {
