@@ -575,6 +575,27 @@ export type AxCodeGrpcNativeIpcBridge = {
   ): AsyncIterable<TResponse>
 }
 
+export type AxCodeGrpcNativeIpcStreamController<T> = {
+  push(value: T): void
+  close(): void
+  fail(error: unknown): void
+}
+
+export type AxCodeGrpcNativeIpcStreamCleanup = void | (() => void | Promise<void>)
+
+export type AxCodeGrpcNativeIpcChannelBridge = {
+  unary<TRequest, TResponse>(call: AxCodeGrpcNativeIpcUnaryCall<TRequest>): Promise<TResponse>
+  serverStream?<TRequest, TResponse>(
+    call: AxCodeGrpcNativeIpcServerStreamCall<TRequest>,
+    controller: AxCodeGrpcNativeIpcStreamController<TResponse>,
+  ): AxCodeGrpcNativeIpcStreamCleanup | Promise<AxCodeGrpcNativeIpcStreamCleanup>
+  bidiStream?<TRequest, TInput, TResponse>(
+    call: AxCodeGrpcNativeIpcBidiStreamCall<TRequest>,
+    input: AsyncIterable<TInput>,
+    controller: AxCodeGrpcNativeIpcStreamController<TResponse>,
+  ): AxCodeGrpcNativeIpcStreamCleanup | Promise<AxCodeGrpcNativeIpcStreamCleanup>
+}
+
 export type AxCodeGrpcNativeHandlerContext<TMethod extends AxCodeGrpcMethod = AxCodeGrpcMethod> =
   AxCodeGrpcCallOptions & {
     method: TMethod
@@ -846,6 +867,79 @@ export function createAxCodeGrpcNativeIpcTransport(bridge: AxCodeGrpcNativeIpcBr
         },
         input,
       )
+    },
+  }
+}
+
+export function createAxCodeGrpcNativeIpcBridgeFromChannels(
+  bridge: AxCodeGrpcNativeIpcChannelBridge,
+): AxCodeGrpcNativeIpcBridge {
+  return {
+    unary: bridge.unary,
+    serverStream<TRequest, TResponse>(call: AxCodeGrpcNativeIpcServerStreamCall<TRequest>): AsyncIterable<TResponse> {
+      if (!bridge.serverStream) throw new Error("AX Code native IPC channel bridge does not support server streaming")
+      return createAxCodeGrpcNativeIpcStream<TResponse>((controller) => bridge.serverStream!(call, controller))
+    },
+    bidiStream<TRequest, TInput, TResponse>(
+      call: AxCodeGrpcNativeIpcBidiStreamCall<TRequest>,
+      input: AsyncIterable<TInput>,
+    ): AsyncIterable<TResponse> {
+      if (!bridge.bidiStream) throw new Error("AX Code native IPC channel bridge does not support bidirectional streaming")
+      return createAxCodeGrpcNativeIpcStream<TResponse>((controller) => bridge.bidiStream!(call, input, controller))
+    },
+  }
+}
+
+export function createAxCodeGrpcNativeIpcStream<T>(
+  subscribe: (
+    controller: AxCodeGrpcNativeIpcStreamController<T>,
+  ) => AxCodeGrpcNativeIpcStreamCleanup | Promise<AxCodeGrpcNativeIpcStreamCleanup>,
+): AsyncIterable<T> {
+  return {
+    [Symbol.asyncIterator]() {
+      const queue = createAsyncQueue<T>()
+      let started = false
+      let cleaned = false
+      let cleanupPromise: Promise<AxCodeGrpcNativeIpcStreamCleanup> | undefined
+
+      const start = () => {
+        if (started) return
+        started = true
+        cleanupPromise = Promise.resolve()
+          .then(() => subscribe(queue))
+          .catch((error) => {
+            queue.fail(error)
+            return undefined
+          })
+      }
+
+      const iterator = queue.iterable[Symbol.asyncIterator]()
+      const cleanup = async () => {
+        if (cleaned) return
+        cleaned = true
+        queue.close()
+        const cleanupFn = await cleanupPromise
+        if (typeof cleanupFn === "function") await cleanupFn()
+      }
+
+      return {
+        async next() {
+          start()
+          try {
+            const result = await iterator.next()
+            if (result.done) await cleanup()
+            return result
+          } catch (error) {
+            await cleanup()
+            throw error
+          }
+        },
+        async return() {
+          start()
+          await cleanup()
+          return { value: undefined, done: true }
+        },
+      }
     },
   }
 }

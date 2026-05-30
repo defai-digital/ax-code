@@ -15,6 +15,8 @@ import {
   createAxCodeGrpcClientFromNativeIpc,
   createAxCodeGrpcHttpBridge,
   createAxCodeGrpcNativeBridgeFromHandlers,
+  createAxCodeGrpcNativeIpcBridgeFromChannels,
+  createAxCodeGrpcNativeIpcStream,
   createAxCodeGrpcNativeIpcTransport,
   getAxCodeGrpcMethodDescriptor,
   listMissingAxCodeGrpcNativeHandlers,
@@ -480,6 +482,87 @@ describe("gRPC SDK facade", () => {
     expect(() => transport.bidiStream?.(AX_CODE_GRPC_METHOD.ConnectPty, { id: "pty_1" }, asyncFrames())).toThrow(
       "AX Code native IPC bridge does not support bidirectional streaming",
     )
+  })
+
+  test("native IPC channel bridge adapts push streams", async () => {
+    const calls: unknown[] = []
+    const client = createAxCodeGrpcClientFromNativeIpc(
+      createAxCodeGrpcNativeIpcBridgeFromChannels({
+        async unary(call) {
+          calls.push(call)
+          return { value: { id: "sess-1" } }
+        },
+        serverStream(call, controller) {
+          calls.push(call)
+          controller.push({ type: "server.connected", properties: {} })
+          controller.close()
+        },
+        bidiStream(call, input, controller) {
+          calls.push(call)
+          void (async () => {
+            for await (const frame of input) calls.push(frame)
+            controller.push({ type: "output", data: "ready" })
+            controller.close()
+          })()
+        },
+      }),
+    )
+    const events = []
+
+    await expect(client.session.get("sess-1")).resolves.toEqual({ id: "sess-1" })
+    for await (const event of client.subscribeEvents()) events.push(event)
+    for await (const event of client.pty.connect("pty_1", asyncFrames("pwd\n"))) events.push(event)
+
+    expect(events).toEqual([
+      { type: "server.connected", properties: {} },
+      { type: "output", data: "ready" },
+    ])
+    expect(calls).toEqual([
+      {
+        method: AX_CODE_GRPC_METHOD.GetSession,
+        request: { sessionID: "sess-1" },
+        metadata: undefined,
+        timeoutMs: undefined,
+      },
+      { method: AX_CODE_GRPC_METHOD.SubscribeEvents, request: {}, metadata: undefined, timeoutMs: undefined },
+      {
+        method: AX_CODE_GRPC_METHOD.ConnectPty,
+        request: { id: "pty_1", cursor: undefined },
+        metadata: undefined,
+        timeoutMs: undefined,
+      },
+      "pwd\n",
+    ])
+  })
+
+  test("native IPC stream helper cleans up subscriptions on early return", async () => {
+    const events: string[] = []
+    const stream = createAxCodeGrpcNativeIpcStream<string>((controller) => {
+      events.push("subscribed")
+      controller.push("ready")
+      return () => events.push("unsubscribed")
+    })
+
+    for await (const value of stream) {
+      events.push(value)
+      break
+    }
+
+    expect(events).toEqual(["subscribed", "ready", "unsubscribed"])
+  })
+
+  test("native IPC stream helper cleans up subscriptions after natural close", async () => {
+    const events: string[] = []
+    const stream = createAxCodeGrpcNativeIpcStream<string>((controller) => {
+      events.push("subscribed")
+      controller.push("ready")
+      controller.close()
+      return () => events.push("unsubscribed")
+    })
+
+    for await (const value of stream) events.push(value)
+
+    expect(events).toEqual(["subscribed", "ready", "unsubscribed"])
   })
 
   test("native handler map can back a renderer client without HTTP dispatch glue", async () => {

@@ -125,6 +125,11 @@ const client = createAxCodeGrpcClientFromNativeIpc({
 Use `createAxCodeGrpcClientFromNativeBridge()` only when both sides are in the same JavaScript realm and can safely pass
 `AbortSignal` and async iterables directly in the call object.
 
+If the host exposes push-style subscriptions, use `createAxCodeGrpcNativeIpcBridgeFromChannels()` or
+`createAxCodeGrpcNativeIpcStream()` to adapt host callbacks into the AsyncIterable streams expected by the gRPC SDK.
+Those helpers are useful for Tauri event listeners, Electron preload callbacks, and other IPC systems that return an
+unsubscribe function rather than a JavaScript async generator.
+
 Native hosts can also expose a handler map instead of hand-writing a method switch. This is useful for Rust/Tauri
 commands, Electron preload APIs, or a real local gRPC server that wants to bind AX Code runtime operations method by
 method. Use the method descriptors to validate that every expected domain is covered before handing the bridge to
