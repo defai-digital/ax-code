@@ -307,8 +307,8 @@ describe("SessionGoal", () => {
     })
   })
 
-  test("active goal schedules a bounded continuation after an ordinary stop", async () => {
-    await using tmp = await tmpdir({ git: true, config: { session: { max_continuations: 1 } } })
+  test("active goal continues until model marks it complete", async () => {
+    await using tmp = await tmpdir({ git: true })
 
     await Instance.provide({
       directory: tmp.path,
@@ -319,6 +319,9 @@ describe("SessionGoal", () => {
         let streams = 0
         streamSpy = spyOn(LLM, "stream").mockImplementation((async () => {
           streams++
+          if (streams >= 2) {
+            await SessionGoal.setStatus({ sessionID: session.id, status: "complete" })
+          }
           return {
             fullStream: (async function* () {
               yield { type: "start" }
@@ -343,13 +346,8 @@ describe("SessionGoal", () => {
           parts: [{ type: "text", text: "start work" }],
         })
 
-        expect(streamSpy?.mock.calls.length ?? 0).toBeGreaterThan(1)
-        const messages = await Session.messages({ sessionID: session.id })
-        expect(
-          messages.some((message) =>
-            message.parts.some((part) => part.type === "text" && part.text.includes("goal auto-continuation 1/1")),
-          ),
-        ).toBe(true)
+        expect(streamSpy?.mock.calls.length ?? 0).toBeGreaterThanOrEqual(2)
+        expect((await SessionGoal.get(session.id))?.status).toBe("complete")
 
         await Session.remove(session.id)
       },
