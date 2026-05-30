@@ -200,12 +200,36 @@ describe("workflow routes", () => {
         `/workflow-runs/${created.id}/artifacts?${directoryQuery}&phaseID=${phaseID}&kind=summary&includePayload=true`,
       )
       expect(rawArtifactsResponse.status).toBe(200)
-      const rawArtifacts = (await rawArtifactsResponse.json()) as Array<{ payload?: unknown }>
+      const rawArtifacts = (await rawArtifactsResponse.json()) as Array<{ id: string; kind: string; payload?: unknown }>
       expect(rawArtifacts).toHaveLength(1)
       expect(rawArtifacts[0]?.payload).toMatchObject({
         phaseID,
         specPhaseID: "noop",
       })
+      const artifactDrillDownResponse = await app.request(
+        `/workflow-runs/${created.id}/artifacts?${directoryQuery}&artifactID=${rawArtifacts[0]!.id}&includePayload=true`,
+      )
+      expect(artifactDrillDownResponse.status).toBe(200)
+      const artifactDrillDown = (await artifactDrillDownResponse.json()) as Array<{
+        id: string
+        kind: string
+        payload?: unknown
+      }>
+      expect(artifactDrillDown).toHaveLength(1)
+      expect(artifactDrillDown[0]).toMatchObject({
+        id: rawArtifacts[0]!.id,
+        kind: "summary",
+        payload: {
+          phaseID,
+          specPhaseID: "noop",
+        },
+      })
+
+      const mismatchedArtifactFilterResponse = await app.request(
+        `/workflow-runs/${created.id}/artifacts?${directoryQuery}&artifactID=${rawArtifacts[0]!.id}&kind=log`,
+      )
+      expect(mismatchedArtifactFilterResponse.status).toBe(200)
+      expect(await mismatchedArtifactFilterResponse.json()).toEqual([])
 
       const promptArtifactsResponse = await app.request(
         `/workflow-runs/${created.id}/artifacts?${directoryQuery}&phaseID=${phaseID}&kind=log`,

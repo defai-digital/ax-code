@@ -358,7 +358,11 @@ describe("headless SDK types", () => {
     await client.workflowRun.get("wfr_live")
     await client.workflowRun.dashboard({ status: "running", limit: 10 })
     await client.workflowRun.evalCases()
-    await client.workflowRun.artifacts("wfr_live", { kind: "summary", includePayload: "false" })
+    await client.workflowRun.artifacts("wfr_live", {
+      artifactID: "wfa_live",
+      kind: "summary",
+      includePayload: "false",
+    })
     await client.workflowRun.evalSummary("wfr_live", {
       baseline: { label: "single-agent", metrics: { confirmedFindings: 0, falsePositiveFindings: 0 } },
     })
@@ -394,6 +398,7 @@ describe("headless SDK types", () => {
       ["POST", "/workflow-runs/wfr_live/retry"],
     ])
     expect(calls[7].search).toBe("?status=running&limit=10")
+    expect(calls[12].search).toBe("?artifactID=wfa_live&kind=summary&includePayload=false")
     expect(calls.at(-1)?.search).toBe("?phaseID=wfp_live")
     expect(calls[2].body).toBe(JSON.stringify({ scope: "project", spec: templateSpec }))
     expect(calls[4].body).toBe(

@@ -70,6 +70,7 @@ const WorkflowRunCreateBody = z
   })
 
 const WorkflowArtifactListQuery = z.object({
+  artifactID: z.string().min(1).optional(),
   phaseID: z.string().min(1).optional(),
   childID: z.string().min(1).optional(),
   kind: WorkflowRunState.ArtifactKind.optional(),
@@ -309,6 +310,7 @@ export const WorkflowRunRoutes = lazy(() =>
         const query = c.req.valid("query")
         const detail = await WorkflowRun.getDetail(runID(c))
         const artifacts = detail.artifacts
+          .filter((artifact) => (query.artifactID ? artifact.id === query.artifactID : true))
           .filter((artifact) => (query.phaseID ? artifact.phaseID === query.phaseID : true))
           .filter((artifact) => (query.childID ? artifact.childID === query.childID : true))
           .filter((artifact) => (query.kind ? artifact.kind === query.kind : true))
