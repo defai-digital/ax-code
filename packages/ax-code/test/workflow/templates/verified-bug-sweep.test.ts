@@ -75,12 +75,20 @@ describe("verified bug sweep workflow template", () => {
         expect(finalReport?.summary).toContain("Confirmed findings:")
         expect(finalReport?.summary).toContain("Likely findings:")
         expect(finalReport?.summary).toContain("Rejected findings:")
+        expect(finalReport?.summary).toContain(
+          "rejectionReason=React textContent escapes markup instead of executing it.",
+        )
         expect(finalReport?.summary).toContain("Unverified findings:")
         expect(finalReport?.payload).toMatchObject({
           findings: {
             confirmed: [expect.objectContaining({ summary: expect.stringContaining("Unauthenticated callers") })],
             likely: [expect.objectContaining({ summary: expect.stringContaining("Retry delay grows") })],
-            rejected: [expect.objectContaining({ summary: expect.stringContaining("textContent") })],
+            rejected: [
+              expect.objectContaining({
+                reason: "React textContent escapes markup instead of executing it.",
+                summary: expect.stringContaining("textContent"),
+              }),
+            ],
             unverified: [expect.objectContaining({ summary: expect.stringContaining("Cache scoping") })],
           },
         })
@@ -133,6 +141,9 @@ async function createCompletedSeededRun(seeds: WorkflowEvalSeededFinding[]) {
         status: seed.expectedStatus,
         file: seed.file,
         line: seed.line,
+        ...(seed.expectedStatus === "rejected"
+          ? { rejectionReason: "React textContent escapes markup instead of executing it." }
+          : {}),
       },
     })
   }

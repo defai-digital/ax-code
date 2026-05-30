@@ -1139,6 +1139,7 @@ type FinalReportFinding = {
   artifactID: WorkflowArtifactID
   specArtifactID?: string
   summary?: string
+  reason?: string
   evidenceRefs: WorkflowArtifactRecord["evidenceRefs"]
 }
 
@@ -1154,10 +1155,12 @@ function finalReportFindings(detail: WorkflowRunDetail): FinalReportFindingBucke
 
   for (const artifact of detail.artifacts) {
     if (artifact.kind !== "finding") continue
-    buckets[classifyWorkflowFindingArtifact(artifact)].push({
+    const status = classifyWorkflowFindingArtifact(artifact)
+    buckets[status].push({
       artifactID: artifact.id,
       specArtifactID: artifact.specArtifactID,
       summary: artifact.summary,
+      reason: status === "rejected" ? findingRejectionReason(artifact.payload) : undefined,
       evidenceRefs: artifact.evidenceRefs,
     })
   }
@@ -1182,15 +1185,41 @@ function findingBucketSummaryLines(findings: FinalReportFindingBuckets) {
     lines.push(`${titleCase(status)} findings:`)
     for (const finding of bucket.slice(0, 5)) {
       const summary = finding.summary ? ` - ${finding.summary}` : ""
+      const reason = status === "rejected" && finding.reason ? ` rejectionReason=${finding.reason}` : ""
       const evidence =
         finding.evidenceRefs.length > 0
           ? ` evidence=${finding.evidenceRefs.map((ref) => `${ref.kind}:${ref.id}`).join(",")}`
           : ""
-      lines.push(`- ${finding.artifactID}${summary}${evidence}`)
+      lines.push(`- ${finding.artifactID}${summary}${reason}${evidence}`)
     }
     if (bucket.length > 5) lines.push(`- ${bucket.length - 5} more ${status} findings omitted from compact summary.`)
   }
   return lines
+}
+
+function findingRejectionReason(payload: unknown) {
+  const reason = payloadStringField(payload, [
+    "reason",
+    "rejectionReason",
+    "rejectedReason",
+    "verificationReason",
+    "rationale",
+    "explanation",
+  ])
+  if (!reason) return undefined
+  const compact = reason.replace(/\s+/g, " ").trim()
+  if (!compact) return undefined
+  return compact.length > 180 ? `${compact.slice(0, 177)}...` : compact
+}
+
+function payloadStringField(payload: unknown, keys: readonly string[]) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return undefined
+  const record = payload as Record<string, unknown>
+  for (const key of keys) {
+    const value = record[key]
+    if (typeof value === "string" && value.trim()) return value
+  }
+  return undefined
 }
 
 function titleCase(value: string) {
