@@ -287,7 +287,7 @@ export const WorkflowRunRoutes = lazy(() =>
         },
       }),
       validator("param", WORKFLOW_RUN_ID_PARAM),
-      async (c) => c.json(await WorkflowRun.getDetail(runID(c))),
+      async (c) => c.json(compactWorkflowRunDetail(await WorkflowRun.getDetail(runID(c)))),
     )
     .get(
       "/:runID/artifacts",
@@ -313,7 +313,7 @@ export const WorkflowRunRoutes = lazy(() =>
           .filter((artifact) => (query.childID ? artifact.childID === query.childID : true))
           .filter((artifact) => (query.kind ? artifact.kind === query.kind : true))
           .map((artifact) => {
-            if (query.includePayload !== "false") return artifact
+            if (query.includePayload === "true") return artifact
             return compactWorkflowArtifact(artifact)
           })
         return c.json(artifacts)
@@ -400,7 +400,8 @@ export const WorkflowRunRoutes = lazy(() =>
       }),
       validator("param", WORKFLOW_RUN_ID_PARAM),
       validator("json", WorkflowScheduler.StartOptions.partial().optional()),
-      async (c) => c.json(await WorkflowScheduler.start(runID(c), c.req.valid("json") ?? {})),
+      async (c) =>
+        c.json(compactWorkflowRunDetail(await WorkflowScheduler.start(runID(c), c.req.valid("json") ?? {}))),
     )
     .post(
       "/:runID/pause",
@@ -417,7 +418,7 @@ export const WorkflowRunRoutes = lazy(() =>
         },
       }),
       validator("param", WORKFLOW_RUN_ID_PARAM),
-      async (c) => c.json(await WorkflowScheduler.pause(runID(c))),
+      async (c) => c.json(compactWorkflowRunDetail(await WorkflowScheduler.pause(runID(c)))),
     )
     .post(
       "/:runID/resume",
@@ -434,7 +435,7 @@ export const WorkflowRunRoutes = lazy(() =>
         },
       }),
       validator("param", WORKFLOW_RUN_ID_PARAM),
-      async (c) => c.json(await WorkflowScheduler.resume(runID(c))),
+      async (c) => c.json(compactWorkflowRunDetail(await WorkflowScheduler.resume(runID(c)))),
     )
     .post(
       "/:runID/cancel",
@@ -451,7 +452,7 @@ export const WorkflowRunRoutes = lazy(() =>
         },
       }),
       validator("param", WORKFLOW_RUN_ID_PARAM),
-      async (c) => c.json(await WorkflowScheduler.cancel(runID(c))),
+      async (c) => c.json(compactWorkflowRunDetail(await WorkflowScheduler.cancel(runID(c)))),
     )
     .post(
       "/:runID/retry",
@@ -472,9 +473,11 @@ export const WorkflowRunRoutes = lazy(() =>
       async (c) => {
         const query = c.req.valid("query")
         return c.json(
-          query.phaseID
-            ? await WorkflowScheduler.retryPhase(runID(c), query.phaseID as WorkflowPhaseID)
-            : await WorkflowScheduler.retry(runID(c)),
+          compactWorkflowRunDetail(
+            query.phaseID
+              ? await WorkflowScheduler.retryPhase(runID(c), query.phaseID as WorkflowPhaseID)
+              : await WorkflowScheduler.retry(runID(c)),
+          ),
         )
       },
     ),
@@ -611,7 +614,11 @@ export const WorkflowRoutineRoutes = lazy(() =>
       validator("json", WorkflowRoutineRunBody),
       async (c) => {
         try {
-          return c.json(await WorkflowRoutineTrigger.run(c.req.valid("json")))
+          const result = await WorkflowRoutineTrigger.run(c.req.valid("json"))
+          return c.json({
+            ...result,
+            run: compactWorkflowRunDetail(result.run),
+          })
         } catch (error) {
           if (error instanceof WorkflowRoutineNotFoundError) throw new HTTPException(404, { message: error.message })
           if (error instanceof WorkflowRoutineDisabledError) throw new HTTPException(409, { message: error.message })
@@ -620,3 +627,10 @@ export const WorkflowRoutineRoutes = lazy(() =>
       },
     ),
 )
+
+function compactWorkflowRunDetail(detail: Awaited<ReturnType<typeof WorkflowRun.getDetail>>) {
+  return {
+    ...detail,
+    artifacts: detail.artifacts.map((artifact) => compactWorkflowArtifact(artifact)),
+  }
+}

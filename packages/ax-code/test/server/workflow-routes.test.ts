@@ -152,13 +152,23 @@ describe("workflow routes", () => {
       expect(startResponse.status).toBe(200)
       const started = (await startResponse.json()) as {
         phases: Array<{ id: string }>
-        artifacts: Array<{ phaseID?: string; payload?: unknown }>
+        artifacts: Array<{ phaseID?: string; payload?: unknown; redaction?: { status: string; summary?: string } }>
       }
       const phaseID = started.phases[0]!.id
       expect(started.artifacts.some((artifact) => artifact.phaseID === phaseID)).toBe(true)
+      expect(started.artifacts.every((artifact) => artifact.payload === undefined)).toBe(true)
+      expect(started.artifacts.find((artifact) => artifact.phaseID === phaseID)?.redaction).toMatchObject({
+        status: "pending",
+        summary: expect.stringContaining("payload omitted"),
+      })
+
+      const detailResponse = await app.request(`/workflow-runs/${created.id}?${directoryQuery}`)
+      expect(detailResponse.status).toBe(200)
+      const detail = (await detailResponse.json()) as { artifacts: Array<{ payload?: unknown }> }
+      expect(detail.artifacts.every((artifact) => artifact.payload === undefined)).toBe(true)
 
       const artifactsResponse = await app.request(
-        `/workflow-runs/${created.id}/artifacts?${directoryQuery}&phaseID=${phaseID}&kind=summary&includePayload=false`,
+        `/workflow-runs/${created.id}/artifacts?${directoryQuery}&phaseID=${phaseID}&kind=summary`,
       )
       expect(artifactsResponse.status).toBe(200)
       const artifacts = (await artifactsResponse.json()) as Array<{
@@ -173,6 +183,17 @@ describe("workflow routes", () => {
       expect(artifacts[0]?.redaction).toMatchObject({
         status: "pending",
         summary: expect.stringContaining("payload omitted"),
+      })
+
+      const rawArtifactsResponse = await app.request(
+        `/workflow-runs/${created.id}/artifacts?${directoryQuery}&phaseID=${phaseID}&kind=summary&includePayload=true`,
+      )
+      expect(rawArtifactsResponse.status).toBe(200)
+      const rawArtifacts = (await rawArtifactsResponse.json()) as Array<{ payload?: unknown }>
+      expect(rawArtifacts).toHaveLength(1)
+      expect(rawArtifacts[0]?.payload).toMatchObject({
+        phaseID,
+        specPhaseID: "noop",
       })
     } finally {
       if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME
