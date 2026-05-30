@@ -10,7 +10,13 @@ import { SessionPrompt } from "./prompt"
 import { PromptIsolationPolicy, type PromptIsolationPolicy as PromptIsolationPolicyType } from "./prompt-runtime-policy"
 import { TaskQueue } from "./task-queue"
 import type { SessionID, TaskQueueID } from "./schema"
-import type { WorkflowChildID, WorkflowPhaseID, WorkflowRunID } from "../workflow/state"
+import type {
+  WorkflowArtifactID,
+  WorkflowChildID,
+  WorkflowEvidenceRef,
+  WorkflowPhaseID,
+  WorkflowRunID,
+} from "../workflow/state"
 
 const log = Log.create({ service: "session.task-queue-executor" })
 
@@ -19,6 +25,8 @@ const log = Log.create({ service: "session.task-queue-executor" })
 const QueuePromptBody = lazy(() => SessionPrompt.PromptInput.omit({ sessionID: true }))
 const QueueCommandBody = lazy(() => SessionPrompt.CommandInput.omit({ sessionID: true }))
 const QueueShellBody = lazy(() => SessionPrompt.ShellInput.omit({ sessionID: true }))
+
+type WorkflowRunApi = typeof import("../workflow/run").WorkflowRun
 
 type QueueExecution = {
   sessionID: SessionID
@@ -383,9 +391,11 @@ async function recordWorkflowSubagentUsage(item: TaskQueue.Info, result: unknown
   const usage = messageBudgetUsage(result)
 
   const { WorkflowRun } = await import("../workflow/run")
+  const artifactIDs: WorkflowArtifactID[] = []
+  const evidenceRefs: WorkflowEvidenceRef[] = []
   const outputArtifact = messageOutputArtifact(result, usage ?? EmptyWorkflowSubagentBudgetUsage)
   if (outputArtifact) {
-    await WorkflowRun.appendArtifact({
+    const artifact = await WorkflowRun.appendArtifact({
       runID: workflow.runID as WorkflowRunID,
       phaseID: workflow.phaseID as WorkflowPhaseID,
       childID: workflow.childID as WorkflowChildID,
@@ -394,20 +404,32 @@ async function recordWorkflowSubagentUsage(item: TaskQueue.Info, result: unknown
       summary: outputArtifact.summary,
       payload: outputArtifact.payload,
     })
+    artifactIDs.push(artifact.id)
+    evidenceRefs.push({ kind: "artifact", id: artifact.id })
   }
+  if (usage) {
+    const toolCallArtifact = messageToolCallArtifact(result, usage)
+    if (toolCallArtifact) {
+      const artifact = await WorkflowRun.appendArtifact({
+        runID: workflow.runID as WorkflowRunID,
+        phaseID: workflow.phaseID as WorkflowPhaseID,
+        childID: workflow.childID as WorkflowChildID,
+        kind: "metric",
+        retention: "session",
+        summary: toolCallArtifact.summary,
+        payload: toolCallArtifact.payload,
+      })
+      artifactIDs.push(artifact.id)
+      evidenceRefs.push({ kind: "artifact", id: artifact.id })
+    }
+  }
+  await attachWorkflowChildArtifacts(WorkflowRun, {
+    runID: workflow.runID as WorkflowRunID,
+    childID: workflow.childID as WorkflowChildID,
+    artifactIDs,
+    evidenceRefs,
+  })
   if (!usage) return
-  const toolCallArtifact = messageToolCallArtifact(result, usage)
-  if (toolCallArtifact) {
-    await WorkflowRun.appendArtifact({
-      runID: workflow.runID as WorkflowRunID,
-      phaseID: workflow.phaseID as WorkflowPhaseID,
-      childID: workflow.childID as WorkflowChildID,
-      kind: "metric",
-      retention: "session",
-      summary: toolCallArtifact.summary,
-      payload: toolCallArtifact.payload,
-    })
-  }
   await WorkflowRun.appendBudgetUsage({
     runID: workflow.runID as WorkflowRunID,
     phaseID: workflow.phaseID as WorkflowPhaseID,
@@ -421,6 +443,43 @@ async function recordWorkflowSubagentUsage(item: TaskQueue.Info, result: unknown
   if (child?.status === "failed" && child.error?.startsWith("Workflow budget exceeded")) {
     throw new Error(child.error)
   }
+}
+
+async function attachWorkflowChildArtifacts(
+  WorkflowRun: WorkflowRunApi,
+  input: {
+    runID: WorkflowRunID
+    childID: WorkflowChildID
+    artifactIDs: WorkflowArtifactID[]
+    evidenceRefs: WorkflowEvidenceRef[]
+  },
+) {
+  if (input.artifactIDs.length === 0 && input.evidenceRefs.length === 0) return
+  const detail = await WorkflowRun.getDetail(input.runID)
+  const child = detail.children.find((candidate) => candidate.id === input.childID)
+  if (!child) return
+  await WorkflowRun.setChildStatus({
+    id: child.id,
+    status: child.status,
+    outputSummary: child.outputSummary,
+    artifactIDs: uniqueWorkflowArtifactIDs([...child.artifactIDs, ...input.artifactIDs]),
+    evidenceRefs: uniqueWorkflowEvidenceRefs([...child.evidenceRefs, ...input.evidenceRefs]),
+    error: child.error,
+  })
+}
+
+function uniqueWorkflowArtifactIDs(ids: WorkflowArtifactID[]): WorkflowArtifactID[] {
+  return Array.from(new Set(ids))
+}
+
+function uniqueWorkflowEvidenceRefs(refs: WorkflowEvidenceRef[]): WorkflowEvidenceRef[] {
+  const seen = new Set<string>()
+  return refs.filter((ref) => {
+    const key = `${ref.kind}:${ref.id}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
 }
 
 function messageToolCallArtifact(result: unknown, usage: WorkflowSubagentBudgetUsage) {

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test"
+import { afterEach, describe, expect, spyOn, test } from "bun:test"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
 import { Database, eq } from "../../src/storage/db"
@@ -581,32 +581,55 @@ describe("WorkflowScheduler", () => {
           await WorkflowScheduler.start(run.id, { allowScaleBeyondDefaults: true })
           const { TaskQueue } = await import("../../src/session/task-queue")
           const { TaskQueueExecutor } = await import("../../src/session/task-queue-executor")
+          const { SessionPrompt } = await import("../../src/session/prompt")
           const [first] = await TaskQueue.list()
           expect(first?.sessionID).toStartWith("ses_")
-
-          const edited = await TaskQueue.edit({
-            id: first!.id,
-            payload: {
-              ...first!.payload,
-              body: {
-                parts: [{ type: "text", text: "Record this workflow child without model execution." }],
-                noReply: true,
-                agentRouting: "preserve",
-              },
+          const promptSpy = spyOn(SessionPrompt, "prompt").mockResolvedValue({
+            info: {
+              id: "msg_workflow_child",
+              role: "assistant",
+              tokens: { input: 11, output: 7, total: 18 },
+              estimatedCostUsd: 0.001,
             },
-          })
+            parts: [
+              { type: "text", text: "Workflow child output with linked evidence." },
+              { type: "tool", tool: "bash" },
+            ],
+          } as unknown as Awaited<ReturnType<typeof SessionPrompt.prompt>>)
 
-          const running = await TaskQueueExecutor.start(edited)
-          expect(running.status).toBe("running")
-          await waitForValue("workflow queue completion", async () => {
-            const item = await TaskQueue.get(first!.id)
-            return item.status === "completed" ? item : undefined
-          })
+          try {
+            const edited = await TaskQueue.edit({
+              id: first!.id,
+              payload: {
+                ...first!.payload,
+                body: {
+                  parts: [{ type: "text", text: "Record this workflow child without model execution." }],
+                  noReply: true,
+                  agentRouting: "preserve",
+                },
+              },
+            })
+
+            const running = await TaskQueueExecutor.start(edited)
+            expect(running.status).toBe("running")
+            await waitForValue("workflow queue completion", async () => {
+              const item = await TaskQueue.get(first!.id)
+              return item.status === "completed" ? item : undefined
+            })
+          } finally {
+            promptSpy.mockRestore()
+          }
 
           const detail = await WorkflowRun.getDetail(run.id)
           const child = detail.children.find((candidate) => candidate.taskQueueID === first!.id)
           expect(child?.status).toBe("completed")
           expect(child?.sessionID).toBe(first?.sessionID)
+          expect(child?.artifactIDs.length).toBeGreaterThan(0)
+          expect(child?.evidenceRefs).toContainEqual({ kind: "artifact", id: child!.artifactIDs[0]! })
+          const linkedArtifacts = detail.artifacts.filter((artifact) => child?.artifactIDs.includes(artifact.id))
+          expect(linkedArtifacts).toHaveLength(child!.artifactIDs.length)
+          expect(linkedArtifacts.some((artifact) => artifact.kind === "summary")).toBe(true)
+          expect(linkedArtifacts.every((artifact) => artifact.childID === child?.id)).toBe(true)
           expect(detail.phases[0]?.status).toBe("running")
         },
       })
