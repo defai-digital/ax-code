@@ -4,13 +4,13 @@ import { Instance } from "../project/instance"
 import { Session } from "../session"
 import { SessionID } from "../session/schema"
 import { Database, NotFoundError, and, asc, desc, eq, inArray } from "../storage/db"
+import { addWorkflowBudgetUsage } from "./budget"
 import {
   EmptyWorkflowBudgetUsage,
   WorkflowArtifactID,
   WorkflowArtifactRecord,
   WorkflowBudgetLedgerEntry,
   WorkflowBudgetLedgerID,
-  type WorkflowBudgetUsage,
   WorkflowChildID,
   WorkflowChildRecord,
   WorkflowPhaseID,
@@ -314,7 +314,7 @@ async function appendBudgetUsage(input: WorkflowRunState.AppendBudgetUsageInput)
   const entry = Database.transaction((db) => {
     const run = db.select().from(WorkflowRunTable).where(eq(WorkflowRunTable.id, parsed.runID)).get()
     if (!run) throw new NotFoundError({ message: `Workflow run not found: ${parsed.runID}` })
-    const nextUsage = addUsage(run.budget_usage, parsed.usageDelta)
+    const nextUsage = addWorkflowBudgetUsage(run.budget_usage, parsed.usageDelta)
     const row = db
       .insert(WorkflowBudgetLedgerTable)
       .values({
@@ -615,18 +615,6 @@ async function assertChildBelongsToRun(childID: WorkflowChildID, runID: Workflow
 
 function touchRun(db: Database.TxOrDb, runID: WorkflowRunID, now: number) {
   db.update(WorkflowRunTable).set({ time_updated: now }).where(eq(WorkflowRunTable.id, runID)).run()
-}
-
-function addUsage(current: WorkflowBudgetUsage, delta: WorkflowBudgetUsage): WorkflowBudgetUsage {
-  return {
-    totalTokens: current.totalTokens + delta.totalTokens,
-    inputTokens: current.inputTokens + delta.inputTokens,
-    outputTokens: current.outputTokens + delta.outputTokens,
-    toolCalls: current.toolCalls + delta.toolCalls,
-    childAgents: current.childAgents + delta.childAgents,
-    retries: current.retries + delta.retries,
-    estimatedCostUsd: current.estimatedCostUsd + delta.estimatedCostUsd,
-  }
 }
 
 function unique<T>(items: T[]): T[] {
