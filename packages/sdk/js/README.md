@@ -222,13 +222,15 @@ try {
 
   const session = (await client.createSession({ title: "Desktop session" })) as { id: string }
   const messages = await client.session.messages(session.id, { limit: 50 })
+  const skills = await client.app.skills()
+  const readme = await client.file.read("README.md")
   await client.sendPrompt(session.id, { parts: [{ type: "text", text: "Review this project" }] })
 } finally {
   await backend.close()
 }
 ```
 
-`bootstrap.load()` returns a partial GUI startup snapshot and an `errors` array for failed subrequests. `client.session` exposes session history and detail APIs for opening existing conversations without importing the full HTTP SDK. PTY terminal access is exposed through `client.pty` with bidirectional streaming for interactive shells. `createAxCodeGrpcClientFromHttp()` is a compatibility bridge over the current headless HTTP/SSE/WebSocket backend. Native hosts can implement the same transport interface and pass it to `createAxCodeGrpcClient({ transport })`. The proto contract is published at [`../proto/ax_code/v1/headless.proto`](../proto/ax_code/v1/headless.proto).
+`bootstrap.load()` returns a partial GUI startup snapshot and an `errors` array for failed subrequests. `client.session` exposes session history and detail APIs for opening existing conversations without importing the full HTTP SDK. `client.app`, `client.project`, `client.file`, `client.find`, and `client.tool` cover GUI discovery and workspace navigation. PTY terminal access is exposed through `client.pty` with bidirectional streaming for interactive shells. `createAxCodeGrpcClientFromHttp()` is a compatibility bridge over the current headless HTTP/SSE/WebSocket backend. Native hosts can implement the same transport interface and pass it to `createAxCodeGrpcClient({ transport })`. The proto contract is published at [`../proto/ax_code/v1/headless.proto`](../proto/ax_code/v1/headless.proto).
 
 ## HTTP client (server-based)
 

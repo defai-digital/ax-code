@@ -36,6 +36,7 @@ The TypeScript facade lives at `@ax-code/sdk/grpc` and covers:
 - prompt, command, shell, abort, permission reply, and question reply
 - GUI bootstrap snapshots for providers, sessions, permissions, questions, path, VCS, LSP, MCP, formatter, and command state
 - session list, detail, message history, message detail, children, goal, todo, diff, fork, share, and summarize operations
+- GUI discovery and workspace navigation for agents, skills, projects, file tree/content/status, text/file/symbol search, and tool schemas
 - PTY terminal management and bidirectional terminal streaming
 - session evidence for review/debug UI
 - task queue operations
@@ -63,6 +64,8 @@ try {
 
   const session = await client.createSession({ title: "GUI session" })
   const messages = await client.session.messages((session as { id: string }).id, { limit: 50 })
+  const skills = await client.app.skills()
+  const readme = await client.file.read("README.md")
   const bootstrap = await client.bootstrap.load({
     include: { sessions: true, providers: true, providerList: true, path: true, vcs: true },
   })

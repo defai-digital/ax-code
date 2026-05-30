@@ -39,6 +39,18 @@ export const AX_CODE_GRPC_METHOD = {
   ShareSession: `/${AX_CODE_GRPC_SERVICE}/ShareSession`,
   UnshareSession: `/${AX_CODE_GRPC_SERVICE}/UnshareSession`,
   SummarizeSession: `/${AX_CODE_GRPC_SERVICE}/SummarizeSession`,
+  ListAgents: `/${AX_CODE_GRPC_SERVICE}/ListAgents`,
+  ListSkills: `/${AX_CODE_GRPC_SERVICE}/ListSkills`,
+  ListProjects: `/${AX_CODE_GRPC_SERVICE}/ListProjects`,
+  GetCurrentProject: `/${AX_CODE_GRPC_SERVICE}/GetCurrentProject`,
+  ListFiles: `/${AX_CODE_GRPC_SERVICE}/ListFiles`,
+  ReadFile: `/${AX_CODE_GRPC_SERVICE}/ReadFile`,
+  GetFileStatus: `/${AX_CODE_GRPC_SERVICE}/GetFileStatus`,
+  FindText: `/${AX_CODE_GRPC_SERVICE}/FindText`,
+  FindFiles: `/${AX_CODE_GRPC_SERVICE}/FindFiles`,
+  FindSymbols: `/${AX_CODE_GRPC_SERVICE}/FindSymbols`,
+  ListToolIDs: `/${AX_CODE_GRPC_SERVICE}/ListToolIDs`,
+  ListTools: `/${AX_CODE_GRPC_SERVICE}/ListTools`,
   ListPty: `/${AX_CODE_GRPC_SERVICE}/ListPty`,
   CreatePty: `/${AX_CODE_GRPC_SERVICE}/CreatePty`,
   GetPty: `/${AX_CODE_GRPC_SERVICE}/GetPty`,
@@ -393,6 +405,63 @@ export function createAxCodeGrpcClient(input: AxCodeGrpcClientOptions) {
         return value(AX_CODE_GRPC_METHOD.SummarizeSession, { sessionID, body }, options)
       },
     },
+    app: {
+      agents(parameters?: Parameters<HeadlessHttpClient["client"]["app"]["agents"]>[0], options?: AxCodeGrpcCallOptions) {
+        return value(AX_CODE_GRPC_METHOD.ListAgents, { parameters }, options)
+      },
+      skills(parameters?: Parameters<HeadlessHttpClient["client"]["app"]["skills"]>[0], options?: AxCodeGrpcCallOptions) {
+        return value(AX_CODE_GRPC_METHOD.ListSkills, { parameters }, options)
+      },
+    },
+    project: {
+      list(parameters?: Parameters<HeadlessHttpClient["client"]["project"]["list"]>[0], options?: AxCodeGrpcCallOptions) {
+        return value(AX_CODE_GRPC_METHOD.ListProjects, { parameters }, options)
+      },
+      current(
+        parameters?: Parameters<HeadlessHttpClient["client"]["project"]["current"]>[0],
+        options?: AxCodeGrpcCallOptions,
+      ) {
+        return value(AX_CODE_GRPC_METHOD.GetCurrentProject, { parameters }, options)
+      },
+    },
+    file: {
+      list(path: string, options?: AxCodeGrpcCallOptions) {
+        return value(AX_CODE_GRPC_METHOD.ListFiles, { parameters: { path } }, options)
+      },
+      read(path: string, options?: AxCodeGrpcCallOptions) {
+        return value(AX_CODE_GRPC_METHOD.ReadFile, { parameters: { path } }, options)
+      },
+      status(parameters?: Parameters<HeadlessHttpClient["client"]["file"]["status"]>[0], options?: AxCodeGrpcCallOptions) {
+        return value(AX_CODE_GRPC_METHOD.GetFileStatus, { parameters }, options)
+      },
+    },
+    find: {
+      text(pattern: string, options?: AxCodeGrpcCallOptions) {
+        return value(AX_CODE_GRPC_METHOD.FindText, { parameters: { pattern } }, options)
+      },
+      files(
+        query: string,
+        parameters?: Omit<Parameters<HeadlessHttpClient["client"]["find"]["files"]>[0], "query" | "directory">,
+        options?: AxCodeGrpcCallOptions,
+      ) {
+        return value(AX_CODE_GRPC_METHOD.FindFiles, { parameters: { query, ...parameters } }, options)
+      },
+      symbols(query: string, options?: AxCodeGrpcCallOptions) {
+        return value(AX_CODE_GRPC_METHOD.FindSymbols, { parameters: { query } }, options)
+      },
+    },
+    tool: {
+      ids(parameters?: Parameters<HeadlessHttpClient["client"]["tool"]["ids"]>[0], options?: AxCodeGrpcCallOptions) {
+        return value(AX_CODE_GRPC_METHOD.ListToolIDs, { parameters }, options)
+      },
+      list(
+        provider: string,
+        model: string,
+        options?: AxCodeGrpcCallOptions,
+      ) {
+        return value(AX_CODE_GRPC_METHOD.ListTools, { parameters: { provider, model } }, options)
+      },
+    },
     bootstrap: {
       load(request: AxCodeGrpcBootstrapRequest = {}, options?: AxCodeGrpcCallOptions) {
         return value<AxCodeGrpcBootstrapRequest, AxCodeGrpcBootstrapResponse>(
@@ -731,6 +800,30 @@ async function handleHttpBridgeUnary(
           await client.client.session.summarize({ sessionID: body.sessionID, ...body.body }, { throwOnError: true }),
         ),
       )
+    case AX_CODE_GRPC_METHOD.ListAgents:
+      return wrap(unwrapHttpSdkResponse(await client.client.app.agents(body.parameters)))
+    case AX_CODE_GRPC_METHOD.ListSkills:
+      return wrap(unwrapHttpSdkResponse(await client.client.app.skills(body.parameters)))
+    case AX_CODE_GRPC_METHOD.ListProjects:
+      return wrap(unwrapHttpSdkResponse(await client.client.project.list(body.parameters)))
+    case AX_CODE_GRPC_METHOD.GetCurrentProject:
+      return wrap(unwrapHttpSdkResponse(await client.client.project.current(body.parameters)))
+    case AX_CODE_GRPC_METHOD.ListFiles:
+      return wrap(unwrapHttpSdkResponse(await client.client.file.list(body.parameters, { throwOnError: true })))
+    case AX_CODE_GRPC_METHOD.ReadFile:
+      return wrap(unwrapHttpSdkResponse(await client.client.file.read(body.parameters, { throwOnError: true })))
+    case AX_CODE_GRPC_METHOD.GetFileStatus:
+      return wrap(unwrapHttpSdkResponse(await client.client.file.status(body.parameters)))
+    case AX_CODE_GRPC_METHOD.FindText:
+      return wrap(unwrapHttpSdkResponse(await client.client.find.text(body.parameters, { throwOnError: true })))
+    case AX_CODE_GRPC_METHOD.FindFiles:
+      return wrap(unwrapHttpSdkResponse(await client.client.find.files(body.parameters, { throwOnError: true })))
+    case AX_CODE_GRPC_METHOD.FindSymbols:
+      return wrap(unwrapHttpSdkResponse(await client.client.find.symbols(body.parameters, { throwOnError: true })))
+    case AX_CODE_GRPC_METHOD.ListToolIDs:
+      return wrap(unwrapHttpSdkResponse(await client.client.tool.ids(body.parameters)))
+    case AX_CODE_GRPC_METHOD.ListTools:
+      return wrap(unwrapHttpSdkResponse(await client.client.tool.list(body.parameters, { throwOnError: true })))
     case AX_CODE_GRPC_METHOD.ListPty:
       return wrap(unwrapHttpSdkResponse(await client.client.pty.list(body.parameters)))
     case AX_CODE_GRPC_METHOD.CreatePty:

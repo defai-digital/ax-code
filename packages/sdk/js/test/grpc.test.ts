@@ -29,6 +29,8 @@ describe("gRPC SDK facade", () => {
         if (method === AX_CODE_GRPC_METHOD.LoadBootstrap) return { value: { path: { root: "/repo" }, errors: [] } }
         if (method === AX_CODE_GRPC_METHOD.GetSession) return { value: { id: "sess-1", title: "GUI" } }
         if (method === AX_CODE_GRPC_METHOD.ListSessionMessages) return { value: [{ id: "msg-1" }] }
+        if (method === AX_CODE_GRPC_METHOD.ListSkills) return { value: [{ id: "security-harden" }] }
+        if (method === AX_CODE_GRPC_METHOD.ReadFile) return { value: { content: "hello" } }
         if (method === AX_CODE_GRPC_METHOD.CreatePty) return { value: { id: "pty_1", title: "Terminal" } }
         if (method === AX_CODE_GRPC_METHOD.TaskQueueCommand) return { value: { id: "task-1", status: "paused" } }
         throw new Error(`unexpected method ${method}`)
@@ -49,6 +51,8 @@ describe("gRPC SDK facade", () => {
     expect(await client.bootstrap.load({ include: { path: true } })).toEqual({ path: { root: "/repo" }, errors: [] })
     expect(await client.session.get("sess-1")).toEqual({ id: "sess-1", title: "GUI" })
     expect(await client.session.messages("sess-1", { limit: 10 })).toEqual([{ id: "msg-1" }])
+    expect(await client.app.skills()).toEqual([{ id: "security-harden" }])
+    expect(await client.file.read("README.md")).toEqual({ content: "hello" })
     expect(await client.pty.create({ title: "Terminal" })).toEqual({ id: "pty_1", title: "Terminal" })
     expect(await pause("task-1")).toEqual({ id: "task-1", status: "paused" })
     expect(calls.map((call) => call.method)).toEqual([
@@ -58,6 +62,8 @@ describe("gRPC SDK facade", () => {
       AX_CODE_GRPC_METHOD.LoadBootstrap,
       AX_CODE_GRPC_METHOD.GetSession,
       AX_CODE_GRPC_METHOD.ListSessionMessages,
+      AX_CODE_GRPC_METHOD.ListSkills,
+      AX_CODE_GRPC_METHOD.ReadFile,
       AX_CODE_GRPC_METHOD.CreatePty,
       AX_CODE_GRPC_METHOD.TaskQueueCommand,
     ])
@@ -161,6 +167,59 @@ describe("gRPC SDK facade", () => {
       { path: "/session/sess-1/children", method: "GET", body: "" },
       { path: "/session/sess-1/diff?messageID=msg-1", method: "GET", body: "" },
       { path: "/session/sess-1/todo", method: "GET", body: "" },
+    ])
+  })
+
+  test("HTTP bridge maps GUI discovery and file search calls to the headless backend", async () => {
+    const calls: string[] = []
+    const client = createAxCodeGrpcClientFromHttp({
+      baseUrl: "http://127.0.0.1:4096",
+      fetch: (async (url: URL | RequestInfo, init?: RequestInit) => {
+        const request = url instanceof Request ? url : new Request(url, init)
+        const parsed = new URL(request.url)
+        calls.push(`${request.method} ${parsed.pathname}${parsed.search}`)
+        if (parsed.pathname === "/skill") return Response.json([{ id: "security-harden" }])
+        if (parsed.pathname === "/agent") return Response.json([{ id: "general" }])
+        if (parsed.pathname === "/project/current") return Response.json({ id: "proj-1" })
+        if (parsed.pathname === "/project") return Response.json([{ id: "proj-1" }])
+        if (parsed.pathname === "/file") return Response.json([{ path: "src/index.ts" }])
+        if (parsed.pathname === "/file/content") return Response.json({ content: "hello" })
+        if (parsed.pathname === "/file/status") return Response.json([{ path: "README.md", status: "modified" }])
+        if (parsed.pathname === "/find") return Response.json([{ path: "README.md" }])
+        if (parsed.pathname === "/find/file") return Response.json(["README.md"])
+        if (parsed.pathname === "/find/symbol") return Response.json([{ name: "main" }])
+        if (parsed.pathname === "/experimental/tool/ids") return Response.json(["bash"])
+        if (parsed.pathname === "/experimental/tool") return Response.json([{ id: "bash" }])
+        return new Response("not found", { status: 404 })
+      }) as typeof fetch,
+    })
+
+    await expect(client.app.skills()).resolves.toEqual([{ id: "security-harden" }])
+    await expect(client.app.agents()).resolves.toEqual([{ id: "general" }])
+    await expect(client.project.current()).resolves.toEqual({ id: "proj-1" })
+    await expect(client.project.list()).resolves.toEqual([{ id: "proj-1" }])
+    await expect(client.file.list("src")).resolves.toEqual([{ path: "src/index.ts" }])
+    await expect(client.file.read("README.md")).resolves.toEqual({ content: "hello" })
+    await expect(client.file.status()).resolves.toEqual([{ path: "README.md", status: "modified" }])
+    await expect(client.find.text("hello")).resolves.toEqual([{ path: "README.md" }])
+    await expect(client.find.files("README", { limit: 5 })).resolves.toEqual(["README.md"])
+    await expect(client.find.symbols("main")).resolves.toEqual([{ name: "main" }])
+    await expect(client.tool.ids()).resolves.toEqual(["bash"])
+    await expect(client.tool.list("anthropic", "claude")).resolves.toEqual([{ id: "bash" }])
+
+    expect(calls).toEqual([
+      "GET /skill",
+      "GET /agent",
+      "GET /project/current",
+      "GET /project",
+      "GET /file?path=src",
+      "GET /file/content?path=README.md",
+      "GET /file/status",
+      "GET /find?pattern=hello",
+      "GET /find/file?query=README&limit=5",
+      "GET /find/symbol?query=main",
+      "GET /experimental/tool/ids",
+      "GET /experimental/tool?provider=anthropic&model=claude",
     ])
   })
 
@@ -312,6 +371,8 @@ describe("gRPC SDK facade", () => {
     expect(proto).toContain("rpc SendRuntimeCommand")
     expect(proto).toContain("rpc LoadBootstrap")
     expect(proto).toContain("rpc ListSessionMessages")
+    expect(proto).toContain("rpc ListSkills")
+    expect(proto).toContain("rpc FindFiles")
     expect(proto).toContain("rpc ConnectPty")
     expect(proto).toContain("rpc SubscribeEvents")
   })

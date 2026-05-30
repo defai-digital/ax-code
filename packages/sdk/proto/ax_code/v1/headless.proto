@@ -29,6 +29,19 @@ service AxCodeHeadless {
   rpc UnshareSession(SessionRequest) returns (JsonResponse);
   rpc SummarizeSession(SessionJsonRequest) returns (JsonResponse);
 
+  rpc ListAgents(QueryRequest) returns (JsonResponse);
+  rpc ListSkills(QueryRequest) returns (JsonResponse);
+  rpc ListProjects(QueryRequest) returns (JsonResponse);
+  rpc GetCurrentProject(QueryRequest) returns (JsonResponse);
+  rpc ListFiles(QueryRequest) returns (JsonResponse);
+  rpc ReadFile(QueryRequest) returns (JsonResponse);
+  rpc GetFileStatus(QueryRequest) returns (JsonResponse);
+  rpc FindText(QueryRequest) returns (JsonResponse);
+  rpc FindFiles(QueryRequest) returns (JsonResponse);
+  rpc FindSymbols(QueryRequest) returns (JsonResponse);
+  rpc ListToolIDs(QueryRequest) returns (JsonResponse);
+  rpc ListTools(QueryRequest) returns (JsonResponse);
+
   rpc ListPty(QueryRequest) returns (JsonResponse);
   rpc CreatePty(JsonRequest) returns (JsonResponse);
   rpc GetPty(IdRequest) returns (JsonResponse);
