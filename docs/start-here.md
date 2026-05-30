@@ -48,7 +48,8 @@ The rest of the documentation maps onto those layers.
 - Supported install paths use the compiled runtime:
   - Homebrew for macOS/Linux: `brew install defai-digital/ax-code/ax-code`
   - GitHub release installer for Linux/CI: `curl -fsSL https://raw.githubusercontent.com/defai-digital/ax-code/main/install | bash`
-- Windows release binaries are published, but Windows should use a native installer path once it is documented and smoke-tested. Do not treat the Bash installer as the canonical Windows setup path.
+  - GitHub release installer for Windows PowerShell: `powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/defai-digital/ax-code/main/install.ps1 | iex"`
+- The Bash installer is not the canonical Windows setup path.
 - npm packages are no longer supported install or upgrade channels. See [Installation and Runtime Channels](install-runtime.md) for platform policy, runtime labels, and the local launcher matrix.
 - Use `/connect` or `ax-code providers login` to set a model.
 - Run `ax-code init` after opening a real project so `AGENTS.md` captures local conventions.
