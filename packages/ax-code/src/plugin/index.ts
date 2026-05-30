@@ -2,7 +2,7 @@ import type { Hooks, PluginInput, Plugin as PluginInstance } from "@ax-code/plug
 import { Config } from "../config/config"
 import { Bus } from "../bus"
 import { Log } from "../util/log"
-import { createOpencodeClient } from "@ax-code/sdk"
+import { createOpencodeClient } from "@ax-code/sdk/v2"
 import { Server } from "../server/server"
 import { ServerRuntimeAuth } from "../server/runtime-auth"
 import { BunProc } from "../bun"

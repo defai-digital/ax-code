@@ -1,6 +1,5 @@
 import type {
   Event,
-  createOpencodeClient,
   Project,
   Model,
   Provider,
@@ -11,6 +10,7 @@ import type {
   Auth,
   Config,
 } from "@ax-code/sdk"
+import type { createOpencodeClient } from "@ax-code/sdk/v2"
 
 import type { BunShell } from "./shell.js"
 import { type ToolDefinition } from "./tool.js"
