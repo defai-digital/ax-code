@@ -356,6 +356,7 @@ describe("TaskQueue", () => {
             role: "assistant",
             sessionID: session.id,
             tokens: { input: 10, output: 5, total: 15 },
+            estimatedCostUsd: 0.000125,
           },
           parts: [
             {
@@ -395,6 +396,7 @@ describe("TaskQueue", () => {
             inputTokens: 10,
             outputTokens: 5,
             toolCalls: 2,
+            estimatedCostUsd: 0.000125,
           })
           expect(failed.artifacts[0]).toMatchObject({
             childID: child.id,
@@ -405,7 +407,13 @@ describe("TaskQueue", () => {
               messageID: "msg_workflow_tool_budget",
               output: "Two tools completed.",
               tools: ["read", "grep"],
-              usage: { totalTokens: 15, inputTokens: 10, outputTokens: 5, toolCalls: 2 },
+              usage: {
+                totalTokens: 15,
+                inputTokens: 10,
+                outputTokens: 5,
+                toolCalls: 2,
+                estimatedCostUsd: 0.000125,
+              },
             },
           })
         } finally {
