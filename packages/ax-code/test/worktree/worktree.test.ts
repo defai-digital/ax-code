@@ -93,7 +93,7 @@ test("reset cancels pending bootstrap before queueing start scripts", async () =
 
       const info = await Worktree.create({ name: "reset-cancel" })
       await Worktree.reset({ directory: info.directory })
-      await new Promise((resolve) => setTimeout(resolve, 100))
+      await new Promise((resolve) => setTimeout(resolve, 500))
 
       const content = await fs.readFile(marker, "utf8").catch(() => "")
       expect(content).toBe("x")

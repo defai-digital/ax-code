@@ -25,33 +25,21 @@ Built by [DEFAI Digital](https://github.com/defai-digital).
 
 ## Get Started in 20 Seconds
 
-### Install
+**1. Install**
 
-macOS:
+| Platform | Command |
+| --- | --- |
+| macOS | `brew install defai-digital/ax-code/ax-code` |
+| Linux / CI | `curl -fsSL https://raw.githubusercontent.com/defai-digital/ax-code/main/install \| bash` |
+| Windows | `powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/defai-digital/ax-code/main/install.ps1 \| iex"` |
 
-```bash
-brew install defai-digital/ax-code/ax-code
-```
-
-Linux / CI:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/defai-digital/ax-code/main/install | bash
-```
-
-Windows PowerShell:
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/defai-digital/ax-code/main/install.ps1 | iex"
-```
-
-### Run
+**2. Run**
 
 ```bash
 ax-code
 ```
 
-That is it. No project setup or config file is required. On first launch, use `/connect` inside the TUI to add or switch providers.
+No project setup or config file required. On first launch, use `/connect` inside the TUI to add a provider.
 
 For headless use, CI jobs, or preconfigured shells, AX Code also respects provider environment variables such as `ANTHROPIC_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`, `XAI_API_KEY`, and `OPENAI_API_KEY`.
 

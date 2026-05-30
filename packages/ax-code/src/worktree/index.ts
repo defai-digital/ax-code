@@ -703,11 +703,9 @@ export namespace Worktree {
 
     if (!entry?.path) {
       const directoryExists = await exists(directory)
-      if (directoryExists) {
-        await stop(directory)
-        await clean(directory)
-      }
+      if (directoryExists) await stop(directory)
       await cleanupInstanceAndSandbox()
+      if (directoryExists) await clean(directory)
       return true
     }
 
