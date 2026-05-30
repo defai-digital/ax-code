@@ -2,6 +2,7 @@ import { HTTPException } from "hono/http-exception"
 import { Bus } from "../bus"
 import { ModelID, ProviderID } from "../provider/schema"
 import { Instance } from "../project/instance"
+import { VerificationEnvelopeSchema, type VerificationEnvelope } from "../quality/verification-envelope"
 import { Session } from "../session"
 import { MessageV2 } from "../session/message-v2"
 import { sessionAssistantPath, zeroTokenUsage } from "../session/prompt-message-builders"
@@ -1016,13 +1017,16 @@ function finalReportVerification(detail: WorkflowRunDetail) {
   const presentArtifactIds = new Set(detail.artifacts.map((artifact) => artifact.specArtifactID).filter(Boolean))
   const hasVerificationArtifact = detail.artifacts.some((artifact) => artifact.kind === "verification")
   const hasVerificationEnvelope = detail.verificationEnvelopeIDs.length > 0
+  const envelopeFailures = verificationEnvelopeFailures(detail)
   const requiredArtifactsSatisfied =
     requiredArtifactIds.length > 0 && requiredArtifactIds.every((artifactID) => presentArtifactIds.has(artifactID))
 
   const status =
     detail.spec.verification.mode === "skipped" || detail.spec.verification.mode === "deferred"
       ? detail.spec.verification.mode
-      : requiredArtifactsSatisfied || hasVerificationArtifact || hasVerificationEnvelope
+      : envelopeFailures.length > 0
+        ? "failed"
+        : requiredArtifactsSatisfied || hasVerificationArtifact || hasVerificationEnvelope
         ? "satisfied"
         : detail.spec.verification.mode === "required"
           ? "missing"
@@ -1034,12 +1038,13 @@ function finalReportVerification(detail: WorkflowRunDetail) {
     requiredArtifactIds,
     commands: detail.spec.verification.commands,
     reason: detail.spec.verification.reason,
-    summaryLines: verificationSummaryLines(detail, status),
+    failures: envelopeFailures,
+    summaryLines: verificationSummaryLines(detail, status, envelopeFailures),
     verificationEnvelopeCount: detail.verificationEnvelopeIDs.length,
   }
 }
 
-function verificationSummaryLines(detail: WorkflowRunDetail, status: string) {
+function verificationSummaryLines(detail: WorkflowRunDetail, status: string, failures: string[]) {
   if (detail.spec.verification.mode === "deferred") {
     const commands = detail.spec.verification.commands
     return [
@@ -1054,6 +1059,9 @@ function verificationSummaryLines(detail: WorkflowRunDetail, status: string) {
   }
   if (detail.spec.verification.mode === "optional" && status === "not_run") {
     return ["Optional verification did not run for this workflow."]
+  }
+  if (status === "failed") {
+    return [`Verification failed: ${failures.join("; ")}.`]
   }
   return []
 }
@@ -1130,6 +1138,14 @@ function evaluateCompletionGate(detail: WorkflowRunDetail): { ok: true } | { ok:
   )
 
   if (detail.spec.verification.mode === "required") {
+    const envelopeFailures = verificationEnvelopeFailures(detail)
+    if (envelopeFailures.length > 0) {
+      return {
+        ok: false,
+        message: `Workflow verification gate is required; verification envelopes did not pass: ${envelopeFailures.join("; ")}`,
+      }
+    }
+
     const missingArtifacts = detail.spec.verification.requiredArtifactIds.filter((id) => !artifactsBySpecID.has(id))
     if (missingArtifacts.length > 0) {
       return {
@@ -1159,6 +1175,36 @@ function evaluateCompletionGate(detail: WorkflowRunDetail): { ok: true } | { ok:
   }
 
   return { ok: true }
+}
+
+function verificationEnvelopeFailures(detail: WorkflowRunDetail) {
+  const failures: string[] = []
+  for (const artifact of detail.artifacts) {
+    if (artifact.kind !== "verification") continue
+    for (const envelope of verificationEnvelopesFromPayload(artifact.payload)) {
+      if (envelope.result.passed && envelope.result.status === "passed") continue
+      const scope = envelope.scope.paths?.join(",") ?? envelope.scope.description ?? envelope.scope.kind
+      failures.push(
+        `${artifact.specArtifactID ?? artifact.id}:${envelope.result.name}:${envelope.result.status}:${scope}`,
+      )
+    }
+  }
+  return failures
+}
+
+function verificationEnvelopesFromPayload(payload: unknown): VerificationEnvelope[] {
+  const parsed = VerificationEnvelopeSchema.safeParse(payload)
+  if (parsed.success) return [parsed.data]
+  if (Array.isArray(payload)) return payload.flatMap(verificationEnvelopesFromPayload)
+  if (!payload || typeof payload !== "object") return []
+
+  const record = payload as Record<string, unknown>
+  return [
+    ...verificationEnvelopesFromPayload(record.envelope),
+    ...verificationEnvelopesFromPayload(record.verificationEnvelope),
+    ...verificationEnvelopesFromPayload(record.envelopes),
+    ...verificationEnvelopesFromPayload(record.verificationEnvelopes),
+  ]
 }
 
 function isTerminalPhaseStatus(status: WorkflowRun.PhaseStatus) {

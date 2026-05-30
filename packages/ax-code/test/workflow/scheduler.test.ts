@@ -257,6 +257,49 @@ describe("WorkflowScheduler", () => {
     }
   })
 
+  test("blocks completion when required verification envelope payloads fail", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
+    process.env.AX_CODE_WORKFLOW_RUNTIME = "1"
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const spec = parseWorkflowSpecV1({
+            schemaVersion: 1,
+            id: "failed-verification-envelope",
+            name: "Failed Verification Envelope",
+            description: "A fixture that cannot complete with failed verification envelope evidence.",
+            artifacts: [{ id: "verification-summary", kind: "verification" }],
+            verification: { mode: "required", requiredArtifactIds: ["verification-summary"] },
+            phases: [{ id: "noop", name: "Noop", kind: "noop" }],
+          })
+          const run = await WorkflowRun.create({ spec })
+          const detail = await WorkflowRun.getDetail(run.id)
+          await WorkflowRun.appendArtifact({
+            runID: run.id,
+            phaseID: detail.phases[0]!.id,
+            specArtifactID: "verification-summary",
+            kind: "verification",
+            summary: "typecheck failed",
+            payload: {
+              verificationEnvelopes: [{ envelope: verificationEnvelope(run.id, "failed", false) }],
+            },
+          })
+
+          const result = await WorkflowRun.setStatus({ id: run.id, status: "completed" })
+
+          expect(result.status).toBe("blocked")
+          expect(result.error).toContain("verification envelopes did not pass")
+          expect(result.error).toContain("verification-summary:typecheck:failed")
+        },
+      })
+    } finally {
+      if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME
+      else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
+    }
+  })
+
   test("blocks completion when required synthesis artifacts are missing", async () => {
     await using tmp = await tmpdir({ git: true })
     const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
@@ -961,4 +1004,28 @@ function workflowSpecPhaseID(item: { payload: Record<string, unknown> }) {
   if (!workflow || typeof workflow !== "object") return undefined
   const specPhaseID = (workflow as { specPhaseID?: unknown }).specPhaseID
   return typeof specPhaseID === "string" ? specPhaseID : undefined
+}
+
+function verificationEnvelope(runID: string, status: "passed" | "failed", passed: boolean) {
+  return {
+    schemaVersion: 1,
+    workflow: "review",
+    scope: { kind: "workspace", description: "workflow fixture" },
+    command: { runner: "bun", argv: ["test"], cwd: "/tmp/workflow-fixture" },
+    result: {
+      name: "typecheck",
+      type: "typecheck",
+      passed,
+      status,
+      issues: [],
+      duration: 1,
+      output: status === "passed" ? "ok" : "typecheck failed",
+    },
+    structuredFailures:
+      status === "passed"
+        ? []
+        : [{ kind: "custom", message: "typecheck failed", details: { runID } }],
+    artifactRefs: [],
+    source: { tool: "workflow-test", version: "1.0.0", runId: runID },
+  }
 }
