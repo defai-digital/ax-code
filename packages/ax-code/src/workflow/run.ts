@@ -348,7 +348,7 @@ async function appendBudgetUsage(input: WorkflowRunState.AppendBudgetUsageInput)
   if (parsed.childID) await assertChildBelongsToRun(parsed.childID, parsed.runID)
 
   const now = Date.now()
-  const changed = Database.transaction((db) => {
+  const changed = Database.transaction((db): AppendBudgetUsageChange => {
     const run = db.select().from(WorkflowRunTable).where(eq(WorkflowRunTable.id, parsed.runID)).get()
     if (!run) throw new NotFoundError({ message: `Workflow run not found: ${parsed.runID}` })
     const nextUsage = addWorkflowBudgetUsage(run.budget_usage, parsed.usageDelta)
@@ -485,6 +485,18 @@ async function appendBudgetUsage(input: WorkflowRunState.AppendBudgetUsageInput)
   if (changed.failedPhase) publishPhaseUpdated(changed.failedPhase, changed.failedPhasePreviousStatus)
   if (changed.failedRun) publishUpdated(changed.failedRun, changed.failedRunPreviousStatus)
   return changed.entry
+}
+
+type AppendBudgetUsageChange = {
+  entry: WorkflowBudgetLedgerEntry
+  exceededEntry: WorkflowBudgetLedgerEntry | undefined
+  failedRun: WorkflowRunState.Info | undefined
+  failedRunPreviousStatus: WorkflowRun.Status | undefined
+  failedPhase: WorkflowPhaseRecord | undefined
+  failedPhasePreviousStatus: WorkflowRun.PhaseStatus | undefined
+  failedChild: WorkflowChildRecord | undefined
+  failedChildPreviousStatus: WorkflowRun.ChildStatus | undefined
+  evaluation: ReturnType<typeof evaluateWorkflowBudget>
 }
 
 async function attachVerificationEnvelopeIDs(

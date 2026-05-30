@@ -173,6 +173,8 @@ describe("headless projection", () => {
     expect(runtimeProbeKeysForEvent({ type: "mcp.tools.changed" })).toEqual(["mcp"])
     expect(runtimeProbeKeysForEvent({ type: "lsp.updated" })).toEqual(["lsp", "debug-engine"])
     expect(runtimeProbeKeysForEvent({ type: "workflow.run.updated", properties: {} })).toEqual(["workflow"])
+    expect(runtimeProbeKeysForEvent({ type: "workflow.run.completed", properties: {} })).toEqual(["workflow"])
+    expect(runtimeProbeKeysForEvent({ type: "workflow.budget.exceeded", properties: {} })).toEqual(["workflow"])
     expect(runtimeProbeKeysForEvent({ type: "vcs.branch.updated", properties: { branch: "main" } })).toEqual([])
   })
 

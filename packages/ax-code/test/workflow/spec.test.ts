@@ -20,8 +20,8 @@ describe("workflow spec v1", () => {
     const spec = getParsedWorkflowFixtureSpec("verifiedBugSweep")
 
     expect(spec.id).toBe("verified-bug-sweep")
-    expect(spec.budget.maxConcurrentAgents).toBe(8)
-    expect(spec.budget.maxTotalAgents).toBe(64)
+    expect(spec.budget.maxConcurrentAgents).toBe(WORKFLOW_DEFAULT_MAX_CONCURRENT_AGENTS)
+    expect(spec.budget.maxTotalAgents).toBe(WORKFLOW_DEFAULT_MAX_TOTAL_AGENTS)
     expect(spec.permissions.writePolicy).toBe("read-only")
     expect(spec.synthesis).toMatchObject({
       agent: "synthesizer",
@@ -30,6 +30,12 @@ describe("workflow spec v1", () => {
       requiredArtifactIds: ["bug-sweep-report"],
     })
     expect(spec.phases.map((phase) => phase.id)).toEqual(["plan-sweep", "scan-files", "cross-check", "final-report"])
+    expect(spec.phases.find((phase) => phase.id === "scan-files")?.maxParallel).toBe(
+      WORKFLOW_DEFAULT_MAX_CONCURRENT_AGENTS,
+    )
+    expect(spec.phases.find((phase) => phase.id === "cross-check")?.maxParallel).toBe(
+      WORKFLOW_DEFAULT_MAX_CONCURRENT_AGENTS,
+    )
   })
 
   test("parses issue triage and noop fixtures", () => {

@@ -94,8 +94,8 @@ export const WorkflowFixtureSpecs = {
     budget: {
       maxTotalTokens: 300_000,
       maxWallTimeMs: 2 * 60 * 60 * 1000,
-      maxConcurrentAgents: 8,
-      maxTotalAgents: 64,
+      maxConcurrentAgents: 3,
+      maxTotalAgents: 25,
       maxToolCalls: 800,
       maxRetries: 1,
     },
@@ -172,7 +172,7 @@ export const WorkflowFixtureSpecs = {
         prompt: "Inspect assigned files for concrete defects. Emit findings only with code evidence.",
         dependsOn: ["plan-sweep"],
         outputs: ["candidate-findings"],
-        maxParallel: 8,
+        maxParallel: 3,
       },
       {
         id: "cross-check",
@@ -182,7 +182,7 @@ export const WorkflowFixtureSpecs = {
         prompt: "Try to falsify each candidate finding. Mark unsupported findings as rejected.",
         dependsOn: ["scan-files"],
         outputs: ["verification-summary"],
-        maxParallel: 8,
+        maxParallel: 3,
         mergeStrategy: "critic-confirmation",
       },
       {

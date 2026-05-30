@@ -417,4 +417,47 @@ describe("tui sync store event", () => {
     expect(scheduled).toEqual(["workflow"])
     expect(synced).toEqual(["workflow"])
   })
+
+  test("schedules workflow dashboard probes from lifecycle and budget events", async () => {
+    const [_store, setStore] = createTestStore()
+    const scheduled: string[] = []
+    const synced: string[] = []
+
+    for (const event of [
+      { type: "workflow.run.completed", properties: { run: { id: "workflow_run_1", status: "completed" } } },
+      {
+        type: "workflow.budget.exceeded",
+        properties: { entry: { id: "workflow_budget_1" }, exceeded: ["total tokens 101/100"] },
+      },
+    ] as const) {
+      const handled = dispatchStoreBackedSyncEvent({
+        event,
+        autonomous: false,
+        setStore,
+        clearSessionSyncState: () => undefined,
+        replyPermission: () => undefined,
+        replyQuestion: () => undefined,
+        syncMcpStatus: () => undefined,
+        syncLspStatus: () => undefined,
+        syncDebugEngine: () => undefined,
+        syncWorkflowDashboard: () => {
+          synced.push("workflow")
+        },
+        scheduleRuntimeProbe(task) {
+          scheduled.push(task.key)
+          void Promise.resolve(task.run())
+        },
+        bootstrap: () => undefined,
+        onWarn: () => undefined,
+        maxSessionMessages: 100,
+      })
+
+      expect(handled).toBe(true)
+    }
+
+    await Promise.resolve()
+
+    expect(scheduled).toEqual(["workflow", "workflow"])
+    expect(synced).toEqual(["workflow", "workflow"])
+  })
 })

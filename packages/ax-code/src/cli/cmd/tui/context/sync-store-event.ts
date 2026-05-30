@@ -118,11 +118,27 @@ function dispatchHeadlessProjectionEvent<
     case "code.index.state":
     case "workflow.run.created":
     case "workflow.run.updated":
+    case "workflow.run.started":
+    case "workflow.run.blocked":
+    case "workflow.run.paused":
+    case "workflow.run.resumed":
+    case "workflow.run.completed":
+    case "workflow.run.failed":
+    case "workflow.run.cancelled":
     case "workflow.phase.updated":
+    case "workflow.phase.started":
+    case "workflow.phase.completed":
+    case "workflow.phase.failed":
     case "workflow.child.created":
     case "workflow.child.updated":
+    case "workflow.child.started":
+    case "workflow.child.completed":
+    case "workflow.child.failed":
+    case "workflow.child.cancelled":
     case "workflow.artifact.written":
     case "workflow.budget.appended":
+    case "workflow.budget.warning":
+    case "workflow.budget.exceeded":
     case "workflow.verification.attached":
     case "server.connected":
     case "server.heartbeat":
