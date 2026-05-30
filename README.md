@@ -6,15 +6,15 @@ _  ___ |    |_/_____/ /___  / /_/ /_  /_/ /_  /___
 /_/  |_/_/|_|       \____/  \____/ /_____/ /_____/
 ```
 
-**AI coding runtime for teams that need controlled execution, durable context, and embeddable agent workflows, not just code suggestions.**
+**Local-first coding agents for real repositories, with control surfaces teams can operate.**
 
-AX Code is an AI execution runtime for software development. It combines agents, tool execution, provider routing, session state, and configurable isolation into one system that can run in the terminal, inside VS Code, through the SDK, or as a headless service.
+AX Code is the runtime behind an interactive terminal agent, one-shot CLI tasks, VS Code workflows, SDK integrations, and headless server automation. It lets AI inspect and change a repo through explicit tools, permission prompts, sandbox modes, provider routing, and durable sessions so teams can use agents for real engineering work without giving up control or context.
 
-- Let agents work in real repositories with explicit tools, sandbox modes, and permission boundaries
-- Keep context alive with persistent sessions, replay, export, and project instructions in `AGENTS.md`
-- Move between hosted and local model providers without changing the developer workflow
-- Reuse one runtime across TUI, CLI, SDK, VS Code, headless server mode, and internal automation
-- Extend the runtime with MCP servers, plugins, and custom SDK tools instead of rebuilding orchestration
+- Start an interactive TUI, run one-shot commands, or operate AX Code as a local headless service
+- Keep work auditable with persistent sessions, replay, fork, export, and repo instructions in `AGENTS.md`
+- Bound execution with `workspace-write`, `read-only`, or `full-access` isolation plus permission rules
+- Switch between hosted and local model providers without changing the tool surface
+- Extend the same agent runtime with MCP servers, plugins, SDK tools, and VS Code integration
 
 Built by [DEFAI Digital](https://github.com/defai-digital).
 
