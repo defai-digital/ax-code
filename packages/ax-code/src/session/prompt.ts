@@ -216,12 +216,15 @@ export namespace SessionPrompt {
       cachedMsgs = undefined
       cachedAgent = undefined
       cachedModel = undefined
+      completionGateRetries = 0
+      lastCompletionGateSignature = undefined
       if (resetTodoDeadlineSignature) {
         lastTodoDeadlineSignature = undefined
       }
       if (resetTodoProgressTracking) {
         lastPendingTodoSignature = undefined
         stagnantTodoRetries = 0
+        todoRetries = 0
         lastTodoContextSignature = undefined
       }
 
@@ -408,6 +411,10 @@ export namespace SessionPrompt {
         continuations,
         maxContinuations,
       })
+      if (agentStepLimit.action === "stop") {
+        reason = agentStepLimit.reason
+        break
+      }
       if (agentStepLimit.action === "continue") {
         await continueAutonomousLoop({
           event: "autonomous agent step-limit auto-continue",

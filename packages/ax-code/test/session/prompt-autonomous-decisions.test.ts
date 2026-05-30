@@ -203,15 +203,22 @@ describe("autonomous continuation decisions", () => {
         maxContinuations: 3,
       }),
     ).toEqual({ action: "ignore" })
-    expect(
-      agentStepLimitContinuationDecision({
-        step: 5,
-        maxSteps: 5,
-        autonomous: true,
-        continuations: 3,
-        maxContinuations: 3,
-      }),
-    ).toEqual({ action: "ignore" })
+  })
+
+  test("stops with step_limit error when autonomous continuation budget is exhausted at agent step limit", () => {
+    const decision = agentStepLimitContinuationDecision({
+      step: 5,
+      maxSteps: 5,
+      autonomous: true,
+      continuations: 3,
+      maxContinuations: 3,
+    })
+    expect(decision.action).toBe("stop")
+    if (decision.action !== "stop") throw new Error("expected stop decision")
+    expect(decision.reason).toBe("step_limit")
+    expect(decision.errorCode).toBe("STEP_LIMIT")
+    expect(decision.message).toContain("5 steps")
+    expect(decision.message).toContain("3 continuations")
   })
 
   test("continues active goals indefinitely regardless of continuation count", () => {
@@ -515,7 +522,7 @@ describe("autonomous continuation decisions", () => {
     })
   })
 
-  test("recovers from the first empty model turn and advances retry counters", () => {
+  test("recovers from the first empty model turn and advances only the empty-model-turn counter", () => {
     expect(
       emptyModelTurnDecision({
         emptyModelTurn: true,
@@ -526,12 +533,12 @@ describe("autonomous continuation decisions", () => {
     ).toEqual({
       action: "recover",
       emptyModelTurnRetries: 1,
-      todoRetries: 3,
+      todoRetries: 2,
       attempt: 1,
     })
   })
 
-  test("normalizes fractional empty-model-turn counters before retrying", () => {
+  test("normalizes fractional empty-model-turn counters before retrying without touching todoRetries", () => {
     expect(
       emptyModelTurnDecision({
         emptyModelTurn: true,
@@ -542,7 +549,7 @@ describe("autonomous continuation decisions", () => {
     ).toEqual({
       action: "recover",
       emptyModelTurnRetries: 1,
-      todoRetries: 3,
+      todoRetries: 2.8,
       attempt: 1,
     })
   })

@@ -22,5 +22,7 @@ export function parseGoalArguments(raw: string): GoalArgumentDecision {
       objective: budgetMatch[2].trim(),
     }
   }
+  // --budget N without an objective is not a valid create — treat as view
+  if (/^--(?:token-)?budget\s+\d+$/.test(text)) return { action: "view" }
   return { action: "create", objective: text }
 }

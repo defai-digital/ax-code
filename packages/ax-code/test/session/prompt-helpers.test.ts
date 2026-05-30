@@ -146,6 +146,11 @@ describe("session.prompt helpers", () => {
     })
   })
 
+  test("treats --budget N without an objective as a view action", () => {
+    expect(parseGoalArguments("--budget 1000")).toEqual({ action: "view" })
+    expect(parseGoalArguments("--token-budget 500")).toEqual({ action: "view" })
+  })
+
   test("appends shell output chunks until the byte cap", () => {
     const state = appendShellOutputChunk({ output: "abc", outputBytes: 3, outputTruncated: false }, "def", 6)
 

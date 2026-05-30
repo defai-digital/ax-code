@@ -54,14 +54,31 @@ describe("prompt loop agent step limit", () => {
     expect(result.logExtras).toEqual({ agent: "review", maxSteps: 5 })
   })
 
-  test("ignores agent step limit after continuation budget is exhausted", () => {
+  test("stops with step_limit error when autonomous continuation budget is exhausted", () => {
+    const result = handlePromptLoopAgentStepLimit({
+      agentName: "review",
+      step: 5,
+      maxSteps: 5,
+      autonomous: true,
+      continuations: 3,
+      maxContinuations: 3,
+    })
+    expect(result.action).toBe("stop")
+    if (result.action !== "stop") throw new Error("expected stop")
+    expect(result.reason).toBe("step_limit")
+    expect(result.errorCode).toBe("STEP_LIMIT")
+    expect(result.message).toContain("5 steps")
+    expect(result.message).toContain("3 continuations")
+  })
+
+  test("ignores agent step limit for non-autonomous sessions", () => {
     expect(
       handlePromptLoopAgentStepLimit({
         agentName: "review",
         step: 5,
         maxSteps: 5,
-        autonomous: true,
-        continuations: 3,
+        autonomous: false,
+        continuations: 0,
         maxContinuations: 3,
       }),
     ).toEqual({ action: "ignore" })

@@ -65,7 +65,7 @@ describe("prompt loop empty model turn", () => {
     expect(result.action).toBe("recover")
     if (result.action !== "recover") throw new Error("expected recovery")
     expect(result.emptyModelTurnRetries).toBe(1)
-    expect(result.todoRetries).toBe(3)
+    expect(result.todoRetries).toBe(2)
     expect(result.text).toContain("empty-turn recovery 1/1")
     expect(warnings).toEqual([
       {

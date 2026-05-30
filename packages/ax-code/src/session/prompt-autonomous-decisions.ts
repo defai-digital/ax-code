@@ -111,6 +111,12 @@ type AgentStepLimitContinuationDecision =
       action: "continue"
       continuation: number
     }
+  | {
+      action: "stop"
+      reason: "step_limit"
+      errorCode: "STEP_LIMIT"
+      message: string
+    }
 
 function nextContinuation(input: { continuations: number; maxContinuations: number }): number | undefined {
   return input.continuations < input.maxContinuations ? nextDecisionCount(input.continuations) : undefined
@@ -182,12 +188,25 @@ export function agentStepLimitContinuationDecision(input: {
     return { action: "ignore" }
   }
 
-  const continuation = nextAutonomousContinuation(input)
-  if (continuation === undefined) return { action: "ignore" }
+  if (!input.autonomous) return { action: "ignore" }
+
+  const continuation = nextContinuation(input)
+  if (continuation !== undefined) {
+    return {
+      action: "continue",
+      continuation,
+    }
+  }
 
   return {
-    action: "continue",
-    continuation,
+    action: "stop",
+    reason: "step_limit",
+    errorCode: "STEP_LIMIT",
+    message:
+      `Agent reached the per-agent step limit (${formatDecisionCount(input.maxSteps)} steps) ` +
+      `and the continuation budget is exhausted ` +
+      `(${formatDecisionCount(input.continuations)} continuations used). ` +
+      `To increase, set the agent's step limit or raise session.max_continuations.`,
   }
 }
 
@@ -330,7 +349,7 @@ export function emptyModelTurnDecision(input: {
   return {
     action: "recover",
     emptyModelTurnRetries: nextEmptyModelTurnRetries,
-    todoRetries: nextDecisionCount(input.todoRetries),
+    todoRetries: input.todoRetries,
     attempt: nextEmptyModelTurnRetries,
   }
 }

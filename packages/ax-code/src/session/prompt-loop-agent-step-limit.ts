@@ -11,6 +11,12 @@ type PromptLoopAgentStepLimitTransition =
         maxSteps: number
       }
     }
+  | {
+      action: "stop"
+      reason: "step_limit"
+      errorCode: "STEP_LIMIT"
+      message: string
+    }
 
 export function handlePromptLoopAgentStepLimit(input: {
   agentName: string
@@ -22,6 +28,15 @@ export function handlePromptLoopAgentStepLimit(input: {
 }): PromptLoopAgentStepLimitTransition {
   const decision = agentStepLimitContinuationDecision(input)
   if (decision.action === "ignore") return { action: "ignore" }
+
+  if (decision.action === "stop") {
+    return {
+      action: "stop",
+      reason: decision.reason,
+      errorCode: decision.errorCode,
+      message: decision.message,
+    }
+  }
 
   return {
     action: "continue",
