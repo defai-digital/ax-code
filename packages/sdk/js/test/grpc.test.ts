@@ -52,6 +52,8 @@ describe("gRPC SDK facade", () => {
       name: "GetSession",
       kind: "unary",
       domain: "session",
+      requestType: "SessionRequest",
+      responseType: "JsonResponse",
       httpBridge: true,
       stability: "active",
     })
@@ -59,11 +61,15 @@ describe("gRPC SDK facade", () => {
       name: "SubscribeEvents",
       kind: "serverStream",
       domain: "events",
+      requestType: "SubscribeEventsRequest",
+      responseType: "RuntimeEvent",
     })
     expect(getAxCodeGrpcMethodDescriptor(AX_CODE_GRPC_METHOD.ConnectPty)).toMatchObject({
       name: "ConnectPty",
       kind: "bidiStream",
       domain: "pty",
+      requestType: "PtyClientEvent",
+      responseType: "PtyServerEvent",
     })
     expect(listAxCodeGrpcMethods({ domain: "mcp" }).map((descriptor) => descriptor.method)).toContain(
       AX_CODE_GRPC_METHOD.GetMcpStatus,
@@ -77,6 +83,31 @@ describe("gRPC SDK facade", () => {
     expect(() => assertAxCodeGrpcMethodSupported(AX_CODE_GRPC_METHOD.Health, "serverStream")).toThrow(
       "is unary, not serverStream",
     )
+  })
+
+  test("method descriptors match the proto service message contract", () => {
+    const proto = readFileSync(resolve(import.meta.dir, "../../proto/ax_code/v1/headless.proto"), "utf8")
+    const rpcPattern = /rpc\s+(\w+)\((stream\s+)?(\w+)\)\s+returns\s+\((stream\s+)?(\w+)\)/g
+    const rpcTypes = new Map<string, { kind: string; requestType: string; responseType: string }>()
+    let match: RegExpExecArray | null
+
+    while ((match = rpcPattern.exec(proto))) {
+      const [, name, requestStream, requestType, responseStream, responseType] = match
+      rpcTypes.set(name, {
+        kind: requestStream && responseStream ? "bidiStream" : responseStream ? "serverStream" : "unary",
+        requestType,
+        responseType,
+      })
+    }
+
+    expect(rpcTypes.size).toBe(AX_CODE_GRPC_METHOD_DESCRIPTORS.length)
+    for (const descriptor of AX_CODE_GRPC_METHOD_DESCRIPTORS) {
+      expect(rpcTypes.get(descriptor.name)).toEqual({
+        kind: descriptor.kind,
+        requestType: descriptor.requestType,
+        responseType: descriptor.responseType,
+      })
+    }
   })
 
   test("high-level client unwraps unary value envelopes", async () => {

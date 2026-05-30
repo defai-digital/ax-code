@@ -60,8 +60,9 @@ The proto uses structured JSON payloads for command bodies and workflow/task pay
 `getAxCodeGrpcMethodDescriptor()`, `assertAxCodeGrpcMethodSupported()`, `listMissingAxCodeGrpcNativeHandlers()`, and
 `assertAxCodeGrpcNativeHandlers()`. Native hosts should use these descriptors and coverage checks as the canonical method
 catalog when building handler maps, gRPC service binders, preload allowlists, or startup gates. Each descriptor includes
-the method name, fully qualified method path, stream kind, GUI domain, HTTP bridge availability, and current stability.
-This keeps the native transport boundary explicit without exposing or mirroring the full HTTP route tree.
+the method name, fully qualified method path, stream kind, proto request and response message names, GUI domain, HTTP
+bridge availability, and current stability. This keeps the native transport boundary explicit without exposing or
+mirroring the full HTTP route tree.
 
 ## TypeScript Usage
 
@@ -152,6 +153,9 @@ const handlers = {
 
 const mcpMethods = listAxCodeGrpcMethods({ domain: "mcp" })
 const streamingMethods = listAxCodeGrpcMethods({ kind: "serverStream" })
+const ptyDescriptor = listAxCodeGrpcMethods({ kind: "bidiStream" })[0]
+// ptyDescriptor.requestType === "PtyClientEvent"
+// ptyDescriptor.responseType === "PtyServerEvent"
 
 assertAxCodeGrpcNativeHandlers(handlers, {
   methods: [
