@@ -58,7 +58,8 @@ function makeMockResult(text: string, toolCalls: ToolCallInfo[]): RunResult {
 
 function makeMockStreamHandle(text: string, toolCalls: ToolCallInfo[]): StreamHandle {
   const result = makeMockResult(text, toolCalls)
-  const listeners: Record<string, Function[]> = {}
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const listeners: Record<string, Array<(...args: any[]) => void>> = {}
   let cancelled = false
 
   async function* gen(): AsyncGenerator<StreamEvent> {
@@ -96,7 +97,8 @@ function makeMockStreamHandle(text: string, toolCalls: ToolCallInfo[]): StreamHa
     async result() {
       return result
     },
-    on(event: string, callback: Function): StreamHandle {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    on(event: string, callback: (...args: any[]) => void): StreamHandle {
       if (!listeners[event]) listeners[event] = []
       listeners[event].push(callback)
       return handle

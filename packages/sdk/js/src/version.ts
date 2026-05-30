@@ -5,7 +5,7 @@
  * ```ts
  * import { SDK_VERSION, isSDKVersionCompatible } from "@ax-code/sdk"
  *
- * console.log(SDK_VERSION) // "2.0.0"
+ * console.log(SDK_VERSION) // "2.1.0"
  * if (!isSDKVersionCompatible("^2.0.0")) {
  *   throw new Error("This plugin requires @ax-code/sdk ^2.0.0")
  * }
@@ -13,7 +13,7 @@
  */
 
 /** Current SDK version. Matches the `version` field in package.json. */
-export const SDK_VERSION = "2.0.0"
+export const SDK_VERSION = "2.1.0"
 
 /**
  * Check whether the current SDK version satisfies a semver range.

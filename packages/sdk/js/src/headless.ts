@@ -80,6 +80,15 @@ export type {
   HeadlessScheduledTaskEvent,
   HeadlessTaskQueueEvent,
   HeadlessControlEvent,
+  WorkflowRunStatus,
+  WorkflowPhaseStatus,
+  WorkflowChildStatus,
+  WorkflowRunProperties,
+  WorkflowPhaseProperties,
+  WorkflowChildProperties,
+  WorkflowArtifactProperties,
+  WorkflowBudgetProperties,
+  WorkflowVerificationProperties,
 } from "./headless/event.js"
 
 export type {

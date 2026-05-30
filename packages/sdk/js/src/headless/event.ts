@@ -19,36 +19,102 @@ export type HeadlessRequestEvent =
   | { type: "question.replied"; properties: { sessionID: string; requestID: string } }
   | { type: "question.rejected"; properties: { sessionID: string; requestID: string } }
 
+export type WorkflowRunStatus =
+  | "queued"
+  | "running"
+  | "blocked"
+  | "paused"
+  | "completed"
+  | "failed"
+  | "cancelled"
+
+export type WorkflowPhaseStatus = "queued" | "running" | "completed" | "failed" | "cancelled"
+
+export type WorkflowChildStatus =
+  | "queued"
+  | "running"
+  | "blocked_permission"
+  | "blocked_question"
+  | "completed"
+  | "failed"
+  | "cancelled"
+
+export interface WorkflowRunProperties {
+  id: string
+  status: WorkflowRunStatus
+  error?: string
+  sourceTemplateID?: string
+}
+
+export interface WorkflowPhaseProperties {
+  id: string
+  runID: string
+  name: string
+  status: WorkflowPhaseStatus
+  error?: string
+}
+
+export interface WorkflowChildProperties {
+  id: string
+  runID: string
+  phaseID: string
+  status: WorkflowChildStatus
+  outputSummary?: string
+  error?: string
+}
+
+export interface WorkflowArtifactProperties {
+  id: string
+  runID: string
+  phaseID?: string
+  childID?: string
+  kind: string
+  summary?: string
+  specArtifactID?: string
+}
+
+export interface WorkflowBudgetProperties {
+  id: string
+  runID: string
+  kind: string
+  message?: string
+}
+
+export interface WorkflowVerificationProperties {
+  id: string
+  envelopeIDs: string[]
+}
+
 export type HeadlessRuntimeStatusEvent =
   | { type: "mcp.tools.changed" }
   | { type: "lsp.updated" }
   | { type: "code.index.progress" }
   | { type: "code.index.state" }
   | { type: "vcs.branch.updated"; properties: { branch: string } }
-  | { type: "workflow.run.created"; properties: Record<string, unknown> }
-  | { type: "workflow.run.updated"; properties: Record<string, unknown> }
-  | { type: "workflow.run.started"; properties: Record<string, unknown> }
-  | { type: "workflow.run.blocked"; properties: Record<string, unknown> }
-  | { type: "workflow.run.paused"; properties: Record<string, unknown> }
-  | { type: "workflow.run.resumed"; properties: Record<string, unknown> }
-  | { type: "workflow.run.completed"; properties: Record<string, unknown> }
-  | { type: "workflow.run.failed"; properties: Record<string, unknown> }
-  | { type: "workflow.run.cancelled"; properties: Record<string, unknown> }
-  | { type: "workflow.phase.updated"; properties: Record<string, unknown> }
-  | { type: "workflow.phase.started"; properties: Record<string, unknown> }
-  | { type: "workflow.phase.completed"; properties: Record<string, unknown> }
-  | { type: "workflow.phase.failed"; properties: Record<string, unknown> }
-  | { type: "workflow.child.created"; properties: Record<string, unknown> }
-  | { type: "workflow.child.updated"; properties: Record<string, unknown> }
-  | { type: "workflow.child.started"; properties: Record<string, unknown> }
-  | { type: "workflow.child.completed"; properties: Record<string, unknown> }
-  | { type: "workflow.child.failed"; properties: Record<string, unknown> }
-  | { type: "workflow.child.cancelled"; properties: Record<string, unknown> }
-  | { type: "workflow.artifact.written"; properties: Record<string, unknown> }
-  | { type: "workflow.budget.appended"; properties: Record<string, unknown> }
-  | { type: "workflow.budget.warning"; properties: Record<string, unknown> }
-  | { type: "workflow.budget.exceeded"; properties: Record<string, unknown> }
-  | { type: "workflow.verification.attached"; properties: Record<string, unknown> }
+  | { type: "workflow.run.created"; properties: WorkflowRunProperties }
+  | { type: "workflow.run.updated"; properties: WorkflowRunProperties }
+  | { type: "workflow.run.started"; properties: WorkflowRunProperties }
+  | { type: "workflow.run.blocked"; properties: WorkflowRunProperties }
+  | { type: "workflow.run.paused"; properties: WorkflowRunProperties }
+  | { type: "workflow.run.resumed"; properties: WorkflowRunProperties }
+  | { type: "workflow.run.completed"; properties: WorkflowRunProperties }
+  | { type: "workflow.run.failed"; properties: WorkflowRunProperties }
+  | { type: "workflow.run.cancelled"; properties: WorkflowRunProperties }
+  | { type: "workflow.phase.updated"; properties: WorkflowPhaseProperties }
+  | { type: "workflow.phase.started"; properties: WorkflowPhaseProperties }
+  | { type: "workflow.phase.completed"; properties: WorkflowPhaseProperties }
+  | { type: "workflow.phase.failed"; properties: WorkflowPhaseProperties }
+  | { type: "workflow.child.created"; properties: WorkflowChildProperties }
+  | { type: "workflow.child.updated"; properties: WorkflowChildProperties }
+  | { type: "workflow.child.started"; properties: WorkflowChildProperties }
+  | { type: "workflow.child.completed"; properties: WorkflowChildProperties }
+  | { type: "workflow.child.failed"; properties: WorkflowChildProperties }
+  | { type: "workflow.child.cancelled"; properties: WorkflowChildProperties }
+  | { type: "workflow.artifact.written"; properties: WorkflowArtifactProperties }
+  | { type: "workflow.budget.appended"; properties: WorkflowBudgetProperties }
+  | { type: "workflow.budget.warning"; properties: WorkflowBudgetProperties }
+  | { type: "workflow.budget.exceeded"; properties: WorkflowBudgetProperties }
+  | { type: "workflow.verification.attached"; properties: WorkflowVerificationProperties }
 
 export type HeadlessRuntimeProbeKey = "mcp" | "lsp" | "debug-engine" | "workflow"
 

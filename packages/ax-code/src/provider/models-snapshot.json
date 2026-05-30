@@ -76976,7 +76976,7 @@
     "models": {
       "xpersona-frieren-coder": {
         "id": "xpersona-frieren-coder",
-        "name": "Xpersona Frieren Coder",
+        "name": "Xpersona Frieren 1",
         "attachment": false,
         "reasoning": true,
         "tool_call": true,
