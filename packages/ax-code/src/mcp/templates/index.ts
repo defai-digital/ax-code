@@ -114,17 +114,6 @@ export const TEMPLATES: McpTemplate[] = [
     command: "npx",
     args: ["-y", "@modelcontextprotocol/server-filesystem", "."],
   },
-  {
-    name: "google-drive",
-    description: "Google Drive — read, search, organize files",
-    category: "File System",
-    type: "local",
-    command: "npx",
-    args: ["-y", "@modelcontextprotocol/server-google-drive"],
-    envRequired: ["GOOGLE_DRIVE_CREDENTIALS"],
-    envDescription: { GOOGLE_DRIVE_CREDENTIALS: "Google OAuth credentials JSON" },
-  },
-
   // === Browser & Testing ===
   {
     name: "puppeteer",
