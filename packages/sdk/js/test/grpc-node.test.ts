@@ -78,9 +78,51 @@ describe("gRPC Node HTTP/2 host", () => {
       },
     ])
   })
+
+  test("serves bidirectional PTY protobuf streams over HTTP/2", async () => {
+    const calls: unknown[] = []
+    handle = await startAxCodeGrpcNodeHttp2Server({
+      bridge: {
+        async unary() {
+          return { status: "SERVING" }
+        },
+        async *bidiStream(call) {
+          calls.push({ method: call.method, request: call.request, metadata: call.metadata })
+          for await (const event of call.input) calls.push(event)
+          yield { type: "output", data: "ready" }
+          yield { type: "replay", cursor: 7, from: 3, gap: { requested: 1, available: 3 } }
+        },
+      },
+    })
+
+    const response = await grpcStream(handle.url, AX_CODE_GRPC_METHOD.ConnectPty, "PtyClientEvent", [
+      { ptyID: "pty-1", cursor: 5 },
+      { type: "input", data: "pwd\n" },
+      { type: "resize", cols: 120, rows: 40 },
+    ])
+
+    expect(response.messages.map((message) => decodeAxCodeGrpcProtoMessage("PtyServerEvent", message))).toEqual([
+      { type: "output", data: "ready" },
+      { type: "replay", cursor: 7, from: 3, gap: { requested: 1, available: 3 } },
+    ])
+    expect(response.grpcStatus).toBe("0")
+    expect(calls).toEqual([
+      {
+        method: AX_CODE_GRPC_METHOD.ConnectPty,
+        request: { id: "pty-1", cursor: 5 },
+        metadata: {},
+      },
+      { type: "input", data: "pwd\n" },
+      { type: "resize", cols: 120, rows: 40 },
+    ])
+  })
 })
 
 async function grpcUnary(url: string, method: string, requestType: string, request: unknown) {
+  return grpcStream(url, method, requestType, [request])
+}
+
+async function grpcStream(url: string, method: string, requestType: string, requests: unknown[]) {
   const session = connect(url)
   try {
     const stream = session.request({
@@ -104,7 +146,10 @@ async function grpcUnary(url: string, method: string, requestType: string, reque
       stream.on("end", resolve)
       stream.on("error", reject)
     })
-    stream.end(encodeAxCodeGrpcFrame(encodeAxCodeGrpcProtoMessage(requestType, request)))
+    for (const request of requests) {
+      stream.write(encodeAxCodeGrpcFrame(encodeAxCodeGrpcProtoMessage(requestType, request)))
+    }
+    stream.end()
     await ended
     return {
       grpcStatus,

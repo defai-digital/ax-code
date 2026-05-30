@@ -366,7 +366,7 @@ async function preparePtyBidiInput(input: AsyncIterable<Record<string, unknown>>
     cursor: typeof firstValue?.cursor === "number" ? firstValue.cursor : undefined,
   }
   async function* events(): AsyncIterable<AxCodeGrpcPtyClientEvent> {
-    if (firstValue) yield normalizePtyClientEvent(firstValue)
+    if (firstValue && hasPtyClientEventPayload(firstValue)) yield normalizePtyClientEvent(firstValue)
     for (;;) {
       const next = await iterator.next()
       if (next.done) return
@@ -374,6 +374,17 @@ async function preparePtyBidiInput(input: AsyncIterable<Record<string, unknown>>
     }
   }
   return { request, input: events() }
+}
+
+function hasPtyClientEventPayload(value: Record<string, unknown>) {
+  return (
+    typeof value.type === "string" ||
+    typeof value.data === "string" ||
+    typeof value.cols === "number" ||
+    typeof value.rows === "number" ||
+    typeof value.code === "number" ||
+    typeof value.reason === "string"
+  )
 }
 
 function normalizePtyClientEvent(value: Record<string, unknown>): AxCodeGrpcPtyClientEvent {
