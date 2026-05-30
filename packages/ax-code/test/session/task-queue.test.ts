@@ -138,15 +138,33 @@ describe("TaskQueue", () => {
         const blocked = await TaskQueue.enqueue({ kind: "review", title: "Interrupted review" })
         const waiting = await TaskQueue.enqueue({ kind: "automation", title: "Waiting for idle" })
         const queued = await TaskQueue.enqueue({ kind: "followup", title: "Still queued" })
+        const workflow = { runID: "wfr_test", phaseID: "wfp_test", specPhaseID: "scan" }
+        const workflowRunning = await TaskQueue.enqueue({
+          kind: "subagent",
+          title: "Interrupted workflow child",
+          payload: { workflow: { ...workflow, childID: "wfc_running" } },
+        })
+        const workflowBlocked = await TaskQueue.enqueue({
+          kind: "subagent",
+          title: "Blocked workflow child",
+          payload: { workflow: { ...workflow, childID: "wfc_blocked" } },
+        })
 
         await TaskQueue.setStatus({ id: running.id, status: "running" })
         await TaskQueue.setStatus({ id: blocked.id, status: "blocked_permission", error: "approval required" })
         await TaskQueue.setStatus({ id: waiting.id, status: "waiting_for_idle" })
+        await TaskQueue.setStatus({ id: workflowRunning.id, status: "running" })
+        await TaskQueue.setStatus({
+          id: workflowBlocked.id,
+          status: "blocked_permission",
+          error: "workflow approval required",
+        })
 
         const recovered = await TaskQueue.recoverInterrupted()
 
         expect(recovered.failed.map((item) => item.id).sort()).toEqual([blocked.id, running.id].sort())
-        expect(recovered.requeued.map((item) => item.id)).toEqual([waiting.id])
+        expect(recovered.requeued.map((item) => item.id).sort()).toEqual([waiting.id, workflowRunning.id].sort())
+        expect(recovered.preserved.map((item) => item.id)).toEqual([workflowBlocked.id])
 
         const failedRunning = await TaskQueue.get(running.id)
         expect(failedRunning.status).toBe("failed")
@@ -162,6 +180,16 @@ describe("TaskQueue", () => {
         expect(requeuedWaiting.error).toBeUndefined()
         expect(requeuedWaiting.time.started).toBeUndefined()
         expect(requeuedWaiting.time.completed).toBeUndefined()
+
+        const requeuedWorkflow = await TaskQueue.get(workflowRunning.id)
+        expect(requeuedWorkflow.status).toBe("queued")
+        expect(requeuedWorkflow.error).toBeUndefined()
+        expect(requeuedWorkflow.time.started).toBeUndefined()
+        expect(requeuedWorkflow.time.completed).toBeUndefined()
+
+        const preservedWorkflow = await TaskQueue.get(workflowBlocked.id)
+        expect(preservedWorkflow.status).toBe("blocked_permission")
+        expect(preservedWorkflow.error).toBe("workflow approval required")
 
         expect((await TaskQueue.get(queued.id)).status).toBe("queued")
       },

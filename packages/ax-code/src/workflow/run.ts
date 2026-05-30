@@ -813,11 +813,9 @@ function formatParentFinalReport(detail: WorkflowRunDetail, artifact: WorkflowAr
   ].join("\n")
 }
 
-async function recoverInterrupted(): Promise<{ failed: WorkflowRunState.Info[] }> {
+async function recoverInterrupted(): Promise<{ failed: WorkflowRunState.Info[]; recovered: WorkflowRunState.Info[] }> {
   const now = Date.now()
   const interruptedRunStatuses = ["running"] as const
-  const interruptedPhaseStatuses = ["running", "blocked"] as const
-  const interruptedChildStatuses = ["running", "blocked_permission", "blocked_question"] as const
   const changed = Database.transaction((db) => {
     const rows = db
       .select()
@@ -830,41 +828,31 @@ async function recoverInterrupted(): Promise<{ failed: WorkflowRunState.Info[] }
       )
       .all()
     const failed: WorkflowRunState.Info[] = []
+    const recovered: WorkflowRunState.Info[] = []
     for (const row of rows) {
-      db.update(WorkflowPhaseTable)
-        .set({
-          status: "failed",
-          error: "Workflow phase interrupted by backend restart; inspect artifacts and retry when safe.",
-          time_completed: now,
-          time_updated: now,
-        })
-        .where(and(eq(WorkflowPhaseTable.run_id, row.id), inArray(WorkflowPhaseTable.status, interruptedPhaseStatuses)))
-        .run()
       db.update(WorkflowChildTable)
         .set({
-          status: "failed",
-          error: "Workflow child interrupted by backend restart; inspect artifacts and retry when safe.",
-          time_completed: now,
+          status: "queued",
+          error: null,
+          time_started: null,
+          time_completed: null,
           time_updated: now,
         })
-        .where(and(eq(WorkflowChildTable.run_id, row.id), inArray(WorkflowChildTable.status, interruptedChildStatuses)))
+        .where(and(eq(WorkflowChildTable.run_id, row.id), eq(WorkflowChildTable.status, "running")))
         .run()
       const updated = db
         .update(WorkflowRunTable)
         .set({
-          status: "failed",
-          error: "Workflow interrupted by backend restart; inspect artifacts and retry when safe.",
-          time_completed: now,
           time_updated: now,
         })
         .where(eq(WorkflowRunTable.id, row.id))
         .returning()
         .get()
-      if (updated) failed.push(fromRunRow(updated))
+      if (updated) recovered.push(fromRunRow(updated))
     }
-    return { failed }
+    return { failed, recovered }
   })
-  for (const run of changed.failed) publishUpdated(run, "running")
+  for (const run of changed.recovered) publishUpdated(run)
   return changed
 }
 

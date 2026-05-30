@@ -475,7 +475,7 @@ describe("WorkflowRun state", () => {
       fn: async () => {
         const events: string[] = []
         const unsubscribers = [
-          Bus.subscribe(WorkflowRun.Event.Failed, (event) => {
+          Bus.subscribe(WorkflowRun.Event.Updated, (event) => {
             events.push(`${event.type}:${event.properties.run.id}:${event.properties.run.status}`)
           }),
         ]
@@ -513,16 +513,17 @@ describe("WorkflowRun state", () => {
 
           const recovered = await WorkflowRun.recoverInterrupted()
 
-          expect(recovered.failed.map((item) => item.id)).toEqual([running.id])
-          expect((await WorkflowRun.get(running.id)).status).toBe("failed")
+          expect(recovered.failed).toEqual([])
+          expect(recovered.recovered.map((item) => item.id)).toEqual([running.id])
+          expect((await WorkflowRun.get(running.id)).status).toBe("running")
           expect((await WorkflowRun.get(queued.id)).status).toBe("queued")
           expect((await WorkflowRun.get(blocked.id)).status).toBe("blocked")
           expect((await WorkflowRun.get(completed.id)).status).toBe("completed")
 
           const recoveredDetail = await WorkflowRun.getDetail(running.id)
-          expect(recoveredDetail.error).toContain("backend restart")
-          expect(recoveredDetail.phases[0]?.status).toBe("failed")
-          expect(recoveredDetail.children[0]?.status).toBe("failed")
+          expect(recoveredDetail.error).toBeUndefined()
+          expect(recoveredDetail.phases[0]?.status).toBe("running")
+          expect(recoveredDetail.children[0]?.status).toBe("queued")
 
           const blockedAfterRecovery = await WorkflowRun.getDetail(blocked.id)
           expect(blockedAfterRecovery.error).toBe("approval required")
@@ -531,7 +532,7 @@ describe("WorkflowRun state", () => {
           expect(blockedAfterRecovery.children[0]?.error).toBe("approval required")
 
           await new Promise((resolve) => setTimeout(resolve, 0))
-          expect(events).toContain(`workflow.run.failed:${running.id}:failed`)
+          expect(events).toContain(`workflow.run.updated:${running.id}:running`)
         } finally {
           for (const unsubscribe of unsubscribers) unsubscribe()
         }

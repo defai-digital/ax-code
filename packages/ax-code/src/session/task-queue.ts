@@ -336,7 +336,7 @@ export namespace TaskQueue {
     return item
   }
 
-  export async function recoverInterrupted(): Promise<{ failed: Info[]; requeued: Info[] }> {
+  export async function recoverInterrupted(): Promise<{ failed: Info[]; requeued: Info[]; preserved: Info[] }> {
     const now = Date.now()
     const interruptedStatuses = ["running", "blocked_permission", "blocked_question"] as const
     const recoverableStatuses = [...interruptedStatuses, "waiting_for_idle"] as const
@@ -351,8 +351,10 @@ export namespace TaskQueue {
 
       const failed: Info[] = []
       const requeued: Info[] = []
+      const preserved: Info[] = []
       for (const row of rows) {
-        if (row.status === "waiting_for_idle") {
+        const workflowItem = hasWorkflowPayload(row.payload)
+        if (row.status === "waiting_for_idle" || (workflowItem && row.status === "running")) {
           const updated = db
             .update(TaskQueueTable)
             .set({
@@ -366,6 +368,10 @@ export namespace TaskQueue {
             .returning()
             .get()
           if (updated) requeued.push(fromRow(updated))
+          continue
+        }
+        if (workflowItem) {
+          preserved.push(fromRow(row))
           continue
         }
 
@@ -383,14 +389,22 @@ export namespace TaskQueue {
         if (updated) failed.push(fromRow(updated))
       }
 
-      return { failed, requeued }
+      return { failed, requeued, preserved }
     })
 
     for (const item of [...changed.failed, ...changed.requeued]) {
       publishUpdated(item)
       await syncWorkflowStatusIfNeeded(item)
     }
+    for (const item of changed.preserved) {
+      await syncWorkflowStatusIfNeeded(item)
+    }
     return changed
+  }
+
+  function hasWorkflowPayload(payload: Payload) {
+    const workflow = payload["workflow"]
+    return !!workflow && typeof workflow === "object"
   }
 
   export async function edit(input: EditInput): Promise<Info> {
