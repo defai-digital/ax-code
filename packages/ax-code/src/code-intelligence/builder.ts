@@ -20,6 +20,128 @@ const log = Log.create({ service: "code-intelligence.builder" })
 const SYMBOL_RANGE_SCALE = 1000
 const MAX_BOOKMARKS_PER_REFERENCE_QUERY = 50
 
+const IMPORT_REGEX =
+  /(?:import\s+(?:[\s\S]*?\s+from\s+)?['"]([^'"]+)['"]|require\s*\(\s*['"]([^'"]+)['"]\s*\)|import\s*\(\s*['"]([^'"]+)['"]\s*\))/g
+
+const BUILTIN_MODULES = new Set([
+  "fs",
+  "path",
+  "os",
+  "crypto",
+  "http",
+  "https",
+  "net",
+  "tls",
+  "dns",
+  "url",
+  "querystring",
+  "stream",
+  "util",
+  "events",
+  "buffer",
+  "child_process",
+  "cluster",
+  "dgram",
+  "readline",
+  "repl",
+  "vm",
+  "zlib",
+  "assert",
+  "console",
+  "process",
+  "timers",
+  "module",
+  "worker_threads",
+  "perf_hooks",
+])
+
+function isEscaped(text: string, index: number) {
+  let count = 0
+  for (let i = index - 1; i >= 0 && text[i] === "\\"; i--) count++
+  return count % 2 === 1
+}
+
+function isIgnoredImportMatch(text: string, index: number) {
+  let state: "code" | "line-comment" | "block-comment" | "single" | "double" | "template" = "code"
+  for (let i = 0; i < index; i++) {
+    const ch = text[i]
+    const next = text[i + 1]
+
+    if (state === "line-comment") {
+      if (ch === "\n" || ch === "\r") state = "code"
+      continue
+    }
+    if (state === "block-comment") {
+      if (ch === "*" && next === "/") {
+        state = "code"
+        i++
+      }
+      continue
+    }
+    if (state === "single") {
+      if (ch === "'" && !isEscaped(text, i)) state = "code"
+      continue
+    }
+    if (state === "double") {
+      if (ch === '"' && !isEscaped(text, i)) state = "code"
+      continue
+    }
+    if (state === "template") {
+      if (ch === "`" && !isEscaped(text, i)) state = "code"
+      continue
+    }
+
+    if (ch === "/" && next === "/") {
+      state = "line-comment"
+      i++
+    } else if (ch === "/" && next === "*") {
+      state = "block-comment"
+      i++
+    } else if (ch === "'") {
+      state = "single"
+    } else if (ch === '"') {
+      state = "double"
+    } else if (ch === "`") {
+      state = "template"
+    }
+  }
+  return state !== "code"
+}
+
+function isBuiltinModule(name: string): boolean {
+  return BUILTIN_MODULES.has(name)
+}
+
+export function parseImportSpecifiers(text: string, absPath: string): string[] {
+  const imports: string[] = []
+  const seen = new Set<string>()
+  const dir = path.dirname(absPath)
+
+  for (const match of text.matchAll(IMPORT_REGEX)) {
+    if (isIgnoredImportMatch(text, match.index ?? 0)) continue
+
+    const modulePath = match[1] ?? match[2] ?? match[3]
+    if (!modulePath || seen.has(modulePath)) continue
+    seen.add(modulePath)
+
+    if (modulePath.startsWith("node:") || isBuiltinModule(modulePath)) continue
+
+    if (modulePath.startsWith(".") || modulePath.startsWith("/")) {
+      const resolved = path.resolve(dir, modulePath)
+      for (const ext of [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"]) {
+        imports.push(resolved + ext)
+      }
+      for (const ext of [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"]) {
+        imports.push(path.join(resolved, `index${ext}`))
+      }
+    } else {
+      imports.push(modulePath)
+    }
+  }
+
+  return imports
+}
+
 // LSP's textDocument/documentSymbol returns DocumentSymbol objects with
 // a numeric `kind` field matching the LSP spec SymbolKind enum.
 // https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#symbolKind
@@ -622,78 +744,6 @@ export namespace CodeGraphBuilder {
     // resolved to the target file if it exists in the graph; otherwise
     // the edge stores the raw module path in the `file` column.
 
-    const IMPORT_REGEX =
-      /(?:import\s+(?:[\s\S]*?\s+from\s+)?['"]([^'"]+)['"]|require\s*\(\s*['"]([^'"]+)['"]\s*\)|import\s*\(\s*['"]([^'"]+)['"]\s*\))/g
-
-    function parseImports(text: string, absPath: string): string[] {
-      const imports: string[] = []
-      const seen = new Set<string>()
-      const dir = path.dirname(absPath)
-
-      for (const match of text.matchAll(IMPORT_REGEX)) {
-        const modulePath = match[1] ?? match[2] ?? match[3]
-        if (!modulePath || seen.has(modulePath)) continue
-        seen.add(modulePath)
-
-        // Skip built-in modules
-        if (modulePath.startsWith("node:") || isBuiltinModule(modulePath)) continue
-
-        // Resolve relative imports to absolute paths
-        if (modulePath.startsWith(".") || modulePath.startsWith("/")) {
-          const resolved = path.resolve(dir, modulePath)
-          // Try adding extensions
-          for (const ext of [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"]) {
-            const withExt = resolved + ext
-            imports.push(withExt)
-          }
-          // Also try index files
-          for (const ext of [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"]) {
-            imports.push(path.join(resolved, `index${ext}`))
-          }
-        } else {
-          // External module (npm package) — store as-is
-          imports.push(modulePath)
-        }
-      }
-
-      return imports
-    }
-
-    function isBuiltinModule(name: string): boolean {
-      const builtins = new Set([
-        "fs",
-        "path",
-        "os",
-        "crypto",
-        "http",
-        "https",
-        "net",
-        "tls",
-        "dns",
-        "url",
-        "querystring",
-        "stream",
-        "util",
-        "events",
-        "buffer",
-        "child_process",
-        "cluster",
-        "dgram",
-        "readline",
-        "repl",
-        "vm",
-        "zlib",
-        "assert",
-        "console",
-        "process",
-        "timers",
-        "module",
-        "worker_threads",
-        "perf_hooks",
-      ])
-      return builtins.has(name)
-    }
-
     // ─── Phase 2 reference pass ─────────────────────────────────────
     //
     // For each "container" symbol (function, method, class, interface,
@@ -815,7 +865,7 @@ export namespace CodeGraphBuilder {
       completeness,
       timings,
       nativeTree,
-      imports: parseImports(text, absPath),
+      imports: parseImportSpecifiers(text, absPath),
     }
   }
 

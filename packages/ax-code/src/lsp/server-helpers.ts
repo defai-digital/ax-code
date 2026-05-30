@@ -223,14 +223,26 @@ export const bunServer = async (input: {
       // Same deadlock hazard as ensureTool above: "pipe" without a
       // reader will block the child once the OS pipe buffer fills.
       // Nothing in this path reads the streams, so discard them.
-      await Process.spawn([BunProc.which(), "install", input.pkg], {
+      const proc = Process.spawn([BunProc.which(), "install", input.pkg], {
         cwd: Global.Path.bin,
         env: bunEnv(),
         timeout: 120_000,
         stdout: "ignore",
         stderr: "ignore",
         stdin: "ignore",
-      }).exited
+      })
+      let exit: number
+      try {
+        exit = await proc.exited
+      } catch (error) {
+        if (proc.exitCode === null && proc.signalCode === null) await Process.killProcessTree(proc).catch(() => {})
+        log.error("bun install failed for LSP server", { pkg: input.pkg, error })
+        return
+      }
+      if (exit !== 0) {
+        log.error("bun install failed for LSP server", { pkg: input.pkg, exitCode: exit })
+        return
+      }
     }
     bin = BunProc.which() ?? null
     if (!bin) return

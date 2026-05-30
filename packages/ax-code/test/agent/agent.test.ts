@@ -775,6 +775,7 @@ test("resolveTier respects explicit tier over other fields", () => {
   expect(Agent.resolveTier({ tier: "core", hidden: true, mode: "subagent" })).toBe("core")
   expect(Agent.resolveTier({ tier: "specialist", hidden: false, mode: "primary" })).toBe("specialist")
   expect(Agent.resolveTier({ tier: "internal", hidden: false, mode: "primary" })).toBe("internal")
+  expect(Agent.resolveTier({ tier: "subagent", hidden: false, mode: "all" })).toBe("subagent")
 })
 
 test("resolveTier falls back correctly when tier is undefined", () => {

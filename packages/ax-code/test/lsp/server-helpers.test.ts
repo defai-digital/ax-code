@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, spyOn, test } from "bun:test"
 import path from "path"
 import fs from "fs/promises"
 import { gzipSync } from "zlib"
@@ -7,6 +7,7 @@ import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
 import {
   NearestRoot,
+  bunServer,
   bunServerArgs,
   bunSpawnInfo,
   globalBin,
@@ -53,6 +54,9 @@ import {
   zlsAsset,
   zlsReleaseForZig,
 } from "../../src/lsp/server-releases"
+import { BunProc } from "../../src/bun"
+import { Filesystem } from "../../src/util/filesystem"
+import { Process } from "../../src/util/process"
 
 describe("lsp server helpers", () => {
   test("lists default venv search paths", async () => {
@@ -422,6 +426,33 @@ describe("lsp server helpers", () => {
   test("builds bun run args for js-backed servers", () => {
     expect(bunServerArgs("/tmp/server.js", ["--stdio"])).toEqual(["run", "/tmp/server.js", "--stdio"])
     expect(bunServerArgs("/tmp/cli.js", ["start"])).toEqual(["run", "/tmp/cli.js", "start"])
+  })
+
+  test("does not spawn a bun-backed server after package install fails", async () => {
+    await using tmp = await tmpdir()
+    const exists = spyOn(Filesystem, "exists").mockResolvedValue(false)
+    const whichBun = spyOn(BunProc, "which").mockReturnValue("/bin/bun")
+    const spawn = spyOn(Process, "spawn").mockReturnValue({
+      exited: Promise.resolve(1),
+      exitCode: 1,
+      signalCode: null,
+    } as any)
+
+    try {
+      const result = await bunServer({
+        root: tmp.path,
+        binary: "definitely-missing-lsp-binary",
+        script: path.join(tmp.path, "missing-server.js"),
+        pkg: "definitely-missing-lsp-package",
+      })
+
+      expect(result).toBeUndefined()
+      expect(spawn).toHaveBeenCalledTimes(1)
+    } finally {
+      exists.mockRestore()
+      whichBun.mockRestore()
+      spawn.mockRestore()
+    }
   })
 
   test("builds shared-bin node module script paths", () => {
