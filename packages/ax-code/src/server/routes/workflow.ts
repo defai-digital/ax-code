@@ -18,7 +18,7 @@ import type { SessionID } from "@/session/schema"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
 
-const WorkflowTemplateIDSchema = z.string().min(1).max(120).regex(/^builtin:[a-z][a-z0-9-]*$/)
+const WorkflowTemplateIDSchema = z.string().min(1).max(120).regex(/^(builtin|user|project):[a-z][a-z0-9-]*$/)
 const WORKFLOW_RUN_ID_PARAM = z.object({ runID: z.string().min(1) })
 const WORKFLOW_TEMPLATE_ID_PARAM = z.object({ templateID: WorkflowTemplateIDSchema })
 
@@ -46,6 +46,12 @@ const WorkflowArtifactListQuery = z.object({
   includePayload: z.enum(["true", "false"]).optional(),
 })
 
+const WorkflowTemplateSaveBody = z.object({
+  scope: z.enum(["user", "project"]),
+  trust: WorkflowTemplate.Trust.optional(),
+  spec: WorkflowSpecV1,
+})
+
 const WorkflowRunResponse = WorkflowRunEventRecord
 const WorkflowRunDetailResponse = WorkflowRunEventRecord.extend({
   phases: z.array(WorkflowPhaseEventRecord),
@@ -56,11 +62,19 @@ const WorkflowRunDetailResponse = WorkflowRunEventRecord.extend({
 
 const WorkflowTemplateResponse = z.object({
   id: z.string(),
-  source: z.enum(["builtin"]),
+  source: z.enum(["builtin", "user", "project"]),
+  trust: WorkflowTemplate.Trust,
   name: z.string(),
   description: z.string(),
   tags: z.array(z.string()),
   spec: WorkflowSpecV1,
+  path: z.string().optional(),
+  time: z
+    .object({
+      created: z.number(),
+      updated: z.number(),
+    })
+    .optional(),
 })
 
 function runID(c: { req: { valid: (input: "param") => { runID: string } } }) {
@@ -299,7 +313,24 @@ export const WorkflowTemplateRoutes = lazy(() =>
           ...errors(400, 404),
         },
       }),
-      async (c) => c.json(WorkflowTemplate.list()),
+      async (c) => c.json(await WorkflowTemplate.list()),
+    )
+    .post(
+      "/",
+      describeRoute({
+        summary: "Save workflow template",
+        description: "Save a user-local or project-local workflow template candidate or trusted template.",
+        operationId: "workflowTemplate.save",
+        responses: {
+          200: {
+            description: "Saved workflow template.",
+            content: { "application/json": { schema: resolver(WorkflowTemplateResponse) } },
+          },
+          ...errors(400, 404),
+        },
+      }),
+      validator("json", WorkflowTemplateSaveBody),
+      async (c) => c.json(await WorkflowTemplate.save(c.req.valid("json"))),
     )
     .get(
       "/:templateID",
@@ -316,6 +347,23 @@ export const WorkflowTemplateRoutes = lazy(() =>
         },
       }),
       validator("param", WORKFLOW_TEMPLATE_ID_PARAM),
-      async (c) => c.json(WorkflowTemplate.get(templateID(c))),
+      async (c) => c.json(await WorkflowTemplate.get(templateID(c))),
+    )
+    .post(
+      "/:templateID/promote",
+      describeRoute({
+        summary: "Promote workflow template",
+        description: "Promote a saved user-local or project-local workflow template candidate to trusted.",
+        operationId: "workflowTemplate.promote",
+        responses: {
+          200: {
+            description: "Promoted workflow template.",
+            content: { "application/json": { schema: resolver(WorkflowTemplateResponse) } },
+          },
+          ...errors(400, 404, 409),
+        },
+      }),
+      validator("param", WORKFLOW_TEMPLATE_ID_PARAM),
+      async (c) => c.json(await WorkflowTemplate.promote(templateID(c))),
     ),
 )

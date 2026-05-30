@@ -269,7 +269,13 @@ describe("headless SDK types", () => {
       fetch: (async (url: URL | RequestInfo, init?: RequestInit) => {
         const parsed = new URL(url.toString())
         calls.push({ pathname: parsed.pathname, method: init?.method, body: init?.body })
+        if (parsed.pathname === "/workflow-templates" && init?.method === "POST") {
+          return new Response(JSON.stringify({ id: "project:route-noop", trust: "candidate" }), { status: 200 })
+        }
         if (parsed.pathname === "/workflow-templates") return new Response(JSON.stringify([]), { status: 200 })
+        if (parsed.pathname.endsWith("/promote")) {
+          return new Response(JSON.stringify({ id: "project:route-noop", trust: "trusted" }), { status: 200 })
+        }
         if (parsed.pathname.startsWith("/workflow-templates/")) {
           return new Response(JSON.stringify({ id: "builtin:noop-dry-run" }), { status: 200 })
         }
@@ -281,8 +287,18 @@ describe("headless SDK types", () => {
       }) as typeof fetch,
     })
 
+    const templateSpec = {
+      schemaVersion: 1,
+      id: "route-noop",
+      name: "Route Noop",
+      description: "Minimal route fixture.",
+      phases: [{ id: "noop", name: "Noop", kind: "noop" }],
+    } as const
+
     await client.workflowTemplate.list()
     await client.workflowTemplate.get("builtin:noop-dry-run")
+    await client.workflowTemplate.save({ scope: "project", spec: templateSpec })
+    await client.workflowTemplate.promote("project:route-noop")
     await client.workflowRun.create({ templateID: "builtin:noop-dry-run" })
     await client.workflowRun.artifacts("wfr_live", { kind: "summary", includePayload: "false" })
     await client.workflowRun.start("wfr_live", { enqueueChildren: false })
@@ -291,13 +307,16 @@ describe("headless SDK types", () => {
     expect(calls.map((call) => [call.method, call.pathname])).toEqual([
       ["GET", "/workflow-templates"],
       ["GET", "/workflow-templates/builtin%3Anoop-dry-run"],
+      ["POST", "/workflow-templates"],
+      ["POST", "/workflow-templates/project%3Aroute-noop/promote"],
       ["POST", "/workflow-runs"],
       ["GET", "/workflow-runs/wfr_live/artifacts"],
       ["POST", "/workflow-runs/wfr_live/start"],
       ["POST", "/workflow-runs/wfr_live/pause"],
     ])
-    expect(calls[2].body).toBe(JSON.stringify({ templateID: "builtin:noop-dry-run" }))
-    expect(calls[4].body).toBe(JSON.stringify({ enqueueChildren: false }))
+    expect(calls[2].body).toBe(JSON.stringify({ scope: "project", spec: templateSpec }))
+    expect(calls[4].body).toBe(JSON.stringify({ templateID: "builtin:noop-dry-run" }))
+    expect(calls[6].body).toBe(JSON.stringify({ enqueueChildren: false }))
   })
 
   test("parseHeadlessRuntimeResponseBody handles empty and invalid bodies", () => {

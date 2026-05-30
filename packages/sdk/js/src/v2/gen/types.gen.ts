@@ -6816,7 +6816,8 @@ export type WorkflowTemplateListResponses = {
    */
   200: Array<{
     id: string
-    source: "builtin"
+    source: "builtin" | "user" | "project"
+    trust: "candidate" | "trusted"
     name: string
     description: string
     tags: Array<string>
@@ -6917,10 +6918,255 @@ export type WorkflowTemplateListResponses = {
         }
       }>
     }
+    path?: string
+    time?: {
+      created: number
+      updated: number
+    }
   }>
 }
 
 export type WorkflowTemplateListResponse = WorkflowTemplateListResponses[keyof WorkflowTemplateListResponses]
+
+export type WorkflowTemplateSaveData = {
+  body?: {
+    scope: "user" | "project"
+    trust?: "candidate" | "trusted"
+    spec: {
+      schemaVersion: 1
+      id: string
+      name: string
+      description: string
+      tags?: Array<string>
+      trigger?:
+        | {
+            kind: "manual"
+            source?: "prompt" | "command" | "api"
+          }
+        | {
+            kind: "scheduled"
+            schedule: string
+            timezone?: string
+            enabled?: boolean
+          }
+        | {
+            kind: "api"
+            route?: string
+            enabled?: boolean
+          }
+        | {
+            kind: "webhook"
+            event: string
+            enabled?: false
+            securityGate?: "required"
+          }
+      budget?: {
+        maxTotalTokens?: number
+        maxWallTimeMs?: number
+        maxConcurrentAgents?: number
+        maxTotalAgents?: number
+        maxToolCalls?: number
+        maxRetries?: number
+      }
+      modelPolicy?: {
+        plannerModel?: string
+        workerModel?: string
+        verifierModel?: string
+        synthesizerModel?: string
+        effort?: "normal" | "deep" | "workflow" | "max-workflow"
+        routing?: Array<{
+          phaseKind?: "fanout" | "sequential" | "synthesis" | "verification" | "noop"
+          use: "planner" | "worker" | "verifier" | "synthesizer"
+        }>
+      }
+      permissions?: {
+        writePolicy?: "read-only" | "serialized" | "worktree-required"
+        allowedTools?: Array<string>
+        networkPolicy?: "inherit" | "disabled" | "allowed"
+        escalationPolicy?: "inherit" | "ask" | "deny"
+      }
+      artifacts?: Array<{
+        id: string
+        kind: "summary" | "finding" | "patch" | "verification" | "metric" | "log"
+        retention?: "ephemeral" | "session" | "durable"
+        exposeToMainContext?: boolean
+      }>
+      verification?: {
+        mode?: "required" | "optional" | "deferred" | "skipped"
+        workflow?: "review" | "debug" | "qa"
+        commands?: Array<string>
+        requiredArtifactIds?: Array<string>
+      }
+      phases: Array<{
+        id: string
+        name: string
+        kind: "fanout" | "sequential" | "synthesis" | "verification" | "noop"
+        prompt?: string
+        agent?: string
+        inputs?: Array<string>
+        outputs?: Array<string>
+        dependsOn?: Array<string>
+        maxParallel?: number
+        mergeStrategy?: "all" | "first-success" | "majority" | "critic-confirmation"
+        modelPolicy?: {
+          plannerModel?: string
+          workerModel?: string
+          verifierModel?: string
+          synthesizerModel?: string
+          effort?: "normal" | "deep" | "workflow" | "max-workflow"
+          routing?: Array<{
+            phaseKind?: "fanout" | "sequential" | "synthesis" | "verification" | "noop"
+            use: "planner" | "worker" | "verifier" | "synthesizer"
+          }>
+        }
+        budget?: {
+          maxTotalTokens?: number
+          maxWallTimeMs?: number
+          maxConcurrentAgents?: number
+          maxTotalAgents?: number
+          maxToolCalls?: number
+          maxRetries?: number
+        }
+      }>
+    }
+  }
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/workflow-templates"
+}
+
+export type WorkflowTemplateSaveErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type WorkflowTemplateSaveError = WorkflowTemplateSaveErrors[keyof WorkflowTemplateSaveErrors]
+
+export type WorkflowTemplateSaveResponses = {
+  /**
+   * Saved workflow template.
+   */
+  200: {
+    id: string
+    source: "builtin" | "user" | "project"
+    trust: "candidate" | "trusted"
+    name: string
+    description: string
+    tags: Array<string>
+    spec: {
+      schemaVersion: 1
+      id: string
+      name: string
+      description: string
+      tags?: Array<string>
+      trigger?:
+        | {
+            kind: "manual"
+            source?: "prompt" | "command" | "api"
+          }
+        | {
+            kind: "scheduled"
+            schedule: string
+            timezone?: string
+            enabled?: boolean
+          }
+        | {
+            kind: "api"
+            route?: string
+            enabled?: boolean
+          }
+        | {
+            kind: "webhook"
+            event: string
+            enabled?: false
+            securityGate?: "required"
+          }
+      budget?: {
+        maxTotalTokens?: number
+        maxWallTimeMs?: number
+        maxConcurrentAgents?: number
+        maxTotalAgents?: number
+        maxToolCalls?: number
+        maxRetries?: number
+      }
+      modelPolicy?: {
+        plannerModel?: string
+        workerModel?: string
+        verifierModel?: string
+        synthesizerModel?: string
+        effort?: "normal" | "deep" | "workflow" | "max-workflow"
+        routing?: Array<{
+          phaseKind?: "fanout" | "sequential" | "synthesis" | "verification" | "noop"
+          use: "planner" | "worker" | "verifier" | "synthesizer"
+        }>
+      }
+      permissions?: {
+        writePolicy?: "read-only" | "serialized" | "worktree-required"
+        allowedTools?: Array<string>
+        networkPolicy?: "inherit" | "disabled" | "allowed"
+        escalationPolicy?: "inherit" | "ask" | "deny"
+      }
+      artifacts?: Array<{
+        id: string
+        kind: "summary" | "finding" | "patch" | "verification" | "metric" | "log"
+        retention?: "ephemeral" | "session" | "durable"
+        exposeToMainContext?: boolean
+      }>
+      verification?: {
+        mode?: "required" | "optional" | "deferred" | "skipped"
+        workflow?: "review" | "debug" | "qa"
+        commands?: Array<string>
+        requiredArtifactIds?: Array<string>
+      }
+      phases: Array<{
+        id: string
+        name: string
+        kind: "fanout" | "sequential" | "synthesis" | "verification" | "noop"
+        prompt?: string
+        agent?: string
+        inputs?: Array<string>
+        outputs?: Array<string>
+        dependsOn?: Array<string>
+        maxParallel?: number
+        mergeStrategy?: "all" | "first-success" | "majority" | "critic-confirmation"
+        modelPolicy?: {
+          plannerModel?: string
+          workerModel?: string
+          verifierModel?: string
+          synthesizerModel?: string
+          effort?: "normal" | "deep" | "workflow" | "max-workflow"
+          routing?: Array<{
+            phaseKind?: "fanout" | "sequential" | "synthesis" | "verification" | "noop"
+            use: "planner" | "worker" | "verifier" | "synthesizer"
+          }>
+        }
+        budget?: {
+          maxTotalTokens?: number
+          maxWallTimeMs?: number
+          maxConcurrentAgents?: number
+          maxTotalAgents?: number
+          maxToolCalls?: number
+          maxRetries?: number
+        }
+      }>
+    }
+    path?: string
+    time?: {
+      created: number
+      updated: number
+    }
+  }
+}
+
+export type WorkflowTemplateSaveResponse = WorkflowTemplateSaveResponses[keyof WorkflowTemplateSaveResponses]
 
 export type WorkflowTemplateGetData = {
   body?: never
@@ -6952,7 +7198,8 @@ export type WorkflowTemplateGetResponses = {
    */
   200: {
     id: string
-    source: "builtin"
+    source: "builtin" | "user" | "project"
+    trust: "candidate" | "trusted"
     name: string
     description: string
     tags: Array<string>
@@ -7053,10 +7300,157 @@ export type WorkflowTemplateGetResponses = {
         }
       }>
     }
+    path?: string
+    time?: {
+      created: number
+      updated: number
+    }
   }
 }
 
 export type WorkflowTemplateGetResponse = WorkflowTemplateGetResponses[keyof WorkflowTemplateGetResponses]
+
+export type WorkflowTemplatePromoteData = {
+  body?: never
+  path: {
+    templateID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/workflow-templates/{templateID}/promote"
+}
+
+export type WorkflowTemplatePromoteErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type WorkflowTemplatePromoteError = WorkflowTemplatePromoteErrors[keyof WorkflowTemplatePromoteErrors]
+
+export type WorkflowTemplatePromoteResponses = {
+  /**
+   * Promoted workflow template.
+   */
+  200: {
+    id: string
+    source: "builtin" | "user" | "project"
+    trust: "candidate" | "trusted"
+    name: string
+    description: string
+    tags: Array<string>
+    spec: {
+      schemaVersion: 1
+      id: string
+      name: string
+      description: string
+      tags?: Array<string>
+      trigger?:
+        | {
+            kind: "manual"
+            source?: "prompt" | "command" | "api"
+          }
+        | {
+            kind: "scheduled"
+            schedule: string
+            timezone?: string
+            enabled?: boolean
+          }
+        | {
+            kind: "api"
+            route?: string
+            enabled?: boolean
+          }
+        | {
+            kind: "webhook"
+            event: string
+            enabled?: false
+            securityGate?: "required"
+          }
+      budget?: {
+        maxTotalTokens?: number
+        maxWallTimeMs?: number
+        maxConcurrentAgents?: number
+        maxTotalAgents?: number
+        maxToolCalls?: number
+        maxRetries?: number
+      }
+      modelPolicy?: {
+        plannerModel?: string
+        workerModel?: string
+        verifierModel?: string
+        synthesizerModel?: string
+        effort?: "normal" | "deep" | "workflow" | "max-workflow"
+        routing?: Array<{
+          phaseKind?: "fanout" | "sequential" | "synthesis" | "verification" | "noop"
+          use: "planner" | "worker" | "verifier" | "synthesizer"
+        }>
+      }
+      permissions?: {
+        writePolicy?: "read-only" | "serialized" | "worktree-required"
+        allowedTools?: Array<string>
+        networkPolicy?: "inherit" | "disabled" | "allowed"
+        escalationPolicy?: "inherit" | "ask" | "deny"
+      }
+      artifacts?: Array<{
+        id: string
+        kind: "summary" | "finding" | "patch" | "verification" | "metric" | "log"
+        retention?: "ephemeral" | "session" | "durable"
+        exposeToMainContext?: boolean
+      }>
+      verification?: {
+        mode?: "required" | "optional" | "deferred" | "skipped"
+        workflow?: "review" | "debug" | "qa"
+        commands?: Array<string>
+        requiredArtifactIds?: Array<string>
+      }
+      phases: Array<{
+        id: string
+        name: string
+        kind: "fanout" | "sequential" | "synthesis" | "verification" | "noop"
+        prompt?: string
+        agent?: string
+        inputs?: Array<string>
+        outputs?: Array<string>
+        dependsOn?: Array<string>
+        maxParallel?: number
+        mergeStrategy?: "all" | "first-success" | "majority" | "critic-confirmation"
+        modelPolicy?: {
+          plannerModel?: string
+          workerModel?: string
+          verifierModel?: string
+          synthesizerModel?: string
+          effort?: "normal" | "deep" | "workflow" | "max-workflow"
+          routing?: Array<{
+            phaseKind?: "fanout" | "sequential" | "synthesis" | "verification" | "noop"
+            use: "planner" | "worker" | "verifier" | "synthesizer"
+          }>
+        }
+        budget?: {
+          maxTotalTokens?: number
+          maxWallTimeMs?: number
+          maxConcurrentAgents?: number
+          maxTotalAgents?: number
+          maxToolCalls?: number
+          maxRetries?: number
+        }
+      }>
+    }
+    path?: string
+    time?: {
+      created: number
+      updated: number
+    }
+  }
+}
+
+export type WorkflowTemplatePromoteResponse = WorkflowTemplatePromoteResponses[keyof WorkflowTemplatePromoteResponses]
 
 export type ToolIdsData = {
   body?: never

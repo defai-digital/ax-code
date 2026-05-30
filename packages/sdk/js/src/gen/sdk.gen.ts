@@ -278,6 +278,10 @@ import type {
   WorkflowTemplateGetResponses,
   WorkflowTemplateListErrors,
   WorkflowTemplateListResponses,
+  WorkflowTemplatePromoteErrors,
+  WorkflowTemplatePromoteResponses,
+  WorkflowTemplateSaveErrors,
+  WorkflowTemplateSaveResponses,
   WorktreeCreateErrors,
   WorktreeCreateInput,
   WorktreeCreateResponses,
@@ -2418,6 +2422,145 @@ export class WorkflowTemplate extends HeyApiClient {
   }
 
   /**
+   * Save workflow template
+   *
+   * Save a user-local or project-local workflow template candidate or trusted template.
+   */
+  public save<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      scope?: "user" | "project"
+      trust?: "candidate" | "trusted"
+      spec?: {
+        schemaVersion: 1
+        id: string
+        name: string
+        description: string
+        tags?: Array<string>
+        trigger?:
+          | {
+              kind: "manual"
+              source?: "prompt" | "command" | "api"
+            }
+          | {
+              kind: "scheduled"
+              schedule: string
+              timezone?: string
+              enabled?: boolean
+            }
+          | {
+              kind: "api"
+              route?: string
+              enabled?: boolean
+            }
+          | {
+              kind: "webhook"
+              event: string
+              enabled?: false
+              securityGate?: "required"
+            }
+        budget?: {
+          maxTotalTokens?: number
+          maxWallTimeMs?: number
+          maxConcurrentAgents?: number
+          maxTotalAgents?: number
+          maxToolCalls?: number
+          maxRetries?: number
+        }
+        modelPolicy?: {
+          plannerModel?: string
+          workerModel?: string
+          verifierModel?: string
+          synthesizerModel?: string
+          effort?: "normal" | "deep" | "workflow" | "max-workflow"
+          routing?: Array<{
+            phaseKind?: "fanout" | "sequential" | "synthesis" | "verification" | "noop"
+            use: "planner" | "worker" | "verifier" | "synthesizer"
+          }>
+        }
+        permissions?: {
+          writePolicy?: "read-only" | "serialized" | "worktree-required"
+          allowedTools?: Array<string>
+          networkPolicy?: "inherit" | "disabled" | "allowed"
+          escalationPolicy?: "inherit" | "ask" | "deny"
+        }
+        artifacts?: Array<{
+          id: string
+          kind: "summary" | "finding" | "patch" | "verification" | "metric" | "log"
+          retention?: "ephemeral" | "session" | "durable"
+          exposeToMainContext?: boolean
+        }>
+        verification?: {
+          mode?: "required" | "optional" | "deferred" | "skipped"
+          workflow?: "review" | "debug" | "qa"
+          commands?: Array<string>
+          requiredArtifactIds?: Array<string>
+        }
+        phases: Array<{
+          id: string
+          name: string
+          kind: "fanout" | "sequential" | "synthesis" | "verification" | "noop"
+          prompt?: string
+          agent?: string
+          inputs?: Array<string>
+          outputs?: Array<string>
+          dependsOn?: Array<string>
+          maxParallel?: number
+          mergeStrategy?: "all" | "first-success" | "majority" | "critic-confirmation"
+          modelPolicy?: {
+            plannerModel?: string
+            workerModel?: string
+            verifierModel?: string
+            synthesizerModel?: string
+            effort?: "normal" | "deep" | "workflow" | "max-workflow"
+            routing?: Array<{
+              phaseKind?: "fanout" | "sequential" | "synthesis" | "verification" | "noop"
+              use: "planner" | "worker" | "verifier" | "synthesizer"
+            }>
+          }
+          budget?: {
+            maxTotalTokens?: number
+            maxWallTimeMs?: number
+            maxConcurrentAgents?: number
+            maxTotalAgents?: number
+            maxToolCalls?: number
+            maxRetries?: number
+          }
+        }>
+      }
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "body", key: "scope" },
+            { in: "body", key: "trust" },
+            { in: "body", key: "spec" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      WorkflowTemplateSaveResponses,
+      WorkflowTemplateSaveErrors,
+      ThrowOnError
+    >({
+      url: "/workflow-templates",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
    * Get workflow template
    *
    * Return one workflow template by id.
@@ -2442,6 +2585,40 @@ export class WorkflowTemplate extends HeyApiClient {
     )
     return (options?.client ?? this.client).get<WorkflowTemplateGetResponses, WorkflowTemplateGetErrors, ThrowOnError>({
       url: "/workflow-templates/{templateID}",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Promote workflow template
+   *
+   * Promote a saved user-local or project-local workflow template candidate to trusted.
+   */
+  public promote<ThrowOnError extends boolean = false>(
+    parameters: {
+      templateID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "templateID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      WorkflowTemplatePromoteResponses,
+      WorkflowTemplatePromoteErrors,
+      ThrowOnError
+    >({
+      url: "/workflow-templates/{templateID}/promote",
       ...options,
       ...params,
     })

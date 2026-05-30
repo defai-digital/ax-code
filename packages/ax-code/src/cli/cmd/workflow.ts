@@ -83,7 +83,7 @@ const WorkflowTemplateListCommand = cmd({
   builder: (yargs: Argv) => yargs.option("json", jsonOption()),
   async handler(args) {
     await withWorkflowRuntime(async () => {
-      const templates = WorkflowTemplate.list()
+      const templates = await WorkflowTemplate.list()
       if (args.json) {
         writeJson(templates)
         return

@@ -124,4 +124,50 @@ describe("workflow routes", () => {
       else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
     }
   })
+
+  test("saves and promotes project workflow templates", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
+    process.env.AX_CODE_WORKFLOW_RUNTIME = "1"
+    try {
+      const app = Server.Default()
+      const directoryQuery = `directory=${encodeURIComponent(tmp.path)}`
+
+      const templatesResponse = await app.request(`/workflow-templates?${directoryQuery}`)
+      expect(templatesResponse.status).toBe(200)
+      const templates = (await templatesResponse.json()) as Array<{ id: string; spec: Record<string, unknown> }>
+      const noop = templates.find((template) => template.id === "builtin:noop-dry-run")
+      expect(noop).toBeDefined()
+
+      const spec = {
+        ...noop!.spec,
+        id: "route-noop",
+        name: "Route Noop",
+        description: "Project workflow template saved through routes.",
+      }
+      const saveResponse = await app.request(`/workflow-templates?${directoryQuery}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ scope: "project", spec }),
+      })
+      expect(saveResponse.status).toBe(200)
+      expect(await saveResponse.json()).toMatchObject({
+        id: "project:route-noop",
+        source: "project",
+        trust: "candidate",
+      })
+
+      const promoteResponse = await app.request(`/workflow-templates/project:route-noop/promote?${directoryQuery}`, {
+        method: "POST",
+      })
+      expect(promoteResponse.status).toBe(200)
+      expect(await promoteResponse.json()).toMatchObject({
+        id: "project:route-noop",
+        trust: "trusted",
+      })
+    } finally {
+      if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME
+      else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
+    }
+  })
 })

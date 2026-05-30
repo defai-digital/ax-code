@@ -2,6 +2,9 @@ import { createAxCodeClient } from "../v2/client.js"
 import { AX_CODE_WORKSPACE_HEADER, LEGACY_OPENCODE_WORKSPACE_HEADER } from "../protocol.js"
 import type {
   Event,
+  WorkflowTemplatePromoteResponse,
+  WorkflowTemplateSaveData,
+  WorkflowTemplateSaveResponse,
   WorkflowRunArtifactsData,
   WorkflowRunArtifactsResponse,
   WorkflowRunCreateData,
@@ -165,6 +168,7 @@ export type HeadlessScheduledTaskRunNowResult = {
 export type HeadlessWorkflowRunListInput = Omit<NonNullable<WorkflowRunListData["query"]>, "directory">
 export type HeadlessWorkflowRunCreateInput = NonNullable<WorkflowRunCreateData["body"]>
 export type HeadlessWorkflowArtifactListInput = Omit<NonNullable<WorkflowRunArtifactsData["query"]>, "directory">
+export type HeadlessWorkflowTemplateSaveInput = NonNullable<WorkflowTemplateSaveData["body"]>
 export type HeadlessWorkflowRunStartInput = {
   allowScaleBeyondDefaults?: boolean
   allowWriteWorkflows?: boolean
@@ -263,6 +267,29 @@ export function createHeadlessClient(input: HeadlessClientOptions) {
           experimental_workspaceID: input.experimental_workspaceID,
           path: `/workflow-templates/${encodeURIComponent(templateID)}`,
           method: "GET",
+        })
+      },
+      save(body: HeadlessWorkflowTemplateSaveInput) {
+        return requestJson<WorkflowTemplateSaveResponse>({
+          baseUrl: input.baseUrl,
+          fetch: fetchFn,
+          headers: input.headers,
+          directory: input.directory,
+          experimental_workspaceID: input.experimental_workspaceID,
+          path: "/workflow-templates",
+          method: "POST",
+          body: body as Record<string, unknown>,
+        })
+      },
+      promote(templateID: string) {
+        return requestJson<WorkflowTemplatePromoteResponse>({
+          baseUrl: input.baseUrl,
+          fetch: fetchFn,
+          headers: input.headers,
+          directory: input.directory,
+          experimental_workspaceID: input.experimental_workspaceID,
+          path: `/workflow-templates/${encodeURIComponent(templateID)}/promote`,
+          method: "POST",
         })
       },
     },
