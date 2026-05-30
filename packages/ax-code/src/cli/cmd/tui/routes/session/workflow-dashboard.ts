@@ -357,7 +357,7 @@ export function workflowEvalSummaryItems(summary: WorkflowEvalSummary): Workflow
         MAX_DESCRIPTION,
       ),
       footer: truncate(
-        `false positives: ${metrics.falsePositiveFindings} | artifacts: ${metrics.artifactCount} | exposed: ${metrics.exposedArtifactCount}`,
+        `cost/finding: ${formatOptionalUsd(metrics.costPerConfirmedFindingUsd)} | false positives: ${metrics.falsePositiveFindings} | artifacts: ${metrics.artifactCount}`,
         MAX_FOOTER,
       ),
       category: "Metrics",
@@ -371,7 +371,7 @@ export function workflowEvalSummaryItems(summary: WorkflowEvalSummary): Workflow
         MAX_DESCRIPTION,
       ),
       footer: truncate(
-        `verification envelopes: ${metrics.verificationEnvelopeCount} | interventions: ${metrics.interventionCount}`,
+        `verified completions: ${metrics.verifiedCompletionCount} | cost/completion: ${formatOptionalUsd(metrics.costPerVerifiedCompletionUsd)} | interventions: ${metrics.interventionCount}`,
         MAX_FOOTER,
       ),
       category: "Metrics",
@@ -581,6 +581,10 @@ function formatDelta(value: number) {
 
 function formatUsd(value: number) {
   return `$${value.toFixed(4)}`
+}
+
+function formatOptionalUsd(value: number | null | undefined) {
+  return value === null || value === undefined ? "n/a" : formatUsd(value)
 }
 
 function formatSignedUsd(value: number) {

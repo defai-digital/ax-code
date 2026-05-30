@@ -232,6 +232,8 @@ describe("tui workflow dashboard view model", () => {
     )
     expect(items.find((item) => item.value === "workflow.eval.decision")?.footer).toContain("cost: $0.0400")
     expect(items.find((item) => item.value === "workflow.eval.findings")?.description).toContain("confirmed: 1")
+    expect(items.find((item) => item.value === "workflow.eval.findings")?.footer).toContain("cost/finding: $0.0400")
+    expect(items.find((item) => item.value === "workflow.eval.execution")?.footer).toContain("cost/completion: n/a")
     expect(items.find((item) => item.value === "workflow.eval.comparison")?.footer).toContain("tokens -4000")
     expect(items.some((item) => item.category === "Budget" && item.description?.includes("tokens 8000/7000"))).toBe(
       true,
@@ -370,6 +372,9 @@ function workflowEvalSummary(input: Partial<WorkflowEvalSummary> = {}): Workflow
       childAgents: 6,
       retries: 1,
       estimatedCostUsd: 0.04,
+      costPerConfirmedFindingUsd: 0.04,
+      verifiedCompletionCount: 0,
+      costPerVerifiedCompletionUsd: null,
       confirmedFindings: 1,
       likelyFindings: 1,
       rejectedFindings: 1,

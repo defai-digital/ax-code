@@ -243,6 +243,11 @@ describe("workflow routes", () => {
         runID: created.id,
         decision: "promote",
         verificationSatisfied: true,
+        metrics: {
+          costPerConfirmedFindingUsd: null,
+          verifiedCompletionCount: 1,
+          costPerVerifiedCompletionUsd: 0,
+        },
         comparison: {
           baselineLabel: "single-agent",
           confirmedFindingsDelta: 0,

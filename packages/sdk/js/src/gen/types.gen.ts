@@ -6675,6 +6675,9 @@ export type WorkflowRunEvalSummaryResponses = {
       childAgents: number
       retries: number
       estimatedCostUsd: number
+      costPerConfirmedFindingUsd: number | null
+      verifiedCompletionCount: number
+      costPerVerifiedCompletionUsd: number | null
       confirmedFindings: number
       likelyFindings: number
       rejectedFindings: number
@@ -6757,6 +6760,9 @@ export type WorkflowRunEvalCaseResponses = {
         childAgents: number
         retries: number
         estimatedCostUsd: number
+        costPerConfirmedFindingUsd: number | null
+        verifiedCompletionCount: number
+        costPerVerifiedCompletionUsd: number | null
         confirmedFindings: number
         likelyFindings: number
         rejectedFindings: number

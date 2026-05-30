@@ -17,6 +17,9 @@ export const WorkflowEvalMetrics = z.object({
   childAgents: z.number().int().min(0),
   retries: z.number().int().min(0),
   estimatedCostUsd: z.number().min(0),
+  costPerConfirmedFindingUsd: z.number().min(0).nullable(),
+  verifiedCompletionCount: z.number().int().min(0),
+  costPerVerifiedCompletionUsd: z.number().min(0).nullable(),
   confirmedFindings: z.number().int().min(0),
   likelyFindings: z.number().int().min(0),
   rejectedFindings: z.number().int().min(0),
@@ -112,6 +115,8 @@ export function evaluateWorkflowRun(input: WorkflowEvalInput): WorkflowEvalSumma
 
 function workflowMetrics(run: z.infer<typeof WorkflowRunDetail>, elapsedMs: number): WorkflowEvalMetrics {
   const findingCounts = countFindingArtifacts(run.artifacts)
+  const budgetUsage = WorkflowUsageDelta.parse(run.budgetUsage)
+  const verifiedCompletionCount = run.status === "completed" && workflowVerificationSatisfied(run) ? 1 : 0
   const blockedChildren = run.children.filter(
     (child) => child.status === "blocked_permission" || child.status === "blocked_question",
   ).length
@@ -120,7 +125,11 @@ function workflowMetrics(run: z.infer<typeof WorkflowRunDetail>, elapsedMs: numb
   return WorkflowEvalMetrics.parse({
     status: run.status,
     elapsedMs,
-    ...WorkflowUsageDelta.parse(run.budgetUsage),
+    ...budgetUsage,
+    costPerConfirmedFindingUsd:
+      findingCounts.confirmedFindings === 0 ? null : budgetUsage.estimatedCostUsd / findingCounts.confirmedFindings,
+    verifiedCompletionCount,
+    costPerVerifiedCompletionUsd: verifiedCompletionCount === 0 ? null : budgetUsage.estimatedCostUsd,
     ...findingCounts,
     falsePositiveFindings: findingCounts.rejectedFindings,
     artifactCount: run.artifacts.length,
