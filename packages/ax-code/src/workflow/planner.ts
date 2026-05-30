@@ -90,7 +90,7 @@ export function planWorkflowDryRun(input: WorkflowDryRunInput): WorkflowDryRunPl
   const warnings: string[] = []
   const phases = parsed.spec.phases.map((phase, phaseIndex): WorkflowDryRunPhase => {
     const estimatedChildren = childCounts[phaseIndex]!
-    const maxParallel = effectiveMaxParallel(phase, parsed.spec.budget, estimatedChildren)
+    const maxParallel = effectiveMaxParallel(phase, parsed.spec, estimatedChildren)
     const pacing = effectivePacing(phase, parsed.spec)
     const route = modelRouteForPhase(phase, parsed.spec)
     return {
@@ -211,6 +211,9 @@ function assertPlannerSafety(input: z.infer<typeof WorkflowDryRunInput>) {
   if (!input.allowWriteWorkflows && input.spec.permissions.writePolicy !== "read-only") {
     issues.push(`writePolicy ${input.spec.permissions.writePolicy} requires explicit write workflow approval`)
   }
+  if (input.spec.permissions.writePolicy === "worktree-required") {
+    issues.push("writePolicy worktree-required requires workflow child worktree isolation before execution")
+  }
 
   if (issues.length > 0) throw new WorkflowPlanError(issues)
 }
@@ -219,7 +222,7 @@ function assertPacingSafety(input: z.infer<typeof WorkflowDryRunInput>, childCou
   const issues: string[] = []
   for (const [index, phase] of input.spec.phases.entries()) {
     const estimatedChildren = childCounts[index] ?? 1
-    const maxParallel = effectiveMaxParallel(phase, input.spec.budget, estimatedChildren)
+    const maxParallel = effectiveMaxParallel(phase, input.spec, estimatedChildren)
     const pacing = effectivePacing(phase, input.spec)
     if (maxParallel > pacing.maxRequestsPerMinute) {
       issues.push(
@@ -241,9 +244,14 @@ function estimatePhaseChildren(phase: WorkflowPhase, budget: WorkflowBudget) {
   return 1
 }
 
-function effectiveMaxParallel(phase: WorkflowPhase, budget: WorkflowBudget, estimatedChildren: number) {
+function effectiveMaxParallel(phase: WorkflowPhase, spec: WorkflowSpec, estimatedChildren: number) {
   if (phase.kind !== "fanout" && phase.kind !== "verification") return 1
-  return Math.min(phase.maxParallel ?? budget.maxConcurrentAgents, budget.maxConcurrentAgents, estimatedChildren)
+  if (spec.permissions.writePolicy === "serialized") return 1
+  return Math.min(
+    phase.maxParallel ?? spec.budget.maxConcurrentAgents,
+    spec.budget.maxConcurrentAgents,
+    estimatedChildren,
+  )
 }
 
 function effectivePacing(phase: WorkflowPhase, spec: WorkflowSpec): WorkflowPacing {

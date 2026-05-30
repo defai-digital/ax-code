@@ -45,12 +45,44 @@ describe("workflow dry-run planner", () => {
     expect(plan.phases[1]?.children[0]?.artifactRefs).toEqual(["issue-table"])
   })
 
-  test("rejects write workflows unless explicitly allowed", () => {
+  test("serializes write workflows when explicitly allowed", () => {
     const spec = parseWorkflowSpecV1({
       schemaVersion: 1,
-      id: "write-workflow",
-      name: "Write Workflow",
-      description: "Invalid without explicit write approval.",
+      id: "serialized-write-workflow",
+      name: "Serialized Write Workflow",
+      description: "Write fan-out must run one child at a time in the shared workspace.",
+      permissions: {
+        writePolicy: "serialized",
+      },
+      budget: {
+        maxConcurrentAgents: 3,
+        maxTotalAgents: 3,
+      },
+      phases: [
+        {
+          id: "edit-files",
+          name: "Edit Files",
+          kind: "fanout",
+          inputs: ["a", "b", "c"],
+          maxParallel: 3,
+        },
+      ],
+    })
+
+    expect(() => planWorkflowDryRun({ spec })).toThrow(/writePolicy serialized/)
+    const plan = planWorkflowDryRun({ spec, allowWriteWorkflows: true })
+    expect(plan.summary.writePolicy).toBe("serialized")
+    expect(plan.summary.estimatedChildAgents).toBe(3)
+    expect(plan.phases[0]?.maxParallel).toBe(1)
+    expect(plan.phases[0]?.children[0]?.writePolicy).toBe("serialized")
+  })
+
+  test("rejects worktree-required workflows until child worktree isolation is available", () => {
+    const spec = parseWorkflowSpecV1({
+      schemaVersion: 1,
+      id: "isolated-write-workflow",
+      name: "Isolated Write Workflow",
+      description: "Worktree-required writes need per-child worktree execution before they can run.",
       permissions: {
         writePolicy: "worktree-required",
       },
@@ -63,8 +95,7 @@ describe("workflow dry-run planner", () => {
       ],
     })
 
-    expect(() => planWorkflowDryRun({ spec })).toThrow(/writePolicy worktree-required/)
-    expect(planWorkflowDryRun({ spec, allowWriteWorkflows: true }).summary.writePolicy).toBe("worktree-required")
+    expect(() => planWorkflowDryRun({ spec, allowWriteWorkflows: true })).toThrow(/worktree isolation/)
   })
 
   test("rejects plans that estimate more children than the workflow budget allows", () => {
