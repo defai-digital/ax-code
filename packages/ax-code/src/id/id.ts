@@ -24,6 +24,11 @@ export namespace Identifier {
     debug_pattern: "dpt",
     task_queue: "tsk",
     scheduled_task: "sch",
+    workflow_run: "wfr",
+    workflow_phase: "wfp",
+    workflow_child: "wfc",
+    workflow_artifact: "wfa",
+    workflow_budget: "wfb",
   } as const
 
   export function schema(prefix: keyof typeof prefixes) {

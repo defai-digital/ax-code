@@ -1,0 +1,674 @@
+import { HTTPException } from "hono/http-exception"
+import { Bus } from "../bus"
+import { Instance } from "../project/instance"
+import { Session } from "../session"
+import { SessionID } from "../session/schema"
+import { Database, NotFoundError, and, asc, desc, eq, inArray } from "../storage/db"
+import {
+  EmptyWorkflowBudgetUsage,
+  WorkflowArtifactID,
+  WorkflowArtifactRecord,
+  WorkflowBudgetLedgerEntry,
+  WorkflowBudgetLedgerID,
+  type WorkflowBudgetUsage,
+  WorkflowChildID,
+  WorkflowChildRecord,
+  WorkflowPhaseID,
+  WorkflowPhaseRecord,
+  WorkflowRun as WorkflowRunState,
+  WorkflowRunDetail,
+  WorkflowRunID,
+} from "./state"
+import {
+  WorkflowArtifactTable,
+  WorkflowBudgetLedgerTable,
+  WorkflowChildTable,
+  WorkflowPhaseTable,
+  WorkflowRunTable,
+} from "./workflow.sql"
+
+async function create(input: WorkflowRunState.CreateInput): Promise<WorkflowRunState.Info> {
+  const parsed = WorkflowRunState.CreateInput.parse(input)
+  if (parsed.parentSessionID) await assertSessionCompatible(parsed.parentSessionID)
+
+  const now = Date.now()
+  const run = Database.transaction((db) => {
+    const id = WorkflowRunID.ascending()
+    const phaseIDs = parsed.spec.phases.map(() => WorkflowPhaseID.ascending())
+    const currentPhaseID = phaseIDs[0]
+    const row = db
+      .insert(WorkflowRunTable)
+      .values({
+        id,
+        project_id: Instance.project.id,
+        directory: Instance.directory,
+        parent_session_id: parsed.parentSessionID,
+        source_template_id: parsed.sourceTemplateID,
+        status: "queued",
+        current_phase_id: currentPhaseID,
+        spec_snapshot: parsed.spec,
+        budget: parsed.spec.budget,
+        budget_usage: EmptyWorkflowBudgetUsage,
+        verification_envelope_ids: [],
+        time_created: now,
+        time_updated: now,
+      })
+      .returning()
+      .get()
+
+    for (const [index, phase] of parsed.spec.phases.entries()) {
+      db.insert(WorkflowPhaseTable)
+        .values({
+          id: phaseIDs[index]!,
+          run_id: id,
+          spec_phase_id: phase.id,
+          position: index,
+          name: phase.name,
+          kind: phase.kind,
+          status: "queued",
+          agent: phase.agent,
+          model_policy: phase.modelPolicy,
+          budget: phase.budget,
+          outputs: phase.outputs,
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+    }
+
+    return fromRunRow(row)
+  })
+  publishCreated(run)
+  return run
+}
+
+async function list(input: Partial<WorkflowRunState.ListInput> = {}): Promise<WorkflowRunState.Info[]> {
+  const parsed = WorkflowRunState.ListInput.partial().parse(input)
+  if (parsed.parentSessionID) await assertSessionCompatible(parsed.parentSessionID)
+  const conditions = [eq(WorkflowRunTable.project_id, Instance.project.id)]
+  if (parsed.status) conditions.push(eq(WorkflowRunTable.status, parsed.status))
+  if (parsed.parentSessionID) conditions.push(eq(WorkflowRunTable.parent_session_id, parsed.parentSessionID))
+  return Database.use((db) => {
+    let query = db
+      .select()
+      .from(WorkflowRunTable)
+      .where(and(...conditions))
+      .orderBy(desc(WorkflowRunTable.time_created), desc(WorkflowRunTable.id))
+      .$dynamic()
+    if (parsed.limit) query = query.limit(parsed.limit)
+    return query.all().map(fromRunRow)
+  })
+}
+
+async function get(id: WorkflowRunID): Promise<WorkflowRunState.Info> {
+  const run = Database.use((db) => {
+    const row = db.select().from(WorkflowRunTable).where(eq(WorkflowRunTable.id, id)).get()
+    if (!row) throw new NotFoundError({ message: `Workflow run not found: ${id}` })
+    return fromRunRow(row)
+  })
+  assertProjectRun(run)
+  return run
+}
+
+async function getDetail(id: WorkflowRunID): Promise<WorkflowRunDetail> {
+  const run = await get(id)
+  const detail = Database.use((db) => {
+    const phases = db
+      .select()
+      .from(WorkflowPhaseTable)
+      .where(eq(WorkflowPhaseTable.run_id, id))
+      .orderBy(asc(WorkflowPhaseTable.position), asc(WorkflowPhaseTable.id))
+      .all()
+      .map(fromPhaseRow)
+    const children = db
+      .select()
+      .from(WorkflowChildTable)
+      .where(eq(WorkflowChildTable.run_id, id))
+      .orderBy(asc(WorkflowChildTable.time_created), asc(WorkflowChildTable.id))
+      .all()
+      .map(fromChildRow)
+    const artifacts = db
+      .select()
+      .from(WorkflowArtifactTable)
+      .where(eq(WorkflowArtifactTable.run_id, id))
+      .orderBy(asc(WorkflowArtifactTable.time_created), asc(WorkflowArtifactTable.id))
+      .all()
+      .map(fromArtifactRow)
+    const budgetLedger = db
+      .select()
+      .from(WorkflowBudgetLedgerTable)
+      .where(eq(WorkflowBudgetLedgerTable.run_id, id))
+      .orderBy(asc(WorkflowBudgetLedgerTable.time_created), asc(WorkflowBudgetLedgerTable.id))
+      .all()
+      .map(fromBudgetLedgerRow)
+    return { ...run, phases, children, artifacts, budgetLedger }
+  })
+  return WorkflowRunDetail.parse(detail)
+}
+
+async function setStatus(input: WorkflowRunState.SetStatusInput): Promise<WorkflowRunState.Info> {
+  const parsed = WorkflowRunState.SetStatusInput.parse(input)
+  const current = await get(parsed.id)
+  const now = Date.now()
+  const updates: Partial<typeof WorkflowRunTable.$inferInsert> = {
+    status: parsed.status,
+    error: parsed.error,
+    time_updated: now,
+  }
+  if (parsed.status === "running" && current.time.started === undefined) updates.time_started = now
+  if (isTerminalRunStatus(parsed.status)) updates.time_completed = now
+
+  const run = Database.use((db) => {
+    const row = db.update(WorkflowRunTable).set(updates).where(eq(WorkflowRunTable.id, parsed.id)).returning().get()
+    if (!row) throw new NotFoundError({ message: `Workflow run not found: ${parsed.id}` })
+    return fromRunRow(row)
+  })
+  assertProjectRun(run)
+  publishUpdated(run)
+  return run
+}
+
+async function setPhaseStatus(input: WorkflowRunState.SetPhaseStatusInput): Promise<WorkflowPhaseRecord> {
+  const parsed = WorkflowRunState.SetPhaseStatusInput.parse(input)
+  const current = await getPhase(parsed.id)
+  const now = Date.now()
+  const updates: Partial<typeof WorkflowPhaseTable.$inferInsert> = {
+    status: parsed.status,
+    error: parsed.error,
+    time_updated: now,
+  }
+  if (parsed.status === "running" && current.time.started === undefined) updates.time_started = now
+  if (isTerminalPhaseStatus(parsed.status)) updates.time_completed = now
+
+  const phase = Database.transaction((db) => {
+    const row = db.update(WorkflowPhaseTable).set(updates).where(eq(WorkflowPhaseTable.id, parsed.id)).returning().get()
+    if (!row) throw new NotFoundError({ message: `Workflow phase not found: ${parsed.id}` })
+    db.update(WorkflowRunTable)
+      .set({
+        current_phase_id: row.id,
+        time_updated: now,
+      })
+      .where(eq(WorkflowRunTable.id, row.run_id))
+      .run()
+    return fromPhaseRow(row)
+  })
+  assertProjectRun(await get(phase.runID))
+  publishPhaseUpdated(phase)
+  return phase
+}
+
+async function appendChild(input: WorkflowRunState.AppendChildInput): Promise<WorkflowChildRecord> {
+  const parsed = WorkflowRunState.AppendChildInput.parse(input)
+  if (parsed.sessionID) await assertSessionCompatible(parsed.sessionID)
+  await get(parsed.runID)
+  await assertPhaseBelongsToRun(parsed.phaseID, parsed.runID)
+  const now = Date.now()
+  const child = Database.transaction((db) => {
+    const row = db
+      .insert(WorkflowChildTable)
+      .values({
+        id: WorkflowChildID.ascending(),
+        run_id: parsed.runID,
+        phase_id: parsed.phaseID,
+        task_queue_id: parsed.taskQueueID,
+        session_id: parsed.sessionID,
+        status: "queued",
+        agent: parsed.agent,
+        model: parsed.model,
+        budget_slice: parsed.budgetSlice,
+        artifact_ids: [],
+        evidence_refs: [],
+        time_created: now,
+        time_updated: now,
+      })
+      .returning()
+      .get()
+    touchRun(db, parsed.runID, now)
+    return fromChildRow(row)
+  })
+  publishChildCreated(child)
+  return child
+}
+
+async function setChildStatus(input: WorkflowRunState.SetChildStatusInput): Promise<WorkflowChildRecord> {
+  const parsed = WorkflowRunState.SetChildStatusInput.parse(input)
+  const current = await getChild(parsed.id)
+  await get(current.runID)
+  const now = Date.now()
+  const updates: Partial<typeof WorkflowChildTable.$inferInsert> = {
+    status: parsed.status,
+    output_summary: parsed.outputSummary,
+    artifact_ids: parsed.artifactIDs ?? current.artifactIDs,
+    evidence_refs: parsed.evidenceRefs ?? current.evidenceRefs,
+    error: parsed.error,
+    time_updated: now,
+  }
+  if (parsed.status === "running" && current.time.started === undefined) updates.time_started = now
+  if (isTerminalChildStatus(parsed.status)) updates.time_completed = now
+
+  const child = Database.transaction((db) => {
+    const row = db.update(WorkflowChildTable).set(updates).where(eq(WorkflowChildTable.id, parsed.id)).returning().get()
+    if (!row) throw new NotFoundError({ message: `Workflow child not found: ${parsed.id}` })
+    touchRun(db, row.run_id, now)
+    return fromChildRow(row)
+  })
+  publishChildUpdated(child)
+  return child
+}
+
+async function appendArtifact(input: WorkflowRunState.AppendArtifactInput): Promise<WorkflowArtifactRecord> {
+  const parsed = WorkflowRunState.AppendArtifactInput.parse(input)
+  await get(parsed.runID)
+  if (parsed.phaseID) await assertPhaseBelongsToRun(parsed.phaseID, parsed.runID)
+  if (parsed.childID) await assertChildBelongsToRun(parsed.childID, parsed.runID)
+
+  const now = Date.now()
+  const artifact = Database.transaction((db) => {
+    const id = WorkflowArtifactID.ascending()
+    const row = db
+      .insert(WorkflowArtifactTable)
+      .values({
+        id,
+        run_id: parsed.runID,
+        phase_id: parsed.phaseID,
+        child_id: parsed.childID,
+        kind: parsed.kind,
+        retention: parsed.retention,
+        expose_to_main_context: parsed.exposeToMainContext,
+        summary: parsed.summary,
+        payload: parsed.payload,
+        redaction: parsed.redaction,
+        evidence_refs: parsed.evidenceRefs,
+        time_created: now,
+        time_updated: now,
+      })
+      .returning()
+      .get()
+
+    if (parsed.childID) {
+      const child = db.select().from(WorkflowChildTable).where(eq(WorkflowChildTable.id, parsed.childID)).get()
+      if (child) {
+        db.update(WorkflowChildTable)
+          .set({
+            artifact_ids: unique([...child.artifact_ids, id]),
+            time_updated: now,
+          })
+          .where(eq(WorkflowChildTable.id, child.id))
+          .run()
+      }
+    }
+    touchRun(db, parsed.runID, now)
+    return fromArtifactRow(row)
+  })
+  publishArtifactWritten(artifact)
+  return artifact
+}
+
+async function appendBudgetUsage(input: WorkflowRunState.AppendBudgetUsageInput): Promise<WorkflowBudgetLedgerEntry> {
+  const parsed = WorkflowRunState.AppendBudgetUsageInput.parse(input)
+  await get(parsed.runID)
+  if (parsed.phaseID) await assertPhaseBelongsToRun(parsed.phaseID, parsed.runID)
+  if (parsed.childID) await assertChildBelongsToRun(parsed.childID, parsed.runID)
+
+  const now = Date.now()
+  const entry = Database.transaction((db) => {
+    const run = db.select().from(WorkflowRunTable).where(eq(WorkflowRunTable.id, parsed.runID)).get()
+    if (!run) throw new NotFoundError({ message: `Workflow run not found: ${parsed.runID}` })
+    const nextUsage = addUsage(run.budget_usage, parsed.usageDelta)
+    const row = db
+      .insert(WorkflowBudgetLedgerTable)
+      .values({
+        id: WorkflowBudgetLedgerID.ascending(),
+        run_id: parsed.runID,
+        phase_id: parsed.phaseID,
+        child_id: parsed.childID,
+        kind: parsed.kind,
+        usage_delta: parsed.usageDelta,
+        message: parsed.message,
+        time_created: now,
+        time_updated: now,
+      })
+      .returning()
+      .get()
+    db.update(WorkflowRunTable)
+      .set({
+        budget_usage: nextUsage,
+        time_updated: now,
+      })
+      .where(eq(WorkflowRunTable.id, parsed.runID))
+      .run()
+    return fromBudgetLedgerRow(row)
+  })
+  publishBudgetAppended(entry)
+  return entry
+}
+
+async function attachVerificationEnvelopeIDs(
+  input: WorkflowRunState.AttachVerificationInput,
+): Promise<WorkflowRunState.Info> {
+  const parsed = WorkflowRunState.AttachVerificationInput.parse(input)
+  const current = await get(parsed.id)
+  const now = Date.now()
+  const run = Database.use((db) => {
+    const row = db
+      .update(WorkflowRunTable)
+      .set({
+        verification_envelope_ids: unique([...current.verificationEnvelopeIDs, ...parsed.envelopeIDs]),
+        time_updated: now,
+      })
+      .where(eq(WorkflowRunTable.id, parsed.id))
+      .returning()
+      .get()
+    if (!row) throw new NotFoundError({ message: `Workflow run not found: ${parsed.id}` })
+    return fromRunRow(row)
+  })
+  publishUpdated(run)
+  return run
+}
+
+async function recoverInterrupted(): Promise<{ failed: WorkflowRunState.Info[] }> {
+  const now = Date.now()
+  const interruptedRunStatuses = ["running", "blocked"] as const
+  const interruptedPhaseStatuses = ["running", "blocked"] as const
+  const interruptedChildStatuses = ["running", "blocked_permission", "blocked_question"] as const
+  const changed = Database.transaction((db) => {
+    const rows = db
+      .select()
+      .from(WorkflowRunTable)
+      .where(
+        and(
+          eq(WorkflowRunTable.project_id, Instance.project.id),
+          inArray(WorkflowRunTable.status, interruptedRunStatuses),
+        ),
+      )
+      .all()
+    const failed: WorkflowRunState.Info[] = []
+    for (const row of rows) {
+      db.update(WorkflowPhaseTable)
+        .set({
+          status: "failed",
+          error: "Workflow phase interrupted by backend restart; inspect artifacts and retry when safe.",
+          time_completed: now,
+          time_updated: now,
+        })
+        .where(and(eq(WorkflowPhaseTable.run_id, row.id), inArray(WorkflowPhaseTable.status, interruptedPhaseStatuses)))
+        .run()
+      db.update(WorkflowChildTable)
+        .set({
+          status: "failed",
+          error: "Workflow child interrupted by backend restart; inspect artifacts and retry when safe.",
+          time_completed: now,
+          time_updated: now,
+        })
+        .where(and(eq(WorkflowChildTable.run_id, row.id), inArray(WorkflowChildTable.status, interruptedChildStatuses)))
+        .run()
+      const updated = db
+        .update(WorkflowRunTable)
+        .set({
+          status: "failed",
+          error: "Workflow interrupted by backend restart; inspect artifacts and retry when safe.",
+          time_completed: now,
+          time_updated: now,
+        })
+        .where(eq(WorkflowRunTable.id, row.id))
+        .returning()
+        .get()
+      if (updated) failed.push(fromRunRow(updated))
+    }
+    return { failed }
+  })
+  for (const run of changed.failed) publishUpdated(run)
+  return changed
+}
+
+export const WorkflowRun = {
+  ...WorkflowRunState,
+  create,
+  list,
+  get,
+  getDetail,
+  setStatus,
+  setPhaseStatus,
+  appendChild,
+  setChildStatus,
+  appendArtifact,
+  appendBudgetUsage,
+  attachVerificationEnvelopeIDs,
+  recoverInterrupted,
+}
+
+export namespace WorkflowRun {
+  export type Info = WorkflowRunState.Info
+  export type Status = WorkflowRunState.Status
+  export type PhaseStatus = WorkflowRunState.PhaseStatus
+  export type ChildStatus = WorkflowRunState.ChildStatus
+  export type ArtifactKind = WorkflowRunState.ArtifactKind
+  export type ArtifactRetention = WorkflowRunState.ArtifactRetention
+  export type BudgetLedgerKind = WorkflowRunState.BudgetLedgerKind
+  export type CreateInput = WorkflowRunState.CreateInput
+  export type ListInput = WorkflowRunState.ListInput
+  export type SetStatusInput = WorkflowRunState.SetStatusInput
+  export type SetPhaseStatusInput = WorkflowRunState.SetPhaseStatusInput
+  export type AppendChildInput = WorkflowRunState.AppendChildInput
+  export type SetChildStatusInput = WorkflowRunState.SetChildStatusInput
+  export type AppendArtifactInput = WorkflowRunState.AppendArtifactInput
+  export type AppendBudgetUsageInput = WorkflowRunState.AppendBudgetUsageInput
+  export type AttachVerificationInput = WorkflowRunState.AttachVerificationInput
+}
+
+function fromRunRow(row: typeof WorkflowRunTable.$inferSelect): WorkflowRunState.Info {
+  return WorkflowRunState.Record.parse({
+    id: row.id,
+    projectID: row.project_id,
+    directory: row.directory,
+    parentSessionID: row.parent_session_id ?? undefined,
+    sourceTemplateID: row.source_template_id ?? undefined,
+    status: row.status,
+    currentPhaseID: row.current_phase_id ?? undefined,
+    spec: row.spec_snapshot,
+    budget: row.budget,
+    budgetUsage: row.budget_usage,
+    verificationEnvelopeIDs: row.verification_envelope_ids,
+    error: row.error ?? undefined,
+    time: {
+      created: row.time_created,
+      updated: row.time_updated,
+      started: row.time_started ?? undefined,
+      completed: row.time_completed ?? undefined,
+    },
+  })
+}
+
+function fromPhaseRow(row: typeof WorkflowPhaseTable.$inferSelect): WorkflowPhaseRecord {
+  return WorkflowPhaseRecord.parse({
+    id: row.id,
+    runID: row.run_id,
+    specPhaseID: row.spec_phase_id,
+    position: row.position,
+    name: row.name,
+    kind: row.kind,
+    status: row.status,
+    agent: row.agent ?? undefined,
+    modelPolicy: row.model_policy ?? undefined,
+    budget: row.budget ?? undefined,
+    outputs: row.outputs,
+    error: row.error ?? undefined,
+    time: {
+      created: row.time_created,
+      updated: row.time_updated,
+      started: row.time_started ?? undefined,
+      completed: row.time_completed ?? undefined,
+    },
+  })
+}
+
+function fromChildRow(row: typeof WorkflowChildTable.$inferSelect): WorkflowChildRecord {
+  return WorkflowChildRecord.parse({
+    id: row.id,
+    runID: row.run_id,
+    phaseID: row.phase_id,
+    taskQueueID: row.task_queue_id ?? undefined,
+    sessionID: row.session_id ?? undefined,
+    status: row.status,
+    agent: row.agent ?? undefined,
+    model: row.model ?? undefined,
+    budgetSlice: row.budget_slice ?? undefined,
+    artifactIDs: row.artifact_ids,
+    evidenceRefs: row.evidence_refs,
+    outputSummary: row.output_summary ?? undefined,
+    error: row.error ?? undefined,
+    time: {
+      created: row.time_created,
+      updated: row.time_updated,
+      started: row.time_started ?? undefined,
+      completed: row.time_completed ?? undefined,
+    },
+  })
+}
+
+function fromArtifactRow(row: typeof WorkflowArtifactTable.$inferSelect): WorkflowArtifactRecord {
+  return WorkflowArtifactRecord.parse({
+    id: row.id,
+    runID: row.run_id,
+    phaseID: row.phase_id ?? undefined,
+    childID: row.child_id ?? undefined,
+    kind: row.kind,
+    retention: row.retention,
+    exposeToMainContext: row.expose_to_main_context,
+    summary: row.summary ?? undefined,
+    payload: row.payload ?? undefined,
+    redaction: row.redaction ?? undefined,
+    evidenceRefs: row.evidence_refs,
+    time: {
+      created: row.time_created,
+      updated: row.time_updated,
+    },
+  })
+}
+
+function fromBudgetLedgerRow(row: typeof WorkflowBudgetLedgerTable.$inferSelect): WorkflowBudgetLedgerEntry {
+  return WorkflowBudgetLedgerEntry.parse({
+    id: row.id,
+    runID: row.run_id,
+    phaseID: row.phase_id ?? undefined,
+    childID: row.child_id ?? undefined,
+    kind: row.kind,
+    usageDelta: row.usage_delta,
+    message: row.message ?? undefined,
+    time: {
+      created: row.time_created,
+      updated: row.time_updated,
+    },
+  })
+}
+
+async function assertSessionCompatible(sessionID: SessionID) {
+  const session = await Session.get(sessionID)
+  if (Session.isCompatibleWithCurrentProject(session)) return session
+  throw new HTTPException(409, {
+    message: `Session ${sessionID} belongs to a different project directory; create the workflow from that project instead.`,
+  })
+}
+
+function assertProjectRun(run: WorkflowRun.Info) {
+  if (run.projectID === Instance.project.id) return
+  throw new HTTPException(409, {
+    message: `Workflow run ${run.id} belongs to a different project.`,
+  })
+}
+
+async function getPhase(id: WorkflowPhaseID): Promise<WorkflowPhaseRecord> {
+  const phase = Database.use((db) => {
+    const row = db.select().from(WorkflowPhaseTable).where(eq(WorkflowPhaseTable.id, id)).get()
+    if (!row) throw new NotFoundError({ message: `Workflow phase not found: ${id}` })
+    return fromPhaseRow(row)
+  })
+  await WorkflowRun.get(phase.runID)
+  return phase
+}
+
+async function getChild(id: WorkflowChildID): Promise<WorkflowChildRecord> {
+  const child = Database.use((db) => {
+    const row = db.select().from(WorkflowChildTable).where(eq(WorkflowChildTable.id, id)).get()
+    if (!row) throw new NotFoundError({ message: `Workflow child not found: ${id}` })
+    return fromChildRow(row)
+  })
+  await WorkflowRun.get(child.runID)
+  return child
+}
+
+async function assertPhaseBelongsToRun(phaseID: WorkflowPhaseID, runID: WorkflowRunID) {
+  const phase = await getPhase(phaseID)
+  if (phase.runID === runID) return
+  throw new HTTPException(409, {
+    message: `Workflow phase ${phaseID} does not belong to workflow run ${runID}.`,
+  })
+}
+
+async function assertChildBelongsToRun(childID: WorkflowChildID, runID: WorkflowRunID) {
+  const child = await getChild(childID)
+  if (child.runID === runID) return
+  throw new HTTPException(409, {
+    message: `Workflow child ${childID} does not belong to workflow run ${runID}.`,
+  })
+}
+
+function touchRun(db: Database.TxOrDb, runID: WorkflowRunID, now: number) {
+  db.update(WorkflowRunTable).set({ time_updated: now }).where(eq(WorkflowRunTable.id, runID)).run()
+}
+
+function addUsage(current: WorkflowBudgetUsage, delta: WorkflowBudgetUsage): WorkflowBudgetUsage {
+  return {
+    totalTokens: current.totalTokens + delta.totalTokens,
+    inputTokens: current.inputTokens + delta.inputTokens,
+    outputTokens: current.outputTokens + delta.outputTokens,
+    toolCalls: current.toolCalls + delta.toolCalls,
+    childAgents: current.childAgents + delta.childAgents,
+    retries: current.retries + delta.retries,
+    estimatedCostUsd: current.estimatedCostUsd + delta.estimatedCostUsd,
+  }
+}
+
+function unique<T>(items: T[]): T[] {
+  return [...new Set(items)]
+}
+
+function isTerminalRunStatus(status: WorkflowRun.Status) {
+  return status === "completed" || status === "failed" || status === "cancelled"
+}
+
+function isTerminalPhaseStatus(status: WorkflowRun.PhaseStatus) {
+  return status === "completed" || status === "failed" || status === "cancelled"
+}
+
+function isTerminalChildStatus(status: WorkflowRun.ChildStatus) {
+  return status === "completed" || status === "failed" || status === "cancelled"
+}
+
+function publishCreated(run: WorkflowRun.Info) {
+  Bus.publishDetached(WorkflowRun.Event.Created, { run })
+}
+
+function publishUpdated(run: WorkflowRun.Info) {
+  Bus.publishDetached(WorkflowRun.Event.Updated, { run })
+}
+
+function publishPhaseUpdated(phase: WorkflowPhaseRecord) {
+  Bus.publishDetached(WorkflowRun.Event.PhaseUpdated, { phase })
+}
+
+function publishChildCreated(child: WorkflowChildRecord) {
+  Bus.publishDetached(WorkflowRun.Event.ChildCreated, { child })
+}
+
+function publishChildUpdated(child: WorkflowChildRecord) {
+  Bus.publishDetached(WorkflowRun.Event.ChildUpdated, { child })
+}
+
+function publishArtifactWritten(artifact: WorkflowArtifactRecord) {
+  Bus.publishDetached(WorkflowRun.Event.ArtifactWritten, { artifact })
+}
+
+function publishBudgetAppended(entry: WorkflowBudgetLedgerEntry) {
+  Bus.publishDetached(WorkflowRun.Event.BudgetAppended, { entry })
+}

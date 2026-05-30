@@ -12,3 +12,10 @@ export {
 } from "../session/session.sql"
 export { SessionShareTable } from "../share/share.sql"
 export { PromptHistoryTable } from "../prompt-history/prompt-history.sql"
+export {
+  WorkflowRunTable,
+  WorkflowPhaseTable,
+  WorkflowChildTable,
+  WorkflowArtifactTable,
+  WorkflowBudgetLedgerTable,
+} from "../workflow/workflow.sql"
