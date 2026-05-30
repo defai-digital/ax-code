@@ -10,6 +10,8 @@ import {
   workflowDashboardItems,
   workflowRunControlItems,
   workflowRunDetailItems,
+  workflowTemplateSaveItems,
+  type WorkflowTemplateSaveScope,
   type WorkflowRunArtifact,
   type WorkflowRunControlAction,
   type WorkflowDashboardRun,
@@ -150,10 +152,17 @@ function DialogWorkflowDetail(props: { runID: string }) {
         void executeWorkflowRunControl(item.action)
       },
     }))
+    const templateActions = workflowTemplateSaveItems(current).map((item) => ({
+      ...item,
+      onSelect: () => {
+        void executeWorkflowTemplateSave(item.scope)
+      },
+    }))
 
     return [
       ...actions,
       ...controls,
+      ...templateActions,
       ...workflowRunDetailItems(current).map((item) => {
         const artifactID = workflowArtifactIDFromDetailValue(item.value)
         if (!artifactID) return item
@@ -191,6 +200,29 @@ function DialogWorkflowDetail(props: { runID: string }) {
     } catch (error) {
       toast.show({
         message: error instanceof Error ? error.message : `Failed to ${action} workflow run`,
+        variant: "error",
+      })
+    }
+  }
+
+  async function executeWorkflowTemplateSave(scope: WorkflowTemplateSaveScope) {
+    try {
+      const result = await sdk.client.workflowRun.saveTemplate({ runID: props.runID, scope })
+      if (result.error) {
+        toast.show({
+          message: workflowErrorMessage(result.error, `Failed to save ${scope} workflow template`),
+          variant: "error",
+        })
+        return
+      }
+
+      toast.show({
+        message: `Saved ${scope} workflow template candidate${result.data?.id ? ` ${result.data.id}` : ""}`,
+        variant: "success",
+      })
+    } catch (error) {
+      toast.show({
+        message: error instanceof Error ? error.message : `Failed to save ${scope} workflow template`,
         variant: "error",
       })
     }

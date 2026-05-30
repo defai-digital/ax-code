@@ -8,6 +8,7 @@ import {
   workflowModelPolicyItems,
   workflowRunControlItems,
   workflowRunDetailItems,
+  workflowTemplateSaveItems,
   type WorkflowDashboardRun,
   type WorkflowRunDetail,
 } from "../../../src/cli/cmd/tui/routes/session/workflow-dashboard"
@@ -148,6 +149,15 @@ describe("tui workflow dashboard view model", () => {
       "retry",
     ])
     expect(workflowRunControlItems(workflowRunDetail({ status: "completed" }))).toEqual([])
+  })
+
+  test("exposes explicit project and user template save candidates", () => {
+    const items = workflowTemplateSaveItems(workflowRunDetail())
+
+    expect(items.map((item) => item.scope)).toEqual(["project", "user"])
+    expect(items[0]?.title).toBe("Save as project template candidate")
+    expect(items[0]?.description).toContain("builtin:verified-bug-sweep")
+    expect(items[1]?.footer).toContain("reviewing the captured spec snapshot")
   })
 
   test("renders artifact drill-down rows with payload and evidence references", () => {

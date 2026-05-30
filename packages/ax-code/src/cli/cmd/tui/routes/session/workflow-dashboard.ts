@@ -4,6 +4,7 @@ export type WorkflowDashboardRun = WorkflowRunDashboardResponse[number]
 export type WorkflowRunDetail = WorkflowRunGetResponse
 export type WorkflowRunArtifact = WorkflowArtifactEventRecord
 export type WorkflowRunControlAction = "pause" | "resume" | "cancel" | "retry"
+export type WorkflowTemplateSaveScope = "project" | "user"
 
 export type WorkflowDashboardItem = {
   title: string
@@ -16,6 +17,10 @@ export type WorkflowDashboardItem = {
 
 export type WorkflowRunControlItem = WorkflowDashboardItem & {
   action: WorkflowRunControlAction
+}
+
+export type WorkflowTemplateSaveItem = WorkflowDashboardItem & {
+  scope: WorkflowTemplateSaveScope
 }
 
 const MAX_TITLE = 46
@@ -279,6 +284,28 @@ export function workflowRunControlItems(detail: WorkflowRunDetail): WorkflowRunC
   }
 
   return items
+}
+
+export function workflowTemplateSaveItems(detail: WorkflowRunDetail): WorkflowTemplateSaveItem[] {
+  const templateSource = detail.sourceTemplateID ?? detail.spec.id
+  return [
+    {
+      title: "Save as project template candidate",
+      value: "workflow.detail.template.project",
+      description: `Persist this run spec for review and reuse in this repository. Source: ${templateSource}.`,
+      footer: "Saved candidates stay explicit until promoted to a trusted template.",
+      category: "Templates",
+      scope: "project",
+    },
+    {
+      title: "Save as user template candidate",
+      value: "workflow.detail.template.user",
+      description: `Persist this run spec for review and reuse across local projects. Source: ${templateSource}.`,
+      footer: "Use this only after reviewing the captured spec snapshot.",
+      category: "Templates",
+      scope: "user",
+    },
+  ]
 }
 
 export function workflowArtifactDetailItems(artifact: WorkflowRunArtifact): WorkflowDashboardItem[] {
