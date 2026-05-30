@@ -19,8 +19,8 @@ const e2e = new Set([
   // The other LSP test files (incremental, launch, orchestrator, server-helpers)
   // stay in deterministic; they don't spawn subprocesses.
   "test/lsp/client.test.ts",
-  // Needs process isolation: oauth-auto-connect.test.ts uses mock.module on
-  // the same specifier and Bun's mock.module leaks across files in one process.
+  // Needs process isolation: mock.module leaks across files in one Bun process.
+  "test/code-intelligence/query-native-dispatch.test.ts",
   "test/mcp/oauth-callback.test.ts",
   "test/mcp/oauth-browser.test.ts",
   "test/script/update-models.test.ts",
