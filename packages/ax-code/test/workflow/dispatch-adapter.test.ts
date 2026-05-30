@@ -20,6 +20,7 @@ describe("WorkflowDispatchAdapter", () => {
         fn: async () => {
           const executor: DispatchExecutor = async (spec) => ({
             output: `dispatch:${spec.agent}:${spec.prompt}`,
+            filesModified: ["src/alpha.ts", "src/beta.ts"],
             tokensUsed: 17,
           })
           const run = await WorkflowRun.create({ spec: parseWorkflowSpecV1(WorkflowFixtureSpecs.issueTriage) })
@@ -41,8 +42,14 @@ describe("WorkflowDispatchAdapter", () => {
 
           const childLogs = result.artifacts.filter((artifact) => artifact.kind === "log" && artifact.childID)
           expect(childLogs).toHaveLength(9)
-          expect(childLogs[0]?.payload).toMatchObject({ status: "completed", tokensUsed: 17 })
+          expect(childLogs[0]?.payload).toMatchObject({
+            status: "completed",
+            filesModified: ["src/alpha.ts", "src/beta.ts"],
+            tokensUsed: 17,
+          })
+          expect(childLogs[0]?.summary).toContain("files=2 (src/alpha.ts, src/beta.ts)")
           expect(result.children.every((child) => child.artifactIDs.length === 1)).toBe(true)
+          expect(result.children[0]?.outputSummary).toContain("files=2 (src/alpha.ts, src/beta.ts)")
           expect(result.children.every((child) => child.evidenceRefs[0]?.kind === "artifact")).toBe(true)
           expect(
             result.children.every((child) => child.evidenceRefs[0]?.id === child.artifactIDs[0]),

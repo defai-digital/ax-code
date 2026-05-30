@@ -110,7 +110,7 @@ export namespace WorkflowDispatchAdapter {
       await WorkflowRun.setChildStatus({
         id: child.id,
         status: childStatus(result),
-        outputSummary: summarizeOutput(result.output),
+        outputSummary: summarizeDispatchChildOutput(result),
         artifactIDs: [artifact.id],
         evidenceRefs: [{ kind: "artifact", id: artifact.id }],
         error: result.error,
@@ -209,13 +209,39 @@ function exposesPhaseSummary(spec: WorkflowSpecV1, phase: WorkflowPhase) {
 
 function summarizeChildResult(result: DispatchResult) {
   const base = `${result.agent}: ${result.status}`
-  if (result.status === "completed") return `${base}; tokens=${result.tokensUsed}; durationMs=${result.durationMs}`
+  const files = summarizeFilesModified(result.filesModified)
+  if (result.status === "completed") {
+    return [base, `tokens=${result.tokensUsed}`, `durationMs=${result.durationMs}`, files].filter(Boolean).join("; ")
+  }
   return `${base}; error=${result.error ?? "unknown"}`
 }
 
-function summarizeOutput(output: string | undefined) {
+const maxChildSummaryLength = 240
+
+function summarizeDispatchChildOutput(result: DispatchResult) {
+  const files = summarizeFilesModified(result.filesModified)
+  if (!files) return summarizeOutput(result.output)
+  if (!result.output) return files
+
+  const outputBudget = Math.max(40, maxChildSummaryLength - files.length - 2)
+  return `${summarizeOutput(result.output, outputBudget)}; ${files}`
+}
+
+function summarizeFilesModified(files: readonly string[] | undefined) {
+  if (!files || files.length === 0) return undefined
+  const shown = files.slice(0, 3).map((file) => summarizePath(file)).join(", ")
+  const suffix = files.length > 3 ? `, +${files.length - 3} more` : ""
+  return `files=${files.length} (${shown}${suffix})`
+}
+
+function summarizePath(path: string) {
+  if (path.length <= 80) return path
+  return `...${path.slice(-77)}`
+}
+
+function summarizeOutput(output: string | undefined, maxLength = maxChildSummaryLength) {
   if (!output) return undefined
-  return output.length > 240 ? `${output.slice(0, 237)}...` : output
+  return output.length > maxLength ? `${output.slice(0, maxLength - 3)}...` : output
 }
 
 function summarizePhase(phase: WorkflowPhase, results: DispatchResult[]) {
