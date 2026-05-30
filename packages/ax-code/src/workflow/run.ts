@@ -336,9 +336,12 @@ async function appendArtifact(input: WorkflowRunState.AppendArtifactInput): Prom
     if (parsed.childID) {
       const child = db.select().from(WorkflowChildTable).where(eq(WorkflowChildTable.id, parsed.childID)).get()
       if (child) {
+        const outputSummary = child.output_summary ?? (parsed.kind === "summary" ? parsed.summary : undefined)
         db.update(WorkflowChildTable)
           .set({
             artifact_ids: unique([...child.artifact_ids, id]),
+            evidence_refs: uniqueEvidenceRefs([...child.evidence_refs, { kind: "artifact" as const, id }]),
+            ...(outputSummary !== undefined ? { output_summary: outputSummary } : {}),
             time_updated: now,
           })
           .where(eq(WorkflowChildTable.id, child.id))
@@ -1017,6 +1020,16 @@ function touchRun(db: Database.TxOrDb, runID: WorkflowRunID, now: number) {
 
 function unique<T>(items: T[]): T[] {
   return [...new Set(items)]
+}
+
+function uniqueEvidenceRefs(items: WorkflowChildRecord["evidenceRefs"]): WorkflowChildRecord["evidenceRefs"] {
+  const seen = new Set<string>()
+  return items.filter((item) => {
+    const key = `${item.kind}:${item.id}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
 }
 
 function countByStatus(values: string[]): Record<string, number> {

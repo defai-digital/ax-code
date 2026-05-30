@@ -632,6 +632,11 @@ describe("TaskQueue", () => {
           expect(failed.status).toBe("failed")
           expect(failed.children[0]?.status).toBe("failed")
           expect(failed.children[0]?.error).toContain("child tool calls 2/1")
+          expect(failed.children[0]?.outputSummary).toBe("Two tools completed.")
+          expect(failed.children[0]?.artifactIDs).toHaveLength(2)
+          expect(failed.children[0]?.evidenceRefs).toEqual(
+            failed.children[0]?.artifactIDs.map((id) => ({ kind: "artifact", id })),
+          )
           expect(failed.budgetUsage).toMatchObject({
             totalTokens: 15,
             inputTokens: 10,
@@ -743,6 +748,11 @@ describe("TaskQueue", () => {
 
           const completed = await WorkflowRun.getDetail(run.id)
           expect(completed.children[0]?.status).toBe("completed")
+          expect(completed.children[0]?.outputSummary).toBe("Text only result.")
+          expect(completed.children[0]?.artifactIDs).toHaveLength(1)
+          expect(completed.children[0]?.evidenceRefs).toEqual([
+            { kind: "artifact", id: completed.children[0]?.artifactIDs[0] },
+          ])
           expect(completed.budgetUsage.totalTokens).toBe(0)
           expect(completed.artifacts[0]).toMatchObject({
             childID: child.id,
