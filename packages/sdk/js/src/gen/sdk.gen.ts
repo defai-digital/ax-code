@@ -2088,6 +2088,10 @@ export class WorkflowRun extends HeyApiClient {
               enabled?: boolean
             }
           | {
+              kind: "command"
+              command?: string
+            }
+          | {
               kind: "api"
               route?: string
               enabled?: boolean
@@ -2371,6 +2375,7 @@ export class WorkflowRun extends HeyApiClient {
     parameters: {
       runID: string
       directory?: string
+      artifactID?: string
       phaseID?: string
       childID?: string
       kind?: "summary" | "finding" | "patch" | "verification" | "metric" | "log"
@@ -2385,6 +2390,7 @@ export class WorkflowRun extends HeyApiClient {
           args: [
             { in: "path", key: "runID" },
             { in: "query", key: "directory" },
+            { in: "query", key: "artifactID" },
             { in: "query", key: "phaseID" },
             { in: "query", key: "childID" },
             { in: "query", key: "kind" },
@@ -2425,6 +2431,9 @@ export class WorkflowRun extends HeyApiClient {
           childAgents?: number
           retries?: number
           estimatedCostUsd?: number
+          costPerConfirmedFindingUsd?: number | null
+          verifiedCompletionCount?: number
+          costPerVerifiedCompletionUsd?: number | null
           confirmedFindings?: number
           likelyFindings?: number
           rejectedFindings?: number
@@ -2767,6 +2776,10 @@ export class WorkflowTemplate extends HeyApiClient {
               schedule: string
               timezone?: string
               enabled?: boolean
+            }
+          | {
+              kind: "command"
+              command?: string
             }
           | {
               kind: "api"

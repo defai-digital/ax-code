@@ -1101,6 +1101,10 @@ export type WorkflowRunEventRecord = {
           enabled?: boolean
         }
       | {
+          kind: "command"
+          command?: string
+        }
+      | {
           kind: "api"
           route?: string
           enabled?: boolean
@@ -6001,6 +6005,10 @@ export type WorkflowRunCreateData = {
             enabled?: boolean
           }
         | {
+            kind: "command"
+            command?: string
+          }
+        | {
             kind: "api"
             route?: string
             enabled?: boolean
@@ -6328,6 +6336,9 @@ export type WorkflowRunEvalCasesResponses = {
         childAgents?: number
         retries?: number
         estimatedCostUsd?: number
+        costPerConfirmedFindingUsd?: number | null
+        verifiedCompletionCount?: number
+        costPerVerifiedCompletionUsd?: number | null
         confirmedFindings?: number
         likelyFindings?: number
         rejectedFindings?: number
@@ -6406,6 +6417,10 @@ export type WorkflowRunGetResponses = {
             schedule: string
             timezone?: string
             enabled?: boolean
+          }
+        | {
+            kind: "command"
+            command?: string
           }
         | {
             kind: "api"
@@ -6578,6 +6593,7 @@ export type WorkflowRunArtifactsData = {
   }
   query?: {
     directory?: string
+    artifactID?: string
     phaseID?: string
     childID?: string
     kind?: "summary" | "finding" | "patch" | "verification" | "metric" | "log"
@@ -6622,6 +6638,9 @@ export type WorkflowRunEvalSummaryData = {
         childAgents?: number
         retries?: number
         estimatedCostUsd?: number
+        costPerConfirmedFindingUsd?: number | null
+        verifiedCompletionCount?: number
+        costPerVerifiedCompletionUsd?: number | null
         confirmedFindings?: number
         likelyFindings?: number
         rejectedFindings?: number
@@ -6870,6 +6889,10 @@ export type WorkflowRunSaveTemplateResponses = {
             enabled?: boolean
           }
         | {
+            kind: "command"
+            command?: string
+          }
+        | {
             kind: "api"
             route?: string
             enabled?: boolean
@@ -7069,6 +7092,10 @@ export type WorkflowRunStartResponses = {
             schedule: string
             timezone?: string
             enabled?: boolean
+          }
+        | {
+            kind: "command"
+            command?: string
           }
         | {
             kind: "api"
@@ -7289,6 +7316,10 @@ export type WorkflowRunPauseResponses = {
             enabled?: boolean
           }
         | {
+            kind: "command"
+            command?: string
+          }
+        | {
             kind: "api"
             route?: string
             enabled?: boolean
@@ -7507,6 +7538,10 @@ export type WorkflowRunResumeResponses = {
             enabled?: boolean
           }
         | {
+            kind: "command"
+            command?: string
+          }
+        | {
             kind: "api"
             route?: string
             enabled?: boolean
@@ -7723,6 +7758,10 @@ export type WorkflowRunCancelResponses = {
             schedule: string
             timezone?: string
             enabled?: boolean
+          }
+        | {
+            kind: "command"
+            command?: string
           }
         | {
             kind: "api"
@@ -7944,6 +7983,10 @@ export type WorkflowRunRetryResponses = {
             enabled?: boolean
           }
         | {
+            kind: "command"
+            command?: string
+          }
+        | {
             kind: "api"
             route?: string
             enabled?: boolean
@@ -8159,6 +8202,10 @@ export type WorkflowTemplateListResponses = {
             enabled?: boolean
           }
         | {
+            kind: "command"
+            command?: string
+          }
+        | {
             kind: "api"
             route?: string
             enabled?: boolean
@@ -8320,6 +8367,10 @@ export type WorkflowTemplateSaveData = {
             schedule: string
             timezone?: string
             enabled?: boolean
+          }
+        | {
+            kind: "command"
+            command?: string
           }
         | {
             kind: "api"
@@ -8502,6 +8553,10 @@ export type WorkflowTemplateSaveResponses = {
             schedule: string
             timezone?: string
             enabled?: boolean
+          }
+        | {
+            kind: "command"
+            command?: string
           }
         | {
             kind: "api"
@@ -8699,6 +8754,10 @@ export type WorkflowTemplateGetResponses = {
             enabled?: boolean
           }
         | {
+            kind: "command"
+            command?: string
+          }
+        | {
             kind: "api"
             route?: string
             enabled?: boolean
@@ -8892,6 +8951,10 @@ export type WorkflowTemplatePromoteResponses = {
             schedule: string
             timezone?: string
             enabled?: boolean
+          }
+        | {
+            kind: "command"
+            command?: string
           }
         | {
             kind: "api"
@@ -9212,6 +9275,10 @@ export type WorkflowRoutineRunResponses = {
               enabled?: boolean
             }
           | {
+              kind: "command"
+              command?: string
+            }
+          | {
               kind: "api"
               route?: string
               enabled?: boolean
@@ -9374,6 +9441,10 @@ export type WorkflowRoutineRunResponses = {
               schedule: string
               timezone?: string
               enabled?: boolean
+            }
+          | {
+              kind: "command"
+              command?: string
             }
           | {
               kind: "api"
