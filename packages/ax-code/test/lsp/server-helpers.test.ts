@@ -403,7 +403,7 @@ describe("lsp server helpers", () => {
       inflateGzip: true,
       fetcher: async () => ({
         ok: true,
-        arrayBuffer: async () => archive.buffer.slice(archive.byteOffset, archive.byteOffset + archive.byteLength),
+        arrayBuffer: async () => archive.buffer.slice(archive.byteOffset, archive.byteOffset + archive.byteLength) as ArrayBuffer,
       }),
       write: async (file) => void calls.push(`write:${file}`),
       extractZip: async (from, to) => void calls.push(`zip:${from}:${to}`),
@@ -665,7 +665,7 @@ describe("lsp server helpers", () => {
       sha256: "f".repeat(64),
       fetcher: async () => ({
         ok: true,
-        arrayBuffer: async () => archive.buffer.slice(archive.byteOffset, archive.byteOffset + archive.byteLength),
+        arrayBuffer: async () => archive.buffer.slice(archive.byteOffset, archive.byteOffset + archive.byteLength) as ArrayBuffer,
       }),
       write: async (file) => void writes.push(file),
       exists: async () => false,
