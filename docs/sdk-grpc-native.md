@@ -34,6 +34,7 @@ The TypeScript facade lives at `@ax-code/sdk/grpc` and covers:
 - health and lifecycle readiness
 - session creation
 - prompt, command, shell, abort, permission reply, and question reply
+- GUI bootstrap snapshots for providers, sessions, permissions, questions, path, VCS, LSP, MCP, formatter, and command state
 - session evidence for review/debug UI
 - task queue operations
 - scheduled task operations
@@ -59,6 +60,10 @@ try {
   })
 
   const session = await client.createSession({ title: "GUI session" })
+  const bootstrap = await client.bootstrap.load({
+    include: { sessions: true, providers: true, providerList: true, path: true, vcs: true },
+  })
+
   await client.sendPrompt((session as { id: string }).id, {
     parts: [{ type: "text", text: "Review this workspace" }],
   })
@@ -71,6 +76,8 @@ try {
   await backend.close()
 }
 ```
+
+`bootstrap.load()` is intentionally a GUI-oriented snapshot rather than a one-to-one copy of every HTTP route. Use `include` to request only the state needed by the current view. Failed subrequests are reported in `errors` while successful fields are still returned, so a missing optional subsystem does not block the desktop shell from opening.
 
 When a real gRPC transport is available, provide it to `createAxCodeGrpcClient({ transport })`. The high-level client remains the same.
 

@@ -21,6 +21,7 @@ export const AX_CODE_GRPC_METHOD = {
   Health: `/${AX_CODE_GRPC_SERVICE}/Health`,
   CreateSession: `/${AX_CODE_GRPC_SERVICE}/CreateSession`,
   SendRuntimeCommand: `/${AX_CODE_GRPC_SERVICE}/SendRuntimeCommand`,
+  LoadBootstrap: `/${AX_CODE_GRPC_SERVICE}/LoadBootstrap`,
   LoadSessionEvidence: `/${AX_CODE_GRPC_SERVICE}/LoadSessionEvidence`,
   ListTaskQueue: `/${AX_CODE_GRPC_SERVICE}/ListTaskQueue`,
   EnqueueTaskQueue: `/${AX_CODE_GRPC_SERVICE}/EnqueueTaskQueue`,
@@ -91,6 +92,36 @@ export type AxCodeGrpcCreateSessionRequest = {
 export type AxCodeGrpcLoadSessionEvidenceRequest = {
   sessionID: string
   parameters?: HeadlessSessionEvidenceInput
+}
+
+export type AxCodeGrpcBootstrapField =
+  | "sessions"
+  | "providers"
+  | "providerList"
+  | "agents"
+  | "config"
+  | "commands"
+  | "permissions"
+  | "questions"
+  | "sessionStatus"
+  | "providerAuth"
+  | "path"
+  | "lsp"
+  | "mcp"
+  | "resources"
+  | "formatter"
+  | "vcs"
+
+export type AxCodeGrpcBootstrapRequest = {
+  include?: Partial<Record<AxCodeGrpcBootstrapField, boolean>>
+  sessionListStart?: number
+}
+
+export type AxCodeGrpcBootstrapResponse = Partial<Record<AxCodeGrpcBootstrapField, unknown>> & {
+  errors: Array<{
+    source: AxCodeGrpcBootstrapField
+    message: string
+  }>
 }
 
 export type AxCodeGrpcTaskQueueCommandRequest = {
@@ -199,6 +230,15 @@ export function createAxCodeGrpcClient(input: AxCodeGrpcClientOptions) {
     },
     replyQuestion(body: HeadlessQuestionReplyBody, options?: AxCodeGrpcCallOptions) {
       return send({ type: "question.reply", body }, options)
+    },
+    bootstrap: {
+      load(request: AxCodeGrpcBootstrapRequest = {}, options?: AxCodeGrpcCallOptions) {
+        return value<AxCodeGrpcBootstrapRequest, AxCodeGrpcBootstrapResponse>(
+          AX_CODE_GRPC_METHOD.LoadBootstrap,
+          request,
+          options,
+        )
+      },
     },
     sessionEvidence: {
       load(sessionID: string, parameters?: HeadlessSessionEvidenceInput, options?: AxCodeGrpcCallOptions) {
@@ -405,6 +445,8 @@ async function handleHttpBridgeUnary(
       return wrap(await client.createSession(body.session))
     case AX_CODE_GRPC_METHOD.SendRuntimeCommand:
       return client.send(body.command)
+    case AX_CODE_GRPC_METHOD.LoadBootstrap:
+      return wrap(await loadBootstrap(client, body))
     case AX_CODE_GRPC_METHOD.LoadSessionEvidence:
       return wrap(await client.sessionEvidence.load(body.sessionID, body.parameters))
     case AX_CODE_GRPC_METHOD.ListTaskQueue:
@@ -453,7 +495,60 @@ async function handleHttpBridgeUnary(
       return wrap(await client.workflowRun.saveTemplate(body.runID, body.body))
     case AX_CODE_GRPC_METHOD.WorkflowRunCommand:
       return wrap(await callWorkflowRunCommand(client, body.runID, body.command, body.body))
+    case AX_CODE_GRPC_METHOD.ListWorkflowRoutines:
+      return wrap(await client.workflowRoutine.list())
+    case AX_CODE_GRPC_METHOD.RunWorkflowRoutine:
+      return wrap(await client.workflowRoutine.run(body.body))
   }
+}
+
+async function loadBootstrap(
+  client: HeadlessHttpClient,
+  request: AxCodeGrpcBootstrapRequest = {},
+): Promise<AxCodeGrpcBootstrapResponse> {
+  const out: AxCodeGrpcBootstrapResponse = { errors: [] }
+  const api = client.client as any
+  const calls: Array<Promise<void>> = []
+  const add = (field: AxCodeGrpcBootstrapField, run: () => Promise<unknown>) => {
+    if (request.include && request.include[field] !== true) return
+    calls.push(
+      Promise.resolve()
+        .then(run)
+        .then((value) => {
+          out[field] = unwrapHttpSdkResponse(value)
+        })
+        .catch((error) => {
+          out.errors.push({ source: field, message: errorMessage(error) })
+        }),
+    )
+  }
+
+  add("sessions", async () => {
+    const response = await api.session.list({ start: request.sessionListStart })
+    const sessions = unwrapHttpSdkResponse(response)
+    if (!Array.isArray(sessions)) return sessions
+    return [...sessions].sort((a: { id?: unknown }, b: { id?: unknown }) =>
+      String(a.id ?? "").localeCompare(String(b.id ?? "")),
+    )
+  })
+  add("providers", () => api.config.providers({}, { throwOnError: true }))
+  add("providerList", () => api.provider.list({}, { throwOnError: true }))
+  add("agents", () => api.app.agents({}, { throwOnError: true }))
+  add("config", () => api.config.get({}, { throwOnError: true }))
+  add("commands", () => api.command.list())
+  add("permissions", () => api.permission.list())
+  add("questions", () => api.question.list())
+  add("sessionStatus", () => api.session.status())
+  add("providerAuth", () => api.provider.auth())
+  add("path", () => api.path.get())
+  add("lsp", () => api.lsp.status())
+  add("mcp", () => api.mcp.status())
+  add("resources", () => api.experimental.resource.list())
+  add("formatter", () => api.formatter.status())
+  add("vcs", () => api.vcs.get())
+
+  await Promise.all(calls)
+  return out
 }
 
 function callTaskQueueCommand(
@@ -510,6 +605,15 @@ function callWorkflowRunCommand(
 
 function wrap<T>(value: T): AxCodeGrpcJsonResponse<T> {
   return { value }
+}
+
+function unwrapHttpSdkResponse(value: unknown): unknown {
+  if (value && typeof value === "object" && "data" in value) return (value as { data: unknown }).data
+  return value
+}
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error)
 }
 
 function mergeHeaders(headers: RequestInit["headers"] | undefined, metadata: AxCodeGrpcMetadata | undefined) {

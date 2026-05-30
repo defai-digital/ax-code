@@ -9,6 +9,7 @@ service AxCodeHeadless {
 
   rpc CreateSession(CreateSessionRequest) returns (JsonResponse);
   rpc SendRuntimeCommand(SendRuntimeCommandRequest) returns (RuntimeCommandResponse);
+  rpc LoadBootstrap(BootstrapRequest) returns (JsonResponse);
   rpc LoadSessionEvidence(LoadSessionEvidenceRequest) returns (JsonResponse);
 
   rpc ListTaskQueue(QueryRequest) returns (JsonResponse);
@@ -72,6 +73,11 @@ message RuntimeCommandResponse {
 message LoadSessionEvidenceRequest {
   string session_id = 1;
   google.protobuf.Struct parameters = 2;
+}
+
+message BootstrapRequest {
+  google.protobuf.Struct include = 1;
+  uint32 session_list_start = 2;
 }
 
 message JsonRequest {

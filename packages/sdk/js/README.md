@@ -215,6 +215,10 @@ try {
     directory: "/path/to/workspace",
   })
 
+  const bootstrap = await client.bootstrap.load({
+    include: { sessions: true, providers: true, providerList: true, path: true, vcs: true },
+  })
+
   const session = (await client.createSession({ title: "Desktop session" })) as { id: string }
   await client.sendPrompt(session.id, { parts: [{ type: "text", text: "Review this project" }] })
 } finally {
@@ -222,7 +226,7 @@ try {
 }
 ```
 
-`createAxCodeGrpcClientFromHttp()` is a compatibility bridge over the current headless HTTP/SSE backend. Native hosts can implement the same transport interface and pass it to `createAxCodeGrpcClient({ transport })`. The proto contract is published at [`../proto/ax_code/v1/headless.proto`](../proto/ax_code/v1/headless.proto).
+`bootstrap.load()` returns a partial GUI startup snapshot and an `errors` array for failed subrequests. `createAxCodeGrpcClientFromHttp()` is a compatibility bridge over the current headless HTTP/SSE backend. Native hosts can implement the same transport interface and pass it to `createAxCodeGrpcClient({ transport })`. The proto contract is published at [`../proto/ax_code/v1/headless.proto`](../proto/ax_code/v1/headless.proto).
 
 ## HTTP client (server-based)
 

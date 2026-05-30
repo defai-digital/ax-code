@@ -13,6 +13,7 @@ import {
 describe("gRPC SDK facade", () => {
   test("exposes a stable headless service and proto path", () => {
     expect(AX_CODE_GRPC_METHOD.SendRuntimeCommand).toBe("/axcode.v1.AxCodeHeadless/SendRuntimeCommand")
+    expect(AX_CODE_GRPC_METHOD.LoadBootstrap).toBe("/axcode.v1.AxCodeHeadless/LoadBootstrap")
     expect(AX_CODE_GRPC_METHOD.SubscribeEvents).toBe("/axcode.v1.AxCodeHeadless/SubscribeEvents")
     expect(AX_CODE_GRPC_PROTO_PATH).toBe("ax_code/v1/headless.proto")
   })
@@ -25,6 +26,7 @@ describe("gRPC SDK facade", () => {
         if (method === AX_CODE_GRPC_METHOD.Health) return { status: "SERVING", transport: "grpc" }
         if (method === AX_CODE_GRPC_METHOD.CreateSession) return { value: { id: "sess-1" } }
         if (method === AX_CODE_GRPC_METHOD.SendRuntimeCommand) return { accepted: true, status: 202 }
+        if (method === AX_CODE_GRPC_METHOD.LoadBootstrap) return { value: { path: { root: "/repo" }, errors: [] } }
         if (method === AX_CODE_GRPC_METHOD.TaskQueueCommand) return { value: { id: "task-1", status: "paused" } }
         throw new Error(`unexpected method ${method}`)
       },
@@ -41,11 +43,13 @@ describe("gRPC SDK facade", () => {
       accepted: true,
       status: 202,
     })
+    expect(await client.bootstrap.load({ include: { path: true } })).toEqual({ path: { root: "/repo" }, errors: [] })
     expect(await pause("task-1")).toEqual({ id: "task-1", status: "paused" })
     expect(calls.map((call) => call.method)).toEqual([
       AX_CODE_GRPC_METHOD.Health,
       AX_CODE_GRPC_METHOD.CreateSession,
       AX_CODE_GRPC_METHOD.SendRuntimeCommand,
+      AX_CODE_GRPC_METHOD.LoadBootstrap,
       AX_CODE_GRPC_METHOD.TaskQueueCommand,
     ])
   })
@@ -76,6 +80,32 @@ describe("gRPC SDK facade", () => {
     )
   })
 
+  test("HTTP bridge can load a GUI bootstrap snapshot from selected routes", async () => {
+    const paths: string[] = []
+    const client = createAxCodeGrpcClientFromHttp({
+      baseUrl: "http://127.0.0.1:4096",
+      fetch: (async (url: URL | RequestInfo, init?: RequestInit) => {
+        const request = url instanceof Request ? url : new Request(url, init)
+        const parsed = new URL(request.url)
+        paths.push(`${parsed.pathname}${parsed.search}`)
+        if (parsed.pathname === "/path") return Response.json({ root: "/repo", config: "/repo/ax-code.json" })
+        if (parsed.pathname === "/vcs") return Response.json({ branch: "main" })
+        if (parsed.pathname === "/command") return Response.json([{ name: "init" }])
+        return new Response("not found", { status: 404 })
+      }) as typeof fetch,
+    })
+
+    await expect(
+      client.bootstrap.load({ include: { path: true, vcs: true, commands: true } }),
+    ).resolves.toEqual({
+      path: { root: "/repo", config: "/repo/ax-code.json" },
+      vcs: { branch: "main" },
+      commands: [{ name: "init" }],
+      errors: [],
+    })
+    expect(paths.toSorted()).toEqual(["/command", "/path", "/vcs"])
+  })
+
   test("HTTP bridge exposes health without requiring an HTTP round trip", async () => {
     const bridge = createAxCodeGrpcHttpBridge({
       baseUrl: "http://127.0.0.1:4096",
@@ -95,6 +125,7 @@ describe("gRPC SDK facade", () => {
 
     expect(proto).toContain("service AxCodeHeadless")
     expect(proto).toContain("rpc SendRuntimeCommand")
+    expect(proto).toContain("rpc LoadBootstrap")
     expect(proto).toContain("rpc SubscribeEvents")
   })
 })
