@@ -23,7 +23,7 @@ Built by [DEFAI Digital](https://github.com/defai-digital).
 
 ---
 
-## Get Started in 60 Seconds
+## Get Started in 20 Seconds
 
 ### Install
 
@@ -44,19 +44,6 @@ Windows PowerShell:
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/defai-digital/ax-code/main/install.ps1 | iex"
 ```
-
-### Verify
-
-```bash
-ax-code doctor
-```
-
-Look for the `Runtime` line:
-
-| Output                          | Meaning                                                |
-| ------------------------------- | ------------------------------------------------------ |
-| `Runtime: Bun X.Y.Z (compiled)` | Homebrew, GitHub release installers, or local launcher |
-| `Runtime: Bun X.Y.Z (source)`   | Contributor source launcher or direct `bun`            |
 
 ### Run
 
