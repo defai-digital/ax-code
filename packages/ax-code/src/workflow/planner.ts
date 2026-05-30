@@ -59,6 +59,7 @@ export type WorkflowDryRunChild = {
   allowedTools: string[]
   writePolicy: WorkflowSpec["permissions"]["writePolicy"]
   networkPolicy: WorkflowSpec["permissions"]["networkPolicy"]
+  artifactRefs: string[]
   durable: boolean
 }
 
@@ -113,6 +114,7 @@ export function planWorkflowDryRun(input: WorkflowDryRunInput): WorkflowDryRunPl
         allowedTools: parsed.spec.permissions.allowedTools,
         writePolicy: parsed.spec.permissions.writePolicy,
         networkPolicy: parsed.spec.permissions.networkPolicy,
+        artifactRefs: phase.outputs,
         durable: parsed.durableChildren,
       })),
     }

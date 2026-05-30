@@ -1,4 +1,5 @@
 import z from "zod"
+import { Instance } from "../project/instance"
 import { Session } from "../session"
 import { addWorkflowBudgetUsage, evaluateWorkflowBudget } from "./budget"
 import { isWorkflowRuntimeEnabled, type WorkflowSpecV1 } from "./spec"
@@ -87,6 +88,7 @@ export namespace WorkflowScheduler {
             sessionID: session.id,
             kind: "subagent",
             title: `${initial.spec.name}: ${phase.name} #${childPlan.index + 1}`,
+            worktree: Instance.worktree,
             agent: childPlan.agent,
             model: childPlan.model,
             payload: {
@@ -98,6 +100,7 @@ export namespace WorkflowScheduler {
                 startOptions: parsed,
               },
               prompt: childPlan.prompt,
+              artifactRefs: childPlan.artifactRefs,
               budgetSlice: childPlan.budgetSlice,
               pacing: childPlan.pacing,
               allowedTools: childPlan.allowedTools,

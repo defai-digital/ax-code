@@ -24,6 +24,7 @@ describe("workflow dry-run planner", () => {
       },
       pacing: { maxRequestsPerMinute: 12, maxTokensPerMinute: 200_000 },
       writePolicy: "read-only",
+      artifactRefs: [],
     })
   })
 
@@ -39,6 +40,8 @@ describe("workflow dry-run planner", () => {
     expect(plan.summary.maxConcurrentAgents).toBe(8)
     expect(plan.summary.estimatedChildAgents).toBe(9)
     expect(plan.phases[0]?.estimatedChildren).toBe(8)
+    expect(plan.phases[0]?.children[0]?.artifactRefs).toEqual([])
+    expect(plan.phases[1]?.children[0]?.artifactRefs).toEqual(["issue-table"])
   })
 
   test("rejects write workflows unless explicitly allowed", () => {

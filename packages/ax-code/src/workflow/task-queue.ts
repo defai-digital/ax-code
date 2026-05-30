@@ -14,6 +14,7 @@ export namespace WorkflowTaskQueue {
       specPhaseID: z.string().min(1),
       startOptions: WorkflowScheduler.StartOptions.partial().optional(),
     }),
+    artifactRefs: z.array(z.string()).default([]),
     budgetSlice: WorkflowPhaseBudget.optional(),
     pacing: WorkflowPacing.optional(),
   })

@@ -348,11 +348,13 @@ describe("WorkflowScheduler", () => {
           expect(queue).toHaveLength(8)
           expect(queue.every((item) => item.kind === "subagent")).toBe(true)
           expect(queue.every((item) => item.sessionID?.startsWith("ses_"))).toBe(true)
+          expect(queue.every((item) => item.worktree === tmp.path)).toBe(true)
           expect(queue[0]?.payload.workflow).toMatchObject({
             runID: run.id,
             phaseID: result.phases[0]?.id,
             specPhaseID: "collect-issues",
           })
+          expect(queue[0]?.payload.artifactRefs).toEqual([])
           expect(queue[0]?.payload.pacing).toEqual({
             maxRequestsPerMinute: 12,
             maxTokensPerMinute: 200_000,
@@ -485,6 +487,7 @@ describe("WorkflowScheduler", () => {
             phaseID: detail.phases[1]?.id,
             specPhaseID: "synthesize-triage",
           })
+          expect(nextQueue[0]?.payload.artifactRefs).toEqual(["issue-table"])
 
           await TaskQueue.setStatus({ id: nextQueue[0]!.id, status: "completed" })
           detail = await WorkflowRun.getDetail(run.id)
