@@ -276,6 +276,7 @@ describe("headless SDK types", () => {
         if (parsed.pathname === "/workflow-runs") {
           return new Response(JSON.stringify({ id: "wfr_live", status: "queued" }), { status: 200 })
         }
+        if (parsed.pathname.endsWith("/artifacts")) return new Response(JSON.stringify([]), { status: 200 })
         return new Response(JSON.stringify({ id: "wfr_live", status: "running" }), { status: 200 })
       }) as typeof fetch,
     })
@@ -283,6 +284,7 @@ describe("headless SDK types", () => {
     await client.workflowTemplate.list()
     await client.workflowTemplate.get("builtin:noop-dry-run")
     await client.workflowRun.create({ templateID: "builtin:noop-dry-run" })
+    await client.workflowRun.artifacts("wfr_live", { kind: "summary", includePayload: "false" })
     await client.workflowRun.start("wfr_live", { enqueueChildren: false })
     await client.workflowRun.pause("wfr_live")
 
@@ -290,11 +292,12 @@ describe("headless SDK types", () => {
       ["GET", "/workflow-templates"],
       ["GET", "/workflow-templates/builtin%3Anoop-dry-run"],
       ["POST", "/workflow-runs"],
+      ["GET", "/workflow-runs/wfr_live/artifacts"],
       ["POST", "/workflow-runs/wfr_live/start"],
       ["POST", "/workflow-runs/wfr_live/pause"],
     ])
     expect(calls[2].body).toBe(JSON.stringify({ templateID: "builtin:noop-dry-run" }))
-    expect(calls[3].body).toBe(JSON.stringify({ enqueueChildren: false }))
+    expect(calls[4].body).toBe(JSON.stringify({ enqueueChildren: false }))
   })
 
   test("parseHeadlessRuntimeResponseBody handles empty and invalid bodies", () => {

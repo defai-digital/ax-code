@@ -256,6 +256,8 @@ import type {
   TuiShowToastResponses,
   TuiSubmitPromptResponses,
   VcsGetResponses,
+  WorkflowRunArtifactsErrors,
+  WorkflowRunArtifactsResponses,
   WorkflowRunCancelErrors,
   WorkflowRunCancelResponses,
   WorkflowRunCreateErrors,
@@ -2180,6 +2182,48 @@ export class WorkflowRun extends HeyApiClient {
     )
     return (options?.client ?? this.client).get<WorkflowRunGetResponses, WorkflowRunGetErrors, ThrowOnError>({
       url: "/workflow-runs/{runID}",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * List workflow run artifacts
+   *
+   * Return workflow artifacts for a run, with optional phase, child, kind, and compact filters.
+   */
+  public artifacts<ThrowOnError extends boolean = false>(
+    parameters: {
+      runID: string
+      directory?: string
+      phaseID?: string
+      childID?: string
+      kind?: "summary" | "finding" | "patch" | "verification" | "metric" | "log"
+      includePayload?: "true" | "false"
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "runID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "phaseID" },
+            { in: "query", key: "childID" },
+            { in: "query", key: "kind" },
+            { in: "query", key: "includePayload" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<
+      WorkflowRunArtifactsResponses,
+      WorkflowRunArtifactsErrors,
+      ThrowOnError
+    >({
+      url: "/workflow-runs/{runID}/artifacts",
       ...options,
       ...params,
     })

@@ -2,6 +2,8 @@ import { createAxCodeClient } from "../v2/client.js"
 import { AX_CODE_WORKSPACE_HEADER, LEGACY_OPENCODE_WORKSPACE_HEADER } from "../protocol.js"
 import type {
   Event,
+  WorkflowRunArtifactsData,
+  WorkflowRunArtifactsResponse,
   WorkflowRunCreateData,
   WorkflowRunCreateResponse,
   WorkflowRunGetResponse,
@@ -162,6 +164,7 @@ export type HeadlessScheduledTaskRunNowResult = {
 
 export type HeadlessWorkflowRunListInput = Omit<NonNullable<WorkflowRunListData["query"]>, "directory">
 export type HeadlessWorkflowRunCreateInput = NonNullable<WorkflowRunCreateData["body"]>
+export type HeadlessWorkflowArtifactListInput = Omit<NonNullable<WorkflowRunArtifactsData["query"]>, "directory">
 export type HeadlessWorkflowRunStartInput = {
   allowScaleBeyondDefaults?: boolean
   allowWriteWorkflows?: boolean
@@ -290,6 +293,18 @@ export function createHeadlessClient(input: HeadlessClientOptions) {
       },
       get(runID: string) {
         return workflowRunCommand<WorkflowRunGetResponse>(input, fetchFn, runID, "GET")
+      },
+      artifacts(runID: string, parameters?: HeadlessWorkflowArtifactListInput) {
+        return requestJson<WorkflowRunArtifactsResponse>({
+          baseUrl: input.baseUrl,
+          fetch: fetchFn,
+          headers: input.headers,
+          directory: input.directory,
+          experimental_workspaceID: input.experimental_workspaceID,
+          path: `/workflow-runs/${encodeURIComponent(runID)}/artifacts`,
+          method: "GET",
+          query: parameters,
+        })
       },
       start(runID: string, body: HeadlessWorkflowRunStartInput = {}) {
         return workflowRunCommand<WorkflowRunStartResponse>(input, fetchFn, runID, "POST", "start", body)

@@ -81,4 +81,47 @@ describe("workflow routes", () => {
       else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
     }
   })
+
+  test("lists workflow artifacts with compact drill-down filters", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
+    process.env.AX_CODE_WORKFLOW_RUNTIME = "1"
+    try {
+      const app = Server.Default()
+      const directoryQuery = `directory=${encodeURIComponent(tmp.path)}`
+
+      const createResponse = await app.request(`/workflow-runs?${directoryQuery}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ templateID: "builtin:noop-dry-run" }),
+      })
+      expect(createResponse.status).toBe(200)
+      const created = (await createResponse.json()) as { id: string }
+
+      const startResponse = await app.request(`/workflow-runs/${created.id}/start?${directoryQuery}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({}),
+      })
+      expect(startResponse.status).toBe(200)
+      const started = (await startResponse.json()) as {
+        phases: Array<{ id: string }>
+        artifacts: Array<{ phaseID?: string; payload?: unknown }>
+      }
+      const phaseID = started.phases[0]!.id
+      expect(started.artifacts).toHaveLength(1)
+
+      const artifactsResponse = await app.request(
+        `/workflow-runs/${created.id}/artifacts?${directoryQuery}&phaseID=${phaseID}&kind=summary&includePayload=false`,
+      )
+      expect(artifactsResponse.status).toBe(200)
+      const artifacts = (await artifactsResponse.json()) as Array<{ phaseID?: string; kind: string; payload?: unknown }>
+      expect(artifacts).toHaveLength(1)
+      expect(artifacts[0]).toMatchObject({ phaseID, kind: "summary" })
+      expect(artifacts[0]?.payload).toBeUndefined()
+    } finally {
+      if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME
+      else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
+    }
+  })
 })

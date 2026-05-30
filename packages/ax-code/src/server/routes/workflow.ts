@@ -39,6 +39,13 @@ const WorkflowRunCreateBody = z
     message: "Exactly one of templateID or spec is required",
   })
 
+const WorkflowArtifactListQuery = z.object({
+  phaseID: z.string().min(1).optional(),
+  childID: z.string().min(1).optional(),
+  kind: WorkflowRun.ArtifactKind.optional(),
+  includePayload: z.enum(["true", "false"]).optional(),
+})
+
 const WorkflowRunResponse = WorkflowRunEventRecord
 const WorkflowRunDetailResponse = WorkflowRunEventRecord.extend({
   phases: z.array(WorkflowPhaseEventRecord),
@@ -152,6 +159,37 @@ export const WorkflowRunRoutes = lazy(() =>
       }),
       validator("param", WORKFLOW_RUN_ID_PARAM),
       async (c) => c.json(await WorkflowRun.getDetail(runID(c))),
+    )
+    .get(
+      "/:runID/artifacts",
+      describeRoute({
+        summary: "List workflow run artifacts",
+        description: "Return workflow artifacts for a run, with optional phase, child, kind, and compact filters.",
+        operationId: "workflowRun.artifacts",
+        responses: {
+          200: {
+            description: "Workflow run artifacts.",
+            content: { "application/json": { schema: resolver(WorkflowArtifactEventRecord.array()) } },
+          },
+          ...errors(400, 404),
+        },
+      }),
+      validator("param", WORKFLOW_RUN_ID_PARAM),
+      validator("query", WorkflowArtifactListQuery),
+      async (c) => {
+        const query = c.req.valid("query")
+        const detail = await WorkflowRun.getDetail(runID(c))
+        const artifacts = detail.artifacts
+          .filter((artifact) => (query.phaseID ? artifact.phaseID === query.phaseID : true))
+          .filter((artifact) => (query.childID ? artifact.childID === query.childID : true))
+          .filter((artifact) => (query.kind ? artifact.kind === query.kind : true))
+          .map((artifact) => {
+            if (query.includePayload !== "false") return artifact
+            const { payload: _payload, ...compact } = artifact
+            return compact
+          })
+        return c.json(artifacts)
+      },
     )
     .post(
       "/:runID/start",

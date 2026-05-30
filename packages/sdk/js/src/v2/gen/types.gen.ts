@@ -5936,6 +5936,43 @@ export type WorkflowRunGetResponses = {
 
 export type WorkflowRunGetResponse = WorkflowRunGetResponses[keyof WorkflowRunGetResponses]
 
+export type WorkflowRunArtifactsData = {
+  body?: never
+  path: {
+    runID: string
+  }
+  query?: {
+    directory?: string
+    phaseID?: string
+    childID?: string
+    kind?: "summary" | "finding" | "patch" | "verification" | "metric" | "log"
+    includePayload?: "true" | "false"
+  }
+  url: "/workflow-runs/{runID}/artifacts"
+}
+
+export type WorkflowRunArtifactsErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type WorkflowRunArtifactsError = WorkflowRunArtifactsErrors[keyof WorkflowRunArtifactsErrors]
+
+export type WorkflowRunArtifactsResponses = {
+  /**
+   * Workflow run artifacts.
+   */
+  200: Array<WorkflowArtifactEventRecord>
+}
+
+export type WorkflowRunArtifactsResponse = WorkflowRunArtifactsResponses[keyof WorkflowRunArtifactsResponses]
+
 export type WorkflowRunStartData = {
   body?: {
     allowScaleBeyondDefaults?: boolean
