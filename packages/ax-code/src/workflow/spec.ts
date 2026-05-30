@@ -218,6 +218,12 @@ export const WorkflowArtifact = z.object({
   kind: z.enum(["summary", "finding", "patch", "verification", "metric", "log"]),
   retention: z.enum(["ephemeral", "session", "durable"]).default("session"),
   exposeToMainContext: z.boolean().default(false),
+  redaction: z
+    .object({
+      status: z.enum(["none", "redacted", "pending"]).default("pending"),
+      summary: NonEmptyString.max(500).optional(),
+    })
+    .optional(),
 })
 export type WorkflowArtifact = z.infer<typeof WorkflowArtifact>
 

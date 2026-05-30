@@ -2160,6 +2160,10 @@ export class WorkflowRun extends HeyApiClient {
           kind: "summary" | "finding" | "patch" | "verification" | "metric" | "log"
           retention?: "ephemeral" | "session" | "durable"
           exposeToMainContext?: boolean
+          redaction?: {
+            status?: "none" | "redacted" | "pending"
+            summary?: string
+          }
         }>
         verification?: {
           mode?: "required" | "optional" | "deferred" | "skipped"
@@ -2849,6 +2853,10 @@ export class WorkflowTemplate extends HeyApiClient {
           kind: "summary" | "finding" | "patch" | "verification" | "metric" | "log"
           retention?: "ephemeral" | "session" | "durable"
           exposeToMainContext?: boolean
+          redaction?: {
+            status?: "none" | "redacted" | "pending"
+            summary?: string
+          }
         }>
         verification?: {
           mode?: "required" | "optional" | "deferred" | "skipped"

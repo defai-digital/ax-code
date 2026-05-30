@@ -33,6 +33,13 @@ describe("workflow spec v1", () => {
       exposeToMainContext: true,
       requiredArtifactIds: ["bug-sweep-report"],
     })
+    expect(spec.artifacts.find((artifact) => artifact.id === "candidate-findings")?.redaction).toMatchObject({
+      status: "pending",
+      summary: expect.stringContaining("Raw candidate analysis"),
+    })
+    expect(spec.artifacts.find((artifact) => artifact.id === "bug-sweep-report")?.redaction).toMatchObject({
+      status: "none",
+    })
     expect(spec.phases.map((phase) => phase.id)).toEqual(["plan-sweep", "scan-files", "cross-check", "final-report"])
     expect(spec.phases.find((phase) => phase.id === "scan-files")?.maxParallel).toBe(
       WORKFLOW_DEFAULT_MAX_CONCURRENT_AGENTS,

@@ -120,7 +120,17 @@ describe("WorkflowDispatchAdapter", () => {
             id: "verified-dispatch",
             name: "Verified Dispatch",
             description: "Read-only direct dispatch that emits the required verification artifact.",
-            artifacts: [{ id: "verification-summary", kind: "verification", exposeToMainContext: true }],
+            artifacts: [
+              {
+                id: "verification-summary",
+                kind: "verification",
+                exposeToMainContext: true,
+                redaction: {
+                  status: "redacted",
+                  summary: "verification payload compacted for event and dashboard surfaces",
+                },
+              },
+            ],
             verification: { mode: "required", requiredArtifactIds: ["verification-summary"] },
             phases: [
               {
@@ -145,6 +155,10 @@ describe("WorkflowDispatchAdapter", () => {
             expect.objectContaining({
               kind: "verification",
               specArtifactID: "verification-summary",
+              redaction: {
+                status: "redacted",
+                summary: "verification payload compacted for event and dashboard surfaces",
+              },
             }),
           )
         },

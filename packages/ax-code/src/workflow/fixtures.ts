@@ -135,17 +135,29 @@ export const WorkflowFixtureSpecs = {
         id: "candidate-findings",
         kind: "finding",
         retention: "session",
+        redaction: {
+          status: "pending",
+          summary: "Raw candidate analysis is stored for drill-down; compact workflow views carry finding summaries.",
+        },
       },
       {
         id: "verification-summary",
         kind: "verification",
         retention: "session",
+        redaction: {
+          status: "pending",
+          summary: "Verification details are summarized in compact views and available through artifact drill-down.",
+        },
       },
       {
         id: "bug-sweep-report",
         kind: "summary",
         retention: "session",
         exposeToMainContext: true,
+        redaction: {
+          status: "none",
+          summary: "Final bug sweep report is intended for the parent session compact summary.",
+        },
       },
     ],
     verification: {

@@ -5,6 +5,7 @@ import {
   type DispatchSpec,
   type MergeStrategy,
 } from "../dispatch"
+import { workflowArtifactRedactionFromSpec } from "./artifact"
 import type { WorkflowDryRunPhase } from "./planner"
 import { WorkflowRun } from "./run"
 import type { WorkflowPhase, WorkflowSpecV1 } from "./spec"
@@ -126,6 +127,7 @@ export namespace WorkflowDispatchAdapter {
       retention: "session",
       exposeToMainContext: exposesPhaseSummary(input.spec, input.phaseSpec),
       summary: summarizePhase(input.phaseSpec, results),
+      redaction: workflowArtifactRedactionFromSpec(input.spec, input.phaseSpec.outputs[0]),
       payload: {
         mergeStrategy: input.phaseSpec.mergeStrategy,
         counts: resultCounts(results),

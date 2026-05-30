@@ -7039,6 +7039,25 @@
                             "exposeToMainContext": {
                               "default": false,
                               "type": "boolean"
+                            },
+                            "redaction": {
+                              "type": "object",
+                              "properties": {
+                                "status": {
+                                  "default": "pending",
+                                  "type": "string",
+                                  "enum": [
+                                    "none",
+                                    "redacted",
+                                    "pending"
+                                  ]
+                                },
+                                "summary": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 500
+                                }
+                              }
                             }
                           },
                           "required": [
@@ -9051,6 +9070,25 @@
                               "exposeToMainContext": {
                                 "default": false,
                                 "type": "boolean"
+                              },
+                              "redaction": {
+                                "type": "object",
+                                "properties": {
+                                  "status": {
+                                    "default": "pending",
+                                    "type": "string",
+                                    "enum": [
+                                      "none",
+                                      "redacted",
+                                      "pending"
+                                    ]
+                                  },
+                                  "summary": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 500
+                                  }
+                                }
                               }
                             },
                             "required": [
@@ -11235,6 +11273,25 @@
                               "exposeToMainContext": {
                                 "default": false,
                                 "type": "boolean"
+                              },
+                              "redaction": {
+                                "type": "object",
+                                "properties": {
+                                  "status": {
+                                    "default": "pending",
+                                    "type": "string",
+                                    "enum": [
+                                      "none",
+                                      "redacted",
+                                      "pending"
+                                    ]
+                                  },
+                                  "summary": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 500
+                                  }
+                                }
                               }
                             },
                             "required": [
@@ -12221,6 +12278,25 @@
                               "exposeToMainContext": {
                                 "default": false,
                                 "type": "boolean"
+                              },
+                              "redaction": {
+                                "type": "object",
+                                "properties": {
+                                  "status": {
+                                    "default": "pending",
+                                    "type": "string",
+                                    "enum": [
+                                      "none",
+                                      "redacted",
+                                      "pending"
+                                    ]
+                                  },
+                                  "summary": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 500
+                                  }
+                                }
                               }
                             },
                             "required": [
@@ -13314,6 +13390,25 @@
                               "exposeToMainContext": {
                                 "default": false,
                                 "type": "boolean"
+                              },
+                              "redaction": {
+                                "type": "object",
+                                "properties": {
+                                  "status": {
+                                    "default": "pending",
+                                    "type": "string",
+                                    "enum": [
+                                      "none",
+                                      "redacted",
+                                      "pending"
+                                    ]
+                                  },
+                                  "summary": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 500
+                                  }
+                                }
                               }
                             },
                             "required": [
@@ -14380,6 +14475,25 @@
                               "exposeToMainContext": {
                                 "default": false,
                                 "type": "boolean"
+                              },
+                              "redaction": {
+                                "type": "object",
+                                "properties": {
+                                  "status": {
+                                    "default": "pending",
+                                    "type": "string",
+                                    "enum": [
+                                      "none",
+                                      "redacted",
+                                      "pending"
+                                    ]
+                                  },
+                                  "summary": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 500
+                                  }
+                                }
                               }
                             },
                             "required": [
@@ -15446,6 +15560,25 @@
                               "exposeToMainContext": {
                                 "default": false,
                                 "type": "boolean"
+                              },
+                              "redaction": {
+                                "type": "object",
+                                "properties": {
+                                  "status": {
+                                    "default": "pending",
+                                    "type": "string",
+                                    "enum": [
+                                      "none",
+                                      "redacted",
+                                      "pending"
+                                    ]
+                                  },
+                                  "summary": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 500
+                                  }
+                                }
                               }
                             },
                             "required": [
@@ -16520,6 +16653,25 @@
                               "exposeToMainContext": {
                                 "default": false,
                                 "type": "boolean"
+                              },
+                              "redaction": {
+                                "type": "object",
+                                "properties": {
+                                  "status": {
+                                    "default": "pending",
+                                    "type": "string",
+                                    "enum": [
+                                      "none",
+                                      "redacted",
+                                      "pending"
+                                    ]
+                                  },
+                                  "summary": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 500
+                                  }
+                                }
                               }
                             },
                             "required": [
@@ -17580,6 +17732,25 @@
                                 "exposeToMainContext": {
                                   "default": false,
                                   "type": "boolean"
+                                },
+                                "redaction": {
+                                  "type": "object",
+                                  "properties": {
+                                    "status": {
+                                      "default": "pending",
+                                      "type": "string",
+                                      "enum": [
+                                        "none",
+                                        "redacted",
+                                        "pending"
+                                      ]
+                                    },
+                                    "summary": {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 500
+                                    }
+                                  }
                                 }
                               },
                               "required": [
@@ -18536,6 +18707,25 @@
                               "exposeToMainContext": {
                                 "default": false,
                                 "type": "boolean"
+                              },
+                              "redaction": {
+                                "type": "object",
+                                "properties": {
+                                  "status": {
+                                    "default": "pending",
+                                    "type": "string",
+                                    "enum": [
+                                      "none",
+                                      "redacted",
+                                      "pending"
+                                    ]
+                                  },
+                                  "summary": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 500
+                                  }
+                                }
                               }
                             },
                             "required": [
@@ -19438,6 +19628,25 @@
                             "exposeToMainContext": {
                               "default": false,
                               "type": "boolean"
+                            },
+                            "redaction": {
+                              "type": "object",
+                              "properties": {
+                                "status": {
+                                  "default": "pending",
+                                  "type": "string",
+                                  "enum": [
+                                    "none",
+                                    "redacted",
+                                    "pending"
+                                  ]
+                                },
+                                "summary": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 500
+                                }
+                              }
                             }
                           },
                           "required": [
@@ -20360,6 +20569,25 @@
                               "exposeToMainContext": {
                                 "default": false,
                                 "type": "boolean"
+                              },
+                              "redaction": {
+                                "type": "object",
+                                "properties": {
+                                  "status": {
+                                    "default": "pending",
+                                    "type": "string",
+                                    "enum": [
+                                      "none",
+                                      "redacted",
+                                      "pending"
+                                    ]
+                                  },
+                                  "summary": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 500
+                                  }
+                                }
                               }
                             },
                             "required": [
@@ -21328,6 +21556,25 @@
                               "exposeToMainContext": {
                                 "default": false,
                                 "type": "boolean"
+                              },
+                              "redaction": {
+                                "type": "object",
+                                "properties": {
+                                  "status": {
+                                    "default": "pending",
+                                    "type": "string",
+                                    "enum": [
+                                      "none",
+                                      "redacted",
+                                      "pending"
+                                    ]
+                                  },
+                                  "summary": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 500
+                                  }
+                                }
                               }
                             },
                             "required": [
@@ -22756,6 +23003,25 @@
                                   "exposeToMainContext": {
                                     "default": false,
                                     "type": "boolean"
+                                  },
+                                  "redaction": {
+                                    "type": "object",
+                                    "properties": {
+                                      "status": {
+                                        "default": "pending",
+                                        "type": "string",
+                                        "enum": [
+                                          "none",
+                                          "redacted",
+                                          "pending"
+                                        ]
+                                      },
+                                      "summary": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 500
+                                      }
+                                    }
                                   }
                                 },
                                 "required": [
@@ -23661,6 +23927,25 @@
                                   "exposeToMainContext": {
                                     "default": false,
                                     "type": "boolean"
+                                  },
+                                  "redaction": {
+                                    "type": "object",
+                                    "properties": {
+                                      "status": {
+                                        "default": "pending",
+                                        "type": "string",
+                                        "enum": [
+                                          "none",
+                                          "redacted",
+                                          "pending"
+                                        ]
+                                      },
+                                      "summary": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 500
+                                      }
+                                    }
                                   }
                                 },
                                 "required": [
@@ -35707,6 +35992,25 @@
                     "exposeToMainContext": {
                       "default": false,
                       "type": "boolean"
+                    },
+                    "redaction": {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "default": "pending",
+                          "type": "string",
+                          "enum": [
+                            "none",
+                            "redacted",
+                            "pending"
+                          ]
+                        },
+                        "summary": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 500
+                        }
+                      }
                     }
                   },
                   "required": [

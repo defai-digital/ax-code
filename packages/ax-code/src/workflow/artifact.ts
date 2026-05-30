@@ -1,4 +1,5 @@
 import type { WorkflowArtifactRecord } from "./state"
+import type { WorkflowSpecV1 } from "./spec"
 
 export type WorkflowArtifactRedaction = NonNullable<WorkflowArtifactRecord["redaction"]>
 
@@ -19,4 +20,12 @@ export function compactWorkflowArtifact<T extends WorkflowArtifactRecord>(artifa
     ...compact,
     redaction: artifact.redaction ?? defaultWorkflowArtifactRedaction(artifact),
   }
+}
+
+export function workflowArtifactRedactionFromSpec(
+  spec: WorkflowSpecV1,
+  specArtifactID: string | undefined,
+): WorkflowArtifactRedaction | undefined {
+  if (!specArtifactID) return undefined
+  return spec.artifacts.find((artifact) => artifact.id === specArtifactID)?.redaction
 }

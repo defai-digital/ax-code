@@ -1173,6 +1173,10 @@ export type WorkflowRunEventRecord = {
       kind: "summary" | "finding" | "patch" | "verification" | "metric" | "log"
       retention?: "ephemeral" | "session" | "durable"
       exposeToMainContext?: boolean
+      redaction?: {
+        status?: "none" | "redacted" | "pending"
+        summary?: string
+      }
     }>
     verification?: {
       mode?: "required" | "optional" | "deferred" | "skipped"
@@ -6101,6 +6105,10 @@ export type WorkflowRunCreateData = {
         kind: "summary" | "finding" | "patch" | "verification" | "metric" | "log"
         retention?: "ephemeral" | "session" | "durable"
         exposeToMainContext?: boolean
+        redaction?: {
+          status?: "none" | "redacted" | "pending"
+          summary?: string
+        }
       }>
       verification?: {
         mode?: "required" | "optional" | "deferred" | "skipped"
@@ -6557,6 +6565,10 @@ export type WorkflowRunGetResponses = {
         kind: "summary" | "finding" | "patch" | "verification" | "metric" | "log"
         retention?: "ephemeral" | "session" | "durable"
         exposeToMainContext?: boolean
+        redaction?: {
+          status?: "none" | "redacted" | "pending"
+          summary?: string
+        }
       }>
       verification?: {
         mode?: "required" | "optional" | "deferred" | "skipped"
@@ -7028,6 +7040,10 @@ export type WorkflowRunSaveTemplateResponses = {
         kind: "summary" | "finding" | "patch" | "verification" | "metric" | "log"
         retention?: "ephemeral" | "session" | "durable"
         exposeToMainContext?: boolean
+        redaction?: {
+          status?: "none" | "redacted" | "pending"
+          summary?: string
+        }
       }>
       verification?: {
         mode?: "required" | "optional" | "deferred" | "skipped"
@@ -7233,6 +7249,10 @@ export type WorkflowRunStartResponses = {
         kind: "summary" | "finding" | "patch" | "verification" | "metric" | "log"
         retention?: "ephemeral" | "session" | "durable"
         exposeToMainContext?: boolean
+        redaction?: {
+          status?: "none" | "redacted" | "pending"
+          summary?: string
+        }
       }>
       verification?: {
         mode?: "required" | "optional" | "deferred" | "skipped"
@@ -7455,6 +7475,10 @@ export type WorkflowRunPauseResponses = {
         kind: "summary" | "finding" | "patch" | "verification" | "metric" | "log"
         retention?: "ephemeral" | "session" | "durable"
         exposeToMainContext?: boolean
+        redaction?: {
+          status?: "none" | "redacted" | "pending"
+          summary?: string
+        }
       }>
       verification?: {
         mode?: "required" | "optional" | "deferred" | "skipped"
@@ -7677,6 +7701,10 @@ export type WorkflowRunResumeResponses = {
         kind: "summary" | "finding" | "patch" | "verification" | "metric" | "log"
         retention?: "ephemeral" | "session" | "durable"
         exposeToMainContext?: boolean
+        redaction?: {
+          status?: "none" | "redacted" | "pending"
+          summary?: string
+        }
       }>
       verification?: {
         mode?: "required" | "optional" | "deferred" | "skipped"
@@ -7899,6 +7927,10 @@ export type WorkflowRunCancelResponses = {
         kind: "summary" | "finding" | "patch" | "verification" | "metric" | "log"
         retention?: "ephemeral" | "session" | "durable"
         exposeToMainContext?: boolean
+        redaction?: {
+          status?: "none" | "redacted" | "pending"
+          summary?: string
+        }
       }>
       verification?: {
         mode?: "required" | "optional" | "deferred" | "skipped"
@@ -8122,6 +8154,10 @@ export type WorkflowRunRetryResponses = {
         kind: "summary" | "finding" | "patch" | "verification" | "metric" | "log"
         retention?: "ephemeral" | "session" | "durable"
         exposeToMainContext?: boolean
+        redaction?: {
+          status?: "none" | "redacted" | "pending"
+          summary?: string
+        }
       }>
       verification?: {
         mode?: "required" | "optional" | "deferred" | "skipped"
@@ -8342,6 +8378,10 @@ export type WorkflowTemplateListResponses = {
         kind: "summary" | "finding" | "patch" | "verification" | "metric" | "log"
         retention?: "ephemeral" | "session" | "durable"
         exposeToMainContext?: boolean
+        redaction?: {
+          status?: "none" | "redacted" | "pending"
+          summary?: string
+        }
       }>
       verification?: {
         mode?: "required" | "optional" | "deferred" | "skipped"
@@ -8508,6 +8548,10 @@ export type WorkflowTemplateSaveData = {
         kind: "summary" | "finding" | "patch" | "verification" | "metric" | "log"
         retention?: "ephemeral" | "session" | "durable"
         exposeToMainContext?: boolean
+        redaction?: {
+          status?: "none" | "redacted" | "pending"
+          summary?: string
+        }
       }>
       verification?: {
         mode?: "required" | "optional" | "deferred" | "skipped"
@@ -8695,6 +8739,10 @@ export type WorkflowTemplateSaveResponses = {
         kind: "summary" | "finding" | "patch" | "verification" | "metric" | "log"
         retention?: "ephemeral" | "session" | "durable"
         exposeToMainContext?: boolean
+        redaction?: {
+          status?: "none" | "redacted" | "pending"
+          summary?: string
+        }
       }>
       verification?: {
         mode?: "required" | "optional" | "deferred" | "skipped"
@@ -8895,6 +8943,10 @@ export type WorkflowTemplateGetResponses = {
         kind: "summary" | "finding" | "patch" | "verification" | "metric" | "log"
         retention?: "ephemeral" | "session" | "durable"
         exposeToMainContext?: boolean
+        redaction?: {
+          status?: "none" | "redacted" | "pending"
+          summary?: string
+        }
       }>
       verification?: {
         mode?: "required" | "optional" | "deferred" | "skipped"
@@ -9095,6 +9147,10 @@ export type WorkflowTemplatePromoteResponses = {
         kind: "summary" | "finding" | "patch" | "verification" | "metric" | "log"
         retention?: "ephemeral" | "session" | "durable"
         exposeToMainContext?: boolean
+        redaction?: {
+          status?: "none" | "redacted" | "pending"
+          summary?: string
+        }
       }>
       verification?: {
         mode?: "required" | "optional" | "deferred" | "skipped"
@@ -9443,6 +9499,10 @@ export type WorkflowRoutineRunResponses = {
           kind: "summary" | "finding" | "patch" | "verification" | "metric" | "log"
           retention?: "ephemeral" | "session" | "durable"
           exposeToMainContext?: boolean
+          redaction?: {
+            status?: "none" | "redacted" | "pending"
+            summary?: string
+          }
         }>
         verification?: {
           mode?: "required" | "optional" | "deferred" | "skipped"
@@ -9611,6 +9671,10 @@ export type WorkflowRoutineRunResponses = {
           kind: "summary" | "finding" | "patch" | "verification" | "metric" | "log"
           retention?: "ephemeral" | "session" | "durable"
           exposeToMainContext?: boolean
+          redaction?: {
+            status?: "none" | "redacted" | "pending"
+            summary?: string
+          }
         }>
         verification?: {
           mode?: "required" | "optional" | "deferred" | "skipped"
