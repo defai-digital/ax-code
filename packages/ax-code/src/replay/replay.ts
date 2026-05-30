@@ -47,6 +47,7 @@ export namespace Replay {
     const divergences: DivergenceInfo[] = []
     let steps = 0
     let toolCalls = 0
+    const seenToolCalls = new Map<string, ReplayEvent & { type: "tool.call" }>()
     const toolSummary = ToolCallReplayQuery.summaryFromEvents(events)
 
     for (let i = 0; i < events.length; i++) {
@@ -54,7 +55,10 @@ export namespace Replay {
       options.onEvent?.(event, i)
 
       if (event.type === "step.start") steps++
-      if (event.type === "tool.call") toolCalls++
+      if (event.type === "tool.call") {
+        toolCalls++
+        seenToolCalls.set(event.callID, event)
+      }
 
       if (options.mode === "verify" || options.mode === "check") {
         // R8: Skip non-deterministic events in comparison
@@ -64,16 +68,21 @@ export namespace Replay {
         // A step.finish should follow step.start
         // A tool.result should follow tool.call with same callID
         if (event.type === "tool.result") {
-          const preceding = events
-            .slice(0, i)
-            .reverse()
-            .find((e) => e.type === "tool.call")
-          if (preceding && preceding.type === "tool.call" && preceding.callID !== event.callID) {
+          const matching = seenToolCalls.get(event.callID)
+          if (!matching) {
             const div: DivergenceInfo = {
               sequence: i,
-              expected: preceding,
+              expected: {
+                type: "tool.call",
+                sessionID: event.sessionID,
+                messageID: event.messageID,
+                stepIndex: event.stepIndex,
+                tool: event.tool,
+                callID: event.callID,
+                input: {},
+              },
               actual: event,
-              reason: `tool.result callID "${event.callID}" does not match preceding tool.call "${preceding.callID}"`,
+              reason: `tool.result callID "${event.callID}" has no matching tool.call`,
             }
             divergences.push(div)
             options.onDivergence?.(div)
@@ -137,6 +146,13 @@ export namespace Replay {
     // Strict — silently dropping events past the cap would synthesize
     // divergences for every truncated step.
     const events = EventQuery.bySessionStrict(sessionID)
+    return reconstructStreamFromEvents(events, options)
+  }
+
+  function reconstructStreamFromEvents(
+    events: ReplayEvent[],
+    options?: { fromStep?: number },
+  ): { steps: ReconstructedStep[] } {
     const steps: ReconstructedStep[] = []
     let current: ReconstructedStep | undefined
     const fromStep = options?.fromStep ?? 0
@@ -299,7 +315,7 @@ export namespace Replay {
     // Strict — divergence reporting against a partial slice is wrong by
     // construction: every truncated step would appear as a divergence.
     const original = EventQuery.bySessionStrict(sessionID)
-    const { steps } = reconstructStream(sessionID)
+    const { steps } = reconstructStreamFromEvents(original)
     const divergences: DivergenceInfo[] = []
 
     // Extract original steps from events for comparison

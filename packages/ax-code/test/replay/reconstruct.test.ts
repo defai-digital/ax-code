@@ -35,9 +35,12 @@ const model: Provider.Model = {
 }
 
 let streamSpy: ReturnType<typeof spyOn> | undefined
+let bySessionStrictSpy: ReturnType<typeof spyOn> | undefined
 afterEach(() => {
   streamSpy?.mockRestore()
   streamSpy = undefined
+  bySessionStrictSpy?.mockRestore()
+  bySessionStrictSpy = undefined
 })
 
 describe("replay.reconstructStream", () => {
@@ -63,6 +66,99 @@ describe("replay.reconstructStream", () => {
         const result = Replay.run({ sessionID: sid, mode: "check" })
         expect(result.divergences.map((item) => item.reason)).toEqual([
           'tool.call "call_open_task" (task) has no matching tool.result',
+        ])
+
+        EventQuery.deleteBySession(sid)
+      },
+    })
+  })
+
+  test("check mode matches parallel tool results by call id", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const sid = session.id
+        Recorder.begin(sid)
+        Recorder.emit({ type: "step.start", sessionID: sid, stepIndex: 0 })
+        Recorder.emit({
+          type: "tool.call",
+          sessionID: sid,
+          tool: "read",
+          callID: "call_a",
+          input: { file_path: "a.ts" },
+          stepIndex: 0,
+        })
+        Recorder.emit({
+          type: "tool.call",
+          sessionID: sid,
+          tool: "read",
+          callID: "call_b",
+          input: { file_path: "b.ts" },
+          stepIndex: 0,
+        })
+        Recorder.emit({
+          type: "tool.result",
+          sessionID: sid,
+          tool: "read",
+          callID: "call_a",
+          status: "completed",
+          output: "a",
+          durationMs: 10,
+          stepIndex: 0,
+        })
+        Recorder.emit({
+          type: "tool.result",
+          sessionID: sid,
+          tool: "read",
+          callID: "call_b",
+          status: "completed",
+          output: "b",
+          durationMs: 10,
+          stepIndex: 0,
+        })
+        Recorder.emit({
+          type: "step.finish",
+          sessionID: sid,
+          stepIndex: 0,
+          finishReason: "tool-calls",
+          tokens: { input: 10, output: 5 },
+        })
+        Recorder.end(sid)
+        await new Promise((r) => setTimeout(r, 50))
+
+        const result = Replay.run({ sessionID: sid, mode: "check" })
+        expect(result.divergences).toHaveLength(0)
+
+        EventQuery.deleteBySession(sid)
+      },
+    })
+  })
+
+  test("check mode flags tool results without matching calls", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const sid = session.id
+        Recorder.begin(sid)
+        Recorder.emit({
+          type: "tool.result",
+          sessionID: sid,
+          tool: "read",
+          callID: "missing_call",
+          status: "completed",
+          output: "orphan",
+          durationMs: 10,
+        })
+        Recorder.end(sid)
+        await new Promise((r) => setTimeout(r, 50))
+
+        const result = Replay.run({ sessionID: sid, mode: "check" })
+        expect(result.divergences.map((item) => item.reason)).toEqual([
+          'tool.result callID "missing_call" has no matching tool.call',
         ])
 
         EventQuery.deleteBySession(sid)
@@ -163,6 +259,34 @@ describe("replay.reconstructStream", () => {
         expect(steps[1].finishReason).toBe("stop")
 
         // Cleanup
+        EventQuery.deleteBySession(sid)
+      },
+    })
+  })
+
+  test("compare reconstructs from one strict event load", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const sid = session.id
+        Recorder.begin(sid)
+        Recorder.emit({ type: "step.start", sessionID: sid, stepIndex: 0 })
+        Recorder.emit({
+          type: "step.finish",
+          sessionID: sid,
+          stepIndex: 0,
+          finishReason: "stop",
+          tokens: { input: 1, output: 1 },
+        })
+        Recorder.end(sid)
+        await new Promise((r) => setTimeout(r, 50))
+
+        bySessionStrictSpy = spyOn(EventQuery, "bySessionStrict")
+        expect(Replay.compare(sid)).toMatchObject({ stepsCompared: 1, divergences: [] })
+        expect(bySessionStrictSpy.mock.calls).toHaveLength(1)
+
         EventQuery.deleteBySession(sid)
       },
     })
