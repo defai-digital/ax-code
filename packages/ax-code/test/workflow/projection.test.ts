@@ -29,6 +29,8 @@ describe("workflow projections", () => {
             currentPhaseName: "Collect Issues",
             effort: "workflow",
             models: {
+              cheap: "cheap",
+              strong: "strong",
               worker: "cheap",
               synthesizer: "strong",
             },

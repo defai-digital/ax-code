@@ -270,6 +270,18 @@ function modelRouteForPhase(phase: WorkflowPhase, spec: WorkflowSpec) {
   const key = `${role}Model` as const
   return {
     role,
-    model: typeof policy[key] === "string" ? policy[key] : undefined,
+    model: roleModel(policy, key, role),
   }
+}
+
+function roleModel(
+  policy: WorkflowSpec["modelPolicy"],
+  key: "plannerModel" | "workerModel" | "verifierModel" | "synthesizerModel",
+  role: WorkflowDryRunChild["modelRole"],
+) {
+  const explicit = policy[key]
+  if (typeof explicit === "string") return explicit
+  if ((role === "worker" || role === "verifier") && typeof policy.cheapModel === "string") return policy.cheapModel
+  if (role === "synthesizer" && typeof policy.strongModel === "string") return policy.strongModel
+  return typeof policy.defaultModel === "string" ? policy.defaultModel : undefined
 }

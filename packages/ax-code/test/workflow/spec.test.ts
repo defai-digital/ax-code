@@ -134,13 +134,16 @@ describe("workflow spec v1", () => {
     })
   })
 
-  test("accepts model provider allowlists", () => {
+  test("accepts model aliases and provider allowlists", () => {
     const spec = parseWorkflowSpecV1({
       schemaVersion: 1,
       id: "provider-policy",
       name: "Provider Policy",
       description: "A workflow spec that restricts model routing to specific providers.",
       modelPolicy: {
+        defaultModel: "openai/gpt-5-mini",
+        cheapModel: "openai/gpt-5-nano",
+        strongModel: "anthropic/claude-sonnet-4-5",
         allowedProviders: ["anthropic", "openai"],
       },
       phases: [
@@ -152,6 +155,9 @@ describe("workflow spec v1", () => {
       ],
     })
 
+    expect(spec.modelPolicy.defaultModel).toBe("openai/gpt-5-mini")
+    expect(spec.modelPolicy.cheapModel).toBe("openai/gpt-5-nano")
+    expect(spec.modelPolicy.strongModel).toBe("anthropic/claude-sonnet-4-5")
     expect(spec.modelPolicy.allowedProviders).toEqual(["anthropic", "openai"])
   })
 

@@ -122,6 +122,9 @@ export const WorkflowPhasePacing = z.object({
 export type WorkflowPhasePacing = z.infer<typeof WorkflowPhasePacing>
 
 export const WorkflowModelPolicy = z.object({
+  defaultModel: NonEmptyString.optional(),
+  cheapModel: NonEmptyString.optional(),
+  strongModel: NonEmptyString.optional(),
   plannerModel: NonEmptyString.optional(),
   workerModel: NonEmptyString.optional(),
   verifierModel: NonEmptyString.optional(),

@@ -2131,6 +2131,9 @@ export class WorkflowRun extends HeyApiClient {
           maxTokensPerMinute?: number
         }
         modelPolicy?: {
+          defaultModel?: string
+          cheapModel?: string
+          strongModel?: string
           plannerModel?: string
           workerModel?: string
           verifierModel?: string
@@ -2186,6 +2189,9 @@ export class WorkflowRun extends HeyApiClient {
             | "critic-confirmation"
             | "custom-reducer"
           modelPolicy?: {
+            defaultModel?: string
+            cheapModel?: string
+            strongModel?: string
             plannerModel?: string
             workerModel?: string
             verifierModel?: string
@@ -2214,6 +2220,9 @@ export class WorkflowRun extends HeyApiClient {
         }>
       }
       modelPolicy?: {
+        defaultModel?: string
+        cheapModel?: string
+        strongModel?: string
         plannerModel?: string
         workerModel?: string
         verifierModel?: string
@@ -2803,6 +2812,9 @@ export class WorkflowTemplate extends HeyApiClient {
           maxTokensPerMinute?: number
         }
         modelPolicy?: {
+          defaultModel?: string
+          cheapModel?: string
+          strongModel?: string
           plannerModel?: string
           workerModel?: string
           verifierModel?: string
@@ -2858,6 +2870,9 @@ export class WorkflowTemplate extends HeyApiClient {
             | "critic-confirmation"
             | "custom-reducer"
           modelPolicy?: {
+            defaultModel?: string
+            cheapModel?: string
+            strongModel?: string
             plannerModel?: string
             workerModel?: string
             verifierModel?: string
@@ -3062,6 +3077,9 @@ export class WorkflowRoutine extends HeyApiClient {
       route?: string
       parentSessionID?: string
       modelPolicy?: {
+        defaultModel?: string
+        cheapModel?: string
+        strongModel?: string
         plannerModel?: string
         workerModel?: string
         verifierModel?: string
@@ -4185,6 +4203,11 @@ export class Session2 extends HeyApiClient {
       tools?: {
         [key: string]: boolean
       }
+      toolsScope?: "session" | "turn"
+      isolation?: {
+        mode?: "read-only" | "workspace-write" | "full-access"
+        network?: boolean
+      }
       format?: OutputFormat
       system?: string
       variant?: string
@@ -4206,6 +4229,8 @@ export class Session2 extends HeyApiClient {
             { in: "body", key: "agentRouting" },
             { in: "body", key: "noReply" },
             { in: "body", key: "tools" },
+            { in: "body", key: "toolsScope" },
+            { in: "body", key: "isolation" },
             { in: "body", key: "format" },
             { in: "body", key: "system" },
             { in: "body", key: "variant" },
@@ -4315,6 +4340,11 @@ export class Session2 extends HeyApiClient {
       tools?: {
         [key: string]: boolean
       }
+      toolsScope?: "session" | "turn"
+      isolation?: {
+        mode?: "read-only" | "workspace-write" | "full-access"
+        network?: boolean
+      }
       format?: OutputFormat
       system?: string
       variant?: string
@@ -4336,6 +4366,8 @@ export class Session2 extends HeyApiClient {
             { in: "body", key: "agentRouting" },
             { in: "body", key: "noReply" },
             { in: "body", key: "tools" },
+            { in: "body", key: "toolsScope" },
+            { in: "body", key: "isolation" },
             { in: "body", key: "format" },
             { in: "body", key: "system" },
             { in: "body", key: "variant" },

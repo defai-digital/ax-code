@@ -47,6 +47,9 @@ export const WorkflowRunProjection = z.object({
   elapsedMs: z.number().int().min(0),
   effort: z.enum(["normal", "deep", "workflow", "max-workflow"]),
   models: z.object({
+    default: z.string().optional(),
+    cheap: z.string().optional(),
+    strong: z.string().optional(),
     planner: z.string().optional(),
     worker: z.string().optional(),
     verifier: z.string().optional(),
@@ -91,6 +94,9 @@ export function summarizeWorkflowRunDetail(
     elapsedMs: workflowElapsedMs(detail, now),
     effort: detail.spec.modelPolicy.effort,
     models: {
+      default: detail.spec.modelPolicy.defaultModel,
+      cheap: detail.spec.modelPolicy.cheapModel,
+      strong: detail.spec.modelPolicy.strongModel,
       planner: detail.spec.modelPolicy.plannerModel,
       worker: detail.spec.modelPolicy.workerModel,
       verifier: detail.spec.modelPolicy.verifierModel,

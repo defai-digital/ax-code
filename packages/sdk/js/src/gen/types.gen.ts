@@ -163,6 +163,10 @@ export type UserMessage = {
   tools?: {
     [key: string]: boolean
   }
+  isolation?: {
+    mode?: "read-only" | "workspace-write" | "full-access"
+    network?: boolean
+  }
   variant?: string
 }
 
@@ -1140,6 +1144,9 @@ export type WorkflowRunEventRecord = {
       maxTokensPerMinute?: number
     }
     modelPolicy?: {
+      defaultModel?: string
+      cheapModel?: string
+      strongModel?: string
       plannerModel?: string
       workerModel?: string
       verifierModel?: string
@@ -1195,6 +1202,9 @@ export type WorkflowRunEventRecord = {
         | "critic-confirmation"
         | "custom-reducer"
       modelPolicy?: {
+        defaultModel?: string
+        cheapModel?: string
+        strongModel?: string
         plannerModel?: string
         workerModel?: string
         verifierModel?: string
@@ -6034,6 +6044,9 @@ export type WorkflowRunCreateData = {
         maxTokensPerMinute?: number
       }
       modelPolicy?: {
+        defaultModel?: string
+        cheapModel?: string
+        strongModel?: string
         plannerModel?: string
         workerModel?: string
         verifierModel?: string
@@ -6089,6 +6102,9 @@ export type WorkflowRunCreateData = {
           | "critic-confirmation"
           | "custom-reducer"
         modelPolicy?: {
+          defaultModel?: string
+          cheapModel?: string
+          strongModel?: string
           plannerModel?: string
           workerModel?: string
           verifierModel?: string
@@ -6117,6 +6133,9 @@ export type WorkflowRunCreateData = {
       }>
     }
     modelPolicy?: {
+      defaultModel?: string
+      cheapModel?: string
+      strongModel?: string
       plannerModel?: string
       workerModel?: string
       verifierModel?: string
@@ -6202,6 +6221,9 @@ export type WorkflowRunDashboardResponses = {
     elapsedMs: number
     effort: "normal" | "deep" | "workflow" | "max-workflow"
     models: {
+      default?: string
+      cheap?: string
+      strong?: string
       planner?: string
       worker?: string
       verifier?: string
@@ -6428,6 +6450,9 @@ export type WorkflowRunGetResponses = {
         maxTokensPerMinute?: number
       }
       modelPolicy?: {
+        defaultModel?: string
+        cheapModel?: string
+        strongModel?: string
         plannerModel?: string
         workerModel?: string
         verifierModel?: string
@@ -6483,6 +6508,9 @@ export type WorkflowRunGetResponses = {
           | "critic-confirmation"
           | "custom-reducer"
         modelPolicy?: {
+          defaultModel?: string
+          cheapModel?: string
+          strongModel?: string
           plannerModel?: string
           workerModel?: string
           verifierModel?: string
@@ -6878,6 +6906,9 @@ export type WorkflowRunSaveTemplateResponses = {
         maxTokensPerMinute?: number
       }
       modelPolicy?: {
+        defaultModel?: string
+        cheapModel?: string
+        strongModel?: string
         plannerModel?: string
         workerModel?: string
         verifierModel?: string
@@ -6933,6 +6964,9 @@ export type WorkflowRunSaveTemplateResponses = {
           | "critic-confirmation"
           | "custom-reducer"
         modelPolicy?: {
+          defaultModel?: string
+          cheapModel?: string
+          strongModel?: string
           plannerModel?: string
           workerModel?: string
           verifierModel?: string
@@ -7073,6 +7107,9 @@ export type WorkflowRunStartResponses = {
         maxTokensPerMinute?: number
       }
       modelPolicy?: {
+        defaultModel?: string
+        cheapModel?: string
+        strongModel?: string
         plannerModel?: string
         workerModel?: string
         verifierModel?: string
@@ -7128,6 +7165,9 @@ export type WorkflowRunStartResponses = {
           | "critic-confirmation"
           | "custom-reducer"
         modelPolicy?: {
+          defaultModel?: string
+          cheapModel?: string
+          strongModel?: string
           plannerModel?: string
           workerModel?: string
           verifierModel?: string
@@ -7285,6 +7325,9 @@ export type WorkflowRunPauseResponses = {
         maxTokensPerMinute?: number
       }
       modelPolicy?: {
+        defaultModel?: string
+        cheapModel?: string
+        strongModel?: string
         plannerModel?: string
         workerModel?: string
         verifierModel?: string
@@ -7340,6 +7383,9 @@ export type WorkflowRunPauseResponses = {
           | "critic-confirmation"
           | "custom-reducer"
         modelPolicy?: {
+          defaultModel?: string
+          cheapModel?: string
+          strongModel?: string
           plannerModel?: string
           workerModel?: string
           verifierModel?: string
@@ -7497,6 +7543,9 @@ export type WorkflowRunResumeResponses = {
         maxTokensPerMinute?: number
       }
       modelPolicy?: {
+        defaultModel?: string
+        cheapModel?: string
+        strongModel?: string
         plannerModel?: string
         workerModel?: string
         verifierModel?: string
@@ -7552,6 +7601,9 @@ export type WorkflowRunResumeResponses = {
           | "critic-confirmation"
           | "custom-reducer"
         modelPolicy?: {
+          defaultModel?: string
+          cheapModel?: string
+          strongModel?: string
           plannerModel?: string
           workerModel?: string
           verifierModel?: string
@@ -7709,6 +7761,9 @@ export type WorkflowRunCancelResponses = {
         maxTokensPerMinute?: number
       }
       modelPolicy?: {
+        defaultModel?: string
+        cheapModel?: string
+        strongModel?: string
         plannerModel?: string
         workerModel?: string
         verifierModel?: string
@@ -7764,6 +7819,9 @@ export type WorkflowRunCancelResponses = {
           | "critic-confirmation"
           | "custom-reducer"
         modelPolicy?: {
+          defaultModel?: string
+          cheapModel?: string
+          strongModel?: string
           plannerModel?: string
           workerModel?: string
           verifierModel?: string
@@ -7922,6 +7980,9 @@ export type WorkflowRunRetryResponses = {
         maxTokensPerMinute?: number
       }
       modelPolicy?: {
+        defaultModel?: string
+        cheapModel?: string
+        strongModel?: string
         plannerModel?: string
         workerModel?: string
         verifierModel?: string
@@ -7977,6 +8038,9 @@ export type WorkflowRunRetryResponses = {
           | "critic-confirmation"
           | "custom-reducer"
         modelPolicy?: {
+          defaultModel?: string
+          cheapModel?: string
+          strongModel?: string
           plannerModel?: string
           workerModel?: string
           verifierModel?: string
@@ -8131,6 +8195,9 @@ export type WorkflowTemplateListResponses = {
         maxTokensPerMinute?: number
       }
       modelPolicy?: {
+        defaultModel?: string
+        cheapModel?: string
+        strongModel?: string
         plannerModel?: string
         workerModel?: string
         verifierModel?: string
@@ -8186,6 +8253,9 @@ export type WorkflowTemplateListResponses = {
           | "critic-confirmation"
           | "custom-reducer"
         modelPolicy?: {
+          defaultModel?: string
+          cheapModel?: string
+          strongModel?: string
           plannerModel?: string
           workerModel?: string
           verifierModel?: string
@@ -8288,6 +8358,9 @@ export type WorkflowTemplateSaveData = {
         maxTokensPerMinute?: number
       }
       modelPolicy?: {
+        defaultModel?: string
+        cheapModel?: string
+        strongModel?: string
         plannerModel?: string
         workerModel?: string
         verifierModel?: string
@@ -8343,6 +8416,9 @@ export type WorkflowTemplateSaveData = {
           | "critic-confirmation"
           | "custom-reducer"
         modelPolicy?: {
+          defaultModel?: string
+          cheapModel?: string
+          strongModel?: string
           plannerModel?: string
           workerModel?: string
           verifierModel?: string
@@ -8464,6 +8540,9 @@ export type WorkflowTemplateSaveResponses = {
         maxTokensPerMinute?: number
       }
       modelPolicy?: {
+        defaultModel?: string
+        cheapModel?: string
+        strongModel?: string
         plannerModel?: string
         workerModel?: string
         verifierModel?: string
@@ -8519,6 +8598,9 @@ export type WorkflowTemplateSaveResponses = {
           | "critic-confirmation"
           | "custom-reducer"
         modelPolicy?: {
+          defaultModel?: string
+          cheapModel?: string
+          strongModel?: string
           plannerModel?: string
           workerModel?: string
           verifierModel?: string
@@ -8653,6 +8735,9 @@ export type WorkflowTemplateGetResponses = {
         maxTokensPerMinute?: number
       }
       modelPolicy?: {
+        defaultModel?: string
+        cheapModel?: string
+        strongModel?: string
         plannerModel?: string
         workerModel?: string
         verifierModel?: string
@@ -8708,6 +8793,9 @@ export type WorkflowTemplateGetResponses = {
           | "critic-confirmation"
           | "custom-reducer"
         modelPolicy?: {
+          defaultModel?: string
+          cheapModel?: string
+          strongModel?: string
           plannerModel?: string
           workerModel?: string
           verifierModel?: string
@@ -8842,6 +8930,9 @@ export type WorkflowTemplatePromoteResponses = {
         maxTokensPerMinute?: number
       }
       modelPolicy?: {
+        defaultModel?: string
+        cheapModel?: string
+        strongModel?: string
         plannerModel?: string
         workerModel?: string
         verifierModel?: string
@@ -8897,6 +8988,9 @@ export type WorkflowTemplatePromoteResponses = {
           | "critic-confirmation"
           | "custom-reducer"
         modelPolicy?: {
+          defaultModel?: string
+          cheapModel?: string
+          strongModel?: string
           plannerModel?: string
           workerModel?: string
           verifierModel?: string
@@ -9026,6 +9120,9 @@ export type WorkflowRoutineRunData = {
     route: string
     parentSessionID?: string
     modelPolicy?: {
+      defaultModel?: string
+      cheapModel?: string
+      strongModel?: string
       plannerModel?: string
       workerModel?: string
       verifierModel?: string
@@ -9151,6 +9248,9 @@ export type WorkflowRoutineRunResponses = {
           maxTokensPerMinute?: number
         }
         modelPolicy?: {
+          defaultModel?: string
+          cheapModel?: string
+          strongModel?: string
           plannerModel?: string
           workerModel?: string
           verifierModel?: string
@@ -9206,6 +9306,9 @@ export type WorkflowRoutineRunResponses = {
             | "critic-confirmation"
             | "custom-reducer"
           modelPolicy?: {
+            defaultModel?: string
+            cheapModel?: string
+            strongModel?: string
             plannerModel?: string
             workerModel?: string
             verifierModel?: string
@@ -9309,6 +9412,9 @@ export type WorkflowRoutineRunResponses = {
           maxTokensPerMinute?: number
         }
         modelPolicy?: {
+          defaultModel?: string
+          cheapModel?: string
+          strongModel?: string
           plannerModel?: string
           workerModel?: string
           verifierModel?: string
@@ -9364,6 +9470,9 @@ export type WorkflowRoutineRunResponses = {
             | "critic-confirmation"
             | "custom-reducer"
           modelPolicy?: {
+            defaultModel?: string
+            cheapModel?: string
+            strongModel?: string
             plannerModel?: string
             workerModel?: string
             verifierModel?: string
@@ -10509,6 +10618,11 @@ export type SessionPromptData = {
     tools?: {
       [key: string]: boolean
     }
+    toolsScope?: "session" | "turn"
+    isolation?: {
+      mode?: "read-only" | "workspace-write" | "full-access"
+      network?: boolean
+    }
     format?: OutputFormat
     system?: string
     variant?: string
@@ -10711,6 +10825,11 @@ export type SessionPromptAsyncData = {
      */
     tools?: {
       [key: string]: boolean
+    }
+    toolsScope?: "session" | "turn"
+    isolation?: {
+      mode?: "read-only" | "workspace-write" | "full-access"
+      network?: boolean
     }
     format?: OutputFormat
     system?: string

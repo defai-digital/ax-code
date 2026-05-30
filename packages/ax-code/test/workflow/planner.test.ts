@@ -217,6 +217,58 @@ describe("workflow dry-run planner", () => {
     })
   })
 
+  test("routes phase models through default, cheap, and strong policy aliases", () => {
+    const spec = parseWorkflowSpecV1({
+      schemaVersion: 1,
+      id: "model-aliases",
+      name: "Model Aliases",
+      description: "Workflow model aliases should map to phase roles unless a role-specific model overrides them.",
+      budget: {
+        maxTotalTokens: 12_000,
+        maxConcurrentAgents: 2,
+        maxTotalAgents: 5,
+      },
+      modelPolicy: {
+        defaultModel: "openai/gpt-5-mini",
+        cheapModel: "openai/gpt-5-nano",
+        strongModel: "anthropic/claude-sonnet-4-5",
+      },
+      phases: [
+        {
+          id: "plan",
+          name: "Plan",
+          kind: "sequential",
+        },
+        {
+          id: "scan",
+          name: "Scan",
+          kind: "fanout",
+          inputs: ["a", "b"],
+        },
+        {
+          id: "verify",
+          name: "Verify",
+          kind: "verification",
+        },
+        {
+          id: "report",
+          name: "Report",
+          kind: "synthesis",
+          modelPolicy: {
+            synthesizerModel: "anthropic/claude-opus-4-7",
+          },
+        },
+      ],
+    })
+
+    const plan = planWorkflowDryRun({ spec })
+
+    expect(plan.phases[0]?.children[0]?.model).toBe("openai/gpt-5-mini")
+    expect(plan.phases[1]?.children[0]?.model).toBe("openai/gpt-5-nano")
+    expect(plan.phases[2]?.children[0]?.model).toBe("openai/gpt-5-nano")
+    expect(plan.phases[3]?.children[0]?.model).toBe("anthropic/claude-opus-4-7")
+  })
+
   test("rejects phase pacing above safe defaults without scale opt-in", () => {
     const spec = parseWorkflowSpecV1({
       schemaVersion: 1,

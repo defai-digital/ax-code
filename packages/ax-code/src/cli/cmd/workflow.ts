@@ -32,6 +32,9 @@ type StartOptions = JsonOption & {
   enqueue?: boolean
   durableChildren?: boolean
   effort?: WorkflowModelPolicyOverride["effort"]
+  defaultModel?: string
+  cheapModel?: string
+  strongModel?: string
   plannerModel?: string
   workerModel?: string
   verifierModel?: string
@@ -500,6 +503,18 @@ const WorkflowRunStartCommand = cmd({
         choices: ["normal", "deep", "workflow", "max-workflow"] as const,
         describe: "override workflow model effort preset",
       })
+      .option("default-model", {
+        type: "string",
+        describe: "override default workflow model",
+      })
+      .option("cheap-model", {
+        type: "string",
+        describe: "override cheap exploration model",
+      })
+      .option("strong-model", {
+        type: "string",
+        describe: "override strong synthesis model",
+      })
       .option("planner-model", {
         type: "string",
         describe: "override planner model",
@@ -587,6 +602,18 @@ const WorkflowRoutineRunCommand = cmd({
         choices: ["normal", "deep", "workflow", "max-workflow"] as const,
         describe: "override workflow model effort preset",
       })
+      .option("default-model", {
+        type: "string",
+        describe: "override default workflow model",
+      })
+      .option("cheap-model", {
+        type: "string",
+        describe: "override cheap exploration model",
+      })
+      .option("strong-model", {
+        type: "string",
+        describe: "override strong synthesis model",
+      })
       .option("planner-model", {
         type: "string",
         describe: "override planner model",
@@ -640,11 +667,22 @@ const WorkflowRoutineRunCommand = cmd({
 function modelPolicyFromStartOptions(
   options: Pick<
     StartOptions,
-    "effort" | "plannerModel" | "workerModel" | "verifierModel" | "synthesizerModel" | "allowedProvider"
+    | "effort"
+    | "defaultModel"
+    | "cheapModel"
+    | "strongModel"
+    | "plannerModel"
+    | "workerModel"
+    | "verifierModel"
+    | "synthesizerModel"
+    | "allowedProvider"
   >,
 ): WorkflowModelPolicyOverride | undefined {
   const modelPolicy: WorkflowModelPolicyOverride = {}
   if (options.effort) modelPolicy.effort = options.effort
+  if (options.defaultModel) modelPolicy.defaultModel = options.defaultModel
+  if (options.cheapModel) modelPolicy.cheapModel = options.cheapModel
+  if (options.strongModel) modelPolicy.strongModel = options.strongModel
   if (options.plannerModel) modelPolicy.plannerModel = options.plannerModel
   if (options.workerModel) modelPolicy.workerModel = options.workerModel
   if (options.verifierModel) modelPolicy.verifierModel = options.verifierModel
@@ -926,6 +964,9 @@ function formatCounts(counts: Record<string, number>) {
 function formatRunModelPolicy(detail: WorkflowRunDetail) {
   const policy = detail.spec.modelPolicy ?? {}
   const models = formatNamedModels({
+    default: policy.defaultModel,
+    cheap: policy.cheapModel,
+    strong: policy.strongModel,
     planner: policy.plannerModel,
     worker: policy.workerModel,
     verifier: policy.verifierModel,
@@ -947,8 +988,19 @@ function formatRunExecutionPolicy(detail: WorkflowRunDetail) {
   ].join(", ")
 }
 
-function formatNamedModels(models: { planner?: string; worker?: string; verifier?: string; synthesizer?: string }) {
+function formatNamedModels(models: {
+  default?: string
+  cheap?: string
+  strong?: string
+  planner?: string
+  worker?: string
+  verifier?: string
+  synthesizer?: string
+}) {
   return [
+    namedModel("default", models.default),
+    namedModel("cheap", models.cheap),
+    namedModel("strong", models.strong),
     namedModel("planner", models.planner),
     namedModel("worker", models.worker),
     namedModel("verifier", models.verifier),

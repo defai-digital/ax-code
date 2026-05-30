@@ -83,6 +83,9 @@ describe("tui workflow dashboard view model", () => {
         ...workflowRunDetail().spec,
         modelPolicy: {
           effort: "deep",
+          defaultModel: "balanced-model",
+          cheapModel: "cheap-alias-model",
+          strongModel: "strong-alias-model",
           workerModel: "cheap-review-model",
           verifierModel: "verifier-model",
           synthesizerModel: "strong-synthesis-model",
@@ -123,6 +126,12 @@ describe("tui workflow dashboard view model", () => {
 
     const items = workflowModelPolicyItems(detail)
     expect(items.find((item) => item.value === "workflow.detail.model-policy")?.title).toBe("Effort deep")
+    expect(items.find((item) => item.value === "workflow.detail.model-policy")?.description).toContain(
+      "default: balanced-model",
+    )
+    expect(items.find((item) => item.value === "workflow.detail.model-policy")?.description).toContain(
+      "cheap: cheap-alias-model",
+    )
     expect(items.find((item) => item.value === "workflow.detail.model-policy")?.description).toContain(
       "worker: cheap-review-model",
     )

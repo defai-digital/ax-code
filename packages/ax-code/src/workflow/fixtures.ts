@@ -45,6 +45,8 @@ export const WorkflowFixtureSpecs = {
       maxToolCalls: 200,
     },
     modelPolicy: {
+      cheapModel: "cheap",
+      strongModel: "strong",
       workerModel: "cheap",
       synthesizerModel: "strong",
       effort: "workflow",
@@ -100,6 +102,8 @@ export const WorkflowFixtureSpecs = {
       maxRetries: 1,
     },
     modelPolicy: {
+      cheapModel: "cheap",
+      strongModel: "strong",
       plannerModel: "strong",
       workerModel: "cheap",
       verifierModel: "cheap",

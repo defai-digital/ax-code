@@ -592,16 +592,25 @@ function totalArtifacts(run: WorkflowDashboardRun) {
 }
 
 function formatWorkflowModels(models: {
+  defaultModel?: string
+  cheapModel?: string
+  strongModel?: string
   plannerModel?: string
   workerModel?: string
   verifierModel?: string
   synthesizerModel?: string
+  default?: string
+  cheap?: string
+  strong?: string
   planner?: string
   worker?: string
   verifier?: string
   synthesizer?: string
 }) {
   return [
+    modelPart("default", models.defaultModel ?? models.default),
+    modelPart("cheap", models.cheapModel ?? models.cheap),
+    modelPart("strong", models.strongModel ?? models.strong),
     modelPart("planner", models.plannerModel ?? models.planner),
     modelPart("worker", models.workerModel ?? models.worker),
     modelPart("verifier", models.verifierModel ?? models.verifier),
@@ -612,6 +621,9 @@ function formatWorkflowModels(models: {
 }
 
 function formatWorkflowModelPolicySummary(policy: {
+  defaultModel?: string
+  cheapModel?: string
+  strongModel?: string
   plannerModel?: string
   workerModel?: string
   verifierModel?: string
