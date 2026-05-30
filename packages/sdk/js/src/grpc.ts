@@ -317,6 +317,11 @@ export type AxCodeGrpcWebSocketLike = {
 
 export type AxCodeGrpcHttpBridgeOptions = HeadlessClientOptions & {
   webSocketFactory?: (url: string) => AxCodeGrpcWebSocketLike
+  /**
+   * The HTTP bridge is a desktop compatibility fallback, not the preferred privileged GUI boundary.
+   * Keep it loopback-only unless the caller explicitly owns and secures the remote server.
+   */
+  allowRemoteHttpBridge?: boolean
 }
 
 export function createAxCodeGrpcNativeBridgeTransport(bridge: AxCodeGrpcNativeBridge): AxCodeGrpcTransport {
@@ -918,6 +923,7 @@ export function createAxCodeGrpcClient(input: AxCodeGrpcClientOptions) {
 }
 
 export function createAxCodeGrpcHttpBridge(input: AxCodeGrpcHttpBridgeOptions): AxCodeGrpcTransport {
+  assertHttpBridgeBaseUrl(input)
   const clientFor = (options?: AxCodeGrpcCallOptions) =>
     createHeadlessClient({
       ...input,
@@ -1243,6 +1249,37 @@ async function loadBootstrap(
 }
 
 async function* emptyAsyncIterable<T>(): AsyncIterable<T> {}
+
+function assertHttpBridgeBaseUrl(input: AxCodeGrpcHttpBridgeOptions) {
+  if (input.allowRemoteHttpBridge) return
+  const url = new URL(input.baseUrl)
+  if (!isLoopbackHttpUrl(url)) {
+    throw new Error(
+      "AX Code gRPC HTTP bridge only accepts loopback HTTP base URLs by default. " +
+        "Use a native bridge for desktop hosts, or set allowRemoteHttpBridge: true only for a trusted remote server.",
+    )
+  }
+}
+
+function isLoopbackHttpUrl(url: URL) {
+  if (url.protocol !== "http:" && url.protocol !== "https:") return false
+  return isLoopbackHostname(url.hostname)
+}
+
+function isLoopbackHostname(hostname: string) {
+  const normalized = hostname.toLowerCase().replace(/^\[|\]$/g, "")
+  return normalized === "localhost" || normalized === "::1" || isIpv4Loopback(normalized)
+}
+
+function isIpv4Loopback(hostname: string) {
+  const parts = hostname.split(".")
+  if (parts.length !== 4 || parts[0] !== "127") return false
+  return parts.every((part) => {
+    if (!/^\d+$/.test(part)) return false
+    const value = Number(part)
+    return value >= 0 && value <= 255
+  })
+}
 
 function nativeHandlerContext<TMethod extends AxCodeGrpcMethod>(
   call: {

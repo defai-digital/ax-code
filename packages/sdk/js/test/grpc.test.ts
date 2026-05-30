@@ -628,6 +628,37 @@ describe("gRPC SDK facade", () => {
     })
   })
 
+  test("HTTP bridge is loopback-only by default for desktop fallback safety", async () => {
+    expect(() =>
+      createAxCodeGrpcClientFromHttp({
+        baseUrl: "https://ax-code.example.com",
+      }),
+    ).toThrow("AX Code gRPC HTTP bridge only accepts loopback HTTP base URLs by default")
+
+    const client = createAxCodeGrpcClientFromHttp({
+      baseUrl: "https://ax-code.example.com",
+      allowRemoteHttpBridge: true,
+      fetch: (async () => {
+        throw new Error("fetch should not be called")
+      }) as typeof fetch,
+    })
+
+    await expect(client.health()).resolves.toEqual({ status: "SERVING", transport: "http-bridge" })
+  })
+
+  test("HTTP bridge default allows literal loopback endpoints", async () => {
+    for (const baseUrl of ["http://localhost:4096", "http://127.12.0.1:4096", "http://[::1]:4096"]) {
+      const client = createAxCodeGrpcClientFromHttp({
+        baseUrl,
+        fetch: (async () => {
+          throw new Error("fetch should not be called")
+        }) as typeof fetch,
+      })
+
+      await expect(client.health()).resolves.toEqual({ status: "SERVING", transport: "http-bridge" })
+    }
+  })
+
   test("proto declares the headless service used by the SDK facade", () => {
     const proto = readFileSync(resolve(import.meta.dir, "../../proto/ax_code/v1/headless.proto"), "utf8")
 
