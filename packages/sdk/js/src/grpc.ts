@@ -4,6 +4,8 @@ import type {
   HeadlessCreateSessionInput,
   HeadlessSessionEvidenceInput,
 } from "./headless/client.js"
+import { startHeadlessBackend } from "./headless/lifecycle.js"
+import type { HeadlessBackendOptions } from "./headless/lifecycle.js"
 import type {
   HeadlessCommandBody,
   HeadlessPermissionReplyBody,
@@ -577,6 +579,15 @@ export type AxCodeGrpcWorkflowRunCommandRequest = {
 
 export type AxCodeGrpcClientOptions = {
   transport: AxCodeGrpcTransport
+}
+
+export type AxCodeGrpcHeadlessBackendOptions = HeadlessBackendOptions & {
+  webSocketFactory?: (url: string) => AxCodeGrpcWebSocketLike
+}
+
+export type AxCodeGrpcHeadlessBackendHandle = {
+  client: ReturnType<typeof createAxCodeGrpcClient>
+  close(): Promise<void>
 }
 
 export type AxCodeGrpcWebSocketLike = {
@@ -1447,6 +1458,23 @@ export function createAxCodeGrpcClientFromHttp(input: AxCodeGrpcHttpBridgeOption
 }
 
 export const createAxCodeGrpcHeadlessClient = createAxCodeGrpcClient
+
+export async function startAxCodeGrpcHeadlessBackend(
+  options: AxCodeGrpcHeadlessBackendOptions = {},
+): Promise<AxCodeGrpcHeadlessBackendHandle> {
+  const backend = await startHeadlessBackend(options)
+  const client = createAxCodeGrpcClientFromHttp({
+    baseUrl: backend.url,
+    headers: backend.headers,
+    directory: options.directory,
+    fetch: options.fetch,
+    webSocketFactory: options.webSocketFactory,
+  })
+  return {
+    client,
+    close: backend.close,
+  }
+}
 
 export function resolveAxCodeGrpcProtoUrl(baseUrl: string | URL = import.meta.url): URL {
   const moduleUrl = typeof baseUrl === "string" ? new URL(baseUrl) : baseUrl

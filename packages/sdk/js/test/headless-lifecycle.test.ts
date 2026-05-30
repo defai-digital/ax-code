@@ -9,6 +9,7 @@ import {
   HEADLESS_RUNTIME_SCHEMA_VERSION,
   startHeadlessBackend,
 } from "../src/headless.js"
+import { startAxCodeGrpcHeadlessBackend } from "../src/grpc"
 
 const originalPath = process.env.PATH
 const originalPidFile = process.env.AX_CODE_FAKE_PID_FILE
@@ -173,6 +174,27 @@ describe("headless backend lifecycle", () => {
     }
 
     await expect(waitForFile(fake.termFile)).resolves.toBe("terminated")
+  })
+
+  test("gRPC headless backend helper hides HTTP endpoint details from the GUI client", async () => {
+    await using fake = await createReadyFakeAxCode()
+
+    const backend = await startAxCodeGrpcHeadlessBackend({
+      auth: { username: "app", password: "secret" },
+      reservePort: async () => 18456,
+      fetch: (async () => jsonResponse({ healthy: true })) as typeof fetch,
+    })
+    try {
+      expect("url" in backend).toBe(false)
+      expect("headers" in backend).toBe(false)
+      expect(await backend.client.health()).toEqual({ status: "SERVING", transport: "http-bridge" })
+      expect(await waitForFile(fake.authFile)).toBe("app:secret\n")
+      expect(await waitForFile(fake.argsFile)).toContain("serve --hostname=127.0.0.1 --port=18456")
+    } finally {
+      await backend.close()
+    }
+
+    await waitForProcessExit(Number(await waitForFile(fake.pidFile)))
   })
 })
 

@@ -65,23 +65,19 @@ This keeps the native transport boundary explicit without exposing or mirroring 
 
 ## TypeScript Usage
 
-Use the HTTP bridge while the native gRPC server is being implemented:
+Use the SDK-managed gRPC headless backend while the native gRPC server is being implemented. It keeps the HTTP bridge
+inside the host process and returns only the gRPC client plus lifecycle handle:
 
 ```ts
-import { startHeadlessBackend } from "@ax-code/sdk/headless"
 import {
-  createAxCodeGrpcClientFromHttp,
   createAxCodeGrpcClientFromNativeBridge,
   resolveAxCodeGrpcProtoUrl,
+  startAxCodeGrpcHeadlessBackend,
 } from "@ax-code/sdk/grpc"
 
-const backend = await startHeadlessBackend({ directory: "/workspace/app" })
+const backend = await startAxCodeGrpcHeadlessBackend({ directory: "/workspace/app" })
 try {
-  const client = createAxCodeGrpcClientFromHttp({
-    baseUrl: backend.url,
-    headers: backend.headers,
-    directory: "/workspace/app",
-  })
+  const client = backend.client
 
   const session = await client.createSession({ title: "GUI session" })
   const messages = await client.session.messages((session as { id: string }).id, { limit: 50 })
@@ -181,6 +177,10 @@ const bridge = createAxCodeGrpcNativeBridgeFromHandlers(handlers, {
 Event streaming accepts optional `types` and `sessionID` filters. Native transports should apply those filters server-side.
 The HTTP compatibility bridge applies the same filters client-side over the existing SSE route so GUI code can keep one
 subscription shape while the native server is being implemented.
+
+`startAxCodeGrpcHeadlessBackend()` is the preferred temporary fallback when the host still starts `ax-code serve`
+internally. It does not return the HTTP URL or authorization header, so renderer code can be written against the gRPC
+facade and later moved to a real native gRPC transport without a public API rewrite.
 
 PTY streaming is modeled as a gRPC bidirectional stream. The HTTP bridge adapts that stream to the existing WebSocket route for compatibility; native GUI hosts should implement it over their local gRPC, Unix-socket, or named-pipe transport instead of exposing the WebSocket route to renderer code.
 

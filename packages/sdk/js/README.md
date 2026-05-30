@@ -204,20 +204,15 @@ See [`example/headless-app.ts`](./example/headless-app.ts) for a minimal app-sty
 Use `@ax-code/sdk/grpc` for first-party desktop or native GUI integrations that want a gRPC-shaped command/event contract without exposing the full HTTP route tree to the app shell.
 
 ```ts
-import { startHeadlessBackend } from "@ax-code/sdk/headless"
 import {
-  createAxCodeGrpcClientFromHttp,
   createAxCodeGrpcClientFromNativeBridge,
   resolveAxCodeGrpcProtoUrl,
+  startAxCodeGrpcHeadlessBackend,
 } from "@ax-code/sdk/grpc"
 
-const backend = await startHeadlessBackend({ directory: "/path/to/workspace" })
+const backend = await startAxCodeGrpcHeadlessBackend({ directory: "/path/to/workspace" })
 try {
-  const client = createAxCodeGrpcClientFromHttp({
-    baseUrl: backend.url,
-    headers: backend.headers,
-    directory: "/path/to/workspace",
-  })
+  const client = backend.client
 
   const bootstrap = await client.bootstrap.load({
     include: { sessions: true, providers: true, providerList: true, path: true, vcs: true },
