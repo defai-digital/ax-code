@@ -1291,6 +1291,7 @@ export type WorkflowArtifactEventRecord = {
   runID: string
   phaseID?: string
   childID?: string
+  specArtifactID?: string
   kind: "summary" | "finding" | "patch" | "verification" | "metric" | "log"
   retention: "ephemeral" | "session" | "durable"
   exposeToMainContext: boolean
@@ -6113,6 +6114,102 @@ export type WorkflowRunArtifactsResponses = {
 }
 
 export type WorkflowRunArtifactsResponse = WorkflowRunArtifactsResponses[keyof WorkflowRunArtifactsResponses]
+
+export type WorkflowRunEvalSummaryData = {
+  body?: {
+    baseline?: {
+      label?: string
+      metrics: {
+        status?: "queued" | "running" | "blocked" | "paused" | "failed" | "completed" | "cancelled"
+        elapsedMs?: number
+        totalTokens?: number
+        inputTokens?: number
+        outputTokens?: number
+        toolCalls?: number
+        childAgents?: number
+        retries?: number
+        estimatedCostUsd?: number
+        confirmedFindings?: number
+        likelyFindings?: number
+        rejectedFindings?: number
+        unverifiedFindings?: number
+        falsePositiveFindings?: number
+        artifactCount?: number
+        exposedArtifactCount?: number
+        verificationEnvelopeCount?: number
+        interventionCount?: number
+      }
+    }
+    now?: number
+  }
+  path: {
+    runID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/workflow-runs/{runID}/eval-summary"
+}
+
+export type WorkflowRunEvalSummaryErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type WorkflowRunEvalSummaryError = WorkflowRunEvalSummaryErrors[keyof WorkflowRunEvalSummaryErrors]
+
+export type WorkflowRunEvalSummaryResponses = {
+  /**
+   * Workflow evaluation summary.
+   */
+  200: {
+    runID: string
+    sourceTemplateID?: string
+    decision: "promote" | "hold" | "rollback"
+    reasons: Array<string>
+    metrics: {
+      status: "queued" | "running" | "blocked" | "paused" | "failed" | "completed" | "cancelled"
+      elapsedMs: number
+      totalTokens: number
+      inputTokens: number
+      outputTokens: number
+      toolCalls: number
+      childAgents: number
+      retries: number
+      estimatedCostUsd: number
+      confirmedFindings: number
+      likelyFindings: number
+      rejectedFindings: number
+      unverifiedFindings: number
+      falsePositiveFindings: number
+      artifactCount: number
+      exposedArtifactCount: number
+      verificationEnvelopeCount: number
+      interventionCount: number
+    }
+    budgetStatus: "ok" | "warning" | "exceeded"
+    budgetWarnings: Array<string>
+    budgetExceeded: Array<string>
+    verificationSatisfied: boolean
+    comparison?: {
+      baselineLabel: string
+      confirmedFindingsDelta: number
+      falsePositiveFindingsDelta: number
+      totalTokensDelta?: number
+      elapsedMsDelta?: number
+      estimatedCostUsdDelta?: number
+      interventionCountDelta?: number
+    }
+  }
+}
+
+export type WorkflowRunEvalSummaryResponse = WorkflowRunEvalSummaryResponses[keyof WorkflowRunEvalSummaryResponses]
 
 export type WorkflowRunStartData = {
   body?: {

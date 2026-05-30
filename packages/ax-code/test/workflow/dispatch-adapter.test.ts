@@ -93,6 +93,48 @@ describe("WorkflowDispatchAdapter", () => {
     }
   })
 
+  test("satisfies required verification gates with declared phase output artifacts", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
+    process.env.AX_CODE_WORKFLOW_RUNTIME = "1"
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const spec = parseWorkflowSpecV1({
+            schemaVersion: 1,
+            id: "verified-dispatch",
+            name: "Verified Dispatch",
+            description: "Read-only direct dispatch that emits the required verification artifact.",
+            artifacts: [{ id: "verification-summary", kind: "verification", exposeToMainContext: true }],
+            verification: { mode: "required", requiredArtifactIds: ["verification-summary"] },
+            phases: [
+              {
+                id: "verify",
+                name: "Verify",
+                kind: "verification",
+                prompt: "Verify candidate findings.",
+                outputs: ["verification-summary"],
+              },
+            ],
+          })
+          const run = await WorkflowRun.create({ spec })
+
+          const result = await WorkflowScheduler.start(run.id, {
+            enqueueChildren: false,
+            dispatchExecutor: async () => ({ output: "verified", tokensUsed: 3 }),
+          })
+
+          expect(result.status).toBe("completed")
+          expect(result.artifacts.some((artifact) => artifact.specArtifactID === "verification-summary")).toBe(true)
+        },
+      })
+    } finally {
+      if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME
+      else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
+    }
+  })
+
   test("stops direct dispatch when token budget is exceeded", async () => {
     await using tmp = await tmpdir({ git: true })
     const previous = process.env.AX_CODE_WORKFLOW_RUNTIME

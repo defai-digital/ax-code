@@ -1,5 +1,6 @@
 export * from "./fixtures"
 export * from "./budget"
+export * from "./eval"
 export * from "./planner"
 export * from "./run"
 export * from "./scheduler"

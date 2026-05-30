@@ -51,6 +51,37 @@ describe("WorkflowScheduler", () => {
     }
   })
 
+  test("blocks completion when required verification artifacts are missing", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
+    process.env.AX_CODE_WORKFLOW_RUNTIME = "1"
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const spec = parseWorkflowSpecV1({
+            schemaVersion: 1,
+            id: "verification-gated-noop",
+            name: "Verification Gated Noop",
+            description: "A fixture that cannot complete without its declared verification artifact.",
+            artifacts: [{ id: "verification-summary", kind: "verification" }],
+            verification: { mode: "required", requiredArtifactIds: ["verification-summary"] },
+            phases: [{ id: "noop", name: "Noop", kind: "noop" }],
+          })
+          const run = await WorkflowRun.create({ spec })
+          const result = await WorkflowScheduler.start(run.id)
+
+          expect(result.status).toBe("blocked")
+          expect(result.error).toContain("missing required workflow artifacts: verification-summary")
+          expect(result.phases[0]?.status).toBe("completed")
+        },
+      })
+    } finally {
+      if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME
+      else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
+    }
+  })
+
   test("bridges the first executable phase into TaskQueue subagent items", async () => {
     await using tmp = await tmpdir({ git: true })
     const previous = process.env.AX_CODE_WORKFLOW_RUNTIME

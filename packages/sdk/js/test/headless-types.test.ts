@@ -287,6 +287,9 @@ describe("headless SDK types", () => {
           return new Response(JSON.stringify({ id: "wfr_live", status: "queued" }), { status: 200 })
         }
         if (parsed.pathname.endsWith("/artifacts")) return new Response(JSON.stringify([]), { status: 200 })
+        if (parsed.pathname.endsWith("/eval-summary")) {
+          return new Response(JSON.stringify({ runID: "wfr_live", decision: "promote" }), { status: 200 })
+        }
         return new Response(JSON.stringify({ id: "wfr_live", status: "running" }), { status: 200 })
       }) as typeof fetch,
     })
@@ -308,6 +311,9 @@ describe("headless SDK types", () => {
       modelPolicy: { effort: "workflow", workerModel: "cheap-headless" },
     })
     await client.workflowRun.artifacts("wfr_live", { kind: "summary", includePayload: "false" })
+    await client.workflowRun.evalSummary("wfr_live", {
+      baseline: { label: "single-agent", metrics: { confirmedFindings: 0, falsePositiveFindings: 0 } },
+    })
     await client.workflowRun.start("wfr_live", { enqueueChildren: false })
     await client.workflowRun.pause("wfr_live")
 
@@ -318,6 +324,7 @@ describe("headless SDK types", () => {
       ["POST", "/workflow-templates/project%3Aroute-noop/promote"],
       ["POST", "/workflow-runs"],
       ["GET", "/workflow-runs/wfr_live/artifacts"],
+      ["POST", "/workflow-runs/wfr_live/eval-summary"],
       ["POST", "/workflow-runs/wfr_live/start"],
       ["POST", "/workflow-runs/wfr_live/pause"],
     ])
@@ -328,7 +335,12 @@ describe("headless SDK types", () => {
         modelPolicy: { effort: "workflow", workerModel: "cheap-headless" },
       }),
     )
-    expect(calls[6].body).toBe(JSON.stringify({ enqueueChildren: false }))
+    expect(calls[6].body).toBe(
+      JSON.stringify({
+        baseline: { label: "single-agent", metrics: { confirmedFindings: 0, falsePositiveFindings: 0 } },
+      }),
+    )
+    expect(calls[7].body).toBe(JSON.stringify({ enqueueChildren: false }))
   })
 
   test("parseHeadlessRuntimeResponseBody handles empty and invalid bodies", () => {

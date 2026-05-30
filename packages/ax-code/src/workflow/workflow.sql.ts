@@ -125,6 +125,7 @@ export const WorkflowArtifactTable = sqliteTable(
     child_id: text()
       .$type<WorkflowChildRecord["id"]>()
       .references(() => WorkflowChildTable.id, { onDelete: "set null" }),
+    spec_artifact_id: text(),
     kind: text().$type<WorkflowArtifactRecord["kind"]>().notNull(),
     retention: text().$type<WorkflowArtifactRecord["retention"]>().notNull(),
     expose_to_main_context: integer({ mode: "boolean" }).notNull(),

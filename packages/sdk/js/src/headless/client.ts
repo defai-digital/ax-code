@@ -9,6 +9,8 @@ import type {
   WorkflowRunArtifactsResponse,
   WorkflowRunCreateData,
   WorkflowRunCreateResponse,
+  WorkflowRunEvalSummaryData,
+  WorkflowRunEvalSummaryResponse,
   WorkflowRunGetResponse,
   WorkflowRunListData,
   WorkflowRunListResponse,
@@ -173,6 +175,7 @@ export type HeadlessScheduledTaskRunNowResult = {
 
 export type HeadlessWorkflowRunListInput = Omit<NonNullable<WorkflowRunListData["query"]>, "directory">
 export type HeadlessWorkflowRunCreateInput = NonNullable<WorkflowRunCreateData["body"]>
+export type HeadlessWorkflowRunEvalSummaryInput = NonNullable<WorkflowRunEvalSummaryData["body"]>
 export type HeadlessWorkflowArtifactListInput = Omit<NonNullable<WorkflowRunArtifactsData["query"]>, "directory">
 export type HeadlessWorkflowTemplateSaveInput = NonNullable<WorkflowTemplateSaveData["body"]>
 export type HeadlessWorkflowRunStartInput = {
@@ -337,6 +340,18 @@ export function createHeadlessClient(input: HeadlessClientOptions) {
           path: `/workflow-runs/${encodeURIComponent(runID)}/artifacts`,
           method: "GET",
           query: parameters,
+        })
+      },
+      evalSummary(runID: string, body: HeadlessWorkflowRunEvalSummaryInput = {}) {
+        return requestJson<WorkflowRunEvalSummaryResponse>({
+          baseUrl: input.baseUrl,
+          fetch: fetchFn,
+          headers: input.headers,
+          directory: input.directory,
+          experimental_workspaceID: input.experimental_workspaceID,
+          path: `/workflow-runs/${encodeURIComponent(runID)}/eval-summary`,
+          method: "POST",
+          body: body as Record<string, unknown>,
         })
       },
       start(runID: string, body: HeadlessWorkflowRunStartInput = {}) {

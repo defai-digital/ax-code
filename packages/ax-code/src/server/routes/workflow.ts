@@ -2,6 +2,7 @@ import { Hono } from "hono"
 import { HTTPException } from "hono/http-exception"
 import { describeRoute, resolver, validator } from "hono-openapi"
 import z from "zod"
+import { WorkflowEvalBaseline, WorkflowEvalSummary, evaluateWorkflowRun } from "@/workflow/eval"
 import { WorkflowRun } from "@/workflow/run"
 import { WorkflowScheduler } from "@/workflow/scheduler"
 import {
@@ -24,7 +25,11 @@ import type { SessionID } from "@/session/schema"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
 
-const WorkflowTemplateIDSchema = z.string().min(1).max(120).regex(/^(builtin|user|project):[a-z][a-z0-9-]*$/)
+const WorkflowTemplateIDSchema = z
+  .string()
+  .min(1)
+  .max(120)
+  .regex(/^(builtin|user|project):[a-z][a-z0-9-]*$/)
 const WORKFLOW_RUN_ID_PARAM = z.object({ runID: z.string().min(1) })
 const WORKFLOW_TEMPLATE_ID_PARAM = z.object({ templateID: WorkflowTemplateIDSchema })
 
@@ -52,6 +57,13 @@ const WorkflowArtifactListQuery = z.object({
   kind: WorkflowRunState.ArtifactKind.optional(),
   includePayload: z.enum(["true", "false"]).optional(),
 })
+
+const WorkflowEvalSummaryBody = z
+  .object({
+    baseline: WorkflowEvalBaseline.optional(),
+    now: z.number().int().min(0).optional(),
+  })
+  .optional()
 
 const WorkflowTemplateSaveBody = z.object({
   scope: z.enum(["user", "project"]),
@@ -211,6 +223,28 @@ export const WorkflowRunRoutes = lazy(() =>
             return compact
           })
         return c.json(artifacts)
+      },
+    )
+    .post(
+      "/:runID/eval-summary",
+      describeRoute({
+        summary: "Evaluate workflow run",
+        description: "Compare a workflow run against optional baseline metrics and return its preview promotion gate.",
+        operationId: "workflowRun.eval_summary",
+        responses: {
+          200: {
+            description: "Workflow evaluation summary.",
+            content: { "application/json": { schema: resolver(WorkflowEvalSummary) } },
+          },
+          ...errors(400, 404),
+        },
+      }),
+      validator("param", WORKFLOW_RUN_ID_PARAM),
+      validator("json", WorkflowEvalSummaryBody),
+      async (c) => {
+        const body = c.req.valid("json") ?? {}
+        const detail = await WorkflowRun.getDetail(runID(c))
+        return c.json(evaluateWorkflowRun({ run: detail, baseline: body.baseline, now: body.now }))
       },
     )
     .post(

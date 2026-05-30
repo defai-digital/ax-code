@@ -84,6 +84,7 @@ describe("WorkflowRun state", () => {
             runID: run.id,
             phaseID: phase.id,
             childID: child.id,
+            specArtifactID: "dry-run-summary",
             kind: "summary",
             summary: "dry-run output",
             exposeToMainContext: true,
@@ -91,6 +92,7 @@ describe("WorkflowRun state", () => {
             redaction: { status: "none" },
           })
           expect(artifact.id).toStartWith("wfa_")
+          expect(artifact.specArtifactID).toBe("dry-run-summary")
           expect(artifact.exposeToMainContext).toBe(true)
 
           const completedChild = await WorkflowRun.setChildStatus({

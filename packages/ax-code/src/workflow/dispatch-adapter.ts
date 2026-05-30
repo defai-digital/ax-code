@@ -107,6 +107,7 @@ export namespace WorkflowDispatchAdapter {
     await WorkflowRun.appendArtifact({
       runID: input.runID,
       phaseID: input.phase.id,
+      specArtifactID: input.phaseSpec.outputs[0],
       kind: "summary",
       retention: "session",
       exposeToMainContext: exposesPhaseSummary(input.spec, input.phaseSpec),

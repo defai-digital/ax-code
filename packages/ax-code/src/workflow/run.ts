@@ -148,15 +148,18 @@ async function getDetail(id: WorkflowRunID): Promise<WorkflowRunDetail> {
 
 async function setStatus(input: WorkflowRunState.SetStatusInput): Promise<WorkflowRunState.Info> {
   const parsed = WorkflowRunState.SetStatusInput.parse(input)
+  const completionGate =
+    parsed.status === "completed" ? evaluateCompletionGate(await getDetail(parsed.id)) : { ok: true as const }
   const current = await get(parsed.id)
   const now = Date.now()
+  const status = completionGate.ok ? parsed.status : "blocked"
   const updates: Partial<typeof WorkflowRunTable.$inferInsert> = {
-    status: parsed.status,
-    error: parsed.error,
+    status,
+    error: completionGate.ok ? parsed.error : completionGate.message,
     time_updated: now,
   }
-  if (parsed.status === "running" && current.time.started === undefined) updates.time_started = now
-  if (isTerminalRunStatus(parsed.status)) updates.time_completed = now
+  if (status === "running" && current.time.started === undefined) updates.time_started = now
+  if (isTerminalRunStatus(status)) updates.time_completed = now
 
   const run = Database.use((db) => {
     const row = db.update(WorkflowRunTable).set(updates).where(eq(WorkflowRunTable.id, parsed.id)).returning().get()
@@ -292,6 +295,7 @@ async function appendArtifact(input: WorkflowRunState.AppendArtifactInput): Prom
         run_id: parsed.runID,
         phase_id: parsed.phaseID,
         child_id: parsed.childID,
+        spec_artifact_id: parsed.specArtifactID,
         kind: parsed.kind,
         retention: parsed.retention,
         expose_to_main_context: parsed.exposeToMainContext,
@@ -650,6 +654,7 @@ function fromArtifactRow(row: typeof WorkflowArtifactTable.$inferSelect): Workfl
     runID: row.run_id,
     phaseID: row.phase_id ?? undefined,
     childID: row.child_id ?? undefined,
+    specArtifactID: row.spec_artifact_id ?? undefined,
     kind: row.kind,
     retention: row.retention,
     exposeToMainContext: row.expose_to_main_context,
@@ -741,6 +746,34 @@ function unique<T>(items: T[]): T[] {
 
 function isTerminalRunStatus(status: WorkflowRun.Status) {
   return status === "completed" || status === "failed" || status === "cancelled"
+}
+
+function evaluateCompletionGate(detail: WorkflowRunDetail): { ok: true } | { ok: false; message: string } {
+  if (detail.spec.verification.mode !== "required") return { ok: true }
+
+  const artifactsBySpecID = new Set(
+    detail.artifacts.map((artifact) => artifact.specArtifactID).filter((id): id is string => !!id),
+  )
+  const missingArtifacts = detail.spec.verification.requiredArtifactIds.filter((id) => !artifactsBySpecID.has(id))
+  if (missingArtifacts.length > 0) {
+    return {
+      ok: false,
+      message: `Workflow verification gate is required; missing required workflow artifacts: ${missingArtifacts.join(", ")}`,
+    }
+  }
+
+  if (
+    detail.spec.verification.requiredArtifactIds.length === 0 &&
+    detail.verificationEnvelopeIDs.length === 0 &&
+    !detail.artifacts.some((artifact) => artifact.kind === "verification")
+  ) {
+    return {
+      ok: false,
+      message: "Workflow verification gate is required; no verification artifact or envelope is attached.",
+    }
+  }
+
+  return { ok: true }
 }
 
 function isTerminalPhaseStatus(status: WorkflowRun.PhaseStatus) {

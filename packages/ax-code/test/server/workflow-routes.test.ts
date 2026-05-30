@@ -69,12 +69,18 @@ describe("workflow routes", () => {
         body: JSON.stringify({ allowScaleBeyondDefaults: true }),
       })
       expect(startResponse.status).toBe(200)
-      const started = (await startResponse.json()) as { status: string; children: unknown[]; phases: Array<{ status: string }> }
+      const started = (await startResponse.json()) as {
+        status: string
+        children: unknown[]
+        phases: Array<{ status: string }>
+      }
       expect(started.status).toBe("running")
       expect(started.phases[0]?.status).toBe("running")
       expect(started.children).toHaveLength(8)
 
-      const pauseResponse = await app.request(`/workflow-runs/${created.id}/pause?${directoryQuery}`, { method: "POST" })
+      const pauseResponse = await app.request(`/workflow-runs/${created.id}/pause?${directoryQuery}`, {
+        method: "POST",
+      })
       expect(pauseResponse.status).toBe(200)
       expect(await pauseResponse.json()).toMatchObject({ status: "paused" })
 
@@ -136,6 +142,60 @@ describe("workflow routes", () => {
       expect(artifacts).toHaveLength(1)
       expect(artifacts[0]).toMatchObject({ phaseID, kind: "summary" })
       expect(artifacts[0]?.payload).toBeUndefined()
+    } finally {
+      if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME
+      else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
+    }
+  })
+
+  test("returns workflow eval summaries for preview promotion gates", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
+    process.env.AX_CODE_WORKFLOW_RUNTIME = "1"
+    try {
+      const app = Server.Default()
+      const directoryQuery = `directory=${encodeURIComponent(tmp.path)}`
+
+      const createResponse = await app.request(`/workflow-runs?${directoryQuery}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ templateID: "builtin:noop-dry-run" }),
+      })
+      expect(createResponse.status).toBe(200)
+      const created = (await createResponse.json()) as { id: string }
+
+      const startResponse = await app.request(`/workflow-runs/${created.id}/start?${directoryQuery}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({}),
+      })
+      expect(startResponse.status).toBe(200)
+
+      const evalResponse = await app.request(`/workflow-runs/${created.id}/eval-summary?${directoryQuery}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          baseline: {
+            label: "single-agent",
+            metrics: {
+              confirmedFindings: 0,
+              falsePositiveFindings: 0,
+              totalTokens: 1_000,
+            },
+          },
+        }),
+      })
+      expect(evalResponse.status).toBe(200)
+      expect(await evalResponse.json()).toMatchObject({
+        runID: created.id,
+        decision: "promote",
+        verificationSatisfied: true,
+        comparison: {
+          baselineLabel: "single-agent",
+          confirmedFindingsDelta: 0,
+          falsePositiveFindingsDelta: 0,
+        },
+      })
     } finally {
       if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME
       else process.env.AX_CODE_WORKFLOW_RUNTIME = previous

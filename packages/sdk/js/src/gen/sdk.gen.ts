@@ -262,6 +262,8 @@ import type {
   WorkflowRunCancelResponses,
   WorkflowRunCreateErrors,
   WorkflowRunCreateResponses,
+  WorkflowRunEvalSummaryErrors,
+  WorkflowRunEvalSummaryResponses,
   WorkflowRunGetErrors,
   WorkflowRunGetResponses,
   WorkflowRunListErrors,
@@ -2260,6 +2262,71 @@ export class WorkflowRun extends HeyApiClient {
       url: "/workflow-runs/{runID}/artifacts",
       ...options,
       ...params,
+    })
+  }
+
+  /**
+   * Evaluate workflow run
+   *
+   * Compare a workflow run against optional baseline metrics and return its preview promotion gate.
+   */
+  public evalSummary<ThrowOnError extends boolean = false>(
+    parameters: {
+      runID: string
+      directory?: string
+      baseline?: {
+        label?: string
+        metrics: {
+          status?: "queued" | "running" | "blocked" | "paused" | "failed" | "completed" | "cancelled"
+          elapsedMs?: number
+          totalTokens?: number
+          inputTokens?: number
+          outputTokens?: number
+          toolCalls?: number
+          childAgents?: number
+          retries?: number
+          estimatedCostUsd?: number
+          confirmedFindings?: number
+          likelyFindings?: number
+          rejectedFindings?: number
+          unverifiedFindings?: number
+          falsePositiveFindings?: number
+          artifactCount?: number
+          exposedArtifactCount?: number
+          verificationEnvelopeCount?: number
+          interventionCount?: number
+        }
+      }
+      now?: number
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "runID" },
+            { in: "query", key: "directory" },
+            { in: "body", key: "baseline" },
+            { in: "body", key: "now" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      WorkflowRunEvalSummaryResponses,
+      WorkflowRunEvalSummaryErrors,
+      ThrowOnError
+    >({
+      url: "/workflow-runs/{runID}/eval-summary",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
     })
   }
 
