@@ -3,7 +3,7 @@ import { Session } from "../session"
 import { isWorkflowRuntimeEnabled, type WorkflowSpecV1 } from "./spec"
 import { planWorkflowDryRun } from "./planner"
 import { WorkflowRun } from "./run"
-import { WorkflowRunID } from "./state"
+import { WorkflowPhaseID, WorkflowRunID } from "./state"
 
 type WorkflowDispatchExecutor = (
   spec: { agent: string; prompt: string; constraints?: string[]; timeoutMs?: number },
@@ -199,22 +199,35 @@ export namespace WorkflowScheduler {
 
   export async function retry(runID: WorkflowRunID) {
     assertEnabled()
-    const TaskQueue = await loadTaskQueue()
-    const detail = await WorkflowRun.getDetail(runID)
-    for (const child of detail.children) {
-      if (child.status !== "failed" && child.status !== "cancelled") continue
-      if (child.taskQueueID) {
-        const item = await TaskQueue.get(child.taskQueueID).catch(() => undefined)
-        if (item?.status === "failed" || item?.status === "cancelled") {
-          await TaskQueue.retry(child.taskQueueID)
-          continue
-        }
-      }
-      await WorkflowRun.setChildStatus({ id: child.id, status: "queued" })
-    }
-    await refreshRunningRunState(runID)
-    return WorkflowRun.getDetail(runID)
+    return retryChildren(runID)
   }
+
+  export async function retryPhase(runID: WorkflowRunID, phaseID: WorkflowPhaseID) {
+    assertEnabled()
+    return retryChildren(runID, phaseID)
+  }
+}
+
+async function retryChildren(runID: WorkflowRunID, phaseID?: WorkflowPhaseID) {
+  const TaskQueue = await loadTaskQueue()
+  const detail = await WorkflowRun.getDetail(runID)
+  if (phaseID && !detail.phases.some((phase) => phase.id === phaseID)) {
+    throw new Error(`Workflow phase ${phaseID} does not belong to workflow run ${runID}.`)
+  }
+  const children = phaseID ? detail.children.filter((child) => child.phaseID === phaseID) : detail.children
+  for (const child of children) {
+    if (child.status !== "failed" && child.status !== "cancelled") continue
+    if (child.taskQueueID) {
+      const item = await TaskQueue.get(child.taskQueueID).catch(() => undefined)
+      if (item?.status === "failed" || item?.status === "cancelled") {
+        await TaskQueue.retry(child.taskQueueID)
+        continue
+      }
+    }
+    await WorkflowRun.setChildStatus({ id: child.id, status: "queued" })
+  }
+  await refreshRunningRunState(runID)
+  return WorkflowRun.getDetail(runID)
 }
 
 export class WorkflowSchedulerDisabledError extends Error {

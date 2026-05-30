@@ -10,7 +10,7 @@ import { isWorkflowRuntimeEnabled } from "../../workflow/spec"
 import type { WorkflowModelPolicyOverride } from "../../workflow/spec"
 import { WorkflowTemplate } from "../../workflow/template"
 import type { SessionID } from "../../session/schema"
-import type { WorkflowArtifactRecord, WorkflowRunDetail, WorkflowRunID } from "../../workflow/state"
+import type { WorkflowArtifactRecord, WorkflowPhaseID, WorkflowRunDetail, WorkflowRunID } from "../../workflow/state"
 import { summarizeWorkflowRunDetail, type WorkflowRunProjection } from "../../workflow/projection"
 import {
   evaluateWorkflowEvalCaseRun,
@@ -45,6 +45,10 @@ type RoutineRunOptions = Omit<StartOptions, "templateID"> & {
 
 type RunIDOptions = JsonOption & {
   runID: string
+}
+
+type RetryOptions = RunIDOptions & {
+  phaseId?: string
 }
 
 type EvalCaseOptions = RunIDOptions & {
@@ -707,11 +711,35 @@ const WorkflowRunSaveTemplateCommand = cmd({
 const WorkflowRunPauseCommand = controlCommand("pause", "pause queued workflow children", WorkflowScheduler.pause)
 const WorkflowRunResumeCommand = controlCommand("resume", "resume paused workflow children", WorkflowScheduler.resume)
 const WorkflowRunCancelCommand = controlCommand("cancel", "cancel a workflow run", WorkflowScheduler.cancel)
-const WorkflowRunRetryCommand = controlCommand(
-  "retry",
-  "retry failed or cancelled workflow children",
-  WorkflowScheduler.retry,
-)
+const WorkflowRunRetryCommand = cmd({
+  command: "retry <runID>",
+  describe: "retry failed or cancelled workflow children",
+  builder: (yargs: Argv) =>
+    yargs
+      .positional("runID", {
+        type: "string",
+        demandOption: true,
+        describe: "workflow run id",
+      })
+      .option("phase-id", {
+        type: "string",
+        describe: "retry failed or cancelled children for one workflow phase id",
+      })
+      .option("json", jsonOption()),
+  async handler(args) {
+    await withWorkflowRuntime(async () => {
+      const options = args as unknown as RetryOptions
+      const detail = options.phaseId
+        ? await WorkflowScheduler.retryPhase(options.runID as WorkflowRunID, options.phaseId as WorkflowPhaseID)
+        : await WorkflowScheduler.retry(options.runID as WorkflowRunID)
+      if (options.json) {
+        writeJson(detail)
+        return
+      }
+      process.stdout.write(formatWorkflowRunDetail(detail))
+    })
+  },
+})
 
 export const WorkflowCommand = cmd({
   command: "workflow",

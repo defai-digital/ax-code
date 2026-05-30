@@ -30,6 +30,7 @@ import {
   WorkflowPhaseEventRecord,
   WorkflowRun as WorkflowRunState,
   WorkflowRunEventRecord,
+  type WorkflowPhaseID,
   type WorkflowRunID,
 } from "@/workflow/state"
 import type { SessionID } from "@/session/schema"
@@ -102,6 +103,10 @@ const WorkflowRoutineRunBody = z.object({
   modelPolicy: WorkflowModelPolicyOverride.optional(),
   inputValues: WorkflowInputValues,
   startOptions: WorkflowScheduler.StartOptions.partial().optional(),
+})
+
+const WorkflowRetryQuery = z.object({
+  phaseID: z.string().min(1).optional(),
 })
 
 const WorkflowRunResponse = WorkflowRunEventRecord
@@ -459,7 +464,15 @@ export const WorkflowRunRoutes = lazy(() =>
         },
       }),
       validator("param", WORKFLOW_RUN_ID_PARAM),
-      async (c) => c.json(await WorkflowScheduler.retry(runID(c))),
+      validator("query", WorkflowRetryQuery),
+      async (c) => {
+        const query = c.req.valid("query")
+        return c.json(
+          query.phaseID
+            ? await WorkflowScheduler.retryPhase(runID(c), query.phaseID as WorkflowPhaseID)
+            : await WorkflowScheduler.retry(runID(c)),
+        )
+      },
     ),
 )
 

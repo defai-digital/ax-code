@@ -268,6 +268,10 @@ describe("WorkflowScheduler", () => {
             maxRequestsPerMinute: 12,
             maxTokensPerMinute: 200_000,
           })
+          expect(queue[0]?.payload.budgetSlice).toMatchObject({
+            maxInputTokensPerChild: 50_000,
+            maxOutputTokensPerChild: 8_000,
+          })
         },
       })
     } finally {
@@ -491,6 +495,49 @@ describe("WorkflowScheduler", () => {
           expect(detail.phases[0]?.status).toBe("running")
           expect(detail.children.find((child) => child.taskQueueID === first!.id)?.status).toBe("queued")
           expect((await TaskQueue.get(first!.id)).status).toBe("queued")
+        },
+      })
+    } finally {
+      if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME
+      else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
+    }
+  })
+
+  test("retries only the selected failed workflow phase", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
+    process.env.AX_CODE_WORKFLOW_RUNTIME = "1"
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const run = await WorkflowRun.create({ spec: parseWorkflowSpecV1(WorkflowFixtureSpecs.issueTriage) })
+          await WorkflowScheduler.start(run.id, { allowScaleBeyondDefaults: true })
+          const { TaskQueue } = await import("../../src/session/task-queue")
+          const firstPhaseQueue = await TaskQueue.list()
+          for (const item of firstPhaseQueue) {
+            await TaskQueue.setStatus({ id: item.id, status: "completed" })
+          }
+
+          let detail = await WorkflowRun.getDetail(run.id)
+          const secondPhase = detail.phases[1]
+          if (!secondPhase) throw new Error("expected second workflow phase")
+          const [secondPhaseItem] = (await TaskQueue.list()).filter((item) => item.status === "queued")
+          await TaskQueue.setStatus({ id: secondPhaseItem!.id, status: "failed", error: "synthesis failed" })
+
+          detail = await WorkflowRun.getDetail(run.id)
+          expect(detail.status).toBe("failed")
+          expect(detail.phases[0]?.status).toBe("completed")
+          expect(detail.phases[1]?.status).toBe("failed")
+
+          detail = await WorkflowScheduler.retryPhase(run.id, secondPhase.id)
+          expect(detail.status).toBe("running")
+          expect(detail.phases[0]?.status).toBe("completed")
+          expect(detail.phases[1]?.status).toBe("running")
+          const firstPhaseChildren = detail.children.filter((child) => child.phaseID === detail.phases[0]?.id)
+          expect(firstPhaseChildren.every((child) => child.status === "completed")).toBe(true)
+          expect(detail.children.find((child) => child.taskQueueID === secondPhaseItem!.id)?.status).toBe("queued")
+          expect((await TaskQueue.get(secondPhaseItem!.id)).status).toBe("queued")
         },
       })
     } finally {
