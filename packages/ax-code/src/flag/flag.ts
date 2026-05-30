@@ -83,6 +83,7 @@ export namespace Flag {
   export declare const AX_CODE_DISABLE_SHARE: boolean
   export declare const AX_CODE_AUTONOMOUS: boolean
   export declare const AX_CODE_SMART_LLM: boolean
+  export declare const AX_CODE_WORKFLOW_RUNTIME: boolean
   export declare const AX_CODE_SUPER_LONG: boolean
   export declare const AX_CODE_CALLER: string | undefined
   export declare const AX_CODE_ORIGINAL_CWD: string | undefined
@@ -232,6 +233,10 @@ defineBooleanFlag("AX_CODE_AUTONOMOUS", true)
 
 // Evaluate each access so toggles and env overrides remain live.
 defineBooleanFlag("AX_CODE_SMART_LLM")
+
+// Dynamic workflow runtime is off by default until the scheduler, storage,
+// TUI, and permission surfaces are wired behind the same runtime contract.
+defineBooleanFlag("AX_CODE_WORKFLOW_RUNTIME")
 
 // Evaluate at access time so runtime toggles remain immediately effective.
 // The session override is set by the Super-Long route and must match the
