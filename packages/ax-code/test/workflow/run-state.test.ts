@@ -193,6 +193,72 @@ describe("WorkflowRun state", () => {
     })
   })
 
+  test("publishes run, phase, and child status transition events", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const events: string[] = []
+        const unsubscribers = [
+          Bus.subscribe(WorkflowRun.Event.Blocked, (event) => {
+            events.push(`${event.type}:${event.properties.run.status}`)
+          }),
+          Bus.subscribe(WorkflowRun.Event.Paused, (event) => {
+            events.push(`${event.type}:${event.properties.run.status}`)
+          }),
+          Bus.subscribe(WorkflowRun.Event.Resumed, (event) => {
+            events.push(`${event.type}:${event.properties.run.status}`)
+          }),
+          Bus.subscribe(WorkflowRun.Event.Cancelled, (event) => {
+            events.push(`${event.type}:${event.properties.run.status}`)
+          }),
+          Bus.subscribe(WorkflowRun.Event.PhaseFailed, (event) => {
+            events.push(`${event.type}:${event.properties.phase.status}`)
+          }),
+          Bus.subscribe(WorkflowRun.Event.ChildStarted, (event) => {
+            events.push(`${event.type}:${event.properties.child.status}`)
+          }),
+          Bus.subscribe(WorkflowRun.Event.ChildFailed, (event) => {
+            events.push(`${event.type}:${event.properties.child.status}`)
+          }),
+          Bus.subscribe(WorkflowRun.Event.ChildCancelled, (event) => {
+            events.push(`${event.type}:${event.properties.child.status}`)
+          }),
+        ]
+
+        try {
+          const run = await WorkflowRun.create({ spec: parseWorkflowSpecV1(WorkflowFixtureSpecs.noopDryRun) })
+          const detail = await WorkflowRun.getDetail(run.id)
+          const phase = detail.phases[0]!
+          const failedChild = await WorkflowRun.appendChild({ runID: run.id, phaseID: phase.id, agent: "worker" })
+          const cancelledChild = await WorkflowRun.appendChild({ runID: run.id, phaseID: phase.id, agent: "worker" })
+
+          await WorkflowRun.setStatus({ id: run.id, status: "blocked", error: "approval required" })
+          await WorkflowRun.setStatus({ id: run.id, status: "paused" })
+          await WorkflowRun.setStatus({ id: run.id, status: "running" })
+          await WorkflowRun.setChildStatus({ id: failedChild.id, status: "running" })
+          await WorkflowRun.setChildStatus({ id: failedChild.id, status: "failed", error: "model failed" })
+          await WorkflowRun.setChildStatus({ id: cancelledChild.id, status: "cancelled" })
+          await WorkflowRun.setPhaseStatus({ id: phase.id, status: "failed", error: "phase failed" })
+          await WorkflowRun.setStatus({ id: run.id, status: "cancelled" })
+
+          await new Promise((resolve) => setTimeout(resolve, 0))
+          expect(events).toContain("workflow.run.blocked:blocked")
+          expect(events).toContain("workflow.run.paused:paused")
+          expect(events).toContain("workflow.run.resumed:running")
+          expect(events).toContain("workflow.run.cancelled:cancelled")
+          expect(events).toContain("workflow.phase.failed:failed")
+          expect(events).toContain("workflow.child.started:running")
+          expect(events).toContain("workflow.child.failed:failed")
+          expect(events).toContain("workflow.child.cancelled:cancelled")
+        } finally {
+          for (const unsubscribe of unsubscribers) unsubscribe()
+        }
+      },
+    })
+  })
+
   test("publishes budget warning and exceeded events", async () => {
     await using tmp = await tmpdir({ git: true })
 
