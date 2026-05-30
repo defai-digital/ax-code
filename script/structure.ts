@@ -302,6 +302,23 @@ function roots() {
     .sort()
 }
 
+function trackedInternalFiles() {
+  const result = Bun.spawnSync(["git", "ls-files", ".internal"], {
+    cwd: root,
+    stdout: "pipe",
+    stderr: "pipe",
+  })
+  if (result.exitCode !== 0) {
+    const message = result.stderr.toString().trim()
+    throw new Error(message || "failed to inspect tracked .internal files")
+  }
+  return result.stdout
+    .toString()
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+}
+
 async function main() {
   const miss = await docs()
   const hit = await deps()
@@ -316,6 +333,7 @@ async function main() {
   const sums = await top()
   const drift = roots()
   const stale = old.filter((dir) => fs.existsSync(path.join(root, dir)))
+  const trackedInternal = trackedInternalFiles()
   const out = [] as string[]
   out.push("# Repo Structure Report")
   out.push("")
@@ -350,6 +368,14 @@ async function main() {
     for (const cycle of cycles) out.push(`- ${cycle}`)
   } else {
     out.push("- ok: no workspace package manifest cycles found")
+  }
+  out.push("")
+  out.push("## Internal Files")
+  if (trackedInternal.length) {
+    out.push("- warning: .internal files are tracked; keep internal planning local-only")
+    for (const file of trackedInternal) out.push(`- ${file}`)
+  } else {
+    out.push("- ok: no .internal files are tracked")
   }
   out.push("")
   out.push("## V4 Guardrails")
@@ -399,7 +425,7 @@ async function main() {
     await Bun.write(file, `${prev}${text}\n`)
   }
 
-  if (miss.length || hit.length || raw.length || v4.length || stale.length || drift.length) {
+  if (miss.length || hit.length || raw.length || v4.length || stale.length || drift.length || trackedInternal.length) {
     process.exit(1)
   }
 }
