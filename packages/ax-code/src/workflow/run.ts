@@ -1086,20 +1086,26 @@ function finalReportVerification(detail: WorkflowRunDetail) {
   const presentArtifactIds = new Set(detail.artifacts.map((artifact) => artifact.specArtifactID).filter(Boolean))
   const hasVerificationArtifact = detail.artifacts.some((artifact) => artifact.kind === "verification")
   const hasVerificationEnvelope = detail.verificationEnvelopeIDs.length > 0
-  const envelopeFailures = verificationEnvelopeFailures(detail)
+  const envelopeEvidence = verificationEnvelopeEvidence(detail)
+  const envelopeFailures = envelopeEvidence.failures
   const requiredArtifactsSatisfied =
     requiredArtifactIds.length > 0 && requiredArtifactIds.every((artifactID) => presentArtifactIds.has(artifactID))
+  const requiredEnvelopeEvidenceSatisfied =
+    requiredArtifactIds.length > 0
+      ? hasVerificationEnvelope ||
+        requiredArtifactIds.every((artifactID) => envelopeEvidence.passingArtifactIds.has(artifactID))
+      : hasVerificationEnvelope || envelopeEvidence.passingArtifactIds.size > 0
 
-  const status =
-    detail.spec.verification.mode === "skipped" || detail.spec.verification.mode === "deferred"
-      ? detail.spec.verification.mode
-      : envelopeFailures.length > 0
-        ? "failed"
-        : requiredArtifactsSatisfied || hasVerificationArtifact || hasVerificationEnvelope
-        ? "satisfied"
-        : detail.spec.verification.mode === "required"
-          ? "missing"
-          : "not_run"
+  let status: string
+  if (detail.spec.verification.mode === "skipped" || detail.spec.verification.mode === "deferred") {
+    status = detail.spec.verification.mode
+  } else if (envelopeFailures.length > 0) {
+    status = "failed"
+  } else if (detail.spec.verification.mode === "required") {
+    status = requiredArtifactsSatisfied && requiredEnvelopeEvidenceSatisfied ? "satisfied" : "missing"
+  } else {
+    status = requiredArtifactsSatisfied || hasVerificationArtifact || hasVerificationEnvelope ? "satisfied" : "not_run"
+  }
 
   return {
     mode: detail.spec.verification.mode,
@@ -1236,11 +1242,11 @@ function evaluateCompletionGate(detail: WorkflowRunDetail): { ok: true } | { ok:
   )
 
   if (detail.spec.verification.mode === "required") {
-    const envelopeFailures = verificationEnvelopeFailures(detail)
-    if (envelopeFailures.length > 0) {
+    const envelopeEvidence = verificationEnvelopeEvidence(detail)
+    if (envelopeEvidence.failures.length > 0) {
       return {
         ok: false,
-        message: `Workflow verification gate is required; verification envelopes did not pass: ${envelopeFailures.join("; ")}`,
+        message: `Workflow verification gate is required; verification envelopes did not pass: ${envelopeEvidence.failures.join("; ")}`,
       }
     }
 
@@ -1249,6 +1255,14 @@ function evaluateCompletionGate(detail: WorkflowRunDetail): { ok: true } | { ok:
       return {
         ok: false,
         message: `Workflow verification gate is required; missing required workflow artifacts: ${missingArtifacts.join(", ")}`,
+      }
+    }
+
+    const missingEnvelopeEvidence = missingRequiredVerificationEnvelopeEvidence(detail, envelopeEvidence)
+    if (missingEnvelopeEvidence.length > 0) {
+      return {
+        ok: false,
+        message: `Workflow verification gate is required; missing passing verification envelope evidence: ${missingEnvelopeEvidence.join(", ")}`,
       }
     }
 
@@ -1275,19 +1289,35 @@ function evaluateCompletionGate(detail: WorkflowRunDetail): { ok: true } | { ok:
   return { ok: true }
 }
 
-function verificationEnvelopeFailures(detail: WorkflowRunDetail) {
-  const failures: string[] = []
+function verificationEnvelopeEvidence(detail: WorkflowRunDetail) {
+  const evidence = {
+    failures: [] as string[],
+    passingArtifactIds: new Set<string>(),
+  }
   for (const artifact of detail.artifacts) {
     if (artifact.kind !== "verification") continue
     for (const envelope of verificationEnvelopesFromPayload(artifact.payload)) {
-      if (envelope.result.passed && envelope.result.status === "passed") continue
+      if (envelope.result.passed && envelope.result.status === "passed") {
+        evidence.passingArtifactIds.add(artifact.specArtifactID ?? artifact.id)
+        continue
+      }
       const scope = envelope.scope.paths?.join(",") ?? envelope.scope.description ?? envelope.scope.kind
-      failures.push(
+      evidence.failures.push(
         `${artifact.specArtifactID ?? artifact.id}:${envelope.result.name}:${envelope.result.status}:${scope}`,
       )
     }
   }
-  return failures
+  return evidence
+}
+
+function missingRequiredVerificationEnvelopeEvidence(
+  detail: WorkflowRunDetail,
+  evidence: ReturnType<typeof verificationEnvelopeEvidence>,
+) {
+  if (detail.verificationEnvelopeIDs.length > 0) return []
+  const required = detail.spec.verification.requiredArtifactIds
+  if (required.length === 0) return evidence.passingArtifactIds.size > 0 ? [] : ["verification envelope"]
+  return required.filter((artifactID) => !evidence.passingArtifactIds.has(artifactID))
 }
 
 function verificationEnvelopesFromPayload(payload: unknown): VerificationEnvelope[] {

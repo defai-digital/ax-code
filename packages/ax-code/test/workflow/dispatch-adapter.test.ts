@@ -107,7 +107,7 @@ describe("WorkflowDispatchAdapter", () => {
     }
   })
 
-  test("satisfies required verification gates with declared phase output artifacts", async () => {
+  test("emits declared verification artifacts but blocks without envelope evidence", async () => {
     await using tmp = await tmpdir({ git: true })
     const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
     process.env.AX_CODE_WORKFLOW_RUNTIME = "1"
@@ -139,7 +139,8 @@ describe("WorkflowDispatchAdapter", () => {
             dispatchExecutor: async () => ({ output: "verified", tokensUsed: 3 }),
           })
 
-          expect(result.status).toBe("completed")
+          expect(result.status).toBe("blocked")
+          expect(result.error).toContain("missing passing verification envelope evidence: verification-summary")
           expect(result.artifacts).toContainEqual(
             expect.objectContaining({
               kind: "verification",

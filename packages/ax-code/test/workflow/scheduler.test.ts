@@ -367,6 +367,88 @@ describe("WorkflowScheduler", () => {
     }
   })
 
+  test("blocks completion when required verification artifacts have no passing envelope evidence", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
+    process.env.AX_CODE_WORKFLOW_RUNTIME = "1"
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const spec = parseWorkflowSpecV1({
+            schemaVersion: 1,
+            id: "missing-verification-envelope",
+            name: "Missing Verification Envelope",
+            description: "A fixture that cannot complete with a bare verification artifact.",
+            artifacts: [{ id: "verification-summary", kind: "verification" }],
+            verification: { mode: "required", requiredArtifactIds: ["verification-summary"] },
+            phases: [{ id: "noop", name: "Noop", kind: "noop" }],
+          })
+          const run = await WorkflowRun.create({ spec })
+          const detail = await WorkflowRun.getDetail(run.id)
+          await WorkflowRun.appendArtifact({
+            runID: run.id,
+            phaseID: detail.phases[0]!.id,
+            specArtifactID: "verification-summary",
+            kind: "verification",
+            summary: "verification summary without envelope",
+            payload: { summary: "checked manually" },
+          })
+
+          const result = await WorkflowRun.setStatus({ id: run.id, status: "completed" })
+
+          expect(result.status).toBe("blocked")
+          expect(result.error).toContain("missing passing verification envelope evidence: verification-summary")
+        },
+      })
+    } finally {
+      if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME
+      else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
+    }
+  })
+
+  test("allows completion when required verification artifacts contain passing envelope evidence", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
+    process.env.AX_CODE_WORKFLOW_RUNTIME = "1"
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const spec = parseWorkflowSpecV1({
+            schemaVersion: 1,
+            id: "passed-verification-envelope",
+            name: "Passed Verification Envelope",
+            description: "A fixture that can complete with passing verification envelope evidence.",
+            artifacts: [{ id: "verification-summary", kind: "verification" }],
+            verification: { mode: "required", requiredArtifactIds: ["verification-summary"] },
+            phases: [{ id: "noop", name: "Noop", kind: "noop" }],
+          })
+          const run = await WorkflowRun.create({ spec })
+          const detail = await WorkflowRun.getDetail(run.id)
+          await WorkflowRun.appendArtifact({
+            runID: run.id,
+            phaseID: detail.phases[0]!.id,
+            specArtifactID: "verification-summary",
+            kind: "verification",
+            summary: "typecheck passed",
+            payload: {
+              verificationEnvelopes: [{ envelope: verificationEnvelope(run.id, "passed", true) }],
+            },
+          })
+
+          const result = await WorkflowRun.setStatus({ id: run.id, status: "completed" })
+
+          expect(result.status).toBe("completed")
+          expect(result.error).toBeUndefined()
+        },
+      })
+    } finally {
+      if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME
+      else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
+    }
+  })
+
   test("blocks completion when required synthesis artifacts are missing", async () => {
     await using tmp = await tmpdir({ git: true })
     const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
