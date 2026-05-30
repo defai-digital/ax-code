@@ -7,6 +7,7 @@ import {
   AX_CODE_GRPC_PROTO_PACKAGE_PATH,
   AX_CODE_GRPC_PROTO_PATH,
   assertAxCodeGrpcMethodSupported,
+  assertAxCodeGrpcNativeHandlers,
   createAxCodeGrpcClient,
   createAxCodeGrpcClientFromHttp,
   createAxCodeGrpcClientFromNativeBridge,
@@ -14,6 +15,7 @@ import {
   createAxCodeGrpcHttpBridge,
   createAxCodeGrpcNativeBridgeFromHandlers,
   getAxCodeGrpcMethodDescriptor,
+  listMissingAxCodeGrpcNativeHandlers,
   listAxCodeGrpcMethods,
   resolveAxCodeGrpcProtoUrl,
   type AxCodeGrpcTransport,
@@ -437,6 +439,58 @@ describe("gRPC SDK facade", () => {
       },
       { type: "input", data: "pwd\n" },
     ])
+  })
+
+  test("native handler coverage can fail fast before renderer handoff", () => {
+    const handlers = {
+      unary: {
+        [AX_CODE_GRPC_METHOD.GetSession]() {
+          return { value: { id: "sess-1" } }
+        },
+        [AX_CODE_GRPC_METHOD.GetMcpStatus]() {
+          return { value: {} }
+        },
+      },
+      serverStream: {
+        async *[AX_CODE_GRPC_METHOD.SubscribeEvents]() {
+          yield { type: "server.connected", properties: {} }
+        },
+      },
+    }
+
+    expect(listMissingAxCodeGrpcNativeHandlers(handlers, { methods: [AX_CODE_GRPC_METHOD.GetSession] })).toEqual([])
+    expect(listMissingAxCodeGrpcNativeHandlers(handlers, { domain: "mcp" }).map((descriptor) => descriptor.name)).toEqual([
+      "ListMcpResources",
+      "AddMcpServer",
+      "StartMcpAuth",
+      "CompleteMcpAuth",
+      "AuthenticateMcp",
+      "RemoveMcpAuth",
+      "ConnectMcp",
+      "DisconnectMcp",
+    ])
+    expect(listMissingAxCodeGrpcNativeHandlers(handlers, { kind: "serverStream" })).toEqual([])
+    expect(listMissingAxCodeGrpcNativeHandlers(handlers, { kind: "bidiStream" })).toEqual([
+      expect.objectContaining({ name: "ConnectPty", kind: "bidiStream" }),
+    ])
+    expect(() => assertAxCodeGrpcNativeHandlers(handlers, { kind: "bidiStream" })).toThrow(
+      "Missing AX Code gRPC native handlers: ConnectPty(bidiStream)",
+    )
+    expect(() =>
+      assertAxCodeGrpcNativeHandlers(handlers, {
+        methods: [AX_CODE_GRPC_METHOD.GetSession, AX_CODE_GRPC_METHOD.SubscribeEvents],
+      }),
+    ).not.toThrow()
+    expect(() =>
+      createAxCodeGrpcNativeBridgeFromHandlers(handlers, {
+        requireHandlers: { methods: [AX_CODE_GRPC_METHOD.GetSession, AX_CODE_GRPC_METHOD.SubscribeEvents] },
+      }),
+    ).not.toThrow()
+    expect(() =>
+      createAxCodeGrpcClientFromNativeHandlers(handlers, {
+        requireHandlers: { methods: [AX_CODE_GRPC_METHOD.ConnectPty] },
+      }),
+    ).toThrow("Missing AX Code gRPC native handlers: ConnectPty(bidiStream)")
   })
 
   test("native handler map reports missing methods clearly", async () => {

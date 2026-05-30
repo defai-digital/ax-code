@@ -452,6 +452,16 @@ export type AxCodeGrpcNativeHandlerMap = {
   bidiStream?: Partial<Record<AxCodeGrpcBidirectionalStreamingMethod, AxCodeGrpcNativeBidiStreamHandler>>
 }
 
+export type AxCodeGrpcNativeHandlerCoverageFilter = AxCodeGrpcMethodDescriptorFilter & {
+  methods?: readonly AxCodeGrpcMethod[]
+}
+
+export type AxCodeGrpcNativeHandlerCoverageRequirement = true | AxCodeGrpcNativeHandlerCoverageFilter
+
+export type AxCodeGrpcNativeBridgeFromHandlersOptions = {
+  requireHandlers?: AxCodeGrpcNativeHandlerCoverageRequirement
+}
+
 export type AxCodeGrpcHealthResponse = {
   status: "SERVING"
   transport?: "http-bridge" | "grpc"
@@ -635,7 +645,11 @@ export function createAxCodeGrpcNativeBridgeTransport(bridge: AxCodeGrpcNativeBr
   }
 }
 
-export function createAxCodeGrpcNativeBridgeFromHandlers(handlers: AxCodeGrpcNativeHandlerMap): AxCodeGrpcNativeBridge {
+export function createAxCodeGrpcNativeBridgeFromHandlers(
+  handlers: AxCodeGrpcNativeHandlerMap,
+  options: AxCodeGrpcNativeBridgeFromHandlersOptions = {},
+): AxCodeGrpcNativeBridge {
+  assertRequiredAxCodeGrpcNativeHandlers(handlers, options.requireHandlers)
   return {
     async unary<TRequest, TResponse>(call: AxCodeGrpcNativeUnaryCall<TRequest>): Promise<TResponse> {
       const handler = handlers.unary?.[call.method]
@@ -657,12 +671,43 @@ export function createAxCodeGrpcNativeBridgeFromHandlers(handlers: AxCodeGrpcNat
   }
 }
 
+export function listMissingAxCodeGrpcNativeHandlers(
+  handlers: AxCodeGrpcNativeHandlerMap,
+  filter: AxCodeGrpcNativeHandlerCoverageFilter = {},
+): AxCodeGrpcMethodDescriptor[] {
+  const methodSet = filter.methods ? new Set<AxCodeGrpcMethod>(filter.methods) : undefined
+  return listAxCodeGrpcMethods(filter)
+    .filter((descriptor) => !methodSet || methodSet.has(descriptor.method))
+    .filter((descriptor) => !hasAxCodeGrpcNativeHandler(handlers, descriptor))
+}
+
+export function assertAxCodeGrpcNativeHandlers(
+  handlers: AxCodeGrpcNativeHandlerMap,
+  filter: AxCodeGrpcNativeHandlerCoverageFilter = {},
+): void {
+  const missing = listMissingAxCodeGrpcNativeHandlers(handlers, filter)
+  if (missing.length === 0) return
+  const names = missing.map((descriptor) => `${descriptor.name}(${descriptor.kind})`).join(", ")
+  throw new Error(`Missing AX Code gRPC native handlers: ${names}`)
+}
+
+function assertRequiredAxCodeGrpcNativeHandlers(
+  handlers: AxCodeGrpcNativeHandlerMap,
+  requirement: AxCodeGrpcNativeHandlerCoverageRequirement | undefined,
+): void {
+  if (!requirement) return
+  assertAxCodeGrpcNativeHandlers(handlers, requirement === true ? {} : requirement)
+}
+
 export function createAxCodeGrpcClientFromNativeBridge(bridge: AxCodeGrpcNativeBridge) {
   return createAxCodeGrpcClient({ transport: createAxCodeGrpcNativeBridgeTransport(bridge) })
 }
 
-export function createAxCodeGrpcClientFromNativeHandlers(handlers: AxCodeGrpcNativeHandlerMap) {
-  return createAxCodeGrpcClientFromNativeBridge(createAxCodeGrpcNativeBridgeFromHandlers(handlers))
+export function createAxCodeGrpcClientFromNativeHandlers(
+  handlers: AxCodeGrpcNativeHandlerMap,
+  options: AxCodeGrpcNativeBridgeFromHandlersOptions = {},
+) {
+  return createAxCodeGrpcClientFromNativeBridge(createAxCodeGrpcNativeBridgeFromHandlers(handlers, options))
 }
 
 export function createAxCodeGrpcClient(input: AxCodeGrpcClientOptions) {
@@ -1861,6 +1906,20 @@ function nativeHandlerContext<TMethod extends AxCodeGrpcMethod>(
 
 function missingNativeHandler(kind: string, method: AxCodeGrpcMethod) {
   return new Error(`Unsupported AX Code gRPC ${kind} method: ${method}`)
+}
+
+function hasAxCodeGrpcNativeHandler(
+  handlers: AxCodeGrpcNativeHandlerMap,
+  descriptor: AxCodeGrpcMethodDescriptor,
+): boolean {
+  switch (descriptor.kind) {
+    case "unary":
+      return Boolean(handlers.unary?.[descriptor.method as AxCodeGrpcUnaryMethod])
+    case "serverStream":
+      return Boolean(handlers.serverStream?.[descriptor.method as AxCodeGrpcStreamingMethod])
+    case "bidiStream":
+      return Boolean(handlers.bidiStream?.[descriptor.method as AxCodeGrpcBidirectionalStreamingMethod])
+  }
 }
 
 function connectPtyOverWebSocket(

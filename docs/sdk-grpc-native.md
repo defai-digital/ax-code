@@ -57,11 +57,11 @@ The TypeScript facade lives at `@ax-code/sdk/grpc` and covers:
 The proto uses structured JSON payloads for command bodies and workflow/task payloads. That keeps the transport stable while AX Code runtime schemas continue to evolve quickly.
 
 `@ax-code/sdk/grpc` also exports `AX_CODE_GRPC_METHOD_DESCRIPTORS`, `listAxCodeGrpcMethods()`,
-`getAxCodeGrpcMethodDescriptor()`, and `assertAxCodeGrpcMethodSupported()`. Native hosts should use these descriptors as
-the canonical method catalog when building handler maps, gRPC service binders, preload allowlists, or coverage checks.
-Each descriptor includes the method name, fully qualified method path, stream kind, GUI domain, HTTP bridge availability,
-and current stability. This keeps the native transport boundary explicit without exposing or mirroring the full HTTP route
-tree.
+`getAxCodeGrpcMethodDescriptor()`, `assertAxCodeGrpcMethodSupported()`, `listMissingAxCodeGrpcNativeHandlers()`, and
+`assertAxCodeGrpcNativeHandlers()`. Native hosts should use these descriptors and coverage checks as the canonical method
+catalog when building handler maps, gRPC service binders, preload allowlists, or startup gates. Each descriptor includes
+the method name, fully qualified method path, stream kind, GUI domain, HTTP bridge availability, and current stability.
+This keeps the native transport boundary explicit without exposing or mirroring the full HTTP route tree.
 
 ## TypeScript Usage
 
@@ -131,11 +131,12 @@ renderer code:
 ```ts
 import {
   AX_CODE_GRPC_METHOD,
+  assertAxCodeGrpcNativeHandlers,
   createAxCodeGrpcNativeBridgeFromHandlers,
   listAxCodeGrpcMethods,
 } from "@ax-code/sdk/grpc"
 
-const bridge = createAxCodeGrpcNativeBridgeFromHandlers({
+const handlers = {
   unary: {
     [AX_CODE_GRPC_METHOD.GetSession](request, options) {
       return runtime.getSession(request.sessionID, options)
@@ -151,10 +152,28 @@ const bridge = createAxCodeGrpcNativeBridgeFromHandlers({
       return runtime.connectPty(request.id, input, options)
     },
   },
-})
+}
 
 const mcpMethods = listAxCodeGrpcMethods({ domain: "mcp" })
 const streamingMethods = listAxCodeGrpcMethods({ kind: "serverStream" })
+
+assertAxCodeGrpcNativeHandlers(handlers, {
+  methods: [
+    AX_CODE_GRPC_METHOD.GetSession,
+    AX_CODE_GRPC_METHOD.SubscribeEvents,
+    AX_CODE_GRPC_METHOD.ConnectPty,
+  ],
+})
+
+const bridge = createAxCodeGrpcNativeBridgeFromHandlers(handlers, {
+  requireHandlers: {
+    methods: [
+      AX_CODE_GRPC_METHOD.GetSession,
+      AX_CODE_GRPC_METHOD.SubscribeEvents,
+      AX_CODE_GRPC_METHOD.ConnectPty,
+    ],
+  },
+})
 ```
 
 `bootstrap.load()` is intentionally a GUI-oriented snapshot rather than a one-to-one copy of every HTTP route. Use `include` to request only the state needed by the current view. Failed subrequests are reported in `errors` while successful fields are still returned, so a missing optional subsystem does not block the desktop shell from opening.
