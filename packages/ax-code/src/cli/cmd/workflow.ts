@@ -86,12 +86,14 @@ export function formatWorkflowRunDashboard(runs: WorkflowRunProjection[]) {
     const childSummary = `${activeChildren}/${queuedChildren}/${run.budgetUsage.childAgents}`
     const budgetSummary = `${run.budgetUsage.totalTokens}/${run.budgetLimit.maxTotalTokens}`
     const blocker = run.blockedReason ? truncate(run.blockedReason, 36) : "-"
+    const models = truncate(formatNamedModels(run.models) || "-", 32)
     return [
       run.status.padEnd(10),
       run.runID.padEnd(28),
       truncate(run.name, 24).padEnd(24),
       truncate(phase, 22).padEnd(22),
       run.effort.padEnd(12),
+      models.padEnd(32),
       childSummary.padEnd(13),
       budgetSummary.padEnd(18),
       blocker,
@@ -99,7 +101,7 @@ export function formatWorkflowRunDashboard(runs: WorkflowRunProjection[]) {
   })
   return (
     [
-      "status     run                          name                     phase                  effort       active/queued/total tokens             blocker",
+      "status     run                          name                     phase                  effort       models                           active/queued/total tokens             blocker",
       ...lines,
     ].join(EOL) + EOL
   )
@@ -178,6 +180,8 @@ export function formatWorkflowRunDetail(detail: WorkflowRunDetail) {
     `name: ${detail.spec.name}`,
     `template: ${detail.sourceTemplateID ?? "-"}`,
     `currentPhase: ${detail.currentPhaseID ?? "-"}`,
+    `modelPolicy: ${formatRunModelPolicy(detail)}`,
+    `executionPolicy: ${formatRunExecutionPolicy(detail)}`,
     `budgetUsage: ${detail.budgetUsage.totalTokens} tokens, ${detail.budgetUsage.childAgents} child agents, ` +
       `${detail.budgetUsage.toolCalls} tool calls`,
     `phases: ${formatCounts(phaseCounts)}`,
@@ -722,6 +726,44 @@ function formatCounts(counts: Record<string, number>) {
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([key, count]) => `${key}=${count}`)
     .join(", ")
+}
+
+function formatRunModelPolicy(detail: WorkflowRunDetail) {
+  const policy = detail.spec.modelPolicy ?? {}
+  const models = formatNamedModels({
+    planner: policy.plannerModel,
+    worker: policy.workerModel,
+    verifier: policy.verifierModel,
+    synthesizer: policy.synthesizerModel,
+  })
+  return [`effort=${policy.effort ?? "normal"}`, models || "models=default"].join(", ")
+}
+
+function formatRunExecutionPolicy(detail: WorkflowRunDetail) {
+  const budget = detail.spec.budget ?? detail.budget
+  const permissions = detail.spec.permissions ?? {}
+  return [
+    `write=${permissions.writePolicy ?? "read-only"}`,
+    `network=${permissions.networkPolicy ?? "inherit"}`,
+    `escalation=${permissions.escalationPolicy ?? "inherit"}`,
+    `maxParallel=${budget.maxConcurrentAgents ?? "-"}`,
+    `maxAgents=${budget.maxTotalAgents ?? "-"}`,
+  ].join(", ")
+}
+
+function formatNamedModels(models: { planner?: string; worker?: string; verifier?: string; synthesizer?: string }) {
+  return [
+    namedModel("planner", models.planner),
+    namedModel("worker", models.worker),
+    namedModel("verifier", models.verifier),
+    namedModel("synthesizer", models.synthesizer),
+  ]
+    .filter(Boolean)
+    .join(", ")
+}
+
+function namedModel(label: string, value: string | undefined) {
+  return value ? `${label}=${value}` : undefined
 }
 
 function truncate(input: string, maxLength: number) {

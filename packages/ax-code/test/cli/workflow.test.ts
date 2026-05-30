@@ -136,6 +136,7 @@ describe("workflow command helpers", () => {
     expect(output).toContain("workflow_run_01")
     expect(output).toContain("Verified Bug Sweep Wi...")
     expect(output).toContain("Cross Check Candida...")
+    expect(output).toContain("worker=cheap-model")
     expect(output).toContain("2/2/4")
     expect(output).toContain("2500/10000")
     expect(output).toContain("approval required before continui...")
@@ -261,7 +262,26 @@ describe("workflow command helpers", () => {
       sourceTemplateID: "builtin:noop-dry-run",
       status: "running",
       currentPhaseID: phaseID,
-      spec,
+      spec: {
+        ...spec,
+        budget: {
+          ...(spec.budget ?? {}),
+          maxConcurrentAgents: 3,
+          maxTotalAgents: 25,
+        },
+        modelPolicy: {
+          effort: "workflow",
+          workerModel: "cheap-model",
+          synthesizerModel: "strong-model",
+          routing: [],
+        },
+        permissions: {
+          writePolicy: "read-only",
+          allowedTools: [],
+          networkPolicy: "disabled",
+          escalationPolicy: "ask",
+        },
+      },
       inputValues: {},
       budget: spec.budget,
       budgetUsage: { ...emptyUsage(), totalTokens: 123, childAgents: 2 },
@@ -310,6 +330,8 @@ describe("workflow command helpers", () => {
     } satisfies WorkflowRunDetail)
 
     expect(output).toContain("Run workflow_run_01")
+    expect(output).toContain("modelPolicy: effort=workflow, worker=cheap-model, synthesizer=strong-model")
+    expect(output).toContain("executionPolicy: write=read-only, network=disabled, escalation=ask")
     expect(output).toContain("budgetUsage: 123 tokens, 2 child agents")
     expect(output).toContain("phases: running=1")
     expect(output).toContain("children: queued=1")
