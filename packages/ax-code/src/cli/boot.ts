@@ -42,6 +42,7 @@ import { TuiBackendCommand } from "./cmd/tui/backend"
 import { TuiThreadCommand } from "./cmd/tui/thread"
 import { UninstallCommand } from "./cmd/uninstall"
 import { UpgradeCommand } from "./cmd/upgrade"
+import { WorkflowCommand } from "./cmd/workflow"
 import { fatal } from "./bootstrap/fatal"
 import { init } from "./bootstrap/env"
 import { migrate } from "./bootstrap/migrate"
@@ -92,6 +93,7 @@ const cmds = [
   DbCommand,
   MemoryCommand,
   SkillCommand,
+  WorkflowCommand,
   DesignCheckCommand,
   ContextCommand,
 ]
