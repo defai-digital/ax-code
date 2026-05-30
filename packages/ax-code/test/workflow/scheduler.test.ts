@@ -363,6 +363,7 @@ describe("WorkflowScheduler", () => {
             maxRequestsPerMinute: 12,
             maxTokensPerMinute: 200_000,
           })
+          expect(queue[0]?.payload.maxParallel).toBe(8)
           expect(queue[0]?.payload.escalationPolicy).toBe("ask")
           expect(queue[0]?.payload.budgetSlice).toMatchObject({
             maxInputTokensPerChild: 50_000,

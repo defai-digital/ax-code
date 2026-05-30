@@ -357,6 +357,95 @@ describe("TaskQueue", () => {
     })
   })
 
+  test("holds workflow child execution when phase maxParallel is saturated", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const firstSession = await Session.create({})
+        const secondSession = await Session.create({})
+        const workflow = { runID: "wfr_test", phaseID: "wfp_test", specPhaseID: "scan" }
+        const first = await TaskQueue.enqueue({
+          sessionID: firstSession.id,
+          kind: "subagent",
+          title: "Run first workflow child",
+          payload: {
+            workflow: { ...workflow, childID: "wfc_first" },
+            maxParallel: 1,
+            body: {
+              noReply: true,
+              parts: [{ type: "text", text: "First child." }],
+            },
+          },
+        })
+        const second = await TaskQueue.enqueue({
+          sessionID: secondSession.id,
+          kind: "subagent",
+          title: "Run second workflow child",
+          payload: {
+            workflow: { ...workflow, childID: "wfc_second" },
+            maxParallel: 1,
+            body: {
+              noReply: true,
+              parts: [{ type: "text", text: "Second child." }],
+            },
+          },
+        })
+
+        await TaskQueue.setStatus({ id: first.id, status: "running" })
+        const result = await TaskQueueExecutor.start(second)
+
+        expect(result.status).toBe("queued")
+        expect((await TaskQueue.get(second.id)).status).toBe("queued")
+      },
+    })
+  })
+
+  test("starts the next queued workflow child when a phase maxParallel slot opens", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const firstSession = await Session.create({})
+        const secondSession = await Session.create({})
+        const workflow = { runID: "wfr_test", phaseID: "wfp_test", specPhaseID: "scan" }
+        const first = await TaskQueue.enqueue({
+          sessionID: firstSession.id,
+          kind: "subagent",
+          title: "Run first workflow child",
+          payload: {
+            workflow: { ...workflow, childID: "wfc_first" },
+            maxParallel: 1,
+            body: {
+              noReply: true,
+              parts: [{ type: "text", text: "First child." }],
+            },
+          },
+        })
+        const second = await TaskQueue.enqueue({
+          sessionID: secondSession.id,
+          kind: "subagent",
+          title: "Run second workflow child",
+          payload: {
+            workflow: { ...workflow, childID: "wfc_second" },
+            maxParallel: 1,
+            body: {
+              noReply: true,
+              parts: [{ type: "text", text: "Second child." }],
+            },
+          },
+        })
+
+        await TaskQueueExecutor.start(first)
+
+        await waitForQueueStatus(first.id, "completed")
+        await waitForQueueStatus(second.id, "completed")
+      },
+    })
+  })
+
   test("records workflow child tool calls against the child budget slice", async () => {
     await using tmp = await tmpdir({ git: true })
 

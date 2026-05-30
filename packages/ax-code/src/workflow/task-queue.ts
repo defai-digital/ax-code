@@ -17,6 +17,7 @@ export namespace WorkflowTaskQueue {
     artifactRefs: z.array(z.string()).default([]),
     budgetSlice: WorkflowPhaseBudget.optional(),
     pacing: WorkflowPacing.optional(),
+    maxParallel: z.number().int().positive().optional(),
   })
   export type Payload = z.infer<typeof Payload>
 

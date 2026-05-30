@@ -110,6 +110,7 @@ export namespace WorkflowScheduler {
               artifactRefs: childPlan.artifactRefs,
               budgetSlice: childPlan.budgetSlice,
               pacing: childPlan.pacing,
+              maxParallel: phasePlan.maxParallel,
               allowedTools: childPlan.allowedTools,
               writePolicy: childPlan.writePolicy,
               networkPolicy: childPlan.networkPolicy,

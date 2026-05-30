@@ -60,6 +60,7 @@ export namespace TaskQueueExecutor {
         ? item
         : TaskQueue.setStatus({ id: item.id, status: "waiting_for_idle" })
     }
+    if (await shouldWaitForWorkflowPhaseSlot(item)) return item
 
     const running = await TaskQueue.claimForExecution(item.id)
     if (!running) return TaskQueue.get(item.id)
@@ -107,6 +108,18 @@ async function executeClaimedItem(item: TaskQueue.Info, execution: QueueExecutio
         log.warn("failed to drain task queue after item settled", { taskID: item.id, sessionID: item.sessionID, error })
       })
     }
+    await drainNextWorkflowPhaseItem(item).catch((error) => {
+      DiagnosticLog.recordProcess("server.taskQueueWorkflowDrainFailed", {
+        taskID: item.id,
+        sessionID: item.sessionID,
+        error,
+      })
+      log.warn("failed to drain workflow phase queue after item settled", {
+        taskID: item.id,
+        sessionID: item.sessionID,
+        error,
+      })
+    })
   }
 }
 
@@ -132,6 +145,33 @@ async function shouldWaitForIdle(sessionID: SessionID, currentTaskID: TaskQueueI
   if (sessionPromptBusy(sessionID)) return true
   const active = await activeSessionItems(sessionID)
   return active.some((item) => item.id !== currentTaskID)
+}
+
+async function shouldWaitForWorkflowPhaseSlot(item: TaskQueue.Info) {
+  const workflow = workflowPayload(item)
+  const maxParallel = workflowMaxParallel(item.payload)
+  if (!workflow || maxParallel === undefined) return false
+  const active = await activeWorkflowPhaseItems(workflow, item.id)
+  return active.length >= maxParallel
+}
+
+async function drainNextWorkflowPhaseItem(item: TaskQueue.Info) {
+  const workflow = workflowPayload(item)
+  const maxParallel = workflowMaxParallel(item.payload)
+  if (!workflow || maxParallel === undefined) return
+  if ((await activeWorkflowPhaseItems(workflow, item.id)).length >= maxParallel) return
+
+  const queued = await TaskQueue.list({ status: "queued", limit: 100 })
+  const next = queued.filter((candidate) => sameWorkflowPhase(candidate, workflow)).sort(compareQueueItems)[0]
+  if (!next) return
+  await TaskQueueExecutor.start(next)
+}
+
+async function activeWorkflowPhaseItems(workflow: WorkflowQueuePayload, currentTaskID?: TaskQueueID) {
+  const items = await Promise.all(activeStatuses.map((status) => TaskQueue.list({ status, limit: 100 })))
+  return items
+    .flat()
+    .filter((candidate) => candidate.id !== currentTaskID && sameWorkflowPhase(candidate, workflow))
 }
 
 function sessionPromptBusy(sessionID: SessionID) {
@@ -508,12 +548,18 @@ function workflowEscalationPolicy(value: unknown): "inherit" | "ask" | "deny" | 
   return value === "inherit" || value === "ask" || value === "deny" ? value : undefined
 }
 
+type WorkflowQueuePayload = {
+  runID: string
+  phaseID: string
+  childID: string
+}
+
 function isWorkflowQueueItem(item: TaskQueue.Info) {
   const workflow = item.payload["workflow"]
   return !!workflow && typeof workflow === "object"
 }
 
-function workflowPayload(item: TaskQueue.Info) {
+function workflowPayload(item: TaskQueue.Info): WorkflowQueuePayload | undefined {
   const workflow = item.payload["workflow"]
   if (!workflow || typeof workflow !== "object") return undefined
   const record = workflow as Record<string, unknown>
@@ -525,6 +571,15 @@ function workflowPayload(item: TaskQueue.Info) {
     phaseID: record.phaseID,
     childID: record.childID,
   }
+}
+
+function sameWorkflowPhase(item: TaskQueue.Info, workflow: WorkflowQueuePayload) {
+  const candidate = workflowPayload(item)
+  return candidate?.runID === workflow.runID && candidate.phaseID === workflow.phaseID
+}
+
+function workflowMaxParallel(payload: TaskQueue.Payload) {
+  return positiveInteger(payload["maxParallel"])
 }
 
 type WorkflowSubagentBudgetUsage = {
@@ -647,6 +702,10 @@ function truncateArtifactSummary(text: string) {
 
 function nonNegativeNumber(value: unknown) {
   return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : undefined
+}
+
+function positiveInteger(value: unknown) {
+  return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : undefined
 }
 
 function modelObject(value: unknown) {
