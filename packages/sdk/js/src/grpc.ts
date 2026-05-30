@@ -51,6 +51,15 @@ export const AX_CODE_GRPC_METHOD = {
   FindSymbols: `/${AX_CODE_GRPC_SERVICE}/FindSymbols`,
   ListToolIDs: `/${AX_CODE_GRPC_SERVICE}/ListToolIDs`,
   ListTools: `/${AX_CODE_GRPC_SERVICE}/ListTools`,
+  GetConfig: `/${AX_CODE_GRPC_SERVICE}/GetConfig`,
+  UpdateConfig: `/${AX_CODE_GRPC_SERVICE}/UpdateConfig`,
+  ListConfigProviders: `/${AX_CODE_GRPC_SERVICE}/ListConfigProviders`,
+  ListProviders: `/${AX_CODE_GRPC_SERVICE}/ListProviders`,
+  GetProviderAuth: `/${AX_CODE_GRPC_SERVICE}/GetProviderAuth`,
+  SetAuth: `/${AX_CODE_GRPC_SERVICE}/SetAuth`,
+  RemoveAuth: `/${AX_CODE_GRPC_SERVICE}/RemoveAuth`,
+  ProviderOauthAuthorize: `/${AX_CODE_GRPC_SERVICE}/ProviderOauthAuthorize`,
+  ProviderOauthCallback: `/${AX_CODE_GRPC_SERVICE}/ProviderOauthCallback`,
   ListPty: `/${AX_CODE_GRPC_SERVICE}/ListPty`,
   CreatePty: `/${AX_CODE_GRPC_SERVICE}/CreatePty`,
   GetPty: `/${AX_CODE_GRPC_SERVICE}/GetPty`,
@@ -543,6 +552,59 @@ export function createAxCodeGrpcClient(input: AxCodeGrpcClientOptions) {
         return value(AX_CODE_GRPC_METHOD.ListTools, { parameters: { provider, model } }, options)
       },
     },
+    config: {
+      get(parameters?: Parameters<HeadlessHttpClient["client"]["config"]["get"]>[0], options?: AxCodeGrpcCallOptions) {
+        return value(AX_CODE_GRPC_METHOD.GetConfig, { parameters }, options)
+      },
+      update(
+        config: NonNullable<Parameters<HeadlessHttpClient["client"]["config"]["update"]>[0]>["config"],
+        options?: AxCodeGrpcCallOptions,
+      ) {
+        return value(AX_CODE_GRPC_METHOD.UpdateConfig, { body: { config } }, options)
+      },
+      providers(
+        parameters?: Parameters<HeadlessHttpClient["client"]["config"]["providers"]>[0],
+        options?: AxCodeGrpcCallOptions,
+      ) {
+        return value(AX_CODE_GRPC_METHOD.ListConfigProviders, { parameters }, options)
+      },
+    },
+    provider: {
+      list(parameters?: Parameters<HeadlessHttpClient["client"]["provider"]["list"]>[0], options?: AxCodeGrpcCallOptions) {
+        return value(AX_CODE_GRPC_METHOD.ListProviders, { parameters }, options)
+      },
+      auth(parameters?: Parameters<HeadlessHttpClient["client"]["provider"]["auth"]>[0], options?: AxCodeGrpcCallOptions) {
+        return value(AX_CODE_GRPC_METHOD.GetProviderAuth, { parameters }, options)
+      },
+      oauth: {
+        authorize(
+          providerID: string,
+          body?: Omit<Parameters<HeadlessHttpClient["client"]["provider"]["oauth"]["authorize"]>[0], "providerID" | "directory">,
+          options?: AxCodeGrpcCallOptions,
+        ) {
+          return value(AX_CODE_GRPC_METHOD.ProviderOauthAuthorize, { providerID, body }, options)
+        },
+        callback(
+          providerID: string,
+          body?: Omit<Parameters<HeadlessHttpClient["client"]["provider"]["oauth"]["callback"]>[0], "providerID" | "directory">,
+          options?: AxCodeGrpcCallOptions,
+        ) {
+          return value(AX_CODE_GRPC_METHOD.ProviderOauthCallback, { providerID, body }, options)
+        },
+      },
+    },
+    auth: {
+      set(
+        providerID: string,
+        auth: NonNullable<Parameters<HeadlessHttpClient["client"]["auth"]["set"]>[0]>["auth"],
+        options?: AxCodeGrpcCallOptions,
+      ) {
+        return value(AX_CODE_GRPC_METHOD.SetAuth, { providerID, auth }, options)
+      },
+      remove(providerID: string, options?: AxCodeGrpcCallOptions) {
+        return value(AX_CODE_GRPC_METHOD.RemoveAuth, { providerID }, options)
+      },
+    },
     bootstrap: {
       load(request: AxCodeGrpcBootstrapRequest = {}, options?: AxCodeGrpcCallOptions) {
         return value<AxCodeGrpcBootstrapRequest, AxCodeGrpcBootstrapResponse>(
@@ -905,6 +967,41 @@ async function handleHttpBridgeUnary(
       return wrap(unwrapHttpSdkResponse(await client.client.tool.ids(body.parameters)))
     case AX_CODE_GRPC_METHOD.ListTools:
       return wrap(unwrapHttpSdkResponse(await client.client.tool.list(body.parameters, { throwOnError: true })))
+    case AX_CODE_GRPC_METHOD.GetConfig:
+      return wrap(unwrapHttpSdkResponse(await client.client.config.get(body.parameters)))
+    case AX_CODE_GRPC_METHOD.UpdateConfig:
+      return wrap(unwrapHttpSdkResponse(await client.client.config.update(body.body, { throwOnError: true })))
+    case AX_CODE_GRPC_METHOD.ListConfigProviders:
+      return wrap(unwrapHttpSdkResponse(await client.client.config.providers(body.parameters)))
+    case AX_CODE_GRPC_METHOD.ListProviders:
+      return wrap(unwrapHttpSdkResponse(await client.client.provider.list(body.parameters)))
+    case AX_CODE_GRPC_METHOD.GetProviderAuth:
+      return wrap(unwrapHttpSdkResponse(await client.client.provider.auth(body.parameters)))
+    case AX_CODE_GRPC_METHOD.SetAuth:
+      return wrap(
+        unwrapHttpSdkResponse(
+          await client.client.auth.set({ providerID: body.providerID, auth: body.auth }, { throwOnError: true }),
+        ),
+      )
+    case AX_CODE_GRPC_METHOD.RemoveAuth:
+      return wrap(
+        unwrapHttpSdkResponse(await client.client.auth.remove({ providerID: body.providerID }, { throwOnError: true })),
+      )
+    case AX_CODE_GRPC_METHOD.ProviderOauthAuthorize:
+      return wrap(
+        unwrapHttpSdkResponse(
+          await client.client.provider.oauth.authorize(
+            { providerID: body.providerID, ...body.body },
+            { throwOnError: true },
+          ),
+        ),
+      )
+    case AX_CODE_GRPC_METHOD.ProviderOauthCallback:
+      return wrap(
+        unwrapHttpSdkResponse(
+          await client.client.provider.oauth.callback({ providerID: body.providerID, ...body.body }, { throwOnError: true }),
+        ),
+      )
     case AX_CODE_GRPC_METHOD.ListPty:
       return wrap(unwrapHttpSdkResponse(await client.client.pty.list(body.parameters)))
     case AX_CODE_GRPC_METHOD.CreatePty:

@@ -32,6 +32,8 @@ describe("gRPC SDK facade", () => {
         if (method === AX_CODE_GRPC_METHOD.ListSessionMessages) return { value: [{ id: "msg-1" }] }
         if (method === AX_CODE_GRPC_METHOD.ListSkills) return { value: [{ id: "security-harden" }] }
         if (method === AX_CODE_GRPC_METHOD.ReadFile) return { value: { content: "hello" } }
+        if (method === AX_CODE_GRPC_METHOD.GetProviderAuth) return { value: { anthropic: [{ type: "api" }] } }
+        if (method === AX_CODE_GRPC_METHOD.SetAuth) return { value: true }
         if (method === AX_CODE_GRPC_METHOD.CreatePty) return { value: { id: "pty_1", title: "Terminal" } }
         if (method === AX_CODE_GRPC_METHOD.TaskQueueCommand) return { value: { id: "task-1", status: "paused" } }
         throw new Error(`unexpected method ${method}`)
@@ -54,6 +56,8 @@ describe("gRPC SDK facade", () => {
     expect(await client.session.messages("sess-1", { limit: 10 })).toEqual([{ id: "msg-1" }])
     expect(await client.app.skills()).toEqual([{ id: "security-harden" }])
     expect(await client.file.read("README.md")).toEqual({ content: "hello" })
+    expect(await client.provider.auth()).toEqual({ anthropic: [{ type: "api" }] })
+    expect(await client.auth.set("anthropic", { type: "api", key: "secret" })).toBe(true)
     expect(await client.pty.create({ title: "Terminal" })).toEqual({ id: "pty_1", title: "Terminal" })
     expect(await pause("task-1")).toEqual({ id: "task-1", status: "paused" })
     expect(calls.map((call) => call.method)).toEqual([
@@ -65,6 +69,8 @@ describe("gRPC SDK facade", () => {
       AX_CODE_GRPC_METHOD.ListSessionMessages,
       AX_CODE_GRPC_METHOD.ListSkills,
       AX_CODE_GRPC_METHOD.ReadFile,
+      AX_CODE_GRPC_METHOD.GetProviderAuth,
+      AX_CODE_GRPC_METHOD.SetAuth,
       AX_CODE_GRPC_METHOD.CreatePty,
       AX_CODE_GRPC_METHOD.TaskQueueCommand,
     ])
@@ -286,6 +292,60 @@ describe("gRPC SDK facade", () => {
     ])
   })
 
+  test("HTTP bridge maps provider auth settings to the headless backend", async () => {
+    const calls: Array<{ path: string; method: string; body: string }> = []
+    const client = createAxCodeGrpcClientFromHttp({
+      baseUrl: "http://127.0.0.1:4096",
+      fetch: (async (url: URL | RequestInfo, init?: RequestInit) => {
+        const request = url instanceof Request ? url : new Request(url, init)
+        const parsed = new URL(request.url)
+        calls.push({
+          path: parsed.pathname,
+          method: request.method,
+          body: request.body ? await new Response(request.body).text() : "",
+        })
+        if (parsed.pathname === "/config" && request.method === "GET") return Response.json({ model: "default" })
+        if (parsed.pathname === "/config" && request.method === "PATCH") return Response.json({ saved: true })
+        if (parsed.pathname === "/config/providers") return Response.json({ anthropic: { model: "claude" } })
+        if (parsed.pathname === "/provider") return Response.json([{ id: "anthropic" }])
+        if (parsed.pathname === "/provider/auth") return Response.json({ anthropic: [{ type: "api" }] })
+        if (parsed.pathname === "/auth/anthropic" && request.method === "PUT") return Response.json(true)
+        if (parsed.pathname === "/auth/anthropic" && request.method === "DELETE") return Response.json(true)
+        if (parsed.pathname === "/provider/anthropic/oauth/authorize") return Response.json({ url: "https://auth.example" })
+        if (parsed.pathname === "/provider/anthropic/oauth/callback") return Response.json(true)
+        return new Response("not found", { status: 404 })
+      }) as typeof fetch,
+    })
+
+    await expect(client.config.get()).resolves.toEqual({ model: "default" })
+    await expect(client.config.update({ model: "next" } as never)).resolves.toEqual({ saved: true })
+    await expect(client.config.providers()).resolves.toEqual({ anthropic: { model: "claude" } })
+    await expect(client.provider.list()).resolves.toEqual([{ id: "anthropic" }])
+    await expect(client.provider.auth()).resolves.toEqual({ anthropic: [{ type: "api" }] })
+    await expect(client.auth.set("anthropic", { type: "api", key: "secret" })).resolves.toBe(true)
+    await expect(client.auth.remove("anthropic")).resolves.toBe(true)
+    await expect(client.provider.oauth.authorize("anthropic", { method: 0 })).resolves.toEqual({
+      url: "https://auth.example",
+    })
+    await expect(client.provider.oauth.callback("anthropic", { method: 0, code: "abc" })).resolves.toBe(true)
+
+    expect(calls).toEqual([
+      { path: "/config", method: "GET", body: "" },
+      { path: "/config", method: "PATCH", body: JSON.stringify({ model: "next" }) },
+      { path: "/config/providers", method: "GET", body: "" },
+      { path: "/provider", method: "GET", body: "" },
+      { path: "/provider/auth", method: "GET", body: "" },
+      { path: "/auth/anthropic", method: "PUT", body: JSON.stringify({ type: "api", key: "secret" }) },
+      { path: "/auth/anthropic", method: "DELETE", body: "" },
+      { path: "/provider/anthropic/oauth/authorize", method: "POST", body: JSON.stringify({ method: 0 }) },
+      {
+        path: "/provider/anthropic/oauth/callback",
+        method: "POST",
+        body: JSON.stringify({ method: 0, code: "abc" }),
+      },
+    ])
+  })
+
   test("HTTP bridge maps PTY management calls to the headless backend", async () => {
     const calls: Array<{ path: string; method: string; body: string }> = []
     const client = createAxCodeGrpcClientFromHttp({
@@ -436,6 +496,8 @@ describe("gRPC SDK facade", () => {
     expect(proto).toContain("rpc ListSessionMessages")
     expect(proto).toContain("rpc ListSkills")
     expect(proto).toContain("rpc FindFiles")
+    expect(proto).toContain("rpc SetAuth")
+    expect(proto).toContain("rpc ProviderOauthAuthorize")
     expect(proto).toContain("rpc ConnectPty")
     expect(proto).toContain("rpc SubscribeEvents")
   })

@@ -42,6 +42,16 @@ service AxCodeHeadless {
   rpc ListToolIDs(QueryRequest) returns (JsonResponse);
   rpc ListTools(QueryRequest) returns (JsonResponse);
 
+  rpc GetConfig(QueryRequest) returns (JsonResponse);
+  rpc UpdateConfig(JsonRequest) returns (JsonResponse);
+  rpc ListConfigProviders(QueryRequest) returns (JsonResponse);
+  rpc ListProviders(QueryRequest) returns (JsonResponse);
+  rpc GetProviderAuth(QueryRequest) returns (JsonResponse);
+  rpc SetAuth(ProviderAuthRequest) returns (JsonResponse);
+  rpc RemoveAuth(ProviderRequest) returns (JsonResponse);
+  rpc ProviderOauthAuthorize(ProviderJsonRequest) returns (JsonResponse);
+  rpc ProviderOauthCallback(ProviderJsonRequest) returns (JsonResponse);
+
   rpc ListPty(QueryRequest) returns (JsonResponse);
   rpc CreatePty(JsonRequest) returns (JsonResponse);
   rpc GetPty(IdRequest) returns (JsonResponse);
@@ -142,6 +152,20 @@ message JsonRequest {
 
 message JsonResponse {
   google.protobuf.Value value = 1;
+}
+
+message ProviderRequest {
+  string provider_id = 1;
+}
+
+message ProviderJsonRequest {
+  string provider_id = 1;
+  google.protobuf.Struct body = 2;
+}
+
+message ProviderAuthRequest {
+  string provider_id = 1;
+  google.protobuf.Struct auth = 2;
 }
 
 message IdRequest {
