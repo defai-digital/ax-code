@@ -371,6 +371,32 @@ describe("WorkflowScheduler", () => {
     }
   })
 
+  test("does not duplicate children when starting an active queued phase again", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
+    process.env.AX_CODE_WORKFLOW_RUNTIME = "1"
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const run = await WorkflowRun.create({ spec: parseWorkflowSpecV1(WorkflowFixtureSpecs.issueTriage) })
+          const firstStart = await WorkflowScheduler.start(run.id, { allowScaleBeyondDefaults: true })
+          const secondStart = await WorkflowScheduler.start(run.id, { allowScaleBeyondDefaults: true })
+
+          expect(firstStart.children).toHaveLength(8)
+          expect(secondStart.children).toHaveLength(8)
+          expect(secondStart.children.map((child) => child.id)).toEqual(firstStart.children.map((child) => child.id))
+
+          const { TaskQueue } = await import("../../src/session/task-queue")
+          expect(await TaskQueue.list()).toHaveLength(8)
+        },
+      })
+    } finally {
+      if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME
+      else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
+    }
+  })
+
   test("executes workflow subagent queue payloads through TaskQueueExecutor", async () => {
     await using tmp = await tmpdir({ git: true })
     const previous = process.env.AX_CODE_WORKFLOW_RUNTIME

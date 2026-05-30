@@ -55,6 +55,12 @@ export namespace WorkflowScheduler {
       const phasePlan = plan.phases.find((item) => item.specPhaseID === phase.specPhaseID)
       if (!phasePlan) throw new Error(`No dry-run phase plan for workflow phase ${phase.specPhaseID}`)
 
+      if (parsed.enqueueChildren) {
+        const current = await WorkflowRun.getDetail(runID)
+        const existingChildren = current.children.filter((child) => child.phaseID === phase.id)
+        if (existingChildren.length > 0) return current
+      }
+
       await WorkflowRun.setPhaseStatus({ id: phase.id, status: "running" })
 
       if (phase.kind === "noop") {
