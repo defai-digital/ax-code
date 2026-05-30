@@ -256,6 +256,10 @@ import type {
   TuiShowToastResponses,
   TuiSubmitPromptResponses,
   VcsGetResponses,
+  WorkflowRoutineListErrors,
+  WorkflowRoutineListResponses,
+  WorkflowRoutineRunErrors,
+  WorkflowRoutineRunResponses,
   WorkflowRunArtifactsErrors,
   WorkflowRunArtifactsResponses,
   WorkflowRunCancelErrors,
@@ -2873,6 +2877,87 @@ export class WorkflowTemplate extends HeyApiClient {
       url: "/workflow-templates/{templateID}/promote",
       ...options,
       ...params,
+    })
+  }
+}
+
+export class WorkflowRoutine extends HeyApiClient {
+  /**
+   * List workflow routines
+   *
+   * Return workflow templates that declare local routine trigger metadata.
+   */
+  public list<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).get<WorkflowRoutineListResponses, WorkflowRoutineListErrors, ThrowOnError>({
+      url: "/workflow-routines",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Run workflow routine
+   *
+   * Run a trusted enabled local API workflow routine by route.
+   */
+  public run<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      route?: string
+      parentSessionID?: string
+      modelPolicy?: {
+        plannerModel?: string
+        workerModel?: string
+        verifierModel?: string
+        synthesizerModel?: string
+        effort?: "normal" | "deep" | "workflow" | "max-workflow"
+        routing?: Array<{
+          phaseKind?: "fanout" | "sequential" | "synthesis" | "verification" | "noop"
+          use: "planner" | "worker" | "verifier" | "synthesizer"
+        }>
+      }
+      inputValues?: {
+        [key: string]: unknown
+      }
+      startOptions?: {
+        allowScaleBeyondDefaults?: boolean
+        allowWriteWorkflows?: boolean
+        durableChildren?: boolean
+        enqueueChildren?: boolean
+      }
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "body", key: "route" },
+            { in: "body", key: "parentSessionID" },
+            { in: "body", key: "modelPolicy" },
+            { in: "body", key: "inputValues" },
+            { in: "body", key: "startOptions" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<WorkflowRoutineRunResponses, WorkflowRoutineRunErrors, ThrowOnError>({
+      url: "/workflow-routines/run",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
     })
   }
 }
@@ -6161,6 +6246,11 @@ export class OpencodeClient extends HeyApiClient {
   private _workflowTemplate?: WorkflowTemplate
   get workflowTemplate(): WorkflowTemplate {
     return (this._workflowTemplate ??= new WorkflowTemplate({ client: this.client }))
+  }
+
+  private _workflowRoutine?: WorkflowRoutine
+  get workflowRoutine(): WorkflowRoutine {
+    return (this._workflowRoutine ??= new WorkflowRoutine({ client: this.client }))
   }
 
   private _tool?: Tool

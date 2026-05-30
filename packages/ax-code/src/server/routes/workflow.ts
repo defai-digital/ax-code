@@ -5,6 +5,7 @@ import z from "zod"
 import { compactWorkflowArtifact } from "@/workflow/artifact"
 import { WorkflowEvalBaseline, WorkflowEvalSummary, evaluateWorkflowRun } from "@/workflow/eval"
 import { WorkflowRunProjection, summarizeWorkflowRunDetail } from "@/workflow/projection"
+import { WorkflowRoutineDisabledError, WorkflowRoutineNotFoundError, WorkflowRoutineTrigger } from "@/workflow/routine"
 import { WorkflowRun } from "@/workflow/run"
 import { WorkflowScheduler } from "@/workflow/scheduler"
 import {
@@ -83,6 +84,14 @@ const WorkflowTemplateSaveFromRunBody = z.object({
   scope: z.enum(["user", "project"]),
 })
 
+const WorkflowRoutineRunBody = z.object({
+  route: z.string().trim().min(1),
+  parentSessionID: z.string().min(1).optional(),
+  modelPolicy: WorkflowModelPolicyOverride.optional(),
+  inputValues: WorkflowInputValues,
+  startOptions: WorkflowScheduler.StartOptions.partial().optional(),
+})
+
 const WorkflowRunResponse = WorkflowRunEventRecord
 const WorkflowRunDetailResponse = WorkflowRunEventRecord.extend({
   phases: z.array(WorkflowPhaseEventRecord),
@@ -107,6 +116,12 @@ const WorkflowTemplateResponse = z.object({
       updated: z.number(),
     })
     .optional(),
+})
+
+const WorkflowRoutineRunResponse = z.object({
+  routine: WorkflowRoutineTrigger.Info,
+  template: WorkflowTemplateResponse,
+  run: WorkflowRunDetailResponse,
 })
 
 function runID(c: { req: { valid: (input: "param") => { runID: string } } }) {
@@ -470,5 +485,54 @@ export const WorkflowTemplateRoutes = lazy(() =>
       }),
       validator("param", WORKFLOW_TEMPLATE_ID_PARAM),
       async (c) => c.json(await WorkflowTemplate.promote(templateID(c))),
+    ),
+)
+
+export const WorkflowRoutineRoutes = lazy(() =>
+  new Hono()
+    .use(async (_c, next) => {
+      assertWorkflowRoutesEnabled()
+      await next()
+    })
+    .get(
+      "/",
+      describeRoute({
+        summary: "List workflow routines",
+        description: "Return workflow templates that declare local routine trigger metadata.",
+        operationId: "workflowRoutine.list",
+        responses: {
+          200: {
+            description: "Workflow routines.",
+            content: { "application/json": { schema: resolver(WorkflowRoutineTrigger.Info.array()) } },
+          },
+          ...errors(400, 404),
+        },
+      }),
+      async (c) => c.json(await WorkflowRoutineTrigger.list()),
+    )
+    .post(
+      "/run",
+      describeRoute({
+        summary: "Run workflow routine",
+        description: "Run a trusted enabled local API workflow routine by route.",
+        operationId: "workflowRoutine.run",
+        responses: {
+          200: {
+            description: "Started workflow routine run.",
+            content: { "application/json": { schema: resolver(WorkflowRoutineRunResponse) } },
+          },
+          ...errors(400, 404, 409),
+        },
+      }),
+      validator("json", WorkflowRoutineRunBody),
+      async (c) => {
+        try {
+          return c.json(await WorkflowRoutineTrigger.run(c.req.valid("json")))
+        } catch (error) {
+          if (error instanceof WorkflowRoutineNotFoundError) throw new HTTPException(404, { message: error.message })
+          if (error instanceof WorkflowRoutineDisabledError) throw new HTTPException(409, { message: error.message })
+          throw error
+        }
+      },
     ),
 )

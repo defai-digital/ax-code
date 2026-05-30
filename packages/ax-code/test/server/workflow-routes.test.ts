@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { Instance } from "../../src/project/instance"
 import { Server } from "../../src/server/server"
+import { WorkflowFixtureSpecs, WorkflowTemplate, parseWorkflowSpecV1 } from "../../src/workflow"
 import { tmpdir } from "../fixture/fixture"
 
 afterEach(async () => {
@@ -301,6 +302,59 @@ describe("workflow routes", () => {
       expect(await promoteResponse.json()).toMatchObject({
         id: "project:route-noop",
         trust: "trusted",
+      })
+    } finally {
+      if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME
+      else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
+    }
+  })
+
+  test("runs trusted local API workflow routines", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
+    process.env.AX_CODE_WORKFLOW_RUNTIME = "1"
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const spec = parseWorkflowSpecV1({
+            ...WorkflowFixtureSpecs.noopDryRun,
+            id: "route-api-noop",
+            name: "Route API Noop",
+            routine: {
+              enabled: true,
+              mode: "api",
+              apiRoute: "workflow/route-api-noop",
+              securityGate: "local-only",
+            },
+          })
+          await WorkflowTemplate.save({ scope: "project", trust: "trusted", spec })
+        },
+      })
+
+      const app = Server.Default()
+      const directoryQuery = `directory=${encodeURIComponent(tmp.path)}`
+
+      const listResponse = await app.request(`/workflow-routines?${directoryQuery}`)
+      expect(listResponse.status).toBe(200)
+      expect(await listResponse.json()).toContainEqual(
+        expect.objectContaining({
+          route: "workflow/route-api-noop",
+          templateID: "project:route-api-noop",
+          enabled: true,
+        }),
+      )
+
+      const runResponse = await app.request(`/workflow-routines/run?${directoryQuery}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ route: "workflow/route-api-noop" }),
+      })
+      expect(runResponse.status).toBe(200)
+      expect(await runResponse.json()).toMatchObject({
+        routine: { route: "workflow/route-api-noop", templateID: "project:route-api-noop" },
+        template: { id: "project:route-api-noop", trust: "trusted" },
+        run: { sourceTemplateID: "project:route-api-noop", status: "completed" },
       })
     } finally {
       if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME

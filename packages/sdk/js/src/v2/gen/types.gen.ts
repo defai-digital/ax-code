@@ -8437,6 +8437,421 @@ export type WorkflowTemplatePromoteResponses = {
 
 export type WorkflowTemplatePromoteResponse = WorkflowTemplatePromoteResponses[keyof WorkflowTemplatePromoteResponses]
 
+export type WorkflowRoutineListData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/workflow-routines"
+}
+
+export type WorkflowRoutineListErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type WorkflowRoutineListError = WorkflowRoutineListErrors[keyof WorkflowRoutineListErrors]
+
+export type WorkflowRoutineListResponses = {
+  /**
+   * Workflow routines.
+   */
+  200: Array<{
+    route: string
+    templateID: string
+    templateName: string
+    source: "builtin" | "user" | "project"
+    trust: "candidate" | "trusted"
+    enabled: boolean
+    mode: "manual" | "scheduled" | "api" | "webhook"
+    securityGate: "local-only" | "required"
+  }>
+}
+
+export type WorkflowRoutineListResponse = WorkflowRoutineListResponses[keyof WorkflowRoutineListResponses]
+
+export type WorkflowRoutineRunData = {
+  body?: {
+    route: string
+    parentSessionID?: string
+    modelPolicy?: {
+      plannerModel?: string
+      workerModel?: string
+      verifierModel?: string
+      synthesizerModel?: string
+      effort?: "normal" | "deep" | "workflow" | "max-workflow"
+      routing?: Array<{
+        phaseKind?: "fanout" | "sequential" | "synthesis" | "verification" | "noop"
+        use: "planner" | "worker" | "verifier" | "synthesizer"
+      }>
+    }
+    inputValues?: {
+      [key: string]: unknown
+    }
+    startOptions?: {
+      allowScaleBeyondDefaults?: boolean
+      allowWriteWorkflows?: boolean
+      durableChildren?: boolean
+      enqueueChildren?: boolean
+    }
+  }
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/workflow-routines/run"
+}
+
+export type WorkflowRoutineRunErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type WorkflowRoutineRunError = WorkflowRoutineRunErrors[keyof WorkflowRoutineRunErrors]
+
+export type WorkflowRoutineRunResponses = {
+  /**
+   * Started workflow routine run.
+   */
+  200: {
+    routine: {
+      route: string
+      templateID: string
+      templateName: string
+      source: "builtin" | "user" | "project"
+      trust: "candidate" | "trusted"
+      enabled: boolean
+      mode: "manual" | "scheduled" | "api" | "webhook"
+      securityGate: "local-only" | "required"
+    }
+    template: {
+      id: string
+      source: "builtin" | "user" | "project"
+      trust: "candidate" | "trusted"
+      name: string
+      description: string
+      tags: Array<string>
+      specHash: string
+      spec: {
+        schemaVersion: 1
+        id: string
+        name: string
+        description: string
+        tags?: Array<string>
+        trigger?:
+          | {
+              kind: "manual"
+              source?: "prompt" | "command" | "api"
+            }
+          | {
+              kind: "scheduled"
+              schedule: string
+              timezone?: string
+              enabled?: boolean
+            }
+          | {
+              kind: "api"
+              route?: string
+              enabled?: boolean
+            }
+          | {
+              kind: "webhook"
+              event: string
+              enabled?: false
+              securityGate?: "required"
+            }
+        inputs?: Array<{
+          id: string
+          label?: string
+          description?: string
+          type?: "string" | "number" | "boolean" | "json" | "path" | "string-array"
+          required?: boolean
+          sensitive?: boolean
+          default?: unknown
+        }>
+        routine?: {
+          enabled?: boolean
+          mode?: "manual" | "scheduled" | "api" | "webhook"
+          schedule?: string
+          timezone?: string
+          apiRoute?: string
+          webhookEvent?: string
+          securityGate?: "local-only" | "required"
+        }
+        budget?: {
+          maxTotalTokens?: number
+          maxWallTimeMs?: number
+          maxConcurrentAgents?: number
+          maxTotalAgents?: number
+          maxToolCalls?: number
+          maxRetries?: number
+        }
+        pacing?: {
+          maxRequestsPerMinute?: number
+          maxTokensPerMinute?: number
+        }
+        modelPolicy?: {
+          plannerModel?: string
+          workerModel?: string
+          verifierModel?: string
+          synthesizerModel?: string
+          effort?: "normal" | "deep" | "workflow" | "max-workflow"
+          routing?: Array<{
+            phaseKind?: "fanout" | "sequential" | "synthesis" | "verification" | "noop"
+            use: "planner" | "worker" | "verifier" | "synthesizer"
+          }>
+        }
+        permissions?: {
+          writePolicy?: "read-only" | "serialized" | "worktree-required"
+          allowedTools?: Array<string>
+          networkPolicy?: "inherit" | "disabled" | "allowed"
+          escalationPolicy?: "inherit" | "ask" | "deny"
+        }
+        artifacts?: Array<{
+          id: string
+          kind: "summary" | "finding" | "patch" | "verification" | "metric" | "log"
+          retention?: "ephemeral" | "session" | "durable"
+          exposeToMainContext?: boolean
+        }>
+        verification?: {
+          mode?: "required" | "optional" | "deferred" | "skipped"
+          workflow?: "review" | "debug" | "qa"
+          commands?: Array<string>
+          requiredArtifactIds?: Array<string>
+        }
+        synthesis?: {
+          agent?: string
+          model?: string
+          outputFormat?: "markdown" | "json" | "table" | "findings"
+          exposeToMainContext?: boolean
+          requiredArtifactIds?: Array<string>
+        }
+        phases: Array<{
+          id: string
+          name: string
+          kind: "fanout" | "sequential" | "synthesis" | "verification" | "noop"
+          prompt?: string
+          agent?: string
+          inputs?: Array<string>
+          outputs?: Array<string>
+          dependsOn?: Array<string>
+          maxParallel?: number
+          mergeStrategy?: "all" | "first-success" | "majority" | "critic-confirmation"
+          modelPolicy?: {
+            plannerModel?: string
+            workerModel?: string
+            verifierModel?: string
+            synthesizerModel?: string
+            effort?: "normal" | "deep" | "workflow" | "max-workflow"
+            routing?: Array<{
+              phaseKind?: "fanout" | "sequential" | "synthesis" | "verification" | "noop"
+              use: "planner" | "worker" | "verifier" | "synthesizer"
+            }>
+          }
+          budget?: {
+            maxTotalTokens?: number
+            maxWallTimeMs?: number
+            maxConcurrentAgents?: number
+            maxTotalAgents?: number
+            maxToolCalls?: number
+            maxRetries?: number
+          }
+          pacing?: {
+            maxRequestsPerMinute?: number
+            maxTokensPerMinute?: number
+          }
+        }>
+      }
+      path?: string
+      time?: {
+        created: number
+        updated: number
+      }
+    }
+    run: {
+      id: string
+      projectID: string
+      directory: string
+      parentSessionID?: string
+      sourceTemplateID?: string
+      status: "queued" | "running" | "blocked" | "paused" | "failed" | "completed" | "cancelled"
+      currentPhaseID?: string
+      spec: {
+        schemaVersion: 1
+        id: string
+        name: string
+        description: string
+        tags?: Array<string>
+        trigger?:
+          | {
+              kind: "manual"
+              source?: "prompt" | "command" | "api"
+            }
+          | {
+              kind: "scheduled"
+              schedule: string
+              timezone?: string
+              enabled?: boolean
+            }
+          | {
+              kind: "api"
+              route?: string
+              enabled?: boolean
+            }
+          | {
+              kind: "webhook"
+              event: string
+              enabled?: false
+              securityGate?: "required"
+            }
+        inputs?: Array<{
+          id: string
+          label?: string
+          description?: string
+          type?: "string" | "number" | "boolean" | "json" | "path" | "string-array"
+          required?: boolean
+          sensitive?: boolean
+          default?: unknown
+        }>
+        routine?: {
+          enabled?: boolean
+          mode?: "manual" | "scheduled" | "api" | "webhook"
+          schedule?: string
+          timezone?: string
+          apiRoute?: string
+          webhookEvent?: string
+          securityGate?: "local-only" | "required"
+        }
+        budget?: {
+          maxTotalTokens?: number
+          maxWallTimeMs?: number
+          maxConcurrentAgents?: number
+          maxTotalAgents?: number
+          maxToolCalls?: number
+          maxRetries?: number
+        }
+        pacing?: {
+          maxRequestsPerMinute?: number
+          maxTokensPerMinute?: number
+        }
+        modelPolicy?: {
+          plannerModel?: string
+          workerModel?: string
+          verifierModel?: string
+          synthesizerModel?: string
+          effort?: "normal" | "deep" | "workflow" | "max-workflow"
+          routing?: Array<{
+            phaseKind?: "fanout" | "sequential" | "synthesis" | "verification" | "noop"
+            use: "planner" | "worker" | "verifier" | "synthesizer"
+          }>
+        }
+        permissions?: {
+          writePolicy?: "read-only" | "serialized" | "worktree-required"
+          allowedTools?: Array<string>
+          networkPolicy?: "inherit" | "disabled" | "allowed"
+          escalationPolicy?: "inherit" | "ask" | "deny"
+        }
+        artifacts?: Array<{
+          id: string
+          kind: "summary" | "finding" | "patch" | "verification" | "metric" | "log"
+          retention?: "ephemeral" | "session" | "durable"
+          exposeToMainContext?: boolean
+        }>
+        verification?: {
+          mode?: "required" | "optional" | "deferred" | "skipped"
+          workflow?: "review" | "debug" | "qa"
+          commands?: Array<string>
+          requiredArtifactIds?: Array<string>
+        }
+        synthesis?: {
+          agent?: string
+          model?: string
+          outputFormat?: "markdown" | "json" | "table" | "findings"
+          exposeToMainContext?: boolean
+          requiredArtifactIds?: Array<string>
+        }
+        phases: Array<{
+          id: string
+          name: string
+          kind: "fanout" | "sequential" | "synthesis" | "verification" | "noop"
+          prompt?: string
+          agent?: string
+          inputs?: Array<string>
+          outputs?: Array<string>
+          dependsOn?: Array<string>
+          maxParallel?: number
+          mergeStrategy?: "all" | "first-success" | "majority" | "critic-confirmation"
+          modelPolicy?: {
+            plannerModel?: string
+            workerModel?: string
+            verifierModel?: string
+            synthesizerModel?: string
+            effort?: "normal" | "deep" | "workflow" | "max-workflow"
+            routing?: Array<{
+              phaseKind?: "fanout" | "sequential" | "synthesis" | "verification" | "noop"
+              use: "planner" | "worker" | "verifier" | "synthesizer"
+            }>
+          }
+          budget?: {
+            maxTotalTokens?: number
+            maxWallTimeMs?: number
+            maxConcurrentAgents?: number
+            maxTotalAgents?: number
+            maxToolCalls?: number
+            maxRetries?: number
+          }
+          pacing?: {
+            maxRequestsPerMinute?: number
+            maxTokensPerMinute?: number
+          }
+        }>
+      }
+      inputValues?: {
+        [key: string]: unknown
+      }
+      budget: {
+        [key: string]: unknown
+      }
+      budgetUsage: {
+        totalTokens?: number
+        inputTokens?: number
+        outputTokens?: number
+        toolCalls?: number
+        childAgents?: number
+        retries?: number
+        estimatedCostUsd?: number
+      }
+      verificationEnvelopeIDs: Array<string>
+      error?: string
+      time: {
+        created: number
+        updated: number
+        started?: number
+        completed?: number
+      }
+      phases: Array<WorkflowPhaseEventRecord>
+      children: Array<WorkflowChildEventRecord>
+      artifacts: Array<WorkflowArtifactEventRecord>
+      budgetLedger: Array<WorkflowBudgetLedgerEventEntry>
+    }
+  }
+}
+
+export type WorkflowRoutineRunResponse = WorkflowRoutineRunResponses[keyof WorkflowRoutineRunResponses]
+
 export type ToolIdsData = {
   body?: never
   path?: never

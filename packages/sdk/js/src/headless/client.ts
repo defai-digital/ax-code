@@ -2,6 +2,9 @@ import { createAxCodeClient } from "../v2/client.js"
 import { AX_CODE_WORKSPACE_HEADER, LEGACY_OPENCODE_WORKSPACE_HEADER } from "../protocol.js"
 import type {
   Event,
+  WorkflowRoutineListResponse,
+  WorkflowRoutineRunData,
+  WorkflowRoutineRunResponse,
   WorkflowTemplatePromoteResponse,
   WorkflowTemplateSaveData,
   WorkflowTemplateSaveResponse,
@@ -184,6 +187,7 @@ export type HeadlessWorkflowRunEvalSummaryInput = NonNullable<WorkflowRunEvalSum
 export type HeadlessWorkflowRunSaveTemplateInput = NonNullable<WorkflowRunSaveTemplateData["body"]>
 export type HeadlessWorkflowArtifactListInput = Omit<NonNullable<WorkflowRunArtifactsData["query"]>, "directory">
 export type HeadlessWorkflowTemplateSaveInput = NonNullable<WorkflowTemplateSaveData["body"]>
+export type HeadlessWorkflowRoutineRunInput = NonNullable<WorkflowRoutineRunData["body"]>
 export type HeadlessWorkflowRunStartInput = {
   allowScaleBeyondDefaults?: boolean
   allowWriteWorkflows?: boolean
@@ -398,6 +402,31 @@ export function createHeadlessClient(input: HeadlessClientOptions) {
       },
       retry(runID: string) {
         return workflowRunCommand<WorkflowRunRetryResponse>(input, fetchFn, runID, "POST", "retry")
+      },
+    },
+    workflowRoutine: {
+      list() {
+        return requestJson<WorkflowRoutineListResponse>({
+          baseUrl: input.baseUrl,
+          fetch: fetchFn,
+          headers: input.headers,
+          directory: input.directory,
+          experimental_workspaceID: input.experimental_workspaceID,
+          path: "/workflow-routines",
+          method: "GET",
+        })
+      },
+      run(body: HeadlessWorkflowRoutineRunInput) {
+        return requestJson<WorkflowRoutineRunResponse>({
+          baseUrl: input.baseUrl,
+          fetch: fetchFn,
+          headers: input.headers,
+          directory: input.directory,
+          experimental_workspaceID: input.experimental_workspaceID,
+          path: "/workflow-routines/run",
+          method: "POST",
+          body: body as Record<string, unknown>,
+        })
       },
     },
     taskQueue: {
