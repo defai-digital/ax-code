@@ -29,6 +29,7 @@ describe("workflow command helpers", () => {
       {
         id: "builtin:noop-dry-run",
         source: "builtin",
+        trust: "trusted",
         name: "Noop Dry Run",
         description: "Minimal workflow fixture.",
         tags: ["fixture", "dry-run"],
