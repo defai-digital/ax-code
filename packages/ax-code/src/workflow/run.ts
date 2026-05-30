@@ -467,9 +467,12 @@ async function attachVerificationEnvelopeIDs(
 ): Promise<WorkflowRunState.Info> {
   const parsed = WorkflowRunState.AttachVerificationInput.parse(input)
   const now = Date.now()
-  const run = Database.transaction((db) => {
+  const changed = Database.transaction((db) => {
     const existing = db.select().from(WorkflowRunTable).where(eq(WorkflowRunTable.id, parsed.id)).get()
     if (!existing) throw new NotFoundError({ message: `Workflow run not found: ${parsed.id}` })
+    const attachedEnvelopeIDs = unique(
+      parsed.envelopeIDs.filter((envelopeID) => !existing.verification_envelope_ids.includes(envelopeID)),
+    )
     const row = db
       .update(WorkflowRunTable)
       .set({
@@ -480,10 +483,11 @@ async function attachVerificationEnvelopeIDs(
       .returning()
       .get()
     if (!row) throw new NotFoundError({ message: `Workflow run not found: ${parsed.id}` })
-    return fromRunRow(row)
+    return { run: fromRunRow(row), attachedEnvelopeIDs }
   })
-  publishUpdated(run)
-  return run
+  publishUpdated(changed.run)
+  if (changed.attachedEnvelopeIDs.length > 0) publishVerificationAttached(changed.run, changed.attachedEnvelopeIDs)
+  return changed.run
 }
 
 async function recoverInterrupted(): Promise<{ failed: WorkflowRunState.Info[] }> {
@@ -749,27 +753,36 @@ function isTerminalRunStatus(status: WorkflowRun.Status) {
 }
 
 function evaluateCompletionGate(detail: WorkflowRunDetail): { ok: true } | { ok: false; message: string } {
-  if (detail.spec.verification.mode !== "required") return { ok: true }
-
   const artifactsBySpecID = new Set(
     detail.artifacts.map((artifact) => artifact.specArtifactID).filter((id): id is string => !!id),
   )
-  const missingArtifacts = detail.spec.verification.requiredArtifactIds.filter((id) => !artifactsBySpecID.has(id))
-  if (missingArtifacts.length > 0) {
-    return {
-      ok: false,
-      message: `Workflow verification gate is required; missing required workflow artifacts: ${missingArtifacts.join(", ")}`,
+
+  if (detail.spec.verification.mode === "required") {
+    const missingArtifacts = detail.spec.verification.requiredArtifactIds.filter((id) => !artifactsBySpecID.has(id))
+    if (missingArtifacts.length > 0) {
+      return {
+        ok: false,
+        message: `Workflow verification gate is required; missing required workflow artifacts: ${missingArtifacts.join(", ")}`,
+      }
+    }
+
+    if (
+      detail.spec.verification.requiredArtifactIds.length === 0 &&
+      detail.verificationEnvelopeIDs.length === 0 &&
+      !detail.artifacts.some((artifact) => artifact.kind === "verification")
+    ) {
+      return {
+        ok: false,
+        message: "Workflow verification gate is required; no verification artifact or envelope is attached.",
+      }
     }
   }
 
-  if (
-    detail.spec.verification.requiredArtifactIds.length === 0 &&
-    detail.verificationEnvelopeIDs.length === 0 &&
-    !detail.artifacts.some((artifact) => artifact.kind === "verification")
-  ) {
+  const missingSynthesisArtifacts = detail.spec.synthesis.requiredArtifactIds.filter((id) => !artifactsBySpecID.has(id))
+  if (missingSynthesisArtifacts.length > 0) {
     return {
       ok: false,
-      message: "Workflow verification gate is required; no verification artifact or envelope is attached.",
+      message: `Workflow synthesis gate is required; missing required workflow artifacts: ${missingSynthesisArtifacts.join(", ")}`,
     }
   }
 
@@ -810,4 +823,14 @@ function publishArtifactWritten(artifact: WorkflowArtifactRecord) {
 
 function publishBudgetAppended(entry: WorkflowBudgetLedgerEntry) {
   Bus.publishDetached(WorkflowRun.Event.BudgetAppended, { entry })
+}
+
+function publishVerificationAttached(run: WorkflowRun.Info, envelopeIDs: string[]) {
+  Bus.publishDetached(WorkflowRun.Event.VerificationAttached, {
+    verification: {
+      runID: run.id,
+      envelopeIDs,
+      run,
+    },
+  })
 }

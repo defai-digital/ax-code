@@ -293,6 +293,14 @@ export const WorkflowBudgetLedgerEventEntry = z
   })
   .meta({ ref: "WorkflowBudgetLedgerEventEntry" })
 
+export const WorkflowVerificationAttachedEventRecord = z
+  .object({
+    runID: WorkflowWireID,
+    envelopeIDs: z.array(z.string()),
+    run: WorkflowRunEventRecord,
+  })
+  .meta({ ref: "WorkflowVerificationAttachedEventRecord" })
+
 export const WorkflowRunDetail = WorkflowRun.Record.extend({
   phases: z.array(WorkflowPhaseRecord),
   children: z.array(WorkflowChildRecord),
@@ -396,5 +404,9 @@ export namespace WorkflowRun {
     ChildUpdated: BusEvent.define("workflow.child.updated", z.object({ child: WorkflowChildEventRecord })),
     ArtifactWritten: BusEvent.define("workflow.artifact.written", z.object({ artifact: WorkflowArtifactEventRecord })),
     BudgetAppended: BusEvent.define("workflow.budget.appended", z.object({ entry: WorkflowBudgetLedgerEventEntry })),
+    VerificationAttached: BusEvent.define(
+      "workflow.verification.attached",
+      z.object({ verification: WorkflowVerificationAttachedEventRecord }),
+    ),
   }
 }

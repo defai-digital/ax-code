@@ -135,6 +135,48 @@ describe("WorkflowDispatchAdapter", () => {
     }
   })
 
+  test("satisfies required synthesis gates with declared phase output artifacts", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
+    process.env.AX_CODE_WORKFLOW_RUNTIME = "1"
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const spec = parseWorkflowSpecV1({
+            schemaVersion: 1,
+            id: "synthesis-dispatch",
+            name: "Synthesis Dispatch",
+            description: "Read-only direct dispatch that emits the required synthesis artifact.",
+            artifacts: [{ id: "final-summary", kind: "summary", exposeToMainContext: true }],
+            synthesis: { requiredArtifactIds: ["final-summary"] },
+            phases: [
+              {
+                id: "summarize",
+                name: "Summarize",
+                kind: "synthesis",
+                prompt: "Summarize findings.",
+                outputs: ["final-summary"],
+              },
+            ],
+          })
+          const run = await WorkflowRun.create({ spec })
+
+          const result = await WorkflowScheduler.start(run.id, {
+            enqueueChildren: false,
+            dispatchExecutor: async () => ({ output: "final summary", tokensUsed: 5 }),
+          })
+
+          expect(result.status).toBe("completed")
+          expect(result.artifacts.some((artifact) => artifact.specArtifactID === "final-summary")).toBe(true)
+        },
+      })
+    } finally {
+      if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME
+      else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
+    }
+  })
+
   test("stops direct dispatch when token budget is exceeded", async () => {
     await using tmp = await tmpdir({ git: true })
     const previous = process.env.AX_CODE_WORKFLOW_RUNTIME

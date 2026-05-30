@@ -20,6 +20,7 @@ describe("workflow eval summary", () => {
         const detail = await WorkflowRun.getDetail(run.id)
         const scan = detail.phases.find((phase) => phase.specPhaseID === "scan-files")!
         const verification = detail.phases.find((phase) => phase.specPhaseID === "cross-check")!
+        const finalReport = detail.phases.find((phase) => phase.specPhaseID === "final-report")!
 
         await WorkflowRun.appendArtifact({
           runID: run.id,
@@ -43,6 +44,13 @@ describe("workflow eval summary", () => {
           specArtifactID: "verification-summary",
           kind: "verification",
           summary: "verification evidence captured",
+        })
+        await WorkflowRun.appendArtifact({
+          runID: run.id,
+          phaseID: finalReport.id,
+          specArtifactID: "bug-sweep-report",
+          kind: "summary",
+          summary: "final bug sweep report",
         })
         await WorkflowRun.appendBudgetUsage({
           runID: run.id,

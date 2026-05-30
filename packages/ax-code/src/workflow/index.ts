@@ -22,6 +22,7 @@ export {
   WorkflowRunDetail,
   WorkflowRunID,
   WorkflowUsageDelta,
+  WorkflowVerificationAttachedEventRecord,
 } from "./state"
 export type {
   WorkflowArtifactRecord as WorkflowArtifactRecordType,

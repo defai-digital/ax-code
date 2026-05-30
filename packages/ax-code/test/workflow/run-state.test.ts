@@ -40,6 +40,9 @@ describe("WorkflowRun state", () => {
           Bus.subscribe(WorkflowRun.Event.BudgetAppended, (event) => {
             events.push(`${event.type}:${event.properties.entry.kind}`)
           }),
+          Bus.subscribe(WorkflowRun.Event.VerificationAttached, (event) => {
+            events.push(`${event.type}:${event.properties.verification.envelopeIDs.join(",")}`)
+          }),
         ]
 
         try {
@@ -157,6 +160,7 @@ describe("WorkflowRun state", () => {
           expect(events).toContain("workflow.child.updated:completed")
           expect(events).toContain("workflow.artifact.written:summary")
           expect(events).toContain("workflow.budget.appended:consume")
+          expect(events).toContain("workflow.verification.attached:0123456789abcdef")
         } finally {
           for (const unsubscribe of unsubscribers) unsubscribe()
           await Session.remove(session.id)
