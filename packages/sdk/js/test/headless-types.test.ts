@@ -262,6 +262,41 @@ describe("headless SDK types", () => {
     )
   })
 
+  test("createHeadlessClient exposes workflow commands", async () => {
+    const calls: Array<{ pathname: string; method?: string; body?: BodyInit | null }> = []
+    const client = createHeadlessClient({
+      baseUrl: "http://127.0.0.1:4096",
+      fetch: (async (url: URL | RequestInfo, init?: RequestInit) => {
+        const parsed = new URL(url.toString())
+        calls.push({ pathname: parsed.pathname, method: init?.method, body: init?.body })
+        if (parsed.pathname === "/workflow-templates") return new Response(JSON.stringify([]), { status: 200 })
+        if (parsed.pathname.startsWith("/workflow-templates/")) {
+          return new Response(JSON.stringify({ id: "builtin:noop-dry-run" }), { status: 200 })
+        }
+        if (parsed.pathname === "/workflow-runs") {
+          return new Response(JSON.stringify({ id: "wfr_live", status: "queued" }), { status: 200 })
+        }
+        return new Response(JSON.stringify({ id: "wfr_live", status: "running" }), { status: 200 })
+      }) as typeof fetch,
+    })
+
+    await client.workflowTemplate.list()
+    await client.workflowTemplate.get("builtin:noop-dry-run")
+    await client.workflowRun.create({ templateID: "builtin:noop-dry-run" })
+    await client.workflowRun.start("wfr_live", { enqueueChildren: false })
+    await client.workflowRun.pause("wfr_live")
+
+    expect(calls.map((call) => [call.method, call.pathname])).toEqual([
+      ["GET", "/workflow-templates"],
+      ["GET", "/workflow-templates/builtin%3Anoop-dry-run"],
+      ["POST", "/workflow-runs"],
+      ["POST", "/workflow-runs/wfr_live/start"],
+      ["POST", "/workflow-runs/wfr_live/pause"],
+    ])
+    expect(calls[2].body).toBe(JSON.stringify({ templateID: "builtin:noop-dry-run" }))
+    expect(calls[3].body).toBe(JSON.stringify({ enqueueChildren: false }))
+  })
+
   test("parseHeadlessRuntimeResponseBody handles empty and invalid bodies", () => {
     expect(parseHeadlessRuntimeResponseBody("")).toBe(true)
     expect(parseHeadlessRuntimeResponseBody(JSON.stringify({ ok: true }))).toEqual({ ok: true })

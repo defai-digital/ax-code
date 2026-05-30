@@ -1,6 +1,20 @@
 import { createAxCodeClient } from "../v2/client.js"
 import { AX_CODE_WORKSPACE_HEADER, LEGACY_OPENCODE_WORKSPACE_HEADER } from "../protocol.js"
-import type { Event } from "../v2/index.js"
+import type {
+  Event,
+  WorkflowRunCreateData,
+  WorkflowRunCreateResponse,
+  WorkflowRunGetResponse,
+  WorkflowRunListData,
+  WorkflowRunListResponse,
+  WorkflowRunPauseResponse,
+  WorkflowRunResumeResponse,
+  WorkflowRunCancelResponse,
+  WorkflowRunRetryResponse,
+  WorkflowRunStartResponse,
+  WorkflowTemplateGetResponse,
+  WorkflowTemplateListResponse,
+} from "../v2/index.js"
 import type {
   HeadlessCommandBody,
   HeadlessPermissionReplyBody,
@@ -146,6 +160,15 @@ export type HeadlessScheduledTaskRunNowResult = {
   queueItem: HeadlessTaskQueueItem
 }
 
+export type HeadlessWorkflowRunListInput = Omit<NonNullable<WorkflowRunListData["query"]>, "directory">
+export type HeadlessWorkflowRunCreateInput = NonNullable<WorkflowRunCreateData["body"]>
+export type HeadlessWorkflowRunStartInput = {
+  allowScaleBeyondDefaults?: boolean
+  allowWriteWorkflows?: boolean
+  durableChildren?: boolean
+  enqueueChildren?: boolean
+}
+
 export type HeadlessSessionEvidence = {
   sessionID: string
   risk?: unknown
@@ -214,6 +237,74 @@ export function createHeadlessClient(input: HeadlessClientOptions) {
     sessionEvidence: {
       load(sessionID: string, parameters?: HeadlessSessionEvidenceInput) {
         return loadSessionEvidence(input, fetchFn, sessionID, parameters)
+      },
+    },
+    workflowTemplate: {
+      list() {
+        return requestJson<WorkflowTemplateListResponse>({
+          baseUrl: input.baseUrl,
+          fetch: fetchFn,
+          headers: input.headers,
+          directory: input.directory,
+          experimental_workspaceID: input.experimental_workspaceID,
+          path: "/workflow-templates",
+          method: "GET",
+        })
+      },
+      get(templateID: string) {
+        return requestJson<WorkflowTemplateGetResponse>({
+          baseUrl: input.baseUrl,
+          fetch: fetchFn,
+          headers: input.headers,
+          directory: input.directory,
+          experimental_workspaceID: input.experimental_workspaceID,
+          path: `/workflow-templates/${encodeURIComponent(templateID)}`,
+          method: "GET",
+        })
+      },
+    },
+    workflowRun: {
+      list(parameters?: HeadlessWorkflowRunListInput) {
+        return requestJson<WorkflowRunListResponse>({
+          baseUrl: input.baseUrl,
+          fetch: fetchFn,
+          headers: input.headers,
+          directory: input.directory,
+          experimental_workspaceID: input.experimental_workspaceID,
+          path: "/workflow-runs",
+          method: "GET",
+          query: parameters,
+        })
+      },
+      create(body: HeadlessWorkflowRunCreateInput) {
+        return requestJson<WorkflowRunCreateResponse>({
+          baseUrl: input.baseUrl,
+          fetch: fetchFn,
+          headers: input.headers,
+          directory: input.directory,
+          experimental_workspaceID: input.experimental_workspaceID,
+          path: "/workflow-runs",
+          method: "POST",
+          body: body as Record<string, unknown>,
+        })
+      },
+      get(runID: string) {
+        return workflowRunCommand<WorkflowRunGetResponse>(input, fetchFn, runID, "GET")
+      },
+      start(runID: string, body: HeadlessWorkflowRunStartInput = {}) {
+        return workflowRunCommand<WorkflowRunStartResponse>(input, fetchFn, runID, "POST", "start", body)
+      },
+      pause(runID: string) {
+        return workflowRunCommand<WorkflowRunPauseResponse>(input, fetchFn, runID, "POST", "pause")
+      },
+      resume(runID: string) {
+        return workflowRunCommand<WorkflowRunResumeResponse>(input, fetchFn, runID, "POST", "resume")
+      },
+      cancel(runID: string) {
+        return workflowRunCommand<WorkflowRunCancelResponse>(input, fetchFn, runID, "POST", "cancel")
+      },
+      retry(runID: string) {
+        return workflowRunCommand<WorkflowRunRetryResponse>(input, fetchFn, runID, "POST", "retry")
       },
     },
     taskQueue: {
@@ -434,6 +525,26 @@ function taskQueueCommand(
     experimental_workspaceID: input.experimental_workspaceID,
     path: `/task-queue/${encodeURIComponent(id)}/${command}`,
     method: "POST",
+  })
+}
+
+function workflowRunCommand<TResult>(
+  input: HeadlessClientOptions,
+  fetchFn: typeof fetch,
+  runID: string,
+  method: "GET" | "POST",
+  command?: "start" | "pause" | "resume" | "cancel" | "retry",
+  body?: HeadlessWorkflowRunStartInput,
+) {
+  return requestJson<TResult>({
+    baseUrl: input.baseUrl,
+    fetch: fetchFn,
+    headers: input.headers,
+    directory: input.directory,
+    experimental_workspaceID: input.experimental_workspaceID,
+    path: `/workflow-runs/${encodeURIComponent(runID)}${command ? `/${command}` : ""}`,
+    method,
+    body: body as Record<string, unknown> | undefined,
   })
 }
 
