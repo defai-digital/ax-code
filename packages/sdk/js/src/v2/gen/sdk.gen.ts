@@ -256,6 +256,8 @@ import type {
   TuiShowToastResponses,
   TuiSubmitPromptResponses,
   VcsGetResponses,
+  WorkflowRoutineCreateErrors,
+  WorkflowRoutineCreateResponses,
   WorkflowRoutineListErrors,
   WorkflowRoutineListResponses,
   WorkflowRoutineRunErrors,
@@ -2066,6 +2068,7 @@ export class WorkflowRun extends HeyApiClient {
       directory?: string
       parentSessionID?: string
       sourceTemplateID?: string
+      sourceTaskID?: string
       templateID?: string
       spec?: {
         schemaVersion: 1
@@ -2233,6 +2236,7 @@ export class WorkflowRun extends HeyApiClient {
             { in: "query", key: "directory" },
             { in: "body", key: "parentSessionID" },
             { in: "body", key: "sourceTemplateID" },
+            { in: "body", key: "sourceTaskID" },
             { in: "body", key: "templateID" },
             { in: "body", key: "spec" },
             { in: "body", key: "modelPolicy" },
@@ -2990,6 +2994,55 @@ export class WorkflowRoutine extends HeyApiClient {
       url: "/workflow-routines",
       ...options,
       ...params,
+    })
+  }
+
+  /**
+   * Create workflow routine
+   *
+   * Create a user-local or project-local API routine trigger from an existing workflow template.
+   */
+  public create<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      templateID?: string
+      scope?: "user" | "project"
+      trust?: "candidate" | "trusted"
+      route?: string
+      enabled?: boolean
+      securityGate?: "local-only"
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "body", key: "templateID" },
+            { in: "body", key: "scope" },
+            { in: "body", key: "trust" },
+            { in: "body", key: "route" },
+            { in: "body", key: "enabled" },
+            { in: "body", key: "securityGate" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      WorkflowRoutineCreateResponses,
+      WorkflowRoutineCreateErrors,
+      ThrowOnError
+    >({
+      url: "/workflow-routines",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
     })
   }
 

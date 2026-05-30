@@ -17,6 +17,21 @@ export namespace WorkflowRoutineTrigger {
   })
   export type Info = z.infer<typeof Info>
 
+  export const CreateInput = z.object({
+    templateID: WorkflowTemplate.ID,
+    scope: WorkflowTemplate.Source.exclude(["builtin"]),
+    trust: WorkflowTemplate.Trust.default("candidate"),
+    route: z
+      .string()
+      .trim()
+      .min(1)
+      .max(160)
+      .regex(/^workflow\/[a-z][a-z0-9-/]*$/, "routine route must start with workflow/ and use kebab-case segments"),
+    enabled: z.boolean().default(false),
+    securityGate: z.literal("local-only").default("local-only"),
+  })
+  export type CreateInput = z.input<typeof CreateInput>
+
   export const RunInput = z.object({
     route: z.string().trim().min(1),
     parentSessionID: SessionID.zod.optional(),
@@ -32,6 +47,28 @@ export namespace WorkflowRoutineTrigger {
       .map(routineInfo)
       .filter((routine): routine is Info => !!routine)
       .sort((a, b) => a.route.localeCompare(b.route) || a.templateID.localeCompare(b.templateID))
+  }
+
+  export async function create(input: CreateInput): Promise<Info> {
+    const parsed = CreateInput.parse(input)
+    const template = await WorkflowTemplate.get(parsed.templateID)
+    const saved = await WorkflowTemplate.save({
+      scope: parsed.scope,
+      trust: parsed.trust,
+      spec: {
+        ...template.spec,
+        routine: {
+          ...(template.spec.routine ?? {}),
+          enabled: parsed.enabled,
+          mode: "api",
+          apiRoute: parsed.route,
+          securityGate: parsed.securityGate,
+        },
+      },
+    })
+    const routine = routineInfo(saved)
+    if (!routine) throw new WorkflowRoutineNotFoundError(parsed.route)
+    return routine
   }
 
   export async function run(input: RunInput) {

@@ -332,7 +332,10 @@ describe("WorkflowScheduler", () => {
       await Instance.provide({
         directory: tmp.path,
         fn: async () => {
-          const run = await WorkflowRun.create({ spec: parseWorkflowSpecV1(WorkflowFixtureSpecs.issueTriage) })
+          const run = await WorkflowRun.create({
+            sourceTaskID: "scheduled_task_issue_triage",
+            spec: parseWorkflowSpecV1(WorkflowFixtureSpecs.issueTriage),
+          })
           const result = await WorkflowScheduler.start(run.id, { allowScaleBeyondDefaults: true })
 
           expect(result.status).toBe("running")
@@ -349,6 +352,7 @@ describe("WorkflowScheduler", () => {
           expect(queue.every((item) => item.kind === "subagent")).toBe(true)
           expect(queue.every((item) => item.sessionID?.startsWith("ses_"))).toBe(true)
           expect(queue.every((item) => item.worktree === tmp.path)).toBe(true)
+          expect(queue.every((item) => item.sourceTaskID === "scheduled_task_issue_triage")).toBe(true)
           expect(queue[0]?.payload.workflow).toMatchObject({
             runID: run.id,
             phaseID: result.phases[0]?.id,

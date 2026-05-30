@@ -1076,6 +1076,7 @@ export type WorkflowRunEventRecord = {
   directory: string
   parentSessionID?: string
   sourceTemplateID?: string
+  sourceTaskID?: string
   status: "queued" | "running" | "blocked" | "paused" | "failed" | "completed" | "cancelled"
   currentPhaseID?: string
   spec: {
@@ -5968,6 +5969,7 @@ export type WorkflowRunCreateData = {
   body?: {
     parentSessionID?: string
     sourceTemplateID?: string
+    sourceTaskID?: string
     templateID?: string
     spec?: {
       schemaVersion: 1
@@ -6357,6 +6359,7 @@ export type WorkflowRunGetResponses = {
     directory: string
     parentSessionID?: string
     sourceTemplateID?: string
+    sourceTaskID?: string
     status: "queued" | "running" | "blocked" | "paused" | "failed" | "completed" | "cancelled"
     currentPhaseID?: string
     spec: {
@@ -6997,6 +7000,7 @@ export type WorkflowRunStartResponses = {
     directory: string
     parentSessionID?: string
     sourceTemplateID?: string
+    sourceTaskID?: string
     status: "queued" | "running" | "blocked" | "paused" | "failed" | "completed" | "cancelled"
     currentPhaseID?: string
     spec: {
@@ -7206,6 +7210,7 @@ export type WorkflowRunPauseResponses = {
     directory: string
     parentSessionID?: string
     sourceTemplateID?: string
+    sourceTaskID?: string
     status: "queued" | "running" | "blocked" | "paused" | "failed" | "completed" | "cancelled"
     currentPhaseID?: string
     spec: {
@@ -7415,6 +7420,7 @@ export type WorkflowRunResumeResponses = {
     directory: string
     parentSessionID?: string
     sourceTemplateID?: string
+    sourceTaskID?: string
     status: "queued" | "running" | "blocked" | "paused" | "failed" | "completed" | "cancelled"
     currentPhaseID?: string
     spec: {
@@ -7624,6 +7630,7 @@ export type WorkflowRunCancelResponses = {
     directory: string
     parentSessionID?: string
     sourceTemplateID?: string
+    sourceTaskID?: string
     status: "queued" | "running" | "blocked" | "paused" | "failed" | "completed" | "cancelled"
     currentPhaseID?: string
     spec: {
@@ -7834,6 +7841,7 @@ export type WorkflowRunRetryResponses = {
     directory: string
     parentSessionID?: string
     sourceTemplateID?: string
+    sourceTaskID?: string
     status: "queued" | "running" | "blocked" | "paused" | "failed" | "completed" | "cancelled"
     currentPhaseID?: string
     spec: {
@@ -8937,6 +8945,53 @@ export type WorkflowRoutineListResponses = {
 
 export type WorkflowRoutineListResponse = WorkflowRoutineListResponses[keyof WorkflowRoutineListResponses]
 
+export type WorkflowRoutineCreateData = {
+  body?: {
+    templateID: string
+    scope: "user" | "project"
+    trust?: "candidate" | "trusted"
+    route: string
+    enabled?: boolean
+    securityGate?: "local-only"
+  }
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/workflow-routines"
+}
+
+export type WorkflowRoutineCreateErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type WorkflowRoutineCreateError = WorkflowRoutineCreateErrors[keyof WorkflowRoutineCreateErrors]
+
+export type WorkflowRoutineCreateResponses = {
+  /**
+   * Created workflow routine.
+   */
+  200: {
+    route: string
+    templateID: string
+    templateName: string
+    source: "builtin" | "user" | "project"
+    trust: "candidate" | "trusted"
+    enabled: boolean
+    mode: "manual" | "scheduled" | "api" | "webhook"
+    securityGate: "local-only" | "required"
+  }
+}
+
+export type WorkflowRoutineCreateResponse = WorkflowRoutineCreateResponses[keyof WorkflowRoutineCreateResponses]
+
 export type WorkflowRoutineRunData = {
   body?: {
     route: string
@@ -9158,6 +9213,7 @@ export type WorkflowRoutineRunResponses = {
       directory: string
       parentSessionID?: string
       sourceTemplateID?: string
+      sourceTaskID?: string
       status: "queued" | "running" | "blocked" | "paused" | "failed" | "completed" | "cancelled"
       currentPhaseID?: string
       spec: {

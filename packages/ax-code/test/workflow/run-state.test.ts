@@ -64,6 +64,7 @@ describe("WorkflowRun state", () => {
           const run = await WorkflowRun.create({
             parentSessionID: session.id,
             sourceTemplateID: "builtin:noop-dry-run",
+            sourceTaskID: "scheduled_task_workflow_source",
             spec: parseWorkflowSpecV1(WorkflowFixtureSpecs.noopDryRun),
           })
 
@@ -71,6 +72,7 @@ describe("WorkflowRun state", () => {
           expect(run.status).toBe("queued")
           expect(run.projectID).toBe(session.projectID)
           expect(run.parentSessionID).toBe(session.id)
+          expect(run.sourceTaskID).toBe("scheduled_task_workflow_source")
           expect(run.spec.id).toBe("noop-dry-run")
           expect(run.inputValues).toEqual({})
           expect(run.currentPhaseID).toStartWith("wfp_")
@@ -165,6 +167,7 @@ describe("WorkflowRun state", () => {
             childAgents: 1,
           })
           expect(finalDetail.verificationEnvelopeIDs).toEqual(["0123456789abcdef"])
+          expect(finalDetail.sourceTaskID).toBe("scheduled_task_workflow_source")
 
           await new Promise((resolve) => setTimeout(resolve, 0))
           expect(events).toContain("workflow.run.created")

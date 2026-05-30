@@ -97,6 +97,7 @@ export namespace WorkflowScheduler {
             worktree: Instance.worktree,
             agent: childPlan.agent,
             model: childPlan.model,
+            sourceTaskID: initial.sourceTaskID,
             payload: {
               workflow: {
                 runID,

@@ -28,6 +28,7 @@ export const WorkflowRunTable = sqliteTable(
       .$type<SessionID>()
       .references(() => SessionTable.id, { onDelete: "set null" }),
     source_template_id: text(),
+    source_task_id: text(),
     status: text().$type<WorkflowRunRecord["status"]>().notNull(),
     current_phase_id: text(),
     spec_snapshot: text({ mode: "json" }).$type<WorkflowSpecV1>().notNull(),
@@ -44,6 +45,7 @@ export const WorkflowRunTable = sqliteTable(
     index("workflow_run_project_status_idx").on(table.project_id, table.status),
     index("workflow_run_project_created_idx").on(table.project_id, table.time_created, table.id),
     index("workflow_run_parent_session_idx").on(table.parent_session_id),
+    index("workflow_run_source_task_idx").on(table.source_task_id),
   ],
 )
 

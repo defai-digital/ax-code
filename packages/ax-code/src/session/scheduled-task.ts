@@ -20,7 +20,11 @@ export namespace ScheduledTask {
   export const Status = z.enum(["active", "paused", "disabled"])
   export type Status = z.infer<typeof Status>
 
-  const WorkflowTemplateIDSchema = z.string().min(1).max(120).regex(/^(builtin|user|project):[a-z][a-z0-9-]*$/)
+  const WorkflowTemplateIDSchema = z
+    .string()
+    .min(1)
+    .max(120)
+    .regex(/^(builtin|user|project):[a-z][a-z0-9-]*$/)
   const WorkflowStartOptionsSchema = z.object({
     allowScaleBeyondDefaults: z.boolean().optional(),
     allowWriteWorkflows: z.boolean().optional(),
@@ -354,6 +358,7 @@ export namespace ScheduledTask {
     const startOptions = WorkflowStartOptionsSchema.parse(current.workflowStartOptions ?? {}) as WorkflowStartOptions
     const run = await WorkflowTemplate.createRun({
       templateID: WorkflowTemplateIDSchema.parse(current.workflowTemplateID) as WorkflowTemplateID,
+      sourceTaskID: current.id,
     })
     const workflowRun = await WorkflowScheduler.start(run.id, startOptions)
     const now = Date.now()

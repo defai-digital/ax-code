@@ -64,6 +64,7 @@ export namespace WorkflowTemplate {
   export const CreateRunInput = z.object({
     templateID: ID,
     parentSessionID: SessionID.zod.optional(),
+    sourceTaskID: z.string().trim().min(1).optional(),
     modelPolicy: WorkflowModelPolicyOverride.optional(),
     inputValues: WorkflowInputValues,
   })
@@ -180,6 +181,7 @@ export namespace WorkflowTemplate {
     return WorkflowRun.create({
       parentSessionID: parsed.parentSessionID,
       sourceTemplateID: template.id,
+      sourceTaskID: parsed.sourceTaskID,
       spec: applyWorkflowModelPolicyOverride(template.spec, parsed.modelPolicy),
       inputValues: parsed.inputValues,
     })

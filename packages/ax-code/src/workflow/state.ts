@@ -110,6 +110,7 @@ export namespace WorkflowRun {
     directory: z.string(),
     parentSessionID: SessionID.zod.optional(),
     sourceTemplateID: z.string().optional(),
+    sourceTaskID: z.string().min(1).optional(),
     status: Status,
     currentPhaseID: WorkflowPhaseID.zod.optional(),
     spec: WorkflowSpecV1,
@@ -209,6 +210,7 @@ export const WorkflowRunEventRecord = z
     directory: z.string(),
     parentSessionID: WorkflowWireID.optional(),
     sourceTemplateID: z.string().optional(),
+    sourceTaskID: z.string().optional(),
     status: WorkflowRun.Status,
     currentPhaseID: WorkflowWireID.optional(),
     spec: WorkflowSpecV1,
@@ -315,6 +317,7 @@ export namespace WorkflowRun {
   export const CreateInput = z.object({
     parentSessionID: SessionID.zod.optional(),
     sourceTemplateID: z.string().trim().min(1).optional(),
+    sourceTaskID: z.string().trim().min(1).optional(),
     spec: WorkflowSpecV1,
     inputValues: WorkflowInputValues,
   })

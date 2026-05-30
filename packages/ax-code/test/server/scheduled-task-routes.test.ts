@@ -160,7 +160,7 @@ describe("scheduled task routes", () => {
           expect(runNowResponse.status).toBe(200)
           const runNow = (await runNowResponse.json()) as {
             task: { id: string; lastWorkflowRunID: string; lastRunAt: number }
-            workflowRun: { id: string; status: string; sourceTemplateID: string }
+            workflowRun: { id: string; status: string; sourceTemplateID: string; sourceTaskID: string }
             queueItem?: unknown
           }
 
@@ -168,6 +168,7 @@ describe("scheduled task routes", () => {
           expect(runNow.workflowRun).toMatchObject({
             status: "completed",
             sourceTemplateID: "builtin:noop-dry-run",
+            sourceTaskID: created.id,
           })
           expect(runNow.task.lastWorkflowRunID).toBe(runNow.workflowRun.id)
           expect(runNow.task.lastRunAt).toBeGreaterThan(0)

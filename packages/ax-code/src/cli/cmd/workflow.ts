@@ -43,6 +43,14 @@ type RoutineRunOptions = Omit<StartOptions, "templateID"> & {
   route: string
 }
 
+type RoutineCreateOptions = JsonOption & {
+  templateID: string
+  scope: "user" | "project"
+  route: string
+  enabled?: boolean
+  trusted?: boolean
+}
+
 type RunIDOptions = JsonOption & {
   runID: string
 }
@@ -403,6 +411,57 @@ const WorkflowEvalCaseRunCommand = cmd({
   },
 })
 
+const WorkflowRoutineCreateCommand = cmd({
+  command: "create-routine <templateID>",
+  describe: "create a local workflow routine trigger from a template",
+  builder: (yargs: Argv) =>
+    yargs
+      .positional("templateID", {
+        type: "string",
+        demandOption: true,
+        describe: "source workflow template id, for example builtin:noop-dry-run",
+      })
+      .option("scope", {
+        type: "string",
+        choices: ["user", "project"] as const,
+        default: "project",
+        describe: "where to save the routine template copy",
+      })
+      .option("route", {
+        type: "string",
+        demandOption: true,
+        describe: "local routine route, for example workflow/daily-review",
+      })
+      .option("enabled", {
+        type: "boolean",
+        default: false,
+        describe: "enable the routine trigger immediately",
+      })
+      .option("trusted", {
+        type: "boolean",
+        default: false,
+        describe: "save the routine template as trusted instead of candidate",
+      })
+      .option("json", jsonOption()),
+  async handler(args) {
+    await withWorkflowRuntime(async () => {
+      const options = args as unknown as RoutineCreateOptions
+      const routine = await WorkflowRoutineTrigger.create({
+        templateID: options.templateID as WorkflowTemplate.ID,
+        scope: options.scope,
+        route: options.route,
+        enabled: options.enabled,
+        trust: options.trusted ? "trusted" : "candidate",
+      })
+      if (options.json) {
+        writeJson(routine)
+        return
+      }
+      process.stdout.write(formatWorkflowRoutineList([routine]))
+    })
+  },
+})
+
 const WorkflowRunStartCommand = cmd({
   command: "start <templateID>",
   describe: "create and start a workflow run from a template",
@@ -753,6 +812,7 @@ export const WorkflowCommand = cmd({
       .command(WorkflowRoutineListCommand)
       .command(WorkflowEvalCaseListCommand)
       .command(WorkflowEvalCaseRunCommand)
+      .command(WorkflowRoutineCreateCommand)
       .command(WorkflowRunStartCommand)
       .command(WorkflowRoutineRunCommand)
       .command(WorkflowRunStatusCommand)

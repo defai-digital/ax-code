@@ -59,6 +59,7 @@ const WorkflowRunCreateBody = z
   .object({
     parentSessionID: z.string().min(1).optional(),
     sourceTemplateID: z.string().trim().min(1).optional(),
+    sourceTaskID: z.string().trim().min(1).optional(),
     templateID: WorkflowTemplateIDSchema.optional(),
     spec: WorkflowSpecV1.optional(),
     modelPolicy: WorkflowModelPolicyOverride.optional(),
@@ -104,6 +105,7 @@ const WorkflowRoutineRunBody = z.object({
   inputValues: WorkflowInputValues,
   startOptions: WorkflowScheduler.StartOptions.partial().optional(),
 })
+const WorkflowRoutineCreateBody = WorkflowRoutineTrigger.CreateInput
 
 const WorkflowRetryQuery = z.object({
   phaseID: z.string().min(1).optional(),
@@ -209,6 +211,7 @@ export const WorkflowRunRoutes = lazy(() =>
             await WorkflowTemplate.createRun({
               templateID: body.templateID as WorkflowTemplate.ID,
               parentSessionID: body.parentSessionID as SessionID | undefined,
+              sourceTaskID: body.sourceTaskID,
               modelPolicy: body.modelPolicy,
               inputValues: body.inputValues,
             }),
@@ -218,6 +221,7 @@ export const WorkflowRunRoutes = lazy(() =>
           await WorkflowRun.create({
             parentSessionID: body.parentSessionID as SessionID | undefined,
             sourceTemplateID: body.sourceTemplateID,
+            sourceTaskID: body.sourceTaskID,
             spec: applyWorkflowModelPolicyOverride(body.spec!, body.modelPolicy),
             inputValues: body.inputValues,
           }),
@@ -572,6 +576,23 @@ export const WorkflowRoutineRoutes = lazy(() =>
         },
       }),
       async (c) => c.json(await WorkflowRoutineTrigger.list()),
+    )
+    .post(
+      "/",
+      describeRoute({
+        summary: "Create workflow routine",
+        description: "Create a user-local or project-local API routine trigger from an existing workflow template.",
+        operationId: "workflowRoutine.create",
+        responses: {
+          200: {
+            description: "Created workflow routine.",
+            content: { "application/json": { schema: resolver(WorkflowRoutineTrigger.Info) } },
+          },
+          ...errors(400, 404, 409),
+        },
+      }),
+      validator("json", WorkflowRoutineCreateBody),
+      async (c) => c.json(await WorkflowRoutineTrigger.create(c.req.valid("json"))),
     )
     .post(
       "/run",

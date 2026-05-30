@@ -14,6 +14,51 @@ afterEach(async () => {
 })
 
 describe("WorkflowRoutineTrigger", () => {
+  test("creates candidate and trusted API routine triggers from templates", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const candidate = await WorkflowRoutineTrigger.create({
+          templateID: "builtin:noop-dry-run",
+          scope: "project",
+          route: "workflow/local-candidate-noop",
+        })
+
+        expect(candidate).toMatchObject({
+          route: "workflow/local-candidate-noop",
+          templateID: "project:noop-dry-run",
+          source: "project",
+          trust: "candidate",
+          enabled: false,
+          mode: "api",
+          securityGate: "local-only",
+        })
+        await expect(WorkflowRoutineTrigger.run({ route: "workflow/local-candidate-noop" })).rejects.toThrow(
+          WorkflowRoutineDisabledError,
+        )
+
+        const trusted = await WorkflowRoutineTrigger.create({
+          templateID: "builtin:noop-dry-run",
+          scope: "project",
+          route: "workflow/local-trusted-noop",
+          enabled: true,
+          trust: "trusted",
+        })
+        expect(trusted).toMatchObject({
+          route: "workflow/local-trusted-noop",
+          templateID: "project:noop-dry-run",
+          trust: "trusted",
+          enabled: true,
+        })
+
+        const routines = await WorkflowRoutineTrigger.list()
+        expect(routines).toContainEqual(expect.objectContaining({ route: "workflow/local-trusted-noop" }))
+      },
+    })
+  })
+
   test("lists and runs trusted local API routines", async () => {
     await using tmp = await tmpdir({ git: true })
     const previous = process.env.AX_CODE_WORKFLOW_RUNTIME

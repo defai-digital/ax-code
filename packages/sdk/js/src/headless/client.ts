@@ -2,6 +2,8 @@ import { createAxCodeClient } from "../v2/client.js"
 import { AX_CODE_WORKSPACE_HEADER, LEGACY_OPENCODE_WORKSPACE_HEADER } from "../protocol.js"
 import type {
   Event,
+  WorkflowRoutineCreateData,
+  WorkflowRoutineCreateResponse,
   WorkflowRoutineListResponse,
   WorkflowRoutineRunData,
   WorkflowRoutineRunResponse,
@@ -187,6 +189,7 @@ export type HeadlessWorkflowRunEvalSummaryInput = NonNullable<WorkflowRunEvalSum
 export type HeadlessWorkflowRunSaveTemplateInput = NonNullable<WorkflowRunSaveTemplateData["body"]>
 export type HeadlessWorkflowArtifactListInput = Omit<NonNullable<WorkflowRunArtifactsData["query"]>, "directory">
 export type HeadlessWorkflowTemplateSaveInput = NonNullable<WorkflowTemplateSaveData["body"]>
+export type HeadlessWorkflowRoutineCreateInput = NonNullable<WorkflowRoutineCreateData["body"]>
 export type HeadlessWorkflowRoutineRunInput = NonNullable<WorkflowRoutineRunData["body"]>
 export type HeadlessWorkflowEvalCaseFindingStatus = "confirmed" | "likely" | "rejected" | "unverified"
 export type HeadlessWorkflowEvalCase = {
@@ -461,6 +464,18 @@ export function createHeadlessClient(input: HeadlessClientOptions) {
       },
     },
     workflowRoutine: {
+      create(body: HeadlessWorkflowRoutineCreateInput) {
+        return requestJson<WorkflowRoutineCreateResponse>({
+          baseUrl: input.baseUrl,
+          fetch: fetchFn,
+          headers: input.headers,
+          directory: input.directory,
+          experimental_workspaceID: input.experimental_workspaceID,
+          path: "/workflow-routines",
+          method: "POST",
+          body: body as Record<string, unknown>,
+        })
+      },
       list() {
         return requestJson<WorkflowRoutineListResponse>({
           baseUrl: input.baseUrl,
