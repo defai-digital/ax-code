@@ -263,8 +263,8 @@ function workflowSubagentExecution(item: TaskQueue.Info): QueueExecution | undef
 async function recordWorkflowSubagentUsage(item: TaskQueue.Info, result: unknown) {
   const workflow = workflowPayload(item)
   if (!workflow) return
-  const tokens = messageTokens(result)
-  if (!tokens) return
+  const usage = messageBudgetUsage(result)
+  if (!usage) return
 
   const { WorkflowRun } = await import("../workflow/run")
   await WorkflowRun.appendBudgetUsage({
@@ -272,11 +272,7 @@ async function recordWorkflowSubagentUsage(item: TaskQueue.Info, result: unknown
     phaseID: workflow.phaseID as WorkflowPhaseID,
     childID: workflow.childID as WorkflowChildID,
     kind: "consume",
-    usageDelta: {
-      totalTokens: tokens.total,
-      inputTokens: tokens.input,
-      outputTokens: tokens.output,
-    },
+    usageDelta: usage,
   })
 
   const detail = await WorkflowRun.getDetail(workflow.runID as WorkflowRunID)
@@ -502,6 +498,18 @@ function workflowPayload(item: TaskQueue.Info) {
   }
 }
 
+function messageBudgetUsage(result: unknown) {
+  const tokens = messageTokens(result)
+  const toolCalls = messageToolCalls(result)
+  if (!tokens && toolCalls === 0) return undefined
+  return {
+    totalTokens: tokens?.total ?? 0,
+    inputTokens: tokens?.input ?? 0,
+    outputTokens: tokens?.output ?? 0,
+    toolCalls,
+  }
+}
+
 function messageTokens(result: unknown) {
   if (!result || typeof result !== "object") return undefined
   const info = (result as { info?: unknown }).info
@@ -518,6 +526,16 @@ function messageTokens(result: unknown) {
     input: input ?? 0,
     output: output ?? 0,
   }
+}
+
+function messageToolCalls(result: unknown) {
+  if (!result || typeof result !== "object") return 0
+  const parts = (result as { parts?: unknown }).parts
+  if (!Array.isArray(parts)) return 0
+  return parts.filter((part) => {
+    if (!part || typeof part !== "object") return false
+    return (part as { type?: unknown }).type === "tool"
+  }).length
 }
 
 function nonNegativeNumber(value: unknown) {

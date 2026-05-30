@@ -1,11 +1,13 @@
-import { afterEach, describe, expect, test } from "bun:test"
+import { afterEach, describe, expect, spyOn, test } from "bun:test"
 import { Bus } from "../../src/bus"
 import { Permission } from "../../src/permission"
 import { Instance } from "../../src/project/instance"
 import { Question } from "../../src/question"
 import { Session } from "../../src/session"
+import { SessionPrompt } from "../../src/session/prompt"
 import { TaskQueue } from "../../src/session/task-queue"
 import { TaskQueueExecutor } from "../../src/session/task-queue-executor"
+import { WorkflowFixtureSpecs, WorkflowRun, parseWorkflowSpecV1 } from "../../src/workflow"
 import { tmpdir } from "../fixture/fixture"
 
 afterEach(async () => {
@@ -308,6 +310,76 @@ describe("TaskQueue", () => {
         })
 
         expect((await Session.get(session.id)).permission ?? []).toEqual([])
+      },
+    })
+  })
+
+  test("records workflow child tool calls against the child budget slice", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const run = await WorkflowRun.create({ spec: parseWorkflowSpecV1(WorkflowFixtureSpecs.noopDryRun) })
+        const detail = await WorkflowRun.getDetail(run.id)
+        const phase = detail.phases[0]!
+        await WorkflowRun.setStatus({ id: run.id, status: "running" })
+        await WorkflowRun.setPhaseStatus({ id: phase.id, status: "running" })
+        const child = await WorkflowRun.appendChild({
+          runID: run.id,
+          phaseID: phase.id,
+          sessionID: session.id,
+          budgetSlice: { maxToolCalls: 1 },
+        })
+        const item = await TaskQueue.enqueue({
+          sessionID: session.id,
+          kind: "subagent",
+          title: "Run workflow child with tool calls",
+          payload: {
+            workflow: {
+              runID: run.id,
+              phaseID: phase.id,
+              childID: child.id,
+              specPhaseID: phase.specPhaseID,
+            },
+            body: {
+              agent: "build",
+              model: { providerID: "test", modelID: "test-model" },
+              parts: [{ type: "text", text: "Use two tools." }],
+            },
+          },
+        })
+        const prompt = spyOn(SessionPrompt, "prompt").mockResolvedValue({
+          info: {
+            id: "msg_workflow_tool_budget",
+            role: "assistant",
+            sessionID: session.id,
+            tokens: { input: 10, output: 5, total: 15 },
+          },
+          parts: [
+            { id: "prt_tool_1", sessionID: session.id, messageID: "msg_workflow_tool_budget", type: "tool" },
+            { id: "prt_tool_2", sessionID: session.id, messageID: "msg_workflow_tool_budget", type: "tool" },
+          ],
+        } as any)
+
+        try {
+          await TaskQueueExecutor.start(item)
+          await waitForQueueStatus(item.id, "failed")
+
+          const failed = await WorkflowRun.getDetail(run.id)
+          expect(failed.status).toBe("failed")
+          expect(failed.children[0]?.status).toBe("failed")
+          expect(failed.children[0]?.error).toContain("child tool calls 2/1")
+          expect(failed.budgetUsage).toMatchObject({
+            totalTokens: 15,
+            inputTokens: 10,
+            outputTokens: 5,
+            toolCalls: 2,
+          })
+        } finally {
+          prompt.mockRestore()
+        }
       },
     })
   })
