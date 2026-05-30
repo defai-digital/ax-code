@@ -72,7 +72,13 @@ describe("WorkflowScheduler", () => {
             exposeToMainContext: true,
           })
           expect(finalReport?.summary).toContain("Verification: not_run (optional)")
+          expect(finalReport?.summary).toContain("Evidence refs: artifact:wfa_")
+          expect(finalReport?.evidenceRefs).toHaveLength(2)
           expect(finalReport?.payload).toMatchObject({
+            evidenceRefs: [
+              expect.objectContaining({ kind: "artifact" }),
+              expect.objectContaining({ kind: "artifact" }),
+            ],
             verification: {
               mode: "optional",
               status: "not_run",
@@ -114,6 +120,7 @@ describe("WorkflowScheduler", () => {
           if (!report || report.type !== "text") throw new Error("expected workflow final report text part")
           expect(report.text).toContain("Workflow final report: Noop Dry Run")
           expect(report.text).toContain("Final artifact: wfa_")
+          expect(report.text).toContain("Linked evidence refs: artifact:wfa_")
           expect(report.text).toContain("Budget used: 0 tokens, 0 tool calls, 0 child agents.")
           expect(report.text).not.toContain("Noop phase completed")
           expect(report.metadata?.workflowFinalReport).toMatchObject({
@@ -140,6 +147,41 @@ describe("WorkflowScheduler", () => {
           messages = await Session.messages({ sessionID: session.id })
           reportParts = workflowFinalReportParts(messages, run.id)
           expect(reportParts).toHaveLength(1)
+        },
+      })
+    } finally {
+      if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME
+      else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
+    }
+  })
+
+  test("includes verification envelope ids in final report evidence refs", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
+    process.env.AX_CODE_WORKFLOW_RUNTIME = "1"
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const run = await WorkflowRun.create({ spec: parseWorkflowSpecV1(WorkflowFixtureSpecs.noopDryRun) })
+          const detail = await WorkflowRun.getDetail(run.id)
+          const phase = detail.phases[0]!
+          await WorkflowRun.setStatus({ id: run.id, status: "running" })
+          await WorkflowRun.setPhaseStatus({ id: phase.id, status: "completed" })
+          await WorkflowRun.attachVerificationEnvelopeIDs({
+            id: run.id,
+            envelopeIDs: ["0123456789abcdef"],
+          })
+          await WorkflowRun.setStatus({ id: run.id, status: "completed" })
+
+          const finalReport = await WorkflowRun.ensureFinalReportArtifact(run.id)
+
+          expect(finalReport?.summary).toContain("Evidence refs: verification:0123456789abcdef.")
+          expect(finalReport?.evidenceRefs).toEqual([{ kind: "verification", id: "0123456789abcdef" }])
+          expect(finalReport?.payload).toMatchObject({
+            evidenceRefs: [{ kind: "verification", id: "0123456789abcdef" }],
+            verificationEnvelopeIDs: ["0123456789abcdef"],
+          })
         },
       })
     } finally {

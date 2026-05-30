@@ -235,10 +235,17 @@ describe("workflow routes", () => {
       const finalReport = finalReportArtifacts.find(
         (artifact) => artifact.specArtifactID === "workflow-final-report",
       )
-      expect(finalReport?.payload).toMatchObject({
+      const finalReportPayload = finalReport?.payload as
+        | { kind?: string; budgetLedger?: unknown[]; evidenceRefs?: Array<{ kind?: string; id?: string }> }
+        | undefined
+      expect(finalReportPayload).toMatchObject({
         kind: "workflow-final-report",
         budgetLedger: [],
       })
+      const hasArtifactEvidenceRef = finalReportPayload?.evidenceRefs?.some(
+        (ref) => ref.kind === "artifact" && ref.id?.startsWith("wfa_"),
+      )
+      expect(hasArtifactEvidenceRef).toBe(true)
     } finally {
       if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME
       else process.env.AX_CODE_WORKFLOW_RUNTIME = previous

@@ -577,11 +577,13 @@ async function ensureFinalReportArtifact(runID: WorkflowRunID): Promise<Workflow
   const artifactCounts = countByStatus(detail.artifacts.map((artifact) => artifact.kind))
   const verification = finalReportVerification(detail)
   const findings = finalReportFindings(detail)
+  const evidenceRefs = finalReportEvidenceRefs(detail)
   const summary = [
     `Workflow final report: ${detail.spec.name}`,
     `Status: ${detail.status}`,
     `Verification: ${verification.status} (${verification.mode})`,
     ...verification.summaryLines,
+    `Evidence refs: ${formatEvidenceRefs(evidenceRefs)}`,
     findingSummaryLine(findings),
     ...findingBucketSummaryLines(findings),
     `Phases: ${detail.phases.length} total, ${phaseCounts.completed ?? 0} completed, ${phaseCounts.failed ?? 0} failed, ${phaseCounts.cancelled ?? 0} cancelled.`,
@@ -609,6 +611,7 @@ async function ensureFinalReportArtifact(runID: WorkflowRunID): Promise<Workflow
       phaseCounts,
       childCounts,
       artifactCounts,
+      evidenceRefs,
       verification,
       findings,
       budgetUsage: detail.budgetUsage,
@@ -619,10 +622,7 @@ async function ensureFinalReportArtifact(runID: WorkflowRunID): Promise<Workflow
         .map((artifact) => artifact.id),
     },
     redaction: { status: "pending", summary: "Generated compact workflow final report from durable run state." },
-    evidenceRefs: [
-      ...detail.artifacts.map((artifact) => ({ kind: "artifact" as const, id: artifact.id })),
-      ...detail.verificationEnvelopeIDs.map((id) => ({ kind: "verification" as const, id })),
-    ],
+    evidenceRefs,
   })
   await syncFinalReportToParentSession(detail, artifact)
   return artifact
@@ -638,6 +638,20 @@ function compactBudgetLedgerEntry(entry: WorkflowBudgetLedgerEntry) {
     message: entry.message,
     time: entry.time,
   }
+}
+
+function finalReportEvidenceRefs(detail: WorkflowRunDetail): WorkflowArtifactRecord["evidenceRefs"] {
+  return uniqueEvidenceRefs([
+    ...detail.artifacts.map((artifact) => ({ kind: "artifact" as const, id: artifact.id })),
+    ...detail.verificationEnvelopeIDs.map((id) => ({ kind: "verification" as const, id })),
+  ])
+}
+
+function formatEvidenceRefs(evidenceRefs: WorkflowArtifactRecord["evidenceRefs"], max = 12) {
+  if (evidenceRefs.length === 0) return "none."
+  const shown = evidenceRefs.slice(0, max).map((ref) => `${ref.kind}:${ref.id}`)
+  const suffix = evidenceRefs.length > max ? `, +${evidenceRefs.length - max} more` : ""
+  return `${shown.join(", ")}${suffix}.`
 }
 
 async function syncFinalReportToParentSession(detail: WorkflowRunDetail, artifact: WorkflowArtifactRecord) {
@@ -756,7 +770,7 @@ function formatParentFinalReport(detail: WorkflowRunDetail, artifact: WorkflowAr
     "",
     `Run: ${detail.id}`,
     `Final artifact: ${artifact.id}`,
-    `Linked evidence refs: ${artifact.evidenceRefs.length}`,
+    `Linked evidence refs: ${formatEvidenceRefs(artifact.evidenceRefs)}`,
     `Budget used: ${usage.totalTokens} tokens, ${usage.toolCalls} tool calls, ${usage.childAgents} child agents${cost}.`,
   ].join("\n")
 }
