@@ -129,6 +129,43 @@ describe("workflow spec v1", () => {
     })
   })
 
+  test("accepts workflow merge strategy aliases and custom reducer placeholders", () => {
+    const spec = parseWorkflowSpecV1({
+      schemaVersion: 1,
+      id: "merge-strategies",
+      name: "Merge Strategies",
+      description: "A workflow spec that exercises PRD merge strategy names.",
+      phases: [
+        {
+          id: "scan",
+          name: "Scan",
+          kind: "fanout",
+          mergeStrategy: "vote-with-critic",
+        },
+        {
+          id: "legacy-critic",
+          name: "Legacy Critic",
+          kind: "verification",
+          dependsOn: ["scan"],
+          mergeStrategy: "critic-confirmation",
+        },
+        {
+          id: "custom",
+          name: "Custom",
+          kind: "synthesis",
+          dependsOn: ["legacy-critic"],
+          mergeStrategy: "custom-reducer",
+        },
+      ],
+    })
+
+    expect(spec.phases.map((phase) => phase.mergeStrategy)).toEqual([
+      "vote-with-critic",
+      "critic-confirmation",
+      "custom-reducer",
+    ])
+  })
+
   test("rejects workflows without phases", () => {
     const parsed = WorkflowSpecV1.safeParse({
       schemaVersion: 1,

@@ -1,6 +1,6 @@
 import z from "zod"
 import { Session } from "../session"
-import { isWorkflowRuntimeEnabled } from "./spec"
+import { isWorkflowRuntimeEnabled, type WorkflowSpecV1 } from "./spec"
 import { planWorkflowDryRun } from "./planner"
 import { WorkflowRun } from "./run"
 import { WorkflowRunID } from "./state"
@@ -31,6 +31,7 @@ export namespace WorkflowScheduler {
     if (initial.status === "completed" || initial.status === "cancelled" || initial.status === "failed") {
       return initial
     }
+    assertExecutableMergeStrategies(initial.spec)
 
     const plan = planWorkflowDryRun({
       spec: initial.spec,
@@ -223,8 +224,23 @@ export class WorkflowSchedulerDisabledError extends Error {
   }
 }
 
+export class WorkflowUnsupportedMergeStrategyError extends Error {
+  constructor(phaseID: string, strategy: string) {
+    super(`Workflow phase ${phaseID} uses mergeStrategy ${strategy}, which is a schema placeholder and cannot run yet.`)
+    this.name = "WorkflowUnsupportedMergeStrategyError"
+  }
+}
+
 function assertEnabled() {
   if (!isWorkflowRuntimeEnabled()) throw new WorkflowSchedulerDisabledError()
+}
+
+function assertExecutableMergeStrategies(spec: WorkflowSpecV1) {
+  for (const phase of spec.phases) {
+    if (phase.mergeStrategy === "custom-reducer") {
+      throw new WorkflowUnsupportedMergeStrategyError(phase.id, phase.mergeStrategy)
+    }
+  }
 }
 
 function isTerminalPhaseStatus(status: WorkflowRun.PhaseStatus) {

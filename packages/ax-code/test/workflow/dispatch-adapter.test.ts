@@ -1,12 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import type { DispatchExecutor } from "../../src/dispatch"
 import { Instance } from "../../src/project/instance"
-import {
-  WorkflowFixtureSpecs,
-  WorkflowRun,
-  WorkflowScheduler,
-  parseWorkflowSpecV1,
-} from "../../src/workflow"
+import { WorkflowFixtureSpecs, WorkflowRun, WorkflowScheduler, parseWorkflowSpecV1 } from "../../src/workflow"
 import { WorkflowDispatchWritePolicyError } from "../../src/workflow/dispatch-adapter"
 import { tmpdir } from "../fixture/fixture"
 
@@ -169,6 +164,64 @@ describe("WorkflowDispatchAdapter", () => {
 
           expect(result.status).toBe("completed")
           expect(result.artifacts.some((artifact) => artifact.specArtifactID === "final-summary")).toBe(true)
+        },
+      })
+    } finally {
+      if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME
+      else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
+    }
+  })
+
+  test("maps vote-with-critic workflow phases to majority dispatch semantics", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
+    process.env.AX_CODE_WORKFLOW_RUNTIME = "1"
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const spec = parseWorkflowSpecV1({
+            schemaVersion: 1,
+            id: "critic-vote-dispatch",
+            name: "Critic Vote Dispatch",
+            description: "Read-only direct dispatch that treats vote-with-critic as majority consensus.",
+            budget: {
+              maxTotalTokens: 100,
+              maxConcurrentAgents: 3,
+              maxTotalAgents: 3,
+              maxToolCalls: 30,
+            },
+            phases: [
+              {
+                id: "vote",
+                name: "Vote",
+                kind: "verification",
+                prompt: "Vote on candidate findings.",
+                inputs: ["a", "b", "c"],
+                maxParallel: 3,
+                mergeStrategy: "vote-with-critic",
+              },
+            ],
+          })
+          const run = await WorkflowRun.create({ spec })
+          let calls = 0
+
+          const result = await WorkflowScheduler.start(run.id, {
+            enqueueChildren: false,
+            dispatchExecutor: async () => {
+              calls++
+              if (calls <= 2) return { output: `accepted:${calls}`, tokensUsed: 2 }
+              throw new Error("critic rejected")
+            },
+          })
+
+          expect(result.status).toBe("completed")
+          expect(result.phases[0]?.status).toBe("completed")
+          expect(result.children).toHaveLength(3)
+          expect(result.artifacts.find((artifact) => artifact.kind === "summary")?.payload).toMatchObject({
+            mergeStrategy: "vote-with-critic",
+            counts: { completed: 2 },
+          })
         },
       })
     } finally {

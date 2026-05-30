@@ -222,7 +222,9 @@ export const WorkflowPhase = z.object({
   outputs: z.array(Identifier).default([]),
   dependsOn: z.array(Identifier).default([]),
   maxParallel: PositiveInteger.max(WORKFLOW_MAX_CONCURRENT_AGENTS).optional(),
-  mergeStrategy: z.enum(["all", "first-success", "majority", "critic-confirmation"]).default("all"),
+  mergeStrategy: z
+    .enum(["all", "first-success", "majority", "vote-with-critic", "critic-confirmation", "custom-reducer"])
+    .default("all"),
   modelPolicy: WorkflowModelPolicy.partial().optional(),
   budget: WorkflowPhaseBudget.optional(),
   pacing: WorkflowPhasePacing.optional(),

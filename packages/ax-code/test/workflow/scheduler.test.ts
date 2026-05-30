@@ -6,6 +6,7 @@ import {
   WorkflowRunID,
   WorkflowScheduler,
   WorkflowSchedulerDisabledError,
+  WorkflowUnsupportedMergeStrategyError,
   WORKFLOW_FINAL_REPORT_SPEC_ARTIFACT_ID,
   parseWorkflowSpecV1,
 } from "../../src/workflow"
@@ -122,6 +123,42 @@ describe("WorkflowScheduler", () => {
           expect(result.status).toBe("blocked")
           expect(result.error).toContain("missing required workflow artifacts: final-summary")
           expect(result.phases[0]?.status).toBe("completed")
+        },
+      })
+    } finally {
+      if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME
+      else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
+    }
+  })
+
+  test("rejects custom reducer placeholders before queueing workflow children", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
+    process.env.AX_CODE_WORKFLOW_RUNTIME = "1"
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const spec = parseWorkflowSpecV1({
+            schemaVersion: 1,
+            id: "custom-reducer-placeholder",
+            name: "Custom Reducer Placeholder",
+            description: "A fixture that can be saved but cannot execute custom reducer code.",
+            phases: [
+              {
+                id: "reduce",
+                name: "Reduce",
+                kind: "synthesis",
+                mergeStrategy: "custom-reducer",
+              },
+            ],
+          })
+          const run = await WorkflowRun.create({ spec })
+
+          await expect(WorkflowScheduler.start(run.id)).rejects.toThrow(WorkflowUnsupportedMergeStrategyError)
+          expect((await WorkflowRun.getDetail(run.id)).status).toBe("queued")
+          const { TaskQueue } = await import("../../src/session/task-queue")
+          expect(await TaskQueue.list()).toEqual([])
         },
       })
     } finally {

@@ -1,4 +1,10 @@
-import { dispatch, type DispatchExecutor, type DispatchResult, type DispatchSpec, type MergeStrategy } from "../dispatch"
+import {
+  dispatch,
+  type DispatchExecutor,
+  type DispatchResult,
+  type DispatchSpec,
+  type MergeStrategy,
+} from "../dispatch"
 import type { WorkflowDryRunPhase } from "./planner"
 import { WorkflowRun } from "./run"
 import type { WorkflowPhase, WorkflowSpecV1 } from "./spec"
@@ -144,6 +150,13 @@ export class WorkflowDispatchExecutorMissingError extends Error {
   }
 }
 
+export class WorkflowDispatchUnsupportedMergeStrategyError extends Error {
+  constructor(strategy: string) {
+    super(`Workflow direct dispatch does not support mergeStrategy ${strategy}.`)
+    this.name = "WorkflowDispatchUnsupportedMergeStrategyError"
+  }
+}
+
 function assertReadOnly(spec: WorkflowSpecV1) {
   if (spec.permissions.writePolicy === "read-only") return
   throw new WorkflowDispatchWritePolicyError(spec.permissions.writePolicy)
@@ -151,7 +164,8 @@ function assertReadOnly(spec: WorkflowSpecV1) {
 
 function dispatchMergeStrategy(strategy: WorkflowPhase["mergeStrategy"]): MergeStrategy {
   if (strategy === "first-success" || strategy === "majority") return strategy
-  if (strategy === "critic-confirmation") return "majority"
+  if (strategy === "vote-with-critic" || strategy === "critic-confirmation") return "majority"
+  if (strategy === "custom-reducer") throw new WorkflowDispatchUnsupportedMergeStrategyError(strategy)
   return "all"
 }
 
@@ -168,7 +182,10 @@ function phaseStatusFromResults(
   if (results.length === 0) return "completed"
   const completed = results.filter((result) => result.status === "completed").length
   if (strategy === "first-success" && completed > 0) return "completed"
-  if ((strategy === "majority" || strategy === "critic-confirmation") && completed > results.length / 2) {
+  if (
+    (strategy === "majority" || strategy === "vote-with-critic" || strategy === "critic-confirmation") &&
+    completed > results.length / 2
+  ) {
     return "completed"
   }
   if (results.every((result) => result.status === "completed")) return "completed"
@@ -210,5 +227,8 @@ function resultCounts(results: DispatchResult[]) {
 
 function failedSummary(results: DispatchResult[]) {
   const failed = results.find((result) => result.status === "failed" || result.status === "timeout")
-  return failed?.error ?? `Workflow phase did not satisfy merge strategy; ${resultCounts(results).completed} children completed.`
+  return (
+    failed?.error ??
+    `Workflow phase did not satisfy merge strategy; ${resultCounts(results).completed} children completed.`
+  )
 }
