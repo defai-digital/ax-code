@@ -50,7 +50,9 @@ export function handlePromptLoopGoalContinuation(
         objective: decision.objective,
         continuation: decision.continuation,
       }),
-      budgetLimitContinuationSent: input.budgetLimitContinuationSent,
+      // An active goal means we're in a fresh budget cycle (new or resumed goal),
+      // so clear any stale wrap-up flag from a previous goal in this session.
+      budgetLimitContinuationSent: false,
     }
   }
 

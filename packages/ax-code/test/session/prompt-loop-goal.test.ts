@@ -71,6 +71,25 @@ describe("prompt loop goal continuation", () => {
     expect(result.text).toContain("Token budget: 100")
   })
 
+  test("active goal continuation resets stale budget-limit flag from a previous goal", () => {
+    const result = handlePromptLoopGoalContinuation({
+      sessionID: SessionID.descending(),
+      goal: {
+        objective: "new goal after previous budget-limited one",
+        status: "active",
+        tokensUsed: 0,
+        timeUsedSeconds: 0,
+      },
+      continuations: 0,
+      maxContinuations: 3,
+      budgetLimitContinuationSent: true, // stale from a prior goal in this session
+    })
+
+    expect(result.action).toBe("continue")
+    if (result.action !== "continue") throw new Error("expected continuation")
+    expect(result.budgetLimitContinuationSent).toBe(false)
+  })
+
   test("continues active goals beyond maxContinuations until model marks complete", () => {
     const result = handlePromptLoopGoalContinuation({
       sessionID: SessionID.descending(),
