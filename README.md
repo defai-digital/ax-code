@@ -6,15 +6,15 @@ _  ___ |    |_/_____/ /___  / /_/ /_  /_/ /_  /___
 /_/  |_/_/|_|       \____/  \____/ /_____/ /_____/
 ```
 
-**Local-first coding agents for real repositories, with control surfaces teams can operate.**
+**A local-first agent runtime for serious software work.**
 
-AX Code is the runtime behind an interactive terminal agent, one-shot CLI tasks, VS Code workflows, SDK integrations, and headless server automation. It lets AI inspect and change a repo through explicit tools, permission prompts, sandbox modes, provider routing, and durable sessions so teams can use agents for real engineering work without giving up control or context.
+AX Code runs coding agents against your actual repositories through a terminal TUI, one-shot CLI, VS Code, a TypeScript SDK, and a local HTTP server. It is built around durable sessions, explicit tools, sandboxed execution, provider routing, code intelligence, and MCP/plugin extensibility so teams can let agents act without losing control of the work.
 
-- Start an interactive TUI, run one-shot commands, or operate AX Code as a local headless service
-- Keep work auditable with persistent sessions, replay, fork, export, and repo instructions in `AGENTS.md`
+- Work interactively in the terminal with model, provider, agent, session, MCP, and skill controls
+- Run headless tasks for scripts, CI, bots, and internal automation with the same runtime
+- Preserve work with persistent sessions, replay, fork, export, compare, rollback, and repo instructions in `AGENTS.md`
 - Bound execution with `workspace-write`, `read-only`, or `full-access` isolation plus permission rules
-- Switch between hosted and local model providers without changing the tool surface
-- Extend the same agent runtime with MCP servers, plugins, SDK tools, and VS Code integration
+- Extend with MCP servers, plugins, custom agents, Agent Skills, SDK tools, and VS Code integration
 
 Built by [DEFAI Digital](https://github.com/defai-digital).
 
@@ -54,11 +54,6 @@ ax-code
 That is it. No project setup or config file is required. On first launch, use `/connect` inside the TUI to add or switch providers.
 
 For headless use, CI jobs, or preconfigured shells, AX Code also respects provider environment variables such as `ANTHROPIC_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`, `XAI_API_KEY`, and `OPENAI_API_KEY`.
-
-Grok is exposed as two separate provider plans:
-
-- `Grok Cloud API` uses `XAI_API_KEY` and the hosted xAI API models, including `grok-build-0.1`.
-- `Grok Build CLI` uses the installed `grok` command from xAI's CLI and your local CLI login/session.
 
 ### Update
 
@@ -120,47 +115,48 @@ That source launcher should report `Runtime: Bun X.Y.Z (source)` and is intentio
 
 ---
 
-## Why AX Code
+## What AX Code Does
 
-Most AI coding tools optimize for a chat loop. AX Code is built as a runtime you can actually operate across repositories, teams, and integration surfaces.
+AX Code is designed for agent work that touches real files, shells, sessions, and team policy. The same runtime powers every surface:
 
-- Control what the agent can do: every action goes through explicit tools, permission rules, and isolation modes such as `full-access`, `workspace-write`, or `read-only`.
-- Preserve work over time: sessions can be resumed, forked, compacted, exported, and replayed instead of disappearing with a chat tab.
-- Keep provider choice open: switch between cloud and local model backends without changing the surrounding workflow.
-- Share project knowledge with the repo: `AGENTS.md` keeps conventions, guardrails, and collaboration defaults close to the code.
-- Build on the same runtime everywhere: use the terminal, VS Code, one-shot CLI, SDK, CI jobs, or internal platforms without inventing separate agent stacks.
+| Need                         | Use                                                                                          |
+| ---------------------------- | -------------------------------------------------------------------------------------------- |
+| Interactive coding           | `ax-code` opens the terminal UI with provider, model, agent, session, MCP, and skill flows   |
+| One-shot automation          | `ax-code run "review the auth flow"` runs a bounded headless task                            |
+| Local service / integrations | `ax-code serve` exposes the runtime over a local HTTP API and OpenAPI contract               |
+| TypeScript embedding         | `@ax-code/sdk` provides `createAgent()`, streaming events, sessions, custom tools, and tests |
+| VS Code                      | The VS Code integration uses the installed CLI/server while staying editor-native            |
 
-AX Code is not just a chat UI. It is the runtime layer behind agent selection, tool orchestration, session persistence, and policy boundaries.
+## Current Capabilities
 
-## When It Fits
+- **Terminal command center**: prompt editing, provider/model picker, agent picker, session list, MCP status, skill dialog, sandbox/autonomous toggles, and live tool progress.
+- **Controlled execution**: tools such as read, edit, write, grep, glob, bash, web fetch/search, todo, task, and skill execution all pass through permission and isolation boundaries.
+- **Durable sessions**: resume, fork, compact, export/import, replay, compare, rollback, and inspect session risk instead of losing work when a chat closes.
+- **Repository intelligence**: `ax-code init` writes `AGENTS.md`; `ax-code index`, `graph`, semantic diff, LSP-backed context, and risk/DRE views help agents reason over larger codebases.
+- **Provider flexibility**: connect hosted or local providers from `/connect` or `ax-code providers login`; list available models with `ax-code models`.
+- **Extensibility**: add MCP servers, create custom agents, validate Agent Skills, and embed custom SDK tools without rebuilding the orchestration layer.
 
-AX Code is a strong fit when you need one or more of these:
+## Control Model
 
-- Large or messy repositories where uncontrolled tool use is risky
-- Team workflows that need repeatability, reviewability, or policy boundaries
-- Provider choice across hosted and local model backends
-- Embeddable agent workflows through a TypeScript SDK or headless server
-- Repository-specific context that can live with the code in `AGENTS.md`
+AX Code starts with autonomous mode on and runtime isolation in `workspace-write` by default: network is disabled, writes stay inside the workspace, and protected paths such as `.git/` and `.ax-code/` remain blocked. The agent can make progress without asking about every low-risk step, while the sandbox still enforces the boundary.
 
-## Use It Your Way
+- Use `/sandbox`, `--sandbox read-only`, `--sandbox workspace-write`, or `--sandbox full-access` to change isolation intentionally.
+- Use `/autonomous` or `AX_CODE_AUTONOMOUS=false` when you want the agent to stop for each permission or question.
+- Use `ax-code mcp list --tools`, `ax-code mcp trust`, and permission rules to control external MCP tool surfaces.
+- Provider and MCP credentials are encrypted at rest; server mode is localhost-only by default.
 
-| Surface        | Best for                          | Entry point                                                                      |
-| -------------- | --------------------------------- | -------------------------------------------------------------------------------- |
-| TUI            | Interactive repo work             | `ax-code`                                                                        |
-| One-shot CLI   | Quick tasks and scripts           | `ax-code run "review the auth flow"`                                             |
-| Server mode    | CI, bots, and internal platforms  | `ax-code serve`                                                                  |
-| TypeScript SDK | Embedding ax-code in applications | [`packages/sdk/js/README.md`](packages/sdk/js/README.md)                         |
-| VS Code        | Editor-native workflow            | [`packages/integration-vscode/README.md`](packages/integration-vscode/README.md) |
+See [Sandbox Mode](docs/sandbox.md), [Autonomous Mode](docs/autonomous.md), [MCP Integrations](docs/mcp.md), and [SECURITY.md](SECURITY.md) for the full control model.
 
-## Core Workflow
+## Typical Workflow
 
-1. Connect a provider with environment variables or `ax-code providers login`.
-2. Launch `ax-code` and use `/connect` if you want to switch models from the TUI.
-3. Run `ax-code init` so `AGENTS.md` captures project-specific instructions and conventions.
-4. Keep the default sandbox on for bounded execution, or use `/sandbox` / `--sandbox full-access` only when you intentionally need unrestricted access.
-5. Run `ax-code index` on larger repos for faster semantic and code-intelligence workflows.
+1. Open a repository and run `ax-code`.
+2. Use `/connect` to add a provider or switch models. For automation, use `ax-code providers login` or provider environment variables.
+3. Run `ax-code init` so `AGENTS.md` captures local conventions, safety rules, and project context.
+4. Keep the default sandbox for broad edits; change it only when the task needs a different boundary.
+5. Run `ax-code index` on larger repos when semantic search and code-intelligence workflows matter.
+6. Use `ax-code run`, `ax-code serve`, or `@ax-code/sdk` when the same agent workflow needs to move into scripts, CI, bots, or applications.
 
-Grok has separate API and CLI provider plans in `/connect`: `Grok Cloud API` is the hosted xAI API path, while `Grok Build CLI` runs the local `grok` command installed by xAI's CLI installer.
+Grok is exposed as two separate provider plans in `/connect`: `Grok Cloud API` uses `XAI_API_KEY` and hosted xAI models, while `Grok Build CLI` uses the local `grok` command and its CLI login/session.
 
 ## Documentation
 
@@ -174,25 +170,21 @@ Grok has separate API and CLI provider plans in `/connect`: `Grok Cloud API` is 
 
 ## Common Commands
 
-```bash
-ax-code
-ax-code run "debug why the build is failing"
-ax-code providers login
-ax-code models
-ax-code init
-ax-code index
-ax-code mcp add
-ax-code serve
-ax-code doctor
-```
-
-## Security and Operations
-
-AX Code starts with autonomous mode on and runtime isolation in `workspace-write` by default: writes are confined to the workspace, network is disabled unless enabled explicitly, and `.git` / `.ax-code` stay protected. Use `/sandbox`, `--sandbox full-access`, `AX_CODE_ISOLATION_MODE`, or project config only when you intentionally need a different boundary. Provider and MCP credentials are encrypted at rest, and server mode is localhost-only by default. See [SECURITY.md](SECURITY.md) for the threat model and [docs/sandbox.md](docs/sandbox.md) for isolation behavior and configuration.
-
-## Project Notes
-
-AX Code combines ideas from [ax-cli](https://github.com/defai-digital/ax-cli) and [OpenCode](https://github.com/anomalyco/opencode) into the developer-facing runtime of the broader AutomatosX ecosystem.
+| Command                                        | Purpose                                      |
+| ---------------------------------------------- | -------------------------------------------- |
+| `ax-code`                                      | Open the interactive terminal UI             |
+| `ax-code run "debug why the build is failing"` | Run a one-shot headless task                 |
+| `ax-code providers login`                      | Configure provider credentials               |
+| `ax-code models`                               | List available provider/model IDs            |
+| `ax-code init`                                 | Create or update repository `AGENTS.md`      |
+| `ax-code index`                                | Build code-intelligence indexes              |
+| `ax-code graph`                                | Inspect the repository graph                 |
+| `ax-code mcp list --tools`                     | Review MCP servers, exposed tools, and rules |
+| `ax-code mcp add`                              | Add a local or remote MCP server             |
+| `ax-code agent create`                         | Generate a custom project or global agent    |
+| `ax-code skill list`                           | List discovered Agent Skills                 |
+| `ax-code serve`                                | Start the local HTTP/OpenAPI server          |
+| `ax-code doctor`                               | Diagnose install, runtime, storage, and auth |
 
 ## Community
 
