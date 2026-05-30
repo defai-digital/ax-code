@@ -24,6 +24,7 @@ describe("workflow dry-run planner", () => {
       },
       pacing: { maxRequestsPerMinute: 12, maxTokensPerMinute: 200_000 },
       writePolicy: "read-only",
+      escalationPolicy: "ask",
       artifactRefs: [],
     })
   })

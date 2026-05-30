@@ -27,6 +27,7 @@ export type WorkflowDryRunPlan = {
     maxRequestsPerMinute: number
     maxTokensPerMinute: number
     writePolicy: WorkflowSpec["permissions"]["writePolicy"]
+    escalationPolicy: WorkflowSpec["permissions"]["escalationPolicy"]
     verificationMode: WorkflowSpec["verification"]["mode"]
   }
   phases: WorkflowDryRunPhase[]
@@ -59,6 +60,7 @@ export type WorkflowDryRunChild = {
   allowedTools: string[]
   writePolicy: WorkflowSpec["permissions"]["writePolicy"]
   networkPolicy: WorkflowSpec["permissions"]["networkPolicy"]
+  escalationPolicy: WorkflowSpec["permissions"]["escalationPolicy"]
   artifactRefs: string[]
   durable: boolean
 }
@@ -114,6 +116,7 @@ export function planWorkflowDryRun(input: WorkflowDryRunInput): WorkflowDryRunPl
         allowedTools: parsed.spec.permissions.allowedTools,
         writePolicy: parsed.spec.permissions.writePolicy,
         networkPolicy: parsed.spec.permissions.networkPolicy,
+        escalationPolicy: parsed.spec.permissions.escalationPolicy,
         artifactRefs: phase.outputs,
         durable: parsed.durableChildren,
       })),
@@ -137,6 +140,7 @@ export function planWorkflowDryRun(input: WorkflowDryRunInput): WorkflowDryRunPl
       maxRequestsPerMinute: parsed.spec.pacing.maxRequestsPerMinute,
       maxTokensPerMinute: parsed.spec.pacing.maxTokensPerMinute,
       writePolicy: parsed.spec.permissions.writePolicy,
+      escalationPolicy: parsed.spec.permissions.escalationPolicy,
       verificationMode: parsed.spec.verification.mode,
     },
     phases,

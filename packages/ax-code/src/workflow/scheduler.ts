@@ -113,6 +113,7 @@ export namespace WorkflowScheduler {
               allowedTools: childPlan.allowedTools,
               writePolicy: childPlan.writePolicy,
               networkPolicy: childPlan.networkPolicy,
+              escalationPolicy: childPlan.escalationPolicy,
             },
           })
           await WorkflowRun.attachChildTaskQueueID({ id: child.id, taskQueueID: task.id })

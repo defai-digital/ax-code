@@ -275,6 +275,7 @@ describe("TaskQueue", () => {
             allowedTools: ["file.read", "rg", "verify_project", "github.issue.view"],
             writePolicy: "read-only",
             networkPolicy: "disabled",
+            escalationPolicy: "ask",
             body: {
               noReply: true,
               agent: "build",
@@ -302,6 +303,7 @@ describe("TaskQueue", () => {
             verify_project: true,
             "github.issue.view": true,
             github_issue_view: true,
+            isolation_escalation: true,
           },
           isolation: {
             mode: "read-only",
@@ -310,6 +312,47 @@ describe("TaskQueue", () => {
         })
 
         expect((await Session.get(session.id)).permission ?? []).toEqual([])
+      },
+    })
+  })
+
+  test("applies workflow child escalation denial as turn-scoped prompt metadata", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const item = await TaskQueue.enqueue({
+          sessionID: session.id,
+          kind: "subagent",
+          title: "Run workflow child without escalation",
+          payload: {
+            workflow: {
+              runID: "wfr_test",
+              phaseID: "wfp_test",
+              childID: "wfc_test",
+              specPhaseID: "scan",
+            },
+            escalationPolicy: "deny",
+            body: {
+              noReply: true,
+              agent: "build",
+              parts: [{ type: "text", text: "Do not ask for isolation escalation." }],
+            },
+          },
+        })
+
+        await TaskQueueExecutor.start(item)
+        await waitForQueueStatus(item.id, "completed")
+
+        const messages = await Session.messages({ sessionID: session.id })
+        const user = messages.find((message) => message.info.role === "user")
+        expect(user?.info).toMatchObject({
+          tools: {
+            isolation_escalation: false,
+          },
+        })
       },
     })
   })

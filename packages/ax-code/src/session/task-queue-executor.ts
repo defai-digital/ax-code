@@ -357,7 +357,7 @@ function applyWorkflowPromptPolicy(body: Record<string, unknown>, item: TaskQueu
   if (!policy) return body
 
   const next = { ...body }
-  const tools = promptToolsFromAllowedTools(policy.allowedTools)
+  const tools = promptToolsFromAllowedTools(policy.allowedTools, policy.escalationPolicy)
   if (tools) {
     next.tools = mergeWorkflowToolPolicy(readBooleanRecord(next.tools), tools)
     next.toolsScope = "turn"
@@ -377,14 +377,27 @@ function workflowPromptPolicy(payload: TaskQueue.Payload) {
   const allowedTools = stringArray(payload["allowedTools"])
   const writePolicy = workflowWritePolicy(payload["writePolicy"])
   const networkPolicy = workflowNetworkPolicy(payload["networkPolicy"])
-  return { allowedTools, writePolicy, networkPolicy }
+  const escalationPolicy = workflowEscalationPolicy(payload["escalationPolicy"])
+  return { allowedTools, writePolicy, networkPolicy, escalationPolicy }
 }
 
-function promptToolsFromAllowedTools(allowedTools: string[] | undefined): Record<string, boolean> | undefined {
-  if (!allowedTools?.length) return undefined
-  const tools: Record<string, boolean> = { "*": false }
-  for (const tool of allowedTools.flatMap(workflowToolPermissionNames)) tools[tool] = true
-  return tools
+function promptToolsFromAllowedTools(
+  allowedTools: string[] | undefined,
+  escalationPolicy: "inherit" | "ask" | "deny" | undefined,
+): Record<string, boolean> | undefined {
+  const tools: Record<string, boolean> = {}
+  if (allowedTools?.length) {
+    tools["*"] = false
+    for (const tool of allowedTools.flatMap(workflowToolPermissionNames)) tools[tool] = true
+  }
+  if (escalationPolicy === "deny") {
+    tools.isolation_escalation = false
+  } else if (escalationPolicy === "ask" && allowedTools?.length) {
+    // `isolation_escalation` is interactive-only, so an allow rule still asks.
+    // This preserves the workflow default while `* = false` denies other tools.
+    tools.isolation_escalation = true
+  }
+  return Object.keys(tools).length > 0 ? tools : undefined
 }
 
 function workflowToolPermissionNames(tool: string): string[] {
@@ -489,6 +502,10 @@ function workflowWritePolicy(value: unknown): "read-only" | "serialized" | "work
 
 function workflowNetworkPolicy(value: unknown): "inherit" | "disabled" | "allowed" | undefined {
   return value === "inherit" || value === "disabled" || value === "allowed" ? value : undefined
+}
+
+function workflowEscalationPolicy(value: unknown): "inherit" | "ask" | "deny" | undefined {
+  return value === "inherit" || value === "ask" || value === "deny" ? value : undefined
 }
 
 function isWorkflowQueueItem(item: TaskQueue.Info) {
