@@ -42,6 +42,9 @@ export const AX_CODE_GRPC_METHOD = {
   SummarizeSession: `/${AX_CODE_GRPC_SERVICE}/SummarizeSession`,
   ListAgents: `/${AX_CODE_GRPC_SERVICE}/ListAgents`,
   ListSkills: `/${AX_CODE_GRPC_SERVICE}/ListSkills`,
+  WriteAppLog: `/${AX_CODE_GRPC_SERVICE}/WriteAppLog`,
+  DisposeInstance: `/${AX_CODE_GRPC_SERVICE}/DisposeInstance`,
+  RestartInstance: `/${AX_CODE_GRPC_SERVICE}/RestartInstance`,
   ListProjects: `/${AX_CODE_GRPC_SERVICE}/ListProjects`,
   GetCurrentProject: `/${AX_CODE_GRPC_SERVICE}/GetCurrentProject`,
   GetPath: `/${AX_CODE_GRPC_SERVICE}/GetPath`,
@@ -620,6 +623,20 @@ export function createAxCodeGrpcClient(input: AxCodeGrpcClientOptions) {
       },
       skills(parameters?: Parameters<HeadlessHttpClient["client"]["app"]["skills"]>[0], options?: AxCodeGrpcCallOptions) {
         return value(AX_CODE_GRPC_METHOD.ListSkills, { parameters }, options)
+      },
+      log(
+        body: Omit<NonNullable<Parameters<HeadlessHttpClient["client"]["app"]["log"]>[0]>, "directory">,
+        options?: AxCodeGrpcCallOptions,
+      ) {
+        return value(AX_CODE_GRPC_METHOD.WriteAppLog, { body }, options)
+      },
+    },
+    instance: {
+      dispose(options?: AxCodeGrpcCallOptions) {
+        return value(AX_CODE_GRPC_METHOD.DisposeInstance, {}, options)
+      },
+      restart(options?: AxCodeGrpcCallOptions) {
+        return value(AX_CODE_GRPC_METHOD.RestartInstance, {}, options)
       },
     },
     project: {
@@ -1274,6 +1291,12 @@ async function handleHttpBridgeUnary(
       return wrap(unwrapHttpSdkResponse(await client.client.app.agents(body.parameters)))
     case AX_CODE_GRPC_METHOD.ListSkills:
       return wrap(unwrapHttpSdkResponse(await client.client.app.skills(body.parameters)))
+    case AX_CODE_GRPC_METHOD.WriteAppLog:
+      return wrap(unwrapHttpSdkResponse(await client.client.app.log(body.body, { throwOnError: true })))
+    case AX_CODE_GRPC_METHOD.DisposeInstance:
+      return wrap(unwrapHttpSdkResponse(await client.client.instance.dispose(undefined, { throwOnError: true })))
+    case AX_CODE_GRPC_METHOD.RestartInstance:
+      return wrap(unwrapHttpSdkResponse(await client.client.instance.restart(undefined, { throwOnError: true })))
     case AX_CODE_GRPC_METHOD.ListProjects:
       return wrap(unwrapHttpSdkResponse(await client.client.project.list(body.parameters)))
     case AX_CODE_GRPC_METHOD.GetCurrentProject:

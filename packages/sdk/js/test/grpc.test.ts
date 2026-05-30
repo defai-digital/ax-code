@@ -45,6 +45,9 @@ describe("gRPC SDK facade", () => {
         if (method === AX_CODE_GRPC_METHOD.GetSession) return { value: { id: "sess-1", title: "GUI" } }
         if (method === AX_CODE_GRPC_METHOD.ListSessionMessages) return { value: [{ id: "msg-1" }] }
         if (method === AX_CODE_GRPC_METHOD.ListSkills) return { value: [{ id: "security-harden" }] }
+        if (method === AX_CODE_GRPC_METHOD.WriteAppLog) return { value: true }
+        if (method === AX_CODE_GRPC_METHOD.DisposeInstance) return { value: true }
+        if (method === AX_CODE_GRPC_METHOD.RestartInstance) return { value: true }
         if (method === AX_CODE_GRPC_METHOD.GetPath) return { value: { root: "/repo" } }
         if (method === AX_CODE_GRPC_METHOD.GetVcs) return { value: { branch: "main" } }
         if (method === AX_CODE_GRPC_METHOD.ListCommands) return { value: [{ name: "init" }] }
@@ -102,6 +105,9 @@ describe("gRPC SDK facade", () => {
     expect(await client.session.get("sess-1")).toEqual({ id: "sess-1", title: "GUI" })
     expect(await client.session.messages("sess-1", { limit: 10 })).toEqual([{ id: "msg-1" }])
     expect(await client.app.skills()).toEqual([{ id: "security-harden" }])
+    expect(await client.app.log({ service: "gui", level: "info", message: "ready" })).toBe(true)
+    expect(await client.instance.dispose()).toBe(true)
+    expect(await client.instance.restart()).toBe(true)
     expect(await client.path.get()).toEqual({ root: "/repo" })
     expect(await client.vcs.get()).toEqual({ branch: "main" })
     expect(await client.command.list()).toEqual([{ name: "init" }])
@@ -150,6 +156,9 @@ describe("gRPC SDK facade", () => {
       AX_CODE_GRPC_METHOD.GetSession,
       AX_CODE_GRPC_METHOD.ListSessionMessages,
       AX_CODE_GRPC_METHOD.ListSkills,
+      AX_CODE_GRPC_METHOD.WriteAppLog,
+      AX_CODE_GRPC_METHOD.DisposeInstance,
+      AX_CODE_GRPC_METHOD.RestartInstance,
       AX_CODE_GRPC_METHOD.GetPath,
       AX_CODE_GRPC_METHOD.GetVcs,
       AX_CODE_GRPC_METHOD.ListCommands,
@@ -536,6 +545,36 @@ describe("gRPC SDK facade", () => {
       "GET /experimental/tool?provider=anthropic&model=claude",
       "GET /lsp",
       "GET /formatter",
+    ])
+  })
+
+  test("HTTP bridge maps app lifecycle controls to the headless backend", async () => {
+    const calls: Array<{ path: string; method: string; body: string }> = []
+    const client = createAxCodeGrpcClientFromHttp({
+      baseUrl: "http://127.0.0.1:4096",
+      fetch: (async (url: URL | RequestInfo, init?: RequestInit) => {
+        const request = url instanceof Request ? url : new Request(url, init)
+        const parsed = new URL(request.url)
+        calls.push({
+          path: parsed.pathname,
+          method: request.method,
+          body: request.body ? await new Response(request.body).text() : "",
+        })
+        if (parsed.pathname === "/log") return Response.json(true)
+        if (parsed.pathname === "/instance/dispose") return Response.json(true)
+        if (parsed.pathname === "/instance/restart") return Response.json(true)
+        return new Response("not found", { status: 404 })
+      }) as typeof fetch,
+    })
+
+    await expect(client.app.log({ service: "gui", level: "info", message: "ready" })).resolves.toBe(true)
+    await expect(client.instance.dispose()).resolves.toBe(true)
+    await expect(client.instance.restart()).resolves.toBe(true)
+
+    expect(calls).toEqual([
+      { path: "/log", method: "POST", body: JSON.stringify({ service: "gui", level: "info", message: "ready" }) },
+      { path: "/instance/dispose", method: "POST", body: "" },
+      { path: "/instance/restart", method: "POST", body: "" },
     ])
   })
 
@@ -1024,6 +1063,9 @@ describe("gRPC SDK facade", () => {
     expect(proto).toContain("rpc LoadBootstrap")
     expect(proto).toContain("rpc ListSessionMessages")
     expect(proto).toContain("rpc ListSkills")
+    expect(proto).toContain("rpc WriteAppLog")
+    expect(proto).toContain("rpc DisposeInstance")
+    expect(proto).toContain("rpc RestartInstance")
     expect(proto).toContain("rpc GetPath")
     expect(proto).toContain("rpc GetVcs")
     expect(proto).toContain("rpc ListCommands")

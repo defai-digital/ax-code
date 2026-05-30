@@ -31,6 +31,9 @@ service AxCodeHeadless {
 
   rpc ListAgents(QueryRequest) returns (JsonResponse);
   rpc ListSkills(QueryRequest) returns (JsonResponse);
+  rpc WriteAppLog(JsonRequest) returns (JsonResponse);
+  rpc DisposeInstance(EmptyRequest) returns (JsonResponse);
+  rpc RestartInstance(EmptyRequest) returns (JsonResponse);
   rpc ListProjects(QueryRequest) returns (JsonResponse);
   rpc GetCurrentProject(QueryRequest) returns (JsonResponse);
   rpc GetPath(QueryRequest) returns (JsonResponse);

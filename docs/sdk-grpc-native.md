@@ -34,6 +34,7 @@ clients from the installed SDK package.
 The TypeScript facade lives at `@ax-code/sdk/grpc` and covers:
 
 - health and lifecycle readiness
+- app log ingestion and instance dispose/restart controls for native host lifecycle management
 - session creation
 - prompt, command, shell, abort, permission reply, and question reply
 - GUI bootstrap snapshots for providers, sessions, permissions, questions, path, VCS, LSP, MCP, formatter, and command state
