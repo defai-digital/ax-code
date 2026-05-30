@@ -36,11 +36,13 @@ The TypeScript facade lives at `@ax-code/sdk/grpc` and covers:
 - prompt, command, shell, abort, permission reply, and question reply
 - GUI bootstrap snapshots for providers, sessions, permissions, questions, path, VCS, LSP, MCP, formatter, and command state
 - session list, detail, message history, message detail, children, goal, todo, diff, fork, share, and summarize operations
-- GUI discovery and workspace navigation for agents, skills, projects, file tree/content/status, text/file/symbol search, and tool schemas
+- GUI discovery and workspace navigation for agents, skills, projects, path, VCS, commands, file tree/content/status,
+  text/file/symbol search, and tool schemas
 - pending permission and question list/reply/reject operations for supervised GUI flows
 - provider, config, API-key auth, and provider OAuth settings for GUI settings screens
 - runtime setting controls for autonomous mode, isolation mode, and smart LLM routing
-- MCP status, dynamic server management, OAuth, connect, and disconnect controls
+- MCP status, resource discovery, dynamic server management, OAuth, connect, and disconnect controls
+- LSP and formatter status for diagnostics and settings screens
 - PTY terminal management and bidirectional terminal streaming
 - session evidence for review/debug UI
 - task queue operations

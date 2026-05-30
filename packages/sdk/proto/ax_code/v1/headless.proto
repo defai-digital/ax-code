@@ -33,6 +33,9 @@ service AxCodeHeadless {
   rpc ListSkills(QueryRequest) returns (JsonResponse);
   rpc ListProjects(QueryRequest) returns (JsonResponse);
   rpc GetCurrentProject(QueryRequest) returns (JsonResponse);
+  rpc GetPath(QueryRequest) returns (JsonResponse);
+  rpc GetVcs(QueryRequest) returns (JsonResponse);
+  rpc ListCommands(QueryRequest) returns (JsonResponse);
   rpc ListFiles(QueryRequest) returns (JsonResponse);
   rpc ReadFile(QueryRequest) returns (JsonResponse);
   rpc GetFileStatus(QueryRequest) returns (JsonResponse);
@@ -58,6 +61,7 @@ service AxCodeHeadless {
   rpc GetSmartLlmRouting(QueryRequest) returns (JsonResponse);
   rpc SetSmartLlmRouting(JsonRequest) returns (JsonResponse);
   rpc GetMcpStatus(QueryRequest) returns (JsonResponse);
+  rpc ListMcpResources(QueryRequest) returns (JsonResponse);
   rpc AddMcpServer(McpAddRequest) returns (JsonResponse);
   rpc StartMcpAuth(NamedRequest) returns (JsonResponse);
   rpc CompleteMcpAuth(McpAuthCallbackRequest) returns (JsonResponse);
@@ -71,6 +75,8 @@ service AxCodeHeadless {
   rpc RemoveAuth(ProviderRequest) returns (JsonResponse);
   rpc ProviderOauthAuthorize(ProviderJsonRequest) returns (JsonResponse);
   rpc ProviderOauthCallback(ProviderJsonRequest) returns (JsonResponse);
+  rpc GetLspStatus(QueryRequest) returns (JsonResponse);
+  rpc GetFormatterStatus(QueryRequest) returns (JsonResponse);
 
   rpc ListPty(QueryRequest) returns (JsonResponse);
   rpc CreatePty(JsonRequest) returns (JsonResponse);

@@ -33,6 +33,9 @@ describe("gRPC SDK facade", () => {
         if (method === AX_CODE_GRPC_METHOD.GetSession) return { value: { id: "sess-1", title: "GUI" } }
         if (method === AX_CODE_GRPC_METHOD.ListSessionMessages) return { value: [{ id: "msg-1" }] }
         if (method === AX_CODE_GRPC_METHOD.ListSkills) return { value: [{ id: "security-harden" }] }
+        if (method === AX_CODE_GRPC_METHOD.GetPath) return { value: { root: "/repo" } }
+        if (method === AX_CODE_GRPC_METHOD.GetVcs) return { value: { branch: "main" } }
+        if (method === AX_CODE_GRPC_METHOD.ListCommands) return { value: [{ name: "init" }] }
         if (method === AX_CODE_GRPC_METHOD.ReadFile) return { value: { content: "hello" } }
         if (method === AX_CODE_GRPC_METHOD.ListPermissions) return { value: [{ id: "perm-1" }] }
         if (method === AX_CODE_GRPC_METHOD.ReplyPermission) return { value: true }
@@ -46,6 +49,7 @@ describe("gRPC SDK facade", () => {
         if (method === AX_CODE_GRPC_METHOD.GetSmartLlmRouting) return { value: { enabled: true } }
         if (method === AX_CODE_GRPC_METHOD.SetSmartLlmRouting) return { value: { enabled: false } }
         if (method === AX_CODE_GRPC_METHOD.GetMcpStatus) return { value: { playwright: { type: "connected" } } }
+        if (method === AX_CODE_GRPC_METHOD.ListMcpResources) return { value: [{ uri: "file://README.md" }] }
         if (method === AX_CODE_GRPC_METHOD.AddMcpServer) return { value: { playwright: { type: "connected" } } }
         if (method === AX_CODE_GRPC_METHOD.StartMcpAuth) return { value: { authorizationUrl: "https://auth.example" } }
         if (method === AX_CODE_GRPC_METHOD.CompleteMcpAuth) return { value: { type: "connected" } }
@@ -55,6 +59,8 @@ describe("gRPC SDK facade", () => {
         if (method === AX_CODE_GRPC_METHOD.DisconnectMcp) return { value: true }
         if (method === AX_CODE_GRPC_METHOD.GetProviderAuth) return { value: { anthropic: [{ type: "api" }] } }
         if (method === AX_CODE_GRPC_METHOD.SetAuth) return { value: true }
+        if (method === AX_CODE_GRPC_METHOD.GetLspStatus) return { value: { servers: [] } }
+        if (method === AX_CODE_GRPC_METHOD.GetFormatterStatus) return { value: { enabled: true } }
         if (method === AX_CODE_GRPC_METHOD.CreatePty) return { value: { id: "pty_1", title: "Terminal" } }
         if (method === AX_CODE_GRPC_METHOD.TaskQueueCommand) return { value: { id: "task-1", status: "paused" } }
         if (method === AX_CODE_GRPC_METHOD.WorkflowRunDashboard) return { value: [{ id: "run-1" }] }
@@ -79,6 +85,9 @@ describe("gRPC SDK facade", () => {
     expect(await client.session.get("sess-1")).toEqual({ id: "sess-1", title: "GUI" })
     expect(await client.session.messages("sess-1", { limit: 10 })).toEqual([{ id: "msg-1" }])
     expect(await client.app.skills()).toEqual([{ id: "security-harden" }])
+    expect(await client.path.get()).toEqual({ root: "/repo" })
+    expect(await client.vcs.get()).toEqual({ branch: "main" })
+    expect(await client.command.list()).toEqual([{ name: "init" }])
     expect(await client.file.read("README.md")).toEqual({ content: "hello" })
     expect(await client.permission.list()).toEqual([{ id: "perm-1" }])
     expect(await client.permission.reply("perm-1", { reply: "once" })).toBe(true)
@@ -92,6 +101,7 @@ describe("gRPC SDK facade", () => {
     expect(await client.runtime.smartLlm.get()).toEqual({ enabled: true })
     expect(await client.runtime.smartLlm.set(false)).toEqual({ enabled: false })
     expect(await client.mcp.status()).toEqual({ playwright: { type: "connected" } })
+    expect(await client.mcp.resources()).toEqual([{ uri: "file://README.md" }])
     expect(await client.mcp.add("playwright", { type: "local", command: ["npx", "playwright"] } as never)).toEqual({
       playwright: { type: "connected" },
     })
@@ -103,6 +113,8 @@ describe("gRPC SDK facade", () => {
     expect(await client.mcp.disconnect("playwright")).toBe(true)
     expect(await client.provider.auth()).toEqual({ anthropic: [{ type: "api" }] })
     expect(await client.auth.set("anthropic", { type: "api", key: "secret" })).toBe(true)
+    expect(await client.lsp.status()).toEqual({ servers: [] })
+    expect(await client.formatter.status()).toEqual({ enabled: true })
     expect(await client.pty.create({ title: "Terminal" })).toEqual({ id: "pty_1", title: "Terminal" })
     expect(await pause("task-1")).toEqual({ id: "task-1", status: "paused" })
     expect(await client.workflowRun.dashboard({ limit: 5 })).toEqual([{ id: "run-1" }])
@@ -116,6 +128,9 @@ describe("gRPC SDK facade", () => {
       AX_CODE_GRPC_METHOD.GetSession,
       AX_CODE_GRPC_METHOD.ListSessionMessages,
       AX_CODE_GRPC_METHOD.ListSkills,
+      AX_CODE_GRPC_METHOD.GetPath,
+      AX_CODE_GRPC_METHOD.GetVcs,
+      AX_CODE_GRPC_METHOD.ListCommands,
       AX_CODE_GRPC_METHOD.ReadFile,
       AX_CODE_GRPC_METHOD.ListPermissions,
       AX_CODE_GRPC_METHOD.ReplyPermission,
@@ -129,6 +144,7 @@ describe("gRPC SDK facade", () => {
       AX_CODE_GRPC_METHOD.GetSmartLlmRouting,
       AX_CODE_GRPC_METHOD.SetSmartLlmRouting,
       AX_CODE_GRPC_METHOD.GetMcpStatus,
+      AX_CODE_GRPC_METHOD.ListMcpResources,
       AX_CODE_GRPC_METHOD.AddMcpServer,
       AX_CODE_GRPC_METHOD.StartMcpAuth,
       AX_CODE_GRPC_METHOD.CompleteMcpAuth,
@@ -138,6 +154,8 @@ describe("gRPC SDK facade", () => {
       AX_CODE_GRPC_METHOD.DisconnectMcp,
       AX_CODE_GRPC_METHOD.GetProviderAuth,
       AX_CODE_GRPC_METHOD.SetAuth,
+      AX_CODE_GRPC_METHOD.GetLspStatus,
+      AX_CODE_GRPC_METHOD.GetFormatterStatus,
       AX_CODE_GRPC_METHOD.CreatePty,
       AX_CODE_GRPC_METHOD.TaskQueueCommand,
       AX_CODE_GRPC_METHOD.WorkflowRunDashboard,
@@ -438,6 +456,9 @@ describe("gRPC SDK facade", () => {
         if (parsed.pathname === "/agent") return Response.json([{ id: "general" }])
         if (parsed.pathname === "/project/current") return Response.json({ id: "proj-1" })
         if (parsed.pathname === "/project") return Response.json([{ id: "proj-1" }])
+        if (parsed.pathname === "/path") return Response.json({ root: "/repo" })
+        if (parsed.pathname === "/vcs") return Response.json({ branch: "main" })
+        if (parsed.pathname === "/command") return Response.json([{ name: "init" }])
         if (parsed.pathname === "/file") return Response.json([{ path: "src/index.ts" }])
         if (parsed.pathname === "/file/content") return Response.json({ content: "hello" })
         if (parsed.pathname === "/file/status") return Response.json([{ path: "README.md", status: "modified" }])
@@ -446,6 +467,8 @@ describe("gRPC SDK facade", () => {
         if (parsed.pathname === "/find/symbol") return Response.json([{ name: "main" }])
         if (parsed.pathname === "/experimental/tool/ids") return Response.json(["bash"])
         if (parsed.pathname === "/experimental/tool") return Response.json([{ id: "bash" }])
+        if (parsed.pathname === "/lsp") return Response.json({ servers: [] })
+        if (parsed.pathname === "/formatter") return Response.json({ enabled: true })
         return new Response("not found", { status: 404 })
       }) as typeof fetch,
     })
@@ -454,6 +477,9 @@ describe("gRPC SDK facade", () => {
     await expect(client.app.agents()).resolves.toEqual([{ id: "general" }])
     await expect(client.project.current()).resolves.toEqual({ id: "proj-1" })
     await expect(client.project.list()).resolves.toEqual([{ id: "proj-1" }])
+    await expect(client.path.get()).resolves.toEqual({ root: "/repo" })
+    await expect(client.vcs.get()).resolves.toEqual({ branch: "main" })
+    await expect(client.command.list()).resolves.toEqual([{ name: "init" }])
     await expect(client.file.list("src")).resolves.toEqual([{ path: "src/index.ts" }])
     await expect(client.file.read("README.md")).resolves.toEqual({ content: "hello" })
     await expect(client.file.status()).resolves.toEqual([{ path: "README.md", status: "modified" }])
@@ -462,12 +488,17 @@ describe("gRPC SDK facade", () => {
     await expect(client.find.symbols("main")).resolves.toEqual([{ name: "main" }])
     await expect(client.tool.ids()).resolves.toEqual(["bash"])
     await expect(client.tool.list("anthropic", "claude")).resolves.toEqual([{ id: "bash" }])
+    await expect(client.lsp.status()).resolves.toEqual({ servers: [] })
+    await expect(client.formatter.status()).resolves.toEqual({ enabled: true })
 
     expect(calls).toEqual([
       "GET /skill",
       "GET /agent",
       "GET /project/current",
       "GET /project",
+      "GET /path",
+      "GET /vcs",
+      "GET /command",
       "GET /file?path=src",
       "GET /file/content?path=README.md",
       "GET /file/status",
@@ -476,6 +507,8 @@ describe("gRPC SDK facade", () => {
       "GET /find/symbol?query=main",
       "GET /experimental/tool/ids",
       "GET /experimental/tool?provider=anthropic&model=claude",
+      "GET /lsp",
+      "GET /formatter",
     ])
   })
 
@@ -581,6 +614,7 @@ describe("gRPC SDK facade", () => {
         if (parsed.pathname === "/mcp" && request.method === "GET") {
           return Response.json({ playwright: { type: "connected" } })
         }
+        if (parsed.pathname === "/experimental/resource") return Response.json([{ uri: "file://README.md" }])
         if (parsed.pathname === "/mcp" && request.method === "POST") {
           return Response.json({ playwright: { type: "connected" } })
         }
@@ -597,6 +631,7 @@ describe("gRPC SDK facade", () => {
     })
 
     await expect(client.mcp.status()).resolves.toEqual({ playwright: { type: "connected" } })
+    await expect(client.mcp.resources()).resolves.toEqual([{ uri: "file://README.md" }])
     await expect(
       client.mcp.add("playwright", { type: "local", command: ["npx", "playwright"] } as never),
     ).resolves.toEqual({ playwright: { type: "connected" } })
@@ -611,6 +646,7 @@ describe("gRPC SDK facade", () => {
 
     expect(calls).toEqual([
       { path: "/mcp", method: "GET", body: "" },
+      { path: "/experimental/resource", method: "GET", body: "" },
       {
         path: "/mcp",
         method: "POST",
@@ -925,6 +961,9 @@ describe("gRPC SDK facade", () => {
     expect(proto).toContain("rpc LoadBootstrap")
     expect(proto).toContain("rpc ListSessionMessages")
     expect(proto).toContain("rpc ListSkills")
+    expect(proto).toContain("rpc GetPath")
+    expect(proto).toContain("rpc GetVcs")
+    expect(proto).toContain("rpc ListCommands")
     expect(proto).toContain("rpc FindFiles")
     expect(proto).toContain("rpc ListPermissions")
     expect(proto).toContain("rpc ReplyPermission")
@@ -938,6 +977,7 @@ describe("gRPC SDK facade", () => {
     expect(proto).toContain("rpc GetSmartLlmRouting")
     expect(proto).toContain("rpc SetSmartLlmRouting")
     expect(proto).toContain("rpc GetMcpStatus")
+    expect(proto).toContain("rpc ListMcpResources")
     expect(proto).toContain("rpc AddMcpServer")
     expect(proto).toContain("rpc StartMcpAuth")
     expect(proto).toContain("rpc CompleteMcpAuth")
@@ -947,6 +987,8 @@ describe("gRPC SDK facade", () => {
     expect(proto).toContain("rpc DisconnectMcp")
     expect(proto).toContain("rpc SetAuth")
     expect(proto).toContain("rpc ProviderOauthAuthorize")
+    expect(proto).toContain("rpc GetLspStatus")
+    expect(proto).toContain("rpc GetFormatterStatus")
     expect(proto).toContain("rpc ConnectPty")
     expect(proto).toContain("rpc WorkflowRunDashboard")
     expect(proto).toContain("rpc WorkflowRunEvalCases")

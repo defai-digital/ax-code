@@ -43,6 +43,9 @@ export const AX_CODE_GRPC_METHOD = {
   ListSkills: `/${AX_CODE_GRPC_SERVICE}/ListSkills`,
   ListProjects: `/${AX_CODE_GRPC_SERVICE}/ListProjects`,
   GetCurrentProject: `/${AX_CODE_GRPC_SERVICE}/GetCurrentProject`,
+  GetPath: `/${AX_CODE_GRPC_SERVICE}/GetPath`,
+  GetVcs: `/${AX_CODE_GRPC_SERVICE}/GetVcs`,
+  ListCommands: `/${AX_CODE_GRPC_SERVICE}/ListCommands`,
   ListFiles: `/${AX_CODE_GRPC_SERVICE}/ListFiles`,
   ReadFile: `/${AX_CODE_GRPC_SERVICE}/ReadFile`,
   GetFileStatus: `/${AX_CODE_GRPC_SERVICE}/GetFileStatus`,
@@ -66,6 +69,7 @@ export const AX_CODE_GRPC_METHOD = {
   GetSmartLlmRouting: `/${AX_CODE_GRPC_SERVICE}/GetSmartLlmRouting`,
   SetSmartLlmRouting: `/${AX_CODE_GRPC_SERVICE}/SetSmartLlmRouting`,
   GetMcpStatus: `/${AX_CODE_GRPC_SERVICE}/GetMcpStatus`,
+  ListMcpResources: `/${AX_CODE_GRPC_SERVICE}/ListMcpResources`,
   AddMcpServer: `/${AX_CODE_GRPC_SERVICE}/AddMcpServer`,
   StartMcpAuth: `/${AX_CODE_GRPC_SERVICE}/StartMcpAuth`,
   CompleteMcpAuth: `/${AX_CODE_GRPC_SERVICE}/CompleteMcpAuth`,
@@ -79,6 +83,8 @@ export const AX_CODE_GRPC_METHOD = {
   RemoveAuth: `/${AX_CODE_GRPC_SERVICE}/RemoveAuth`,
   ProviderOauthAuthorize: `/${AX_CODE_GRPC_SERVICE}/ProviderOauthAuthorize`,
   ProviderOauthCallback: `/${AX_CODE_GRPC_SERVICE}/ProviderOauthCallback`,
+  GetLspStatus: `/${AX_CODE_GRPC_SERVICE}/GetLspStatus`,
+  GetFormatterStatus: `/${AX_CODE_GRPC_SERVICE}/GetFormatterStatus`,
   ListPty: `/${AX_CODE_GRPC_SERVICE}/ListPty`,
   CreatePty: `/${AX_CODE_GRPC_SERVICE}/CreatePty`,
   GetPty: `/${AX_CODE_GRPC_SERVICE}/GetPty`,
@@ -621,6 +627,21 @@ export function createAxCodeGrpcClient(input: AxCodeGrpcClientOptions) {
         return value(AX_CODE_GRPC_METHOD.GetCurrentProject, { parameters }, options)
       },
     },
+    path: {
+      get(parameters?: Parameters<HeadlessHttpClient["client"]["path"]["get"]>[0], options?: AxCodeGrpcCallOptions) {
+        return value(AX_CODE_GRPC_METHOD.GetPath, { parameters }, options)
+      },
+    },
+    vcs: {
+      get(parameters?: Parameters<HeadlessHttpClient["client"]["vcs"]["get"]>[0], options?: AxCodeGrpcCallOptions) {
+        return value(AX_CODE_GRPC_METHOD.GetVcs, { parameters }, options)
+      },
+    },
+    command: {
+      list(parameters?: Parameters<HeadlessHttpClient["client"]["command"]["list"]>[0], options?: AxCodeGrpcCallOptions) {
+        return value(AX_CODE_GRPC_METHOD.ListCommands, { parameters }, options)
+      },
+    },
     file: {
       list(path: string, options?: AxCodeGrpcCallOptions) {
         return value(AX_CODE_GRPC_METHOD.ListFiles, { parameters: { path } }, options)
@@ -759,6 +780,12 @@ export function createAxCodeGrpcClient(input: AxCodeGrpcClientOptions) {
       status(parameters?: Parameters<HeadlessHttpClient["client"]["mcp"]["status"]>[0], options?: AxCodeGrpcCallOptions) {
         return value(AX_CODE_GRPC_METHOD.GetMcpStatus, { parameters }, options)
       },
+      resources(
+        parameters?: Parameters<HeadlessHttpClient["client"]["experimental"]["resource"]["list"]>[0],
+        options?: AxCodeGrpcCallOptions,
+      ) {
+        return value(AX_CODE_GRPC_METHOD.ListMcpResources, { parameters }, options)
+      },
       add(
         name: string,
         config: AxCodeGrpcMcpAddRequest["config"],
@@ -789,6 +816,19 @@ export function createAxCodeGrpcClient(input: AxCodeGrpcClientOptions) {
         remove(name: string, options?: AxCodeGrpcCallOptions) {
           return value<AxCodeGrpcNamedRequest, unknown>(AX_CODE_GRPC_METHOD.RemoveMcpAuth, { name }, options)
         },
+      },
+    },
+    lsp: {
+      status(parameters?: Parameters<HeadlessHttpClient["client"]["lsp"]["status"]>[0], options?: AxCodeGrpcCallOptions) {
+        return value(AX_CODE_GRPC_METHOD.GetLspStatus, { parameters }, options)
+      },
+    },
+    formatter: {
+      status(
+        parameters?: Parameters<HeadlessHttpClient["client"]["formatter"]["status"]>[0],
+        options?: AxCodeGrpcCallOptions,
+      ) {
+        return value(AX_CODE_GRPC_METHOD.GetFormatterStatus, { parameters }, options)
       },
     },
     provider: {
@@ -1197,6 +1237,12 @@ async function handleHttpBridgeUnary(
       return wrap(unwrapHttpSdkResponse(await client.client.project.list(body.parameters)))
     case AX_CODE_GRPC_METHOD.GetCurrentProject:
       return wrap(unwrapHttpSdkResponse(await client.client.project.current(body.parameters)))
+    case AX_CODE_GRPC_METHOD.GetPath:
+      return wrap(unwrapHttpSdkResponse(await client.client.path.get(body.parameters)))
+    case AX_CODE_GRPC_METHOD.GetVcs:
+      return wrap(unwrapHttpSdkResponse(await client.client.vcs.get(body.parameters)))
+    case AX_CODE_GRPC_METHOD.ListCommands:
+      return wrap(unwrapHttpSdkResponse(await client.client.command.list(body.parameters)))
     case AX_CODE_GRPC_METHOD.ListFiles:
       return wrap(unwrapHttpSdkResponse(await client.client.file.list(body.parameters, { throwOnError: true })))
     case AX_CODE_GRPC_METHOD.ReadFile:
@@ -1253,6 +1299,8 @@ async function handleHttpBridgeUnary(
       return wrap(unwrapHttpSdkResponse(await client.client.smartLlm.set(body.body, { throwOnError: true })))
     case AX_CODE_GRPC_METHOD.GetMcpStatus:
       return wrap(unwrapHttpSdkResponse(await client.client.mcp.status(body.parameters)))
+    case AX_CODE_GRPC_METHOD.ListMcpResources:
+      return wrap(unwrapHttpSdkResponse(await client.client.experimental.resource.list(body.parameters)))
     case AX_CODE_GRPC_METHOD.AddMcpServer:
       return wrap(
         unwrapHttpSdkResponse(
@@ -1314,6 +1362,10 @@ async function handleHttpBridgeUnary(
           await client.client.provider.oauth.callback({ providerID: body.providerID, ...body.body }, { throwOnError: true }),
         ),
       )
+    case AX_CODE_GRPC_METHOD.GetLspStatus:
+      return wrap(unwrapHttpSdkResponse(await client.client.lsp.status(body.parameters)))
+    case AX_CODE_GRPC_METHOD.GetFormatterStatus:
+      return wrap(unwrapHttpSdkResponse(await client.client.formatter.status(body.parameters)))
     case AX_CODE_GRPC_METHOD.ListPty:
       return wrap(unwrapHttpSdkResponse(await client.client.pty.list(body.parameters)))
     case AX_CODE_GRPC_METHOD.CreatePty:
