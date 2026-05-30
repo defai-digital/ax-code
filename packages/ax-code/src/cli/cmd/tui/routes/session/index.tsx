@@ -29,6 +29,7 @@ import { DialogMessage } from "./dialog-message"
 import { DialogActivity } from "./dialog-activity"
 import { DialogTimeline } from "./dialog-timeline"
 import { DialogQuality } from "./dialog-quality"
+import { DialogWorkflow } from "./dialog-workflow"
 import { DialogForkFromTimeline } from "./dialog-fork-from-timeline"
 import { DialogSessionRename } from "../../component/dialog-session-rename"
 import { DialogDre } from "./dialog-dre"
@@ -521,6 +522,7 @@ export function Session() {
             }}
           />
         )),
+      dialogReplaceWorkflow: (dialog) => dialog.replace(() => <DialogWorkflow />),
       dialogReplaceBranch: (dialog) =>
         dialog.replace(() => (
           <DialogBranch
@@ -637,6 +639,7 @@ export function Session() {
       sidebarVisible,
       agents: sync.data.agent,
       hasQualityReadiness,
+      workflowRuntimeEnabled: Flag.AX_CODE_WORKFLOW_RUNTIME,
       suggested: route.type === "session",
       toast,
     }),

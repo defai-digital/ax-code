@@ -58,6 +58,7 @@ export function createSyncBootstrapRequests<TClient extends SyncBootstrapRequest
   syncIsolation: () => Promise<unknown>
   syncSmartLlm: () => Promise<unknown>
   syncSuperLong: () => Promise<unknown>
+  syncWorkflowDashboard: () => Promise<unknown>
   syncWorkspaces: () => Promise<unknown>
 }) {
   return createTimedBootstrapRequests(input.wrap, {
@@ -144,6 +145,10 @@ export function createSyncBootstrapRequests<TClient extends SyncBootstrapRequest
     debugEngineTask: {
       label: "tui bootstrap debug-engine",
       request: () => input.syncDebugEngine(),
+    },
+    workflowDashboardTask: {
+      label: "tui bootstrap workflow-dashboard",
+      request: () => input.syncWorkflowDashboard(),
     },
     smartLlmTask: {
       label: "tui bootstrap smart-llm",

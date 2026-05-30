@@ -66,6 +66,72 @@ describe("tui sync startup coordinator", () => {
     expect(intervalCalls).toBe(0)
   })
 
+  test("polls workflow dashboard when workflow runtime is enabled", () => {
+    const calls = {
+      bootstrap: 0,
+      debug: 0,
+      workflow: 0,
+    }
+
+    const coordinator = createSyncStartupCoordinator({
+      runBootstrapInBackground() {
+        calls.bootstrap++
+      },
+      debugEngineEnabled: false,
+      workflowRuntimeEnabled: true,
+      pollDebugEngine() {
+        calls.debug++
+      },
+      pollWorkflowDashboard() {
+        calls.workflow++
+      },
+      recoverBootstrap: () => undefined,
+      setIntervalFn(handler) {
+        handler()
+        return "workflow-poll" as unknown as ReturnType<typeof setInterval>
+      },
+    })
+
+    coordinator.start()
+
+    expect(calls).toEqual({
+      bootstrap: 1,
+      debug: 0,
+      workflow: 1,
+    })
+  })
+
+  test("uses one runtime poll interval for debug-engine and workflow dashboard", () => {
+    const calls = {
+      debug: 0,
+      workflow: 0,
+    }
+    let intervalCalls = 0
+
+    const coordinator = createSyncStartupCoordinator({
+      runBootstrapInBackground: () => undefined,
+      debugEngineEnabled: true,
+      workflowRuntimeEnabled: true,
+      pollDebugEngine() {
+        calls.debug++
+      },
+      pollWorkflowDashboard() {
+        calls.workflow++
+      },
+      recoverBootstrap: () => undefined,
+      setIntervalFn(handler) {
+        intervalCalls++
+        handler()
+        return "runtime-poll" as unknown as ReturnType<typeof setInterval>
+      },
+    })
+
+    coordinator.start()
+
+    expect(intervalCalls).toBe(1)
+    expect(calls).toEqual({ debug: 1, workflow: 1 })
+  })
+
   test("forwards connection changes to the reconnect recovery gate", () => {
     const forwarded: boolean[] = []
     const recoverCalls: Array<() => Promise<void> | void> = []

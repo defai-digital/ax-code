@@ -57,6 +57,7 @@ export function displayCommands(input: {
   dialogReplaceDreGraph: (dialog: DialogContext) => void
   dialogReplaceGoal: (dialog: DialogContext) => void
   dialogReplaceQuality: (dialog: DialogContext) => void
+  dialogReplaceWorkflow: (dialog: DialogContext) => void
   dialogReplaceRollback: (dialog: DialogContext) => void
   dialogReplaceTimeline: (dialog: DialogContext) => void
   dialogReplaceFork: (dialog: DialogContext) => void
@@ -100,6 +101,7 @@ export function displayCommands(input: {
   showTimestamps: Accessor<boolean>
   agents: Array<{ name: string; displayName?: string }>
   hasQualityReadiness: Accessor<boolean>
+  workflowRuntimeEnabled: boolean
   sidebarVisible: Accessor<boolean>
   suggested: boolean
   toast: Toast
@@ -192,6 +194,18 @@ export function displayCommands(input: {
       category: "Session",
       enabled: input.hasQualityReadiness(),
       onSelect: (dialog: DialogContext) => input.dialogReplaceQuality(dialog),
+    },
+    {
+      title: "View workflow runs",
+      value: "session.workflow.runs",
+      category: "Session",
+      enabled: input.workflowRuntimeEnabled,
+      hidden: !input.workflowRuntimeEnabled,
+      slash: {
+        name: "workflows",
+        aliases: ["workflow"],
+      },
+      onSelect: (dialog: DialogContext) => input.dialogReplaceWorkflow(dialog),
     },
     {
       title: "View execution graph (DRE)",

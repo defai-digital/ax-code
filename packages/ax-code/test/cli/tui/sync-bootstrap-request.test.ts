@@ -212,6 +212,10 @@ describe("tui sync bootstrap request", () => {
         sideEffects.push("debug")
         return Promise.resolve()
       },
+      syncWorkflowDashboard() {
+        sideEffects.push("workflow")
+        return Promise.resolve()
+      },
       syncSmartLlm() {
         sideEffects.push("smart")
         return Promise.resolve()
@@ -254,6 +258,7 @@ describe("tui sync bootstrap request", () => {
       requests.vcsPromise(),
       requests.workspacesTask(),
       requests.debugEngineTask(),
+      requests.workflowDashboardTask(),
       requests.smartLlmTask(),
     ])
     expect(options).toEqual({
@@ -263,7 +268,7 @@ describe("tui sync bootstrap request", () => {
       configThrowOnError: true,
       sessionListStart: 42,
     })
-    expect(sideEffects).toEqual(["isolation", "autonomous", "workspaces", "debug", "smart"])
+    expect(sideEffects).toEqual(["isolation", "autonomous", "workspaces", "debug", "workflow", "smart"])
     expect(wrapped).toEqual([
       "tui bootstrap session.list",
       "tui bootstrap config.providers",
@@ -285,6 +290,7 @@ describe("tui sync bootstrap request", () => {
       "tui bootstrap vcs.get",
       "tui bootstrap worktree.list",
       "tui bootstrap debug-engine",
+      "tui bootstrap workflow-dashboard",
       "tui bootstrap smart-llm",
     ])
   })

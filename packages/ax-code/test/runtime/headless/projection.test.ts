@@ -172,6 +172,7 @@ describe("headless projection", () => {
   test("maps runtime events to runtime probe keys without TUI-specific handlers", () => {
     expect(runtimeProbeKeysForEvent({ type: "mcp.tools.changed" })).toEqual(["mcp"])
     expect(runtimeProbeKeysForEvent({ type: "lsp.updated" })).toEqual(["lsp", "debug-engine"])
+    expect(runtimeProbeKeysForEvent({ type: "workflow.run.updated", properties: {} })).toEqual(["workflow"])
     expect(runtimeProbeKeysForEvent({ type: "vcs.branch.updated", properties: { branch: "main" } })).toEqual([])
   })
 

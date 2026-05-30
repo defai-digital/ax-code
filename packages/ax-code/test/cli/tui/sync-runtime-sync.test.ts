@@ -4,6 +4,7 @@ import {
   type RuntimeSyncClient,
   type RuntimeSyncFetchResponse,
 } from "../../../src/cli/cmd/tui/context/sync-runtime-sync"
+import type { WorkflowDashboardState } from "../../../src/cli/cmd/tui/context/sync-runtime-store"
 
 function okJson(value: unknown): RuntimeSyncFetchResponse {
   return {
@@ -165,6 +166,83 @@ describe("tui sync runtime sync", () => {
     ])
   })
 
+  test("fetches workflow dashboard state with directory headers when enabled", async () => {
+    const requests: Array<{ url: string; init?: RequestInit }> = []
+    const applied: WorkflowDashboardState[] = []
+
+    const actions = createRuntimeSyncActions({
+      url: "http://localhost",
+      directory: "/repo",
+      fetch: async (url, init) => {
+        requests.push({ url, init })
+        return okJson([workflowRun({ runID: "workflow_run_01", status: "running" })])
+      },
+      client: createClient(),
+      debugEngineEnabled: true,
+      workflowRuntimeEnabled: true,
+      applyWorkspaceList: () => undefined,
+      applyMcp: () => undefined,
+      applyLsp: () => undefined,
+      applyDebugEngine: () => undefined,
+      applyWorkflowDashboard(value) {
+        applied.push(value)
+      },
+      applyAutonomous: () => undefined,
+      applySmartLlm: () => undefined,
+      applySuperLong: () => undefined,
+      applyIsolation: () => undefined,
+    })
+
+    await actions.syncWorkflowDashboard()
+
+    expect(requests).toEqual([
+      {
+        url: "http://localhost/workflow-runs/dashboard?limit=8",
+        init: {
+          headers: {
+            accept: "application/json",
+            "x-ax-code-directory": "/repo",
+            "x-opencode-directory": "/repo",
+          },
+        },
+      },
+    ])
+    expect(applied).toMatchObject([
+      {
+        runs: [{ runID: "workflow_run_01", status: "running" }],
+        activeCount: 1,
+      },
+    ])
+  })
+
+  test("skips workflow dashboard fetches when the workflow runtime is disabled", async () => {
+    const fetchCalls: string[] = []
+
+    const actions = createRuntimeSyncActions({
+      url: "http://localhost",
+      fetch: async (url) => {
+        fetchCalls.push(url)
+        return okJson([])
+      },
+      client: createClient(),
+      debugEngineEnabled: true,
+      workflowRuntimeEnabled: false,
+      applyWorkspaceList: () => undefined,
+      applyMcp: () => undefined,
+      applyLsp: () => undefined,
+      applyDebugEngine: () => undefined,
+      applyWorkflowDashboard: () => undefined,
+      applyAutonomous: () => undefined,
+      applySmartLlm: () => undefined,
+      applySuperLong: () => undefined,
+      applyIsolation: () => undefined,
+    })
+
+    await actions.syncWorkflowDashboard()
+
+    expect(fetchCalls).toEqual([])
+  })
+
   test("applies autonomous and smart-llm runtime flags from optional runtime endpoints", async () => {
     const requests: string[] = []
     const applied = {
@@ -291,3 +369,48 @@ describe("tui sync runtime sync", () => {
     expect(applied).toEqual([{ mode: "workspace-write", network: true }])
   })
 })
+
+function workflowRun(input: {
+  runID: string
+  status: "queued" | "running" | "blocked" | "paused" | "failed" | "completed" | "cancelled"
+}) {
+  return {
+    runID: input.runID,
+    status: input.status,
+    name: input.runID,
+    elapsedMs: 0,
+    effort: "workflow",
+    models: {},
+    budgetUsage: {
+      totalTokens: 0,
+      inputTokens: 0,
+      outputTokens: 0,
+      toolCalls: 0,
+      childAgents: 0,
+      retries: 0,
+      estimatedCostUsd: 0,
+    },
+    budgetLimit: {
+      maxTotalTokens: 10_000,
+      maxWallTimeMs: 600_000,
+      maxConcurrentAgents: 3,
+      maxTotalAgents: 25,
+      maxToolCalls: 100,
+      maxRetries: 1,
+    },
+    phaseCounts: { queued: 0, running: 0, blocked: 0, paused: 0, failed: 0, completed: 0, cancelled: 0 },
+    childCounts: {
+      queued: 0,
+      running: 0,
+      blockedPermission: 0,
+      blockedQuestion: 0,
+      paused: 0,
+      failed: 0,
+      completed: 0,
+      cancelled: 0,
+    },
+    artifactCounts: { summary: 0, finding: 0, patch: 0, verification: 0, metric: 0, log: 0 },
+    verificationEnvelopeCount: 0,
+    exposedArtifactCount: 0,
+  }
+}

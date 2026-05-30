@@ -16,7 +16,9 @@ type ReconnectGate = {
 export function createSyncStartupCoordinator(input: {
   runBootstrapInBackground: () => void
   debugEngineEnabled: boolean
+  workflowRuntimeEnabled?: boolean
   pollDebugEngine: () => void
+  pollWorkflowDashboard?: () => void
   recoverBootstrap: () => Promise<void> | void
   pollIntervalMs?: number
   setIntervalFn?: (handler: () => void, timeout: number) => IntervalHandle
@@ -28,7 +30,7 @@ export function createSyncStartupCoordinator(input: {
   const createReconnectGate = input.createReconnectGate ?? createReconnectRecoveryGate
   const pollIntervalMs = input.pollIntervalMs ?? 10_000
 
-  let debugEnginePoll: IntervalHandle | undefined
+  let runtimePoll: IntervalHandle | undefined
   let reconnectGate: ReconnectGate | undefined
   let started = false
   let stopped = false
@@ -45,9 +47,10 @@ export function createSyncStartupCoordinator(input: {
       stopped = false
       ensureReconnectGate()
       input.runBootstrapInBackground()
-      if (!input.debugEngineEnabled) return
-      debugEnginePoll = setIntervalFn(() => {
-        input.pollDebugEngine()
+      if (!input.debugEngineEnabled && !input.workflowRuntimeEnabled) return
+      runtimePoll = setIntervalFn(() => {
+        if (input.debugEngineEnabled) input.pollDebugEngine()
+        if (input.workflowRuntimeEnabled) input.pollWorkflowDashboard?.()
       }, pollIntervalMs)
     },
     stop() {
@@ -55,9 +58,9 @@ export function createSyncStartupCoordinator(input: {
       stopped = true
       reconnectGate?.dispose?.()
       reconnectGate = undefined
-      if (debugEnginePoll === undefined) return
-      clearIntervalFn(debugEnginePoll)
-      debugEnginePoll = undefined
+      if (runtimePoll === undefined) return
+      clearIntervalFn(runtimePoll)
+      runtimePoll = undefined
     },
     onConnectionChange(connected) {
       if (stopped) return

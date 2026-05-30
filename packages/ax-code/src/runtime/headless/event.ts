@@ -19,7 +19,7 @@ export type HeadlessRequestEvent =
   | { type: "question.replied"; properties: { sessionID: string; requestID: string } }
   | { type: "question.rejected"; properties: { sessionID: string; requestID: string } }
 
-export type HeadlessRuntimeProbeKey = "mcp" | "lsp" | "debug-engine"
+export type HeadlessRuntimeProbeKey = "mcp" | "lsp" | "debug-engine" | "workflow"
 
 export type HeadlessRuntimeStatusEvent =
   | { type: "mcp.tools.changed" }
@@ -27,6 +27,14 @@ export type HeadlessRuntimeStatusEvent =
   | { type: "code.index.progress" }
   | { type: "code.index.state" }
   | { type: "vcs.branch.updated"; properties: { branch: string } }
+  | { type: "workflow.run.created"; properties: Record<string, unknown> }
+  | { type: "workflow.run.updated"; properties: Record<string, unknown> }
+  | { type: "workflow.phase.updated"; properties: Record<string, unknown> }
+  | { type: "workflow.child.created"; properties: Record<string, unknown> }
+  | { type: "workflow.child.updated"; properties: Record<string, unknown> }
+  | { type: "workflow.artifact.written"; properties: Record<string, unknown> }
+  | { type: "workflow.budget.appended"; properties: Record<string, unknown> }
+  | { type: "workflow.verification.attached"; properties: Record<string, unknown> }
 
 export type HeadlessSessionEvent<TSession extends { id: string }, TTodo, TDiff, TStatus, TGoal = unknown> =
   | { type: "todo.updated"; properties: { sessionID: string; todos: TTodo[] } }
@@ -86,6 +94,14 @@ export const HEADLESS_RUNTIME_EVENT_TYPES = new Set<string>([
   "code.index.progress",
   "code.index.state",
   "vcs.branch.updated",
+  "workflow.run.created",
+  "workflow.run.updated",
+  "workflow.phase.updated",
+  "workflow.child.created",
+  "workflow.child.updated",
+  "workflow.artifact.written",
+  "workflow.budget.appended",
+  "workflow.verification.attached",
   "server.connected",
   "server.heartbeat",
   "server.instance.disposed",

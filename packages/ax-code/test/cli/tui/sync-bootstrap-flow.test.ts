@@ -165,6 +165,9 @@ describe("tui sync bootstrap flow", () => {
         runtimeCalls.push("smart")
       },
       syncSuperLong: async () => undefined,
+      syncWorkflowDashboard: async () => {
+        runtimeCalls.push("workflow")
+      },
       createTasks(requests, onProvidersReady) {
         return createStoreBackedBootstrapTasks({
           continueFromArgs: true,
@@ -200,7 +203,7 @@ describe("tui sync bootstrap flow", () => {
     expect(store.session.map((session) => session.id)).toEqual(["ses_1", "ses_2"])
     expect(store.provider.map((provider) => provider.id)).toEqual(["openai"])
     expect((store.config as Record<string, unknown>).theme).toBe("dark")
-    expect(runtimeCalls.sort()).toEqual(["autonomous", "debug", "isolation", "smart", "workspaces"])
+    expect(runtimeCalls.sort()).toEqual(["autonomous", "debug", "isolation", "smart", "workflow", "workspaces"])
     expect(startup).toEqual([
       { name: "tui.startup.sessionListReady", data: undefined },
       { name: "tui.startup.syncPartial", data: undefined },
@@ -234,6 +237,7 @@ describe("tui sync bootstrap flow", () => {
       syncDebugEngine: async () => undefined,
       syncSmartLlm: async () => undefined,
       syncSuperLong: async () => undefined,
+      syncWorkflowDashboard: async () => undefined,
       createTasks() {
         throw new Error("bootstrap flow failed")
       },
@@ -284,6 +288,7 @@ describe("tui sync bootstrap flow", () => {
       syncDebugEngine: async () => undefined,
       syncSmartLlm: async () => undefined,
       syncSuperLong: async () => undefined,
+      syncWorkflowDashboard: async () => undefined,
       createTasks() {
         const current = ++runID
         return {

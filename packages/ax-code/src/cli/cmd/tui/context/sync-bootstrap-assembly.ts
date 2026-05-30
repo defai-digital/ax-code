@@ -69,6 +69,7 @@ export interface SyncBootstrapAssemblyRequests {
   vcsPromise: () => Promise<BootstrapResponse<VcsInfo | undefined>>
   workspacesTask: BootstrapTask
   debugEngineTask: BootstrapTask
+  workflowDashboardTask: BootstrapTask
   smartLlmTask: BootstrapTask
   superLongTask: BootstrapTask
 }
@@ -142,6 +143,7 @@ export function createStoreBackedBootstrapTasks<TStore extends SyncBootstrapAsse
       applyVcs: (value) => setStore("vcs", reconcile(value)),
       workspacesTask: input.requests.workspacesTask,
       debugEngineTask: input.requests.debugEngineTask,
+      workflowDashboardTask: input.requests.workflowDashboardTask,
       smartLlmTask: input.requests.smartLlmTask,
       superLongTask: input.requests.superLongTask,
     }),

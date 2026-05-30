@@ -23,6 +23,7 @@ import type { SessionGoal } from "@/session/goal"
 import type { Snapshot } from "@/snapshot"
 import { Flag } from "@/flag/flag"
 import type { SyncedSessionRisk } from "./sync-session-risk"
+import { emptyWorkflowDashboardState, type WorkflowDashboardState } from "./sync-runtime-store"
 
 export interface SyncStoreState {
   status: "loading" | "partial" | "complete"
@@ -70,6 +71,7 @@ export interface SyncStoreState {
       error: string | null
     }
   }
+  workflowDashboard: WorkflowDashboardState
   isolation: {
     mode: "read-only" | "workspace-write" | "full-access"
     network: boolean
@@ -128,6 +130,7 @@ export function createInitialSyncState(): SyncStoreState {
         error: null,
       },
     },
+    workflowDashboard: emptyWorkflowDashboardState(),
     isolation: {
       mode: Flag.AX_CODE_ISOLATION_MODE ?? "workspace-write",
       network: Flag.AX_CODE_ISOLATION_NETWORK ?? false,

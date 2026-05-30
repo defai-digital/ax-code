@@ -189,6 +189,17 @@ export function applyHeadlessProjectionEvent<
     case "code.index.state":
       effects.push({ type: "runtime.probe", key: "debug-engine" })
       return { handled: true, effects }
+
+    case "workflow.run.created":
+    case "workflow.run.updated":
+    case "workflow.phase.updated":
+    case "workflow.child.created":
+    case "workflow.child.updated":
+    case "workflow.artifact.written":
+    case "workflow.budget.appended":
+    case "workflow.verification.attached":
+      effects.push({ type: "runtime.probe", key: "workflow" })
+      return { handled: true, effects }
   }
 
   const _exhaustive: never = event
@@ -206,6 +217,15 @@ export function runtimeProbeKeysForEvent(event: HeadlessRuntimeStatusEvent): Hea
       return ["debug-engine"]
     case "vcs.branch.updated":
       return []
+    case "workflow.run.created":
+    case "workflow.run.updated":
+    case "workflow.phase.updated":
+    case "workflow.child.created":
+    case "workflow.child.updated":
+    case "workflow.artifact.written":
+    case "workflow.budget.appended":
+    case "workflow.verification.attached":
+      return ["workflow"]
   }
   return []
 }

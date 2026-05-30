@@ -83,6 +83,15 @@ export function subscribeStoreBackedSyncEvents<
     TPart,
     TStore
   >["syncDebugEngine"]
+  syncWorkflowDashboard?: DispatchStoreBackedSyncEventInput<
+    TSession,
+    TTodo,
+    TDiff,
+    TStatus,
+    TMessage,
+    TPart,
+    TStore
+  >["syncWorkflowDashboard"]
   scheduleRuntimeProbe?: DispatchStoreBackedSyncEventInput<
     TSession,
     TTodo,
@@ -122,6 +131,7 @@ export function subscribeStoreBackedSyncEvents<
         syncMcpStatus: input.syncMcpStatus,
         syncLspStatus: input.syncLspStatus,
         syncDebugEngine: input.syncDebugEngine,
+        syncWorkflowDashboard: input.syncWorkflowDashboard,
         scheduleRuntimeProbe: input.scheduleRuntimeProbe,
         bootstrap: input.bootstrap,
         onWarn: input.onWarn,

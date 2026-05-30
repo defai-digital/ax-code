@@ -373,4 +373,48 @@ describe("tui sync store event", () => {
     expect(handled).toBe(true)
     expect(store.vcs).toEqual({ branch: "feature/test" })
   })
+
+  test("schedules workflow dashboard probes from workflow runtime events", async () => {
+    const [_store, setStore] = createTestStore()
+    const scheduled: string[] = []
+    const synced: string[] = []
+
+    const handled = dispatchStoreBackedSyncEvent({
+      event: {
+        type: "workflow.child.updated",
+        properties: {
+          child: {
+            id: "child_1",
+            runID: "workflow_run_1",
+            phaseID: "phase_1",
+            status: "completed",
+          },
+        },
+      },
+      autonomous: false,
+      setStore,
+      clearSessionSyncState: () => undefined,
+      replyPermission: () => undefined,
+      replyQuestion: () => undefined,
+      syncMcpStatus: () => undefined,
+      syncLspStatus: () => undefined,
+      syncDebugEngine: () => undefined,
+      syncWorkflowDashboard: () => {
+        synced.push("workflow")
+      },
+      scheduleRuntimeProbe(task) {
+        scheduled.push(task.key)
+        void Promise.resolve(task.run())
+      },
+      bootstrap: () => undefined,
+      onWarn: () => undefined,
+      maxSessionMessages: 100,
+    })
+
+    await Promise.resolve()
+
+    expect(handled).toBe(true)
+    expect(scheduled).toEqual(["workflow"])
+    expect(synced).toEqual(["workflow"])
+  })
 })

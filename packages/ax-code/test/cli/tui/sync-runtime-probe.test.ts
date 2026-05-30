@@ -25,6 +25,23 @@ describe("tui sync runtime probe", () => {
     expect(mcp.label).toBe("mcp status sync failed")
     expect(calls).toEqual(["mcp"])
     expect(warnings).toEqual([])
+
+    const workflow = runtimeSyncProbeTask("workflow", {
+      syncMcpStatus: () => undefined,
+      syncLspStatus: () => undefined,
+      syncDebugEngine: () => undefined,
+      syncWorkflowDashboard: () => {
+        calls.push("workflow")
+      },
+      onWarn(label, error) {
+        warnings.push({ label, error })
+      },
+    })
+
+    await workflow.run()
+
+    expect(workflow.label).toBe("workflow dashboard sync failed")
+    expect(calls).toEqual(["mcp", "workflow"])
   })
 
   test("coalesces scheduled runtime probes by key", async () => {

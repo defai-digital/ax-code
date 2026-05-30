@@ -3,6 +3,8 @@ import {
   normalizeDebugEngineState,
   normalizeIsolationState,
   normalizeRuntimeFlagState,
+  normalizeWorkflowDashboardState,
+  type WorkflowDashboardRun,
 } from "../../../src/cli/cmd/tui/context/sync-runtime-store"
 
 describe("tui sync runtime store", () => {
@@ -91,4 +93,70 @@ describe("tui sync runtime store", () => {
       network: true,
     })
   })
+
+  test("normalizes workflow dashboard projections for supervision state", () => {
+    expect(
+      normalizeWorkflowDashboardState([
+        workflowRun({ runID: "workflow_run_completed", status: "completed", elapsedMs: 1_000 }),
+        workflowRun({ runID: "workflow_run_blocked", status: "blocked", elapsedMs: 500, verificationEnvelopeCount: 1 }),
+        workflowRun({ runID: "workflow_run_running", status: "running", elapsedMs: 2_000, exposedArtifactCount: 2 }),
+      ]),
+    ).toMatchObject({
+      runs: [{ runID: "workflow_run_blocked" }, { runID: "workflow_run_running" }, { runID: "workflow_run_completed" }],
+      activeCount: 2,
+      blockedCount: 1,
+      terminalCount: 1,
+      verificationEnvelopeCount: 1,
+      exposedArtifactCount: 2,
+    })
+  })
 })
+
+function workflowRun(
+  input: Partial<WorkflowDashboardRun> & {
+    runID: string
+    status: WorkflowDashboardRun["status"]
+  },
+) {
+  const { runID, status, ...overrides } = input
+  return {
+    runID,
+    status,
+    name: input.name ?? runID,
+    elapsedMs: input.elapsedMs ?? 0,
+    effort: "workflow",
+    models: {},
+    budgetUsage: {
+      totalTokens: 0,
+      inputTokens: 0,
+      outputTokens: 0,
+      toolCalls: 0,
+      childAgents: 0,
+      retries: 0,
+      estimatedCostUsd: 0,
+    },
+    budgetLimit: {
+      maxTotalTokens: 10_000,
+      maxWallTimeMs: 600_000,
+      maxConcurrentAgents: 3,
+      maxTotalAgents: 25,
+      maxToolCalls: 100,
+      maxRetries: 1,
+    },
+    phaseCounts: { queued: 0, running: 0, blocked: 0, paused: 0, failed: 0, completed: 0, cancelled: 0 },
+    childCounts: {
+      queued: 0,
+      running: 0,
+      blockedPermission: 0,
+      blockedQuestion: 0,
+      paused: 0,
+      failed: 0,
+      completed: 0,
+      cancelled: 0,
+    },
+    artifactCounts: { summary: 0, finding: 0, patch: 0, verification: 0, metric: 0, log: 0 },
+    verificationEnvelopeCount: input.verificationEnvelopeCount ?? 0,
+    exposedArtifactCount: input.exposedArtifactCount ?? 0,
+    ...overrides,
+  } as WorkflowDashboardRun
+}

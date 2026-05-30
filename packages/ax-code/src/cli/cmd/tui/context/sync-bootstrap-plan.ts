@@ -179,6 +179,7 @@ export function createDeferredBootstrapPhaseTasks(input: {
   applyVcs: (value: VcsInfo | undefined) => void
   workspacesTask: BootstrapTask
   debugEngineTask: BootstrapTask
+  workflowDashboardTask: BootstrapTask
   smartLlmTask: BootstrapTask
   superLongTask: BootstrapTask
 }) {
@@ -212,6 +213,7 @@ export function createDeferredBootstrapPhaseTasks(input: {
     ),
     input.workspacesTask,
     input.debugEngineTask,
+    input.workflowDashboardTask,
     input.smartLlmTask,
     input.superLongTask,
   ]

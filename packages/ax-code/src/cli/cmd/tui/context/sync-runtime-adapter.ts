@@ -10,7 +10,15 @@ import { type SyncStoreState } from "./sync-state"
 
 type RuntimeStoreState = Pick<
   SyncStoreState,
-  "workspaceList" | "mcp" | "lsp" | "debugEngine" | "autonomous" | "smartLlm" | "superLong" | "isolation"
+  | "workspaceList"
+  | "mcp"
+  | "lsp"
+  | "debugEngine"
+  | "workflowDashboard"
+  | "autonomous"
+  | "smartLlm"
+  | "superLong"
+  | "isolation"
 >
 
 export function createStoreBackedRuntimeSyncActions<TStore extends RuntimeStoreState>(input: {
@@ -19,6 +27,7 @@ export function createStoreBackedRuntimeSyncActions<TStore extends RuntimeStoreS
   fetch: (url: string, init?: RequestInit) => Promise<RuntimeSyncFetchResponse>
   client: RuntimeSyncClient
   debugEngineEnabled: boolean
+  workflowRuntimeEnabled?: boolean
   setStore: SetStoreFunction<TStore>
 }): RuntimeSyncActions {
   const setStore = input.setStore as unknown as SetStoreFunction<RuntimeStoreState>
@@ -32,6 +41,7 @@ export function createStoreBackedRuntimeSyncActions<TStore extends RuntimeStoreS
     fetch: input.fetch,
     client: input.client,
     debugEngineEnabled: input.debugEngineEnabled,
+    workflowRuntimeEnabled: input.workflowRuntimeEnabled,
     applyWorkspaceList(value) {
       setStore("workspaceList", reconcile(value))
     },
@@ -43,6 +53,9 @@ export function createStoreBackedRuntimeSyncActions<TStore extends RuntimeStoreS
     },
     applyDebugEngine(value: RuntimeStoreState["debugEngine"]) {
       setStore("debugEngine", reconcile(value))
+    },
+    applyWorkflowDashboard(value: RuntimeStoreState["workflowDashboard"]) {
+      setStore("workflowDashboard", reconcile(value))
     },
     applyAutonomous: applyBooleanFeature("autonomous"),
     applySmartLlm: applyBooleanFeature("smartLlm"),

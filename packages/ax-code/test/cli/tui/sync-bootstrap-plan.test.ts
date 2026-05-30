@@ -259,6 +259,10 @@ describe("tui sync bootstrap plan", () => {
           Promise.resolve().then(() => {
             applied.push("debug")
           }),
+        workflowDashboardTask: () =>
+          Promise.resolve().then(() => {
+            applied.push("workflow")
+          }),
         smartLlmTask: () =>
           Promise.resolve().then(() => {
             applied.push("smart")
@@ -279,6 +283,7 @@ describe("tui sync bootstrap plan", () => {
       "smart",
       "super-long",
       "vcs",
+      "workflow",
       "workspaces",
     ])
   })

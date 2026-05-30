@@ -36,6 +36,12 @@ import {
   sessionQualityActionValue,
   sessionQualityWorkflowIcon,
 } from "./quality"
+import {
+  isWorkflowStatusAttention,
+  renderWorkflowDashboardHeader,
+  renderWorkflowStatusSidebarLine,
+  visibleWorkflowSidebarRuns,
+} from "./workflow-status"
 
 const log = Log.create({ service: "tui.sidebar.queue" })
 
@@ -89,6 +95,14 @@ function qualityColor(
   if (status === "pass") return theme.success
   if (status === "warn") return theme.warning
   if (status === "fail") return theme.error
+  return theme.textMuted
+}
+
+function workflowColor(status: string, theme: ReturnType<typeof useTheme>["theme"]) {
+  if (status === "running") return theme.primary
+  if (status === "blocked" || status === "failed" || status === "cancelled") return theme.error
+  if (status === "completed") return theme.success
+  if (status === "paused") return theme.warning
   return theme.textMuted
 }
 
@@ -148,6 +162,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
     // enabling the experimental flag. Collapses if the plan list
     // grows beyond 2 entries, same rule as Todo.
     dre: true,
+    workflows: true,
     activity: true,
   })
 
@@ -231,6 +246,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
       rollups: risk()?.debug?.rollups,
     }),
   )
+  const workflowRuns = createMemo(() => visibleWorkflowSidebarRuns(sync.data.workflowDashboard))
 
   // Sort MCP servers alphabetically for consistent display order
   const mcpEntries = createMemo(() =>
@@ -649,6 +665,40 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
                   <text fg={theme.textMuted} wrapMode="word">
                     {debugCasesSummary()}
                   </text>
+                </box>
+              </Show>
+              <Show when={workflowRuns().length > 0}>
+                <box backgroundColor={theme.backgroundElement} paddingLeft={1} paddingRight={1}>
+                  <box
+                    flexDirection="row"
+                    gap={1}
+                    justifyContent="space-between"
+                    onMouseDown={() => workflowRuns().length > 2 && setExpanded("workflows", !expanded.workflows)}
+                  >
+                    <box flexDirection="row" gap={1}>
+                      <Show when={workflowRuns().length > 2}>
+                        <text fg={theme.text}>{expanded.workflows ? "-" : "+"}</text>
+                      </Show>
+                      <text fg={theme.text}>
+                        <b>{renderWorkflowDashboardHeader(sync.data.workflowDashboard)}</b>
+                      </text>
+                    </box>
+                  </box>
+                  <box border={["top"]} borderColor={theme.borderSubtle} />
+                  <Show when={workflowRuns().length <= 2 || expanded.workflows}>
+                    <For each={workflowRuns()}>
+                      {(run) => (
+                        <box flexDirection="row" gap={1}>
+                          <text flexShrink={0} style={{ fg: workflowColor(run.status, theme) }}>
+                            {isWorkflowStatusAttention(run.status) ? "!" : "W"}
+                          </text>
+                          <text fg={theme.textMuted} wrapMode="word">
+                            {renderWorkflowStatusSidebarLine(run)}
+                          </text>
+                        </box>
+                      )}
+                    </For>
+                  </Show>
                 </box>
               </Show>
               <Show when={activity().length > 0}>

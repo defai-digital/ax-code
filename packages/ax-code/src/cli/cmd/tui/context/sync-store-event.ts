@@ -54,6 +54,7 @@ export interface DispatchStoreBackedSyncEventInput<
   syncMcpStatus: RuntimeSyncProbeHandlers["syncMcpStatus"]
   syncLspStatus: RuntimeSyncProbeHandlers["syncLspStatus"]
   syncDebugEngine: RuntimeSyncProbeHandlers["syncDebugEngine"]
+  syncWorkflowDashboard?: RuntimeSyncProbeHandlers["syncWorkflowDashboard"]
   scheduleRuntimeProbe?: RuntimeSyncProbeScheduler["schedule"]
   bootstrap: () => Promise<void> | void
   onWarn: (label: string, error: unknown) => void
@@ -115,6 +116,14 @@ function dispatchHeadlessProjectionEvent<
     case "lsp.updated":
     case "code.index.progress":
     case "code.index.state":
+    case "workflow.run.created":
+    case "workflow.run.updated":
+    case "workflow.phase.updated":
+    case "workflow.child.created":
+    case "workflow.child.updated":
+    case "workflow.artifact.written":
+    case "workflow.budget.appended":
+    case "workflow.verification.attached":
     case "server.connected":
     case "server.heartbeat":
     case "server.instance.disposed": {
@@ -139,6 +148,7 @@ function dispatchHeadlessProjectionEvent<
             syncMcpStatus: input.syncMcpStatus,
             syncLspStatus: input.syncLspStatus,
             syncDebugEngine: input.syncDebugEngine,
+            syncWorkflowDashboard: input.syncWorkflowDashboard,
             onWarn: input.onWarn,
           })
           if (input.scheduleRuntimeProbe) {

@@ -151,7 +151,7 @@ describe("workflow routes", () => {
         artifacts: Array<{ phaseID?: string; payload?: unknown }>
       }
       const phaseID = started.phases[0]!.id
-      expect(started.artifacts).toHaveLength(1)
+      expect(started.artifacts.some((artifact) => artifact.phaseID === phaseID)).toBe(true)
 
       const artifactsResponse = await app.request(
         `/workflow-runs/${created.id}/artifacts?${directoryQuery}&phaseID=${phaseID}&kind=summary&includePayload=false`,

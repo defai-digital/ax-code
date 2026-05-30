@@ -82,6 +82,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
       syncMcpStatus,
       syncLspStatus,
       syncDebugEngine,
+      syncWorkflowDashboard,
       syncAutonomous,
       syncSmartLlm,
       syncSuperLong,
@@ -92,6 +93,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
       fetch: sdk.fetch,
       client: sdk.client,
       debugEngineEnabled: Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE,
+      workflowRuntimeEnabled: Flag.AX_CODE_WORKFLOW_RUNTIME,
       setStore,
     })
     const runtimeProbeScheduler = createRuntimeSyncProbeScheduler({
@@ -149,6 +151,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
       syncAutonomous,
       syncWorkspaces,
       syncDebugEngine,
+      syncWorkflowDashboard,
       syncSmartLlm,
       syncSuperLong,
       createTasks(requests, onProvidersReady) {
@@ -182,8 +185,12 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
     const startupCoordinator = createSyncStartupCoordinator({
       runBootstrapInBackground: () => bootstrapController.runInBackground(),
       debugEngineEnabled: Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE,
+      workflowRuntimeEnabled: Flag.AX_CODE_WORKFLOW_RUNTIME,
       pollDebugEngine: () => {
         void syncDebugEngine()
+      },
+      pollWorkflowDashboard: () => {
+        void syncWorkflowDashboard()
       },
       recoverBootstrap: bootstrap,
     })
@@ -210,6 +217,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
       syncMcpStatus,
       syncLspStatus,
       syncDebugEngine,
+      syncWorkflowDashboard,
       scheduleRuntimeProbe: runtimeProbeScheduler.schedule,
       bootstrap,
       onWarn(label, error) {

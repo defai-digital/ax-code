@@ -4,9 +4,11 @@ import {
   normalizeDebugEngineState,
   normalizeIsolationState,
   normalizeRuntimeFlagState,
+  normalizeWorkflowDashboardState,
   type DebugEnginePayload,
   type IsolationPayload,
   type RuntimeFlagPayload,
+  type WorkflowDashboardPayload,
 } from "./sync-runtime-store"
 
 export interface RuntimeSyncResponse<T> {
@@ -37,6 +39,7 @@ export interface RuntimeSyncActions {
   syncMcpStatus: () => Promise<void>
   syncLspStatus: () => Promise<void>
   syncDebugEngine: () => Promise<void>
+  syncWorkflowDashboard: () => Promise<void>
   syncAutonomous: () => Promise<void>
   syncSmartLlm: () => Promise<void>
   syncSuperLong: (input?: { model?: string }) => Promise<void>
@@ -49,10 +52,12 @@ export function createRuntimeSyncActions(input: {
   fetch: (url: string, init?: RequestInit) => Promise<RuntimeSyncFetchResponse>
   client: RuntimeSyncClient
   debugEngineEnabled: boolean
+  workflowRuntimeEnabled?: boolean
   applyWorkspaceList: (value: string[]) => void
   applyMcp: (value: Record<string, McpStatus>) => void
   applyLsp: (value: LspStatus[]) => void
   applyDebugEngine: (value: ReturnType<typeof normalizeDebugEngineState>) => void
+  applyWorkflowDashboard?: (value: ReturnType<typeof normalizeWorkflowDashboardState>) => void
   applyAutonomous: (value: boolean) => void
   applySmartLlm: (value: boolean) => void
   applySuperLong: (value: boolean) => void
@@ -93,6 +98,11 @@ export function createRuntimeSyncActions(input: {
     return `/super-long?${params.toString()}`
   }
 
+  function workflowDashboardPath() {
+    const params = new URLSearchParams({ limit: "8" })
+    return `/workflow-runs/dashboard?${params.toString()}`
+  }
+
   return {
     async syncWorkspaces() {
       const result = await input.client.worktree.list().catch(() => undefined)
@@ -119,6 +129,17 @@ export function createRuntimeSyncActions(input: {
       })
       if (!body) return
       input.applyDebugEngine(normalizeDebugEngineState(body))
+    },
+    async syncWorkflowDashboard() {
+      if (!input.workflowRuntimeEnabled || !input.applyWorkflowDashboard) return
+      const body = await fetchOptionalRuntimeJson<WorkflowDashboardPayload>(workflowDashboardPath(), {
+        headers: directoryRequestHeaders({
+          directory: input.directory,
+          accept: "application/json",
+        }),
+      })
+      if (!body) return
+      input.applyWorkflowDashboard(normalizeWorkflowDashboardState(body))
     },
     syncAutonomous: createRuntimeFeatureSync("/autonomous", input.applyAutonomous),
     syncSmartLlm: createRuntimeFeatureSync("/smart-llm", input.applySmartLlm),

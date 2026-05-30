@@ -5,6 +5,7 @@ export interface RuntimeSyncProbeHandlers {
   syncMcpStatus: () => Promise<void> | void
   syncLspStatus: () => Promise<void> | void
   syncDebugEngine: () => Promise<void> | void
+  syncWorkflowDashboard?: () => Promise<void> | void
   onWarn: (label: string, error: unknown) => void
 }
 
@@ -21,6 +22,7 @@ const RUNTIME_PROBE_LABEL: Record<RuntimeSyncProbeKey, string> = {
   mcp: "mcp status sync failed",
   lsp: "lsp status sync failed",
   "debug-engine": "debug engine sync failed",
+  workflow: "workflow dashboard sync failed",
 }
 
 export function runtimeSyncProbeTask(
@@ -133,5 +135,7 @@ function runtimeProbeRunner(key: RuntimeSyncProbeKey, handlers: RuntimeSyncProbe
       return handlers.syncLspStatus
     case "debug-engine":
       return handlers.syncDebugEngine
+    case "workflow":
+      return handlers.syncWorkflowDashboard ?? (() => undefined)
   }
 }
