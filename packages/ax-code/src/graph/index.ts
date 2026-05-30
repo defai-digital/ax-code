@@ -110,6 +110,7 @@ export namespace ExecutionGraph {
 
     const nodes: Node[] = []
     const edges: Edge[] = []
+    const nodeByID = new Map<string, Node>()
     const stepNodes = new Map<number, Node>()
     const pending = new Map<string, string>()
     const agents = new Set<string>()
@@ -165,7 +166,7 @@ export namespace ExecutionGraph {
         }
 
         case "step.finish": {
-          const existing = currentStepID ? nodes.find((n) => n.id === currentStepID) : undefined
+          const existing = currentStepID ? stepNodes.get(stepCount) : undefined
           if (existing) {
             existing.duration = ts - existing.timestamp
             const tokens = e.tokens as { input: number; output: number }
@@ -269,6 +270,7 @@ export namespace ExecutionGraph {
       if (!node) continue
 
       nodes.push(node)
+      nodeByID.set(node.id, node)
 
       if (prevID) {
         edges.push({ from: prevID, to: node.id, type: "sequence" })
@@ -281,7 +283,7 @@ export namespace ExecutionGraph {
     }
 
     for (const [, nodeID] of pending) {
-      const node = nodes.find((n) => n.id === nodeID)
+      const node = nodeByID.get(nodeID)
       if (node) node.status = "pending"
     }
 

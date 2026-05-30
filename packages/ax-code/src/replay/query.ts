@@ -14,10 +14,9 @@ export namespace EventQuery {
   // Per-session full-log loads are capped to bound peak memory for
   // pathologically long sessions. tool.result events can each carry
   // megabytes of stdout, so an unbounded `.all()` over a 5k-event log
-  // can hold hundreds of MB resident — and Replay.compare() doubles
-  // that by reconstructing twice (BUG-006). 10k matches the largest
-  // session size we've seen in practice; callers that genuinely need
-  // unbounded reads should paginate via `allSince`.
+  // can hold hundreds of MB resident. 10k matches the largest session
+  // size we've seen in practice; callers that genuinely need unbounded
+  // reads should paginate via `allSince`.
   export const BY_SESSION_LIMIT = 10_000
 
   // Thrown when a strict per-session loader detects truncation. Replay
