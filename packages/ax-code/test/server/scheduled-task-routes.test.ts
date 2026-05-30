@@ -179,6 +179,35 @@ describe("scheduled task routes", () => {
       else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
     }
   })
+
+  test("run-due records workflow scheduled task failures", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
+    delete process.env.AX_CODE_WORKFLOW_RUNTIME
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const runAt = Date.now() + 1_000
+          const task = await ScheduledTask.create({
+            title: "Due workflow audit",
+            prompt: "Run the saved workflow template.",
+            schedule: { type: "once", runAt },
+            workflowTemplateID: "builtin:noop-dry-run",
+          })
+
+          await expect(ScheduledTask.runDue(runAt + 1)).resolves.toEqual([])
+
+          const refreshed = await ScheduledTask.get(task.id)
+          expect(refreshed.error).toContain("Workflow runtime is disabled")
+          expect(refreshed.lastRunAt).toBeGreaterThan(0)
+        },
+      })
+    } finally {
+      if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME
+      else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
+    }
+  })
 })
 
 async function waitForValue<T>(read: () => T | undefined | Promise<T | undefined>): Promise<T> {

@@ -5,6 +5,7 @@ import { BusEvent } from "@/bus/bus-event"
 import { Instance } from "@/project/instance"
 import { ProjectID } from "@/project/schema"
 import { Database, NotFoundError, and, asc, desc, eq, lte } from "@/storage/db"
+import { toErrorMessage } from "@/util/error-message"
 import { Log } from "@/util/log"
 import { ScheduledTaskID } from "./schema"
 import { ScheduledTaskTable } from "./session.sql"
@@ -319,37 +320,44 @@ export namespace ScheduledTask {
     if (current.status === "disabled") {
       throw new HTTPException(409, { message: `Scheduled task ${id} is disabled.` })
     }
-    if (current.workflowTemplateID) return runWorkflowNow(current)
-    const queueItem = await TaskQueue.enqueue({
-      kind: "automation",
-      title: current.title,
-      agent: current.agent,
-      model: current.model,
-      sourceTaskID: current.id,
-      payload: {
-        scheduledTaskID: current.id,
-        prompt: current.prompt,
-        schedule: current.schedule,
-      },
-    })
-    const now = Date.now()
-    const task = Database.use((db) => {
-      const row = db
-        .update(ScheduledTaskTable)
-        .set({
-          last_queue_id: queueItem.id,
-          last_run_at: now,
-          error: null,
-          time_updated: now,
-        })
-        .where(eq(ScheduledTaskTable.id, id))
-        .returning()
-        .get()
-      if (!row) throw new NotFoundError({ message: `Scheduled task not found: ${id}` })
-      return fromRow(row)
-    })
-    publishUpdated(task)
-    return { task, queueItem }
+    try {
+      if (current.workflowTemplateID) return await runWorkflowNow(current)
+      const queueItem = await TaskQueue.enqueue({
+        kind: "automation",
+        title: current.title,
+        agent: current.agent,
+        model: current.model,
+        sourceTaskID: current.id,
+        payload: {
+          scheduledTaskID: current.id,
+          prompt: current.prompt,
+          schedule: current.schedule,
+        },
+      })
+      const now = Date.now()
+      const task = Database.use((db) => {
+        const row = db
+          .update(ScheduledTaskTable)
+          .set({
+            last_queue_id: queueItem.id,
+            last_run_at: now,
+            error: null,
+            time_updated: now,
+          })
+          .where(eq(ScheduledTaskTable.id, id))
+          .returning()
+          .get()
+        if (!row) throw new NotFoundError({ message: `Scheduled task not found: ${id}` })
+        return fromRow(row)
+      })
+      publishUpdated(task)
+      return { task, queueItem }
+    } catch (error) {
+      await recordRunFailure(id, error).catch((recordError) => {
+        log.warn("scheduled task failure record failed", { taskID: id, error: recordError })
+      })
+      throw error
+    }
   }
 
   async function runWorkflowNow(current: Info): Promise<RunNowResult> {
@@ -379,6 +387,26 @@ export namespace ScheduledTask {
     })
     publishUpdated(task)
     return { task, workflowRun }
+  }
+
+  async function recordRunFailure(id: ScheduledTaskID, error: unknown): Promise<Info> {
+    const now = Date.now()
+    const task = Database.use((db) => {
+      const row = db
+        .update(ScheduledTaskTable)
+        .set({
+          error: toErrorMessage(error),
+          last_run_at: now,
+          time_updated: now,
+        })
+        .where(eq(ScheduledTaskTable.id, id))
+        .returning()
+        .get()
+      if (!row) throw new NotFoundError({ message: `Scheduled task not found: ${id}` })
+      return fromRow(row)
+    })
+    publishUpdated(task)
+    return task
   }
 
   export async function runDue(now = Date.now()): Promise<RunNowResult[]> {
