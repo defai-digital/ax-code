@@ -727,6 +727,8 @@ export namespace Worktree {
       }
     }
 
+    await cleanupInstanceAndSandbox()
+
     const branch = entry.branch?.replace(/^refs\/heads\//, "")
     let cleanupError: unknown
     let branchError: unknown
@@ -755,8 +757,6 @@ export namespace Worktree {
       throw cleanupError
     }
     if (branchError) throw branchError
-
-    await cleanupInstanceAndSandbox()
 
     return true
   })

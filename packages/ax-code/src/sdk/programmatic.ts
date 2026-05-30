@@ -440,7 +440,7 @@ function classifyError(errMsg: string): Error {
   const lower = errMsg.toLowerCase()
 
   // Agent not found
-  const agentMatch = errMsg.match(/Agent not found: "(.+?)"\. Available: (.+)/)
+  const agentMatch = errMsg.match(/Agent not found: "(.+?)"\. Available agents: (.+)/)
   if (agentMatch) {
     return new AgentNotFoundError(agentMatch[1], agentMatch[2].split(", "))
   }
