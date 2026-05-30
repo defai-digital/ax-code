@@ -252,6 +252,8 @@ function workflowDashboardRun(input: Partial<WorkflowDashboardRun> = {}): Workfl
     },
     budgetLimit: {
       maxTotalTokens: 5000,
+      maxInputTokensPerChild: 2500,
+      maxOutputTokensPerChild: 500,
       maxWallTimeMs: 600_000,
       maxConcurrentAgents: 3,
       maxTotalAgents: 25,
@@ -349,6 +351,8 @@ function workflowRunDetail(input: Partial<WorkflowRunDetail> = {}): WorkflowRunD
       phases: [],
       budget: {
         maxTotalTokens: 5000,
+        maxInputTokensPerChild: 2500,
+        maxOutputTokensPerChild: 500,
         maxTotalAgents: 25,
         maxToolCalls: 120,
       },
@@ -356,6 +360,8 @@ function workflowRunDetail(input: Partial<WorkflowRunDetail> = {}): WorkflowRunD
     inputValues: {},
     budget: {
       maxTotalTokens: 5000,
+      maxInputTokensPerChild: 2500,
+      maxOutputTokensPerChild: 500,
       maxTotalAgents: 25,
       maxToolCalls: 120,
     },

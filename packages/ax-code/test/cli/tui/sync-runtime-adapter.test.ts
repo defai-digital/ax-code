@@ -138,6 +138,8 @@ function workflowRun(input: {
     },
     budgetLimit: {
       maxTotalTokens: 10_000,
+      maxInputTokensPerChild: 5_000,
+      maxOutputTokensPerChild: 1_000,
       maxWallTimeMs: 600_000,
       maxConcurrentAgents: 3,
       maxTotalAgents: 25,
