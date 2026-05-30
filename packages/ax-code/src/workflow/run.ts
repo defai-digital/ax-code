@@ -513,9 +513,11 @@ async function ensureFinalReportArtifact(runID: WorkflowRunID): Promise<Workflow
   const phaseCounts = countByStatus(detail.phases.map((phase) => phase.status))
   const childCounts = countByStatus(detail.children.map((child) => child.status))
   const artifactCounts = countByStatus(detail.artifacts.map((artifact) => artifact.kind))
+  const verification = finalReportVerification(detail)
   const summary = [
     `Workflow final report: ${detail.spec.name}`,
     `Status: ${detail.status}`,
+    `Verification: ${verification.status} (${verification.mode})`,
     `Phases: ${detail.phases.length} total, ${phaseCounts.completed ?? 0} completed, ${phaseCounts.failed ?? 0} failed, ${phaseCounts.cancelled ?? 0} cancelled.`,
     `Children: ${detail.children.length} total, ${childCounts.completed ?? 0} completed, ${childCounts.failed ?? 0} failed, ${childCounts.cancelled ?? 0} cancelled.`,
     `Artifacts: ${detail.artifacts.length} existing, verification envelopes: ${detail.verificationEnvelopeIDs.length}.`,
@@ -541,6 +543,7 @@ async function ensureFinalReportArtifact(runID: WorkflowRunID): Promise<Workflow
       phaseCounts,
       childCounts,
       artifactCounts,
+      verification,
       budgetUsage: detail.budgetUsage,
       verificationEnvelopeIDs: detail.verificationEnvelopeIDs,
       exposedArtifactIDs: detail.artifacts
@@ -819,6 +822,31 @@ function countByStatus(values: string[]): Record<string, number> {
   const counts: Record<string, number> = {}
   for (const value of values) counts[value] = (counts[value] ?? 0) + 1
   return counts
+}
+
+function finalReportVerification(detail: WorkflowRunDetail) {
+  const requiredArtifactIds = detail.spec.verification.requiredArtifactIds
+  const presentArtifactIds = new Set(detail.artifacts.map((artifact) => artifact.specArtifactID).filter(Boolean))
+  const hasVerificationArtifact = detail.artifacts.some((artifact) => artifact.kind === "verification")
+  const hasVerificationEnvelope = detail.verificationEnvelopeIDs.length > 0
+  const requiredArtifactsSatisfied =
+    requiredArtifactIds.length > 0 && requiredArtifactIds.every((artifactID) => presentArtifactIds.has(artifactID))
+
+  const status =
+    detail.spec.verification.mode === "skipped" || detail.spec.verification.mode === "deferred"
+      ? detail.spec.verification.mode
+      : requiredArtifactsSatisfied || hasVerificationArtifact || hasVerificationEnvelope
+        ? "satisfied"
+        : detail.spec.verification.mode === "required"
+          ? "missing"
+          : "not_run"
+
+  return {
+    mode: detail.spec.verification.mode,
+    status,
+    requiredArtifactIds,
+    verificationEnvelopeCount: detail.verificationEnvelopeIDs.length,
+  }
 }
 
 function isTerminalRunStatus(status: WorkflowRun.Status) {
