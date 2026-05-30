@@ -15,10 +15,12 @@ Use the SDK when you want AX Code's runtime inside your own TypeScript or JavaSc
 | ---------------------------------------------- | ----------------------------------- | -------------------------------------------------------------------------------------------- |
 | Interactive repository work                    | `ax-code` TUI or `ax-code run`      | Fastest path for humans working directly in a checkout                                       |
 | In-process TypeScript or JavaScript automation | `@ax-code/sdk` with `createAgent()` | Lowest overhead, custom tools, streaming, multi-turn sessions, and testing helpers           |
-| Service boundary or non-JavaScript clients     | `ax-code serve` plus OpenAPI        | Lets Python, Go, Java, Rust, CI jobs, and internal platforms call the same runtime over HTTP |
+| App shell or GUI backend                       | `@ax-code/sdk/headless`             | Starts or attaches to a local backend with typed events and projected app state              |
+| Native desktop boundary                        | `@ax-code/sdk/grpc`                 | Stable command/event contract, streaming, metadata, deadlines, and native host adapters      |
 | Editor-native workflow                         | VS Code integration                 | Uses the installed CLI/runtime while staying inside the editor                               |
 
-For cross-language clients, see [HTTP and OpenAPI SDKs](../../../docs/sdk-http-openapi.md).
+The JavaScript package no longer exposes first-party HTTP client/server subpaths. HTTP/OpenAPI remains an internal
+runtime, fallback, and diagnostics layer behind the headless and gRPC SDKs.
 
 ## Install
 
@@ -26,7 +28,7 @@ For cross-language clients, see [HTTP and OpenAPI SDKs](../../../docs/sdk-http-o
 pnpm add @ax-code/sdk
 ```
 
-The in-process `createAgent()` entry point loads the `ax-code` runtime from the host project at call time. Keep a compatible `ax-code` runtime installed or use `@ax-code/sdk/http` with `ax-code serve` when the runtime is provided as a separate service.
+The in-process `createAgent()` entry point loads the `ax-code` runtime from the host project at call time. Keep a compatible `ax-code` runtime installed. For app shells that should not load runtime internals directly, use `@ax-code/sdk/headless` or `@ax-code/sdk/grpc`.
 
 ## Quick start
 
@@ -157,7 +159,7 @@ test("CI bot scans for CVEs", async () => {
 ```ts
 import { SDK_VERSION, isSDKVersionCompatible } from "@ax-code/sdk"
 
-console.log(SDK_VERSION) // "2.0.0"
+console.log(SDK_VERSION) // "2.1.0"
 if (!isSDKVersionCompatible("^2.0.0")) {
   throw new Error("Incompatible SDK version")
 }
@@ -236,41 +238,17 @@ try {
 
 For a desktop host that already owns a Rust, Tauri, Electron preload, or gRPC client boundary, use `createAxCodeGrpcClientFromNativeIpc()` for structured-clone IPC boundaries and implement `unary`, `serverStream`, and optionally `bidiStream` in the host. Use `createAxCodeGrpcNativeIpcBridgeFromChannels()` or `createAxCodeGrpcNativeIpcStream()` when the host exposes push-style subscriptions with unsubscribe callbacks. Use `createAxCodeGrpcClientFromNativeBridge()` only when both sides share a JavaScript realm and can pass `AbortSignal` and async iterables directly in the call object. Hosts that want less custom dispatch code can use `createAxCodeGrpcNativeBridgeFromHandlers()` or `createAxCodeGrpcClientFromNativeHandlers()` to bind method names to typed runtime handlers; pass `requireHandlers` to fail fast when an expected method set, domain, or stream kind is missing. Node-based desktop hosts can expose the same bridge as a real HTTP/2 gRPC endpoint with `startAxCodeGrpcNodeHttp2Server()` from `@ax-code/sdk/grpc/node`. Use `AX_CODE_GRPC_METHOD_DESCRIPTORS`, `listAxCodeGrpcMethods()`, `getAxCodeGrpcMethodDescriptor()`, `assertAxCodeGrpcMethodSupported()`, `listMissingAxCodeGrpcNativeHandlers()`, or `assertAxCodeGrpcNativeHandlers()` as the canonical method catalog and startup coverage gate for native handler coverage, service binding, preload allowlists, and proto request/response message names. The renderer keeps the same high-level client API without receiving the HTTP base URL, auth header, or PTY WebSocket endpoint.
 
-## HTTP client (server-based)
-
-The 1.4.0 default entry point (`createAxCode`) is still available at a subpath:
-
-```ts
-import { createAxCode } from "@ax-code/sdk/http"
-
-const { client, server } = await createAxCode()
-const sessions = await client.session.list()
-```
-
-`createAxCode()` and `createAxCodeServer()` start `ax-code serve` with generated Basic Auth credentials by default and
-return `server.headers` for clients that need to call the server directly. Prefer `@ax-code/sdk/headless` or
-`@ax-code/sdk/grpc` for desktop GUI work; keep this HTTP helper for compatibility, diagnostics, and service-boundary
-integrations. SDK server helpers bind the HTTP API to loopback hostnames by default; pass `allowNetworkBind: true` only
-when the caller explicitly owns network transport security and authentication.
-
-HTTP client/server runtime values are not exported from the top-level `@ax-code/sdk` entrypoint. Use the explicit
-`@ax-code/sdk/http`, `@ax-code/sdk/client`, or `@ax-code/sdk/server` subpaths for HTTP integrations. The top-level
-entrypoint still exports generated route types such as `Project`, `Provider`, `Message`, and `Part` for downstream type
-imports.
-
 ## Cross-language integrations
 
-Use this package for first-party TypeScript and JavaScript integrations. For first-party desktop/native GUI work, prefer `@ax-code/sdk/grpc` and keep HTTP/SSE as the compatibility and debug fallback. For Python, Go, Java, Rust, or other non-JavaScript runtimes, run `ax-code serve` and generate a client from the OpenAPI snapshot at [`../openapi.json`](../openapi.json) unless the integration is owned as part of the native GUI transport.
-
-See [HTTP and OpenAPI SDKs](../../../docs/sdk-http-openapi.md) for the supported cross-language integration path and the criteria for promoting a generated client into a first-party package.
+Use this package for first-party TypeScript and JavaScript integrations. For first-party desktop/native GUI work, prefer `@ax-code/sdk/grpc`; use `@ax-code/sdk/headless` when a local backend process is still the right lifecycle boundary. HTTP/SSE stays behind those SDKs as compatibility and debug infrastructure, not as a first-party JavaScript SDK surface. For Python, Go, Java, Rust, or other non-JavaScript runtimes, generate from the published gRPC proto at `@ax-code/sdk/proto/ax_code/v1/headless.proto` or use the CLI/runtime boundary owned by that integration.
 
 ## Migration from 1.4.0
 
-| Before (1.4.0)                                            | After (2.0.0)                                                          |
+| Before (1.4.0)                                            | After (2.1.0)                                                          |
 | --------------------------------------------------------- | ---------------------------------------------------------------------- |
-| `import { createAxCode } from "@ax-code/sdk"`             | `import { createAxCode } from "@ax-code/sdk/http"`                     |
-| `import { createAxCodeClient } from "@ax-code/sdk"`       | `import { createAxCodeClient } from "@ax-code/sdk/client"`             |
-| `import { createAxCodeServer } from "@ax-code/sdk"`       | `import { createAxCodeServer } from "@ax-code/sdk/server"`             |
+| `import { createAxCode } from "@ax-code/sdk"`             | `import { startHeadlessBackend } from "@ax-code/sdk/headless"`         |
+| `import { createAxCodeClient } from "@ax-code/sdk"`       | `import { createHeadlessClient } from "@ax-code/sdk/headless"`         |
+| `import { createAxCodeServer } from "@ax-code/sdk"`       | `import { startHeadlessBackend } from "@ax-code/sdk/headless"`         |
 | `import { createAgent } from "@ax-code/sdk/programmatic"` | `import { createAgent } from "@ax-code/sdk"`                           |
 | No custom tools                                           | `import { tool } from "@ax-code/sdk"` + `tools: [...]` on AgentOptions |
 | No testing utilities                                      | `import { createMockAgent } from "@ax-code/sdk/testing"`               |

@@ -1,17 +1,18 @@
-# HTTP and OpenAPI SDKs
+# HTTP and OpenAPI Compatibility
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-04-28
+Last reviewed: 2026-05-30
 Owner: ax-code sdk
 
 AX Code has two integration paths:
 
 - Use [`@ax-code/sdk`](../packages/sdk/js/README.md) for first-party TypeScript and JavaScript embedding.
-- Use `ax-code serve` plus the OpenAPI contract when another language or process boundary is required.
+- Use `@ax-code/sdk/headless` or `@ax-code/sdk/grpc` for first-party app and desktop GUI work.
+- Use `ax-code serve` plus the OpenAPI contract when another language or compatibility process boundary is required.
 - Use [gRPC and Native SDK Transport](sdk-grpc-native.md) for first-party desktop GUI work where AX Code owns both ends of the transport.
 
-The HTTP/OpenAPI path is the recommended compatibility and generated-client surface today. It lets Python, Go, Java, Rust, and other clients call the same server API without AX Code committing to maintain a full official package for every language. It should not be treated as the preferred privileged bridge inside a first-party desktop GUI when the gRPC/native contract is available.
+The HTTP/OpenAPI path is compatibility and generated-client infrastructure. It lets Python, Go, Java, Rust, and other clients call the same server API without AX Code committing to maintain a full official package for every language. It should not be treated as the preferred privileged bridge inside a first-party desktop GUI when the gRPC/native contract is available, and it is no longer exposed as first-party JavaScript SDK subpaths.
 
 ## Choose a Path
 
@@ -19,7 +20,7 @@ The HTTP/OpenAPI path is the recommended compatibility and generated-client surf
 | ------------------------------------------------ | -------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
 | TypeScript or JavaScript in the same process     | `@ax-code/sdk` with `createAgent()`                | Lowest startup overhead and access to programmatic helpers, custom tools, and testing utilities     |
 | First-party desktop/native GUI                   | `@ax-code/sdk/grpc`                                | Narrower headless contract, server streaming, metadata/deadline friendly, and less WebView exposure |
-| TypeScript or JavaScript with a service boundary | `@ax-code/sdk/http` or `createAxCodeClient()`      | Keeps typed client ergonomics while using `ax-code serve`                                           |
+| TypeScript or JavaScript with a local backend    | `@ax-code/sdk/headless`                            | Keeps lifecycle and event projection typed without exposing the full HTTP SDK surface                |
 | Python, Go, Java, Rust, or another runtime       | Generate a client from `packages/sdk/openapi.json` | Reuses the HTTP contract without adding first-party package maintenance for every language          |
 | CI, automation, or one-off scripts               | HTTP calls against `ax-code serve`                 | Simple deployment model and easy process isolation                                                  |
 
@@ -27,7 +28,7 @@ The HTTP/OpenAPI path is the recommended compatibility and generated-client surf
 
 - `@ax-code/sdk` is the first-party TypeScript and JavaScript SDK.
 - `@ax-code/sdk/grpc` is the first-party optional desktop/native headless transport facade.
-- `@ax-code/sdk/http` is the first-party TypeScript and JavaScript client for the server path.
+- `@ax-code/sdk/headless` is the first-party TypeScript and JavaScript lifecycle/event SDK for local backend process boundaries.
 - `packages/sdk/openapi.json` is the OpenAPI snapshot for generated HTTP clients.
 - Generated non-JavaScript clients are supported as integrations over HTTP, but they are not first-party published packages unless a package owner, tests, and release workflow exist.
 
@@ -40,20 +41,19 @@ export AX_CODE_SERVER_PASSWORD="$(openssl rand -base64 24)"
 ax-code serve --hostname=127.0.0.1 --port=4096
 ```
 
-The `@ax-code/sdk/http` lifecycle helper generates a one-time Basic Auth password and wires the returned client with the
-matching `Authorization` header automatically. Manual `ax-code serve` users should set `AX_CODE_SERVER_PASSWORD`
+The `@ax-code/sdk/headless` lifecycle helper generates a one-time Basic Auth password and wires the returned client with
+the matching `Authorization` header automatically. Manual `ax-code serve` users should set `AX_CODE_SERVER_PASSWORD`
 explicitly and send the corresponding Basic Auth header. Live OpenAPI docs at `/doc` are loopback-only by default. If
 the server is bound to a non-loopback hostname for a trusted contract-generation workflow, set
 `AX_CODE_ENABLE_HTTP_DOCS=1` explicitly and keep `AX_CODE_SERVER_PASSWORD` configured.
 
-SDK-managed HTTP server helpers are loopback-only by default. `startHeadlessBackend()`, `createAxCodeServer()`, and the
-v2 server helper refuse network hostnames such as `0.0.0.0` unless the caller passes `allowNetworkBind: true`. Use that
-escape hatch only for a deliberately secured service integration; first-party desktop GUI shells should prefer
-`@ax-code/sdk/grpc` or an in-process SDK boundary.
+SDK-managed backend helpers are loopback-only by default. `startHeadlessBackend()` refuses network hostnames such as
+`0.0.0.0` unless the caller passes `allowNetworkBind: true`. Use that escape hatch only for a deliberately secured
+service integration; first-party desktop GUI shells should prefer `@ax-code/sdk/grpc` or an in-process SDK boundary.
 
-HTTP runtime helpers are intentionally behind explicit SDK subpaths. Import `createAxCode()` from `@ax-code/sdk/http`,
-`createAxCodeClient()` from `@ax-code/sdk/client`, or `createAxCodeServer()` from `@ax-code/sdk/server`; the top-level
-`@ax-code/sdk` entrypoint is reserved for the in-process agent API plus generated route types.
+HTTP runtime helpers are no longer public JavaScript SDK subpaths. The package still contains generated client internals
+because `@ax-code/sdk/headless` and the gRPC HTTP fallback use them, but external integrations should use headless,
+gRPC, or generated clients from the OpenAPI snapshot instead of importing HTTP runtime values from `@ax-code/sdk`.
 
 Check server health:
 

@@ -5,8 +5,9 @@
  * spawned — the agent runs directly in your Node.js process with
  * 10-40x faster startup than the server-based path.
  *
- * For the HTTP-server-based client (the default in 1.4.0), use:
- *   import { createAxCode } from "@ax-code/sdk/http"
+ * For GUI or app shell integrations, use:
+ *   import { startHeadlessBackend } from "@ax-code/sdk/headless"
+ *   import { createAxCodeGrpcClient } from "@ax-code/sdk/grpc"
  *
  * @example
  * ```ts
@@ -56,11 +57,9 @@ export {
 // ── Version ──────────────────────────────────────────────────────────
 export { SDK_VERSION, isSDKVersionCompatible } from "./version.js"
 
-// ── Generated HTTP route types ───────────────────────────────────────
+// ── Generated route types ────────────────────────────────────────────
 // Keep OpenAPI-derived types like `Project`, `Provider`, `Message`,
 // and `Part` available from the top-level package for downstream type
-// imports. HTTP client/server values intentionally live behind explicit
-// subpaths (`@ax-code/sdk/http`, `@ax-code/sdk/client`,
-// `@ax-code/sdk/server`) so desktop apps do not accidentally choose the
-// HTTP boundary over the in-process or gRPC/native SDK.
+// imports. HTTP client/server runtime values are intentionally not
+// public SDK exports; use headless or gRPC/native for app integrations.
 export type * from "./gen/types.gen.js"

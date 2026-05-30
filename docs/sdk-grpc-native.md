@@ -5,7 +5,7 @@ Scope: desktop-native transport contract
 Last reviewed: 2026-05-30
 Owner: ax-code sdk
 
-AX Code now exposes an optional gRPC-shaped transport contract for desktop and native GUI apps. The contract is intentionally narrower than the full HTTP/OpenAPI route tree: it focuses on the headless runtime capabilities a GUI needs to feel native, while keeping HTTP/OpenAPI available for compatibility, diagnostics, and generated clients.
+AX Code now exposes an optional gRPC-shaped transport contract for desktop and native GUI apps. The contract is intentionally narrower than the full HTTP/OpenAPI route tree: it focuses on the headless runtime capabilities a GUI needs to feel native, while keeping HTTP/OpenAPI available internally for compatibility, diagnostics, and generated clients.
 
 ## Recommendation
 
@@ -16,12 +16,12 @@ Use gRPC/native transport as the preferred boundary for first-party desktop apps
 | First-party desktop GUI                        | `@ax-code/sdk/grpc`                      | Stable command/event contract, streaming-ready, native-friendly metadata and deadlines |
 | TypeScript automation in the same process      | `@ax-code/sdk` with `createAgent()`      | Lowest overhead and custom tool support                                                |
 | Browser, WebView fallback, or easy diagnostics | HTTP/SSE with `@ax-code/sdk/headless`    | Works with fetch, curl, browser devtools, and current server auth controls             |
-| External non-JS integrations                   | OpenAPI-generated HTTP client            | Broad tooling support and no first-party maintenance commitment per language           |
+| External non-JS integrations                   | gRPC proto or OpenAPI-generated client   | Broad tooling support without first-party HTTP SDK maintenance                         |
 | Rust host embedding                            | gRPC/native service or subprocess bridge | Avoids exposing the full HTTP route tree to the app shell                              |
 
 ## Why Not Remove HTTP
 
-Removing HTTP/OpenAPI would reduce one exposed surface, but it would also remove the most inspectable and portable integration path. Current HTTP server controls already include loopback-first defaults, generated Basic Auth credentials in SDK-managed server helpers, required password for non-loopback binds, Basic Auth enforcement, origin checks on mutating browser requests, directory validation, request rate limits, and loopback-only live OpenAPI docs by default.
+Removing HTTP/OpenAPI from the runtime would remove the most inspectable and portable compatibility path. The JavaScript SDK should not expose HTTP client/server subpaths as first-party support surfaces, but the internal HTTP bridge remains useful for diagnostics, existing headless backend startup, and generated-client workflows. Current HTTP server controls already include loopback-first defaults, generated Basic Auth credentials in SDK-managed backend helpers, required password for non-loopback binds, Basic Auth enforcement, origin checks on mutating browser requests, directory validation, request rate limits, and loopback-only live OpenAPI docs by default.
 
 The transport is not the dominant latency source for normal agent turns. LLM calls, shell commands, file IO, indexing, LSP startup, and tool execution are usually more expensive than localhost JSON. gRPC is still useful for a desktop GUI because it provides a cleaner native API contract, deadlines, metadata, server streaming, and a path to Unix-socket or named-pipe transports without dragging a browser-oriented API into the app shell.
 
@@ -249,7 +249,7 @@ Do not expose the full HTTP API, PTY WebSocket, or OpenAPI docs to arbitrary Web
 
 ## Implementation Policy
 
-- Keep gRPC optional. The CLI, TUI, HTTP SDK, and OpenAPI snapshot must continue to work.
+- Keep gRPC optional. The CLI, TUI, headless SDK, gRPC SDK, and OpenAPI snapshot must continue to work.
 - Do not duplicate every HTTP route in proto. Promote routes into gRPC only when the GUI needs them.
 - Keep generated gRPC code out of handwritten SDK folders. Handwritten code belongs in `packages/sdk/js/src/grpc.ts`; generated code should live in a generated folder if added later.
 - Treat HTTP as compatibility and observability infrastructure. Deprecate individual HTTP routes only after the GUI and integrations have a replacement and tests.
