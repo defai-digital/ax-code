@@ -54,6 +54,7 @@ export function workflowDashboardItems(runs: WorkflowDashboardRun[]): WorkflowDa
     const budget = formatWorkflowBudget(run.budgetUsage.totalTokens ?? 0, run.budgetLimit.maxTotalTokens)
     const childSummary = `${activeChildren} active, ${run.childCounts.queued} queued, ${run.budgetUsage.childAgents ?? 0} total`
     const verification = `${run.verificationEnvelopeCount} verification`
+    const evidence = `${run.evidenceRefCount} evidence`
     const artifacts = `${totalArtifacts(run)} artifacts`
     const blocker = run.blockedReason ? `blocker: ${run.blockedReason}` : undefined
     const models = formatWorkflowModels(run.models)
@@ -71,6 +72,7 @@ export function workflowDashboardItems(runs: WorkflowDashboardRun[]): WorkflowDa
           `effort: ${run.effort}`,
           models ? `models: ${models}` : undefined,
           verification,
+          evidence,
           artifacts,
           `elapsed: ${formatWorkflowDuration(run.elapsedMs)}`,
         ]

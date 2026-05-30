@@ -60,6 +60,7 @@ describe("tui workflow dashboard view model", () => {
     expect(items[0]?.description).toContain("tokens: 1200/5000")
     expect(items[0]?.footer).toContain("blocker: waiting for permission")
     expect(items[0]?.footer).toContain("2 verification")
+    expect(items[0]?.footer).toContain("3 evidence")
     expect(items[0]?.footer).toContain("4 artifacts")
   })
 
@@ -351,6 +352,7 @@ function workflowDashboardRun(input: Partial<WorkflowDashboardRun> = {}): Workfl
       log: 0,
     },
     verificationEnvelopeCount: 2,
+    evidenceRefCount: 3,
     exposedArtifactCount: 1,
     ...input,
   }

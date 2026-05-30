@@ -6276,6 +6276,7 @@ export type WorkflowRunDashboardResponses = {
       log: number
     }
     verificationEnvelopeCount: number
+    evidenceRefCount: number
     exposedArtifactCount: number
     blockedReason?: string
   }>

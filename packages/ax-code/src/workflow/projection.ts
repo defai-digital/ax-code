@@ -70,6 +70,7 @@ export const WorkflowRunProjection = z.object({
   childCounts: WorkflowChildStatusCounts,
   artifactCounts: WorkflowArtifactKindCounts,
   verificationEnvelopeCount: z.number().int().min(0),
+  evidenceRefCount: z.number().int().min(0),
   exposedArtifactCount: z.number().int().min(0),
   blockedReason: z.string().optional(),
 })
@@ -108,6 +109,7 @@ export function summarizeWorkflowRunDetail(
     childCounts: countChildStatuses(detail),
     artifactCounts: countArtifactKinds(detail),
     verificationEnvelopeCount: detail.verificationEnvelopeIDs.length,
+    evidenceRefCount: countEvidenceRefs(detail),
     exposedArtifactCount: detail.artifacts.filter((artifact) => artifact.exposeToMainContext).length,
     blockedReason: blockedReason(detail),
   })
@@ -162,6 +164,17 @@ function countArtifactKinds(detail: z.infer<typeof WorkflowRunDetail>): Workflow
   }
   for (const artifact of detail.artifacts) counts[artifact.kind]++
   return counts
+}
+
+function countEvidenceRefs(detail: z.infer<typeof WorkflowRunDetail>) {
+  const refs = new Set<string>()
+  for (const child of detail.children) {
+    for (const ref of child.evidenceRefs) refs.add(`${ref.kind}:${ref.id}`)
+  }
+  for (const artifact of detail.artifacts) {
+    for (const ref of artifact.evidenceRefs) refs.add(`${ref.kind}:${ref.id}`)
+  }
+  return refs.size
 }
 
 function blockedReason(detail: z.infer<typeof WorkflowRunDetail>) {

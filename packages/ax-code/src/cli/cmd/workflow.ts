@@ -109,6 +109,7 @@ export function formatWorkflowRunDashboard(runs: WorkflowRunProjection[]) {
     const queuedChildren = run.childCounts.queued
     const childSummary = `${activeChildren}/${queuedChildren}/${run.budgetUsage.childAgents}`
     const budgetSummary = `${run.budgetUsage.totalTokens}/${run.budgetLimit.maxTotalTokens}`
+    const evidenceSummary = `${run.evidenceRefCount}/${run.verificationEnvelopeCount}/${totalArtifacts(run)}`
     const blocker = run.blockedReason ? truncate(run.blockedReason, 36) : "-"
     const models = truncate(formatNamedModels(run.models) || "-", 32)
     return [
@@ -120,12 +121,13 @@ export function formatWorkflowRunDashboard(runs: WorkflowRunProjection[]) {
       models.padEnd(32),
       childSummary.padEnd(13),
       budgetSummary.padEnd(18),
+      evidenceSummary.padEnd(17),
       blocker,
     ].join(" ")
   })
   return (
     [
-      "status     run                          name                     phase                  effort       models                           active/queued/total tokens             blocker",
+      "status     run                          name                     phase                  effort       models                           active/queued/total tokens             evidence/ver/art blocker",
       ...lines,
     ].join(EOL) + EOL
   )
@@ -986,6 +988,10 @@ function formatRunExecutionPolicy(detail: WorkflowRunDetail) {
     `maxParallel=${budget.maxConcurrentAgents ?? "-"}`,
     `maxAgents=${budget.maxTotalAgents ?? "-"}`,
   ].join(", ")
+}
+
+function totalArtifacts(run: WorkflowRunProjection) {
+  return Object.values(run.artifactCounts).reduce((sum, value) => sum + value, 0)
 }
 
 function formatNamedModels(models: {

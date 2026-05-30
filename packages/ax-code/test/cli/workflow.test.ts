@@ -131,6 +131,7 @@ describe("workflow command helpers", () => {
           log: 0,
         },
         verificationEnvelopeCount: 1,
+        evidenceRefCount: 3,
         exposedArtifactCount: 2,
         blockedReason: "approval required before continuing the workflow",
       },
@@ -143,6 +144,7 @@ describe("workflow command helpers", () => {
     expect(output).toContain("worker=cheap-model")
     expect(output).toContain("2/2/4")
     expect(output).toContain("2500/10000")
+    expect(output).toContain("3/1/4")
     expect(output).toContain("approval required before continui...")
   })
 

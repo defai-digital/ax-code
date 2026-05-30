@@ -19,8 +19,17 @@ describe("workflow projections", () => {
         fn: async () => {
           const run = await WorkflowRun.create({ spec: parseWorkflowSpecV1(WorkflowFixtureSpecs.issueTriage) })
           const started = await WorkflowScheduler.start(run.id, { allowScaleBeyondDefaults: true })
+          await WorkflowRun.appendArtifact({
+            runID: run.id,
+            phaseID: started.phases[0]?.id,
+            kind: "metric",
+            retention: "session",
+            summary: "linked evidence",
+            evidenceRefs: [{ kind: "debug-evidence", id: "probe-1" }],
+          })
 
-          const projection = summarizeWorkflowRunDetail(started, Date.now())
+          const detail = await WorkflowRun.getDetail(run.id)
+          const projection = summarizeWorkflowRunDetail(detail, Date.now())
 
           expect(projection).toMatchObject({
             runID: run.id,
@@ -49,8 +58,11 @@ describe("workflow projections", () => {
               summary: 0,
               finding: 0,
               verification: 0,
+              metric: 1,
+              log: 1,
             },
             verificationEnvelopeCount: 0,
+            evidenceRefCount: 1,
           })
           expect(projection.budgetUsage.childAgents).toBe(8)
           expect(projection.budgetLimit.maxConcurrentAgents).toBe(8)

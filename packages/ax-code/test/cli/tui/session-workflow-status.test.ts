@@ -47,6 +47,7 @@ describe("tui workflow status sidebar", () => {
         },
         artifactCounts: { summary: 1, finding: 2, patch: 0, verification: 1, metric: 0, log: 0 },
         verificationEnvelopeCount: 1,
+        evidenceRefCount: 2,
         budgetUsage: { totalTokens: 2500 },
       }),
     )
@@ -127,6 +128,7 @@ function workflowRun(input: WorkflowRunInput) {
       log: 0,
     },
     verificationEnvelopeCount: input.verificationEnvelopeCount ?? 0,
+    evidenceRefCount: input.evidenceRefCount ?? 0,
     exposedArtifactCount: input.exposedArtifactCount ?? 0,
     blockedReason: input.blockedReason,
     currentPhaseName: input.currentPhaseName,

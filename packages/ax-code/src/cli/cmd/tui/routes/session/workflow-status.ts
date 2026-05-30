@@ -26,7 +26,7 @@ export function renderWorkflowStatusSidebarLine(run: WorkflowDashboardRun) {
     run.childCounts.blockedQuestion
   const totalChildren = Object.values(run.childCounts).reduce((sum, value) => sum + value, 0)
   const budget = `${run.budgetUsage.totalTokens}/${run.budgetLimit.maxTotalTokens} tok`
-  const evidence = run.verificationEnvelopeCount + run.artifactCounts.verification
+  const evidence = run.evidenceRefCount
   const evidencePart = evidence > 0 ? ` | evidence ${evidence}` : ""
   const blocked = run.blockedReason ? ` | ${truncate(run.blockedReason, 40)}` : ""
 
