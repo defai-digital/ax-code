@@ -27,11 +27,12 @@ export function renderWorkflowStatusSidebarLine(run: WorkflowDashboardRun) {
     run.childCounts.blockedQuestion
   const totalChildren = Object.values(run.childCounts).reduce((sum, value) => sum + value, 0)
   const budget = `${run.budgetUsage.totalTokens}/${run.budgetLimit.maxTotalTokens} tok`
+  const modelPolicy = workflowModelPolicyPart(run)
   const evidence = run.evidenceRefCount
   const evidencePart = evidence > 0 ? ` | evidence ${evidence}` : ""
   const blocked = run.blockedReason ? ` | ${truncate(run.blockedReason, 40)}` : ""
 
-  return `${statusLabel(run.status)} ${truncate(run.name, MAX_WORKFLOW_LINE_NAME)}${phase} | agents ${activeChildren}/${totalChildren} | ${budget}${evidencePart}${blocked}`
+  return `${statusLabel(run.status)} ${truncate(run.name, MAX_WORKFLOW_LINE_NAME)}${phase} | agents ${activeChildren}/${totalChildren} | ${budget} | ${modelPolicy}${evidencePart}${blocked}`
 }
 
 export function isWorkflowStatusAttention(status: WorkflowDashboardRun["status"]) {
@@ -50,6 +51,12 @@ function statusLabel(status: WorkflowDashboardRun["status"]) {
   if (status === "failed") return "failed"
   if (status === "cancelled") return "cancelled"
   return "done"
+}
+
+function workflowModelPolicyPart(run: WorkflowDashboardRun) {
+  const worker = run.models.worker ?? run.models.cheap ?? run.models.default ?? "default"
+  const synthesizer = run.models.synthesizer ?? run.models.strong ?? run.models.default ?? "default"
+  return `effort ${run.effort} | model ${truncate(`${worker}->${synthesizer}`, 24)}`
 }
 
 function truncate(value: string, max: number) {

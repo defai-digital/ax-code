@@ -48,6 +48,11 @@ describe("tui workflow status sidebar", () => {
         artifactCounts: { summary: 1, finding: 2, patch: 0, verification: 1, metric: 0, log: 0 },
         verificationEnvelopeCount: 1,
         evidenceRefCount: 2,
+        effort: "max-workflow",
+        models: {
+          worker: "cheap-local",
+          synthesizer: "strong-cloud",
+        },
         budgetUsage: { totalTokens: 2500 },
       }),
     )
@@ -56,6 +61,8 @@ describe("tui workflow status sidebar", () => {
     expect(line).toContain("Cross Check Candida...")
     expect(line).toContain("agents 4/9")
     expect(line).toContain("2500/10000 tok")
+    expect(line).toContain("effort max-workflow")
+    expect(line).toContain("model cheap-local->strong-c...")
     expect(line).toContain("evidence 2")
     expect(line).toContain("approval required before continuing t...")
   })
