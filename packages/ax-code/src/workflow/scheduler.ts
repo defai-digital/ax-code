@@ -14,6 +14,7 @@ type WorkflowDispatchExecutor = (
 ) => Promise<{
   output?: string
   filesModified?: string[]
+  filesProposed?: string[]
   tokensUsed?: number
   inputTokens?: number
   outputTokens?: number

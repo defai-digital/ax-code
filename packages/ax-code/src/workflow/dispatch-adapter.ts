@@ -86,6 +86,7 @@ export namespace WorkflowDispatchAdapter {
           error: result.error,
           durationMs: result.durationMs,
           filesModified: result.filesModified,
+          filesProposed: result.filesProposed,
           tokensUsed: result.tokensUsed,
           inputTokens: result.inputTokens,
           outputTokens: result.outputTokens,
@@ -209,7 +210,7 @@ function exposesPhaseSummary(spec: WorkflowSpecV1, phase: WorkflowPhase) {
 
 function summarizeChildResult(result: DispatchResult) {
   const base = `${result.agent}: ${result.status}`
-  const files = summarizeFilesModified(result.filesModified)
+  const files = summarizeDispatchFiles(result)
   if (result.status === "completed") {
     return [base, `tokens=${result.tokensUsed}`, `durationMs=${result.durationMs}`, files].filter(Boolean).join("; ")
   }
@@ -219,7 +220,7 @@ function summarizeChildResult(result: DispatchResult) {
 const maxChildSummaryLength = 240
 
 function summarizeDispatchChildOutput(result: DispatchResult) {
-  const files = summarizeFilesModified(result.filesModified)
+  const files = summarizeDispatchFiles(result)
   if (!files) return summarizeOutput(result.output)
   if (!result.output) return files
 
@@ -227,11 +228,20 @@ function summarizeDispatchChildOutput(result: DispatchResult) {
   return `${summarizeOutput(result.output, outputBudget)}; ${files}`
 }
 
-function summarizeFilesModified(files: readonly string[] | undefined) {
+function summarizeDispatchFiles(result: DispatchResult) {
+  return [
+    summarizeFileList("files", result.filesModified),
+    summarizeFileList("proposed", result.filesProposed),
+  ]
+    .filter(Boolean)
+    .join("; ")
+}
+
+function summarizeFileList(label: string, files: readonly string[] | undefined) {
   if (!files || files.length === 0) return undefined
   const shown = files.slice(0, 3).map((file) => summarizePath(file)).join(", ")
   const suffix = files.length > 3 ? `, +${files.length - 3} more` : ""
-  return `files=${files.length} (${shown}${suffix})`
+  return `${label}=${files.length} (${shown}${suffix})`
 }
 
 function summarizePath(path: string) {

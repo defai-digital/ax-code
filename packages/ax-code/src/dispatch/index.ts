@@ -41,6 +41,7 @@ export interface DispatchResult {
   error?: string
   durationMs: number
   filesModified: string[]
+  filesProposed: string[]
   tokensUsed: number
   inputTokens: number
   outputTokens: number
@@ -50,6 +51,7 @@ export interface DispatchResult {
 export interface ExecutorOutput {
   output?: string
   filesModified?: string[]
+  filesProposed?: string[]
   tokensUsed?: number
   inputTokens?: number
   outputTokens?: number
@@ -253,6 +255,7 @@ async function dispatchUntil(
               status: "failed",
               error: toErrorMessage(err),
               filesModified: [],
+              filesProposed: [],
               tokensUsed: 0,
               inputTokens: 0,
               outputTokens: 0,
@@ -320,6 +323,7 @@ async function runOne(
       status: "completed",
       ...(out.output !== undefined ? { output: out.output } : {}),
       filesModified: out.filesModified ?? [],
+      filesProposed: out.filesProposed ?? [],
       tokensUsed: out.tokensUsed ?? 0,
       inputTokens: out.inputTokens ?? 0,
       outputTokens: out.outputTokens ?? 0,
@@ -337,6 +341,7 @@ async function runOne(
       status,
       error: toErrorMessage(err),
       filesModified: [],
+      filesProposed: [],
       tokensUsed: 0,
       inputTokens: 0,
       outputTokens: 0,
@@ -359,6 +364,7 @@ function cancelled(spec: DispatchSpec): DispatchResult {
     status: "cancelled",
     error: "parent dispatch cancelled before this spec started",
     filesModified: [],
+    filesProposed: [],
     tokensUsed: 0,
     inputTokens: 0,
     outputTokens: 0,
