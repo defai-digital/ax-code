@@ -136,12 +136,20 @@ export function ensureShellEnv() {
   return shellEnvReady ?? Promise.resolve()
 }
 
+async function stopShellEnvProcess(proc: Process.Child | undefined) {
+  if (!proc) return
+  await Process.stop(proc).catch((err) => {
+    Log.Default.debug("shell env process cleanup failed", { error: toErrorMessage(err) })
+  })
+}
+
 async function loadShellEnv(env: Record<string, string | undefined>) {
   if (process.platform === "win32") return
   const shell = env.SHELL || (process.platform === "darwin" ? "/bin/zsh" : "/bin/bash")
   const shellTimeoutMs = 3000
+  let proc: Process.Child | undefined
   try {
-    const proc = Process.spawn([shell, "-l", "-c", "env -0"], {
+    proc = Process.spawn([shell, "-l", "-c", "env -0"], {
       stdin: "ignore",
       stdout: "pipe",
       stderr: "pipe",
@@ -161,6 +169,7 @@ async function loadShellEnv(env: Record<string, string | undefined>) {
       result = [code, stdout, stderr]
     } catch (err) {
       Log.Default.debug("shell env load failed", { error: toErrorMessage(err) })
+      await stopShellEnvProcess(proc)
       result = undefined
     }
     if (!result) return
@@ -174,7 +183,9 @@ async function loadShellEnv(env: Record<string, string | undefined>) {
       if (key in env) continue // don't overwrite existing vars
       env[key] = entry.slice(eq + 1)
     }
-  } catch {
+  } catch (err) {
+    await stopShellEnvProcess(proc)
+    Log.Default.debug("shell env load setup failed", { error: toErrorMessage(err) })
     // Shell env loading is best-effort — don't fail startup
   }
 }

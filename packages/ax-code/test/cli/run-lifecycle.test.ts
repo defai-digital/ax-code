@@ -94,6 +94,10 @@ test("shell env loading uses shared process timeout cleanup", async () => {
   expect(body).toContain("timeout: shellTimeoutMs")
   expect(body).toContain("if (code === 124)")
   expect(body).toContain('Log.Default.debug("shell env load failed"')
+  expect(body).toContain("await stopShellEnvProcess(proc)")
+  expect(body).toContain('Log.Default.debug("shell env load setup failed"')
+  expect(src).toContain('Log.Default.debug("shell env process cleanup failed"')
+  expect(src).toContain("await Process.stop(proc)")
 })
 
 test("shell env loading starts after logging is configured", async () => {
@@ -104,6 +108,19 @@ test("shell env loading starts after logging is configured", async () => {
 
   expect(body.indexOf("await log({")).toBeGreaterThan(-1)
   expect(body.indexOf("shellEnvReady = loadShellEnv(env)")).toBeGreaterThan(body.indexOf("await log({"))
+})
+
+test("debug wait unrefs the underlying timer", async () => {
+  const src = await Bun.file(path.join(import.meta.dir, "../../src/cli/cmd/debug/index.ts")).text()
+  const waitStart = src.indexOf('command: "wait"')
+  const waitEnd = src.indexOf(".demandCommand()", waitStart)
+  expect(waitStart).toBeGreaterThan(-1)
+  expect(waitEnd).toBeGreaterThan(waitStart)
+  const body = src.slice(waitStart, waitEnd)
+
+  expect(body).toContain("const timer = setTimeout")
+  expect(body).toContain("timer.unref?.()")
+  expect(body).not.toContain("setTimeout(resolve, 1_000 * 60 * 60 * 24).unref()")
 })
 
 test("auth lock polling does not keep the process alive while waiting", async () => {
