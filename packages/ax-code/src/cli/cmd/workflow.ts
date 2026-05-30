@@ -27,6 +27,7 @@ type StartOptions = JsonOption & {
   workerModel?: string
   verifierModel?: string
   synthesizerModel?: string
+  input?: unknown
 }
 
 type RunIDOptions = JsonOption & {
@@ -274,6 +275,10 @@ const WorkflowRunStartCommand = cmd({
         type: "string",
         describe: "override synthesizer model",
       })
+      .option("input", {
+        type: "array",
+        describe: "workflow input assignment as key=JSON; repeat for multiple inputs",
+      })
       .option("json", jsonOption()),
   async handler(args) {
     await withWorkflowRuntime(async () => {
@@ -282,6 +287,7 @@ const WorkflowRunStartCommand = cmd({
         templateID: options.templateID as WorkflowTemplate.ID,
         parentSessionID: options.parentSession as SessionID | undefined,
         modelPolicy: modelPolicyFromStartOptions(options),
+        inputValues: parseWorkflowInputArguments(options.input),
       })
       const detail = await WorkflowScheduler.start(run.id, {
         allowScaleBeyondDefaults: options.allowScale,
@@ -306,6 +312,30 @@ function modelPolicyFromStartOptions(options: StartOptions): WorkflowModelPolicy
   if (options.verifierModel) modelPolicy.verifierModel = options.verifierModel
   if (options.synthesizerModel) modelPolicy.synthesizerModel = options.synthesizerModel
   return Object.keys(modelPolicy).length > 0 ? modelPolicy : undefined
+}
+
+export function parseWorkflowInputArguments(input: unknown): Record<string, unknown> | undefined {
+  const values = input === undefined ? [] : Array.isArray(input) ? input : [input]
+  if (values.length === 0) return undefined
+  const result: Record<string, unknown> = {}
+  for (const value of values) {
+    if (typeof value !== "string") throw new Error("Workflow inputs must be passed as key=value strings.")
+    const separator = value.indexOf("=")
+    if (separator <= 0) throw new Error(`Workflow input must use key=value syntax: ${value}`)
+    const key = value.slice(0, separator).trim()
+    if (!key) throw new Error(`Workflow input key is empty: ${value}`)
+    result[key] = parseWorkflowInputValue(value.slice(separator + 1))
+  }
+  return result
+}
+
+function parseWorkflowInputValue(value: string): unknown {
+  if (value === "") return ""
+  try {
+    return JSON.parse(value)
+  } catch {
+    return value
+  }
 }
 
 const WorkflowRunStatusCommand = cmd({

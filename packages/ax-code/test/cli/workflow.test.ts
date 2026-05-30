@@ -4,6 +4,7 @@ import {
   formatWorkflowRunDetail,
   formatWorkflowRunList,
   formatWorkflowTemplateList,
+  parseWorkflowInputArguments,
 } from "../../src/cli/cmd/workflow"
 import { getParsedWorkflowFixtureSpec } from "../../src/workflow/fixtures"
 import type { WorkflowRunProjection } from "../../src/workflow/projection"
@@ -202,6 +203,27 @@ describe("workflow command helpers", () => {
     expect(output).toContain("agent=worker")
     expect(output).toContain("Artifacts")
     expect(output).toContain("phase summary")
+  })
+
+  test("parses workflow start input assignments", () => {
+    expect(
+      parseWorkflowInputArguments([
+        "issue-limit=5",
+        "dry-run=true",
+        'paths=["src/index.ts","src/workflow.ts"]',
+        "label=triage",
+        "empty=",
+      ]),
+    ).toEqual({
+      "issue-limit": 5,
+      "dry-run": true,
+      paths: ["src/index.ts", "src/workflow.ts"],
+      label: "triage",
+      empty: "",
+    })
+
+    expect(parseWorkflowInputArguments(undefined)).toBeUndefined()
+    expect(() => parseWorkflowInputArguments(["missing-separator"])).toThrow("key=value")
   })
 })
 
