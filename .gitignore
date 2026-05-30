@@ -9,6 +9,8 @@ node_modules
 *~
 playground
 tmp
+.tmp/
+**/.tmp/
 dist
 dist-source
 ts-dist
@@ -41,6 +43,7 @@ debug-log/
 
 # Temp files
 ~$*
+*.tsbuildinfo
 
 # Sensitive data
 auth.json
