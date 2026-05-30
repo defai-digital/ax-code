@@ -52,7 +52,7 @@ Use the HTTP bridge while the native gRPC server is being implemented:
 
 ```ts
 import { startHeadlessBackend } from "@ax-code/sdk/headless"
-import { createAxCodeGrpcClientFromHttp } from "@ax-code/sdk/grpc"
+import { createAxCodeGrpcClientFromHttp, createAxCodeGrpcClientFromNativeBridge } from "@ax-code/sdk/grpc"
 
 const backend = await startHeadlessBackend({ directory: "/workspace/app" })
 try {
@@ -82,6 +82,22 @@ try {
 } finally {
   await backend.close()
 }
+```
+
+Use a native bridge when the desktop host owns the privileged runtime boundary:
+
+```ts
+const client = createAxCodeGrpcClientFromNativeBridge({
+  unary(call) {
+    return window.axCodeNative.unary(call)
+  },
+  serverStream(call) {
+    return window.axCodeNative.serverStream(call)
+  },
+  bidiStream(call) {
+    return window.axCodeNative.bidiStream(call)
+  },
+})
 ```
 
 `bootstrap.load()` is intentionally a GUI-oriented snapshot rather than a one-to-one copy of every HTTP route. Use `include` to request only the state needed by the current view. Failed subrequests are reported in `errors` while successful fields are still returned, so a missing optional subsystem does not block the desktop shell from opening.

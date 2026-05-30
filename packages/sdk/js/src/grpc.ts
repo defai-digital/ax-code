@@ -124,6 +124,39 @@ export type AxCodeGrpcTransport = {
   ): AsyncIterable<TResponse>
 }
 
+export type AxCodeGrpcNativeUnaryCall<TRequest = unknown> = {
+  method: AxCodeGrpcUnaryMethod
+  request: TRequest
+  metadata?: AxCodeGrpcMetadata
+  signal?: AbortSignal
+  timeoutMs?: number
+}
+
+export type AxCodeGrpcNativeServerStreamCall<TRequest = unknown> = {
+  method: AxCodeGrpcStreamingMethod
+  request: TRequest
+  metadata?: AxCodeGrpcMetadata
+  signal?: AbortSignal
+  timeoutMs?: number
+}
+
+export type AxCodeGrpcNativeBidiStreamCall<TRequest = unknown, TInput = unknown> = {
+  method: AxCodeGrpcBidirectionalStreamingMethod
+  request: TRequest
+  input: AsyncIterable<TInput>
+  metadata?: AxCodeGrpcMetadata
+  signal?: AbortSignal
+  timeoutMs?: number
+}
+
+export type AxCodeGrpcNativeBridge = {
+  unary<TRequest, TResponse>(call: AxCodeGrpcNativeUnaryCall<TRequest>): Promise<TResponse>
+  serverStream?<TRequest, TResponse>(call: AxCodeGrpcNativeServerStreamCall<TRequest>): AsyncIterable<TResponse>
+  bidiStream?<TRequest, TInput, TResponse>(
+    call: AxCodeGrpcNativeBidiStreamCall<TRequest, TInput>,
+  ): AsyncIterable<TResponse>
+}
+
 export type AxCodeGrpcHealthResponse = {
   status: "SERVING"
   transport?: "http-bridge" | "grpc"
@@ -234,6 +267,54 @@ export type AxCodeGrpcWebSocketLike = {
 
 export type AxCodeGrpcHttpBridgeOptions = HeadlessClientOptions & {
   webSocketFactory?: (url: string) => AxCodeGrpcWebSocketLike
+}
+
+export function createAxCodeGrpcNativeBridgeTransport(bridge: AxCodeGrpcNativeBridge): AxCodeGrpcTransport {
+  return {
+    unary<TRequest, TResponse>(method: AxCodeGrpcUnaryMethod, request: TRequest, options?: AxCodeGrpcCallOptions) {
+      return bridge.unary<TRequest, TResponse>({
+        method,
+        request,
+        metadata: options?.metadata,
+        signal: options?.signal,
+        timeoutMs: options?.timeoutMs,
+      })
+    },
+    serverStream<TRequest, TResponse>(
+      method: AxCodeGrpcStreamingMethod,
+      request: TRequest,
+      options?: AxCodeGrpcCallOptions,
+    ) {
+      if (!bridge.serverStream) throw new Error("AX Code native bridge does not support server streaming")
+      return bridge.serverStream<TRequest, TResponse>({
+        method,
+        request,
+        metadata: options?.metadata,
+        signal: options?.signal,
+        timeoutMs: options?.timeoutMs,
+      })
+    },
+    bidiStream<TRequest, TInput, TResponse>(
+      method: AxCodeGrpcBidirectionalStreamingMethod,
+      request: TRequest,
+      input: AsyncIterable<TInput>,
+      options?: AxCodeGrpcCallOptions,
+    ) {
+      if (!bridge.bidiStream) throw new Error("AX Code native bridge does not support bidirectional streaming")
+      return bridge.bidiStream<TRequest, TInput, TResponse>({
+        method,
+        request,
+        input,
+        metadata: options?.metadata,
+        signal: options?.signal,
+        timeoutMs: options?.timeoutMs,
+      })
+    },
+  }
+}
+
+export function createAxCodeGrpcClientFromNativeBridge(bridge: AxCodeGrpcNativeBridge) {
+  return createAxCodeGrpcClient({ transport: createAxCodeGrpcNativeBridgeTransport(bridge) })
 }
 
 export function createAxCodeGrpcClient(input: AxCodeGrpcClientOptions) {

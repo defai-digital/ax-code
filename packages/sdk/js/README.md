@@ -205,7 +205,7 @@ Use `@ax-code/sdk/grpc` for first-party desktop or native GUI integrations that 
 
 ```ts
 import { startHeadlessBackend } from "@ax-code/sdk/headless"
-import { createAxCodeGrpcClientFromHttp } from "@ax-code/sdk/grpc"
+import { createAxCodeGrpcClientFromHttp, createAxCodeGrpcClientFromNativeBridge } from "@ax-code/sdk/grpc"
 
 const backend = await startHeadlessBackend({ directory: "/path/to/workspace" })
 try {
@@ -231,6 +231,8 @@ try {
 ```
 
 `bootstrap.load()` returns a partial GUI startup snapshot and an `errors` array for failed subrequests. `client.session` exposes session history and detail APIs for opening existing conversations without importing the full HTTP SDK. `client.app`, `client.project`, `client.file`, `client.find`, and `client.tool` cover GUI discovery and workspace navigation. PTY terminal access is exposed through `client.pty` with bidirectional streaming for interactive shells. `createAxCodeGrpcClientFromHttp()` is a compatibility bridge over the current headless HTTP/SSE/WebSocket backend. Native hosts can implement the same transport interface and pass it to `createAxCodeGrpcClient({ transport })`. The proto contract is published at [`../proto/ax_code/v1/headless.proto`](../proto/ax_code/v1/headless.proto).
+
+For a desktop host that already owns a Rust, Tauri, Electron preload, or gRPC client boundary, use `createAxCodeGrpcClientFromNativeBridge()` and implement `unary`, `serverStream`, and optionally `bidiStream` in the host. The renderer keeps the same high-level client API without receiving the HTTP base URL, auth header, or PTY WebSocket endpoint.
 
 ## HTTP client (server-based)
 

@@ -6,6 +6,7 @@ import {
   AX_CODE_GRPC_PROTO_PATH,
   createAxCodeGrpcClient,
   createAxCodeGrpcClientFromHttp,
+  createAxCodeGrpcClientFromNativeBridge,
   createAxCodeGrpcHttpBridge,
   type AxCodeGrpcTransport,
 } from "../src/grpc"
@@ -96,6 +97,68 @@ describe("gRPC SDK facade", () => {
       { method: AX_CODE_GRPC_METHOD.ConnectPty, request: { id: "pty_1", cursor: 42 } },
       { type: "input", data: "pwd\n" },
       { type: "resize", cols: 120, rows: 30 },
+    ])
+  })
+
+  test("native bridge adapter carries metadata and streaming calls without HTTP", async () => {
+    const calls: unknown[] = []
+    const client = createAxCodeGrpcClientFromNativeBridge({
+      async unary(call) {
+        calls.push(call)
+        return { value: { id: "sess-1" } }
+      },
+      async *serverStream(call) {
+        calls.push(call)
+        yield { type: "server.connected", properties: {} }
+      },
+      async *bidiStream(call) {
+        calls.push({ ...call, input: "captured" })
+        for await (const frame of call.input) calls.push(frame)
+        yield { type: "output", data: "ready" }
+      },
+    })
+    const abort = new AbortController()
+
+    await expect(
+      client.session.get("sess-1", {
+        metadata: { "x-native-host": "tauri" },
+        signal: abort.signal,
+        timeoutMs: 250,
+      }),
+    ).resolves.toEqual({ id: "sess-1" })
+
+    const events = []
+    for await (const event of client.subscribeEvents({ metadata: { "x-native-host": "tauri" } })) events.push(event)
+    for await (const event of client.pty.connect("pty_1", asyncFrames("pwd\n"), { cursor: 4 })) events.push(event)
+
+    expect(events).toEqual([
+      { type: "server.connected", properties: {} },
+      { type: "output", data: "ready" },
+    ])
+    expect(calls).toEqual([
+      {
+        method: AX_CODE_GRPC_METHOD.GetSession,
+        request: { sessionID: "sess-1" },
+        metadata: { "x-native-host": "tauri" },
+        signal: abort.signal,
+        timeoutMs: 250,
+      },
+      {
+        method: AX_CODE_GRPC_METHOD.SubscribeEvents,
+        request: {},
+        metadata: { "x-native-host": "tauri" },
+        signal: undefined,
+        timeoutMs: undefined,
+      },
+      {
+        method: AX_CODE_GRPC_METHOD.ConnectPty,
+        request: { id: "pty_1", cursor: 4 },
+        input: "captured",
+        metadata: undefined,
+        signal: undefined,
+        timeoutMs: undefined,
+      },
+      "pwd\n",
     ])
   })
 
@@ -384,6 +447,10 @@ function ptyMetaFrame(payload: unknown) {
   bytes[0] = 0
   bytes.set(encoded, 1)
   return bytes
+}
+
+async function* asyncFrames<T>(...frames: T[]) {
+  yield* frames
 }
 
 function headerValue(headers: RequestInit["headers"], name: string) {
