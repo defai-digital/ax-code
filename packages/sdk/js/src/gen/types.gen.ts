@@ -1145,6 +1145,7 @@ export type WorkflowRunEventRecord = {
       verifierModel?: string
       synthesizerModel?: string
       effort?: "normal" | "deep" | "workflow" | "max-workflow"
+      allowedProviders?: Array<string>
       routing?: Array<{
         phaseKind?: "fanout" | "sequential" | "synthesis" | "verification" | "noop"
         use: "planner" | "worker" | "verifier" | "synthesizer"
@@ -1199,6 +1200,7 @@ export type WorkflowRunEventRecord = {
         verifierModel?: string
         synthesizerModel?: string
         effort?: "normal" | "deep" | "workflow" | "max-workflow"
+        allowedProviders?: Array<string>
         routing?: Array<{
           phaseKind?: "fanout" | "sequential" | "synthesis" | "verification" | "noop"
           use: "planner" | "worker" | "verifier" | "synthesizer"
@@ -6037,6 +6039,7 @@ export type WorkflowRunCreateData = {
         verifierModel?: string
         synthesizerModel?: string
         effort?: "normal" | "deep" | "workflow" | "max-workflow"
+        allowedProviders?: Array<string>
         routing?: Array<{
           phaseKind?: "fanout" | "sequential" | "synthesis" | "verification" | "noop"
           use: "planner" | "worker" | "verifier" | "synthesizer"
@@ -6091,6 +6094,7 @@ export type WorkflowRunCreateData = {
           verifierModel?: string
           synthesizerModel?: string
           effort?: "normal" | "deep" | "workflow" | "max-workflow"
+          allowedProviders?: Array<string>
           routing?: Array<{
             phaseKind?: "fanout" | "sequential" | "synthesis" | "verification" | "noop"
             use: "planner" | "worker" | "verifier" | "synthesizer"
@@ -6118,6 +6122,7 @@ export type WorkflowRunCreateData = {
       verifierModel?: string
       synthesizerModel?: string
       effort?: "normal" | "deep" | "workflow" | "max-workflow"
+      allowedProviders?: Array<string>
       routing?: Array<{
         phaseKind?: "fanout" | "sequential" | "synthesis" | "verification" | "noop"
         use: "planner" | "worker" | "verifier" | "synthesizer"
@@ -6428,6 +6433,7 @@ export type WorkflowRunGetResponses = {
         verifierModel?: string
         synthesizerModel?: string
         effort?: "normal" | "deep" | "workflow" | "max-workflow"
+        allowedProviders?: Array<string>
         routing?: Array<{
           phaseKind?: "fanout" | "sequential" | "synthesis" | "verification" | "noop"
           use: "planner" | "worker" | "verifier" | "synthesizer"
@@ -6482,6 +6488,7 @@ export type WorkflowRunGetResponses = {
           verifierModel?: string
           synthesizerModel?: string
           effort?: "normal" | "deep" | "workflow" | "max-workflow"
+          allowedProviders?: Array<string>
           routing?: Array<{
             phaseKind?: "fanout" | "sequential" | "synthesis" | "verification" | "noop"
             use: "planner" | "worker" | "verifier" | "synthesizer"
@@ -6876,6 +6883,7 @@ export type WorkflowRunSaveTemplateResponses = {
         verifierModel?: string
         synthesizerModel?: string
         effort?: "normal" | "deep" | "workflow" | "max-workflow"
+        allowedProviders?: Array<string>
         routing?: Array<{
           phaseKind?: "fanout" | "sequential" | "synthesis" | "verification" | "noop"
           use: "planner" | "worker" | "verifier" | "synthesizer"
@@ -6930,6 +6938,7 @@ export type WorkflowRunSaveTemplateResponses = {
           verifierModel?: string
           synthesizerModel?: string
           effort?: "normal" | "deep" | "workflow" | "max-workflow"
+          allowedProviders?: Array<string>
           routing?: Array<{
             phaseKind?: "fanout" | "sequential" | "synthesis" | "verification" | "noop"
             use: "planner" | "worker" | "verifier" | "synthesizer"
@@ -7069,6 +7078,7 @@ export type WorkflowRunStartResponses = {
         verifierModel?: string
         synthesizerModel?: string
         effort?: "normal" | "deep" | "workflow" | "max-workflow"
+        allowedProviders?: Array<string>
         routing?: Array<{
           phaseKind?: "fanout" | "sequential" | "synthesis" | "verification" | "noop"
           use: "planner" | "worker" | "verifier" | "synthesizer"
@@ -7123,6 +7133,7 @@ export type WorkflowRunStartResponses = {
           verifierModel?: string
           synthesizerModel?: string
           effort?: "normal" | "deep" | "workflow" | "max-workflow"
+          allowedProviders?: Array<string>
           routing?: Array<{
             phaseKind?: "fanout" | "sequential" | "synthesis" | "verification" | "noop"
             use: "planner" | "worker" | "verifier" | "synthesizer"
@@ -7279,6 +7290,7 @@ export type WorkflowRunPauseResponses = {
         verifierModel?: string
         synthesizerModel?: string
         effort?: "normal" | "deep" | "workflow" | "max-workflow"
+        allowedProviders?: Array<string>
         routing?: Array<{
           phaseKind?: "fanout" | "sequential" | "synthesis" | "verification" | "noop"
           use: "planner" | "worker" | "verifier" | "synthesizer"
@@ -7333,6 +7345,7 @@ export type WorkflowRunPauseResponses = {
           verifierModel?: string
           synthesizerModel?: string
           effort?: "normal" | "deep" | "workflow" | "max-workflow"
+          allowedProviders?: Array<string>
           routing?: Array<{
             phaseKind?: "fanout" | "sequential" | "synthesis" | "verification" | "noop"
             use: "planner" | "worker" | "verifier" | "synthesizer"
@@ -7489,6 +7502,7 @@ export type WorkflowRunResumeResponses = {
         verifierModel?: string
         synthesizerModel?: string
         effort?: "normal" | "deep" | "workflow" | "max-workflow"
+        allowedProviders?: Array<string>
         routing?: Array<{
           phaseKind?: "fanout" | "sequential" | "synthesis" | "verification" | "noop"
           use: "planner" | "worker" | "verifier" | "synthesizer"
@@ -7543,6 +7557,7 @@ export type WorkflowRunResumeResponses = {
           verifierModel?: string
           synthesizerModel?: string
           effort?: "normal" | "deep" | "workflow" | "max-workflow"
+          allowedProviders?: Array<string>
           routing?: Array<{
             phaseKind?: "fanout" | "sequential" | "synthesis" | "verification" | "noop"
             use: "planner" | "worker" | "verifier" | "synthesizer"
@@ -7699,6 +7714,7 @@ export type WorkflowRunCancelResponses = {
         verifierModel?: string
         synthesizerModel?: string
         effort?: "normal" | "deep" | "workflow" | "max-workflow"
+        allowedProviders?: Array<string>
         routing?: Array<{
           phaseKind?: "fanout" | "sequential" | "synthesis" | "verification" | "noop"
           use: "planner" | "worker" | "verifier" | "synthesizer"
@@ -7753,6 +7769,7 @@ export type WorkflowRunCancelResponses = {
           verifierModel?: string
           synthesizerModel?: string
           effort?: "normal" | "deep" | "workflow" | "max-workflow"
+          allowedProviders?: Array<string>
           routing?: Array<{
             phaseKind?: "fanout" | "sequential" | "synthesis" | "verification" | "noop"
             use: "planner" | "worker" | "verifier" | "synthesizer"
@@ -7910,6 +7927,7 @@ export type WorkflowRunRetryResponses = {
         verifierModel?: string
         synthesizerModel?: string
         effort?: "normal" | "deep" | "workflow" | "max-workflow"
+        allowedProviders?: Array<string>
         routing?: Array<{
           phaseKind?: "fanout" | "sequential" | "synthesis" | "verification" | "noop"
           use: "planner" | "worker" | "verifier" | "synthesizer"
@@ -7964,6 +7982,7 @@ export type WorkflowRunRetryResponses = {
           verifierModel?: string
           synthesizerModel?: string
           effort?: "normal" | "deep" | "workflow" | "max-workflow"
+          allowedProviders?: Array<string>
           routing?: Array<{
             phaseKind?: "fanout" | "sequential" | "synthesis" | "verification" | "noop"
             use: "planner" | "worker" | "verifier" | "synthesizer"
@@ -8117,6 +8136,7 @@ export type WorkflowTemplateListResponses = {
         verifierModel?: string
         synthesizerModel?: string
         effort?: "normal" | "deep" | "workflow" | "max-workflow"
+        allowedProviders?: Array<string>
         routing?: Array<{
           phaseKind?: "fanout" | "sequential" | "synthesis" | "verification" | "noop"
           use: "planner" | "worker" | "verifier" | "synthesizer"
@@ -8171,6 +8191,7 @@ export type WorkflowTemplateListResponses = {
           verifierModel?: string
           synthesizerModel?: string
           effort?: "normal" | "deep" | "workflow" | "max-workflow"
+          allowedProviders?: Array<string>
           routing?: Array<{
             phaseKind?: "fanout" | "sequential" | "synthesis" | "verification" | "noop"
             use: "planner" | "worker" | "verifier" | "synthesizer"
@@ -8272,6 +8293,7 @@ export type WorkflowTemplateSaveData = {
         verifierModel?: string
         synthesizerModel?: string
         effort?: "normal" | "deep" | "workflow" | "max-workflow"
+        allowedProviders?: Array<string>
         routing?: Array<{
           phaseKind?: "fanout" | "sequential" | "synthesis" | "verification" | "noop"
           use: "planner" | "worker" | "verifier" | "synthesizer"
@@ -8326,6 +8348,7 @@ export type WorkflowTemplateSaveData = {
           verifierModel?: string
           synthesizerModel?: string
           effort?: "normal" | "deep" | "workflow" | "max-workflow"
+          allowedProviders?: Array<string>
           routing?: Array<{
             phaseKind?: "fanout" | "sequential" | "synthesis" | "verification" | "noop"
             use: "planner" | "worker" | "verifier" | "synthesizer"
@@ -8446,6 +8469,7 @@ export type WorkflowTemplateSaveResponses = {
         verifierModel?: string
         synthesizerModel?: string
         effort?: "normal" | "deep" | "workflow" | "max-workflow"
+        allowedProviders?: Array<string>
         routing?: Array<{
           phaseKind?: "fanout" | "sequential" | "synthesis" | "verification" | "noop"
           use: "planner" | "worker" | "verifier" | "synthesizer"
@@ -8500,6 +8524,7 @@ export type WorkflowTemplateSaveResponses = {
           verifierModel?: string
           synthesizerModel?: string
           effort?: "normal" | "deep" | "workflow" | "max-workflow"
+          allowedProviders?: Array<string>
           routing?: Array<{
             phaseKind?: "fanout" | "sequential" | "synthesis" | "verification" | "noop"
             use: "planner" | "worker" | "verifier" | "synthesizer"
@@ -8633,6 +8658,7 @@ export type WorkflowTemplateGetResponses = {
         verifierModel?: string
         synthesizerModel?: string
         effort?: "normal" | "deep" | "workflow" | "max-workflow"
+        allowedProviders?: Array<string>
         routing?: Array<{
           phaseKind?: "fanout" | "sequential" | "synthesis" | "verification" | "noop"
           use: "planner" | "worker" | "verifier" | "synthesizer"
@@ -8687,6 +8713,7 @@ export type WorkflowTemplateGetResponses = {
           verifierModel?: string
           synthesizerModel?: string
           effort?: "normal" | "deep" | "workflow" | "max-workflow"
+          allowedProviders?: Array<string>
           routing?: Array<{
             phaseKind?: "fanout" | "sequential" | "synthesis" | "verification" | "noop"
             use: "planner" | "worker" | "verifier" | "synthesizer"
@@ -8820,6 +8847,7 @@ export type WorkflowTemplatePromoteResponses = {
         verifierModel?: string
         synthesizerModel?: string
         effort?: "normal" | "deep" | "workflow" | "max-workflow"
+        allowedProviders?: Array<string>
         routing?: Array<{
           phaseKind?: "fanout" | "sequential" | "synthesis" | "verification" | "noop"
           use: "planner" | "worker" | "verifier" | "synthesizer"
@@ -8874,6 +8902,7 @@ export type WorkflowTemplatePromoteResponses = {
           verifierModel?: string
           synthesizerModel?: string
           effort?: "normal" | "deep" | "workflow" | "max-workflow"
+          allowedProviders?: Array<string>
           routing?: Array<{
             phaseKind?: "fanout" | "sequential" | "synthesis" | "verification" | "noop"
             use: "planner" | "worker" | "verifier" | "synthesizer"
@@ -9002,6 +9031,7 @@ export type WorkflowRoutineRunData = {
       verifierModel?: string
       synthesizerModel?: string
       effort?: "normal" | "deep" | "workflow" | "max-workflow"
+      allowedProviders?: Array<string>
       routing?: Array<{
         phaseKind?: "fanout" | "sequential" | "synthesis" | "verification" | "noop"
         use: "planner" | "worker" | "verifier" | "synthesizer"
@@ -9126,6 +9156,7 @@ export type WorkflowRoutineRunResponses = {
           verifierModel?: string
           synthesizerModel?: string
           effort?: "normal" | "deep" | "workflow" | "max-workflow"
+          allowedProviders?: Array<string>
           routing?: Array<{
             phaseKind?: "fanout" | "sequential" | "synthesis" | "verification" | "noop"
             use: "planner" | "worker" | "verifier" | "synthesizer"
@@ -9180,6 +9211,7 @@ export type WorkflowRoutineRunResponses = {
             verifierModel?: string
             synthesizerModel?: string
             effort?: "normal" | "deep" | "workflow" | "max-workflow"
+            allowedProviders?: Array<string>
             routing?: Array<{
               phaseKind?: "fanout" | "sequential" | "synthesis" | "verification" | "noop"
               use: "planner" | "worker" | "verifier" | "synthesizer"
@@ -9282,6 +9314,7 @@ export type WorkflowRoutineRunResponses = {
           verifierModel?: string
           synthesizerModel?: string
           effort?: "normal" | "deep" | "workflow" | "max-workflow"
+          allowedProviders?: Array<string>
           routing?: Array<{
             phaseKind?: "fanout" | "sequential" | "synthesis" | "verification" | "noop"
             use: "planner" | "worker" | "verifier" | "synthesizer"
@@ -9336,6 +9369,7 @@ export type WorkflowRoutineRunResponses = {
             verifierModel?: string
             synthesizerModel?: string
             effort?: "normal" | "deep" | "workflow" | "max-workflow"
+            allowedProviders?: Array<string>
             routing?: Array<{
               phaseKind?: "fanout" | "sequential" | "synthesis" | "verification" | "noop"
               use: "planner" | "worker" | "verifier" | "synthesizer"

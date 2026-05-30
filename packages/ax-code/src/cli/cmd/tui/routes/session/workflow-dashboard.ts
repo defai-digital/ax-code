@@ -190,13 +190,14 @@ export function workflowModelPolicyItems(detail: WorkflowRunDetail): WorkflowDas
   const budget = detail.spec.budget ?? {}
   const pacing = detail.spec.pacing ?? {}
   const permissions = detail.spec.permissions ?? {}
+  const allowedProviders = formatAllowedProviders(modelPolicy.allowedProviders)
   const items: WorkflowDashboardItem[] = [
     {
       title: truncate(`Effort ${modelPolicy.effort ?? "normal"}`, MAX_TITLE),
       value: "workflow.detail.model-policy",
       description: truncate(formatWorkflowModels(modelPolicy) || "default model routing", MAX_DESCRIPTION),
       footer: truncate(
-        `phase routes: ${modelPolicy.routing?.length ?? 0} | strong synthesis: ${
+        `${allowedProviders ? `${allowedProviders} | ` : ""}phase routes: ${modelPolicy.routing?.length ?? 0} | strong synthesis: ${
           modelPolicy.synthesizerModel ?? "default"
         }`,
         MAX_FOOTER,
@@ -233,7 +234,10 @@ export function workflowModelPolicyItems(detail: WorkflowRunDetail): WorkflowDas
         `${phase.kind} | max parallel: ${phase.maxParallel ?? "inherit"} | merge: ${phase.mergeStrategy ?? "all"}`,
         MAX_DESCRIPTION,
       ),
-      footer: truncate(formatWorkflowModels(phase.modelPolicy ?? {}) || "inherits workflow model policy", MAX_FOOTER),
+      footer: truncate(
+        formatWorkflowModelPolicySummary(phase.modelPolicy ?? {}) || "inherits workflow model policy",
+        MAX_FOOTER,
+      ),
       category: "Model policy",
       disabled: true,
     })
@@ -605,6 +609,20 @@ function formatWorkflowModels(models: {
   ]
     .filter(Boolean)
     .join(", ")
+}
+
+function formatWorkflowModelPolicySummary(policy: {
+  plannerModel?: string
+  workerModel?: string
+  verifierModel?: string
+  synthesizerModel?: string
+  allowedProviders?: readonly string[]
+}) {
+  return [formatWorkflowModels(policy), formatAllowedProviders(policy.allowedProviders)].filter(Boolean).join(" | ")
+}
+
+function formatAllowedProviders(providers: readonly string[] | undefined) {
+  return providers?.length ? `providers: ${providers.join(", ")}` : undefined
 }
 
 function modelPart(label: string, value: string | undefined) {

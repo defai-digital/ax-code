@@ -127,6 +127,7 @@ export const WorkflowModelPolicy = z.object({
   verifierModel: NonEmptyString.optional(),
   synthesizerModel: NonEmptyString.optional(),
   effort: z.enum(["normal", "deep", "workflow", "max-workflow"]).default("normal"),
+  allowedProviders: z.array(NonEmptyString).default([]),
   routing: z
     .array(
       z.object({
@@ -272,7 +273,7 @@ export const WorkflowSpecV1 = z
     routine: WorkflowRoutine.optional(),
     budget: WorkflowBudget.default(DefaultWorkflowBudget),
     pacing: WorkflowPacing.default(DefaultWorkflowPacing),
-    modelPolicy: WorkflowModelPolicy.default({ effort: "normal", routing: [] }),
+    modelPolicy: WorkflowModelPolicy.default({ effort: "normal", allowedProviders: [], routing: [] }),
     permissions: WorkflowPermissions.default({
       writePolicy: "read-only",
       allowedTools: [],

@@ -120,6 +120,7 @@ describe("workflow spec v1", () => {
     expect(spec.budget.maxTotalAgents).toBe(WORKFLOW_DEFAULT_MAX_TOTAL_AGENTS)
     expect(spec.permissions.writePolicy).toBe("read-only")
     expect(spec.modelPolicy.effort).toBe("normal")
+    expect(spec.modelPolicy.allowedProviders).toEqual([])
     expect(spec.pacing).toEqual({
       maxRequestsPerMinute: WORKFLOW_DEFAULT_MAX_REQUESTS_PER_MINUTE,
       maxTokensPerMinute: WORKFLOW_DEFAULT_MAX_TOKENS_PER_MINUTE,
@@ -131,6 +132,27 @@ describe("workflow spec v1", () => {
       exposeToMainContext: true,
       requiredArtifactIds: [],
     })
+  })
+
+  test("accepts model provider allowlists", () => {
+    const spec = parseWorkflowSpecV1({
+      schemaVersion: 1,
+      id: "provider-policy",
+      name: "Provider Policy",
+      description: "A workflow spec that restricts model routing to specific providers.",
+      modelPolicy: {
+        allowedProviders: ["anthropic", "openai"],
+      },
+      phases: [
+        {
+          id: "noop",
+          name: "Noop",
+          kind: "noop",
+        },
+      ],
+    })
+
+    expect(spec.modelPolicy.allowedProviders).toEqual(["anthropic", "openai"])
   })
 
   test("accepts workflow merge strategy aliases and custom reducer placeholders", () => {

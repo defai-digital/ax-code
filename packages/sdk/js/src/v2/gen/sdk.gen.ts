@@ -2136,6 +2136,7 @@ export class WorkflowRun extends HeyApiClient {
           verifierModel?: string
           synthesizerModel?: string
           effort?: "normal" | "deep" | "workflow" | "max-workflow"
+          allowedProviders?: Array<string>
           routing?: Array<{
             phaseKind?: "fanout" | "sequential" | "synthesis" | "verification" | "noop"
             use: "planner" | "worker" | "verifier" | "synthesizer"
@@ -2190,6 +2191,7 @@ export class WorkflowRun extends HeyApiClient {
             verifierModel?: string
             synthesizerModel?: string
             effort?: "normal" | "deep" | "workflow" | "max-workflow"
+            allowedProviders?: Array<string>
             routing?: Array<{
               phaseKind?: "fanout" | "sequential" | "synthesis" | "verification" | "noop"
               use: "planner" | "worker" | "verifier" | "synthesizer"
@@ -2217,6 +2219,7 @@ export class WorkflowRun extends HeyApiClient {
         verifierModel?: string
         synthesizerModel?: string
         effort?: "normal" | "deep" | "workflow" | "max-workflow"
+        allowedProviders?: Array<string>
         routing?: Array<{
           phaseKind?: "fanout" | "sequential" | "synthesis" | "verification" | "noop"
           use: "planner" | "worker" | "verifier" | "synthesizer"
@@ -2805,6 +2808,7 @@ export class WorkflowTemplate extends HeyApiClient {
           verifierModel?: string
           synthesizerModel?: string
           effort?: "normal" | "deep" | "workflow" | "max-workflow"
+          allowedProviders?: Array<string>
           routing?: Array<{
             phaseKind?: "fanout" | "sequential" | "synthesis" | "verification" | "noop"
             use: "planner" | "worker" | "verifier" | "synthesizer"
@@ -2859,6 +2863,7 @@ export class WorkflowTemplate extends HeyApiClient {
             verifierModel?: string
             synthesizerModel?: string
             effort?: "normal" | "deep" | "workflow" | "max-workflow"
+            allowedProviders?: Array<string>
             routing?: Array<{
               phaseKind?: "fanout" | "sequential" | "synthesis" | "verification" | "noop"
               use: "planner" | "worker" | "verifier" | "synthesizer"
@@ -3062,6 +3067,7 @@ export class WorkflowRoutine extends HeyApiClient {
         verifierModel?: string
         synthesizerModel?: string
         effort?: "normal" | "deep" | "workflow" | "max-workflow"
+        allowedProviders?: Array<string>
         routing?: Array<{
           phaseKind?: "fanout" | "sequential" | "synthesis" | "verification" | "noop"
           use: "planner" | "worker" | "verifier" | "synthesizer"

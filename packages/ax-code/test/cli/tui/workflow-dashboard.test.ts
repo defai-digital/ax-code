@@ -86,6 +86,7 @@ describe("tui workflow dashboard view model", () => {
           workerModel: "cheap-review-model",
           verifierModel: "verifier-model",
           synthesizerModel: "strong-synthesis-model",
+          allowedProviders: ["anthropic", "openai"],
         },
         pacing: {
           maxRequestsPerMinute: 12,
@@ -105,6 +106,7 @@ describe("tui workflow dashboard view model", () => {
             mergeStrategy: "majority",
             modelPolicy: {
               workerModel: "cheap-review-model",
+              allowedProviders: ["anthropic"],
             },
           },
           {
@@ -127,11 +129,17 @@ describe("tui workflow dashboard view model", () => {
     expect(items.find((item) => item.value === "workflow.detail.model-policy")?.footer).toContain(
       "strong synthesis: strong-synthesis-model",
     )
+    expect(items.find((item) => item.value === "workflow.detail.model-policy")?.footer).toContain(
+      "providers: anthropic, openai",
+    )
     expect(items.find((item) => item.value === "workflow.detail.execution-policy")?.description).toContain(
       "network: disabled",
     )
     expect(items.find((item) => item.value === "workflow.detail.phase-policy.scan-files")?.description).toContain(
       "max parallel: 3",
+    )
+    expect(items.find((item) => item.value === "workflow.detail.phase-policy.scan-files")?.footer).toContain(
+      "providers: anthropic",
     )
     expect(items.find((item) => item.value === "workflow.detail.phase-policy.final-report")?.footer).toContain(
       "synthesizer: strong-synthesis-model",

@@ -36,6 +36,7 @@ type StartOptions = JsonOption & {
   workerModel?: string
   verifierModel?: string
   synthesizerModel?: string
+  allowedProvider?: unknown
   input?: unknown
 }
 
@@ -515,6 +516,11 @@ const WorkflowRunStartCommand = cmd({
         type: "string",
         describe: "override synthesizer model",
       })
+      .option("allowed-provider", {
+        type: "array",
+        alias: "allowed-providers",
+        describe: "restrict workflow model routing to provider IDs; repeat or comma-separate for multiple providers",
+      })
       .option("input", {
         type: "array",
         describe: "workflow input assignment as key=JSON; repeat for multiple inputs",
@@ -597,6 +603,11 @@ const WorkflowRoutineRunCommand = cmd({
         type: "string",
         describe: "override synthesizer model",
       })
+      .option("allowed-provider", {
+        type: "array",
+        alias: "allowed-providers",
+        describe: "restrict workflow model routing to provider IDs; repeat or comma-separate for multiple providers",
+      })
       .option("input", {
         type: "array",
         describe: "workflow input assignment as key=JSON; repeat for multiple inputs",
@@ -627,7 +638,10 @@ const WorkflowRoutineRunCommand = cmd({
 })
 
 function modelPolicyFromStartOptions(
-  options: Pick<StartOptions, "effort" | "plannerModel" | "workerModel" | "verifierModel" | "synthesizerModel">,
+  options: Pick<
+    StartOptions,
+    "effort" | "plannerModel" | "workerModel" | "verifierModel" | "synthesizerModel" | "allowedProvider"
+  >,
 ): WorkflowModelPolicyOverride | undefined {
   const modelPolicy: WorkflowModelPolicyOverride = {}
   if (options.effort) modelPolicy.effort = options.effort
@@ -635,7 +649,22 @@ function modelPolicyFromStartOptions(
   if (options.workerModel) modelPolicy.workerModel = options.workerModel
   if (options.verifierModel) modelPolicy.verifierModel = options.verifierModel
   if (options.synthesizerModel) modelPolicy.synthesizerModel = options.synthesizerModel
+  const allowedProviders = parseAllowedProvidersOption(options.allowedProvider)
+  if (allowedProviders) modelPolicy.allowedProviders = allowedProviders
   return Object.keys(modelPolicy).length > 0 ? modelPolicy : undefined
+}
+
+function parseAllowedProvidersOption(input: unknown): string[] | undefined {
+  const values = input === undefined ? [] : Array.isArray(input) ? input : [input]
+  const providers = values.flatMap((value) => {
+    if (typeof value !== "string") throw new Error("Workflow allowed providers must be provider ID strings.")
+    return value
+      .split(",")
+      .map((provider) => provider.trim())
+      .filter(Boolean)
+  })
+  const unique = [...new Set(providers)]
+  return unique.length > 0 ? unique : undefined
 }
 
 export function parseWorkflowInputArguments(input: unknown): Record<string, unknown> | undefined {
@@ -902,7 +931,8 @@ function formatRunModelPolicy(detail: WorkflowRunDetail) {
     verifier: policy.verifierModel,
     synthesizer: policy.synthesizerModel,
   })
-  return [`effort=${policy.effort ?? "normal"}`, models || "models=default"].join(", ")
+  const providers = policy.allowedProviders?.length ? `providers=${policy.allowedProviders.join("|")}` : undefined
+  return [`effort=${policy.effort ?? "normal"}`, models || "models=default", providers].filter(Boolean).join(", ")
 }
 
 function formatRunExecutionPolicy(detail: WorkflowRunDetail) {

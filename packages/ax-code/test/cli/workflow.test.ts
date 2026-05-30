@@ -307,6 +307,7 @@ describe("workflow command helpers", () => {
           effort: "workflow",
           workerModel: "cheap-model",
           synthesizerModel: "strong-model",
+          allowedProviders: ["anthropic", "openai"],
           routing: [],
         },
         permissions: {
@@ -364,7 +365,9 @@ describe("workflow command helpers", () => {
     } satisfies WorkflowRunDetail)
 
     expect(output).toContain("Run workflow_run_01")
-    expect(output).toContain("modelPolicy: effort=workflow, worker=cheap-model, synthesizer=strong-model")
+    expect(output).toContain(
+      "modelPolicy: effort=workflow, worker=cheap-model, synthesizer=strong-model, providers=anthropic|openai",
+    )
     expect(output).toContain("executionPolicy: write=read-only, network=disabled, escalation=ask")
     expect(output).toContain("budgetUsage: 123 tokens, 2 child agents")
     expect(output).toContain("phases: running=1")

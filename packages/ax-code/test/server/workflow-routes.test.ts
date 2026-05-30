@@ -45,6 +45,7 @@ describe("workflow routes", () => {
             effort: "max-workflow",
             workerModel: "cheap-route",
             synthesizerModel: "strong-route",
+            allowedProviders: ["anthropic", "openai"],
           },
           inputValues: {
             "issue-limit": 5,
@@ -57,7 +58,9 @@ describe("workflow routes", () => {
         sourceTemplateID: string
         status: string
         inputValues: Record<string, unknown>
-        spec: { modelPolicy: { effort: string; workerModel: string; synthesizerModel: string } }
+        spec: {
+          modelPolicy: { effort: string; workerModel: string; synthesizerModel: string; allowedProviders: string[] }
+        }
       }
       expect(created.id).toStartWith("wfr_")
       expect(created.sourceTemplateID).toBe("builtin:issue-triage")
@@ -67,6 +70,7 @@ describe("workflow routes", () => {
         effort: "max-workflow",
         workerModel: "cheap-route",
         synthesizerModel: "strong-route",
+        allowedProviders: ["anthropic", "openai"],
       })
 
       const startResponse = await app.request(`/workflow-runs/${created.id}/start?${directoryQuery}`, {
