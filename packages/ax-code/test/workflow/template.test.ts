@@ -5,6 +5,7 @@ import {
   WorkflowTemplateNotFoundError,
   WorkflowTemplateUntrustedError,
   getParsedWorkflowFixtureSpec,
+  parseWorkflowSpecV1,
 } from "../../src/workflow"
 import { tmpdir } from "../fixture/fixture"
 
@@ -18,6 +19,9 @@ describe("WorkflowTemplate", () => {
     expect(templates.map((template) => template.id)).toContain("builtin:issue-triage")
     expect(templates.map((template) => template.id)).toContain("builtin:noop-dry-run")
     expect(templates.map((template) => template.id)).toContain("builtin:verified-bug-sweep")
+    expect(templates.find((template) => template.id === "builtin:verified-bug-sweep")?.specHash).toMatch(
+      /^sha256:[a-f0-9]{64}$/,
+    )
     expect(templates.find((template) => template.id === "builtin:verified-bug-sweep")?.spec.verification.mode).toBe(
       "required",
     )
@@ -81,11 +85,15 @@ describe("WorkflowTemplate", () => {
           source: "project",
           trust: "candidate",
           name: "Local Noop",
+          specHash: WorkflowTemplate.specHash(spec),
         })
         expect(saved.path).toContain(".ax-code/workflow-template/local-noop.json")
 
         const listed = await WorkflowTemplate.list()
-        expect(listed.find((template) => template.id === "project:local-noop")?.trust).toBe("candidate")
+        expect(listed.find((template) => template.id === "project:local-noop")).toMatchObject({
+          trust: "candidate",
+          specHash: saved.specHash,
+        })
 
         await expect(WorkflowTemplate.createRun({ templateID: saved.id })).rejects.toThrow(
           WorkflowTemplateUntrustedError,
@@ -93,6 +101,7 @@ describe("WorkflowTemplate", () => {
 
         const promoted = await WorkflowTemplate.promote(saved.id)
         expect(promoted.trust).toBe("trusted")
+        expect(promoted.specHash).toBe(saved.specHash)
 
         const run = await WorkflowTemplate.createRun({ templateID: promoted.id })
         expect(run.sourceTemplateID).toBe("project:local-noop")
@@ -105,5 +114,19 @@ describe("WorkflowTemplate", () => {
     await expect(WorkflowTemplate.get("builtin:missing" as WorkflowTemplate.ID)).rejects.toThrow(
       WorkflowTemplateNotFoundError,
     )
+  })
+
+  test("hashes specs canonically for diffable template identity", () => {
+    const spec = getParsedWorkflowFixtureSpec("noopDryRun")
+    const reordered = {
+      phases: spec.phases,
+      description: spec.description,
+      schemaVersion: spec.schemaVersion,
+      id: spec.id,
+      name: spec.name,
+      tags: spec.tags,
+    }
+
+    expect(WorkflowTemplate.specHash(spec)).toBe(WorkflowTemplate.specHash(parseWorkflowSpecV1(reordered)))
   })
 })

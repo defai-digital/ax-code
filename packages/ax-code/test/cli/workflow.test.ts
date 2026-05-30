@@ -35,6 +35,7 @@ describe("workflow command helpers", () => {
         name: "Noop Dry Run",
         description: "Minimal workflow fixture.",
         tags: ["fixture", "dry-run"],
+        specHash: "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
         spec,
       },
     ] satisfies WorkflowTemplate.Info[])

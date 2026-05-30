@@ -1372,6 +1372,19 @@ export type EventWorkflowBudgetAppended = {
   }
 }
 
+export type WorkflowVerificationAttachedEventRecord = {
+  runID: string
+  envelopeIDs: Array<string>
+  run: WorkflowRunEventRecord
+}
+
+export type EventWorkflowVerificationAttached = {
+  type: "workflow.verification.attached"
+  properties: {
+    verification: WorkflowVerificationAttachedEventRecord
+  }
+}
+
 export type EventScheduledTaskCreated = {
   type: "scheduled.task.created"
   properties: {
@@ -1543,6 +1556,7 @@ export type Event =
   | EventWorkflowChildUpdated
   | EventWorkflowArtifactWritten
   | EventWorkflowBudgetAppended
+  | EventWorkflowVerificationAttached
   | EventScheduledTaskCreated
   | EventScheduledTaskUpdated
   | EventScheduledTaskDeleted
@@ -7357,6 +7371,7 @@ export type WorkflowTemplateListResponses = {
     name: string
     description: string
     tags: Array<string>
+    specHash: string
     spec: {
       schemaVersion: 1
       id: string
@@ -7647,6 +7662,7 @@ export type WorkflowTemplateSaveResponses = {
     name: string
     description: string
     tags: Array<string>
+    specHash: string
     spec: {
       schemaVersion: 1
       id: string
@@ -7814,6 +7830,7 @@ export type WorkflowTemplateGetResponses = {
     name: string
     description: string
     tags: Array<string>
+    specHash: string
     spec: {
       schemaVersion: 1
       id: string
@@ -7981,6 +7998,7 @@ export type WorkflowTemplatePromoteResponses = {
     name: string
     description: string
     tags: Array<string>
+    specHash: string
     spec: {
       schemaVersion: 1
       id: string

@@ -1,5 +1,6 @@
 import path from "path"
 import fs from "fs/promises"
+import { createHash } from "crypto"
 import z from "zod"
 import { Global } from "../global"
 import { Instance } from "../project/instance"
@@ -21,7 +22,11 @@ export namespace WorkflowTemplate {
   export const Trust = z.enum(["candidate", "trusted"])
   export type Trust = z.infer<typeof Trust>
 
-  export const ID = z.string().min(1).max(120).regex(/^(builtin|user|project):[a-z][a-z0-9-]*$/)
+  export const ID = z
+    .string()
+    .min(1)
+    .max(120)
+    .regex(/^(builtin|user|project):[a-z][a-z0-9-]*$/)
   export type ID = z.infer<typeof ID>
 
   export const Stored = z.object({
@@ -42,6 +47,7 @@ export namespace WorkflowTemplate {
     name: z.string().min(1),
     description: z.string().min(1),
     tags: z.array(z.string()),
+    specHash: z.string().regex(/^sha256:[a-f0-9]{64}$/),
     spec: WorkflowSpecV1,
     path: z.string().optional(),
     time: z
@@ -79,6 +85,7 @@ export namespace WorkflowTemplate {
           name: spec.name,
           description: spec.description,
           tags: spec.tags,
+          specHash: specHash(spec),
           spec,
         },
       ]
@@ -129,7 +136,8 @@ export namespace WorkflowTemplate {
   export async function promote(id: ID): Promise<Info> {
     const parsed = ID.parse(id)
     const { source } = splitID(parsed)
-    if (source === "builtin") throw new WorkflowTemplatePromotionError(parsed, "Built-in templates are already trusted.")
+    if (source === "builtin")
+      throw new WorkflowTemplatePromotionError(parsed, "Built-in templates are already trusted.")
 
     const file = templatePath(source, splitID(parsed).specID)
     const stored = await readStoredTemplate(file)
@@ -195,6 +203,7 @@ export namespace WorkflowTemplate {
       name: stored.spec.name,
       description: stored.spec.description,
       tags: stored.spec.tags,
+      specHash: specHash(stored.spec),
       spec: stored.spec,
       path: file,
       time: stored.time,
@@ -223,6 +232,22 @@ export namespace WorkflowTemplate {
 
   function templatePath(source: Exclude<Source, "builtin">, specID: string) {
     return path.join(templateDir(source), `${specID}.json`)
+  }
+
+  export function specHash(spec: WorkflowSpecV1): string {
+    return `sha256:${createHash("sha256")
+      .update(JSON.stringify(canonical(spec)))
+      .digest("hex")}`
+  }
+
+  function canonical(value: unknown): unknown {
+    if (Array.isArray(value)) return value.map(canonical)
+    if (!value || typeof value !== "object") return value
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([key, val]) => [key, canonical(val)]),
+    )
   }
 }
 
