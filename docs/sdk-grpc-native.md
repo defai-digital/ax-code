@@ -43,7 +43,7 @@ The TypeScript facade lives at `@ax-code/sdk/grpc` and covers:
 - session evidence for review/debug UI
 - task queue operations
 - scheduled task operations
-- workflow templates, workflow runs, workflow routines, and run artifacts
+- workflow templates, workflow runs, dashboard summaries, eval cases, workflow routines, and run artifacts
 - server-streamed runtime events
 
 The proto uses structured JSON payloads for command bodies and workflow/task payloads. That keeps the transport stable while AX Code runtime schemas continue to evolve quickly.

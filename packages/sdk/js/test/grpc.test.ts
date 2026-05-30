@@ -43,6 +43,9 @@ describe("gRPC SDK facade", () => {
         if (method === AX_CODE_GRPC_METHOD.SetAuth) return { value: true }
         if (method === AX_CODE_GRPC_METHOD.CreatePty) return { value: { id: "pty_1", title: "Terminal" } }
         if (method === AX_CODE_GRPC_METHOD.TaskQueueCommand) return { value: { id: "task-1", status: "paused" } }
+        if (method === AX_CODE_GRPC_METHOD.WorkflowRunDashboard) return { value: [{ id: "run-1" }] }
+        if (method === AX_CODE_GRPC_METHOD.WorkflowRunEvalCases) return { value: [{ id: "case-1" }] }
+        if (method === AX_CODE_GRPC_METHOD.WorkflowRunEvalCase) return { value: { caseID: "case-1" } }
         throw new Error(`unexpected method ${method}`)
       },
       async *serverStream() {
@@ -72,6 +75,9 @@ describe("gRPC SDK facade", () => {
     expect(await client.auth.set("anthropic", { type: "api", key: "secret" })).toBe(true)
     expect(await client.pty.create({ title: "Terminal" })).toEqual({ id: "pty_1", title: "Terminal" })
     expect(await pause("task-1")).toEqual({ id: "task-1", status: "paused" })
+    expect(await client.workflowRun.dashboard({ limit: 5 })).toEqual([{ id: "run-1" }])
+    expect(await client.workflowRun.evalCases()).toEqual([{ id: "case-1" }])
+    expect(await client.workflowRun.evalCase("run-1", { caseID: "case-1" })).toEqual({ caseID: "case-1" })
     expect(calls.map((call) => call.method)).toEqual([
       AX_CODE_GRPC_METHOD.Health,
       AX_CODE_GRPC_METHOD.CreateSession,
@@ -90,6 +96,9 @@ describe("gRPC SDK facade", () => {
       AX_CODE_GRPC_METHOD.SetAuth,
       AX_CODE_GRPC_METHOD.CreatePty,
       AX_CODE_GRPC_METHOD.TaskQueueCommand,
+      AX_CODE_GRPC_METHOD.WorkflowRunDashboard,
+      AX_CODE_GRPC_METHOD.WorkflowRunEvalCases,
+      AX_CODE_GRPC_METHOD.WorkflowRunEvalCase,
     ])
   })
 
@@ -560,6 +569,36 @@ describe("gRPC SDK facade", () => {
     ])
   })
 
+  test("HTTP bridge maps workflow dashboard supervision calls to the headless backend", async () => {
+    const calls: Array<{ path: string; method: string; body: string }> = []
+    const client = createAxCodeGrpcClientFromHttp({
+      baseUrl: "http://127.0.0.1:4096",
+      fetch: (async (url: URL | RequestInfo, init?: RequestInit) => {
+        const request = url instanceof Request ? url : new Request(url, init)
+        const parsed = new URL(request.url)
+        calls.push({
+          path: `${parsed.pathname}${parsed.search}`,
+          method: request.method,
+          body: request.body ? await new Response(request.body).text() : "",
+        })
+        if (parsed.pathname === "/workflow-runs/dashboard") return Response.json([{ id: "run-1" }])
+        if (parsed.pathname === "/workflow-runs/eval-cases") return Response.json([{ id: "case-1" }])
+        if (parsed.pathname === "/workflow-runs/run-1/eval-case") return Response.json({ caseID: "case-1" })
+        return new Response("not found", { status: 404 })
+      }) as typeof fetch,
+    })
+
+    await expect(client.workflowRun.dashboard({ limit: 10 })).resolves.toEqual([{ id: "run-1" }])
+    await expect(client.workflowRun.evalCases()).resolves.toEqual([{ id: "case-1" }])
+    await expect(client.workflowRun.evalCase("run-1", { caseID: "case-1" })).resolves.toEqual({ caseID: "case-1" })
+
+    expect(calls).toEqual([
+      { path: "/workflow-runs/dashboard?limit=10", method: "GET", body: "" },
+      { path: "/workflow-runs/eval-cases", method: "GET", body: "" },
+      { path: "/workflow-runs/run-1/eval-case", method: "POST", body: JSON.stringify({ caseID: "case-1" }) },
+    ])
+  })
+
   test("HTTP bridge maps PTY management calls to the headless backend", async () => {
     const calls: Array<{ path: string; method: string; body: string }> = []
     const client = createAxCodeGrpcClientFromHttp({
@@ -749,6 +788,9 @@ describe("gRPC SDK facade", () => {
     expect(proto).toContain("rpc SetAuth")
     expect(proto).toContain("rpc ProviderOauthAuthorize")
     expect(proto).toContain("rpc ConnectPty")
+    expect(proto).toContain("rpc WorkflowRunDashboard")
+    expect(proto).toContain("rpc WorkflowRunEvalCases")
+    expect(proto).toContain("rpc WorkflowRunEvalCase")
     expect(proto).toContain("rpc SubscribeEvents")
   })
 })

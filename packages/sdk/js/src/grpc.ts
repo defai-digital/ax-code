@@ -88,10 +88,13 @@ export const AX_CODE_GRPC_METHOD = {
   SaveWorkflowTemplate: `/${AX_CODE_GRPC_SERVICE}/SaveWorkflowTemplate`,
   PromoteWorkflowTemplate: `/${AX_CODE_GRPC_SERVICE}/PromoteWorkflowTemplate`,
   ListWorkflowRuns: `/${AX_CODE_GRPC_SERVICE}/ListWorkflowRuns`,
+  WorkflowRunDashboard: `/${AX_CODE_GRPC_SERVICE}/WorkflowRunDashboard`,
+  WorkflowRunEvalCases: `/${AX_CODE_GRPC_SERVICE}/WorkflowRunEvalCases`,
   CreateWorkflowRun: `/${AX_CODE_GRPC_SERVICE}/CreateWorkflowRun`,
   GetWorkflowRun: `/${AX_CODE_GRPC_SERVICE}/GetWorkflowRun`,
   WorkflowRunArtifacts: `/${AX_CODE_GRPC_SERVICE}/WorkflowRunArtifacts`,
   WorkflowRunEvalSummary: `/${AX_CODE_GRPC_SERVICE}/WorkflowRunEvalSummary`,
+  WorkflowRunEvalCase: `/${AX_CODE_GRPC_SERVICE}/WorkflowRunEvalCase`,
   SaveWorkflowRunTemplate: `/${AX_CODE_GRPC_SERVICE}/SaveWorkflowRunTemplate`,
   WorkflowRunCommand: `/${AX_CODE_GRPC_SERVICE}/WorkflowRunCommand`,
   ListWorkflowRoutines: `/${AX_CODE_GRPC_SERVICE}/ListWorkflowRoutines`,
@@ -858,6 +861,15 @@ export function createAxCodeGrpcClient(input: AxCodeGrpcClientOptions) {
       list(parameters?: Parameters<HeadlessHttpClient["workflowRun"]["list"]>[0], options?: AxCodeGrpcCallOptions) {
         return value(AX_CODE_GRPC_METHOD.ListWorkflowRuns, { parameters }, options)
       },
+      dashboard(
+        parameters?: Parameters<HeadlessHttpClient["workflowRun"]["dashboard"]>[0],
+        options?: AxCodeGrpcCallOptions,
+      ) {
+        return value(AX_CODE_GRPC_METHOD.WorkflowRunDashboard, { parameters }, options)
+      },
+      evalCases(options?: AxCodeGrpcCallOptions) {
+        return value(AX_CODE_GRPC_METHOD.WorkflowRunEvalCases, {}, options)
+      },
       create(body: Parameters<HeadlessHttpClient["workflowRun"]["create"]>[0], options?: AxCodeGrpcCallOptions) {
         return value(AX_CODE_GRPC_METHOD.CreateWorkflowRun, { body }, options)
       },
@@ -877,6 +889,13 @@ export function createAxCodeGrpcClient(input: AxCodeGrpcClientOptions) {
         options?: AxCodeGrpcCallOptions,
       ) {
         return value(AX_CODE_GRPC_METHOD.WorkflowRunEvalSummary, { runID, body }, options)
+      },
+      evalCase(
+        runID: string,
+        body?: Parameters<HeadlessHttpClient["workflowRun"]["evalCase"]>[1],
+        options?: AxCodeGrpcCallOptions,
+      ) {
+        return value(AX_CODE_GRPC_METHOD.WorkflowRunEvalCase, { runID, body }, options)
       },
       saveTemplate(
         runID: string,
@@ -1192,6 +1211,10 @@ async function handleHttpBridgeUnary(
       return wrap(await client.workflowTemplate.promote(body.templateID))
     case AX_CODE_GRPC_METHOD.ListWorkflowRuns:
       return wrap(await client.workflowRun.list(body.parameters))
+    case AX_CODE_GRPC_METHOD.WorkflowRunDashboard:
+      return wrap(await client.workflowRun.dashboard(body.parameters))
+    case AX_CODE_GRPC_METHOD.WorkflowRunEvalCases:
+      return wrap(await client.workflowRun.evalCases())
     case AX_CODE_GRPC_METHOD.CreateWorkflowRun:
       return wrap(await client.workflowRun.create(body.body))
     case AX_CODE_GRPC_METHOD.GetWorkflowRun:
@@ -1200,6 +1223,8 @@ async function handleHttpBridgeUnary(
       return wrap(await client.workflowRun.artifacts(body.runID, body.parameters))
     case AX_CODE_GRPC_METHOD.WorkflowRunEvalSummary:
       return wrap(await client.workflowRun.evalSummary(body.runID, body.body))
+    case AX_CODE_GRPC_METHOD.WorkflowRunEvalCase:
+      return wrap(await client.workflowRun.evalCase(body.runID, body.body))
     case AX_CODE_GRPC_METHOD.SaveWorkflowRunTemplate:
       return wrap(await client.workflowRun.saveTemplate(body.runID, body.body))
     case AX_CODE_GRPC_METHOD.WorkflowRunCommand:

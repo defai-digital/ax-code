@@ -85,10 +85,13 @@ service AxCodeHeadless {
   rpc PromoteWorkflowTemplate(TemplateRequest) returns (JsonResponse);
 
   rpc ListWorkflowRuns(QueryRequest) returns (JsonResponse);
+  rpc WorkflowRunDashboard(QueryRequest) returns (JsonResponse);
+  rpc WorkflowRunEvalCases(EmptyRequest) returns (JsonResponse);
   rpc CreateWorkflowRun(JsonRequest) returns (JsonResponse);
   rpc GetWorkflowRun(RunRequest) returns (JsonResponse);
   rpc WorkflowRunArtifacts(RunQueryRequest) returns (JsonResponse);
   rpc WorkflowRunEvalSummary(RunJsonRequest) returns (JsonResponse);
+  rpc WorkflowRunEvalCase(RunJsonRequest) returns (JsonResponse);
   rpc SaveWorkflowRunTemplate(RunJsonRequest) returns (JsonResponse);
   rpc WorkflowRunCommand(WorkflowRunCommandRequest) returns (JsonResponse);
 
