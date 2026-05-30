@@ -23,6 +23,9 @@ export namespace ExecutionController {
 
   export function decide(input: { state: AgentControl.State; signal?: Signal }): Decision {
     const signal = input.signal ?? {}
+    if (input.state.phase === "complete") {
+      return { phase: "complete", reason: "already_complete" }
+    }
     if (signal.unrecoverableFailure) {
       return {
         phase: "blocked",
@@ -83,8 +86,6 @@ export namespace ExecutionController {
         if (signal.planRequired) return { phase: "plan", reason: "user_unblocked_with_plan" }
         if (signal.executionStarted) return { phase: "execute", reason: "user_unblocked_with_execution" }
         return { phase: "assess", reason: "reassess_after_block" }
-      case "complete":
-        return { phase: "complete", reason: "already_complete" }
     }
   }
 

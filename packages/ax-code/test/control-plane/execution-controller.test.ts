@@ -313,6 +313,35 @@ describe("ExecutionController", () => {
     })
   })
 
+  test("ignores late failure signals after completion", () => {
+    const state = AgentControl.createState({
+      sessionID: "ses_123",
+      objective: plan.objective,
+      phase: "summarize",
+      plan: closedPlan,
+      validationStatus: "passed",
+    })
+    const completed = ExecutionController.apply({ state })
+
+    expect(
+      ExecutionController.decide({
+        state: completed,
+        signal: { unrecoverableFailure: true, blockedReason: "late_failure" },
+      }),
+    ).toEqual({
+      phase: "complete",
+      reason: "already_complete",
+    })
+    expect(ExecutionController.decide({ state: completed, signal: { recoverableFailure: true } })).toEqual({
+      phase: "complete",
+      reason: "already_complete",
+    })
+    expect(ExecutionController.apply({ state: completed, signal: { unrecoverableFailure: true } })).toMatchObject({
+      phase: "complete",
+      lastDecisionReason: "already_complete",
+    })
+  })
+
   test("routes unrecoverable failure signal to blocked phase from any phase", () => {
     const state = AgentControl.createState({
       sessionID: "ses_123",

@@ -6,6 +6,7 @@ import { Risk } from "../../risk/score"
 import { Session } from "../../session"
 import { SessionID } from "../../session/schema"
 import type { ReplayEvent } from "../../replay/event"
+import { getRequiredSession } from "./session-required"
 
 export const CompareCommand = cmd({
   command: "compare <session1> <session2>",
@@ -27,7 +28,10 @@ export const CompareCommand = cmd({
         const sid1 = SessionID.make(args.session1 as string)
         const sid2 = SessionID.make(args.session2 as string)
 
-        const [s1, s2] = await Promise.all([Session.get(sid1), Session.get(sid2)])
+        const [s1, s2] = await Promise.all([
+          getRequiredSession(sid1, args.session1 as string),
+          getRequiredSession(sid2, args.session2 as string),
+        ])
         const [e1, e2] = [EventQuery.bySession(sid1), EventQuery.bySession(sid2)]
         const [r1, r2] = [Risk.fromSession(sid1), Risk.fromSession(sid2)]
 
