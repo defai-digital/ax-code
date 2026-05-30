@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { Instance } from "../../src/project/instance"
+import { Session } from "../../src/session"
 import {
   WorkflowFixtureSpecs,
   WorkflowRun,
@@ -15,6 +16,16 @@ import { tmpdir } from "../fixture/fixture"
 afterEach(async () => {
   await Instance.disposeAll()
 })
+
+function workflowFinalReportParts(messages: Awaited<ReturnType<typeof Session.messages>>, runID: string) {
+  return messages.flatMap((message) =>
+    message.parts.filter(
+      (part) =>
+        part.type === "text" &&
+        (part.metadata?.workflowFinalReport as { runID?: unknown } | undefined)?.runID === runID,
+    ),
+  )
+}
 
 describe("WorkflowScheduler", () => {
   test("stays behind AX_CODE_WORKFLOW_RUNTIME", async () => {
@@ -61,6 +72,63 @@ describe("WorkflowScheduler", () => {
           expect(result.children).toEqual([])
           const { TaskQueue } = await import("../../src/session/task-queue")
           expect(await TaskQueue.list()).toEqual([])
+        },
+      })
+    } finally {
+      if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME
+      else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
+    }
+  })
+
+  test("syncs a compact final report into the parent session once", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
+    process.env.AX_CODE_WORKFLOW_RUNTIME = "1"
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const session = await Session.create({})
+          const run = await WorkflowRun.create({
+            parentSessionID: session.id,
+            spec: parseWorkflowSpecV1(WorkflowFixtureSpecs.noopDryRun),
+          })
+
+          await WorkflowScheduler.start(run.id)
+
+          let messages = await Session.messages({ sessionID: session.id })
+          let reportParts = workflowFinalReportParts(messages, run.id)
+          expect(reportParts).toHaveLength(1)
+          const report = reportParts[0]
+          if (!report || report.type !== "text") throw new Error("expected workflow final report text part")
+          expect(report.text).toContain("Workflow final report: Noop Dry Run")
+          expect(report.text).toContain("Final artifact: wfa_")
+          expect(report.text).toContain("Budget used: 0 tokens, 0 tool calls, 0 child agents.")
+          expect(report.text).not.toContain("Noop phase completed")
+          expect(report.metadata?.workflowFinalReport).toMatchObject({
+            schemaVersion: 1,
+            runID: run.id,
+            status: "completed",
+            specID: "noop-dry-run",
+          })
+
+          const anchors = messages.flatMap((message) =>
+            message.parts.filter(
+              (part) =>
+                part.type === "text" &&
+                (part.metadata?.workflowFinalReportAnchor as { runID?: unknown } | undefined)?.runID === run.id,
+            ),
+          )
+          expect(anchors).toHaveLength(1)
+          const anchor = anchors[0]
+          if (!anchor || anchor.type !== "text") throw new Error("expected workflow final report anchor text part")
+          expect(anchor.synthetic).toBe(true)
+          expect(anchor.ignored).toBe(true)
+
+          await WorkflowRun.ensureFinalReportArtifact(run.id)
+          messages = await Session.messages({ sessionID: session.id })
+          reportParts = workflowFinalReportParts(messages, run.id)
+          expect(reportParts).toHaveLength(1)
         },
       })
     } finally {

@@ -1,9 +1,13 @@
 import { HTTPException } from "hono/http-exception"
 import { Bus } from "../bus"
+import { ModelID, ProviderID } from "../provider/schema"
 import { Instance } from "../project/instance"
 import { Session } from "../session"
-import { SessionID } from "../session/schema"
+import { MessageV2 } from "../session/message-v2"
+import { sessionAssistantPath, zeroTokenUsage } from "../session/prompt-message-builders"
+import { MessageID, PartID, SessionID } from "../session/schema"
 import { Database, NotFoundError, and, asc, desc, eq, inArray } from "../storage/db"
+import { Log } from "../util/log"
 import { defaultWorkflowArtifactRedaction } from "./artifact"
 import { addWorkflowBudgetUsage, evaluateWorkflowBudget } from "./budget"
 import { WorkflowInputValidationError, resolveWorkflowInputValues } from "./spec"
@@ -30,6 +34,10 @@ import {
 } from "./workflow.sql"
 
 export const WORKFLOW_FINAL_REPORT_SPEC_ARTIFACT_ID = "workflow-final-report"
+
+const log = Log.create({ service: "workflow.run" })
+const WORKFLOW_RUNTIME_MODEL_ID = ModelID.make("workflow-runtime")
+const WORKFLOW_RUNTIME_PROVIDER_ID = ProviderID.axCode
 
 async function create(input: WorkflowRunState.CreateInput): Promise<WorkflowRunState.Info> {
   const parsed = WorkflowRunState.CreateInput.parse(input)
@@ -532,7 +540,10 @@ async function ensureFinalReportArtifact(runID: WorkflowRunID): Promise<Workflow
   const existing = detail.artifacts.find(
     (artifact) => artifact.specArtifactID === WORKFLOW_FINAL_REPORT_SPEC_ARTIFACT_ID,
   )
-  if (existing) return existing
+  if (existing) {
+    await syncFinalReportToParentSession(detail, existing)
+    return existing
+  }
 
   const phaseCounts = countByStatus(detail.phases.map((phase) => phase.status))
   const childCounts = countByStatus(detail.children.map((child) => child.status))
@@ -547,7 +558,7 @@ async function ensureFinalReportArtifact(runID: WorkflowRunID): Promise<Workflow
     `Artifacts: ${detail.artifacts.length} existing, verification envelopes: ${detail.verificationEnvelopeIDs.length}.`,
   ].join("\n")
 
-  return appendArtifact({
+  const artifact = await appendArtifact({
     runID,
     specArtifactID: WORKFLOW_FINAL_REPORT_SPEC_ARTIFACT_ID,
     kind: "summary",
@@ -580,6 +591,129 @@ async function ensureFinalReportArtifact(runID: WorkflowRunID): Promise<Workflow
       ...detail.verificationEnvelopeIDs.map((id) => ({ kind: "verification" as const, id })),
     ],
   })
+  await syncFinalReportToParentSession(detail, artifact)
+  return artifact
+}
+
+async function syncFinalReportToParentSession(detail: WorkflowRunDetail, artifact: WorkflowArtifactRecord) {
+  if (!detail.parentSessionID || !artifact.exposeToMainContext) return
+  try {
+    const messages = await Session.messages({ sessionID: detail.parentSessionID })
+    if (hasParentFinalReportMessage(messages, detail.id)) return
+
+    const now = Date.now()
+    const latestUser = findLatestUserMessage(messages)
+    let parentID = latestUser?.info.id
+    if (!parentID) {
+      const anchor: MessageV2.User = {
+        id: MessageID.ascending(),
+        sessionID: detail.parentSessionID,
+        role: "user",
+        time: { created: now },
+        agent: "workflow",
+        model: {
+          providerID: WORKFLOW_RUNTIME_PROVIDER_ID,
+          modelID: WORKFLOW_RUNTIME_MODEL_ID,
+        },
+      }
+      const anchorPart: MessageV2.TextPart = {
+        id: PartID.ascending(),
+        messageID: anchor.id,
+        sessionID: detail.parentSessionID,
+        type: "text",
+        text: `Workflow ${detail.id} completed.`,
+        synthetic: true,
+        ignored: true,
+        metadata: {
+          workflowFinalReportAnchor: {
+            schemaVersion: 1,
+            runID: detail.id,
+            artifactID: artifact.id,
+          },
+        },
+      }
+      await Session.updateMessageWithParts(anchor, [anchorPart])
+      parentID = anchor.id
+    }
+
+    const assistant: MessageV2.Assistant = {
+      id: MessageID.ascending(),
+      sessionID: detail.parentSessionID,
+      role: "assistant",
+      parentID,
+      modelID: WORKFLOW_RUNTIME_MODEL_ID,
+      providerID: WORKFLOW_RUNTIME_PROVIDER_ID,
+      mode: "workflow",
+      agent: "workflow",
+      path: sessionAssistantPath({ directory: detail.directory }),
+      tokens: zeroTokenUsage(),
+      time: {
+        created: now,
+        completed: now,
+      },
+      finish: "stop",
+    }
+    const part: MessageV2.TextPart = {
+      id: PartID.ascending(),
+      messageID: assistant.id,
+      sessionID: detail.parentSessionID,
+      type: "text",
+      text: formatParentFinalReport(detail, artifact),
+      metadata: {
+        workflowFinalReport: {
+          schemaVersion: 1,
+          runID: detail.id,
+          artifactID: artifact.id,
+          status: detail.status,
+          specID: detail.spec.id,
+          specName: detail.spec.name,
+        },
+      },
+    }
+    await Session.updateMessageWithParts(assistant, [part])
+  } catch (error) {
+    log.warn("failed to sync workflow final report to parent session", {
+      runID: detail.id,
+      parentSessionID: detail.parentSessionID,
+      artifactID: artifact.id,
+      error,
+    })
+  }
+}
+
+function hasParentFinalReportMessage(messages: MessageV2.WithParts[], runID: WorkflowRunID) {
+  return messages.some((message) =>
+    message.parts.some((part) => {
+      if (part.type !== "text") return false
+      const metadata = part.metadata?.workflowFinalReport
+      if (!metadata || typeof metadata !== "object") return false
+      return (metadata as Record<string, unknown>).runID === runID
+    }),
+  )
+}
+
+function findLatestUserMessage(messages: MessageV2.WithParts[]) {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const message = messages[i]
+    if (message?.info.role === "user") return message as MessageV2.WithParts & { info: MessageV2.User }
+  }
+  return undefined
+}
+
+function formatParentFinalReport(detail: WorkflowRunDetail, artifact: WorkflowArtifactRecord) {
+  const usage = detail.budgetUsage
+  const cost =
+    usage.estimatedCostUsd === undefined || usage.estimatedCostUsd <= 0
+      ? ""
+      : `, estimated cost $${usage.estimatedCostUsd.toFixed(4)}`
+  return [
+    artifact.summary ?? `Workflow final report: ${detail.spec.name}`,
+    "",
+    `Run: ${detail.id}`,
+    `Final artifact: ${artifact.id}`,
+    `Linked evidence refs: ${artifact.evidenceRefs.length}`,
+    `Budget used: ${usage.totalTokens} tokens, ${usage.toolCalls} tool calls, ${usage.childAgents} child agents${cost}.`,
+  ].join("\n")
 }
 
 async function recoverInterrupted(): Promise<{ failed: WorkflowRunState.Info[] }> {
