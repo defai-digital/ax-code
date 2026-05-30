@@ -61,6 +61,21 @@ test("/doc can be explicitly enabled for non-loopback app instances", async () =
   }
 })
 
+test("websocket upgrades reject cross-origin browser requests", async () => {
+  const app = Server.createApp({ hostname: "127.0.0.1", port: 4096 })
+  const response = await app.fetch(
+    new Request("http://127.0.0.1:4096/pty/pty_1/connect", {
+      headers: {
+        origin: "https://evil.example",
+        upgrade: "websocket",
+      },
+    }),
+  )
+
+  expect(response.status).toBe(403)
+  expect(await response.json()).toEqual({ error: "origin mismatch" })
+})
+
 test("path route resolves symlinked directory requests to their canonical path", async () => {
   await using tmp = await tmpdir({ git: true })
   const link = path.join(tmp.path, "..", `${path.basename(tmp.path)}-link`)

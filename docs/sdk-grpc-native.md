@@ -96,6 +96,8 @@ For desktop apps, prefer this order:
 
 When network HTTP is unavoidable, keep `/doc` disabled unless actively generating or debugging client contracts on a trusted network. Set `AX_CODE_ENABLE_HTTP_DOCS=1` only for that explicit case.
 
+The HTTP compatibility bridge rejects cross-origin WebSocket upgrades by default. Add an origin to the explicit server CORS allowlist only when that browser origin is part of the trusted app shell.
+
 Do not expose the full HTTP API, PTY WebSocket, or OpenAPI docs to arbitrary WebViews. If a WebView is used, keep it as a renderer and route privileged operations through the native host using the gRPC/native facade.
 
 ## Implementation Policy

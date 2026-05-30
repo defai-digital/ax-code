@@ -601,7 +601,10 @@ export namespace Server {
       .use(async (c, next) => {
         if (c.req.method === "OPTIONS") return next()
         const origin = c.req.header("origin")
-        if (origin && ["POST", "PUT", "PATCH", "DELETE"].includes(c.req.method)) {
+        const browserPrivilegedRequest =
+          ["POST", "PUT", "PATCH", "DELETE"].includes(c.req.method) ||
+          c.req.header("upgrade")?.toLowerCase() === "websocket"
+        if (origin && browserPrivilegedRequest) {
           const request = new URL(c.req.url).origin
           if (origin !== request && !opts?.cors?.includes(origin)) {
             return c.json({ error: "origin mismatch" }, 403)
