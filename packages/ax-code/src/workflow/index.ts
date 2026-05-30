@@ -2,6 +2,7 @@ export * from "./fixtures"
 export * from "./budget"
 export * from "./planner"
 export * from "./run"
+export * from "./scheduler"
 export * from "./spec"
 export {
   EmptyWorkflowBudgetUsage,

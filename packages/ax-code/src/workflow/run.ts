@@ -256,6 +256,29 @@ async function setChildStatus(input: WorkflowRunState.SetChildStatusInput): Prom
   return child
 }
 
+async function attachChildTaskQueueID(input: WorkflowRunState.AttachChildTaskQueueInput): Promise<WorkflowChildRecord> {
+  const parsed = WorkflowRunState.AttachChildTaskQueueInput.parse(input)
+  const current = await getChild(parsed.id)
+  await get(current.runID)
+  const now = Date.now()
+  const child = Database.transaction((db) => {
+    const row = db
+      .update(WorkflowChildTable)
+      .set({
+        task_queue_id: parsed.taskQueueID,
+        time_updated: now,
+      })
+      .where(eq(WorkflowChildTable.id, parsed.id))
+      .returning()
+      .get()
+    if (!row) throw new NotFoundError({ message: `Workflow child not found: ${parsed.id}` })
+    touchRun(db, row.run_id, now)
+    return fromChildRow(row)
+  })
+  publishChildUpdated(child)
+  return child
+}
+
 async function appendArtifact(input: WorkflowRunState.AppendArtifactInput): Promise<WorkflowArtifactRecord> {
   const parsed = WorkflowRunState.AppendArtifactInput.parse(input)
   await get(parsed.runID)
@@ -431,6 +454,7 @@ export const WorkflowRun = {
   setPhaseStatus,
   appendChild,
   setChildStatus,
+  attachChildTaskQueueID,
   appendArtifact,
   appendBudgetUsage,
   attachVerificationEnvelopeIDs,
@@ -451,6 +475,7 @@ export namespace WorkflowRun {
   export type SetPhaseStatusInput = WorkflowRunState.SetPhaseStatusInput
   export type AppendChildInput = WorkflowRunState.AppendChildInput
   export type SetChildStatusInput = WorkflowRunState.SetChildStatusInput
+  export type AttachChildTaskQueueInput = WorkflowRunState.AttachChildTaskQueueInput
   export type AppendArtifactInput = WorkflowRunState.AppendArtifactInput
   export type AppendBudgetUsageInput = WorkflowRunState.AppendBudgetUsageInput
   export type AttachVerificationInput = WorkflowRunState.AttachVerificationInput

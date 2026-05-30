@@ -256,6 +256,12 @@ export namespace WorkflowRun {
   })
   export type SetChildStatusInput = z.infer<typeof SetChildStatusInput>
 
+  export const AttachChildTaskQueueInput = z.object({
+    id: WorkflowChildID.zod,
+    taskQueueID: TaskQueueID.zod,
+  })
+  export type AttachChildTaskQueueInput = z.infer<typeof AttachChildTaskQueueInput>
+
   export const AppendArtifactInput = z.object({
     runID: WorkflowRunID.zod,
     phaseID: WorkflowPhaseID.zod.optional(),
