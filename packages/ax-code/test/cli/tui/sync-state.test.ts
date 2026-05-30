@@ -56,6 +56,7 @@ describe("tui sync state", () => {
         blockedCount: 0,
         terminalCount: 0,
         verificationEnvelopeCount: 0,
+        evidenceRefCount: 0,
         exposedArtifactCount: 0,
       },
       isolation: { mode: "workspace-write", network: false },

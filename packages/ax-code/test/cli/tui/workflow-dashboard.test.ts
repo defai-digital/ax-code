@@ -283,11 +283,12 @@ describe("tui workflow dashboard view model", () => {
       blockedCount: 1,
       terminalCount: 1,
       verificationEnvelopeCount: 1,
+      evidenceRefCount: 3,
       exposedArtifactCount: 0,
     } as Parameters<typeof visibleWorkflowSidebarRuns>[0]
 
     expect(visibleWorkflowSidebarRuns(state).map((run) => run.runID)).toEqual(["workflow_run_blocked"])
-    expect(renderWorkflowDashboardHeader(state)).toBe("Workflows (1 active, 1 blocked, 1 verified)")
+    expect(renderWorkflowDashboardHeader(state)).toBe("Workflows (1 active, 1 blocked, 3 evidence, 1 verified)")
     expect(renderWorkflowStatusSidebarLine(state.runs[1]!)).toContain("blocked Verified bug sweep")
     expect(renderWorkflowStatusSidebarLine(state.runs[1]!)).toContain("needs permission")
   })

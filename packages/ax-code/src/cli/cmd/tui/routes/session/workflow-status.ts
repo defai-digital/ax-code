@@ -13,6 +13,7 @@ export function renderWorkflowDashboardHeader(state: WorkflowDashboardState) {
   if (state.runs.length === 0) return "Workflows"
   const parts = [`${state.activeCount} active`]
   if (state.blockedCount > 0) parts.push(`${state.blockedCount} blocked`)
+  if (state.evidenceRefCount > 0) parts.push(`${state.evidenceRefCount} evidence`)
   if (state.verificationEnvelopeCount > 0) parts.push(`${state.verificationEnvelopeCount} verified`)
   return `Workflows (${parts.join(", ")})`
 }

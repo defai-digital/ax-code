@@ -98,7 +98,13 @@ describe("tui sync runtime store", () => {
     expect(
       normalizeWorkflowDashboardState([
         workflowRun({ runID: "workflow_run_completed", status: "completed", elapsedMs: 1_000 }),
-        workflowRun({ runID: "workflow_run_blocked", status: "blocked", elapsedMs: 500, verificationEnvelopeCount: 1 }),
+        workflowRun({
+          runID: "workflow_run_blocked",
+          status: "blocked",
+          elapsedMs: 500,
+          verificationEnvelopeCount: 1,
+          evidenceRefCount: 2,
+        }),
         workflowRun({ runID: "workflow_run_running", status: "running", elapsedMs: 2_000, exposedArtifactCount: 2 }),
       ]),
     ).toMatchObject({
@@ -107,6 +113,7 @@ describe("tui sync runtime store", () => {
       blockedCount: 1,
       terminalCount: 1,
       verificationEnvelopeCount: 1,
+      evidenceRefCount: 2,
       exposedArtifactCount: 2,
     })
   })
@@ -158,6 +165,7 @@ function workflowRun(
     },
     artifactCounts: { summary: 0, finding: 0, patch: 0, verification: 0, metric: 0, log: 0 },
     verificationEnvelopeCount: input.verificationEnvelopeCount ?? 0,
+    evidenceRefCount: input.evidenceRefCount ?? 0,
     exposedArtifactCount: input.exposedArtifactCount ?? 0,
     ...overrides,
   } as WorkflowDashboardRun

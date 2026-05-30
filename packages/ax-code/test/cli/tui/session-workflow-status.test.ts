@@ -68,6 +68,7 @@ function workflowState(runs: WorkflowDashboardRun[]): WorkflowDashboardState {
     blockedCount: runs.filter((run) => run.status === "blocked").length,
     terminalCount: runs.filter((run) => ["completed", "failed", "cancelled"].includes(run.status)).length,
     verificationEnvelopeCount: runs.reduce((sum, run) => sum + run.verificationEnvelopeCount, 0),
+    evidenceRefCount: runs.reduce((sum, run) => sum + run.evidenceRefCount, 0),
     exposedArtifactCount: runs.reduce((sum, run) => sum + run.exposedArtifactCount, 0),
   }
 }

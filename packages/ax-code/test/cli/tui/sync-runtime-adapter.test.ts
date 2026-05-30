@@ -159,6 +159,7 @@ function workflowRun(input: {
     },
     artifactCounts: { summary: 0, finding: 0, patch: 0, verification: 0, metric: 0, log: 0 },
     verificationEnvelopeCount: 0,
+    evidenceRefCount: 0,
     exposedArtifactCount: 0,
   }
 }

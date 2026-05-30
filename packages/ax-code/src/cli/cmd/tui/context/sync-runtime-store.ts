@@ -43,6 +43,7 @@ export interface WorkflowDashboardState {
   blockedCount: number
   terminalCount: number
   verificationEnvelopeCount: number
+  evidenceRefCount: number
   exposedArtifactCount: number
 }
 
@@ -81,6 +82,7 @@ export function emptyWorkflowDashboardState(): WorkflowDashboardState {
     blockedCount: 0,
     terminalCount: 0,
     verificationEnvelopeCount: 0,
+    evidenceRefCount: 0,
     exposedArtifactCount: 0,
   }
 }
@@ -97,6 +99,7 @@ export function normalizeWorkflowDashboardState(body: WorkflowDashboardPayload):
     blockedCount: sorted.filter((run) => run.status === "blocked").length,
     terminalCount: sorted.filter((run) => isTerminalWorkflowRunStatus(run.status)).length,
     verificationEnvelopeCount: sorted.reduce((total, run) => total + run.verificationEnvelopeCount, 0),
+    evidenceRefCount: sorted.reduce((total, run) => total + run.evidenceRefCount, 0),
     exposedArtifactCount: sorted.reduce((total, run) => total + run.exposedArtifactCount, 0),
   }
 }
