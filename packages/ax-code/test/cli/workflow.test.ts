@@ -1,10 +1,12 @@
 import { describe, expect, test } from "bun:test"
 import {
+  formatWorkflowRunDashboard,
   formatWorkflowRunDetail,
   formatWorkflowRunList,
   formatWorkflowTemplateList,
 } from "../../src/cli/cmd/workflow"
 import { getParsedWorkflowFixtureSpec } from "../../src/workflow/fixtures"
+import type { WorkflowRunProjection } from "../../src/workflow/projection"
 import type {
   WorkflowArtifactID,
   WorkflowChildID,
@@ -66,6 +68,70 @@ describe("workflow command helpers", () => {
     expect(output).toContain("running")
     expect(output).toContain("workflow_run_01")
     expect(output).toContain("builtin:noop-dry-run")
+  })
+
+  test("formats compact dashboard rows", () => {
+    const output = formatWorkflowRunDashboard([
+      {
+        runID,
+        status: "blocked",
+        name: "Verified Bug Sweep With A Very Long Name",
+        sourceTemplateID: "builtin:verified-bug-sweep",
+        currentPhaseID: phaseID,
+        currentPhaseName: "Cross Check Candidate Findings",
+        currentPhaseStatus: "blocked",
+        elapsedMs: 2500,
+        effort: "workflow",
+        models: { worker: "cheap-model", verifier: "strong-model" },
+        budgetUsage: { ...emptyUsage(), totalTokens: 2500, childAgents: 4 },
+        budgetLimit: {
+          maxTotalTokens: 10_000,
+          maxWallTimeMs: 600_000,
+          maxConcurrentAgents: 3,
+          maxTotalAgents: 25,
+          maxToolCalls: 100,
+          maxRetries: 2,
+        },
+        phaseCounts: {
+          queued: 1,
+          running: 0,
+          blocked: 1,
+          paused: 0,
+          failed: 0,
+          completed: 1,
+          cancelled: 0,
+        },
+        childCounts: {
+          queued: 2,
+          running: 1,
+          blockedPermission: 1,
+          blockedQuestion: 0,
+          paused: 0,
+          failed: 0,
+          completed: 1,
+          cancelled: 0,
+        },
+        artifactCounts: {
+          summary: 1,
+          finding: 2,
+          patch: 0,
+          verification: 1,
+          metric: 0,
+          log: 0,
+        },
+        verificationEnvelopeCount: 1,
+        exposedArtifactCount: 2,
+        blockedReason: "approval required before continuing the workflow",
+      },
+    ] satisfies WorkflowRunProjection[])
+
+    expect(output).toContain("blocked")
+    expect(output).toContain("workflow_run_01")
+    expect(output).toContain("Verified Bug Sweep Wi...")
+    expect(output).toContain("Cross Check Candida...")
+    expect(output).toContain("2/2/4")
+    expect(output).toContain("2500/10000")
+    expect(output).toContain("approval required before continui...")
   })
 
   test("formats run detail counts", () => {

@@ -9,6 +9,7 @@ import type { WorkflowModelPolicyOverride } from "../../workflow/spec"
 import { WorkflowTemplate } from "../../workflow/template"
 import type { SessionID } from "../../session/schema"
 import type { WorkflowRunDetail, WorkflowRunID } from "../../workflow/state"
+import { summarizeWorkflowRunDetail, type WorkflowRunProjection } from "../../workflow/projection"
 
 type JsonOption = {
   json?: boolean
@@ -52,6 +53,34 @@ export function formatWorkflowRunList(runs: WorkflowRun.Info[]) {
   })
   return (
     [`status     run                          template                         currentPhase`, ...lines].join(EOL) + EOL
+  )
+}
+
+export function formatWorkflowRunDashboard(runs: WorkflowRunProjection[]) {
+  if (runs.length === 0) return `No workflow runs found.${EOL}`
+  const lines = runs.map((run) => {
+    const phase = run.currentPhaseName ?? "-"
+    const activeChildren = run.childCounts.running + run.childCounts.blockedPermission + run.childCounts.blockedQuestion
+    const queuedChildren = run.childCounts.queued
+    const childSummary = `${activeChildren}/${queuedChildren}/${run.budgetUsage.childAgents}`
+    const budgetSummary = `${run.budgetUsage.totalTokens}/${run.budgetLimit.maxTotalTokens}`
+    const blocker = run.blockedReason ? truncate(run.blockedReason, 36) : "-"
+    return [
+      run.status.padEnd(10),
+      run.runID.padEnd(28),
+      truncate(run.name, 24).padEnd(24),
+      truncate(phase, 22).padEnd(22),
+      run.effort.padEnd(12),
+      childSummary.padEnd(13),
+      budgetSummary.padEnd(18),
+      blocker,
+    ].join(" ")
+  })
+  return (
+    [
+      "status     run                          name                     phase                  effort       active/queued/total tokens             blocker",
+      ...lines,
+    ].join(EOL) + EOL
   )
 }
 
@@ -151,6 +180,39 @@ const WorkflowRunListCommand = cmd({
         return
       }
       process.stdout.write(formatWorkflowRunList(runs))
+    })
+  },
+})
+
+const WorkflowRunDashboardCommand = cmd({
+  command: "dashboard",
+  describe: "show compact workflow run dashboard",
+  builder: (yargs: Argv) =>
+    yargs
+      .option("status", {
+        type: "string",
+        choices: ["queued", "running", "blocked", "paused", "failed", "completed", "cancelled"] as const,
+        describe: "filter by workflow run status",
+      })
+      .option("limit", {
+        type: "number",
+        describe: "maximum runs to show",
+      })
+      .option("json", jsonOption()),
+  async handler(args) {
+    await withWorkflowRuntime(async () => {
+      const runs = await WorkflowRun.list({
+        status: args.status as WorkflowRun.Status | undefined,
+        limit: args.limit,
+      })
+      const summaries = await Promise.all(
+        runs.map(async (run) => summarizeWorkflowRunDetail(await WorkflowRun.getDetail(run.id))),
+      )
+      if (args.json) {
+        writeJson(summaries)
+        return
+      }
+      process.stdout.write(formatWorkflowRunDashboard(summaries))
     })
   },
 })
@@ -283,6 +345,7 @@ export const WorkflowCommand = cmd({
     yargs
       .command(WorkflowTemplateListCommand)
       .command(WorkflowRunListCommand)
+      .command(WorkflowRunDashboardCommand)
       .command(WorkflowRunStartCommand)
       .command(WorkflowRunStatusCommand)
       .command(WorkflowRunPauseCommand)
@@ -359,4 +422,9 @@ function formatCounts(counts: Record<string, number>) {
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([key, count]) => `${key}=${count}`)
     .join(", ")
+}
+
+function truncate(input: string, maxLength: number) {
+  if (input.length <= maxLength) return input
+  return `${input.slice(0, Math.max(0, maxLength - 3))}...`
 }
