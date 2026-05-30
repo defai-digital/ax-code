@@ -582,8 +582,43 @@ describe("WorkflowScheduler", () => {
           detail = await WorkflowScheduler.retry(run.id)
           expect(detail.status).toBe("running")
           expect(detail.phases[0]?.status).toBe("running")
+          expect(detail.budgetUsage.retries).toBe(1)
+          expect(detail.budgetLedger.some((entry) => entry.message === "Retry requested for workflow run.")).toBe(true)
           expect(detail.children.find((child) => child.taskQueueID === first!.id)?.status).toBe("queued")
           expect((await TaskQueue.get(first!.id)).status).toBe("queued")
+        },
+      })
+    } finally {
+      if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME
+      else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
+    }
+  })
+
+  test("does not requeue workflow children after retry budget is exhausted", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
+    process.env.AX_CODE_WORKFLOW_RUNTIME = "1"
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const run = await WorkflowRun.create({ spec: parseWorkflowSpecV1(WorkflowFixtureSpecs.issueTriage) })
+          await WorkflowScheduler.start(run.id, { allowScaleBeyondDefaults: true })
+          const { TaskQueue } = await import("../../src/session/task-queue")
+          const [first] = await TaskQueue.list()
+
+          await TaskQueue.setStatus({ id: first!.id, status: "failed", error: "model failed" })
+          await WorkflowScheduler.retry(run.id)
+          expect((await TaskQueue.get(first!.id)).status).toBe("queued")
+
+          await TaskQueue.setStatus({ id: first!.id, status: "failed", error: "model failed again" })
+          const exhausted = await WorkflowScheduler.retry(run.id)
+
+          expect(exhausted.status).toBe("failed")
+          expect(exhausted.budgetUsage.retries).toBe(2)
+          expect(exhausted.budgetLedger.some((entry) => entry.message?.includes("Retry requested"))).toBe(true)
+          expect(exhausted.children.find((child) => child.taskQueueID === first!.id)?.status).toBe("failed")
+          expect((await TaskQueue.get(first!.id)).status).toBe("failed")
         },
       })
     } finally {

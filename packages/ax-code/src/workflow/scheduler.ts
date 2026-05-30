@@ -1,5 +1,6 @@
 import z from "zod"
 import { Session } from "../session"
+import { addWorkflowBudgetUsage, evaluateWorkflowBudget } from "./budget"
 import { isWorkflowRuntimeEnabled, type WorkflowSpecV1 } from "./spec"
 import { planWorkflowDryRun } from "./planner"
 import { WorkflowRun } from "./run"
@@ -221,8 +222,24 @@ async function retryChildren(runID: WorkflowRunID, phaseID?: WorkflowPhaseID) {
     throw new Error(`Workflow phase ${phaseID} does not belong to workflow run ${runID}.`)
   }
   const children = phaseID ? detail.children.filter((child) => child.phaseID === phaseID) : detail.children
-  for (const child of children) {
-    if (child.status !== "failed" && child.status !== "cancelled") continue
+  const retryableChildren = children.filter((child) => child.status === "failed" || child.status === "cancelled")
+  if (retryableChildren.length === 0) return detail
+
+  const retryDelta = { retries: 1 }
+  const retryBudget = evaluateWorkflowBudget({
+    budget: detail.budget,
+    usage: addWorkflowBudgetUsage(detail.budgetUsage, retryDelta),
+  })
+  await WorkflowRun.appendBudgetUsage({
+    runID,
+    phaseID,
+    kind: "consume",
+    usageDelta: retryDelta,
+    message: phaseID ? `Retry requested for workflow phase ${phaseID}.` : "Retry requested for workflow run.",
+  })
+  if (retryBudget.exceeded.length > 0) return WorkflowRun.getDetail(runID)
+
+  for (const child of retryableChildren) {
     if (child.taskQueueID) {
       const item = await TaskQueue.get(child.taskQueueID).catch(() => undefined)
       if (item?.status === "failed" || item?.status === "cancelled") {
