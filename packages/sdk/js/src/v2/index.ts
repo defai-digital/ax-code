@@ -12,6 +12,7 @@ export async function createAxCode(options?: ServerOptions) {
 
   const client = createAxCodeClient({
     baseUrl: server.url,
+    headers: server.headers,
   })
 
   return {

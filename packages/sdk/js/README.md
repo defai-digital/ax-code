@@ -251,6 +251,11 @@ const { client, server } = await createAxCode()
 const sessions = await client.session.list()
 ```
 
+`createAxCode()` and `createAxCodeServer()` start `ax-code serve` with generated Basic Auth credentials by default and
+return `server.headers` for clients that need to call the server directly. Prefer `@ax-code/sdk/headless` or
+`@ax-code/sdk/grpc` for desktop GUI work; keep this HTTP helper for compatibility, diagnostics, and service-boundary
+integrations.
+
 ## Cross-language integrations
 
 Use this package for first-party TypeScript and JavaScript integrations. For first-party desktop/native GUI work, prefer `@ax-code/sdk/grpc` and keep HTTP/SSE as the compatibility and debug fallback. For Python, Go, Java, Rust, or other non-JavaScript runtimes, run `ax-code serve` and generate a client from the OpenAPI snapshot at [`../openapi.json`](../openapi.json) unless the integration is owned as part of the native GUI transport.

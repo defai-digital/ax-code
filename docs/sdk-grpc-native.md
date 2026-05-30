@@ -21,7 +21,7 @@ Use gRPC/native transport as the preferred boundary for first-party desktop apps
 
 ## Why Not Remove HTTP
 
-Removing HTTP/OpenAPI would reduce one exposed surface, but it would also remove the most inspectable and portable integration path. Current HTTP server controls already include loopback-first defaults, required password for non-loopback binds, Basic Auth, origin checks on mutating browser requests, directory validation, request rate limits, and loopback-only live OpenAPI docs by default.
+Removing HTTP/OpenAPI would reduce one exposed surface, but it would also remove the most inspectable and portable integration path. Current HTTP server controls already include loopback-first defaults, generated Basic Auth credentials in SDK-managed server helpers, required password for non-loopback binds, Basic Auth enforcement, origin checks on mutating browser requests, directory validation, request rate limits, and loopback-only live OpenAPI docs by default.
 
 The transport is not the dominant latency source for normal agent turns. LLM calls, shell commands, file IO, indexing, LSP startup, and tool execution are usually more expensive than localhost JSON. gRPC is still useful for a desktop GUI because it provides a cleaner native API contract, deadlines, metadata, server streaming, and a path to Unix-socket or named-pipe transports without dragging a browser-oriented API into the app shell.
 

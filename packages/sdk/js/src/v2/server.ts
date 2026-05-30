@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process"
+import { randomBytes } from "node:crypto"
 import { type Config } from "./gen/types.gen.js"
 
 type Proc = ReturnType<typeof spawn> & {
@@ -12,6 +13,10 @@ export type ServerOptions = {
   signal?: AbortSignal
   timeout?: number
   config?: Config
+  auth?: {
+    username?: string
+    password?: string
+  }
 }
 
 export type TuiOptions = {
@@ -35,11 +40,18 @@ export async function createAxCodeServer(options?: ServerOptions) {
 
   const args = [`serve`, `--hostname=${options.hostname}`, `--port=${options.port}`]
   if (options.config?.logLevel) args.push(`--log-level=${options.config.logLevel}`)
+  const username = options.auth?.username ?? "ax-code"
+  const password = options.auth?.password ?? randomBytes(24).toString("base64url")
+  const headers = {
+    Authorization: "Basic " + Buffer.from(`${username}:${password}`).toString("base64"),
+  }
 
   const proc = spawn(`ax-code`, args, {
     signal: options.signal,
     env: {
       ...process.env,
+      AX_CODE_SERVER_USERNAME: username,
+      AX_CODE_SERVER_PASSWORD: password,
       AX_CODE_CONFIG_CONTENT: JSON.stringify(options.config ?? {}),
     },
   }) as Proc
@@ -114,6 +126,7 @@ export async function createAxCodeServer(options?: ServerOptions) {
 
   return {
     url,
+    headers,
     close() {
       try {
         proc.kill()
