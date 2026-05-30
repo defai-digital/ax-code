@@ -43,8 +43,8 @@ describe("workflow routes", () => {
           templateID: "builtin:issue-triage",
           modelPolicy: {
             effort: "max-workflow",
-            workerModel: "cheap-route",
-            synthesizerModel: "strong-route",
+            workerModel: "openai/cheap-route",
+            synthesizerModel: "anthropic/strong-route",
             allowedProviders: ["anthropic", "openai"],
           },
           inputValues: {
@@ -68,8 +68,8 @@ describe("workflow routes", () => {
       expect(created.inputValues).toEqual({ "issue-limit": 5 })
       expect(created.spec.modelPolicy).toMatchObject({
         effort: "max-workflow",
-        workerModel: "cheap-route",
-        synthesizerModel: "strong-route",
+        workerModel: "openai/cheap-route",
+        synthesizerModel: "anthropic/strong-route",
         allowedProviders: ["anthropic", "openai"],
       })
 
@@ -471,7 +471,7 @@ describe("workflow routes", () => {
       const saveResponse = await app.request(`/workflow-templates?${directoryQuery}`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ scope: "project", spec }),
+        body: JSON.stringify({ scope: "project", trust: "trusted", spec }),
       })
       expect(saveResponse.status).toBe(200)
       expect(await saveResponse.json()).toMatchObject({

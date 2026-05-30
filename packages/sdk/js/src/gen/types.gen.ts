@@ -8392,7 +8392,6 @@ export type WorkflowTemplateListResponse = WorkflowTemplateListResponses[keyof W
 export type WorkflowTemplateSaveData = {
   body?: {
     scope: "user" | "project"
-    trust?: "candidate" | "trusted"
     spec: {
       schemaVersion: 1
       id: string

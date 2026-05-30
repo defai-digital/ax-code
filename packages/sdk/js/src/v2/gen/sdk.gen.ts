@@ -2753,13 +2753,12 @@ export class WorkflowTemplate extends HeyApiClient {
   /**
    * Save workflow template
    *
-   * Save a user-local or project-local workflow template candidate or trusted template.
+   * Save a user-local or project-local workflow template candidate. Promote after review to trust it.
    */
   public save<ThrowOnError extends boolean = false>(
     parameters?: {
       directory?: string
       scope?: "user" | "project"
-      trust?: "candidate" | "trusted"
       spec?: {
         schemaVersion: 1
         id: string
@@ -2923,7 +2922,6 @@ export class WorkflowTemplate extends HeyApiClient {
           args: [
             { in: "query", key: "directory" },
             { in: "body", key: "scope" },
-            { in: "body", key: "trust" },
             { in: "body", key: "spec" },
           ],
         },

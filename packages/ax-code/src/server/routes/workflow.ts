@@ -91,7 +91,6 @@ const WorkflowEvalCaseRunBody = z.object({
 
 const WorkflowTemplateSaveBody = z.object({
   scope: z.enum(["user", "project"]),
-  trust: WorkflowTemplate.Trust.optional(),
   spec: WorkflowSpecV1,
 })
 
@@ -511,7 +510,7 @@ export const WorkflowTemplateRoutes = lazy(() =>
       "/",
       describeRoute({
         summary: "Save workflow template",
-        description: "Save a user-local or project-local workflow template candidate or trusted template.",
+        description: "Save a user-local or project-local workflow template candidate. Promote after review to trust it.",
         operationId: "workflowTemplate.save",
         responses: {
           200: {
@@ -522,7 +521,7 @@ export const WorkflowTemplateRoutes = lazy(() =>
         },
       }),
       validator("json", WorkflowTemplateSaveBody),
-      async (c) => c.json(await WorkflowTemplate.save(c.req.valid("json"))),
+      async (c) => c.json(await WorkflowTemplate.save({ ...c.req.valid("json"), trust: "candidate" })),
     )
     .get(
       "/:templateID",
