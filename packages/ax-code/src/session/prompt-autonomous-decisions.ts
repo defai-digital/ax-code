@@ -198,16 +198,25 @@ export function agentStepLimitContinuationDecision(input: {
     }
   }
 
-  return {
-    action: "stop",
-    reason: "step_limit",
-    errorCode: "STEP_LIMIT",
-    message:
-      `Agent reached the per-agent step limit (${formatDecisionCount(input.maxSteps)} steps) ` +
-      `and the continuation budget is exhausted ` +
-      `(${formatDecisionCount(input.continuations)} continuations used). ` +
-      `To increase, set the agent's step limit or raise session.max_continuations.`,
+  // When step > maxSteps the agent is running past its limit with the
+  // continuation budget exhausted — stop immediately.  When step === maxSteps
+  // (the last allowed step is about to run), return ignore so the LLM can
+  // complete that step; pendingTodoContinuationDecision will emit the
+  // "unfinished todo" error with isLastStep=true and break the loop cleanly.
+  if (input.step > input.maxSteps) {
+    return {
+      action: "stop",
+      reason: "step_limit",
+      errorCode: "STEP_LIMIT",
+      message:
+        `Agent reached the per-agent step limit (${formatDecisionCount(input.maxSteps)} steps) ` +
+        `and the continuation budget is exhausted ` +
+        `(${formatDecisionCount(input.continuations)} continuations used). ` +
+        `To increase, set the agent's step limit or raise session.max_continuations.`,
+    }
   }
+
+  return { action: "ignore" }
 }
 
 export function completionGateEventState(input: {
