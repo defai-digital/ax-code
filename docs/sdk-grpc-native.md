@@ -66,8 +66,8 @@ mirroring the full HTTP route tree.
 
 ## TypeScript Usage
 
-Use the SDK-managed gRPC headless backend while the native gRPC server is being implemented. It keeps the HTTP bridge
-inside the host process and returns only the gRPC client plus lifecycle handle:
+Use the SDK-managed gRPC headless backend when the host still needs the existing HTTP runtime internally. It keeps the
+HTTP bridge inside the host process and returns only the gRPC client plus lifecycle handle:
 
 ```ts
 import {
@@ -195,6 +195,34 @@ subscription shape while the native server is being implemented.
 `startAxCodeGrpcHeadlessBackend()` is the preferred temporary fallback when the host still starts `ax-code serve`
 internally. It does not return the HTTP URL or authorization header, so renderer code can be written against the gRPC
 facade and later moved to a real native gRPC transport without a public API rewrite.
+
+Node-based desktop hosts can expose a real HTTP/2 gRPC endpoint from the same native bridge with
+`@ax-code/sdk/grpc/node`. This is for privileged host processes, not renderer code:
+
+```ts
+import { createAxCodeGrpcNativeBridgeFromHandlers, AX_CODE_GRPC_METHOD } from "@ax-code/sdk/grpc"
+import { startAxCodeGrpcNodeHttp2Server } from "@ax-code/sdk/grpc/node"
+
+const bridge = createAxCodeGrpcNativeBridgeFromHandlers({
+  unary: {
+    [AX_CODE_GRPC_METHOD.Health]() {
+      return { status: "SERVING" }
+    },
+  },
+  serverStream: {
+    [AX_CODE_GRPC_METHOD.SubscribeEvents](request) {
+      return runtime.subscribeEvents(request)
+    },
+  },
+})
+
+const server = await startAxCodeGrpcNodeHttp2Server({ bridge, host: "127.0.0.1" })
+try {
+  // Native clients can generate from ax_code/v1/headless.proto and connect to server.url.
+} finally {
+  await server.close()
+}
+```
 
 PTY streaming is modeled as a gRPC bidirectional stream. The HTTP bridge adapts that stream to the existing WebSocket route for compatibility; native GUI hosts should implement it over their local gRPC, Unix-socket, or named-pipe transport instead of exposing the WebSocket route to renderer code.
 
