@@ -269,9 +269,11 @@ function modelRouteForPhase(phase: WorkflowPhase, spec: WorkflowSpec) {
   const policy = { ...spec.modelPolicy, ...phase.modelPolicy }
   const role = modelRoleForPhase(phase, policy)
   const key = `${role}Model` as const
+  const model = roleModel(policy, key, role)
+  assertModelProviderAllowed({ phase, policy, role, model })
   return {
     role,
-    model: roleModel(policy, key, role),
+    model,
   }
 }
 
@@ -300,4 +302,30 @@ function roleModel(
   if ((role === "worker" || role === "verifier") && typeof policy.cheapModel === "string") return policy.cheapModel
   if (role === "synthesizer" && typeof policy.strongModel === "string") return policy.strongModel
   return typeof policy.defaultModel === "string" ? policy.defaultModel : undefined
+}
+
+function assertModelProviderAllowed(input: {
+  phase: WorkflowPhase
+  policy: WorkflowSpec["modelPolicy"]
+  role: WorkflowDryRunChild["modelRole"]
+  model: string | undefined
+}) {
+  if (!input.model || input.policy.allowedProviders.length === 0) return
+  const provider = modelProvider(input.model)
+  if (!provider) {
+    throw new WorkflowPlanError([
+      `phase ${input.phase.id} ${input.role} model ${input.model} must include a provider prefix because allowedProviders is set`,
+    ])
+  }
+  if (!input.policy.allowedProviders.includes(provider)) {
+    throw new WorkflowPlanError([
+      `phase ${input.phase.id} ${input.role} model provider ${provider} is not in allowedProviders ${input.policy.allowedProviders.join(",")}`,
+    ])
+  }
+}
+
+function modelProvider(model: string) {
+  const [provider, modelName] = model.split("/", 2)
+  if (!provider || !modelName) return undefined
+  return provider
 }

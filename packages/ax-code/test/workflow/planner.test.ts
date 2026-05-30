@@ -374,6 +374,61 @@ describe("workflow dry-run planner", () => {
     })
   })
 
+  test("rejects routed models outside the provider allowlist", () => {
+    const spec = parseWorkflowSpecV1({
+      schemaVersion: 1,
+      id: "model-provider-allowlist",
+      name: "Model Provider Allowlist",
+      description: "Planner should reject model routes that leave the allowed provider boundary.",
+      modelPolicy: {
+        defaultModel: "openai/gpt-5-mini",
+        strongModel: "anthropic/claude-sonnet-4-5",
+        allowedProviders: ["openai"],
+        routing: [
+          {
+            phaseKind: "synthesis",
+            use: "synthesizer",
+          },
+        ],
+      },
+      phases: [
+        {
+          id: "report",
+          name: "Report",
+          kind: "synthesis",
+        },
+      ],
+    })
+
+    expect(() => planWorkflowDryRun({ spec })).toThrow(
+      /phase report synthesizer model provider anthropic is not in allowedProviders openai/,
+    )
+  })
+
+  test("requires provider-prefixed models when provider allowlists are declared", () => {
+    const spec = parseWorkflowSpecV1({
+      schemaVersion: 1,
+      id: "model-provider-prefix",
+      name: "Model Provider Prefix",
+      description: "Planner cannot audit a provider allowlist against provider-less model aliases.",
+      modelPolicy: {
+        defaultModel: "workflow-default",
+        allowedProviders: ["openai"],
+      },
+      phases: [
+        {
+          id: "plan",
+          name: "Plan",
+          kind: "sequential",
+        },
+      ],
+    })
+
+    expect(() => planWorkflowDryRun({ spec })).toThrow(
+      /phase plan planner model workflow-default must include a provider prefix/,
+    )
+  })
+
   test("rejects phase pacing above safe defaults without scale opt-in", () => {
     const spec = parseWorkflowSpecV1({
       schemaVersion: 1,
