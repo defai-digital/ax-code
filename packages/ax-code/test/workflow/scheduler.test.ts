@@ -8,6 +8,7 @@ import {
   WorkflowRunID,
   WorkflowScheduler,
   WorkflowSchedulerDisabledError,
+  WorkflowTaskQueue,
   WorkflowUnsupportedMergeStrategyError,
   WORKFLOW_FINAL_REPORT_SPEC_ARTIFACT_ID,
   parseWorkflowSpecV1,
@@ -485,6 +486,13 @@ describe("WorkflowScheduler", () => {
           })
           expect(queue[0]?.payload.maxParallel).toBe(8)
           expect(queue[0]?.payload.escalationPolicy).toBe("ask")
+          expect(WorkflowTaskQueue.readPayload(queue[0]!.payload)).toMatchObject({
+            artifactRefs: [],
+            allowedTools: ["github.issue.view"],
+            writePolicy: "read-only",
+            networkPolicy: "inherit",
+            escalationPolicy: "ask",
+          })
           expect(queue[0]?.payload.budgetSlice).toMatchObject({
             maxInputTokensPerChild: 50_000,
             maxOutputTokensPerChild: 8_000,

@@ -1,7 +1,7 @@
 import z from "zod"
 import type { TaskQueue } from "../session/task-queue"
 import { WorkflowRun } from "./run"
-import { WorkflowPacing, WorkflowPhaseBudget } from "./spec"
+import { WorkflowPacing, WorkflowPermissions, WorkflowPhaseBudget } from "./spec"
 import { WorkflowChildID, WorkflowPhaseID, WorkflowRunID, type WorkflowChildRecord } from "./state"
 import { WorkflowScheduler } from "./scheduler"
 
@@ -18,6 +18,10 @@ export namespace WorkflowTaskQueue {
     budgetSlice: WorkflowPhaseBudget.optional(),
     pacing: WorkflowPacing.optional(),
     maxParallel: z.number().int().positive().optional(),
+    allowedTools: WorkflowPermissions.shape.allowedTools,
+    writePolicy: WorkflowPermissions.shape.writePolicy,
+    networkPolicy: WorkflowPermissions.shape.networkPolicy,
+    escalationPolicy: WorkflowPermissions.shape.escalationPolicy,
   })
   export type Payload = z.infer<typeof Payload>
 
