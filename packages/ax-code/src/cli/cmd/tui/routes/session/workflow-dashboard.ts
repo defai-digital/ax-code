@@ -1,7 +1,9 @@
-import type { WorkflowRunDashboardResponse, WorkflowRunGetResponse } from "@ax-code/sdk/v2"
+import type { WorkflowArtifactEventRecord, WorkflowRunDashboardResponse, WorkflowRunGetResponse } from "@ax-code/sdk/v2"
 
 export type WorkflowDashboardRun = WorkflowRunDashboardResponse[number]
 export type WorkflowRunDetail = WorkflowRunGetResponse
+export type WorkflowRunArtifact = WorkflowArtifactEventRecord
+export type WorkflowRunControlAction = "pause" | "resume" | "cancel" | "retry"
 
 export type WorkflowDashboardItem = {
   title: string
@@ -12,9 +14,14 @@ export type WorkflowDashboardItem = {
   disabled?: boolean
 }
 
+export type WorkflowRunControlItem = WorkflowDashboardItem & {
+  action: WorkflowRunControlAction
+}
+
 const MAX_TITLE = 46
 const MAX_DESCRIPTION = 118
 const MAX_FOOTER = 118
+const ARTIFACT_DETAIL_VALUE_PREFIX = "workflow.detail.artifact."
 
 export function workflowDashboardItems(runs: WorkflowDashboardRun[]): WorkflowDashboardItem[] {
   if (runs.length === 0) {
@@ -121,7 +128,7 @@ export function workflowRunDetailItems(detail: WorkflowRunDetail): WorkflowDashb
   for (const artifact of detail.artifacts) {
     items.push({
       title: truncate(`${artifact.kind} ${artifact.id}`, MAX_TITLE),
-      value: `workflow.detail.artifact.${artifact.id}`,
+      value: `${ARTIFACT_DETAIL_VALUE_PREFIX}${artifact.id}`,
       description: truncate(
         `${artifact.retention}${artifact.exposeToMainContext ? " | exposed" : ""}${
           artifact.redaction?.status ? ` | redaction: ${artifact.redaction.status}` : ""
@@ -130,7 +137,6 @@ export function workflowRunDetailItems(detail: WorkflowRunDetail): WorkflowDashb
       ),
       footer: artifact.summary ? truncate(artifact.summary, MAX_FOOTER) : undefined,
       category: "Artifacts",
-      disabled: true,
     })
   }
 
@@ -156,6 +162,143 @@ export function workflowRunDetailItems(detail: WorkflowRunDetail): WorkflowDashb
   }
 
   return items
+}
+
+export function workflowRunControlItems(detail: WorkflowRunDetail): WorkflowRunControlItem[] {
+  const items: WorkflowRunControlItem[] = []
+
+  if (detail.status === "queued" || detail.status === "running" || detail.status === "blocked") {
+    items.push({
+      title: "Pause workflow run",
+      value: "workflow.detail.control.pause",
+      description: "Pause queued workflow children and keep durable run state available for resume.",
+      category: "Controls",
+      action: "pause",
+    })
+  }
+
+  if (detail.status === "paused") {
+    items.push({
+      title: "Resume workflow run",
+      value: "workflow.detail.control.resume",
+      description: "Resume paused workflow queue children and continue the run.",
+      category: "Controls",
+      action: "resume",
+    })
+  }
+
+  if (
+    detail.status === "queued" ||
+    detail.status === "running" ||
+    detail.status === "blocked" ||
+    detail.status === "paused"
+  ) {
+    items.push({
+      title: "Cancel workflow run",
+      value: "workflow.detail.control.cancel",
+      description: "Stop queued workflow children and mark the workflow run cancelled.",
+      category: "Controls",
+      action: "cancel",
+    })
+  }
+
+  if (detail.status === "failed" || detail.status === "cancelled") {
+    items.push({
+      title: "Retry workflow run",
+      value: "workflow.detail.control.retry",
+      description: "Retry failed or cancelled workflow queue children from durable state.",
+      category: "Controls",
+      action: "retry",
+    })
+  }
+
+  return items
+}
+
+export function workflowArtifactDetailItems(artifact: WorkflowRunArtifact): WorkflowDashboardItem[] {
+  const items: WorkflowDashboardItem[] = [
+    {
+      title: truncate(`${artifact.kind} ${artifact.id}`, MAX_TITLE),
+      value: "workflow.artifact.overview",
+      description: truncate(
+        `${artifact.retention}${artifact.exposeToMainContext ? " | exposed" : ""}${
+          artifact.redaction?.status ? ` | redaction: ${artifact.redaction.status}` : ""
+        }`,
+        MAX_DESCRIPTION,
+      ),
+      footer: artifact.redaction?.summary
+        ? truncate(`redaction: ${artifact.redaction.summary}`, MAX_FOOTER)
+        : undefined,
+      category: "Overview",
+      disabled: true,
+    },
+    {
+      title: "Artifact scope",
+      value: "workflow.artifact.scope",
+      description: truncate(
+        [
+          artifact.phaseID ? `phase: ${artifact.phaseID}` : undefined,
+          artifact.childID ? `child: ${artifact.childID}` : undefined,
+          artifact.specArtifactID ? `spec: ${artifact.specArtifactID}` : undefined,
+        ]
+          .filter(Boolean)
+          .join(" | ") || "run-level artifact",
+        MAX_DESCRIPTION,
+      ),
+      footer: `created: ${artifact.time.created}`,
+      category: "Overview",
+      disabled: true,
+    },
+  ]
+
+  if (artifact.summary) {
+    items.push({
+      title: "Summary",
+      value: "workflow.artifact.summary",
+      description: truncate(artifact.summary, MAX_DESCRIPTION),
+      category: "Content",
+      disabled: true,
+    })
+  }
+
+  items.push({
+    title: "Payload preview",
+    value: "workflow.artifact.payload",
+    description: truncate(workflowArtifactPayloadPreview(artifact.payload), MAX_DESCRIPTION),
+    footer:
+      artifact.payload === undefined
+        ? undefined
+        : truncate(workflowArtifactPayloadPreview(artifact.payload, true), MAX_FOOTER),
+    category: "Content",
+    disabled: true,
+  })
+
+  if (artifact.evidenceRefs.length === 0) {
+    items.push({
+      title: "No evidence refs",
+      value: "workflow.artifact.evidence.empty",
+      description: "This artifact has no linked verification, finding, or debug evidence refs.",
+      category: "Evidence",
+      disabled: true,
+    })
+  } else {
+    for (const ref of artifact.evidenceRefs) {
+      items.push({
+        title: truncate(`${ref.kind} ${ref.id}`, MAX_TITLE),
+        value: `workflow.artifact.evidence.${ref.kind}.${ref.id}`,
+        description: "Linked evidence reference for this workflow artifact.",
+        category: "Evidence",
+        disabled: true,
+      })
+    }
+  }
+
+  return items
+}
+
+export function workflowArtifactIDFromDetailValue(value: string) {
+  if (!value.startsWith(ARTIFACT_DETAIL_VALUE_PREFIX)) return undefined
+  return value.slice(ARTIFACT_DETAIL_VALUE_PREFIX.length) || undefined
 }
 
 function workflowBudgetLimits(detail: WorkflowRunDetail) {
@@ -207,4 +350,15 @@ function numberField(primary: unknown, fallback: unknown) {
 function truncate(value: string, max: number) {
   if (value.length <= max) return value
   return value.slice(0, Math.max(0, max - 3)) + "..."
+}
+
+function workflowArtifactPayloadPreview(payload: unknown, multiline = false) {
+  if (payload === undefined) return "No payload stored for this artifact."
+  if (typeof payload === "string") return payload
+  if (typeof payload === "number" || typeof payload === "boolean" || payload === null) return String(payload)
+  try {
+    return JSON.stringify(payload, null, multiline ? 2 : 0)
+  } catch {
+    return String(payload)
+  }
 }

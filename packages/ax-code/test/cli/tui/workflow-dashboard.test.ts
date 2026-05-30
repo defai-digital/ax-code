@@ -2,7 +2,10 @@ import { describe, expect, test } from "bun:test"
 import {
   formatWorkflowDuration,
   statusCategory,
+  workflowArtifactDetailItems,
+  workflowArtifactIDFromDetailValue,
   workflowDashboardItems,
+  workflowRunControlItems,
   workflowRunDetailItems,
   type WorkflowDashboardRun,
   type WorkflowRunDetail,
@@ -66,7 +69,41 @@ describe("tui workflow dashboard view model", () => {
     expect(items.some((item) => item.category === "Phases" && item.title.includes("Cross-check"))).toBe(true)
     expect(items.some((item) => item.category === "Children" && item.description?.includes("artifacts: 1"))).toBe(true)
     expect(items.some((item) => item.category === "Artifacts" && item.footer === "final evidence")).toBe(true)
+    expect(items.find((item) => item.value === "workflow.detail.artifact.artifact_1")?.disabled).toBeUndefined()
     expect(items.some((item) => item.category === "Budget" && item.description?.includes("3 tool calls"))).toBe(true)
+  })
+
+  test("exposes run controls by workflow run status", () => {
+    expect(workflowRunControlItems(workflowRunDetail({ status: "running" })).map((item) => item.action)).toEqual([
+      "pause",
+      "cancel",
+    ])
+    expect(workflowRunControlItems(workflowRunDetail({ status: "paused" })).map((item) => item.action)).toEqual([
+      "resume",
+      "cancel",
+    ])
+    expect(workflowRunControlItems(workflowRunDetail({ status: "failed" })).map((item) => item.action)).toEqual([
+      "retry",
+    ])
+    expect(workflowRunControlItems(workflowRunDetail({ status: "completed" }))).toEqual([])
+  })
+
+  test("renders artifact drill-down rows with payload and evidence references", () => {
+    const [artifact] = workflowRunDetail().artifacts
+    const items = workflowArtifactDetailItems({
+      ...artifact!,
+      phaseID: "phase_2",
+      childID: "child_1",
+      payload: { confirmed: 1, rejected: 2 },
+      evidenceRefs: [{ kind: "verification", id: "ve_1" }],
+      redaction: { status: "redacted", summary: "secret paths removed" },
+    })
+
+    expect(workflowArtifactIDFromDetailValue("workflow.detail.artifact.artifact_1")).toBe("artifact_1")
+    expect(workflowArtifactIDFromDetailValue("workflow.detail.phase.phase_1")).toBeUndefined()
+    expect(items.find((item) => item.value === "workflow.artifact.scope")?.description).toContain("phase: phase_2")
+    expect(items.find((item) => item.value === "workflow.artifact.payload")?.description).toContain('"confirmed":1')
+    expect(items.some((item) => item.value === "workflow.artifact.evidence.verification.ve_1")).toBe(true)
   })
 
   test("formats duration and status categories", () => {
@@ -164,7 +201,7 @@ function workflowDashboardRun(input: Partial<WorkflowDashboardRun> = {}): Workfl
   }
 }
 
-function workflowRunDetail(): WorkflowRunDetail {
+function workflowRunDetail(input: Partial<WorkflowRunDetail> = {}): WorkflowRunDetail {
   return {
     id: "wfr_1",
     projectID: "proj_1",
@@ -266,5 +303,6 @@ function workflowRunDetail(): WorkflowRunDetail {
         time: { created: 1, updated: 2 },
       },
     ],
+    ...input,
   } as WorkflowRunDetail
 }
