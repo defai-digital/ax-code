@@ -76,6 +76,7 @@ describe("WorkflowScheduler", () => {
           })
           expect(finalReport?.summary).toContain("Verification: not_run (optional)")
           expect(finalReport?.summary).toContain("Evidence refs: artifact:wfa_")
+          expect(finalReport?.summary).toContain("Eval decision: promote; cost per verified completion: $0.0000.")
           expect(finalReport?.summary).toContain("Budget limits: tokens 100000")
           expect(finalReport?.summary).toContain("Pacing: requests/min 12, tokens/min 200000.")
           expect(finalReport?.evidenceRefs).toHaveLength(2)
@@ -98,6 +99,13 @@ describe("WorkflowScheduler", () => {
               status: "not_run",
               requiredArtifactIds: [],
               verificationEnvelopeCount: 0,
+            },
+            evaluation: {
+              decision: "promote",
+              metrics: {
+                verifiedCompletionCount: 1,
+                costPerVerifiedCompletionUsd: 0,
+              },
             },
           })
           expect(result.children).toEqual([])
@@ -135,6 +143,7 @@ describe("WorkflowScheduler", () => {
           expect(report.text).toContain("Workflow final report: Noop Dry Run")
           expect(report.text).toContain("Final artifact: wfa_")
           expect(report.text).toContain("Linked evidence refs: artifact:wfa_")
+          expect(report.text).toContain("Eval decision: promote; cost per verified completion: $0.0000.")
           expect(report.text).toContain("Budget limits: tokens 100000")
           expect(report.text).toContain("Pacing: requests/min 12, tokens/min 200000.")
           expect(report.text).toContain("Budget used: 0 tokens, 0 tool calls, 0 child agents.")

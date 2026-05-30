@@ -11,7 +11,7 @@ import { Database, NotFoundError, and, asc, desc, eq, inArray } from "../storage
 import { Log } from "../util/log"
 import { defaultWorkflowArtifactRedaction } from "./artifact"
 import { addWorkflowBudgetUsage, evaluateWorkflowBudget, evaluateWorkflowChildBudget } from "./budget"
-import { classifyWorkflowFindingArtifact, type WorkflowEvalFindingStatus } from "./eval"
+import { classifyWorkflowFindingArtifact, evaluateWorkflowRun, type WorkflowEvalFindingStatus } from "./eval"
 import { WorkflowInputValidationError, resolveWorkflowInputValues } from "./spec"
 import {
   EmptyWorkflowBudgetUsage,
@@ -579,11 +579,13 @@ async function ensureFinalReportArtifact(runID: WorkflowRunID): Promise<Workflow
   const verification = finalReportVerification(detail)
   const findings = finalReportFindings(detail)
   const evidenceRefs = finalReportEvidenceRefs(detail)
+  const evaluation = evaluateWorkflowRun({ run: detail, now: detail.time.completed ?? Date.now() })
   const summary = [
     `Workflow final report: ${detail.spec.name}`,
     `Status: ${detail.status}`,
     `Verification: ${verification.status} (${verification.mode})`,
     ...verification.summaryLines,
+    `Eval decision: ${evaluation.decision}; cost per verified completion: ${formatUsdMetric(evaluation.metrics.costPerVerifiedCompletionUsd)}.`,
     `Evidence refs: ${formatEvidenceRefs(evidenceRefs)}`,
     `Budget limits: ${formatWorkflowBudgetLimit(detail.budget)}`,
     `Pacing: ${formatWorkflowPacing(detail.spec.pacing)}`,
@@ -617,6 +619,7 @@ async function ensureFinalReportArtifact(runID: WorkflowRunID): Promise<Workflow
       evidenceRefs,
       verification,
       findings,
+      evaluation,
       budgetLimit: detail.budget,
       pacing: detail.spec.pacing,
       budgetUsage: detail.budgetUsage,
@@ -672,6 +675,10 @@ function formatWorkflowBudgetLimit(budget: WorkflowRunDetail["budget"]) {
 
 function formatWorkflowPacing(pacing: WorkflowRunDetail["spec"]["pacing"]) {
   return `requests/min ${pacing.maxRequestsPerMinute}, tokens/min ${pacing.maxTokensPerMinute}.`
+}
+
+function formatUsdMetric(value: number | null | undefined) {
+  return value === null || value === undefined ? "n/a" : `$${value.toFixed(4)}`
 }
 
 function formatDurationMs(ms: number) {
@@ -788,6 +795,7 @@ function findLatestUserMessage(messages: MessageV2.WithParts[]) {
 
 function formatParentFinalReport(detail: WorkflowRunDetail, artifact: WorkflowArtifactRecord) {
   const usage = detail.budgetUsage
+  const evaluation = evaluateWorkflowRun({ run: detail, now: detail.time.completed ?? Date.now() })
   const cost =
     usage.estimatedCostUsd === undefined || usage.estimatedCostUsd <= 0
       ? ""
@@ -798,6 +806,7 @@ function formatParentFinalReport(detail: WorkflowRunDetail, artifact: WorkflowAr
     `Run: ${detail.id}`,
     `Final artifact: ${artifact.id}`,
     `Linked evidence refs: ${formatEvidenceRefs(artifact.evidenceRefs)}`,
+    `Eval decision: ${evaluation.decision}; cost per verified completion: ${formatUsdMetric(evaluation.metrics.costPerVerifiedCompletionUsd)}.`,
     `Budget limits: ${formatWorkflowBudgetLimit(detail.budget)}`,
     `Pacing: ${formatWorkflowPacing(detail.spec.pacing)}`,
     `Budget used: ${usage.totalTokens} tokens, ${usage.toolCalls} tool calls, ${usage.childAgents} child agents${cost}.`,
