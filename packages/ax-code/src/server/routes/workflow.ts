@@ -79,6 +79,10 @@ const WorkflowTemplateSaveBody = z.object({
   spec: WorkflowSpecV1,
 })
 
+const WorkflowTemplateSaveFromRunBody = z.object({
+  scope: z.enum(["user", "project"]),
+})
+
 const WorkflowRunResponse = WorkflowRunEventRecord
 const WorkflowRunDetailResponse = WorkflowRunEventRecord.extend({
   phases: z.array(WorkflowPhaseEventRecord),
@@ -283,6 +287,27 @@ export const WorkflowRunRoutes = lazy(() =>
         const body = c.req.valid("json") ?? {}
         const detail = await WorkflowRun.getDetail(runID(c))
         return c.json(evaluateWorkflowRun({ run: detail, baseline: body.baseline, now: body.now }))
+      },
+    )
+    .post(
+      "/:runID/save-template",
+      describeRoute({
+        summary: "Save workflow run as template",
+        description: "Save a workflow run spec snapshot as a candidate user-local or project-local template.",
+        operationId: "workflowRun.save_template",
+        responses: {
+          200: {
+            description: "Saved workflow template candidate.",
+            content: { "application/json": { schema: resolver(WorkflowTemplateResponse) } },
+          },
+          ...errors(400, 404),
+        },
+      }),
+      validator("param", WORKFLOW_RUN_ID_PARAM),
+      validator("json", WorkflowTemplateSaveFromRunBody),
+      async (c) => {
+        const body = c.req.valid("json")
+        return c.json(await WorkflowTemplate.saveFromRun({ runID: runID(c), scope: body.scope }))
       },
     )
     .post(

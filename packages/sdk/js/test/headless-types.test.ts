@@ -293,6 +293,9 @@ describe("headless SDK types", () => {
         if (parsed.pathname.endsWith("/eval-summary")) {
           return new Response(JSON.stringify({ runID: "wfr_live", decision: "promote" }), { status: 200 })
         }
+        if (parsed.pathname.endsWith("/save-template")) {
+          return new Response(JSON.stringify({ id: "project:noop-dry-run", trust: "candidate" }), { status: 200 })
+        }
         return new Response(JSON.stringify({ id: "wfr_live", status: "running" }), { status: 200 })
       }) as typeof fetch,
     })
@@ -319,6 +322,7 @@ describe("headless SDK types", () => {
     await client.workflowRun.evalSummary("wfr_live", {
       baseline: { label: "single-agent", metrics: { confirmedFindings: 0, falsePositiveFindings: 0 } },
     })
+    await client.workflowRun.saveTemplate("wfr_live", { scope: "project" })
     await client.workflowRun.start("wfr_live", { enqueueChildren: false })
     await client.workflowRun.pause("wfr_live")
 
@@ -331,6 +335,7 @@ describe("headless SDK types", () => {
       ["GET", "/workflow-runs/dashboard"],
       ["GET", "/workflow-runs/wfr_live/artifacts"],
       ["POST", "/workflow-runs/wfr_live/eval-summary"],
+      ["POST", "/workflow-runs/wfr_live/save-template"],
       ["POST", "/workflow-runs/wfr_live/start"],
       ["POST", "/workflow-runs/wfr_live/pause"],
     ])
@@ -347,7 +352,8 @@ describe("headless SDK types", () => {
         baseline: { label: "single-agent", metrics: { confirmedFindings: 0, falsePositiveFindings: 0 } },
       }),
     )
-    expect(calls[8].body).toBe(JSON.stringify({ enqueueChildren: false }))
+    expect(calls[8].body).toBe(JSON.stringify({ scope: "project" }))
+    expect(calls[9].body).toBe(JSON.stringify({ enqueueChildren: false }))
   })
 
   test("parseHeadlessRuntimeResponseBody handles empty and invalid bodies", () => {

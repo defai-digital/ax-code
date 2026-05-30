@@ -8,6 +8,7 @@ import { SessionID } from "../session/schema"
 import { Filesystem } from "../util/filesystem"
 import { WorkflowFixtureSpecs } from "./fixtures"
 import { WorkflowRun } from "./run"
+import { WorkflowRunID } from "./state"
 import {
   WorkflowInputValues,
   WorkflowModelPolicyOverride,
@@ -74,6 +75,12 @@ export namespace WorkflowTemplate {
     spec: WorkflowSpecV1,
   })
   export type SaveInput = z.input<typeof SaveInput>
+
+  export const SaveFromRunInput = z.object({
+    runID: WorkflowRunID.zod,
+    scope: Source.exclude(["builtin"]),
+  })
+  export type SaveFromRunInput = z.input<typeof SaveFromRunInput>
 
   const builtins = Object.fromEntries(
     Object.entries(WorkflowFixtureSpecs).map(([key, value]) => {
@@ -154,6 +161,16 @@ export namespace WorkflowTemplate {
     })
     await Filesystem.writeJson(file, promoted, 0o600)
     return Info.parse(toInfo(source, promoted, file))
+  }
+
+  export async function saveFromRun(input: SaveFromRunInput): Promise<Info> {
+    const parsed = SaveFromRunInput.parse(input)
+    const run = await WorkflowRun.getDetail(parsed.runID)
+    return save({
+      scope: parsed.scope,
+      trust: "candidate",
+      spec: run.spec,
+    })
   }
 
   export async function createRun(input: CreateRunInput): Promise<WorkflowRun.Info> {

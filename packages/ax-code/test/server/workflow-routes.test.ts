@@ -229,6 +229,39 @@ describe("workflow routes", () => {
     }
   })
 
+  test("saves workflow runs as candidate templates", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
+    process.env.AX_CODE_WORKFLOW_RUNTIME = "1"
+    try {
+      const app = Server.Default()
+      const directoryQuery = `directory=${encodeURIComponent(tmp.path)}`
+
+      const createResponse = await app.request(`/workflow-runs?${directoryQuery}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ templateID: "builtin:noop-dry-run" }),
+      })
+      expect(createResponse.status).toBe(200)
+      const created = (await createResponse.json()) as { id: string }
+
+      const earlySaveResponse = await app.request(`/workflow-runs/${created.id}/save-template?${directoryQuery}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ scope: "project" }),
+      })
+      expect(earlySaveResponse.status).toBe(200)
+      expect(await earlySaveResponse.json()).toMatchObject({
+        id: "project:noop-dry-run",
+        source: "project",
+        trust: "candidate",
+      })
+    } finally {
+      if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME
+      else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
+    }
+  })
+
   test("saves and promotes project workflow templates", async () => {
     await using tmp = await tmpdir({ git: true })
     const previous = process.env.AX_CODE_WORKFLOW_RUNTIME

@@ -4,6 +4,7 @@ import {
   WorkflowTemplate,
   WorkflowTemplateNotFoundError,
   WorkflowTemplateUntrustedError,
+  WorkflowRun,
   getParsedWorkflowFixtureSpec,
   parseWorkflowSpecV1,
 } from "../../src/workflow"
@@ -111,6 +112,33 @@ describe("WorkflowTemplate", () => {
         const run = await WorkflowTemplate.createRun({ templateID: promoted.id })
         expect(run.sourceTemplateID).toBe("project:local-noop")
         expect(run.spec.id).toBe("local-noop")
+      },
+    })
+  })
+
+  test("saves generated workflow run snapshots as candidate templates", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const run = await WorkflowRun.create({
+          spec: {
+            ...getParsedWorkflowFixtureSpec("noopDryRun"),
+            id: "run-generated-noop",
+            name: "Run Generated Noop",
+            description: "Workflow spec generated during a successful run.",
+          },
+        })
+        const saved = await WorkflowTemplate.saveFromRun({ runID: run.id, scope: "project" })
+
+        expect(saved).toMatchObject({
+          id: "project:run-generated-noop",
+          source: "project",
+          trust: "candidate",
+          name: "Run Generated Noop",
+        })
+        expect(saved.specHash).toBe(WorkflowTemplate.specHash(run.spec))
       },
     })
   })

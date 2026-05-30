@@ -276,6 +276,8 @@ import type {
   WorkflowRunResumeResponses,
   WorkflowRunRetryErrors,
   WorkflowRunRetryResponses,
+  WorkflowRunSaveTemplateErrors,
+  WorkflowRunSaveTemplateResponses,
   WorkflowRunStartErrors,
   WorkflowRunStartResponses,
   WorkflowTemplateGetErrors,
@@ -2391,6 +2393,47 @@ export class WorkflowRun extends HeyApiClient {
       ThrowOnError
     >({
       url: "/workflow-runs/{runID}/eval-summary",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Save workflow run as template
+   *
+   * Save a workflow run spec snapshot as a candidate user-local or project-local template.
+   */
+  public saveTemplate<ThrowOnError extends boolean = false>(
+    parameters: {
+      runID: string
+      directory?: string
+      scope?: "user" | "project"
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "runID" },
+            { in: "query", key: "directory" },
+            { in: "body", key: "scope" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      WorkflowRunSaveTemplateResponses,
+      WorkflowRunSaveTemplateErrors,
+      ThrowOnError
+    >({
+      url: "/workflow-runs/{runID}/save-template",
       ...options,
       ...params,
       headers: {

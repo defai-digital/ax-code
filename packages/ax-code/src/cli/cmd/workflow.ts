@@ -33,6 +33,10 @@ type RunIDOptions = JsonOption & {
   runID: string
 }
 
+type SaveTemplateOptions = RunIDOptions & {
+  scope: "user" | "project"
+}
+
 export function formatWorkflowTemplateList(templates: WorkflowTemplate.Info[]) {
   if (templates.length === 0) return `No workflow templates found.${EOL}`
   return templates
@@ -328,6 +332,39 @@ const WorkflowRunStatusCommand = cmd({
   },
 })
 
+const WorkflowRunSaveTemplateCommand = cmd({
+  command: "save-template <runID>",
+  describe: "save a workflow run spec snapshot as a candidate template",
+  builder: (yargs: Argv) =>
+    yargs
+      .positional("runID", {
+        type: "string",
+        demandOption: true,
+        describe: "workflow run id",
+      })
+      .option("scope", {
+        type: "string",
+        choices: ["project", "user"] as const,
+        default: "project" as const,
+        describe: "template catalog to save into",
+      })
+      .option("json", jsonOption()),
+  async handler(args) {
+    await withWorkflowRuntime(async () => {
+      const options = args as unknown as SaveTemplateOptions
+      const template = await WorkflowTemplate.saveFromRun({
+        runID: options.runID as WorkflowRunID,
+        scope: options.scope,
+      })
+      if (options.json) {
+        writeJson(template)
+        return
+      }
+      process.stdout.write(formatWorkflowTemplateList([template]))
+    })
+  },
+})
+
 const WorkflowRunPauseCommand = controlCommand("pause", "pause queued workflow children", WorkflowScheduler.pause)
 const WorkflowRunResumeCommand = controlCommand("resume", "resume paused workflow children", WorkflowScheduler.resume)
 const WorkflowRunCancelCommand = controlCommand("cancel", "cancel a workflow run", WorkflowScheduler.cancel)
@@ -348,6 +385,7 @@ export const WorkflowCommand = cmd({
       .command(WorkflowRunDashboardCommand)
       .command(WorkflowRunStartCommand)
       .command(WorkflowRunStatusCommand)
+      .command(WorkflowRunSaveTemplateCommand)
       .command(WorkflowRunPauseCommand)
       .command(WorkflowRunResumeCommand)
       .command(WorkflowRunCancelCommand)

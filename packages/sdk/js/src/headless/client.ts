@@ -20,6 +20,8 @@ import type {
   WorkflowRunResumeResponse,
   WorkflowRunCancelResponse,
   WorkflowRunRetryResponse,
+  WorkflowRunSaveTemplateData,
+  WorkflowRunSaveTemplateResponse,
   WorkflowRunStartResponse,
   WorkflowTemplateGetResponse,
   WorkflowTemplateListResponse,
@@ -179,6 +181,7 @@ export type HeadlessWorkflowRunListInput = Omit<NonNullable<WorkflowRunListData[
 export type HeadlessWorkflowRunDashboardInput = Omit<NonNullable<WorkflowRunDashboardData["query"]>, "directory">
 export type HeadlessWorkflowRunCreateInput = NonNullable<WorkflowRunCreateData["body"]>
 export type HeadlessWorkflowRunEvalSummaryInput = NonNullable<WorkflowRunEvalSummaryData["body"]>
+export type HeadlessWorkflowRunSaveTemplateInput = NonNullable<WorkflowRunSaveTemplateData["body"]>
 export type HeadlessWorkflowArtifactListInput = Omit<NonNullable<WorkflowRunArtifactsData["query"]>, "directory">
 export type HeadlessWorkflowTemplateSaveInput = NonNullable<WorkflowTemplateSaveData["body"]>
 export type HeadlessWorkflowRunStartInput = {
@@ -365,6 +368,18 @@ export function createHeadlessClient(input: HeadlessClientOptions) {
           directory: input.directory,
           experimental_workspaceID: input.experimental_workspaceID,
           path: `/workflow-runs/${encodeURIComponent(runID)}/eval-summary`,
+          method: "POST",
+          body: body as Record<string, unknown>,
+        })
+      },
+      saveTemplate(runID: string, body: HeadlessWorkflowRunSaveTemplateInput) {
+        return requestJson<WorkflowRunSaveTemplateResponse>({
+          baseUrl: input.baseUrl,
+          fetch: fetchFn,
+          headers: input.headers,
+          directory: input.directory,
+          experimental_workspaceID: input.experimental_workspaceID,
+          path: `/workflow-runs/${encodeURIComponent(runID)}/save-template`,
           method: "POST",
           body: body as Record<string, unknown>,
         })
