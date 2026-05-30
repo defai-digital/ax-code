@@ -12,6 +12,13 @@ service AxCodeHeadless {
   rpc LoadBootstrap(BootstrapRequest) returns (JsonResponse);
   rpc LoadSessionEvidence(LoadSessionEvidenceRequest) returns (JsonResponse);
 
+  rpc ListPty(QueryRequest) returns (JsonResponse);
+  rpc CreatePty(JsonRequest) returns (JsonResponse);
+  rpc GetPty(IdRequest) returns (JsonResponse);
+  rpc UpdatePty(IdJsonRequest) returns (JsonResponse);
+  rpc RemovePty(IdRequest) returns (JsonResponse);
+  rpc ConnectPty(stream PtyClientEvent) returns (stream PtyServerEvent);
+
   rpc ListTaskQueue(QueryRequest) returns (JsonResponse);
   rpc EnqueueTaskQueue(JsonRequest) returns (JsonResponse);
   rpc EditTaskQueue(IdJsonRequest) returns (JsonResponse);
@@ -144,4 +151,25 @@ message RuntimeEvent {
   string type = 1;
   google.protobuf.Value properties = 2;
   google.protobuf.Value event = 3;
+}
+
+message PtyClientEvent {
+  string pty_id = 1;
+  uint32 cursor = 2;
+  string type = 3;
+  string data = 4;
+  uint32 cols = 5;
+  uint32 rows = 6;
+  uint32 code = 7;
+  string reason = 8;
+}
+
+message PtyServerEvent {
+  string type = 1;
+  string data = 2;
+  uint32 cursor = 3;
+  uint32 from = 4;
+  google.protobuf.Struct gap = 5;
+  uint32 code = 6;
+  string reason = 7;
 }

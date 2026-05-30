@@ -27,6 +27,7 @@ describe("gRPC SDK facade", () => {
         if (method === AX_CODE_GRPC_METHOD.CreateSession) return { value: { id: "sess-1" } }
         if (method === AX_CODE_GRPC_METHOD.SendRuntimeCommand) return { accepted: true, status: 202 }
         if (method === AX_CODE_GRPC_METHOD.LoadBootstrap) return { value: { path: { root: "/repo" }, errors: [] } }
+        if (method === AX_CODE_GRPC_METHOD.CreatePty) return { value: { id: "pty_1", title: "Terminal" } }
         if (method === AX_CODE_GRPC_METHOD.TaskQueueCommand) return { value: { id: "task-1", status: "paused" } }
         throw new Error(`unexpected method ${method}`)
       },
@@ -44,13 +45,45 @@ describe("gRPC SDK facade", () => {
       status: 202,
     })
     expect(await client.bootstrap.load({ include: { path: true } })).toEqual({ path: { root: "/repo" }, errors: [] })
+    expect(await client.pty.create({ title: "Terminal" })).toEqual({ id: "pty_1", title: "Terminal" })
     expect(await pause("task-1")).toEqual({ id: "task-1", status: "paused" })
     expect(calls.map((call) => call.method)).toEqual([
       AX_CODE_GRPC_METHOD.Health,
       AX_CODE_GRPC_METHOD.CreateSession,
       AX_CODE_GRPC_METHOD.SendRuntimeCommand,
       AX_CODE_GRPC_METHOD.LoadBootstrap,
+      AX_CODE_GRPC_METHOD.CreatePty,
       AX_CODE_GRPC_METHOD.TaskQueueCommand,
+    ])
+  })
+
+  test("high-level client exposes PTY bidirectional streaming", async () => {
+    const seen: unknown[] = []
+    const transport: AxCodeGrpcTransport = {
+      async unary() {
+        throw new Error("unary should not be called")
+      },
+      async *serverStream() {},
+      async *bidiStream(method, request, input) {
+        seen.push({ method, request })
+        for await (const frame of input) seen.push(frame)
+        yield { type: "output", data: "ready" }
+      },
+    }
+    const client = createAxCodeGrpcClient({ transport })
+    const frames = async function* () {
+      yield { type: "input" as const, data: "pwd\n" }
+      yield { type: "resize" as const, cols: 120, rows: 30 }
+    }
+    const events = []
+
+    for await (const event of client.pty.connect("pty_1", frames(), { cursor: 42 })) events.push(event)
+
+    expect(events).toEqual([{ type: "output", data: "ready" }])
+    expect(seen).toEqual([
+      { method: AX_CODE_GRPC_METHOD.ConnectPty, request: { id: "pty_1", cursor: 42 } },
+      { type: "input", data: "pwd\n" },
+      { type: "resize", cols: 120, rows: 30 },
     ])
   })
 
@@ -78,6 +111,107 @@ describe("gRPC SDK facade", () => {
     expect(await new Response(calls[1].init.body).text()).toBe(
       JSON.stringify({ parts: [{ type: "text", text: "hello" }] }),
     )
+  })
+
+  test("HTTP bridge maps PTY management calls to the headless backend", async () => {
+    const calls: Array<{ path: string; method: string; body: string }> = []
+    const client = createAxCodeGrpcClientFromHttp({
+      baseUrl: "http://127.0.0.1:4096",
+      fetch: (async (url: URL | RequestInfo, init?: RequestInit) => {
+        const request = url instanceof Request ? url : new Request(url, init)
+        calls.push({
+          path: new URL(request.url).pathname,
+          method: request.method,
+          body: request.body ? await new Response(request.body).text() : "",
+        })
+        const pathname = new URL(request.url).pathname
+        if (pathname === "/pty" && request.method === "GET") return Response.json([{ id: "pty_1" }])
+        if (pathname === "/pty" && request.method === "POST") return Response.json({ id: "pty_2" })
+        if (pathname === "/pty/pty_2" && request.method === "PUT") return Response.json({ id: "pty_2", title: "Shell" })
+        if (pathname === "/pty/pty_2" && request.method === "DELETE") return Response.json(true)
+        return new Response("not found", { status: 404 })
+      }) as typeof fetch,
+    })
+
+    await expect(client.pty.list()).resolves.toEqual([{ id: "pty_1" }])
+    await expect(client.pty.create({ title: "Shell" })).resolves.toEqual({ id: "pty_2" })
+    await expect(client.pty.update("pty_2", { title: "Shell" })).resolves.toEqual({ id: "pty_2", title: "Shell" })
+    await expect(client.pty.remove("pty_2")).resolves.toBe(true)
+
+    expect(calls).toEqual([
+      { path: "/pty", method: "GET", body: "" },
+      { path: "/pty", method: "POST", body: JSON.stringify({ title: "Shell" }) },
+      { path: "/pty/pty_2", method: "PUT", body: JSON.stringify({ title: "Shell" }) },
+      { path: "/pty/pty_2", method: "DELETE", body: "" },
+    ])
+  })
+
+  test("HTTP bridge adapts PTY streams to the WebSocket route", async () => {
+    class FakeSocket {
+      readyState = 1
+      binaryType?: BinaryType
+      sent: Array<string | Uint8Array | ArrayBuffer> = []
+      onopen?: (event: unknown) => void
+      onmessage?: (event: { data: unknown }) => void
+      onerror?: (event: unknown) => void
+      onclose?: (event: { code?: number; reason?: string }) => void
+
+      constructor(readonly url: string) {}
+
+      send(data: string | Uint8Array | ArrayBuffer) {
+        this.sent.push(data)
+      }
+
+      close(code?: number, reason?: string) {
+        this.onclose?.({ code, reason })
+      }
+    }
+
+    let socket: FakeSocket | undefined
+    const calls: Array<{ path: string; method: string; body: string }> = []
+    const client = createAxCodeGrpcClientFromHttp({
+      baseUrl: "http://127.0.0.1:4096",
+      headers: { Authorization: "Basic " + btoa("ax-code:secret") },
+      webSocketFactory(url) {
+        socket = new FakeSocket(url)
+        queueMicrotask(() => socket?.onopen?.({}))
+        return socket
+      },
+      fetch: (async (url: URL | RequestInfo, init?: RequestInit) => {
+        const request = url instanceof Request ? url : new Request(url, init)
+        calls.push({
+          path: new URL(request.url).pathname,
+          method: request.method,
+          body: request.body ? await new Response(request.body).text() : "",
+        })
+        return Response.json({ id: "pty_1" })
+      }) as typeof fetch,
+    })
+    const frames = async function* () {
+      yield "ls\n"
+      yield { type: "resize" as const, cols: 120, rows: 30 }
+    }
+    const eventsPromise = (async () => {
+      const events = []
+      for await (const event of client.pty.connect("pty_1", frames(), { cursor: 8 })) events.push(event)
+      return events
+    })()
+
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(socket?.url).toBe("ws://ax-code:secret@127.0.0.1:4096/pty/pty_1/connect?cursor=8")
+    socket?.onmessage?.({ data: "ready" })
+    socket?.onmessage?.({ data: ptyMetaFrame({ cursor: 12 }) })
+    socket?.close(1000, "done")
+
+    await expect(eventsPromise).resolves.toEqual([
+      { type: "output", data: "ready" },
+      { type: "replay", cursor: 12 },
+      { type: "closed", code: 1000, reason: "done" },
+    ])
+    expect(socket?.sent).toEqual(["ls\n"])
+    expect(calls).toEqual([
+      { path: "/pty/pty_1", method: "PUT", body: JSON.stringify({ size: { cols: 120, rows: 30 } }) },
+    ])
   })
 
   test("HTTP bridge can load a GUI bootstrap snapshot from selected routes", async () => {
@@ -126,9 +260,18 @@ describe("gRPC SDK facade", () => {
     expect(proto).toContain("service AxCodeHeadless")
     expect(proto).toContain("rpc SendRuntimeCommand")
     expect(proto).toContain("rpc LoadBootstrap")
+    expect(proto).toContain("rpc ConnectPty")
     expect(proto).toContain("rpc SubscribeEvents")
   })
 })
+
+function ptyMetaFrame(payload: unknown) {
+  const encoded = new TextEncoder().encode(JSON.stringify(payload))
+  const bytes = new Uint8Array(encoded.length + 1)
+  bytes[0] = 0
+  bytes.set(encoded, 1)
+  return bytes
+}
 
 function headerValue(headers: RequestInit["headers"], name: string) {
   if (!headers) return null

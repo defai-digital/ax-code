@@ -23,6 +23,12 @@ export const AX_CODE_GRPC_METHOD = {
   SendRuntimeCommand: `/${AX_CODE_GRPC_SERVICE}/SendRuntimeCommand`,
   LoadBootstrap: `/${AX_CODE_GRPC_SERVICE}/LoadBootstrap`,
   LoadSessionEvidence: `/${AX_CODE_GRPC_SERVICE}/LoadSessionEvidence`,
+  ListPty: `/${AX_CODE_GRPC_SERVICE}/ListPty`,
+  CreatePty: `/${AX_CODE_GRPC_SERVICE}/CreatePty`,
+  GetPty: `/${AX_CODE_GRPC_SERVICE}/GetPty`,
+  UpdatePty: `/${AX_CODE_GRPC_SERVICE}/UpdatePty`,
+  RemovePty: `/${AX_CODE_GRPC_SERVICE}/RemovePty`,
+  ConnectPty: `/${AX_CODE_GRPC_SERVICE}/ConnectPty`,
   ListTaskQueue: `/${AX_CODE_GRPC_SERVICE}/ListTaskQueue`,
   EnqueueTaskQueue: `/${AX_CODE_GRPC_SERVICE}/EnqueueTaskQueue`,
   EditTaskQueue: `/${AX_CODE_GRPC_SERVICE}/EditTaskQueue`,
@@ -55,8 +61,12 @@ type HeadlessHttpClient = ReturnType<typeof createHeadlessClient>
 type GrpcMethodMap = typeof AX_CODE_GRPC_METHOD
 
 export type AxCodeGrpcMethod = GrpcMethodMap[keyof GrpcMethodMap]
-export type AxCodeGrpcUnaryMethod = Exclude<AxCodeGrpcMethod, typeof AX_CODE_GRPC_METHOD.SubscribeEvents>
+export type AxCodeGrpcUnaryMethod = Exclude<
+  AxCodeGrpcMethod,
+  typeof AX_CODE_GRPC_METHOD.SubscribeEvents | typeof AX_CODE_GRPC_METHOD.ConnectPty
+>
 export type AxCodeGrpcStreamingMethod = typeof AX_CODE_GRPC_METHOD.SubscribeEvents
+export type AxCodeGrpcBidirectionalStreamingMethod = typeof AX_CODE_GRPC_METHOD.ConnectPty
 export type AxCodeGrpcMetadata = Record<string, string>
 export type AxCodeGrpcJsonResponse<T = unknown> = { value: T }
 export type AxCodeGrpcRuntimeEvent = { type: string; properties?: unknown }
@@ -76,6 +86,12 @@ export type AxCodeGrpcTransport = {
   serverStream<TRequest, TResponse>(
     method: AxCodeGrpcStreamingMethod,
     request: TRequest,
+    options?: AxCodeGrpcCallOptions,
+  ): AsyncIterable<TResponse>
+  bidiStream?<TRequest, TInput, TResponse>(
+    method: AxCodeGrpcBidirectionalStreamingMethod,
+    request: TRequest,
+    input: AsyncIterable<TInput>,
     options?: AxCodeGrpcCallOptions,
   ): AsyncIterable<TResponse>
 }
@@ -124,6 +140,22 @@ export type AxCodeGrpcBootstrapResponse = Partial<Record<AxCodeGrpcBootstrapFiel
   }>
 }
 
+export type AxCodeGrpcPtyConnectRequest = {
+  id: string
+  cursor?: number
+}
+
+export type AxCodeGrpcPtyClientEvent =
+  | string
+  | { type: "input"; data: string }
+  | { type: "resize"; cols: number; rows: number }
+  | { type: "close"; code?: number; reason?: string }
+
+export type AxCodeGrpcPtyServerEvent =
+  | { type: "output"; data: string }
+  | { type: "replay"; cursor: number; from?: number; gap?: { requested: number; available: number } }
+  | { type: "closed"; code?: number; reason?: string }
+
 export type AxCodeGrpcTaskQueueCommandRequest = {
   id: string
   command: "pause" | "resume" | "cancel" | "retry" | "send-now"
@@ -144,12 +176,30 @@ export type AxCodeGrpcClientOptions = {
   transport: AxCodeGrpcTransport
 }
 
+export type AxCodeGrpcWebSocketLike = {
+  readyState: number
+  binaryType?: BinaryType
+  send(data: string | Uint8Array | ArrayBuffer): void
+  close(code?: number, reason?: string): void
+  addEventListener?: (type: string, listener: (event: any) => void, options?: boolean | AddEventListenerOptions) => void
+  removeEventListener?: (type: string, listener: (event: any) => void, options?: boolean | EventListenerOptions) => void
+  onopen?: ((event: unknown) => void) | null
+  onmessage?: ((event: { data: unknown }) => void) | null
+  onerror?: ((event: unknown) => void) | null
+  onclose?: ((event: { code?: number; reason?: string }) => void) | null
+}
+
+export type AxCodeGrpcHttpBridgeOptions = HeadlessClientOptions & {
+  webSocketFactory?: (url: string) => AxCodeGrpcWebSocketLike
+}
+
 export function createAxCodeGrpcClient(input: AxCodeGrpcClientOptions) {
+  const transport = input.transport
   const unary = <TRequest, TResponse>(
     method: AxCodeGrpcUnaryMethod,
     request: TRequest,
     options?: AxCodeGrpcCallOptions,
-  ) => input.transport.unary<TRequest, TResponse>(method, request, options)
+  ) => transport.unary<TRequest, TResponse>(method, request, options)
 
   const send = (command: HeadlessRuntimeCommand, options?: AxCodeGrpcCallOptions) =>
     unary<{ command: HeadlessRuntimeCommand }, HeadlessRuntimeCommandResult>(
@@ -236,6 +286,40 @@ export function createAxCodeGrpcClient(input: AxCodeGrpcClientOptions) {
         return value<AxCodeGrpcBootstrapRequest, AxCodeGrpcBootstrapResponse>(
           AX_CODE_GRPC_METHOD.LoadBootstrap,
           request,
+          options,
+        )
+      },
+    },
+    pty: {
+      list(parameters?: { directory?: string }, options?: AxCodeGrpcCallOptions) {
+        return value(AX_CODE_GRPC_METHOD.ListPty, { parameters }, options)
+      },
+      create(body?: Parameters<HeadlessHttpClient["client"]["pty"]["create"]>[0], options?: AxCodeGrpcCallOptions) {
+        return value(AX_CODE_GRPC_METHOD.CreatePty, { body }, options)
+      },
+      get(id: string, options?: AxCodeGrpcCallOptions) {
+        return value(AX_CODE_GRPC_METHOD.GetPty, { id }, options)
+      },
+      update(
+        id: string,
+        body: Omit<Parameters<HeadlessHttpClient["client"]["pty"]["update"]>[0], "ptyID" | "directory">,
+        options?: AxCodeGrpcCallOptions,
+      ) {
+        return value(AX_CODE_GRPC_METHOD.UpdatePty, { id, body }, options)
+      },
+      remove(id: string, options?: AxCodeGrpcCallOptions) {
+        return value(AX_CODE_GRPC_METHOD.RemovePty, { id }, options)
+      },
+      connect(
+        id: string,
+        events: AsyncIterable<AxCodeGrpcPtyClientEvent> = emptyAsyncIterable(),
+        options?: AxCodeGrpcCallOptions & { cursor?: number },
+      ) {
+        if (!transport.bidiStream) throw new Error("AX Code gRPC transport does not support PTY streaming")
+        return transport.bidiStream<AxCodeGrpcPtyConnectRequest, AxCodeGrpcPtyClientEvent, AxCodeGrpcPtyServerEvent>(
+          AX_CODE_GRPC_METHOD.ConnectPty,
+          { id, cursor: options?.cursor },
+          events,
           options,
         )
       },
@@ -401,7 +485,7 @@ export function createAxCodeGrpcClient(input: AxCodeGrpcClientOptions) {
   }
 }
 
-export function createAxCodeGrpcHttpBridge(input: HeadlessClientOptions): AxCodeGrpcTransport {
+export function createAxCodeGrpcHttpBridge(input: AxCodeGrpcHttpBridgeOptions): AxCodeGrpcTransport {
   const clientFor = (options?: AxCodeGrpcCallOptions) =>
     createHeadlessClient({
       ...input,
@@ -423,10 +507,20 @@ export function createAxCodeGrpcHttpBridge(input: HeadlessClientOptions): AxCode
         yield event as TResponse
       }
     },
+    bidiStream<TRequest, TInput, TResponse>(
+      method: AxCodeGrpcBidirectionalStreamingMethod,
+      request: TRequest,
+      stream: AsyncIterable<TInput>,
+      options?: AxCodeGrpcCallOptions,
+    ) {
+      if (method !== AX_CODE_GRPC_METHOD.ConnectPty) throw new Error(`Unsupported AX Code gRPC stream: ${method}`)
+      const body = request as AxCodeGrpcPtyConnectRequest
+      return connectPtyOverWebSocket(input, clientFor(options), body, stream as AsyncIterable<AxCodeGrpcPtyClientEvent>, options) as AsyncIterable<TResponse>
+    },
   }
 }
 
-export function createAxCodeGrpcClientFromHttp(input: HeadlessClientOptions) {
+export function createAxCodeGrpcClientFromHttp(input: AxCodeGrpcHttpBridgeOptions) {
   return createAxCodeGrpcClient({ transport: createAxCodeGrpcHttpBridge(input) })
 }
 
@@ -449,6 +543,16 @@ async function handleHttpBridgeUnary(
       return wrap(await loadBootstrap(client, body))
     case AX_CODE_GRPC_METHOD.LoadSessionEvidence:
       return wrap(await client.sessionEvidence.load(body.sessionID, body.parameters))
+    case AX_CODE_GRPC_METHOD.ListPty:
+      return wrap(unwrapHttpSdkResponse(await client.client.pty.list(body.parameters)))
+    case AX_CODE_GRPC_METHOD.CreatePty:
+      return wrap(unwrapHttpSdkResponse(await client.client.pty.create(body.body, { throwOnError: true })))
+    case AX_CODE_GRPC_METHOD.GetPty:
+      return wrap(unwrapHttpSdkResponse(await client.client.pty.get({ ptyID: body.id }, { throwOnError: true })))
+    case AX_CODE_GRPC_METHOD.UpdatePty:
+      return wrap(unwrapHttpSdkResponse(await client.client.pty.update({ ptyID: body.id, ...body.body }, { throwOnError: true })))
+    case AX_CODE_GRPC_METHOD.RemovePty:
+      return wrap(unwrapHttpSdkResponse(await client.client.pty.remove({ ptyID: body.id }, { throwOnError: true })))
     case AX_CODE_GRPC_METHOD.ListTaskQueue:
       return wrap(await client.taskQueue.list(body.parameters))
     case AX_CODE_GRPC_METHOD.EnqueueTaskQueue:
@@ -549,6 +653,220 @@ async function loadBootstrap(
 
   await Promise.all(calls)
   return out
+}
+
+async function* emptyAsyncIterable<T>(): AsyncIterable<T> {}
+
+function connectPtyOverWebSocket(
+  input: AxCodeGrpcHttpBridgeOptions,
+  client: HeadlessHttpClient,
+  request: AxCodeGrpcPtyConnectRequest,
+  stream: AsyncIterable<AxCodeGrpcPtyClientEvent>,
+  options: AxCodeGrpcCallOptions | undefined,
+): AsyncIterable<AxCodeGrpcPtyServerEvent> {
+  const queue = createAsyncQueue<AxCodeGrpcPtyServerEvent>()
+  const socket = createPtyWebSocket(input, request)
+  socket.binaryType = "arraybuffer"
+  let opened = false
+  let closed = false
+
+  const close = (code?: number, reason?: string) => {
+    if (closed) return
+    closed = true
+    try {
+      socket.close(code, reason)
+    } catch {}
+    queue.close()
+  }
+  const onAbort = () => close(1000, "aborted")
+  options?.signal?.addEventListener("abort", onAbort, { once: true })
+  if (options?.signal?.aborted) onAbort()
+
+  setSocketHandler(socket, "open", () => {
+    opened = true
+    void pumpPtyClientEvents(client, request.id, socket, stream, options).catch((error) => {
+      queue.fail(error)
+      close(1011, "client stream failed")
+    })
+  })
+  setSocketHandler(socket, "message", (event) => {
+    const parsed = parsePtyServerEvent(event.data)
+    if (parsed) queue.push(parsed)
+  })
+  setSocketHandler(socket, "error", () => {
+    queue.fail(new Error("AX Code PTY WebSocket failed"))
+    close(1011, "websocket failed")
+  })
+  setSocketHandler(socket, "close", (event) => {
+    if (!opened) queue.fail(new Error("AX Code PTY WebSocket closed before opening"))
+    queue.push({ type: "closed", code: event.code, reason: event.reason })
+    options?.signal?.removeEventListener("abort", onAbort)
+    queue.close()
+  })
+
+  return queue.iterable
+}
+
+function createPtyWebSocket(input: AxCodeGrpcHttpBridgeOptions, request: AxCodeGrpcPtyConnectRequest) {
+  const url = new URL(`/pty/${encodeURIComponent(request.id)}/connect`, input.baseUrl)
+  url.protocol = url.protocol === "https:" ? "wss:" : "ws:"
+  if (request.cursor !== undefined) url.searchParams.set("cursor", String(request.cursor))
+  applyBasicAuthUserInfo(url, input.headers)
+  const factory = input.webSocketFactory ?? defaultWebSocketFactory
+  return factory(url.toString())
+}
+
+async function pumpPtyClientEvents(
+  client: HeadlessHttpClient,
+  ptyID: string,
+  socket: AxCodeGrpcWebSocketLike,
+  stream: AsyncIterable<AxCodeGrpcPtyClientEvent>,
+  options: AxCodeGrpcCallOptions | undefined,
+) {
+  for await (const event of stream) {
+    if (options?.signal?.aborted) return
+    if (typeof event === "string") {
+      socket.send(event)
+      continue
+    }
+    switch (event.type) {
+      case "input":
+        socket.send(event.data)
+        break
+      case "resize":
+        await client.client.pty.update({ ptyID, size: { cols: event.cols, rows: event.rows } }, { throwOnError: true })
+        break
+      case "close":
+        socket.close(event.code, event.reason)
+        return
+    }
+  }
+}
+
+function parsePtyServerEvent(data: unknown): AxCodeGrpcPtyServerEvent | undefined {
+  if (typeof data === "string") return { type: "output", data }
+  const bytes = bytesFromPtyMessage(data)
+  if (!bytes) return
+  if (bytes[0] === 0) {
+    const json = new TextDecoder().decode(bytes.slice(1))
+    return { type: "replay", ...(JSON.parse(json) as Omit<Extract<AxCodeGrpcPtyServerEvent, { type: "replay" }>, "type">) }
+  }
+  return { type: "output", data: new TextDecoder().decode(bytes) }
+}
+
+function bytesFromPtyMessage(data: unknown): Uint8Array | undefined {
+  if (data instanceof Uint8Array) return data
+  if (data instanceof ArrayBuffer) return new Uint8Array(data)
+  if (ArrayBuffer.isView(data)) return new Uint8Array(data.buffer, data.byteOffset, data.byteLength)
+  return undefined
+}
+
+function setSocketHandler(
+  socket: AxCodeGrpcWebSocketLike,
+  type: "open" | "message" | "error" | "close",
+  listener: (event: any) => void,
+) {
+  if (socket.addEventListener) {
+    socket.addEventListener(type, listener)
+    return
+  }
+  switch (type) {
+    case "open":
+      socket.onopen = listener
+      break
+    case "message":
+      socket.onmessage = listener
+      break
+    case "error":
+      socket.onerror = listener
+      break
+    case "close":
+      socket.onclose = listener
+      break
+  }
+}
+
+function defaultWebSocketFactory(url: string): AxCodeGrpcWebSocketLike {
+  const ctor = globalThis.WebSocket
+  if (!ctor) throw new Error("AX Code PTY streaming requires a WebSocket implementation")
+  return new ctor(url) as unknown as AxCodeGrpcWebSocketLike
+}
+
+function applyBasicAuthUserInfo(url: URL, headers: RequestInit["headers"] | undefined) {
+  const auth = headerValue(headers, "authorization")
+  if (!auth?.toLowerCase().startsWith("basic ")) return
+  const decoded = decodeBase64(auth.slice("basic ".length).trim())
+  const split = decoded?.indexOf(":") ?? -1
+  if (!decoded || split < 0) return
+  url.username = decoded.slice(0, split)
+  url.password = decoded.slice(split + 1)
+}
+
+function decodeBase64(value: string) {
+  try {
+    return atob(value)
+  } catch {
+    return undefined
+  }
+}
+
+function headerValue(headers: RequestInit["headers"] | undefined, name: string) {
+  if (!headers) return
+  const lower = name.toLowerCase()
+  if (headers instanceof Headers) return headers.get(name) ?? undefined
+  if (Array.isArray(headers)) return headers.find(([key]) => key.toLowerCase() === lower)?.[1]
+  return Object.entries(headers).find(([key]) => key.toLowerCase() === lower)?.[1]
+}
+
+function createAsyncQueue<T>() {
+  const values: T[] = []
+  const waiters: Array<{
+    resolve: (result: IteratorResult<T>) => void
+    reject: (error: unknown) => void
+  }> = []
+  let closed = false
+  let failure: unknown
+
+  const next = (): Promise<IteratorResult<T>> => {
+    if (values.length) return Promise.resolve({ value: values.shift() as T, done: false })
+    if (failure) return Promise.reject(failure)
+    if (closed) return Promise.resolve({ value: undefined, done: true })
+    return new Promise((resolve, reject) => waiters.push({ resolve, reject }))
+  }
+
+  const flush = () => {
+    while (waiters.length && values.length) {
+      waiters.shift()!.resolve({ value: values.shift() as T, done: false })
+    }
+    if (failure) {
+      while (waiters.length) waiters.shift()!.reject(failure)
+      return
+    }
+    if (closed) {
+      while (waiters.length) waiters.shift()!.resolve({ value: undefined, done: true })
+    }
+  }
+
+  return {
+    iterable: {
+      [Symbol.asyncIterator]() {
+        return { next }
+      },
+    } satisfies AsyncIterable<T>,
+    push(value: T) {
+      if (closed || failure) return
+      values.push(value)
+      flush()
+    },
+    close() {
+      closed = true
+      flush()
+    },
+    fail(error: unknown) {
+      failure = error
+      flush()
+    },
+  }
 }
 
 function callTaskQueueCommand(

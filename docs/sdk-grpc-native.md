@@ -35,6 +35,7 @@ The TypeScript facade lives at `@ax-code/sdk/grpc` and covers:
 - session creation
 - prompt, command, shell, abort, permission reply, and question reply
 - GUI bootstrap snapshots for providers, sessions, permissions, questions, path, VCS, LSP, MCP, formatter, and command state
+- PTY terminal management and bidirectional terminal streaming
 - session evidence for review/debug UI
 - task queue operations
 - scheduled task operations
@@ -63,6 +64,7 @@ try {
   const bootstrap = await client.bootstrap.load({
     include: { sessions: true, providers: true, providerList: true, path: true, vcs: true },
   })
+  const terminal = (await client.pty.create({ title: "GUI shell" })) as { id: string }
 
   await client.sendPrompt((session as { id: string }).id, {
     parts: [{ type: "text", text: "Review this workspace" }],
@@ -79,6 +81,8 @@ try {
 
 `bootstrap.load()` is intentionally a GUI-oriented snapshot rather than a one-to-one copy of every HTTP route. Use `include` to request only the state needed by the current view. Failed subrequests are reported in `errors` while successful fields are still returned, so a missing optional subsystem does not block the desktop shell from opening.
 
+PTY streaming is modeled as a gRPC bidirectional stream. The HTTP bridge adapts that stream to the existing WebSocket route for compatibility; native GUI hosts should implement it over their local gRPC, Unix-socket, or named-pipe transport instead of exposing the WebSocket route to renderer code.
+
 When a real gRPC transport is available, provide it to `createAxCodeGrpcClient({ transport })`. The high-level client remains the same.
 
 ## Security Posture
@@ -92,7 +96,7 @@ For desktop apps, prefer this order:
 
 When network HTTP is unavoidable, keep `/doc` disabled unless actively generating or debugging client contracts on a trusted network. Set `AX_CODE_ENABLE_HTTP_DOCS=1` only for that explicit case.
 
-Do not expose the full HTTP API to arbitrary WebViews. If a WebView is used, keep it as a renderer and route privileged operations through the native host using the gRPC/native facade.
+Do not expose the full HTTP API, PTY WebSocket, or OpenAPI docs to arbitrary WebViews. If a WebView is used, keep it as a renderer and route privileged operations through the native host using the gRPC/native facade.
 
 ## Implementation Policy
 
