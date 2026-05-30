@@ -46,6 +46,11 @@ explicitly and send the corresponding Basic Auth header. Live OpenAPI docs at `/
 the server is bound to a non-loopback hostname for a trusted contract-generation workflow, set
 `AX_CODE_ENABLE_HTTP_DOCS=1` explicitly and keep `AX_CODE_SERVER_PASSWORD` configured.
 
+SDK-managed HTTP server helpers are loopback-only by default. `startHeadlessBackend()`, `createAxCodeServer()`, and the
+v2 server helper refuse network hostnames such as `0.0.0.0` unless the caller passes `allowNetworkBind: true`. Use that
+escape hatch only for a deliberately secured service integration; first-party desktop GUI shells should prefer
+`@ax-code/sdk/grpc` or an in-process SDK boundary.
+
 Check server health:
 
 ```bash

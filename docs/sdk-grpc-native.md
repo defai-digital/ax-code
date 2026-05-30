@@ -197,8 +197,9 @@ For desktop apps, prefer this order:
 
 The gRPC HTTP compatibility bridge accepts only literal loopback HTTP(S) base URLs by default. If network HTTP is
 unavoidable, pass `allowRemoteHttpBridge: true` only after the caller owns the remote server authentication and transport
-security. Keep `/doc` disabled unless actively generating or debugging client contracts on a trusted network. Set
-`AX_CODE_ENABLE_HTTP_DOCS=1` only for that explicit case.
+security. SDK-managed HTTP backend helpers also refuse network binds by default; pass `allowNetworkBind: true` only for
+a deliberately secured service integration. Keep `/doc` disabled unless actively generating or debugging client
+contracts on a trusted network. Set `AX_CODE_ENABLE_HTTP_DOCS=1` only for that explicit case.
 
 The HTTP compatibility bridge rejects cross-origin WebSocket upgrades by default. Add an origin to the explicit server CORS allowlist only when that browser origin is part of the trusted app shell.
 

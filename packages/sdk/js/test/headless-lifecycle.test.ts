@@ -68,6 +68,31 @@ describe("headless backend lifecycle", () => {
     await backend.close()
   })
 
+  test("refuses network HTTP binds unless explicitly allowed", async () => {
+    await expect(
+      startHeadlessBackend({
+        hostname: "0.0.0.0",
+        reservePort: async () => 18456,
+        fetch: (async () => jsonResponse({ healthy: true })) as typeof fetch,
+      }),
+    ).rejects.toThrow("startHeadlessBackend only binds the HTTP API to loopback hostnames by default")
+  })
+
+  test("allows explicit network HTTP binds for secured service integrations", async () => {
+    await using fake = await createReadyFakeAxCode()
+
+    const backend = await startHeadlessBackend({
+      hostname: "0.0.0.0",
+      allowNetworkBind: true,
+      reservePort: async () => 18458,
+      fetch: (async () => jsonResponse({ healthy: true })) as typeof fetch,
+    })
+
+    expect(await waitForFile(fake.argsFile)).toContain("serve --hostname=0.0.0.0 --port=18458")
+
+    await backend.close()
+  })
+
   test("reports an actionable error when random port reservation fails", async () => {
     await expect(
       startHeadlessBackend({

@@ -11,6 +11,11 @@ type Proc = ReturnType<typeof spawn> & {
 export type ServerOptions = {
   hostname?: string
   port?: number
+  /**
+   * HTTP server helpers default to loopback-only. Set this only when the caller owns
+   * transport security and authentication for a network-visible server.
+   */
+  allowNetworkBind?: boolean
   signal?: AbortSignal
   timeout?: number
   config?: Config
@@ -38,8 +43,10 @@ export async function createAxCodeServer(options?: ServerOptions) {
     },
     options ?? {},
   )
+  const hostname = options.hostname ?? "127.0.0.1"
+  assertSdkHttpLoopbackBind(hostname, options.allowNetworkBind, "createAxCodeServer")
 
-  const args = [`serve`, `--hostname=${options.hostname}`, `--port=${options.port}`]
+  const args = [`serve`, `--hostname=${hostname}`, `--port=${options.port}`]
   if (options.config?.logLevel) args.push(`--log-level=${options.config.logLevel}`)
   const username = options.auth?.username ?? "ax-code"
   const password = options.auth?.password ?? randomBytes(24).toString("base64url")
@@ -180,3 +187,24 @@ export function createAxCodeTui(options?: TuiOptions) {
 }
 
 export const createOpencodeTui = createAxCodeTui
+
+function assertSdkHttpLoopbackBind(hostname: string, allowNetworkBind: boolean | undefined, helper: string) {
+  if (allowNetworkBind || isLoopbackHostname(hostname)) return
+  throw new Error(
+    `${helper} only binds the HTTP API to loopback hostnames by default. ` +
+      `Refusing hostname ${hostname}. ` +
+      "Use @ax-code/sdk/grpc for desktop native transports, or pass allowNetworkBind: true only for an explicitly secured server.",
+  )
+}
+
+function isLoopbackHostname(hostname: string) {
+  const normalized = hostname.toLowerCase().replace(/^\[|\]$/g, "")
+  return normalized === "localhost" || normalized === "::1" || isIpv4Loopback(normalized)
+}
+
+function isIpv4Loopback(hostname: string) {
+  const parts = hostname.split(".")
+  if (parts.length !== 4) return false
+  const numbers = parts.map((part) => Number(part))
+  return numbers.every((part) => Number.isInteger(part) && part >= 0 && part <= 255) && numbers[0] === 127
+}

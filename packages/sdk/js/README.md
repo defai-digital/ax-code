@@ -254,7 +254,8 @@ const sessions = await client.session.list()
 `createAxCode()` and `createAxCodeServer()` start `ax-code serve` with generated Basic Auth credentials by default and
 return `server.headers` for clients that need to call the server directly. Prefer `@ax-code/sdk/headless` or
 `@ax-code/sdk/grpc` for desktop GUI work; keep this HTTP helper for compatibility, diagnostics, and service-boundary
-integrations.
+integrations. SDK server helpers bind the HTTP API to loopback hostnames by default; pass `allowNetworkBind: true` only
+when the caller explicitly owns network transport security and authentication.
 
 ## Cross-language integrations
 

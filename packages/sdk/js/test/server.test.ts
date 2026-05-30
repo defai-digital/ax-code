@@ -45,6 +45,29 @@ describe("createAxCodeServer", () => {
     await waitForProcessExit(Number(await waitForFile(fake.pidFile)))
   })
 
+  test("refuses network HTTP binds unless explicitly allowed", async () => {
+    await expect(createAxCodeServer({ hostname: "0.0.0.0" })).rejects.toThrow(
+      "createAxCodeServer only binds the HTTP API to loopback hostnames by default",
+    )
+  })
+
+  test("allows explicit network HTTP binds for secured service integrations", async () => {
+    await using fake = await createReadyFakeAxCode()
+
+    const server = await createAxCodeServer({
+      hostname: "0.0.0.0",
+      allowNetworkBind: true,
+      auth: { username: "app", password: "secret" },
+    })
+    try {
+      expect(await waitForFile(fake.argsFile)).toContain("serve --hostname=0.0.0.0 --port=4096")
+    } finally {
+      server.close()
+    }
+
+    await waitForProcessExit(Number(await waitForFile(fake.pidFile)))
+  })
+
   test("v2 kills the spawned server when startup times out", async () => {
     await using fake = await createFakeAxCode()
 
@@ -63,6 +86,29 @@ describe("createAxCodeServer", () => {
       expect(server.headers.Authorization).toBe("Basic " + Buffer.from("app:secret").toString("base64"))
       expect(await waitForFile(fake.authFile)).toBe("app:secret\n")
       expect(await waitForFile(fake.argsFile)).toContain("serve --hostname=127.0.0.1 --port=4096")
+    } finally {
+      server.close()
+    }
+
+    await waitForProcessExit(Number(await waitForFile(fake.pidFile)))
+  })
+
+  test("v2 refuses network HTTP binds unless explicitly allowed", async () => {
+    await expect(createAxCodeServerV2({ hostname: "0.0.0.0" })).rejects.toThrow(
+      "createAxCodeServer only binds the HTTP API to loopback hostnames by default",
+    )
+  })
+
+  test("v2 allows explicit network HTTP binds for secured service integrations", async () => {
+    await using fake = await createReadyFakeAxCode()
+
+    const server = await createAxCodeServerV2({
+      hostname: "0.0.0.0",
+      allowNetworkBind: true,
+      auth: { username: "app", password: "secret" },
+    })
+    try {
+      expect(await waitForFile(fake.argsFile)).toContain("serve --hostname=0.0.0.0 --port=4096")
     } finally {
       server.close()
     }
