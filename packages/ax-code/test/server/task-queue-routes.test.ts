@@ -26,7 +26,7 @@ describe("task queue routes", () => {
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
             sessionID: session.id,
-            kind: "prompt",
+            kind: "automation",
             title: "Queue a route-level task",
             worktree: "wt-route",
             payload: { prompt: "ship gui" },

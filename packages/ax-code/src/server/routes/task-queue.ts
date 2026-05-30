@@ -222,11 +222,12 @@ export const TaskQueueRoutes = lazy(() =>
       "/:taskID/send-now",
       describeRoute({
         summary: "Send task now",
-        description: "Move a task queue item to the front of the queue and mark it queued.",
+        description:
+          "Move a task queue item to the front of the queue. Executable prompt, command, shell, or workflow subagent items start immediately when the target session is idle; non-executable items remain queued.",
         operationId: "taskQueue.send_now",
         responses: {
           200: {
-            description: "Prioritized task queue item.",
+            description: "Prioritized or started task queue item.",
             content: { "application/json": { schema: resolver(TaskQueue.Info) } },
           },
           ...errors(400, 404),
