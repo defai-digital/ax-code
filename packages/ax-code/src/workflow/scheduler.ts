@@ -1,4 +1,5 @@
 import z from "zod"
+import { Session } from "../session"
 import { isWorkflowRuntimeEnabled } from "./spec"
 import { planWorkflowDryRun } from "./planner"
 import { WorkflowRun } from "./run"
@@ -52,14 +53,20 @@ export namespace WorkflowScheduler {
 
       if (parsed.enqueueChildren) {
         for (const childPlan of phasePlan.children) {
+          const session = await Session.create({
+            parentID: initial.parentSessionID,
+            title: `${initial.spec.name}: ${phase.name} #${childPlan.index + 1} (@${childPlan.agent ?? "workflow"} workflow child)`,
+          })
           const child = await WorkflowRun.appendChild({
             runID,
             phaseID: phase.id,
+            sessionID: session.id,
             agent: childPlan.agent,
             model: childPlan.model,
             budgetSlice: childPlan.budgetSlice,
           })
           const task = await TaskQueue.enqueue({
+            sessionID: session.id,
             kind: "subagent",
             title: `${initial.spec.name}: ${phase.name} #${childPlan.index + 1}`,
             agent: childPlan.agent,

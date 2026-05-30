@@ -237,20 +237,32 @@ function queueItemExecution(item: TaskQueue.Info): QueueExecution | undefined {
       }
     }
     case "subagent":
+      return workflowSubagentExecution(item)
     case "review":
     case "automation":
       return undefined
   }
 }
 
+function workflowSubagentExecution(item: TaskQueue.Info): QueueExecution | undefined {
+  if (!isWorkflowQueueItem(item)) return undefined
+  const body = promptBodyFromQueueItem(item)
+  if (!body) return undefined
+  return {
+    sessionID: item.sessionID!,
+    run: () => SessionPrompt.prompt({ ...body, sessionID: item.sessionID! }),
+  }
+}
+
 function promptBodyFromQueueItem(item: TaskQueue.Info) {
   const direct = readPayloadBody(item)
   if (direct) return QueuePromptBody().parse(direct)
-  const text = readPayloadText(item)
+  const text = readPayloadText(item) ?? readPayloadPrompt(item)
   if (!text) return undefined
   return QueuePromptBody().parse({
     parts: [{ type: "text", text }],
     agent: item.agent,
+    agentRouting: "preserve",
     model: modelObject(item.model),
   })
 }
@@ -288,6 +300,16 @@ function readPayloadBody(item: TaskQueue.Info) {
 function readPayloadText(item: TaskQueue.Info) {
   const text = item.payload["text"]
   return typeof text === "string" && text.trim().length > 0 ? text.trim() : undefined
+}
+
+function readPayloadPrompt(item: TaskQueue.Info) {
+  const prompt = item.payload["prompt"]
+  return typeof prompt === "string" && prompt.trim().length > 0 ? prompt.trim() : undefined
+}
+
+function isWorkflowQueueItem(item: TaskQueue.Info) {
+  const workflow = item.payload["workflow"]
+  return !!workflow && typeof workflow === "object"
 }
 
 function modelObject(value: unknown) {

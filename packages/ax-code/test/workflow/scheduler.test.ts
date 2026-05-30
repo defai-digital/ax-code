@@ -67,17 +67,66 @@ describe("WorkflowScheduler", () => {
           expect(result.phases[1]?.status).toBe("queued")
           expect(result.children).toHaveLength(8)
           expect(result.children.every((child) => child.taskQueueID?.startsWith("tsk_"))).toBe(true)
+          expect(result.children.every((child) => child.sessionID?.startsWith("ses_"))).toBe(true)
           expect(result.budgetUsage.childAgents).toBe(8)
 
           const { TaskQueue } = await import("../../src/session/task-queue")
           const queue = await TaskQueue.list()
           expect(queue).toHaveLength(8)
           expect(queue.every((item) => item.kind === "subagent")).toBe(true)
+          expect(queue.every((item) => item.sessionID?.startsWith("ses_"))).toBe(true)
           expect(queue[0]?.payload.workflow).toMatchObject({
             runID: run.id,
             phaseID: result.phases[0]?.id,
             specPhaseID: "collect-issues",
           })
+        },
+      })
+    } finally {
+      if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME
+      else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
+    }
+  })
+
+  test("executes workflow subagent queue payloads through TaskQueueExecutor", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
+    process.env.AX_CODE_WORKFLOW_RUNTIME = "1"
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const run = await WorkflowRun.create({ spec: parseWorkflowSpecV1(WorkflowFixtureSpecs.issueTriage) })
+          await WorkflowScheduler.start(run.id, { allowScaleBeyondDefaults: true })
+          const { TaskQueue } = await import("../../src/session/task-queue")
+          const { TaskQueueExecutor } = await import("../../src/session/task-queue-executor")
+          const [first] = await TaskQueue.list()
+          expect(first?.sessionID).toStartWith("ses_")
+
+          const edited = await TaskQueue.edit({
+            id: first!.id,
+            payload: {
+              ...first!.payload,
+              body: {
+                parts: [{ type: "text", text: "Record this workflow child without model execution." }],
+                noReply: true,
+                agentRouting: "preserve",
+              },
+            },
+          })
+
+          const running = await TaskQueueExecutor.start(edited)
+          expect(running.status).toBe("running")
+          await waitForValue("workflow queue completion", async () => {
+            const item = await TaskQueue.get(first!.id)
+            return item.status === "completed" ? item : undefined
+          })
+
+          const detail = await WorkflowRun.getDetail(run.id)
+          const child = detail.children.find((candidate) => candidate.taskQueueID === first!.id)
+          expect(child?.status).toBe("completed")
+          expect(child?.sessionID).toBe(first?.sessionID)
+          expect(detail.phases[0]?.status).toBe("running")
         },
       })
     } finally {
@@ -195,3 +244,12 @@ describe("WorkflowScheduler", () => {
     }
   })
 })
+
+async function waitForValue<T>(label: string, read: () => T | undefined | Promise<T | undefined>): Promise<T> {
+  for (let attempt = 0; attempt < 25; attempt++) {
+    const value = await read()
+    if (value !== undefined) return value
+    await new Promise((resolve) => setTimeout(resolve, 0))
+  }
+  throw new Error(`Timed out waiting for ${label}`)
+}
