@@ -2,6 +2,7 @@ import z from "zod"
 import { ModelID, ProviderID } from "../provider/schema"
 import { MessageV2 } from "./message-v2"
 import { FilePartInput, PromptPartInput } from "./prompt-part-input"
+import { PromptIsolationPolicy } from "./prompt-runtime-policy"
 import { MessageID, SessionID } from "./schema"
 
 export const PromptInput = z.object({
@@ -27,6 +28,8 @@ export const PromptInput = z.object({
     .record(z.string(), z.boolean())
     .optional()
     .describe("@deprecated tools and permissions have been merged, you can set permissions on the session itself now"),
+  toolsScope: z.enum(["session", "turn"]).optional(),
+  isolation: PromptIsolationPolicy.optional(),
   format: MessageV2.Format.optional(),
   system: z.string().optional(),
   variant: z.string().optional(),

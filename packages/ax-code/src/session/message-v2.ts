@@ -21,6 +21,7 @@ import type { Provider } from "@/provider/provider"
 import { ModelID, ProviderID } from "@/provider/schema"
 import { providerModelKey } from "@/provider/model-key"
 import { toErrorMessage } from "../util/error-message"
+import { PromptIsolationPolicy } from "./prompt-runtime-policy"
 
 export namespace MessageV2 {
   const log = Log.create({ service: "session.message" })
@@ -374,6 +375,7 @@ export namespace MessageV2 {
     }),
     system: z.string().optional(),
     tools: z.record(z.string(), z.boolean()).optional(),
+    isolation: PromptIsolationPolicy.optional(),
     variant: z.string().optional(),
   }).meta({
     ref: "UserMessage",

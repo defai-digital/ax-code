@@ -12,6 +12,7 @@ import { SessionPrompt } from "../../src/session/prompt"
 import { autonomousDecisionLedgerReminder } from "../../src/session/prompt-autonomous-ledger"
 import { resolvePromptParts } from "../../src/session/prompt-helpers"
 import { isolationRetryState } from "../../src/session/prompt-tools"
+import { applyPromptIsolationPolicy } from "../../src/session/prompt-runtime-policy"
 import { EventQuery } from "../../src/replay/query"
 import { Recorder } from "../../src/replay/recorder"
 import { Log } from "../../src/util/log"
@@ -23,6 +24,27 @@ import { Isolation } from "../../src/isolation"
 Log.init({ print: false })
 
 describe("session.prompt isolation retry state", () => {
+  test("prompt isolation policy can only tighten the base isolation boundary", () => {
+    const base = Isolation.resolve({ mode: "read-only", network: false }, "/tmp/project")
+
+    const loosened = applyPromptIsolationPolicy(base, { mode: "workspace-write", network: true })
+
+    expect(loosened).toMatchObject({
+      mode: "read-only",
+      network: false,
+    })
+
+    const tightened = applyPromptIsolationPolicy(
+      Isolation.resolve({ mode: "workspace-write", network: true }, "/tmp/project"),
+      { mode: "read-only", network: false },
+    )
+
+    expect(tightened).toMatchObject({
+      mode: "read-only",
+      network: false,
+    })
+  })
+
   test("network escalation preserves the active write isolation policy", () => {
     const isolation: Isolation.State = {
       ...Isolation.resolve({ mode: "workspace-write", network: false, protected: ["secrets"] }, "/tmp/project"),

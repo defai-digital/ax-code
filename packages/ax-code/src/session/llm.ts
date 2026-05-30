@@ -22,7 +22,6 @@ import { Plugin } from "@/plugin"
 import { SystemPrompt } from "./system"
 import { Flag } from "@/flag/flag"
 import { Permission } from "@/permission"
-import { Isolation } from "@/isolation"
 import { DiagnosticLog } from "@/debug/diagnostic-log"
 import { withTimeout } from "@/util/timeout"
 import { Recorder } from "@/replay/recorder"
@@ -34,6 +33,8 @@ import { SuperLongRuntime } from "./super-long-runtime"
 import { longAgentProfileForModel } from "@/provider/agent-optimization-profile"
 import { PromptCachePolicy } from "@/provider/prompt-cache-policy"
 import { LongAgentContextPacker } from "@/context/long-agent-packer"
+import { permissionRulesetFromLegacyTools } from "./prompt-permission"
+import { resolvePromptIsolationPolicy } from "./prompt-runtime-policy"
 
 import { ReasoningPolicy } from "@/control-plane/reasoning-policy"
 
@@ -647,7 +648,11 @@ export namespace LLM {
     cfg: Awaited<ReturnType<typeof Config.get>>,
   ) {
     const tools = { ...input.tools }
-    const ruleset = Permission.merge(input.agent.permission, input.permission ?? [])
+    const ruleset = Permission.merge(
+      input.agent.permission,
+      input.permission ?? [],
+      permissionRulesetFromLegacyTools(input.user.tools),
+    )
     const toolKeys = Object.keys(tools)
     const toolKeysStr = toolKeys.join(",")
     const key = JSON.stringify(ruleset)
@@ -665,7 +670,12 @@ export namespace LLM {
       }
     }
 
-    const isolation = Isolation.resolve(cfg.isolation, Instance.directory, Instance.worktree)
+    const isolation = resolvePromptIsolationPolicy({
+      config: cfg.isolation,
+      policy: input.user.isolation,
+      directory: Instance.directory,
+      worktree: Instance.worktree,
+    })
     if (isolation.mode === "read-only") {
       for (const t of ["edit", "write", "apply_patch", "multiedit", "bash"]) delete tools[t]
     }

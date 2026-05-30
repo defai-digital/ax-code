@@ -17,7 +17,6 @@ import { Flag } from "../flag/flag"
 import { Todo } from "./todo"
 import { SessionGoal } from "./goal"
 import { Config } from "@/config/config"
-import { Isolation } from "@/isolation"
 import { fn } from "@/util/fn"
 import { LLM } from "./llm"
 import { iife } from "@/util/iife"
@@ -59,6 +58,7 @@ import { scheduleFirstTurnSummary } from "./prompt-session-summary"
 import { enforceSuperLongDeadline } from "./prompt-super-long"
 import { createAutonomousTextContinuation, createUserMessage } from "./prompt-user-message"
 import { permissionRulesetFromLegacyTools } from "./prompt-permission"
+import { resolvePromptIsolationPolicy } from "./prompt-runtime-policy"
 import { createPromptRunState } from "./prompt-run-state"
 import { resolvePromptCache, type PromptCacheEntry } from "./prompt-cache"
 import { promptLoopLimits } from "./prompt-loop-config"
@@ -98,7 +98,7 @@ export namespace SessionPrompt {
 
     // Backwards compatibility for legacy prompt-time `tools` toggles.
     const permissions = permissionRulesetFromLegacyTools(input.tools)
-    if (permissions.length > 0) {
+    if (permissions.length > 0 && input.toolsScope !== "turn") {
       session.permission = permissions
       await Session.setPermission({ sessionID: session.id, permission: permissions })
     }
@@ -475,7 +475,12 @@ export namespace SessionPrompt {
         processor,
         bypassAgentCheck: shouldBypassAgentCheck(lastUserParts),
         messages: msgs,
-        isolation: Isolation.resolve(cfg.isolation, Instance.directory, Instance.worktree),
+        isolation: resolvePromptIsolationPolicy({
+          config: cfg.isolation,
+          policy: lastUser.isolation,
+          directory: Instance.directory,
+          worktree: Instance.worktree,
+        }),
       })
 
       const structuredOutput = createStructuredOutputTurn(request.format)

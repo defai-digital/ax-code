@@ -251,6 +251,66 @@ describe("TaskQueue", () => {
       else process.env.AX_CODE_AUTONOMOUS = previousAutonomous
     }
   })
+
+  test("applies workflow child tool and isolation policy as turn-scoped prompt metadata", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const item = await TaskQueue.enqueue({
+          sessionID: session.id,
+          kind: "subagent",
+          title: "Run workflow child",
+          payload: {
+            workflow: {
+              runID: "wfr_test",
+              phaseID: "wfp_test",
+              childID: "wfc_test",
+              specPhaseID: "scan",
+            },
+            allowedTools: ["file.read", "rg", "verify_project", "github.issue.view"],
+            writePolicy: "read-only",
+            networkPolicy: "disabled",
+            body: {
+              noReply: true,
+              agent: "build",
+              model: { providerID: "test", modelID: "test-model" },
+              tools: { grep: false, write: true },
+              isolation: { mode: "full-access", network: true },
+              parts: [{ type: "text", text: "Inspect the repository without mutating it." }],
+            },
+          },
+        })
+
+        await TaskQueueExecutor.start(item)
+        await waitForQueueStatus(item.id, "completed")
+
+        const messages = await Session.messages({ sessionID: session.id })
+        const user = messages.find((message) => message.info.role === "user")
+        expect(user?.info).toMatchObject({
+          tools: {
+            "*": false,
+            "file.read": true,
+            file_read: true,
+            read: true,
+            rg: true,
+            grep: false,
+            verify_project: true,
+            "github.issue.view": true,
+            github_issue_view: true,
+          },
+          isolation: {
+            mode: "read-only",
+            network: false,
+          },
+        })
+
+        expect((await Session.get(session.id)).permission ?? []).toEqual([])
+      },
+    })
+  })
 })
 
 async function waitForQueueStatus(id: TaskQueue.Info["id"], status: TaskQueue.Status) {

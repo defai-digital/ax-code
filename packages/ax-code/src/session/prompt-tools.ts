@@ -25,6 +25,7 @@ import { Config } from "@/config/config"
 import { Instance } from "../project/instance"
 import { Truncate } from "@/tool/truncate"
 import type { SessionProcessor } from "./processor"
+import { permissionRulesetFromLegacyTools } from "./prompt-permission"
 
 const log = Log.create({ service: "session.prompt.tools" })
 
@@ -124,7 +125,11 @@ export async function resolveTools(input: ResolveToolsInput) {
   const tools: Record<string, AITool> = {}
   const isolation =
     input.isolation ?? Isolation.resolve((await Config.get()).isolation, Instance.directory, Instance.worktree)
-  const ruleset = Permission.merge(input.agent.permission, input.session.permission ?? [])
+  const ruleset = Permission.merge(
+    input.agent.permission,
+    input.session.permission ?? [],
+    permissionRulesetFromLegacyTools(input.tools),
+  )
   // Initialize schema cache on first use
   if (!_schemaCache) _schemaCache = new Map()
   const schemaCache = _schemaCache

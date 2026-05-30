@@ -7,6 +7,7 @@ import { Log } from "@/util/log"
 import { NamedError } from "@ax-code/util/error"
 import { lazy } from "../util/lazy"
 import { SessionPrompt } from "./prompt"
+import { PromptIsolationPolicy, type PromptIsolationPolicy as PromptIsolationPolicyType } from "./prompt-runtime-policy"
 import { TaskQueue } from "./task-queue"
 import type { SessionID, TaskQueueID } from "./schema"
 import type { WorkflowChildID, WorkflowPhaseID, WorkflowRunID } from "../workflow/state"
@@ -287,15 +288,20 @@ async function recordWorkflowSubagentUsage(item: TaskQueue.Info, result: unknown
 
 function promptBodyFromQueueItem(item: TaskQueue.Info) {
   const direct = readPayloadBody(item)
-  if (direct) return QueuePromptBody().parse(direct)
+  if (direct) return QueuePromptBody().parse(applyWorkflowPromptPolicy(direct, item))
   const text = readPayloadText(item) ?? readPayloadPrompt(item)
   if (!text) return undefined
-  return QueuePromptBody().parse({
-    parts: [{ type: "text", text }],
-    agent: item.agent,
-    agentRouting: "preserve",
-    model: modelObject(item.model),
-  })
+  return QueuePromptBody().parse(
+    applyWorkflowPromptPolicy(
+      {
+        parts: [{ type: "text", text }],
+        agent: item.agent,
+        agentRouting: "preserve",
+        model: modelObject(item.model),
+      },
+      item,
+    ),
+  )
 }
 
 function commandBodyFromQueueItem(item: TaskQueue.Info) {
@@ -336,6 +342,145 @@ function readPayloadText(item: TaskQueue.Info) {
 function readPayloadPrompt(item: TaskQueue.Info) {
   const prompt = item.payload["prompt"]
   return typeof prompt === "string" && prompt.trim().length > 0 ? prompt.trim() : undefined
+}
+
+function applyWorkflowPromptPolicy(body: Record<string, unknown>, item: TaskQueue.Info): Record<string, unknown> {
+  const policy = workflowPromptPolicy(item.payload)
+  if (!policy) return body
+
+  const next = { ...body }
+  const tools = promptToolsFromAllowedTools(policy.allowedTools)
+  if (tools) {
+    next.tools = mergeWorkflowToolPolicy(readBooleanRecord(next.tools), tools)
+    next.toolsScope = "turn"
+  } else if (readBooleanRecord(next.tools)) {
+    next.toolsScope = "turn"
+  }
+
+  const isolation = promptIsolationFromWorkflowPolicy(policy)
+  if (isolation) next.isolation = mergeWorkflowIsolationPolicy(readPromptIsolationPolicy(next.isolation), isolation)
+  return next
+}
+
+function workflowPromptPolicy(payload: TaskQueue.Payload) {
+  const workflow = payload["workflow"]
+  if (!workflow || typeof workflow !== "object") return undefined
+
+  const allowedTools = stringArray(payload["allowedTools"])
+  const writePolicy = workflowWritePolicy(payload["writePolicy"])
+  const networkPolicy = workflowNetworkPolicy(payload["networkPolicy"])
+  return { allowedTools, writePolicy, networkPolicy }
+}
+
+function promptToolsFromAllowedTools(allowedTools: string[] | undefined): Record<string, boolean> | undefined {
+  if (!allowedTools?.length) return undefined
+  const tools: Record<string, boolean> = { "*": false }
+  for (const tool of allowedTools.flatMap(workflowToolPermissionNames)) tools[tool] = true
+  return tools
+}
+
+function workflowToolPermissionNames(tool: string): string[] {
+  const trimmed = tool.trim()
+  if (!trimmed) return []
+  const names = new Set([trimmed])
+  const sanitized = trimmed.replace(/[^A-Za-z0-9_]/g, "_")
+  if (sanitized !== trimmed) names.add(sanitized)
+  for (const alias of workflowToolAliases(trimmed)) names.add(alias)
+  return Array.from(names)
+}
+
+function workflowToolAliases(tool: string): string[] {
+  switch (tool) {
+    case "file.read":
+      return ["read"]
+    case "file.grep":
+    case "rg":
+      return ["grep"]
+    case "file.glob":
+      return ["glob"]
+    case "file.list":
+      return ["list"]
+    default:
+      return []
+  }
+}
+
+function mergeWorkflowToolPolicy(
+  existing: Record<string, boolean> | undefined,
+  workflow: Record<string, boolean>,
+): Record<string, boolean> {
+  const merged = { ...workflow }
+  for (const [tool, enabled] of Object.entries(existing ?? {})) {
+    if (enabled === false) merged[tool] = false
+    else if (workflow[tool] === true) merged[tool] = true
+  }
+  return merged
+}
+
+function promptIsolationFromWorkflowPolicy(policy: {
+  writePolicy?: "read-only" | "serialized" | "worktree-required"
+  networkPolicy?: "inherit" | "disabled" | "allowed"
+}): PromptIsolationPolicyType | undefined {
+  const isolation: PromptIsolationPolicyType = {}
+  if (policy.writePolicy === "read-only") isolation.mode = "read-only"
+  if (policy.writePolicy === "serialized" || policy.writePolicy === "worktree-required") {
+    isolation.mode = "workspace-write"
+  }
+  if (policy.networkPolicy === "disabled") isolation.network = false
+  if (policy.networkPolicy === "allowed") isolation.network = true
+  return Object.keys(isolation).length > 0 ? isolation : undefined
+}
+
+function mergeWorkflowIsolationPolicy(
+  existing: PromptIsolationPolicyType | undefined,
+  workflow: PromptIsolationPolicyType,
+): PromptIsolationPolicyType {
+  if (!existing) return workflow
+  const mode = stricterIsolationMode(workflow.mode, existing.mode)
+  const network =
+    workflow.network === false || existing.network === false ? false : (workflow.network ?? existing.network)
+  return {
+    ...(mode ? { mode } : {}),
+    ...(network === undefined ? {} : { network }),
+  }
+}
+
+function stricterIsolationMode(
+  a: PromptIsolationPolicyType["mode"],
+  b: PromptIsolationPolicyType["mode"],
+): PromptIsolationPolicyType["mode"] {
+  if (!a) return b
+  if (!b) return a
+  const rank = { "read-only": 0, "workspace-write": 1, "full-access": 2 } as const
+  return rank[a] <= rank[b] ? a : b
+}
+
+function readPromptIsolationPolicy(value: unknown): PromptIsolationPolicyType | undefined {
+  const parsed = PromptIsolationPolicy.safeParse(value)
+  return parsed.success ? parsed.data : undefined
+}
+
+function readBooleanRecord(value: unknown): Record<string, boolean> | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined
+  const result: Record<string, boolean> = {}
+  for (const [key, item] of Object.entries(value)) {
+    if (typeof item === "boolean") result[key] = item
+  }
+  return result
+}
+
+function stringArray(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined
+  const items = value.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+  return items.length ? items : undefined
+}
+
+function workflowWritePolicy(value: unknown): "read-only" | "serialized" | "worktree-required" | undefined {
+  return value === "read-only" || value === "serialized" || value === "worktree-required" ? value : undefined
+}
+
+function workflowNetworkPolicy(value: unknown): "inherit" | "disabled" | "allowed" | undefined {
+  return value === "inherit" || value === "disabled" || value === "allowed" ? value : undefined
 }
 
 function isWorkflowQueueItem(item: TaskQueue.Info) {

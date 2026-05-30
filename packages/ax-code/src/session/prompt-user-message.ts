@@ -12,6 +12,7 @@ import { lastModel } from "./prompt-command-selection"
 import { Session } from "."
 import { MessageID, type SessionID } from "./schema"
 import type { ModelID, ProviderID } from "../provider/schema"
+import type { PromptIsolationPolicy } from "./prompt-runtime-policy"
 
 export type CreateUserMessageInput = {
   sessionID: SessionID
@@ -24,6 +25,7 @@ export type CreateUserMessageInput = {
   agentRouting?: "auto" | "preserve"
   noReply?: boolean
   tools?: Record<string, boolean>
+  isolation?: PromptIsolationPolicy
   format?: MessageV2.OutputFormat
   system?: string
   variant?: string
@@ -93,6 +95,7 @@ export async function createUserMessage(input: CreateUserMessageInput) {
     model,
     system: input.system,
     format: input.format,
+    isolation: input.isolation,
     variant,
   }
   using _ = defer(() => InstructionPrompt.clear(info.id))
