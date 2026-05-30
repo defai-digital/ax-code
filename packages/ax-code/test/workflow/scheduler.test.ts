@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
+import { Database, eq } from "../../src/storage/db"
 import {
   WorkflowFixtureSpecs,
   WorkflowRun,
@@ -11,6 +12,7 @@ import {
   WORKFLOW_FINAL_REPORT_SPEC_ARTIFACT_ID,
   parseWorkflowSpecV1,
 } from "../../src/workflow"
+import { WorkflowRunTable } from "../../src/workflow/workflow.sql"
 import { tmpdir } from "../fixture/fixture"
 
 afterEach(async () => {
@@ -412,6 +414,52 @@ describe("WorkflowScheduler", () => {
             maxInputTokensPerChild: 50_000,
             maxOutputTokensPerChild: 8_000,
           })
+        },
+      })
+    } finally {
+      if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME
+      else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
+    }
+  })
+
+  test("stops active workflow runs before advancing when wall-time budget is exceeded", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
+    process.env.AX_CODE_WORKFLOW_RUNTIME = "1"
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const spec = parseWorkflowSpecV1({
+            schemaVersion: 1,
+            id: "wall-time-stop",
+            name: "Wall Time Stop",
+            description: "A fixture that must not enqueue children after wall time expires.",
+            budget: {
+              maxWallTimeMs: 10,
+              maxConcurrentAgents: 3,
+              maxTotalAgents: 3,
+            },
+            phases: [
+              {
+                id: "scan",
+                name: "Scan",
+                kind: "fanout",
+                inputs: ["a", "b"],
+              },
+            ],
+          })
+          const run = await WorkflowRun.create({ spec })
+          await WorkflowRun.setStatus({ id: run.id, status: "running" })
+          setWorkflowRunStartedAt(run.id, Date.now() - 1_000)
+
+          const result = await WorkflowScheduler.start(run.id)
+
+          expect(result.status).toBe("failed")
+          expect(result.error).toContain("wall time")
+          expect(result.budgetLedger.some((entry) => entry.kind === "exceeded")).toBe(true)
+          const { TaskQueue } = await import("../../src/session/task-queue")
+          expect(await TaskQueue.list()).toEqual([])
         },
       })
     } finally {
@@ -1004,6 +1052,12 @@ function workflowSpecPhaseID(item: { payload: Record<string, unknown> }) {
   if (!workflow || typeof workflow !== "object") return undefined
   const specPhaseID = (workflow as { specPhaseID?: unknown }).specPhaseID
   return typeof specPhaseID === "string" ? specPhaseID : undefined
+}
+
+function setWorkflowRunStartedAt(id: WorkflowRun.Info["id"], startedAt: number) {
+  Database.use((db) => {
+    db.update(WorkflowRunTable).set({ time_started: startedAt }).where(eq(WorkflowRunTable.id, id)).run()
+  })
 }
 
 function verificationEnvelope(runID: string, status: "passed" | "failed", passed: boolean) {

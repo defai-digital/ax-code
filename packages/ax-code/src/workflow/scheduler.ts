@@ -5,7 +5,7 @@ import { addWorkflowBudgetUsage, evaluateWorkflowBudget } from "./budget"
 import { isWorkflowRuntimeEnabled, type WorkflowSpecV1 } from "./spec"
 import { planWorkflowDryRun } from "./planner"
 import { WorkflowRun } from "./run"
-import { WorkflowPhaseID, WorkflowRunID } from "./state"
+import { WorkflowPhaseID, type WorkflowRunDetail, WorkflowRunID } from "./state"
 
 type WorkflowDispatchExecutor = (
   spec: { agent: string; prompt: string; constraints?: string[]; timeoutMs?: number },
@@ -39,6 +39,8 @@ export namespace WorkflowScheduler {
     if (initial.status === "completed" || initial.status === "cancelled" || initial.status === "failed") {
       return initial
     }
+    const timedOut = await stopIfWallTimeExceeded(runID, initial)
+    if (timedOut) return timedOut
     assertExecutableMergeStrategies(initial.spec)
 
     const plan = planWorkflowDryRun({
@@ -51,6 +53,8 @@ export namespace WorkflowScheduler {
 
     await WorkflowRun.setStatus({ id: runID, status: "running" })
     for (const phase of initial.phases) {
+      const stopped = await stopIfWallTimeExceeded(runID)
+      if (stopped) return stopped
       if (phase.status === "completed") continue
       const phasePlan = plan.phases.find((item) => item.specPhaseID === phase.specPhaseID)
       if (!phasePlan) throw new Error(`No dry-run phase plan for workflow phase ${phase.specPhaseID}`)
@@ -225,6 +229,26 @@ export namespace WorkflowScheduler {
     assertEnabled()
     return retryChildren(runID, phaseID)
   }
+}
+
+async function stopIfWallTimeExceeded(runID: WorkflowRunID, inputDetail?: WorkflowRunDetail) {
+  const detail = inputDetail ?? (await WorkflowRun.getDetail(runID))
+  if (detail.time.started === undefined) return undefined
+  const elapsedMs = Date.now() - detail.time.started
+  const evaluation = evaluateWorkflowBudget({
+    budget: detail.budget,
+    usage: detail.budgetUsage,
+    elapsedMs,
+  })
+  if (!evaluation.exceeded.some((item) => item.startsWith("wall time "))) return undefined
+
+  await WorkflowRun.appendBudgetUsage({
+    runID,
+    kind: "exceeded",
+    usageDelta: {},
+    message: `Workflow wall time budget exceeded before scheduler advance: ${evaluation.exceeded.join("; ")}`,
+  })
+  return WorkflowRun.getDetail(runID)
 }
 
 async function retryChildren(runID: WorkflowRunID, phaseID?: WorkflowPhaseID) {

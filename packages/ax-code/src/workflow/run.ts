@@ -366,7 +366,7 @@ async function appendBudgetUsage(input: WorkflowRunState.AppendBudgetUsageInput)
     const workflowEvaluation = evaluateWorkflowBudget({
       budget: run.budget,
       usage: nextUsage,
-      elapsedMs: now - run.time_created,
+      elapsedMs: now - (run.time_started ?? run.time_created),
     })
     const budgetChild = parsed.childID
       ? db.select().from(WorkflowChildTable).where(eq(WorkflowChildTable.id, parsed.childID)).get()
