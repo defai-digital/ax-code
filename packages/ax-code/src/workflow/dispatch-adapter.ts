@@ -112,6 +112,7 @@ export namespace WorkflowDispatchAdapter {
         status: childStatus(result),
         outputSummary: summarizeOutput(result.output),
         artifactIDs: [artifact.id],
+        evidenceRefs: [{ kind: "artifact", id: artifact.id }],
         error: result.error,
       })
     }

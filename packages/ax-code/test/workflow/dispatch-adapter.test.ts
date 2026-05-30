@@ -35,12 +35,20 @@ describe("WorkflowDispatchAdapter", () => {
           expect(result.children.every((child) => child.status === "completed")).toBe(true)
           expect(result.children.every((child) => child.taskQueueID === undefined)).toBe(true)
           expect(result.children.every((child) => child.sessionID === undefined)).toBe(true)
+          expect(result.children.every((child) => child.evidenceRefs.length === 1)).toBe(true)
           expect(result.budgetUsage.childAgents).toBe(9)
           expect(result.budgetUsage.totalTokens).toBe(153)
 
-          const childLogs = result.artifacts.filter((artifact) => artifact.kind === "log")
+          const childLogs = result.artifacts.filter((artifact) => artifact.kind === "log" && artifact.childID)
           expect(childLogs).toHaveLength(9)
           expect(childLogs[0]?.payload).toMatchObject({ status: "completed", tokensUsed: 17 })
+          expect(result.children.every((child) => child.artifactIDs.length === 1)).toBe(true)
+          expect(result.children.every((child) => child.evidenceRefs[0]?.kind === "artifact")).toBe(true)
+          expect(
+            result.children.every((child) => child.evidenceRefs[0]?.id === child.artifactIDs[0]),
+          ).toBe(true)
+          expect(result.children.every((child) => childLogs.some((artifact) => artifact.id === child.artifactIDs[0])))
+            .toBe(true)
           expect(result.artifacts.some((artifact) => artifact.kind === "summary" && artifact.exposeToMainContext)).toBe(
             true,
           )
