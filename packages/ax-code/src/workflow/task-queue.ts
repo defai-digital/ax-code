@@ -44,13 +44,18 @@ export namespace WorkflowTaskQueue {
     }
 
     const refreshed = await WorkflowRun.getDetail(payload.workflow.runID)
-    const phaseStatus = aggregatePhaseStatus(
-      refreshed.children.filter((candidate) => candidate.phaseID === payload.workflow.phaseID),
-    )
     const phase = refreshed.phases.find((candidate) => candidate.id === payload.workflow.phaseID)
-    if (phase && phase.status !== phaseStatus) {
+    const phaseChildren = refreshed.children.filter((candidate) => candidate.phaseID === payload.workflow.phaseID)
+    const phaseStatus = aggregatePhaseStatus(phaseChildren, phase ? mergeStrategyForPhase(refreshed, phase) : "all")
+    if (phase && phaseStatus === "completed") {
+      await cancelSupersededPhaseChildren(phaseChildren)
+    }
+
+    const afterMerge = phaseStatus === "completed" ? await WorkflowRun.getDetail(payload.workflow.runID) : refreshed
+    const latestPhase = afterMerge.phases.find((candidate) => candidate.id === payload.workflow.phaseID)
+    if (latestPhase && latestPhase.status !== phaseStatus) {
       await WorkflowRun.setPhaseStatus({
-        id: phase.id,
+        id: latestPhase.id,
         status: phaseStatus,
         error: phaseStatus === "failed" || phaseStatus === "blocked" ? item.error : undefined,
       })
@@ -99,8 +104,36 @@ function childStatusFromQueueStatus(status: TaskQueue.Status): WorkflowRun.Child
   }
 }
 
-function aggregatePhaseStatus(children: WorkflowChildRecord[]): WorkflowRun.PhaseStatus {
+function aggregatePhaseStatus(
+  children: WorkflowChildRecord[],
+  mergeStrategy: WorkflowPhaseMergeStrategy,
+): WorkflowRun.PhaseStatus {
   if (children.length === 0) return "queued"
+  if (mergeStrategy === "first-success") {
+    if (children.some((child) => child.status === "completed")) return "completed"
+    if (children.some((child) => child.status === "blocked_permission" || child.status === "blocked_question")) {
+      return "blocked"
+    }
+    if (children.every((child) => child.status === "cancelled")) return "cancelled"
+    if (children.every((child) => isTerminalChildStatus(child.status))) return "failed"
+    if (children.some((child) => child.status === "paused")) return "paused"
+    return "running"
+  }
+  if (isMajorityMergeStrategy(mergeStrategy)) {
+    const completed = children.filter((child) => child.status === "completed").length
+    if (completed > children.length / 2) return "completed"
+    const failedOrCancelled = children.filter(
+      (child) => child.status === "failed" || child.status === "cancelled",
+    ).length
+    if (failedOrCancelled > children.length / 2) return "failed"
+    if (children.some((child) => child.status === "blocked_permission" || child.status === "blocked_question")) {
+      return "blocked"
+    }
+    if (children.every((child) => child.status === "cancelled")) return "cancelled"
+    if (children.every((child) => isTerminalChildStatus(child.status))) return "failed"
+    if (children.some((child) => child.status === "paused")) return "paused"
+    return "running"
+  }
   if (children.some((child) => child.status === "failed")) return "failed"
   if (children.some((child) => child.status === "blocked_permission" || child.status === "blocked_question")) {
     return "blocked"
@@ -109,6 +142,47 @@ function aggregatePhaseStatus(children: WorkflowChildRecord[]): WorkflowRun.Phas
   if (children.every((child) => child.status === "cancelled")) return "cancelled"
   if (children.some((child) => child.status === "paused")) return "paused"
   return "running"
+}
+
+async function cancelSupersededPhaseChildren(children: WorkflowChildRecord[]) {
+  const { TaskQueue } = await import("../session/task-queue")
+  for (const child of children) {
+    if (child.status === "completed" || child.status === "failed" || child.status === "cancelled") continue
+    let cancelledQueue = false
+    if (child.taskQueueID) {
+      await TaskQueue.setStatus({
+        id: child.taskQueueID,
+        status: "cancelled",
+        error: "Workflow phase merge strategy already satisfied.",
+      })
+        .then(() => {
+          cancelledQueue = true
+        })
+        .catch(() => undefined)
+    }
+    if (!cancelledQueue) {
+      await WorkflowRun.setChildStatus({
+        id: child.id,
+        status: "cancelled",
+        error: "Workflow phase merge strategy already satisfied.",
+      })
+    }
+  }
+}
+
+function mergeStrategyForPhase(
+  detail: Awaited<ReturnType<typeof WorkflowRun.getDetail>>,
+  phase: WorkflowRunDetailPhase,
+) {
+  return detail.spec.phases.find((candidate) => candidate.id === phase.specPhaseID)?.mergeStrategy ?? "all"
+}
+
+function isMajorityMergeStrategy(strategy: WorkflowPhaseMergeStrategy) {
+  return strategy === "majority" || strategy === "vote-with-critic" || strategy === "critic-confirmation"
+}
+
+function isTerminalChildStatus(status: WorkflowRun.ChildStatus) {
+  return status === "completed" || status === "failed" || status === "cancelled"
 }
 
 function aggregateRunStatus(phases: WorkflowRunDetailPhase[]): WorkflowRun.Status {
@@ -122,3 +196,4 @@ function aggregateRunStatus(phases: WorkflowRunDetailPhase[]): WorkflowRun.Statu
 }
 
 type WorkflowRunDetailPhase = Awaited<ReturnType<typeof WorkflowRun.getDetail>>["phases"][number]
+type WorkflowPhaseMergeStrategy = Awaited<ReturnType<typeof WorkflowRun.getDetail>>["spec"]["phases"][number]["mergeStrategy"]

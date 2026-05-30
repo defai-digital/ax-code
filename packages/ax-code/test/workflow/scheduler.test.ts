@@ -556,6 +556,221 @@ describe("WorkflowScheduler", () => {
     }
   })
 
+  test("advances first-success queued phases and cancels superseded children", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
+    process.env.AX_CODE_WORKFLOW_RUNTIME = "1"
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const spec = parseWorkflowSpecV1({
+            schemaVersion: 1,
+            id: "first-success-queued",
+            name: "First Success Queued",
+            description: "A queued fan-out phase should advance after the first successful child.",
+            budget: {
+              maxConcurrentAgents: 3,
+              maxTotalAgents: 4,
+            },
+            phases: [
+              {
+                id: "race",
+                name: "Race",
+                kind: "fanout",
+                inputs: ["a", "b", "c"],
+                maxParallel: 3,
+                mergeStrategy: "first-success",
+              },
+              {
+                id: "summarize",
+                name: "Summarize",
+                kind: "synthesis",
+                dependsOn: ["race"],
+              },
+            ],
+          })
+          const run = await WorkflowRun.create({ spec })
+          const started = await WorkflowScheduler.start(run.id)
+          const firstPhase = started.phases[0]
+          const secondPhase = started.phases[1]
+          if (!firstPhase || !secondPhase) throw new Error("expected two workflow phases")
+
+          const { TaskQueue } = await import("../../src/session/task-queue")
+          const firstPhaseQueue = await TaskQueue.list()
+          expect(firstPhaseQueue).toHaveLength(3)
+
+          await TaskQueue.setStatus({ id: firstPhaseQueue[0]!.id, status: "completed" })
+          const detail = await waitForValue("first-success phase advance", async () => {
+            const current = await WorkflowRun.getDetail(run.id)
+            return current.phases[1]?.status === "running" ? current : undefined
+          })
+
+          expect(detail.phases[0]?.status).toBe("completed")
+          const firstPhaseChildren = detail.children.filter((child) => child.phaseID === firstPhase.id)
+          expect(firstPhaseChildren.map((child) => child.status).sort()).toEqual([
+            "cancelled",
+            "cancelled",
+            "completed",
+          ])
+          const queue = await TaskQueue.list()
+          expect(queue.filter((item) => workflowSpecPhaseID(item) === "race").map((item) => item.status).sort()).toEqual(
+            ["cancelled", "cancelled", "completed"],
+          )
+          expect(queue.filter((item) => workflowSpecPhaseID(item) === "summarize")).toHaveLength(1)
+        },
+      })
+    } finally {
+      if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME
+      else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
+    }
+  })
+
+  test("completes durable first-success phases after the first child succeeds", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
+    process.env.AX_CODE_WORKFLOW_RUNTIME = "1"
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const spec = parseWorkflowSpecV1({
+            schemaVersion: 1,
+            id: "durable-first-success",
+            name: "Durable First Success",
+            description: "A durable queue workflow that should finish as soon as one child succeeds.",
+            phases: [
+              {
+                id: "search",
+                name: "Search",
+                kind: "fanout",
+                inputs: ["a", "b", "c"],
+                mergeStrategy: "first-success",
+              },
+            ],
+          })
+          const run = await WorkflowRun.create({ spec })
+          await WorkflowScheduler.start(run.id)
+          const { TaskQueue } = await import("../../src/session/task-queue")
+          const queue = await TaskQueue.list()
+          expect(queue).toHaveLength(3)
+
+          await TaskQueue.setStatus({ id: queue[0]!.id, status: "completed" })
+
+          const detail = await WorkflowRun.getDetail(run.id)
+          expect(detail.status).toBe("completed")
+          expect(detail.phases[0]?.status).toBe("completed")
+          expect(detail.children.filter((child) => child.status === "completed")).toHaveLength(1)
+          expect(detail.children.filter((child) => child.status === "cancelled")).toHaveLength(2)
+          expect((await TaskQueue.list()).filter((item) => item.status === "cancelled")).toHaveLength(2)
+        },
+      })
+    } finally {
+      if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME
+      else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
+    }
+  })
+
+  test("completes durable majority phases once a majority succeeds", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
+    process.env.AX_CODE_WORKFLOW_RUNTIME = "1"
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const spec = parseWorkflowSpecV1({
+            schemaVersion: 1,
+            id: "durable-majority",
+            name: "Durable Majority",
+            description: "A durable queue workflow that completes after a successful majority.",
+            phases: [
+              {
+                id: "vote",
+                name: "Vote",
+                kind: "fanout",
+                inputs: ["a", "b", "c"],
+                mergeStrategy: "vote-with-critic",
+              },
+            ],
+          })
+          const run = await WorkflowRun.create({ spec })
+          await WorkflowScheduler.start(run.id)
+          const { TaskQueue } = await import("../../src/session/task-queue")
+          const queue = await TaskQueue.list()
+          expect(queue).toHaveLength(3)
+
+          await TaskQueue.setStatus({ id: queue[0]!.id, status: "completed" })
+          let detail = await WorkflowRun.getDetail(run.id)
+          expect(detail.status).toBe("running")
+          expect(detail.phases[0]?.status).toBe("running")
+
+          await TaskQueue.setStatus({ id: queue[1]!.id, status: "completed" })
+
+          detail = await WorkflowRun.getDetail(run.id)
+          expect(detail.status).toBe("completed")
+          expect(detail.phases[0]?.status).toBe("completed")
+          expect(detail.children.filter((child) => child.status === "completed")).toHaveLength(2)
+          expect(detail.children.filter((child) => child.status === "cancelled")).toHaveLength(1)
+          expect((await TaskQueue.get(queue[2]!.id)).status).toBe("cancelled")
+        },
+      })
+    } finally {
+      if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME
+      else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
+    }
+  })
+
+  test("fails durable majority phases once a majority fails or cancels", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
+    process.env.AX_CODE_WORKFLOW_RUNTIME = "1"
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const spec = parseWorkflowSpecV1({
+            schemaVersion: 1,
+            id: "durable-majority-failure",
+            name: "Durable Majority Failure",
+            description: "A durable queue workflow that fails after a failed majority.",
+            phases: [
+              {
+                id: "vote",
+                name: "Vote",
+                kind: "fanout",
+                inputs: ["a", "b", "c"],
+                mergeStrategy: "majority",
+              },
+            ],
+          })
+          const run = await WorkflowRun.create({ spec })
+          await WorkflowScheduler.start(run.id)
+          const { TaskQueue } = await import("../../src/session/task-queue")
+          const queue = await TaskQueue.list()
+          expect(queue).toHaveLength(3)
+
+          await TaskQueue.setStatus({ id: queue[0]!.id, status: "failed", error: "first worker failed" })
+          let detail = await WorkflowRun.getDetail(run.id)
+          expect(detail.status).toBe("running")
+          expect(detail.phases[0]?.status).toBe("running")
+
+          await TaskQueue.setStatus({ id: queue[1]!.id, status: "cancelled", error: "second worker cancelled" })
+
+          detail = await WorkflowRun.getDetail(run.id)
+          expect(detail.status).toBe("failed")
+          expect(detail.phases[0]?.status).toBe("failed")
+          expect(
+            detail.children.filter((child) => child.status === "failed" || child.status === "cancelled"),
+          ).toHaveLength(2)
+        },
+      })
+    } finally {
+      if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME
+      else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
+    }
+  })
+
   test("pauses and resumes queued workflow children without advancing future phases", async () => {
     await using tmp = await tmpdir({ git: true })
     const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
@@ -733,4 +948,11 @@ async function waitForValue<T>(label: string, read: () => T | undefined | Promis
     await new Promise((resolve) => setTimeout(resolve, 0))
   }
   throw new Error(`Timed out waiting for ${label}`)
+}
+
+function workflowSpecPhaseID(item: { payload: Record<string, unknown> }) {
+  const workflow = item.payload.workflow
+  if (!workflow || typeof workflow !== "object") return undefined
+  const specPhaseID = (workflow as { specPhaseID?: unknown }).specPhaseID
+  return typeof specPhaseID === "string" ? specPhaseID : undefined
 }
