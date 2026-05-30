@@ -410,26 +410,68 @@ describe("WorkflowRun state", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
+        const events: string[] = []
+        const unsubscribers = [
+          Bus.subscribe(WorkflowRun.Event.Failed, (event) => {
+            events.push(`${event.type}:${event.properties.run.id}:${event.properties.run.status}`)
+          }),
+        ]
         const running = await WorkflowRun.create({ spec: parseWorkflowSpecV1(WorkflowFixtureSpecs.noopDryRun) })
         const queued = await WorkflowRun.create({ spec: parseWorkflowSpecV1(WorkflowFixtureSpecs.noopDryRun) })
+        const blocked = await WorkflowRun.create({ spec: parseWorkflowSpecV1(WorkflowFixtureSpecs.noopDryRun) })
+        const completed = await WorkflowRun.create({ spec: parseWorkflowSpecV1(WorkflowFixtureSpecs.noopDryRun) })
 
-        const runningDetail = await WorkflowRun.getDetail(running.id)
-        const phase = runningDetail.phases[0]!
-        await WorkflowRun.setStatus({ id: running.id, status: "running" })
-        await WorkflowRun.setPhaseStatus({ id: phase.id, status: "running" })
-        const child = await WorkflowRun.appendChild({ runID: running.id, phaseID: phase.id, agent: "worker" })
-        await WorkflowRun.setChildStatus({ id: child.id, status: "running" })
+        try {
+          const runningDetail = await WorkflowRun.getDetail(running.id)
+          const runningPhase = runningDetail.phases[0]!
+          await WorkflowRun.setStatus({ id: running.id, status: "running" })
+          await WorkflowRun.setPhaseStatus({ id: runningPhase.id, status: "running" })
+          const child = await WorkflowRun.appendChild({ runID: running.id, phaseID: runningPhase.id, agent: "worker" })
+          await WorkflowRun.setChildStatus({ id: child.id, status: "running" })
 
-        const recovered = await WorkflowRun.recoverInterrupted()
+          const blockedDetail = await WorkflowRun.getDetail(blocked.id)
+          const blockedPhase = blockedDetail.phases[0]!
+          await WorkflowRun.setStatus({ id: blocked.id, status: "running" })
+          await WorkflowRun.setPhaseStatus({ id: blockedPhase.id, status: "running" })
+          const blockedChild = await WorkflowRun.appendChild({
+            runID: blocked.id,
+            phaseID: blockedPhase.id,
+            agent: "worker",
+          })
+          await WorkflowRun.setChildStatus({
+            id: blockedChild.id,
+            status: "blocked_permission",
+            error: "approval required",
+          })
+          await WorkflowRun.setPhaseStatus({ id: blockedPhase.id, status: "blocked", error: "approval required" })
+          await WorkflowRun.setStatus({ id: blocked.id, status: "blocked", error: "approval required" })
 
-        expect(recovered.failed.map((item) => item.id)).toEqual([running.id])
-        expect((await WorkflowRun.get(running.id)).status).toBe("failed")
-        expect((await WorkflowRun.get(queued.id)).status).toBe("queued")
+          await WorkflowRun.setStatus({ id: completed.id, status: "completed" })
 
-        const recoveredDetail = await WorkflowRun.getDetail(running.id)
-        expect(recoveredDetail.error).toContain("backend restart")
-        expect(recoveredDetail.phases[0]?.status).toBe("failed")
-        expect(recoveredDetail.children[0]?.status).toBe("failed")
+          const recovered = await WorkflowRun.recoverInterrupted()
+
+          expect(recovered.failed.map((item) => item.id)).toEqual([running.id])
+          expect((await WorkflowRun.get(running.id)).status).toBe("failed")
+          expect((await WorkflowRun.get(queued.id)).status).toBe("queued")
+          expect((await WorkflowRun.get(blocked.id)).status).toBe("blocked")
+          expect((await WorkflowRun.get(completed.id)).status).toBe("completed")
+
+          const recoveredDetail = await WorkflowRun.getDetail(running.id)
+          expect(recoveredDetail.error).toContain("backend restart")
+          expect(recoveredDetail.phases[0]?.status).toBe("failed")
+          expect(recoveredDetail.children[0]?.status).toBe("failed")
+
+          const blockedAfterRecovery = await WorkflowRun.getDetail(blocked.id)
+          expect(blockedAfterRecovery.error).toBe("approval required")
+          expect(blockedAfterRecovery.phases[0]?.status).toBe("blocked")
+          expect(blockedAfterRecovery.children[0]?.status).toBe("blocked_permission")
+          expect(blockedAfterRecovery.children[0]?.error).toBe("approval required")
+
+          await new Promise((resolve) => setTimeout(resolve, 0))
+          expect(events).toContain(`workflow.run.failed:${running.id}:failed`)
+        } finally {
+          for (const unsubscribe of unsubscribers) unsubscribe()
+        }
       },
     })
   })

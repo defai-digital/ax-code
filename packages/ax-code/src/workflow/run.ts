@@ -805,7 +805,7 @@ function formatParentFinalReport(detail: WorkflowRunDetail, artifact: WorkflowAr
 
 async function recoverInterrupted(): Promise<{ failed: WorkflowRunState.Info[] }> {
   const now = Date.now()
-  const interruptedRunStatuses = ["running", "blocked"] as const
+  const interruptedRunStatuses = ["running"] as const
   const interruptedPhaseStatuses = ["running", "blocked"] as const
   const interruptedChildStatuses = ["running", "blocked_permission", "blocked_question"] as const
   const changed = Database.transaction((db) => {
@@ -854,7 +854,7 @@ async function recoverInterrupted(): Promise<{ failed: WorkflowRunState.Info[] }
     }
     return { failed }
   })
-  for (const run of changed.failed) publishUpdated(run)
+  for (const run of changed.failed) publishUpdated(run, "running")
   return changed
 }
 
