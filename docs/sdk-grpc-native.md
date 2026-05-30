@@ -40,6 +40,7 @@ The TypeScript facade lives at `@ax-code/sdk/grpc` and covers:
 - pending permission and question list/reply/reject operations for supervised GUI flows
 - provider, config, API-key auth, and provider OAuth settings for GUI settings screens
 - runtime setting controls for autonomous mode, isolation mode, and smart LLM routing
+- MCP status, dynamic server management, OAuth, connect, and disconnect controls
 - PTY terminal management and bidirectional terminal streaming
 - session evidence for review/debug UI
 - task queue operations

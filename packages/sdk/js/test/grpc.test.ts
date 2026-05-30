@@ -45,6 +45,14 @@ describe("gRPC SDK facade", () => {
         if (method === AX_CODE_GRPC_METHOD.SetIsolationMode) return { value: { mode: "read-only", network: false } }
         if (method === AX_CODE_GRPC_METHOD.GetSmartLlmRouting) return { value: { enabled: true } }
         if (method === AX_CODE_GRPC_METHOD.SetSmartLlmRouting) return { value: { enabled: false } }
+        if (method === AX_CODE_GRPC_METHOD.GetMcpStatus) return { value: { playwright: { type: "connected" } } }
+        if (method === AX_CODE_GRPC_METHOD.AddMcpServer) return { value: { playwright: { type: "connected" } } }
+        if (method === AX_CODE_GRPC_METHOD.StartMcpAuth) return { value: { authorizationUrl: "https://auth.example" } }
+        if (method === AX_CODE_GRPC_METHOD.CompleteMcpAuth) return { value: { type: "connected" } }
+        if (method === AX_CODE_GRPC_METHOD.AuthenticateMcp) return { value: { type: "connected" } }
+        if (method === AX_CODE_GRPC_METHOD.RemoveMcpAuth) return { value: true }
+        if (method === AX_CODE_GRPC_METHOD.ConnectMcp) return { value: true }
+        if (method === AX_CODE_GRPC_METHOD.DisconnectMcp) return { value: true }
         if (method === AX_CODE_GRPC_METHOD.GetProviderAuth) return { value: { anthropic: [{ type: "api" }] } }
         if (method === AX_CODE_GRPC_METHOD.SetAuth) return { value: true }
         if (method === AX_CODE_GRPC_METHOD.CreatePty) return { value: { id: "pty_1", title: "Terminal" } }
@@ -83,6 +91,16 @@ describe("gRPC SDK facade", () => {
     expect(await client.runtime.isolation.set("read-only")).toEqual({ mode: "read-only", network: false })
     expect(await client.runtime.smartLlm.get()).toEqual({ enabled: true })
     expect(await client.runtime.smartLlm.set(false)).toEqual({ enabled: false })
+    expect(await client.mcp.status()).toEqual({ playwright: { type: "connected" } })
+    expect(await client.mcp.add("playwright", { type: "local", command: ["npx", "playwright"] } as never)).toEqual({
+      playwright: { type: "connected" },
+    })
+    expect(await client.mcp.auth.start("playwright")).toEqual({ authorizationUrl: "https://auth.example" })
+    expect(await client.mcp.auth.callback("playwright", "abc")).toEqual({ type: "connected" })
+    expect(await client.mcp.auth.authenticate("playwright")).toEqual({ type: "connected" })
+    expect(await client.mcp.auth.remove("playwright")).toBe(true)
+    expect(await client.mcp.connect("playwright")).toBe(true)
+    expect(await client.mcp.disconnect("playwright")).toBe(true)
     expect(await client.provider.auth()).toEqual({ anthropic: [{ type: "api" }] })
     expect(await client.auth.set("anthropic", { type: "api", key: "secret" })).toBe(true)
     expect(await client.pty.create({ title: "Terminal" })).toEqual({ id: "pty_1", title: "Terminal" })
@@ -110,6 +128,14 @@ describe("gRPC SDK facade", () => {
       AX_CODE_GRPC_METHOD.SetIsolationMode,
       AX_CODE_GRPC_METHOD.GetSmartLlmRouting,
       AX_CODE_GRPC_METHOD.SetSmartLlmRouting,
+      AX_CODE_GRPC_METHOD.GetMcpStatus,
+      AX_CODE_GRPC_METHOD.AddMcpServer,
+      AX_CODE_GRPC_METHOD.StartMcpAuth,
+      AX_CODE_GRPC_METHOD.CompleteMcpAuth,
+      AX_CODE_GRPC_METHOD.AuthenticateMcp,
+      AX_CODE_GRPC_METHOD.RemoveMcpAuth,
+      AX_CODE_GRPC_METHOD.ConnectMcp,
+      AX_CODE_GRPC_METHOD.DisconnectMcp,
       AX_CODE_GRPC_METHOD.GetProviderAuth,
       AX_CODE_GRPC_METHOD.SetAuth,
       AX_CODE_GRPC_METHOD.CreatePty,
@@ -540,6 +566,65 @@ describe("gRPC SDK facade", () => {
     ])
   })
 
+  test("HTTP bridge maps MCP management calls to the headless backend", async () => {
+    const calls: Array<{ path: string; method: string; body: string }> = []
+    const client = createAxCodeGrpcClientFromHttp({
+      baseUrl: "http://127.0.0.1:4096",
+      fetch: (async (url: URL | RequestInfo, init?: RequestInit) => {
+        const request = url instanceof Request ? url : new Request(url, init)
+        const parsed = new URL(request.url)
+        calls.push({
+          path: parsed.pathname,
+          method: request.method,
+          body: request.body ? await new Response(request.body).text() : "",
+        })
+        if (parsed.pathname === "/mcp" && request.method === "GET") {
+          return Response.json({ playwright: { type: "connected" } })
+        }
+        if (parsed.pathname === "/mcp" && request.method === "POST") {
+          return Response.json({ playwright: { type: "connected" } })
+        }
+        if (parsed.pathname === "/mcp/playwright/auth" && request.method === "POST") {
+          return Response.json({ authorizationUrl: "https://auth.example" })
+        }
+        if (parsed.pathname === "/mcp/playwright/auth/callback") return Response.json({ type: "connected" })
+        if (parsed.pathname === "/mcp/playwright/auth/authenticate") return Response.json({ type: "connected" })
+        if (parsed.pathname === "/mcp/playwright/auth" && request.method === "DELETE") return Response.json(true)
+        if (parsed.pathname === "/mcp/playwright/connect") return Response.json(true)
+        if (parsed.pathname === "/mcp/playwright/disconnect") return Response.json(true)
+        return new Response("not found", { status: 404 })
+      }) as typeof fetch,
+    })
+
+    await expect(client.mcp.status()).resolves.toEqual({ playwright: { type: "connected" } })
+    await expect(
+      client.mcp.add("playwright", { type: "local", command: ["npx", "playwright"] } as never),
+    ).resolves.toEqual({ playwright: { type: "connected" } })
+    await expect(client.mcp.auth.start("playwright")).resolves.toEqual({
+      authorizationUrl: "https://auth.example",
+    })
+    await expect(client.mcp.auth.callback("playwright", "abc")).resolves.toEqual({ type: "connected" })
+    await expect(client.mcp.auth.authenticate("playwright")).resolves.toEqual({ type: "connected" })
+    await expect(client.mcp.auth.remove("playwright")).resolves.toBe(true)
+    await expect(client.mcp.connect("playwright")).resolves.toBe(true)
+    await expect(client.mcp.disconnect("playwright")).resolves.toBe(true)
+
+    expect(calls).toEqual([
+      { path: "/mcp", method: "GET", body: "" },
+      {
+        path: "/mcp",
+        method: "POST",
+        body: JSON.stringify({ name: "playwright", config: { type: "local", command: ["npx", "playwright"] } }),
+      },
+      { path: "/mcp/playwright/auth", method: "POST", body: "" },
+      { path: "/mcp/playwright/auth/callback", method: "POST", body: JSON.stringify({ code: "abc" }) },
+      { path: "/mcp/playwright/auth/authenticate", method: "POST", body: "" },
+      { path: "/mcp/playwright/auth", method: "DELETE", body: "" },
+      { path: "/mcp/playwright/connect", method: "POST", body: "" },
+      { path: "/mcp/playwright/disconnect", method: "POST", body: "" },
+    ])
+  })
+
   test("HTTP bridge filters event streams for GUI subscriptions", async () => {
     const calls: string[] = []
     const client = createAxCodeGrpcClientFromHttp({
@@ -852,6 +937,14 @@ describe("gRPC SDK facade", () => {
     expect(proto).toContain("rpc SetIsolationMode")
     expect(proto).toContain("rpc GetSmartLlmRouting")
     expect(proto).toContain("rpc SetSmartLlmRouting")
+    expect(proto).toContain("rpc GetMcpStatus")
+    expect(proto).toContain("rpc AddMcpServer")
+    expect(proto).toContain("rpc StartMcpAuth")
+    expect(proto).toContain("rpc CompleteMcpAuth")
+    expect(proto).toContain("rpc AuthenticateMcp")
+    expect(proto).toContain("rpc RemoveMcpAuth")
+    expect(proto).toContain("rpc ConnectMcp")
+    expect(proto).toContain("rpc DisconnectMcp")
     expect(proto).toContain("rpc SetAuth")
     expect(proto).toContain("rpc ProviderOauthAuthorize")
     expect(proto).toContain("rpc ConnectPty")

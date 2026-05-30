@@ -57,6 +57,14 @@ service AxCodeHeadless {
   rpc SetIsolationMode(JsonRequest) returns (JsonResponse);
   rpc GetSmartLlmRouting(QueryRequest) returns (JsonResponse);
   rpc SetSmartLlmRouting(JsonRequest) returns (JsonResponse);
+  rpc GetMcpStatus(QueryRequest) returns (JsonResponse);
+  rpc AddMcpServer(McpAddRequest) returns (JsonResponse);
+  rpc StartMcpAuth(NamedRequest) returns (JsonResponse);
+  rpc CompleteMcpAuth(McpAuthCallbackRequest) returns (JsonResponse);
+  rpc AuthenticateMcp(NamedRequest) returns (JsonResponse);
+  rpc RemoveMcpAuth(NamedRequest) returns (JsonResponse);
+  rpc ConnectMcp(NamedRequest) returns (JsonResponse);
+  rpc DisconnectMcp(NamedRequest) returns (JsonResponse);
   rpc ListProviders(QueryRequest) returns (JsonResponse);
   rpc GetProviderAuth(QueryRequest) returns (JsonResponse);
   rpc SetAuth(ProviderAuthRequest) returns (JsonResponse);
@@ -199,6 +207,20 @@ message IdRequest {
 message IdJsonRequest {
   string id = 1;
   google.protobuf.Struct body = 2;
+}
+
+message NamedRequest {
+  string name = 1;
+}
+
+message McpAddRequest {
+  string name = 1;
+  google.protobuf.Struct config = 2;
+}
+
+message McpAuthCallbackRequest {
+  string name = 1;
+  string code = 2;
 }
 
 message QueryRequest {

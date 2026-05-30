@@ -65,6 +65,14 @@ export const AX_CODE_GRPC_METHOD = {
   SetIsolationMode: `/${AX_CODE_GRPC_SERVICE}/SetIsolationMode`,
   GetSmartLlmRouting: `/${AX_CODE_GRPC_SERVICE}/GetSmartLlmRouting`,
   SetSmartLlmRouting: `/${AX_CODE_GRPC_SERVICE}/SetSmartLlmRouting`,
+  GetMcpStatus: `/${AX_CODE_GRPC_SERVICE}/GetMcpStatus`,
+  AddMcpServer: `/${AX_CODE_GRPC_SERVICE}/AddMcpServer`,
+  StartMcpAuth: `/${AX_CODE_GRPC_SERVICE}/StartMcpAuth`,
+  CompleteMcpAuth: `/${AX_CODE_GRPC_SERVICE}/CompleteMcpAuth`,
+  AuthenticateMcp: `/${AX_CODE_GRPC_SERVICE}/AuthenticateMcp`,
+  RemoveMcpAuth: `/${AX_CODE_GRPC_SERVICE}/RemoveMcpAuth`,
+  ConnectMcp: `/${AX_CODE_GRPC_SERVICE}/ConnectMcp`,
+  DisconnectMcp: `/${AX_CODE_GRPC_SERVICE}/DisconnectMcp`,
   ListProviders: `/${AX_CODE_GRPC_SERVICE}/ListProviders`,
   GetProviderAuth: `/${AX_CODE_GRPC_SERVICE}/GetProviderAuth`,
   SetAuth: `/${AX_CODE_GRPC_SERVICE}/SetAuth`,
@@ -304,6 +312,19 @@ export type AxCodeGrpcTaskQueueCommandRequest = {
 export type AxCodeGrpcScheduledTaskCommandRequest = {
   id: string
   command: "pause" | "resume"
+}
+
+export type AxCodeGrpcNamedRequest = {
+  name: string
+}
+
+export type AxCodeGrpcMcpAddRequest = {
+  name: string
+  config?: NonNullable<Parameters<HeadlessHttpClient["client"]["mcp"]["add"]>[0]>["config"]
+}
+
+export type AxCodeGrpcMcpAuthCallbackRequest = AxCodeGrpcNamedRequest & {
+  code?: string
 }
 
 export type AxCodeGrpcWorkflowRunCommandRequest = {
@@ -731,6 +752,42 @@ export function createAxCodeGrpcClient(input: AxCodeGrpcClientOptions) {
         },
         set(enabled: boolean, options?: AxCodeGrpcCallOptions) {
           return value(AX_CODE_GRPC_METHOD.SetSmartLlmRouting, { body: { enabled } }, options)
+        },
+      },
+    },
+    mcp: {
+      status(parameters?: Parameters<HeadlessHttpClient["client"]["mcp"]["status"]>[0], options?: AxCodeGrpcCallOptions) {
+        return value(AX_CODE_GRPC_METHOD.GetMcpStatus, { parameters }, options)
+      },
+      add(
+        name: string,
+        config: AxCodeGrpcMcpAddRequest["config"],
+        options?: AxCodeGrpcCallOptions,
+      ) {
+        return value<AxCodeGrpcMcpAddRequest, unknown>(AX_CODE_GRPC_METHOD.AddMcpServer, { name, config }, options)
+      },
+      connect(name: string, options?: AxCodeGrpcCallOptions) {
+        return value<AxCodeGrpcNamedRequest, unknown>(AX_CODE_GRPC_METHOD.ConnectMcp, { name }, options)
+      },
+      disconnect(name: string, options?: AxCodeGrpcCallOptions) {
+        return value<AxCodeGrpcNamedRequest, unknown>(AX_CODE_GRPC_METHOD.DisconnectMcp, { name }, options)
+      },
+      auth: {
+        start(name: string, options?: AxCodeGrpcCallOptions) {
+          return value<AxCodeGrpcNamedRequest, unknown>(AX_CODE_GRPC_METHOD.StartMcpAuth, { name }, options)
+        },
+        callback(name: string, code?: string, options?: AxCodeGrpcCallOptions) {
+          return value<AxCodeGrpcMcpAuthCallbackRequest, unknown>(
+            AX_CODE_GRPC_METHOD.CompleteMcpAuth,
+            { name, code },
+            options,
+          )
+        },
+        authenticate(name: string, options?: AxCodeGrpcCallOptions) {
+          return value<AxCodeGrpcNamedRequest, unknown>(AX_CODE_GRPC_METHOD.AuthenticateMcp, { name }, options)
+        },
+        remove(name: string, options?: AxCodeGrpcCallOptions) {
+          return value<AxCodeGrpcNamedRequest, unknown>(AX_CODE_GRPC_METHOD.RemoveMcpAuth, { name }, options)
         },
       },
     },
@@ -1194,6 +1251,40 @@ async function handleHttpBridgeUnary(
       return wrap(unwrapHttpSdkResponse(await client.client.smartLlm.get(body.parameters)))
     case AX_CODE_GRPC_METHOD.SetSmartLlmRouting:
       return wrap(unwrapHttpSdkResponse(await client.client.smartLlm.set(body.body, { throwOnError: true })))
+    case AX_CODE_GRPC_METHOD.GetMcpStatus:
+      return wrap(unwrapHttpSdkResponse(await client.client.mcp.status(body.parameters)))
+    case AX_CODE_GRPC_METHOD.AddMcpServer:
+      return wrap(
+        unwrapHttpSdkResponse(
+          await client.client.mcp.add({ name: body.name, config: body.config }, { throwOnError: true }),
+        ),
+      )
+    case AX_CODE_GRPC_METHOD.StartMcpAuth:
+      return wrap(
+        unwrapHttpSdkResponse(await client.client.mcp.auth.start({ name: body.name }, { throwOnError: true })),
+      )
+    case AX_CODE_GRPC_METHOD.CompleteMcpAuth:
+      return wrap(
+        unwrapHttpSdkResponse(
+          await client.client.mcp.auth.callback({ name: body.name, code: body.code }, { throwOnError: true }),
+        ),
+      )
+    case AX_CODE_GRPC_METHOD.AuthenticateMcp:
+      return wrap(
+        unwrapHttpSdkResponse(await client.client.mcp.auth.authenticate({ name: body.name }, { throwOnError: true })),
+      )
+    case AX_CODE_GRPC_METHOD.RemoveMcpAuth:
+      return wrap(
+        unwrapHttpSdkResponse(await client.client.mcp.auth.remove({ name: body.name }, { throwOnError: true })),
+      )
+    case AX_CODE_GRPC_METHOD.ConnectMcp:
+      return wrap(
+        unwrapHttpSdkResponse(await client.client.mcp.connect({ name: body.name }, { throwOnError: true })),
+      )
+    case AX_CODE_GRPC_METHOD.DisconnectMcp:
+      return wrap(
+        unwrapHttpSdkResponse(await client.client.mcp.disconnect({ name: body.name }, { throwOnError: true })),
+      )
     case AX_CODE_GRPC_METHOD.ListProviders:
       return wrap(unwrapHttpSdkResponse(await client.client.provider.list(body.parameters)))
     case AX_CODE_GRPC_METHOD.GetProviderAuth:
