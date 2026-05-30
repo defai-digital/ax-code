@@ -164,6 +164,8 @@ describe("gRPC SDK facade", () => {
         if (method === AX_CODE_GRPC_METHOD.GetFormatterStatus) return { value: { enabled: true } }
         if (method === AX_CODE_GRPC_METHOD.CreatePty) return { value: { id: "pty_1", title: "Terminal" } }
         if (method === AX_CODE_GRPC_METHOD.TaskQueueCommand) return { value: { id: "task-1", status: "paused" } }
+        if (method === AX_CODE_GRPC_METHOD.ListWorkflowRuns) return { value: [{ id: "run-1" }] }
+        if (method === AX_CODE_GRPC_METHOD.GetWorkflowRun) return { value: { id: "run-1", status: "running" } }
         if (method === AX_CODE_GRPC_METHOD.WorkflowRunDashboard) return { value: [{ id: "run-1" }] }
         if (method === AX_CODE_GRPC_METHOD.WorkflowRunEvalCases) return { value: [{ id: "case-1" }] }
         if (method === AX_CODE_GRPC_METHOD.WorkflowRunEvalCase) return { value: { caseID: "case-1" } }
@@ -227,6 +229,8 @@ describe("gRPC SDK facade", () => {
     expect(await client.formatter.status()).toEqual({ enabled: true })
     expect(await client.pty.create({ title: "Terminal" })).toEqual({ id: "pty_1", title: "Terminal" })
     expect(await pause("task-1")).toEqual({ id: "task-1", status: "paused" })
+    expect(await client.workflowRun.list({ status: "running", limit: 5 })).toEqual([{ id: "run-1" }])
+    expect(await client.workflowRun.get("run-1")).toEqual({ id: "run-1", status: "running" })
     expect(await client.workflowRun.dashboard({ limit: 5 })).toEqual([{ id: "run-1" }])
     expect(await client.workflowRun.evalCases()).toEqual([{ id: "case-1" }])
     expect(await client.workflowRun.evalCase("run-1", { caseID: "case-1" })).toEqual({ caseID: "case-1" })
@@ -277,6 +281,8 @@ describe("gRPC SDK facade", () => {
       AX_CODE_GRPC_METHOD.GetFormatterStatus,
       AX_CODE_GRPC_METHOD.CreatePty,
       AX_CODE_GRPC_METHOD.TaskQueueCommand,
+      AX_CODE_GRPC_METHOD.ListWorkflowRuns,
+      AX_CODE_GRPC_METHOD.GetWorkflowRun,
       AX_CODE_GRPC_METHOD.WorkflowRunDashboard,
       AX_CODE_GRPC_METHOD.WorkflowRunEvalCases,
       AX_CODE_GRPC_METHOD.WorkflowRunEvalCase,
@@ -286,6 +292,12 @@ describe("gRPC SDK facade", () => {
       runID: "run-1",
       command: "retry",
       body: { phaseID: "phase-1" },
+    })
+    expect(calls.find((call) => call.method === AX_CODE_GRPC_METHOD.ListWorkflowRuns)?.request).toEqual({
+      parameters: { status: "running", limit: 5 },
+    })
+    expect(calls.find((call) => call.method === AX_CODE_GRPC_METHOD.GetWorkflowRun)?.request).toEqual({
+      runID: "run-1",
     })
   })
 
@@ -1161,6 +1173,10 @@ describe("gRPC SDK facade", () => {
           method: request.method,
           body: request.body ? await new Response(request.body).text() : "",
         })
+        if (parsed.pathname === "/workflow-runs") return Response.json([{ id: "run-1" }])
+        if (parsed.pathname === "/workflow-runs/run-1" && request.method === "GET") {
+          return Response.json({ id: "run-1", status: "running" })
+        }
         if (parsed.pathname === "/workflow-runs/dashboard") return Response.json([{ id: "run-1" }])
         if (parsed.pathname === "/workflow-runs/eval-cases") return Response.json([{ id: "case-1" }])
         if (parsed.pathname === "/workflow-runs/run-1/eval-case") return Response.json({ caseID: "case-1" })
@@ -1169,6 +1185,8 @@ describe("gRPC SDK facade", () => {
       }) as typeof fetch,
     })
 
+    await expect(client.workflowRun.list({ status: "running", limit: 10 })).resolves.toEqual([{ id: "run-1" }])
+    await expect(client.workflowRun.get("run-1")).resolves.toEqual({ id: "run-1", status: "running" })
     await expect(client.workflowRun.dashboard({ limit: 10 })).resolves.toEqual([{ id: "run-1" }])
     await expect(client.workflowRun.evalCases()).resolves.toEqual([{ id: "case-1" }])
     await expect(client.workflowRun.evalCase("run-1", { caseID: "case-1" })).resolves.toEqual({ caseID: "case-1" })
@@ -1178,6 +1196,8 @@ describe("gRPC SDK facade", () => {
     })
 
     expect(calls).toEqual([
+      { path: "/workflow-runs?status=running&limit=10", method: "GET", body: "" },
+      { path: "/workflow-runs/run-1", method: "GET", body: "" },
       { path: "/workflow-runs/dashboard?limit=10", method: "GET", body: "" },
       { path: "/workflow-runs/eval-cases", method: "GET", body: "" },
       { path: "/workflow-runs/run-1/eval-case", method: "POST", body: JSON.stringify({ caseID: "case-1" }) },
