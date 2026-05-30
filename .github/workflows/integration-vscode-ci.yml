@@ -31,8 +31,12 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v6
+
       - name: Setup Ax-code JS toolchain
         uses: ./.github/actions/setup-ax-code-toolchain
+        with:
+          checkout: "false"
 
       - name: Install deps
         run: pnpm install --frozen-lockfile
