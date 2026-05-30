@@ -1,6 +1,7 @@
 import z from "zod"
 import { Instance } from "../project/instance"
 import { Session } from "../session"
+import type { TaskQueueID } from "../session/schema"
 import { addWorkflowBudgetUsage, evaluateWorkflowBudget } from "./budget"
 import { isWorkflowRuntimeEnabled, type WorkflowSpecV1 } from "./spec"
 import { planWorkflowDryRun } from "./planner"
@@ -165,7 +166,7 @@ export namespace WorkflowScheduler {
     const detail = await WorkflowRun.getDetail(runID)
     for (const child of detail.children) {
       if (child.taskQueueID) {
-        await TaskQueue.cancel(child.taskQueueID).catch(() => undefined)
+        await cancelWorkflowQueueItem(child.taskQueueID).catch(() => undefined)
       }
       if (!isTerminalChildStatus(child.status)) {
         await WorkflowRun.setChildStatus({ id: child.id, status: "cancelled" })
@@ -249,6 +250,27 @@ async function stopIfWallTimeExceeded(runID: WorkflowRunID, inputDetail?: Workfl
     message: `Workflow wall time budget exceeded before scheduler advance: ${evaluation.exceeded.join("; ")}`,
   })
   return WorkflowRun.getDetail(runID)
+}
+
+async function cancelWorkflowQueueItem(taskQueueID: TaskQueueID) {
+  const TaskQueue = await loadTaskQueue()
+  const item = await TaskQueue.get(taskQueueID)
+  if (item.status === "cancelled") return item
+  if (item.status === "queued" || item.status === "waiting_for_idle" || item.status === "paused") {
+    return TaskQueue.cancel(taskQueueID)
+  }
+  if (item.status === "running" || item.status === "blocked_permission" || item.status === "blocked_question") {
+    if (item.sessionID) {
+      const { SessionPrompt } = await import("../session/prompt")
+      await SessionPrompt.cancel(item.sessionID).catch(() => undefined)
+    }
+    return TaskQueue.setStatus({
+      id: taskQueueID,
+      status: "cancelled",
+      error: "Workflow run cancelled.",
+    })
+  }
+  return item
 }
 
 async function retryChildren(runID: WorkflowRunID, phaseID?: WorkflowPhaseID) {

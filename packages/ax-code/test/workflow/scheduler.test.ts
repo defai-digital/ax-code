@@ -1036,6 +1036,40 @@ describe("WorkflowScheduler", () => {
       else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
     }
   })
+
+  test("cancels running workflow children and linked queue items", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
+    process.env.AX_CODE_WORKFLOW_RUNTIME = "1"
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const run = await WorkflowRun.create({ spec: parseWorkflowSpecV1(WorkflowFixtureSpecs.issueTriage) })
+          await WorkflowScheduler.start(run.id, { allowScaleBeyondDefaults: true })
+          const { TaskQueue } = await import("../../src/session/task-queue")
+          const queued = await TaskQueue.list()
+          expect(queued.length).toBeGreaterThan(0)
+          for (const item of queued) {
+            await TaskQueue.setStatus({ id: item.id, status: "running" })
+          }
+          expect((await TaskQueue.list()).some((item) => item.status === "running")).toBe(true)
+
+          const cancelled = await WorkflowScheduler.cancel(run.id)
+
+          expect(cancelled.status).toBe("cancelled")
+          expect(cancelled.children.every((child) => child.status === "cancelled")).toBe(true)
+          expect(cancelled.phases.every((phase) => phase.status === "cancelled")).toBe(true)
+          const queueAfterCancel = await TaskQueue.list()
+          expect(queueAfterCancel.every((item) => item.status === "cancelled")).toBe(true)
+          expect(queueAfterCancel.some((item) => item.status === "running")).toBe(false)
+        },
+      })
+    } finally {
+      if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME
+      else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
+    }
+  })
 })
 
 async function waitForValue<T>(label: string, read: () => T | undefined | Promise<T | undefined>): Promise<T> {
