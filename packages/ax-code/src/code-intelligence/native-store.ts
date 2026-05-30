@@ -145,6 +145,10 @@ export namespace NativeStore {
     return result ? parseNativeStoreJson(result, []) : []
   }
 
+  export function deleteEdgesInFile(projectID: ProjectID, file: string): void {
+    op("deleteEdgesInFile", { projectID, file }, (store) => store.deleteEdgesInFile(projectID, file))
+  }
+
   export function deleteEdgesTouchingFile(projectID: ProjectID, file: string): void {
     op("deleteEdgesTouchingFile", { projectID, file }, (store) => store.deleteEdgesTouchingFile(projectID, file))
   }

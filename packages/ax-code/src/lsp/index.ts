@@ -24,6 +24,7 @@ import * as LSPClientNotify from "./client-notify"
 import * as LSPDocumentSymbol from "./document-symbol"
 import * as LSPReferences from "./references"
 import { LSPServerConfig } from "./server-config"
+import { FileWatcher } from "../file/watcher"
 
 export namespace LSP {
   const log = Log.create({ service: "lsp" })
@@ -48,6 +49,18 @@ export namespace LSP {
   // responsive enough for interactive use without generating log noise.
   const HEALTH_CHECK_INTERVAL_MS = 60_000
   const MAX_ROOT_CACHE_ENTRIES = 2_000
+  const ROOT_MARKER_FILES = new Set([
+    "package.json",
+    "tsconfig.json",
+    "jsconfig.json",
+    "deno.json",
+    "deno.jsonc",
+    "Cargo.toml",
+    "go.mod",
+    "pyproject.toml",
+    "composer.json",
+    "Gemfile",
+  ])
 
   const hasProcessExited = (proc: ChildProcessWithoutNullStreams) => proc.exitCode !== null || proc.signalCode !== null
 
@@ -55,6 +68,19 @@ export namespace LSP {
     await Shell.killTree(proc, {
       exited: () => hasProcessExited(proc),
     })
+  }
+
+  async function stopLSPProcessBestEffort(proc: ChildProcessWithoutNullStreams, context: Record<string, unknown>) {
+    await stopLSPProcess(proc).catch((error) => {
+      log.warn("failed to stop LSP process", {
+        ...context,
+        error,
+      })
+    })
+  }
+
+  function isRootMarkerFile(file: string) {
+    return ROOT_MARKER_FILES.has(path.basename(file))
   }
 
   function clientKey(root: string, serverID: string) {
@@ -98,6 +124,7 @@ export namespace LSP {
           rootCache: new Map<string, string | null>(),
           spawning: new Map<string, Promise<LSPClient.Info | undefined>>(),
           healthCheck: undefined,
+          rootCacheUnsubscribe: undefined,
         }
       }
 
@@ -118,7 +145,18 @@ export namespace LSP {
         rootCache: new Map<string, string | null>(),
         spawning: new Map<string, Promise<LSPClient.Info | undefined>>(),
         healthCheck: undefined as ReturnType<typeof setInterval> | undefined,
+        rootCacheUnsubscribe: undefined as (() => void) | undefined,
       }
+
+      s.rootCacheUnsubscribe = Bus.subscribe(FileWatcher.Event.Updated, (event) => {
+        if (!isRootMarkerFile(event.properties.file)) return
+        if (s.rootCache.size === 0) return
+        s.rootCache.clear()
+        log.debug("cleared lsp root cache after project marker change", {
+          file: event.properties.file,
+          event: event.properties.event,
+        })
+      })
 
       // Health-check loop: periodically probe every connected client and
       // remove any whose underlying process has died. Dead clients get
@@ -149,6 +187,7 @@ export namespace LSP {
       return s
     },
     async (state) => {
+      state.rootCacheUnsubscribe?.()
       if (state.healthCheck) clearInterval(state.healthCheck)
       // Per-client catch so one client's shutdown failure (process
       // already exited, broken pipe, RPC timeout) doesn't skip the
@@ -266,7 +305,7 @@ export namespace LSP {
     } catch (err) {
       LSPPerf.finishPhase("client.initialize", initializeStarted, false)
       LSPBrokenServer.markBroken(s.broken, key)
-      await stopLSPProcess(handle.process)
+      await stopLSPProcessBestEffort(handle.process, { serverID: server.id, root, phase: "initialize" })
       log.error(`Failed to initialize LSP client ${server.id}`, { error: err })
       return undefined
     }
@@ -277,14 +316,14 @@ export namespace LSP {
 
     const existing = s.clients.find((x) => x.root === root && x.serverID === server.id)
     if (existing) {
-      await stopLSPProcess(handle.process)
+      await stopLSPProcessBestEffort(handle.process, { serverID: server.id, root, phase: "duplicate" })
       return existing
     }
 
     if (client.closed || !client.ping()) {
       log.warn("lsp client died during spawn, skipping active registration", { serverID: server.id, root })
       LSPBrokenServer.markBroken(s.broken, key)
-      await stopLSPProcess(handle.process)
+      await stopLSPProcessBestEffort(handle.process, { serverID: server.id, root, phase: "liveness" })
       return undefined
     }
 

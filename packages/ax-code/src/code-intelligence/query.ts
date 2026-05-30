@@ -187,6 +187,7 @@ export namespace CodeGraphQuery {
   }
 
   export function edgesInFile(projectID: ProjectID, file: string): EdgeRow[] {
+    if (useNative) return NativeStore.edgesInFile(projectID, file)
     return Database.use((db) =>
       db
         .select()
@@ -197,6 +198,7 @@ export namespace CodeGraphQuery {
   }
 
   export function deleteEdgesInFile(projectID: ProjectID, file: string): void {
+    if (useNative) return NativeStore.deleteEdgesInFile(projectID, file)
     Database.use((db) =>
       db
         .delete(CodeEdgeTable)

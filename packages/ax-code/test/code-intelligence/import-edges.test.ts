@@ -2,6 +2,7 @@ import { describe, test, expect, beforeAll, afterAll } from "bun:test"
 import path from "path"
 import fs from "fs/promises"
 import { CodeIntelligence } from "../../src/code-intelligence"
+import { parseImportSpecifiers } from "../../src/code-intelligence/builder"
 import { Instance } from "../../src/project/instance"
 import { Log } from "../../src/util/log"
 import { tmpdir } from "../fixture/fixture"
@@ -109,5 +110,24 @@ import { foo } from "./local"
     expect(imports).not.toContain("fs")
     expect(imports).not.toContain("path")
     expect(imports).not.toContain("node:http")
+  })
+
+  test("ignores import-like text inside comments and strings", () => {
+    const text = `
+// require("./commented")
+/* import hidden from "./block-comment" */
+const example = "require('./string-literal')"
+const template = \`import("./template-literal")\`
+import actual from "./actual"
+const lazy = await import("./lazy")
+`
+    const imports = parseImportSpecifiers(text, "/repo/src/main.ts")
+
+    expect(imports).toContain("/repo/src/actual.ts")
+    expect(imports).toContain("/repo/src/lazy.ts")
+    expect(imports.some((item) => item.includes("commented"))).toBe(false)
+    expect(imports.some((item) => item.includes("block-comment"))).toBe(false)
+    expect(imports.some((item) => item.includes("string-literal"))).toBe(false)
+    expect(imports.some((item) => item.includes("template-literal"))).toBe(false)
   })
 })

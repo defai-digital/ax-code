@@ -64,7 +64,8 @@ export namespace Agent {
   export type Tier = "core" | "specialist" | "internal" | "subagent"
 
   export function resolveTier(agent: { tier?: string; hidden?: boolean; mode?: string }): Tier {
-    if (agent.tier === "core" || agent.tier === "specialist" || agent.tier === "internal") return agent.tier
+    if (agent.tier === "core" || agent.tier === "specialist" || agent.tier === "internal" || agent.tier === "subagent")
+      return agent.tier
     if (agent.hidden === true) return "internal"
     if (agent.mode === "subagent") return "subagent"
     return "specialist"
