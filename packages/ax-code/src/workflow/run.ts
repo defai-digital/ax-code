@@ -9,7 +9,7 @@ import { sessionAssistantPath, zeroTokenUsage } from "../session/prompt-message-
 import { MessageID, PartID, SessionID } from "../session/schema"
 import { Database, NotFoundError, and, asc, desc, eq, inArray } from "../storage/db"
 import { Log } from "../util/log"
-import { defaultWorkflowArtifactRedaction } from "./artifact"
+import { compactWorkflowArtifact, defaultWorkflowArtifactRedaction } from "./artifact"
 import { addWorkflowBudgetUsage, evaluateWorkflowBudget, evaluateWorkflowChildBudget } from "./budget"
 import { classifyWorkflowFindingArtifact, evaluateWorkflowRun, type WorkflowEvalFindingStatus } from "./eval"
 import { WorkflowInputValidationError, resolveWorkflowInputValues } from "./spec"
@@ -1364,7 +1364,7 @@ function publishChildUpdated(child: WorkflowChildRecord, previousStatus?: Workfl
 }
 
 function publishArtifactWritten(artifact: WorkflowArtifactRecord) {
-  Bus.publishDetached(WorkflowRun.Event.ArtifactWritten, { artifact })
+  Bus.publishDetached(WorkflowRun.Event.ArtifactWritten, { artifact: compactWorkflowArtifact(artifact) })
 }
 
 function publishBudgetAppended(entry: WorkflowBudgetLedgerEntry) {

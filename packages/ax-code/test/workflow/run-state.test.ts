@@ -267,6 +267,53 @@ describe("WorkflowRun state", () => {
     })
   })
 
+  test("publishes compact artifact events without raw payloads", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const artifactEvents: Array<{
+          id: string
+          payload?: unknown
+          redaction?: { status: string; summary?: string }
+        }> = []
+        const unsubscribe = Bus.subscribe(WorkflowRun.Event.ArtifactWritten, (event) => {
+          artifactEvents.push(event.properties.artifact)
+        })
+
+        try {
+          const run = await WorkflowRun.create({ spec: parseWorkflowSpecV1(WorkflowFixtureSpecs.noopDryRun) })
+          const detail = await WorkflowRun.getDetail(run.id)
+          const phase = detail.phases[0]!
+
+          const artifact = await WorkflowRun.appendArtifact({
+            runID: run.id,
+            phaseID: phase.id,
+            kind: "log",
+            summary: "child transcript",
+            exposeToMainContext: false,
+            payload: { raw: "private child transcript" },
+          })
+
+          await new Promise((resolve) => setTimeout(resolve, 0))
+          expect(artifact.payload).toMatchObject({ raw: "private child transcript" })
+          expect(artifactEvents).toHaveLength(1)
+          expect(artifactEvents[0]).toMatchObject({
+            id: artifact.id,
+            redaction: {
+              status: "pending",
+              summary: expect.stringContaining("payload omitted"),
+            },
+          })
+          expect(artifactEvents[0]?.payload).toBeUndefined()
+        } finally {
+          unsubscribe()
+        }
+      },
+    })
+  })
+
   test("publishes budget warning and exceeded events", async () => {
     await using tmp = await tmpdir({ git: true })
 
