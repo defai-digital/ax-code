@@ -4,7 +4,12 @@ import { describeRoute, resolver, validator } from "hono-openapi"
 import z from "zod"
 import { WorkflowRun } from "@/workflow/run"
 import { WorkflowScheduler } from "@/workflow/scheduler"
-import { WorkflowSpecV1, isWorkflowRuntimeEnabled } from "@/workflow/spec"
+import {
+  WorkflowModelPolicyOverride,
+  WorkflowSpecV1,
+  applyWorkflowModelPolicyOverride,
+  isWorkflowRuntimeEnabled,
+} from "@/workflow/spec"
 import { WorkflowTemplate } from "@/workflow/template"
 import {
   WorkflowArtifactEventRecord,
@@ -35,6 +40,7 @@ const WorkflowRunCreateBody = z
     sourceTemplateID: z.string().trim().min(1).optional(),
     templateID: WorkflowTemplateIDSchema.optional(),
     spec: WorkflowSpecV1.optional(),
+    modelPolicy: WorkflowModelPolicyOverride.optional(),
   })
   .refine((input) => (input.templateID ? 1 : 0) + (input.spec ? 1 : 0) === 1, {
     message: "Exactly one of templateID or spec is required",
@@ -146,6 +152,7 @@ export const WorkflowRunRoutes = lazy(() =>
             await WorkflowTemplate.createRun({
               templateID: body.templateID as WorkflowTemplate.ID,
               parentSessionID: body.parentSessionID as SessionID | undefined,
+              modelPolicy: body.modelPolicy,
             }),
           )
         }
@@ -153,7 +160,7 @@ export const WorkflowRunRoutes = lazy(() =>
           await WorkflowRun.create({
             parentSessionID: body.parentSessionID as SessionID | undefined,
             sourceTemplateID: body.sourceTemplateID,
-            spec: body.spec!,
+            spec: applyWorkflowModelPolicyOverride(body.spec!, body.modelPolicy),
           }),
         )
       },

@@ -5,6 +5,7 @@ import { cmd } from "./cmd"
 import { WorkflowRun } from "../../workflow/run"
 import { WorkflowScheduler } from "../../workflow/scheduler"
 import { isWorkflowRuntimeEnabled } from "../../workflow/spec"
+import type { WorkflowModelPolicyOverride } from "../../workflow/spec"
 import { WorkflowTemplate } from "../../workflow/template"
 import type { SessionID } from "../../session/schema"
 import type { WorkflowRunDetail, WorkflowRunID } from "../../workflow/state"
@@ -20,6 +21,11 @@ type StartOptions = JsonOption & {
   allowWrite?: boolean
   enqueue?: boolean
   durableChildren?: boolean
+  effort?: WorkflowModelPolicyOverride["effort"]
+  plannerModel?: string
+  workerModel?: string
+  verifierModel?: string
+  synthesizerModel?: string
 }
 
 type RunIDOptions = JsonOption & {
@@ -155,6 +161,27 @@ const WorkflowRunStartCommand = cmd({
         default: true,
         describe: "persist child-agent execution state",
       })
+      .option("effort", {
+        type: "string",
+        choices: ["normal", "deep", "workflow", "max-workflow"] as const,
+        describe: "override workflow model effort preset",
+      })
+      .option("planner-model", {
+        type: "string",
+        describe: "override planner model",
+      })
+      .option("worker-model", {
+        type: "string",
+        describe: "override worker model",
+      })
+      .option("verifier-model", {
+        type: "string",
+        describe: "override verifier model",
+      })
+      .option("synthesizer-model", {
+        type: "string",
+        describe: "override synthesizer model",
+      })
       .option("json", jsonOption()),
   async handler(args) {
     await withWorkflowRuntime(async () => {
@@ -162,6 +189,7 @@ const WorkflowRunStartCommand = cmd({
       const run = await WorkflowTemplate.createRun({
         templateID: options.templateID as WorkflowTemplate.ID,
         parentSessionID: options.parentSession as SessionID | undefined,
+        modelPolicy: modelPolicyFromStartOptions(options),
       })
       const detail = await WorkflowScheduler.start(run.id, {
         allowScaleBeyondDefaults: options.allowScale,
@@ -177,6 +205,16 @@ const WorkflowRunStartCommand = cmd({
     })
   },
 })
+
+function modelPolicyFromStartOptions(options: StartOptions): WorkflowModelPolicyOverride | undefined {
+  const modelPolicy: WorkflowModelPolicyOverride = {}
+  if (options.effort) modelPolicy.effort = options.effort
+  if (options.plannerModel) modelPolicy.plannerModel = options.plannerModel
+  if (options.workerModel) modelPolicy.workerModel = options.workerModel
+  if (options.verifierModel) modelPolicy.verifierModel = options.verifierModel
+  if (options.synthesizerModel) modelPolicy.synthesizerModel = options.synthesizerModel
+  return Object.keys(modelPolicy).length > 0 ? modelPolicy : undefined
+}
 
 const WorkflowRunStatusCommand = cmd({
   command: "status <runID>",

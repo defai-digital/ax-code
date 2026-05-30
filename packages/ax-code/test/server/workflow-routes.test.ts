@@ -38,13 +38,30 @@ describe("workflow routes", () => {
       const createResponse = await app.request(`/workflow-runs?${directoryQuery}`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ templateID: "builtin:issue-triage" }),
+        body: JSON.stringify({
+          templateID: "builtin:issue-triage",
+          modelPolicy: {
+            effort: "max-workflow",
+            workerModel: "cheap-route",
+            synthesizerModel: "strong-route",
+          },
+        }),
       })
       expect(createResponse.status).toBe(200)
-      const created = (await createResponse.json()) as { id: string; sourceTemplateID: string; status: string }
+      const created = (await createResponse.json()) as {
+        id: string
+        sourceTemplateID: string
+        status: string
+        spec: { modelPolicy: { effort: string; workerModel: string; synthesizerModel: string } }
+      }
       expect(created.id).toStartWith("wfr_")
       expect(created.sourceTemplateID).toBe("builtin:issue-triage")
       expect(created.status).toBe("queued")
+      expect(created.spec.modelPolicy).toMatchObject({
+        effort: "max-workflow",
+        workerModel: "cheap-route",
+        synthesizerModel: "strong-route",
+      })
 
       const startResponse = await app.request(`/workflow-runs/${created.id}/start?${directoryQuery}`, {
         method: "POST",

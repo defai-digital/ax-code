@@ -299,7 +299,10 @@ describe("headless SDK types", () => {
     await client.workflowTemplate.get("builtin:noop-dry-run")
     await client.workflowTemplate.save({ scope: "project", spec: templateSpec })
     await client.workflowTemplate.promote("project:route-noop")
-    await client.workflowRun.create({ templateID: "builtin:noop-dry-run" })
+    await client.workflowRun.create({
+      templateID: "builtin:noop-dry-run",
+      modelPolicy: { effort: "workflow", workerModel: "cheap-headless" },
+    })
     await client.workflowRun.artifacts("wfr_live", { kind: "summary", includePayload: "false" })
     await client.workflowRun.start("wfr_live", { enqueueChildren: false })
     await client.workflowRun.pause("wfr_live")
@@ -315,7 +318,12 @@ describe("headless SDK types", () => {
       ["POST", "/workflow-runs/wfr_live/pause"],
     ])
     expect(calls[2].body).toBe(JSON.stringify({ scope: "project", spec: templateSpec }))
-    expect(calls[4].body).toBe(JSON.stringify({ templateID: "builtin:noop-dry-run" }))
+    expect(calls[4].body).toBe(
+      JSON.stringify({
+        templateID: "builtin:noop-dry-run",
+        modelPolicy: { effort: "workflow", workerModel: "cheap-headless" },
+      }),
+    )
     expect(calls[6].body).toBe(JSON.stringify({ enqueueChildren: false }))
   })
 

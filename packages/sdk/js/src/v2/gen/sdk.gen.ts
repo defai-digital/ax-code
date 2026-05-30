@@ -2132,6 +2132,17 @@ export class WorkflowRun extends HeyApiClient {
           }
         }>
       }
+      modelPolicy?: {
+        plannerModel?: string
+        workerModel?: string
+        verifierModel?: string
+        synthesizerModel?: string
+        effort?: "normal" | "deep" | "workflow" | "max-workflow"
+        routing?: Array<{
+          phaseKind?: "fanout" | "sequential" | "synthesis" | "verification" | "noop"
+          use: "planner" | "worker" | "verifier" | "synthesizer"
+        }>
+      }
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -2145,6 +2156,7 @@ export class WorkflowRun extends HeyApiClient {
             { in: "body", key: "sourceTemplateID" },
             { in: "body", key: "templateID" },
             { in: "body", key: "spec" },
+            { in: "body", key: "modelPolicy" },
           ],
         },
       ],

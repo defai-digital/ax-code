@@ -7,7 +7,12 @@ import { SessionID } from "../session/schema"
 import { Filesystem } from "../util/filesystem"
 import { WorkflowFixtureSpecs } from "./fixtures"
 import { WorkflowRun } from "./run"
-import { WorkflowSpecV1, parseWorkflowSpecV1 } from "./spec"
+import {
+  WorkflowModelPolicyOverride,
+  WorkflowSpecV1,
+  applyWorkflowModelPolicyOverride,
+  parseWorkflowSpecV1,
+} from "./spec"
 
 export namespace WorkflowTemplate {
   export const Source = z.enum(["builtin", "user", "project"])
@@ -51,6 +56,7 @@ export namespace WorkflowTemplate {
   export const CreateRunInput = z.object({
     templateID: ID,
     parentSessionID: SessionID.zod.optional(),
+    modelPolicy: WorkflowModelPolicyOverride.optional(),
   })
   export type CreateRunInput = z.infer<typeof CreateRunInput>
 
@@ -147,7 +153,7 @@ export namespace WorkflowTemplate {
     return WorkflowRun.create({
       parentSessionID: parsed.parentSessionID,
       sourceTemplateID: template.id,
-      spec: template.spec,
+      spec: applyWorkflowModelPolicyOverride(template.spec, parsed.modelPolicy),
     })
   }
 

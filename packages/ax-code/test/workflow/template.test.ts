@@ -38,6 +38,31 @@ describe("WorkflowTemplate", () => {
     })
   })
 
+  test("applies model policy overrides when creating runs", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const run = await WorkflowTemplate.createRun({
+          templateID: "builtin:issue-triage",
+          modelPolicy: {
+            effort: "max-workflow",
+            workerModel: "cheap-local",
+            synthesizerModel: "strong-cloud",
+          },
+        })
+
+        expect(run.spec.modelPolicy).toMatchObject({
+          effort: "max-workflow",
+          workerModel: "cheap-local",
+          synthesizerModel: "strong-cloud",
+        })
+        expect(run.spec.modelPolicy.plannerModel).toBeUndefined()
+      },
+    })
+  })
+
   test("saves project-local candidates and promotes them before reuse", async () => {
     await using tmp = await tmpdir({ git: true })
     const spec = {

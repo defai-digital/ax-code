@@ -5744,6 +5744,17 @@ export type WorkflowRunCreateData = {
         }
       }>
     }
+    modelPolicy?: {
+      plannerModel?: string
+      workerModel?: string
+      verifierModel?: string
+      synthesizerModel?: string
+      effort?: "normal" | "deep" | "workflow" | "max-workflow"
+      routing?: Array<{
+        phaseKind?: "fanout" | "sequential" | "synthesis" | "verification" | "noop"
+        use: "planner" | "worker" | "verifier" | "synthesizer"
+      }>
+    }
   }
   path?: never
   query?: {

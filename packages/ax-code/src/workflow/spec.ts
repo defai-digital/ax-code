@@ -96,6 +96,9 @@ export const WorkflowModelPolicy = z.object({
 })
 export type WorkflowModelPolicy = z.infer<typeof WorkflowModelPolicy>
 
+export const WorkflowModelPolicyOverride = WorkflowModelPolicy.partial()
+export type WorkflowModelPolicyOverride = z.infer<typeof WorkflowModelPolicyOverride>
+
 export const WorkflowPermissions = z.object({
   writePolicy: z.enum(["read-only", "serialized", "worktree-required"]).default("read-only"),
   allowedTools: z.array(NonEmptyString).default([]),
@@ -238,6 +241,20 @@ export function parseWorkflowSpecV1(input: unknown): WorkflowSpecV1 {
 
 export function safeParseWorkflowSpecV1(input: unknown) {
   return WorkflowSpecV1.safeParse(input)
+}
+
+export function applyWorkflowModelPolicyOverride(
+  spec: WorkflowSpecV1,
+  override: WorkflowModelPolicyOverride | undefined,
+): WorkflowSpecV1 {
+  if (!override || Object.keys(override).length === 0) return spec
+  return WorkflowSpecV1.parse({
+    ...spec,
+    modelPolicy: {
+      ...spec.modelPolicy,
+      ...override,
+    },
+  })
 }
 
 export function isWorkflowRuntimeEnabled() {
