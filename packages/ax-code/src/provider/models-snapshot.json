@@ -143,8 +143,8 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 262144,
-          "output": 262144
+          "context": 262142,
+          "output": 262142
         }
       },
       "mistralai/completion/models/Ministral-3-14B-Reasoning-2512": {
@@ -40588,8 +40588,8 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 262142,
-          "output": 262142
+          "context": 262144,
+          "output": 262144
         }
       },
       "x-ai/grok-4.3": {
