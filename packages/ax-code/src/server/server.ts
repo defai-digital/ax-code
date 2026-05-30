@@ -546,8 +546,22 @@ export namespace Server {
     return c.json(true)
   }
 
-  export const createApp = (opts: { port?: number; cors?: string[] }): Hono => {
+  export function allowHttpDocs(opts: { hostname?: string }) {
+    return isLoopbackHostname(opts.hostname ?? "127.0.0.1") || Flag.AX_CODE_ENABLE_HTTP_DOCS
+  }
+
+  export const createApp = (opts: { port?: number; hostname?: string; cors?: string[] }): Hono => {
     const app = new Hono()
+    const openApiHandler = openAPIRouteHandler(app, {
+      documentation: {
+        info: {
+          title: "AX Code",
+          version: "0.0.3",
+          description: "AX Code API",
+        },
+        openapi: "3.1.1",
+      },
+    })
     return app
       .onError((err, c) => {
         log.error("failed", {
@@ -745,16 +759,18 @@ export namespace Server {
       })
       .get(
         "/doc",
-        openAPIRouteHandler(app, {
-          documentation: {
-            info: {
-              title: "AX Code",
-              version: "0.0.3",
-              description: "AX Code API",
-            },
-            openapi: "3.1.1",
-          },
-        }),
+        async (c, next) => {
+          if (!allowHttpDocs(opts)) {
+            return c.json(
+              {
+                error:
+                  "HTTP API documentation is disabled for non-loopback server binds. Set AX_CODE_ENABLE_HTTP_DOCS=1 to enable it.",
+              },
+              403,
+            )
+          }
+          return openApiHandler(c, next)
+        },
       )
       .use(
         validator(

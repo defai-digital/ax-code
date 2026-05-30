@@ -100,6 +100,7 @@ export namespace Flag {
   export declare const AX_CODE_OTLP_ENDPOINT: string | undefined
   export const AX_CODE_SERVER_PASSWORD = process.env["AX_CODE_SERVER_PASSWORD"]
   export const AX_CODE_SERVER_USERNAME = process.env["AX_CODE_SERVER_USERNAME"]
+  export declare const AX_CODE_ENABLE_HTTP_DOCS: boolean
   export const AX_CODE_ENABLE_QUESTION_TOOL = truthy("AX_CODE_ENABLE_QUESTION_TOOL")
   export declare const AX_CODE_ISOLATION_MODE: "read-only" | "workspace-write" | "full-access" | undefined
   export declare const AX_CODE_ISOLATION_NETWORK: boolean | undefined
@@ -273,6 +274,10 @@ defineStringFlag("AX_CODE_TEST_MANAGED_CONFIG_DIR")
 defineStringFlag("AX_CODE_INTERNAL_BASE_URL")
 
 defineStringFlag("AX_CODE_OTLP_ENDPOINT")
+
+// The live OpenAPI docs route is gated at request time, so tests and
+// wrappers can opt in without reloading the server module graph.
+defineBooleanFlag("AX_CODE_ENABLE_HTTP_DOCS")
 
 // This must be evaluated at access time, not module load time,
 // because tests and external tooling may set this env var at runtime

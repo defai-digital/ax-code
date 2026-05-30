@@ -28,6 +28,39 @@ test("cors uses the bound port after --port=0 fallback", async () => {
   }
 })
 
+test("/doc is available on loopback app instances", async () => {
+  const app = Server.createApp({ hostname: "127.0.0.1", port: 4096 })
+  const response = await app.fetch(new Request("http://127.0.0.1:4096/doc"))
+
+  expect(response.status).toBe(200)
+  expect(response.headers.get("content-type")).toContain("application/json")
+})
+
+test("/doc is disabled for non-loopback app instances by default", async () => {
+  const app = Server.createApp({ hostname: "0.0.0.0", port: 4096 })
+  const response = await app.fetch(new Request("http://0.0.0.0:4096/doc"))
+
+  expect(response.status).toBe(403)
+  expect(await response.json()).toEqual({
+    error:
+      "HTTP API documentation is disabled for non-loopback server binds. Set AX_CODE_ENABLE_HTTP_DOCS=1 to enable it.",
+  })
+})
+
+test("/doc can be explicitly enabled for non-loopback app instances", async () => {
+  const previous = process.env.AX_CODE_ENABLE_HTTP_DOCS
+  process.env.AX_CODE_ENABLE_HTTP_DOCS = "1"
+  try {
+    const app = Server.createApp({ hostname: "0.0.0.0", port: 4096 })
+    const response = await app.fetch(new Request("http://0.0.0.0:4096/doc"))
+
+    expect(response.status).toBe(200)
+  } finally {
+    if (previous === undefined) delete process.env.AX_CODE_ENABLE_HTTP_DOCS
+    else process.env.AX_CODE_ENABLE_HTTP_DOCS = previous
+  }
+})
+
 test("path route resolves symlinked directory requests to their canonical path", async () => {
   await using tmp = await tmpdir({ git: true })
   const link = path.join(tmp.path, "..", `${path.basename(tmp.path)}-link`)

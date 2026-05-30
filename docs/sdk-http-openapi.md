@@ -39,6 +39,8 @@ Start the server:
 ax-code serve --hostname=127.0.0.1 --port=4096
 ```
 
+Live OpenAPI docs at `/doc` are loopback-only by default. If the server is bound to a non-loopback hostname for a trusted contract-generation workflow, set `AX_CODE_ENABLE_HTTP_DOCS=1` explicitly and keep `AX_CODE_SERVER_PASSWORD` configured.
+
 Check server health:
 
 ```bash

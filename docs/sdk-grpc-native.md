@@ -21,7 +21,7 @@ Use gRPC/native transport as the preferred boundary for first-party desktop apps
 
 ## Why Not Remove HTTP
 
-Removing HTTP/OpenAPI would reduce one exposed surface, but it would also remove the most inspectable and portable integration path. Current HTTP server controls already include loopback-first defaults, required password for non-loopback binds, Basic Auth, origin checks on mutating browser requests, directory validation, and request rate limits.
+Removing HTTP/OpenAPI would reduce one exposed surface, but it would also remove the most inspectable and portable integration path. Current HTTP server controls already include loopback-first defaults, required password for non-loopback binds, Basic Auth, origin checks on mutating browser requests, directory validation, request rate limits, and loopback-only live OpenAPI docs by default.
 
 The transport is not the dominant latency source for normal agent turns. LLM calls, shell commands, file IO, indexing, LSP startup, and tool execution are usually more expensive than localhost JSON. gRPC is still useful for a desktop GUI because it provides a cleaner native API contract, deadlines, metadata, server streaming, and a path to Unix-socket or named-pipe transports without dragging a browser-oriented API into the app shell.
 
@@ -82,6 +82,8 @@ For desktop apps, prefer this order:
 2. Local gRPC/native transport over loopback, Unix socket, or named pipe.
 3. HTTP/SSE headless bridge with generated one-time Basic Auth credentials.
 4. Network HTTP only when explicitly configured and protected by `AX_CODE_SERVER_PASSWORD`.
+
+When network HTTP is unavoidable, keep `/doc` disabled unless actively generating or debugging client contracts on a trusted network. Set `AX_CODE_ENABLE_HTTP_DOCS=1` only for that explicit case.
 
 Do not expose the full HTTP API to arbitrary WebViews. If a WebView is used, keep it as a renderer and route privileged operations through the native host using the gRPC/native facade.
 
