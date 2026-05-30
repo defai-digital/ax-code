@@ -637,6 +637,13 @@ describe("WorkflowScheduler", () => {
               verificationEnvelopeCount: 0,
             },
           })
+          const finalPayload = finalReport?.payload as
+            | { budgetLedger?: Array<{ kind: string; usageDelta?: { childAgents?: number } }> }
+            | undefined
+          expect(Array.isArray(finalPayload?.budgetLedger)).toBe(true)
+          expect(finalPayload?.budgetLedger).toHaveLength(detail.budgetLedger.length)
+          expect(finalPayload?.budgetLedger?.some((entry) => entry.kind === "reserve")).toBe(true)
+          expect(finalPayload?.budgetLedger?.some((entry) => entry.usageDelta?.childAgents === 1)).toBe(true)
 
           await WorkflowScheduler.start(run.id, { allowScaleBeyondDefaults: true })
           const finalDetail = await WorkflowRun.getDetail(run.id)

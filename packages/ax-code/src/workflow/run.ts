@@ -609,6 +609,7 @@ async function ensureFinalReportArtifact(runID: WorkflowRunID): Promise<Workflow
       verification,
       findings,
       budgetUsage: detail.budgetUsage,
+      budgetLedger: detail.budgetLedger.map(compactBudgetLedgerEntry),
       verificationEnvelopeIDs: detail.verificationEnvelopeIDs,
       exposedArtifactIDs: detail.artifacts
         .filter((artifact) => artifact.exposeToMainContext)
@@ -622,6 +623,18 @@ async function ensureFinalReportArtifact(runID: WorkflowRunID): Promise<Workflow
   })
   await syncFinalReportToParentSession(detail, artifact)
   return artifact
+}
+
+function compactBudgetLedgerEntry(entry: WorkflowBudgetLedgerEntry) {
+  return {
+    id: entry.id,
+    phaseID: entry.phaseID,
+    childID: entry.childID,
+    kind: entry.kind,
+    usageDelta: entry.usageDelta,
+    message: entry.message,
+    time: entry.time,
+  }
 }
 
 async function syncFinalReportToParentSession(detail: WorkflowRunDetail, artifact: WorkflowArtifactRecord) {

@@ -195,6 +195,22 @@ describe("workflow routes", () => {
         phaseID,
         specPhaseID: "noop",
       })
+
+      const finalReportArtifactsResponse = await app.request(
+        `/workflow-runs/${created.id}/artifacts?${directoryQuery}&kind=summary&includePayload=true`,
+      )
+      expect(finalReportArtifactsResponse.status).toBe(200)
+      const finalReportArtifacts = (await finalReportArtifactsResponse.json()) as Array<{
+        specArtifactID?: string
+        payload?: unknown
+      }>
+      const finalReport = finalReportArtifacts.find(
+        (artifact) => artifact.specArtifactID === "workflow-final-report",
+      )
+      expect(finalReport?.payload).toMatchObject({
+        kind: "workflow-final-report",
+        budgetLedger: [],
+      })
     } finally {
       if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME
       else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
