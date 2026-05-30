@@ -657,6 +657,27 @@ describe("TaskQueue", () => {
               },
             },
           })
+          const toolCallArtifact = failed.artifacts.find((artifact) => artifact.kind === "metric")
+          expect(toolCallArtifact).toMatchObject({
+            childID: child.id,
+            kind: "metric",
+            retention: "session",
+            exposeToMainContext: false,
+            summary: "Tool-call summary: 2 call(s) (read, grep).",
+            payload: {
+              kind: "workflow-tool-call-summary",
+              messageID: "msg_workflow_tool_budget",
+              toolCalls: 2,
+              tools: ["read", "grep"],
+              usage: {
+                totalTokens: 15,
+                inputTokens: 10,
+                outputTokens: 5,
+                toolCalls: 2,
+                estimatedCostUsd: 0.000125,
+              },
+            },
+          })
         } finally {
           prompt.mockRestore()
         }

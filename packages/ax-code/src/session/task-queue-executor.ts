@@ -396,6 +396,18 @@ async function recordWorkflowSubagentUsage(item: TaskQueue.Info, result: unknown
     })
   }
   if (!usage) return
+  const toolCallArtifact = messageToolCallArtifact(result, usage)
+  if (toolCallArtifact) {
+    await WorkflowRun.appendArtifact({
+      runID: workflow.runID as WorkflowRunID,
+      phaseID: workflow.phaseID as WorkflowPhaseID,
+      childID: workflow.childID as WorkflowChildID,
+      kind: "metric",
+      retention: "session",
+      summary: toolCallArtifact.summary,
+      payload: toolCallArtifact.payload,
+    })
+  }
   await WorkflowRun.appendBudgetUsage({
     runID: workflow.runID as WorkflowRunID,
     phaseID: workflow.phaseID as WorkflowPhaseID,
@@ -408,6 +420,25 @@ async function recordWorkflowSubagentUsage(item: TaskQueue.Info, result: unknown
   const child = detail.children.find((candidate) => candidate.id === workflow.childID)
   if (child?.status === "failed" && child.error?.startsWith("Workflow budget exceeded")) {
     throw new Error(child.error)
+  }
+}
+
+function messageToolCallArtifact(result: unknown, usage: WorkflowSubagentBudgetUsage) {
+  if (usage.toolCalls === 0) return undefined
+  const parts = result && typeof result === "object" ? (result as { parts?: unknown }).parts : undefined
+  const tools = messageToolNames(parts)
+  const info = result && typeof result === "object" ? (result as { info?: unknown }).info : undefined
+  const messageID = info && typeof info === "object" ? (info as { id?: unknown }).id : undefined
+  const label = tools.length > 0 ? tools.join(", ") : "unknown tools"
+  return {
+    summary: `Tool-call summary: ${usage.toolCalls} call(s) (${label}).`,
+    payload: {
+      kind: "workflow-tool-call-summary",
+      messageID: typeof messageID === "string" ? messageID : undefined,
+      toolCalls: usage.toolCalls,
+      tools,
+      usage,
+    },
   }
 }
 
