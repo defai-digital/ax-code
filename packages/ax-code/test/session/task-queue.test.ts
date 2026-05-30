@@ -5,8 +5,10 @@ import { Instance } from "../../src/project/instance"
 import { Question } from "../../src/question"
 import { Session } from "../../src/session"
 import { SessionPrompt } from "../../src/session/prompt"
+import { TaskQueueTable } from "../../src/session/session.sql"
 import { TaskQueue } from "../../src/session/task-queue"
 import { TaskQueueExecutor } from "../../src/session/task-queue-executor"
+import { Database, eq } from "../../src/storage/db"
 import { WorkflowFixtureSpecs, WorkflowRun, parseWorkflowSpecV1 } from "../../src/workflow"
 import { tmpdir } from "../fixture/fixture"
 
@@ -446,6 +448,113 @@ describe("TaskQueue", () => {
     })
   })
 
+  test("holds workflow child execution when request pacing is saturated", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const firstSession = await Session.create({})
+        const secondSession = await Session.create({})
+        const workflow = { runID: "wfr_test", phaseID: "wfp_test", specPhaseID: "scan" }
+        const first = await TaskQueue.enqueue({
+          sessionID: firstSession.id,
+          kind: "subagent",
+          title: "Run first paced workflow child",
+          payload: pacedWorkflowPayload({ workflow: { ...workflow, childID: "wfc_first" } }),
+        })
+        const second = await TaskQueue.enqueue({
+          sessionID: secondSession.id,
+          kind: "subagent",
+          title: "Run second paced workflow child",
+          payload: pacedWorkflowPayload({ workflow: { ...workflow, childID: "wfc_second" } }),
+        })
+
+        await TaskQueue.setStatus({ id: first.id, status: "running" })
+        await TaskQueue.setStatus({ id: first.id, status: "completed" })
+
+        const result = await TaskQueueExecutor.start(second)
+
+        expect(result.status).toBe("queued")
+        expect((await TaskQueue.get(second.id)).status).toBe("queued")
+      },
+    })
+  })
+
+  test("holds workflow child execution when token pacing is saturated", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const firstSession = await Session.create({})
+        const secondSession = await Session.create({})
+        const workflow = { runID: "wfr_test", phaseID: "wfp_test", specPhaseID: "scan" }
+        const first = await TaskQueue.enqueue({
+          sessionID: firstSession.id,
+          kind: "subagent",
+          title: "Run first token-paced workflow child",
+          payload: pacedWorkflowPayload({
+            workflow: { ...workflow, childID: "wfc_first" },
+            pacing: { maxRequestsPerMinute: 10, maxTokensPerMinute: 100 },
+            budgetSlice: { maxTotalTokens: 80 },
+          }),
+        })
+        const second = await TaskQueue.enqueue({
+          sessionID: secondSession.id,
+          kind: "subagent",
+          title: "Run second token-paced workflow child",
+          payload: pacedWorkflowPayload({
+            workflow: { ...workflow, childID: "wfc_second" },
+            pacing: { maxRequestsPerMinute: 10, maxTokensPerMinute: 100 },
+            budgetSlice: { maxTotalTokens: 30 },
+          }),
+        })
+
+        await TaskQueue.setStatus({ id: first.id, status: "running" })
+        await TaskQueue.setStatus({ id: first.id, status: "completed" })
+
+        const result = await TaskQueueExecutor.start(second)
+
+        expect(result.status).toBe("queued")
+        expect((await TaskQueue.get(second.id)).status).toBe("queued")
+      },
+    })
+  })
+
+  test("starts workflow child execution after the pacing window expires", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const firstSession = await Session.create({})
+        const secondSession = await Session.create({})
+        const workflow = { runID: "wfr_test", phaseID: "wfp_test", specPhaseID: "scan" }
+        const first = await TaskQueue.enqueue({
+          sessionID: firstSession.id,
+          kind: "subagent",
+          title: "Run old paced workflow child",
+          payload: pacedWorkflowPayload({ workflow: { ...workflow, childID: "wfc_first" } }),
+        })
+        const second = await TaskQueue.enqueue({
+          sessionID: secondSession.id,
+          kind: "subagent",
+          title: "Run fresh paced workflow child",
+          payload: pacedWorkflowPayload({ workflow: { ...workflow, childID: "wfc_second" } }),
+        })
+
+        await TaskQueue.setStatus({ id: first.id, status: "running" })
+        await TaskQueue.setStatus({ id: first.id, status: "completed" })
+        setTaskQueueStartedAt(first.id, Date.now() - 61_000)
+
+        await TaskQueueExecutor.start(second)
+
+        await waitForQueueStatus(second.id, "completed")
+      },
+    })
+  })
+
   test("records workflow child tool calls against the child budget slice", async () => {
     await using tmp = await tmpdir({ git: true })
 
@@ -646,4 +755,27 @@ async function waitForValue<T>(label: string, read: () => T | undefined | Promis
     await new Promise((resolve) => setTimeout(resolve, 0))
   }
   throw new Error(`Timed out waiting for ${label}`)
+}
+
+function pacedWorkflowPayload(input: {
+  workflow: { runID: string; phaseID: string; childID: string; specPhaseID: string }
+  pacing?: { maxRequestsPerMinute: number; maxTokensPerMinute: number }
+  budgetSlice?: { maxTotalTokens: number }
+}) {
+  return {
+    workflow: input.workflow,
+    maxParallel: 10,
+    pacing: input.pacing ?? { maxRequestsPerMinute: 1, maxTokensPerMinute: 100_000 },
+    budgetSlice: input.budgetSlice ?? { maxTotalTokens: 10 },
+    body: {
+      noReply: true,
+      parts: [{ type: "text", text: "Run paced workflow child." }],
+    },
+  }
+}
+
+function setTaskQueueStartedAt(id: TaskQueue.Info["id"], startedAt: number) {
+  Database.use((db) => {
+    db.update(TaskQueueTable).set({ time_started: startedAt }).where(eq(TaskQueueTable.id, id)).run()
+  })
 }

@@ -26,6 +26,8 @@ type QueueExecution = {
 }
 
 const activeStatuses = ["running", "blocked_permission", "blocked_question"] as const
+const WORKFLOW_PACING_WINDOW_MS = 60_000
+const workflowPacingTimers = new Map<TaskQueueID, ReturnType<typeof setTimeout>>()
 
 const blockObserverState = Instance.state(
   () => ({
@@ -61,6 +63,11 @@ export namespace TaskQueueExecutor {
         : TaskQueue.setStatus({ id: item.id, status: "waiting_for_idle" })
     }
     if (await shouldWaitForWorkflowPhaseSlot(item)) return item
+    const pacingWaitMs = await workflowPacingWaitMs(item)
+    if (pacingWaitMs > 0) {
+      scheduleWorkflowPacingRetry(item, pacingWaitMs)
+      return item
+    }
 
     const running = await TaskQueue.claimForExecution(item.id)
     if (!running) return TaskQueue.get(item.id)
@@ -165,6 +172,76 @@ async function drainNextWorkflowPhaseItem(item: TaskQueue.Info) {
   const next = queued.filter((candidate) => sameWorkflowPhase(candidate, workflow)).sort(compareQueueItems)[0]
   if (!next) return
   await TaskQueueExecutor.start(next)
+}
+
+async function workflowPacingWaitMs(item: TaskQueue.Info, now = Date.now()) {
+  const workflow = workflowPayload(item)
+  const pacing = workflowPacing(item.payload)
+  if (!workflow || !pacing) return 0
+
+  const started = (await TaskQueue.list({ limit: 500 }))
+    .filter((candidate) => candidate.id !== item.id && sameWorkflowRun(candidate, workflow))
+    .map((candidate) => ({
+      startedAt: candidate.time.started,
+      tokens: workflowEstimatedTokensForPacing(candidate.payload),
+    }))
+    .filter((candidate): candidate is { startedAt: number; tokens: number } => {
+      return candidate.startedAt !== undefined && candidate.startedAt > now - WORKFLOW_PACING_WINDOW_MS
+    })
+    .sort((left, right) => left.startedAt - right.startedAt)
+
+  const requestWaitMs =
+    started.length >= pacing.maxRequestsPerMinute
+      ? Math.max(1, started[0]!.startedAt + WORKFLOW_PACING_WINDOW_MS - now)
+      : 0
+  const tokenWaitMs = workflowTokenPacingWaitMs({
+    started,
+    requestedTokens: workflowEstimatedTokensForPacing(item.payload),
+    maxTokensPerMinute: pacing.maxTokensPerMinute,
+    now,
+  })
+  return Math.max(requestWaitMs, tokenWaitMs)
+}
+
+function workflowTokenPacingWaitMs(input: {
+  started: Array<{ startedAt: number; tokens: number }>
+  requestedTokens: number
+  maxTokensPerMinute: number
+  now: number
+}) {
+  if (input.requestedTokens <= 0 || input.requestedTokens > input.maxTokensPerMinute) return 0
+  let total = input.requestedTokens + input.started.reduce((sum, item) => sum + item.tokens, 0)
+  if (total <= input.maxTokensPerMinute) return 0
+  for (const item of input.started) {
+    total -= item.tokens
+    if (total <= input.maxTokensPerMinute) {
+      return Math.max(1, item.startedAt + WORKFLOW_PACING_WINDOW_MS - input.now)
+    }
+  }
+  return 0
+}
+
+function scheduleWorkflowPacingRetry(item: TaskQueue.Info, waitMs: number) {
+  if (workflowPacingTimers.has(item.id)) return
+  const timer = setTimeout(() => {
+    workflowPacingTimers.delete(item.id)
+    void TaskQueue.get(item.id)
+      .then((latest) => TaskQueueExecutor.start(latest))
+      .catch((error) => {
+        DiagnosticLog.recordProcess("server.taskQueueWorkflowPacingRetryFailed", {
+          taskID: item.id,
+          sessionID: item.sessionID,
+          error,
+        })
+        log.warn("failed to retry workflow child after pacing wait", {
+          taskID: item.id,
+          sessionID: item.sessionID,
+          error,
+        })
+      })
+  }, waitMs)
+  ;(timer as { unref?: () => void }).unref?.()
+  workflowPacingTimers.set(item.id, timer)
 }
 
 async function activeWorkflowPhaseItems(workflow: WorkflowQueuePayload, currentTaskID?: TaskQueueID) {
@@ -578,8 +655,31 @@ function sameWorkflowPhase(item: TaskQueue.Info, workflow: WorkflowQueuePayload)
   return candidate?.runID === workflow.runID && candidate.phaseID === workflow.phaseID
 }
 
+function sameWorkflowRun(item: TaskQueue.Info, workflow: WorkflowQueuePayload) {
+  return workflowPayload(item)?.runID === workflow.runID
+}
+
 function workflowMaxParallel(payload: TaskQueue.Payload) {
   return positiveInteger(payload["maxParallel"])
+}
+
+function workflowPacing(payload: TaskQueue.Payload) {
+  const pacing = payload["pacing"]
+  if (!pacing || typeof pacing !== "object") return undefined
+  const record = pacing as Record<string, unknown>
+  const maxRequestsPerMinute = positiveInteger(record.maxRequestsPerMinute)
+  const maxTokensPerMinute = positiveInteger(record.maxTokensPerMinute)
+  if (maxRequestsPerMinute === undefined || maxTokensPerMinute === undefined) return undefined
+  return { maxRequestsPerMinute, maxTokensPerMinute }
+}
+
+function workflowEstimatedTokensForPacing(payload: TaskQueue.Payload) {
+  const budgetSlice = payload["budgetSlice"]
+  if (!budgetSlice || typeof budgetSlice !== "object") return 0
+  const record = budgetSlice as Record<string, unknown>
+  const total = positiveInteger(record.maxTotalTokens)
+  if (total !== undefined) return total
+  return (positiveInteger(record.maxInputTokensPerChild) ?? 0) + (positiveInteger(record.maxOutputTokensPerChild) ?? 0)
 }
 
 type WorkflowSubagentBudgetUsage = {
