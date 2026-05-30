@@ -7,7 +7,9 @@ import {
   createAxCodeGrpcClient,
   createAxCodeGrpcClientFromHttp,
   createAxCodeGrpcClientFromNativeBridge,
+  createAxCodeGrpcClientFromNativeHandlers,
   createAxCodeGrpcHttpBridge,
+  createAxCodeGrpcNativeBridgeFromHandlers,
   type AxCodeGrpcTransport,
 } from "../src/grpc"
 
@@ -166,6 +168,86 @@ describe("gRPC SDK facade", () => {
       },
       "pwd\n",
     ])
+  })
+
+  test("native handler map can back a renderer client without HTTP dispatch glue", async () => {
+    const calls: unknown[] = []
+    const client = createAxCodeGrpcClientFromNativeHandlers({
+      unary: {
+        [AX_CODE_GRPC_METHOD.GetSession](request, context) {
+          calls.push({ request, context })
+          return {
+            value: {
+              id: (request as { sessionID: string }).sessionID,
+              host: context.metadata?.["x-native-host"],
+            },
+          }
+        },
+      },
+      serverStream: {
+        async *[AX_CODE_GRPC_METHOD.SubscribeEvents](_request, context) {
+          calls.push({ stream: context.method, metadata: context.metadata })
+          yield { type: "server.connected", properties: { host: context.metadata?.["x-native-host"] } }
+        },
+      },
+      bidiStream: {
+        async *[AX_CODE_GRPC_METHOD.ConnectPty](request, input, context) {
+          calls.push({ request, method: context.method })
+          for await (const frame of input) calls.push(frame)
+          yield { type: "output", data: "ready" }
+        },
+      },
+    })
+
+    await expect(client.session.get("sess-1", { metadata: { "x-native-host": "tauri" } })).resolves.toEqual({
+      id: "sess-1",
+      host: "tauri",
+    })
+
+    const events = []
+    for await (const event of client.subscribeEvents({ metadata: { "x-native-host": "tauri" } })) events.push(event)
+    for await (const event of client.pty.connect("pty_1", asyncFrames({ type: "input" as const, data: "pwd\n" }))) {
+      events.push(event)
+    }
+
+    expect(events).toEqual([
+      { type: "server.connected", properties: { host: "tauri" } },
+      { type: "output", data: "ready" },
+    ])
+    expect(calls).toEqual([
+      {
+        request: { sessionID: "sess-1" },
+        context: {
+          method: AX_CODE_GRPC_METHOD.GetSession,
+          metadata: { "x-native-host": "tauri" },
+          signal: undefined,
+          timeoutMs: undefined,
+        },
+      },
+      {
+        stream: AX_CODE_GRPC_METHOD.SubscribeEvents,
+        metadata: { "x-native-host": "tauri" },
+      },
+      {
+        request: { id: "pty_1", cursor: undefined },
+        method: AX_CODE_GRPC_METHOD.ConnectPty,
+      },
+      { type: "input", data: "pwd\n" },
+    ])
+  })
+
+  test("native handler map reports missing methods clearly", async () => {
+    const bridge = createAxCodeGrpcNativeBridgeFromHandlers({})
+
+    await expect(
+      bridge.unary({ method: AX_CODE_GRPC_METHOD.GetSession, request: { sessionID: "sess-1" } }),
+    ).rejects.toThrow("Unsupported AX Code gRPC unary method: /axcode.v1.AxCodeHeadless/GetSession")
+    expect(() => bridge.serverStream?.({ method: AX_CODE_GRPC_METHOD.SubscribeEvents, request: {} })).toThrow(
+      "Unsupported AX Code gRPC server stream method: /axcode.v1.AxCodeHeadless/SubscribeEvents",
+    )
+    expect(() =>
+      bridge.bidiStream?.({ method: AX_CODE_GRPC_METHOD.ConnectPty, request: { id: "pty_1" }, input: asyncFrames() }),
+    ).toThrow("Unsupported AX Code gRPC bidirectional stream method: /axcode.v1.AxCodeHeadless/ConnectPty")
   })
 
   test("HTTP bridge maps gRPC-style session commands to the headless backend", async () => {

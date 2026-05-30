@@ -166,6 +166,33 @@ export type AxCodeGrpcNativeBridge = {
   ): AsyncIterable<TResponse>
 }
 
+export type AxCodeGrpcNativeHandlerContext<TMethod extends AxCodeGrpcMethod = AxCodeGrpcMethod> =
+  AxCodeGrpcCallOptions & {
+    method: TMethod
+  }
+
+export type AxCodeGrpcNativeUnaryHandler<TRequest = unknown, TResponse = unknown> = (
+  request: TRequest,
+  context: AxCodeGrpcNativeHandlerContext<AxCodeGrpcUnaryMethod>,
+) => TResponse | Promise<TResponse>
+
+export type AxCodeGrpcNativeServerStreamHandler<TRequest = unknown, TResponse = unknown> = (
+  request: TRequest,
+  context: AxCodeGrpcNativeHandlerContext<AxCodeGrpcStreamingMethod>,
+) => AsyncIterable<TResponse>
+
+export type AxCodeGrpcNativeBidiStreamHandler<TRequest = unknown, TInput = unknown, TResponse = unknown> = (
+  request: TRequest,
+  input: AsyncIterable<TInput>,
+  context: AxCodeGrpcNativeHandlerContext<AxCodeGrpcBidirectionalStreamingMethod>,
+) => AsyncIterable<TResponse>
+
+export type AxCodeGrpcNativeHandlerMap = {
+  unary?: Partial<Record<AxCodeGrpcUnaryMethod, AxCodeGrpcNativeUnaryHandler>>
+  serverStream?: Partial<Record<AxCodeGrpcStreamingMethod, AxCodeGrpcNativeServerStreamHandler>>
+  bidiStream?: Partial<Record<AxCodeGrpcBidirectionalStreamingMethod, AxCodeGrpcNativeBidiStreamHandler>>
+}
+
 export type AxCodeGrpcHealthResponse = {
   status: "SERVING"
   transport?: "http-bridge" | "grpc"
@@ -322,8 +349,34 @@ export function createAxCodeGrpcNativeBridgeTransport(bridge: AxCodeGrpcNativeBr
   }
 }
 
+export function createAxCodeGrpcNativeBridgeFromHandlers(handlers: AxCodeGrpcNativeHandlerMap): AxCodeGrpcNativeBridge {
+  return {
+    async unary<TRequest, TResponse>(call: AxCodeGrpcNativeUnaryCall<TRequest>): Promise<TResponse> {
+      const handler = handlers.unary?.[call.method]
+      if (!handler) throw missingNativeHandler("unary", call.method)
+      return handler(call.request, nativeHandlerContext(call)) as Promise<TResponse>
+    },
+    serverStream<TRequest, TResponse>(call: AxCodeGrpcNativeServerStreamCall<TRequest>): AsyncIterable<TResponse> {
+      const handler = handlers.serverStream?.[call.method]
+      if (!handler) throw missingNativeHandler("server stream", call.method)
+      return handler(call.request, nativeHandlerContext(call)) as AsyncIterable<TResponse>
+    },
+    bidiStream<TRequest, TInput, TResponse>(
+      call: AxCodeGrpcNativeBidiStreamCall<TRequest, TInput>,
+    ): AsyncIterable<TResponse> {
+      const handler = handlers.bidiStream?.[call.method]
+      if (!handler) throw missingNativeHandler("bidirectional stream", call.method)
+      return handler(call.request, call.input, nativeHandlerContext(call)) as AsyncIterable<TResponse>
+    },
+  }
+}
+
 export function createAxCodeGrpcClientFromNativeBridge(bridge: AxCodeGrpcNativeBridge) {
   return createAxCodeGrpcClient({ transport: createAxCodeGrpcNativeBridgeTransport(bridge) })
+}
+
+export function createAxCodeGrpcClientFromNativeHandlers(handlers: AxCodeGrpcNativeHandlerMap) {
+  return createAxCodeGrpcClientFromNativeBridge(createAxCodeGrpcNativeBridgeFromHandlers(handlers))
 }
 
 export function createAxCodeGrpcClient(input: AxCodeGrpcClientOptions) {
@@ -1115,6 +1168,26 @@ async function loadBootstrap(
 }
 
 async function* emptyAsyncIterable<T>(): AsyncIterable<T> {}
+
+function nativeHandlerContext<TMethod extends AxCodeGrpcMethod>(
+  call: {
+    method: TMethod
+    metadata?: AxCodeGrpcMetadata
+    signal?: AbortSignal
+    timeoutMs?: number
+  },
+): AxCodeGrpcNativeHandlerContext<TMethod> {
+  return {
+    method: call.method,
+    metadata: call.metadata,
+    signal: call.signal,
+    timeoutMs: call.timeoutMs,
+  }
+}
+
+function missingNativeHandler(kind: string, method: AxCodeGrpcMethod) {
+  return new Error(`Unsupported AX Code gRPC ${kind} method: ${method}`)
+}
 
 function connectPtyOverWebSocket(
   input: AxCodeGrpcHttpBridgeOptions,

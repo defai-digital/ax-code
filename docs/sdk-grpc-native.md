@@ -102,6 +102,32 @@ const client = createAxCodeGrpcClientFromNativeBridge({
 })
 ```
 
+Native hosts can also expose a handler map instead of hand-writing a method switch. This is useful for Rust/Tauri
+commands, Electron preload APIs, or a real local gRPC server that wants to bind AX Code runtime operations method by
+method:
+
+```ts
+import { AX_CODE_GRPC_METHOD, createAxCodeGrpcNativeBridgeFromHandlers } from "@ax-code/sdk/grpc"
+
+const bridge = createAxCodeGrpcNativeBridgeFromHandlers({
+  unary: {
+    [AX_CODE_GRPC_METHOD.GetSession](request, options) {
+      return runtime.getSession(request.sessionID, options)
+    },
+  },
+  serverStream: {
+    [AX_CODE_GRPC_METHOD.SubscribeEvents](_request, options) {
+      return runtime.events(options)
+    },
+  },
+  bidiStream: {
+    [AX_CODE_GRPC_METHOD.ConnectPty](request, input, options) {
+      return runtime.connectPty(request.id, input, options)
+    },
+  },
+})
+```
+
 `bootstrap.load()` is intentionally a GUI-oriented snapshot rather than a one-to-one copy of every HTTP route. Use `include` to request only the state needed by the current view. Failed subrequests are reported in `errors` while successful fields are still returned, so a missing optional subsystem does not block the desktop shell from opening.
 
 PTY streaming is modeled as a gRPC bidirectional stream. The HTTP bridge adapts that stream to the existing WebSocket route for compatibility; native GUI hosts should implement it over their local gRPC, Unix-socket, or named-pipe transport instead of exposing the WebSocket route to renderer code.
