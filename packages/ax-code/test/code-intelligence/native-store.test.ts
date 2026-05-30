@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test"
-import { NativeStore } from "../../src/code-intelligence/native-store"
+
+const nativeStoreModule = "../../src/code-intelligence/native-store.ts" + "?native-store-unit"
+const { NativeStore } = (await import(nativeStoreModule)) as typeof import("../../src/code-intelligence/native-store")
 
 describe("code-intelligence.native-store", () => {
   test("parseNativeStoreJson decodes valid native JSON", () => {
