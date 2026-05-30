@@ -155,7 +155,7 @@ function countFindingArtifacts(artifacts: WorkflowArtifactRecord[]) {
 
   for (const artifact of artifacts) {
     if (artifact.kind !== "finding") continue
-    const status = classifyFindingArtifact(artifact)
+    const status = classifyWorkflowFindingArtifact(artifact)
     if (status === "confirmed") counts.confirmedFindings++
     else if (status === "likely") counts.likelyFindings++
     else if (status === "rejected") counts.rejectedFindings++
@@ -165,7 +165,7 @@ function countFindingArtifacts(artifacts: WorkflowArtifactRecord[]) {
   return counts
 }
 
-function classifyFindingArtifact(artifact: WorkflowArtifactRecord): WorkflowEvalFindingStatus {
+export function classifyWorkflowFindingArtifact(artifact: WorkflowArtifactRecord): WorkflowEvalFindingStatus {
   const fromPayload = payloadFindingStatus(artifact.payload)
   if (fromPayload) return fromPayload
 

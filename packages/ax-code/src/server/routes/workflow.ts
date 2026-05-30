@@ -4,6 +4,13 @@ import { describeRoute, resolver, validator } from "hono-openapi"
 import z from "zod"
 import { compactWorkflowArtifact } from "@/workflow/artifact"
 import { WorkflowEvalBaseline, WorkflowEvalSummary, evaluateWorkflowRun } from "@/workflow/eval"
+import {
+  WorkflowEvalCase,
+  WorkflowEvalCaseID,
+  WorkflowEvalCaseRunSummary,
+  evaluateWorkflowEvalCaseRun,
+  listWorkflowEvalCases,
+} from "@/workflow/eval-corpus"
 import { WorkflowRunProjection, summarizeWorkflowRunDetail } from "@/workflow/projection"
 import { WorkflowRoutineDisabledError, WorkflowRoutineNotFoundError, WorkflowRoutineTrigger } from "@/workflow/routine"
 import { WorkflowRun } from "@/workflow/run"
@@ -73,6 +80,11 @@ const WorkflowEvalSummaryBody = z
     now: z.number().int().min(0).optional(),
   })
   .optional()
+
+const WorkflowEvalCaseRunBody = z.object({
+  caseID: WorkflowEvalCaseID.default("verified-bug-sweep-seeded"),
+  now: z.number().int().min(0).optional(),
+})
 
 const WorkflowTemplateSaveBody = z.object({
   scope: z.enum(["user", "project"]),
@@ -236,6 +248,22 @@ export const WorkflowRunRoutes = lazy(() =>
       },
     )
     .get(
+      "/eval-cases",
+      describeRoute({
+        summary: "List workflow evaluation cases",
+        description: "Return built-in local workflow evaluation cases used for preview promotion gates.",
+        operationId: "workflowRun.eval_cases",
+        responses: {
+          200: {
+            description: "Workflow evaluation cases.",
+            content: { "application/json": { schema: resolver(WorkflowEvalCase.array()) } },
+          },
+          ...errors(400, 404),
+        },
+      }),
+      async (c) => c.json(listWorkflowEvalCases()),
+    )
+    .get(
       "/:runID",
       describeRoute({
         summary: "Get workflow run detail",
@@ -302,6 +330,28 @@ export const WorkflowRunRoutes = lazy(() =>
         const body = c.req.valid("json") ?? {}
         const detail = await WorkflowRun.getDetail(runID(c))
         return c.json(evaluateWorkflowRun({ run: detail, baseline: body.baseline, now: body.now }))
+      },
+    )
+    .post(
+      "/:runID/eval-case",
+      describeRoute({
+        summary: "Evaluate workflow run against a local case",
+        description: "Compare a workflow run against a seeded local eval case and single-agent baseline.",
+        operationId: "workflowRun.eval_case",
+        responses: {
+          200: {
+            description: "Workflow evaluation case result.",
+            content: { "application/json": { schema: resolver(WorkflowEvalCaseRunSummary) } },
+          },
+          ...errors(400, 404),
+        },
+      }),
+      validator("param", WORKFLOW_RUN_ID_PARAM),
+      validator("json", WorkflowEvalCaseRunBody),
+      async (c) => {
+        const body = c.req.valid("json")
+        const detail = await WorkflowRun.getDetail(runID(c))
+        return c.json(evaluateWorkflowEvalCaseRun({ run: detail, caseID: body.caseID, now: body.now }))
       },
     )
     .post(

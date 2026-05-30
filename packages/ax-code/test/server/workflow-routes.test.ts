@@ -230,6 +230,61 @@ describe("workflow routes", () => {
     }
   })
 
+  test("returns workflow eval cases for seeded preview gates", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
+    process.env.AX_CODE_WORKFLOW_RUNTIME = "1"
+    try {
+      const app = Server.Default()
+      const directoryQuery = `directory=${encodeURIComponent(tmp.path)}`
+
+      const casesResponse = await app.request(`/workflow-runs/eval-cases?${directoryQuery}`)
+      expect(casesResponse.status).toBe(200)
+      const cases = (await casesResponse.json()) as Array<{ id: string; seeds: unknown[] }>
+      expect(cases).toContainEqual(
+        expect.objectContaining({
+          id: "verified-bug-sweep-seeded",
+          seeds: expect.arrayContaining([
+            expect.objectContaining({ id: "text-content-xss-rejected", expectedStatus: "rejected" }),
+          ]),
+        }),
+      )
+
+      const createResponse = await app.request(`/workflow-runs?${directoryQuery}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ templateID: "builtin:verified-bug-sweep" }),
+      })
+      expect(createResponse.status).toBe(200)
+      const created = (await createResponse.json()) as { id: string }
+
+      const evalResponse = await app.request(`/workflow-runs/${created.id}/eval-case?${directoryQuery}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ caseID: "verified-bug-sweep-seeded" }),
+      })
+      expect(evalResponse.status).toBe(200)
+      expect(await evalResponse.json()).toMatchObject({
+        caseID: "verified-bug-sweep-seeded",
+        decision: "hold",
+        missingSeedIDs: expect.arrayContaining(["text-content-xss-rejected"]),
+        metrics: {
+          expectedConfirmedFindings: 1,
+          expectedLikelyFindings: 1,
+          expectedRejectedFindings: 1,
+          expectedUnverifiedFindings: 1,
+          falsePositiveRejectionRate: 0,
+        },
+        summary: {
+          comparison: { baselineLabel: "single-agent-seeded-review" },
+        },
+      })
+    } finally {
+      if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME
+      else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
+    }
+  })
+
   test("saves workflow runs as candidate templates", async () => {
     await using tmp = await tmpdir({ git: true })
     const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
