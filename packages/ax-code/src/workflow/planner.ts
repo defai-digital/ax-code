@@ -267,19 +267,27 @@ function effectiveChildOutputTokenLimit(phase: WorkflowPhase, budget: WorkflowBu
 
 function modelRouteForPhase(phase: WorkflowPhase, spec: WorkflowSpec) {
   const policy = { ...spec.modelPolicy, ...phase.modelPolicy }
-  const role: WorkflowDryRunChild["modelRole"] =
-    phase.kind === "fanout"
-      ? "worker"
-      : phase.kind === "verification"
-        ? "verifier"
-        : phase.kind === "synthesis"
-          ? "synthesizer"
-          : "planner"
+  const role = modelRoleForPhase(phase, policy)
   const key = `${role}Model` as const
   return {
     role,
     model: roleModel(policy, key, role),
   }
+}
+
+function modelRoleForPhase(
+  phase: WorkflowPhase,
+  policy: WorkflowSpec["modelPolicy"],
+): WorkflowDryRunChild["modelRole"] {
+  const routed = policy.routing.find((route) => route.phaseKind === undefined || route.phaseKind === phase.kind)
+  return routed?.use ?? defaultModelRoleForPhase(phase)
+}
+
+function defaultModelRoleForPhase(phase: WorkflowPhase): WorkflowDryRunChild["modelRole"] {
+  if (phase.kind === "fanout") return "worker"
+  if (phase.kind === "verification") return "verifier"
+  if (phase.kind === "synthesis") return "synthesizer"
+  return "planner"
 }
 
 function roleModel(

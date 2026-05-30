@@ -304,6 +304,76 @@ describe("workflow dry-run planner", () => {
     expect(plan.phases[3]?.children[0]?.model).toBe("anthropic/claude-opus-4-7")
   })
 
+  test("applies model routing rules before resolving role model aliases", () => {
+    const spec = parseWorkflowSpecV1({
+      schemaVersion: 1,
+      id: "model-routing-rules",
+      name: "Model Routing Rules",
+      description: "Workflow route rules should choose auditable phase model roles.",
+      budget: {
+        maxTotalTokens: 12_000,
+        maxConcurrentAgents: 2,
+        maxTotalAgents: 4,
+      },
+      modelPolicy: {
+        defaultModel: "openai/gpt-5-mini",
+        cheapModel: "openai/gpt-5-nano",
+        strongModel: "anthropic/claude-sonnet-4-5",
+        verifierModel: "openai/gpt-5-mini-verifier",
+        routing: [
+          {
+            phaseKind: "fanout",
+            use: "verifier",
+          },
+          {
+            phaseKind: "synthesis",
+            use: "worker",
+          },
+        ],
+      },
+      phases: [
+        {
+          id: "scan",
+          name: "Scan",
+          kind: "fanout",
+          inputs: ["a", "b"],
+        },
+        {
+          id: "triage",
+          name: "Triage",
+          kind: "sequential",
+          modelPolicy: {
+            routing: [
+              {
+                use: "synthesizer",
+              },
+            ],
+          },
+        },
+        {
+          id: "report",
+          name: "Report",
+          kind: "synthesis",
+        },
+      ],
+    })
+
+    const plan = planWorkflowDryRun({ spec })
+
+    expect(plan.phases[0]?.children[0]).toMatchObject({
+      modelRole: "verifier",
+      model: "openai/gpt-5-mini-verifier",
+    })
+    expect(plan.phases[1]?.children[0]).toMatchObject({
+      modelRole: "synthesizer",
+      model: "anthropic/claude-sonnet-4-5",
+    })
+    expect(plan.phases[2]?.children[0]).toMatchObject({
+      modelRole: "worker",
+      model: "openai/gpt-5-nano",
+    })
+  })
+
   test("rejects phase pacing above safe defaults without scale opt-in", () => {
     const spec = parseWorkflowSpecV1({
       schemaVersion: 1,
