@@ -20,6 +20,13 @@ const nativeEdges = [
 const edgesInFile = mock(() => nativeEdges)
 const deleteEdgesInFile = mock(() => undefined)
 const close = mock(() => undefined)
+const parseNativeStoreJson = mock((json: string, fallback: unknown) => {
+  try {
+    return JSON.parse(json)
+  } catch {
+    return fallback
+  }
+})
 
 mock.module("../../src/code-intelligence/native-store", () => ({
   NativeStore: {
@@ -27,6 +34,7 @@ mock.module("../../src/code-intelligence/native-store", () => ({
     close,
     edgesInFile,
     deleteEdgesInFile,
+    parseNativeStoreJson,
   },
 }))
 
