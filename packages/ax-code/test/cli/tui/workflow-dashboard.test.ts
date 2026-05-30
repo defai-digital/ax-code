@@ -153,6 +153,50 @@ describe("tui workflow dashboard view model", () => {
     expect(workflowRunControlItems(workflowRunDetail({ status: "completed" }))).toEqual([])
   })
 
+  test("exposes phase-scoped retry controls for failed phases", () => {
+    const items = workflowRunControlItems(
+      workflowRunDetail({
+        status: "failed",
+        phases: [
+          {
+            id: "phase_1",
+            runID: "wfr_1",
+            specPhaseID: "discover",
+            position: 0,
+            name: "Discover files",
+            kind: "fanout",
+            status: "completed",
+            outputs: [],
+            time: { created: 1, updated: 2 },
+          },
+          {
+            id: "phase_2",
+            runID: "wfr_1",
+            specPhaseID: "cross-check",
+            position: 1,
+            name: "Cross-check findings",
+            kind: "verification",
+            status: "failed",
+            outputs: [],
+            error: "verification failed",
+            time: { created: 1, updated: 2 },
+          },
+        ],
+      }),
+    )
+
+    expect(items.map((item) => item.value)).toEqual([
+      "workflow.detail.control.retry",
+      "workflow.detail.control.retry-phase.phase_2",
+    ])
+    expect(items[1]).toMatchObject({
+      action: "retry",
+      phaseID: "phase_2",
+      title: "Retry phase Cross-check findings",
+    })
+    expect(items[1]?.footer).toContain("verification failed")
+  })
+
   test("exposes explicit project and user template save candidates", () => {
     const items = workflowTemplateSaveItems(workflowRunDetail())
 

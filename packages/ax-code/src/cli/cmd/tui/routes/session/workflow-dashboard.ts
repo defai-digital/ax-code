@@ -23,6 +23,7 @@ export type WorkflowDashboardItem = {
 
 export type WorkflowRunControlItem = WorkflowDashboardItem & {
   action: WorkflowRunControlAction
+  phaseID?: string
 }
 
 export type WorkflowTemplateSaveItem = WorkflowDashboardItem & {
@@ -286,6 +287,19 @@ export function workflowRunControlItems(detail: WorkflowRunDetail): WorkflowRunC
       description: "Retry failed or cancelled workflow queue children from durable state.",
       category: "Controls",
       action: "retry",
+    })
+  }
+
+  for (const phase of detail.phases) {
+    if (phase.status !== "failed" && phase.status !== "cancelled") continue
+    items.push({
+      title: truncate(`Retry phase ${phase.name}`, MAX_TITLE),
+      value: `workflow.detail.control.retry-phase.${phase.id}`,
+      description: "Retry failed or cancelled workflow children for this phase only.",
+      footer: phase.error ? truncate(`error: ${phase.error}`, MAX_FOOTER) : undefined,
+      category: "Controls",
+      action: "retry",
+      phaseID: phase.id,
     })
   }
 

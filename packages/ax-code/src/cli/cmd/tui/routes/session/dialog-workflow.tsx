@@ -160,7 +160,7 @@ function DialogWorkflowDetail(props: { runID: string }) {
     const controls = workflowRunControlItems(current).map((item) => ({
       ...item,
       onSelect: () => {
-        void executeWorkflowRunControl(item.action)
+        void executeWorkflowRunControl(item)
       },
     }))
     const templateActions = workflowTemplateSaveItems(current).map((item) => ({
@@ -187,7 +187,8 @@ function DialogWorkflowDetail(props: { runID: string }) {
     ]
   })
 
-  async function executeWorkflowRunControl(action: WorkflowRunControlAction) {
+  async function executeWorkflowRunControl(control: { action: WorkflowRunControlAction; phaseID?: string }) {
+    const action = control.action
     try {
       const result =
         action === "pause"
@@ -196,7 +197,10 @@ function DialogWorkflowDetail(props: { runID: string }) {
             ? await sdk.client.workflowRun.resume({ runID: props.runID })
             : action === "cancel"
               ? await sdk.client.workflowRun.cancel({ runID: props.runID })
-              : await sdk.client.workflowRun.retry({ runID: props.runID })
+              : await sdk.client.workflowRun.retry({
+                  runID: props.runID,
+                  ...(control.phaseID ? { phaseID: control.phaseID } : {}),
+                })
 
       if (result.error) {
         toast.show({
