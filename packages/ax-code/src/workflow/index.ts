@@ -5,6 +5,7 @@ export * from "./run"
 export * from "./scheduler"
 export * from "./spec"
 export * from "./task-queue"
+export * from "./template"
 export {
   EmptyWorkflowBudgetUsage,
   WorkflowArtifactID,
