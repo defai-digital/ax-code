@@ -48,6 +48,11 @@ describe("gRPC SDK facade", () => {
         if (method === AX_CODE_GRPC_METHOD.GetPath) return { value: { root: "/repo" } }
         if (method === AX_CODE_GRPC_METHOD.GetVcs) return { value: { branch: "main" } }
         if (method === AX_CODE_GRPC_METHOD.ListCommands) return { value: [{ name: "init" }] }
+        if (method === AX_CODE_GRPC_METHOD.GetProjectContext) return { value: { files: ["AGENTS.md"] } }
+        if (method === AX_CODE_GRPC_METHOD.CreateProjectContextTemplate) return { value: { path: "AGENTS.md" } }
+        if (method === AX_CODE_GRPC_METHOD.WarmupProjectMemory) return { value: { warmed: true } }
+        if (method === AX_CODE_GRPC_METHOD.ClearProjectMemory) return { value: true }
+        if (method === AX_CODE_GRPC_METHOD.GetDebugEnginePendingPlans) return { value: { count: 1, plans: [] } }
         if (method === AX_CODE_GRPC_METHOD.ReadFile) return { value: { content: "hello" } }
         if (method === AX_CODE_GRPC_METHOD.ListPermissions) return { value: [{ id: "perm-1" }] }
         if (method === AX_CODE_GRPC_METHOD.ReplyPermission) return { value: true }
@@ -100,6 +105,11 @@ describe("gRPC SDK facade", () => {
     expect(await client.path.get()).toEqual({ root: "/repo" })
     expect(await client.vcs.get()).toEqual({ branch: "main" })
     expect(await client.command.list()).toEqual([{ name: "init" }])
+    expect(await client.context.get()).toEqual({ files: ["AGENTS.md"] })
+    expect(await client.context.createTemplate("repo-rules")).toEqual({ path: "AGENTS.md" })
+    expect(await client.context.memory.warmup()).toEqual({ warmed: true })
+    expect(await client.context.memory.clear()).toBe(true)
+    expect(await client.debugEngine.pendingPlans()).toEqual({ count: 1, plans: [] })
     expect(await client.file.read("README.md")).toEqual({ content: "hello" })
     expect(await client.permission.list()).toEqual([{ id: "perm-1" }])
     expect(await client.permission.reply("perm-1", { reply: "once" })).toBe(true)
@@ -143,6 +153,11 @@ describe("gRPC SDK facade", () => {
       AX_CODE_GRPC_METHOD.GetPath,
       AX_CODE_GRPC_METHOD.GetVcs,
       AX_CODE_GRPC_METHOD.ListCommands,
+      AX_CODE_GRPC_METHOD.GetProjectContext,
+      AX_CODE_GRPC_METHOD.CreateProjectContextTemplate,
+      AX_CODE_GRPC_METHOD.WarmupProjectMemory,
+      AX_CODE_GRPC_METHOD.ClearProjectMemory,
+      AX_CODE_GRPC_METHOD.GetDebugEnginePendingPlans,
       AX_CODE_GRPC_METHOD.ReadFile,
       AX_CODE_GRPC_METHOD.ListPermissions,
       AX_CODE_GRPC_METHOD.ReplyPermission,
@@ -521,6 +536,42 @@ describe("gRPC SDK facade", () => {
       "GET /experimental/tool?provider=anthropic&model=claude",
       "GET /lsp",
       "GET /formatter",
+    ])
+  })
+
+  test("HTTP bridge maps project context diagnostics to the headless backend", async () => {
+    const calls: Array<{ path: string; method: string; body: string }> = []
+    const client = createAxCodeGrpcClientFromHttp({
+      baseUrl: "http://127.0.0.1:4096",
+      fetch: (async (url: URL | RequestInfo, init?: RequestInit) => {
+        const request = url instanceof Request ? url : new Request(url, init)
+        const parsed = new URL(request.url)
+        calls.push({
+          path: parsed.pathname,
+          method: request.method,
+          body: request.body ? await new Response(request.body).text() : "",
+        })
+        if (parsed.pathname === "/context" && request.method === "GET") return Response.json({ files: ["AGENTS.md"] })
+        if (parsed.pathname === "/context/template") return Response.json({ path: "AGENTS.md" })
+        if (parsed.pathname === "/context/memory/warmup") return Response.json({ warmed: true })
+        if (parsed.pathname === "/context/memory" && request.method === "DELETE") return Response.json(true)
+        if (parsed.pathname === "/debug-engine/pending-plans") return Response.json({ count: 1, plans: [] })
+        return new Response("not found", { status: 404 })
+      }) as typeof fetch,
+    })
+
+    await expect(client.context.get()).resolves.toEqual({ files: ["AGENTS.md"] })
+    await expect(client.context.createTemplate("repo-rules")).resolves.toEqual({ path: "AGENTS.md" })
+    await expect(client.context.memory.warmup()).resolves.toEqual({ warmed: true })
+    await expect(client.context.memory.clear()).resolves.toBe(true)
+    await expect(client.debugEngine.pendingPlans()).resolves.toEqual({ count: 1, plans: [] })
+
+    expect(calls).toEqual([
+      { path: "/context", method: "GET", body: "" },
+      { path: "/context/template", method: "POST", body: JSON.stringify({ key: "repo-rules" }) },
+      { path: "/context/memory/warmup", method: "POST", body: "" },
+      { path: "/context/memory", method: "DELETE", body: "" },
+      { path: "/debug-engine/pending-plans", method: "GET", body: "" },
     ])
   })
 
@@ -976,6 +1027,11 @@ describe("gRPC SDK facade", () => {
     expect(proto).toContain("rpc GetPath")
     expect(proto).toContain("rpc GetVcs")
     expect(proto).toContain("rpc ListCommands")
+    expect(proto).toContain("rpc GetProjectContext")
+    expect(proto).toContain("rpc CreateProjectContextTemplate")
+    expect(proto).toContain("rpc WarmupProjectMemory")
+    expect(proto).toContain("rpc ClearProjectMemory")
+    expect(proto).toContain("rpc GetDebugEnginePendingPlans")
     expect(proto).toContain("rpc FindFiles")
     expect(proto).toContain("rpc ListPermissions")
     expect(proto).toContain("rpc ReplyPermission")

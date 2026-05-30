@@ -47,6 +47,11 @@ export const AX_CODE_GRPC_METHOD = {
   GetPath: `/${AX_CODE_GRPC_SERVICE}/GetPath`,
   GetVcs: `/${AX_CODE_GRPC_SERVICE}/GetVcs`,
   ListCommands: `/${AX_CODE_GRPC_SERVICE}/ListCommands`,
+  GetProjectContext: `/${AX_CODE_GRPC_SERVICE}/GetProjectContext`,
+  CreateProjectContextTemplate: `/${AX_CODE_GRPC_SERVICE}/CreateProjectContextTemplate`,
+  WarmupProjectMemory: `/${AX_CODE_GRPC_SERVICE}/WarmupProjectMemory`,
+  ClearProjectMemory: `/${AX_CODE_GRPC_SERVICE}/ClearProjectMemory`,
+  GetDebugEnginePendingPlans: `/${AX_CODE_GRPC_SERVICE}/GetDebugEnginePendingPlans`,
   ListFiles: `/${AX_CODE_GRPC_SERVICE}/ListFiles`,
   ReadFile: `/${AX_CODE_GRPC_SERVICE}/ReadFile`,
   GetFileStatus: `/${AX_CODE_GRPC_SERVICE}/GetFileStatus`,
@@ -641,6 +646,33 @@ export function createAxCodeGrpcClient(input: AxCodeGrpcClientOptions) {
     command: {
       list(parameters?: Parameters<HeadlessHttpClient["client"]["command"]["list"]>[0], options?: AxCodeGrpcCallOptions) {
         return value(AX_CODE_GRPC_METHOD.ListCommands, { parameters }, options)
+      },
+    },
+    context: {
+      get(parameters?: Parameters<HeadlessHttpClient["client"]["app"]["context"]>[0], options?: AxCodeGrpcCallOptions) {
+        return value(AX_CODE_GRPC_METHOD.GetProjectContext, { parameters }, options)
+      },
+      createTemplate(
+        key: NonNullable<Parameters<HeadlessHttpClient["client"]["app"]["contextTemplateCreate"]>[0]>["key"],
+        options?: AxCodeGrpcCallOptions,
+      ) {
+        return value(AX_CODE_GRPC_METHOD.CreateProjectContextTemplate, { body: { key } }, options)
+      },
+      memory: {
+        warmup(options?: AxCodeGrpcCallOptions) {
+          return value(AX_CODE_GRPC_METHOD.WarmupProjectMemory, {}, options)
+        },
+        clear(options?: AxCodeGrpcCallOptions) {
+          return value(AX_CODE_GRPC_METHOD.ClearProjectMemory, {}, options)
+        },
+      },
+    },
+    debugEngine: {
+      pendingPlans(
+        parameters?: Parameters<HeadlessHttpClient["client"]["debugEngine"]["pendingPlans"]>[0],
+        options?: AxCodeGrpcCallOptions,
+      ) {
+        return value(AX_CODE_GRPC_METHOD.GetDebugEnginePendingPlans, { parameters }, options)
       },
     },
     file: {
@@ -1252,6 +1284,18 @@ async function handleHttpBridgeUnary(
       return wrap(unwrapHttpSdkResponse(await client.client.vcs.get(body.parameters)))
     case AX_CODE_GRPC_METHOD.ListCommands:
       return wrap(unwrapHttpSdkResponse(await client.client.command.list(body.parameters)))
+    case AX_CODE_GRPC_METHOD.GetProjectContext:
+      return wrap(unwrapHttpSdkResponse(await client.client.app.context(body.parameters)))
+    case AX_CODE_GRPC_METHOD.CreateProjectContextTemplate:
+      return wrap(
+        unwrapHttpSdkResponse(await client.client.app.contextTemplateCreate(body.body, { throwOnError: true })),
+      )
+    case AX_CODE_GRPC_METHOD.WarmupProjectMemory:
+      return wrap(unwrapHttpSdkResponse(await client.client.app.contextMemoryWarmup(undefined, { throwOnError: true })))
+    case AX_CODE_GRPC_METHOD.ClearProjectMemory:
+      return wrap(unwrapHttpSdkResponse(await client.client.app.contextMemoryClear(undefined, { throwOnError: true })))
+    case AX_CODE_GRPC_METHOD.GetDebugEnginePendingPlans:
+      return wrap(unwrapHttpSdkResponse(await client.client.debugEngine.pendingPlans(body.parameters)))
     case AX_CODE_GRPC_METHOD.ListFiles:
       return wrap(unwrapHttpSdkResponse(await client.client.file.list(body.parameters, { throwOnError: true })))
     case AX_CODE_GRPC_METHOD.ReadFile:

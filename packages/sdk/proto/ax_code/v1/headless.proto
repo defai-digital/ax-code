@@ -36,6 +36,11 @@ service AxCodeHeadless {
   rpc GetPath(QueryRequest) returns (JsonResponse);
   rpc GetVcs(QueryRequest) returns (JsonResponse);
   rpc ListCommands(QueryRequest) returns (JsonResponse);
+  rpc GetProjectContext(QueryRequest) returns (JsonResponse);
+  rpc CreateProjectContextTemplate(JsonRequest) returns (JsonResponse);
+  rpc WarmupProjectMemory(EmptyRequest) returns (JsonResponse);
+  rpc ClearProjectMemory(EmptyRequest) returns (JsonResponse);
+  rpc GetDebugEnginePendingPlans(QueryRequest) returns (JsonResponse);
   rpc ListFiles(QueryRequest) returns (JsonResponse);
   rpc ReadFile(QueryRequest) returns (JsonResponse);
   rpc GetFileStatus(QueryRequest) returns (JsonResponse);
