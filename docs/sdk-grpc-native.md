@@ -78,7 +78,7 @@ try {
     parts: [{ type: "text", text: "Review this workspace" }],
   })
 
-  for await (const event of client.subscribeEvents()) {
+  for await (const event of client.subscribeEvents({ sessionID: (session as { id: string }).id })) {
     if (event.type === "server.heartbeat") continue
     // Project event into GUI state.
   }
@@ -130,6 +130,10 @@ const bridge = createAxCodeGrpcNativeBridgeFromHandlers({
 ```
 
 `bootstrap.load()` is intentionally a GUI-oriented snapshot rather than a one-to-one copy of every HTTP route. Use `include` to request only the state needed by the current view. Failed subrequests are reported in `errors` while successful fields are still returned, so a missing optional subsystem does not block the desktop shell from opening.
+
+Event streaming accepts optional `types` and `sessionID` filters. Native transports should apply those filters server-side.
+The HTTP compatibility bridge applies the same filters client-side over the existing SSE route so GUI code can keep one
+subscription shape while the native server is being implemented.
 
 PTY streaming is modeled as a gRPC bidirectional stream. The HTTP bridge adapts that stream to the existing WebSocket route for compatibility; native GUI hosts should implement it over their local gRPC, Unix-socket, or named-pipe transport instead of exposing the WebSocket route to renderer code.
 

@@ -123,6 +123,43 @@ describe("gRPC SDK facade", () => {
     ])
   })
 
+  test("high-level client forwards event subscription filters and keeps legacy options", async () => {
+    const calls: unknown[] = []
+    const transport: AxCodeGrpcTransport = {
+      async unary() {
+        throw new Error("unary should not be called")
+      },
+      async *serverStream(method, request, options) {
+        calls.push({ method, request, options })
+        yield { type: "server.connected", properties: {} }
+      },
+    }
+    const client = createAxCodeGrpcClient({ transport })
+
+    for await (const _event of client.subscribeEvents(
+      { types: ["session.status"], sessionID: "sess-1" },
+      { metadata: { "x-native-host": "tauri" } },
+    )) {
+      break
+    }
+    for await (const _event of client.subscribeEvents({ metadata: { "x-legacy-options": "true" } })) {
+      break
+    }
+
+    expect(calls).toEqual([
+      {
+        method: AX_CODE_GRPC_METHOD.SubscribeEvents,
+        request: { types: ["session.status"], sessionID: "sess-1" },
+        options: { metadata: { "x-native-host": "tauri" } },
+      },
+      {
+        method: AX_CODE_GRPC_METHOD.SubscribeEvents,
+        request: {},
+        options: { metadata: { "x-legacy-options": "true" } },
+      },
+    ])
+  })
+
   test("native bridge adapter carries metadata and streaming calls without HTTP", async () => {
     const calls: unknown[] = []
     const client = createAxCodeGrpcClientFromNativeBridge({
@@ -433,6 +470,42 @@ describe("gRPC SDK facade", () => {
     ])
   })
 
+  test("HTTP bridge filters event streams for GUI subscriptions", async () => {
+    const calls: string[] = []
+    const client = createAxCodeGrpcClientFromHttp({
+      baseUrl: "http://127.0.0.1:4096",
+      fetch: (async (url: URL | RequestInfo, init?: RequestInit) => {
+        const request = url instanceof Request ? url : new Request(url, init)
+        const parsed = new URL(request.url)
+        calls.push(`${request.method} ${parsed.pathname}`)
+        if (parsed.pathname === "/event") {
+          return sseResponse([
+            { type: "server.connected", properties: {} },
+            { type: "session.created", properties: { info: { id: "sess-1" } } },
+            { type: "session.status", properties: { sessionID: "sess-2", status: { type: "idle" } } },
+            { type: "message.updated", properties: { info: { id: "msg-1", sessionID: "sess-1" } } },
+            { type: "task.queue.updated", properties: { item: { id: "task-1", sessionID: "sess-2" } } },
+          ])
+        }
+        return new Response("not found", { status: 404 })
+      }) as typeof fetch,
+    })
+    const events = []
+
+    for await (const event of client.subscribeEvents({
+      types: ["server.connected", "session.status", "message.updated", "task.queue.updated"],
+      sessionID: "sess-1",
+    })) {
+      events.push(event)
+    }
+
+    expect(calls).toEqual(["GET /event"])
+    expect(events).toEqual([
+      { type: "server.connected", properties: {} },
+      { type: "message.updated", properties: { info: { id: "msg-1", sessionID: "sess-1" } } },
+    ])
+  })
+
   test("HTTP bridge maps provider auth settings to the headless backend", async () => {
     const calls: Array<{ path: string; method: string; body: string }> = []
     const client = createAxCodeGrpcClientFromHttp({
@@ -686,6 +759,23 @@ function ptyMetaFrame(payload: unknown) {
   bytes[0] = 0
   bytes.set(encoded, 1)
   return bytes
+}
+
+function sseResponse(events: unknown[]) {
+  const encoder = new TextEncoder()
+  return new Response(
+    new ReadableStream({
+      start(controller) {
+        for (const event of events) {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`))
+        }
+        controller.close()
+      },
+    }),
+    {
+      headers: { "content-type": "text/event-stream" },
+    },
+  )
 }
 
 async function* asyncFrames<T>(...frames: T[]) {

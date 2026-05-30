@@ -119,6 +119,11 @@ export type AxCodeGrpcCallOptions = {
   metadata?: AxCodeGrpcMetadata
 }
 
+export type AxCodeGrpcSubscribeEventsRequest = {
+  types?: string[]
+  sessionID?: string
+}
+
 export type AxCodeGrpcTransport = {
   unary<TRequest, TResponse>(
     method: AxCodeGrpcUnaryMethod,
@@ -912,10 +917,15 @@ export function createAxCodeGrpcClient(input: AxCodeGrpcClientOptions) {
         return value(AX_CODE_GRPC_METHOD.RunWorkflowRoutine, { body }, options)
       },
     },
-    subscribeEvents(options?: AxCodeGrpcCallOptions): AsyncIterable<AxCodeGrpcRuntimeEvent> {
-      return input.transport.serverStream<Record<string, never>, AxCodeGrpcRuntimeEvent>(
+    subscribeEvents(
+      requestOrOptions?: AxCodeGrpcSubscribeEventsRequest | AxCodeGrpcCallOptions,
+      maybeOptions?: AxCodeGrpcCallOptions,
+    ): AsyncIterable<AxCodeGrpcRuntimeEvent> {
+      const request = isCallOptions(requestOrOptions) ? {} : (requestOrOptions ?? {})
+      const options = isCallOptions(requestOrOptions) ? requestOrOptions : maybeOptions
+      return input.transport.serverStream<AxCodeGrpcSubscribeEventsRequest, AxCodeGrpcRuntimeEvent>(
         AX_CODE_GRPC_METHOD.SubscribeEvents,
-        {},
+        request,
         options,
       )
     },
@@ -936,12 +946,14 @@ export function createAxCodeGrpcHttpBridge(input: AxCodeGrpcHttpBridgeOptions): 
     },
     async *serverStream<TRequest, TResponse>(
       method: AxCodeGrpcStreamingMethod,
-      _request: TRequest,
+      request: TRequest,
       options?: AxCodeGrpcCallOptions,
     ) {
       if (method !== AX_CODE_GRPC_METHOD.SubscribeEvents) throw new Error(`Unsupported AX Code gRPC stream: ${method}`)
       const client = clientFor(options)
+      const filter = request as AxCodeGrpcSubscribeEventsRequest
       for await (const event of client.subscribe({ signal: options?.signal })) {
+        if (!matchesEventSubscription(event, filter)) continue
         yield event as TResponse
       }
     },
@@ -1279,6 +1291,39 @@ function isIpv4Loopback(hostname: string) {
     const value = Number(part)
     return value >= 0 && value <= 255
   })
+}
+
+function isCallOptions(input: AxCodeGrpcSubscribeEventsRequest | AxCodeGrpcCallOptions | undefined): input is AxCodeGrpcCallOptions {
+  if (!input || typeof input !== "object") return false
+  return "metadata" in input || "signal" in input || "timeoutMs" in input
+}
+
+function matchesEventSubscription(event: AxCodeGrpcRuntimeEvent, request: AxCodeGrpcSubscribeEventsRequest = {}) {
+  if (request.types?.length && !request.types.includes(event.type)) return false
+  if (!request.sessionID) return true
+  if (event.type === "server.connected" || event.type === "server.heartbeat" || event.type === "server.instance.disposed") {
+    return true
+  }
+  return eventSessionID(event) === request.sessionID
+}
+
+function eventSessionID(event: AxCodeGrpcRuntimeEvent) {
+  const properties = event.properties
+  if (!properties || typeof properties !== "object") return undefined
+  if ("sessionID" in properties && typeof properties.sessionID === "string") return properties.sessionID
+  if ("info" in properties && properties.info && typeof properties.info === "object" && "sessionID" in properties.info) {
+    const sessionID = properties.info.sessionID
+    return typeof sessionID === "string" ? sessionID : undefined
+  }
+  if ("info" in properties && properties.info && typeof properties.info === "object" && "id" in properties.info) {
+    const id = properties.info.id
+    return typeof id === "string" ? id : undefined
+  }
+  if ("item" in properties && properties.item && typeof properties.item === "object" && "sessionID" in properties.item) {
+    const sessionID = properties.item.sessionID
+    return typeof sessionID === "string" ? sessionID : undefined
+  }
+  return undefined
 }
 
 function nativeHandlerContext<TMethod extends AxCodeGrpcMethod>(
