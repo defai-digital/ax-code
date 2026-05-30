@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, spyOn, test } from "bun:test"
 import fs from "fs/promises"
 import { Instance } from "../../src/project/instance"
+import { computeEnvelopeId, type VerificationEnvelope } from "../../src/quality/verification-envelope"
+import { Recorder } from "../../src/replay/recorder"
 import { Session } from "../../src/session"
 import { Database, eq } from "../../src/storage/db"
 import { Worktree } from "../../src/worktree"
@@ -410,6 +412,93 @@ describe("WorkflowScheduler", () => {
 
           expect(result.status).toBe("blocked")
           expect(result.error).toContain("missing passing verification envelope evidence: verification-summary")
+        },
+      })
+    } finally {
+      if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME
+      else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
+    }
+  })
+
+  test("blocks completion when attached verification envelope ids cannot be resolved", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
+    process.env.AX_CODE_WORKFLOW_RUNTIME = "1"
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const session = await Session.create({})
+          const spec = parseWorkflowSpecV1({
+            schemaVersion: 1,
+            id: "unknown-verification-envelope",
+            name: "Unknown Verification Envelope",
+            description: "A fixture that cannot complete with an invented envelope id.",
+            artifacts: [{ id: "verification-summary", kind: "verification" }],
+            verification: { mode: "required", requiredArtifactIds: ["verification-summary"] },
+            phases: [{ id: "noop", name: "Noop", kind: "noop" }],
+          })
+          const run = await WorkflowRun.create({ parentSessionID: session.id, spec })
+          const detail = await WorkflowRun.getDetail(run.id)
+          await WorkflowRun.appendArtifact({
+            runID: run.id,
+            phaseID: detail.phases[0]!.id,
+            specArtifactID: "verification-summary",
+            kind: "verification",
+            summary: "verification summary without resolvable envelope",
+            payload: { summary: "checked manually" },
+          })
+          await WorkflowRun.attachVerificationEnvelopeIDs({ id: run.id, envelopeIDs: ["0123456789abcdef"] })
+
+          const result = await WorkflowRun.setStatus({ id: run.id, status: "completed" })
+
+          expect(result.status).toBe("blocked")
+          expect(result.error).toContain("missing passing verification envelope evidence")
+          expect(result.error).toContain("verification envelope 0123456789abcdef")
+        },
+      })
+    } finally {
+      if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME
+      else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
+    }
+  })
+
+  test("allows completion when attached verification envelope ids resolve to passed parent-session evidence", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
+    process.env.AX_CODE_WORKFLOW_RUNTIME = "1"
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const session = await Session.create({})
+          const spec = parseWorkflowSpecV1({
+            schemaVersion: 1,
+            id: "attached-verification-envelope",
+            name: "Attached Verification Envelope",
+            description: "A fixture that completes with a passed envelope id from the parent session.",
+            artifacts: [{ id: "verification-summary", kind: "verification" }],
+            verification: { mode: "required", requiredArtifactIds: ["verification-summary"] },
+            phases: [{ id: "noop", name: "Noop", kind: "noop" }],
+          })
+          const run = await WorkflowRun.create({ parentSessionID: session.id, spec })
+          const envelope = verificationEnvelope(run.id, "passed", true)
+          await recordVerificationEnvelope(session.id, envelope)
+          const detail = await WorkflowRun.getDetail(run.id)
+          await WorkflowRun.appendArtifact({
+            runID: run.id,
+            phaseID: detail.phases[0]!.id,
+            specArtifactID: "verification-summary",
+            kind: "verification",
+            summary: "verification summary linked to parent envelope",
+            payload: { summary: "see attached envelope id" },
+          })
+          await WorkflowRun.attachVerificationEnvelopeIDs({ id: run.id, envelopeIDs: [computeEnvelopeId(envelope)] })
+
+          const result = await WorkflowRun.setStatus({ id: run.id, status: "completed" })
+
+          expect(result.status).toBe("completed")
+          expect(result.error).toBeUndefined()
         },
       })
     } finally {
@@ -1435,7 +1524,21 @@ function setWorkflowRunStartedAt(id: WorkflowRun.Info["id"], startedAt: number) 
   })
 }
 
-function verificationEnvelope(runID: string, status: "passed" | "failed", passed: boolean) {
+async function recordVerificationEnvelope(sessionID: Session.Info["id"], envelope: VerificationEnvelope) {
+  Recorder.begin(sessionID)
+  Recorder.emit({
+    type: "tool.result",
+    sessionID,
+    tool: "verify_project",
+    callID: `call-verify-${computeEnvelopeId(envelope)}`,
+    status: "completed",
+    metadata: { verificationEnvelopes: [envelope] },
+    durationMs: 1,
+  })
+  await Recorder.end(sessionID)
+}
+
+function verificationEnvelope(runID: string, status: "passed" | "failed", passed: boolean): VerificationEnvelope {
   return {
     schemaVersion: 1,
     workflow: "review",

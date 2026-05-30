@@ -1,4 +1,10 @@
 import z from "zod"
+import {
+  computeEnvelopeId,
+  VerificationEnvelopeSchema,
+  type VerificationEnvelope,
+} from "../quality/verification-envelope"
+import { SessionVerifications } from "../session/verifications"
 import { evaluateWorkflowBudget } from "./budget"
 import { WorkflowRunDetail, WorkflowUsageDelta, type WorkflowArtifactRecord } from "./state"
 
@@ -149,9 +155,72 @@ function workflowVerificationSatisfied(run: z.infer<typeof WorkflowRunDetail>) {
 
   const required = run.spec.verification.requiredArtifactIds
   const present = new Set(run.artifacts.map((artifact) => artifact.specArtifactID).filter(Boolean))
-  if (required.length > 0) return required.every((artifactID) => present.has(artifactID))
+  if (required.length > 0 && !required.every((artifactID) => present.has(artifactID))) return false
 
-  return run.verificationEnvelopeIDs.length > 0 || run.artifacts.some((artifact) => artifact.kind === "verification")
+  const evidence = workflowVerificationEvidence(run)
+  if (evidence.failures.length > 0 || evidence.missingEnvelopeIds.length > 0) return false
+  if (run.verificationEnvelopeIDs.length > 0) {
+    return run.verificationEnvelopeIDs.every((id) => evidence.passingEnvelopeIds.has(id))
+  }
+  if (required.length > 0) return required.every((artifactID) => evidence.passingArtifactIds.has(artifactID))
+  return evidence.passingArtifactIds.size > 0
+}
+
+function workflowVerificationEvidence(run: z.infer<typeof WorkflowRunDetail>) {
+  const evidence = {
+    failures: [] as string[],
+    missingEnvelopeIds: [] as string[],
+    passingEnvelopeIds: new Set<string>(),
+    passingArtifactIds: new Set<string>(),
+  }
+
+  for (const artifact of run.artifacts) {
+    if (artifact.kind !== "verification") continue
+    for (const envelope of verificationEnvelopesFromPayload(artifact.payload)) {
+      if (envelope.result.passed && envelope.result.status === "passed") {
+        evidence.passingEnvelopeIds.add(computeEnvelopeId(envelope))
+        evidence.passingArtifactIds.add(artifact.specArtifactID ?? artifact.id)
+        continue
+      }
+      evidence.failures.push(artifact.specArtifactID ?? artifact.id)
+    }
+  }
+
+  if (run.verificationEnvelopeIDs.length > 0) {
+    const loaded = run.parentSessionID
+      ? new Map(SessionVerifications.loadWithIds(run.parentSessionID).map((item) => [item.envelopeId, item.envelope]))
+      : new Map<string, VerificationEnvelope>()
+    for (const envelopeID of run.verificationEnvelopeIDs) {
+      if (evidence.passingEnvelopeIds.has(envelopeID)) continue
+      const envelope = loaded.get(envelopeID)
+      if (!envelope) {
+        evidence.missingEnvelopeIds.push(envelopeID)
+        continue
+      }
+      if (envelope.result.passed && envelope.result.status === "passed") {
+        evidence.passingEnvelopeIds.add(envelopeID)
+        continue
+      }
+      evidence.failures.push(envelopeID)
+    }
+  }
+
+  return evidence
+}
+
+function verificationEnvelopesFromPayload(payload: unknown): VerificationEnvelope[] {
+  const parsed = VerificationEnvelopeSchema.safeParse(payload)
+  if (parsed.success) return [parsed.data]
+  if (Array.isArray(payload)) return payload.flatMap(verificationEnvelopesFromPayload)
+  if (!payload || typeof payload !== "object") return []
+
+  const record = payload as Record<string, unknown>
+  return [
+    ...verificationEnvelopesFromPayload(record.envelope),
+    ...verificationEnvelopesFromPayload(record.verificationEnvelope),
+    ...verificationEnvelopesFromPayload(record.envelopes),
+    ...verificationEnvelopesFromPayload(record.verificationEnvelopes),
+  ]
 }
 
 function countFindingArtifacts(artifacts: WorkflowArtifactRecord[]) {

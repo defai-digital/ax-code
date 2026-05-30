@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { Instance } from "../../src/project/instance"
+import type { VerificationEnvelope } from "../../src/quality/verification-envelope"
 import { evaluateWorkflowRun } from "../../src/workflow/eval"
 import { WorkflowFixtureSpecs, WorkflowRun, parseWorkflowSpecV1 } from "../../src/workflow"
 import { tmpdir } from "../fixture/fixture"
@@ -44,6 +45,9 @@ describe("workflow eval summary", () => {
           specArtifactID: "verification-summary",
           kind: "verification",
           summary: "verification evidence captured",
+          payload: {
+            verificationEnvelopes: [{ envelope: verificationEnvelope(run.id, "passed", true) }],
+          },
         })
         await WorkflowRun.appendArtifact({
           runID: run.id,
@@ -57,7 +61,6 @@ describe("workflow eval summary", () => {
           kind: "consume",
           usageDelta: { totalTokens: 5_000, inputTokens: 4_000, outputTokens: 1_000, childAgents: 4 },
         })
-        await WorkflowRun.attachVerificationEnvelopeIDs({ id: run.id, envelopeIDs: ["0123456789abcdef"] })
         await WorkflowRun.setStatus({ id: run.id, status: "completed" })
 
         const summary = evaluateWorkflowRun({
@@ -151,3 +154,27 @@ describe("workflow eval summary", () => {
     })
   })
 })
+
+function verificationEnvelope(runID: string, status: "passed" | "failed", passed: boolean): VerificationEnvelope {
+  return {
+    schemaVersion: 1,
+    workflow: "review",
+    scope: { kind: "workspace", description: "workflow eval fixture" },
+    command: { runner: "bun", argv: ["test"], cwd: "/tmp/workflow-eval-fixture" },
+    result: {
+      name: "typecheck",
+      type: "typecheck",
+      passed,
+      status,
+      issues: [],
+      duration: 1,
+      output: status === "passed" ? "ok" : "typecheck failed",
+    },
+    structuredFailures:
+      status === "passed"
+        ? []
+        : [{ kind: "custom", message: "typecheck failed", details: { runID } }],
+    artifactRefs: [],
+    source: { tool: "workflow-eval-test", version: "1.0.0", runId: runID },
+  }
+}

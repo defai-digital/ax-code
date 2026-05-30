@@ -2,11 +2,16 @@ import { HTTPException } from "hono/http-exception"
 import { Bus } from "../bus"
 import { ModelID, ProviderID } from "../provider/schema"
 import { Instance } from "../project/instance"
-import { VerificationEnvelopeSchema, type VerificationEnvelope } from "../quality/verification-envelope"
+import {
+  computeEnvelopeId,
+  VerificationEnvelopeSchema,
+  type VerificationEnvelope,
+} from "../quality/verification-envelope"
 import { Session } from "../session"
 import { MessageV2 } from "../session/message-v2"
 import { sessionAssistantPath, zeroTokenUsage } from "../session/prompt-message-builders"
 import { MessageID, PartID, SessionID } from "../session/schema"
+import { SessionVerifications } from "../session/verifications"
 import { Database, NotFoundError, and, asc, desc, eq, inArray } from "../storage/db"
 import { Log } from "../util/log"
 import { compactWorkflowArtifact, defaultWorkflowArtifactRedaction } from "./artifact"
@@ -1115,8 +1120,8 @@ function finalReportVerification(detail: WorkflowRunDetail) {
   const requiredArtifactIds = detail.spec.verification.requiredArtifactIds
   const presentArtifactIds = new Set(detail.artifacts.map((artifact) => artifact.specArtifactID).filter(Boolean))
   const hasVerificationArtifact = detail.artifacts.some((artifact) => artifact.kind === "verification")
-  const hasVerificationEnvelope = detail.verificationEnvelopeIDs.length > 0
   const envelopeEvidence = verificationEnvelopeEvidence(detail)
+  const hasVerificationEnvelope = envelopeEvidence.passingEnvelopeIds.size > 0
   const envelopeFailures = envelopeEvidence.failures
   const requiredArtifactsSatisfied =
     requiredArtifactIds.length > 0 && requiredArtifactIds.every((artifactID) => presentArtifactIds.has(artifactID))
@@ -1322,12 +1327,15 @@ function evaluateCompletionGate(detail: WorkflowRunDetail): { ok: true } | { ok:
 function verificationEnvelopeEvidence(detail: WorkflowRunDetail) {
   const evidence = {
     failures: [] as string[],
+    missingEnvelopeIds: [] as string[],
+    passingEnvelopeIds: new Set<string>(),
     passingArtifactIds: new Set<string>(),
   }
   for (const artifact of detail.artifacts) {
     if (artifact.kind !== "verification") continue
     for (const envelope of verificationEnvelopesFromPayload(artifact.payload)) {
       if (envelope.result.passed && envelope.result.status === "passed") {
+        evidence.passingEnvelopeIds.add(computeEnvelopeId(envelope))
         evidence.passingArtifactIds.add(artifact.specArtifactID ?? artifact.id)
         continue
       }
@@ -1337,6 +1345,26 @@ function verificationEnvelopeEvidence(detail: WorkflowRunDetail) {
       )
     }
   }
+
+  if (detail.verificationEnvelopeIDs.length > 0) {
+    const loaded = detail.parentSessionID
+      ? new Map(SessionVerifications.loadWithIds(detail.parentSessionID).map((item) => [item.envelopeId, item.envelope]))
+      : new Map<string, VerificationEnvelope>()
+    for (const envelopeID of detail.verificationEnvelopeIDs) {
+      if (evidence.passingEnvelopeIds.has(envelopeID)) continue
+      const envelope = loaded.get(envelopeID)
+      if (!envelope) {
+        evidence.missingEnvelopeIds.push(envelopeID)
+        continue
+      }
+      if (envelope.result.passed && envelope.result.status === "passed") {
+        evidence.passingEnvelopeIds.add(envelopeID)
+        continue
+      }
+      const scope = envelope.scope.paths?.join(",") ?? envelope.scope.description ?? envelope.scope.kind
+      evidence.failures.push(`envelope:${envelopeID}:${envelope.result.name}:${envelope.result.status}:${scope}`)
+    }
+  }
   return evidence
 }
 
@@ -1344,7 +1372,15 @@ function missingRequiredVerificationEnvelopeEvidence(
   detail: WorkflowRunDetail,
   evidence: ReturnType<typeof verificationEnvelopeEvidence>,
 ) {
-  if (detail.verificationEnvelopeIDs.length > 0) return []
+  if (evidence.missingEnvelopeIds.length > 0) {
+    return evidence.missingEnvelopeIds.map((id) => `verification envelope ${id}`)
+  }
+  if (
+    detail.verificationEnvelopeIDs.length > 0 &&
+    detail.verificationEnvelopeIDs.every((id) => evidence.passingEnvelopeIds.has(id))
+  ) {
+    return []
+  }
   const required = detail.spec.verification.requiredArtifactIds
   if (required.length === 0) return evidence.passingArtifactIds.size > 0 ? [] : ["verification envelope"]
   return required.filter((artifactID) => !evidence.passingArtifactIds.has(artifactID))
