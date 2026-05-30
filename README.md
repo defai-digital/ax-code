@@ -61,17 +61,12 @@ Look for the `Runtime` line:
 ### Run
 
 ```bash
-# Set any provider key (pick one)
-export ANTHROPIC_API_KEY="your-key"              # Claude
-export GOOGLE_GENERATIVE_AI_API_KEY="your-key"   # Gemini
-export XAI_API_KEY="your-key"                    # Grok
-export OPENAI_API_KEY="your-key"                 # GPT
-
-# Launch
 ax-code
 ```
 
-That is it. No project setup or config file is required. Run `ax-code`, then use `/connect` inside the TUI to add or switch providers.
+That is it. No project setup or config file is required. On first launch, use `/connect` inside the TUI to add or switch providers.
+
+For headless use, CI jobs, or preconfigured shells, AX Code also respects provider environment variables such as `ANTHROPIC_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`, `XAI_API_KEY`, and `OPENAI_API_KEY`.
 
 Grok is exposed as two separate provider plans:
 
