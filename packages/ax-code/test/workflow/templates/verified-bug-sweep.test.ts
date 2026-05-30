@@ -3,6 +3,7 @@ import path from "path"
 import { fileURLToPath } from "url"
 import { afterEach, describe, expect, test } from "bun:test"
 import { Instance } from "../../../src/project/instance"
+import type { VerificationEnvelope } from "../../../src/quality/verification-envelope"
 import {
   WorkflowRun,
   WorkflowTemplate,
@@ -153,7 +154,10 @@ async function createCompletedSeededRun(seeds: WorkflowEvalSeededFinding[]) {
     specArtifactID: "verification-summary",
     kind: "verification",
     summary: "seeded verification evidence captured",
-    payload: { caseID: evalCase.id },
+    payload: {
+      caseID: evalCase.id,
+      verificationEnvelopes: [{ envelope: verificationEnvelope(run.id, "passed", true) }],
+    },
   })
   await WorkflowRun.appendArtifact({
     runID: run.id,
@@ -176,8 +180,31 @@ async function createCompletedSeededRun(seeds: WorkflowEvalSeededFinding[]) {
       estimatedCostUsd: 0.04,
     },
   })
-  await WorkflowRun.attachVerificationEnvelopeIDs({ id: run.id, envelopeIDs: ["0123456789abcdef"] })
   await WorkflowRun.setStatus({ id: run.id, status: "completed" })
   await WorkflowRun.ensureFinalReportArtifact(run.id)
   return WorkflowRun.getDetail(run.id)
+}
+
+function verificationEnvelope(runID: string, status: "passed" | "failed", passed: boolean): VerificationEnvelope {
+  return {
+    schemaVersion: 1,
+    workflow: "review",
+    scope: { kind: "workspace", description: "verified bug sweep seeded fixture" },
+    command: { runner: "bun", argv: ["test"], cwd: "/tmp/verified-bug-sweep-seeded" },
+    result: {
+      name: "seeded-workflow-eval",
+      type: "test",
+      passed,
+      status,
+      issues: [],
+      duration: 1,
+      output: status === "passed" ? "ok" : "seeded eval failed",
+    },
+    structuredFailures:
+      status === "passed"
+        ? []
+        : [{ kind: "custom", message: "seeded eval failed", details: { runID } }],
+    artifactRefs: [],
+    source: { tool: "workflow-seeded-test", version: "1.0.0", runId: runID },
+  }
 }
