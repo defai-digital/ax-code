@@ -44,6 +44,7 @@ export function workflowDashboardItems(runs: WorkflowDashboardRun[]): WorkflowDa
     const verification = `${run.verificationEnvelopeCount} verification`
     const artifacts = `${totalArtifacts(run)} artifacts`
     const blocker = run.blockedReason ? `blocker: ${run.blockedReason}` : undefined
+    const models = formatWorkflowModels(run.models)
 
     return {
       title: truncate(`${statusLabel(run.status)} ${run.name}`, MAX_TITLE),
@@ -53,7 +54,14 @@ export function workflowDashboardItems(runs: WorkflowDashboardRun[]): WorkflowDa
         MAX_DESCRIPTION,
       ),
       footer: truncate(
-        [blocker, `effort: ${run.effort}`, verification, artifacts, `elapsed: ${formatWorkflowDuration(run.elapsedMs)}`]
+        [
+          blocker,
+          `effort: ${run.effort}`,
+          models ? `models: ${models}` : undefined,
+          verification,
+          artifacts,
+          `elapsed: ${formatWorkflowDuration(run.elapsedMs)}`,
+        ]
           .filter(Boolean)
           .join(" | "),
         MAX_FOOTER,
@@ -97,6 +105,7 @@ export function workflowRunDetailItems(detail: WorkflowRunDetail): WorkflowDashb
       category: "Overview",
       disabled: true,
     },
+    ...workflowModelPolicyItems(detail),
   ]
 
   for (const phase of detail.phases) {
@@ -159,6 +168,63 @@ export function workflowRunDetailItems(detail: WorkflowRunDetail): WorkflowDashb
         disabled: true,
       })
     }
+  }
+
+  return items
+}
+
+export function workflowModelPolicyItems(detail: WorkflowRunDetail): WorkflowDashboardItem[] {
+  const modelPolicy = detail.spec.modelPolicy ?? {}
+  const budget = detail.spec.budget ?? {}
+  const pacing = detail.spec.pacing ?? {}
+  const permissions = detail.spec.permissions ?? {}
+  const items: WorkflowDashboardItem[] = [
+    {
+      title: truncate(`Effort ${modelPolicy.effort ?? "normal"}`, MAX_TITLE),
+      value: "workflow.detail.model-policy",
+      description: truncate(formatWorkflowModels(modelPolicy) || "default model routing", MAX_DESCRIPTION),
+      footer: truncate(
+        `phase routes: ${modelPolicy.routing?.length ?? 0} | strong synthesis: ${
+          modelPolicy.synthesizerModel ?? "default"
+        }`,
+        MAX_FOOTER,
+      ),
+      category: "Model policy",
+      disabled: true,
+    },
+    {
+      title: "Execution policy",
+      value: "workflow.detail.execution-policy",
+      description: truncate(
+        `write: ${permissions.writePolicy ?? "read-only"} | network: ${
+          permissions.networkPolicy ?? "inherit"
+        } | escalation: ${permissions.escalationPolicy ?? "inherit"}`,
+        MAX_DESCRIPTION,
+      ),
+      footer: truncate(
+        `parallel: ${budget.maxConcurrentAgents ?? 0} | agents: ${budget.maxTotalAgents ?? 0} | requests/min: ${
+          pacing.maxRequestsPerMinute ?? "unset"
+        } | tokens/min: ${pacing.maxTokensPerMinute ?? "unset"}`,
+        MAX_FOOTER,
+      ),
+      category: "Model policy",
+      disabled: true,
+    },
+  ]
+
+  for (const phase of detail.spec.phases) {
+    if (!phase.modelPolicy && !phase.maxParallel && !phase.mergeStrategy) continue
+    items.push({
+      title: truncate(`Phase policy ${phase.name}`, MAX_TITLE),
+      value: `workflow.detail.phase-policy.${phase.id}`,
+      description: truncate(
+        `${phase.kind} | max parallel: ${phase.maxParallel ?? "inherit"} | merge: ${phase.mergeStrategy ?? "all"}`,
+        MAX_DESCRIPTION,
+      ),
+      footer: truncate(formatWorkflowModels(phase.modelPolicy ?? {}) || "inherits workflow model policy", MAX_FOOTER),
+      category: "Model policy",
+      disabled: true,
+    })
   }
 
   return items
@@ -339,6 +405,30 @@ function formatWorkflowBudget(used: number, limit: number) {
 
 function totalArtifacts(run: WorkflowDashboardRun) {
   return Object.values(run.artifactCounts).reduce((sum, value) => sum + value, 0)
+}
+
+function formatWorkflowModels(models: {
+  plannerModel?: string
+  workerModel?: string
+  verifierModel?: string
+  synthesizerModel?: string
+  planner?: string
+  worker?: string
+  verifier?: string
+  synthesizer?: string
+}) {
+  return [
+    modelPart("planner", models.plannerModel ?? models.planner),
+    modelPart("worker", models.workerModel ?? models.worker),
+    modelPart("verifier", models.verifierModel ?? models.verifier),
+    modelPart("synthesizer", models.synthesizerModel ?? models.synthesizer),
+  ]
+    .filter(Boolean)
+    .join(", ")
+}
+
+function modelPart(label: string, value: string | undefined) {
+  return value ? `${label}: ${value}` : undefined
 }
 
 function numberField(primary: unknown, fallback: unknown) {

@@ -5,6 +5,7 @@ import {
   workflowArtifactDetailItems,
   workflowArtifactIDFromDetailValue,
   workflowDashboardItems,
+  workflowModelPolicyItems,
   workflowRunControlItems,
   workflowRunDetailItems,
   type WorkflowDashboardRun,
@@ -71,6 +72,67 @@ describe("tui workflow dashboard view model", () => {
     expect(items.some((item) => item.category === "Artifacts" && item.footer === "final evidence")).toBe(true)
     expect(items.find((item) => item.value === "workflow.detail.artifact.artifact_1")?.disabled).toBeUndefined()
     expect(items.some((item) => item.category === "Budget" && item.description?.includes("3 tool calls"))).toBe(true)
+  })
+
+  test("renders effort, model policy, and phase routing detail rows", () => {
+    const detail = workflowRunDetail({
+      spec: {
+        ...workflowRunDetail().spec,
+        modelPolicy: {
+          effort: "deep",
+          workerModel: "cheap-review-model",
+          verifierModel: "verifier-model",
+          synthesizerModel: "strong-synthesis-model",
+        },
+        pacing: {
+          maxRequestsPerMinute: 12,
+          maxTokensPerMinute: 20_000,
+        },
+        permissions: {
+          writePolicy: "read-only",
+          networkPolicy: "disabled",
+          escalationPolicy: "ask",
+        },
+        phases: [
+          {
+            id: "scan-files",
+            name: "Read-only scan",
+            kind: "fanout",
+            maxParallel: 3,
+            mergeStrategy: "majority",
+            modelPolicy: {
+              workerModel: "cheap-review-model",
+            },
+          },
+          {
+            id: "final-report",
+            name: "Final report",
+            kind: "synthesis",
+            modelPolicy: {
+              synthesizerModel: "strong-synthesis-model",
+            },
+          },
+        ],
+      },
+    })
+
+    const items = workflowModelPolicyItems(detail)
+    expect(items.find((item) => item.value === "workflow.detail.model-policy")?.title).toBe("Effort deep")
+    expect(items.find((item) => item.value === "workflow.detail.model-policy")?.description).toContain(
+      "worker: cheap-review-model",
+    )
+    expect(items.find((item) => item.value === "workflow.detail.model-policy")?.footer).toContain(
+      "strong synthesis: strong-synthesis-model",
+    )
+    expect(items.find((item) => item.value === "workflow.detail.execution-policy")?.description).toContain(
+      "network: disabled",
+    )
+    expect(items.find((item) => item.value === "workflow.detail.phase-policy.scan-files")?.description).toContain(
+      "max parallel: 3",
+    )
+    expect(items.find((item) => item.value === "workflow.detail.phase-policy.final-report")?.footer).toContain(
+      "synthesizer: strong-synthesis-model",
+    )
   })
 
   test("exposes run controls by workflow run status", () => {
