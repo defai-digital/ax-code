@@ -33,6 +33,9 @@ brew install defai-digital/ax-code/ax-code
 
 # GitHub release installer (Linux / CI)
 curl -fsSL https://raw.githubusercontent.com/defai-digital/ax-code/main/install | bash
+
+# GitHub release installer (Windows PowerShell)
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/defai-digital/ax-code/main/install.ps1 | iex"
 ```
 
 ### Verify
@@ -43,10 +46,10 @@ ax-code doctor
 
 Look for the `Runtime` line:
 
-| Output                          | Meaning                                               |
-| ------------------------------- | ----------------------------------------------------- |
-| `Runtime: Bun X.Y.Z (compiled)` | Homebrew, GitHub release installer, or local launcher |
-| `Runtime: Bun X.Y.Z (source)`   | Contributor source launcher or direct `bun`           |
+| Output                          | Meaning                                                |
+| ------------------------------- | ------------------------------------------------------ |
+| `Runtime: Bun X.Y.Z (compiled)` | Homebrew, GitHub release installers, or local launcher |
+| `Runtime: Bun X.Y.Z (source)`   | Contributor source launcher or direct `bun`            |
 
 ### Run
 
@@ -76,11 +79,12 @@ Grok is exposed as two separate provider plans:
 ax-code upgrade
 brew upgrade ax-code
 curl -fsSL https://raw.githubusercontent.com/defai-digital/ax-code/main/install | bash
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/defai-digital/ax-code/main/install.ps1 | iex"
 ```
 
 ### Distribution note
 
-Supported user install paths are Homebrew and the GitHub release installer for Linux/CI. For security-sensitive environments, download and inspect the installer before running it:
+Supported user install paths are Homebrew, the GitHub release installer for Linux/CI, and the GitHub release installer for Windows PowerShell. For security-sensitive environments, download and inspect the installer before running it:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/defai-digital/ax-code/main/install -o ax-code-install
@@ -88,9 +92,13 @@ less ax-code-install
 bash ax-code-install
 ```
 
-Use `--version <release>` in CI when the installed version must be pinned.
+```powershell
+irm https://raw.githubusercontent.com/defai-digital/ax-code/main/install.ps1 -OutFile ax-code-install.ps1
+Get-Content .\ax-code-install.ps1
+.\ax-code-install.ps1
+```
 
-Windows release binaries are built as GitHub release assets, but Windows does not yet have a documented first-class installer channel. The Windows path should be a native PowerShell installer with the same release-binary and smoke-test gates, not the Bash installer as the canonical user experience.
+Use `--version <release>` on Linux/CI or `-Version <release>` on Windows when the installed version must be pinned.
 
 npm packages, including the former source compatibility package, are no longer supported as install or upgrade channels.
 
