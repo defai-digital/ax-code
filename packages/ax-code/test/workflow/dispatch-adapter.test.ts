@@ -140,7 +140,12 @@ describe("WorkflowDispatchAdapter", () => {
           })
 
           expect(result.status).toBe("completed")
-          expect(result.artifacts.some((artifact) => artifact.specArtifactID === "verification-summary")).toBe(true)
+          expect(result.artifacts).toContainEqual(
+            expect.objectContaining({
+              kind: "verification",
+              specArtifactID: "verification-summary",
+            }),
+          )
         },
       })
     } finally {

@@ -122,7 +122,7 @@ export namespace WorkflowDispatchAdapter {
       runID: input.runID,
       phaseID: input.phase.id,
       specArtifactID: input.phaseSpec.outputs[0],
-      kind: "summary",
+      kind: phaseOutputArtifactKind(input.spec, input.phaseSpec.outputs[0]),
       retention: "session",
       exposeToMainContext: exposesPhaseSummary(input.spec, input.phaseSpec),
       summary: summarizePhase(input.phaseSpec, results),
@@ -206,6 +206,11 @@ function exposesPhaseSummary(spec: WorkflowSpecV1, phase: WorkflowPhase) {
     spec.artifacts.filter((artifact) => artifact.exposeToMainContext).map((artifact) => artifact.id),
   )
   return phase.outputs.some((output) => exposed.has(output))
+}
+
+function phaseOutputArtifactKind(spec: WorkflowSpecV1, specArtifactID: string | undefined): WorkflowRun.ArtifactKind {
+  if (!specArtifactID) return "summary"
+  return spec.artifacts.find((artifact) => artifact.id === specArtifactID)?.kind ?? "summary"
 }
 
 function summarizeChildResult(result: DispatchResult) {
