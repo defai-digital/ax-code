@@ -188,6 +188,39 @@ export type HeadlessWorkflowRunSaveTemplateInput = NonNullable<WorkflowRunSaveTe
 export type HeadlessWorkflowArtifactListInput = Omit<NonNullable<WorkflowRunArtifactsData["query"]>, "directory">
 export type HeadlessWorkflowTemplateSaveInput = NonNullable<WorkflowTemplateSaveData["body"]>
 export type HeadlessWorkflowRoutineRunInput = NonNullable<WorkflowRoutineRunData["body"]>
+export type HeadlessWorkflowEvalCaseFindingStatus = "confirmed" | "likely" | "rejected" | "unverified"
+export type HeadlessWorkflowEvalCase = {
+  id: string
+  name: string
+  description: string
+  fixtureID: string
+  templateID: string
+  baseline: unknown
+  seeds: Array<{
+    id: string
+    file: string
+    line: number
+    expectedStatus: HeadlessWorkflowEvalCaseFindingStatus
+    severity: "critical" | "high" | "medium" | "low" | "info"
+    summary: string
+    rationale?: string
+  }>
+}
+export type HeadlessWorkflowEvalCaseRunInput = {
+  caseID?: string
+  now?: number
+}
+export type HeadlessWorkflowEvalCaseRunSummary = {
+  caseID: string
+  templateID: string
+  fixtureID: string
+  decision: "promote" | "hold" | "rollback"
+  reasons: string[]
+  missingSeedIDs: string[]
+  mismatchedSeedIDs: string[]
+  summary: WorkflowRunEvalSummaryResponse
+  metrics: Record<string, unknown>
+}
 export type HeadlessWorkflowRunStartInput = {
   allowScaleBeyondDefaults?: boolean
   allowWriteWorkflows?: boolean
@@ -337,6 +370,17 @@ export function createHeadlessClient(input: HeadlessClientOptions) {
           query: parameters,
         })
       },
+      evalCases() {
+        return requestJson<HeadlessWorkflowEvalCase[]>({
+          baseUrl: input.baseUrl,
+          fetch: fetchFn,
+          headers: input.headers,
+          directory: input.directory,
+          experimental_workspaceID: input.experimental_workspaceID,
+          path: "/workflow-runs/eval-cases",
+          method: "GET",
+        })
+      },
       create(body: HeadlessWorkflowRunCreateInput) {
         return requestJson<WorkflowRunCreateResponse>({
           baseUrl: input.baseUrl,
@@ -374,6 +418,18 @@ export function createHeadlessClient(input: HeadlessClientOptions) {
           path: `/workflow-runs/${encodeURIComponent(runID)}/eval-summary`,
           method: "POST",
           body: body as Record<string, unknown>,
+        })
+      },
+      evalCase(runID: string, body: HeadlessWorkflowEvalCaseRunInput = {}) {
+        return requestJson<HeadlessWorkflowEvalCaseRunSummary>({
+          baseUrl: input.baseUrl,
+          fetch: fetchFn,
+          headers: input.headers,
+          directory: input.directory,
+          experimental_workspaceID: input.experimental_workspaceID,
+          path: `/workflow-runs/${encodeURIComponent(runID)}/eval-case`,
+          method: "POST",
+          body,
         })
       },
       saveTemplate(runID: string, body: HeadlessWorkflowRunSaveTemplateInput) {
