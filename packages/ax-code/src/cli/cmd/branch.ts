@@ -4,6 +4,7 @@ import { Session } from "../../session"
 import { SessionID, MessageID } from "../../session/schema"
 import { Risk } from "../../risk/score"
 import { Snapshot } from "../../snapshot"
+import { getRequiredSession } from "./session-required"
 
 export const BranchCommand = cmd({
   command: "branch <sessionID>",
@@ -18,7 +19,7 @@ export const BranchCommand = cmd({
       directory: process.cwd(),
       fn: async () => {
         const sessionID = SessionID.make(args.sessionID as string)
-        const original = await Session.get(sessionID)
+        const original = await getRequiredSession(sessionID, args.sessionID as string)
         const risk = Risk.fromSession(sessionID)
 
         // Snapshot current state before branching

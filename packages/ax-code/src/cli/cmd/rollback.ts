@@ -5,6 +5,7 @@ import { SessionID } from "../../session/schema"
 import { SessionRevert } from "../../session/revert"
 import { Risk } from "../../risk/score"
 import { ExecutionGraph } from "../../graph"
+import { getRequiredSession } from "./session-required"
 
 export const RollbackCommand = cmd({
   command: "rollback <sessionID>",
@@ -29,7 +30,7 @@ export const RollbackCommand = cmd({
       directory: process.cwd(),
       fn: async () => {
         const sessionID = SessionID.make(args.sessionID as string)
-        const session = await Session.get(sessionID)
+        const session = await getRequiredSession(sessionID, args.sessionID as string)
         const risk = Risk.fromSession(sessionID)
 
         console.log(`\nSession: ${sessionID}`)

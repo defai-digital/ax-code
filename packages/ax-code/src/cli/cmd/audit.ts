@@ -12,25 +12,37 @@ const AuditPruneCommand = cmd({
   command: "prune",
   describe: "delete audit events older than N days",
   builder: (yargs: Argv) =>
-    yargs.option("days", {
-      describe: "delete audit events older than this many days",
-      type: "number",
-      default: 90,
-    }),
+    yargs
+      .option("days", {
+        describe: "delete audit events older than this many days",
+        type: "number",
+        default: 90,
+      })
+      .check((argv) => {
+        validateAuditPruneDays(argv.days)
+        return true
+      }),
   handler: async (args) => {
     await bootstrap(process.cwd(), async () => {
-      const cutoffMs = args.days * 24 * 60 * 60 * 1000
+      const days = validateAuditPruneDays(args.days)
+      const cutoffMs = days * 24 * 60 * 60 * 1000
       const removed = EventQuery.pruneOlderThan(cutoffMs)
       if (removed === 0) {
-        process.stderr.write(`No audit events older than ${args.days} days${EOL}`)
+        process.stderr.write(`No audit events older than ${days} days${EOL}`)
         return
       }
-      process.stderr.write(
-        `Pruned ${removed} audit event${removed === 1 ? "" : "s"} older than ${args.days} days${EOL}`,
-      )
+      process.stderr.write(`Pruned ${removed} audit event${removed === 1 ? "" : "s"} older than ${days} days${EOL}`)
     })
   },
 })
+
+export function validateAuditPruneDays(days: unknown): number {
+  const value = Number(days)
+  if (!Number.isFinite(value) || value < 1) {
+    throw new Error("--days must be at least 1")
+  }
+  return value
+}
 
 const AuditExportCommand = cmd({
   command: "export [sessionID]",

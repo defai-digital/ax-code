@@ -237,6 +237,27 @@ describe("cli smoke", () => {
     expect(text).toContain("Session not found: session_missing")
   }, 20000)
 
+  test("session graph commands report missing sessions without stack traces", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    for (const args of [
+      ["rollback", "session_missing"],
+      ["compare", "session_missing_a", "session_missing_b"],
+      ["branch", "session_missing"],
+    ]) {
+      const out = await Process.run(cmd(...args), {
+        cwd: tmp.path,
+        nothrow: true,
+      })
+
+      const text = stripAnsi((out.stdout.toString() + out.stderr.toString()).trim())
+      expect(out.code).toBe(1)
+      expect(text).toContain(`Session not found: ${args[1]}`)
+      expect(text).not.toContain("NotFoundError")
+      expect(text).not.toContain(" at ")
+    }
+  }, 20000)
+
   test("skips malformed sessions in cli session list", async () => {
     await using tmp = await tmpdir({ git: true })
 
