@@ -69,6 +69,21 @@ describe("verified bug sweep workflow template", () => {
           completionRate: 1,
           verificationPassRate: 1,
         })
+
+        const finalReport = detail.artifacts.find((artifact) => artifact.specArtifactID === "workflow-final-report")
+        expect(finalReport?.summary).toContain("Findings: 1 confirmed, 1 likely, 1 rejected, 1 unverified.")
+        expect(finalReport?.summary).toContain("Confirmed findings:")
+        expect(finalReport?.summary).toContain("Likely findings:")
+        expect(finalReport?.summary).toContain("Rejected findings:")
+        expect(finalReport?.summary).toContain("Unverified findings:")
+        expect(finalReport?.payload).toMatchObject({
+          findings: {
+            confirmed: [expect.objectContaining({ summary: expect.stringContaining("Unauthenticated callers") })],
+            likely: [expect.objectContaining({ summary: expect.stringContaining("Retry delay grows") })],
+            rejected: [expect.objectContaining({ summary: expect.stringContaining("textContent") })],
+            unverified: [expect.objectContaining({ summary: expect.stringContaining("Cache scoping") })],
+          },
+        })
       },
     })
   })
@@ -152,5 +167,6 @@ async function createCompletedSeededRun(seeds: WorkflowEvalSeededFinding[]) {
   })
   await WorkflowRun.attachVerificationEnvelopeIDs({ id: run.id, envelopeIDs: ["0123456789abcdef"] })
   await WorkflowRun.setStatus({ id: run.id, status: "completed" })
+  await WorkflowRun.ensureFinalReportArtifact(run.id)
   return WorkflowRun.getDetail(run.id)
 }

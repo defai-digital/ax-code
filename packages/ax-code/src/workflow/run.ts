@@ -10,6 +10,7 @@ import { Database, NotFoundError, and, asc, desc, eq, inArray } from "../storage
 import { Log } from "../util/log"
 import { defaultWorkflowArtifactRedaction } from "./artifact"
 import { addWorkflowBudgetUsage, evaluateWorkflowBudget, evaluateWorkflowChildBudget } from "./budget"
+import { classifyWorkflowFindingArtifact, type WorkflowEvalFindingStatus } from "./eval"
 import { WorkflowInputValidationError, resolveWorkflowInputValues } from "./spec"
 import {
   EmptyWorkflowBudgetUsage,
@@ -571,11 +572,14 @@ async function ensureFinalReportArtifact(runID: WorkflowRunID): Promise<Workflow
   const childCounts = countByStatus(detail.children.map((child) => child.status))
   const artifactCounts = countByStatus(detail.artifacts.map((artifact) => artifact.kind))
   const verification = finalReportVerification(detail)
+  const findings = finalReportFindings(detail)
   const summary = [
     `Workflow final report: ${detail.spec.name}`,
     `Status: ${detail.status}`,
     `Verification: ${verification.status} (${verification.mode})`,
     ...verification.summaryLines,
+    findingSummaryLine(findings),
+    ...findingBucketSummaryLines(findings),
     `Phases: ${detail.phases.length} total, ${phaseCounts.completed ?? 0} completed, ${phaseCounts.failed ?? 0} failed, ${phaseCounts.cancelled ?? 0} cancelled.`,
     `Children: ${detail.children.length} total, ${childCounts.completed ?? 0} completed, ${childCounts.failed ?? 0} failed, ${childCounts.cancelled ?? 0} cancelled.`,
     `Artifacts: ${detail.artifacts.length} existing, verification envelopes: ${detail.verificationEnvelopeIDs.length}.`,
@@ -602,6 +606,7 @@ async function ensureFinalReportArtifact(runID: WorkflowRunID): Promise<Workflow
       childCounts,
       artifactCounts,
       verification,
+      findings,
       budgetUsage: detail.budgetUsage,
       verificationEnvelopeIDs: detail.verificationEnvelopeIDs,
       exposedArtifactIDs: detail.artifacts
@@ -1051,6 +1056,68 @@ function verificationSummaryLines(detail: WorkflowRunDetail, status: string) {
     return ["Optional verification did not run for this workflow."]
   }
   return []
+}
+
+type FinalReportFinding = {
+  artifactID: WorkflowArtifactID
+  specArtifactID?: string
+  summary?: string
+  evidenceRefs: WorkflowArtifactRecord["evidenceRefs"]
+}
+
+type FinalReportFindingBuckets = Record<WorkflowEvalFindingStatus, FinalReportFinding[]>
+
+function finalReportFindings(detail: WorkflowRunDetail): FinalReportFindingBuckets {
+  const buckets: FinalReportFindingBuckets = {
+    confirmed: [],
+    likely: [],
+    rejected: [],
+    unverified: [],
+  }
+
+  for (const artifact of detail.artifacts) {
+    if (artifact.kind !== "finding") continue
+    buckets[classifyWorkflowFindingArtifact(artifact)].push({
+      artifactID: artifact.id,
+      specArtifactID: artifact.specArtifactID,
+      summary: artifact.summary,
+      evidenceRefs: artifact.evidenceRefs,
+    })
+  }
+
+  return buckets
+}
+
+function findingSummaryLine(findings: FinalReportFindingBuckets) {
+  return [
+    `Findings: ${findings.confirmed.length} confirmed`,
+    `${findings.likely.length} likely`,
+    `${findings.rejected.length} rejected`,
+    `${findings.unverified.length} unverified.`,
+  ].join(", ")
+}
+
+function findingBucketSummaryLines(findings: FinalReportFindingBuckets) {
+  const lines: string[] = []
+  for (const status of ["confirmed", "likely", "rejected", "unverified"] as const) {
+    const bucket = findings[status]
+    if (bucket.length === 0) continue
+    lines.push(`${titleCase(status)} findings:`)
+    for (const finding of bucket.slice(0, 5)) {
+      const summary = finding.summary ? ` - ${finding.summary}` : ""
+      const evidence =
+        finding.evidenceRefs.length > 0
+          ? ` evidence=${finding.evidenceRefs.map((ref) => `${ref.kind}:${ref.id}`).join(",")}`
+          : ""
+      lines.push(`- ${finding.artifactID}${summary}${evidence}`)
+    }
+    if (bucket.length > 5) lines.push(`- ${bucket.length - 5} more ${status} findings omitted from compact summary.`)
+  }
+  return lines
+}
+
+function titleCase(value: string) {
+  return value.charAt(0).toUpperCase() + value.slice(1)
 }
 
 function isTerminalRunStatus(status: WorkflowRun.Status) {
