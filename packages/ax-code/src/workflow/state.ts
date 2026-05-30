@@ -281,6 +281,10 @@ export const WorkflowArtifactEventRecord = z
   })
   .meta({ ref: "WorkflowArtifactEventRecord" })
 
+export const WorkflowArtifactCompactEventRecord = WorkflowArtifactEventRecord.omit({ payload: true }).meta({
+  ref: "WorkflowArtifactCompactEventRecord",
+})
+
 export const WorkflowBudgetLedgerEventEntry = z
   .object({
     id: WorkflowWireID,
@@ -422,7 +426,10 @@ export namespace WorkflowRun {
     ChildCompleted: BusEvent.define("workflow.child.completed", z.object({ child: WorkflowChildEventRecord })),
     ChildFailed: BusEvent.define("workflow.child.failed", z.object({ child: WorkflowChildEventRecord })),
     ChildCancelled: BusEvent.define("workflow.child.cancelled", z.object({ child: WorkflowChildEventRecord })),
-    ArtifactWritten: BusEvent.define("workflow.artifact.written", z.object({ artifact: WorkflowArtifactEventRecord })),
+    ArtifactWritten: BusEvent.define(
+      "workflow.artifact.written",
+      z.object({ artifact: WorkflowArtifactCompactEventRecord }),
+    ),
     BudgetAppended: BusEvent.define("workflow.budget.appended", z.object({ entry: WorkflowBudgetLedgerEventEntry })),
     BudgetWarning: BusEvent.define(
       "workflow.budget.warning",

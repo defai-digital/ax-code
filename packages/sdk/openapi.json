@@ -7890,6 +7890,256 @@
                         "minimum": 0,
                         "maximum": 9007199254740991
                       },
+                      "evaluation": {
+                        "type": "object",
+                        "properties": {
+                          "runID": {
+                            "type": "string"
+                          },
+                          "sourceTemplateID": {
+                            "type": "string"
+                          },
+                          "decision": {
+                            "type": "string",
+                            "enum": [
+                              "promote",
+                              "hold",
+                              "rollback"
+                            ]
+                          },
+                          "reasons": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "metrics": {
+                            "type": "object",
+                            "properties": {
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "queued",
+                                  "running",
+                                  "blocked",
+                                  "paused",
+                                  "failed",
+                                  "completed",
+                                  "cancelled"
+                                ]
+                              },
+                              "elapsedMs": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "totalTokens": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "inputTokens": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "outputTokens": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "toolCalls": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "childAgents": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "retries": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "estimatedCostUsd": {
+                                "type": "number",
+                                "minimum": 0
+                              },
+                              "costPerConfirmedFindingUsd": {
+                                "anyOf": [
+                                  {
+                                    "type": "number",
+                                    "minimum": 0
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "verifiedCompletionCount": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "costPerVerifiedCompletionUsd": {
+                                "anyOf": [
+                                  {
+                                    "type": "number",
+                                    "minimum": 0
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "confirmedFindings": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "likelyFindings": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "rejectedFindings": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "unverifiedFindings": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "falsePositiveFindings": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "artifactCount": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "exposedArtifactCount": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "verificationEnvelopeCount": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "interventionCount": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              }
+                            },
+                            "required": [
+                              "status",
+                              "elapsedMs",
+                              "totalTokens",
+                              "inputTokens",
+                              "outputTokens",
+                              "toolCalls",
+                              "childAgents",
+                              "retries",
+                              "estimatedCostUsd",
+                              "costPerConfirmedFindingUsd",
+                              "verifiedCompletionCount",
+                              "costPerVerifiedCompletionUsd",
+                              "confirmedFindings",
+                              "likelyFindings",
+                              "rejectedFindings",
+                              "unverifiedFindings",
+                              "falsePositiveFindings",
+                              "artifactCount",
+                              "exposedArtifactCount",
+                              "verificationEnvelopeCount",
+                              "interventionCount"
+                            ]
+                          },
+                          "budgetStatus": {
+                            "type": "string",
+                            "enum": [
+                              "ok",
+                              "warning",
+                              "exceeded"
+                            ]
+                          },
+                          "budgetWarnings": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "budgetExceeded": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "verificationSatisfied": {
+                            "type": "boolean"
+                          },
+                          "comparison": {
+                            "type": "object",
+                            "properties": {
+                              "baselineLabel": {
+                                "type": "string"
+                              },
+                              "confirmedFindingsDelta": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "falsePositiveFindingsDelta": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "totalTokensDelta": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "elapsedMsDelta": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "estimatedCostUsdDelta": {
+                                "type": "number"
+                              },
+                              "interventionCountDelta": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              }
+                            },
+                            "required": [
+                              "baselineLabel",
+                              "confirmedFindingsDelta",
+                              "falsePositiveFindingsDelta"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "runID",
+                          "decision",
+                          "reasons",
+                          "metrics",
+                          "budgetStatus",
+                          "budgetWarnings",
+                          "budgetExceeded",
+                          "verificationSatisfied"
+                        ]
+                      },
                       "blockedReason": {
                         "type": "string"
                       }
@@ -7908,7 +8158,8 @@
                       "artifactCounts",
                       "verificationEnvelopeCount",
                       "evidenceRefCount",
-                      "exposedArtifactCount"
+                      "exposedArtifactCount",
+                      "evaluation"
                     ]
                   }
                 }
@@ -10482,6 +10733,11 @@
                         "type": "string"
                       }
                     },
+                    "revision": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
                     "specHash": {
                       "type": "string"
                     },
@@ -11345,6 +11601,7 @@
                     "name",
                     "description",
                     "tags",
+                    "revision",
                     "specHash",
                     "spec"
                   ]
@@ -16821,6 +17078,11 @@
                           "type": "string"
                         }
                       },
+                      "revision": {
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 9007199254740991
+                      },
                       "specHash": {
                         "type": "string"
                       },
@@ -17684,6 +17946,7 @@
                       "name",
                       "description",
                       "tags",
+                      "revision",
                       "specHash",
                       "spec"
                     ]
@@ -17732,7 +17995,7 @@
           }
         ],
         "summary": "Save workflow template",
-        "description": "Save a user-local or project-local workflow template candidate or trusted template.",
+        "description": "Save a user-local or project-local workflow template candidate. Promote after review to trust it.",
         "responses": {
           "200": {
             "description": "Saved workflow template.",
@@ -17770,6 +18033,11 @@
                       "items": {
                         "type": "string"
                       }
+                    },
+                    "revision": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
                     },
                     "specHash": {
                       "type": "string"
@@ -18634,6 +18902,7 @@
                     "name",
                     "description",
                     "tags",
+                    "revision",
                     "specHash",
                     "spec"
                   ]
@@ -18673,13 +18942,6 @@
                     "enum": [
                       "user",
                       "project"
-                    ]
-                  },
-                  "trust": {
-                    "type": "string",
-                    "enum": [
-                      "candidate",
-                      "trusted"
                     ]
                   },
                   "spec": {
@@ -19596,6 +19858,11 @@
                         "type": "string"
                       }
                     },
+                    "revision": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
                     "specHash": {
                       "type": "string"
                     },
@@ -20459,6 +20726,7 @@
                     "name",
                     "description",
                     "tags",
+                    "revision",
                     "specHash",
                     "spec"
                   ]
@@ -20558,6 +20826,11 @@
                         "type": "string"
                       }
                     },
+                    "revision": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
                     "specHash": {
                       "type": "string"
                     },
@@ -21421,6 +21694,7 @@
                     "name",
                     "description",
                     "tags",
+                    "revision",
                     "specHash",
                     "spec"
                   ]
@@ -21979,6 +22253,11 @@
                           "items": {
                             "type": "string"
                           }
+                        },
+                        "revision": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
                         },
                         "specHash": {
                           "type": "string"
@@ -22843,6 +23122,7 @@
                         "name",
                         "description",
                         "tags",
+                        "revision",
                         "specHash",
                         "spec"
                       ]
@@ -36532,7 +36812,7 @@
           "properties"
         ]
       },
-      "WorkflowArtifactEventRecord": {
+      "WorkflowArtifactCompactEventRecord": {
         "type": "object",
         "properties": {
           "id": {
@@ -36580,7 +36860,6 @@
           "summary": {
             "type": "string"
           },
-          "payload": {},
           "redaction": {
             "type": "object",
             "properties": {
@@ -36660,7 +36939,7 @@
             "type": "object",
             "properties": {
               "artifact": {
-                "$ref": "#/components/schemas/WorkflowArtifactEventRecord"
+                "$ref": "#/components/schemas/WorkflowArtifactCompactEventRecord"
               }
             },
             "required": [
@@ -39295,6 +39574,123 @@
         },
         "required": [
           "enabled"
+        ]
+      },
+      "WorkflowArtifactEventRecord": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "runID": {
+            "type": "string",
+            "minLength": 1
+          },
+          "phaseID": {
+            "type": "string",
+            "minLength": 1
+          },
+          "childID": {
+            "type": "string",
+            "minLength": 1
+          },
+          "specArtifactID": {
+            "type": "string",
+            "minLength": 1
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "summary",
+              "finding",
+              "patch",
+              "verification",
+              "metric",
+              "log"
+            ]
+          },
+          "retention": {
+            "type": "string",
+            "enum": [
+              "ephemeral",
+              "session",
+              "durable"
+            ]
+          },
+          "exposeToMainContext": {
+            "type": "boolean"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "payload": {},
+          "redaction": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "default": "pending",
+                "type": "string",
+                "enum": [
+                  "none",
+                  "redacted",
+                  "pending"
+                ]
+              },
+              "summary": {
+                "type": "string"
+              }
+            }
+          },
+          "evidenceRefs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "artifact",
+                    "verification",
+                    "finding",
+                    "debug-evidence"
+                  ]
+                },
+                "id": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "kind",
+                "id"
+              ]
+            }
+          },
+          "time": {
+            "type": "object",
+            "properties": {
+              "created": {
+                "type": "number"
+              },
+              "updated": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "created",
+              "updated"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "runID",
+          "kind",
+          "retention",
+          "exposeToMainContext",
+          "evidenceRefs",
+          "time"
         ]
       },
       "ToolIDs": {

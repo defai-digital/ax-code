@@ -1448,7 +1448,7 @@ export type EventWorkflowChildCancelled = {
   }
 }
 
-export type WorkflowArtifactEventRecord = {
+export type WorkflowArtifactCompactEventRecord = {
   id: string
   runID: string
   phaseID?: string
@@ -1458,7 +1458,6 @@ export type WorkflowArtifactEventRecord = {
   retention: "ephemeral" | "session" | "durable"
   exposeToMainContext: boolean
   summary?: string
-  payload?: unknown
   redaction?: {
     status?: "none" | "redacted" | "pending"
     summary?: string
@@ -1476,7 +1475,7 @@ export type WorkflowArtifactEventRecord = {
 export type EventWorkflowArtifactWritten = {
   type: "workflow.artifact.written"
   properties: {
-    artifact: WorkflowArtifactEventRecord
+    artifact: WorkflowArtifactCompactEventRecord
   }
 }
 
@@ -2480,6 +2479,31 @@ export type SmartLlmState = {
 
 export type SuperLongState = {
   enabled: boolean
+}
+
+export type WorkflowArtifactEventRecord = {
+  id: string
+  runID: string
+  phaseID?: string
+  childID?: string
+  specArtifactID?: string
+  kind: "summary" | "finding" | "patch" | "verification" | "metric" | "log"
+  retention: "ephemeral" | "session" | "durable"
+  exposeToMainContext: boolean
+  summary?: string
+  payload?: unknown
+  redaction?: {
+    status?: "none" | "redacted" | "pending"
+    summary?: string
+  }
+  evidenceRefs: Array<{
+    kind: "artifact" | "verification" | "finding" | "debug-evidence"
+    id: string
+  }>
+  time: {
+    created: number
+    updated: number
+  }
 }
 
 export type ToolIds = Array<string>
