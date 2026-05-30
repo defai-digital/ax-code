@@ -705,15 +705,13 @@ export namespace Worktree {
       const directoryExists = await exists(directory)
       if (directoryExists) {
         await stop(directory)
-        await cleanupInstanceAndSandbox()
         await clean(directory)
       }
-      if (!directoryExists) await cleanupInstanceAndSandbox()
+      await cleanupInstanceAndSandbox()
       return true
     }
 
     await stop(entry.path)
-    await cleanupInstanceAndSandbox()
     const removed = await git(["worktree", "remove", "--force", entry.path], {
       cwd: Instance.worktree,
     })
@@ -731,15 +729,36 @@ export namespace Worktree {
       }
     }
 
-    await clean(entry.path)
-
     const branch = entry.branch?.replace(/^refs\/heads\//, "")
-    if (branch) {
-      const deleted = await git(["branch", "-D", branch], { cwd: Instance.worktree })
-      if (deleted.exitCode !== 0) {
-        throw new RemoveFailedError({ message: errorText(deleted) || "Failed to delete worktree branch" })
+    let cleanupError: unknown
+    let branchError: unknown
+    try {
+      await clean(entry.path)
+    } catch (error) {
+      cleanupError = error
+    } finally {
+      if (branch) {
+        const deleted = await git(["branch", "-D", branch], { cwd: Instance.worktree })
+        if (deleted.exitCode !== 0) {
+          branchError = new RemoveFailedError({
+            message: errorText(deleted) || "Failed to delete worktree branch",
+          })
+        }
       }
     }
+    if (cleanupError) {
+      if (branchError) {
+        log.warn("failed to delete worktree branch after cleanup failure", {
+          directory: entry.path,
+          branch,
+          error: toErrorMessage(branchError),
+        })
+      }
+      throw cleanupError
+    }
+    if (branchError) throw branchError
+
+    await cleanupInstanceAndSandbox()
 
     return true
   })
@@ -748,6 +767,8 @@ export namespace Worktree {
     if (Instance.project.vcs !== "git") {
       throw new NotGitError({ message: "Worktrees are only supported for git projects" })
     }
+
+    cancelPendingStartScripts(input.directory)
 
     const directory = await canonical(input.directory)
     const primary = await canonical(Instance.worktree)
@@ -839,6 +860,7 @@ export namespace Worktree {
     }
 
     const worktreePath = entry.path
+    cancelPendingStartScripts(worktreePath)
 
     const resetToTarget = await git(["reset", "--hard", target], { cwd: worktreePath })
     if (resetToTarget.exitCode !== 0) {

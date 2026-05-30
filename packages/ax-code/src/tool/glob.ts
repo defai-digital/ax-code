@@ -103,7 +103,7 @@ export const GlobTool = Tool.define("glob", {
         break
       }
       const full = path.resolve(search, file)
-      const stats = Filesystem.stat(full)?.mtime.getTime() ?? 0
+      const stats = Filesystem.stat(full)?.mtime?.getTime() ?? 0
       files.push({
         path: full,
         mtime: stats,

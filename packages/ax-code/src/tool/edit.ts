@@ -138,7 +138,8 @@ export const EditTool = Tool.define("edit", {
       let replaced: string | undefined
       try {
         replaced = replace(contentOld, old, next, params.replaceAll)
-      } catch {
+      } catch (error) {
+        if (contentOld.includes(old)) throw error
         // If the converted ending doesn't match (mixed-ending file),
         // try with normalized endings on both sides.
         const normalizedContent = normalizeLineEndings(contentOld)

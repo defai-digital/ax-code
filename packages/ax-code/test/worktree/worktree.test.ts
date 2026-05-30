@@ -74,3 +74,31 @@ test("runStartScripts fails when the worktree start command fails", async () => 
     get.mockRestore()
   }
 })
+
+test("reset cancels pending bootstrap before queueing start scripts", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Bun.write(path.join(tmp.path, "tracked.txt"), "ready\n")
+  await $`git add tracked.txt`.cwd(tmp.path).quiet()
+  await $`git commit -m test`.cwd(tmp.path).quiet()
+
+  const marker = path.join(tmp.path, "start-count.txt")
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await Project.update({
+        projectID: Instance.project.id,
+        commands: { start: `printf x >> ${JSON.stringify(marker)}` },
+      })
+
+      const info = await Worktree.create({ name: "reset-cancel" })
+      await Worktree.reset({ directory: info.directory })
+      await new Promise((resolve) => setTimeout(resolve, 100))
+
+      const content = await fs.readFile(marker, "utf8").catch(() => "")
+      expect(content).toBe("x")
+
+      await Worktree.remove({ directory: info.directory })
+    },
+  })
+})

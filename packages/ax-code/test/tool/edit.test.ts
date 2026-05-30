@@ -828,4 +828,14 @@ describe("tool.edit", () => {
     expect(preLock).not.toContain("await assertSymlinkInsideProject(filePath)")
     expect(lockBody).toContain("await assertSymlinkInsideProject(filePath)")
   })
+
+  test("only retries normalized replacement when the converted match is absent", async () => {
+    const source = await Bun.file(path.join(__dirname, "../../src/tool/edit.ts")).text()
+    const replaceStart = source.indexOf("replaced = replace(contentOld, old, next, params.replaceAll)")
+    expect(replaceStart).toBeGreaterThan(-1)
+
+    const retryGuard = source.slice(replaceStart, source.indexOf("const normalizedContent", replaceStart))
+    expect(retryGuard).toContain("} catch (error) {")
+    expect(retryGuard).toContain("if (contentOld.includes(old)) throw error")
+  })
 })
