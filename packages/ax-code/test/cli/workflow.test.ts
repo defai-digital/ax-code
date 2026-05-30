@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import {
+  formatWorkflowEvalCaseList,
+  formatWorkflowEvalCaseRunSummary,
   formatWorkflowRunDashboard,
   formatWorkflowRunDetail,
   formatWorkflowRunList,
@@ -7,6 +9,7 @@ import {
   formatWorkflowTemplateList,
   parseWorkflowInputArguments,
 } from "../../src/cli/cmd/workflow"
+import { getWorkflowEvalCase, type WorkflowEvalCaseRunSummary } from "../../src/workflow/eval-corpus"
 import { getParsedWorkflowFixtureSpec } from "../../src/workflow/fixtures"
 import type { WorkflowRunProjection } from "../../src/workflow/projection"
 import type {
@@ -166,6 +169,88 @@ describe("workflow command helpers", () => {
     expect(output).toContain("project:route-noop")
     expect(output).toContain("enabled")
     expect(output).toContain("disabled")
+  })
+
+  test("formats workflow eval case rows", () => {
+    const output = formatWorkflowEvalCaseList([getWorkflowEvalCase("verified-bug-sweep-seeded")])
+
+    expect(output).toContain("verified-bug-sweep-seeded")
+    expect(output).toContain("builtin:verified-bug-sweep")
+    expect(output).toContain("fixture: verified-bug-sweep-seeded")
+    expect(output).toContain("confirmed=1")
+    expect(output).toContain("rejected=1")
+    expect(output).toContain("baseline: single-agent-seeded-review")
+  })
+
+  test("formats workflow eval case run summaries", () => {
+    const output = formatWorkflowEvalCaseRunSummary({
+      caseID: "verified-bug-sweep-seeded",
+      templateID: "builtin:verified-bug-sweep",
+      fixtureID: "verified-bug-sweep-seeded",
+      decision: "hold",
+      reasons: ["expected false-positive rejections are missing: text-content-xss-rejected"],
+      missingSeedIDs: ["text-content-xss-rejected"],
+      mismatchedSeedIDs: [],
+      summary: {
+        runID: "wfr_01",
+        decision: "hold",
+        reasons: ["required verification evidence is missing"],
+        metrics: {
+          status: "completed",
+          elapsedMs: 1000,
+          totalTokens: 8000,
+          inputTokens: 6000,
+          outputTokens: 2000,
+          toolCalls: 16,
+          childAgents: 6,
+          retries: 0,
+          estimatedCostUsd: 0.04,
+          confirmedFindings: 1,
+          likelyFindings: 1,
+          rejectedFindings: 0,
+          unverifiedFindings: 1,
+          falsePositiveFindings: 0,
+          artifactCount: 4,
+          exposedArtifactCount: 1,
+          verificationEnvelopeCount: 0,
+          interventionCount: 0,
+        },
+        budgetStatus: "ok",
+        budgetWarnings: [],
+        budgetExceeded: [],
+        verificationSatisfied: false,
+      },
+      metrics: {
+        expectedConfirmedFindings: 1,
+        expectedLikelyFindings: 1,
+        expectedRejectedFindings: 1,
+        expectedUnverifiedFindings: 1,
+        observedSeedConfirmedFindings: 1,
+        observedSeedLikelyFindings: 1,
+        observedSeedRejectedFindings: 0,
+        observedSeedUnverifiedFindings: 1,
+        missingSeedFindings: 1,
+        mismatchedSeedFindings: 0,
+        duplicateSeedArtifacts: 0,
+        unmatchedFindingArtifacts: 0,
+        costPerConfirmedFindingUsd: 0.04,
+        falsePositiveRejectionRate: 0,
+        confirmedFindingRecall: 1,
+        completionRate: 1,
+        verificationPassRate: 0,
+        budgetStopped: false,
+        interventionCount: 0,
+      },
+    } satisfies WorkflowEvalCaseRunSummary)
+
+    expect(output).toContain("decision: hold")
+    expect(output).toContain("verification: missing")
+    expect(output).toContain("seedFindings: confirmed 1/1, likely 1/1, rejected 0/1, unverified 1/1")
+    expect(output).toContain("falsePositiveRejectionRate: 0%")
+    expect(output).toContain("confirmedFindingRecall: 100%")
+    expect(output).toContain("costPerConfirmedFindingUsd: $0.0400")
+    expect(output).toContain("missingSeeds: text-content-xss-rejected")
+    expect(output).toContain("expected false-positive rejections are missing")
   })
 
   test("formats run detail counts", () => {

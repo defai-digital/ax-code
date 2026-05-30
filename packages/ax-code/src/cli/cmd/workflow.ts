@@ -11,6 +11,13 @@ import { WorkflowTemplate } from "../../workflow/template"
 import type { SessionID } from "../../session/schema"
 import type { WorkflowRunDetail, WorkflowRunID } from "../../workflow/state"
 import { summarizeWorkflowRunDetail, type WorkflowRunProjection } from "../../workflow/projection"
+import {
+  evaluateWorkflowEvalCaseRun,
+  listWorkflowEvalCases,
+  type WorkflowEvalCase,
+  type WorkflowEvalCaseID,
+  type WorkflowEvalCaseRunSummary,
+} from "../../workflow/eval-corpus"
 
 type JsonOption = {
   json?: boolean
@@ -37,6 +44,10 @@ type RoutineRunOptions = Omit<StartOptions, "templateID"> & {
 
 type RunIDOptions = JsonOption & {
   runID: string
+}
+
+type EvalCaseOptions = RunIDOptions & {
+  caseId?: string
 }
 
 type SaveTemplateOptions = RunIDOptions & {
@@ -109,6 +120,52 @@ export function formatWorkflowRoutineList(routines: WorkflowRoutineTrigger.Info[
   return (
     ["status   route                        template                         mode      gate", ...lines].join(EOL) + EOL
   )
+}
+
+export function formatWorkflowEvalCaseList(cases: WorkflowEvalCase[]) {
+  if (cases.length === 0) return `No workflow eval cases found.${EOL}`
+  return cases
+    .map((item) => {
+      const counts = countBy(item.seeds.map((seed) => seed.expectedStatus))
+      return [
+        `${item.id.padEnd(30)} ${item.templateID}`,
+        `  ${item.description}`,
+        `  fixture: ${item.fixtureID}; seeds: ${formatCounts(counts)}; baseline: ${item.baseline.label}`,
+      ].join(EOL)
+    })
+    .join(EOL + EOL)
+    .concat(EOL)
+}
+
+export function formatWorkflowEvalCaseRunSummary(result: WorkflowEvalCaseRunSummary) {
+  const metrics = result.metrics
+  const lines = [
+    `Eval case ${result.caseID}`,
+    `decision: ${result.decision}`,
+    `template: ${result.templateID}`,
+    `fixture: ${result.fixtureID}`,
+    `summaryDecision: ${result.summary.decision}`,
+    `verification: ${result.summary.verificationSatisfied ? "satisfied" : "missing"}`,
+    [
+      "seedFindings:",
+      `confirmed ${metrics.observedSeedConfirmedFindings}/${metrics.expectedConfirmedFindings},`,
+      `likely ${metrics.observedSeedLikelyFindings}/${metrics.expectedLikelyFindings},`,
+      `rejected ${metrics.observedSeedRejectedFindings}/${metrics.expectedRejectedFindings},`,
+      `unverified ${metrics.observedSeedUnverifiedFindings}/${metrics.expectedUnverifiedFindings}`,
+    ].join(" "),
+    `falsePositiveRejectionRate: ${formatPercent(metrics.falsePositiveRejectionRate)}`,
+    `confirmedFindingRecall: ${formatPercent(metrics.confirmedFindingRecall)}`,
+    `costPerConfirmedFindingUsd: ${formatUsd(metrics.costPerConfirmedFindingUsd)}`,
+    `interventions: ${metrics.interventionCount}`,
+  ]
+  if (result.missingSeedIDs.length) lines.push(`missingSeeds: ${result.missingSeedIDs.join(", ")}`)
+  if (result.mismatchedSeedIDs.length) lines.push(`mismatchedSeeds: ${result.mismatchedSeedIDs.join(", ")}`)
+  if (result.reasons.length) {
+    lines.push("")
+    lines.push("Reasons")
+    for (const reason of result.reasons) lines.push(`  - ${reason}`)
+  }
+  return lines.join(EOL).concat(EOL)
 }
 
 export function formatWorkflowRunDetail(detail: WorkflowRunDetail) {
@@ -256,6 +313,55 @@ const WorkflowRoutineListCommand = cmd({
         return
       }
       process.stdout.write(formatWorkflowRoutineList(routines))
+    })
+  },
+})
+
+const WorkflowEvalCaseListCommand = cmd({
+  command: "eval-cases",
+  describe: "list workflow evaluation cases",
+  builder: (yargs: Argv) => yargs.option("json", jsonOption()),
+  async handler(args) {
+    await withWorkflowRuntime(async () => {
+      const cases = listWorkflowEvalCases()
+      if (args.json) {
+        writeJson(cases)
+        return
+      }
+      process.stdout.write(formatWorkflowEvalCaseList(cases))
+    })
+  },
+})
+
+const WorkflowEvalCaseRunCommand = cmd({
+  command: "eval-case <runID>",
+  describe: "evaluate a workflow run against a seeded local case",
+  builder: (yargs: Argv) =>
+    yargs
+      .positional("runID", {
+        type: "string",
+        demandOption: true,
+        describe: "workflow run id",
+      })
+      .option("case-id", {
+        type: "string",
+        default: "verified-bug-sweep-seeded",
+        describe: "workflow eval case id",
+      })
+      .option("json", jsonOption()),
+  async handler(args) {
+    await withWorkflowRuntime(async () => {
+      const options = args as unknown as EvalCaseOptions
+      const detail = await WorkflowRun.getDetail(options.runID as WorkflowRunID)
+      const result = evaluateWorkflowEvalCaseRun({
+        run: detail,
+        caseID: (options.caseId ?? "verified-bug-sweep-seeded") as WorkflowEvalCaseID,
+      })
+      if (options.json) {
+        writeJson(result)
+        return
+      }
+      process.stdout.write(formatWorkflowEvalCaseRunSummary(result))
     })
   },
 })
@@ -536,6 +642,8 @@ export const WorkflowCommand = cmd({
       .command(WorkflowRunListCommand)
       .command(WorkflowRunDashboardCommand)
       .command(WorkflowRoutineListCommand)
+      .command(WorkflowEvalCaseListCommand)
+      .command(WorkflowEvalCaseRunCommand)
       .command(WorkflowRunStartCommand)
       .command(WorkflowRoutineRunCommand)
       .command(WorkflowRunStatusCommand)
@@ -619,4 +727,14 @@ function formatCounts(counts: Record<string, number>) {
 function truncate(input: string, maxLength: number) {
   if (input.length <= maxLength) return input
   return `${input.slice(0, Math.max(0, maxLength - 3))}...`
+}
+
+function formatPercent(value: number | null) {
+  if (value === null) return "-"
+  return `${Math.round(value * 100)}%`
+}
+
+function formatUsd(value: number | null) {
+  if (value === null) return "-"
+  return `$${value.toFixed(4)}`
 }
