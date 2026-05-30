@@ -358,8 +358,27 @@ describe("TaskQueue", () => {
             tokens: { input: 10, output: 5, total: 15 },
           },
           parts: [
-            { id: "prt_tool_1", sessionID: session.id, messageID: "msg_workflow_tool_budget", type: "tool" },
-            { id: "prt_tool_2", sessionID: session.id, messageID: "msg_workflow_tool_budget", type: "tool" },
+            {
+              id: "prt_text_1",
+              sessionID: session.id,
+              messageID: "msg_workflow_tool_budget",
+              type: "text",
+              text: "Two tools completed.",
+            },
+            {
+              id: "prt_tool_1",
+              sessionID: session.id,
+              messageID: "msg_workflow_tool_budget",
+              type: "tool",
+              tool: "read",
+            },
+            {
+              id: "prt_tool_2",
+              sessionID: session.id,
+              messageID: "msg_workflow_tool_budget",
+              type: "tool",
+              tool: "grep",
+            },
           ],
         } as any)
 
@@ -376,6 +395,18 @@ describe("TaskQueue", () => {
             inputTokens: 10,
             outputTokens: 5,
             toolCalls: 2,
+          })
+          expect(failed.artifacts[0]).toMatchObject({
+            childID: child.id,
+            kind: "summary",
+            retention: "session",
+            summary: "Two tools completed.",
+            payload: {
+              messageID: "msg_workflow_tool_budget",
+              output: "Two tools completed.",
+              tools: ["read", "grep"],
+              usage: { totalTokens: 15, inputTokens: 10, outputTokens: 5, toolCalls: 2 },
+            },
           })
         } finally {
           prompt.mockRestore()

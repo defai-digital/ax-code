@@ -267,6 +267,18 @@ async function recordWorkflowSubagentUsage(item: TaskQueue.Info, result: unknown
   if (!usage) return
 
   const { WorkflowRun } = await import("../workflow/run")
+  const outputArtifact = messageOutputArtifact(result, usage)
+  if (outputArtifact) {
+    await WorkflowRun.appendArtifact({
+      runID: workflow.runID as WorkflowRunID,
+      phaseID: workflow.phaseID as WorkflowPhaseID,
+      childID: workflow.childID as WorkflowChildID,
+      kind: "summary",
+      retention: "session",
+      summary: outputArtifact.summary,
+      payload: outputArtifact.payload,
+    })
+  }
   await WorkflowRun.appendBudgetUsage({
     runID: workflow.runID as WorkflowRunID,
     phaseID: workflow.phaseID as WorkflowPhaseID,
@@ -498,15 +510,47 @@ function workflowPayload(item: TaskQueue.Info) {
   }
 }
 
-function messageBudgetUsage(result: unknown) {
+type WorkflowSubagentBudgetUsage = {
+  totalTokens: number
+  inputTokens: number
+  outputTokens: number
+  toolCalls: number
+  estimatedCostUsd: number
+}
+
+function messageBudgetUsage(result: unknown): WorkflowSubagentBudgetUsage | undefined {
   const tokens = messageTokens(result)
   const toolCalls = messageToolCalls(result)
   if (!tokens && toolCalls === 0) return undefined
+  const estimatedCostUsd = messageEstimatedCostUsd(result)
   return {
     totalTokens: tokens?.total ?? 0,
     inputTokens: tokens?.input ?? 0,
     outputTokens: tokens?.output ?? 0,
     toolCalls,
+    estimatedCostUsd: estimatedCostUsd ?? 0,
+  }
+}
+
+function messageOutputArtifact(
+  result: unknown,
+  usage: WorkflowSubagentBudgetUsage,
+) {
+  if (!result || typeof result !== "object") return undefined
+  const info = (result as { info?: unknown }).info
+  const messageID = info && typeof info === "object" ? (info as { id?: unknown }).id : undefined
+  const parts = (result as { parts?: unknown }).parts
+  const output = messageTextOutput(parts)
+  const tools = messageToolNames(parts)
+  const fallback = usage.toolCalls > 0 ? `${usage.toolCalls} tool call(s) completed.` : "Workflow child completed."
+  return {
+    summary: truncateArtifactSummary(output || fallback),
+    payload: {
+      messageID: typeof messageID === "string" ? messageID : undefined,
+      output: output || undefined,
+      tools,
+      usage,
+    },
   }
 }
 
@@ -528,6 +572,13 @@ function messageTokens(result: unknown) {
   }
 }
 
+function messageEstimatedCostUsd(result: unknown) {
+  if (!result || typeof result !== "object") return undefined
+  const info = (result as { info?: unknown }).info
+  if (!info || typeof info !== "object") return undefined
+  return nonNegativeNumber((info as { estimatedCostUsd?: unknown }).estimatedCostUsd)
+}
+
 function messageToolCalls(result: unknown) {
   if (!result || typeof result !== "object") return 0
   const parts = (result as { parts?: unknown }).parts
@@ -536,6 +587,39 @@ function messageToolCalls(result: unknown) {
     if (!part || typeof part !== "object") return false
     return (part as { type?: unknown }).type === "tool"
   }).length
+}
+
+function messageTextOutput(parts: unknown) {
+  if (!Array.isArray(parts)) return ""
+  return parts
+    .map((part) => {
+      if (!part || typeof part !== "object") return ""
+      const record = part as { type?: unknown; text?: unknown }
+      return record.type === "text" && typeof record.text === "string" ? record.text.trim() : ""
+    })
+    .filter(Boolean)
+    .join("\n\n")
+    .trim()
+}
+
+function messageToolNames(parts: unknown) {
+  if (!Array.isArray(parts)) return []
+  return Array.from(
+    new Set(
+      parts
+        .map((part) => {
+          if (!part || typeof part !== "object") return undefined
+          const record = part as { type?: unknown; tool?: unknown }
+          return record.type === "tool" && typeof record.tool === "string" ? record.tool : undefined
+        })
+        .filter((tool): tool is string => typeof tool === "string" && tool.length > 0),
+    ),
+  )
+}
+
+function truncateArtifactSummary(text: string) {
+  const compact = text.replace(/\s+/g, " ").trim()
+  return compact.length > 500 ? `${compact.slice(0, 497)}...` : compact
 }
 
 function nonNegativeNumber(value: unknown) {
