@@ -50,6 +50,7 @@ describe("workflow command helpers", () => {
 
     expect(output).toContain("builtin:noop-dry-run")
     expect(output).toContain("Noop Dry Run")
+    expect(output).toContain("trust: trusted; revision: 1; hash: sha256:0123456789abcdef")
     expect(output).toContain("tags: fixture, dry-run")
   })
 

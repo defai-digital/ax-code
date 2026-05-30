@@ -87,7 +87,7 @@ export function formatWorkflowTemplateList(templates: WorkflowTemplate.Info[]) {
   return templates
     .map((template) => {
       const tags = template.tags.length ? template.tags.join(", ") : "none"
-      return `${template.id.padEnd(32)} ${template.name}${EOL}  ${template.description}${EOL}  tags: ${tags}`
+      return `${template.id.padEnd(32)} ${template.name}${EOL}  ${template.description}${EOL}  trust: ${template.trust}; revision: ${template.revision}; hash: ${template.specHash}${EOL}  tags: ${tags}`
     })
     .join(EOL + EOL)
     .concat(EOL)
