@@ -44,7 +44,7 @@ describe("prompt loop goal continuation", () => {
     expect(result.event).toBe("goal auto-continuation")
     expect(result.budgetLimitContinuationSent).toBe(false)
     expect(result.text).toContain("finish refactor")
-    expect(result.text).toContain("2/3")
+    expect(result.text).toContain("continuation 2")
   })
 
   test("maps budget-limited goals to one wrap-up continuation and marks it sent", () => {
@@ -71,33 +71,24 @@ describe("prompt loop goal continuation", () => {
     expect(result.text).toContain("Token budget: 100")
   })
 
-  test("publishes stop errors when continuation limits are exhausted", () => {
-    const sessionID = SessionID.descending()
-    const published: { sessionID: SessionID; message: string }[] = []
-
-    const result = handlePromptLoopGoalContinuation(
-      {
-        sessionID,
-        goal: {
-          objective: "finish refactor",
-          status: "active",
-          tokensUsed: 10,
-          timeUsedSeconds: 2,
-        },
-        continuations: 3,
-        maxContinuations: 3,
-        budgetLimitContinuationSent: false,
+  test("continues active goals beyond maxContinuations until model marks complete", () => {
+    const result = handlePromptLoopGoalContinuation({
+      sessionID: SessionID.descending(),
+      goal: {
+        objective: "finish refactor",
+        status: "active",
+        tokensUsed: 10,
+        timeUsedSeconds: 2,
       },
-      {
-        publishError(input) {
-          published.push(input)
-        },
-      },
-    )
+      continuations: 3,
+      maxContinuations: 3,
+      budgetLimitContinuationSent: false,
+    })
 
-    expect(result).toEqual({ action: "stop", reason: "stalled", budgetLimitContinuationSent: false })
-    expect(published).toHaveLength(1)
-    expect(published[0]?.sessionID).toBe(sessionID)
-    expect(published[0]?.message).toContain("Goal remains active")
+    expect(result.action).toBe("continue")
+    if (result.action !== "continue") throw new Error("expected continuation")
+    expect(result.event).toBe("goal auto-continuation")
+    expect(result.text).toContain("finish refactor")
+    expect(result.text).toContain("continuation 4")
   })
 })

@@ -8,13 +8,12 @@ describe("autonomous continuation prompt builders", () => {
     const text = AutonomousContinuationPrompt.goal({
       objective: "finish the migration",
       continuation: 1,
-      maxContinuations: 3,
     })
 
     expect(text).toContain("active session goal")
     expect(text).toContain("finish the migration")
     expect(text).toContain('update_goal with status "complete"')
-    expect(text).toContain("goal auto-continuation 1/3")
+    expect(text).toContain("goal auto-continuation 1")
   })
 
   test("builds goal budget-limit wrap-up guidance", () => {

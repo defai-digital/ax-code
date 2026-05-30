@@ -49,7 +49,6 @@ export function handlePromptLoopGoalContinuation(
       text: AutonomousContinuationPrompt.goal({
         objective: decision.objective,
         continuation: decision.continuation,
-        maxContinuations: input.maxContinuations,
       }),
       budgetLimitContinuationSent: input.budgetLimitContinuationSent,
     }
@@ -69,7 +68,7 @@ export function handlePromptLoopGoalContinuation(
     }
   }
 
-  if (decision.action === "stop_active_limit" || decision.action === "stop_budget_limit") {
+  if (decision.action === "stop_budget_limit") {
     ;(deps.publishError ?? Session.publishError)({
       sessionID: input.sessionID,
       message: decision.message,

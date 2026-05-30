@@ -128,7 +128,7 @@ describe("autonomous continuation decisions", () => {
       maxContinuations: Number.NaN,
       budgetLimitContinuationSent: false,
     })
-    expect(goalDecision.action).toBe("stop_active_limit")
+    expect(goalDecision.action).toBe("continue_active")
   })
 
   test("formats non-comparable global step limit values in stop messages", () => {
@@ -214,7 +214,7 @@ describe("autonomous continuation decisions", () => {
     ).toEqual({ action: "ignore" })
   })
 
-  test("continues active goals until the continuation limit", () => {
+  test("continues active goals indefinitely regardless of continuation count", () => {
     expect(
       goalContinuationDecision({
         goal: {
@@ -232,44 +232,24 @@ describe("autonomous continuation decisions", () => {
       objective: "finish refactor",
       continuation: 2,
     })
-  })
 
-  test("stops active goals when the continuation limit is reached", () => {
-    const decision = goalContinuationDecision({
-      goal: {
-        objective: "finish refactor",
-        status: "active",
-        tokensUsed: 10,
-        timeUsedSeconds: 2,
-      },
-      continuations: 3,
-      maxContinuations: 3,
-      budgetLimitContinuationSent: false,
+    expect(
+      goalContinuationDecision({
+        goal: {
+          objective: "finish refactor",
+          status: "active",
+          tokensUsed: 10,
+          timeUsedSeconds: 2,
+        },
+        continuations: 3,
+        maxContinuations: 3,
+        budgetLimitContinuationSent: false,
+      }),
+    ).toEqual({
+      action: "continue_active",
+      objective: "finish refactor",
+      continuation: 4,
     })
-
-    expect(decision.action).toBe("stop_active_limit")
-    if (decision.action !== "stop_active_limit") throw new Error("expected stop_active_limit")
-    expect(decision.reason).toBe("stalled")
-    expect(decision.message).toContain("Goal remains active")
-  })
-
-  test("formats non-comparable active goal continuation counts in stop messages", () => {
-    const decision = goalContinuationDecision({
-      goal: {
-        objective: "finish refactor",
-        status: "active",
-        tokensUsed: 10,
-        timeUsedSeconds: 2,
-      },
-      continuations: Number.NaN,
-      maxContinuations: 3,
-      budgetLimitContinuationSent: false,
-    })
-
-    expect(decision.action).toBe("stop_active_limit")
-    if (decision.action !== "stop_active_limit") throw new Error("expected stop_active_limit")
-    expect(decision.message).toContain("an invalid number of auto-continuation(s)")
-    expect(decision.message).not.toContain("NaN")
   })
 
   test("schedules one budget-limited goal wrap-up when budget data exists", () => {

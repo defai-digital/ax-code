@@ -66,11 +66,6 @@ type GoalContinuationDecision =
       timeUsedSeconds: number
     }
   | {
-      action: "stop_active_limit"
-      reason: "stalled"
-      message: string
-    }
-  | {
       action: "stop_budget_limit"
       reason: "stalled"
       message: string
@@ -269,21 +264,11 @@ export function goalContinuationDecision(input: {
   if (!input.goal) return { action: "ignore" }
 
   if (input.goal.status === "active") {
-    const continuation = nextContinuation(input)
-    if (continuation !== undefined) {
-      return {
-        action: "continue_active",
-        objective: input.goal.objective,
-        continuation,
-      }
-    }
-
+    // Goals run until the model marks them complete or blocked — no continuation cap.
     return {
-      action: "stop_active_limit",
-      reason: "stalled",
-      message:
-        `Goal remains active after ${formatDecisionCount(input.continuations)} auto-continuation(s), but the continuation limit was reached. ` +
-        `Resume the session or increase session.max_continuations to continue working toward the goal.`,
+      action: "continue_active",
+      objective: input.goal.objective,
+      continuation: normalizedDecisionCount(input.continuations) + 1,
     }
   }
 
