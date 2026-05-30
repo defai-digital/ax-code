@@ -178,6 +178,9 @@ export const ScheduledTaskTable = sqliteTable(
     status: text().notNull(),
     agent: text(),
     model: text({ mode: "json" }).$type<unknown>(),
+    workflow_template_id: text(),
+    workflow_start_options: text({ mode: "json" }).$type<Record<string, unknown>>(),
+    last_workflow_run_id: text(),
     last_queue_id: text()
       .$type<TaskQueueID>()
       .references(() => TaskQueueTable.id, { onDelete: "set null" }),

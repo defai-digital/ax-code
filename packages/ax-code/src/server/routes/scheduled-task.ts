@@ -137,11 +137,12 @@ export const ScheduledTaskRoutes = lazy(() =>
       "/:scheduledTaskID/run-now",
       describeRoute({
         summary: "Run scheduled task now",
-        description: "Create a server-owned automation queue item from a scheduled task.",
+        description:
+          "Run a scheduled task immediately. Prompt tasks create a server-owned automation queue item; workflow tasks create and start a workflow run.",
         operationId: "scheduledTask.run_now",
         responses: {
           200: {
-            description: "Run-now result with updated scheduled task and created queue item.",
+            description: "Run-now result with the updated scheduled task and either a queue item or workflow run.",
             content: { "application/json": { schema: resolver(ScheduledTask.RunNowResult) } },
           },
           ...errors(400, 404),
@@ -154,7 +155,7 @@ export const ScheduledTaskRoutes = lazy(() =>
       "/run-due",
       describeRoute({
         summary: "Run due scheduled tasks",
-        description: "Create automation queue items for due active scheduled tasks.",
+        description: "Run due active scheduled tasks, creating automation queue items or workflow runs as configured.",
         operationId: "scheduledTask.run_due",
         responses: {
           200: {

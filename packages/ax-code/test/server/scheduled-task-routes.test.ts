@@ -127,6 +127,57 @@ describe("scheduled task routes", () => {
       },
     })
   })
+
+  test("run-now can create workflow runs for workflow scheduled tasks", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
+    process.env.AX_CODE_WORKFLOW_RUNTIME = "1"
+    try {
+      const app = Server.Default()
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const directoryQuery = `directory=${encodeURIComponent(tmp.path)}`
+          const createdResponse = await app.request(`/scheduled-task?${directoryQuery}`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              title: "Daily workflow audit",
+              prompt: "Run the saved workflow template.",
+              schedule: { type: "once", runAt: Date.now() + 86_400_000 },
+              workflowTemplateID: "builtin:noop-dry-run",
+              workflowStartOptions: { enqueueChildren: true },
+            }),
+          })
+          expect(createdResponse.status).toBe(200)
+          const created = (await createdResponse.json()) as { id: string; workflowTemplateID: string }
+          expect(created.workflowTemplateID).toBe("builtin:noop-dry-run")
+
+          const runNowResponse = await app.request(`/scheduled-task/${created.id}/run-now?${directoryQuery}`, {
+            method: "POST",
+          })
+          expect(runNowResponse.status).toBe(200)
+          const runNow = (await runNowResponse.json()) as {
+            task: { id: string; lastWorkflowRunID: string; lastRunAt: number }
+            workflowRun: { id: string; status: string; sourceTemplateID: string }
+            queueItem?: unknown
+          }
+
+          expect(runNow.queueItem).toBeUndefined()
+          expect(runNow.workflowRun).toMatchObject({
+            status: "completed",
+            sourceTemplateID: "builtin:noop-dry-run",
+          })
+          expect(runNow.task.lastWorkflowRunID).toBe(runNow.workflowRun.id)
+          expect(runNow.task.lastRunAt).toBeGreaterThan(0)
+        },
+      })
+    } finally {
+      if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME
+      else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
+    }
+  })
 })
 
 async function waitForValue<T>(read: () => T | undefined | Promise<T | undefined>): Promise<T> {

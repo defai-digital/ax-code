@@ -132,7 +132,10 @@ export type HeadlessScheduledTask = {
   status: HeadlessScheduledTaskStatus
   agent?: string
   model?: unknown
+  workflowTemplateID?: string
+  workflowStartOptions?: Record<string, unknown>
   lastQueueID?: string
+  lastWorkflowRunID?: string
   error?: string
   nextRunAt?: number
   lastRunAt?: number
@@ -148,6 +151,8 @@ export type HeadlessScheduledTaskCreateInput = {
   schedule: HeadlessScheduledTaskSchedule
   agent?: string
   model?: unknown
+  workflowTemplateID?: string
+  workflowStartOptions?: Record<string, unknown>
 }
 
 export type HeadlessScheduledTaskUpdateInput = Partial<HeadlessScheduledTaskCreateInput> & {
@@ -162,7 +167,8 @@ export type HeadlessScheduledTaskListInput = {
 
 export type HeadlessScheduledTaskRunNowResult = {
   task: HeadlessScheduledTask
-  queueItem: HeadlessTaskQueueItem
+  queueItem?: HeadlessTaskQueueItem
+  workflowRun?: WorkflowRunGetResponse
 }
 
 export type HeadlessWorkflowRunListInput = Omit<NonNullable<WorkflowRunListData["query"]>, "directory">

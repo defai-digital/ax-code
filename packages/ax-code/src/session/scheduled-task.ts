@@ -9,12 +9,32 @@ import { Log } from "@/util/log"
 import { ScheduledTaskID } from "./schema"
 import { ScheduledTaskTable } from "./session.sql"
 import { TaskQueue } from "./task-queue"
+import { WorkflowRun as WorkflowRunState, type WorkflowRunDetail } from "@/workflow/state"
+
+type WorkflowTemplateID = import("@/workflow/template").WorkflowTemplate.ID
+type WorkflowStartOptions = import("@/workflow/scheduler").WorkflowScheduler.StartOptions
 
 export namespace ScheduledTask {
   const log = Log.create({ service: "session.scheduled-task" })
 
   export const Status = z.enum(["active", "paused", "disabled"])
   export type Status = z.infer<typeof Status>
+
+  const WorkflowTemplateIDSchema = z.string().min(1).max(120).regex(/^(builtin|user|project):[a-z][a-z0-9-]*$/)
+  const WorkflowStartOptionsSchema = z.object({
+    allowScaleBeyondDefaults: z.boolean().optional(),
+    allowWriteWorkflows: z.boolean().optional(),
+    durableChildren: z.boolean().optional(),
+    enqueueChildren: z.boolean().optional(),
+  })
+  const WorkflowRunSummary = z
+    .object({
+      id: z.string().min(1),
+      status: WorkflowRunState.Status,
+      sourceTemplateID: z.string().optional(),
+      error: z.string().optional(),
+    })
+    .passthrough()
 
   const TimeOfDay = z.string().regex(/^\d{2}:\d{2}$/)
   export const Schedule = z.discriminatedUnion("type", [
@@ -51,7 +71,10 @@ export namespace ScheduledTask {
     status: Status,
     agent: z.string().optional(),
     model: z.unknown().optional(),
+    workflowTemplateID: WorkflowTemplateIDSchema.optional(),
+    workflowStartOptions: WorkflowStartOptionsSchema.optional(),
     lastQueueID: z.string().optional(),
+    lastWorkflowRunID: z.string().optional(),
     error: z.string().optional(),
     nextRunAt: z.number().optional(),
     lastRunAt: z.number().optional(),
@@ -68,6 +91,8 @@ export namespace ScheduledTask {
     schedule: Schedule,
     agent: z.string().optional(),
     model: z.unknown().optional(),
+    workflowTemplateID: WorkflowTemplateIDSchema.optional(),
+    workflowStartOptions: WorkflowStartOptionsSchema.optional(),
   })
   export type CreateInput = z.input<typeof CreateInput>
 
@@ -79,6 +104,8 @@ export namespace ScheduledTask {
     status: Status.optional(),
     agent: z.string().optional(),
     model: z.unknown().optional(),
+    workflowTemplateID: WorkflowTemplateIDSchema.optional(),
+    workflowStartOptions: WorkflowStartOptionsSchema.optional(),
   })
   export type UpdateInput = z.input<typeof UpdateInput>
 
@@ -91,9 +118,12 @@ export namespace ScheduledTask {
 
   export const RunNowResult = z.object({
     task: Info,
-    queueItem: TaskQueue.Info,
+    queueItem: TaskQueue.Info.optional(),
+    workflowRun: WorkflowRunSummary.optional(),
   })
-  export type RunNowResult = z.infer<typeof RunNowResult>
+  export type RunNowResult = Omit<z.infer<typeof RunNowResult>, "workflowRun"> & {
+    workflowRun?: WorkflowRunDetail
+  }
 
   export const Event = {
     Created: BusEvent.define("scheduled.task.created", z.object({ task: Info })),
@@ -132,7 +162,10 @@ export namespace ScheduledTask {
       status: row.status,
       agent: row.agent ?? undefined,
       model: row.model ?? undefined,
+      workflowTemplateID: row.workflow_template_id ?? undefined,
+      workflowStartOptions: row.workflow_start_options ?? undefined,
       lastQueueID: row.last_queue_id ?? undefined,
+      lastWorkflowRunID: row.last_workflow_run_id ?? undefined,
       error: row.error ?? undefined,
       nextRunAt: row.next_run_at ?? undefined,
       lastRunAt: row.last_run_at ?? undefined,
@@ -199,6 +232,8 @@ export namespace ScheduledTask {
           status: "active",
           agent: parsed.agent,
           model: parsed.model,
+          workflow_template_id: parsed.workflowTemplateID,
+          workflow_start_options: parsed.workflowStartOptions,
           next_run_at: nextRunAt(parsed.schedule, now),
           time_created: now,
           time_updated: now,
@@ -240,6 +275,8 @@ export namespace ScheduledTask {
     if (parsed.status !== undefined) updates.status = parsed.status
     if (Object.hasOwn(parsed, "agent")) updates.agent = parsed.agent
     if (Object.hasOwn(parsed, "model")) updates.model = parsed.model
+    if (Object.hasOwn(parsed, "workflowTemplateID")) updates.workflow_template_id = parsed.workflowTemplateID
+    if (Object.hasOwn(parsed, "workflowStartOptions")) updates.workflow_start_options = parsed.workflowStartOptions
 
     const task = Database.use((db) => {
       const row = db
@@ -278,6 +315,7 @@ export namespace ScheduledTask {
     if (current.status === "disabled") {
       throw new HTTPException(409, { message: `Scheduled task ${id} is disabled.` })
     }
+    if (current.workflowTemplateID) return runWorkflowNow(current)
     const queueItem = await TaskQueue.enqueue({
       kind: "automation",
       title: current.title,
@@ -308,6 +346,34 @@ export namespace ScheduledTask {
     })
     publishUpdated(task)
     return { task, queueItem }
+  }
+
+  async function runWorkflowNow(current: Info): Promise<RunNowResult> {
+    const { WorkflowTemplate } = await import("@/workflow/template")
+    const { WorkflowScheduler } = await import("@/workflow/scheduler")
+    const startOptions = WorkflowStartOptionsSchema.parse(current.workflowStartOptions ?? {}) as WorkflowStartOptions
+    const run = await WorkflowTemplate.createRun({
+      templateID: WorkflowTemplateIDSchema.parse(current.workflowTemplateID) as WorkflowTemplateID,
+    })
+    const workflowRun = await WorkflowScheduler.start(run.id, startOptions)
+    const now = Date.now()
+    const task = Database.use((db) => {
+      const row = db
+        .update(ScheduledTaskTable)
+        .set({
+          last_workflow_run_id: workflowRun.id,
+          last_run_at: now,
+          error: null,
+          time_updated: now,
+        })
+        .where(eq(ScheduledTaskTable.id, current.id))
+        .returning()
+        .get()
+      if (!row) throw new NotFoundError({ message: `Scheduled task not found: ${current.id}` })
+      return fromRow(row)
+    })
+    publishUpdated(task)
+    return { task, workflowRun }
   }
 
   export async function runDue(now = Date.now()): Promise<RunNowResult[]> {

@@ -1070,104 +1070,6 @@ export type EventWorktreeFailed = {
   }
 }
 
-export type EventScheduledTaskCreated = {
-  type: "scheduled.task.created"
-  properties: {
-    task: {
-      id: string
-      projectID: string
-      directory: string
-      title: string
-      prompt: string
-      schedule:
-        | {
-            type: "once"
-            runAt: number
-          }
-        | {
-            type: "daily"
-            time: string
-            timezone?: string
-          }
-        | {
-            type: "weekly"
-            day: number
-            time: string
-            timezone?: string
-          }
-        | {
-            type: "cron"
-            expression: string
-            timezone?: string
-          }
-      status: "active" | "paused" | "disabled"
-      agent?: string
-      model?: unknown
-      lastQueueID?: string
-      error?: string
-      nextRunAt?: number
-      lastRunAt?: number
-      time: {
-        created: number
-        updated?: number
-      }
-    }
-  }
-}
-
-export type EventScheduledTaskUpdated = {
-  type: "scheduled.task.updated"
-  properties: {
-    task: {
-      id: string
-      projectID: string
-      directory: string
-      title: string
-      prompt: string
-      schedule:
-        | {
-            type: "once"
-            runAt: number
-          }
-        | {
-            type: "daily"
-            time: string
-            timezone?: string
-          }
-        | {
-            type: "weekly"
-            day: number
-            time: string
-            timezone?: string
-          }
-        | {
-            type: "cron"
-            expression: string
-            timezone?: string
-          }
-      status: "active" | "paused" | "disabled"
-      agent?: string
-      model?: unknown
-      lastQueueID?: string
-      error?: string
-      nextRunAt?: number
-      lastRunAt?: number
-      time: {
-        created: number
-        updated?: number
-      }
-    }
-  }
-}
-
-export type EventScheduledTaskDeleted = {
-  type: "scheduled.task.deleted"
-  properties: {
-    id: string
-    projectID: string
-  }
-}
-
 export type WorkflowRunEventRecord = {
   id: string
   projectID: string
@@ -1444,6 +1346,120 @@ export type EventWorkflowBudgetAppended = {
   }
 }
 
+export type EventScheduledTaskCreated = {
+  type: "scheduled.task.created"
+  properties: {
+    task: {
+      id: string
+      projectID: string
+      directory: string
+      title: string
+      prompt: string
+      schedule:
+        | {
+            type: "once"
+            runAt: number
+          }
+        | {
+            type: "daily"
+            time: string
+            timezone?: string
+          }
+        | {
+            type: "weekly"
+            day: number
+            time: string
+            timezone?: string
+          }
+        | {
+            type: "cron"
+            expression: string
+            timezone?: string
+          }
+      status: "active" | "paused" | "disabled"
+      agent?: string
+      model?: unknown
+      workflowTemplateID?: string
+      workflowStartOptions?: {
+        allowScaleBeyondDefaults?: boolean
+        allowWriteWorkflows?: boolean
+        durableChildren?: boolean
+        enqueueChildren?: boolean
+      }
+      lastQueueID?: string
+      lastWorkflowRunID?: string
+      error?: string
+      nextRunAt?: number
+      lastRunAt?: number
+      time: {
+        created: number
+        updated?: number
+      }
+    }
+  }
+}
+
+export type EventScheduledTaskUpdated = {
+  type: "scheduled.task.updated"
+  properties: {
+    task: {
+      id: string
+      projectID: string
+      directory: string
+      title: string
+      prompt: string
+      schedule:
+        | {
+            type: "once"
+            runAt: number
+          }
+        | {
+            type: "daily"
+            time: string
+            timezone?: string
+          }
+        | {
+            type: "weekly"
+            day: number
+            time: string
+            timezone?: string
+          }
+        | {
+            type: "cron"
+            expression: string
+            timezone?: string
+          }
+      status: "active" | "paused" | "disabled"
+      agent?: string
+      model?: unknown
+      workflowTemplateID?: string
+      workflowStartOptions?: {
+        allowScaleBeyondDefaults?: boolean
+        allowWriteWorkflows?: boolean
+        durableChildren?: boolean
+        enqueueChildren?: boolean
+      }
+      lastQueueID?: string
+      lastWorkflowRunID?: string
+      error?: string
+      nextRunAt?: number
+      lastRunAt?: number
+      time: {
+        created: number
+        updated?: number
+      }
+    }
+  }
+}
+
+export type EventScheduledTaskDeleted = {
+  type: "scheduled.task.deleted"
+  properties: {
+    id: string
+    projectID: string
+  }
+}
+
 export type Event =
   | EventInstallationUpdated
   | EventInstallationUpdateAvailable
@@ -1494,9 +1510,6 @@ export type Event =
   | EventPtyDeleted
   | EventWorktreeReady
   | EventWorktreeFailed
-  | EventScheduledTaskCreated
-  | EventScheduledTaskUpdated
-  | EventScheduledTaskDeleted
   | EventWorkflowRunCreated
   | EventWorkflowRunUpdated
   | EventWorkflowPhaseUpdated
@@ -1504,6 +1517,9 @@ export type Event =
   | EventWorkflowChildUpdated
   | EventWorkflowArtifactWritten
   | EventWorkflowBudgetAppended
+  | EventScheduledTaskCreated
+  | EventScheduledTaskUpdated
+  | EventScheduledTaskDeleted
 
 export type GlobalEvent = {
   directory: string
@@ -4772,7 +4788,7 @@ export type TaskQueueSendNowError = TaskQueueSendNowErrors[keyof TaskQueueSendNo
 
 export type TaskQueueSendNowResponses = {
   /**
-   * Prioritized task queue item.
+   * Prioritized or started task queue item.
    */
   200: {
     id: string
@@ -4941,7 +4957,15 @@ export type ScheduledTaskListResponses = {
     status: "active" | "paused" | "disabled"
     agent?: string
     model?: unknown
+    workflowTemplateID?: string
+    workflowStartOptions?: {
+      allowScaleBeyondDefaults?: boolean
+      allowWriteWorkflows?: boolean
+      durableChildren?: boolean
+      enqueueChildren?: boolean
+    }
     lastQueueID?: string
+    lastWorkflowRunID?: string
     error?: string
     nextRunAt?: number
     lastRunAt?: number
@@ -4981,6 +5005,13 @@ export type ScheduledTaskCreateData = {
         }
     agent?: string
     model?: unknown
+    workflowTemplateID?: string
+    workflowStartOptions?: {
+      allowScaleBeyondDefaults?: boolean
+      allowWriteWorkflows?: boolean
+      durableChildren?: boolean
+      enqueueChildren?: boolean
+    }
   }
   path?: never
   query?: {
@@ -5036,7 +5067,15 @@ export type ScheduledTaskCreateResponses = {
     status: "active" | "paused" | "disabled"
     agent?: string
     model?: unknown
+    workflowTemplateID?: string
+    workflowStartOptions?: {
+      allowScaleBeyondDefaults?: boolean
+      allowWriteWorkflows?: boolean
+      durableChildren?: boolean
+      enqueueChildren?: boolean
+    }
     lastQueueID?: string
+    lastWorkflowRunID?: string
     error?: string
     nextRunAt?: number
     lastRunAt?: number
@@ -5140,7 +5179,15 @@ export type ScheduledTaskGetResponses = {
     status: "active" | "paused" | "disabled"
     agent?: string
     model?: unknown
+    workflowTemplateID?: string
+    workflowStartOptions?: {
+      allowScaleBeyondDefaults?: boolean
+      allowWriteWorkflows?: boolean
+      durableChildren?: boolean
+      enqueueChildren?: boolean
+    }
     lastQueueID?: string
+    lastWorkflowRunID?: string
     error?: string
     nextRunAt?: number
     lastRunAt?: number
@@ -5181,6 +5228,13 @@ export type ScheduledTaskUpdateData = {
     status?: "active" | "paused" | "disabled"
     agent?: string
     model?: unknown
+    workflowTemplateID?: string
+    workflowStartOptions?: {
+      allowScaleBeyondDefaults?: boolean
+      allowWriteWorkflows?: boolean
+      durableChildren?: boolean
+      enqueueChildren?: boolean
+    }
   }
   path: {
     scheduledTaskID: string
@@ -5238,7 +5292,15 @@ export type ScheduledTaskUpdateResponses = {
     status: "active" | "paused" | "disabled"
     agent?: string
     model?: unknown
+    workflowTemplateID?: string
+    workflowStartOptions?: {
+      allowScaleBeyondDefaults?: boolean
+      allowWriteWorkflows?: boolean
+      durableChildren?: boolean
+      enqueueChildren?: boolean
+    }
     lastQueueID?: string
+    lastWorkflowRunID?: string
     error?: string
     nextRunAt?: number
     lastRunAt?: number
@@ -5309,7 +5371,15 @@ export type ScheduledTaskPauseResponses = {
     status: "active" | "paused" | "disabled"
     agent?: string
     model?: unknown
+    workflowTemplateID?: string
+    workflowStartOptions?: {
+      allowScaleBeyondDefaults?: boolean
+      allowWriteWorkflows?: boolean
+      durableChildren?: boolean
+      enqueueChildren?: boolean
+    }
     lastQueueID?: string
+    lastWorkflowRunID?: string
     error?: string
     nextRunAt?: number
     lastRunAt?: number
@@ -5380,7 +5450,15 @@ export type ScheduledTaskResumeResponses = {
     status: "active" | "paused" | "disabled"
     agent?: string
     model?: unknown
+    workflowTemplateID?: string
+    workflowStartOptions?: {
+      allowScaleBeyondDefaults?: boolean
+      allowWriteWorkflows?: boolean
+      durableChildren?: boolean
+      enqueueChildren?: boolean
+    }
     lastQueueID?: string
+    lastWorkflowRunID?: string
     error?: string
     nextRunAt?: number
     lastRunAt?: number
@@ -5419,7 +5497,7 @@ export type ScheduledTaskRunNowError = ScheduledTaskRunNowErrors[keyof Scheduled
 
 export type ScheduledTaskRunNowResponses = {
   /**
-   * Run-now result with updated scheduled task and created queue item.
+   * Run-now result with the updated scheduled task and either a queue item or workflow run.
    */
   200: {
     task: {
@@ -5452,7 +5530,15 @@ export type ScheduledTaskRunNowResponses = {
       status: "active" | "paused" | "disabled"
       agent?: string
       model?: unknown
+      workflowTemplateID?: string
+      workflowStartOptions?: {
+        allowScaleBeyondDefaults?: boolean
+        allowWriteWorkflows?: boolean
+        durableChildren?: boolean
+        enqueueChildren?: boolean
+      }
       lastQueueID?: string
+      lastWorkflowRunID?: string
       error?: string
       nextRunAt?: number
       lastRunAt?: number
@@ -5461,7 +5547,7 @@ export type ScheduledTaskRunNowResponses = {
         updated?: number
       }
     }
-    queueItem: {
+    queueItem?: {
       id: string
       projectID: string
       directory: string
@@ -5495,6 +5581,24 @@ export type ScheduledTaskRunNowResponses = {
         started?: number
         completed?: number
       }
+    }
+    workflowRun?: {
+      id: string
+      status: "queued" | "running" | "blocked" | "paused" | "failed" | "completed" | "cancelled"
+      sourceTemplateID?: string
+      error?: string
+      [key: string]:
+        | unknown
+        | string
+        | "queued"
+        | "running"
+        | "blocked"
+        | "paused"
+        | "failed"
+        | "completed"
+        | "cancelled"
+        | string
+        | undefined
     }
   }
 }
@@ -5559,7 +5663,15 @@ export type ScheduledTaskRunDueResponses = {
       status: "active" | "paused" | "disabled"
       agent?: string
       model?: unknown
+      workflowTemplateID?: string
+      workflowStartOptions?: {
+        allowScaleBeyondDefaults?: boolean
+        allowWriteWorkflows?: boolean
+        durableChildren?: boolean
+        enqueueChildren?: boolean
+      }
       lastQueueID?: string
+      lastWorkflowRunID?: string
       error?: string
       nextRunAt?: number
       lastRunAt?: number
@@ -5568,7 +5680,7 @@ export type ScheduledTaskRunDueResponses = {
         updated?: number
       }
     }
-    queueItem: {
+    queueItem?: {
       id: string
       projectID: string
       directory: string
@@ -5602,6 +5714,24 @@ export type ScheduledTaskRunDueResponses = {
         started?: number
         completed?: number
       }
+    }
+    workflowRun?: {
+      id: string
+      status: "queued" | "running" | "blocked" | "paused" | "failed" | "completed" | "cancelled"
+      sourceTemplateID?: string
+      error?: string
+      [key: string]:
+        | unknown
+        | string
+        | "queued"
+        | "running"
+        | "blocked"
+        | "paused"
+        | "failed"
+        | "completed"
+        | "cancelled"
+        | string
+        | undefined
     }
   }>
 }

@@ -1564,7 +1564,7 @@ export class TaskQueue extends HeyApiClient {
   /**
    * Send task now
    *
-   * Move a task queue item to the front of the queue and mark it queued.
+   * Move a task queue item to the front of the queue. Executable prompt, command, shell, or workflow subagent items start immediately when the target session is idle; non-executable items remain queued.
    */
   public sendNow<ThrowOnError extends boolean = false>(
     parameters: {
@@ -1697,6 +1697,13 @@ export class ScheduledTask extends HeyApiClient {
           }
       agent?: string
       model?: unknown
+      workflowTemplateID?: string
+      workflowStartOptions?: {
+        allowScaleBeyondDefaults?: boolean
+        allowWriteWorkflows?: boolean
+        durableChildren?: boolean
+        enqueueChildren?: boolean
+      }
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -1711,6 +1718,8 @@ export class ScheduledTask extends HeyApiClient {
             { in: "body", key: "schedule" },
             { in: "body", key: "agent" },
             { in: "body", key: "model" },
+            { in: "body", key: "workflowTemplateID" },
+            { in: "body", key: "workflowStartOptions" },
           ],
         },
       ],
@@ -1828,6 +1837,13 @@ export class ScheduledTask extends HeyApiClient {
       status?: "active" | "paused" | "disabled"
       agent?: string
       model?: unknown
+      workflowTemplateID?: string
+      workflowStartOptions?: {
+        allowScaleBeyondDefaults?: boolean
+        allowWriteWorkflows?: boolean
+        durableChildren?: boolean
+        enqueueChildren?: boolean
+      }
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -1844,6 +1860,8 @@ export class ScheduledTask extends HeyApiClient {
             { in: "body", key: "status" },
             { in: "body", key: "agent" },
             { in: "body", key: "model" },
+            { in: "body", key: "workflowTemplateID" },
+            { in: "body", key: "workflowStartOptions" },
           ],
         },
       ],
@@ -1927,7 +1945,7 @@ export class ScheduledTask extends HeyApiClient {
   /**
    * Run scheduled task now
    *
-   * Create a server-owned automation queue item from a scheduled task.
+   * Run a scheduled task immediately. Prompt tasks create a server-owned automation queue item; workflow tasks create and start a workflow run.
    */
   public runNow<ThrowOnError extends boolean = false>(
     parameters: {
@@ -1959,7 +1977,7 @@ export class ScheduledTask extends HeyApiClient {
   /**
    * Run due scheduled tasks
    *
-   * Create automation queue items for due active scheduled tasks.
+   * Run due active scheduled tasks, creating automation queue items or workflow runs as configured.
    */
   public runDue<ThrowOnError extends boolean = false>(
     parameters?: {

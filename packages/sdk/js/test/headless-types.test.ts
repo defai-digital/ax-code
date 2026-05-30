@@ -246,6 +246,8 @@ describe("headless SDK types", () => {
       title: "Daily review",
       prompt: "Review branch",
       schedule: { type: "daily", time: "09:00" },
+      workflowTemplateID: "builtin:noop-dry-run",
+      workflowStartOptions: { enqueueChildren: true },
     })
     await client.scheduledTask.runNow("sch_live")
 
@@ -258,6 +260,8 @@ describe("headless SDK types", () => {
         title: "Daily review",
         prompt: "Review branch",
         schedule: { type: "daily", time: "09:00" },
+        workflowTemplateID: "builtin:noop-dry-run",
+        workflowStartOptions: { enqueueChildren: true },
       }),
     )
   })
