@@ -42,6 +42,8 @@ curl -fsSL https://raw.githubusercontent.com/defai-digital/ax-code/main/install 
 powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/defai-digital/ax-code/main/install.ps1 | iex"
 ```
 
+> Supported install paths are Homebrew (macOS), the GitHub release installer (Linux/CI), and the GitHub release installer for Windows PowerShell. npm packages are no longer a supported channel. Use `--version <release>` on Linux/CI or `-Version <release>` on Windows to pin a specific version. See [Installation and Runtime Channels](docs/install-runtime.md) for the full matrix.
+
 **2. Run**
 
 ```bash
@@ -74,28 +76,6 @@ curl -fsSL https://raw.githubusercontent.com/defai-digital/ax-code/main/install 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/defai-digital/ax-code/main/install.ps1 | iex"
 ```
-
-### Distribution note
-
-Supported user install paths are Homebrew, the GitHub release installer for Linux/CI, and the GitHub release installer for Windows PowerShell. For security-sensitive environments, download and inspect the installer before running it:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/defai-digital/ax-code/main/install -o ax-code-install
-less ax-code-install
-bash ax-code-install
-```
-
-```powershell
-irm https://raw.githubusercontent.com/defai-digital/ax-code/main/install.ps1 -OutFile ax-code-install.ps1
-Get-Content .\ax-code-install.ps1
-.\ax-code-install.ps1
-```
-
-Use `--version <release>` on Linux/CI or `-Version <release>` on Windows when the installed version must be pinned.
-
-npm packages, including the former source compatibility package, are no longer supported as install or upgrade channels.
-
-See [Installation and Runtime Channels](docs/install-runtime.md) for the full package, runtime-label, and local launcher matrix.
 
 ### From Source (contributors)
 
