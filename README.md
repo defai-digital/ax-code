@@ -27,14 +27,21 @@ Built by [DEFAI Digital](https://github.com/defai-digital).
 
 ### Install
 
+macOS:
+
 ```bash
-# Homebrew (macOS / Linux package-manager install)
 brew install defai-digital/ax-code/ax-code
+```
 
-# GitHub release installer (Linux / CI)
+Linux / CI:
+
+```bash
 curl -fsSL https://raw.githubusercontent.com/defai-digital/ax-code/main/install | bash
+```
 
-# GitHub release installer (Windows PowerShell)
+Windows PowerShell:
+
+```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/defai-digital/ax-code/main/install.ps1 | iex"
 ```
 
