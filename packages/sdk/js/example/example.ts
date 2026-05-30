@@ -1,4 +1,5 @@
-import { createOpencodeClient, createOpencodeServer } from "@ax-code/sdk"
+import { createOpencodeClient } from "@ax-code/sdk/v2/client"
+import { createOpencodeServer } from "@ax-code/sdk/v2/server"
 import { pathToFileURL } from "bun"
 
 const server = await createOpencodeServer()

@@ -5,7 +5,7 @@ import * as sdk from "../src/index"
 import type { Project } from "../src/index"
 
 describe("@ax-code/sdk top-level exports", () => {
-  test("package manifest exposes headless and gRPC SDK surfaces only", () => {
+  test("package manifest exposes supported SDK surfaces from published dist files", () => {
     const packageJson = JSON.parse(readFileSync(resolve(import.meta.dir, "../package.json"), "utf8")) as {
       exports: Record<string, string>
     }
@@ -22,13 +22,18 @@ describe("@ax-code/sdk top-level exports", () => {
       "./headless/client",
       "./headless/event",
       "./headless/projection",
+      "./v2",
+      "./v2/client",
+      "./v2/gen/client",
+      "./v2/server",
     ])
+    for (const [subpath, target] of Object.entries(packageJson.exports)) {
+      expect(target.startsWith("./dist/")).toBe(true)
+      expect(subpath.startsWith("./v2") || !target.includes("/v2/")).toBe(true)
+    }
     expect(publicSubpaths).not.toContain("./http")
     expect(publicSubpaths).not.toContain("./client")
     expect(publicSubpaths).not.toContain("./server")
-    expect(publicSubpaths).not.toContain("./v2")
-    expect(publicSubpaths).not.toContain("./v2/client")
-    expect(publicSubpaths).not.toContain("./v2/server")
   })
 
   test("does not expose HTTP client or server helpers as runtime values", () => {

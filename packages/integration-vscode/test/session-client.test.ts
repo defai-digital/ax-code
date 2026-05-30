@@ -9,7 +9,7 @@ mock.module("vscode", () => ({
   },
 }))
 
-mock.module("@ax-code/sdk", () => ({
+mock.module("@ax-code/sdk/v2/client", () => ({
   createAxCodeClient: (config: any) => clientFactory(config),
 }))
 

@@ -20,7 +20,8 @@ Use the SDK when you want AX Code's runtime inside your own TypeScript or JavaSc
 | Editor-native workflow                         | VS Code integration                 | Uses the installed CLI/runtime while staying inside the editor                               |
 
 The JavaScript package no longer exposes first-party HTTP client/server subpaths. HTTP/OpenAPI remains an internal
-runtime, fallback, and diagnostics layer behind the headless and gRPC SDKs.
+runtime, fallback, and diagnostics layer behind the headless and gRPC SDKs. The legacy `@ax-code/sdk/v2` subpaths remain
+available for AX Code runtime compatibility, but new app integrations should use headless or gRPC.
 
 ## Install
 

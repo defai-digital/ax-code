@@ -11,16 +11,20 @@
     "test": "bun test"
   },
   "exports": {
-    ".": "./src/index.ts",
-    "./testing": "./src/testing/index.ts",
-    "./programmatic": "./src/programmatic/index.ts",
-    "./grpc": "./src/grpc.ts",
-    "./grpc/node": "./src/grpc-node.ts",
+    ".": "./dist/index.js",
+    "./testing": "./dist/testing/index.js",
+    "./programmatic": "./dist/programmatic/index.js",
+    "./grpc": "./dist/grpc.js",
+    "./grpc/node": "./dist/grpc-node.js",
     "./proto/ax_code/v1/headless.proto": "./dist/proto/ax_code/v1/headless.proto",
-    "./headless": "./src/headless.ts",
-    "./headless/client": "./src/headless/client.ts",
-    "./headless/event": "./src/headless/event.ts",
-    "./headless/projection": "./src/headless/projection.ts"
+    "./headless": "./dist/headless.js",
+    "./headless/client": "./dist/headless/client.js",
+    "./headless/event": "./dist/headless/event.js",
+    "./headless/projection": "./dist/headless/projection.js",
+    "./v2": "./dist/v2/index.js",
+    "./v2/client": "./dist/v2/client.js",
+    "./v2/gen/client": "./dist/v2/gen/client/index.js",
+    "./v2/server": "./dist/v2/server.js"
   },
   "files": [
     "dist"

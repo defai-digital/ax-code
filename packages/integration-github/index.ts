@@ -11,7 +11,7 @@ import * as core from "@actions/core"
 import * as github from "@actions/github"
 import type { Context as GitHubContext } from "@actions/github/lib/context"
 import type { IssueCommentEvent, PullRequestReviewCommentEvent } from "@octokit/webhooks-types"
-import { createAxCodeClient } from "@ax-code/sdk"
+import { createAxCodeClient } from "@ax-code/sdk/v2/client"
 import { spawn } from "node:child_process"
 import { setTimeout as sleep } from "node:timers/promises"
 

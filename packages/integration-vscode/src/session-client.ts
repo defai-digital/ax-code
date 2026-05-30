@@ -1,5 +1,5 @@
 import * as vscode from "vscode"
-import { createAxCodeClient, type AxCodeClient } from "@ax-code/sdk"
+import { createAxCodeClient, type AxCodeClient } from "@ax-code/sdk/v2/client"
 import { ServerError } from "./errors"
 import { renderMarkdown } from "./markdown"
 import type { AxCodeServer } from "./server-lifecycle"

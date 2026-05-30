@@ -52,8 +52,9 @@ SDK-managed backend helpers are loopback-only by default. `startHeadlessBackend(
 service integration; first-party desktop GUI shells should prefer `@ax-code/sdk/grpc` or an in-process SDK boundary.
 
 HTTP runtime helpers are no longer public JavaScript SDK subpaths. The package still contains generated client internals
-because `@ax-code/sdk/headless` and the gRPC HTTP fallback use them, but external integrations should use headless,
-gRPC, or generated clients from the OpenAPI snapshot instead of importing HTTP runtime values from `@ax-code/sdk`.
+because `@ax-code/sdk/headless`, the gRPC HTTP fallback, and legacy AX Code runtime code use them, but external
+integrations should use headless, gRPC, or generated clients from the OpenAPI snapshot instead of importing HTTP runtime
+values from `@ax-code/sdk`.
 
 Check server health:
 
