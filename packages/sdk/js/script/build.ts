@@ -63,6 +63,7 @@ try {
   await $`bun prettier --write src/v2`
   await $`rm -rf dist`
   await $`bun tsc`
+  await fs.cp(path.resolve(dir, "../proto"), path.join(dir, "dist", "proto"), { recursive: true })
   await $`rm openapi.json`
 } finally {
   await fs.rm(path.join(dir, ".tmp"), { recursive: true, force: true })

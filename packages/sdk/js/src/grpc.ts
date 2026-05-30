@@ -16,6 +16,7 @@ import type {
 
 export const AX_CODE_GRPC_SERVICE = "axcode.v1.AxCodeHeadless"
 export const AX_CODE_GRPC_PROTO_PATH = "ax_code/v1/headless.proto"
+export const AX_CODE_GRPC_PROTO_PACKAGE_PATH = `proto/${AX_CODE_GRPC_PROTO_PATH}`
 
 export const AX_CODE_GRPC_METHOD = {
   Health: `/${AX_CODE_GRPC_SERVICE}/Health`,
@@ -1135,6 +1136,14 @@ export function createAxCodeGrpcClientFromHttp(input: AxCodeGrpcHttpBridgeOption
 }
 
 export const createAxCodeGrpcHeadlessClient = createAxCodeGrpcClient
+
+export function resolveAxCodeGrpcProtoUrl(baseUrl: string | URL = import.meta.url): URL {
+  const moduleUrl = typeof baseUrl === "string" ? new URL(baseUrl) : baseUrl
+  const relativePath = moduleUrl.pathname.includes("/dist/")
+    ? `./${AX_CODE_GRPC_PROTO_PACKAGE_PATH}`
+    : `../../${AX_CODE_GRPC_PROTO_PACKAGE_PATH}`
+  return new URL(relativePath, moduleUrl)
+}
 
 async function handleHttpBridgeUnary(
   client: HeadlessHttpClient,

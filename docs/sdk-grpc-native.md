@@ -28,6 +28,8 @@ The transport is not the dominant latency source for normal agent turns. LLM cal
 ## Contract Shape
 
 The language-neutral contract lives at [`packages/sdk/proto/ax_code/v1/headless.proto`](../packages/sdk/proto/ax_code/v1/headless.proto).
+Published packages also include it at `@ax-code/sdk/proto/ax_code/v1/headless.proto` for native hosts that generate
+clients from the installed SDK package.
 
 The TypeScript facade lives at `@ax-code/sdk/grpc` and covers:
 
@@ -58,7 +60,11 @@ Use the HTTP bridge while the native gRPC server is being implemented:
 
 ```ts
 import { startHeadlessBackend } from "@ax-code/sdk/headless"
-import { createAxCodeGrpcClientFromHttp, createAxCodeGrpcClientFromNativeBridge } from "@ax-code/sdk/grpc"
+import {
+  createAxCodeGrpcClientFromHttp,
+  createAxCodeGrpcClientFromNativeBridge,
+  resolveAxCodeGrpcProtoUrl,
+} from "@ax-code/sdk/grpc"
 
 const backend = await startHeadlessBackend({ directory: "/workspace/app" })
 try {
@@ -77,6 +83,7 @@ try {
     include: { sessions: true, providers: true, providerList: true, path: true, vcs: true },
   })
   const terminal = (await client.pty.create({ title: "GUI shell" })) as { id: string }
+  const protoUrl = resolveAxCodeGrpcProtoUrl()
 
   await client.sendPrompt((session as { id: string }).id, {
     parts: [{ type: "text", text: "Review this workspace" }],

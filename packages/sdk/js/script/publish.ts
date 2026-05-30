@@ -15,7 +15,7 @@ function transformExports(exports: Record<string, string | object>) {
   for (const [key, value] of Object.entries(exports)) {
     if (typeof value === "object" && value !== null) {
       transformExports(value as Record<string, string | object>)
-    } else if (typeof value === "string") {
+    } else if (typeof value === "string" && value.endsWith(".ts")) {
       const file = value.replace("./src/", "./dist/").replace(".ts", "")
       exports[key] = {
         import: file + ".js",
