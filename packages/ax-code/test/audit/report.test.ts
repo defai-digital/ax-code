@@ -1,12 +1,39 @@
 import { describe, expect, test } from "bun:test"
+
 import { AuditReport } from "../../src/audit/report"
+import type { VerificationEnvelope } from "../../src/quality/verification-envelope"
 import { Instance } from "../../src/project/instance"
-import { Recorder } from "../../src/replay/recorder"
 import { EventQuery } from "../../src/replay/query"
+import { Recorder } from "../../src/replay/recorder"
 import { Session } from "../../src/session"
 import { tmpdir } from "../fixture/fixture"
 
-describe("audit report routing", () => {
+function envelope(input: {
+  sessionID: string
+  name: string
+  type: VerificationEnvelope["result"]["type"]
+  passed: boolean
+}): VerificationEnvelope {
+  return {
+    schemaVersion: 1,
+    workflow: "qa",
+    scope: { kind: "workspace" },
+    command: { runner: input.name, argv: [input.name], cwd: "/tmp/work" },
+    result: {
+      name: input.name,
+      type: input.type,
+      passed: input.passed,
+      status: input.passed ? "passed" : "failed",
+      issues: [],
+      duration: 0,
+    },
+    structuredFailures: [],
+    artifactRefs: [],
+    source: { tool: "verify_project", version: "4.x.x", runId: input.sessionID },
+  }
+}
+
+describe("AuditReport.generate", () => {
   test("shows delegate and switch route entries distinctly", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
@@ -52,6 +79,76 @@ describe("audit report routing", () => {
         expect(report).toContain("switch `build` -> `security` (0.88) [security, scan]")
 
         EventQuery.deleteBySession(sid)
+      },
+    })
+  })
+
+  test("does not infer validation pass or fail from raw bash status", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ title: "Audit report bash status" })
+        Recorder.begin(session.id)
+        Recorder.emit({
+          type: "tool.call",
+          sessionID: session.id,
+          tool: "bash",
+          callID: "call-test",
+          input: { command: "bun test" },
+        })
+        Recorder.emit({
+          type: "tool.result",
+          sessionID: session.id,
+          tool: "bash",
+          callID: "call-test",
+          status: "completed",
+          output: "0 passed, 1 failed",
+          durationMs: 10,
+        })
+        Recorder.end(session.id)
+        await new Promise((resolve) => setTimeout(resolve, 50))
+
+        const report = await AuditReport.generate(session.id)
+        expect(report).toContain("| 1 |")
+        expect(report).not.toContain("## Validation")
+        expect(report).not.toContain("**PASS:** bun test")
+
+        EventQuery.deleteBySession(session.id)
+      },
+    })
+  })
+
+  test("renders validation from structured verification envelopes", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ title: "Audit report verification envelopes" })
+        Recorder.begin(session.id)
+        Recorder.emit({
+          type: "tool.result",
+          sessionID: session.id,
+          tool: "verify_project",
+          callID: "call-verify",
+          status: "completed",
+          durationMs: 10,
+          metadata: {
+            verificationEnvelopes: [
+              envelope({ sessionID: session.id, name: "typecheck", type: "typecheck", passed: true }),
+              envelope({ sessionID: session.id, name: "tests", type: "test", passed: false }),
+            ],
+          },
+        })
+        Recorder.end(session.id)
+        await new Promise((resolve) => setTimeout(resolve, 50))
+
+        const report = await AuditReport.generate(session.id)
+        expect(report).toContain("## Validation")
+        expect(report).toContain("- **PASS:** typecheck: typecheck")
+        expect(report).toContain("- **FAIL:** tests: tests")
+
+        EventQuery.deleteBySession(session.id)
       },
     })
   })

@@ -2,6 +2,8 @@ import { EventQuery } from "../replay/query"
 import type { ReplayEvent } from "../replay/event"
 import { Session } from "../session"
 import type { SessionID } from "../session/schema"
+import { SessionVerifications } from "../session/verifications"
+import type { VerificationEnvelope } from "../quality/verification-envelope"
 import { Risk } from "../risk/score"
 import path from "path"
 
@@ -138,6 +140,11 @@ function formatResult(event: Extract<ReplayEvent, { type: "tool.result" }>): str
   return text ? `ERR: ${text}` : "ERR"
 }
 
+function formatVerificationCommand(envelope: VerificationEnvelope): string {
+  const command = envelope.command.argv.length > 0 ? envelope.command.argv.join(" ") : envelope.command.runner
+  return `${envelope.result.name}: ${command}`
+}
+
 export namespace AuditReport {
   export async function generate(sessionID: SessionID): Promise<string> {
     const info = await Session.get(sessionID)
@@ -181,7 +188,6 @@ export namespace AuditReport {
     let totalInput = 0
     let totalOutput = 0
     let totalReasoning = 0
-    const validations: Array<{ command: string; passed: boolean }> = []
     const routes: Array<{
       time: number
       from: string
@@ -231,16 +237,6 @@ export namespace AuditReport {
               result: formatResult(event),
               duration: formatDuration(event.durationMs),
             })
-            // Check for validation commands
-            if (call.tool === "bash") {
-              const cmd = call.target.toLowerCase()
-              if (/\b(bun test|npm test|vitest|jest|typecheck|tsc\b|eslint|biome check|lint)/.test(cmd)) {
-                validations.push({
-                  command: call.target,
-                  passed: event.status === "completed",
-                })
-              }
-            }
             pending.delete(event.callID)
           }
           break
@@ -265,6 +261,14 @@ export namespace AuditReport {
         duration: "-",
       })
     }
+
+    const validations = SessionVerifications.loadRunsWithIds(sessionID).flatMap((run) => {
+      const policyFailed = SessionVerifications.runPolicyFailed(run)
+      return run.envelopes.map(({ envelope }) => ({
+        command: formatVerificationCommand(envelope),
+        passed: envelope.result.passed && !policyFailed,
+      }))
+    })
 
     // Build markdown
     const lines: string[] = []
