@@ -12,6 +12,7 @@ export namespace WorkflowRoutineTrigger {
     .max(160)
     .regex(/^workflow\/[a-z][a-z0-9-/]*$/, "routine route must start with workflow/ and use kebab-case segments")
   const Schedule = z.string().trim().min(1).max(160)
+  const ScheduledTaskStatus = z.enum(["active", "paused", "disabled"])
 
   export const Info = z.object({
     route: z.string().min(1),
@@ -24,6 +25,10 @@ export namespace WorkflowRoutineTrigger {
     schedule: z.string().min(1).optional(),
     timezone: z.string().min(1).optional(),
     webhookEvent: z.string().min(1).optional(),
+    scheduledTaskID: z.string().min(1).optional(),
+    scheduledTaskStatus: ScheduledTaskStatus.optional(),
+    nextRunAt: z.number().int().positive().optional(),
+    lastWorkflowRunID: z.string().min(1).optional(),
     securityGate: z.enum(["local-only", "required"]),
   })
   export type Info = z.infer<typeof Info>
@@ -69,8 +74,9 @@ export namespace WorkflowRoutineTrigger {
 
   export async function list(): Promise<Info[]> {
     const templates = await WorkflowTemplate.list()
+    const scheduledTasks = await scheduledTasksByTemplateID()
     return templates
-      .map(routineInfo)
+      .map((template) => routineInfo(template, scheduledTasks.get(template.id)))
       .filter((routine): routine is Info => !!routine)
       .sort((a, b) => a.route.localeCompare(b.route) || a.templateID.localeCompare(b.templateID))
   }
@@ -108,7 +114,14 @@ export namespace WorkflowRoutineTrigger {
         },
       },
     })
-    const routine = routineInfo(saved)
+    const scheduledTask = await maybeSyncScheduledTask({
+      template: saved,
+      route,
+      schedule: parsed.schedule,
+      timezone: parsed.timezone,
+      enabled: parsed.enabled,
+    })
+    const routine = routineInfo(saved, scheduledTask)
     if (!routine) throw new WorkflowRoutineNotFoundError(route)
     return routine
   }
@@ -144,7 +157,7 @@ export namespace WorkflowRoutineTrigger {
     throw new WorkflowRoutineNotFoundError(route)
   }
 
-  function routineInfo(template: WorkflowTemplate.Info): Info | undefined {
+  function routineInfo(template: WorkflowTemplate.Info, scheduledTask?: ScheduledTaskInfo): Info | undefined {
     const routine = template.spec.routine
     if (!routine || routine.mode === "manual") return undefined
     const route = routine.apiRoute ?? `workflow/${template.spec.id}`
@@ -159,8 +172,75 @@ export namespace WorkflowRoutineTrigger {
       schedule: routine.schedule,
       timezone: routine.timezone,
       webhookEvent: routine.webhookEvent,
+      scheduledTaskID: scheduledTask?.id,
+      scheduledTaskStatus: scheduledTask?.status,
+      nextRunAt: scheduledTask?.nextRunAt,
+      lastWorkflowRunID: scheduledTask?.lastWorkflowRunID,
       securityGate: routine.securityGate,
     })
+  }
+
+  type ScheduledTaskInfo = {
+    id: string
+    workflowTemplateID?: string
+    status: z.infer<typeof ScheduledTaskStatus>
+    nextRunAt?: number
+    lastWorkflowRunID?: string
+  }
+
+  async function maybeSyncScheduledTask(input: {
+    template: WorkflowTemplate.Info
+    route: string
+    schedule?: string
+    timezone?: string
+    enabled: boolean
+  }): Promise<ScheduledTaskInfo | undefined> {
+    if (input.template.spec.routine?.mode !== "scheduled") return undefined
+    const { ScheduledTask } = await import("../session/scheduled-task")
+    const schedule = ScheduledTask.Schedule.parse({
+      type: "cron",
+      expression: input.schedule,
+      timezone: input.timezone,
+    })
+    if (ScheduledTask.nextRunAt(schedule) === undefined) throw new WorkflowRoutineScheduleError(input.route)
+    const active = input.enabled && input.template.trust === "trusted"
+    const existing = (await ScheduledTask.list()).find((task) => task.workflowTemplateID === input.template.id)
+    if (existing) {
+      return ScheduledTask.update({
+        id: existing.id,
+        title: `Workflow: ${input.template.name}`,
+        prompt: `Run scheduled workflow routine ${input.route}.`,
+        schedule,
+        status: active ? "active" : "paused",
+        workflowTemplateID: input.template.id,
+        workflowStartOptions: {
+          durableChildren: true,
+          enqueueChildren: true,
+        },
+      })
+    }
+    if (!active) return undefined
+    return ScheduledTask.create({
+      title: `Workflow: ${input.template.name}`,
+      prompt: `Run scheduled workflow routine ${input.route}.`,
+      schedule,
+      workflowTemplateID: input.template.id,
+      workflowStartOptions: {
+        durableChildren: true,
+        enqueueChildren: true,
+      },
+    })
+  }
+
+  async function scheduledTasksByTemplateID(): Promise<Map<WorkflowTemplate.ID, ScheduledTaskInfo>> {
+    const { ScheduledTask } = await import("../session/scheduled-task")
+    const tasks = await ScheduledTask.list()
+    const result = new Map<WorkflowTemplate.ID, ScheduledTaskInfo>()
+    for (const task of tasks) {
+      if (!task.workflowTemplateID || result.has(task.workflowTemplateID as WorkflowTemplate.ID)) continue
+      result.set(task.workflowTemplateID as WorkflowTemplate.ID, task)
+    }
+    return result
   }
 }
 
@@ -175,5 +255,12 @@ export class WorkflowRoutineDisabledError extends Error {
   constructor(route: string) {
     super(`Workflow routine is not enabled as a trusted local API routine: ${route}`)
     this.name = "WorkflowRoutineDisabledError"
+  }
+}
+
+export class WorkflowRoutineScheduleError extends Error {
+  constructor(route: string) {
+    super(`Workflow routine schedule cannot produce a next run time: ${route}`)
+    this.name = "WorkflowRoutineScheduleError"
   }
 }

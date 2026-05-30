@@ -610,7 +610,8 @@ describe("workflow routes", () => {
         }),
       })
       expect(createResponse.status).toBe(200)
-      expect(await createResponse.json()).toMatchObject({
+      const created = (await createResponse.json()) as { scheduledTaskID?: string; nextRunAt?: number }
+      expect(created).toMatchObject({
         route: "workflow/noop-dry-run",
         templateID: "project:noop-dry-run",
         trust: "trusted",
@@ -618,7 +619,10 @@ describe("workflow routes", () => {
         mode: "scheduled",
         schedule: "0 9 * * *",
         timezone: "America/Toronto",
+        scheduledTaskStatus: "active",
       })
+      expect(created.scheduledTaskID).toBeString()
+      expect(created.nextRunAt).toBeGreaterThan(0)
 
       const listResponse = await app.request(`/workflow-routines?${directoryQuery}`)
       expect(listResponse.status).toBe(200)
@@ -628,6 +632,7 @@ describe("workflow routes", () => {
           templateID: "project:noop-dry-run",
           mode: "scheduled",
           schedule: "0 9 * * *",
+          scheduledTaskID: created.scheduledTaskID,
         }),
       )
     } finally {

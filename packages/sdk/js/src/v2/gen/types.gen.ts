@@ -9135,6 +9135,10 @@ export type WorkflowRoutineListResponses = {
     schedule?: string
     timezone?: string
     webhookEvent?: string
+    scheduledTaskID?: string
+    scheduledTaskStatus?: "active" | "paused" | "disabled"
+    nextRunAt?: number
+    lastWorkflowRunID?: string
     securityGate: "local-only" | "required"
   }>
 }
@@ -9188,6 +9192,10 @@ export type WorkflowRoutineCreateResponses = {
     schedule?: string
     timezone?: string
     webhookEvent?: string
+    scheduledTaskID?: string
+    scheduledTaskStatus?: "active" | "paused" | "disabled"
+    nextRunAt?: number
+    lastWorkflowRunID?: string
     securityGate: "local-only" | "required"
   }
 }
@@ -9259,6 +9267,10 @@ export type WorkflowRoutineRunResponses = {
       schedule?: string
       timezone?: string
       webhookEvent?: string
+      scheduledTaskID?: string
+      scheduledTaskStatus?: "active" | "paused" | "disabled"
+      nextRunAt?: number
+      lastWorkflowRunID?: string
       securityGate: "local-only" | "required"
     }
     template: {

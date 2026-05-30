@@ -86,7 +86,10 @@ describe("WorkflowRoutineTrigger", () => {
           schedule: "0 9 * * *",
           timezone: "America/Toronto",
           securityGate: "local-only",
+          scheduledTaskStatus: "active",
         })
+        expect(routine.scheduledTaskID).toBeString()
+        expect(routine.nextRunAt).toBeGreaterThan(0)
 
         const template = await WorkflowTemplate.get("project:noop-dry-run")
         expect(template.spec.trigger).toEqual({
@@ -103,9 +106,46 @@ describe("WorkflowRoutineTrigger", () => {
           timezone: "America/Toronto",
           securityGate: "local-only",
         })
+        const { ScheduledTask } = await import("../../src/session/scheduled-task")
+        const scheduledTasks = await ScheduledTask.list()
+        expect(scheduledTasks).toContainEqual(
+          expect.objectContaining({
+            id: routine.scheduledTaskID,
+            title: "Workflow: Noop Dry Run",
+            workflowTemplateID: "project:noop-dry-run",
+            status: "active",
+          }),
+        )
 
         const routines = await WorkflowRoutineTrigger.list()
-        expect(routines).toContainEqual(expect.objectContaining({ route: "workflow/noop-dry-run", mode: "scheduled" }))
+        expect(routines).toContainEqual(
+          expect.objectContaining({
+            route: "workflow/noop-dry-run",
+            mode: "scheduled",
+            scheduledTaskID: routine.scheduledTaskID,
+            scheduledTaskStatus: "active",
+          }),
+        )
+
+        const paused = await WorkflowRoutineTrigger.create({
+          templateID: "project:noop-dry-run",
+          scope: "project",
+          trust: "candidate",
+          mode: "scheduled",
+          schedule: "15 10 * * *",
+          enabled: false,
+        })
+        expect(paused).toMatchObject({
+          route: "workflow/noop-dry-run",
+          templateID: "project:noop-dry-run",
+          trust: "candidate",
+          enabled: false,
+          mode: "scheduled",
+          scheduledTaskID: routine.scheduledTaskID,
+          scheduledTaskStatus: "paused",
+        })
+        const refreshedTasks = await ScheduledTask.list()
+        expect(refreshedTasks.filter((task) => task.workflowTemplateID === "project:noop-dry-run")).toHaveLength(1)
 
         await expect(WorkflowRoutineTrigger.run({ route: "workflow/noop-dry-run" })).rejects.toThrow(
           WorkflowRoutineNotFoundError,

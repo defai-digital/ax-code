@@ -21534,6 +21534,27 @@
                         "type": "string",
                         "minLength": 1
                       },
+                      "scheduledTaskID": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "scheduledTaskStatus": {
+                        "type": "string",
+                        "enum": [
+                          "active",
+                          "paused",
+                          "disabled"
+                        ]
+                      },
+                      "nextRunAt": {
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "lastWorkflowRunID": {
+                        "type": "string",
+                        "minLength": 1
+                      },
                       "securityGate": {
                         "type": "string",
                         "enum": [
@@ -21656,6 +21677,27 @@
                       "minLength": 1
                     },
                     "webhookEvent": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "scheduledTaskID": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "scheduledTaskStatus": {
+                      "type": "string",
+                      "enum": [
+                        "active",
+                        "paused",
+                        "disabled"
+                      ]
+                    },
+                    "nextRunAt": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "lastWorkflowRunID": {
                       "type": "string",
                       "minLength": 1
                     },
@@ -21854,6 +21896,27 @@
                           "minLength": 1
                         },
                         "webhookEvent": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "scheduledTaskID": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "scheduledTaskStatus": {
+                          "type": "string",
+                          "enum": [
+                            "active",
+                            "paused",
+                            "disabled"
+                          ]
+                        },
+                        "nextRunAt": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "lastWorkflowRunID": {
                           "type": "string",
                           "minLength": 1
                         },
