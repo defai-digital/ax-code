@@ -23,6 +23,21 @@ export const WorkflowFixtureSpecs = {
     name: "Issue Triage",
     description: "Classify a small batch of issues with cheap parallel workers and a single synthesis phase.",
     tags: ["triage", "fanout"],
+    inputs: [
+      {
+        id: "issue-limit",
+        label: "Issue Limit",
+        description: "Maximum number of issues to classify.",
+        type: "number",
+        default: 10,
+      },
+    ],
+    routine: {
+      enabled: false,
+      mode: "api",
+      apiRoute: "workflow/issue-triage",
+      securityGate: "local-only",
+    },
     budget: {
       maxTotalTokens: 120_000,
       maxConcurrentAgents: 8,
@@ -134,6 +149,12 @@ export const WorkflowFixtureSpecs = {
       workflow: "review",
       commands: ["bun test test/workflow/spec.test.ts"],
       requiredArtifactIds: ["verification-summary"],
+    },
+    synthesis: {
+      agent: "synthesizer",
+      outputFormat: "findings",
+      exposeToMainContext: true,
+      requiredArtifactIds: ["bug-sweep-report"],
     },
     phases: [
       {

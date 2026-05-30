@@ -99,6 +99,59 @@ export type WorkflowModelPolicy = z.infer<typeof WorkflowModelPolicy>
 export const WorkflowModelPolicyOverride = WorkflowModelPolicy.partial()
 export type WorkflowModelPolicyOverride = z.infer<typeof WorkflowModelPolicyOverride>
 
+export const WorkflowInput = z.object({
+  id: Identifier,
+  label: NonEmptyString.max(120).optional(),
+  description: NonEmptyString.max(500).optional(),
+  type: z.enum(["string", "number", "boolean", "json", "path", "string-array"]).default("string"),
+  required: z.boolean().default(false),
+  sensitive: z.boolean().default(false),
+  default: z.unknown().optional(),
+})
+export type WorkflowInput = z.infer<typeof WorkflowInput>
+
+export const WorkflowRoutine = z
+  .object({
+    enabled: z.boolean().default(false),
+    mode: z.enum(["manual", "scheduled", "api", "webhook"]).default("manual"),
+    schedule: NonEmptyString.optional(),
+    timezone: NonEmptyString.optional(),
+    apiRoute: NonEmptyString.optional(),
+    webhookEvent: NonEmptyString.optional(),
+    securityGate: z.enum(["local-only", "required"]).default("local-only"),
+  })
+  .superRefine((routine, ctx) => {
+    if (routine.mode === "scheduled" && !routine.schedule) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "scheduled routines must declare a schedule",
+        path: ["schedule"],
+      })
+    }
+    if (routine.mode === "api" && routine.enabled && routine.securityGate !== "local-only") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "api routines must stay local-only in workflow runtime preview",
+        path: ["securityGate"],
+      })
+    }
+    if (routine.mode === "webhook" && routine.enabled) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "webhook routines must remain disabled until remote security gates ship",
+        path: ["enabled"],
+      })
+    }
+    if (routine.mode === "webhook" && !routine.webhookEvent) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "webhook routines must declare an event",
+        path: ["webhookEvent"],
+      })
+    }
+  })
+export type WorkflowRoutine = z.infer<typeof WorkflowRoutine>
+
 export const WorkflowPermissions = z.object({
   writePolicy: z.enum(["read-only", "serialized", "worktree-required"]).default("read-only"),
   allowedTools: z.array(NonEmptyString).default([]),
@@ -122,6 +175,15 @@ export const WorkflowVerification = z.object({
   requiredArtifactIds: z.array(Identifier).default([]),
 })
 export type WorkflowVerification = z.infer<typeof WorkflowVerification>
+
+export const WorkflowSynthesis = z.object({
+  agent: NonEmptyString.optional(),
+  model: NonEmptyString.optional(),
+  outputFormat: z.enum(["markdown", "json", "table", "findings"]).default("markdown"),
+  exposeToMainContext: z.boolean().default(true),
+  requiredArtifactIds: z.array(Identifier).default([]),
+})
+export type WorkflowSynthesis = z.infer<typeof WorkflowSynthesis>
 
 export const WorkflowPhase = z.object({
   id: Identifier,
@@ -147,6 +209,8 @@ export const WorkflowSpecV1 = z
     description: NonEmptyString.max(1000),
     tags: z.array(Identifier).default([]),
     trigger: WorkflowTrigger.default({ kind: "manual", source: "prompt" }),
+    inputs: z.array(WorkflowInput).default([]),
+    routine: WorkflowRoutine.optional(),
     budget: WorkflowBudget.default(DefaultWorkflowBudget),
     modelPolicy: WorkflowModelPolicy.default({ effort: "normal", routing: [] }),
     permissions: WorkflowPermissions.default({
@@ -161,6 +225,11 @@ export const WorkflowSpecV1 = z
       commands: [],
       requiredArtifactIds: [],
     }),
+    synthesis: WorkflowSynthesis.default({
+      outputFormat: "markdown",
+      exposeToMainContext: true,
+      requiredArtifactIds: [],
+    }),
     phases: z.array(WorkflowPhase).min(1, "workflow must declare at least one phase"),
   })
   .superRefine((spec, ctx) => {
@@ -169,6 +238,16 @@ export const WorkflowSpecV1 = z
     const artifacts = spec.artifacts ?? []
     const artifactIds = new Set(artifacts.map((artifact) => artifact.id))
     const maxConcurrentAgents = spec.budget?.maxConcurrentAgents
+
+    for (const [index, input] of spec.inputs.entries()) {
+      if (spec.inputs.findIndex((candidate) => candidate.id === input.id) !== index) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `duplicate input id: ${input.id}`,
+          path: ["inputs", index, "id"],
+        })
+      }
+    }
 
     for (const [index, phase] of phases.entries()) {
       if (phaseIds.has(phase.id)) {
@@ -229,6 +308,16 @@ export const WorkflowSpecV1 = z
           code: z.ZodIssueCode.custom,
           message: `verification artifact must be declared: ${artifactId}`,
           path: ["verification", "requiredArtifactIds"],
+        })
+      }
+    }
+
+    for (const artifactId of spec.synthesis.requiredArtifactIds) {
+      if (!artifactIds.has(artifactId)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `synthesis artifact must be declared: ${artifactId}`,
+          path: ["synthesis", "requiredArtifactIds"],
         })
       }
     }

@@ -2085,6 +2085,24 @@ export class WorkflowRun extends HeyApiClient {
               enabled?: false
               securityGate?: "required"
             }
+        inputs?: Array<{
+          id: string
+          label?: string
+          description?: string
+          type?: "string" | "number" | "boolean" | "json" | "path" | "string-array"
+          required?: boolean
+          sensitive?: boolean
+          default?: unknown
+        }>
+        routine?: {
+          enabled?: boolean
+          mode?: "manual" | "scheduled" | "api" | "webhook"
+          schedule?: string
+          timezone?: string
+          apiRoute?: string
+          webhookEvent?: string
+          securityGate?: "local-only" | "required"
+        }
         budget?: {
           maxTotalTokens?: number
           maxWallTimeMs?: number
@@ -2120,6 +2138,13 @@ export class WorkflowRun extends HeyApiClient {
           mode?: "required" | "optional" | "deferred" | "skipped"
           workflow?: "review" | "debug" | "qa"
           commands?: Array<string>
+          requiredArtifactIds?: Array<string>
+        }
+        synthesis?: {
+          agent?: string
+          model?: string
+          outputFormat?: "markdown" | "json" | "table" | "findings"
+          exposeToMainContext?: boolean
           requiredArtifactIds?: Array<string>
         }
         phases: Array<{
@@ -2598,6 +2623,24 @@ export class WorkflowTemplate extends HeyApiClient {
               enabled?: false
               securityGate?: "required"
             }
+        inputs?: Array<{
+          id: string
+          label?: string
+          description?: string
+          type?: "string" | "number" | "boolean" | "json" | "path" | "string-array"
+          required?: boolean
+          sensitive?: boolean
+          default?: unknown
+        }>
+        routine?: {
+          enabled?: boolean
+          mode?: "manual" | "scheduled" | "api" | "webhook"
+          schedule?: string
+          timezone?: string
+          apiRoute?: string
+          webhookEvent?: string
+          securityGate?: "local-only" | "required"
+        }
         budget?: {
           maxTotalTokens?: number
           maxWallTimeMs?: number
@@ -2633,6 +2676,13 @@ export class WorkflowTemplate extends HeyApiClient {
           mode?: "required" | "optional" | "deferred" | "skipped"
           workflow?: "review" | "debug" | "qa"
           commands?: Array<string>
+          requiredArtifactIds?: Array<string>
+        }
+        synthesis?: {
+          agent?: string
+          model?: string
+          outputFormat?: "markdown" | "json" | "table" | "findings"
+          exposeToMainContext?: boolean
           requiredArtifactIds?: Array<string>
         }
         phases: Array<{

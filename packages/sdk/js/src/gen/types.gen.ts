@@ -1106,6 +1106,24 @@ export type WorkflowRunEventRecord = {
           enabled?: false
           securityGate?: "required"
         }
+    inputs?: Array<{
+      id: string
+      label?: string
+      description?: string
+      type?: "string" | "number" | "boolean" | "json" | "path" | "string-array"
+      required?: boolean
+      sensitive?: boolean
+      default?: unknown
+    }>
+    routine?: {
+      enabled?: boolean
+      mode?: "manual" | "scheduled" | "api" | "webhook"
+      schedule?: string
+      timezone?: string
+      apiRoute?: string
+      webhookEvent?: string
+      securityGate?: "local-only" | "required"
+    }
     budget?: {
       maxTotalTokens?: number
       maxWallTimeMs?: number
@@ -1141,6 +1159,13 @@ export type WorkflowRunEventRecord = {
       mode?: "required" | "optional" | "deferred" | "skipped"
       workflow?: "review" | "debug" | "qa"
       commands?: Array<string>
+      requiredArtifactIds?: Array<string>
+    }
+    synthesis?: {
+      agent?: string
+      model?: string
+      outputFormat?: "markdown" | "json" | "table" | "findings"
+      exposeToMainContext?: boolean
       requiredArtifactIds?: Array<string>
     }
     phases: Array<{
@@ -5806,6 +5831,24 @@ export type WorkflowRunCreateData = {
             enabled?: false
             securityGate?: "required"
           }
+      inputs?: Array<{
+        id: string
+        label?: string
+        description?: string
+        type?: "string" | "number" | "boolean" | "json" | "path" | "string-array"
+        required?: boolean
+        sensitive?: boolean
+        default?: unknown
+      }>
+      routine?: {
+        enabled?: boolean
+        mode?: "manual" | "scheduled" | "api" | "webhook"
+        schedule?: string
+        timezone?: string
+        apiRoute?: string
+        webhookEvent?: string
+        securityGate?: "local-only" | "required"
+      }
       budget?: {
         maxTotalTokens?: number
         maxWallTimeMs?: number
@@ -5841,6 +5884,13 @@ export type WorkflowRunCreateData = {
         mode?: "required" | "optional" | "deferred" | "skipped"
         workflow?: "review" | "debug" | "qa"
         commands?: Array<string>
+        requiredArtifactIds?: Array<string>
+      }
+      synthesis?: {
+        agent?: string
+        model?: string
+        outputFormat?: "markdown" | "json" | "table" | "findings"
+        exposeToMainContext?: boolean
         requiredArtifactIds?: Array<string>
       }
       phases: Array<{
@@ -6078,6 +6128,24 @@ export type WorkflowRunGetResponses = {
             enabled?: false
             securityGate?: "required"
           }
+      inputs?: Array<{
+        id: string
+        label?: string
+        description?: string
+        type?: "string" | "number" | "boolean" | "json" | "path" | "string-array"
+        required?: boolean
+        sensitive?: boolean
+        default?: unknown
+      }>
+      routine?: {
+        enabled?: boolean
+        mode?: "manual" | "scheduled" | "api" | "webhook"
+        schedule?: string
+        timezone?: string
+        apiRoute?: string
+        webhookEvent?: string
+        securityGate?: "local-only" | "required"
+      }
       budget?: {
         maxTotalTokens?: number
         maxWallTimeMs?: number
@@ -6113,6 +6181,13 @@ export type WorkflowRunGetResponses = {
         mode?: "required" | "optional" | "deferred" | "skipped"
         workflow?: "review" | "debug" | "qa"
         commands?: Array<string>
+        requiredArtifactIds?: Array<string>
+      }
+      synthesis?: {
+        agent?: string
+        model?: string
+        outputFormat?: "markdown" | "json" | "table" | "findings"
+        exposeToMainContext?: boolean
         requiredArtifactIds?: Array<string>
       }
       phases: Array<{
@@ -6378,6 +6453,24 @@ export type WorkflowRunStartResponses = {
             enabled?: false
             securityGate?: "required"
           }
+      inputs?: Array<{
+        id: string
+        label?: string
+        description?: string
+        type?: "string" | "number" | "boolean" | "json" | "path" | "string-array"
+        required?: boolean
+        sensitive?: boolean
+        default?: unknown
+      }>
+      routine?: {
+        enabled?: boolean
+        mode?: "manual" | "scheduled" | "api" | "webhook"
+        schedule?: string
+        timezone?: string
+        apiRoute?: string
+        webhookEvent?: string
+        securityGate?: "local-only" | "required"
+      }
       budget?: {
         maxTotalTokens?: number
         maxWallTimeMs?: number
@@ -6413,6 +6506,13 @@ export type WorkflowRunStartResponses = {
         mode?: "required" | "optional" | "deferred" | "skipped"
         workflow?: "review" | "debug" | "qa"
         commands?: Array<string>
+        requiredArtifactIds?: Array<string>
+      }
+      synthesis?: {
+        agent?: string
+        model?: string
+        outputFormat?: "markdown" | "json" | "table" | "findings"
+        exposeToMainContext?: boolean
         requiredArtifactIds?: Array<string>
       }
       phases: Array<{
@@ -6540,6 +6640,24 @@ export type WorkflowRunPauseResponses = {
             enabled?: false
             securityGate?: "required"
           }
+      inputs?: Array<{
+        id: string
+        label?: string
+        description?: string
+        type?: "string" | "number" | "boolean" | "json" | "path" | "string-array"
+        required?: boolean
+        sensitive?: boolean
+        default?: unknown
+      }>
+      routine?: {
+        enabled?: boolean
+        mode?: "manual" | "scheduled" | "api" | "webhook"
+        schedule?: string
+        timezone?: string
+        apiRoute?: string
+        webhookEvent?: string
+        securityGate?: "local-only" | "required"
+      }
       budget?: {
         maxTotalTokens?: number
         maxWallTimeMs?: number
@@ -6575,6 +6693,13 @@ export type WorkflowRunPauseResponses = {
         mode?: "required" | "optional" | "deferred" | "skipped"
         workflow?: "review" | "debug" | "qa"
         commands?: Array<string>
+        requiredArtifactIds?: Array<string>
+      }
+      synthesis?: {
+        agent?: string
+        model?: string
+        outputFormat?: "markdown" | "json" | "table" | "findings"
+        exposeToMainContext?: boolean
         requiredArtifactIds?: Array<string>
       }
       phases: Array<{
@@ -6702,6 +6827,24 @@ export type WorkflowRunResumeResponses = {
             enabled?: false
             securityGate?: "required"
           }
+      inputs?: Array<{
+        id: string
+        label?: string
+        description?: string
+        type?: "string" | "number" | "boolean" | "json" | "path" | "string-array"
+        required?: boolean
+        sensitive?: boolean
+        default?: unknown
+      }>
+      routine?: {
+        enabled?: boolean
+        mode?: "manual" | "scheduled" | "api" | "webhook"
+        schedule?: string
+        timezone?: string
+        apiRoute?: string
+        webhookEvent?: string
+        securityGate?: "local-only" | "required"
+      }
       budget?: {
         maxTotalTokens?: number
         maxWallTimeMs?: number
@@ -6737,6 +6880,13 @@ export type WorkflowRunResumeResponses = {
         mode?: "required" | "optional" | "deferred" | "skipped"
         workflow?: "review" | "debug" | "qa"
         commands?: Array<string>
+        requiredArtifactIds?: Array<string>
+      }
+      synthesis?: {
+        agent?: string
+        model?: string
+        outputFormat?: "markdown" | "json" | "table" | "findings"
+        exposeToMainContext?: boolean
         requiredArtifactIds?: Array<string>
       }
       phases: Array<{
@@ -6864,6 +7014,24 @@ export type WorkflowRunCancelResponses = {
             enabled?: false
             securityGate?: "required"
           }
+      inputs?: Array<{
+        id: string
+        label?: string
+        description?: string
+        type?: "string" | "number" | "boolean" | "json" | "path" | "string-array"
+        required?: boolean
+        sensitive?: boolean
+        default?: unknown
+      }>
+      routine?: {
+        enabled?: boolean
+        mode?: "manual" | "scheduled" | "api" | "webhook"
+        schedule?: string
+        timezone?: string
+        apiRoute?: string
+        webhookEvent?: string
+        securityGate?: "local-only" | "required"
+      }
       budget?: {
         maxTotalTokens?: number
         maxWallTimeMs?: number
@@ -6899,6 +7067,13 @@ export type WorkflowRunCancelResponses = {
         mode?: "required" | "optional" | "deferred" | "skipped"
         workflow?: "review" | "debug" | "qa"
         commands?: Array<string>
+        requiredArtifactIds?: Array<string>
+      }
+      synthesis?: {
+        agent?: string
+        model?: string
+        outputFormat?: "markdown" | "json" | "table" | "findings"
+        exposeToMainContext?: boolean
         requiredArtifactIds?: Array<string>
       }
       phases: Array<{
@@ -7026,6 +7201,24 @@ export type WorkflowRunRetryResponses = {
             enabled?: false
             securityGate?: "required"
           }
+      inputs?: Array<{
+        id: string
+        label?: string
+        description?: string
+        type?: "string" | "number" | "boolean" | "json" | "path" | "string-array"
+        required?: boolean
+        sensitive?: boolean
+        default?: unknown
+      }>
+      routine?: {
+        enabled?: boolean
+        mode?: "manual" | "scheduled" | "api" | "webhook"
+        schedule?: string
+        timezone?: string
+        apiRoute?: string
+        webhookEvent?: string
+        securityGate?: "local-only" | "required"
+      }
       budget?: {
         maxTotalTokens?: number
         maxWallTimeMs?: number
@@ -7061,6 +7254,13 @@ export type WorkflowRunRetryResponses = {
         mode?: "required" | "optional" | "deferred" | "skipped"
         workflow?: "review" | "debug" | "qa"
         commands?: Array<string>
+        requiredArtifactIds?: Array<string>
+      }
+      synthesis?: {
+        agent?: string
+        model?: string
+        outputFormat?: "markdown" | "json" | "table" | "findings"
+        exposeToMainContext?: boolean
         requiredArtifactIds?: Array<string>
       }
       phases: Array<{
@@ -7185,6 +7385,24 @@ export type WorkflowTemplateListResponses = {
             enabled?: false
             securityGate?: "required"
           }
+      inputs?: Array<{
+        id: string
+        label?: string
+        description?: string
+        type?: "string" | "number" | "boolean" | "json" | "path" | "string-array"
+        required?: boolean
+        sensitive?: boolean
+        default?: unknown
+      }>
+      routine?: {
+        enabled?: boolean
+        mode?: "manual" | "scheduled" | "api" | "webhook"
+        schedule?: string
+        timezone?: string
+        apiRoute?: string
+        webhookEvent?: string
+        securityGate?: "local-only" | "required"
+      }
       budget?: {
         maxTotalTokens?: number
         maxWallTimeMs?: number
@@ -7220,6 +7438,13 @@ export type WorkflowTemplateListResponses = {
         mode?: "required" | "optional" | "deferred" | "skipped"
         workflow?: "review" | "debug" | "qa"
         commands?: Array<string>
+        requiredArtifactIds?: Array<string>
+      }
+      synthesis?: {
+        agent?: string
+        model?: string
+        outputFormat?: "markdown" | "json" | "table" | "findings"
+        exposeToMainContext?: boolean
         requiredArtifactIds?: Array<string>
       }
       phases: Array<{
@@ -7296,6 +7521,24 @@ export type WorkflowTemplateSaveData = {
             enabled?: false
             securityGate?: "required"
           }
+      inputs?: Array<{
+        id: string
+        label?: string
+        description?: string
+        type?: "string" | "number" | "boolean" | "json" | "path" | "string-array"
+        required?: boolean
+        sensitive?: boolean
+        default?: unknown
+      }>
+      routine?: {
+        enabled?: boolean
+        mode?: "manual" | "scheduled" | "api" | "webhook"
+        schedule?: string
+        timezone?: string
+        apiRoute?: string
+        webhookEvent?: string
+        securityGate?: "local-only" | "required"
+      }
       budget?: {
         maxTotalTokens?: number
         maxWallTimeMs?: number
@@ -7331,6 +7574,13 @@ export type WorkflowTemplateSaveData = {
         mode?: "required" | "optional" | "deferred" | "skipped"
         workflow?: "review" | "debug" | "qa"
         commands?: Array<string>
+        requiredArtifactIds?: Array<string>
+      }
+      synthesis?: {
+        agent?: string
+        model?: string
+        outputFormat?: "markdown" | "json" | "table" | "findings"
+        exposeToMainContext?: boolean
         requiredArtifactIds?: Array<string>
       }
       phases: Array<{
@@ -7425,6 +7675,24 @@ export type WorkflowTemplateSaveResponses = {
             enabled?: false
             securityGate?: "required"
           }
+      inputs?: Array<{
+        id: string
+        label?: string
+        description?: string
+        type?: "string" | "number" | "boolean" | "json" | "path" | "string-array"
+        required?: boolean
+        sensitive?: boolean
+        default?: unknown
+      }>
+      routine?: {
+        enabled?: boolean
+        mode?: "manual" | "scheduled" | "api" | "webhook"
+        schedule?: string
+        timezone?: string
+        apiRoute?: string
+        webhookEvent?: string
+        securityGate?: "local-only" | "required"
+      }
       budget?: {
         maxTotalTokens?: number
         maxWallTimeMs?: number
@@ -7460,6 +7728,13 @@ export type WorkflowTemplateSaveResponses = {
         mode?: "required" | "optional" | "deferred" | "skipped"
         workflow?: "review" | "debug" | "qa"
         commands?: Array<string>
+        requiredArtifactIds?: Array<string>
+      }
+      synthesis?: {
+        agent?: string
+        model?: string
+        outputFormat?: "markdown" | "json" | "table" | "findings"
+        exposeToMainContext?: boolean
         requiredArtifactIds?: Array<string>
       }
       phases: Array<{
@@ -7567,6 +7842,24 @@ export type WorkflowTemplateGetResponses = {
             enabled?: false
             securityGate?: "required"
           }
+      inputs?: Array<{
+        id: string
+        label?: string
+        description?: string
+        type?: "string" | "number" | "boolean" | "json" | "path" | "string-array"
+        required?: boolean
+        sensitive?: boolean
+        default?: unknown
+      }>
+      routine?: {
+        enabled?: boolean
+        mode?: "manual" | "scheduled" | "api" | "webhook"
+        schedule?: string
+        timezone?: string
+        apiRoute?: string
+        webhookEvent?: string
+        securityGate?: "local-only" | "required"
+      }
       budget?: {
         maxTotalTokens?: number
         maxWallTimeMs?: number
@@ -7602,6 +7895,13 @@ export type WorkflowTemplateGetResponses = {
         mode?: "required" | "optional" | "deferred" | "skipped"
         workflow?: "review" | "debug" | "qa"
         commands?: Array<string>
+        requiredArtifactIds?: Array<string>
+      }
+      synthesis?: {
+        agent?: string
+        model?: string
+        outputFormat?: "markdown" | "json" | "table" | "findings"
+        exposeToMainContext?: boolean
         requiredArtifactIds?: Array<string>
       }
       phases: Array<{
@@ -7709,6 +8009,24 @@ export type WorkflowTemplatePromoteResponses = {
             enabled?: false
             securityGate?: "required"
           }
+      inputs?: Array<{
+        id: string
+        label?: string
+        description?: string
+        type?: "string" | "number" | "boolean" | "json" | "path" | "string-array"
+        required?: boolean
+        sensitive?: boolean
+        default?: unknown
+      }>
+      routine?: {
+        enabled?: boolean
+        mode?: "manual" | "scheduled" | "api" | "webhook"
+        schedule?: string
+        timezone?: string
+        apiRoute?: string
+        webhookEvent?: string
+        securityGate?: "local-only" | "required"
+      }
       budget?: {
         maxTotalTokens?: number
         maxWallTimeMs?: number
@@ -7744,6 +8062,13 @@ export type WorkflowTemplatePromoteResponses = {
         mode?: "required" | "optional" | "deferred" | "skipped"
         workflow?: "review" | "debug" | "qa"
         commands?: Array<string>
+        requiredArtifactIds?: Array<string>
+      }
+      synthesis?: {
+        agent?: string
+        model?: string
+        outputFormat?: "markdown" | "json" | "table" | "findings"
+        exposeToMainContext?: boolean
         requiredArtifactIds?: Array<string>
       }
       phases: Array<{

@@ -19,11 +19,35 @@ describe("workflow spec v1", () => {
     expect(spec.budget.maxConcurrentAgents).toBe(8)
     expect(spec.budget.maxTotalAgents).toBe(64)
     expect(spec.permissions.writePolicy).toBe("read-only")
+    expect(spec.synthesis).toMatchObject({
+      agent: "synthesizer",
+      outputFormat: "findings",
+      exposeToMainContext: true,
+      requiredArtifactIds: ["bug-sweep-report"],
+    })
     expect(spec.phases.map((phase) => phase.id)).toEqual(["plan-sweep", "scan-files", "cross-check", "final-report"])
   })
 
   test("parses issue triage and noop fixtures", () => {
-    expect(parseWorkflowSpecV1(WorkflowFixtureSpecs.issueTriage).id).toBe("issue-triage")
+    const issueTriage = parseWorkflowSpecV1(WorkflowFixtureSpecs.issueTriage)
+    expect(issueTriage.id).toBe("issue-triage")
+    expect(issueTriage.inputs).toEqual([
+      {
+        id: "issue-limit",
+        label: "Issue Limit",
+        description: "Maximum number of issues to classify.",
+        type: "number",
+        required: false,
+        sensitive: false,
+        default: 10,
+      },
+    ])
+    expect(issueTriage.routine).toMatchObject({
+      enabled: false,
+      mode: "api",
+      apiRoute: "workflow/issue-triage",
+      securityGate: "local-only",
+    })
     expect(parseWorkflowSpecV1(WorkflowFixtureSpecs.noopDryRun).id).toBe("noop-dry-run")
   })
 
@@ -47,6 +71,13 @@ describe("workflow spec v1", () => {
     expect(spec.budget.maxTotalAgents).toBe(WORKFLOW_DEFAULT_MAX_TOTAL_AGENTS)
     expect(spec.permissions.writePolicy).toBe("read-only")
     expect(spec.modelPolicy.effort).toBe("normal")
+    expect(spec.inputs).toEqual([])
+    expect(spec.routine).toBeUndefined()
+    expect(spec.synthesis).toEqual({
+      outputFormat: "markdown",
+      exposeToMainContext: true,
+      requiredArtifactIds: [],
+    })
   })
 
   test("rejects workflows without phases", () => {
@@ -141,6 +172,35 @@ describe("workflow spec v1", () => {
     expect(parsed.success).toBe(false)
     expect(parsed.error?.issues.some((issue) => issue.path.join(".") === "phases.0.outputs")).toBe(true)
     expect(parsed.error?.issues.some((issue) => issue.path.join(".") === "verification.requiredArtifactIds")).toBe(true)
+  })
+
+  test("validates workflow input, routine, and synthesis contracts", () => {
+    const parsed = WorkflowSpecV1.safeParse({
+      schemaVersion: 1,
+      id: "contract-invalid",
+      name: "Contract Invalid",
+      description: "Invalid workflow contract fields.",
+      inputs: [
+        { id: "target", type: "path" },
+        { id: "target", type: "string" },
+      ],
+      routine: {
+        enabled: true,
+        mode: "webhook",
+        securityGate: "required",
+      },
+      artifacts: [{ id: "declared", kind: "summary" }],
+      synthesis: {
+        requiredArtifactIds: ["missing"],
+      },
+      phases: [{ id: "noop", name: "Noop", kind: "noop" }],
+    })
+
+    expect(parsed.success).toBe(false)
+    expect(parsed.error?.issues.some((issue) => issue.path.join(".") === "inputs.1.id")).toBe(true)
+    expect(parsed.error?.issues.some((issue) => issue.path.join(".") === "routine.enabled")).toBe(true)
+    expect(parsed.error?.issues.some((issue) => issue.path.join(".") === "routine.webhookEvent")).toBe(true)
+    expect(parsed.error?.issues.some((issue) => issue.path.join(".") === "synthesis.requiredArtifactIds")).toBe(true)
   })
 
   test("keeps workflow runtime behind AX_CODE_WORKFLOW_RUNTIME", () => {
