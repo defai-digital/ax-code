@@ -235,7 +235,10 @@ function detectProjectType(root: string, pkg: PackageJson | null): string {
 function detectEntryPoint(pkg: PackageJson | null): string | undefined {
   if (!pkg) return undefined
   if (typeof pkg.bin === "string") return pkg.bin
-  if (typeof pkg.bin === "object") return Object.values(pkg.bin)[0]
+  if (typeof pkg.bin === "object") {
+    const first = Object.values(pkg.bin)[0]
+    if (first !== undefined) return first
+  }
   if (typeof pkg.main === "string") return pkg.main
   return undefined
 }
