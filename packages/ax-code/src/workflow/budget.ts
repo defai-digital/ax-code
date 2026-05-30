@@ -1,4 +1,4 @@
-import type { WorkflowBudget } from "./spec"
+import type { WorkflowBudget, WorkflowPhaseBudget } from "./spec"
 import { EmptyWorkflowBudgetUsage, WorkflowUsageDelta, type WorkflowBudgetUsage } from "./state"
 
 export type WorkflowBudgetEvaluation = {
@@ -11,6 +11,12 @@ export type WorkflowBudgetEvaluationInput = {
   budget: WorkflowBudget
   usage: Partial<WorkflowBudgetUsage>
   elapsedMs?: number
+  warningRatio?: number
+}
+
+export type WorkflowChildBudgetEvaluationInput = {
+  budgetSlice: WorkflowPhaseBudget | undefined
+  usage: Partial<WorkflowBudgetUsage>
   warningRatio?: number
 }
 
@@ -47,6 +53,47 @@ export function evaluateWorkflowBudget(input: WorkflowBudgetEvaluationInput): Wo
   checkLimit("retries", usage.retries, input.budget.maxRetries, warningRatio, warnings, exceeded)
   if (input.elapsedMs !== undefined) {
     checkLimit("wall time", input.elapsedMs, input.budget.maxWallTimeMs, warningRatio, warnings, exceeded)
+  }
+
+  return {
+    status: exceeded.length > 0 ? "exceeded" : warnings.length > 0 ? "warning" : "ok",
+    warnings,
+    exceeded,
+  }
+}
+
+export function evaluateWorkflowChildBudget(input: WorkflowChildBudgetEvaluationInput): WorkflowBudgetEvaluation {
+  const usage = normalizeWorkflowBudgetUsage(input.usage)
+  const warningRatio = input.warningRatio ?? 0.8
+  const warnings: string[] = []
+  const exceeded: string[] = []
+  const budgetSlice = input.budgetSlice
+
+  if (budgetSlice?.maxTotalTokens !== undefined) {
+    checkLimit("child total tokens", usage.totalTokens, budgetSlice.maxTotalTokens, warningRatio, warnings, exceeded)
+  }
+  if (budgetSlice?.maxInputTokensPerChild !== undefined) {
+    checkLimit(
+      "child input tokens",
+      usage.inputTokens,
+      budgetSlice.maxInputTokensPerChild,
+      warningRatio,
+      warnings,
+      exceeded,
+    )
+  }
+  if (budgetSlice?.maxOutputTokensPerChild !== undefined) {
+    checkLimit(
+      "child output tokens",
+      usage.outputTokens,
+      budgetSlice.maxOutputTokensPerChild,
+      warningRatio,
+      warnings,
+      exceeded,
+    )
+  }
+  if (budgetSlice?.maxToolCalls !== undefined) {
+    checkLimit("child tool calls", usage.toolCalls, budgetSlice.maxToolCalls, warningRatio, warnings, exceeded)
   }
 
   return {

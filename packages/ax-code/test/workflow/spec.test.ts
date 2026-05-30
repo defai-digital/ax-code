@@ -3,6 +3,8 @@ import { Flag } from "../../src/flag/flag"
 import {
   InvalidWorkflowFixtureSpecs,
   WORKFLOW_DEFAULT_MAX_CONCURRENT_AGENTS,
+  WORKFLOW_DEFAULT_MAX_INPUT_TOKENS_PER_CHILD,
+  WORKFLOW_DEFAULT_MAX_OUTPUT_TOKENS_PER_CHILD,
   WORKFLOW_DEFAULT_MAX_REQUESTS_PER_MINUTE,
   WORKFLOW_DEFAULT_MAX_TOKENS_PER_MINUTE,
   WORKFLOW_DEFAULT_MAX_TOTAL_AGENTS,
@@ -22,6 +24,8 @@ describe("workflow spec v1", () => {
     expect(spec.id).toBe("verified-bug-sweep")
     expect(spec.budget.maxConcurrentAgents).toBe(WORKFLOW_DEFAULT_MAX_CONCURRENT_AGENTS)
     expect(spec.budget.maxTotalAgents).toBe(WORKFLOW_DEFAULT_MAX_TOTAL_AGENTS)
+    expect(spec.budget.maxInputTokensPerChild).toBe(WORKFLOW_DEFAULT_MAX_INPUT_TOKENS_PER_CHILD)
+    expect(spec.budget.maxOutputTokensPerChild).toBe(WORKFLOW_DEFAULT_MAX_OUTPUT_TOKENS_PER_CHILD)
     expect(spec.permissions.writePolicy).toBe("read-only")
     expect(spec.synthesis).toMatchObject({
       agent: "synthesizer",

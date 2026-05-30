@@ -42,6 +42,8 @@ export interface DispatchResult {
   durationMs: number
   filesModified: string[]
   tokensUsed: number
+  inputTokens: number
+  outputTokens: number
 }
 
 /** Subset of DispatchResult that an executor must produce on success. */
@@ -49,6 +51,8 @@ export interface ExecutorOutput {
   output?: string
   filesModified?: string[]
   tokensUsed?: number
+  inputTokens?: number
+  outputTokens?: number
 }
 
 /**
@@ -250,6 +254,8 @@ async function dispatchUntil(
               error: toErrorMessage(err),
               filesModified: [],
               tokensUsed: 0,
+              inputTokens: 0,
+              outputTokens: 0,
               durationMs: 0,
             }
             inflight--
@@ -315,6 +321,8 @@ async function runOne(
       ...(out.output !== undefined ? { output: out.output } : {}),
       filesModified: out.filesModified ?? [],
       tokensUsed: out.tokensUsed ?? 0,
+      inputTokens: out.inputTokens ?? 0,
+      outputTokens: out.outputTokens ?? 0,
       durationMs: Date.now() - start,
     }
     safeCallback(options.onSubagentComplete, result, "onSubagentComplete")
@@ -330,6 +338,8 @@ async function runOne(
       error: toErrorMessage(err),
       filesModified: [],
       tokensUsed: 0,
+      inputTokens: 0,
+      outputTokens: 0,
       durationMs: Date.now() - start,
     }
     safeCallback(options.onSubagentComplete, result, "onSubagentComplete")
@@ -350,6 +360,8 @@ function cancelled(spec: DispatchSpec): DispatchResult {
     error: "parent dispatch cancelled before this spec started",
     filesModified: [],
     tokensUsed: 0,
+    inputTokens: 0,
+    outputTokens: 0,
     durationMs: 0,
   }
 }

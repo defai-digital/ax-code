@@ -55,6 +55,8 @@ export const WorkflowRunProjection = z.object({
   budgetUsage: WorkflowUsageDelta,
   budgetLimit: z.object({
     maxTotalTokens: z.number().int().positive(),
+    maxInputTokensPerChild: z.number().int().positive(),
+    maxOutputTokensPerChild: z.number().int().positive(),
     maxWallTimeMs: z.number().int().positive(),
     maxConcurrentAgents: z.number().int().positive(),
     maxTotalAgents: z.number().int().positive(),

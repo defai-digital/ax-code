@@ -1126,6 +1126,8 @@ export type WorkflowRunEventRecord = {
     }
     budget?: {
       maxTotalTokens?: number
+      maxInputTokensPerChild?: number
+      maxOutputTokensPerChild?: number
       maxWallTimeMs?: number
       maxConcurrentAgents?: number
       maxTotalAgents?: number
@@ -1182,7 +1184,13 @@ export type WorkflowRunEventRecord = {
       outputs?: Array<string>
       dependsOn?: Array<string>
       maxParallel?: number
-      mergeStrategy?: "all" | "first-success" | "majority" | "critic-confirmation"
+      mergeStrategy?:
+        | "all"
+        | "first-success"
+        | "majority"
+        | "vote-with-critic"
+        | "critic-confirmation"
+        | "custom-reducer"
       modelPolicy?: {
         plannerModel?: string
         workerModel?: string
@@ -1196,6 +1204,8 @@ export type WorkflowRunEventRecord = {
       }
       budget?: {
         maxTotalTokens?: number
+        maxInputTokensPerChild?: number
+        maxOutputTokensPerChild?: number
         maxWallTimeMs?: number
         maxConcurrentAgents?: number
         maxTotalAgents?: number
@@ -1247,6 +1257,55 @@ export type EventWorkflowRunUpdated = {
   }
 }
 
+export type EventWorkflowRunStarted = {
+  type: "workflow.run.started"
+  properties: {
+    run: WorkflowRunEventRecord
+  }
+}
+
+export type EventWorkflowRunBlocked = {
+  type: "workflow.run.blocked"
+  properties: {
+    run: WorkflowRunEventRecord
+  }
+}
+
+export type EventWorkflowRunPaused = {
+  type: "workflow.run.paused"
+  properties: {
+    run: WorkflowRunEventRecord
+  }
+}
+
+export type EventWorkflowRunResumed = {
+  type: "workflow.run.resumed"
+  properties: {
+    run: WorkflowRunEventRecord
+  }
+}
+
+export type EventWorkflowRunCompleted = {
+  type: "workflow.run.completed"
+  properties: {
+    run: WorkflowRunEventRecord
+  }
+}
+
+export type EventWorkflowRunFailed = {
+  type: "workflow.run.failed"
+  properties: {
+    run: WorkflowRunEventRecord
+  }
+}
+
+export type EventWorkflowRunCancelled = {
+  type: "workflow.run.cancelled"
+  properties: {
+    run: WorkflowRunEventRecord
+  }
+}
+
 export type WorkflowPhaseEventRecord = {
   id: string
   runID: string
@@ -1270,6 +1329,27 @@ export type WorkflowPhaseEventRecord = {
 
 export type EventWorkflowPhaseUpdated = {
   type: "workflow.phase.updated"
+  properties: {
+    phase: WorkflowPhaseEventRecord
+  }
+}
+
+export type EventWorkflowPhaseStarted = {
+  type: "workflow.phase.started"
+  properties: {
+    phase: WorkflowPhaseEventRecord
+  }
+}
+
+export type EventWorkflowPhaseCompleted = {
+  type: "workflow.phase.completed"
+  properties: {
+    phase: WorkflowPhaseEventRecord
+  }
+}
+
+export type EventWorkflowPhaseFailed = {
+  type: "workflow.phase.failed"
   properties: {
     phase: WorkflowPhaseEventRecord
   }
@@ -1317,6 +1397,34 @@ export type EventWorkflowChildCreated = {
 
 export type EventWorkflowChildUpdated = {
   type: "workflow.child.updated"
+  properties: {
+    child: WorkflowChildEventRecord
+  }
+}
+
+export type EventWorkflowChildStarted = {
+  type: "workflow.child.started"
+  properties: {
+    child: WorkflowChildEventRecord
+  }
+}
+
+export type EventWorkflowChildCompleted = {
+  type: "workflow.child.completed"
+  properties: {
+    child: WorkflowChildEventRecord
+  }
+}
+
+export type EventWorkflowChildFailed = {
+  type: "workflow.child.failed"
+  properties: {
+    child: WorkflowChildEventRecord
+  }
+}
+
+export type EventWorkflowChildCancelled = {
+  type: "workflow.child.cancelled"
   properties: {
     child: WorkflowChildEventRecord
   }
@@ -1380,6 +1488,22 @@ export type EventWorkflowBudgetAppended = {
   type: "workflow.budget.appended"
   properties: {
     entry: WorkflowBudgetLedgerEventEntry
+  }
+}
+
+export type EventWorkflowBudgetWarning = {
+  type: "workflow.budget.warning"
+  properties: {
+    entry: WorkflowBudgetLedgerEventEntry
+    warnings: Array<string>
+  }
+}
+
+export type EventWorkflowBudgetExceeded = {
+  type: "workflow.budget.exceeded"
+  properties: {
+    entry: WorkflowBudgetLedgerEventEntry
+    exceeded: Array<string>
   }
 }
 
@@ -1562,11 +1686,27 @@ export type Event =
   | EventWorktreeFailed
   | EventWorkflowRunCreated
   | EventWorkflowRunUpdated
+  | EventWorkflowRunStarted
+  | EventWorkflowRunBlocked
+  | EventWorkflowRunPaused
+  | EventWorkflowRunResumed
+  | EventWorkflowRunCompleted
+  | EventWorkflowRunFailed
+  | EventWorkflowRunCancelled
   | EventWorkflowPhaseUpdated
+  | EventWorkflowPhaseStarted
+  | EventWorkflowPhaseCompleted
+  | EventWorkflowPhaseFailed
   | EventWorkflowChildCreated
   | EventWorkflowChildUpdated
+  | EventWorkflowChildStarted
+  | EventWorkflowChildCompleted
+  | EventWorkflowChildFailed
+  | EventWorkflowChildCancelled
   | EventWorkflowArtifactWritten
   | EventWorkflowBudgetAppended
+  | EventWorkflowBudgetWarning
+  | EventWorkflowBudgetExceeded
   | EventWorkflowVerificationAttached
   | EventScheduledTaskCreated
   | EventScheduledTaskUpdated
@@ -5876,6 +6016,8 @@ export type WorkflowRunCreateData = {
       }
       budget?: {
         maxTotalTokens?: number
+        maxInputTokensPerChild?: number
+        maxOutputTokensPerChild?: number
         maxWallTimeMs?: number
         maxConcurrentAgents?: number
         maxTotalAgents?: number
@@ -5932,7 +6074,13 @@ export type WorkflowRunCreateData = {
         outputs?: Array<string>
         dependsOn?: Array<string>
         maxParallel?: number
-        mergeStrategy?: "all" | "first-success" | "majority" | "critic-confirmation"
+        mergeStrategy?:
+          | "all"
+          | "first-success"
+          | "majority"
+          | "vote-with-critic"
+          | "critic-confirmation"
+          | "custom-reducer"
         modelPolicy?: {
           plannerModel?: string
           workerModel?: string
@@ -5946,6 +6094,8 @@ export type WorkflowRunCreateData = {
         }
         budget?: {
           maxTotalTokens?: number
+          maxInputTokensPerChild?: number
+          maxOutputTokensPerChild?: number
           maxWallTimeMs?: number
           maxConcurrentAgents?: number
           maxTotalAgents?: number
@@ -6059,6 +6209,8 @@ export type WorkflowRunDashboardResponses = {
     }
     budgetLimit: {
       maxTotalTokens: number
+      maxInputTokensPerChild: number
+      maxOutputTokensPerChild: number
       maxWallTimeMs: number
       maxConcurrentAgents: number
       maxTotalAgents: number
@@ -6099,6 +6251,75 @@ export type WorkflowRunDashboardResponses = {
 }
 
 export type WorkflowRunDashboardResponse = WorkflowRunDashboardResponses[keyof WorkflowRunDashboardResponses]
+
+export type WorkflowRunEvalCasesData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/workflow-runs/eval-cases"
+}
+
+export type WorkflowRunEvalCasesErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type WorkflowRunEvalCasesError = WorkflowRunEvalCasesErrors[keyof WorkflowRunEvalCasesErrors]
+
+export type WorkflowRunEvalCasesResponses = {
+  /**
+   * Workflow evaluation cases.
+   */
+  200: Array<{
+    id: "verified-bug-sweep-seeded"
+    name: string
+    description: string
+    fixtureID: string
+    templateID: string
+    baseline: {
+      label?: string
+      metrics: {
+        status?: "queued" | "running" | "blocked" | "paused" | "failed" | "completed" | "cancelled"
+        elapsedMs?: number
+        totalTokens?: number
+        inputTokens?: number
+        outputTokens?: number
+        toolCalls?: number
+        childAgents?: number
+        retries?: number
+        estimatedCostUsd?: number
+        confirmedFindings?: number
+        likelyFindings?: number
+        rejectedFindings?: number
+        unverifiedFindings?: number
+        falsePositiveFindings?: number
+        artifactCount?: number
+        exposedArtifactCount?: number
+        verificationEnvelopeCount?: number
+        interventionCount?: number
+      }
+    }
+    seeds: Array<{
+      id: string
+      file: string
+      line: number
+      expectedStatus: "confirmed" | "likely" | "rejected" | "unverified"
+      severity?: "critical" | "high" | "medium" | "low" | "info"
+      summary: string
+      rationale?: string
+    }>
+  }>
+}
+
+export type WorkflowRunEvalCasesResponse = WorkflowRunEvalCasesResponses[keyof WorkflowRunEvalCasesResponses]
 
 export type WorkflowRunGetData = {
   body?: never
@@ -6184,6 +6405,8 @@ export type WorkflowRunGetResponses = {
       }
       budget?: {
         maxTotalTokens?: number
+        maxInputTokensPerChild?: number
+        maxOutputTokensPerChild?: number
         maxWallTimeMs?: number
         maxConcurrentAgents?: number
         maxTotalAgents?: number
@@ -6240,7 +6463,13 @@ export type WorkflowRunGetResponses = {
         outputs?: Array<string>
         dependsOn?: Array<string>
         maxParallel?: number
-        mergeStrategy?: "all" | "first-success" | "majority" | "critic-confirmation"
+        mergeStrategy?:
+          | "all"
+          | "first-success"
+          | "majority"
+          | "vote-with-critic"
+          | "critic-confirmation"
+          | "custom-reducer"
         modelPolicy?: {
           plannerModel?: string
           workerModel?: string
@@ -6254,6 +6483,8 @@ export type WorkflowRunGetResponses = {
         }
         budget?: {
           maxTotalTokens?: number
+          maxInputTokensPerChild?: number
+          maxOutputTokensPerChild?: number
           maxWallTimeMs?: number
           maxConcurrentAgents?: number
           maxTotalAgents?: number
@@ -6431,6 +6662,110 @@ export type WorkflowRunEvalSummaryResponses = {
 
 export type WorkflowRunEvalSummaryResponse = WorkflowRunEvalSummaryResponses[keyof WorkflowRunEvalSummaryResponses]
 
+export type WorkflowRunEvalCaseData = {
+  body?: {
+    caseID?: "verified-bug-sweep-seeded"
+    now?: number
+  }
+  path: {
+    runID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/workflow-runs/{runID}/eval-case"
+}
+
+export type WorkflowRunEvalCaseErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type WorkflowRunEvalCaseError = WorkflowRunEvalCaseErrors[keyof WorkflowRunEvalCaseErrors]
+
+export type WorkflowRunEvalCaseResponses = {
+  /**
+   * Workflow evaluation case result.
+   */
+  200: {
+    caseID: "verified-bug-sweep-seeded"
+    templateID: string
+    fixtureID: string
+    decision: "promote" | "hold" | "rollback"
+    reasons: Array<string>
+    missingSeedIDs: Array<string>
+    mismatchedSeedIDs: Array<string>
+    summary: {
+      runID: string
+      sourceTemplateID?: string
+      decision: "promote" | "hold" | "rollback"
+      reasons: Array<string>
+      metrics: {
+        status: "queued" | "running" | "blocked" | "paused" | "failed" | "completed" | "cancelled"
+        elapsedMs: number
+        totalTokens: number
+        inputTokens: number
+        outputTokens: number
+        toolCalls: number
+        childAgents: number
+        retries: number
+        estimatedCostUsd: number
+        confirmedFindings: number
+        likelyFindings: number
+        rejectedFindings: number
+        unverifiedFindings: number
+        falsePositiveFindings: number
+        artifactCount: number
+        exposedArtifactCount: number
+        verificationEnvelopeCount: number
+        interventionCount: number
+      }
+      budgetStatus: "ok" | "warning" | "exceeded"
+      budgetWarnings: Array<string>
+      budgetExceeded: Array<string>
+      verificationSatisfied: boolean
+      comparison?: {
+        baselineLabel: string
+        confirmedFindingsDelta: number
+        falsePositiveFindingsDelta: number
+        totalTokensDelta?: number
+        elapsedMsDelta?: number
+        estimatedCostUsdDelta?: number
+        interventionCountDelta?: number
+      }
+    }
+    metrics: {
+      expectedConfirmedFindings: number
+      expectedLikelyFindings: number
+      expectedRejectedFindings: number
+      expectedUnverifiedFindings: number
+      observedSeedConfirmedFindings: number
+      observedSeedLikelyFindings: number
+      observedSeedRejectedFindings: number
+      observedSeedUnverifiedFindings: number
+      missingSeedFindings: number
+      mismatchedSeedFindings: number
+      duplicateSeedArtifacts: number
+      unmatchedFindingArtifacts: number
+      costPerConfirmedFindingUsd: number | null
+      falsePositiveRejectionRate: number | null
+      confirmedFindingRecall: number | null
+      completionRate: number
+      verificationPassRate: number
+      budgetStopped: boolean
+      interventionCount: number
+    }
+  }
+}
+
+export type WorkflowRunEvalCaseResponse = WorkflowRunEvalCaseResponses[keyof WorkflowRunEvalCaseResponses]
+
 export type WorkflowRunSaveTemplateData = {
   body?: {
     scope: "user" | "project"
@@ -6517,6 +6852,8 @@ export type WorkflowRunSaveTemplateResponses = {
       }
       budget?: {
         maxTotalTokens?: number
+        maxInputTokensPerChild?: number
+        maxOutputTokensPerChild?: number
         maxWallTimeMs?: number
         maxConcurrentAgents?: number
         maxTotalAgents?: number
@@ -6573,7 +6910,13 @@ export type WorkflowRunSaveTemplateResponses = {
         outputs?: Array<string>
         dependsOn?: Array<string>
         maxParallel?: number
-        mergeStrategy?: "all" | "first-success" | "majority" | "critic-confirmation"
+        mergeStrategy?:
+          | "all"
+          | "first-success"
+          | "majority"
+          | "vote-with-critic"
+          | "critic-confirmation"
+          | "custom-reducer"
         modelPolicy?: {
           plannerModel?: string
           workerModel?: string
@@ -6587,6 +6930,8 @@ export type WorkflowRunSaveTemplateResponses = {
         }
         budget?: {
           maxTotalTokens?: number
+          maxInputTokensPerChild?: number
+          maxOutputTokensPerChild?: number
           maxWallTimeMs?: number
           maxConcurrentAgents?: number
           maxTotalAgents?: number
@@ -6698,6 +7043,8 @@ export type WorkflowRunStartResponses = {
       }
       budget?: {
         maxTotalTokens?: number
+        maxInputTokensPerChild?: number
+        maxOutputTokensPerChild?: number
         maxWallTimeMs?: number
         maxConcurrentAgents?: number
         maxTotalAgents?: number
@@ -6754,7 +7101,13 @@ export type WorkflowRunStartResponses = {
         outputs?: Array<string>
         dependsOn?: Array<string>
         maxParallel?: number
-        mergeStrategy?: "all" | "first-success" | "majority" | "critic-confirmation"
+        mergeStrategy?:
+          | "all"
+          | "first-success"
+          | "majority"
+          | "vote-with-critic"
+          | "critic-confirmation"
+          | "custom-reducer"
         modelPolicy?: {
           plannerModel?: string
           workerModel?: string
@@ -6768,6 +7121,8 @@ export type WorkflowRunStartResponses = {
         }
         budget?: {
           maxTotalTokens?: number
+          maxInputTokensPerChild?: number
+          maxOutputTokensPerChild?: number
           maxWallTimeMs?: number
           maxConcurrentAgents?: number
           maxTotalAgents?: number
@@ -6896,6 +7251,8 @@ export type WorkflowRunPauseResponses = {
       }
       budget?: {
         maxTotalTokens?: number
+        maxInputTokensPerChild?: number
+        maxOutputTokensPerChild?: number
         maxWallTimeMs?: number
         maxConcurrentAgents?: number
         maxTotalAgents?: number
@@ -6952,7 +7309,13 @@ export type WorkflowRunPauseResponses = {
         outputs?: Array<string>
         dependsOn?: Array<string>
         maxParallel?: number
-        mergeStrategy?: "all" | "first-success" | "majority" | "critic-confirmation"
+        mergeStrategy?:
+          | "all"
+          | "first-success"
+          | "majority"
+          | "vote-with-critic"
+          | "critic-confirmation"
+          | "custom-reducer"
         modelPolicy?: {
           plannerModel?: string
           workerModel?: string
@@ -6966,6 +7329,8 @@ export type WorkflowRunPauseResponses = {
         }
         budget?: {
           maxTotalTokens?: number
+          maxInputTokensPerChild?: number
+          maxOutputTokensPerChild?: number
           maxWallTimeMs?: number
           maxConcurrentAgents?: number
           maxTotalAgents?: number
@@ -7094,6 +7459,8 @@ export type WorkflowRunResumeResponses = {
       }
       budget?: {
         maxTotalTokens?: number
+        maxInputTokensPerChild?: number
+        maxOutputTokensPerChild?: number
         maxWallTimeMs?: number
         maxConcurrentAgents?: number
         maxTotalAgents?: number
@@ -7150,7 +7517,13 @@ export type WorkflowRunResumeResponses = {
         outputs?: Array<string>
         dependsOn?: Array<string>
         maxParallel?: number
-        mergeStrategy?: "all" | "first-success" | "majority" | "critic-confirmation"
+        mergeStrategy?:
+          | "all"
+          | "first-success"
+          | "majority"
+          | "vote-with-critic"
+          | "critic-confirmation"
+          | "custom-reducer"
         modelPolicy?: {
           plannerModel?: string
           workerModel?: string
@@ -7164,6 +7537,8 @@ export type WorkflowRunResumeResponses = {
         }
         budget?: {
           maxTotalTokens?: number
+          maxInputTokensPerChild?: number
+          maxOutputTokensPerChild?: number
           maxWallTimeMs?: number
           maxConcurrentAgents?: number
           maxTotalAgents?: number
@@ -7292,6 +7667,8 @@ export type WorkflowRunCancelResponses = {
       }
       budget?: {
         maxTotalTokens?: number
+        maxInputTokensPerChild?: number
+        maxOutputTokensPerChild?: number
         maxWallTimeMs?: number
         maxConcurrentAgents?: number
         maxTotalAgents?: number
@@ -7348,7 +7725,13 @@ export type WorkflowRunCancelResponses = {
         outputs?: Array<string>
         dependsOn?: Array<string>
         maxParallel?: number
-        mergeStrategy?: "all" | "first-success" | "majority" | "critic-confirmation"
+        mergeStrategy?:
+          | "all"
+          | "first-success"
+          | "majority"
+          | "vote-with-critic"
+          | "critic-confirmation"
+          | "custom-reducer"
         modelPolicy?: {
           plannerModel?: string
           workerModel?: string
@@ -7362,6 +7745,8 @@ export type WorkflowRunCancelResponses = {
         }
         budget?: {
           maxTotalTokens?: number
+          maxInputTokensPerChild?: number
+          maxOutputTokensPerChild?: number
           maxWallTimeMs?: number
           maxConcurrentAgents?: number
           maxTotalAgents?: number
@@ -7413,6 +7798,7 @@ export type WorkflowRunRetryData = {
   }
   query?: {
     directory?: string
+    phaseID?: string
   }
   url: "/workflow-runs/{runID}/retry"
 }
@@ -7490,6 +7876,8 @@ export type WorkflowRunRetryResponses = {
       }
       budget?: {
         maxTotalTokens?: number
+        maxInputTokensPerChild?: number
+        maxOutputTokensPerChild?: number
         maxWallTimeMs?: number
         maxConcurrentAgents?: number
         maxTotalAgents?: number
@@ -7546,7 +7934,13 @@ export type WorkflowRunRetryResponses = {
         outputs?: Array<string>
         dependsOn?: Array<string>
         maxParallel?: number
-        mergeStrategy?: "all" | "first-success" | "majority" | "critic-confirmation"
+        mergeStrategy?:
+          | "all"
+          | "first-success"
+          | "majority"
+          | "vote-with-critic"
+          | "critic-confirmation"
+          | "custom-reducer"
         modelPolicy?: {
           plannerModel?: string
           workerModel?: string
@@ -7560,6 +7954,8 @@ export type WorkflowRunRetryResponses = {
         }
         budget?: {
           maxTotalTokens?: number
+          maxInputTokensPerChild?: number
+          maxOutputTokensPerChild?: number
           maxWallTimeMs?: number
           maxConcurrentAgents?: number
           maxTotalAgents?: number
@@ -7686,6 +8082,8 @@ export type WorkflowTemplateListResponses = {
       }
       budget?: {
         maxTotalTokens?: number
+        maxInputTokensPerChild?: number
+        maxOutputTokensPerChild?: number
         maxWallTimeMs?: number
         maxConcurrentAgents?: number
         maxTotalAgents?: number
@@ -7742,7 +8140,13 @@ export type WorkflowTemplateListResponses = {
         outputs?: Array<string>
         dependsOn?: Array<string>
         maxParallel?: number
-        mergeStrategy?: "all" | "first-success" | "majority" | "critic-confirmation"
+        mergeStrategy?:
+          | "all"
+          | "first-success"
+          | "majority"
+          | "vote-with-critic"
+          | "critic-confirmation"
+          | "custom-reducer"
         modelPolicy?: {
           plannerModel?: string
           workerModel?: string
@@ -7756,6 +8160,8 @@ export type WorkflowTemplateListResponses = {
         }
         budget?: {
           maxTotalTokens?: number
+          maxInputTokensPerChild?: number
+          maxOutputTokensPerChild?: number
           maxWallTimeMs?: number
           maxConcurrentAgents?: number
           maxTotalAgents?: number
@@ -7830,6 +8236,8 @@ export type WorkflowTemplateSaveData = {
       }
       budget?: {
         maxTotalTokens?: number
+        maxInputTokensPerChild?: number
+        maxOutputTokensPerChild?: number
         maxWallTimeMs?: number
         maxConcurrentAgents?: number
         maxTotalAgents?: number
@@ -7886,7 +8294,13 @@ export type WorkflowTemplateSaveData = {
         outputs?: Array<string>
         dependsOn?: Array<string>
         maxParallel?: number
-        mergeStrategy?: "all" | "first-success" | "majority" | "critic-confirmation"
+        mergeStrategy?:
+          | "all"
+          | "first-success"
+          | "majority"
+          | "vote-with-critic"
+          | "critic-confirmation"
+          | "custom-reducer"
         modelPolicy?: {
           plannerModel?: string
           workerModel?: string
@@ -7900,6 +8314,8 @@ export type WorkflowTemplateSaveData = {
         }
         budget?: {
           maxTotalTokens?: number
+          maxInputTokensPerChild?: number
+          maxOutputTokensPerChild?: number
           maxWallTimeMs?: number
           maxConcurrentAgents?: number
           maxTotalAgents?: number
@@ -7993,6 +8409,8 @@ export type WorkflowTemplateSaveResponses = {
       }
       budget?: {
         maxTotalTokens?: number
+        maxInputTokensPerChild?: number
+        maxOutputTokensPerChild?: number
         maxWallTimeMs?: number
         maxConcurrentAgents?: number
         maxTotalAgents?: number
@@ -8049,7 +8467,13 @@ export type WorkflowTemplateSaveResponses = {
         outputs?: Array<string>
         dependsOn?: Array<string>
         maxParallel?: number
-        mergeStrategy?: "all" | "first-success" | "majority" | "critic-confirmation"
+        mergeStrategy?:
+          | "all"
+          | "first-success"
+          | "majority"
+          | "vote-with-critic"
+          | "critic-confirmation"
+          | "custom-reducer"
         modelPolicy?: {
           plannerModel?: string
           workerModel?: string
@@ -8063,6 +8487,8 @@ export type WorkflowTemplateSaveResponses = {
         }
         budget?: {
           maxTotalTokens?: number
+          maxInputTokensPerChild?: number
+          maxOutputTokensPerChild?: number
           maxWallTimeMs?: number
           maxConcurrentAgents?: number
           maxTotalAgents?: number
@@ -8169,6 +8595,8 @@ export type WorkflowTemplateGetResponses = {
       }
       budget?: {
         maxTotalTokens?: number
+        maxInputTokensPerChild?: number
+        maxOutputTokensPerChild?: number
         maxWallTimeMs?: number
         maxConcurrentAgents?: number
         maxTotalAgents?: number
@@ -8225,7 +8653,13 @@ export type WorkflowTemplateGetResponses = {
         outputs?: Array<string>
         dependsOn?: Array<string>
         maxParallel?: number
-        mergeStrategy?: "all" | "first-success" | "majority" | "critic-confirmation"
+        mergeStrategy?:
+          | "all"
+          | "first-success"
+          | "majority"
+          | "vote-with-critic"
+          | "critic-confirmation"
+          | "custom-reducer"
         modelPolicy?: {
           plannerModel?: string
           workerModel?: string
@@ -8239,6 +8673,8 @@ export type WorkflowTemplateGetResponses = {
         }
         budget?: {
           maxTotalTokens?: number
+          maxInputTokensPerChild?: number
+          maxOutputTokensPerChild?: number
           maxWallTimeMs?: number
           maxConcurrentAgents?: number
           maxTotalAgents?: number
@@ -8345,6 +8781,8 @@ export type WorkflowTemplatePromoteResponses = {
       }
       budget?: {
         maxTotalTokens?: number
+        maxInputTokensPerChild?: number
+        maxOutputTokensPerChild?: number
         maxWallTimeMs?: number
         maxConcurrentAgents?: number
         maxTotalAgents?: number
@@ -8401,7 +8839,13 @@ export type WorkflowTemplatePromoteResponses = {
         outputs?: Array<string>
         dependsOn?: Array<string>
         maxParallel?: number
-        mergeStrategy?: "all" | "first-success" | "majority" | "critic-confirmation"
+        mergeStrategy?:
+          | "all"
+          | "first-success"
+          | "majority"
+          | "vote-with-critic"
+          | "critic-confirmation"
+          | "custom-reducer"
         modelPolicy?: {
           plannerModel?: string
           workerModel?: string
@@ -8415,6 +8859,8 @@ export type WorkflowTemplatePromoteResponses = {
         }
         budget?: {
           maxTotalTokens?: number
+          maxInputTokensPerChild?: number
+          maxOutputTokensPerChild?: number
           maxWallTimeMs?: number
           maxConcurrentAgents?: number
           maxTotalAgents?: number
@@ -8593,6 +9039,8 @@ export type WorkflowRoutineRunResponses = {
         }
         budget?: {
           maxTotalTokens?: number
+          maxInputTokensPerChild?: number
+          maxOutputTokensPerChild?: number
           maxWallTimeMs?: number
           maxConcurrentAgents?: number
           maxTotalAgents?: number
@@ -8649,7 +9097,13 @@ export type WorkflowRoutineRunResponses = {
           outputs?: Array<string>
           dependsOn?: Array<string>
           maxParallel?: number
-          mergeStrategy?: "all" | "first-success" | "majority" | "critic-confirmation"
+          mergeStrategy?:
+            | "all"
+            | "first-success"
+            | "majority"
+            | "vote-with-critic"
+            | "critic-confirmation"
+            | "custom-reducer"
           modelPolicy?: {
             plannerModel?: string
             workerModel?: string
@@ -8663,6 +9117,8 @@ export type WorkflowRoutineRunResponses = {
           }
           budget?: {
             maxTotalTokens?: number
+            maxInputTokensPerChild?: number
+            maxOutputTokensPerChild?: number
             maxWallTimeMs?: number
             maxConcurrentAgents?: number
             maxTotalAgents?: number
@@ -8737,6 +9193,8 @@ export type WorkflowRoutineRunResponses = {
         }
         budget?: {
           maxTotalTokens?: number
+          maxInputTokensPerChild?: number
+          maxOutputTokensPerChild?: number
           maxWallTimeMs?: number
           maxConcurrentAgents?: number
           maxTotalAgents?: number
@@ -8793,7 +9251,13 @@ export type WorkflowRoutineRunResponses = {
           outputs?: Array<string>
           dependsOn?: Array<string>
           maxParallel?: number
-          mergeStrategy?: "all" | "first-success" | "majority" | "critic-confirmation"
+          mergeStrategy?:
+            | "all"
+            | "first-success"
+            | "majority"
+            | "vote-with-critic"
+            | "critic-confirmation"
+            | "custom-reducer"
           modelPolicy?: {
             plannerModel?: string
             workerModel?: string
@@ -8807,6 +9271,8 @@ export type WorkflowRoutineRunResponses = {
           }
           budget?: {
             maxTotalTokens?: number
+            maxInputTokensPerChild?: number
+            maxOutputTokensPerChild?: number
             maxWallTimeMs?: number
             maxConcurrentAgents?: number
             maxTotalAgents?: number

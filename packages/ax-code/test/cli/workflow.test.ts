@@ -95,6 +95,8 @@ describe("workflow command helpers", () => {
         budgetUsage: { ...emptyUsage(), totalTokens: 2500, childAgents: 4 },
         budgetLimit: {
           maxTotalTokens: 10_000,
+          maxInputTokensPerChild: 5_000,
+          maxOutputTokensPerChild: 1_000,
           maxWallTimeMs: 600_000,
           maxConcurrentAgents: 3,
           maxTotalAgents: 25,

@@ -8,7 +8,13 @@ import { WorkflowPhaseID, WorkflowRunID } from "./state"
 type WorkflowDispatchExecutor = (
   spec: { agent: string; prompt: string; constraints?: string[]; timeoutMs?: number },
   signal: AbortSignal,
-) => Promise<{ output?: string; filesModified?: string[]; tokensUsed?: number }>
+) => Promise<{
+  output?: string
+  filesModified?: string[]
+  tokensUsed?: number
+  inputTokens?: number
+  outputTokens?: number
+}>
 
 export namespace WorkflowScheduler {
   export const StartOptions = z.object({

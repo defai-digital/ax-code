@@ -87,6 +87,8 @@ export namespace WorkflowDispatchAdapter {
           durationMs: result.durationMs,
           filesModified: result.filesModified,
           tokensUsed: result.tokensUsed,
+          inputTokens: result.inputTokens,
+          outputTokens: result.outputTokens,
         },
       })
       await WorkflowRun.appendBudgetUsage({
@@ -94,7 +96,11 @@ export namespace WorkflowDispatchAdapter {
         phaseID: input.phase.id,
         childID: child.id,
         kind: "consume",
-        usageDelta: { totalTokens: result.tokensUsed },
+        usageDelta: {
+          totalTokens: result.tokensUsed,
+          inputTokens: result.inputTokens,
+          outputTokens: result.outputTokens,
+        },
       })
       const budgetChecked = await WorkflowRun.getDetail(input.runID)
       if (budgetChecked.status === "failed") {

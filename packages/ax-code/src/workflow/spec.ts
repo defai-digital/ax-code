@@ -7,6 +7,8 @@ export const WORKFLOW_DEFAULT_MAX_TOTAL_AGENTS = 25
 export const WORKFLOW_MAX_CONCURRENT_AGENTS = 16
 export const WORKFLOW_MAX_TOTAL_AGENTS = 1000
 export const WORKFLOW_DEFAULT_MAX_TOTAL_TOKENS = 100_000
+export const WORKFLOW_DEFAULT_MAX_INPUT_TOKENS_PER_CHILD = 50_000
+export const WORKFLOW_DEFAULT_MAX_OUTPUT_TOKENS_PER_CHILD = 8_000
 export const WORKFLOW_DEFAULT_MAX_WALL_TIME_MS = 60 * 60 * 1000
 export const WORKFLOW_DEFAULT_MAX_TOOL_CALLS = 500
 export const WORKFLOW_DEFAULT_MAX_RETRIES = 1
@@ -51,6 +53,8 @@ export type WorkflowTrigger = z.infer<typeof WorkflowTrigger>
 
 const WorkflowBudgetFields = {
   maxTotalTokens: PositiveInteger.default(WORKFLOW_DEFAULT_MAX_TOTAL_TOKENS),
+  maxInputTokensPerChild: PositiveInteger.default(WORKFLOW_DEFAULT_MAX_INPUT_TOKENS_PER_CHILD),
+  maxOutputTokensPerChild: PositiveInteger.default(WORKFLOW_DEFAULT_MAX_OUTPUT_TOKENS_PER_CHILD),
   maxWallTimeMs: PositiveInteger.default(WORKFLOW_DEFAULT_MAX_WALL_TIME_MS),
   maxConcurrentAgents: PositiveInteger.max(WORKFLOW_MAX_CONCURRENT_AGENTS).default(
     WORKFLOW_DEFAULT_MAX_CONCURRENT_AGENTS,
@@ -62,6 +66,8 @@ const WorkflowBudgetFields = {
 
 const DefaultWorkflowBudget = {
   maxTotalTokens: WORKFLOW_DEFAULT_MAX_TOTAL_TOKENS,
+  maxInputTokensPerChild: WORKFLOW_DEFAULT_MAX_INPUT_TOKENS_PER_CHILD,
+  maxOutputTokensPerChild: WORKFLOW_DEFAULT_MAX_OUTPUT_TOKENS_PER_CHILD,
   maxWallTimeMs: WORKFLOW_DEFAULT_MAX_WALL_TIME_MS,
   maxConcurrentAgents: WORKFLOW_DEFAULT_MAX_CONCURRENT_AGENTS,
   maxTotalAgents: WORKFLOW_DEFAULT_MAX_TOTAL_AGENTS,
@@ -80,7 +86,16 @@ export const WorkflowBudget = z.object(WorkflowBudgetFields).superRefine((budget
 })
 export type WorkflowBudget = z.infer<typeof WorkflowBudget>
 
-export const WorkflowPhaseBudget = z.object(WorkflowBudgetFields).partial()
+export const WorkflowPhaseBudget = z.object({
+  maxTotalTokens: PositiveInteger.optional(),
+  maxInputTokensPerChild: PositiveInteger.optional(),
+  maxOutputTokensPerChild: PositiveInteger.optional(),
+  maxWallTimeMs: PositiveInteger.optional(),
+  maxConcurrentAgents: PositiveInteger.max(WORKFLOW_MAX_CONCURRENT_AGENTS).optional(),
+  maxTotalAgents: PositiveInteger.max(WORKFLOW_MAX_TOTAL_AGENTS).optional(),
+  maxToolCalls: PositiveInteger.optional(),
+  maxRetries: z.number().int().min(0).max(5).optional(),
+})
 export type WorkflowPhaseBudget = z.infer<typeof WorkflowPhaseBudget>
 
 const WorkflowPacingFields = {
@@ -100,7 +115,10 @@ const DefaultWorkflowPacing = {
 export const WorkflowPacing = z.object(WorkflowPacingFields)
 export type WorkflowPacing = z.infer<typeof WorkflowPacing>
 
-export const WorkflowPhasePacing = z.object(WorkflowPacingFields).partial()
+export const WorkflowPhasePacing = z.object({
+  maxRequestsPerMinute: PositiveInteger.max(WORKFLOW_MAX_REQUESTS_PER_MINUTE).optional(),
+  maxTokensPerMinute: PositiveInteger.max(WORKFLOW_MAX_TOKENS_PER_MINUTE).optional(),
+})
 export type WorkflowPhasePacing = z.infer<typeof WorkflowPhasePacing>
 
 export const WorkflowModelPolicy = z.object({

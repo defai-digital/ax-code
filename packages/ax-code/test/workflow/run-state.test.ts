@@ -246,6 +246,72 @@ describe("WorkflowRun state", () => {
     })
   })
 
+  test("fails a workflow when a child exceeds its input or output token slice", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const events: string[] = []
+        const unsubscribers = [
+          Bus.subscribe(WorkflowRun.Event.BudgetExceeded, (event) => {
+            events.push(`${event.type}:${event.properties.exceeded.join(";")}`)
+          }),
+          Bus.subscribe(WorkflowRun.Event.ChildUpdated, (event) => {
+            events.push(`${event.type}:${event.properties.child.status}:${event.properties.child.error ?? ""}`)
+          }),
+        ]
+
+        try {
+          const run = await WorkflowRun.create({ spec: parseWorkflowSpecV1(WorkflowFixtureSpecs.noopDryRun) })
+          const detail = await WorkflowRun.getDetail(run.id)
+          const phase = detail.phases[0]!
+          await WorkflowRun.setStatus({ id: run.id, status: "running" })
+          await WorkflowRun.setPhaseStatus({ id: phase.id, status: "running" })
+          const child = await WorkflowRun.appendChild({
+            runID: run.id,
+            phaseID: phase.id,
+            agent: "worker",
+            budgetSlice: {
+              maxTotalTokens: 100,
+              maxInputTokensPerChild: 30,
+              maxOutputTokensPerChild: 20,
+            },
+          })
+
+          await WorkflowRun.appendBudgetUsage({
+            runID: run.id,
+            phaseID: phase.id,
+            childID: child.id,
+            kind: "consume",
+            usageDelta: {
+              totalTokens: 55,
+              inputTokens: 35,
+              outputTokens: 20,
+            },
+          })
+
+          const failed = await WorkflowRun.getDetail(run.id)
+          expect(failed.status).toBe("failed")
+          expect(failed.phases[0]?.status).toBe("failed")
+          expect(failed.children[0]?.status).toBe("failed")
+          expect(failed.error).toContain("child input tokens 35/30")
+          expect(failed.budgetUsage).toMatchObject({
+            totalTokens: 55,
+            inputTokens: 35,
+            outputTokens: 20,
+          })
+
+          await new Promise((resolve) => setTimeout(resolve, 0))
+          expect(events).toContain("workflow.budget.exceeded:child input tokens 35/30")
+          expect(events.some((event) => event.includes("workflow.child.updated:failed"))).toBe(true)
+        } finally {
+          for (const unsubscribe of unsubscribers) unsubscribe()
+        }
+      },
+    })
+  })
+
   test("persists resolved workflow input values", async () => {
     await using tmp = await tmpdir({ git: true })
 

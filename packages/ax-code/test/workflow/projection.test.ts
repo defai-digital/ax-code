@@ -52,6 +52,8 @@ describe("workflow projections", () => {
           })
           expect(projection.budgetUsage.childAgents).toBe(8)
           expect(projection.budgetLimit.maxConcurrentAgents).toBe(8)
+          expect(projection.budgetLimit.maxInputTokensPerChild).toBe(50_000)
+          expect(projection.budgetLimit.maxOutputTokensPerChild).toBe(8_000)
           expect(projection.elapsedMs).toBeGreaterThanOrEqual(0)
         },
       })

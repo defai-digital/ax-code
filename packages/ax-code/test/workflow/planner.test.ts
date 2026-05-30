@@ -9,6 +9,8 @@ describe("workflow dry-run planner", () => {
 
     expect(plan.summary.phaseCount).toBe(1)
     expect(plan.summary.estimatedChildAgents).toBe(1)
+    expect(plan.summary.maxInputTokensPerChild).toBe(50_000)
+    expect(plan.summary.maxOutputTokensPerChild).toBe(8_000)
     expect(plan.summary.maxRequestsPerMinute).toBe(12)
     expect(plan.summary.maxTokensPerMinute).toBe(200_000)
     expect(plan.phases[0]?.maxParallel).toBe(1)
@@ -16,6 +18,10 @@ describe("workflow dry-run planner", () => {
     expect(plan.phases[0]?.children[0]).toMatchObject({
       modelRole: "planner",
       durable: true,
+      budgetSlice: {
+        maxInputTokensPerChild: 50_000,
+        maxOutputTokensPerChild: 8_000,
+      },
       pacing: { maxRequestsPerMinute: 12, maxTokensPerMinute: 200_000 },
       writePolicy: "read-only",
     })
@@ -140,6 +146,72 @@ describe("workflow dry-run planner", () => {
     const plan = planWorkflowDryRun({ spec, allowScaleBeyondDefaults: true })
     expect(plan.phases[0]?.pacing).toEqual({ maxRequestsPerMinute: 4, maxTokensPerMinute: 12_000 })
     expect(plan.phases[0]?.children[0]?.pacing).toEqual({ maxRequestsPerMinute: 4, maxTokensPerMinute: 12_000 })
+  })
+
+  test("inherits workflow pacing fields that a phase does not override", () => {
+    const spec = parseWorkflowSpecV1({
+      schemaVersion: 1,
+      id: "phase-pacing-inheritance",
+      name: "Phase Pacing Inheritance",
+      description: "Phase pacing overrides should not reset unspecified workflow pacing fields.",
+      budget: {
+        maxTotalTokens: 4_000,
+        maxConcurrentAgents: 4,
+        maxTotalAgents: 4,
+      },
+      pacing: {
+        maxRequestsPerMinute: 2,
+        maxTokensPerMinute: 8_000,
+      },
+      phases: [
+        {
+          id: "fanout",
+          name: "Fanout",
+          kind: "fanout",
+          inputs: ["a", "b", "c", "d"],
+          pacing: {
+            maxRequestsPerMinute: 4,
+          },
+        },
+      ],
+    })
+
+    const plan = planWorkflowDryRun({ spec, allowScaleBeyondDefaults: true })
+    expect(plan.phases[0]?.pacing).toEqual({ maxRequestsPerMinute: 4, maxTokensPerMinute: 8_000 })
+  })
+
+  test("slices child token caps from workflow and phase budgets", () => {
+    const spec = parseWorkflowSpecV1({
+      schemaVersion: 1,
+      id: "child-token-caps",
+      name: "Child Token Caps",
+      description: "The planner carries child-level input and output token limits.",
+      budget: {
+        maxTotalTokens: 12_000,
+        maxInputTokensPerChild: 3_000,
+        maxOutputTokensPerChild: 1_000,
+        maxConcurrentAgents: 2,
+        maxTotalAgents: 2,
+      },
+      phases: [
+        {
+          id: "fanout",
+          name: "Fanout",
+          kind: "fanout",
+          inputs: ["a", "b"],
+          budget: {
+            maxInputTokensPerChild: 2_000,
+          },
+        },
+      ],
+    })
+
+    const plan = planWorkflowDryRun({ spec })
+    expect(plan.phases[0]?.children[0]?.budgetSlice).toMatchObject({
+      maxTotalTokens: 6_000,
+      maxInputTokensPerChild: 2_000,
+      maxOutputTokensPerChild: 1_000,
+    })
   })
 
   test("rejects phase pacing above safe defaults without scale opt-in", () => {

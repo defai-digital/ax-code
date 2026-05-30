@@ -1,6 +1,8 @@
 import z from "zod"
 import {
   WORKFLOW_DEFAULT_MAX_CONCURRENT_AGENTS,
+  WORKFLOW_DEFAULT_MAX_INPUT_TOKENS_PER_CHILD,
+  WORKFLOW_DEFAULT_MAX_OUTPUT_TOKENS_PER_CHILD,
   WORKFLOW_DEFAULT_MAX_REQUESTS_PER_MINUTE,
   WORKFLOW_DEFAULT_MAX_TOKENS_PER_MINUTE,
   WORKFLOW_DEFAULT_MAX_TOTAL_AGENTS,
@@ -19,6 +21,8 @@ export type WorkflowDryRunPlan = {
     estimatedChildAgents: number
     maxConcurrentAgents: number
     maxTotalTokens: number
+    maxInputTokensPerChild: number
+    maxOutputTokensPerChild: number
     maxToolCalls: number
     maxRequestsPerMinute: number
     maxTokensPerMinute: number
@@ -47,6 +51,8 @@ export type WorkflowDryRunChild = {
   model?: string
   budgetSlice: {
     maxTotalTokens: number
+    maxInputTokensPerChild: number
+    maxOutputTokensPerChild: number
     maxToolCalls: number
   }
   pacing: WorkflowPacing
@@ -99,6 +105,8 @@ export function planWorkflowDryRun(input: WorkflowDryRunInput): WorkflowDryRunPl
         model: route.model,
         budgetSlice: {
           maxTotalTokens: tokenSlice,
+          maxInputTokensPerChild: effectiveChildInputTokenLimit(phase, parsed.spec.budget),
+          maxOutputTokensPerChild: effectiveChildOutputTokenLimit(phase, parsed.spec.budget),
           maxToolCalls: toolCallSlice,
         },
         pacing,
@@ -121,6 +129,8 @@ export function planWorkflowDryRun(input: WorkflowDryRunInput): WorkflowDryRunPl
       estimatedChildAgents,
       maxConcurrentAgents: parsed.spec.budget.maxConcurrentAgents,
       maxTotalTokens: parsed.spec.budget.maxTotalTokens,
+      maxInputTokensPerChild: parsed.spec.budget.maxInputTokensPerChild,
+      maxOutputTokensPerChild: parsed.spec.budget.maxOutputTokensPerChild,
       maxToolCalls: parsed.spec.budget.maxToolCalls,
       maxRequestsPerMinute: parsed.spec.pacing.maxRequestsPerMinute,
       maxTokensPerMinute: parsed.spec.pacing.maxTokensPerMinute,
@@ -150,6 +160,16 @@ function assertPlannerSafety(input: z.infer<typeof WorkflowDryRunInput>) {
     if (input.spec.budget.maxTotalAgents > WORKFLOW_DEFAULT_MAX_TOTAL_AGENTS) {
       issues.push(
         `maxTotalAgents ${input.spec.budget.maxTotalAgents} exceeds safe default ${WORKFLOW_DEFAULT_MAX_TOTAL_AGENTS}`,
+      )
+    }
+    if (input.spec.budget.maxInputTokensPerChild > WORKFLOW_DEFAULT_MAX_INPUT_TOKENS_PER_CHILD) {
+      issues.push(
+        `maxInputTokensPerChild ${input.spec.budget.maxInputTokensPerChild} exceeds safe default ${WORKFLOW_DEFAULT_MAX_INPUT_TOKENS_PER_CHILD}`,
+      )
+    }
+    if (input.spec.budget.maxOutputTokensPerChild > WORKFLOW_DEFAULT_MAX_OUTPUT_TOKENS_PER_CHILD) {
+      issues.push(
+        `maxOutputTokensPerChild ${input.spec.budget.maxOutputTokensPerChild} exceeds safe default ${WORKFLOW_DEFAULT_MAX_OUTPUT_TOKENS_PER_CHILD}`,
       )
     }
     if (input.spec.pacing.maxRequestsPerMinute > WORKFLOW_DEFAULT_MAX_REQUESTS_PER_MINUTE) {
@@ -189,11 +209,7 @@ function assertPlannerSafety(input: z.infer<typeof WorkflowDryRunInput>) {
   if (issues.length > 0) throw new WorkflowPlanError(issues)
 }
 
-function assertPacingSafety(
-  input: z.infer<typeof WorkflowDryRunInput>,
-  childCounts: number[],
-  tokenSlice: number,
-) {
+function assertPacingSafety(input: z.infer<typeof WorkflowDryRunInput>, childCounts: number[], tokenSlice: number) {
   const issues: string[] = []
   for (const [index, phase] of input.spec.phases.entries()) {
     const estimatedChildren = childCounts[index] ?? 1
@@ -229,6 +245,14 @@ function effectivePacing(phase: WorkflowPhase, spec: WorkflowSpec): WorkflowPaci
     ...spec.pacing,
     ...phase.pacing,
   }
+}
+
+function effectiveChildInputTokenLimit(phase: WorkflowPhase, budget: WorkflowBudget) {
+  return phase.budget?.maxInputTokensPerChild ?? budget.maxInputTokensPerChild
+}
+
+function effectiveChildOutputTokenLimit(phase: WorkflowPhase, budget: WorkflowBudget) {
+  return phase.budget?.maxOutputTokensPerChild ?? budget.maxOutputTokensPerChild
 }
 
 function modelRouteForPhase(phase: WorkflowPhase, spec: WorkflowSpec) {

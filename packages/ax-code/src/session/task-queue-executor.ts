@@ -9,6 +9,7 @@ import { lazy } from "../util/lazy"
 import { SessionPrompt } from "./prompt"
 import { TaskQueue } from "./task-queue"
 import type { SessionID, TaskQueueID } from "./schema"
+import type { WorkflowChildID, WorkflowPhaseID, WorkflowRunID } from "../workflow/state"
 
 const log = Log.create({ service: "session.task-queue-executor" })
 
@@ -250,7 +251,37 @@ function workflowSubagentExecution(item: TaskQueue.Info): QueueExecution | undef
   if (!body) return undefined
   return {
     sessionID: item.sessionID!,
-    run: () => SessionPrompt.prompt({ ...body, sessionID: item.sessionID! }),
+    run: async () => {
+      const result = await SessionPrompt.prompt({ ...body, sessionID: item.sessionID! })
+      await recordWorkflowSubagentUsage(item, result)
+      return result
+    },
+  }
+}
+
+async function recordWorkflowSubagentUsage(item: TaskQueue.Info, result: unknown) {
+  const workflow = workflowPayload(item)
+  if (!workflow) return
+  const tokens = messageTokens(result)
+  if (!tokens) return
+
+  const { WorkflowRun } = await import("../workflow/run")
+  await WorkflowRun.appendBudgetUsage({
+    runID: workflow.runID as WorkflowRunID,
+    phaseID: workflow.phaseID as WorkflowPhaseID,
+    childID: workflow.childID as WorkflowChildID,
+    kind: "consume",
+    usageDelta: {
+      totalTokens: tokens.total,
+      inputTokens: tokens.input,
+      outputTokens: tokens.output,
+    },
+  })
+
+  const detail = await WorkflowRun.getDetail(workflow.runID as WorkflowRunID)
+  const child = detail.children.find((candidate) => candidate.id === workflow.childID)
+  if (child?.status === "failed" && child.error?.startsWith("Workflow budget exceeded")) {
+    throw new Error(child.error)
   }
 }
 
@@ -310,6 +341,42 @@ function readPayloadPrompt(item: TaskQueue.Info) {
 function isWorkflowQueueItem(item: TaskQueue.Info) {
   const workflow = item.payload["workflow"]
   return !!workflow && typeof workflow === "object"
+}
+
+function workflowPayload(item: TaskQueue.Info) {
+  const workflow = item.payload["workflow"]
+  if (!workflow || typeof workflow !== "object") return undefined
+  const record = workflow as Record<string, unknown>
+  if (typeof record.runID !== "string" || typeof record.phaseID !== "string" || typeof record.childID !== "string") {
+    return undefined
+  }
+  return {
+    runID: record.runID,
+    phaseID: record.phaseID,
+    childID: record.childID,
+  }
+}
+
+function messageTokens(result: unknown) {
+  if (!result || typeof result !== "object") return undefined
+  const info = (result as { info?: unknown }).info
+  if (!info || typeof info !== "object") return undefined
+  const tokens = (info as { tokens?: unknown }).tokens
+  if (!tokens || typeof tokens !== "object") return undefined
+  const record = tokens as Record<string, unknown>
+  const input = nonNegativeNumber(record.input)
+  const output = nonNegativeNumber(record.output)
+  const total = nonNegativeNumber(record.total) ?? (input ?? 0) + (output ?? 0)
+  if (input === undefined && output === undefined && total === 0) return undefined
+  return {
+    total,
+    input: input ?? 0,
+    output: output ?? 0,
+  }
+}
+
+function nonNegativeNumber(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : undefined
 }
 
 function modelObject(value: unknown) {

@@ -120,11 +120,13 @@ describe("dispatch primitive", () => {
     expect(events.sort()).toEqual(["done:a:completed", "done:b:completed", "start:a", "start:b"])
   })
 
-  test("preserves executor output, filesModified, tokensUsed", async () => {
+  test("preserves executor output, filesModified, and token usage", async () => {
     const executor: DispatchExecutor = async (s) => ({
       output: `${s.agent}-output`,
       filesModified: [`/tmp/${s.agent}.ts`],
       tokensUsed: 123,
+      inputTokens: 100,
+      outputTokens: 23,
     })
 
     const [result] = await dispatch([spec("a")], executor)
@@ -132,6 +134,8 @@ describe("dispatch primitive", () => {
     expect(result.output).toBe("a-output")
     expect(result.filesModified).toEqual(["/tmp/a.ts"])
     expect(result.tokensUsed).toBe(123)
+    expect(result.inputTokens).toBe(100)
+    expect(result.outputTokens).toBe(23)
   })
 
   test("missing optional fields default sensibly", async () => {
@@ -142,6 +146,8 @@ describe("dispatch primitive", () => {
     expect(result.output).toBeUndefined()
     expect(result.filesModified).toEqual([])
     expect(result.tokensUsed).toBe(0)
+    expect(result.inputTokens).toBe(0)
+    expect(result.outputTokens).toBe(0)
   })
 
   test("non-Error throw is stringified", async () => {

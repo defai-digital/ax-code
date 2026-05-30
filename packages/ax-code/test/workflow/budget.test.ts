@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import {
   WorkflowBudgetExceededError,
   addWorkflowBudgetUsage,
+  evaluateWorkflowChildBudget,
   evaluateWorkflowBudget,
   normalizeWorkflowBudgetUsage,
   reserveWorkflowBudget,
@@ -9,6 +10,8 @@ import {
 
 const budget = {
   maxTotalTokens: 1000,
+  maxInputTokensPerChild: 500,
+  maxOutputTokensPerChild: 250,
   maxWallTimeMs: 10_000,
   maxConcurrentAgents: 3,
   maxTotalAgents: 5,
@@ -62,5 +65,24 @@ describe("workflow budget helpers", () => {
         reserve: { totalTokens: 200 },
       }),
     ).toThrow(WorkflowBudgetExceededError)
+  })
+
+  test("evaluates child-level input and output token caps", () => {
+    const evaluation = evaluateWorkflowChildBudget({
+      budgetSlice: {
+        maxTotalTokens: 1000,
+        maxInputTokensPerChild: 500,
+        maxOutputTokensPerChild: 250,
+      },
+      usage: {
+        totalTokens: 760,
+        inputTokens: 510,
+        outputTokens: 250,
+      },
+    })
+
+    expect(evaluation.status).toBe("exceeded")
+    expect(evaluation.exceeded).toEqual(["child input tokens 510/500"])
+    expect(evaluation.warnings).toContain("child output tokens 250/250")
   })
 })

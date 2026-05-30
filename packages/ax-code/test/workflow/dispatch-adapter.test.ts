@@ -272,4 +272,56 @@ describe("WorkflowDispatchAdapter", () => {
       else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
     }
   })
+
+  test("stops direct dispatch when a child exceeds its input token slice", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const previous = process.env.AX_CODE_WORKFLOW_RUNTIME
+    process.env.AX_CODE_WORKFLOW_RUNTIME = "1"
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const spec = parseWorkflowSpecV1({
+            schemaVersion: 1,
+            id: "child-budget-stop",
+            name: "Child Budget Stop",
+            description: "Fixture that must stop when one direct dispatch child exceeds its input token cap.",
+            budget: {
+              maxTotalTokens: 1_000,
+              maxInputTokensPerChild: 10,
+              maxOutputTokensPerChild: 100,
+              maxConcurrentAgents: 1,
+              maxTotalAgents: 1,
+              maxToolCalls: 100,
+            },
+            phases: [{ id: "scan", name: "Scan", kind: "fanout", prompt: "Spend too many input tokens." }],
+          })
+          const run = await WorkflowRun.create({ spec })
+
+          const result = await WorkflowScheduler.start(run.id, {
+            enqueueChildren: false,
+            dispatchExecutor: async () => ({
+              output: "too much context",
+              tokensUsed: 25,
+              inputTokens: 20,
+              outputTokens: 5,
+            }),
+          })
+
+          expect(result.status).toBe("failed")
+          expect(result.error).toContain("child input tokens 20/10")
+          expect(result.children[0]?.status).toBe("failed")
+          expect(result.budgetUsage).toMatchObject({
+            totalTokens: 25,
+            inputTokens: 20,
+            outputTokens: 5,
+          })
+          expect(result.budgetLedger.at(-1)?.message).toContain("child input tokens 20/10")
+        },
+      })
+    } finally {
+      if (previous === undefined) delete process.env.AX_CODE_WORKFLOW_RUNTIME
+      else process.env.AX_CODE_WORKFLOW_RUNTIME = previous
+    }
+  })
 })

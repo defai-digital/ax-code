@@ -9,7 +9,7 @@ import { MessageID, PartID, SessionID } from "../session/schema"
 import { Database, NotFoundError, and, asc, desc, eq, inArray } from "../storage/db"
 import { Log } from "../util/log"
 import { defaultWorkflowArtifactRedaction } from "./artifact"
-import { addWorkflowBudgetUsage, evaluateWorkflowBudget } from "./budget"
+import { addWorkflowBudgetUsage, evaluateWorkflowBudget, evaluateWorkflowChildBudget } from "./budget"
 import { WorkflowInputValidationError, resolveWorkflowInputValues } from "./spec"
 import {
   EmptyWorkflowBudgetUsage,
@@ -360,13 +360,33 @@ async function appendBudgetUsage(input: WorkflowRunState.AppendBudgetUsageInput)
     const run = db.select().from(WorkflowRunTable).where(eq(WorkflowRunTable.id, parsed.runID)).get()
     if (!run) throw new NotFoundError({ message: `Workflow run not found: ${parsed.runID}` })
     const nextUsage = addWorkflowBudgetUsage(run.budget_usage, parsed.usageDelta)
-    const evaluation = evaluateWorkflowBudget({
+    const workflowEvaluation = evaluateWorkflowBudget({
       budget: run.budget,
       usage: nextUsage,
       elapsedMs: now - run.time_created,
     })
-    const budgetExceeded = evaluation.exceeded.length > 0
-    const stopMessage = budgetExceeded ? `Workflow budget exceeded: ${evaluation.exceeded.join("; ")}` : undefined
+    const budgetChild = parsed.childID
+      ? db.select().from(WorkflowChildTable).where(eq(WorkflowChildTable.id, parsed.childID)).get()
+      : undefined
+    const childUsage = parsed.childID
+      ? addWorkflowBudgetUsage(
+          db
+            .select()
+            .from(WorkflowBudgetLedgerTable)
+            .where(eq(WorkflowBudgetLedgerTable.child_id, parsed.childID))
+            .all()
+            .reduce((usage, ledger) => addWorkflowBudgetUsage(usage, ledger.usage_delta), EmptyWorkflowBudgetUsage),
+          parsed.usageDelta,
+        )
+      : undefined
+    const childEvaluation = evaluateWorkflowChildBudget({
+      budgetSlice: budgetChild?.budget_slice ?? undefined,
+      usage: childUsage ?? EmptyWorkflowBudgetUsage,
+    })
+    const budgetWarnings = [...workflowEvaluation.warnings, ...childEvaluation.warnings]
+    const budgetExceededMessages = [...workflowEvaluation.exceeded, ...childEvaluation.exceeded]
+    const budgetExceeded = budgetExceededMessages.length > 0
+    const stopMessage = budgetExceeded ? `Workflow budget exceeded: ${budgetExceededMessages.join("; ")}` : undefined
     const row = db
       .insert(WorkflowBudgetLedgerTable)
       .values({
@@ -411,9 +431,8 @@ async function appendBudgetUsage(input: WorkflowRunState.AppendBudgetUsageInput)
       }
 
       if (parsed.childID) {
-        const child = db.select().from(WorkflowChildTable).where(eq(WorkflowChildTable.id, parsed.childID)).get()
-        if (child && !isTerminalChildStatus(child.status)) {
-          failedChildPreviousStatus = child.status
+        if (budgetChild && !isTerminalChildStatus(budgetChild.status)) {
+          failedChildPreviousStatus = budgetChild.status
           const failedChildRow = db
             .update(WorkflowChildTable)
             .set({
@@ -480,14 +499,15 @@ async function appendBudgetUsage(input: WorkflowRunState.AppendBudgetUsageInput)
       failedPhasePreviousStatus,
       failedChild,
       failedChildPreviousStatus,
-      evaluation,
+      warnings: budgetWarnings,
+      exceeded: budgetExceededMessages,
     }
   })
   publishBudgetAppended(changed.entry)
-  if (changed.evaluation.warnings.length > 0) publishBudgetWarning(changed.entry, changed.evaluation.warnings)
+  if (changed.warnings.length > 0) publishBudgetWarning(changed.entry, changed.warnings)
   if (changed.exceededEntry) publishBudgetAppended(changed.exceededEntry)
-  if (changed.evaluation.exceeded.length > 0) {
-    publishBudgetExceeded(changed.exceededEntry ?? changed.entry, changed.evaluation.exceeded)
+  if (changed.exceeded.length > 0) {
+    publishBudgetExceeded(changed.exceededEntry ?? changed.entry, changed.exceeded)
   }
   if (changed.failedChild) publishChildUpdated(changed.failedChild, changed.failedChildPreviousStatus)
   if (changed.failedPhase) publishPhaseUpdated(changed.failedPhase, changed.failedPhasePreviousStatus)
@@ -504,7 +524,8 @@ type AppendBudgetUsageChange = {
   failedPhasePreviousStatus: WorkflowRun.PhaseStatus | undefined
   failedChild: WorkflowChildRecord | undefined
   failedChildPreviousStatus: WorkflowRun.ChildStatus | undefined
-  evaluation: ReturnType<typeof evaluateWorkflowBudget>
+  warnings: string[]
+  exceeded: string[]
 }
 
 async function attachVerificationEnvelopeIDs(
