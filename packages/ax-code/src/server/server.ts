@@ -51,6 +51,7 @@ import { SuperLongRoutes } from "./routes/super-long"
 import { PromptHistoryRoutes } from "./routes/prompt-history"
 import { TaskQueueRoutes } from "./routes/task-queue"
 import { ScheduledTaskRoutes } from "./routes/scheduled-task"
+import { WorkflowRunRoutes, WorkflowTemplateRoutes } from "./routes/workflow"
 import { GlobalRoutes } from "./routes/global"
 import { PROVIDER_ID_PARAM, withProviderID } from "./routes/route-params"
 import { ToolRegistry } from "../tool/registry"
@@ -773,6 +774,8 @@ export namespace Server {
       .route("/prompt-history", PromptHistoryRoutes())
       .route("/task-queue", TaskQueueRoutes())
       .route("/scheduled-task", ScheduledTaskRoutes())
+      .route("/workflow-runs", WorkflowRunRoutes())
+      .route("/workflow-templates", WorkflowTemplateRoutes())
       .route("/experimental", ExperimentalRoutes())
       .route("/session", SessionRoutes())
       .route("/permission", PermissionRoutes())
