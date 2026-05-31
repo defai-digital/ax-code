@@ -938,7 +938,6 @@ export function createAxCodeGrpcNativeIpcStream<T>(
           }
         },
         async return() {
-          start()
           await cleanup()
           return { value: undefined, done: true }
         },
@@ -2418,11 +2417,12 @@ function createAsyncQueue<T>() {
     reject: (error: unknown) => void
   }> = []
   let closed = false
+  let hasFailed = false
   let failure: unknown
 
   const next = (): Promise<IteratorResult<T>> => {
     if (values.length) return Promise.resolve({ value: values.shift() as T, done: false })
-    if (failure) return Promise.reject(failure)
+    if (hasFailed) return Promise.reject(failure)
     if (closed) return Promise.resolve({ value: undefined, done: true })
     return new Promise((resolve, reject) => waiters.push({ resolve, reject }))
   }
@@ -2431,7 +2431,7 @@ function createAsyncQueue<T>() {
     while (waiters.length && values.length) {
       waiters.shift()!.resolve({ value: values.shift() as T, done: false })
     }
-    if (failure) {
+    if (hasFailed) {
       while (waiters.length) waiters.shift()!.reject(failure)
       return
     }
@@ -2447,7 +2447,7 @@ function createAsyncQueue<T>() {
       },
     } satisfies AsyncIterable<T>,
     push(value: T) {
-      if (closed || failure) return
+      if (closed || hasFailed) return
       values.push(value)
       flush()
     },
@@ -2456,6 +2456,7 @@ function createAsyncQueue<T>() {
       flush()
     },
     fail(error: unknown) {
+      hasFailed = true
       failure = error
       flush()
     },
