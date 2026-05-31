@@ -91553,8 +91553,8 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 1000000,
-          "output": 128000
+          "context": 200000,
+          "output": 32000
         }
       },
       "gpt-5.4-nano": {
@@ -92357,6 +92357,35 @@
         },
         "provider": {
           "npm": "@ai-sdk/openai"
+        }
+      },
+      "deepseek-v4-flash": {
+        "id": "deepseek-v4-flash",
+        "name": "DeepSeek V4 Flash",
+        "family": "deepseek-flash",
+        "attachment": false,
+        "reasoning": true,
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "structured_output": true,
+        "temperature": true,
+        "knowledge": "2025-05",
+        "release_date": "2026-04-24",
+        "last_updated": "2026-04-24",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 1000000,
+          "output": 384000
         }
       },
       "claude-opus-4-8": {

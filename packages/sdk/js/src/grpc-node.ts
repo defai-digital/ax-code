@@ -234,7 +234,8 @@ export async function startAxCodeGrpcNodeHttp2Server(
     server.listen(options.port ?? 0, host)
   })
   const address = server.address()
-  if (!address || typeof address === "string") throw new Error("AX Code gRPC HTTP/2 server did not expose a TCP address")
+  if (!address || typeof address === "string")
+    throw new Error("AX Code gRPC HTTP/2 server did not expose a TCP address")
   return {
     url: `http://${host}:${address.port}`,
     server,
@@ -715,7 +716,7 @@ function errorMessage(error: unknown) {
 }
 
 class GrpcFrameDecoder {
-  private buffer = new Uint8Array(0)
+  private buffer: Uint8Array<ArrayBufferLike> = new Uint8Array(0)
 
   push(chunk: Uint8Array) {
     this.buffer = concatBytes([this.buffer, chunk])
