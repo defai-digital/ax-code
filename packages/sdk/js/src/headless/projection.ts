@@ -237,7 +237,8 @@ export function applyHeadlessProjectionEvent<
   }
 
   const _exhaustive: never = event
-  return { handled: false, effects: _exhaustive }
+  void _exhaustive
+  return { handled: false, effects }
 }
 
 export function runtimeProbeKeysForEvent(event: HeadlessRuntimeStatusEvent): HeadlessRuntimeProbeKey[] {
@@ -316,7 +317,7 @@ function deleteSessionState<
   TRisk = unknown,
   TGoal = unknown,
 >(state: HeadlessProjectionState<TSession, TTodo, TDiff, TStatus, TMessage, TPart, TRisk, TGoal>, sessionID: string) {
-  state.session = state.session.filter((session) => session.id !== sessionID)
+  removeByID(state.session, sessionID)
   for (const message of state.message[sessionID] ?? []) {
     delete state.part[message.id]
   }

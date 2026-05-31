@@ -58,7 +58,7 @@ export class PermissionError extends AxCodeError {
   readonly permission: string
   readonly patterns: string[]
   constructor(permission: string, patterns: string[] = []) {
-    super(`Permission denied: ${permission} (${patterns.join(", ")})`, "PERMISSION_DENIED")
+    super(`Permission denied: ${permission}${patterns.length ? ` (${patterns.join(", ")})` : ""}`, "PERMISSION_DENIED")
     this.name = "PermissionError"
     this.permission = permission
     this.patterns = patterns
