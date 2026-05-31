@@ -1,5 +1,5 @@
 import { createStore } from "solid-js/store"
-import { batch, createEffect, createMemo } from "solid-js"
+import { batch, createEffect, createMemo, onCleanup } from "solid-js"
 import { useSync } from "@tui/context/sync"
 import { useTheme } from "@tui/context/theme"
 import { uniqueBy } from "remeda"
@@ -18,6 +18,7 @@ import {
 } from "@/provider/model-key"
 import { useArgs } from "./args"
 import { useSDK } from "./sdk"
+import { useRoute } from "./route"
 import { RGBA } from "@opentui/core"
 import { Filesystem } from "@/util/filesystem"
 import { optionalStateErrorMessage, shouldSurfaceOptionalStateError } from "@tui/util/optional-state"
@@ -484,6 +485,73 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
       },
     }
 
+    const session = iife(() => {
+      const filePath = path.join(Global.Path.state, "session.json")
+      const [sessionStore, setSessionStore] = createStore<{ ready: boolean; pinned: string[] }>({
+        ready: false,
+        pinned: [],
+      })
+      const state = { pending: false, saveWarningShown: false, disposed: false }
+
+      onCleanup(() => { state.disposed = true })
+
+      function save() {
+        if (state.disposed) return
+        if (!sessionStore.ready) {
+          state.pending = true
+          return
+        }
+        state.pending = false
+        void Filesystem.writeJson(filePath, { pinned: sessionStore.pinned })
+          .then(() => { state.saveWarningShown = false })
+          .catch((error) => {
+            state.pending = true
+            if (state.saveWarningShown) return
+            state.saveWarningShown = true
+            log.warn("failed to persist session pin state", { filePath, error })
+          })
+      }
+
+      Filesystem.readJson(filePath)
+        .then((x: any) => {
+          if (Array.isArray(x?.pinned)) setSessionStore("pinned", x.pinned)
+        })
+        .catch(() => {})
+        .finally(() => {
+          setSessionStore("ready", true)
+          if (state.pending) save()
+        })
+
+      const slots = createMemo(() => {
+        const existing = new Set(sync.data.session.filter((x) => x.parentID === undefined).map((x) => x.id))
+        return sessionStore.pinned.filter((id) => existing.has(id)).slice(0, 9)
+      })
+
+      const route = useRoute()
+
+      return {
+        pinned() { return sessionStore.pinned },
+        slots() { return slots() },
+        isPinned(id: string) { return sessionStore.pinned.includes(id) },
+        togglePin(sessionID: string) {
+          batch(() => {
+            const exists = sessionStore.pinned.includes(sessionID)
+            const next = exists
+              ? sessionStore.pinned.filter((x) => x !== sessionID)
+              : [...sessionStore.pinned, sessionID]
+            setSessionStore("pinned", next)
+            save()
+          })
+        },
+        quickSwitch(slot: number) {
+          const target = slots()[slot - 1]
+          if (!target) return
+          if (route.data.type === "session" && route.data.sessionID === target) return
+          route.navigate({ type: "session", sessionID: target })
+        },
+      }
+    })
+
     // Automatically update model when agent changes
     createEffect(() => {
       const value = agent.current()
@@ -511,6 +579,7 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
       model,
       agent,
       mcp,
+      session,
     }
     return result
   },
