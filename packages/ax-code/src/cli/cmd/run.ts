@@ -331,6 +331,15 @@ export const RunCommand = cmd({
         describe: "show thinking blocks",
         default: false,
       })
+      .option("replay", {
+        type: "boolean",
+        describe: "replay visible session history when resuming a session (requires --session or --continue)",
+        default: false,
+      })
+      .option("replay-limit", {
+        type: "number",
+        describe: "cap replay to the newest N messages (requires --replay)",
+      })
   },
   handler: async (args) => {
     const exitEarly = (message: string): never => {
@@ -390,6 +399,18 @@ export const RunCommand = cmd({
 
     if (args.fork && !args.continue && !args.session) {
       exitEarly("--fork requires --continue or --session")
+    }
+
+    if (args.replay && !args.continue && !args.session) {
+      exitEarly("--replay requires --continue or --session")
+    }
+
+    if (args["replay-limit"] !== undefined && !args.replay) {
+      exitEarly("--replay-limit requires --replay")
+    }
+
+    if (args["replay-limit"] !== undefined && (!Number.isInteger(args["replay-limit"]) || args["replay-limit"] <= 0)) {
+      exitEarly("--replay-limit must be a positive integer")
     }
 
     const rules: Permission.Ruleset = [
@@ -642,6 +663,29 @@ export const RunCommand = cmd({
 
       const sessionID = (await session(sdk)) ?? exitEarly("Session not found")
       await share(sdk, sessionID)
+
+      if (args.replay) {
+        const replayLimit = args["replay-limit"]
+        const msgsRes = await sdk.session.messages({ sessionID }).catch(() => undefined)
+        const msgs = msgsRes?.data ?? []
+        const limited = replayLimit !== undefined ? msgs.slice(-replayLimit) : msgs
+        if (limited.length > 0) {
+          UI.println(UI.Style.TEXT_DIM + `── session replay (${limited.length} message${limited.length === 1 ? "" : "s"}) ──`)
+          for (const entry of limited) {
+            const role = entry.info.role === "user" ? "You" : "Assistant"
+            const trimmed = entry.parts
+              .filter((p) => p.type === "text" && "text" in p)
+              .map((p) => ("text" in p ? (p as { text: string }).text : ""))
+              .join("")
+              .trim()
+            if (trimmed) {
+              UI.println(UI.Style.TEXT_DIM + `[${role}] ` + UI.Style.TEXT_NORMAL + trimmed.slice(0, 200) + (trimmed.length > 200 ? "…" : ""))
+            }
+          }
+          UI.println(UI.Style.TEXT_DIM + "────────────────────────────────────")
+          UI.empty()
+        }
+      }
 
       const closeEvents = async () => {
         const stream = events.stream as AsyncIterator<unknown>
