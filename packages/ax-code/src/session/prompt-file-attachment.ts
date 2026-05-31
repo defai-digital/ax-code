@@ -14,6 +14,8 @@ import { Log } from "../util/log"
 import { MessageV2 } from "./message-v2"
 import { MessageID, type SessionID } from "./schema"
 import { attachmentLineRange, readToolCallText } from "./prompt-file-reference"
+import { maybeResizeImage } from "./image-resize"
+import { Config } from "@/config/config"
 
 const log = Log.create({ service: "session.prompt" })
 
@@ -222,6 +224,27 @@ export async function resolveFileAttachmentPart(input: {
 
       try {
         await FileTime.read(input.sessionID, filepath)
+
+        let dataUrl: string
+        let finalMime = part.mime
+        {
+          const buffer = await Filesystem.readBytes(filepath)
+          if (buffer.length > 50 * 1024 * 1024) throw new Error(`Attachment too large: ${buffer.length} bytes`)
+
+          if (MessageV2.isMedia(part.mime) && part.mime.startsWith("image/")) {
+            const cfg = await Config.get()
+            const resizeResult = await maybeResizeImage({ buffer, mime: part.mime, config: cfg.attachment?.image })
+            if (resizeResult.resized) {
+              dataUrl = `data:${resizeResult.mime};base64,` + resizeResult.data
+              finalMime = resizeResult.mime
+            } else {
+              dataUrl = `data:${part.mime};base64,` + buffer.toString("base64")
+            }
+          } else {
+            dataUrl = `data:${part.mime};base64,` + buffer.toString("base64")
+          }
+        }
+
         return [
           draftReadToolCallPart({ filePath: filepath }),
           {
@@ -229,12 +252,8 @@ export async function resolveFileAttachmentPart(input: {
             messageID: input.messageID,
             sessionID: input.sessionID,
             type: "file",
-            url: await (async () => {
-              const buffer = await Filesystem.readBytes(filepath)
-              if (buffer.length > 50 * 1024 * 1024) throw new Error(`Attachment too large: ${buffer.length} bytes`)
-              return `data:${part.mime};base64,` + buffer.toString("base64")
-            })(),
-            mime: part.mime,
+            url: dataUrl,
+            mime: finalMime,
             filename: part.filename ?? path.basename(filepath),
             source: part.source,
           },
