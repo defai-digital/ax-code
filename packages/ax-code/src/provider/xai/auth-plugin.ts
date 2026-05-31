@@ -87,4 +87,4 @@ const hooks: Hooks = {
   },
 }
 
-export const xaiAuthPlugin: Plugin = Object.assign(async () => hooks, { name: "xai-auth" })
+export const xaiAuthPlugin: Plugin = Object.defineProperty(async () => hooks, "name", { value: "xai-auth" }) as Plugin
