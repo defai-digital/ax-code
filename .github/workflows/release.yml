@@ -172,8 +172,8 @@ jobs:
           if [ "$CHANNEL" != "latest" ]; then
             PRERELEASE_ARGS=(--prerelease)
           fi
-          # The release workflow only publishes GitHub release assets.
-          # Homebrew distribution is a manual follow-up step; npm distribution
+          # The release workflow publishes GitHub release assets and then
+          # triggers the homebrew job to update the tap. npm distribution
           # is no longer supported.
           # Idempotent: skip if any release (draft or published) already exists.
           if ! gh release view "$TAG" >/dev/null 2>&1; then
@@ -201,3 +201,17 @@ jobs:
           for f in packages/ax-code/dist/*.tar.gz packages/ax-code/dist/*.zip; do
             [ -f "$f" ] && gh release upload "$TAG" "$f" --clobber || true
           done
+
+  homebrew:
+    needs: publish
+    if: ${{ !contains(github.ref_name, '-') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Update Homebrew tap
+        env:
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAP_TOKEN: ${{ secrets.TAP_TOKEN }}
+        run: bash .github/scripts/update-homebrew.sh
