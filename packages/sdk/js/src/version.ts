@@ -13,7 +13,7 @@
  */
 
 /** Current SDK version. Matches the `version` field in package.json. */
-export const SDK_VERSION = "2.1.0"
+export const SDK_VERSION = "2.2.0"
 
 /**
  * Check whether the current SDK version satisfies a semver range.

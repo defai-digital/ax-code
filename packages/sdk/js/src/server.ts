@@ -68,11 +68,12 @@ export async function createAxCodeServer(options?: ServerOptions) {
     const id = setTimeout(() => {
       fail(new Error(`Timeout waiting for server to start after ${options.timeout}ms`))
     }, options.timeout)
-    let output = ""
+    let stdoutOutput = ""
+    let stderrOutput = ""
     let settled = false
     const onStdout = (chunk: any) => {
-      output += chunk.toString()
-      const lines = output.split("\n")
+      stdoutOutput += chunk.toString()
+      const lines = stdoutOutput.split("\n")
       for (const line of lines) {
         if (line.startsWith("ax-code server listening")) {
           const match = line.match(/on\s+(https?:\/\/[^\s]+)/)
@@ -86,7 +87,7 @@ export async function createAxCodeServer(options?: ServerOptions) {
       }
     }
     const onStderr = (chunk: any) => {
-      output += chunk.toString()
+      stderrOutput += chunk.toString()
     }
     const cleanup = () => {
       proc.stdout?.removeListener("data", onStdout)
@@ -118,9 +119,10 @@ export async function createAxCodeServer(options?: ServerOptions) {
     proc.stdout?.on("data", onStdout)
     proc.stderr?.on("data", onStderr)
     proc.on("exit", (code) => {
+      const combined = [stdoutOutput, stderrOutput].filter(Boolean).join("\n")
       let msg = `Server exited with code ${code}`
-      if (output.trim()) {
-        msg += `\nServer output: ${output}`
+      if (combined.trim()) {
+        msg += `\nServer output: ${combined}`
       }
       fail(new Error(msg), false)
     })
