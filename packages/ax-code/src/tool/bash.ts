@@ -178,7 +178,8 @@ const parser = lazy(async () => {
 
 // TODO: we may wanna rename this tool so it works better on other shells
 export const BashTool = Tool.define("bash", async () => {
-  const shell = Shell.acceptable()
+  const config = await Config.get()
+  const shell = Shell.acceptable(config.shell)
   log.info("bash tool using shell", { shell })
 
   return {
@@ -778,9 +779,21 @@ export const BashTool = Tool.define("bash", async () => {
           if (proc.pid) forgetTrackedPID(proc.pid)
         }
 
-        proc.once("close", () => {
-          procExitCode = proc.exitCode
+        proc.once("exit", () => {
           exited = true
+          procExitCode = proc.exitCode
+          // Background processes spawned by the command (e.g. `cmd &`) inherit
+          // the pipe FDs and keep them open, so the 'close' event never fires.
+          // Destroy the streams after one I/O cycle — giving Node.js a chance
+          // to drain any data already in the kernel buffer — then 'close' fires
+          // regardless of what background processes are still running.
+          setImmediate(() => {
+            proc.stdout?.destroy()
+            proc.stderr?.destroy()
+          })
+        })
+
+        proc.once("close", () => {
           cleanup()
           resolve()
         })

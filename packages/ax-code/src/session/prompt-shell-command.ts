@@ -5,6 +5,7 @@ import { Log } from "../util/log"
 import { Plugin } from "../plugin"
 import { Instance } from "../project/instance"
 import { Shell } from "@/shell/shell"
+import { Config } from "@/config/config"
 import { Session } from "."
 import { SessionRevert } from "./revert"
 import type { MessageV2 } from "./message-v2"
@@ -64,7 +65,8 @@ export async function executeShellCommand(
     model,
     command: input.command,
   })
-  const shell = Shell.preferred()
+  const config = await Config.get()
+  const shell = Shell.preferred(config.shell)
   const args = shellArgs(shell, input.command)
 
   const cwd = Instance.directory
@@ -244,10 +246,19 @@ export async function executeShellCommand(
       if (abort.aborted) {
         abortTimeoutHandler()
       }
-      proc.once("close", (code, signal) => {
+      proc.once("exit", (code, signal) => {
         exited = true
         exitSignal = signal ?? null
         exitCode = signal !== null ? 1 : (code ?? 0)
+        // Background processes spawned by the command inherit the pipe FDs,
+        // keeping them open so 'close' never fires. Destroy streams after one
+        // I/O cycle to drain the kernel buffer, then 'close' fires regardless.
+        setImmediate(() => {
+          proc.stdout?.destroy()
+          proc.stderr?.destroy()
+        })
+      })
+      proc.once("close", () => {
         resolve()
       })
       proc.once("error", (err) => {
