@@ -4,6 +4,7 @@ import { Permission } from "@/permission"
 import { Instance } from "@/project/instance"
 import { Question } from "@/question"
 import { Log } from "@/util/log"
+import { KeyedSerialQueue } from "@/util/queue"
 import { NamedError } from "@ax-code/util/error"
 import { lazy } from "../util/lazy"
 import { SessionPrompt } from "./prompt"
@@ -36,6 +37,12 @@ type QueueExecution = {
 const activeStatuses = ["running", "blocked_permission", "blocked_question"] as const
 const WORKFLOW_PACING_WINDOW_MS = 60_000
 const workflowPacingTimers = new Map<TaskQueueID, ReturnType<typeof setTimeout>>()
+const startLocks = Instance.state(
+  () => new KeyedSerialQueue(),
+  async (queue) => {
+    queue.clear()
+  },
+)
 
 const blockObserverState = Instance.state(
   () => ({
@@ -70,27 +77,33 @@ export namespace TaskQueueExecutor {
     ensureSessionBlockObservers()
     const execution = queueItemExecution(item)
     if (!execution) return item
-    if (item.status !== "queued" && item.status !== "waiting_for_idle") return item
 
-    if (await shouldWaitForIdle(execution.sessionID, item.id)) {
-      return item.status === "waiting_for_idle"
-        ? item
-        : TaskQueue.setStatus({ id: item.id, status: "waiting_for_idle" })
-    }
-    if (await shouldWaitForWorkflowPhaseSlot(item)) return item
-    const pacingWaitMs = await workflowPacingWaitMs(item)
-    if (pacingWaitMs > 0) {
-      scheduleWorkflowPacingRetry(item, pacingWaitMs)
-      return item
-    }
+    return withStartLocks(item, execution, async () => {
+      const latest = await TaskQueue.get(item.id)
+      const latestExecution = queueItemExecution(latest)
+      if (!latestExecution) return latest
+      if (latest.status !== "queued" && latest.status !== "waiting_for_idle") return latest
 
-    const running = await TaskQueue.claimForExecution(item.id)
-    if (!running) return TaskQueue.get(item.id)
+      if (await shouldWaitForIdle(latestExecution.sessionID, latest.id)) {
+        return latest.status === "waiting_for_idle"
+          ? latest
+          : TaskQueue.setStatus({ id: latest.id, status: "waiting_for_idle" })
+      }
+      if (await shouldWaitForWorkflowPhaseSlot(latest)) return latest
+      const pacingWaitMs = await workflowPacingWaitMs(latest)
+      if (pacingWaitMs > 0) {
+        scheduleWorkflowPacingRetry(latest, pacingWaitMs)
+        return latest
+      }
 
-    startDetachedQueueTask(async () => {
-      await executeClaimedItem(running, execution)
+      const running = await TaskQueue.claimForExecution(latest.id)
+      if (!running) return TaskQueue.get(latest.id)
+
+      startDetachedQueueTask(async () => {
+        await executeClaimedItem(running, latestExecution)
+      })
+      return running
     })
-    return running
   }
 
   export async function drainNextForSession(sessionID: SessionID): Promise<TaskQueue.Info | undefined> {
@@ -101,6 +114,23 @@ export namespace TaskQueueExecutor {
     }
     return undefined
   }
+}
+
+function withStartLocks<T>(item: TaskQueue.Info, execution: QueueExecution, fn: () => Promise<T>): Promise<T> {
+  const keys = startLockKeys(item, execution)
+  let run = fn
+  for (const key of [...keys].reverse()) {
+    const next = run
+    run = () => startLocks().run(key, next)
+  }
+  return run()
+}
+
+function startLockKeys(item: TaskQueue.Info, execution: QueueExecution): string[] {
+  const keys = [`session:${item.projectID}:${execution.sessionID}`]
+  const workflow = workflowPayload(item)
+  if (workflow) keys.push(`workflow-phase:${item.projectID}:${workflow.runID}:${workflow.phaseID}`)
+  return Array.from(new Set(keys)).sort()
 }
 
 async function executeClaimedItem(item: TaskQueue.Info, execution: QueueExecution) {

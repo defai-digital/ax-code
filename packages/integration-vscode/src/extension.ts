@@ -100,8 +100,8 @@ export function activate(context: vscode.ExtensionContext) {
       const terminal = vscode.window.createTerminal({
         name: TERMINAL_NAME,
         iconPath: {
-          light: vscode.Uri.file(context.asAbsolutePath("images/button-dark.svg")),
-          dark: vscode.Uri.file(context.asAbsolutePath("images/button-light.svg")),
+          light: vscode.Uri.file(context.asAbsolutePath("images/logo/activity-icon.png")),
+          dark: vscode.Uri.file(context.asAbsolutePath("images/logo/activity-icon.png")),
         },
         location: { viewColumn: vscode.ViewColumn.Beside, preserveFocus: false },
         env: { AX_CODE_CALLER: "vscode" },
@@ -117,8 +117,8 @@ export function activate(context: vscode.ExtensionContext) {
       const terminal = vscode.window.createTerminal({
         name: TERMINAL_NAME,
         iconPath: {
-          light: vscode.Uri.file(context.asAbsolutePath("images/button-dark.svg")),
-          dark: vscode.Uri.file(context.asAbsolutePath("images/button-light.svg")),
+          light: vscode.Uri.file(context.asAbsolutePath("images/logo/activity-icon.png")),
+          dark: vscode.Uri.file(context.asAbsolutePath("images/logo/activity-icon.png")),
         },
         location: { viewColumn: vscode.ViewColumn.Beside, preserveFocus: false },
         env: { AX_CODE_CALLER: "vscode" },

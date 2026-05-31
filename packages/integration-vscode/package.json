@@ -31,7 +31,7 @@
         {
           "id": "ax-code",
           "title": "ax-code",
-          "icon": "images/button-dark.svg"
+          "icon": "images/logo/activity-icon.png"
         }
       ]
     },
@@ -69,16 +69,16 @@
         "command": "ax-code.openTerminal",
         "title": "ax-code: Open Terminal",
         "icon": {
-          "light": "images/button-dark.svg",
-          "dark": "images/button-light.svg"
+          "light": "images/logo/activity-icon.png",
+          "dark": "images/logo/activity-icon.png"
         }
       },
       {
         "command": "ax-code.openNewTerminal",
         "title": "ax-code: Open Terminal (New Tab)",
         "icon": {
-          "light": "images/button-dark.svg",
-          "dark": "images/button-light.svg"
+          "light": "images/logo/activity-icon.png",
+          "dark": "images/logo/activity-icon.png"
         }
       }
     ],

@@ -2,6 +2,7 @@ import z from "zod"
 import { Instance } from "../project/instance"
 import { Session } from "../session"
 import type { TaskQueueID } from "../session/schema"
+import { KeyedSerialQueue } from "../util/queue"
 import { addWorkflowBudgetUsage, evaluateWorkflowBudget } from "./budget"
 import { isWorkflowRuntimeEnabled, type WorkflowSpecV1 } from "./spec"
 import { planWorkflowDryRun, type WorkflowDryRunPhase } from "./planner"
@@ -20,6 +21,13 @@ type WorkflowDispatchExecutor = (
   outputTokens?: number
 }>
 
+const startLocks = Instance.state(
+  () => new KeyedSerialQueue(),
+  async (queue) => {
+    queue.clear()
+  },
+)
+
 export namespace WorkflowScheduler {
   export const StartOptions = z.object({
     allowScaleBeyondDefaults: z.boolean().default(false),
@@ -34,6 +42,10 @@ export namespace WorkflowScheduler {
 
   export async function start(runID: WorkflowRunID, options: StartOptions = {}) {
     assertEnabled()
+    return startLocks().run(`workflow-run:${Instance.project.id}:${runID}`, () => startUnlocked(runID, options))
+  }
+
+  async function startUnlocked(runID: WorkflowRunID, options: StartOptions = {}) {
     const dispatchExecutor = options.dispatchExecutor
     const signal = options.signal
     const parsed = StartOptions.parse(options)
