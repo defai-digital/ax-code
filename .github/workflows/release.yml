@@ -31,7 +31,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       - name: Build SDK
-        run: bun run build
+        run: bun tsc
         working-directory: packages/sdk/js
 
       - name: Typecheck

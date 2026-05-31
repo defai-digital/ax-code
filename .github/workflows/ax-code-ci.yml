@@ -80,7 +80,7 @@ jobs:
             --format=table
 
       - name: Build SDK
-        run: bun run build
+        run: bun tsc
         working-directory: packages/sdk/js
 
       - name: Typecheck ax-code
