@@ -447,15 +447,26 @@ function runCommand(cmd: string, args: string[], cwd: string, timeoutMs: number)
     proc.stdout.on("data", (d) => (stdout += d.toString()))
     proc.stderr.on("data", (d) => (stderr += d.toString()))
 
-    proc.on("close", (code) => {
+    let exitCode: number | null = null
+    proc.once("exit", (code) => {
+      exitCode = code
+      // Background processes spawned by the tool may hold the pipe FDs open,
+      // preventing 'close' from ever firing. Destroy streams after one I/O
+      // cycle to drain the kernel buffer, then 'close' fires regardless.
+      setImmediate(() => {
+        proc.stdout?.destroy()
+        proc.stderr?.destroy()
+      })
+    })
+
+    proc.once("close", () => {
       clearTimeout(timer)
       if (timedOut) return
-      // clippy/ruff/mypy may exit non-zero with findings — that's OK
-      // Only reject on ENOENT or other spawn errors
-      if (code === null) {
+      if (exitCode === null) {
         finish(new Error(`${cmd} was killed`))
       } else {
-        // Return stdout even if non-zero — the JSON output is what matters
+        // clippy/ruff/mypy may exit non-zero with findings — that's OK
+        // Only reject on ENOENT or other spawn errors
         finish(stdout || stderr)
       }
     })

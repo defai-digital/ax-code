@@ -140,6 +140,14 @@ export namespace Process {
       proc.once("exit", (code, signal) => {
         done()
         resolve(timedOut ? 124 : (code ?? (signal ? 1 : 0)))
+        // Background children spawned by the command inherit the pipe FDs and
+        // keep them open, preventing stream EOF. Destroy after one I/O cycle
+        // (giving Node.js a chance to drain the kernel buffer first) so that
+        // any awaiter of the piped streams unblocks regardless.
+        setImmediate(() => {
+          if (opts.stdout === "pipe") (proc as ChildProcess).stdout?.destroy()
+          if (opts.stderr === "pipe") (proc as ChildProcess).stderr?.destroy()
+        })
       })
 
       proc.once("error", (error) => {
