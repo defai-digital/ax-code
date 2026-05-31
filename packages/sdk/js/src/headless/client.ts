@@ -258,7 +258,10 @@ export function createHeadlessClient(input: HeadlessClientOptions) {
   const client = createAxCodeClient({
     baseUrl: input.baseUrl,
     directory: input.directory,
-    fetch: fetchFn,
+    // Pass user-provided fetch only; when undefined, createAxCodeClient applies
+    // its noTimeoutFetch wrapper so SSE subscriptions are not killed by Bun's
+    // default connection timeout.
+    ...(input.fetch !== undefined ? { fetch: input.fetch } : {}),
     headers: input.headers,
     experimental_workspaceID: input.experimental_workspaceID,
   })

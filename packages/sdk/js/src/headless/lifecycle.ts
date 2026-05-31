@@ -84,6 +84,7 @@ export async function startHeadlessBackend(options: HeadlessBackendOptions = {})
     let capturedOutput = ""
     let settled = false
     let stdoutBuf = ""
+    let stderrBuf = ""
 
     const onReadyUrl = (urlStr: string) => {
       void waitForBackendHealth({
@@ -143,7 +144,10 @@ export async function startHeadlessBackend(options: HeadlessBackendOptions = {})
     const onStderr = (chunk: Buffer) => {
       const text = chunk.toString()
       capturedOutput += text
-      for (const line of text.split("\n")) {
+      stderrBuf += text
+      const lines = stderrBuf.split("\n")
+      stderrBuf = lines.pop() ?? ""
+      for (const line of lines) {
         if (line.trim()) options.onStderr?.(line)
       }
     }
