@@ -718,7 +718,7 @@ class GrpcFrameDecoder {
   private buffer = new Uint8Array(0)
 
   push(chunk: Uint8Array) {
-    this.buffer = new Uint8Array(concatBytes([this.buffer, chunk]))
+    this.buffer = concatBytes([this.buffer, chunk])
     const frames: Uint8Array[] = []
     let offset = 0
     while (this.buffer.byteLength - offset >= 5) {
