@@ -213,6 +213,7 @@ export namespace SessionPrompt {
       continuations += 1
       step = 0
       consecutiveErrors = 0
+      fallbackModelOverride = undefined
       cachedMsgs = undefined
       cachedAgent = undefined
       cachedModel = undefined

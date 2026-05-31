@@ -116,7 +116,7 @@ describe("prompt loop error transitions", () => {
     expect(published[0]?.message).toContain("3 consecutive errors")
   })
 
-  test("resets fallback state and cached model after a successful turn", async () => {
+  test("resets consecutive errors and preserves fallback override after a successful turn", async () => {
     const transition = await resolvePromptLoopErrorTransition({
       sessionID: SessionID.descending(),
       currentModel: primaryModel,
@@ -129,8 +129,26 @@ describe("prompt loop error transitions", () => {
     expect(transition).toEqual({
       action: "continue",
       consecutiveErrors: 0,
+      fallbackModelOverride: fallbackModel,
+      resetCachedModel: false,
+    })
+  })
+
+  test("clears fallback override when no fallback was active", async () => {
+    const transition = await resolvePromptLoopErrorTransition({
+      sessionID: SessionID.descending(),
+      currentModel: primaryModel,
+      error: undefined,
+      consecutiveErrors: 0,
       fallbackModelOverride: undefined,
-      resetCachedModel: true,
+      step: 5,
+    })
+
+    expect(transition).toEqual({
+      action: "continue",
+      consecutiveErrors: 0,
+      fallbackModelOverride: undefined,
+      resetCachedModel: false,
     })
   })
 

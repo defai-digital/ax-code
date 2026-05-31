@@ -205,7 +205,7 @@ export function agentStepLimitContinuationDecision(input: {
   // todo" error with isLastStep=true and break the loop cleanly.
   // When step === maxSteps and a continuation budget existed but is now
   // exhausted (maxContinuations > 0), stop immediately.
-  if (input.step <= input.maxSteps && input.maxContinuations === 0) {
+  if (input.step === input.maxSteps && input.maxContinuations === 0) {
     return { action: "ignore" }
   }
 

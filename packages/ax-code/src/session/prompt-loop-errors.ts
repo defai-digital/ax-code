@@ -141,8 +141,8 @@ export async function resolvePromptLoopErrorTransition(
     return {
       action: "continue",
       consecutiveErrors: 0,
-      fallbackModelOverride: undefined,
-      resetCachedModel: Boolean(input.fallbackModelOverride),
+      fallbackModelOverride: input.fallbackModelOverride,
+      resetCachedModel: false,
     }
   }
 

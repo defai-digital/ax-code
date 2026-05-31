@@ -96,12 +96,9 @@ export namespace SessionGoal {
   }
 
   function assertCanSetStatus(row: typeof SessionGoalTable.$inferSelect, status: Status) {
-    if (
-      status === "active" &&
-      row.status === "budget_limited" &&
-      row.token_budget !== null &&
-      row.tokens_used >= row.token_budget
-    ) {
+    // Guard the budget exhaustion condition regardless of current status so that
+    // the budget_limited → pause → resume path cannot silently bypass this check.
+    if (status === "active" && row.token_budget !== null && row.tokens_used >= row.token_budget) {
       throw new Error(
         "Cannot resume a budget-limited goal without increasing the token budget. Start a new goal with a larger budget or clear the current goal first.",
       )

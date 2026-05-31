@@ -177,21 +177,22 @@ describe("session.processor", () => {
     })
   })
 
-  test("successful fallback step returns later loops to the original model", async () => {
+  test("successful fallback step preserves the fallback override for the remainder of the continuation", async () => {
+    const fallbackModel = { providerID: "fallback" as any, modelID: "model-b" as any }
     const transition = await resolvePromptLoopErrorTransition({
       sessionID: SessionID.descending(),
       currentModel: { providerID: "current" as any, modelID: "model-a" as any },
       error: undefined,
       consecutiveErrors: 2,
-      fallbackModelOverride: { providerID: "fallback" as any, modelID: "model-b" as any },
+      fallbackModelOverride: fallbackModel,
       step: 2,
     })
 
     expect(transition).toEqual({
       action: "continue",
       consecutiveErrors: 0,
-      fallbackModelOverride: undefined,
-      resetCachedModel: true,
+      fallbackModelOverride: fallbackModel,
+      resetCachedModel: false,
     })
   })
 
