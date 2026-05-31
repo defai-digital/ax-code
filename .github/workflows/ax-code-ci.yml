@@ -79,6 +79,10 @@ jobs:
             --lockfile=pnpm-lock.yaml
             --format=table
 
+      - name: Build SDK
+        run: bun run build
+        working-directory: packages/sdk/js
+
       - name: Typecheck ax-code
         run: pnpm --dir packages/ax-code run typecheck
 
