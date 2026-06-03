@@ -38,6 +38,7 @@ import { DialogGoal } from "./dialog-goal"
 import { DialogBranch } from "./dialog-branch"
 import { DialogCompare } from "./dialog-compare"
 import { DialogRollback } from "./dialog-rollback"
+import { DialogDiffViewer } from "../../component/dialog-diff-viewer"
 import { SessionRollbackView } from "./rollback"
 import { Sidebar } from "./sidebar"
 import { sessionQualityActions, sessionQualityActionValue } from "./quality"
@@ -581,6 +582,7 @@ export function Session() {
           />
         )),
       children,
+      dialogReplaceDiffViewer: (dialog) => dialog.replace(() => <DialogDiffViewer sessionID={route.sessionID} />),
       dialogReplaceTimeline: (dialog) =>
         dialog.replace(() => (
           <DialogTimeline

@@ -73,16 +73,29 @@ export namespace Shell {
     return "/bin/sh"
   }
 
-  export const preferred = lazy(() => {
+  const _preferred = lazy(() => {
     return resolveShellFromEnv((shell) => shell.length > 0)
   })
 
-  export const acceptable = lazy(() => {
+  const _acceptable = lazy(() => {
     return resolveShellFromEnv((shell) => {
       const base = process.platform === "win32" ? path.win32.basename(shell) : path.basename(shell)
       return !BLACKLIST.has(base)
     })
   })
+
+  export function preferred(configShell?: string): string {
+    if (configShell && configShell.length > 0) return configShell
+    return _preferred()
+  }
+
+  export function acceptable(configShell?: string): string {
+    if (configShell) {
+      const base = process.platform === "win32" ? path.win32.basename(configShell) : path.basename(configShell)
+      if (!BLACKLIST.has(base)) return configShell
+    }
+    return _acceptable()
+  }
 
   function resolveShellFromEnv(accept: (value: string) => boolean): string {
     const shell = process.env.SHELL

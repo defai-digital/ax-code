@@ -706,6 +706,28 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
         dialog.clear()
       },
     },
+    ...(
+      [
+        { keybind: "session_quick_switch_1", slot: 1 },
+        { keybind: "session_quick_switch_2", slot: 2 },
+        { keybind: "session_quick_switch_3", slot: 3 },
+        { keybind: "session_quick_switch_4", slot: 4 },
+        { keybind: "session_quick_switch_5", slot: 5 },
+        { keybind: "session_quick_switch_6", slot: 6 },
+        { keybind: "session_quick_switch_7", slot: 7 },
+        { keybind: "session_quick_switch_8", slot: 8 },
+        { keybind: "session_quick_switch_9", slot: 9 },
+      ] as const
+    ).map(({ keybind: kb, slot }) => ({
+      title: `Switch to pinned session ${slot}`,
+      value: `session.quick_switch.${slot}`,
+      keybind: kb,
+      category: "Session",
+      onSelect: () => {
+        local.session.quickSwitch(slot)
+        dialog.clear()
+      },
+    })),
     {
       title: "Switch model",
       value: "model.list",

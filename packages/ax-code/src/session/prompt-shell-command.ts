@@ -249,7 +249,7 @@ export async function executeShellCommand(
       proc.once("exit", (code, signal) => {
         exited = true
         exitSignal = signal ?? null
-        exitCode = signal !== null ? 1 : (code ?? 0)
+        exitCode = signal == null ? (code ?? 0) : 1
         // Background processes spawned by the command inherit the pipe FDs,
         // keeping them open so 'close' never fires. Destroy streams after one
         // I/O cycle to drain the kernel buffer, then 'close' fires regardless.
@@ -258,7 +258,12 @@ export async function executeShellCommand(
           proc.stderr?.destroy()
         })
       })
-      proc.once("close", () => {
+      proc.once("close", (code, signal) => {
+        if (!exited) {
+          exited = true
+          exitSignal = signal ?? null
+          exitCode = signal == null ? (code ?? 0) : 1
+        }
         resolve()
       })
       proc.once("error", (err) => {

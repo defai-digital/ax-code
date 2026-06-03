@@ -284,6 +284,9 @@ importers:
       "@pierre/diffs":
         specifier: "catalog:"
         version: 1.1.0-beta.18(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      "@silvia-odwyer/photon-node":
+        specifier: ^0.3.4
+        version: 0.3.4
       "@solid-primitives/event-bus":
         specifier: 1.1.2
         version: 1.1.2(solid-js@1.9.12)
@@ -2620,6 +2623,10 @@ packages:
     peerDependencies:
       react: ^18.3.1 || ^19.0.0
       react-dom: ^18.3.1 || ^19.0.0
+
+  "@silvia-odwyer/photon-node@0.3.4":
+    resolution:
+      { integrity: sha512-bnly4BKB3KDTFxrUIcgCLbaeVVS8lrAkri1pEzskpmxu9MdfGQTy8b8EgcD83ywD3RPMsIulY8xJH5Awa+t9fA== }
 
   "@pierre/theme@0.0.22":
     resolution:
@@ -8592,6 +8599,8 @@ snapshots:
       react: 19.2.4
       react-dom: 19.2.4(react@19.2.4)
       shiki: 3.23.0
+
+  "@silvia-odwyer/photon-node@0.3.4": {}
 
   "@pierre/theme@0.0.22": {}
 

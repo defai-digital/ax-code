@@ -92,6 +92,7 @@ export namespace Session {
       share,
       revert,
       permission: row.permission ?? undefined,
+      metadata: row.metadata ?? undefined,
       time: {
         created: row.time_created,
         updated: row.time_updated,
@@ -139,6 +140,7 @@ export namespace Session {
       summary_diffs: info.summary?.diffs,
       revert: info.revert ?? null,
       permission: info.permission,
+      metadata: info.metadata ?? null,
       time_created: info.time.created,
       time_updated: info.time.updated,
       time_compacting: info.time.compacting,
@@ -193,6 +195,7 @@ export namespace Session {
           diff: z.string().optional(),
         })
         .optional(),
+      metadata: z.record(z.string(), z.unknown()).optional(),
     })
     .meta({
       ref: "Session",
@@ -502,6 +505,11 @@ export namespace Session {
 
   export const setArchived = fn(z.object({ sessionID: SessionID.zod, time: z.number().optional() }), async (input) =>
     updateAndPublish(input.sessionID, { time_archived: input.time, time_updated: Date.now() }),
+  )
+
+  export const setMetadata = fn(
+    z.object({ sessionID: SessionID.zod, metadata: z.record(z.string(), z.unknown()) }),
+    async (input) => updateAndPublish(input.sessionID, { metadata: input.metadata, time_updated: Date.now() }),
   )
 
   export const setPermission = fn(

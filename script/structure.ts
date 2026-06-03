@@ -39,6 +39,7 @@ const keep = [
   "crates",
   "debug-log",
   "docs",
+  "logo",
   "planning",
   "nix",
   "node_modules",

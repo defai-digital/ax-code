@@ -49,6 +49,19 @@ export namespace PromptHistory {
     const projectID = Instance.project.id
     const directory = Instance.directory
     Database.transaction((db) => {
+      const recent = db
+        .select()
+        .from(PromptHistoryTable)
+        .where(eq(PromptHistoryTable.project_id, projectID))
+        .orderBy(desc(PromptHistoryTable.time_created), desc(PromptHistoryTable.id))
+        .limit(1)
+        .all()
+      const last = recent[0]
+      if (last) {
+        const lastEntry = { input: last.input, mode: last.mode ?? undefined, parts: last.parts }
+        const newEntry = { input: parsed.input, mode: parsed.mode, parts: parsed.parts }
+        if (JSON.stringify(lastEntry) === JSON.stringify(newEntry)) return
+      }
       db.insert(PromptHistoryTable)
         .values({
           id: id(),

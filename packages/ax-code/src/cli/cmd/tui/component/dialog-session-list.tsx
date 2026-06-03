@@ -7,6 +7,7 @@ import { Locale } from "@/util/locale"
 import { useKeybind } from "../context/keybind"
 import { useTheme } from "../context/theme"
 import { useSDK } from "../context/sdk"
+import { useLocal } from "../context/local"
 import { DialogSessionRename } from "./dialog-session-rename"
 import { useKV } from "../context/kv"
 import { createDebouncedSignal } from "../util/signal"
@@ -27,6 +28,7 @@ export function DialogSessionList() {
   const sdk = useSDK()
   const kv = useKV()
   const toast = useToast()
+  const local = useLocal()
 
   const [toDelete, setToDelete] = createSignal<string>()
   const [search, setSearch] = createDebouncedSignal("", 150)
@@ -55,27 +57,42 @@ export function DialogSessionList() {
 
   const options = createMemo(() => {
     const today = new Date().toDateString()
-    return sessions()
+    const pinnedIDs = local.session.pinned()
+    const slotByID = new Map<string, number>(local.session.slots().map((id, i) => [id, i + 1]))
+
+    const allSessions = sessions()
       .filter((x: Session) => x.parentID === undefined)
       .toSorted((a: Session, b: Session) => b.time.updated - a.time.updated)
-      .map((x: Session) => {
-        const date = new Date(x.time.updated)
-        let category = date.toDateString()
-        if (category === today) {
-          category = "Today"
-        }
-        const isDeleting = toDelete() === x.id
-        const status = sync.data.session_status?.[x.id]
-        const isWorking = status?.type === "busy"
-        return {
-          title: isDeleting ? `Press ${keybind.print("session_delete")} again to confirm` : x.title,
-          bg: isDeleting ? theme.error : undefined,
-          value: x.id,
-          category,
-          footer: Locale.time(x.time.updated),
-          gutter: isWorking ? <Spinner /> : undefined,
-        }
-      })
+
+    const pinnedSet = new Set(pinnedIDs.filter((id) => allSessions.some((s) => s.id === id)))
+    const pinnedSessions = pinnedIDs.filter((id) => pinnedSet.has(id)).map((id) => allSessions.find((s) => s.id === id)!).filter(Boolean)
+    const unpinnedSessions = allSessions.filter((s) => !pinnedSet.has(s.id))
+    const ordered = [...pinnedSessions, ...unpinnedSessions]
+
+    return ordered.map((x: Session) => {
+      const isPinned = pinnedSet.has(x.id)
+      const date = new Date(x.time.updated)
+      let category = date.toDateString()
+      if (category === today) category = "Today"
+      if (isPinned) category = "Pinned"
+      const isDeleting = toDelete() === x.id
+      const status = sync.data.session_status?.[x.id]
+      const isWorking = status?.type === "busy"
+      const slot = slotByID.get(x.id)
+      const gutter = isWorking
+        ? <Spinner />
+        : slot !== undefined
+          ? <text fg={theme.accent}>{slot}</text>
+          : undefined
+      return {
+        title: isDeleting ? `Press ${keybind.print("session_delete")} again to confirm` : x.title,
+        bg: isDeleting ? theme.error : undefined,
+        value: x.id,
+        category,
+        footer: Locale.time(x.time.updated),
+        gutter,
+      }
+    })
   })
 
   onMount(() => {
@@ -100,6 +117,13 @@ export function DialogSessionList() {
         dialog.clear()
       }}
       keybind={[
+        {
+          keybind: keybind.all.session_pin_toggle?.[0],
+          title: "pin/unpin",
+          onTrigger: (option) => {
+            local.session.togglePin(option.value)
+          },
+        },
         {
           keybind: keybind.all.session_delete?.[0],
           title: "delete",

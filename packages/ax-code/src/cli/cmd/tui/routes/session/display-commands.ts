@@ -60,6 +60,7 @@ export function displayCommands(input: {
   dialogReplaceWorkflow: (dialog: DialogContext) => void
   dialogReplaceRollback: (dialog: DialogContext) => void
   dialogReplaceTimeline: (dialog: DialogContext) => void
+  dialogReplaceDiffViewer: (dialog: DialogContext) => void
   dialogReplaceFork: (dialog: DialogContext) => void
   dialogReplaceRename: (dialog: DialogContext) => void
   children: Accessor<Array<{ id: string }>>
@@ -252,6 +253,16 @@ export function displayCommands(input: {
       value: "session.rollback",
       category: "Session",
       onSelect: (dialog: DialogContext) => input.dialogReplaceRollback(dialog),
+    },
+    {
+      title: "View session diff",
+      value: "session.diff",
+      keybind: "session_diff_view",
+      category: "Session",
+      slash: {
+        name: "diff",
+      },
+      onSelect: (dialog: DialogContext) => input.dialogReplaceDiffViewer(dialog),
     },
     {
       title: "Jump to message",

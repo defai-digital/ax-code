@@ -41,6 +41,7 @@ export const SessionTable = sqliteTable(
     ...Timestamps,
     time_compacting: integer(),
     time_archived: integer(),
+    metadata: text({ mode: "json" }).$type<Record<string, unknown>>(),
   },
   (table) => [
     foreignKey({

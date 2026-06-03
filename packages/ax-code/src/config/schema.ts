@@ -316,6 +316,17 @@ export const Keybinds = z
     session_unshare: z.string().optional().default("none").describe("Unshare current session"),
     session_interrupt: z.string().optional().default("escape").describe("Interrupt current session"),
     session_compact: z.string().optional().default("<leader>c").describe("Compact the session"),
+    session_pin_toggle: z.string().optional().default("ctrl+f").describe("Pin or unpin session in the session list"),
+    session_diff_view: z.string().optional().default("<leader>d").describe("View session diff"),
+    session_quick_switch_1: z.string().optional().default("<leader>1").describe("Switch to session in quick slot 1"),
+    session_quick_switch_2: z.string().optional().default("<leader>2").describe("Switch to session in quick slot 2"),
+    session_quick_switch_3: z.string().optional().default("<leader>3").describe("Switch to session in quick slot 3"),
+    session_quick_switch_4: z.string().optional().default("<leader>4").describe("Switch to session in quick slot 4"),
+    session_quick_switch_5: z.string().optional().default("<leader>5").describe("Switch to session in quick slot 5"),
+    session_quick_switch_6: z.string().optional().default("<leader>6").describe("Switch to session in quick slot 6"),
+    session_quick_switch_7: z.string().optional().default("<leader>7").describe("Switch to session in quick slot 7"),
+    session_quick_switch_8: z.string().optional().default("<leader>8").describe("Switch to session in quick slot 8"),
+    session_quick_switch_9: z.string().optional().default("<leader>9").describe("Switch to session in quick slot 9"),
     messages_page_up: z.string().optional().default("pageup,ctrl+alt+b").describe("Scroll messages up by one page"),
     messages_page_down: z
       .string()
@@ -553,6 +564,7 @@ export const Info = z
       .describe(
         "Automatically update to the latest version. Set to true to auto-update, false to disable, or 'notify' to show update notifications",
       ),
+    shell: z.string().optional().describe("Default shell to use for terminal and bash tool (e.g. /bin/bash, /usr/bin/zsh). Overrides $SHELL environment variable."),
     language: z.literal("en").optional().describe("UI language (English only)"),
     disabled_providers: z.array(z.string()).optional().describe("Disable providers that are loaded automatically"),
     enabled_providers: z
@@ -774,6 +786,19 @@ export const Info = z
       })
       .optional()
       .describe("Browser integration settings"),
+    attachment: z
+      .object({
+        image: z
+          .object({
+            auto_resize: z.boolean().optional().describe("Automatically resize images that exceed limits before sending to the model (default: true)"),
+            max_width: z.number().int().positive().optional().describe("Maximum image width in pixels (default: 2000)"),
+            max_height: z.number().int().positive().optional().describe("Maximum image height in pixels (default: 2000)"),
+            max_base64_bytes: z.number().int().positive().optional().describe("Maximum image size in base64 bytes (default: 5242880 = 5MiB)"),
+          })
+          .optional(),
+      })
+      .optional()
+      .describe("File attachment settings"),
     experimental: z
       .object({
         disable_paste_summary: z.boolean().optional(),
