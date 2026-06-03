@@ -106,6 +106,10 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      - name: Build SDK
+        run: bun tsc
+        working-directory: packages/sdk/js
+
       - name: Build
         working-directory: packages/ax-code
         run: bun run script/build.ts ${{ matrix.build-args }}
