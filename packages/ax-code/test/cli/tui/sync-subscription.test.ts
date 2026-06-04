@@ -12,6 +12,7 @@ type Part = { id: string; messageID: string }
 
 function createTestStore() {
   return createStore<SyncEventStoreState<Session, Todo, Diff, Status, Message, Part>>({
+    stream_health: "connecting",
     permission: {},
     question: {},
     todo: {},

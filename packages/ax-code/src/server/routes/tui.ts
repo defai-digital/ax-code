@@ -1,5 +1,6 @@
 import { Hono, type Context } from "hono"
-import { describeRoute, validator, resolver } from "hono-openapi"
+import { describeRoute, resolver } from "hono-openapi"
+import { validator } from "../validation"
 import z from "zod"
 import { Bus } from "../../bus"
 import { Session } from "../../session"

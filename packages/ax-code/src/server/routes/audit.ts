@@ -1,5 +1,6 @@
 import { Hono } from "hono"
-import { describeRoute, validator } from "hono-openapi"
+import { describeRoute } from "hono-openapi"
+import { validator } from "../validation"
 import z from "zod"
 import { AuditExport } from "../../audit/export"
 import { parseAuditJsonLineResult } from "../../audit/json"

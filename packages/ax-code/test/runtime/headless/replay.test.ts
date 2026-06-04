@@ -9,6 +9,27 @@ type Message = { id: string; sessionID: string }
 type Part = { id: string; messageID: string; type?: string; text?: string }
 
 describe("headless replay", () => {
+  test("clones replayed event objects before applying projection state", async () => {
+    const sessionInfo = {
+      id: "ses_1",
+      title: "Original",
+    }
+    const event = {
+      type: "session.updated",
+      properties: {
+        info: sessionInfo,
+      },
+    } as const
+
+    const state = await replayHeadlessEvents<Session, Todo, Diff, Status, Message, Part>({
+      events: [event],
+    })
+
+    sessionInfo.title = "Mutated after replay"
+
+    expect(state.session).toEqual([{ id: "ses_1", title: "Original" }])
+  })
+
   test("rebuilds projection state from raw event records", async () => {
     const state = await replayHeadlessEvents<Session, Todo, Diff, Status, Message, Part>({
       events: [

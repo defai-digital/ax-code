@@ -1,5 +1,6 @@
 import { Hono } from "hono"
-import { describeRoute, resolver, validator } from "hono-openapi"
+import { describeRoute, resolver } from "hono-openapi"
+import { validator } from "../validation"
 import z from "zod"
 import { lazy } from "@/util/lazy"
 import { PromptHistory } from "@/prompt-history"

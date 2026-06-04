@@ -13,6 +13,22 @@ type Message = { id: string; sessionID: string }
 type Part = { id: string; messageID: string; type?: string; text?: string }
 
 describe("headless projection", () => {
+  test("tracks stream health from control events and fixture state", () => {
+    const fixture = createHeadlessProjectionState<Session, Todo, Diff, Status, Message, Part>({
+      streamHealth: "fixture",
+    })
+    expect(fixture.stream_health).toBe("fixture")
+
+    const state = createHeadlessProjectionState<Session, Todo, Diff, Status, Message, Part>()
+    expect(state.stream_health).toBe("connecting")
+
+    applyHeadlessProjectionEvent(state, { type: "server.connected", properties: {} })
+    expect(state.stream_health).toBe("connected")
+
+    applyHeadlessProjectionEvent(state, { type: "server.instance.disposed" })
+    expect(state.stream_health).toBe("unavailable")
+  })
+
   test("stores request prompts when autonomy is disabled and emits effects when autonomy is enabled", () => {
     const manual = createHeadlessProjectionState<Session, Todo, Diff, Status, Message, Part>()
     const autonomous = createHeadlessProjectionState<Session, Todo, Diff, Status, Message, Part>()

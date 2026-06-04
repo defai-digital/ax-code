@@ -18,6 +18,8 @@ try {
   await fs.mkdir(path.join(tmp, "cache"), { recursive: true })
   await fs.mkdir(path.join(tmp, "state"), { recursive: true })
 
+  await $`bun tsc --build --force`
+
   await $`bun --env-file=../../.env --conditions=browser ./src/index.ts generate > ${dir}/openapi.json`
     .cwd(path.resolve(dir, "../../ax-code"))
     .env({
@@ -62,7 +64,7 @@ try {
   await $`bun prettier --write src/gen`
   await $`bun prettier --write src/v2`
   await $`rm -rf dist`
-  await $`bun tsc`
+  await $`bun tsc --build --force`
   await fs.cp(path.resolve(dir, "../proto"), path.join(dir, "dist", "proto"), { recursive: true })
   await $`rm openapi.json`
 } finally {

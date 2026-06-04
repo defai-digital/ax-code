@@ -29,9 +29,28 @@ describe("headless SDK types", () => {
     expect(isHeadlessRuntimeEvent(null)).toBe(false)
   })
 
-  test("createHeadlessProjectionState has session_error", () => {
+  test("createHeadlessProjectionState has session_error and stream health", () => {
     const state = createHeadlessProjectionState()
     expect(state.session_error).toEqual({})
+    expect(state.stream_health).toBe("connecting")
+  })
+
+  test("applyHeadlessProjectionEvent tracks stream health", () => {
+    const state = createHeadlessProjectionState<
+      { id: string },
+      unknown,
+      unknown,
+      unknown,
+      { id: string; sessionID: string },
+      { id: string; messageID: string }
+    >({ streamHealth: "fixture" })
+    expect(state.stream_health).toBe("fixture")
+
+    applyHeadlessProjectionEvent(state, { type: "server.connected", properties: {} })
+    expect(state.stream_health).toBe("connected")
+
+    applyHeadlessProjectionEvent(state, { type: "server.instance.disposed" })
+    expect(state.stream_health).toBe("unavailable")
   })
 
   test("applyHeadlessProjectionEvent handles session.error", () => {
@@ -49,6 +68,79 @@ describe("headless SDK types", () => {
     })
     expect(result.handled).toBe(true)
     expect(state.session_error["sess-1"]).toEqual({ message: "Provider failed" })
+  })
+
+  test("projection fixtures cover app-visible session, queue, and blocked states", () => {
+    type TestSession = { id: string; title?: string; metadata?: Record<string, unknown> }
+    type TestStatus = { type: "idle" | "busy" | "failed"; waitState?: "llm" | "tool"; error?: string }
+    type TestMessage = { id: string; sessionID: string; role: "user" | "assistant" }
+    type TestPart = { id: string; messageID: string; type?: string; text?: string }
+    type TestTaskQueueItem = { id: string; sessionID?: string; status: "queued" | "running" | "completed" }
+
+    const state = createHeadlessProjectionState<
+      TestSession,
+      { id: string; content: string },
+      { path: string },
+      TestStatus,
+      TestMessage,
+      TestPart,
+      unknown,
+      unknown,
+      TestTaskQueueItem
+    >({ streamHealth: "fixture" })
+
+    const events = [
+      { type: "server.connected", properties: {} },
+      { type: "session.created", properties: { info: { id: "ses_1", title: "Fixture" } } },
+      { type: "session.status", properties: { sessionID: "ses_1", status: { type: "idle" } } },
+      {
+        type: "message.updated",
+        properties: { info: { id: "msg_1", sessionID: "ses_1", role: "user" } },
+      },
+      {
+        type: "message.part.updated",
+        properties: { part: { id: "part_1", messageID: "msg_1", type: "text", text: "hel" } },
+      },
+      {
+        type: "message.part.delta",
+        properties: { messageID: "msg_1", partID: "part_1", field: "text", delta: "lo" },
+      },
+      {
+        type: "permission.asked",
+        properties: { id: "perm_1", sessionID: "ses_1", permission: "shell", patterns: [], metadata: {}, always: [] },
+      },
+      {
+        type: "question.asked",
+        properties: { id: "question_1", sessionID: "ses_1", questions: [], metadata: {} },
+      },
+      {
+        type: "task.queue.created",
+        properties: { item: { id: "task_1", sessionID: "ses_1", status: "queued" } },
+      },
+      {
+        type: "task.queue.updated",
+        properties: { item: { id: "task_1", sessionID: "ses_1", status: "running" } },
+      },
+      {
+        type: "session.updated",
+        properties: { info: { id: "ses_1", title: "Fixture", metadata: { app: { pinned: true } } } },
+      },
+      {
+        type: "session.status",
+        properties: { sessionID: "ses_1", status: { type: "failed", error: "tool failed" } },
+      },
+    ] as const
+
+    for (const event of events) applyHeadlessProjectionEvent(state, event)
+
+    expect(state.stream_health).toBe("connected")
+    expect(state.session).toEqual([{ id: "ses_1", title: "Fixture", metadata: { app: { pinned: true } } }])
+    expect(state.session_status.ses_1).toEqual({ type: "failed", error: "tool failed" })
+    expect(state.message.ses_1).toEqual([{ id: "msg_1", sessionID: "ses_1", role: "user" }])
+    expect(state.part.msg_1).toEqual([{ id: "part_1", messageID: "msg_1", type: "text", text: "hello" }])
+    expect(state.permission.ses_1).toHaveLength(1)
+    expect(state.question.ses_1).toHaveLength(1)
+    expect(state.task_queue).toEqual([{ id: "task_1", sessionID: "ses_1", status: "running" }])
   })
 
   test("session.deleted clears session_error", () => {

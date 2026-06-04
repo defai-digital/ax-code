@@ -1,5 +1,6 @@
 import { Hono } from "hono"
-import { describeRoute, resolver, validator } from "hono-openapi"
+import { describeRoute, resolver } from "hono-openapi"
+import { validator } from "../validation"
 import z from "zod"
 import { TaskQueue } from "@/session/task-queue"
 import { TaskQueueID, SessionID } from "@/session/schema"

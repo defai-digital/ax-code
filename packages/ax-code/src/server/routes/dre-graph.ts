@@ -1,5 +1,5 @@
 import { Hono } from "hono"
-import { validator } from "hono-openapi"
+import { validator } from "../validation"
 import z from "zod"
 import { Session } from "../../session"
 import { SessionBranchRank } from "../../session/branch"

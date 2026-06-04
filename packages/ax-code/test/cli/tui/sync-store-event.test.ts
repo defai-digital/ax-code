@@ -43,6 +43,7 @@ const reviewRisk: SyncedSessionRisk = {
 
 function createTestStore() {
   return createStore<SyncEventStoreState<Session, Todo, Diff, Status, Message, Part>>({
+    stream_health: "connecting",
     permission: {},
     question: {},
     todo: {},
@@ -213,6 +214,7 @@ describe("tui sync store event", () => {
     expect(handled).toBe(true)
     expect(cleared).toEqual(["ses_1"])
     expect(store).toEqual({
+      stream_health: "connecting",
       permission: {},
       question: {},
       todo: {},

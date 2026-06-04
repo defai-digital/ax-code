@@ -36,6 +36,7 @@ export interface SyncStoreState {
   provider_auth: Record<string, ProviderAuthMethod[]>
   agent: Agent[]
   command: Command[]
+  stream_health: "fixture" | "connecting" | "connected" | "unavailable" | "error"
   permission: Record<string, PermissionRequest[]>
   question: Record<string, QuestionRequest[]>
   config: Config
@@ -101,6 +102,7 @@ export function createInitialSyncState(): SyncStoreState {
     config: {},
     status: "loading",
     agent: [],
+    stream_health: "connecting",
     permission: {},
     question: {},
     command: [],

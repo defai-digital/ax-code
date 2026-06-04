@@ -876,6 +876,9 @@ export type Session = {
     snapshot?: string
     diff?: string
   }
+  metadata?: {
+    [key: string]: unknown
+  }
 }
 
 export type EventSessionCreated = {
@@ -2106,6 +2109,10 @@ export type Config = {
    */
   autoupdate?: boolean | "notify"
   /**
+   * Default shell to use for terminal and bash tool (e.g. /bin/bash, /usr/bin/zsh). Overrides $SHELL environment variable.
+   */
+  shell?: string
+  /**
    * UI language (English only)
    */
   language?: "en"
@@ -2304,6 +2311,29 @@ export type Config = {
      */
     interceptOpen?: boolean
   }
+  /**
+   * File attachment settings
+   */
+  attachment?: {
+    image?: {
+      /**
+       * Automatically resize images that exceed limits before sending to the model (default: true)
+       */
+      auto_resize?: boolean
+      /**
+       * Maximum image width in pixels (default: 2000)
+       */
+      max_width?: number
+      /**
+       * Maximum image height in pixels (default: 2000)
+       */
+      max_height?: number
+      /**
+       * Maximum image size in base64 bytes (default: 5242880 = 5MiB)
+       */
+      max_base64_bytes?: number
+    }
+  }
   experimental?: {
     disable_paste_summary?: boolean
     /**
@@ -2362,12 +2392,16 @@ export type Config = {
   }
 }
 
-export type BadRequestError = {
-  data: unknown
-  errors: Array<{
+export type AppErrorEnvelope = {
+  name: string
+  message: string
+  status: number
+  code?: string
+  logRef?: string
+  retryable?: boolean
+  details?: {
     [key: string]: unknown
-  }>
-  success: false
+  }
 }
 
 export type OAuth = {
@@ -2391,13 +2425,6 @@ export type WellKnownAuth = {
 }
 
 export type Auth = OAuth | ApiAuth | WellKnownAuth
-
-export type NotFoundError = {
-  name: "NotFoundError"
-  data: {
-    message: string
-  }
-}
 
 export type Model = {
   id: string
@@ -2583,6 +2610,9 @@ export type GlobalSession = {
     partID?: string
     snapshot?: string
     diff?: string
+  }
+  metadata?: {
+    [key: string]: unknown
   }
   project: ProjectSummary | null
 }
@@ -3257,6 +3287,10 @@ export type SessionRollbackPoint = {
   kinds: Array<string>
 }
 
+export type SessionMetadata = {
+  [key: string]: unknown
+}
+
 export type TextPartInput = {
   id?: string
   type: "text"
@@ -3574,7 +3608,7 @@ export type GlobalConfigUpdateErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
 }
 
 export type GlobalConfigUpdateError = GlobalConfigUpdateErrors[keyof GlobalConfigUpdateErrors]
@@ -3617,7 +3651,7 @@ export type GlobalUpgradeErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
 }
 
 export type GlobalUpgradeError = GlobalUpgradeErrors[keyof GlobalUpgradeErrors]
@@ -3655,7 +3689,7 @@ export type AuthRemoveErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
 }
 
 export type AuthRemoveError = AuthRemoveErrors[keyof AuthRemoveErrors]
@@ -3685,7 +3719,7 @@ export type AuthSetErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
 }
 
 export type AuthSetError = AuthSetErrors[keyof AuthSetErrors]
@@ -3781,11 +3815,11 @@ export type ProjectUpdateErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
 }
 
 export type ProjectUpdateError = ProjectUpdateErrors[keyof ProjectUpdateErrors]
@@ -3838,7 +3872,7 @@ export type PtyCreateErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
 }
 
 export type PtyCreateError = PtyCreateErrors[keyof PtyCreateErrors]
@@ -3867,7 +3901,7 @@ export type PtyRemoveErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
 }
 
 export type PtyRemoveError = PtyRemoveErrors[keyof PtyRemoveErrors]
@@ -3896,7 +3930,7 @@ export type PtyGetErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
 }
 
 export type PtyGetError = PtyGetErrors[keyof PtyGetErrors]
@@ -3931,7 +3965,7 @@ export type PtyUpdateErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
 }
 
 export type PtyUpdateError = PtyUpdateErrors[keyof PtyUpdateErrors]
@@ -3960,7 +3994,7 @@ export type PtyConnectErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
 }
 
 export type PtyConnectError = PtyConnectErrors[keyof PtyConnectErrors]
@@ -4005,7 +4039,7 @@ export type ConfigUpdateErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
 }
 
 export type ConfigUpdateError = ConfigUpdateErrors[keyof ConfigUpdateErrors]
@@ -4208,7 +4242,7 @@ export type PromptHistoryListErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
 }
 
 export type PromptHistoryListError = PromptHistoryListErrors[keyof PromptHistoryListErrors]
@@ -4281,7 +4315,7 @@ export type PromptHistoryAppendErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
 }
 
 export type PromptHistoryAppendError = PromptHistoryAppendErrors[keyof PromptHistoryAppendErrors]
@@ -4343,11 +4377,11 @@ export type TaskQueueListErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
 }
 
 export type TaskQueueListError = TaskQueueListErrors[keyof TaskQueueListErrors]
@@ -4421,11 +4455,11 @@ export type TaskQueueEnqueueErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
 }
 
 export type TaskQueueEnqueueError = TaskQueueEnqueueErrors[keyof TaskQueueEnqueueErrors]
@@ -4488,11 +4522,11 @@ export type TaskQueueDeleteErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
 }
 
 export type TaskQueueDeleteError = TaskQueueDeleteErrors[keyof TaskQueueDeleteErrors]
@@ -4521,11 +4555,11 @@ export type TaskQueueGetErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
 }
 
 export type TaskQueueGetError = TaskQueueGetErrors[keyof TaskQueueGetErrors]
@@ -4603,11 +4637,11 @@ export type TaskQueueStatusErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
 }
 
 export type TaskQueueStatusError = TaskQueueStatusErrors[keyof TaskQueueStatusErrors]
@@ -4679,11 +4713,15 @@ export type TaskQueueEditErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
+  /**
+   * Conflict
+   */
+  409: AppErrorEnvelope
 }
 
 export type TaskQueueEditError = TaskQueueEditErrors[keyof TaskQueueEditErrors]
@@ -4746,11 +4784,11 @@ export type TaskQueuePauseErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
 }
 
 export type TaskQueuePauseError = TaskQueuePauseErrors[keyof TaskQueuePauseErrors]
@@ -4813,11 +4851,11 @@ export type TaskQueueResumeErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
 }
 
 export type TaskQueueResumeError = TaskQueueResumeErrors[keyof TaskQueueResumeErrors]
@@ -4880,11 +4918,11 @@ export type TaskQueueCancelErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
 }
 
 export type TaskQueueCancelError = TaskQueueCancelErrors[keyof TaskQueueCancelErrors]
@@ -4947,11 +4985,11 @@ export type TaskQueueRetryErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
 }
 
 export type TaskQueueRetryError = TaskQueueRetryErrors[keyof TaskQueueRetryErrors]
@@ -5014,11 +5052,11 @@ export type TaskQueueSendNowErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
 }
 
 export type TaskQueueSendNowError = TaskQueueSendNowErrors[keyof TaskQueueSendNowErrors]
@@ -5083,11 +5121,11 @@ export type TaskQueueReorderErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
 }
 
 export type TaskQueueReorderError = TaskQueueReorderErrors[keyof TaskQueueReorderErrors]
@@ -5151,11 +5189,11 @@ export type ScheduledTaskListErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
 }
 
 export type ScheduledTaskListError = ScheduledTaskListErrors[keyof ScheduledTaskListErrors]
@@ -5261,11 +5299,11 @@ export type ScheduledTaskCreateErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
 }
 
 export type ScheduledTaskCreateError = ScheduledTaskCreateErrors[keyof ScheduledTaskCreateErrors]
@@ -5340,11 +5378,11 @@ export type ScheduledTaskDeleteErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
 }
 
 export type ScheduledTaskDeleteError = ScheduledTaskDeleteErrors[keyof ScheduledTaskDeleteErrors]
@@ -5373,11 +5411,11 @@ export type ScheduledTaskGetErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
 }
 
 export type ScheduledTaskGetError = ScheduledTaskGetErrors[keyof ScheduledTaskGetErrors]
@@ -5486,11 +5524,11 @@ export type ScheduledTaskUpdateErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
 }
 
 export type ScheduledTaskUpdateError = ScheduledTaskUpdateErrors[keyof ScheduledTaskUpdateErrors]
@@ -5565,11 +5603,11 @@ export type ScheduledTaskPauseErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
 }
 
 export type ScheduledTaskPauseError = ScheduledTaskPauseErrors[keyof ScheduledTaskPauseErrors]
@@ -5644,11 +5682,11 @@ export type ScheduledTaskResumeErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
 }
 
 export type ScheduledTaskResumeError = ScheduledTaskResumeErrors[keyof ScheduledTaskResumeErrors]
@@ -5723,11 +5761,11 @@ export type ScheduledTaskRunNowErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
 }
 
 export type ScheduledTaskRunNowError = ScheduledTaskRunNowErrors[keyof ScheduledTaskRunNowErrors]
@@ -5856,11 +5894,11 @@ export type ScheduledTaskRunDueErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
 }
 
 export type ScheduledTaskRunDueError = ScheduledTaskRunDueErrors[keyof ScheduledTaskRunDueErrors]
@@ -5991,11 +6029,11 @@ export type WorkflowRunListErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
 }
 
 export type WorkflowRunListError = WorkflowRunListErrors[keyof WorkflowRunListErrors]
@@ -6202,11 +6240,11 @@ export type WorkflowRunCreateErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
 }
 
 export type WorkflowRunCreateError = WorkflowRunCreateErrors[keyof WorkflowRunCreateErrors]
@@ -6237,11 +6275,11 @@ export type WorkflowRunDashboardErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
 }
 
 export type WorkflowRunDashboardError = WorkflowRunDashboardErrors[keyof WorkflowRunDashboardErrors]
@@ -6379,11 +6417,11 @@ export type WorkflowRunEvalCasesErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
 }
 
 export type WorkflowRunEvalCasesError = WorkflowRunEvalCasesErrors[keyof WorkflowRunEvalCasesErrors]
@@ -6453,11 +6491,11 @@ export type WorkflowRunGetErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
 }
 
 export type WorkflowRunGetError = WorkflowRunGetErrors[keyof WorkflowRunGetErrors]
@@ -6684,11 +6722,11 @@ export type WorkflowRunArtifactsErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
 }
 
 export type WorkflowRunArtifactsError = WorkflowRunArtifactsErrors[keyof WorkflowRunArtifactsErrors]
@@ -6745,11 +6783,11 @@ export type WorkflowRunEvalSummaryErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
 }
 
 export type WorkflowRunEvalSummaryError = WorkflowRunEvalSummaryErrors[keyof WorkflowRunEvalSummaryErrors]
@@ -6822,11 +6860,11 @@ export type WorkflowRunEvalCaseErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
 }
 
 export type WorkflowRunEvalCaseError = WorkflowRunEvalCaseErrors[keyof WorkflowRunEvalCaseErrors]
@@ -6928,11 +6966,11 @@ export type WorkflowRunSaveTemplateErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
 }
 
 export type WorkflowRunSaveTemplateError = WorkflowRunSaveTemplateErrors[keyof WorkflowRunSaveTemplateErrors]
@@ -7137,11 +7175,15 @@ export type WorkflowRunStartErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
+  /**
+   * Conflict
+   */
+  409: AppErrorEnvelope
 }
 
 export type WorkflowRunStartError = WorkflowRunStartErrors[keyof WorkflowRunStartErrors]
@@ -7363,11 +7405,15 @@ export type WorkflowRunPauseErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
+  /**
+   * Conflict
+   */
+  409: AppErrorEnvelope
 }
 
 export type WorkflowRunPauseError = WorkflowRunPauseErrors[keyof WorkflowRunPauseErrors]
@@ -7589,11 +7635,15 @@ export type WorkflowRunResumeErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
+  /**
+   * Conflict
+   */
+  409: AppErrorEnvelope
 }
 
 export type WorkflowRunResumeError = WorkflowRunResumeErrors[keyof WorkflowRunResumeErrors]
@@ -7815,11 +7865,15 @@ export type WorkflowRunCancelErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
+  /**
+   * Conflict
+   */
+  409: AppErrorEnvelope
 }
 
 export type WorkflowRunCancelError = WorkflowRunCancelErrors[keyof WorkflowRunCancelErrors]
@@ -8042,11 +8096,15 @@ export type WorkflowRunRetryErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
+  /**
+   * Conflict
+   */
+  409: AppErrorEnvelope
 }
 
 export type WorkflowRunRetryError = WorkflowRunRetryErrors[keyof WorkflowRunRetryErrors]
@@ -8266,11 +8324,11 @@ export type WorkflowTemplateListErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
 }
 
 export type WorkflowTemplateListError = WorkflowTemplateListErrors[keyof WorkflowTemplateListErrors]
@@ -8627,11 +8685,11 @@ export type WorkflowTemplateSaveErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
 }
 
 export type WorkflowTemplateSaveError = WorkflowTemplateSaveErrors[keyof WorkflowTemplateSaveErrors]
@@ -8831,11 +8889,11 @@ export type WorkflowTemplateGetErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
 }
 
 export type WorkflowTemplateGetError = WorkflowTemplateGetErrors[keyof WorkflowTemplateGetErrors]
@@ -9035,11 +9093,15 @@ export type WorkflowTemplatePromoteErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
+  /**
+   * Conflict
+   */
+  409: AppErrorEnvelope
 }
 
 export type WorkflowTemplatePromoteError = WorkflowTemplatePromoteErrors[keyof WorkflowTemplatePromoteErrors]
@@ -9237,11 +9299,11 @@ export type WorkflowRoutineListErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
 }
 
 export type WorkflowRoutineListError = WorkflowRoutineListErrors[keyof WorkflowRoutineListErrors]
@@ -9295,11 +9357,15 @@ export type WorkflowRoutineCreateErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
+  /**
+   * Conflict
+   */
+  409: AppErrorEnvelope
 }
 
 export type WorkflowRoutineCreateError = WorkflowRoutineCreateErrors[keyof WorkflowRoutineCreateErrors]
@@ -9369,11 +9435,15 @@ export type WorkflowRoutineRunErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
+  /**
+   * Conflict
+   */
+  409: AppErrorEnvelope
 }
 
 export type WorkflowRoutineRunError = WorkflowRoutineRunErrors[keyof WorkflowRoutineRunErrors]
@@ -9784,7 +9854,7 @@ export type ToolIdsErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
 }
 
 export type ToolIdsError = ToolIdsErrors[keyof ToolIdsErrors]
@@ -9813,7 +9883,7 @@ export type ToolListErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
 }
 
 export type ToolListError = ToolListErrors[keyof ToolListErrors]
@@ -9840,7 +9910,7 @@ export type WorktreeRemoveErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
 }
 
 export type WorktreeRemoveError = WorktreeRemoveErrors[keyof WorktreeRemoveErrors]
@@ -9885,7 +9955,7 @@ export type WorktreeCreateErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
 }
 
 export type WorktreeCreateError = WorktreeCreateErrors[keyof WorktreeCreateErrors]
@@ -9912,7 +9982,7 @@ export type WorktreeResetErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
 }
 
 export type WorktreeResetError = WorktreeResetErrors[keyof WorktreeResetErrors]
@@ -10047,7 +10117,7 @@ export type SessionCreateErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
 }
 
 export type SessionCreateError = SessionCreateErrors[keyof SessionCreateErrors]
@@ -10074,7 +10144,7 @@ export type SessionStatusErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
 }
 
 export type SessionStatusError = SessionStatusErrors[keyof SessionStatusErrors]
@@ -10105,11 +10175,11 @@ export type SessionDeleteErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
 }
 
 export type SessionDeleteError = SessionDeleteErrors[keyof SessionDeleteErrors]
@@ -10138,11 +10208,11 @@ export type SessionGetErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
 }
 
 export type SessionGetError = SessionGetErrors[keyof SessionGetErrors]
@@ -10162,6 +10232,7 @@ export type SessionUpdateData = {
     time?: {
       archived?: number
     }
+    metadata?: SessionMetadata
   }
   path: {
     sessionID: string
@@ -10176,11 +10247,11 @@ export type SessionUpdateErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
 }
 
 export type SessionUpdateError = SessionUpdateErrors[keyof SessionUpdateErrors]
@@ -10209,11 +10280,11 @@ export type SessionGoalErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
 }
 
 export type SessionGoalError = SessionGoalErrors[keyof SessionGoalErrors]
@@ -10254,11 +10325,11 @@ export type SessionChildrenErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
 }
 
 export type SessionChildrenError = SessionChildrenErrors[keyof SessionChildrenErrors]
@@ -10291,11 +10362,11 @@ export type SessionBranchRankErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
 }
 
 export type SessionBranchRankError = SessionBranchRankErrors[keyof SessionBranchRankErrors]
@@ -10324,11 +10395,11 @@ export type SessionDreErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
 }
 
 export type SessionDreError = SessionDreErrors[keyof SessionDreErrors]
@@ -10357,11 +10428,11 @@ export type SessionGraphErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
 }
 
 export type SessionGraphError = SessionGraphErrors[keyof SessionGraphErrors]
@@ -10414,11 +10485,11 @@ export type SessionRiskErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
 }
 
 export type SessionRiskError = SessionRiskErrors[keyof SessionRiskErrors]
@@ -10447,11 +10518,11 @@ export type SessionSemanticDiffErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
 }
 
 export type SessionSemanticDiffError = SessionSemanticDiffErrors[keyof SessionSemanticDiffErrors]
@@ -10485,11 +10556,11 @@ export type SessionCompareErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
 }
 
 export type SessionCompareError = SessionCompareErrors[keyof SessionCompareErrors]
@@ -10522,11 +10593,11 @@ export type SessionRollbackPointsErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
 }
 
 export type SessionRollbackPointsError = SessionRollbackPointsErrors[keyof SessionRollbackPointsErrors]
@@ -10555,11 +10626,11 @@ export type SessionTodoErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
 }
 
 export type SessionTodoError = SessionTodoErrors[keyof SessionTodoErrors]
@@ -10592,11 +10663,11 @@ export type SessionInitErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
 }
 
 export type SessionInitError = SessionInitErrors[keyof SessionInitErrors]
@@ -10647,11 +10718,11 @@ export type SessionAbortErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
 }
 
 export type SessionAbortError = SessionAbortErrors[keyof SessionAbortErrors]
@@ -10680,11 +10751,11 @@ export type SessionUnshareErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
 }
 
 export type SessionUnshareError = SessionUnshareErrors[keyof SessionUnshareErrors]
@@ -10713,11 +10784,11 @@ export type SessionShareErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
 }
 
 export type SessionShareError = SessionShareErrors[keyof SessionShareErrors]
@@ -10771,11 +10842,11 @@ export type SessionSummarizeErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
 }
 
 export type SessionSummarizeError = SessionSummarizeErrors[keyof SessionSummarizeErrors]
@@ -10812,11 +10883,11 @@ export type SessionMessagesErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
 }
 
 export type SessionMessagesError = SessionMessagesErrors[keyof SessionMessagesErrors]
@@ -10879,11 +10950,11 @@ export type SessionPromptErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
 }
 
 export type SessionPromptError = SessionPromptErrors[keyof SessionPromptErrors]
@@ -10916,11 +10987,11 @@ export type SessionDeleteMessageErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
 }
 
 export type SessionDeleteMessageError = SessionDeleteMessageErrors[keyof SessionDeleteMessageErrors]
@@ -10950,11 +11021,11 @@ export type SessionMessageErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
 }
 
 export type SessionMessageError = SessionMessageErrors[keyof SessionMessageErrors]
@@ -10988,11 +11059,11 @@ export type PartDeleteErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
 }
 
 export type PartDeleteError = PartDeleteErrors[keyof PartDeleteErrors]
@@ -11023,11 +11094,11 @@ export type PartUpdateErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
 }
 
 export type PartUpdateError = PartUpdateErrors[keyof PartUpdateErrors]
@@ -11087,11 +11158,11 @@ export type SessionPromptAsyncErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
 }
 
 export type SessionPromptAsyncError = SessionPromptAsyncErrors[keyof SessionPromptAsyncErrors]
@@ -11126,11 +11197,11 @@ export type SessionCommandAsyncErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
 }
 
 export type SessionCommandAsyncError = SessionCommandAsyncErrors[keyof SessionCommandAsyncErrors]
@@ -11165,11 +11236,11 @@ export type SessionCommandErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
 }
 
 export type SessionCommandError = SessionCommandErrors[keyof SessionCommandErrors]
@@ -11208,11 +11279,11 @@ export type SessionShellAsyncErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
 }
 
 export type SessionShellAsyncError = SessionShellAsyncErrors[keyof SessionShellAsyncErrors]
@@ -11246,11 +11317,11 @@ export type SessionShellErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
 }
 
 export type SessionShellError = SessionShellErrors[keyof SessionShellErrors]
@@ -11282,11 +11353,11 @@ export type SessionRevertErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
 }
 
 export type SessionRevertError = SessionRevertErrors[keyof SessionRevertErrors]
@@ -11315,11 +11386,11 @@ export type SessionUnrevertErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
 }
 
 export type SessionUnrevertError = SessionUnrevertErrors[keyof SessionUnrevertErrors]
@@ -11351,11 +11422,11 @@ export type PermissionRespondErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
 }
 
 export type PermissionRespondError = PermissionRespondErrors[keyof PermissionRespondErrors]
@@ -11387,11 +11458,11 @@ export type PermissionReplyErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
 }
 
 export type PermissionReplyError = PermissionReplyErrors[keyof PermissionReplyErrors]
@@ -11502,11 +11573,11 @@ export type GraphTopologyErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
 }
 
 export type GraphTopologyError = GraphTopologyErrors[keyof GraphTopologyErrors]
@@ -11536,11 +11607,11 @@ export type GraphGetErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
 }
 
 export type GraphGetError = GraphGetErrors[keyof GraphGetErrors]
@@ -11624,11 +11695,11 @@ export type QuestionReplyErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
 }
 
 export type QuestionReplyError = QuestionReplyErrors[keyof QuestionReplyErrors]
@@ -11657,11 +11728,11 @@ export type QuestionRejectErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
 }
 
 export type QuestionRejectError = QuestionRejectErrors[keyof QuestionRejectErrors]
@@ -11801,7 +11872,7 @@ export type ProviderOauthAuthorizeErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
 }
 
 export type ProviderOauthAuthorizeError = ProviderOauthAuthorizeErrors[keyof ProviderOauthAuthorizeErrors]
@@ -11842,7 +11913,7 @@ export type ProviderOauthCallbackErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
 }
 
 export type ProviderOauthCallbackError = ProviderOauthCallbackErrors[keyof ProviderOauthCallbackErrors]
@@ -12045,7 +12116,7 @@ export type McpAddErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
 }
 
 export type McpAddError = McpAddErrors[keyof McpAddErrors]
@@ -12076,7 +12147,7 @@ export type McpAuthRemoveErrors = {
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
 }
 
 export type McpAuthRemoveError = McpAuthRemoveErrors[keyof McpAuthRemoveErrors]
@@ -12107,11 +12178,11 @@ export type McpAuthStartErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
 }
 
 export type McpAuthStartError = McpAuthStartErrors[keyof McpAuthStartErrors]
@@ -12150,11 +12221,11 @@ export type McpAuthCallbackErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
 }
 
 export type McpAuthCallbackError = McpAuthCallbackErrors[keyof McpAuthCallbackErrors]
@@ -12183,11 +12254,11 @@ export type McpAuthAuthenticateErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
 }
 
 export type McpAuthAuthenticateError = McpAuthAuthenticateErrors[keyof McpAuthAuthenticateErrors]
@@ -12256,7 +12327,7 @@ export type TuiAppendPromptErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
 }
 
 export type TuiAppendPromptError = TuiAppendPromptErrors[keyof TuiAppendPromptErrors]
@@ -12393,7 +12464,7 @@ export type TuiExecuteCommandErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
 }
 
 export type TuiExecuteCommandError = TuiExecuteCommandErrors[keyof TuiExecuteCommandErrors]
@@ -12446,7 +12517,7 @@ export type TuiPublishErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
 }
 
 export type TuiPublishError = TuiPublishErrors[keyof TuiPublishErrors]
@@ -12478,11 +12549,11 @@ export type TuiSelectSessionErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
   /**
    * Not found
    */
-  404: NotFoundError
+  404: AppErrorEnvelope
 }
 
 export type TuiSelectSessionError = TuiSelectSessionErrors[keyof TuiSelectSessionErrors]
@@ -12618,7 +12689,7 @@ export type AppLogErrors = {
   /**
    * Bad request
    */
-  400: BadRequestError
+  400: AppErrorEnvelope
 }
 
 export type AppLogError = AppLogErrors[keyof AppLogErrors]

@@ -21,6 +21,7 @@ describe("tui sync state", () => {
       config: {},
       status: "loading",
       agent: [],
+      stream_health: "connecting",
       permission: {},
       question: {},
       command: [],

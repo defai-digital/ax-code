@@ -36,8 +36,9 @@ export async function replayHeadlessEvents<
   for await (const record of toAsyncIterable(input.events)) {
     const event = decodeHeadlessEventLogRecord<TSession, TTodo, TDiff, TStatus, TMessage, TPart>(record)
     if (!event) continue
-    applyHeadlessProjectionEvent(state, event)
-    await input.onEvent?.(event, state)
+    const cloned = cloneHeadlessRuntimeEvent(event)
+    applyHeadlessProjectionEvent(state, cloned)
+    await input.onEvent?.(cloned, state)
   }
 
   return state
@@ -70,11 +71,23 @@ export async function replayHeadlessEventLogLines<
   for await (const line of toAsyncIterable(input.lines)) {
     const event = decodeHeadlessEventLogLine<TSession, TTodo, TDiff, TStatus, TMessage, TPart>(line)
     if (!event) continue
-    applyHeadlessProjectionEvent(state, event)
-    await input.onEvent?.(event, state)
+    const cloned = cloneHeadlessRuntimeEvent(event)
+    applyHeadlessProjectionEvent(state, cloned)
+    await input.onEvent?.(cloned, state)
   }
 
   return state
+}
+
+function cloneHeadlessRuntimeEvent<
+  TSession extends { id: string },
+  TTodo,
+  TDiff,
+  TStatus,
+  TMessage extends { id: string; sessionID: string },
+  TPart extends { id: string; messageID: string },
+>(event: HeadlessRuntimeEvent<TSession, TTodo, TDiff, TStatus, TMessage, TPart>) {
+  return structuredClone(event)
 }
 
 async function* toAsyncIterable<T>(items: Iterable<T> | AsyncIterable<T>) {

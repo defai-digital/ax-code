@@ -1,5 +1,6 @@
 import { Hono } from "hono"
-import { describeRoute, validator, resolver } from "hono-openapi"
+import { describeRoute, resolver } from "hono-openapi"
+import { validator } from "../validation"
 import z from "zod"
 import { Config } from "../../config/config"
 import { Provider } from "../../provider/provider"

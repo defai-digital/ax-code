@@ -20,6 +20,7 @@ import { SessionPrompt } from "./prompt"
 import { SelfCorrection } from "./correction"
 import { BlastRadius } from "./blast-radius"
 import { SessionStatus } from "./status"
+import { SessionMetadata } from "./metadata"
 import { fn } from "@/util/fn"
 import { Command } from "../command"
 import { Snapshot } from "@/snapshot"
@@ -201,6 +202,10 @@ export namespace Session {
       ref: "Session",
     })
   export type Info = z.output<typeof Info>
+  export const Metadata = SessionMetadata.Metadata
+  export type Metadata = SessionMetadata.Metadata
+  export const ProductMetadata = SessionMetadata.Product
+  export type ProductMetadata = SessionMetadata.Product
 
   export const ProjectInfo = z
     .object({
@@ -508,8 +513,22 @@ export namespace Session {
   )
 
   export const setMetadata = fn(
-    z.object({ sessionID: SessionID.zod, metadata: z.record(z.string(), z.unknown()) }),
-    async (input) => updateAndPublish(input.sessionID, { metadata: input.metadata, time_updated: Date.now() }),
+    z.object({ sessionID: SessionID.zod, metadata: SessionMetadata.Metadata }),
+    async (input) =>
+      updateAndPublish(input.sessionID, { metadata: SessionMetadata.validate(input.metadata), time_updated: Date.now() }),
+  )
+
+  export const setProductMetadata = fn(
+    z.object({
+      sessionID: SessionID.zod,
+      namespace: SessionMetadata.Namespace,
+      value: z.unknown().optional(),
+    }),
+    async (input) => {
+      const session = await get(input.sessionID)
+      const metadata = SessionMetadata.mergeNamespace(session.metadata, input.namespace, input.value)
+      return updateAndPublish(input.sessionID, { metadata, time_updated: Date.now() })
+    },
   )
 
   export const setPermission = fn(

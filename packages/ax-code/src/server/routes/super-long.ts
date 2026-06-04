@@ -1,5 +1,6 @@
 import { Hono } from "hono"
-import { describeRoute, resolver, validator } from "hono-openapi"
+import { describeRoute, resolver } from "hono-openapi"
+import { validator } from "../validation"
 import { Log } from "../../util/log"
 import { lazy } from "../../util/lazy"
 import { isQwen37MaxModel } from "../../provider/qwen37-readiness"

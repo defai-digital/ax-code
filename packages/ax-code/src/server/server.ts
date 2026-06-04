@@ -1,5 +1,5 @@
 import { Log } from "../util/log"
-import { describeRoute, generateSpecs, validator, resolver, openAPIRouteHandler } from "hono-openapi"
+import { describeRoute, generateSpecs, resolver, openAPIRouteHandler } from "hono-openapi"
 import { Hono, type Context } from "hono"
 import { cors } from "hono/cors"
 import { basicAuth } from "hono/basic-auth"
@@ -34,11 +34,10 @@ import { ExperimentalRoutes } from "./routes/experimental"
 import { ProviderRoutes } from "./routes/provider"
 import { EventRoutes } from "./routes/event"
 import { InstanceBootstrap } from "../project/bootstrap"
-import { NotFoundError } from "../storage/db"
 import type { ContentfulStatusCode } from "hono/utils/http-status"
 import { websocket } from "hono/bun"
-import { HTTPException } from "hono/http-exception"
-import { errors } from "./error"
+import { appErrorEnvelope, errors } from "./error"
+import { validator } from "./validation"
 import { QuestionRoutes } from "./routes/question"
 import { PermissionRoutes } from "./routes/permission"
 import { AuditRoutes } from "./routes/audit"
@@ -564,30 +563,15 @@ export namespace Server {
     })
     return app
       .onError((err, c) => {
+        const logRef = `err_${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}`
+        const envelope = appErrorEnvelope({ error: err, logRef })
         log.error("failed", {
+          logRef,
+          status: envelope.status,
+          errorName: envelope.name,
           error: err,
         })
-        if (err instanceof NamedError) {
-          let status: ContentfulStatusCode
-          if (err instanceof NotFoundError) status = 404
-          else if (err instanceof Provider.ModelNotFoundError) status = 400
-          else if (err.name === "ProviderAuthValidationFailed") status = 400
-          else if (err.name.startsWith("Worktree")) status = 400
-          else status = 500
-          return c.json(err.toObject(), { status })
-        }
-        if (err instanceof HTTPException) return err.getResponse()
-        // Return a generic message to the client; the full stack was
-        // already logged by `log.error("failed", { error: err })` above.
-        // Previously this returned `err.stack` in the response body,
-        // which leaked internal paths, function names, line numbers,
-        // and library versions to any caller that could reach the
-        // server. Clients get a short message and a 500 — operators
-        // see the full trace in the logs.
-        const message = err instanceof NamedError ? err.message : "Internal server error"
-        return c.json(new NamedError.Unknown({ message }).toObject(), {
-          status: 500,
-        })
+        return c.json(envelope, { status: envelope.status as ContentfulStatusCode })
       })
       .use((c, next) => {
         // Allow CORS preflight requests to succeed without auth.

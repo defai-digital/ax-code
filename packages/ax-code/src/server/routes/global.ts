@@ -1,5 +1,6 @@
 import { Hono } from "hono"
-import { describeRoute, validator, resolver } from "hono-openapi"
+import { describeRoute, resolver } from "hono-openapi"
+import { validator } from "../validation"
 import { streamSSE } from "hono/streaming"
 import z from "zod"
 import semver from "semver"

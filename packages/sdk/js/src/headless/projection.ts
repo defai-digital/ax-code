@@ -12,6 +12,7 @@ export interface HeadlessProjectionState<
   TGoal = unknown,
   TTaskQueueItem extends { id: string } = { id: string },
 > {
+  stream_health: HeadlessStreamHealth
   permission: Record<string, PermissionRequest[]>
   question: Record<string, QuestionRequest[]>
   todo: Record<string, TTodo[]>
@@ -26,6 +27,8 @@ export interface HeadlessProjectionState<
   part: Record<string, TPart[]>
   vcs: { branch: string } | undefined
 }
+
+export type HeadlessStreamHealth = "fixture" | "connecting" | "connected" | "unavailable" | "error"
 
 export type HeadlessProjectionEffect =
   | { type: "permission.auto_reply"; requestID: string }
@@ -48,8 +51,19 @@ export function createHeadlessProjectionState<
   TRisk = unknown,
   TGoal = unknown,
   TTaskQueueItem extends { id: string } = { id: string },
->(): HeadlessProjectionState<TSession, TTodo, TDiff, TStatus, TMessage, TPart, TRisk, TGoal, TTaskQueueItem> {
+>(input: { streamHealth?: HeadlessStreamHealth } = {}): HeadlessProjectionState<
+  TSession,
+  TTodo,
+  TDiff,
+  TStatus,
+  TMessage,
+  TPart,
+  TRisk,
+  TGoal,
+  TTaskQueueItem
+> {
   return {
+    stream_health: input.streamHealth ?? "connecting",
     permission: {},
     question: {},
     todo: {},
@@ -89,9 +103,11 @@ export function applyHeadlessProjectionEvent<
   switch (event.type) {
     case "server.connected":
     case "server.heartbeat":
+      state.stream_health = "connected"
       return { handled: true, effects }
 
     case "server.instance.disposed":
+      state.stream_health = "unavailable"
       effects.push({ type: "bootstrap.reload" })
       return { handled: true, effects }
 

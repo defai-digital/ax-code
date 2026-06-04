@@ -61,6 +61,7 @@ export {
 } from "./headless/projection.js"
 export type {
   HeadlessProjectionState,
+  HeadlessStreamHealth,
   HeadlessProjectionEffect,
   HeadlessProjectionApplyResult,
 } from "./headless/projection.js"

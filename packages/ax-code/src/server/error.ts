@@ -1,23 +1,161 @@
 import { resolver } from "hono-openapi"
+import type { ContentfulStatusCode } from "hono/utils/http-status"
+import { HTTPException } from "hono/http-exception"
 import z from "zod"
+import { NamedError } from "@ax-code/util/error"
 import { NotFoundError } from "../storage/db"
+import { Provider } from "../provider/provider"
+
+export const AppErrorEnvelope = z
+  .object({
+    name: z.string(),
+    message: z.string(),
+    status: z.number().int().min(400).max(599),
+    code: z.string().optional(),
+    logRef: z.string().optional(),
+    retryable: z.boolean().optional(),
+    details: z.record(z.string(), z.unknown()).optional(),
+  })
+  .meta({
+    ref: "AppErrorEnvelope",
+  })
+
+export type AppErrorEnvelope = z.infer<typeof AppErrorEnvelope>
+
+type NormalizedErrorInput = {
+  error: unknown
+  logRef?: string
+}
+
+function namedErrorData(error: NamedError): Record<string, unknown> {
+  const data = error.toObject().data
+  if (!data || typeof data !== "object" || Array.isArray(data)) return {}
+  return data as Record<string, unknown>
+}
+
+function resourceFromMessage(message: string) {
+  if (/^Session not found\b/i.test(message)) return "session"
+  if (/^Project not found\b/i.test(message)) return "project"
+  if (/^MCP server not found\b/i.test(message)) return "mcpServer"
+  if (/^Tool .* is unavailable\b/i.test(message)) return "tool"
+  if (/^No LSP server available\b/i.test(message)) return "lsp"
+  return undefined
+}
+
+function notFoundEnvelope(error: NamedError, logRef?: string): AppErrorEnvelope {
+  const message = namedErrorData(error).message
+  const text = typeof message === "string" ? message : error.message
+  const resource = resourceFromMessage(text)
+  const name =
+    resource === "session"
+      ? "SessionNotFoundError"
+      : resource === "project"
+        ? "ProjectNotFoundError"
+        : resource === "mcpServer"
+          ? "McpServerNotFoundError"
+          : "NotFoundError"
+  return {
+    name,
+    message: resource ? `${resource[0]!.toUpperCase()}${resource.slice(1)} not found` : "Resource not found",
+    status: 404,
+    logRef,
+    details: resource ? { resource } : undefined,
+  }
+}
+
+function httpExceptionEnvelope(error: HTTPException, logRef?: string): AppErrorEnvelope {
+  const status = error.status as ContentfulStatusCode
+  const name =
+    status === 409
+      ? "ServiceUnavailableError"
+      : status === 404
+        ? "NotFoundError"
+        : status >= 400 && status < 500
+          ? "InvalidRequestError"
+          : "UnknownError"
+  return {
+    name,
+    message: error.message || (status >= 500 ? "Internal server error" : "Invalid request"),
+    status,
+    logRef: status >= 500 ? logRef : undefined,
+    retryable: status === 409 || status === 429 || status >= 500,
+  }
+}
+
+function namedErrorEnvelope(error: NamedError, logRef?: string): AppErrorEnvelope {
+  if (error instanceof NotFoundError) return notFoundEnvelope(error, logRef)
+  if (error instanceof Provider.ModelNotFoundError) {
+    return {
+      name: "InvalidRequestError",
+      message: "Provider model not found",
+      status: 400,
+      details: { resource: "providerModel" },
+    }
+  }
+  if (error.name === "ProviderAuthValidationFailed") {
+    return {
+      name: "InvalidRequestError",
+      message: "Provider authentication could not be validated",
+      status: 400,
+      details: { resource: "providerAuth" },
+    }
+  }
+  if (error.name.startsWith("Worktree")) {
+    return {
+      name: "InvalidRequestError",
+      message: "Worktree request is invalid",
+      status: 400,
+      details: { resource: "worktree" },
+    }
+  }
+  return {
+    name: "UnknownError",
+    message: "Internal server error",
+    status: 500,
+    logRef,
+    retryable: false,
+  }
+}
+
+function plainErrorEnvelope(error: Error, logRef?: string): AppErrorEnvelope {
+  if (error.constructor.name === "BusyError" && /^Session .* is busy$/.test(error.message)) {
+    return {
+      name: "SessionBusyError",
+      message: "Session is busy",
+      status: 409,
+      details: { resource: "session" },
+      retryable: true,
+    }
+  }
+  return {
+    name: "UnknownError",
+    message: "Internal server error",
+    status: 500,
+    logRef,
+    retryable: false,
+  }
+}
+
+export function appErrorEnvelope(input: NormalizedErrorInput): AppErrorEnvelope {
+  const { error, logRef } = input
+  if (error instanceof HTTPException) return httpExceptionEnvelope(error, logRef)
+  if (error instanceof NamedError) return namedErrorEnvelope(error, logRef)
+  if (error instanceof Error) return plainErrorEnvelope(error, logRef)
+  return {
+    name: "UnknownError",
+    message: "Internal server error",
+    status: 500,
+    logRef,
+    retryable: false,
+  }
+}
 
 export const ERRORS = {
   400: {
     description: "Bad request",
     content: {
       "application/json": {
-        schema: resolver(
-          z
-            .object({
-              data: z.any(),
-              errors: z.array(z.record(z.string(), z.any())),
-              success: z.literal(false),
-            })
-            .meta({
-              ref: "BadRequestError",
-            }),
-        ),
+        schema: resolver(AppErrorEnvelope),
       },
     },
   },
@@ -25,7 +163,15 @@ export const ERRORS = {
     description: "Not found",
     content: {
       "application/json": {
-        schema: resolver(NotFoundError.Schema),
+        schema: resolver(AppErrorEnvelope),
+      },
+    },
+  },
+  409: {
+    description: "Conflict",
+    content: {
+      "application/json": {
+        schema: resolver(AppErrorEnvelope),
       },
     },
   },

@@ -2,7 +2,11 @@ import type { PermissionRequest, QuestionRequest } from "@ax-code/sdk/v2"
 import { produce, type SetStoreFunction } from "solid-js/store"
 import { executeHeadlessProjectionEffects } from "@/runtime/headless/effects"
 import type { HeadlessProjectionEffectHandlers } from "@/runtime/headless/effects"
-import { applyHeadlessProjectionEvent, type HeadlessProjectionEffect } from "@/runtime/headless/projection"
+import {
+  applyHeadlessProjectionEvent,
+  type HeadlessProjectionEffect,
+  type HeadlessStreamHealth,
+} from "@/runtime/headless/projection"
 import type { SyncedSessionRisk } from "./sync-session-risk"
 import type { SyncEvent } from "./sync-event"
 import {
@@ -22,6 +26,7 @@ export interface SyncEventStoreState<
   TMessage extends { id: string; sessionID: string },
   TPart extends { id: string; messageID: string },
 > {
+  stream_health: HeadlessStreamHealth
   permission: Record<string, PermissionRequest[]>
   question: Record<string, QuestionRequest[]>
   todo: Record<string, TTodo[]>
@@ -111,6 +116,9 @@ function dispatchHeadlessProjectionEvent<
     case "message.part.updated":
     case "message.part.delta":
     case "message.part.removed":
+    case "server.connected":
+    case "server.heartbeat":
+    case "server.instance.disposed":
     case "vcs.branch.updated":
     case "mcp.tools.changed":
     case "lsp.updated":

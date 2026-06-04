@@ -7,7 +7,7 @@ import { Server } from "../../src/server/server"
 import { Session } from "../../src/session"
 import { MessageV2 } from "../../src/session/message-v2"
 import { SessionPrompt } from "../../src/session/prompt"
-import { MessageID, PartID } from "../../src/session/schema"
+import { MessageID, PartID, SessionID } from "../../src/session/schema"
 import { Log } from "../../src/util/log"
 import { ServerRuntimeAuth } from "../../src/server/runtime-auth"
 
@@ -24,7 +24,9 @@ describe("server route validation", () => {
       directory: root,
       fn: async () => {
         const session = await Session.create({})
-        const promptSpy = spyOn(SessionPrompt, "prompt").mockRejectedValue(new Error("prompt failed"))
+        const promptSpy = spyOn(SessionPrompt, "prompt").mockRejectedValue(
+          new Error("prompt failed with sk-test-token"),
+        )
 
         try {
           const res = await Server.Default().request(`/session/${session.id}/message`, {
@@ -36,9 +38,18 @@ describe("server route validation", () => {
           })
 
           expect(res.status).toBe(500)
-          const text = await res.text()
-          expect(text).toContain("Internal server error")
-          expect(text).not.toContain("prompt failed")
+          const body = (await res.json()) as {
+            name: string
+            message: string
+            status: number
+            logRef?: string
+          }
+          expect(body.name).toBe("UnknownError")
+          expect(body.message).toBe("Internal server error")
+          expect(body.status).toBe(500)
+          expect(body.logRef).toMatch(/^err_/)
+          expect(JSON.stringify(body)).not.toContain("prompt failed")
+          expect(JSON.stringify(body)).not.toContain("sk-test-token")
         } finally {
           promptSpy.mockRestore()
           await Session.remove(session.id)
@@ -83,14 +94,123 @@ describe("server route validation", () => {
             },
           )
 
-          const text = await res.text()
+          const body = (await res.json()) as {
+            name: string
+            message: string
+            status: number
+          }
           expect(res.status).toBe(400)
-          expect(text).toContain("Part identifiers do not match the request path")
+          expect(body).toMatchObject({
+            name: "InvalidRequestError",
+            message: "Part identifiers do not match the request path",
+            status: 400,
+          })
+          const text = JSON.stringify(body)
           expect(text).not.toContain(String(partID))
           expect(text).not.toContain(String(messageID))
           expect(text).not.toContain(String(session.id))
         } finally {
           await Session.remove(session.id)
+        }
+      },
+    })
+  })
+
+  test("missing session route returns a session not found envelope", async () => {
+    await Instance.provide({
+      directory: root,
+      fn: async () => {
+        const missingID = SessionID.descending()
+        const res = await Server.Default().request(`/session/${missingID}`)
+
+        expect(res.status).toBe(404)
+        expect(await res.json()).toMatchObject({
+          name: "SessionNotFoundError",
+          message: "Session not found",
+          status: 404,
+          details: { resource: "session" },
+        })
+      },
+    })
+  })
+
+  test("session update route round-trips valid product metadata and rejects invalid reserved metadata", async () => {
+    await Instance.provide({
+      directory: root,
+      fn: async () => {
+        const session = await Session.create({})
+        try {
+          const valid = await Server.Default().request(`/session/${session.id}`, {
+            method: "PATCH",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              metadata: {
+                app: { pinned: true, label: "Pinned run" },
+                queue: { queueItemId: "task_1", source: "manual" },
+                custom: { keep: true },
+              },
+            }),
+          })
+
+          expect(valid.status).toBe(200)
+          const body = (await valid.json()) as Session.Info
+          expect(body.metadata).toEqual({
+            app: { pinned: true, label: "Pinned run" },
+            queue: { queueItemId: "task_1", source: "manual" },
+            custom: { keep: true },
+          })
+
+          const invalid = await Server.Default().request(`/session/${session.id}`, {
+            method: "PATCH",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              metadata: {
+                queue: { source: "daemon" },
+              },
+            }),
+          })
+
+          expect(invalid.status).toBe(400)
+          expect(await invalid.json()).toMatchObject({
+            name: "InvalidRequestError",
+            status: 400,
+          })
+        } finally {
+          await Session.remove(session.id)
+        }
+      },
+    })
+  })
+
+  test("busy session route returns a retryable busy envelope", async () => {
+    await Instance.provide({
+      directory: root,
+      fn: async () => {
+        const sessionID = SessionID.descending()
+        const busySpy = spyOn(SessionPrompt, "assertNotBusy").mockImplementation(() => {
+          throw new Session.BusyError(sessionID)
+        })
+
+        try {
+          const res = await Server.Default().request(`/session/${sessionID}/summarize`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              providerID: "test",
+              modelID: "test",
+            }),
+          })
+
+          expect(res.status).toBe(409)
+          expect(await res.json()).toMatchObject({
+            name: "SessionBusyError",
+            message: "Session is busy",
+            status: 409,
+            retryable: true,
+            details: { resource: "session" },
+          })
+        } finally {
+          busySpy.mockRestore()
         }
       },
     })

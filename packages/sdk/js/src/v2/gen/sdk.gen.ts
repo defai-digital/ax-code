@@ -176,6 +176,7 @@ import type {
   SessionMessageResponses,
   SessionMessagesErrors,
   SessionMessagesResponses,
+  SessionMetadata,
   SessionPromptAsyncErrors,
   SessionPromptAsyncResponses,
   SessionPromptErrors,
@@ -3582,6 +3583,7 @@ export class Session2 extends HeyApiClient {
       time?: {
         archived?: number
       }
+      metadata?: SessionMetadata
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -3594,6 +3596,7 @@ export class Session2 extends HeyApiClient {
             { in: "query", key: "directory" },
             { in: "body", key: "title" },
             { in: "body", key: "time" },
+            { in: "body", key: "metadata" },
           ],
         },
       ],

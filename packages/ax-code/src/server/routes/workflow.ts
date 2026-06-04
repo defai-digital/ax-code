@@ -1,6 +1,7 @@
 import { Hono } from "hono"
 import { HTTPException } from "hono/http-exception"
-import { describeRoute, resolver, validator } from "hono-openapi"
+import { describeRoute, resolver } from "hono-openapi"
+import { validator } from "../validation"
 import z from "zod"
 import { compactWorkflowArtifact } from "@/workflow/artifact"
 import { WorkflowEvalBaseline, WorkflowEvalSummary, evaluateWorkflowRun } from "@/workflow/eval"

@@ -1,5 +1,6 @@
 import { Hono, type Context } from "hono"
-import { describeRoute, validator, resolver } from "hono-openapi"
+import { describeRoute, resolver } from "hono-openapi"
+import { validator } from "../validation"
 import { HTTPException } from "hono/http-exception"
 import { SessionID, MessageID, PartID, TaskQueueID } from "@/session/schema"
 import z from "zod"
@@ -814,7 +815,7 @@ export const SessionRoutes = lazy(() =>
               archived: z.number().optional(),
             })
             .optional(),
-          metadata: z.record(z.string(), z.unknown()).optional(),
+          metadata: Session.Metadata.optional(),
         }),
       ),
       async (c) => {
