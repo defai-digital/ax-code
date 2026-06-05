@@ -2,7 +2,7 @@ import { Hono, type Context } from "hono"
 import { describeRoute, resolver } from "hono-openapi"
 import { validator } from "../validation"
 import { HTTPException } from "hono/http-exception"
-import { SessionID, MessageID, PartID, TaskQueueID } from "@/session/schema"
+import { SessionID, MessageID, PartID } from "@/session/schema"
 import z from "zod"
 import { Session } from "../../session"
 import { MessageV2 } from "../../session/message-v2"
@@ -30,8 +30,6 @@ import { PermissionID } from "@/permission/schema"
 import { ModelID, ProviderID } from "@/provider/schema"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
-import { NamedError } from "@ax-code/util/error"
-import { DiagnosticLog } from "@/debug/diagnostic-log"
 import { parseExistingSessionID, parseSessionID, type SessionRouteContext, SESSION_ID_PARAM } from "./route-params"
 import { QueryBoolean } from "./query"
 
@@ -51,145 +49,6 @@ const SESSION_PERMISSION_PARAM = z.object({
   sessionID: SessionID.zod,
   permissionID: PermissionID.zod,
 })
-
-function startDetachedSessionTask(task: () => Promise<void>) {
-  // setTimeout with 0ms delay keeps the event loop alive until the callback
-  // fires and the resulting promise from task() settles, which prevents
-  // packaged stdio backends from going idle before the first turn starts.
-  const timer = setTimeout(() => {
-    void task().catch((error) => {
-      DiagnosticLog.recordProcess("server.sessionAsyncTaskUnhandledFailure", { error })
-      log.error("detached session task failed", { error })
-    })
-  }, 0)
-  void timer
-}
-
-function recordAsyncSessionTask(input: {
-  event: string
-  sessionID: string
-  kind: "prompt" | "command" | "shell"
-  startedAt?: number
-  error?: unknown
-}) {
-  DiagnosticLog.recordProcess(input.event, {
-    sessionID: input.sessionID,
-    kind: input.kind,
-    elapsedMs: input.startedAt === undefined ? undefined : Math.round(performance.now() - input.startedAt),
-    error: input.error,
-  })
-}
-
-function startObservedAsyncSessionTask(input: {
-  sessionID: SessionID
-  kind: "prompt" | "command" | "shell"
-  queueID?: string
-  task: () => Promise<unknown>
-  onError: (error: unknown) => void
-}) {
-  TaskQueueExecutor.initSessionBlockObservers()
-  recordAsyncSessionTask({ event: "server.sessionAsyncAccepted", sessionID: input.sessionID, kind: input.kind })
-  startDetachedSessionTask(async () => {
-    const startedAt = performance.now()
-    recordAsyncSessionTask({
-      event: "server.sessionAsyncStarted",
-      sessionID: input.sessionID,
-      kind: input.kind,
-      startedAt,
-    })
-    await updateAsyncTaskQueueStatus(input.queueID, { status: "running" })
-    try {
-      await input.task()
-      await updateAsyncTaskQueueStatus(input.queueID, { status: "completed" })
-      recordAsyncSessionTask({
-        event: "server.sessionAsyncSucceeded",
-        sessionID: input.sessionID,
-        kind: input.kind,
-        startedAt,
-      })
-    } catch (error) {
-      recordAsyncSessionTask({
-        event: "server.sessionAsyncFailed",
-        sessionID: input.sessionID,
-        kind: input.kind,
-        startedAt,
-        error,
-      })
-      await updateAsyncTaskQueueStatus(input.queueID, {
-        status: "failed",
-        error: NamedError.message(error),
-      })
-      try {
-        input.onError(error)
-      } catch (handlerError) {
-        DiagnosticLog.recordProcess("server.sessionAsyncErrorHandlerFailed", {
-          sessionID: input.sessionID,
-          kind: input.kind,
-          error: handlerError,
-        })
-        log.error("detached session task error handler failed", { error: handlerError })
-      }
-    } finally {
-      await TaskQueueExecutor.drainNextForSession(input.sessionID).catch((error) => {
-        DiagnosticLog.recordProcess("server.sessionAsyncDrainFailed", {
-          sessionID: input.sessionID,
-          kind: input.kind,
-          error,
-        })
-        log.warn("failed to drain task queue after async session task settled", {
-          sessionID: input.sessionID,
-          kind: input.kind,
-          error,
-        })
-      })
-      recordAsyncSessionTask({
-        event: "server.sessionAsyncSettled",
-        sessionID: input.sessionID,
-        kind: input.kind,
-        startedAt,
-      })
-    }
-  })
-}
-
-function createAsyncSessionErrorHandler(sessionID: SessionID, kind: "prompt" | "command" | "shell") {
-  return (error: unknown) => {
-    log.error(`${kind}_async failed`, { sessionID, error })
-    Session.publishError({ sessionID, message: NamedError.message(error) })
-  }
-}
-
-function startAsyncSessionTask(input: {
-  sessionID: SessionID
-  kind: "prompt" | "command" | "shell"
-  queueID?: string
-  task: () => Promise<unknown>
-}) {
-  startObservedAsyncSessionTask({
-    ...input,
-    onError: createAsyncSessionErrorHandler(input.sessionID, input.kind),
-  })
-}
-
-async function updateAsyncTaskQueueStatus(
-  queueID: string | undefined,
-  input: { status: TaskQueue.Status; error?: string },
-) {
-  if (!queueID) return
-  try {
-    await TaskQueue.setStatus({
-      id: TaskQueueID.make(queueID),
-      status: input.status,
-      error: input.error,
-    })
-  } catch (error) {
-    log.warn("failed to update async task queue status", {
-      queueID,
-      status: input.status,
-      error,
-    })
-  }
-}
 
 type SessionJSONRouteContext = {
   req: {
@@ -213,7 +72,6 @@ async function startAsyncSessionHandler<TBody>(
   c: Context,
   input: {
     kind: "prompt" | "command" | "shell"
-    start: (input: TBody & { sessionID: SessionID }) => Promise<unknown>
   },
 ) {
   const { sessionID, body } = await parseSessionJSONInput<TBody>(c as SessionJSONRouteContext)
@@ -227,12 +85,7 @@ async function startAsyncSessionHandler<TBody>(
     sourceMessageID: asyncTaskQueueSourceMessageID(body),
     payload: asyncTaskQueuePayload(input.kind, body),
   })
-  startAsyncSessionTask({
-    sessionID,
-    kind: input.kind,
-    queueID: queueItem.id,
-    task: () => input.start({ ...body, sessionID }),
-  })
+  await TaskQueueExecutor.start(queueItem)
   return c.body(null, 202)
 }
 
@@ -1325,7 +1178,6 @@ export const SessionRoutes = lazy(() =>
       async (c) => {
         return startAsyncSessionHandler(c, {
           kind: "prompt",
-          start: SessionPrompt.prompt,
         })
       },
     )
@@ -1347,7 +1199,6 @@ export const SessionRoutes = lazy(() =>
       async (c) => {
         return startAsyncSessionHandler(c, {
           kind: "command",
-          start: SessionPrompt.command,
         })
       },
     )
@@ -1399,7 +1250,6 @@ export const SessionRoutes = lazy(() =>
       async (c) => {
         return startAsyncSessionHandler(c, {
           kind: "shell",
-          start: SessionPrompt.shell,
         })
       },
     )

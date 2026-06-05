@@ -60,7 +60,7 @@ import { installResizeInputGuard, useResizeInputRecovery } from "./input-mode"
 import { directoryRequestHeaders } from "@tui/util/request-headers"
 import { scheduleDeferredStartupTask } from "@tui/util/startup-task"
 import { beginTuiStartup, createTuiStartupSpan, recordTuiStartup, recordTuiStartupOnce } from "@tui/util/startup-trace"
-import { unknownErrorMessage } from "@tui/util/error-message"
+import { responseErrorMessage, unknownErrorMessage } from "@tui/util/error-message"
 
 const FALLBACK_COLOR_MODE = "dark" as const
 
@@ -458,7 +458,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
         signal: ctrl.signal,
       })
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status} ${response.statusText}`.trim())
+        throw new Error(await responseErrorMessage(response))
       }
     } finally {
       clearTimeout(timer)

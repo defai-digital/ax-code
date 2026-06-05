@@ -3,6 +3,7 @@ import { describeRoute, resolver } from "hono-openapi"
 import { validator } from "../validation"
 import { Log } from "../../util/log"
 import { lazy } from "../../util/lazy"
+import { FeatureFlag } from "../../util/feature-flags"
 import {
   BooleanFeatureState,
   persistProjectConfigBooleanFeatureResponse,
@@ -10,6 +11,7 @@ import {
 } from "./project-config"
 
 const log = Log.create({ service: "autonomous" })
+const SUPER_LONG_OVERRIDE = "AX_CODE_SUPER_LONG_SESSION_OVERRIDE"
 
 const AutonomousState = BooleanFeatureState.meta({ ref: "AutonomousState" })
 
@@ -79,6 +81,7 @@ export const AutonomousRoutes = lazy(() =>
           },
         })
         if ("error" in state) return c.json(state, 500)
+        if (!enabled) FeatureFlag.set(SUPER_LONG_OVERRIDE, false)
         log.info("autonomous mode changed", { enabled })
         return c.json(state)
       },

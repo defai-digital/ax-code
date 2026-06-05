@@ -198,7 +198,8 @@ describe("task queue routes", () => {
             status: "running",
           })
 
-          releaseCommand()
+          const release = await waitForRouteValue(() => releaseCommand)
+          release()
           const completed = await waitForQueueStatus("completed")
           expect(completed.id).toBe(running.id)
           expect(completed.time.completed).toBeDefined()
@@ -321,7 +322,8 @@ describe("task queue routes", () => {
           const queued = (await queuedResponse.json()) as { id: string; status: string }
           expect(queued.status).toBe("queued")
 
-          releaseCommand()
+          const release = await waitForRouteValue(() => releaseCommand)
+          release()
           const completed = await waitForQueueItemStatus(queued.id, "completed")
           expect(completed.kind).toBe("prompt")
           expect(promptInputs).toHaveLength(1)
@@ -331,6 +333,68 @@ describe("task queue routes", () => {
           })
         } finally {
           commandSpy.mockRestore()
+          promptSpy.mockRestore()
+          await Session.remove(session.id)
+        }
+      },
+    })
+  })
+
+  test("async prompt route waits behind the active queue item for the same session", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const app = Server.Default()
+    let releaseFirst!: () => void
+    const promptInputs: SessionPrompt.PromptInput[] = []
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const promptSpy = spyOn(SessionPrompt, "prompt").mockImplementation((async (
+          input: SessionPrompt.PromptInput,
+        ) => {
+          promptInputs.push(input)
+          if (promptInputs.length === 1) {
+            await new Promise<void>((resolve) => {
+              releaseFirst = resolve
+            })
+          }
+          return {} as any
+        }) as any)
+
+        try {
+          const directoryQuery = `directory=${encodeURIComponent(tmp.path)}`
+          const firstResponse = await app.request(`/session/${session.id}/prompt_async?${directoryQuery}`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              parts: [{ type: "text", text: "first async prompt" }],
+            }),
+          })
+          expect(firstResponse.status).toBe(202)
+          await waitForQueueTitleStatus("first async prompt", "running")
+
+          const secondResponse = await app.request(`/session/${session.id}/prompt_async?${directoryQuery}`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              parts: [{ type: "text", text: "second async prompt" }],
+            }),
+          })
+          expect(secondResponse.status).toBe(202)
+          await waitForQueueTitleStatus("second async prompt", "waiting_for_idle")
+          const release = await waitForRouteValue(() => releaseFirst)
+          expect(promptInputs).toHaveLength(1)
+
+          release()
+          await waitForQueueTitleStatus("first async prompt", "completed")
+          await waitForQueueTitleStatus("second async prompt", "completed")
+          expect(promptInputs).toHaveLength(2)
+          expect(promptInputs[1]).toMatchObject({
+            sessionID: session.id,
+            parts: [{ type: "text", text: "second async prompt" }],
+          })
+        } finally {
           promptSpy.mockRestore()
           await Session.remove(session.id)
         }
@@ -395,7 +459,8 @@ describe("task queue routes", () => {
           expect(await sendNowResponse.json()).toMatchObject({ id: created.id, status: "waiting_for_idle" })
           expect(promptInputs).toHaveLength(0)
 
-          releaseCommand()
+          const release = await waitForRouteValue(() => releaseCommand)
+          release()
           const completed = await waitForQueueItemStatus(created.id, "completed")
           expect(completed.kind).toBe("prompt")
           expect(promptInputs).toHaveLength(1)
@@ -462,4 +527,22 @@ async function waitForQueueItemStatus(id: string, status: TaskQueue.Status) {
     await new Promise((resolve) => setTimeout(resolve, 10))
   }
   throw new Error(`Timed out waiting for task queue item ${id} status: ${status}`)
+}
+
+async function waitForQueueTitleStatus(title: string, status: TaskQueue.Status) {
+  for (let i = 0; i < 30; i++) {
+    const item = (await TaskQueue.list()).find((entry) => entry.title === title)
+    if (item?.status === status) return item
+    await new Promise((resolve) => setTimeout(resolve, 10))
+  }
+  throw new Error(`Timed out waiting for task queue item titled ${title} status: ${status}`)
+}
+
+async function waitForRouteValue<T>(read: () => T | undefined): Promise<T> {
+  for (let i = 0; i < 30; i++) {
+    const value = read()
+    if (value !== undefined) return value
+    await new Promise((resolve) => setTimeout(resolve, 10))
+  }
+  throw new Error("Timed out waiting for route test value")
 }

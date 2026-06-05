@@ -37,6 +37,19 @@ describe("tui error message decoding", () => {
     expect(message).toBe("Request failed with status 503")
   })
 
+  test("decodes standard server error envelopes from response bodies", async () => {
+    const message = await responseErrorMessage({
+      status: 409,
+      text: async () =>
+        JSON.stringify({
+          name: "ServiceUnavailableError",
+          message: "Super-Long requires autonomous mode or equivalent runtime guardrails.",
+          status: 409,
+        }),
+    })
+    expect(message).toBe("Super-Long requires autonomous mode or equivalent runtime guardrails.")
+  })
+
   test("formats unknown errors for session event toasts", () => {
     expect(unknownErrorMessage({ data: { message: "session failed" } })).toBe("session failed")
     expect(unknownErrorMessage(undefined)).toBe("An error occurred")

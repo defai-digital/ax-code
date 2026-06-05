@@ -120,9 +120,55 @@ describe("super-long route", () => {
           })
           expect(response.status).toBe(409)
           expect(await response.json()).toEqual({
-            error: "Super-Long requires autonomous mode or equivalent runtime guardrails.",
+            name: "ServiceUnavailableError",
+            message: "Super-Long requires autonomous mode or equivalent runtime guardrails.",
+            status: 409,
+            retryable: true,
+            details: { resource: "superLong" },
           })
           expect(process.env[OVERRIDE]).toBeUndefined()
+        },
+      })
+    })
+  })
+
+  test("disabling autonomous prevents a session Super-Long override from reviving", async () => {
+    await withCleanSuperLongEnv(async () => {
+      await using tmp = await tmpdir({ git: true })
+      await Bun.write(path.join(tmp.path, "ax-code.json"), JSON.stringify({ autonomous: true }))
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const directoryQuery = `directory=${encodeURIComponent(tmp.path)}`
+          const enabled = await Server.Default().request(`/super-long?${directoryQuery}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ enabled: true }),
+          })
+          expect(enabled.status).toBe(200)
+          expect(await enabled.json()).toEqual({ enabled: true })
+
+          const autonomousOff = await Server.Default().request(`/autonomous?${directoryQuery}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ enabled: false }),
+          })
+          expect(autonomousOff.status).toBe(200)
+          expect(await autonomousOff.json()).toEqual({ enabled: false })
+          expect(process.env[OVERRIDE]).toBe("false")
+
+          const autonomousOn = await Server.Default().request(`/autonomous?${directoryQuery}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ enabled: true }),
+          })
+          expect(autonomousOn.status).toBe(200)
+          expect(await autonomousOn.json()).toEqual({ enabled: true })
+
+          const superLong = await Server.Default().request(`/super-long?${directoryQuery}`)
+          expect(superLong.status).toBe(200)
+          expect(await superLong.json()).toEqual({ enabled: false })
         },
       })
     })
