@@ -113,7 +113,7 @@ export namespace SessionGoal {
   }): Promise<Info> {
     const objective = input.objective.trim()
     if (!objective) throw new Error("Goal objective is required")
-    if (input.tokenBudget !== undefined && (!Number.isInteger(input.tokenBudget) || input.tokenBudget <= 0)) {
+    if (input.tokenBudget !== undefined && (!Number.isSafeInteger(input.tokenBudget) || input.tokenBudget <= 0)) {
       throw new Error("Goal token budget must be a positive integer")
     }
     const now = Date.now()

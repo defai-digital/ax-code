@@ -309,7 +309,11 @@ describe("autonomous continuation decisions", () => {
     ).toEqual({ action: "ignore" })
   })
 
-  test("formats non-comparable budget goal continuation counts in stop messages", () => {
+  test("issues the budget wrap-up even when continuations has exceeded maxContinuations", () => {
+    // A long-running active goal deliberately runs past maxContinuations, so by
+    // the time it exhausts its token budget `continuations` is already over the
+    // cap. The single guaranteed wrap-up turn (bounded by budgetLimitContinuationSent)
+    // must still fire instead of being denied as "continuation limit reached".
     const decision = goalContinuationDecision({
       goal: {
         objective: "finish refactor",
@@ -318,15 +322,18 @@ describe("autonomous continuation decisions", () => {
         tokensUsed: 120,
         timeUsedSeconds: 9,
       },
-      continuations: Number.NaN,
+      continuations: 25,
       maxContinuations: 3,
       budgetLimitContinuationSent: false,
     })
 
-    expect(decision.action).toBe("stop_budget_limit")
-    if (decision.action !== "stop_budget_limit") throw new Error("expected stop_budget_limit")
-    expect(decision.message).toContain("an invalid number of auto-continuation(s)")
-    expect(decision.message).not.toContain("NaN")
+    expect(decision).toEqual({
+      action: "continue_budget_wrapup",
+      objective: "finish refactor",
+      tokensUsed: 120,
+      tokenBudget: 100,
+      timeUsedSeconds: 9,
+    })
   })
 
   test("uses todo retries for unfinished-todo completion gate events", () => {

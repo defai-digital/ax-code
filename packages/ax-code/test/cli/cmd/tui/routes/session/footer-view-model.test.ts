@@ -101,6 +101,20 @@ describe("footerGoalChip", () => {
       })?.label,
     ).toBe("Goal blocked: wait for user input · /goal resume")
   })
+
+  test("omits the resume hint when the token budget is exhausted", () => {
+    const chip = footerGoalChip({
+      goal: {
+        objective: "stop at the budget",
+        status: "blocked",
+        tokensUsed: 100,
+        tokenBudget: 100,
+        remainingTokens: 0,
+      },
+    })
+    expect(chip?.resumeHint).toBeUndefined()
+    expect(chip?.label).not.toContain("/goal resume")
+  })
 })
 
 describe("footerSessionStatusOrIdle", () => {

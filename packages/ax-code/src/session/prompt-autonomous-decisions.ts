@@ -307,22 +307,18 @@ export function goalContinuationDecision(input: {
     input.goal.tokenBudget !== undefined &&
     !input.budgetLimitContinuationSent
   ) {
-    if (nextContinuation(input) !== undefined) {
-      return {
-        action: "continue_budget_wrapup",
-        objective: input.goal.objective,
-        tokensUsed: input.goal.tokensUsed,
-        tokenBudget: input.goal.tokenBudget,
-        timeUsedSeconds: input.goal.timeUsedSeconds,
-      }
-    }
-
+    // The single budget wrap-up turn is guaranteed once per budget cycle
+    // (bounded by budgetLimitContinuationSent), independent of the continuation
+    // cap. Active goals deliberately run past maxContinuations, so by the time a
+    // long active goal exhausts its budget, `continuations` is almost always
+    // already past the cap — gating the wrap-up on it denied the wrap-up turn
+    // and surfaced a spurious "continuation limit reached" stop instead.
     return {
-      action: "stop_budget_limit",
-      reason: "stalled",
-      message:
-        `Goal reached its token budget after ${formatDecisionCount(input.continuations)} auto-continuation(s), but the continuation limit was reached. ` +
-        `Resume the session or increase session.max_continuations for a budget wrap-up turn.`,
+      action: "continue_budget_wrapup",
+      objective: input.goal.objective,
+      tokensUsed: input.goal.tokensUsed,
+      tokenBudget: input.goal.tokenBudget,
+      timeUsedSeconds: input.goal.timeUsedSeconds,
     }
   }
 

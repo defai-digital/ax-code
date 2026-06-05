@@ -41,7 +41,12 @@ export function DialogGoal(props: { goal?: SessionGoal.PublicInfo | null; setPro
       })
     }
 
-    if (goal?.status === "paused" || goal?.status === "blocked") {
+    // Resuming sets the goal back to active, which the server refuses when the
+    // token budget is exhausted. Only offer Resume when it can actually succeed,
+    // otherwise the action throws a budget error. (A budget-exhausted goal can
+    // still be cleared or replaced with a new goal below.)
+    const budgetExhausted = goal?.tokenBudget !== undefined && (goal?.remainingTokens ?? 0) <= 0
+    if ((goal?.status === "paused" || goal?.status === "blocked") && !budgetExhausted) {
       items.push({
         title: "Resume current goal",
         value: "goal.resume",

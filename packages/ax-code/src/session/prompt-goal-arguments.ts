@@ -14,7 +14,9 @@ export function parseGoalArguments(raw: string): GoalArgumentDecision {
   if (lower === "resume") return { action: "resume" }
   if (lower === "clear") return { action: "clear" }
 
-  const budgetMatch = /^--(?:token-)?budget\s+(\d+)\s+([\s\S]+)$/.exec(text)
+  // The flag is matched case-insensitively to stay consistent with the
+  // pause/resume/clear keywords above (which compare against `lower`).
+  const budgetMatch = /^--(?:token-)?budget\s+(\d+)\s+([\s\S]+)$/i.exec(text)
   if (budgetMatch) {
     return {
       action: "create",
@@ -23,6 +25,6 @@ export function parseGoalArguments(raw: string): GoalArgumentDecision {
     }
   }
   // --budget N without an objective is not a valid create — treat as view
-  if (/^--(?:token-)?budget\s+\d+$/.test(text)) return { action: "view" }
+  if (/^--(?:token-)?budget\s+\d+$/i.test(text)) return { action: "view" }
   return { action: "create", objective: text }
 }

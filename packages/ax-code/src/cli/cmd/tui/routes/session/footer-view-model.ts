@@ -131,7 +131,12 @@ export function footerGoalChip(input: {
     goal.tokenBudget === undefined || goal.tokensUsed === undefined
       ? ""
       : ` · ${formatTokenCount(goal.tokensUsed)}/${formatTokenCount(goal.tokenBudget)} tok`
-  const resumeHint = goal.status === "paused" || goal.status === "blocked" ? "/goal resume" : undefined
+  // Don't hint "/goal resume" once the token budget is exhausted — resuming
+  // such a goal is refused server-side, so the hint would point at an action
+  // that errors. The goal can still be cleared or replaced.
+  const budgetExhausted = goal.tokenBudget !== undefined && (goal.remainingTokens ?? 0) <= 0
+  const resumeHint =
+    (goal.status === "paused" || goal.status === "blocked") && !budgetExhausted ? "/goal resume" : undefined
   const resume = resumeHint ? ` · ${resumeHint}` : ""
   const tone: FooterSessionStatusTone =
     goal.status === "complete" ? "success" : goal.status === "active" ? "working" : "warning"

@@ -350,6 +350,60 @@ describe("SessionGoal", () => {
     })
   })
 
+  test("goal command surfaces control errors as messages without invoking the model", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        modelSpy = spyOn(Provider, "getModel").mockResolvedValue(model)
+        streamSpy = spyOn(LLM, "stream").mockResolvedValue({
+          fullStream: (async function* () {})(),
+        } as any)
+
+        const hasText = (message: Awaited<ReturnType<typeof SessionPrompt.command>>, needle: string) =>
+          message.parts.some((part) => part.type === "text" && part.text.includes(needle))
+
+        // pause with no goal set — must report, not throw
+        const noGoal = await SessionPrompt.command({
+          sessionID: session.id,
+          command: "goal",
+          arguments: "pause",
+          agent: "build",
+          model: "test/test-model",
+        })
+        expect(hasText(noGoal, "No goal is set for this session")).toBe(true)
+
+        // create over an existing active goal — must report, not throw or replace
+        await SessionGoal.create({ sessionID: session.id, objective: "first goal" })
+        const duplicate = await SessionPrompt.command({
+          sessionID: session.id,
+          command: "goal",
+          arguments: "second goal",
+          agent: "build",
+          model: "test/test-model",
+        })
+        expect(hasText(duplicate, "already has an active goal")).toBe(true)
+        expect((await SessionGoal.get(session.id))?.objective).toBe("first goal")
+
+        // invalid budget — must report the validation error, not throw
+        await SessionGoal.clear(session.id)
+        const badBudget = await SessionPrompt.command({
+          sessionID: session.id,
+          command: "goal",
+          arguments: "--budget 0 do it",
+          agent: "build",
+          model: "test/test-model",
+        })
+        expect(hasText(badBudget, "must be a positive integer")).toBe(true)
+
+        expect(streamSpy).not.toHaveBeenCalled()
+        await Session.remove(session.id)
+      },
+    })
+  })
+
   test("active goal continues until model marks it complete", async () => {
     await using tmp = await tmpdir({ git: true })
 

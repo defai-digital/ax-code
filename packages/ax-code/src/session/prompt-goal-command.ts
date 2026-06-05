@@ -8,6 +8,21 @@ import { createUserMessage } from "./prompt-user-message"
 
 type PromptRunner = (input: PromptInput) => Promise<MessageV2.WithParts>
 
+function goalErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error)
+}
+
+// Run a goal status transition that may reject (pause/resume throw when no goal
+// is set, and resume throws when the token budget is exhausted) and render the
+// outcome as user-facing text rather than letting the error escape the command.
+async function goalControlText(action: () => Promise<SessionGoal.Info>): Promise<string> {
+  try {
+    return SessionGoal.format(await action())
+  } catch (error) {
+    return goalErrorMessage(error)
+  }
+}
+
 async function goalControlMessage(input: CommandInput, text: string) {
   const model = await commandModel({ model: input.model, sessionID: input.sessionID })
   const user = await createUserMessage({
@@ -38,10 +53,10 @@ export async function executeGoalCommand(input: CommandInput, prompt: PromptRunn
     return goalControlMessage(input, SessionGoal.format(await SessionGoal.get(input.sessionID)))
   }
   if (parsed.action === "pause") {
-    return goalControlMessage(input, SessionGoal.format(await SessionGoal.pause(input.sessionID)))
+    return goalControlMessage(input, await goalControlText(() => SessionGoal.pause(input.sessionID)))
   }
   if (parsed.action === "resume") {
-    return goalControlMessage(input, SessionGoal.format(await SessionGoal.resume(input.sessionID)))
+    return goalControlMessage(input, await goalControlText(() => SessionGoal.resume(input.sessionID)))
   }
   if (parsed.action === "clear") {
     await SessionGoal.clear(input.sessionID)
@@ -52,12 +67,21 @@ export async function executeGoalCommand(input: CommandInput, prompt: PromptRunn
     throw new Error(`Unhandled goal action: ${parsed.action}`)
   }
 
-  const goal = await SessionGoal.create({
-    sessionID: input.sessionID,
-    objective: parsed.objective,
-    tokenBudget: parsed.tokenBudget,
-    replace: false,
-  })
+  // create() rejects when an active goal already exists or the budget is
+  // invalid (e.g. `/goal --budget 0 ...`). Surface those as a friendly control
+  // message instead of letting the raw error escape the command as a 500/failed
+  // task — matching how view/pause/resume report state in-session.
+  let goal: SessionGoal.Info
+  try {
+    goal = await SessionGoal.create({
+      sessionID: input.sessionID,
+      objective: parsed.objective,
+      tokenBudget: parsed.tokenBudget,
+      replace: false,
+    })
+  } catch (error) {
+    return goalControlMessage(input, goalErrorMessage(error))
+  }
   return prompt({
     sessionID: input.sessionID,
     messageID: input.messageID,
