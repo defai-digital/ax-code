@@ -4,7 +4,7 @@ import { validator } from "../validation"
 import { resolver } from "hono-openapi"
 import { Question } from "../../question"
 import z from "zod"
-import { errors } from "../error"
+import { errors, notFound } from "../error"
 import { lazy } from "../../util/lazy"
 import { QUESTION_REQUEST_ID_PARAM, withQuestionRequestID } from "./route-params"
 
@@ -54,6 +54,14 @@ export const QuestionRoutes = lazy(() =>
       validator("json", Question.Reply),
       withQuestionRequestID(async (requestID, c) => {
         const json = c.req.valid("json") as Question.Reply
+        const pending = await Question.list()
+        if (!pending.some((request) => request.id === requestID)) {
+          return notFound(c, {
+            name: "QuestionUnavailableError",
+            message: "Question request is unavailable",
+            resource: "question",
+          })
+        }
         await Question.reply({ requestID, answers: json.answers })
         return c.json(true)
       }),
@@ -78,6 +86,14 @@ export const QuestionRoutes = lazy(() =>
       }),
       validator("param", QUESTION_REQUEST_ID_PARAM),
       withQuestionRequestID(async (requestID, c) => {
+        const pending = await Question.list()
+        if (!pending.some((request) => request.id === requestID)) {
+          return notFound(c, {
+            name: "QuestionUnavailableError",
+            message: "Question request is unavailable",
+            resource: "question",
+          })
+        }
         await Question.reject(requestID)
         return c.json(true)
       }),

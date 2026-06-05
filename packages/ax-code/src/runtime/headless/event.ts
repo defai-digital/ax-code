@@ -62,6 +62,16 @@ export type HeadlessSessionEvent<TSession extends { id: string }, TTodo, TDiff, 
   | { type: "session.status"; properties: { sessionID: string; status: TStatus } }
   | { type: "session.error"; properties: { sessionID?: string; error: unknown } }
 
+export type HeadlessTaskQueueEvent<TTaskQueueItem extends { id: string }> =
+  | { type: "task.queue.created"; properties: { item: TTaskQueueItem } }
+  | { type: "task.queue.updated"; properties: { item: TTaskQueueItem } }
+  | { type: "task.queue.deleted"; properties: { id: string; projectID: string; sessionID?: string } }
+
+export type HeadlessScheduledTaskEvent<TScheduledTask> =
+  | { type: "scheduled.task.created"; properties: { task: TScheduledTask } }
+  | { type: "scheduled.task.updated"; properties: { task: TScheduledTask } }
+  | { type: "scheduled.task.deleted"; properties: { id: string; projectID: string } }
+
 export type HeadlessControlEvent =
   | { type: "server.connected"; properties: Record<string, never> }
   | { type: "server.heartbeat"; properties: Record<string, never> }
@@ -75,9 +85,13 @@ export type HeadlessRuntimeEvent<
   TMessage extends { id: string; sessionID: string },
   TPart extends { id: string; messageID: string },
   TGoal = unknown,
+  TTaskQueueItem extends { id: string } = { id: string },
+  TScheduledTask = unknown,
 > =
   | HeadlessRequestEvent
   | HeadlessSessionEvent<TSession, TTodo, TDiff, TStatus, TGoal>
+  | HeadlessTaskQueueEvent<TTaskQueueItem>
+  | HeadlessScheduledTaskEvent<TScheduledTask>
   | HeadlessMessageEvent<TMessage, TPart>
   | HeadlessRuntimeStatusEvent
   | HeadlessControlEvent
@@ -105,6 +119,12 @@ export const HEADLESS_RUNTIME_EVENT_TYPES = new Set<string>([
   "session.updated",
   "session.status",
   "session.error",
+  "task.queue.created",
+  "task.queue.updated",
+  "task.queue.deleted",
+  "scheduled.task.created",
+  "scheduled.task.updated",
+  "scheduled.task.deleted",
   "mcp.tools.changed",
   "lsp.updated",
   "code.index.progress",

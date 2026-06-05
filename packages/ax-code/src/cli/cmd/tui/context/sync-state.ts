@@ -25,6 +25,8 @@ import { Flag } from "@/flag/flag"
 import type { SyncedSessionRisk } from "./sync-session-risk"
 import { emptyWorkflowDashboardState, type WorkflowDashboardState } from "./sync-runtime-store"
 
+type SyncTaskQueueItem = { id: string; sessionID?: string } & Record<string, unknown>
+
 export interface SyncStoreState {
   status: "loading" | "partial" | "complete"
   session_loaded: boolean
@@ -45,6 +47,7 @@ export interface SyncStoreState {
   session_error: Record<string, unknown>
   session_risk: Record<string, SyncedSessionRisk>
   session_goal: Record<string, SessionGoal.PublicInfo | null>
+  task_queue: SyncTaskQueueItem[]
   session_diff: Record<string, Snapshot.FileDiff[]>
   todo: Record<string, Todo[]>
   message: Record<string, Message[]>
@@ -113,6 +116,7 @@ export function createInitialSyncState(): SyncStoreState {
     session_error: {},
     session_risk: {},
     session_goal: {},
+    task_queue: [],
     session_diff: {},
     todo: {},
     message: {},

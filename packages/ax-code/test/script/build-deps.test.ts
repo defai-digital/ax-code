@@ -8,6 +8,7 @@ describe("script.build-deps", () => {
         {
           "@opentui/core-darwin-arm64": "0.1.100",
           "@opentui/core-linux-x64": "0.1.100",
+          "@opentui/core-linux-x64-musl": "0.1.100",
           "@opentui/core-win32-arm64": "0.1.100",
           "@opentui/core": "0.1.100",
           three: "0.177.0",
@@ -21,12 +22,13 @@ describe("script.build-deps", () => {
         [
           { os: "darwin", arch: "arm64" },
           { os: "linux", arch: "x64" },
-          { os: "linux", arch: "x64" },
+          { os: "linux", arch: "x64", abi: "musl" },
         ],
         { os: "darwin", arch: "arm64" },
       ),
     ).toEqual([
       { name: "@opentui/core-linux-x64", version: "0.1.100" },
+      { name: "@opentui/core-linux-x64-musl", version: "0.1.100" },
       { name: "@parcel/watcher-darwin-arm64", version: "2.5.1" },
       { name: "@parcel/watcher-linux-x64-glibc", version: "2.5.1" },
     ])

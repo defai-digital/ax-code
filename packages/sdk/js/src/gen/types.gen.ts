@@ -3652,6 +3652,10 @@ export type GlobalUpgradeErrors = {
    * Bad request
    */
   400: AppErrorEnvelope
+  /**
+   * Internal server error
+   */
+  500: AppErrorEnvelope
 }
 
 export type GlobalUpgradeError = GlobalUpgradeErrors[keyof GlobalUpgradeErrors]
@@ -3660,15 +3664,10 @@ export type GlobalUpgradeResponses = {
   /**
    * Upgrade result
    */
-  200:
-    | {
-        success: true
-        version: string
-      }
-    | {
-        success: false
-        error: string
-      }
+  200: {
+    success: true
+    version: string
+  }
 }
 
 export type GlobalUpgradeResponse = GlobalUpgradeResponses[keyof GlobalUpgradeResponses]
@@ -4218,6 +4217,15 @@ export type SuperLongSetData = {
   }
   url: "/super-long"
 }
+
+export type SuperLongSetErrors = {
+  /**
+   * Conflict
+   */
+  409: AppErrorEnvelope
+}
+
+export type SuperLongSetError = SuperLongSetErrors[keyof SuperLongSetErrors]
 
 export type SuperLongSetResponses = {
   /**

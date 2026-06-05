@@ -36,7 +36,7 @@ import { EventRoutes } from "./routes/event"
 import { InstanceBootstrap } from "../project/bootstrap"
 import type { ContentfulStatusCode } from "hono/utils/http-status"
 import { websocket } from "hono/bun"
-import { appErrorEnvelope, errors } from "./error"
+import { appErrorEnvelope, errors, forbidden, invalidRequest, rateLimited } from "./error"
 import { validator } from "./validation"
 import { QuestionRoutes } from "./routes/question"
 import { PermissionRoutes } from "./routes/permission"
@@ -470,7 +470,7 @@ export namespace Server {
       }
     })()
     if (decoded === process.cwd()) return Filesystem.resolve(decoded)
-    if (!path.isAbsolute(decoded)) return c.json({ error: "directory must be absolute" }, 400)
+    if (!path.isAbsolute(decoded)) return invalidRequest(c, { message: "Directory must be absolute" })
     const directory = Filesystem.resolve(decoded)
     const realDirectory = (() => {
       try {
@@ -486,7 +486,7 @@ export namespace Server {
         return undefined
       }
     })()
-    if (!stat?.isDirectory()) return c.json({ error: "directory does not exist or is not a directory" }, 400)
+    if (!stat?.isDirectory()) return invalidRequest(c, { message: "Directory does not exist or is not a directory" })
     const DANGEROUS_ROOTS = new Set([
       "/",
       "/etc",
@@ -517,7 +517,7 @@ export namespace Server {
       (blocked) => realDirectory === blocked || Filesystem.contains(blocked, realDirectory),
     )
     if (DANGEROUS_ROOTS.has(realDirectory) || isSensitiveHomeDirectory) {
-      return c.json({ error: "directory is not allowed" }, 400)
+      return invalidRequest(c, { message: "Directory is not allowed", details: { resource: "directory" } })
     }
     return directory
   }
@@ -591,7 +591,7 @@ export namespace Server {
         if (origin && browserPrivilegedRequest) {
           const request = new URL(c.req.url).origin
           if (origin !== request && !opts?.cors?.includes(origin)) {
-            return c.json({ error: "origin mismatch" }, 403)
+            return forbidden(c, { message: "Origin mismatch" })
           }
         }
         // Prefer the socket's remote address (not spoofable) over headers.
@@ -631,7 +631,7 @@ export namespace Server {
           return next()
         }
         if (current.count >= limit) {
-          return c.json({ error: "too many requests" }, 429)
+          return rateLimited(c)
         }
         current.count++
         return next()

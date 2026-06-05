@@ -12,10 +12,14 @@ import {
   type VerificationEnvelopeWithId,
 } from "../quality/review-result"
 import { loadSessionFindings } from "../session/findings"
+import { Session } from "../session"
 import type { SessionID } from "../session/schema"
 import { SessionVerifications } from "../session/verifications"
+import { Log } from "../util/log"
 import { Tool } from "./tool"
 import DESCRIPTION from "./review_complete.txt"
+
+const log = Log.create({ service: "tool.review_complete" })
 
 function selectFindings(sessionID: SessionID, ids: string[] | undefined) {
   const findings = loadSessionFindings(sessionID).filter((finding) => finding.workflow === "review")
@@ -129,6 +133,22 @@ function policyImpactLine(input: ReturnType<typeof policyImpact>) {
   return `Policy impact: ${decision}; ${blocking}; dropped ${input.droppedFindingCount}${droppedBlocking}`
 }
 
+async function syncReviewMetadata(sessionID: SessionID, reviewId: string) {
+  try {
+    await Session.setProductMetadata({
+      sessionID,
+      namespace: "review",
+      value: { reviewId },
+    })
+  } catch (error) {
+    log.warn("failed to sync session review metadata", {
+      sessionID,
+      reviewId,
+      error,
+    })
+  }
+}
+
 export const ReviewCompleteTool = Tool.define("review_complete", {
   description: DESCRIPTION,
   parameters: z.object({
@@ -182,6 +202,7 @@ export const ReviewCompleteTool = Tool.define("review_complete", {
       missingVerification: draft.missingVerification,
       overrideReason: draft.overrideReason,
     })
+    await syncReviewMetadata(sessionID, draft.reviewId)
 
     const lines = [
       `Review: ${draft.decision}`,

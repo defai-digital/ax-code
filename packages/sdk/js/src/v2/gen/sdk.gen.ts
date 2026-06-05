@@ -211,6 +211,7 @@ import type {
   SmartLlmSetResponses,
   SubtaskPartInput,
   SuperLongGetResponses,
+  SuperLongSetErrors,
   SuperLongSetResponses,
   TaskQueueCancelErrors,
   TaskQueueCancelResponses,
@@ -1108,7 +1109,7 @@ export class SuperLong extends HeyApiClient {
         },
       ],
     )
-    return (options?.client ?? this.client).put<SuperLongSetResponses, unknown, ThrowOnError>({
+    return (options?.client ?? this.client).put<SuperLongSetResponses, SuperLongSetErrors, ThrowOnError>({
       url: "/super-long",
       ...options,
       ...params,

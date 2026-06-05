@@ -4,7 +4,7 @@ import { validator } from "../validation"
 import z from "zod"
 import { MCP } from "../../mcp"
 import { Config } from "../../config/config"
-import { errors } from "../error"
+import { errors, invalidRequest } from "../error"
 import { lazy } from "../../util/lazy"
 import { withRouteParam } from "./route-params"
 import { ServerRuntimeAuth } from "../runtime-auth"
@@ -24,7 +24,10 @@ function withMcpName(handler: (name: string, c: any) => unknown) {
 
 async function oauthNotSupportedResponse(c: any, name: string) {
   if (await MCP.supportsOAuth(name)) return undefined
-  return c.json({ error: `MCP server ${name} does not support OAuth` }, 400)
+  return invalidRequest(c, {
+    message: "MCP server does not support OAuth",
+    details: { resource: "mcpServer" },
+  })
 }
 
 export const McpRoutes = lazy(() =>

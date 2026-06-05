@@ -110,6 +110,18 @@ async function exists(target: string) {
     .catch(() => false)
 }
 
+async function hasPackageVersion(target: string, version: string) {
+  const packageJsonPath = path.join(target, "package.json")
+  const text = await fs.promises.readFile(packageJsonPath, "utf8").catch(() => undefined)
+  if (!text) return false
+  try {
+    const parsed = JSON.parse(text) as { version?: unknown }
+    return parsed.version === version
+  } catch {
+    return false
+  }
+}
+
 async function cleanupBunBuildArtifacts() {
   const entries = await fs.promises.readdir(dir, { withFileTypes: true })
   await Promise.all(
@@ -119,9 +131,10 @@ async function cleanupBunBuildArtifacts() {
   )
 }
 
-async function materializePackage(target: string, sources: string[]) {
+async function materializePackage(target: string, sources: string[], version?: string) {
   for (const source of sources) {
     if (!(await exists(source))) continue
+    if (version && !(await hasPackageVersion(source, version))) continue
     const resolvedSource = await fs.promises.realpath(source).catch(() => source)
     await fs.promises.mkdir(path.dirname(target), { recursive: true })
     await fs.promises.rm(target, { recursive: true, force: true })
@@ -131,15 +144,20 @@ async function materializePackage(target: string, sources: string[]) {
   return false
 }
 
-async function ensurePackageTargets(targets: string[], sources: string[]) {
+async function ensurePackageTargets(targets: string[], sources: string[], version?: string) {
   const availableSources = [...sources]
 
   for (const target of targets) {
     if (await exists(target)) {
-      availableSources.unshift(target)
-      continue
+      if (version && !(await hasPackageVersion(target, version))) {
+        await fs.promises.rm(target, { recursive: true, force: true })
+      } else {
+        availableSources.unshift(target)
+        continue
+      }
     }
-    const copied = await materializePackage(target, availableSources)
+
+    const copied = await materializePackage(target, availableSources, version)
     if (!copied) return false
     availableSources.unshift(target)
   }
@@ -147,7 +165,7 @@ async function ensurePackageTargets(targets: string[], sources: string[]) {
   return true
 }
 
-async function ensureBuildDependencies(targets: { os: string; arch: string }[]) {
+async function ensureBuildDependencies(targets: { os: string; arch: string; abi?: string }[]) {
   const localNodeModules = path.join(dir, "node_modules")
   const repoRoot = path.resolve(dir, "../..")
   const repoNodeModules = path.join(repoRoot, "node_modules")
@@ -165,11 +183,15 @@ async function ensureBuildDependencies(targets: { os: string; arch: string }[]) 
       resolveInstalledPackagePath(repoStoreNodeModules, dependency.name),
       resolveInstalledPackagePath(localNodeModules, dependency.name),
     ]
-    const hydrated = await ensurePackageTargets(targetPaths, [
-      resolveInstalledPackagePath(repoStoreNodeModules, dependency.name),
-      resolveInstalledPackagePath(localNodeModules, dependency.name),
-      resolveInstalledPackagePath(repoNodeModules, dependency.name),
-    ])
+    const hydrated = await ensurePackageTargets(
+      targetPaths,
+      [
+        resolveInstalledPackagePath(repoStoreNodeModules, dependency.name),
+        resolveInstalledPackagePath(localNodeModules, dependency.name),
+        resolveInstalledPackagePath(repoNodeModules, dependency.name),
+      ],
+      dependency.version,
+    )
     if (!hydrated) {
       missingPackages.push(dependency)
     }
@@ -233,6 +255,7 @@ async function ensureBuildDependencies(targets: { os: string; arch: string }[]) 
         resolveInstalledPackagePath(localNodeModules, dependency.name),
         resolveInstalledPackagePath(repoNodeModules, dependency.name),
       ],
+      dependency.version,
     )
     if (!copied) {
       throw new Error(`Failed to materialize build dependency ${dependency.name}`)

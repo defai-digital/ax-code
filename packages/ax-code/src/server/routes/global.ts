@@ -14,10 +14,9 @@ import { Log } from "../../util/log"
 import { lazy } from "../../util/lazy"
 import { Config } from "../../config/config"
 import { redactConfig } from "./config"
-import { errors } from "../error"
+import { errors, invalidRequest } from "../error"
 import { pushSseFrame } from "../sse-queue"
 import { Event } from "../event"
-import { toErrorMessage } from "../../util/error-message"
 
 const log = Log.create({ service: "server" })
 
@@ -218,21 +217,15 @@ export const GlobalRoutes = lazy(() =>
             content: {
               "application/json": {
                 schema: resolver(
-                  z.union([
-                    z.object({
-                      success: z.literal(true),
-                      version: z.string(),
-                    }),
-                    z.object({
-                      success: z.literal(false),
-                      error: z.string(),
-                    }),
-                  ]),
+                  z.object({
+                    success: z.literal(true),
+                    version: z.string(),
+                  }),
                 ),
               },
             },
           },
-          ...errors(400),
+          ...errors(400, 500),
         },
       }),
       validator(
@@ -246,22 +239,17 @@ export const GlobalRoutes = lazy(() =>
         const rawTarget = c.req.valid("json").target || (await Installation.latest(method))
         const target = semver.valid(semver.coerce(rawTarget))
         if (!target) {
-          return c.json({ success: false, error: `Invalid version string: ${rawTarget}` }, 400)
+          return invalidRequest(c, { message: "Invalid version string", details: { resource: "version" } })
         }
-        const result = await Installation.upgrade(method, target)
-          .then(() => ({ success: true as const, version: target }))
-          .catch((e) => ({ success: false as const, error: toErrorMessage(e) }))
-        if (result.success) {
-          GlobalBus.emit("event", {
-            directory: "global",
-            payload: {
-              type: Installation.Event.Updated.type,
-              properties: { version: target },
-            },
-          })
-          return c.json(result)
-        }
-        return c.json(result, 500)
+        await Installation.upgrade(method, target)
+        GlobalBus.emit("event", {
+          directory: "global",
+          payload: {
+            type: Installation.Event.Updated.type,
+            properties: { version: target },
+          },
+        })
+        return c.json({ success: true as const, version: target })
       },
     ),
 )

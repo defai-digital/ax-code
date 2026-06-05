@@ -8,6 +8,7 @@ import { BooleanFeatureState, readProjectConfig } from "./project-config"
 import { FeatureFlag } from "../../util/feature-flags"
 import { Flag } from "../../flag/flag"
 import type { Config } from "../../config/config"
+import { errors, serviceUnavailable } from "../error"
 
 const log = Log.create({ service: "super-long" })
 const SUPER_LONG_OVERRIDE = "AX_CODE_SUPER_LONG_SESSION_OVERRIDE"
@@ -77,6 +78,7 @@ export const SuperLongRoutes = lazy(() =>
               },
             },
           },
+          ...errors(409),
         },
       }),
       validator("json", BooleanFeatureState),
@@ -85,7 +87,10 @@ export const SuperLongRoutes = lazy(() =>
         if (enabled) {
           const config = await readProjectConfig()
           if (!autonomousEnabled(config)) {
-            return c.json({ error: "Super-Long requires autonomous mode or equivalent runtime guardrails." }, 409)
+            return serviceUnavailable(c, {
+              message: "Super-Long requires autonomous mode or equivalent runtime guardrails.",
+              details: { resource: "superLong" },
+            })
           }
         }
         FeatureFlag.set("AX_CODE_SUPER_LONG", enabled)

@@ -5,9 +5,12 @@ import { BusEvent } from "@/bus/bus-event"
 import { Instance } from "@/project/instance"
 import { ProjectID } from "@/project/schema"
 import { Database, NotFoundError, and, asc, desc, eq, inArray, sql } from "@/storage/db"
+import { Log } from "@/util/log"
 import { Session } from "."
 import { SessionID, TaskQueueID } from "./schema"
 import { TaskQueueTable } from "./session.sql"
+
+const log = Log.create({ service: "task-queue" })
 
 export namespace TaskQueue {
   export const Kind = z.enum(["prompt", "command", "shell", "followup", "subagent", "review", "automation"])
@@ -159,6 +162,33 @@ export namespace TaskQueue {
     })
   }
 
+  function queueMetadataSource(item: Info): "manual" | "scheduled" | "workflow" {
+    if (item.sourceTaskID?.startsWith("sch_")) return "scheduled"
+    if (item.payload["workflow"]) return "workflow"
+    return "manual"
+  }
+
+  async function syncSessionQueueMetadata(item: Info) {
+    if (!item.sessionID) return
+    try {
+      await Session.setProductMetadata({
+        sessionID: item.sessionID,
+        namespace: "queue",
+        value: {
+          queueItemId: item.id,
+          groupId: item.sourceTaskID,
+          source: queueMetadataSource(item),
+        },
+      })
+    } catch (error) {
+      log.warn("failed to sync session queue metadata", {
+        taskQueueID: item.id,
+        sessionID: item.sessionID,
+        error,
+      })
+    }
+  }
+
   function assertProjectItem(item: Info) {
     if (item.projectID === Instance.project.id) return
     throw new HTTPException(409, {
@@ -225,6 +255,7 @@ export namespace TaskQueue {
       return fromRow(row)
     })
     publishCreated(item)
+    await syncSessionQueueMetadata(item)
     return item
   }
 
@@ -434,6 +465,7 @@ export namespace TaskQueue {
     })
     assertProjectItem(item)
     publishUpdated(item)
+    await syncSessionQueueMetadata(item)
     await syncWorkflowStatusIfNeeded(item)
     return item
   }

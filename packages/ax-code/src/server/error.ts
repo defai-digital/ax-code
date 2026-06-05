@@ -1,6 +1,7 @@
 import { resolver } from "hono-openapi"
 import type { ContentfulStatusCode } from "hono/utils/http-status"
 import { HTTPException } from "hono/http-exception"
+import type { Context } from "hono"
 import z from "zod"
 import { NamedError } from "@ax-code/util/error"
 import { NotFoundError } from "../storage/db"
@@ -127,6 +128,32 @@ function plainErrorEnvelope(error: Error, logRef?: string): AppErrorEnvelope {
       retryable: true,
     }
   }
+  if (/^Tool .* is unavailable\b/i.test(error.message)) {
+    return {
+      name: "ToolUnavailableError",
+      message: "Tool is unavailable",
+      status: 409,
+      details: { resource: "tool" },
+      retryable: false,
+    }
+  }
+  if (/^No LSP server available\b/i.test(error.message)) {
+    return {
+      name: "LspUnavailableError",
+      message: "No LSP server available",
+      status: 409,
+      details: { resource: "lsp" },
+      retryable: false,
+    }
+  }
+  if (/^MCP server not found\b/i.test(error.message)) {
+    return {
+      name: "McpServerNotFoundError",
+      message: "McpServer not found",
+      status: 404,
+      details: { resource: "mcpServer" },
+    }
+  }
   return {
     name: "UnknownError",
     message: "Internal server error",
@@ -150,9 +177,82 @@ export function appErrorEnvelope(input: NormalizedErrorInput): AppErrorEnvelope 
   }
 }
 
+export function appErrorResponse(
+  c: Context,
+  envelope: AppErrorEnvelope,
+): Response {
+  return c.json(envelope, { status: envelope.status as ContentfulStatusCode })
+}
+
+export function invalidRequest(
+  c: Context,
+  input: { message?: string; details?: Record<string, unknown> } = {},
+): Response {
+  return appErrorResponse(c, {
+    name: "InvalidRequestError",
+    message: input.message ?? "Invalid request",
+    status: 400,
+    details: input.details,
+  })
+}
+
+export function notFound(
+  c: Context,
+  input: { name?: string; message?: string; resource?: string } = {},
+): Response {
+  return appErrorResponse(c, {
+    name: input.name ?? "NotFoundError",
+    message: input.message ?? "Resource not found",
+    status: 404,
+    details: input.resource ? { resource: input.resource } : undefined,
+  })
+}
+
+export function forbidden(
+  c: Context,
+  input: { message?: string; details?: Record<string, unknown> } = {},
+): Response {
+  return appErrorResponse(c, {
+    name: "InvalidRequestError",
+    message: input.message ?? "Forbidden",
+    status: 403,
+    details: input.details,
+  })
+}
+
+export function serviceUnavailable(
+  c: Context,
+  input: { message?: string; details?: Record<string, unknown>; retryable?: boolean } = {},
+): Response {
+  return appErrorResponse(c, {
+    name: "ServiceUnavailableError",
+    message: input.message ?? "Service unavailable",
+    status: 409,
+    retryable: input.retryable ?? true,
+    details: input.details,
+  })
+}
+
+export function rateLimited(c: Context): Response {
+  return appErrorResponse(c, {
+    name: "ServiceUnavailableError",
+    message: "Too many requests",
+    status: 429,
+    retryable: true,
+  })
+}
+
 export const ERRORS = {
   400: {
     description: "Bad request",
+    content: {
+      "application/json": {
+        schema: resolver(AppErrorEnvelope),
+      },
+    },
+  },
+  403: {
+    description: "Forbidden",
     content: {
       "application/json": {
         schema: resolver(AppErrorEnvelope),
@@ -169,6 +269,22 @@ export const ERRORS = {
   },
   409: {
     description: "Conflict",
+    content: {
+      "application/json": {
+        schema: resolver(AppErrorEnvelope),
+      },
+    },
+  },
+  429: {
+    description: "Too many requests",
+    content: {
+      "application/json": {
+        schema: resolver(AppErrorEnvelope),
+      },
+    },
+  },
+  500: {
+    description: "Internal server error",
     content: {
       "application/json": {
         schema: resolver(AppErrorEnvelope),

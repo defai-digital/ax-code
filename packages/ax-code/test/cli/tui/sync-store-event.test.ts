@@ -52,6 +52,7 @@ function createTestStore() {
     session_error: {},
     session_risk: {},
     session_goal: {},
+    task_queue: [],
     session: [],
     message: {},
     part: {},
@@ -223,6 +224,7 @@ describe("tui sync store event", () => {
       session_error: {},
       session_risk: {},
       session_goal: {},
+      task_queue: [],
       session: [],
       message: {},
       part: {},
@@ -295,6 +297,60 @@ describe("tui sync store event", () => {
       objective: "finish all phases",
       status: "active",
     })
+  })
+
+  test("projects task queue lifecycle events into the sync store", () => {
+    const [store, setStore] = createTestStore()
+
+    for (const event of [
+      {
+        type: "task.queue.created",
+        properties: { item: { id: "task_1", sessionID: "ses_1", status: "queued" } },
+      },
+      {
+        type: "task.queue.updated",
+        properties: { item: { id: "task_1", sessionID: "ses_1", status: "running" } },
+      },
+    ] as const) {
+      const handled = dispatchStoreBackedSyncEvent({
+        event,
+        autonomous: false,
+        setStore,
+        clearSessionSyncState: () => undefined,
+        replyPermission: () => undefined,
+        replyQuestion: () => undefined,
+        syncMcpStatus: () => undefined,
+        syncLspStatus: () => undefined,
+        syncDebugEngine: () => undefined,
+        bootstrap: () => undefined,
+        onWarn: () => undefined,
+        maxSessionMessages: 100,
+      })
+      expect(handled).toBe(true)
+    }
+
+    expect(store.task_queue).toEqual([{ id: "task_1", sessionID: "ses_1", status: "running" }])
+
+    const deleted = dispatchStoreBackedSyncEvent({
+      event: {
+        type: "task.queue.deleted",
+        properties: { id: "task_1", projectID: "project_1", sessionID: "ses_1" },
+      },
+      autonomous: false,
+      setStore,
+      clearSessionSyncState: () => undefined,
+      replyPermission: () => undefined,
+      replyQuestion: () => undefined,
+      syncMcpStatus: () => undefined,
+      syncLspStatus: () => undefined,
+      syncDebugEngine: () => undefined,
+      bootstrap: () => undefined,
+      onWarn: () => undefined,
+      maxSessionMessages: 100,
+    })
+
+    expect(deleted).toBe(true)
+    expect(store.task_queue).toEqual([])
   })
 
   test("removes part buckets for messages trimmed by maxSessionMessages", () => {

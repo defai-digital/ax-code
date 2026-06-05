@@ -5,7 +5,7 @@ import z from "zod"
 import { Bus } from "../../bus"
 import { Session } from "../../session"
 import { TuiEvent } from "@/cli/cmd/tui/event"
-import { errors } from "../error"
+import { errors, invalidRequest } from "../error"
 import { lazy } from "../../util/lazy"
 import { Log } from "../../util/log"
 
@@ -194,7 +194,7 @@ export const TuiRoutes = lazy(() =>
       async (c) => {
         const command = c.req.valid("json").command
         const mapped = TUI_COMMAND_MAPPINGS[command]
-        if (!mapped) return c.json({ error: `Unknown command: ${command}` }, 400)
+        if (!mapped) return invalidRequest(c, { message: "Unknown TUI command", details: { resource: "tuiCommand" } })
         await Bus.publish(TuiEvent.CommandExecute, { command: mapped })
         return c.json(true)
       },
@@ -264,7 +264,7 @@ export const TuiRoutes = lazy(() =>
         const def = Object.values(TuiEvent).find((d) => d.type === evt.type)
         if (!def) {
           log.warn("unknown tui event type", { type: evt.type })
-          return c.json({ error: `Unknown tui event type: ${evt.type}` }, 400)
+          return invalidRequest(c, { message: "Unknown TUI event type", details: { resource: "tuiEvent" } })
         }
         await Bus.publish(def, evt.properties)
         return c.json(true)

@@ -149,6 +149,9 @@ describe("ReviewCompleteTool", () => {
           verificationEnvelopeIds: [computeEnvelopeId(passed)],
           missingVerification: false,
         })
+        expect((await Session.get(session.id)).metadata?.review).toEqual({
+          reviewId: result.metadata.reviewId,
+        })
         expect(result.output).toContain(result.metadata.reviewId)
       },
     })

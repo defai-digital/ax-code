@@ -73,7 +73,11 @@ test("websocket upgrades reject cross-origin browser requests", async () => {
   )
 
   expect(response.status).toBe(403)
-  expect(await response.json()).toEqual({ error: "origin mismatch" })
+  expect(await response.json()).toMatchObject({
+    name: "InvalidRequestError",
+    message: "Origin mismatch",
+    status: 403,
+  })
 })
 
 test("path route resolves symlinked directory requests to their canonical path", async () => {

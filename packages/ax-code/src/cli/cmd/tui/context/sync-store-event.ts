@@ -17,6 +17,7 @@ import {
 
 type HeadlessReplyPermission = NonNullable<HeadlessProjectionEffectHandlers["replyPermission"]>
 type HeadlessReplyQuestion = NonNullable<HeadlessProjectionEffectHandlers["replyQuestion"]>
+type SyncTaskQueueItem = { id: string; sessionID?: string } & Record<string, unknown>
 
 export interface SyncEventStoreState<
   TSession extends { id: string },
@@ -35,6 +36,7 @@ export interface SyncEventStoreState<
   session_error: Record<string, unknown>
   session_risk: Record<string, SyncedSessionRisk>
   session_goal: Record<string, unknown>
+  task_queue: SyncTaskQueueItem[]
   session: TSession[]
   message: Record<string, TMessage[]>
   part: Record<string, TPart[]>
@@ -108,6 +110,9 @@ function dispatchHeadlessProjectionEvent<
     case "session.goal":
     case "session.status":
     case "session.error":
+    case "task.queue.created":
+    case "task.queue.updated":
+    case "task.queue.deleted":
     case "session.created":
     case "session.updated":
     case "session.deleted":

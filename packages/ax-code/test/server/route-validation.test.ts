@@ -10,6 +10,9 @@ import { SessionPrompt } from "../../src/session/prompt"
 import { MessageID, PartID, SessionID } from "../../src/session/schema"
 import { Log } from "../../src/util/log"
 import { ServerRuntimeAuth } from "../../src/server/runtime-auth"
+import { PermissionID } from "../../src/permission/schema"
+import { QuestionID } from "../../src/question/schema"
+import { appErrorEnvelope } from "../../src/server/error"
 
 const root = path.join(__dirname, "../..")
 Log.init({ print: false })
@@ -216,6 +219,98 @@ describe("server route validation", () => {
     })
   })
 
+  test("direct route failures use structured envelopes", async () => {
+    await Instance.provide({
+      directory: root,
+      fn: async () => {
+        const auth = await Server.Default().request("/mcp", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ name: "test", config: { type: "local", command: ["echo"] } }),
+        })
+        expect(auth.status).toBe(403)
+        expect(await auth.json()).toMatchObject({
+          name: "InvalidRequestError",
+          message: "Runtime authorization required",
+          status: 403,
+        })
+
+        const previousAutonomous = process.env.AX_CODE_AUTONOMOUS
+        process.env.AX_CODE_AUTONOMOUS = "false"
+        try {
+          const superLong = await Server.Default().request("/super-long", {
+            method: "PUT",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ enabled: true }),
+          })
+          expect(superLong.status).toBe(409)
+          expect(await superLong.json()).toMatchObject({
+            name: "ServiceUnavailableError",
+            status: 409,
+            details: { resource: "superLong" },
+          })
+        } finally {
+          if (previousAutonomous === undefined) delete process.env.AX_CODE_AUTONOMOUS
+          else process.env.AX_CODE_AUTONOMOUS = previousAutonomous
+        }
+      },
+    })
+  })
+
+  test("permission and question routes expose unavailable envelopes for stale requests", async () => {
+    await Instance.provide({
+      directory: root,
+      fn: async () => {
+        const permission = await Server.Default().request(`/permission/${PermissionID.ascending()}/reply`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ reply: "once" }),
+        })
+        expect(permission.status).toBe(404)
+        expect(await permission.json()).toMatchObject({
+          name: "PermissionUnavailableError",
+          message: "Permission request is unavailable",
+          status: 404,
+          details: { resource: "permission" },
+        })
+
+        const question = await Server.Default().request(`/question/${QuestionID.ascending()}/reply`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ answers: [] }),
+        })
+        expect(question.status).toBe(404)
+        expect(await question.json()).toMatchObject({
+          name: "QuestionUnavailableError",
+          message: "Question request is unavailable",
+          status: 404,
+          details: { resource: "question" },
+        })
+      },
+    })
+  })
+
+  test("plain server errors map explicit unavailable families without leaking details", () => {
+    expect(appErrorEnvelope({ error: new Error("Tool custom_tool is unavailable: sk-test-token") })).toMatchObject({
+      name: "ToolUnavailableError",
+      message: "Tool is unavailable",
+      status: 409,
+      details: { resource: "tool" },
+    })
+    expect(appErrorEnvelope({ error: new Error("No LSP server available for this file type.") })).toMatchObject({
+      name: "LspUnavailableError",
+      message: "No LSP server available",
+      status: 409,
+      details: { resource: "lsp" },
+    })
+    expect(appErrorEnvelope({ error: new Error("MCP server not found: private-mcp") })).toMatchObject({
+      name: "McpServerNotFoundError",
+      message: "McpServer not found",
+      status: 404,
+      details: { resource: "mcpServer" },
+    })
+  })
+
   test("revert and unrevert routes assert that the session is not busy", async () => {
     const src = await Bun.file(path.join(import.meta.dir, "../../src/server/routes/session.ts")).text()
     const revertStart = src.indexOf('"/:sessionID/revert"')
@@ -377,7 +472,12 @@ describe("server route validation", () => {
         `/experimental/session?directory=${encodeURIComponent(path.join(home, ".ssh"))}`,
       )
       expect(res.status).toBe(400)
-      expect(await res.text()).toContain("directory is not allowed")
+      expect(await res.json()).toMatchObject({
+        name: "InvalidRequestError",
+        message: "Directory is not allowed",
+        status: 400,
+        details: { resource: "directory" },
+      })
     } finally {
       homedir.mockRestore()
       await fs.rm(home, { recursive: true, force: true })

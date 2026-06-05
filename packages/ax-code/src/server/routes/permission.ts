@@ -3,7 +3,7 @@ import { describeRoute, resolver } from "hono-openapi"
 import { validator } from "../validation"
 import z from "zod"
 import { Permission } from "@/permission"
-import { errors } from "../error"
+import { errors, notFound } from "../error"
 import { lazy } from "../../util/lazy"
 import { PERMISSION_REQUEST_ID_PARAM, withPermissionRequestID } from "./route-params"
 
@@ -31,6 +31,14 @@ export const PermissionRoutes = lazy(() =>
       validator("json", z.object({ reply: Permission.Reply, message: z.string().optional() })),
       withPermissionRequestID(async (requestID, c) => {
         const json = c.req.valid("json")
+        const pending = await Permission.list()
+        if (!pending.some((request) => request.id === requestID)) {
+          return notFound(c, {
+            name: "PermissionUnavailableError",
+            message: "Permission request is unavailable",
+            resource: "permission",
+          })
+        }
         await Permission.reply({ requestID, reply: json.reply, message: json.message })
         return c.json(true)
       }),

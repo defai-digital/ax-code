@@ -67,6 +67,19 @@ export type {
 } from "./headless/projection.js"
 
 export {
+  AppErrorEnvelopeSchema,
+  DesktopDiagnosticExportSchema,
+  HeadlessStreamHealthSchema,
+  parseDesktopDiagnosticExport,
+  redactDiagnosticValue,
+} from "./headless/diagnostics.js"
+export type {
+  AppErrorEnvelopeLike,
+  DesktopDiagnosticExport,
+  HeadlessStreamHealthValue,
+} from "./headless/diagnostics.js"
+
+export {
   HEADLESS_RUNTIME_SCHEMA_VERSION,
   HEADLESS_RUNTIME_EVENT_TYPES,
   isHeadlessRuntimeEvent,

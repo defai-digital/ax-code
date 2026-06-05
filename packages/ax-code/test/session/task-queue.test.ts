@@ -58,6 +58,12 @@ describe("TaskQueue", () => {
           expect(created.model).toEqual({ providerID: "test", modelID: "test-model" })
           expect(created.sourceMessageID).toBe("msg_task_queue_source")
           expect(created.sourceTaskID).toBe("tsk_task_queue_parent")
+          const queuedSession = await Session.get(session.id)
+          expect(queuedSession.metadata?.queue).toEqual({
+            queueItemId: created.id,
+            groupId: "tsk_task_queue_parent",
+            source: "manual",
+          })
 
           const list = await TaskQueue.list({ sessionID: session.id })
           expect(list.map((item) => item.id)).toEqual([created.id])

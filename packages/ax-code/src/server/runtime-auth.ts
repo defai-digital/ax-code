@@ -1,5 +1,6 @@
 import { randomBytes, timingSafeEqual } from "node:crypto"
 import type { Context } from "hono"
+import { forbidden } from "./error"
 
 export namespace ServerRuntimeAuth {
   export const HEADER = "x-ax-code-runtime-token"
@@ -22,6 +23,6 @@ export namespace ServerRuntimeAuth {
 
   export function require(c: Context) {
     if (isAuthorized(c.req.header(HEADER))) return undefined
-    return c.json({ error: "runtime authorization required" }, 403)
+    return forbidden(c, { message: "Runtime authorization required" })
   }
 }

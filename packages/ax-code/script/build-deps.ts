@@ -1,11 +1,20 @@
 import path from "path"
 
-const OPENTUI_TARGET_PACKAGE = /^@opentui\/core-(darwin|linux|win32)-(arm64|x64)$/
+const OPENTUI_TARGET_PACKAGE = /^@opentui\/core-(darwin|linux|win32)-(arm64|x64)(-musl)?$/
 const PARCEL_WATCHER_TARGET_PACKAGE = /^@parcel\/watcher-(darwin|linux|win32)-(arm64|x64)(-(glibc|musl))?$/
 
 export interface BuildTargetSpec {
   os: string
   arch: string
+  abi?: string
+}
+
+function opentuiPackageNameForTarget(target: BuildTargetSpec) {
+  return `@opentui/core-${target.os}-${target.arch}${target.abi === "musl" ? "-musl" : ""}`
+}
+
+function isCurrentNativeTarget(target: BuildTargetSpec, currentTarget: BuildTargetSpec) {
+  return target.os === currentTarget.os && target.arch === currentTarget.arch && target.abi === currentTarget.abi
 }
 
 export function collectBuildDependencyPackages(
@@ -17,8 +26,8 @@ export function collectBuildDependencyPackages(
   const buildDependencies = new Map<string, string>()
   const requiredOpentuiPackages = new Set(
     targets
-      .filter((target) => !(target.os === currentTarget.os && target.arch === currentTarget.arch))
-      .map((target) => `@opentui/core-${target.os}-${target.arch}`),
+      .filter((target) => !isCurrentNativeTarget(target, currentTarget))
+      .map((target) => opentuiPackageNameForTarget(target)),
   )
 
   for (const [name, version] of Object.entries(opentuiOptionalDependencies ?? {})) {

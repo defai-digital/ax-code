@@ -21,6 +21,7 @@ function createTestStore() {
     session_error: {},
     session_risk: {},
     session_goal: {},
+    task_queue: [],
     session: [],
     message: {},
     part: {},
