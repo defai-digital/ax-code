@@ -507,4 +507,66 @@ describe("SessionGoal", () => {
       },
     })
   })
+
+  test("budget wrap-up still fires after the goal runs past maxContinuations", async () => {
+    // Regression: active goals deliberately ignore the continuation cap, so a
+    // long goal reaches budget exhaustion with `continuations` already past
+    // maxContinuations. The single wrap-up turn must still fire — it previously
+    // got a spurious "continuation limit reached" stop instead.
+    await using tmp = await tmpdir({ git: true, config: { session: { max_continuations: 1 } } })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        // 12 tokens/turn, budget 25 → exhausts on turn 3, by which point the
+        // active goal has already auto-continued twice (continuations = 2 > 1).
+        await SessionGoal.create({
+          sessionID: session.id,
+          objective: "long goal that exhausts its budget",
+          tokenBudget: 25,
+        })
+        modelSpy = spyOn(Provider, "getModel").mockResolvedValue(model)
+        let streams = 0
+        streamSpy = spyOn(LLM, "stream").mockImplementation((async () => {
+          streams++
+          return {
+            fullStream: (async function* () {
+              yield { type: "start" }
+              yield { type: "start-step" }
+              yield { type: "text-start", id: `text_${streams}` }
+              yield { type: "text-delta", id: `text_${streams}`, text: `turn ${streams}` }
+              yield { type: "text-end", id: `text_${streams}` }
+              yield {
+                type: "finish-step",
+                finishReason: "stop",
+                usage: { inputTokens: 8, outputTokens: 4, totalTokens: 12 },
+              }
+              yield { type: "finish" }
+            })(),
+          } as any
+        }) as any)
+
+        await SessionPrompt.prompt({
+          sessionID: session.id,
+          agent: "build",
+          model: { providerID: model.providerID, modelID: model.id },
+          parts: [{ type: "text", text: "start the long goal" }],
+        })
+
+        // The goal must end budget_limited and receive exactly one wrap-up turn,
+        // even though continuations exceeded max_continuations (1) before the
+        // budget was hit.
+        expect(streamSpy?.mock.calls.length ?? 0).toBeGreaterThanOrEqual(3)
+        expect((await SessionGoal.get(session.id))?.status).toBe("budget_limited")
+        const messages = await Session.messages({ sessionID: session.id })
+        const wrapUpCount = messages.filter((message) =>
+          message.parts.some((part) => part.type === "text" && part.text.includes("has reached its token budget")),
+        ).length
+        expect(wrapUpCount).toBe(1)
+
+        await Session.remove(session.id)
+      },
+    })
+  })
 })
