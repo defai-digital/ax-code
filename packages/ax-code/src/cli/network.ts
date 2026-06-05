@@ -39,11 +39,15 @@ export function withNetworkOptions<T>(yargs: Argv<T>) {
 
 export async function resolveNetworkOptions(args: NetworkOptions) {
   const config = await Config.global()
-  const portExplicitlySet = process.argv.includes("--port")
-  const hostnameExplicitlySet = process.argv.includes("--hostname")
-  const mdnsExplicitlySet = process.argv.includes("--mdns")
-  const mdnsDomainExplicitlySet = process.argv.includes("--mdns-domain")
-  const corsExplicitlySet = process.argv.includes("--cors")
+  // Detect both the space form (`--port 80`) and the equals form (`--port=80`).
+  // `process.argv.includes(flag)` only matches the space form, so an explicit
+  // `--port=80` was treated as unset and silently overridden by config/defaults.
+  const flagExplicitlySet = (flag: string) =>
+    process.argv.some((arg) => arg === flag || arg.startsWith(`${flag}=`))
+  const portExplicitlySet = flagExplicitlySet("--port")
+  const hostnameExplicitlySet = flagExplicitlySet("--hostname")
+  const mdnsExplicitlySet = flagExplicitlySet("--mdns")
+  const mdnsDomainExplicitlySet = flagExplicitlySet("--mdns-domain")
 
   const mdns = mdnsExplicitlySet ? args.mdns : (config?.server?.mdns ?? args.mdns)
   const mdnsDomain = mdnsDomainExplicitlySet ? args["mdns-domain"] : (config?.server?.mdnsDomain ?? args["mdns-domain"])

@@ -38,7 +38,10 @@ export const UpgradeCommand = {
         ],
         initialValue: false,
       })
-      if (!install) {
+      // `prompts.select` returns a cancel symbol (truthy) on Ctrl-C/ESC, so a
+      // bare `!install` check would fall through and upgrade anyway. Treat a
+      // cancel the same as choosing "No".
+      if (prompts.isCancel(install) || !install) {
         prompts.outro("Done")
         return
       }
