@@ -128,8 +128,8 @@ describe("session.prompt_async error handling", () => {
     return src.slice(start, end)
   }
 
-  const extractSourceBlock = async (startMarker: string, endMarker: string) => {
-    const src = await Bun.file(path.join(import.meta.dir, "../../src/server/routes/session.ts")).text()
+  const extractFrom = async (relativePath: string, startMarker: string, endMarker: string) => {
+    const src = await Bun.file(path.join(import.meta.dir, relativePath)).text()
     const start = src.indexOf(startMarker)
     const end = src.indexOf(endMarker, start)
     expect(start).toBeGreaterThan(-1)
@@ -137,50 +137,69 @@ describe("session.prompt_async error handling", () => {
     return src.slice(start, end)
   }
 
-  test("async session accept routes defer detached work to the next tick", async () => {
-    const src = await Bun.file(path.join(import.meta.dir, "../../src/server/routes/session.ts")).text()
-    expect(src).toContain("function startDetachedSessionTask")
-    expect(src).toContain("const timer = setTimeout(() => {")
-    const start = src.indexOf("function startDetachedSessionTask")
-    const end = src.indexOf("function recordAsyncSessionTask", start)
-    expect(start).toBeGreaterThan(-1)
-    expect(end).toBeGreaterThan(start)
-    expect(src.slice(start, end)).not.toContain("timer.unref")
-  })
-
-  test("shared async session helper records failures and publishes session errors", async () => {
-    const helper = await extractSourceBlock("function startObservedAsyncSessionTask", "function startAsyncSessionTask")
-    expect(helper).toContain("recordAsyncSessionTask({")
-    expect(helper).toContain('event: "server.sessionAsyncFailed"')
-    expect(helper).toContain("input.onError(error)")
-
-    const handler = await extractSourceBlock(
-      "function createAsyncSessionErrorHandler",
-      "function startAsyncSessionTask",
+  test("async session accept handler enqueues and starts via the task queue executor", async () => {
+    // The async accept routes no longer execute the turn inline. They enqueue a
+    // task-queue item and hand it to the executor, which owns detached execution
+    // and failure recording. The handler must return 202 before the turn runs.
+    const handler = await extractFrom(
+      "../../src/server/routes/session.ts",
+      "async function startAsyncSessionHandler",
+      "function asyncTaskQueueTitle",
     )
-    expect(handler).toContain("Session.publishError")
-    expect(handler).toContain("NamedError.message(error)")
+    expect(handler).toContain("TaskQueue.enqueue({")
+    expect(handler).toContain("await TaskQueueExecutor.start(queueItem)")
+    expect(handler).toContain("return c.body(null, 202)")
+    // The deleted inline implementation must not linger.
+    const src = await Bun.file(path.join(import.meta.dir, "../../src/server/routes/session.ts")).text()
+    expect(src).not.toContain("function startDetachedSessionTask")
+    expect(src).not.toContain("function startObservedAsyncSessionTask")
   })
 
-  test("prompt_async route has error handler for detached prompt call", async () => {
+  test("task queue executor defers detached work to the next tick without unref", async () => {
+    const detached = await extractFrom(
+      "../../src/session/task-queue-executor.ts",
+      "function startDetachedQueueTask",
+      "async function shouldWaitForIdle",
+    )
+    expect(detached).toContain("setTimeout(() => {")
+    expect(detached).toContain("}, 0)")
+    // The detached turn timer must keep the event loop alive (no unref), so
+    // packaged stdio backends do not go idle before the first turn starts.
+    expect(detached).not.toContain("unref")
+  })
+
+  test("task queue executor records detached failures on the queue item", async () => {
+    const execute = await extractFrom(
+      "../../src/session/task-queue-executor.ts",
+      "async function executeClaimedItem",
+      "async function finishIfRunning",
+    )
+    expect(execute).toContain('DiagnosticLog.recordProcess("server.taskQueueTaskFailed"')
+    expect(execute).toContain("finishIfRunning(item, {")
+    expect(execute).toContain('status: "failed"')
+    expect(execute).toContain("NamedError.message(error)")
+  })
+
+  test("prompt_async route delegates to the async handler", async () => {
     const route = await extractRoute('"/:sessionID/prompt_async"', '"/:sessionID/command_async"')
     expect(route).toContain("startAsyncSessionHandler(c, {")
     expect(route).toContain('kind: "prompt"')
-    expect(route).toContain("start: SessionPrompt.prompt")
+    // Execution is owned by the executor now, not wired inline per-route.
+    expect(route).not.toContain("start: SessionPrompt.prompt")
   })
 
-  test("command_async route has error handler for detached command call", async () => {
+  test("command_async route delegates to the async handler", async () => {
     const route = await extractRoute('"/:sessionID/command_async"', '"/:sessionID/command"')
     expect(route).toContain("startAsyncSessionHandler(c, {")
     expect(route).toContain('kind: "command"')
-    expect(route).toContain("start: SessionPrompt.command")
+    expect(route).not.toContain("start: SessionPrompt.command")
   })
 
-  test("shell_async route has error handler for detached shell call", async () => {
+  test("shell_async route delegates to the async handler", async () => {
     const route = await extractRoute('"/:sessionID/shell_async"', '"/:sessionID/shell"')
     expect(route).toContain("startAsyncSessionHandler(c, {")
     expect(route).toContain('kind: "shell"')
-    expect(route).toContain("start: SessionPrompt.shell")
+    expect(route).not.toContain("start: SessionPrompt.shell")
   })
 
   test("destructive session routes require current project ownership", async () => {
