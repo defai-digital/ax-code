@@ -104,9 +104,6 @@ To launch Chrome with CDP enabled:
 ```bash
 # macOS
 /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222
-
-# Linux
-google-chrome --remote-debugging-port=9222
 ```
 
 ### Headless Fallback

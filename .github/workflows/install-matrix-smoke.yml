@@ -23,7 +23,6 @@ on:
         default: all
         options:
           - all
-          - curl
           - homebrew
           - windows
 
@@ -38,96 +37,6 @@ env:
   AX_CODE_DISABLE_PROJECT_CONFIG: "1"
 
 jobs:
-  curl:
-    name: ${{ matrix.label }} / curl
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-latest
-            label: linux-x64-glibc
-          - os: ubuntu-24.04-arm
-            label: linux-arm64-glibc
-          - os: ubuntu-latest
-            container: alpine:3.20
-            label: linux-musl-x64
-    runs-on: ${{ matrix.os }}
-    container: ${{ matrix.container || '' }}
-    steps:
-      # MUST run before any `shell: bash` step. Alpine 3.20's base image
-      # ships only BusyBox `ash`; the very first action-step that declares
-      # `shell: bash` would otherwise fail with `bash: executable file not
-      # found in $PATH`. Default shell here is `sh` (POSIX), which Alpine has.
-      - name: Alpine prereqs
-        if: ${{ matrix.container == 'alpine:3.20' }}
-        run: |
-          apk add --no-cache bash ca-certificates curl nodejs tar
-
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Validate manual dispatch inputs
-        shell: bash
-        run: bash .github/scripts/validate-install-matrix-inputs.sh "${{ inputs.version }}" "${{ inputs.channel }}"
-
-      - name: Set isolated home paths
-        shell: bash
-        run: |
-          bash .github/scripts/set-isolated-home-env.sh "$RUNNER_TEMP/ax-code-curl-smoke-home"
-
-      - name: Resolve version under test
-        id: version
-        shell: bash
-        run: bash .github/scripts/resolve-version-for-workflow.sh "$GITHUB_OUTPUT" "${{ inputs.version }}"
-
-      - name: Filter dispatch channel
-        id: channel
-        shell: bash
-        run: bash .github/scripts/filter-dispatch-channel.sh "$GITHUB_OUTPUT" "${{ inputs.channel }}" "curl" "curl installer"
-
-      - name: Install ax-code from GitHub release installer
-        if: ${{ steps.channel.outputs.enabled == 'true' }}
-        shell: bash
-        run: |
-          set -e
-          VERSION="${{ steps.version.outputs.version }}"
-          bash ./install --version "$VERSION" --no-modify-path
-          echo "$HOME/.ax-code/bin" >> "$GITHUB_PATH"
-
-      - name: ax-code --version
-        if: ${{ steps.channel.outputs.enabled == 'true' }}
-        shell: bash
-        run: |
-          VERSION="${{ steps.version.outputs.version }}"
-          bash .github/scripts/assert-ax-code-version.sh "$VERSION"
-
-      - name: ax-code doctor - assert curl runtime is compiled
-        if: ${{ steps.channel.outputs.enabled == 'true' }}
-        shell: bash
-        run: |
-          OUTPUT="$(ax-code doctor 2>&1)"
-          echo "$OUTPUT"
-          echo "$OUTPUT" | bash .github/scripts/assert-runtime-mode.sh "curl" doctor
-
-      - name: Smoke - installed backend stdio handshake
-        if: ${{ steps.channel.outputs.enabled == 'true' }}
-        shell: bash
-        timeout-minutes: 1
-        run: |
-          set -e
-          OUTPUT="$(printf '{"type":"rpc.request","method":"health","id":1}\n' | ax-code tui-backend --stdio 2>&1)"
-          echo "$OUTPUT"
-          echo "$OUTPUT" | grep -E '"type":"rpc.result".*"id":1' \
-            || (echo "FAIL: curl installed backend did not return rpc health result" && exit 1)
-          echo "$OUTPUT" | bash .github/scripts/assert-runtime-mode.sh "curl" backend
-
-      - name: Smoke - non-interactive command
-        if: ${{ steps.channel.outputs.enabled == 'true' }}
-        shell: bash
-        timeout-minutes: 1
-        run: |
-          ax-code debug config || true
-
   homebrew:
     name: macos-latest / homebrew
     runs-on: macos-latest

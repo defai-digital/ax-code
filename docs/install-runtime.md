@@ -9,27 +9,17 @@ The root [README](../README.md) keeps the shortest install path. This page is th
 
 ## Recommended Path
 
-Use a supported compiled installer unless you are developing from a checkout. Prefer Homebrew for interactive macOS/Linux machines, the GitHub release installer for Linux servers, containers, and CI jobs, and the native PowerShell installer on Windows.
+Use a supported compiled installer unless you are developing from a checkout. Prefer Homebrew on macOS and the native PowerShell installer on Windows.
 
 ```bash
-# Homebrew (macOS / Linux package-manager install)
+# Homebrew (macOS)
 brew install defai-digital/ax-code/ax-code
-
-# GitHub release installer (Linux / CI)
-curl -fsSL https://raw.githubusercontent.com/defai-digital/ax-code/main/install | bash
 
 # GitHub release installer (Windows PowerShell)
 powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/defai-digital/ax-code/main/install.ps1 | iex"
 ```
 
 For security-sensitive environments, inspect the installer before execution and pin the release version used by CI:
-
-```bash
-AX_CODE_VERSION=<release>
-curl -fsSL https://raw.githubusercontent.com/defai-digital/ax-code/main/install -o ax-code-install
-less ax-code-install
-bash ax-code-install --version "$AX_CODE_VERSION" --no-modify-path
-```
 
 ```powershell
 $AX_CODE_VERSION = "<release>"
@@ -48,15 +38,14 @@ Supported user installs should report `Runtime: Bun X.Y.Z (compiled)`.
 
 ## Channel Matrix
 
-| Channel                              | Install or setup command                                                                                                                       | Expected runtime label | Support status        | Use when                                                               |
-| ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- | --------------------- | ---------------------------------------------------------------------- |
-| Homebrew                             | `brew install defai-digital/ax-code/ax-code`                                                                                                   | `compiled`             | Supported             | Normal macOS or Linux package-manager install path                     |
-| GitHub release installer             | `curl -fsSL https://raw.githubusercontent.com/defai-digital/ax-code/main/install \| bash`                                                      | `compiled`             | Supported on Linux/CI | Linux servers, containers, CI, or manual GitHub release binary install |
-| Windows PowerShell release installer | `powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/defai-digital/ax-code/main/install.ps1 \| iex"` | `compiled`             | Supported on Windows  | Windows user-local install path                                        |
-| Windows release assets               | Download `ax-code-windows-*.zip` from GitHub releases                                                                                          | `compiled`             | Manual                | Manual validation or troubleshooting                                   |
-| Local bundled launcher               | `pnpm install && pnpm run setup:cli`                                                                                                           | `compiled`             | Contributor           | Contributor parity with the packaged startup path                      |
-| Local source launcher                | `pnpm run setup:cli -- --source`                                                                                                               | `source`               | Contributor           | Contributor-only source debugging                                      |
-| Direct checkout run                  | `pnpm cli` or `pnpm dev`                                                                                                                       | `source`               | Contributor           | Short-lived development runs without replacing the global launcher     |
+| Channel                              | Install or setup command                                                                                                                       | Expected runtime label | Support status       | Use when                                                           |
+| ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- | -------------------- | ------------------------------------------------------------------ |
+| Homebrew                             | `brew install defai-digital/ax-code/ax-code`                                                                                                   | `compiled`             | Supported            | Normal macOS package-manager install path                          |
+| Windows PowerShell release installer | `powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/defai-digital/ax-code/main/install.ps1 \| iex"` | `compiled`             | Supported on Windows | Windows user-local install path                                    |
+| Windows release assets               | Download `ax-code-windows-*.zip` from GitHub releases                                                                                          | `compiled`             | Manual               | Manual validation or troubleshooting                               |
+| Local bundled launcher               | `pnpm install && pnpm run setup:cli`                                                                                                           | `compiled`             | Contributor          | Contributor parity with the packaged startup path                  |
+| Local source launcher                | `pnpm run setup:cli -- --source`                                                                                                               | `source`               | Contributor          | Contributor-only source debugging                                  |
+| Direct checkout run                  | `pnpm cli` or `pnpm dev`                                                                                                                       | `source`               | Contributor          | Short-lived development runs without replacing the global launcher |
 
 `compiled` and `source` are runtime modes, not package-manager names. They describe which executable loads the app code:
 
@@ -68,7 +57,6 @@ Supported user installs should report `Runtime: Bun X.Y.Z (compiled)`.
 ## Platform Policy
 
 - macOS: use Homebrew as the documented user path. Contributor builds use `pnpm run setup:cli`.
-- Linux: use Homebrew when a package-manager flow is preferred, and use the GitHub release installer for servers, containers, and CI. The installer selects glibc or musl release assets and AVX2 or baseline x64 builds.
 - Windows: use the native PowerShell installer. It installs the GitHub release asset into a user-local directory and updates the user PATH unless `-NoModifyPath` is provided. The Bash installer is not the canonical Windows user experience.
 - npm: not a supported install or upgrade channel.
 
@@ -81,7 +69,6 @@ For supported compiled channels:
 ```bash
 ax-code upgrade
 brew upgrade ax-code
-curl -fsSL https://raw.githubusercontent.com/defai-digital/ax-code/main/install | bash
 powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/defai-digital/ax-code/main/install.ps1 | iex"
 ```
 

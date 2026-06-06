@@ -59,8 +59,9 @@ describe("distribution support guardrails", () => {
     expect(text).toContain("mktemp -d")
     expect(text).not.toContain("x-access-token:${TAP_AUTH_TOKEN}")
     expect(text).toContain('DARWIN_ARM64_ASSET="ax-code-darwin-arm64.zip"')
-    expect(text).toContain('LINUX_ARM64_ASSET="ax-code-linux-arm64.tar.gz"')
-    expect(text).toContain('LINUX_X64_ASSET="ax-code-linux-x64-baseline.tar.gz"')
+    // Linux support was dropped: the formula is macOS-arm64 only.
+    expect(text).not.toContain("LINUX_")
+    expect(text).not.toContain("on_linux")
     expect(text).toContain("depends_on arch: :arm64")
     expect(text).toContain('bin.install "ax-code"')
     expect(text).not.toContain('depends_on "bun"')
@@ -77,7 +78,7 @@ describe("distribution support guardrails", () => {
       text.indexOf('DARWIN_ARM64_SHA="$(download_asset "${DARWIN_ARM64_ASSET}")"'),
     )
     expect(text.indexOf('export GH_TOKEN="${TAP_AUTH_TOKEN}"')).toBeGreaterThan(
-      text.indexOf('LINUX_X64_SHA="$(download_asset "${LINUX_X64_ASSET}")"'),
+      text.indexOf('DARWIN_ARM64_SHA="$(download_asset "${DARWIN_ARM64_ASSET}")"'),
     )
   })
 
@@ -121,14 +122,15 @@ describe("distribution support guardrails", () => {
     expect(text).not.toContain("release workflow dispatches")
   })
 
-  test("install matrix supports curl, Homebrew, and Windows without npm package installs", async () => {
+  test("install matrix supports Homebrew and Windows without npm package installs", async () => {
     const text = await Bun.file(installMatrixWorkflow).text()
     const filterDispatchChannel = await Bun.file(filterDispatchChannelScript).text()
     const validateInputs = await Bun.file(validateInstallMatrixInputsScript).text()
-    expect(text).toContain("- curl")
+    // Linux support was dropped: no curl/linux smoke legs remain.
+    expect(text).not.toContain("- curl")
+    expect(text).not.toContain("ubuntu")
     expect(text).toContain("- homebrew")
     expect(text).toContain("- windows")
-    expect(text).toContain('bash ./install --version "$VERSION" --no-modify-path')
     expect(text).toContain("brew install defai-digital/ax-code/ax-code")
     expect(text).toContain("./install.ps1 -Version $Version -NoModifyPath")
     expect(text).toContain("windows-2022")
@@ -139,10 +141,8 @@ describe("distribution support guardrails", () => {
     expect(text).toContain("id: channel")
     expect(filterDispatchChannel).toContain("enabled=false")
     expect(filterDispatchChannel).toContain('"all"')
-    expect(validateInputs).toContain("all|curl|homebrew|windows")
+    expect(validateInputs).toContain("all|homebrew|windows")
     expect(text).toContain("steps.channel.outputs.enabled == 'true'")
-    expect(text).toContain('bash .github/scripts/assert-runtime-mode.sh "curl" doctor')
-    expect(text).toContain('bash .github/scripts/assert-runtime-mode.sh "curl" backend')
     expect(text).toContain('bash .github/scripts/assert-runtime-mode.sh "homebrew" doctor')
     expect(text).toContain('bash .github/scripts/assert-runtime-mode.sh "homebrew" backend')
     expect(text).toContain('"runtimeMode":"compiled"')
@@ -155,10 +155,6 @@ describe("distribution support guardrails", () => {
   test("install matrix smokes supported installers with isolated runtime homes", async () => {
     const text = await Bun.file(installMatrixWorkflow).text()
     const isolatedHome = await Bun.file(isolatedHomeScript).text()
-    const curlJob = text.match(/curl:[\s\S]*?(?=\n  homebrew:|$)/)
-    expect(curlJob).not.toBeNull()
-    expect(curlJob![0]).toContain("set-isolated-home-env.sh")
-
     const homebrewJob = text.match(/homebrew:[\s\S]*?(?=\n  windows:|$)/)
     expect(homebrewJob).not.toBeNull()
     expect(homebrewJob![0]).toContain("set-isolated-home-env.sh")

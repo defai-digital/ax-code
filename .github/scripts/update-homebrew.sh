@@ -68,12 +68,8 @@ download_asset() {
 }
 
 DARWIN_ARM64_ASSET="ax-code-darwin-arm64.zip"
-LINUX_ARM64_ASSET="ax-code-linux-arm64.tar.gz"
-LINUX_X64_ASSET="ax-code-linux-x64-baseline.tar.gz"
 
 DARWIN_ARM64_SHA="$(download_asset "${DARWIN_ARM64_ASSET}")"
-LINUX_ARM64_SHA="$(download_asset "${LINUX_ARM64_ASSET}")"
-LINUX_X64_SHA="$(download_asset "${LINUX_X64_ASSET}")"
 
 cat > /tmp/ax-code.rb << HEADER
 # typed: false
@@ -92,16 +88,6 @@ class AxCode < Formula
     depends_on arch: :arm64
     url "${RELEASE_BASE}/${DARWIN_ARM64_ASSET}"
     sha256 "${DARWIN_ARM64_SHA}"
-  end
-
-  on_linux do
-    if Hardware::CPU.arm?
-      url "${RELEASE_BASE}/${LINUX_ARM64_ASSET}"
-      sha256 "${LINUX_ARM64_SHA}"
-    else
-      url "${RELEASE_BASE}/${LINUX_X64_ASSET}"
-      sha256 "${LINUX_X64_SHA}"
-    end
   end
 
   depends_on "ripgrep"

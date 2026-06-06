@@ -58,14 +58,6 @@ jobs:
     strategy:
       matrix:
         include:
-          - os: ubuntu-latest
-            targets: linux-x64
-            build-args: --single --baseline --include-abi --skip-install
-            smoke-bin: dist/ax-code-linux-x64/bin/ax-code
-          - os: ubuntu-24.04-arm
-            targets: linux-arm64
-            build-args: --single --include-abi --skip-install
-            smoke-bin: dist/ax-code-linux-arm64/bin/ax-code
           - os: macos-latest
             targets: darwin-arm64
             build-args: --single --skip-install

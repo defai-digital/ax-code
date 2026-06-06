@@ -22,21 +22,18 @@ Built by [DEFAI Digital](https://github.com/defai-digital).
 **1. Install**
 
 **macOS**
+
 ```bash
 brew install defai-digital/ax-code/ax-code
 ```
 
-**Linux / CI**
-```bash
-curl -fsSL https://raw.githubusercontent.com/defai-digital/ax-code/main/install | bash
-```
-
 **Windows**
+
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/defai-digital/ax-code/main/install.ps1 | iex"
 ```
 
-> Supported install paths are Homebrew (macOS), the GitHub release installer (Linux/CI), and the GitHub release installer for Windows PowerShell. npm packages are no longer a supported channel. Use `--version <release>` on Linux/CI or `-Version <release>` on Windows to pin a specific version. See [Installation and Runtime Channels](docs/install-runtime.md) for the full matrix.
+> Supported install paths are Homebrew (macOS) and the GitHub release installer for Windows PowerShell. npm packages are no longer a supported channel. Use `-Version <release>` on Windows to pin a specific version. See [Installation and Runtime Channels](docs/install-runtime.md) for the full matrix.
 
 **2. Run**
 
@@ -57,16 +54,13 @@ ax-code upgrade
 ```
 
 **macOS**
+
 ```bash
 brew upgrade ax-code
 ```
 
-**Linux / CI**
-```bash
-curl -fsSL https://raw.githubusercontent.com/defai-digital/ax-code/main/install | bash
-```
-
 **Windows**
+
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/defai-digital/ax-code/main/install.ps1 | iex"
 ```
