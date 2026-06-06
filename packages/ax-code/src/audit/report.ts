@@ -5,12 +5,8 @@ import type { SessionID } from "../session/schema"
 import { SessionVerifications } from "../session/verifications"
 import type { VerificationEnvelope } from "../quality/verification-envelope"
 import { Risk } from "../risk/score"
+import { truncate } from "../util/format"
 import path from "path"
-
-export function truncate(s: string, max: number): string {
-  if (s.length <= max) return s
-  return s.slice(0, max - 3) + "..."
-}
 
 const MS_PER_SECOND = 1000
 const SECONDS_PER_HOUR = 3600

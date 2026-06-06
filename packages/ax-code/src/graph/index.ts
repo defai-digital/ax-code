@@ -2,7 +2,8 @@ import z from "zod"
 import { EventQuery } from "../replay/query"
 import type { ReplayEvent } from "../replay/event"
 import { Risk } from "../risk/score"
-import { extractTarget, truncate } from "../audit/report"
+import { extractTarget } from "../audit/report"
+import { truncate } from "../util/format"
 import type { SessionID } from "../session/schema"
 
 export namespace ExecutionGraph {

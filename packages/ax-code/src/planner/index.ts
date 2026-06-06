@@ -63,6 +63,11 @@ export { type DepthLevel } from "../context/analyzer"
 export namespace Planner {
   const log = Log.create({ service: "planner" })
 
+  // Exponential backoff (1s, 2s, 4s…) capped at 5s between phase retries.
+  function retryBackoffMs(attempt: number) {
+    return Math.min(1000 * Math.pow(2, attempt - 1), 5000)
+  }
+
   export type ComplexityHint = Complexity.ComplexityHint
 
   /**
@@ -428,7 +433,7 @@ export namespace Planner {
 
         // Failed — check if we should retry
         if (attempt < maxAttempts && phase.fallbackStrategy === "retry") {
-          const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000)
+          const delay = retryBackoffMs(attempt)
           log.info("phase retry", { phaseId: phase.id, attempt, delay })
           await new Promise((r) => setTimeout(r, delay))
           phase.retryCount++
@@ -448,7 +453,7 @@ export namespace Planner {
         }
 
         if (attempt < maxAttempts && phase.fallbackStrategy === "retry") {
-          const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000)
+          const delay = retryBackoffMs(attempt)
           await new Promise((r) => setTimeout(r, delay))
           phase.retryCount++
           continue

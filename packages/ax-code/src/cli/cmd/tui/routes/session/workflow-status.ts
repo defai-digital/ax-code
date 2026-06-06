@@ -1,3 +1,4 @@
+import { truncate } from "@/util/format"
 import type { WorkflowDashboardRun, WorkflowDashboardState } from "../../context/sync-runtime-store"
 
 const MAX_WORKFLOW_LINE_NAME = 26
@@ -57,9 +58,4 @@ function workflowModelPolicyPart(run: WorkflowDashboardRun) {
   const worker = run.models.worker ?? run.models.cheap ?? run.models.default ?? "default"
   const synthesizer = run.models.synthesizer ?? run.models.strong ?? run.models.default ?? "default"
   return `effort ${run.effort} | model ${truncate(`${worker}->${synthesizer}`, 24)}`
-}
-
-function truncate(value: string, max: number) {
-  if (value.length <= max) return value
-  return `${value.slice(0, Math.max(0, max - 3))}...`
 }

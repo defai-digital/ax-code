@@ -10,6 +10,7 @@ import { Filesystem } from "../util/filesystem"
 import { encryptField, decryptField, createCanary, verifyCanary } from "./encryption"
 import { Lock } from "../util/lock"
 import { Log } from "../util/log"
+import { sleep } from "../util/timeout"
 import {
   createProcessLockBody,
   isSameProcessLockHost,
@@ -178,15 +179,8 @@ async function acquireFileLock(): Promise<Disposable> {
     if (Date.now() >= deadline) {
       throw new Error("Failed to acquire auth lock: timed out waiting for active holder")
     }
-    await sleepUnref(LOCK_POLL_MS)
+    await sleep(LOCK_POLL_MS)
   }
-}
-
-function sleepUnref(ms: number) {
-  return new Promise<void>((resolve) => {
-    const timer = setTimeout(resolve, ms)
-    timer.unref?.()
-  })
 }
 
 const fail = (message: string) => (cause: unknown) => new Auth.AuthError({ message, cause })
