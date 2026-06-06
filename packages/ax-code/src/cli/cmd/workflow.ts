@@ -2,6 +2,7 @@ import { EOL } from "os"
 import type { Argv } from "yargs"
 import { bootstrap } from "../bootstrap"
 import { cmd } from "./cmd"
+import { truncate } from "../../util/format"
 import { compactWorkflowArtifact } from "../../workflow/artifact"
 import { WorkflowRun } from "../../workflow/run"
 import { WorkflowRoutineTrigger } from "../../workflow/routine"
@@ -148,7 +149,7 @@ export function formatWorkflowRoutineList(routines: WorkflowRoutineTrigger.Info[
         ? truncate([routine.schedule, routine.timezone].filter(Boolean).join("@"), 28)
         : routine.mode === "webhook" && routine.webhookEvent
           ? truncate(routine.webhookEvent, 28)
-        : "-"
+          : "-"
     return [
       status.padEnd(8),
       routine.route.padEnd(28),
@@ -159,7 +160,10 @@ export function formatWorkflowRoutineList(routines: WorkflowRoutineTrigger.Info[
     ].join(" ")
   })
   return (
-    ["status   route                        template                         mode      schedule                     gate", ...lines].join(EOL) + EOL
+    [
+      "status   route                        template                         mode      schedule                     gate",
+      ...lines,
+    ].join(EOL) + EOL
   )
 }
 
@@ -1052,11 +1056,6 @@ function formatNamedModels(models: {
 
 function namedModel(label: string, value: string | undefined) {
   return value ? `${label}=${value}` : undefined
-}
-
-function truncate(input: string, maxLength: number) {
-  if (input.length <= maxLength) return input
-  return `${input.slice(0, Math.max(0, maxLength - 3))}...`
 }
 
 function formatPercent(value: number | null) {

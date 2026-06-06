@@ -454,10 +454,6 @@ function inputValueMatchesType(value: unknown, type: WorkflowInput["type"]) {
   return false
 }
 
-export function safeParseWorkflowSpecV1(input: unknown) {
-  return WorkflowSpecV1.safeParse(input)
-}
-
 export function applyWorkflowModelPolicyOverride(
   spec: WorkflowSpecV1,
   override: WorkflowModelPolicyOverride | undefined,

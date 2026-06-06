@@ -110,10 +110,3 @@ export function planDuration(p: TaskPlan, batches: ExecutionBatch[]): number {
   }
   return total
 }
-
-/**
- * Check if plan fits within context token limit
- */
-export function fitsInContext(p: TaskPlan, limit: number): boolean {
-  return plan(p) <= limit
-}

@@ -4,6 +4,7 @@ import type {
   WorkflowRunEvalSummaryResponse,
   WorkflowRunGetResponse,
 } from "@ax-code/sdk/v2"
+import { truncate } from "@/util/format"
 
 export type WorkflowDashboardRun = WorkflowRunDashboardResponse[number]
 export type WorkflowRunDetail = WorkflowRunGetResponse
@@ -651,11 +652,6 @@ function numberField(primary: unknown, fallback: unknown) {
   if (typeof primary === "number" && Number.isFinite(primary)) return primary
   if (typeof fallback === "number" && Number.isFinite(fallback)) return fallback
   return 0
-}
-
-function truncate(value: string, max: number) {
-  if (value.length <= max) return value
-  return value.slice(0, Math.max(0, max - 3)) + "..."
 }
 
 function workflowArtifactPayloadPreview(payload: unknown, multiline = false) {

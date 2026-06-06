@@ -2,6 +2,7 @@ import fs from "fs/promises"
 import { readFileSync, unlinkSync } from "fs"
 import path from "path"
 import { Log } from "./log"
+import { sleep } from "./timeout"
 import {
   createProcessLockBody,
   isSameProcessLockHost,
@@ -111,15 +112,8 @@ export namespace FileLock {
       if (Date.now() >= deadline) {
         throw new Error(`timed out waiting for file lock: ${target}`)
       }
-      await sleepUnref(POLL_INTERVAL_MS)
+      await sleep(POLL_INTERVAL_MS)
     }
-  }
-
-  function sleepUnref(ms: number) {
-    return new Promise<void>((resolve) => {
-      const timer = setTimeout(resolve, ms)
-      timer.unref?.()
-    })
   }
 
   function makeDisposable(target: string): Disposable {

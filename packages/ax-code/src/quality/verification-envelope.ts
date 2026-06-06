@@ -93,6 +93,25 @@ export const VerificationEnvelopeSchema = z.object({
 })
 export type VerificationEnvelope = z.infer<typeof VerificationEnvelopeSchema>
 
+// Recursively extract verification envelopes from an arbitrary payload — a
+// single envelope, an array of them, or an object nesting them under the
+// common keys (envelope / verificationEnvelope / envelopes /
+// verificationEnvelopes). Used by the workflow eval and run projections.
+export function verificationEnvelopesFromPayload(payload: unknown): VerificationEnvelope[] {
+  const parsed = VerificationEnvelopeSchema.safeParse(payload)
+  if (parsed.success) return [parsed.data]
+  if (Array.isArray(payload)) return payload.flatMap(verificationEnvelopesFromPayload)
+  if (!payload || typeof payload !== "object") return []
+
+  const record = payload as Record<string, unknown>
+  return [
+    ...verificationEnvelopesFromPayload(record.envelope),
+    ...verificationEnvelopesFromPayload(record.verificationEnvelope),
+    ...verificationEnvelopesFromPayload(record.envelopes),
+    ...verificationEnvelopesFromPayload(record.verificationEnvelopes),
+  ]
+}
+
 export const ENVELOPE_ID_PATTERN = /^[0-9a-f]{16}$/
 
 // Deterministic 16-char hex hash of the envelope content. Sets up Phase 2

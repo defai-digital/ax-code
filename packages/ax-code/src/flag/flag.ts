@@ -1,19 +1,12 @@
 import { Config } from "effect"
-
-function parseBooleanEnvValue(value: string | undefined) {
-  if (!value) return undefined
-  const normalized = value.toLowerCase()
-  if (normalized === "true" || normalized === "1") return true
-  if (normalized === "false" || normalized === "0") return false
-  return undefined
-}
+import { Env } from "../util/env"
 
 function truthy(key: string) {
-  return parseBooleanEnvValue(process.env[key]) === true
+  return Env.parseBoolean(process.env[key]) === true
 }
 
 function falsy(key: string) {
-  return parseBooleanEnvValue(process.env[key]) === false
+  return Env.parseBoolean(process.env[key]) === false
 }
 
 function defineStringFlag(name: string, fallback?: string) {
@@ -29,7 +22,7 @@ function defineStringFlag(name: string, fallback?: string) {
 function defineBooleanFlag(name: string, fallback = false) {
   Object.defineProperty(Flag, name, {
     get() {
-      const parsed = parseBooleanEnvValue(process.env[name])
+      const parsed = Env.parseBoolean(process.env[name])
       return parsed ?? fallback
     },
     enumerable: true,
@@ -40,9 +33,9 @@ function defineBooleanFlag(name: string, fallback = false) {
 function defineBooleanFlagWithOverride(name: string, overrideName: string, fallback = false) {
   Object.defineProperty(Flag, name, {
     get() {
-      const override = parseBooleanEnvValue(process.env[overrideName])
+      const override = Env.parseBoolean(process.env[overrideName])
       if (override !== undefined) return override
-      const parsed = parseBooleanEnvValue(process.env[name])
+      const parsed = Env.parseBoolean(process.env[name])
       return parsed ?? fallback
     },
     enumerable: true,
@@ -144,7 +137,7 @@ export namespace Flag {
   //   unset                     → fall through to user kv preference
   // Resolved at runtime in src/cli/cmd/tui/ui/glyphs.ts.
   export const AX_CODE_NERD_FONT_ENV = (() => {
-    const value = parseBooleanEnvValue(process.env["AX_CODE_NERD_FONT"])
+    const value = Env.parseBoolean(process.env["AX_CODE_NERD_FONT"])
     return value
   })()
 
@@ -161,7 +154,7 @@ export namespace Flag {
 
   const copy = process.env["AX_CODE_EXPERIMENTAL_DISABLE_COPY_ON_SELECT"]
   export const AX_CODE_EXPERIMENTAL_DISABLE_COPY_ON_SELECT =
-    copy === undefined ? process.platform === "win32" : parseBooleanEnvValue(copy) === true
+    copy === undefined ? process.platform === "win32" : Env.parseBoolean(copy) === true
   export const AX_CODE_ENABLE_EXA =
     truthy("AX_CODE_ENABLE_EXA") || AX_CODE_EXPERIMENTAL || truthy("AX_CODE_EXPERIMENTAL_EXA")
   export const AX_CODE_EXPERIMENTAL_BASH_DEFAULT_TIMEOUT_MS = number("AX_CODE_EXPERIMENTAL_BASH_DEFAULT_TIMEOUT_MS")

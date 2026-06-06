@@ -1,10 +1,9 @@
 import { NodeFileSystem } from "@effect/platform-node"
-import { dirname, join, relative, resolve as pathResolve } from "path"
-import { realpathSync } from "fs"
-import { lookup } from "mime-types"
+import { dirname, join } from "path"
 import { Effect, FileSystem, Layer, Schema, ServiceMap } from "effect"
 import type { PlatformError } from "effect/PlatformError"
 import { Glob } from "../util/glob"
+import { Filesystem } from "../util/filesystem"
 
 export namespace AppFileSystem {
   const JsonUnknown = Schema.fromJsonString(Schema.Unknown)
@@ -156,45 +155,10 @@ export namespace AppFileSystem {
 
   export const defaultLayer = layer.pipe(Layer.provide(NodeFileSystem.layer))
 
-  // Pure helpers that don't need Effect (path manipulation, sync operations)
-  export function mimeType(p: string): string {
-    return lookup(p) || "application/octet-stream"
-  }
-
-  export function normalizePath(p: string): string {
-    if (process.platform !== "win32") return p
-    try {
-      return realpathSync.native(p)
-    } catch {
-      return p
-    }
-  }
-
-  export function resolve(p: string): string {
-    const resolved = pathResolve(windowsPath(p))
-    try {
-      return normalizePath(realpathSync(resolved))
-    } catch (e) {
-      if ((e as { code?: string })?.code === "ENOENT") return normalizePath(resolved)
-      throw e
-    }
-  }
-
-  export function windowsPath(p: string): string {
-    if (process.platform !== "win32") return p
-    return p
-      .replace(/^\/([a-zA-Z]):(?:[\\/]|$)/, (_, drive) => `${drive.toUpperCase()}:/`)
-      .replace(/^\/([a-zA-Z])(?:\/|$)/, (_, drive) => `${drive.toUpperCase()}:/`)
-      .replace(/^\/cygdrive\/([a-zA-Z])(?:\/|$)/, (_, drive) => `${drive.toUpperCase()}:/`)
-      .replace(/^\/mnt\/([a-zA-Z])(?:\/|$)/, (_, drive) => `${drive.toUpperCase()}:/`)
-  }
-
-  export function overlaps(a: string, b: string) {
-    return contains(a, b) || contains(b, a)
-  }
-
-  export function contains(parent: string, child: string) {
-    const rel = relative(pathResolve(parent), pathResolve(child))
-    return !rel.startsWith("..") && !rel.startsWith("/")
-  }
+  // Pure path/mime helpers delegate to the canonical util/Filesystem so there
+  // is a single source of truth for path manipulation (see util/filesystem.ts).
+  export const mimeType = Filesystem.mimeType
+  export const windowsPath = Filesystem.windowsPath
+  export const contains = Filesystem.contains
+  export const overlaps = Filesystem.overlaps
 }

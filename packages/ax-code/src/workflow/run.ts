@@ -4,7 +4,7 @@ import { ModelID, ProviderID } from "../provider/schema"
 import { Instance } from "../project/instance"
 import {
   computeEnvelopeId,
-  VerificationEnvelopeSchema,
+  verificationEnvelopesFromPayload,
   type VerificationEnvelope,
 } from "../quality/verification-envelope"
 import { Session } from "../session"
@@ -1348,7 +1348,9 @@ function verificationEnvelopeEvidence(detail: WorkflowRunDetail) {
 
   if (detail.verificationEnvelopeIDs.length > 0) {
     const loaded = detail.parentSessionID
-      ? new Map(SessionVerifications.loadWithIds(detail.parentSessionID).map((item) => [item.envelopeId, item.envelope]))
+      ? new Map(
+          SessionVerifications.loadWithIds(detail.parentSessionID).map((item) => [item.envelopeId, item.envelope]),
+        )
       : new Map<string, VerificationEnvelope>()
     for (const envelopeID of detail.verificationEnvelopeIDs) {
       if (evidence.passingEnvelopeIds.has(envelopeID)) continue
@@ -1384,21 +1386,6 @@ function missingRequiredVerificationEnvelopeEvidence(
   const required = detail.spec.verification.requiredArtifactIds
   if (required.length === 0) return evidence.passingArtifactIds.size > 0 ? [] : ["verification envelope"]
   return required.filter((artifactID) => !evidence.passingArtifactIds.has(artifactID))
-}
-
-function verificationEnvelopesFromPayload(payload: unknown): VerificationEnvelope[] {
-  const parsed = VerificationEnvelopeSchema.safeParse(payload)
-  if (parsed.success) return [parsed.data]
-  if (Array.isArray(payload)) return payload.flatMap(verificationEnvelopesFromPayload)
-  if (!payload || typeof payload !== "object") return []
-
-  const record = payload as Record<string, unknown>
-  return [
-    ...verificationEnvelopesFromPayload(record.envelope),
-    ...verificationEnvelopesFromPayload(record.verificationEnvelope),
-    ...verificationEnvelopesFromPayload(record.envelopes),
-    ...verificationEnvelopesFromPayload(record.verificationEnvelopes),
-  ]
 }
 
 function isTerminalPhaseStatus(status: WorkflowRun.PhaseStatus) {

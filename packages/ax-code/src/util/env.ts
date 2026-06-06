@@ -49,4 +49,15 @@ export namespace Env {
     }
     return out
   }
+
+  // Interpret an environment-variable string as a tri-state boolean.
+  // "true"/"1" → true, "false"/"0" → false, anything else (incl. unset) →
+  // undefined so callers can distinguish "explicitly set" from "default".
+  export function parseBoolean(value: string | undefined): boolean | undefined {
+    if (!value) return undefined
+    const normalized = value.trim().toLowerCase()
+    if (normalized === "true" || normalized === "1") return true
+    if (normalized === "false" || normalized === "0") return false
+    return undefined
+  }
 }

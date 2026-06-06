@@ -131,8 +131,14 @@ test("auth lock polling does not keep the process alive while waiting", async ()
   expect(end).toBeGreaterThan(start)
 
   const body = src.slice(start, end)
-  expect(body).toContain("sleepUnref(LOCK_POLL_MS)")
-  expect(body).toContain("timer.unref?.()")
+  // The poll loop sleeps via the shared util, whose timer is unref'd so a
+  // pending wait never keeps the process alive.
+  expect(body).toContain("sleep(LOCK_POLL_MS)")
+
+  const timeoutSrc = await Bun.file(path.join(import.meta.dir, "../../src/util/timeout.ts")).text()
+  const sleepStart = timeoutSrc.indexOf("export function sleep(")
+  expect(sleepStart).toBeGreaterThan(-1)
+  expect(timeoutSrc.slice(sleepStart)).toContain("timer.unref?.()")
 })
 
 test("TUI worker removes signal handlers during RPC shutdown", async () => {

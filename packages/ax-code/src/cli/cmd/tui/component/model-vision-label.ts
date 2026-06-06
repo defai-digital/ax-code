@@ -31,10 +31,6 @@ export function supportsWebSearch(model: DisplayCapableModel | undefined) {
   return false
 }
 
-export function modelVisionLabel(label: string, model: { capabilities?: { input?: { image?: boolean } } } | undefined) {
-  return supportsVision(model) ? `${label} ${MODEL_VISION_MARKER}` : label
-}
-
 export function modelDisplayInfo(fallbackLabel: string, model: DisplayCapableModel | undefined) {
   const rawName = model?.name ?? fallbackLabel
   const vision = supportsVision(model)

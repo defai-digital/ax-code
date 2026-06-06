@@ -1,4 +1,5 @@
 import { isQwen37MaxModel } from "@/provider/qwen37-readiness"
+import { Env } from "@/util/env"
 
 export namespace SuperLongPolicy {
   const MAX_DURATION_MS = 72 * 60 * 60 * 1000
@@ -88,11 +89,11 @@ export namespace SuperLongPolicy {
     env?: Record<string, string | undefined>
   }): StateDecision {
     const env = input.env ?? process.env
-    const sessionOverride = parseBooleanEnvValue(env[SESSION_OVERRIDE_ENV])
+    const sessionOverride = Env.parseBoolean(env[SESSION_OVERRIDE_ENV])
     if (sessionOverride !== undefined) {
       return { enabled: sessionOverride, source: "session-override" }
     }
-    const base = parseBooleanEnvValue(env[BASE_ENV])
+    const base = Env.parseBoolean(env[BASE_ENV])
     if (base !== undefined) {
       return { enabled: base, source: "env" }
     }
@@ -252,13 +253,5 @@ export namespace SuperLongPolicy {
 
   function normalizeTimestamp(value: number) {
     return nonNegativeFinite(value) ? value : 0
-  }
-
-  function parseBooleanEnvValue(value: string | undefined) {
-    if (!value) return undefined
-    const normalized = value.trim().toLowerCase()
-    if (normalized === "true" || normalized === "1") return true
-    if (normalized === "false" || normalized === "0") return false
-    return undefined
   }
 }
