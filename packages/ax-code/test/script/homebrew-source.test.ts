@@ -93,22 +93,25 @@ describe("distribution support guardrails", () => {
     expect(text).not.toContain("gh workflow run install-matrix-smoke.yml")
   })
 
-  test("release workflow does not automatically publish npm or Homebrew packages", async () => {
+  test("release workflow auto-publishes the Homebrew tap but never npm", async () => {
     const text = await Bun.file(releaseWorkflow).text()
+    // npm/source distribution stays retired.
     expect(text).not.toMatch(/\n  publish-npm:/)
     expect(text).not.toMatch(/\n  publish-source:/)
-    expect(text).not.toMatch(/\n  homebrew:/)
     expect(text).not.toMatch(/\n  homebrew-source:/)
     expect(text).not.toContain("NPM_TOKEN")
     expect(text).not.toContain("NPM_CONFIG_PROVENANCE")
-    expect(text).not.toContain("TAP_TOKEN")
     expect(text).not.toContain("bun run script/publish.ts")
     expect(text).not.toContain("bun run script/publish-source.ts")
-    expect(text).not.toContain("update-homebrew.sh")
     expect(text).not.toContain("update-homebrew-source.sh")
-    expect(text).toContain("Homebrew distribution is a manual follow-up step")
     expect(text).toContain("npm distribution")
     expect(text).toContain("no longer supported")
+    // Homebrew is published automatically (stable releases only) via the tap PAT.
+    expect(text).toMatch(/\n  homebrew:/)
+    expect(text).toContain("bash .github/scripts/update-homebrew.sh")
+    expect(text).toContain("secrets.HOMEBREW_TAP_TOKEN")
+    expect(text).toContain("TAP_TOKEN")
+    expect(text).toContain("!contains(github.ref_name, '-')")
   })
 
   test("install matrix is dispatch-only so release.published cannot race package publication", async () => {
