@@ -267,6 +267,39 @@ describe("WorkflowRun state", () => {
     })
   })
 
+  test("clears the completion time when a terminal record is re-activated", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const run = await WorkflowRun.create({ spec: parseWorkflowSpecV1(WorkflowFixtureSpecs.noopDryRun) })
+        const detail = await WorkflowRun.getDetail(run.id)
+        const phase = detail.phases[0]!
+
+        // Child: fail it (terminal → completion time set), then re-queue it the
+        // way retryChildren does. The stale completion time must be cleared.
+        const child = await WorkflowRun.appendChild({ runID: run.id, phaseID: phase.id, agent: "worker" })
+        const failedChild = await WorkflowRun.setChildStatus({ id: child.id, status: "failed", error: "boom" })
+        expect(failedChild.time.completed).toBeDefined()
+        const requeuedChild = await WorkflowRun.setChildStatus({ id: child.id, status: "queued" })
+        expect(requeuedChild.time.completed).toBeUndefined()
+
+        // Phase: fail, then re-activate to running (refreshRunningRunState).
+        const failedPhase = await WorkflowRun.setPhaseStatus({ id: phase.id, status: "failed", error: "boom" })
+        expect(failedPhase.time.completed).toBeDefined()
+        const rerunPhase = await WorkflowRun.setPhaseStatus({ id: phase.id, status: "running" })
+        expect(rerunPhase.time.completed).toBeUndefined()
+
+        // Run: cancel, then re-activate to running.
+        const cancelledRun = await WorkflowRun.setStatus({ id: run.id, status: "cancelled" })
+        expect(cancelledRun.time.completed).toBeDefined()
+        const rerunRun = await WorkflowRun.setStatus({ id: run.id, status: "running" })
+        expect(rerunRun.time.completed).toBeUndefined()
+      },
+    })
+  })
+
   test("publishes compact artifact events without raw payloads", async () => {
     await using tmp = await tmpdir({ git: true })
 

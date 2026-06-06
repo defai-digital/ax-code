@@ -1157,6 +1157,32 @@ describe("ProviderTransform family matching", () => {
     expect(Object.keys(ProviderTransform.variants(model))).toEqual(["low", "medium", "high"])
   })
 
+  test("applies minimax-m2 tuning to dotted, dashed and dashless id spellings", () => {
+    // These all denote the minimax-m2 family; some providers spell the version
+    // without a separator (minimax-m25 == minimax-m2.5), which the family
+    // boundary check would otherwise reject.
+    for (const id of ["minimax-m2.5", "minimax-m2-7", "minimax-m25", "minimax-m27", "minimax/minimax-m25"]) {
+      const model = createModel({ id, family: "minimax" })
+      expect(ProviderTransform.temperature(model)).toBe(1.0)
+      expect(ProviderTransform.topP(model)).toBe(0.95)
+      expect(ProviderTransform.topK(model)).toBe(40)
+    }
+  })
+
+  test("base minimax-m2 uses the narrower top-k", () => {
+    const model = createModel({ id: "minimax-m2", family: "minimax" })
+    expect(ProviderTransform.temperature(model)).toBe(1.0)
+    expect(ProviderTransform.topP(model)).toBe(0.95)
+    expect(ProviderTransform.topK(model)).toBe(20)
+  })
+
+  test("non-m2 minimax models receive no m2 sampling tuning", () => {
+    const model = createModel({ id: "minimax-m1", family: "minimax" })
+    expect(ProviderTransform.temperature(model)).toBeUndefined()
+    expect(ProviderTransform.topP(model)).toBeUndefined()
+    expect(ProviderTransform.topK(model)).toBeUndefined()
+  })
+
   test("matches model families from the final id segment", () => {
     const qwen = createModel({
       id: "accounts/fireworks/models/qwen3-next",

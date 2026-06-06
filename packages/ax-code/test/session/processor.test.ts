@@ -458,6 +458,17 @@ describe("session.processor", () => {
 
         expect(result).toBe("continue")
         expect(processor.message.finish).toBe("stop")
+
+        // The provider streamed `tool-call` without a preceding
+        // `tool-input-start`; the tool part and its result must still persist
+        // instead of being silently dropped.
+        const saved = await MessageV2.get({ sessionID: session.id, messageID: assistant.id })
+        const toolParts = saved.parts.filter((part) => part.type === "tool")
+        expect(toolParts).toHaveLength(1)
+        const globPart = toolParts[0]
+        expect(globPart?.state.status).toBe("completed")
+        if (globPart?.state.status !== "completed") throw new Error("glob tool part did not complete")
+        expect(globPart.state.output).toBe("match")
       },
     })
   })

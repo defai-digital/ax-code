@@ -172,21 +172,22 @@ export namespace ProviderTransform {
     if (hasFamily(model, "qwen")) return 0.55
     if (hasFamily(model, "gemini")) return 1.0
     if (hasFamily(model, "glm")) return 1.0
-    if (hasFamily(model, "minimax-m2")) return 1.0
+    if (isMinimaxM2(model)) return 1.0
     return undefined
   }
 
   export function topP(model: Provider.Model) {
     if (hasFamily(model, "qwen")) return 1
-    if (hasAnyFamily(model, ["minimax-m2", "gemini"])) return 0.95
+    if (isMinimaxM2(model) || hasFamily(model, "gemini")) return 0.95
     return undefined
   }
 
   export function topK(model: Provider.Model) {
     const id = model.id.toLowerCase()
-    if (hasFamily(model, "minimax-m2")) {
-      if (["m2.", "m25", "m21"].some((s) => id.includes(s))) return 40
-      return 20
+    if (isMinimaxM2(model)) {
+      // Versioned m2 models (m2.1/m2.5/m2.7 and their dashed/dashless
+      // spellings) use a wider top-k than the base m2.
+      return /m2[.-]?\d/.test(id) ? 40 : 20
     }
     if (hasFamily(model, "gemini")) return 64
     return undefined
@@ -211,8 +212,14 @@ export namespace ProviderTransform {
     return matches(segment) || matches(declared)
   }
 
-  function hasAnyFamily(model: Provider.Model, families: string[]): boolean {
-    return families.some((family) => hasFamily(model, family))
+  // "minimax-m2" family, including the dashless id spellings (minimax-m25 ==
+  // minimax-m2.5) some providers use. hasFamily rejects those because a digit
+  // immediately follows "minimax-m2", which would otherwise deny them the
+  // temperature/topP/topK tuning the dotted variants receive.
+  function isMinimaxM2(model: Provider.Model): boolean {
+    if (hasFamily(model, "minimax-m2")) return true
+    const segment = model.id.toLowerCase().split("/").filter(Boolean).at(-1) ?? ""
+    return /^minimax-m2\d/.test(segment)
   }
 
   // Any reasoning-capable Alibaba model on an OpenAI-compat endpoint goes
