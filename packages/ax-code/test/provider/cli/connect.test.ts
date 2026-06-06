@@ -107,4 +107,22 @@ describe("probeCliLanguageModel", () => {
       runSpy.mockRestore()
     }
   })
+
+  test("Claude auth probe reports authentication failures written to stderr", async () => {
+    const runSpy = spyOn(Process, "run").mockResolvedValue({
+      stdout: Buffer.from(""),
+      stderr: Buffer.from(JSON.stringify({ type: "error", error: { message: "Please login first" } }) + "\n"),
+      code: 1,
+      exitCode: 1,
+      text() {
+        return ""
+      },
+    } as any)
+
+    try {
+      await expect(checkCliProviderAuth("claude-code", "claude")).resolves.toContain("Claude CLI is not logged in")
+    } finally {
+      runSpy.mockRestore()
+    }
+  })
 })

@@ -101107,7 +101107,7 @@
       "AX_SERVING_HOST"
     ],
     "npm": "@ai-sdk/openai-compatible",
-    "api": "http://localhost:11434/v1",
+    "api": "http://localhost:18080/v1",
     "name": "AX Serving",
     "models": {}
   },

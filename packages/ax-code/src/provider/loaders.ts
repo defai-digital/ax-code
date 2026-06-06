@@ -34,6 +34,20 @@ type OpenAICompatibleModelItem = {
 
 type ModelListFetcher = (input: string, init?: { signal?: AbortSignal }) => Promise<Response>
 
+function asOpenAICompatibleModelList(input: unknown): { data: OpenAICompatibleModelItem[] } | null {
+  if (!input || typeof input !== "object") return null
+  const data = (input as { data?: unknown }).data
+  if (!Array.isArray(data)) return null
+  return { data: data.filter((item): item is OpenAICompatibleModelItem => !!item && typeof item === "object") }
+}
+
+function asOllamaTags(input: unknown): { models: { name: string }[] } | null {
+  if (!input || typeof input !== "object") return null
+  const models = (input as { models?: unknown }).models
+  if (!Array.isArray(models)) return null
+  return { models: models.filter((item): item is { name: string } => !!item && typeof item === "object" && typeof (item as { name?: unknown }).name === "string") }
+}
+
 function openAICompatibleCapabilities(item: OpenAICompatibleModelItem): Provider.Model["capabilities"] {
   return {
     temperature: item.capabilities?.temperature ?? true,
@@ -75,7 +89,13 @@ async function fetchOpenAICompatibleModels(fetcher: ModelListFetcher, endpoint: 
         })
         return null
       }
-      return (await r.json()) as { data?: OpenAICompatibleModelItem[] }
+      const parsed = asOpenAICompatibleModelList(await r.json())
+      if (!parsed) {
+        log.debug("OpenAI-compatible model list returned invalid schema", {
+          host: endpoint.discoveryHost,
+        })
+      }
+      return parsed
     })
     .catch((error) => {
       log.debug("OpenAI-compatible model list fetch failed", { host: endpoint.discoveryHost, error })
@@ -168,9 +188,25 @@ function ollamaCompatibleLoader(providerID: string, envKey: string, defaultHost:
             })
           return {}
         }
-        const data = (await res.json()) as { models?: { name: string }[] }
+        let data: { models: { name: string }[] } | null = null
+        try {
+          data = asOllamaTags(await res.json())
+        } catch (error) {
+          log.debug("Ollama-compatible model discovery returned invalid JSON", {
+            providerID,
+            host: endpoint.discoveryHost,
+            error,
+          })
+        }
+        if (!data) {
+          log.debug("Ollama-compatible model discovery returned invalid schema", {
+            providerID,
+            host: endpoint.discoveryHost,
+          })
+          return {}
+        }
         const models: Record<string, Provider.Model> = {}
-        for (const m of data.models ?? []) {
+        for (const m of data.models) {
           const id = ModelID.make(m.name)
           models[id] = {
             id,

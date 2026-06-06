@@ -36,7 +36,7 @@ async function checkClaudeAuth(binary: string): Promise<string | undefined> {
       nothrow: true,
     })
 
-    for (const line of out.stdout.toString().split("\n")) {
+    for (const line of [out.stdout, out.stderr].map((chunk) => chunk.toString()).join("\n").split("\n")) {
       const trimmed = line.trim()
       if (!trimmed || trimmed[0] !== "{") continue
       const event = parseCliJsonEventLine(line)

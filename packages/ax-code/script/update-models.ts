@@ -401,6 +401,8 @@ const apiOverrides: Record<string, string> = {
   "alibaba-coding-plan-cn": "https://coding.dashscope.aliyuncs.com/v1",
   "alibaba-token-plan": "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
   "alibaba-token-plan-cn": "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+  "ax-serving": "http://localhost:18080/v1",
+  ollama: "http://localhost:11434/v1",
 }
 for (const [id, api] of Object.entries(apiOverrides)) {
   if (fetched[id]) fetched[id].api = api

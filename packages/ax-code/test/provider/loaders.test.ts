@@ -287,6 +287,61 @@ describe("offline provider loaders", () => {
     })
   })
 
+  test("ax-serving ignores invalid /v1/models schema", async () => {
+    process.env.AX_SERVING_HOST = "http://localhost:18080"
+    globalThis.fetch = (async (input: string | URL | Request) => {
+      const url = String(input)
+      if (url === "http://localhost:18080/v1/models") {
+        return new Response(JSON.stringify({ data: { id: "not-an-array" } }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        })
+      }
+      throw new Error(`unexpected fetch: ${url}`)
+    }) as typeof fetch
+
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await Bun.write(path.join(dir, "ax-code.json"), JSON.stringify({}))
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const providers = await Provider.list()
+        expect(providers[ProviderID.make("ax-serving")]).toBeUndefined()
+      },
+    })
+  })
+
+  test("ollama ignores invalid tags JSON during deferred discovery", async () => {
+    globalThis.fetch = (async (input: string | URL | Request) => {
+      const url = String(input)
+      if (url === "http://localhost:11434/api/tags") {
+        return new Response("not-json", {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        })
+      }
+      throw new Error(`unexpected fetch: ${url}`)
+    }) as typeof fetch
+
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await Bun.write(path.join(dir, "ax-code.json"), JSON.stringify({}))
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const providers = await Provider.list()
+        expect(providers[ProviderID.make("ollama")]).toBeUndefined()
+      },
+    })
+  })
+
   test("ollama provider autoloads when server reachable", async () => {
     // Test ollama discovery — this only passes when ollama is running locally
     const reachable = await fetch("http://localhost:11434/api/tags", { signal: AbortSignal.timeout(1000) })

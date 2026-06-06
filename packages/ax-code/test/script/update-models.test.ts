@@ -97,6 +97,35 @@ describe("update-models script", () => {
     expect(data.xai?.name).toBe("Grok Cloud API")
     expect(data.xai?.models?.["grok-build-0.1"]?.id).toBe("grok-build-0.1")
     expect(data["grok-build-cli"]?.name).toBe("Grok Build CLI")
+    expect(data.ollama?.api).toBe("http://localhost:11434/v1")
+    expect(data["ax-serving"]?.api).toBe("http://localhost:18080/v1")
+  })
+
+  test("normalizes local provider endpoints during snapshot regeneration", async () => {
+    await using tmp = await tmpdir()
+    const { fixturePath, snapshotPath } = await createModelsFixture(tmp.path)
+    await Bun.write(
+      snapshotPath,
+      JSON.stringify({
+        ollama: localProvider("ollama", "Ollama", "OLLAMA_HOST", "http://wrong-host/v1"),
+        "ax-serving": localProvider("ax-serving", "AX Serving", "AX_SERVING_HOST", "http://localhost:11434/v1"),
+      }),
+    )
+
+    const result = Bun.spawnSync({
+      cmd: ["bun", "run", path.join(import.meta.dir, "../../script/update-models.ts")],
+      env: {
+        ...process.env,
+        AX_CODE_MODELS_FIXTURE_PATH: fixturePath,
+        AX_CODE_MODELS_SNAPSHOT_PATH: snapshotPath,
+      },
+      cwd: path.join(import.meta.dir, "../.."),
+    })
+
+    expect(result.exitCode).toBe(0)
+    const data = await Bun.file(snapshotPath).json()
+    expect(data.ollama?.api).toBe("http://localhost:11434/v1")
+    expect(data["ax-serving"]?.api).toBe("http://localhost:18080/v1")
   })
 
   test("idempotent — running twice produces same result", async () => {
@@ -198,5 +227,16 @@ function staleCliProvider(id: string) {
         status: "active",
       },
     },
+  }
+}
+
+function localProvider(id: string, name: string, env: string, api: string) {
+  return {
+    id,
+    name,
+    env: [env],
+    npm: "@ai-sdk/openai-compatible",
+    api,
+    models: {},
   }
 }
