@@ -240,10 +240,6 @@ export const InvalidWorkflowFixtureSpecs = {
 export type WorkflowFixtureName = keyof typeof WorkflowFixtureSpecs
 export type InvalidWorkflowFixtureName = keyof typeof InvalidWorkflowFixtureSpecs
 
-export function getWorkflowFixtureSpec(name: WorkflowFixtureName): unknown {
-  return WorkflowFixtureSpecs[name]
-}
-
 export function getParsedWorkflowFixtureSpec(name: WorkflowFixtureName): WorkflowSpecV1 {
   return WorkflowSpecV1Schema.parse(WorkflowFixtureSpecs[name])
 }

@@ -70,7 +70,3 @@ export function useAutonomousPulse(
 
   return phase
 }
-
-// Convenience for non-reactive callers that just want the current phase
-// without subscribing to start/stop (e.g. one-shot logging).
-export const autonomousPulsePhase = phase

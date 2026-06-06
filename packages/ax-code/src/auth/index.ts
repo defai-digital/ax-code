@@ -20,8 +20,6 @@ import {
 
 const log = Log.create({ service: "auth" })
 
-export const OAUTH_DUMMY_KEY = "ax-code-oauth-dummy-key"
-
 const file = path.join(Global.Path.data, "auth.json")
 const lockFile = `${file}.lock`
 const LOCK_TIMEOUT_MS = 5_000
