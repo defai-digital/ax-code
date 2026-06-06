@@ -379,7 +379,11 @@ export namespace Config {
       result.agent = mergeDeep(result.agent, await loadAgent(dir))
       result.agent = mergeDeep(result.agent, await loadMode(dir))
       const pluginFiles = await loadPlugin(dir)
-      result.plugin.push(...pluginFiles)
+      // Reassign rather than push: `result.plugin` can alias the lazily-cached
+      // global config's array (mergeDeep does not clone source-only arrays), so
+      // an in-place push would mutate that shared array and leak discovered
+      // plugins across directories / reloads.
+      result.plugin = [...result.plugin, ...pluginFiles]
 
       if (
         dependencyManaged &&

@@ -3,6 +3,7 @@ import { afterEach, expect, spyOn, test } from "bun:test"
 import fs from "fs/promises"
 import { Auth } from "../../src/auth"
 import { Global } from "../../src/global"
+import { currentLockHost } from "../../src/util/process-lock"
 
 const file = path.join(Global.Path.data, "auth.json")
 const lockFile = `${file}.lock`
@@ -113,7 +114,7 @@ test("set steals an abandoned auth lock owned by a dead process", async () => {
   await fs.writeFile(
     lockFile,
     JSON.stringify({
-      host: process.env.HOSTNAME ?? "",
+      host: currentLockHost(),
       pid: 99999999,
       startedAt: Date.now(),
       token: "stale-lock",
@@ -144,7 +145,7 @@ test("stale auth lock stealing claims and revalidates the stale snapshot before 
 
 test("set unreferences lock polling timers while waiting for an active holder", async () => {
   const originalSetTimeout = globalThis.setTimeout
-  const host = process.env.HOSTNAME ?? ""
+  const host = currentLockHost()
   let unrefCalls = 0
   let nowCalls = 0
 
