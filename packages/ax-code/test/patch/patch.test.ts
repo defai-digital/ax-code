@@ -237,6 +237,31 @@ PATCH`
       expect(content).toBe("alpha\nbeta\ninserted\ngamma\n")
     })
 
+    test("treats a blank context line emitted without a leading space as context", async () => {
+      const filePath = path.join(tempDir, "blank-context.txt")
+      await fs.writeFile(filePath, "a\n\nb\n")
+
+      // The blank context line between " a" and "-b" is emitted as an empty
+      // line (no leading space) — the way models commonly produce it. It must
+      // be kept as context, not silently dropped (which would break matching).
+      const patchText = [
+        "*** Begin Patch",
+        `*** Update File: ${filePath}`,
+        "@@",
+        " a",
+        "",
+        "-b",
+        "+B",
+        "*** End Patch",
+      ].join("\n")
+
+      const result = await Patch.applyPatch(patchText)
+      expect(result.modified).toHaveLength(1)
+
+      const content = await fs.readFile(filePath, "utf-8")
+      expect(content).toBe("a\n\nB\n")
+    })
+
     test("should move and update a file", async () => {
       const oldPath = path.join(tempDir, "old-name.txt")
       const newPath = path.join(tempDir, "new-name.txt")
