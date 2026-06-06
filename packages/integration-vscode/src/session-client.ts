@@ -1,5 +1,5 @@
 import * as vscode from "vscode"
-import { createAxCodeClient, type AxCodeClient } from "@ax-code/sdk/v2/client"
+import { createAxCodeClient, type AxCodeClient, type ProviderListResponse } from "@ax-code/sdk/v2/client"
 import { ServerError } from "./errors"
 import { renderMarkdown } from "./markdown"
 import type { AxCodeServer } from "./server-lifecycle"
@@ -125,11 +125,14 @@ export class SessionClient {
     await this.context.workspaceState.update(STATE_SESSION_ID, undefined)
   }
 
-  async listProviders(): Promise<any> {
+  async listProviders(): Promise<ProviderListResponse> {
     const client = this.requireClient()
     const { data, error } = await client.provider.list()
     if (error) {
       throw new Error(`Failed to list providers: ${JSON.stringify(error)}`)
+    }
+    if (!data) {
+      throw new Error("Failed to list providers: empty response")
     }
     return data
   }
@@ -147,6 +150,7 @@ export class SessionClient {
       this.client = createAxCodeClient({
         baseUrl: this.server.url,
         directory: workspaceFolder,
+        headers: this.server.headers,
       })
     }
     return this.client

@@ -160,7 +160,7 @@ test("CI bot scans for CVEs", async () => {
 ```ts
 import { SDK_VERSION, isSDKVersionCompatible } from "@ax-code/sdk"
 
-console.log(SDK_VERSION) // "2.1.0"
+console.log(SDK_VERSION) // "2.2.0"
 if (!isSDKVersionCompatible("^2.0.0")) {
   throw new Error("Incompatible SDK version")
 }

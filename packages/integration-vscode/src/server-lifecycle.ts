@@ -1,10 +1,13 @@
 import * as vscode from "vscode"
 import { spawn, type ChildProcess } from "node:child_process"
+import { randomBytes } from "node:crypto"
 import * as fs from "node:fs"
 import * as path from "node:path"
+import { startHeadlessBackend, type HeadlessBackendHandle } from "@ax-code/sdk/headless"
 import { enrichPath, getConfig } from "./config"
 
 interface AxCodePath {
+  mode: "sdk" | "legacy"
   useBun: boolean
   command: string
   cwd: string
@@ -19,15 +22,21 @@ interface AxCodePath {
  * child process and is safe to call multiple times.
  */
 export class AxCodeServer {
+  private backend: HeadlessBackendHandle | null = null
   private process: ChildProcess | null = null
   private startPromise: Promise<void> | null = null
   private currentUrl: string | null = null
+  private currentHeaders: Record<string, string> = {}
   private onExitCallback: (() => void) | null = null
 
   constructor(private readonly context: vscode.ExtensionContext) {}
 
   get url(): string | null {
     return this.currentUrl
+  }
+
+  get headers(): Record<string, string> {
+    return this.currentHeaders
   }
 
   /**
@@ -53,11 +62,16 @@ export class AxCodeServer {
   }
 
   dispose() {
+    if (this.backend) {
+      void this.backend.close()
+      this.backend = null
+    }
     if (this.process) {
       this.process.kill()
       this.process = null
-      this.currentUrl = null
     }
+    this.currentUrl = null
+    this.currentHeaders = {}
   }
 
   private async startWithRetry(): Promise<void> {
@@ -79,12 +93,48 @@ export class AxCodeServer {
   }
 
   private async startInner(): Promise<void> {
-    const port = Math.floor(Math.random() * (49150 - 16384 + 1)) + 16384
     const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd()
-
     const axCodePath = this.findAxCodePath()
+
+    if (axCodePath.mode === "sdk") {
+      await this.startWithHeadlessSdk(workspaceFolder)
+      return
+    }
+
+    await this.startLegacy(axCodePath, workspaceFolder)
+  }
+
+  private async startWithHeadlessSdk(workspaceFolder: string): Promise<void> {
+    const { serverTimeoutMs } = getConfig()
+    const backend = await startHeadlessBackend({
+      directory: workspaceFolder,
+      timeout: serverTimeoutMs,
+      env: {
+        PATH: enrichPath(process.env.PATH ?? ""),
+        AX_CODE_CALLER: "vscode",
+        AX_CODE_ORIGINAL_CWD: workspaceFolder,
+      },
+    })
+
+    this.backend = backend
+    this.currentUrl = backend.url
+    this.currentHeaders = backend.headers
+    void backend.closed.then(() => {
+      if (this.backend !== backend) {
+        return
+      }
+      this.backend = null
+      this.currentUrl = null
+      this.currentHeaders = {}
+      this.onExitCallback?.()
+    })
+  }
+
+  private async startLegacy(axCodePath: AxCodePath, workspaceFolder: string): Promise<void> {
+    const port = Math.floor(Math.random() * (49150 - 16384 + 1)) + 16384
     const useShell = process.platform === "win32" && !axCodePath.useBun
     const { serverTimeoutMs } = getConfig()
+    const auth = createAuth()
 
     return new Promise((resolve, reject) => {
       const env = {
@@ -92,8 +142,11 @@ export class AxCodeServer {
         PATH: enrichPath(process.env.PATH ?? ""),
         AX_CODE_CALLER: "vscode",
         AX_CODE_ORIGINAL_CWD: workspaceFolder,
+        AX_CODE_SERVER_USERNAME: auth.username,
+        AX_CODE_SERVER_PASSWORD: auth.password,
       }
 
+      this.currentHeaders = auth.headers
       const proc = axCodePath.useBun
         ? spawn(
             "bun",
@@ -129,6 +182,7 @@ export class AxCodeServer {
         if (this.process === proc) {
           this.process = null
           this.currentUrl = null
+          this.currentHeaders = {}
         }
         reject(err)
       }
@@ -184,6 +238,7 @@ export class AxCodeServer {
         if (this.process === proc) {
           this.process = null
           this.currentUrl = null
+          this.currentHeaders = {}
         }
         this.onExitCallback?.()
       })
@@ -194,7 +249,7 @@ export class AxCodeServer {
     // Highest priority: explicit user config.
     const override = getConfig().binaryPath
     if (override && fs.existsSync(override)) {
-      return { useBun: false, command: override, cwd: "", entry: "" }
+      return { mode: "legacy", useBun: false, command: override, cwd: "", entry: "" }
     }
 
     // Dev mode: extension is inside the monorepo next to packages/ax-code.
@@ -207,10 +262,22 @@ export class AxCodeServer {
     const axCodeCwd = path.join(monorepoRoot, "packages", "ax-code")
     const workspaceMarker = path.join(monorepoRoot, "pnpm-workspace.yaml")
     if (fs.existsSync(axCodeEntry) && fs.existsSync(workspaceMarker)) {
-      return { useBun: true, command: "bun", cwd: axCodeCwd, entry: axCodeEntry }
+      return { mode: "legacy", useBun: true, command: "bun", cwd: axCodeCwd, entry: axCodeEntry }
     }
 
     // Fall back to globally-installed ax-code command.
-    return { useBun: false, command: "ax-code", cwd: "", entry: "" }
+    return { mode: "sdk", useBun: false, command: "ax-code", cwd: "", entry: "" }
+  }
+}
+
+function createAuth() {
+  const username = "ax-code-vscode"
+  const password = randomBytes(24).toString("base64url")
+  return {
+    username,
+    password,
+    headers: {
+      Authorization: "Basic " + Buffer.from(`${username}:${password}`).toString("base64"),
+    },
   }
 }

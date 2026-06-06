@@ -18,7 +18,10 @@ const { SessionClient } = await import("../src/session-client")
 class FakeServer {
   private onExit: (() => void) | null = null
 
-  constructor(public url: string | null) {}
+  constructor(
+    public url: string | null,
+    public headers: Record<string, string> = { Authorization: "Basic test" },
+  ) {}
 
   setOnExit(cb: (() => void) | null) {
     this.onExit = cb
@@ -69,7 +72,31 @@ function createSdkClient(label: string) {
       subscribe: () => ({ stream: emptyEventStream() }),
     },
     provider: {
-      list: async () => ({ data: { providers: [] }, error: undefined }),
+      list: async () => ({
+        data: {
+          all: [
+            {
+              id: "xai",
+              name: "x.ai",
+              env: ["XAI_API_KEY"],
+              models: {
+                "grok-code": {
+                  id: "grok-code",
+                  name: "Grok Code",
+                  release_date: "",
+                  attachment: false,
+                  reasoning: false,
+                  tool_call: true,
+                  limit: { context: 128000, output: 4096 },
+                },
+              },
+            },
+          ],
+          default: { xai: "grok-code" },
+          connected: ["xai"],
+        },
+        error: undefined,
+      }),
     },
     session: {
       get: async () => ({ data: { id: "stored-session" }, error: undefined }),
@@ -166,5 +193,33 @@ describe("SessionClient server restart handling", () => {
 
     expect(baseUrls).toEqual(["http://first", "http://second"])
     expect(result.finalText).toBe("http://second")
+  })
+
+  test("passes server auth headers into the SDK client", async () => {
+    const configs: any[] = []
+    clientFactory = (config: any) => {
+      configs.push(config)
+      return createSdkClient("default")
+    }
+
+    const server = new FakeServer("http://server", { Authorization: "Basic server-auth" })
+    const stream = createStreamEvents()
+    const client = new SessionClient(createContext() as any, server as any, stream.events)
+
+    await client.sendMessage("first", null, new AbortController().signal)
+
+    expect(configs[0].headers).toEqual({ Authorization: "Basic server-auth" })
+  })
+
+  test("returns provider list using the generated provider.list response shape", async () => {
+    const server = new FakeServer("http://server")
+    const stream = createStreamEvents()
+    const client = new SessionClient(createContext() as any, server as any, stream.events)
+
+    const providers = await client.listProviders()
+
+    expect(providers.all[0].id).toBe("xai")
+    expect(providers.default.xai).toBe("grok-code")
+    expect(providers.connected).toEqual(["xai"])
   })
 })

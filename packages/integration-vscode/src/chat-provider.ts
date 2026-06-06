@@ -12,6 +12,7 @@ import { renderMarkdown } from "./markdown"
 import { AxCodeServer } from "./server-lifecycle"
 import { SelectedModel, SessionClient, ServerError } from "./session-client"
 import { buildChatHtml, generateNonce } from "./webview-html"
+import { providerModelPickItems } from "./provider-picker"
 
 const STATE_SELECTED_MODEL = "axCode.selectedModel"
 
@@ -215,20 +216,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       }
 
       const config = await this.session.listProviders()
-      const providers = config?.providers ?? []
-
-      const items: vscode.QuickPickItem[] = []
-      for (const provider of providers) {
-        if (!provider.models) {
-          continue
-        }
-        for (const modelID of Object.keys(provider.models as Record<string, any>)) {
-          items.push({
-            label: `${provider.id}/${modelID}`,
-            description: provider.name ?? provider.id,
-          })
-        }
-      }
+      const items: vscode.QuickPickItem[] = providerModelPickItems(config)
 
       if (items.length === 0) {
         vscode.window.showWarningMessage("No models available. Run: ax-code providers login")

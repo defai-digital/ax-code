@@ -34,6 +34,7 @@ export type HeadlessBackendOptions = {
 export type HeadlessBackendHandle = {
   url: string
   headers: Record<string, string>
+  closed: Promise<void>
   close(): Promise<void>
 }
 
@@ -72,6 +73,10 @@ export async function startHeadlessBackend(options: HeadlessBackendOptions = {})
       ...(options.directory ? { AX_CODE_PROJECT: options.directory } : {}),
       ...(options.config ? { AX_CODE_CONFIG_CONTENT: JSON.stringify(options.config) } : {}),
     },
+  })
+  const closed = new Promise<void>((resolve) => {
+    proc.once("exit", () => resolve())
+    proc.once("error", () => resolve())
   })
 
   const url = await new Promise<string>((resolve, reject) => {
@@ -178,6 +183,7 @@ export async function startHeadlessBackend(options: HeadlessBackendOptions = {})
   return {
     url,
     headers,
+    closed,
     async close() {
       await killProc(proc)
     },
