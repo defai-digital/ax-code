@@ -1,7 +1,7 @@
 import z from "zod"
 import {
   computeEnvelopeId,
-  VerificationEnvelopeSchema,
+  verificationEnvelopesFromPayload,
   type VerificationEnvelope,
 } from "../quality/verification-envelope"
 import { SessionVerifications } from "../session/verifications"
@@ -206,21 +206,6 @@ function workflowVerificationEvidence(run: z.infer<typeof WorkflowRunDetail>) {
   }
 
   return evidence
-}
-
-function verificationEnvelopesFromPayload(payload: unknown): VerificationEnvelope[] {
-  const parsed = VerificationEnvelopeSchema.safeParse(payload)
-  if (parsed.success) return [parsed.data]
-  if (Array.isArray(payload)) return payload.flatMap(verificationEnvelopesFromPayload)
-  if (!payload || typeof payload !== "object") return []
-
-  const record = payload as Record<string, unknown>
-  return [
-    ...verificationEnvelopesFromPayload(record.envelope),
-    ...verificationEnvelopesFromPayload(record.verificationEnvelope),
-    ...verificationEnvelopesFromPayload(record.envelopes),
-    ...verificationEnvelopesFromPayload(record.verificationEnvelopes),
-  ]
 }
 
 function countFindingArtifacts(artifacts: WorkflowArtifactRecord[]) {
