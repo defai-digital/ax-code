@@ -850,7 +850,7 @@ describe("session.llm.stream", () => {
 
   test("uses minimal Gemini thinking config for small-model requests", async () => {
     const providerID = "google"
-    const modelID = "gemini-3-pro-preview"
+    const modelID = "gemini-3.1-pro-preview"
     const fixture = await loadFixture(providerID, modelID)
     const model = fixture.model
     const pathSuffix = `/v1beta/models/${model.id}:streamGenerateContent`
