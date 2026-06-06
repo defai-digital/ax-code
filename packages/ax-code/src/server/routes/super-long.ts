@@ -3,10 +3,10 @@ import { describeRoute, resolver } from "hono-openapi"
 import { validator } from "../validation"
 import { Log } from "../../util/log"
 import { lazy } from "../../util/lazy"
-import { isQwen37MaxModel } from "../../provider/qwen37-readiness"
 import { BooleanFeatureState, readProjectConfig } from "./project-config"
 import { FeatureFlag } from "../../util/feature-flags"
 import { Flag } from "../../flag/flag"
+import { SuperLongPolicy } from "../../session/super-long-policy"
 import type { Config } from "../../config/config"
 import { errors, serviceUnavailable } from "../error"
 
@@ -14,13 +14,6 @@ const log = Log.create({ service: "super-long" })
 const SUPER_LONG_OVERRIDE = "AX_CODE_SUPER_LONG_SESSION_OVERRIDE"
 
 const SuperLongState = BooleanFeatureState.meta({ ref: "SuperLongState" })
-
-function readOverride() {
-  const override = process.env[SUPER_LONG_OVERRIDE]
-  if (override === "true") return true
-  if (override === "false") return false
-  return undefined
-}
 
 function configuredModelID(config: Config.Info | undefined, explicitModel?: string) {
   const model = explicitModel ?? config?.model ?? ""
@@ -32,10 +25,16 @@ function autonomousEnabled(config: Config.Info | undefined) {
 }
 
 function superLongDesired(config: Config.Info | undefined, explicitModel?: string) {
-  const override = readOverride()
-  if (override !== undefined) return override
-  if (config?.super_long !== undefined) return config.super_long
-  return isQwen37MaxModel(configuredModelID(config, explicitModel))
+  // Delegate to the canonical runtime precedence (session override -> base env
+  // -> config -> model default) instead of re-implementing it. Re-implementing
+  // dropped the AX_CODE_SUPER_LONG base-env step, so an externally-set base env
+  // made this GET report a state the runtime readers (LLM/prompt) did not use.
+  // See the flag contract note at src/flag/flag.ts (defineBooleanFlagWithOverride
+  // for AX_CODE_SUPER_LONG): the reported state must match runtime behavior.
+  return SuperLongPolicy.runtimeState({
+    modelID: configuredModelID(config, explicitModel),
+    config: { enabled: config?.super_long },
+  }).enabled
 }
 
 export const SuperLongRoutes = lazy(() =>

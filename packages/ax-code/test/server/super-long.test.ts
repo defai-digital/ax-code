@@ -41,6 +41,43 @@ describe("super-long route", () => {
     })
   })
 
+  test("honors the AX_CODE_SUPER_LONG base env, matching runtime precedence", async () => {
+    await withCleanSuperLongEnv(async () => {
+      await using tmp = await tmpdir({ git: true })
+      // Non-Qwen model: the model default is off, so only the base env can enable
+      // it here (no session override set). The runtime readers honor this base
+      // env, so GET must too.
+      await Bun.write(path.join(tmp.path, "ax-code.json"), JSON.stringify({ model: "anthropic/claude-opus-4-8" }))
+      process.env.AX_CODE_SUPER_LONG = "true"
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const response = await Server.Default().request(`/super-long?directory=${encodeURIComponent(tmp.path)}`)
+          expect(response.status).toBe(200)
+          expect(await response.json()).toEqual({ enabled: true })
+        },
+      })
+    })
+  })
+
+  test("base env false overrides the Qwen3.7-Max model default", async () => {
+    await withCleanSuperLongEnv(async () => {
+      await using tmp = await tmpdir({ git: true })
+      await Bun.write(path.join(tmp.path, "ax-code.json"), JSON.stringify({ model: "alibaba-coding-plan/qwen3.7-max" }))
+      process.env.AX_CODE_SUPER_LONG = "false"
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const response = await Server.Default().request(`/super-long?directory=${encodeURIComponent(tmp.path)}`)
+          expect(response.status).toBe(200)
+          expect(await response.json()).toEqual({ enabled: false })
+        },
+      })
+    })
+  })
+
   test("does not default on when autonomous mode is disabled", async () => {
     await withCleanSuperLongEnv(async () => {
       await using tmp = await tmpdir({ git: true })
