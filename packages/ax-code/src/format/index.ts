@@ -46,9 +46,15 @@ export namespace Format {
             delete formatters[name]
             continue
           }
+          // Default to the built-in command/extensions so an override that
+          // sets only one field (e.g. adding an extension to prettier) does not
+          // clobber the other. mergeDeep replaces arrays, so a hard-coded
+          // `command: []` default made an extensions-only override collapse to
+          // an empty command and get skipped below (the override was silently
+          // ignored). Seeding the defaults from the built-in keeps it intact.
           const info = mergeDeep(formatters[name] ?? {}, {
-            command: [],
-            extensions: [],
+            command: formatters[name]?.command ?? [],
+            extensions: formatters[name]?.extensions ?? [],
             ...item,
           })
 

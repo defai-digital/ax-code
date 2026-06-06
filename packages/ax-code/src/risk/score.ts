@@ -120,7 +120,12 @@ export namespace Risk {
   }
 
   function isCrossModule(files: string[]): boolean {
-    const dirs = new Set(files.map((f) => f.split("/").slice(0, 2).join("/")))
+    // Group by the top-level area (first path segment). slice(0, 2) grouped by
+    // the first TWO segments, which falsely flagged flat siblings like
+    // ["src/foo.ts", "src/bar.ts"] as cross-module. (Absolute tool-call paths
+    // collapse to one group either way; normalizing those to repo-relative is
+    // a separate concern.)
+    const dirs = new Set(files.map((f) => f.split("/").slice(0, 1).join("/")))
     return dirs.size > 1
   }
 
