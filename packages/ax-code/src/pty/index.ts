@@ -346,7 +346,12 @@ export namespace Pty {
                   session.subscribers.delete(key)
                   continue
                 }
-                if (ws.data !== key) {
+                // Recycled-socket guard: only meaningful when the key is the
+                // socket's `data` object. When we fell back to the socket
+                // itself as the key (ws.data not an object), `ws.data !== key`
+                // would always be true and wrongly drop a live subscriber on
+                // its first chunk.
+                if (key !== ws && ws.data !== key) {
                   session.subscribers.delete(key)
                   continue
                 }

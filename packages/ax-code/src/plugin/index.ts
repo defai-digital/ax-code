@@ -124,7 +124,10 @@ export namespace Plugin {
           })
       }
 
-      for (const hook of hooks) {
+      // Iterate a snapshot: a failing hook is spliced out of `hooks`, and
+      // mutating the array being iterated by `for...of` would skip the hook
+      // immediately after the failed one.
+      for (const hook of [...hooks]) {
         try {
           const config = (hook as any).config
           await config?.(cfg)
