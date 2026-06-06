@@ -894,6 +894,10 @@ export namespace ACP {
         const diff = typeof metadata["diff"] === "string" ? metadata["diff"] : ""
         if (filepath) {
           // Serialize the read-modify-write through FileTime's per-path lock.
+          // This optimistic client-side write is best-effort: if it fails
+          // (client write error, fs error, lock path throws) we must still fall
+          // through to reply below, otherwise the user already approved but the
+          // tool's permission deferred is never settled and the tool hangs.
           await FileTime.withLock(filepath, async () => {
             const content = (await Filesystem.exists(filepath)) ? await Filesystem.readText(filepath) : ""
             const newContent = getNewContent(content, diff)
@@ -904,6 +908,12 @@ export namespace ACP {
                 content: newContent,
               })
             }
+          }).catch((error) => {
+            log.error("failed to apply ACP optimistic edit write", {
+              error,
+              permissionID: permission.id,
+              sessionID: permission.sessionID,
+            })
           })
         }
       }
