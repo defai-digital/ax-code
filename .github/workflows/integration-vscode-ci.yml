@@ -41,6 +41,13 @@ jobs:
       - name: Install deps
         run: pnpm install --frozen-lockfile
 
+      # integration-vscode imports @ax-code/sdk subpaths (e.g. ./v2/client) whose
+      # exports resolve to dist/, so the SDK must be built before typecheck/lint/
+      # tests can resolve its declarations. Matches ax-code-ci.yml and release.yml.
+      - name: Build SDK
+        run: bun tsc
+        working-directory: packages/sdk/js
+
       - name: Typecheck
         run: pnpm --dir packages/integration-vscode run typecheck
 
