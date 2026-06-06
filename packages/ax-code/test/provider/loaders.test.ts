@@ -315,6 +315,49 @@ describe("offline provider loaders", () => {
     })
   })
 
+  test("ax-serving applies model filters to discovered models", async () => {
+    process.env.AX_SERVING_HOST = "http://localhost:18080"
+    globalThis.fetch = (async (input: string | URL | Request) => {
+      const url = String(input)
+      if (url === "http://localhost:18080/v1/models") {
+        return new Response(
+          JSON.stringify({
+            data: [{ id: "allowed" }, { id: "blocked" }],
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        )
+      }
+      throw new Error(`unexpected fetch: ${url}`)
+    }) as typeof fetch
+
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await Bun.write(
+          path.join(dir, "ax-code.json"),
+          JSON.stringify({
+            provider: {
+              "ax-serving": {
+                whitelist: ["allowed"],
+              },
+            },
+          }),
+        )
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const providers = await Provider.list()
+        const axServing = providers[ProviderID.make("ax-serving")]
+        expect(Object.keys(axServing.models)).toEqual(["allowed"])
+      },
+    })
+  })
+
   test("ollama ignores invalid tags JSON during deferred discovery", async () => {
     globalThis.fetch = (async (input: string | URL | Request) => {
       const url = String(input)

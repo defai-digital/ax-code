@@ -414,6 +414,44 @@ export namespace Provider {
       providers[providerID] = mergeDeep(match, provider)
     }
 
+    function applyModelFilters(providerID: ProviderID, provider: Info) {
+      const configProvider = config.provider?.[providerID]
+      addLegacyXaiModelAliases(providerID, provider.models)
+
+      for (const [modelID, model] of Object.entries(provider.models)) {
+        const supportModelID = model.api.id ?? model.id ?? modelID
+        model.api = {
+          ...model.api,
+          id: providerID === ProviderID.xai ? canonicalXaiApiModelID(supportModelID) : supportModelID,
+        }
+        const filterID = providerID === "openrouter" ? modelID : supportModelID
+        if (!supported(providerID, filterID, model)) {
+          delete provider.models[modelID]
+          continue
+        }
+        if (modelID === "gpt-5-chat-latest") delete provider.models[modelID]
+        if (model.status === "alpha" && !Flag.AX_CODE_ENABLE_EXPERIMENTAL_MODELS) delete provider.models[modelID]
+        if (model.status === "deprecated") delete provider.models[modelID]
+        if (
+          (configProvider?.blacklist && configProvider.blacklist.includes(modelID)) ||
+          (configProvider?.whitelist && !configProvider.whitelist.includes(modelID))
+        )
+          delete provider.models[modelID]
+
+        model.variants = mapValues(ProviderTransform.variants(model), (v) => v)
+
+        // Filter out disabled variants from config
+        const configVariants = configProvider?.models?.[modelID]?.variants
+        if (configVariants && model.variants) {
+          const merged = mergeDeep(model.variants, configVariants)
+          model.variants = mapValues(
+            pickBy(merged, (v) => !v.disabled),
+            (v) => omit(v, ["disabled"]),
+          )
+        }
+      }
+    }
+
     // extend database from config
     for (const [rawProviderID, provider] of configProviders) {
       const providerID = ProviderID.make(rawProviderID)
@@ -606,41 +644,7 @@ export namespace Provider {
         continue
       }
 
-      const configProvider = config.provider?.[providerID]
-      addLegacyXaiModelAliases(providerID, provider.models)
-
-      for (const [modelID, model] of Object.entries(provider.models)) {
-        const supportModelID = model.api.id ?? model.id ?? modelID
-        model.api = {
-          ...model.api,
-          id: providerID === ProviderID.xai ? canonicalXaiApiModelID(supportModelID) : supportModelID,
-        }
-        const filterID = providerID === "openrouter" ? modelID : supportModelID
-        if (!supported(providerID, filterID, model)) {
-          delete provider.models[modelID]
-          continue
-        }
-        if (modelID === "gpt-5-chat-latest") delete provider.models[modelID]
-        if (model.status === "alpha" && !Flag.AX_CODE_ENABLE_EXPERIMENTAL_MODELS) delete provider.models[modelID]
-        if (model.status === "deprecated") delete provider.models[modelID]
-        if (
-          (configProvider?.blacklist && configProvider.blacklist.includes(modelID)) ||
-          (configProvider?.whitelist && !configProvider.whitelist.includes(modelID))
-        )
-          delete provider.models[modelID]
-
-        model.variants = mapValues(ProviderTransform.variants(model), (v) => v)
-
-        // Filter out disabled variants from config
-        const configVariants = configProvider?.models?.[modelID]?.variants
-        if (configVariants && model.variants) {
-          const merged = mergeDeep(model.variants, configVariants)
-          model.variants = mapValues(
-            pickBy(merged, (v) => !v.disabled),
-            (v) => omit(v, ["disabled"]),
-          )
-        }
-      }
+      applyModelFilters(providerID, provider)
 
       if (!isNonEmptyRecord(provider.models) && !discoveryLoaders[providerID]) {
         delete providers[providerID]
@@ -663,6 +667,7 @@ export namespace Provider {
           for (const [modelID, model] of Object.entries(discovered)) {
             providers[providerID].models[modelID] = model
           }
+          applyModelFilters(providerID, providers[providerID])
         })().catch((e) => {
           initFailures.push({ source: `discovery:${id}`, error: e })
           log.warn("state discovery error", { id, error: e })

@@ -62,6 +62,29 @@ describe("probeCliLanguageModel", () => {
     }
   })
 
+  test("Claude auth probe forwards Anthropic API key env", async () => {
+    const original = process.env.ANTHROPIC_API_KEY
+    process.env.ANTHROPIC_API_KEY = "anthropic-key"
+    const runSpy = spyOn(Process, "run").mockResolvedValue({
+      stdout: Buffer.from(""),
+      stderr: Buffer.from(""),
+      code: 0,
+      exitCode: 0,
+      text() {
+        return ""
+      },
+    } as any)
+
+    try {
+      await expect(checkCliProviderAuth("claude-code", "claude")).resolves.toBeUndefined()
+      expect(runSpy.mock.calls[0]?.[1]?.env?.ANTHROPIC_API_KEY).toBe("anthropic-key")
+    } finally {
+      runSpy.mockRestore()
+      if (original === undefined) delete process.env.ANTHROPIC_API_KEY
+      else process.env.ANTHROPIC_API_KEY = original
+    }
+  })
+
   test("Claude auth probe does not reject apiKeySource none without an auth error", async () => {
     const runSpy = spyOn(Process, "run").mockResolvedValue({
       stdout: Buffer.from(
