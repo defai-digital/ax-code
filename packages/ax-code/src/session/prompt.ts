@@ -664,7 +664,14 @@ export namespace SessionPrompt {
         }
       }
 
-      if (modelFinished && !processor.message.error) {
+      // Goal auto-continuation is autonomy, so it must respect the autonomous
+      // gate like every other continuation (global/agent step limits, todos,
+      // completion gate). Without this gate a goal keeps auto-continuing even
+      // when the user disabled autonomous mode — and because the Super-Long
+      // ceiling requires autonomous and each continuation resets `step`, such a
+      // goal runs with no time or step guardrail at all. When autonomous is off
+      // the goal still persists in context; the user just drives each turn.
+      if (autonomous && modelFinished && !processor.message.error) {
         const goal = updatedGoal ?? (await SessionGoal.get(sessionID))
         const goalTransition = handlePromptLoopGoalContinuation({
           sessionID,
