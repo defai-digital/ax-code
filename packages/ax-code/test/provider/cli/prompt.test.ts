@@ -22,6 +22,7 @@ describe("promptToText", () => {
 
     expect(promptToText(prompt, { providerID: "codex-cli" })).toContain("built-in web search")
     expect(promptToText(prompt, { providerID: "gemini-cli" })).toContain("built-in web search")
+    expect(promptToText(prompt, { providerID: "grok-build-cli" })).toContain("built-in web search")
   })
 
   test("does not add Claude Code web search guidance for other CLI providers", () => {
