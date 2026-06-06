@@ -1,7 +1,9 @@
 import type { LanguageModelV3Prompt } from "@ai-sdk/provider"
+import type { CliAttachmentRef } from "./attachments"
 
 export interface CliPromptOptions {
   providerID?: string
+  attachments?: CliAttachmentRef[]
 }
 
 const WEB_SEARCH_CLI_PROVIDERS = new Set(["claude-code", "codex-cli", "gemini-cli", "grok-build-cli"])
@@ -20,10 +22,22 @@ const CLI_WEB_SEARCH_HINT = [
   "</cli_web_search>",
 ].join("\n")
 
+function attachmentHint(refs: CliAttachmentRef[]): string {
+  const lines = refs.map((ref) => `- ${ref.path ?? ref.url} (${ref.mediaType})`)
+  return [
+    "<cli_attachments>",
+    "The user attached the following file(s). Open and view them with your built-in file/image tools" +
+      " (read the local paths, fetch the URLs) before answering — do not claim you cannot see attachments.",
+    ...lines,
+    "</cli_attachments>",
+  ].join("\n")
+}
+
 export function promptToText(prompt: LanguageModelV3Prompt, options: CliPromptOptions = {}): string {
   const parts: string[] = []
 
   if (options.providerID && WEB_SEARCH_CLI_PROVIDERS.has(options.providerID)) parts.push(CLI_WEB_SEARCH_HINT)
+  if (options.attachments && options.attachments.length > 0) parts.push(attachmentHint(options.attachments))
 
   for (const message of prompt) {
     if (message.role === "system") {

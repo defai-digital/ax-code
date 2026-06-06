@@ -7,6 +7,7 @@ import type {
 import { Process } from "../../util/process"
 import { Env } from "../../util/env"
 import { promptToText } from "./prompt"
+import { materializeCliAttachments } from "./attachments"
 import type { CliOutputParser } from "./parser"
 import { buffer } from "node:stream/consumers"
 import { StringDecoder } from "node:string_decoder"
@@ -156,7 +157,11 @@ export class CliLanguageModel implements LanguageModelV3 {
   async doGenerate(options: LanguageModelV3CallOptions) {
     if (options.abortSignal?.aborted) throw readAbortError(options.abortSignal)
 
-    const text = promptToText(options.prompt, { providerID: this.config.providerID })
+    const attachments = await materializeCliAttachments(options.prompt)
+    const text = promptToText(options.prompt, {
+      providerID: this.config.providerID,
+      attachments: attachments.refs,
+    })
     const proc = Process.spawn(this.buildCmd(text), {
       stdin: this.useStdin() ? "pipe" : "ignore",
       stdout: "pipe",
@@ -164,6 +169,12 @@ export class CliLanguageModel implements LanguageModelV3 {
       env: cliEnv(this.config.providerEnvKeys),
     })
     const abort = this.setupProcessAbort(proc, options.abortSignal, "cli generate")
+    // Remove materialized attachment temp files once the process exits
+    // (success, error, or kill). cleanup() never rejects.
+    proc.exited.then(
+      () => attachments.cleanup(),
+      () => attachments.cleanup(),
+    )
 
     if (this.useStdin()) {
       if (!proc.stdin) throw new Error("CLI process stdin not available")
@@ -234,7 +245,11 @@ export class CliLanguageModel implements LanguageModelV3 {
   async doStream(options: LanguageModelV3CallOptions) {
     if (options.abortSignal?.aborted) throw readAbortError(options.abortSignal)
 
-    const text = promptToText(options.prompt, { providerID: this.config.providerID })
+    const attachments = await materializeCliAttachments(options.prompt)
+    const text = promptToText(options.prompt, {
+      providerID: this.config.providerID,
+      attachments: attachments.refs,
+    })
     const proc = Process.spawn(this.buildCmd(text), {
       stdin: this.useStdin() ? "pipe" : "ignore",
       stdout: "pipe",
@@ -242,6 +257,12 @@ export class CliLanguageModel implements LanguageModelV3 {
       env: cliEnv(this.config.providerEnvKeys),
     })
     const abort = this.setupProcessAbort(proc, options.abortSignal, "cli stream")
+    // Remove materialized attachment temp files once the process exits
+    // (success, error, or kill). cleanup() never rejects.
+    proc.exited.then(
+      () => attachments.cleanup(),
+      () => attachments.cleanup(),
+    )
 
     if (this.useStdin()) {
       if (!proc.stdin) throw new Error("CLI process stdin not available")

@@ -25,6 +25,25 @@ describe("promptToText", () => {
     expect(promptToText(prompt, { providerID: "grok-build-cli" })).toContain("built-in web search")
   })
 
+  test("lists attachments so the CLI agent reads them", () => {
+    const prompt: LanguageModelV3Prompt = [{ role: "user", content: [{ type: "text", text: "what is this?" }] }]
+    const result = promptToText(prompt, {
+      providerID: "claude-code",
+      attachments: [
+        { path: "/tmp/ax-code-cli-attach-x/attachment-0.png", mediaType: "image/png" },
+        { url: "https://example.com/cat.png", mediaType: "image/png" },
+      ],
+    })
+    expect(result).toContain("<cli_attachments>")
+    expect(result).toContain("/tmp/ax-code-cli-attach-x/attachment-0.png (image/png)")
+    expect(result).toContain("https://example.com/cat.png (image/png)")
+  })
+
+  test("omits the attachments block when there are none", () => {
+    const prompt: LanguageModelV3Prompt = [{ role: "user", content: [{ type: "text", text: "hello" }] }]
+    expect(promptToText(prompt, { providerID: "claude-code", attachments: [] })).not.toContain("<cli_attachments>")
+  })
+
   test("does not add Claude Code web search guidance for other CLI providers", () => {
     const prompt: LanguageModelV3Prompt = [{ role: "user", content: [{ type: "text", text: "What changed today?" }] }]
 
