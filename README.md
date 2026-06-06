@@ -1,5 +1,3 @@
-<img src="logo/apple-icon.png" alt="AX Code logo" width="96" height="96">
-
 **A local-first agent runtime for serious software work.**
 
 AX Code runs coding agents against your actual repositories through a terminal TUI, one-shot CLI, VS Code, a TypeScript SDK, and a local HTTP server. It is built around durable sessions, explicit tools, sandboxed execution, provider routing, code intelligence, and MCP/plugin extensibility so teams can let agents act without losing control of the work.
