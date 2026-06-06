@@ -44,7 +44,8 @@ const existing = await Bun.file(snapshotPath)
   .catch(() => ({}))
 
 // Preserve local-only provider entries that models.dev doesn't include
-const localProviderIDs = ["claude-code", "gemini-cli", "codex-cli", "grok-build-cli", "ollama", "ax-serving"]
+const cliImageProviderIDs = ["claude-code", "gemini-cli", "codex-cli", "grok-build-cli"] as const
+const localProviderIDs = [...cliImageProviderIDs, "ollama", "ax-serving"]
 for (const id of localProviderIDs) {
   if (existing[id] && !fetched[id]) fetched[id] = JSON.parse(JSON.stringify(existing[id]))
 }
@@ -59,13 +60,13 @@ if (!fetched["grok-build-cli"]) {
         id: "grok-build-cli",
         name: "Grok Build CLI",
         family: "grok",
-        attachment: false,
+        attachment: true,
         reasoning: false,
         tool_call: false,
         temperature: false,
         release_date: "2026-04-16",
         modalities: {
-          input: ["text"],
+          input: ["text", "image"],
           output: ["text"],
         },
         limit: {
@@ -85,13 +86,13 @@ if (!fetched["grok-build-cli"].models?.["grok-build-cli"]) {
       id: "grok-build-cli",
       name: "Grok Build CLI",
       family: "grok",
-      attachment: false,
+      attachment: true,
       reasoning: false,
       tool_call: false,
       temperature: false,
       release_date: "2026-04-16",
       modalities: {
-        input: ["text"],
+        input: ["text", "image"],
         output: ["text"],
       },
       limit: {
@@ -214,13 +215,13 @@ if (!fetched["grok-build-cli"].models?.["grok-build-cli"]) {
       id: "grok-build-cli",
       name: "Grok Build CLI",
       family: "grok",
-      attachment: false,
+      attachment: true,
       reasoning: false,
       tool_call: false,
       temperature: false,
       release_date: "2026-04-16",
       modalities: {
-        input: ["text"],
+        input: ["text", "image"],
         output: ["text"],
       },
       limit: {
@@ -230,6 +231,22 @@ if (!fetched["grok-build-cli"].models?.["grok-build-cli"]) {
       options: {},
       status: "active",
     },
+  }
+}
+
+// CLI wrappers pass images as materialized temp-file paths/URLs to the wrapped
+// assistant. Keep their model metadata aligned with that adapter path so the
+// common provider transform does not downgrade image parts before the CLI runs.
+for (const id of cliImageProviderIDs) {
+  const provider = fetched[id]
+  const model = provider?.models?.[id]
+  if (!model) continue
+  model.attachment = true
+  const input = Array.isArray(model.modalities?.input) ? model.modalities.input : []
+  model.modalities = {
+    ...(model.modalities ?? {}),
+    input: Array.from(new Set(["text", "image", ...input])),
+    output: Array.isArray(model.modalities?.output) ? model.modalities.output : ["text"],
   }
 }
 

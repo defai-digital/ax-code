@@ -45,12 +45,48 @@ describe("update-models script", () => {
     const snapshotPath = path.join(import.meta.dir, "../../src/provider/models-snapshot.json")
     const data = await Bun.file(snapshotPath).json()
 
-    // CLI providers should be preserved from the existing snapshot
+    // CLI providers should be preserved from the existing snapshot and keep
+    // image capability metadata aligned with the CLI attachment adapter.
     const cliProviders = ["claude-code", "gemini-cli", "codex-cli", "grok-build-cli"]
     for (const id of cliProviders) {
-      if (data[id]) {
-        expect(typeof data[id]).toBe("object")
-      }
+      const provider = data[id]
+      const model = provider?.models?.[id]
+      expect(typeof provider).toBe("object")
+      expect(model).toBeDefined()
+      expect(model.attachment).toBe(true)
+      expect(model.modalities?.input).toEqual(expect.arrayContaining(["text", "image"]))
+      expect(model.modalities?.output).toEqual(["text"])
+    }
+  })
+
+  test("normalizes stale CLI provider entries during snapshot regeneration", async () => {
+    await using tmp = await tmpdir()
+    const { fixturePath, snapshotPath } = await createModelsFixture(tmp.path)
+    await Bun.write(
+      snapshotPath,
+      JSON.stringify(
+        Object.fromEntries(
+          ["claude-code", "gemini-cli", "codex-cli", "grok-build-cli"].map((id) => [id, staleCliProvider(id)]),
+        ),
+      ),
+    )
+
+    const result = Bun.spawnSync({
+      cmd: ["bun", "run", path.join(import.meta.dir, "../../script/update-models.ts")],
+      env: {
+        ...process.env,
+        AX_CODE_MODELS_FIXTURE_PATH: fixturePath,
+        AX_CODE_MODELS_SNAPSHOT_PATH: snapshotPath,
+      },
+      cwd: path.join(import.meta.dir, "../.."),
+    })
+
+    expect(result.exitCode).toBe(0)
+    const data = await Bun.file(snapshotPath).json()
+    for (const id of ["claude-code", "gemini-cli", "codex-cli", "grok-build-cli"]) {
+      const model = data[id]?.models?.[id]
+      expect(model?.attachment).toBe(true)
+      expect(model?.modalities?.input).toEqual(expect.arrayContaining(["text", "image"]))
     }
   })
 
@@ -132,4 +168,35 @@ async function createModelsFixture(dir: string) {
   )
   await Bun.write(snapshotPath, "{}\n")
   return { fixturePath, snapshotPath }
+}
+
+function staleCliProvider(id: string) {
+  return {
+    id,
+    name: id,
+    env: [],
+    npm: "cli",
+    models: {
+      [id]: {
+        id,
+        name: id,
+        family: id.split("-")[0],
+        attachment: false,
+        reasoning: false,
+        tool_call: false,
+        temperature: false,
+        release_date: "2026-01-01",
+        modalities: {
+          input: ["text"],
+          output: ["text"],
+        },
+        limit: {
+          context: 1000,
+          output: 100,
+        },
+        options: {},
+        status: "active",
+      },
+    },
+  }
 }

@@ -693,6 +693,28 @@ describe("ProviderTransform.message - empty image handling", () => {
     expect(result[0].content[1]).toEqual({ type: "image", image: `data:image/png;base64,${validBase64}` })
   })
 
+  test("should keep file image parts unchanged when model supports image input", () => {
+    const filePart = {
+      type: "file" as const,
+      data: "data:image/png;base64,AA==",
+      mediaType: "image/png",
+      filename: "screenshot.png",
+    }
+    const msgs = [
+      {
+        role: "user",
+        content: [{ type: "text", text: "What is in this screenshot?" }, filePart],
+      },
+    ] as any[]
+
+    const result = ProviderTransform.message(msgs, mockModel, {})
+
+    expect(result).toHaveLength(1)
+    expect(result[0].content).toHaveLength(2)
+    expect(result[0].content[0]).toEqual({ type: "text", text: "What is in this screenshot?" })
+    expect(result[0].content[1]).toEqual(filePart)
+  })
+
   test("should handle mixed valid and empty images", () => {
     const validBase64 =
       "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="

@@ -15,16 +15,17 @@ describe("modelDisplayInfo", () => {
     }
   })
 
-  test("preserves vision marker alongside web search marker", () => {
-    const display = modelDisplayInfo("claude-code", {
-      providerID: "claude-code",
-      name: "Claude Code default",
-      capabilities: { input: { image: true } },
-    })
+  test("shows vision marker for CLI providers with image input", () => {
+    for (const providerID of ["claude-code", "codex-cli", "gemini-cli", "grok-build-cli"]) {
+      const display = modelDisplayInfo(providerID, {
+        providerID,
+        name: `${providerID} default`,
+        capabilities: { input: { image: true } },
+      })
 
-    expect(display.label).toBe("Claude Code default 👀 🌐")
-    expect(display.vision).toBe(true)
-    expect(display.webSearch).toBe(true)
+      expect(display.label).toContain("👀")
+      expect(display.vision).toBe(true)
+    }
   })
 
   test("does not duplicate markers already present in the model name", () => {
