@@ -3,6 +3,7 @@ import { afterEach, expect, spyOn, test } from "bun:test"
 import fs from "fs/promises"
 import { Auth } from "../../src/auth"
 import { Global } from "../../src/global"
+import { currentLockHost } from "../../src/util/process-lock"
 
 const file = path.join(Global.Path.data, "auth.json")
 const lockFile = `${file}.lock`
@@ -89,11 +90,31 @@ test("all filters invalid auth entries and keeps valid ones", async () => {
   expect(data["broken"]).toBeUndefined()
 })
 
+test("canary migration preserves entries that fail to decode instead of erasing them", async () => {
+  await Bun.write(
+    file,
+    JSON.stringify({
+      anthropic: { type: "api", key: "sk-test" },
+      broken: { type: "api", key: 1 },
+    }),
+  )
+
+  // No __canary present, so the first all() triggers the full-file migration
+  // rewrite. The entry that fails to decode must survive on disk (it may be a
+  // recoverable credential), not be silently deleted.
+  await Auth.all()
+
+  const onDisk = JSON.parse(await fs.readFile(file, "utf-8"))
+  expect(onDisk.__canary).toBeDefined()
+  expect(onDisk.anthropic).toBeDefined()
+  expect(onDisk.broken).toBeDefined()
+})
+
 test("set steals an abandoned auth lock owned by a dead process", async () => {
   await fs.writeFile(
     lockFile,
     JSON.stringify({
-      host: process.env.HOSTNAME ?? "",
+      host: currentLockHost(),
       pid: 99999999,
       startedAt: Date.now(),
       token: "stale-lock",
@@ -124,7 +145,7 @@ test("stale auth lock stealing claims and revalidates the stale snapshot before 
 
 test("set unreferences lock polling timers while waiting for an active holder", async () => {
   const originalSetTimeout = globalThis.setTimeout
-  const host = process.env.HOSTNAME ?? ""
+  const host = currentLockHost()
   let unrefCalls = 0
   let nowCalls = 0
 

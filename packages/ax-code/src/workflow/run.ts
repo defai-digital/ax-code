@@ -188,7 +188,11 @@ async function setStatus(input: WorkflowRunState.SetStatusInput): Promise<Workfl
     time_updated: now,
   }
   if (status === "running" && current.time.started === undefined) updates.time_started = now
-  if (isTerminalRunStatus(status)) updates.time_completed = now
+  // Clear the completion timestamp when re-activating a previously-terminal
+  // run (retry / refreshRunningRunState moves failed/cancelled/paused back to
+  // running). A non-terminal status must never carry a completion time —
+  // recoverInterrupted relies on the same invariant.
+  updates.time_completed = isTerminalRunStatus(status) ? now : null
 
   const run = Database.use((db) => {
     const row = db.update(WorkflowRunTable).set(updates).where(eq(WorkflowRunTable.id, parsed.id)).returning().get()
@@ -210,7 +214,8 @@ async function setPhaseStatus(input: WorkflowRunState.SetPhaseStatusInput): Prom
     time_updated: now,
   }
   if (parsed.status === "running" && current.time.started === undefined) updates.time_started = now
-  if (isTerminalPhaseStatus(parsed.status)) updates.time_completed = now
+  // A non-terminal phase must not retain a stale completion time (see setStatus).
+  updates.time_completed = isTerminalPhaseStatus(parsed.status) ? now : null
 
   const phase = Database.transaction((db) => {
     const row = db.update(WorkflowPhaseTable).set(updates).where(eq(WorkflowPhaseTable.id, parsed.id)).returning().get()
@@ -273,7 +278,8 @@ async function setChildStatus(input: WorkflowRunState.SetChildStatusInput): Prom
     time_updated: now,
   }
   if (parsed.status === "running" && current.time.started === undefined) updates.time_started = now
-  if (isTerminalChildStatus(parsed.status)) updates.time_completed = now
+  // A non-terminal child must not retain a stale completion time (see setStatus).
+  updates.time_completed = isTerminalChildStatus(parsed.status) ? now : null
 
   const child = Database.transaction((db) => {
     const row = db.update(WorkflowChildTable).set(updates).where(eq(WorkflowChildTable.id, parsed.id)).returning().get()

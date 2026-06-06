@@ -17,7 +17,11 @@ import { KeyedSerialQueue } from "../util/queue"
 import { toErrorMessage } from "../util/error-message"
 
 const log = Log.create({ service: "code-intelligence.builder" })
-const SYMBOL_RANGE_SCALE = 1000
+// Line weight for the innermost-container size metric (lines * SCALE + chars).
+// MUST match the native interval tree (crates/ax-code-index interval_tree.rs,
+// `lines * 10000 + chars`) so the JS fallback and native paths break ties the
+// same way and attribute reference/call edges to the same container.
+const SYMBOL_RANGE_SCALE = 10000
 const MAX_BOOKMARKS_PER_REFERENCE_QUERY = 50
 
 const IMPORT_REGEX =

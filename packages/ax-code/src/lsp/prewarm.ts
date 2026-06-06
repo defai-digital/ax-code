@@ -3,7 +3,11 @@ import { LANGUAGE_EXTENSIONS } from "./language"
 import type { PrewarmSelectionOptions } from "./selection"
 
 export function detectLanguage(file: string): string {
-  const extension = path.parse(file).ext || file
+  // Extensionless files key on the (lowercased) basename — LANGUAGE_EXTENSIONS
+  // stores those as lowercase (e.g. `dockerfile`, `makefile`), matching how
+  // client.ts derives the languageId. Previously `|| file` used the whole path
+  // as the key, so e.g. a `Dockerfile` resolved to "unknown" and was skipped.
+  const extension = path.parse(file).ext || path.basename(file).toLowerCase()
   return LANGUAGE_EXTENSIONS[extension] ?? "unknown"
 }
 

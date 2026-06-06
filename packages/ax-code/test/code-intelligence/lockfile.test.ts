@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { IndexLock } from "../../src/code-intelligence/lockfile"
+import { currentLockHost } from "../../src/util/process-lock"
 import type { ProjectID } from "../../src/project/schema"
 import { Log } from "../../src/util/log"
 import fs from "fs/promises"
@@ -56,7 +57,7 @@ describe("IndexLock", () => {
     // systems and is definitely not us.
     const target = await lockPath(id)
     await fs.mkdir(path.dirname(target), { recursive: true })
-    await fs.writeFile(target, JSON.stringify({ pid: 1, startedAt: Date.now(), host: process.env.HOSTNAME ?? "" }))
+    await fs.writeFile(target, JSON.stringify({ pid: 1, startedAt: Date.now(), host: currentLockHost() }))
 
     const handle = await IndexLock.tryAcquire(id)
     expect(handle).toBeUndefined()
@@ -73,10 +74,7 @@ describe("IndexLock", () => {
     await fs.mkdir(path.dirname(target), { recursive: true })
     // PID 0 is never a real process on linux/macos, so process.kill(0, 0)
     // will ESRCH. The host field matches ours so the steal path runs.
-    await fs.writeFile(
-      target,
-      JSON.stringify({ pid: 99999999, startedAt: Date.now(), host: process.env.HOSTNAME ?? "" }),
-    )
+    await fs.writeFile(target, JSON.stringify({ pid: 99999999, startedAt: Date.now(), host: currentLockHost() }))
 
     const handle = await IndexLock.tryAcquire(id)
     expect(handle).toBeDefined()
@@ -97,7 +95,7 @@ describe("IndexLock", () => {
       JSON.stringify({
         pid: 1,
         startedAt: Date.now() - 24 * 60 * 60 * 1000,
-        host: process.env.HOSTNAME ?? "",
+        host: currentLockHost(),
       }),
     )
 
@@ -141,7 +139,7 @@ describe("IndexLock", () => {
     // Hold the lock with a live foreign pid (pid 1).
     const target = await lockPath(id)
     await fs.mkdir(path.dirname(target), { recursive: true })
-    await fs.writeFile(target, JSON.stringify({ pid: 1, startedAt: Date.now(), host: process.env.HOSTNAME ?? "" }))
+    await fs.writeFile(target, JSON.stringify({ pid: 1, startedAt: Date.now(), host: currentLockHost() }))
 
     await expect(IndexLock.acquire(id, { timeoutMs: 200 })).rejects.toThrow(/timed out/)
 

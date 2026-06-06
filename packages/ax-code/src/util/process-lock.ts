@@ -1,3 +1,4 @@
+import os from "node:os"
 import z from "zod"
 import { parseJsonResult } from "./json-value"
 
@@ -16,7 +17,11 @@ const ProcessLockBodySchema = z
   .passthrough()
 
 export function currentLockHost(): string {
-  return process.env.HOSTNAME ?? ""
+  // os.hostname(), not process.env.HOSTNAME — HOSTNAME is a shell variable that
+  // is not exported into the process env on macOS/Windows (and often Linux),
+  // so reading it returned "" for every process and defeated the cross-host
+  // lock-steal guard (foreign locks compared equal to the local host).
+  return os.hostname()
 }
 
 export function isSameProcessLockHost(body: Pick<ProcessLockBody, "host">): boolean {

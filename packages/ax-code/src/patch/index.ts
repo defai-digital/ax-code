@@ -157,6 +157,14 @@ export namespace Patch {
           } else if (changeLine.startsWith("+")) {
             // Add line - only in new
             newLines.push(changeLine.substring(1))
+          } else {
+            // A line with no " "/"-"/"+" prefix is a context line — most often
+            // a blank line a model emitted without the leading space. Keep it
+            // in both old and new so the match pattern stays intact instead of
+            // silently dropping it (which corrupts seekSequence and makes the
+            // patch fail with "Failed to find expected lines").
+            oldLines.push(changeLine)
+            newLines.push(changeLine)
           }
 
           i++

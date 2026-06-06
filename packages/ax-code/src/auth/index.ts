@@ -322,7 +322,12 @@ export namespace Auth {
               // Re-encrypt legacy entries with proper 32-byte salt,
               // and write a canary so future upgrades can detect
               // crypto runtime changes without attempting decryption.
-              const updated: Record<string, unknown> = { __canary: createCanary() }
+              //
+              // Preserve the original on-disk values first so providers that
+              // failed to decrypt (e.g. a transient install-secret issue or a
+              // partially-written field) are kept as-is and can be recovered on
+              // a later read — this full-file rewrite must not erase them.
+              const updated: Record<string, unknown> = { ...providerData, __canary: createCanary() }
               for (const [key, info] of Object.entries(entries)) {
                 updated[key] = encryptEntry(info as Info)
               }

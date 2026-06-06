@@ -69,6 +69,30 @@ describe("Format", () => {
     })
   })
 
+  test("status() keeps a built-in formatter when an override sets only extensions", async () => {
+    await using tmp = await tmpdir({
+      config: {
+        formatter: {
+          gofmt: { extensions: [".go", ".gofmtextra"] },
+        },
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const statuses = await Format.status()
+        const gofmt = statuses.find((status) => status.name === "gofmt")
+        // The override only set extensions; the built-in command must be
+        // preserved so the override is actually applied (regression: command
+        // was clobbered to [], so the empty-command guard skipped the override
+        // and the added extension was silently ignored).
+        expect(gofmt).toBeDefined()
+        expect(gofmt!.extensions).toContain(".gofmtextra")
+      },
+    })
+  })
+
   test("service initializes without error", async () => {
     await using tmp = await tmpdir()
 

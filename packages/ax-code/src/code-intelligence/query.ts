@@ -102,7 +102,10 @@ export namespace CodeGraphQuery {
         .select()
         .from(CodeNodeTable)
         .where(and(...filters))
-        .orderBy(CodeNodeTable.name)
+        // Match the native path's deterministic ordering (node.rs:
+        // "ORDER BY name, file, range_start_line") so a `limit` truncates to
+        // the same rows whether or not the native addon is enabled.
+        .orderBy(CodeNodeTable.name, CodeNodeTable.file, CodeNodeTable.range_start_line)
       return opts?.limit ? q.limit(opts.limit).all() : q.all()
     })
   }

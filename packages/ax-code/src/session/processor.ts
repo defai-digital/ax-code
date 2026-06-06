@@ -432,7 +432,24 @@ export namespace SessionProcessor {
                     input: toolInput,
                     stepIndex: attempt,
                   })
-                  const match = toolcalls[value.toolCallId]
+                  // Some providers stream `tool-call` without a preceding
+                  // `tool-input-start` (non-streamed tool input). Create the
+                  // tool part on the fly so the running-state transition,
+                  // doom-loop detection, and the later `tool-result` /
+                  // `tool-error` attach to a real part instead of silently
+                  // dropping the tool output.
+                  let match = toolcalls[value.toolCallId]
+                  if (!match) {
+                    const base = partBase()
+                    match = (await Session.updatePart.force({
+                      ...base,
+                      type: "tool",
+                      tool: value.toolName,
+                      callID: value.toolCallId,
+                      state: { status: "pending", input: {}, raw: "" },
+                    })) as MessageV2.ToolPart
+                    toolcalls[value.toolCallId] = match
+                  }
                   if (match) {
                     const part = await Session.updatePart.force({
                       ...match,

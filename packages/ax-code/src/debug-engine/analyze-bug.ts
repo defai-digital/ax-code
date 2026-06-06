@@ -329,9 +329,11 @@ export async function analyzeBugImpl(
           role: "entry",
         })
       }
-      // Re-assign role: the last frame is always "entry", earlier extended
-      // frames become "intermediate".
-      for (let i = baseIdx; i < chain.length - 1; i++) chain[i].role = "intermediate"
+      // Re-assign roles: only the new last frame is "entry"; every frame
+      // before it (except the failure frame at index 0) is "intermediate" —
+      // including the frame that was the entry before the chain was extended
+      // (baseIdx - 1), which the previous loop bound skipped.
+      for (let i = Math.max(1, baseIdx - 1); i < chain.length - 1; i++) chain[i].role = "intermediate"
     }
     if (extraTruncated) truncated = true
   }

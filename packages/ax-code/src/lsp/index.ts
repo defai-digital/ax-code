@@ -387,7 +387,7 @@ export namespace LSP {
 
   async function getClientsDetailed(file: string, opts: ClientOptions = {}): Promise<ClientSelection> {
     const s = await state()
-    const extension = path.parse(file).ext || file
+    const extension = path.parse(file).ext || path.basename(file)
     const request = resolveClientRequest(opts)
     const result: LSPClient.Info[] = []
     let freshSpawnCount = 0
@@ -470,7 +470,7 @@ export namespace LSP {
     matchesServer?: (server: LSPServer.Info) => boolean,
   ) {
     const s = await state()
-    const extension = path.parse(file).ext || file
+    const extension = path.parse(file).ext || path.basename(file)
     const request = resolveClientRequest(opts)
     for (const server of Object.values(s.servers)) {
       if (!serverMatchesClientRequest(server, request)) continue
@@ -531,7 +531,7 @@ export namespace LSP {
         let freshSpawnCount = 0
 
         for (const file of uniqueFiles) {
-          const extension = path.parse(file).ext || file
+          const extension = path.parse(file).ext || path.basename(file)
           for (const server of Object.values(s.servers)) {
             if (!serverMatchesClientRequest(server, request)) continue
             if (!clientPrewarmMatchesServer(server)) continue

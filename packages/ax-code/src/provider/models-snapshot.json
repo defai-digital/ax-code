@@ -492,6 +492,7 @@
         "attachment": false,
         "reasoning": true,
         "tool_call": true,
+        "temperature": true,
         "release_date": "2026-03-11",
         "last_updated": "2026-03-12",
         "modalities": {
@@ -707,6 +708,7 @@
         "attachment": false,
         "reasoning": true,
         "tool_call": true,
+        "temperature": true,
         "release_date": "2025-12-15",
         "last_updated": "2026-01-19",
         "modalities": {
@@ -13990,6 +13992,7 @@
         "reasoning": false,
         "tool_call": false,
         "structured_output": false,
+        "temperature": true,
         "release_date": "2025-08-08",
         "last_updated": "2025-08-08",
         "modalities": {
@@ -14010,10 +14013,12 @@
       "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning": {
         "id": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
         "name": "Nvidia Nemotron 3 Nano Omni",
+        "family": "nemotron",
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
         "structured_output": false,
+        "temperature": true,
         "release_date": "2026-04-28",
         "last_updated": "2026-04-28",
         "modalities": {
@@ -14040,6 +14045,7 @@
         "reasoning": false,
         "tool_call": false,
         "structured_output": false,
+        "temperature": true,
         "release_date": "2025-12-15",
         "last_updated": "2025-12-15",
         "modalities": {
@@ -14065,6 +14071,7 @@
         "reasoning": false,
         "tool_call": false,
         "structured_output": false,
+        "temperature": true,
         "release_date": "2025-08-08",
         "last_updated": "2025-08-08",
         "modalities": {
@@ -14090,6 +14097,7 @@
         "reasoning": false,
         "tool_call": false,
         "structured_output": false,
+        "temperature": true,
         "release_date": "2025-08-18",
         "last_updated": "2025-08-18",
         "modalities": {
@@ -14115,6 +14123,7 @@
         "reasoning": false,
         "tool_call": false,
         "structured_output": false,
+        "temperature": true,
         "release_date": "2025-04-15",
         "last_updated": "2025-04-15",
         "modalities": {
@@ -14135,10 +14144,12 @@
       "nvidia/nemotron-3-super-120b-a12b": {
         "id": "nvidia/nemotron-3-super-120b-a12b",
         "name": "Nvidia Nemotron 3 Super 120B",
+        "family": "nemotron",
         "attachment": false,
         "reasoning": true,
         "tool_call": true,
         "structured_output": false,
+        "temperature": true,
         "release_date": "2026-03-01",
         "last_updated": "2026-03-01",
         "modalities": {
@@ -14159,10 +14170,12 @@
       "nvidia/nemotron-3-super-120b-a12b:thinking": {
         "id": "nvidia/nemotron-3-super-120b-a12b:thinking",
         "name": "Nvidia Nemotron 3 Super 120B Thinking",
+        "family": "nemotron",
         "attachment": false,
         "reasoning": true,
         "tool_call": true,
         "structured_output": false,
+        "temperature": true,
         "release_date": "2026-03-01",
         "last_updated": "2026-03-01",
         "modalities": {
@@ -26948,6 +26961,7 @@
       "nvidia/nemotron-3-nano-30b-a3b": {
         "id": "nvidia/nemotron-3-nano-30b-a3b",
         "name": "NVIDIA: Nemotron 3 Nano 30B A3B",
+        "family": "nemotron",
         "attachment": false,
         "reasoning": true,
         "tool_call": true,
@@ -26971,6 +26985,7 @@
       "nvidia/nemotron-nano-9b-v2": {
         "id": "nvidia/nemotron-nano-9b-v2",
         "name": "NVIDIA: Nemotron Nano 9B V2",
+        "family": "nemotron",
         "attachment": false,
         "reasoning": true,
         "tool_call": true,
@@ -26994,6 +27009,7 @@
       "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free": {
         "id": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
         "name": "NVIDIA: Nemotron 3 Nano Omni (free)",
+        "family": "nemotron",
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
@@ -27020,6 +27036,7 @@
       "nvidia/nemotron-3-super-120b-a12b:free": {
         "id": "nvidia/nemotron-3-super-120b-a12b:free",
         "name": "NVIDIA: Nemotron 3 Super (free)",
+        "family": "nemotron",
         "attachment": false,
         "reasoning": true,
         "tool_call": true,
@@ -27043,6 +27060,7 @@
       "nvidia/llama-3.3-nemotron-super-49b-v1.5": {
         "id": "nvidia/llama-3.3-nemotron-super-49b-v1.5",
         "name": "NVIDIA: Llama 3.3 Nemotron Super 49B V1.5",
+        "family": "nemotron",
         "attachment": false,
         "reasoning": true,
         "tool_call": true,
@@ -27066,6 +27084,7 @@
       "nvidia/nemotron-3-super-120b-a12b": {
         "id": "nvidia/nemotron-3-super-120b-a12b",
         "name": "NVIDIA: Nemotron 3 Super",
+        "family": "nemotron",
         "attachment": false,
         "reasoning": true,
         "tool_call": true,
@@ -58263,6 +58282,7 @@
       "mistralai/mistral-nemotron": {
         "id": "mistralai/mistral-nemotron",
         "name": "mistral-nemotron",
+        "family": "nemotron",
         "attachment": false,
         "reasoning": false,
         "tool_call": true,
@@ -59071,6 +59091,7 @@
       "nvidia/llama-nemotron-rerank-vl-1b-v2": {
         "id": "nvidia/llama-nemotron-rerank-vl-1b-v2",
         "name": "llama-nemotron-rerank-vl-1b-v2",
+        "family": "nemotron",
         "attachment": true,
         "reasoning": false,
         "tool_call": false,
@@ -59143,6 +59164,7 @@
       "nvidia/nemotron-3-content-safety": {
         "id": "nvidia/nemotron-3-content-safety",
         "name": "nemotron-3-content-safety",
+        "family": "nemotron",
         "attachment": false,
         "reasoning": false,
         "tool_call": false,
@@ -59212,6 +59234,7 @@
       "nvidia/llama-nemotron-embed-vl-1b-v2": {
         "id": "nvidia/llama-nemotron-embed-vl-1b-v2",
         "name": "llama-nemotron-embed-vl-1b-v2",
+        "family": "nemotron",
         "attachment": true,
         "reasoning": false,
         "tool_call": false,
@@ -59259,6 +59282,7 @@
       "nvidia/llama-3_1-nemotron-safety-guard-8b-v3": {
         "id": "nvidia/llama-3_1-nemotron-safety-guard-8b-v3",
         "name": "llama-3.1-nemotron-safety-guard-8b-v3",
+        "family": "nemotron",
         "attachment": false,
         "reasoning": false,
         "tool_call": false,
@@ -59426,6 +59450,7 @@
       "nvidia/nemotron-mini-4b-instruct": {
         "id": "nvidia/nemotron-mini-4b-instruct",
         "name": "nemotron-mini-4b-instruct",
+        "family": "nemotron",
         "attachment": false,
         "reasoning": false,
         "tool_call": true,
@@ -59449,6 +59474,7 @@
       "nvidia/nemotron-voicechat": {
         "id": "nvidia/nemotron-voicechat",
         "name": "nemotron-voicechat",
+        "family": "nemotron",
         "attachment": true,
         "reasoning": false,
         "tool_call": true,
@@ -59521,6 +59547,7 @@
       "nvidia/nemotron-content-safety-reasoning-4b": {
         "id": "nvidia/nemotron-content-safety-reasoning-4b",
         "name": "nemotron-content-safety-reasoning-4b",
+        "family": "nemotron",
         "attachment": false,
         "reasoning": true,
         "tool_call": false,
@@ -65772,6 +65799,7 @@
       "nemotron-3-super-120b-a12b": {
         "id": "nemotron-3-super-120b-a12b",
         "name": "Nemotron 3 Super 120B A12B",
+        "family": "nemotron",
         "attachment": false,
         "reasoning": true,
         "tool_call": true,
@@ -100050,6 +100078,7 @@
       "nvidia/Llama-3_1-Nemotron-Ultra-253B-v1": {
         "id": "nvidia/Llama-3_1-Nemotron-Ultra-253B-v1",
         "name": "Llama-3.1-Nemotron-Ultra-253B-v1",
+        "family": "nemotron",
         "attachment": false,
         "reasoning": false,
         "tool_call": true,
@@ -100076,6 +100105,7 @@
       "nvidia/Nemotron-3-Nano-Omni": {
         "id": "nvidia/Nemotron-3-Nano-Omni",
         "name": "Nemotron-3-Nano-Omni",
+        "family": "nemotron",
         "attachment": false,
         "reasoning": true,
         "tool_call": true,
@@ -100102,6 +100132,7 @@
       "nvidia/nemotron-3-super-120b-a12b": {
         "id": "nvidia/nemotron-3-super-120b-a12b",
         "name": "Nemotron-3-Super-120B-A12B",
+        "family": "nemotron",
         "attachment": false,
         "reasoning": true,
         "tool_call": true,
@@ -100128,6 +100159,7 @@
       "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B": {
         "id": "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
         "name": "Nemotron-3-Nano-30B-A3B",
+        "family": "nemotron",
         "attachment": false,
         "reasoning": false,
         "tool_call": true,

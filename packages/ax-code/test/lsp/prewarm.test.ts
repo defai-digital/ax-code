@@ -37,6 +37,17 @@ describe("LSP.selectPrewarmFiles", () => {
       }),
     ).toEqual(["/repo/a.ts", "/repo/b.tsx"])
   })
+
+  test("recognizes extensionless files like Dockerfile by basename", () => {
+    // Regression: `path.parse(file).ext || file` used the whole path as the
+    // language key, so a Dockerfile resolved to "unknown" and was dropped.
+    expect(
+      LSP.selectPrewarmFiles(["/repo/Dockerfile", "/repo/a.ts"], {
+        maxFiles: 5,
+        maxLanguages: 5,
+      }),
+    ).toEqual(["/repo/Dockerfile", "/repo/a.ts"])
+  })
 })
 
 describe("LSP.prewarmFiles", () => {
