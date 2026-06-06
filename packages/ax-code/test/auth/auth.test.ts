@@ -89,6 +89,26 @@ test("all filters invalid auth entries and keeps valid ones", async () => {
   expect(data["broken"]).toBeUndefined()
 })
 
+test("canary migration preserves entries that fail to decode instead of erasing them", async () => {
+  await Bun.write(
+    file,
+    JSON.stringify({
+      anthropic: { type: "api", key: "sk-test" },
+      broken: { type: "api", key: 1 },
+    }),
+  )
+
+  // No __canary present, so the first all() triggers the full-file migration
+  // rewrite. The entry that fails to decode must survive on disk (it may be a
+  // recoverable credential), not be silently deleted.
+  await Auth.all()
+
+  const onDisk = JSON.parse(await fs.readFile(file, "utf-8"))
+  expect(onDisk.__canary).toBeDefined()
+  expect(onDisk.anthropic).toBeDefined()
+  expect(onDisk.broken).toBeDefined()
+})
+
 test("set steals an abandoned auth lock owned by a dead process", async () => {
   await fs.writeFile(
     lockFile,
