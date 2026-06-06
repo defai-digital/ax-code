@@ -672,7 +672,7 @@ export const SessionRoutes = lazy(() =>
         }),
       ),
       async (c) => {
-        const sessionID = parseSessionID(c)
+        const sessionID = await parseCurrentProjectSessionID(c)
         const updates = c.req.valid("json")
 
         let session = await Session.get(sessionID)
@@ -787,7 +787,7 @@ export const SessionRoutes = lazy(() =>
       }),
       validator("param", SESSION_ID_PARAM),
       async (c) => {
-        const sessionID = parseSessionID(c)
+        const sessionID = await parseCurrentProjectSessionID(c)
         await Session.share(sessionID)
         const session = await Session.get(sessionID)
         return c.json(session)
@@ -847,7 +847,7 @@ export const SessionRoutes = lazy(() =>
       }),
       validator("param", SESSION_ID_PARAM),
       async (c) => {
-        const sessionID = parseSessionID(c)
+        const sessionID = await parseCurrentProjectSessionID(c)
         await Session.unshare(sessionID)
         const session = await Session.get(sessionID)
         return c.json(session)
@@ -881,7 +881,7 @@ export const SessionRoutes = lazy(() =>
         }),
       ),
       async (c) => {
-        const sessionID = parseSessionID(c)
+        const sessionID = await parseCurrentProjectSessionID(c)
         const body = c.req.valid("json")
         SessionPrompt.assertNotBusy(sessionID)
         const session = await Session.get(sessionID)
@@ -1304,7 +1304,7 @@ export const SessionRoutes = lazy(() =>
       ),
       validator("json", SessionRevert.RevertInput.omit({ sessionID: true })),
       async (c) => {
-        const sessionID = parseSessionID(c)
+        const sessionID = await parseCurrentProjectSessionID(c)
         SessionPrompt.assertNotBusy(sessionID)
         log.info("revert", c.req.valid("json"))
         const session = await SessionRevert.revert({
@@ -1339,7 +1339,7 @@ export const SessionRoutes = lazy(() =>
         }),
       ),
       async (c) => {
-        const sessionID = parseSessionID(c)
+        const sessionID = await parseCurrentProjectSessionID(c)
         SessionPrompt.assertNotBusy(sessionID)
         const session = await SessionRevert.unrevert({ sessionID })
         return c.json(session)
