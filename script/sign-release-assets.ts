@@ -8,6 +8,7 @@ import path from "path"
 import { parseArgs } from "util"
 
 export const ROOT = path.resolve(import.meta.dir, "..")
+export const AX_CODE_MINISIGN_PUBLIC_KEY = "RWS6la0s0/o4gdFUZ0Bk/BkrnN8qC2CFOfLXVP5OtQTrvm1BQeOvXgao"
 
 export type SignReleaseOptions = {
   distDir: string
@@ -146,6 +147,24 @@ function requireRegularFile(file: string, label: string) {
   return stat
 }
 
+function readMinisignPublicKey(file: string) {
+  return fs
+    .readFileSync(file, "utf8")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find((line) => line.startsWith("RW"))
+}
+
+function requirePinnedPublicKey(file: string) {
+  const publicKey = readMinisignPublicKey(file)
+  if (publicKey !== AX_CODE_MINISIGN_PUBLIC_KEY) {
+    throw new Error(
+      `Minisign public key does not match the pinned AX Code release key: ${file}. ` +
+        "Set AX_CODE_MINISIGN_PUBLIC_KEY or --public-key to the matching key file.",
+    )
+  }
+}
+
 export function secretKeyPermissionIssue(file: string, platform: NodeJS.Platform = process.platform) {
   if (platform === "win32") return undefined
   const stat = requireRegularFile(file, "Secret key")
@@ -212,6 +231,7 @@ async function main() {
   }
 
   requireRegularFile(options.publicKey, "Public key")
+  requirePinnedPublicKey(options.publicKey)
   if (!options.verifyOnly) requireSecretKey(options.secretKey)
 
   for (const asset of assets) {

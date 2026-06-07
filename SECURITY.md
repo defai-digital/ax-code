@@ -68,6 +68,16 @@ The encryption key is derived from local machine attributes (hostname, platform,
 
 MCP OAuth tokens, client secrets, and account access/refresh tokens are also encrypted at rest using the same mechanism. Non-sensitive metadata (server URLs, expiry timestamps, email, account IDs) remains in plaintext.
 
+### Release Artifact Verification
+
+The shell installer verifies downloaded GitHub release archives with minisign before extraction. The pinned AX Code release public key is:
+
+```text
+RWS6la0s0/o4gdFUZ0Bk/BkrnN8qC2CFOfLXVP5OtQTrvm1BQeOvXgao
+```
+
+The installer downloads the matching `.minisig` asset for the selected archive and fails closed when `minisign` is unavailable or verification fails. Set `AX_CODE_SKIP_MINISIGN_VERIFY=1` only when you intentionally accept an unverifiable release download.
+
 ---
 
 ## Scope

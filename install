@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 APP=ax-code
+AX_CODE_MINISIGN_PUBLIC_KEY='RWS6la0s0/o4gdFUZ0Bk/BkrnN8qC2CFOfLXVP5OtQTrvm1BQeOvXgao'
 
 MUTED='\033[0;2m'
 RED='\033[0;31m'
@@ -178,6 +179,12 @@ else
             echo -e "${RED}Error: 'unzip' is required but not installed.${NC}"
             exit 1
         fi
+    fi
+
+    if [ "${AX_CODE_SKIP_MINISIGN_VERIFY:-}" != "1" ] && ! command -v minisign >/dev/null 2>&1; then
+        echo -e "${RED}Error: 'minisign' is required to verify AX Code release artifacts.${NC}"
+        echo -e "${MUTED}Install minisign, or set AX_CODE_SKIP_MINISIGN_VERIFY=1 to bypass signature verification.${NC}"
+        exit 1
     fi
 
     if [ -z "$requested_version" ]; then
@@ -426,6 +433,8 @@ download_and_install() {
         curl -# -L -o "$tmp_dir/$filename" "$url"
     fi
 
+    verify_downloaded_archive "$tmp_dir/$filename" "$url.minisig" "$tmp_dir/$filename.minisig"
+
     if [ "$os" = "linux" ]; then
         tar -xzf "$tmp_dir/$filename" -C "$tmp_dir"
     else
@@ -435,6 +444,21 @@ download_and_install() {
     mv "$tmp_dir/ax-code" "$INSTALL_DIR"
     chmod 755 "${INSTALL_DIR}/ax-code"
     rm -rf "$tmp_dir"
+}
+
+verify_downloaded_archive() {
+    local archive_path="$1"
+    local signature_url="$2"
+    local signature_path="$3"
+
+    if [ "${AX_CODE_SKIP_MINISIGN_VERIFY:-}" = "1" ]; then
+        print_message warning "${ORANGE}Warning:${NC} skipping minisign verification because AX_CODE_SKIP_MINISIGN_VERIFY=1"
+        return 0
+    fi
+
+    print_message info "${MUTED}Verifying release signature${NC}"
+    curl -fsSL -o "$signature_path" "$signature_url"
+    minisign -Vm "$archive_path" -x "$signature_path" -P "$AX_CODE_MINISIGN_PUBLIC_KEY" >/dev/null
 }
 
 install_from_binary() {

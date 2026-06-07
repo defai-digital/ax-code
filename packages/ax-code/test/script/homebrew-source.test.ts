@@ -71,7 +71,9 @@ describe("distribution support guardrails", () => {
   test("default homebrew update separates release-read and tap-write tokens", async () => {
     const text = await Bun.file(homebrewDefaultScript).text()
     expect(text).toContain('RELEASE_READ_TOKEN="${GH_TOKEN:-}"')
-    expect(text).toContain('TAP_AUTH_TOKEN="${TAP_TOKEN:-${GH_TOKEN:-}}"')
+    expect(text).toContain('TAP_AUTH_TOKEN="${TAP_TOKEN:-}"')
+    expect(text).toContain('HOMEBREW_TAP_TOKEN is not configured; skipping Homebrew tap update')
+    expect(text).toContain('TAP_AUTH_TOKEN="${GH_TOKEN:-}"')
     expect(text).toContain('export GH_TOKEN="${RELEASE_READ_TOKEN}"')
     expect(text).toContain('export GH_TOKEN="${TAP_AUTH_TOKEN}"')
     expect(text.indexOf('export GH_TOKEN="${RELEASE_READ_TOKEN}"')).toBeLessThan(

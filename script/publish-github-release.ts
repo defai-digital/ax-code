@@ -5,7 +5,7 @@ import fs from "fs"
 import os from "os"
 import path from "path"
 import { parseArgs } from "util"
-import { expandHome, secretKeyPermissionIssue } from "./sign-release-assets"
+import { AX_CODE_MINISIGN_PUBLIC_KEY, expandHome, secretKeyPermissionIssue } from "./sign-release-assets"
 
 export const ROOT = path.resolve(import.meta.dir, "..")
 
@@ -206,6 +206,14 @@ function ensurePreflight(options: PublishGithubReleaseOptions) {
     const secretKey = path.join(options.keyDir, "ax-code.sec")
     const publicKey = path.join(options.keyDir, "ax-code.pub")
     if (!fs.existsSync(publicKey)) throw new Error(`Minisign public key not found: ${publicKey}`)
+    const actualPublicKey = fs
+      .readFileSync(publicKey, "utf8")
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .find((line) => line.startsWith("RW"))
+    if (actualPublicKey !== AX_CODE_MINISIGN_PUBLIC_KEY) {
+      throw new Error(`Minisign public key does not match the pinned AX Code release key: ${publicKey}`)
+    }
     const issue = secretKeyPermissionIssue(secretKey)
     if (issue) throw new Error(issue)
   }

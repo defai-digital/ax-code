@@ -8,7 +8,8 @@
 # Inputs (env):
 #   GITHUB_REF_NAME — release tag (e.g. v5.5.1)
 #   GH_TOKEN        — read access to the ax-code release assets
-#   TAP_TOKEN       — write access to the Homebrew tap repo (falls back to GH_TOKEN)
+#   TAP_TOKEN       — write access to the Homebrew tap repo. Local manual runs
+#                    may fall back to GH_TOKEN when it has tap write access.
 set -euo pipefail
 
 VERSION="${GITHUB_REF_NAME#v}"
@@ -16,14 +17,21 @@ TAG="v${VERSION}"
 RELEASE_BASE="https://github.com/defai-digital/ax-code/releases/download/${TAG}"
 SOURCE_REPO="${GITHUB_REPOSITORY:-defai-digital/ax-code}"
 RELEASE_READ_TOKEN="${GH_TOKEN:-}"
-TAP_AUTH_TOKEN="${TAP_TOKEN:-${GH_TOKEN:-}}"
+TAP_AUTH_TOKEN="${TAP_TOKEN:-}"
 
 if [ -z "${RELEASE_READ_TOKEN}" ]; then
   echo "::error::GH_TOKEN is required to read release assets from ${SOURCE_REPO}"
   exit 1
 fi
 if [ -z "${TAP_AUTH_TOKEN}" ]; then
-  echo "::error::TAP_TOKEN or GH_TOKEN is required to update the Homebrew tap"
+  if [ "${GITHUB_ACTIONS:-}" = "true" ]; then
+    echo "::warning::HOMEBREW_TAP_TOKEN is not configured; skipping Homebrew tap update"
+    exit 0
+  fi
+  TAP_AUTH_TOKEN="${GH_TOKEN:-}"
+fi
+if [ -z "${TAP_AUTH_TOKEN}" ]; then
+  echo "::error::TAP_TOKEN or a tap-write GH_TOKEN is required to update the Homebrew tap"
   exit 1
 fi
 # Keep release downloads on the source-repo token. The tap write token may be
