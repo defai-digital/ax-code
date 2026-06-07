@@ -786,7 +786,10 @@ export namespace MCP {
     if (!trust.trusted) {
       const s = await state()
       s.status[name] = needsTrustStatus(trust)
-      delete s.clients[name]
+      if (s.clients[name]) {
+        await closeIfPossible(s.clients[name], name, "trust revoked")
+        delete s.clients[name]
+      }
       return
     }
 
@@ -811,6 +814,14 @@ export namespace MCP {
         await closeIfPossible(existingClient, name, "disconnecting existing client")
       }
       s.clients[name] = result.mcpClient
+      result.mcpClient.onclose = () => {
+        void state().then((s) => {
+          if (s.clients[name] === result.mcpClient) {
+            delete s.clients[name]
+            s.status[name] = { status: "failed", error: "Server closed the connection" }
+          }
+        })
+      }
     }
   }
 

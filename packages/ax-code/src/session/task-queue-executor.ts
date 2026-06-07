@@ -135,20 +135,27 @@ function startLockKeys(item: TaskQueue.Info, execution: QueueExecution): string[
 
 async function executeClaimedItem(item: TaskQueue.Info, execution: QueueExecution) {
   try {
-    await execution.run()
-    await finishIfRunning(item, { status: "completed" })
-  } catch (error) {
-    DiagnosticLog.recordProcess("server.taskQueueTaskFailed", {
-      taskID: item.id,
-      sessionID: item.sessionID,
-      kind: item.kind,
-      error,
-    })
-    await finishIfRunning(item, {
-      status: "failed",
-      error: NamedError.message(error),
-    })
-    log.error("task queue item execution failed", { taskID: item.id, sessionID: item.sessionID, error })
+    // Keep execution.run() and finishIfRunning("completed") in separate try
+    // blocks. If they shared one block a DB error from finishIfRunning would
+    // fall into the catch and mark a successfully-run task as "failed".
+    let succeeded = false
+    try {
+      await execution.run()
+      succeeded = true
+    } catch (error) {
+      DiagnosticLog.recordProcess("server.taskQueueTaskFailed", {
+        taskID: item.id,
+        sessionID: item.sessionID,
+        kind: item.kind,
+        error,
+      })
+      await finishIfRunning(item, {
+        status: "failed",
+        error: NamedError.message(error),
+      })
+      log.error("task queue item execution failed", { taskID: item.id, sessionID: item.sessionID, error })
+    }
+    if (succeeded) await finishIfRunning(item, { status: "completed" })
   } finally {
     if (item.sessionID) {
       await TaskQueueExecutor.drainNextForSession(item.sessionID).catch((error) => {
@@ -213,8 +220,16 @@ async function drainNextWorkflowPhaseItem(item: TaskQueue.Info) {
   if (!workflow || maxParallel === undefined) return
   if ((await activeWorkflowPhaseItems(workflow, item.id)).length >= maxParallel) return
 
-  const queued = await TaskQueue.list({ status: "queued", limit: 100 })
-  const next = queued.filter((candidate) => sameWorkflowPhase(candidate, workflow)).sort(compareQueueItems)[0]
+  // Include waiting_for_idle items: a task that was blocked on idle when
+  // start() ran stays in waiting_for_idle, invisible to a queued-only query.
+  // When a phase slot opens it would never be retried otherwise.
+  const [queued, waitingForIdle] = await Promise.all([
+    TaskQueue.list({ status: "queued", limit: 100 }),
+    TaskQueue.list({ status: "waiting_for_idle", limit: 100 }),
+  ])
+  const next = [...queued, ...waitingForIdle]
+    .filter((candidate) => sameWorkflowPhase(candidate, workflow))
+    .sort(compareQueueItems)[0]
   if (!next) return
   await TaskQueueExecutor.start(next)
 }

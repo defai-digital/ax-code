@@ -448,7 +448,16 @@ export namespace Provider {
         )
           delete provider.models[modelID]
 
-        model.variants = mapValues(ProviderTransform.variants(model), (v) => v)
+        try {
+          model.variants = mapValues(ProviderTransform.variants(model), (v) => v)
+        } catch (variantError) {
+          log.warn("provider variant transform failed, skipping variants for model", {
+            modelID,
+            providerID,
+            error: variantError,
+          })
+          model.variants = {}
+        }
 
         // Filter out disabled variants from config
         const configVariants = configProvider?.models?.[modelID]?.variants
@@ -1209,7 +1218,13 @@ export namespace Provider {
       return getModel(parsed.providerID, parsed.modelID)
     }
 
-    const provider = await state().then((state) => state.providers[providerID])
+    // Await discovery so models populated solely by discovery loaders (e.g. a
+    // local Ollama endpoint) are visible before the priority scan runs.
+    // getModel() and defaultModel() both do this; omitting it here caused
+    // getSmallModel() to return undefined during the startup discovery window.
+    const s = await state()
+    await s.discovery
+    const provider = s.providers[providerID]
     if (provider) {
       let priority = ["gemini-3-flash", "gemini-flash", "llama-3.1-8b", "llama3-8b"]
       if (providerID.startsWith("zai")) {

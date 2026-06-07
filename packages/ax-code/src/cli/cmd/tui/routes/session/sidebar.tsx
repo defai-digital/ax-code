@@ -1,5 +1,5 @@
 import { useSync } from "@tui/context/sync"
-import { createMemo, type Accessor, For, Match, Show, Switch } from "solid-js"
+import { createMemo, createEffect, type Accessor, For, Match, Show, Switch } from "solid-js"
 import { useTerminalDimensions } from "@opentui/solid"
 import { createStore } from "solid-js/store"
 import { useTheme } from "../../context/theme"
@@ -165,6 +165,14 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
     dre: true,
     workflows: true,
     activity: true,
+  })
+
+  // When the queue drains to zero, reset the expanded flag so the section
+  // opens automatically the next time items are enqueued. Without this, a user
+  // who collapsed a queue of 3+ items would see an empty collapsed section on
+  // the next enqueue and have to manually expand it again.
+  createEffect(() => {
+    if (queued().length === 0) setExpanded("queued", true)
   })
 
   // Removing a queued follow-up is purely client-side: the item never reached
