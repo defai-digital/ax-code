@@ -86,6 +86,19 @@ security add-generic-password -U -a ax-code-release -s ax-code-minisign -w
 
 Release tooling reads that Keychain item automatically when `AX_CODE_MINISIGN_PASSWORD` is not set.
 
+The tag-driven GitHub release workflow signs archives before upload. It requires
+these repository secrets:
+
+```text
+AX_CODE_MINISIGN_SECRET_KEY_B64
+AX_CODE_MINISIGN_PASSWORD
+```
+
+`AX_CODE_MINISIGN_SECRET_KEY_B64` must be the base64-encoded contents of the
+encrypted `ax-code.sec` minisign secret key. The workflow writes it to a
+temporary `0600` key file, verifies the pinned public key, signs each release
+archive, and uploads the matching `.minisig` assets with the archives.
+
 ---
 
 ## Scope

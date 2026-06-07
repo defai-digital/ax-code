@@ -97,6 +97,30 @@ describe("distribution support guardrails", () => {
     expect(text).not.toContain("gh workflow run install-matrix-smoke.yml")
   })
 
+  test("release workflow signs archives with minisign before uploading assets", async () => {
+    const text = await Bun.file(releaseWorkflow).text()
+    const publishJob = text.match(/\n  publish:[\s\S]*?(?=\n  homebrew:|$)/)
+    expect(publishJob).not.toBeNull()
+    const job = publishJob![0]
+    expect(job).toContain("Setup Ax-code JS toolchain")
+    expect(job).toContain("Install minisign")
+    expect(job).toContain("sudo apt-get install -y minisign")
+    expect(job).toContain("Prepare minisign release key")
+    expect(job).toContain("AX_CODE_MINISIGN_SECRET_KEY_B64")
+    expect(job).toContain("secrets.AX_CODE_MINISIGN_SECRET_KEY_B64")
+    expect(job).toContain("chmod 600")
+    expect(job).toContain("RWS6la0s0/o4gdFUZ0Bk/BkrnN8qC2CFOfLXVP5OtQTrvm1BQeOvXgao")
+    expect(job).toContain("Sign release assets")
+    expect(job).toContain("secrets.AX_CODE_MINISIGN_PASSWORD")
+    expect(job).toContain("bun run script/sign-release-assets.ts --dist-dir packages/ax-code/dist")
+    expect(job).toContain('missing minisign signature for ${archive}')
+    expect(job).toContain("shopt -s nullglob")
+    expect(job).toContain("no release assets found to upload")
+    expect(job).not.toContain("gh release upload \"$TAG\" \"$f\" --clobber || true")
+    expect(job.indexOf("Sign release assets")).toBeLessThan(job.indexOf("Create GitHub release"))
+    expect(job.indexOf("Sign release assets")).toBeLessThan(job.indexOf("Upload release assets"))
+  })
+
   test("release workflow auto-publishes the Homebrew tap but never npm", async () => {
     const text = await Bun.file(releaseWorkflow).text()
     // npm/source distribution stays retired.

@@ -152,11 +152,57 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Setup Ax-code JS toolchain
+        uses: ./.github/actions/setup-ax-code-toolchain
+        with:
+          checkout: "false"
+
       - name: Download all build artifacts
         uses: actions/download-artifact@v8
         with:
           path: packages/ax-code/dist/
           merge-multiple: true
+
+      - name: Install minisign
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y minisign
+
+      - name: Prepare minisign release key
+        env:
+          AX_CODE_MINISIGN_SECRET_KEY_B64: ${{ secrets.AX_CODE_MINISIGN_SECRET_KEY_B64 }}
+        run: |
+          if [ -z "$AX_CODE_MINISIGN_SECRET_KEY_B64" ]; then
+            echo "::error::AX_CODE_MINISIGN_SECRET_KEY_B64 is required to sign release assets"
+            exit 1
+          fi
+          KEY_DIR="$RUNNER_TEMP/ax-code-minisign"
+          mkdir -p "$KEY_DIR"
+          printf '%s' "$AX_CODE_MINISIGN_SECRET_KEY_B64" | base64 -d > "$KEY_DIR/ax-code.sec"
+          chmod 600 "$KEY_DIR/ax-code.sec"
+          cat > "$KEY_DIR/ax-code.pub" <<'PUB'
+          untrusted comment: minisign public key 8138FAD32CAD95BA
+          RWS6la0s0/o4gdFUZ0Bk/BkrnN8qC2CFOfLXVP5OtQTrvm1BQeOvXgao
+          PUB
+          echo "AX_CODE_MINISIGN_KEY_DIR=$KEY_DIR" >> "$GITHUB_ENV"
+
+      - name: Sign release assets
+        env:
+          AX_CODE_MINISIGN_PASSWORD: ${{ secrets.AX_CODE_MINISIGN_PASSWORD }}
+        run: |
+          if [ -z "$AX_CODE_MINISIGN_PASSWORD" ]; then
+            echo "::error::AX_CODE_MINISIGN_PASSWORD is required to sign release assets"
+            exit 1
+          fi
+          bun run script/sign-release-assets.ts --dist-dir packages/ax-code/dist
+          shopt -s nullglob
+          archives=(packages/ax-code/dist/*.tar.gz packages/ax-code/dist/*.zip)
+          for archive in "${archives[@]}"; do
+            if [ ! -f "${archive}.minisig" ]; then
+              echo "::error::missing minisign signature for ${archive}"
+              exit 1
+            fi
+          done
 
       - name: Create GitHub release
         env:
@@ -194,8 +240,14 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="${{ github.ref_name }}"
-          for f in packages/ax-code/dist/*.tar.gz packages/ax-code/dist/*.tar.gz.minisig packages/ax-code/dist/*.zip packages/ax-code/dist/*.zip.minisig; do
-            [ -f "$f" ] && gh release upload "$TAG" "$f" --clobber || true
+          shopt -s nullglob
+          files=(packages/ax-code/dist/*.tar.gz packages/ax-code/dist/*.tar.gz.minisig packages/ax-code/dist/*.zip packages/ax-code/dist/*.zip.minisig)
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "::error::no release assets found to upload"
+            exit 1
+          fi
+          for f in "${files[@]}"; do
+            gh release upload "$TAG" "$f" --clobber
           done
 
   homebrew:
