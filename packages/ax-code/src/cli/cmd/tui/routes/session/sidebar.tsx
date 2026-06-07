@@ -183,11 +183,15 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
   }
 
   // Send a queued follow-up immediately. Dispatch first, then remove on success
-  // so a failed send keeps the item in the queue rather than losing it.
+  // so a failed send keeps the item in the queue rather than losing it. A `false`
+  // result means another dispatch is in flight — leave it queued without error.
   async function sendQueuedNow(id: string) {
     const item = queued().find((entry) => entry.id === id)
     if (!item) return
-    const dispatched = await dispatchFollowUp(sdk, props.sessionID, item).catch((error) => {
+    try {
+      const dispatched = await dispatchFollowUp(sdk, props.sessionID, item)
+      if (dispatched) removeQueuedFollowUp(props.sessionID, id)
+    } catch (error) {
       log.warn("send queued follow-up failed", {
         command: "tui.sidebar.queue.send",
         status: "error",
@@ -195,10 +199,8 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
         id,
         error,
       })
-      return false
-    })
-    if (dispatched) removeQueuedFollowUp(props.sessionID, id)
-    else toast.show({ message: "Failed to send queued message", variant: "error" })
+      toast.show({ message: "Failed to send queued message", variant: "error" })
+    }
   }
 
   const activity = createMemo(() => {

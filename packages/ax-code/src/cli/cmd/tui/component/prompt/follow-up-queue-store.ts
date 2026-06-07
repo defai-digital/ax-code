@@ -96,8 +96,12 @@ type PromptAsyncBody = Parameters<SdkContext["client"]["session"]["promptAsync"]
 
 /**
  * Dispatch a single follow-up to the server via the normal async prompt route.
- * Concurrent dispatches for the same session are skipped (returns false). The
- * caller removes the item from the queue when this resolves true.
+ *
+ * Returns `true` when the item was dispatched (caller removes it from the queue)
+ * and `false` when the dispatch was skipped because another dispatch for the
+ * same session is already in flight (caller leaves it queued, no error). A real
+ * server/transport failure throws so callers can surface it — distinguishing a
+ * harmless skip from an actual failure.
  */
 export async function dispatchFollowUp(sdk: SdkContext, sessionID: string, item: QueuedFollowUp): Promise<boolean> {
   if (inflight.has(sessionID)) return false
@@ -111,8 +115,10 @@ export async function dispatchFollowUp(sdk: SdkContext, sessionID: string, item:
       variant: item.variant,
       parts: item.parts as PromptAsyncBody["parts"],
     })
-    if (result && typeof result === "object" && "error" in result && (result as { error?: unknown }).error) {
-      return false
+    const error = result && typeof result === "object" ? (result as { error?: unknown }).error : undefined
+    if (error) {
+      const detail = (error as { data?: { message?: string }; message?: string })?.data?.message
+      throw new Error(detail ?? (error as { message?: string })?.message ?? "prompt_async failed")
     }
     return true
   } finally {

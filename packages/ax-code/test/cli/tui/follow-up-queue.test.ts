@@ -126,10 +126,9 @@ describe("follow-up-queue-store", () => {
     clearFollowUpQueue(sid)
   })
 
-  test("dispatchFollowUp returns false on a server error result", async () => {
-    const sdk = { client: { session: { promptAsync: async () => ({ error: { message: "boom" } }) } } } as any
-    const ok = await dispatchFollowUp(sdk, "ses_err", item("1"))
-    expect(ok).toBe(false)
+  test("dispatchFollowUp throws on a server error result (so callers can surface it)", async () => {
+    const sdk = { client: { session: { promptAsync: async () => ({ error: { data: { message: "boom" } } }) } } } as any
+    expect(dispatchFollowUp(sdk, "ses_err", item("1"))).rejects.toThrow("boom")
   })
 
   test("edit channel carries a pending request and clears", () => {

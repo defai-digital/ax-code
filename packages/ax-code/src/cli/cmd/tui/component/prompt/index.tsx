@@ -36,7 +36,7 @@ import { useSDK } from "@tui/context/sdk"
 import { useRoute } from "@tui/context/route"
 import { useSync } from "@tui/context/sync"
 import { MessageID, PartID, SessionID } from "@/session/schema"
-import { shouldDrainOnIdle } from "./follow-up-queue"
+import { isQueueableStatus, shouldDrainOnIdle } from "./follow-up-queue"
 import {
   clearFollowUpEdit,
   dispatchFollowUp,
@@ -238,10 +238,20 @@ export function Prompt(props: PromptProps) {
       if (!head) return
       void dispatchFollowUp(sdk, sessionID, head)
         .then((dispatched) => {
+          // `false` means another dispatch is already in flight — leave the item
+          // queued for the next idle transition rather than flagging an error.
           if (dispatched) removeQueuedFollowUp(sessionID, head.id)
         })
         .catch((error) => {
-          log.warn("follow-up queue drain failed", { sessionID, error })
+          log.warn("follow-up queue drain failed", {
+            command: "tui.prompt.queue.drain",
+            status: "error",
+            sessionID,
+            error,
+          })
+          // Keep the item queued (it stays visible with send-now/edit) and let
+          // the user know the auto-send did not go through.
+          toast.show({ message: "Failed to send queued message", variant: "error" })
         })
     })
   })
@@ -1219,7 +1229,7 @@ export function Prompt(props: PromptProps) {
       currentMode === "normal" &&
       !isKnownSlashCommand &&
       props.sessionID &&
-      status().type !== "idle"
+      isQueueableStatus(status().type)
     ) {
       enqueueFollowUp(props.sessionID, {
         parts: [
