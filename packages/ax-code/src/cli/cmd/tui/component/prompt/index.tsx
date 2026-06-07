@@ -41,8 +41,10 @@ import {
   clearFollowUpEdit,
   enqueueFollowUp,
   followUpEditRequest,
+  forgetFollowUpSession,
   markFollowUpAbort,
   reconcileFollowUpDrain,
+  removeQueuedFollowUp,
 } from "./follow-up-queue-store"
 import { createStore, produce } from "solid-js/store"
 import { useKeybind } from "@tui/context/keybind"
@@ -433,11 +435,33 @@ export function Prompt(props: PromptProps) {
       // non-matching instance could clear the request before the right one
       // applies it, silently dropping the user's edited text.
       if (request.sessionID !== props.sessionID) return
+      // Remove from the queue only once the text actually lands in the composer,
+      // so a request that arrives while the input is unavailable doesn't lose
+      // the message (it stays queued and can be edited again).
       if (input && !input.isDestroyed) {
         input.insertText(request.text)
         requestInputLayoutRefresh({ gotoBufferEnd: true })
+        removeQueuedFollowUp(request.sessionID, request.id)
       }
       clearFollowUpEdit()
+    })
+  })
+
+  // Forget client follow-up state for sessions that no longer exist so queues,
+  // drain baselines, and abort marks don't leak (and a recreated id can't
+  // inherit a stale baseline). Runs in every Prompt instance; forget is
+  // idempotent. Skip pruning when the list is empty — that is almost always a
+  // transient bootstrap/reconnect blip, and forgetting then would drop live
+  // queues for sessions that are about to reappear.
+  let knownFollowUpSessions = new Set<string>()
+  createEffect(() => {
+    const current = new Set((sync.data.session ?? []).map((s) => s.id))
+    untrack(() => {
+      if (current.size === 0) return
+      for (const id of knownFollowUpSessions) {
+        if (!current.has(id)) forgetFollowUpSession(id)
+      }
+      knownFollowUpSessions = current
     })
   })
 
