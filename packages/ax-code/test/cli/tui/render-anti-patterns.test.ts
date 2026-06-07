@@ -512,9 +512,12 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(queuedBlock).toContain("width={QUEUED_DELETE_ICON_WIDTH}")
     expect(queuedBlock).toContain("dropQueued(item.id)")
     expect(queuedBlock).toContain("<text style={{ fg: theme.warning }}>{QUEUED_DELETE_ICON}</text>")
-    // The send-now control is also a fixed-width box so wide glyphs stay aligned.
+    // The send-now and edit controls are also fixed-width boxes so wide glyphs
+    // stay aligned.
     expect(queuedBlock).toContain("width={QUEUED_SEND_ICON_WIDTH}")
     expect(queuedBlock).toContain("void sendQueuedNow(item.id)")
+    expect(queuedBlock).toContain("width={QUEUED_EDIT_ICON_WIDTH}")
+    expect(queuedBlock).toContain("editQueued(item.id)")
     // Click handlers stay on the width-boxed containers, never on <text> (wide
     // emoji measured inside an interactive text node misaligns the row).
     expect(queuedBlock).not.toMatch(/<text[^>]*onMouseUp/)

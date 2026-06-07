@@ -10,14 +10,17 @@ import {
   type QueuedFollowUp,
 } from "../../../src/cli/cmd/tui/component/prompt/follow-up-queue"
 import {
+  clearFollowUpEdit,
   clearFollowUpQueue,
   dispatchFollowUp,
   enqueueFollowUp,
+  followUpEditRequest,
   followUpQueue,
   hasRecentFollowUpAbort,
   markFollowUpAbort,
   peekQueuedFollowUp,
   removeQueuedFollowUp,
+  requestFollowUpEdit,
 } from "../../../src/cli/cmd/tui/component/prompt/follow-up-queue-store"
 
 const item = (id: string, text = "hi"): QueuedFollowUp =>
@@ -127,6 +130,15 @@ describe("follow-up-queue-store", () => {
     const sdk = { client: { session: { promptAsync: async () => ({ error: { message: "boom" } }) } } } as any
     const ok = await dispatchFollowUp(sdk, "ses_err", item("1"))
     expect(ok).toBe(false)
+  })
+
+  test("edit channel carries a pending request and clears", () => {
+    clearFollowUpEdit()
+    expect(followUpEditRequest()).toBeUndefined()
+    requestFollowUpEdit("ses_edit", "revise me")
+    expect(followUpEditRequest()).toEqual({ sessionID: "ses_edit", text: "revise me" })
+    clearFollowUpEdit()
+    expect(followUpEditRequest()).toBeUndefined()
   })
 
   test("dispatchFollowUp skips a concurrent dispatch for the same session", async () => {

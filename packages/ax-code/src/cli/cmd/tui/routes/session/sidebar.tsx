@@ -19,7 +19,13 @@ import { SessionRollbackView } from "./rollback"
 import { SessionSemanticDiff } from "@/session/semantic-diff"
 import { Todo } from "@/session/todo"
 import { footerSessionStatusOrIdle, footerSessionStatusView } from "./footer-view-model"
-import { dispatchFollowUp, followUpQueue, removeQueuedFollowUp } from "../../component/prompt/follow-up-queue-store"
+import { followUpText } from "../../component/prompt/follow-up-queue"
+import {
+  dispatchFollowUp,
+  followUpQueue,
+  removeQueuedFollowUp,
+  requestFollowUpEdit,
+} from "../../component/prompt/follow-up-queue-store"
 import { computeSidebarWidth } from "./layout"
 import { sidebarGraphIndexStatusText } from "./sidebar-index-view-model"
 import { Locale } from "@/util/locale"
@@ -50,6 +56,8 @@ const QUEUED_DELETE_ICON = "🗑️"
 const QUEUED_DELETE_ICON_WIDTH = 2
 const QUEUED_SEND_ICON = "▸"
 const QUEUED_SEND_ICON_WIDTH = 2
+const QUEUED_EDIT_ICON = "✎"
+const QUEUED_EDIT_ICON_WIDTH = 2
 const QUEUE_SNIPPET_MAX = 48
 
 function queuedSnippet(parts: { type: string; text?: string; synthetic?: boolean; ignored?: boolean }[]) {
@@ -163,6 +171,15 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
   // the server, so dropping it from the buffer guarantees it will not run.
   function dropQueued(id: string) {
     removeQueuedFollowUp(props.sessionID, id)
+  }
+
+  // Editing pops the follow-up out of the queue and back into the composer so
+  // the user can revise and resubmit it.
+  function editQueued(id: string) {
+    const item = queued().find((entry) => entry.id === id)
+    if (!item) return
+    removeQueuedFollowUp(props.sessionID, id)
+    requestFollowUpEdit(props.sessionID, followUpText(item))
   }
 
   // Send a queued follow-up immediately. Dispatch first, then remove on success
@@ -524,6 +541,15 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
                     <For each={queued()}>
                       {(item) => (
                         <box flexDirection="row" gap={1}>
+                          <box
+                            flexShrink={0}
+                            width={QUEUED_EDIT_ICON_WIDTH}
+                            onMouseUp={() => {
+                              editQueued(item.id)
+                            }}
+                          >
+                            <text style={{ fg: theme.text }}>{QUEUED_EDIT_ICON}</text>
+                          </box>
                           <box
                             flexShrink={0}
                             width={QUEUED_SEND_ICON_WIDTH}

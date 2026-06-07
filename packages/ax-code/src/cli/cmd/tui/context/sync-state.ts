@@ -47,6 +47,11 @@ export interface SyncStoreState {
   session_error: Record<string, unknown>
   session_risk: Record<string, SyncedSessionRisk>
   session_goal: Record<string, SessionGoal.PublicInfo | null>
+  // Durable server-owned task-queue items (workflow children, scheduled tasks,
+  // automations). Intentionally retained as a projection for the future
+  // workflow/queue supervision panel (ADR-025). It is deliberately NOT the
+  // source for the interactive "Queued" sidebar section, which uses the
+  // client-owned ephemeral follow-up queue instead (ADR-028).
   task_queue: SyncTaskQueueItem[]
   session_diff: Record<string, Snapshot.FileDiff[]>
   todo: Record<string, Todo[]>

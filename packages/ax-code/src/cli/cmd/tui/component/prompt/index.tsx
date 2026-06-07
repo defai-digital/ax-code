@@ -38,8 +38,10 @@ import { useSync } from "@tui/context/sync"
 import { MessageID, PartID, SessionID } from "@/session/schema"
 import { shouldDrainOnIdle } from "./follow-up-queue"
 import {
+  clearFollowUpEdit,
   dispatchFollowUp,
   enqueueFollowUp,
+  followUpEditRequest,
   hasRecentFollowUpAbort,
   markFollowUpAbort,
   peekQueuedFollowUp,
@@ -426,6 +428,20 @@ export function Prompt(props: PromptProps) {
     requestInputLayoutRefresh({ gotoBufferEnd: true })
   })
   onCleanup(() => unsubPromptAppend())
+
+  // ADR-028: edit a queued follow-up — the sidebar removes it from the queue and
+  // requests its text here so the user can revise and resubmit it.
+  createEffect(() => {
+    const request = followUpEditRequest()
+    if (!request) return
+    untrack(() => {
+      if (request.sessionID === props.sessionID && input && !input.isDestroyed) {
+        input.insertText(request.text)
+        requestInputLayoutRefresh({ gotoBufferEnd: true })
+      }
+      clearFollowUpEdit()
+    })
+  })
 
   createEffect(() => {
     if (inputBlocked()) input.cursorColor = theme.backgroundElement

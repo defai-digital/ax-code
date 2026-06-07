@@ -36,6 +36,8 @@ export interface SyncEventStoreState<
   session_error: Record<string, unknown>
   session_risk: Record<string, SyncedSessionRisk>
   session_goal: Record<string, unknown>
+  // Durable server task-queue projection retained for the future supervision
+  // panel (ADR-025); not the interactive follow-up queue (ADR-028).
   task_queue: SyncTaskQueueItem[]
   session: TSession[]
   message: Record<string, TMessage[]>

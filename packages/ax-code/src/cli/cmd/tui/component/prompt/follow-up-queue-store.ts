@@ -4,6 +4,7 @@
  * client-owned, and per-session — matching the shipped ax-code-desktop model
  * and Codex CLI. Pure reducers/decisions live in `follow-up-queue.ts`.
  */
+import { createSignal } from "solid-js"
 import { createStore, produce } from "solid-js/store"
 import { MessageID } from "@/session/schema"
 import type { useSDK } from "@tui/context/sdk"
@@ -25,6 +26,11 @@ const [queues, setQueues] = createStore<Record<string, QueuedFollowUp[]>>({})
 const inflight = new Set<string>()
 const abortAt = new Map<string, number>()
 let counter = 0
+
+// Client-only "edit" channel: the sidebar removes a queued follow-up and asks
+// the prompt composer (which owns the textarea ref) to load its text back for
+// editing. A new object each request retriggers the prompt's consuming effect.
+const [editRequest, setEditRequest] = createSignal<{ sessionID: string; text: string } | undefined>()
 
 /** Reactive accessor — read inside a tracking scope to subscribe to changes. */
 export function followUpQueue(sessionID: string): QueuedFollowUp[] {
@@ -69,6 +75,20 @@ export function markFollowUpAbort(sessionID: string, now: number = Date.now()): 
 export function hasRecentFollowUpAbort(sessionID: string, now: number = Date.now()): boolean {
   const at = abortAt.get(sessionID)
   return at !== undefined && now - at < RECENT_ABORT_WINDOW_MS
+}
+
+/** Ask the prompt composer to load `text` for editing (see sidebar edit control). */
+export function requestFollowUpEdit(sessionID: string, text: string): void {
+  setEditRequest({ sessionID, text })
+}
+
+/** Reactive accessor for a pending edit request — consumed by the prompt composer. */
+export function followUpEditRequest(): { sessionID: string; text: string } | undefined {
+  return editRequest()
+}
+
+export function clearFollowUpEdit(): void {
+  setEditRequest(undefined)
 }
 
 type SdkContext = ReturnType<typeof useSDK>
