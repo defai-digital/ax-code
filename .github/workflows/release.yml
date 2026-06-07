@@ -189,41 +189,6 @@ jobs:
             gh release edit "$TAG" --draft=false
           fi
 
-      - name: Sign release assets
-        env:
-          AX_CODE_MINISIGN_SECRET_KEY_B64: ${{ secrets.AX_CODE_MINISIGN_SECRET_KEY_B64 }}
-          AX_CODE_MINISIGN_PASSWORD: ${{ secrets.AX_CODE_MINISIGN_PASSWORD }}
-        run: |
-          if [ -z "$AX_CODE_MINISIGN_SECRET_KEY_B64" ]; then
-            echo "::error::AX_CODE_MINISIGN_SECRET_KEY_B64 is required to sign release assets"
-            exit 1
-          fi
-          if [ -z "$AX_CODE_MINISIGN_PASSWORD" ]; then
-            echo "::error::AX_CODE_MINISIGN_PASSWORD is required to unlock the release signing key"
-            exit 1
-          fi
-
-          sudo apt-get update
-          sudo apt-get install -y minisign
-
-          SECRET_KEY="$RUNNER_TEMP/ax-code.sec"
-          PUBLIC_KEY="$RUNNER_TEMP/ax-code.pub"
-          printf '%s' "$AX_CODE_MINISIGN_SECRET_KEY_B64" | base64 -d > "$SECRET_KEY"
-          chmod 600 "$SECRET_KEY"
-          printf '%s\n%s\n' \
-            'untrusted comment: minisign public key 8138FAD32CAD95BA' \
-            'RWS6la0s0/o4gdFUZ0Bk/BkrnN8qC2CFOfLXVP5OtQTrvm1BQeOvXgao' > "$PUBLIC_KEY"
-
-          assets=()
-          for f in packages/ax-code/dist/*.tar.gz packages/ax-code/dist/*.zip; do
-            [ -f "$f" ] && assets+=("$f")
-          done
-          if [ "${#assets[@]}" -eq 0 ]; then
-            echo "::error::No release archives found to sign"
-            exit 1
-          fi
-          bun run script/sign-release-assets.ts --secret-key "$SECRET_KEY" --public-key "$PUBLIC_KEY" "${assets[@]}"
-
       - name: Upload release assets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -251,5 +216,5 @@ jobs:
           # Read this repo's release assets with the default token; write the
           # separate homebrew-ax-code tap with the scoped PAT secret.
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN || secrets.TAP_TOKEN }}
         run: bash .github/scripts/update-homebrew.sh
