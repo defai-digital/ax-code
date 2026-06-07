@@ -220,3 +220,43 @@ describe("isolation.bypass", () => {
     )
   })
 })
+
+describe("isolation worktree guard", () => {
+  test("empty worktree does not widen the write boundary to the process cwd", () => {
+    const state = Isolation.resolve({ mode: "workspace-write", network: false }, root)
+    const cwdFile = path.join(process.cwd(), "outside-the-workspace.ts")
+    // A bogus empty worktree must not be resolved (it would resolve to cwd and
+    // widen the boundary). The write must stay confined to `root`.
+    expect(Isolation.canWrite(state, cwdFile, root, "")).toBe(false)
+    expect(() => Isolation.assertWrite(state, cwdFile, root, "")).toThrow("outside workspace boundary")
+  })
+
+  test("undefined worktree does not throw and stays confined to directory", () => {
+    const state = Isolation.resolve({ mode: "workspace-write", network: false }, root)
+    const wt = undefined as unknown as string
+    expect(() => Isolation.canWrite(state, path.join(root, "src/x.ts"), root, wt)).not.toThrow()
+    expect(Isolation.canWrite(state, path.join(root, "src/x.ts"), root, wt)).toBe(true)
+    expect(Isolation.canWrite(state, path.join(process.cwd(), "x.ts"), root, wt)).toBe(false)
+  })
+
+  test("assertBash tolerates empty worktree without widening to cwd", () => {
+    const state = Isolation.resolve({ mode: "workspace-write", network: false }, root)
+    // cwd is outside `root`; bash there must be rejected, not allowed via a
+    // cwd-widened root.
+    expect(() => Isolation.assertBash(state, process.cwd(), root, "", [])).toThrow("outside workspace boundary")
+  })
+})
+
+describe("isolation read-only floor", () => {
+  test("read-only denies writes even with an explicit bypass entry", () => {
+    const state: Isolation.State = {
+      ...Isolation.resolve({ mode: "read-only", network: false }, root),
+      bypass: [path.join(root, "allowed.ts")],
+    }
+    // A per-path bypass must never override read-only.
+    expect(Isolation.canWrite(state, path.join(root, "allowed.ts"), root, worktree)).toBe(false)
+    expect(() => Isolation.assertWrite(state, path.join(root, "allowed.ts"), root, worktree)).toThrow(
+      "Isolation mode is read-only",
+    )
+  })
+})
