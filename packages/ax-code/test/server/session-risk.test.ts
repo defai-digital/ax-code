@@ -165,14 +165,21 @@ describe("session risk endpoint", () => {
             },
           ])
 
-          const base = await app.request(`/session/${sid}/risk`)
+          const requestRisk = (query = "") =>
+            app.request(`/session/${sid}/risk${query}`, {
+              headers: {
+                "x-opencode-directory": tmp.path,
+              },
+            })
+
+          const base = await requestRisk()
           expect(base.status).toBe(200)
           const baseBody = (await base.json()) as Record<string, unknown>
           expect(baseBody["quality"]).toBeUndefined()
           expect(baseBody["reviewResults"]).toBeUndefined()
           expect(baseBody["decisionHints"]).toBeUndefined()
 
-          const hints = await app.request(`/session/${sid}/risk?hints=true`)
+          const hints = await requestRisk("?hints=true")
           expect(hints.status).toBe(200)
           const hintsBody = (await hints.json()) as {
             decisionHints?: {
@@ -191,7 +198,7 @@ describe("session risk endpoint", () => {
             hints: [{ id: "missing-review-verification", category: "missing_verification" }],
           })
 
-          const reviewResults = await app.request(`/session/${sid}/risk?reviewResults=true`)
+          const reviewResults = await requestRisk("?reviewResults=true")
           expect(reviewResults.status).toBe(200)
           const reviewResultsBody = (await reviewResults.json()) as {
             reviewResults?: Array<{ decision: string; summary: string }>
@@ -202,7 +209,7 @@ describe("session risk endpoint", () => {
             summary: "Endpoint review result.",
           })
 
-          const enriched = await app.request(`/session/${sid}/risk?quality=true`)
+          const enriched = await requestRisk("?quality=true")
           expect(enriched.status).toBe(200)
           const enrichedBody = (await enriched.json()) as {
             quality?: {

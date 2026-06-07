@@ -72,7 +72,7 @@ describe("distribution support guardrails", () => {
     const text = await Bun.file(homebrewDefaultScript).text()
     expect(text).toContain('RELEASE_READ_TOKEN="${GH_TOKEN:-}"')
     expect(text).toContain('TAP_AUTH_TOKEN="${TAP_TOKEN:-}"')
-    expect(text).toContain('HOMEBREW_TAP_TOKEN is not configured; skipping Homebrew tap update')
+    expect(text).toContain('HOMEBREW_TAP_TOKEN is not configured; stable releases must update the Homebrew tap')
     expect(text).toContain('TAP_AUTH_TOKEN="${GH_TOKEN:-}"')
     expect(text).toContain('export GH_TOKEN="${RELEASE_READ_TOKEN}"')
     expect(text).toContain('export GH_TOKEN="${TAP_AUTH_TOKEN}"')
