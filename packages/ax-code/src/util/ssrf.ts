@@ -55,9 +55,18 @@ export namespace Ssrf {
     return status >= 300 && status < 400
   }
 
-  function redirectInit(init: PinnedFetchInit | undefined, status: number): PinnedFetchInit {
+  function redirectInit(init: PinnedFetchInit | undefined, status: number, crossOrigin: boolean): PinnedFetchInit {
     const headers = new Headers(init?.headers)
     headers.delete("Host")
+
+    // Never forward credentials across an origin boundary on redirect — a
+    // redirect from a trusted endpoint to an attacker host must not leak the
+    // API key / cookies. Matches browser fetch semantics.
+    if (crossOrigin) {
+      headers.delete("authorization")
+      headers.delete("cookie")
+      headers.delete("proxy-authorization")
+    }
 
     const next: PinnedFetchInit = { ...init, headers, redirect: "manual" }
     const method = init?.method?.toUpperCase()
@@ -70,16 +79,84 @@ export namespace Ssrf {
     return next
   }
 
+  // Expand any valid IPv6 literal (compressed `::`, embedded dotted IPv4,
+  // uncompressed, zone id) to its 16 bytes. Returns null only for input that is
+  // not a parseable IPv6 — callers treat that as "reject" since net.isIP has
+  // already vouched the literal is IPv6.
+  function ipv6ToBytes(input: string): number[] | null {
+    let addr = input.trim().toLowerCase()
+    const zone = addr.indexOf("%")
+    if (zone !== -1) addr = addr.slice(0, zone)
+
+    // Rewrite a trailing dotted-quad (e.g. ::ffff:127.0.0.1) into two hextets so
+    // both dotted and hex forms of IPv4-mapped/compatible addresses parse.
+    const lastColon = addr.lastIndexOf(":")
+    if (lastColon !== -1 && addr.slice(lastColon + 1).includes(".")) {
+      const v4 = addr.slice(lastColon + 1).split(".")
+      if (v4.length !== 4) return null
+      const octets: number[] = []
+      for (const part of v4) {
+        if (!/^\d{1,3}$/.test(part)) return null
+        const n = Number(part)
+        if (n > 255) return null
+        octets.push(n)
+      }
+      const hi = ((octets[0] << 8) | octets[1]).toString(16)
+      const lo = ((octets[2] << 8) | octets[3]).toString(16)
+      addr = `${addr.slice(0, lastColon + 1)}${hi}:${lo}`
+    }
+
+    const halves = addr.split("::")
+    if (halves.length > 2) return null
+    const head = halves[0] ? halves[0].split(":") : []
+    const tail = halves.length === 2 ? (halves[1] ? halves[1].split(":") : []) : null
+
+    let hextets: number[]
+    if (tail === null) {
+      if (head.length !== 8) return null
+      hextets = head.map((h) => parseInt(h, 16))
+    } else {
+      const missing = 8 - (head.length + tail.length)
+      if (missing < 1) return null // `::` must stand in for at least one group
+      hextets = [...head, ...Array(missing).fill("0"), ...tail].map((h) => parseInt(h, 16))
+    }
+    if (hextets.length !== 8 || hextets.some((h) => !Number.isInteger(h) || h < 0 || h > 0xffff)) return null
+
+    const bytes: number[] = []
+    for (const h of hextets) bytes.push((h >> 8) & 0xff, h & 0xff)
+    return bytes
+  }
+
   function isPrivateIPv6(addr: string): boolean {
-    const lower = addr.toLowerCase()
-    if (lower === "::1" || lower === "::") return true
-    if (lower.startsWith("fc") || lower.startsWith("fd")) return true // fc00::/7 ULA
-    // fe80::/10 link-local covers fe80: through febf:
-    if (/^fe[89ab][0-9a-f]:/.test(lower)) return true
-    if (lower.startsWith("ff")) return true // multicast
-    const mapped = lower.match(/^::ffff:([0-9.]+)$/)
-    if (mapped) return isPrivateIPv4(mapped[1])
+    const b = ipv6ToBytes(addr)
+    if (!b) return true // unparseable IPv6 literal → fail closed
+    if (b.every((x) => x === 0)) return true // :: unspecified
+    if (b.slice(0, 15).every((x) => x === 0) && b[15] === 1) return true // ::1 loopback
+    if ((b[0] & 0xfe) === 0xfc) return true // fc00::/7 ULA
+    if (b[0] === 0xfe && (b[1] & 0xc0) === 0x80) return true // fe80::/10 link-local
+    if (b[0] === 0xff) return true // ff00::/8 multicast
+    // IPv4-mapped ::ffff:0:0/96 — check the embedded IPv4 in BOTH dotted and hex
+    // forms (e.g. ::ffff:7f00:1 == 127.0.0.1, ::ffff:a9fe:a9fe == 169.254.169.254).
+    if (b.slice(0, 10).every((x) => x === 0) && b[10] === 0xff && b[11] === 0xff) {
+      return isPrivateIPv4(`${b[12]}.${b[13]}.${b[14]}.${b[15]}`)
+    }
+    // IPv4-compatible ::/96 (deprecated) — embeds an IPv4 in the low 32 bits.
+    if (b.slice(0, 12).every((x) => x === 0)) {
+      return isPrivateIPv4(`${b[12]}.${b[13]}.${b[14]}.${b[15]}`)
+    }
+    // NAT64 64:ff9b::/96 — embeds an IPv4 that could route to a private host.
+    if (b[0] === 0x00 && b[1] === 0x64 && b[2] === 0xff && b[3] === 0x9b && b.slice(4, 12).every((x) => x === 0)) {
+      return isPrivateIPv4(`${b[12]}.${b[13]}.${b[14]}.${b[15]}`)
+    }
     return false
+  }
+
+  // URL.hostname keeps the brackets on IPv6 literals (e.g. "[::1]"), which
+  // net.isIP does not accept. Strip them so IPv6 literals hit the IP-literal
+  // branch (and are validated) instead of falling through to a DNS lookup of a
+  // bracketed string — which both leaks public IPv6 fetches and skips the check.
+  function ipFromHostname(hostname: string): string {
+    return hostname.startsWith("[") && hostname.endsWith("]") ? hostname.slice(1, -1) : hostname
   }
 
   /**
@@ -93,7 +170,7 @@ export namespace Ssrf {
     if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
       throw new Error(`${label}: unsupported URL scheme: ${parsed.protocol}`)
     }
-    const hostname = parsed.hostname
+    const hostname = ipFromHostname(parsed.hostname)
     if (net.isIP(hostname)) {
       const bad = net.isIP(hostname) === 4 ? isPrivateIPv4(hostname) : isPrivateIPv6(hostname)
       if (bad) throw new Error(`${label}: refusing to fetch private/reserved address: ${hostname}`)
@@ -142,7 +219,7 @@ export namespace Ssrf {
       throw new Error(`${label}: unsupported URL scheme: ${parsed.protocol}`)
     }
 
-    const hostname = parsed.hostname
+    const hostname = ipFromHostname(parsed.hostname)
 
     // If already an IP literal, just validate and fetch directly
     if (net.isIP(hostname)) {
@@ -224,8 +301,9 @@ export namespace Ssrf {
       if (redirectUrl.protocol !== "http:" && redirectUrl.protocol !== "https:") {
         throw new Error(`${label}: redirect to unsupported URL scheme: ${redirectUrl.protocol}`)
       }
+      const crossOrigin = new URL(currentUrl).origin !== redirectUrl.origin
       currentUrl = redirectUrl.toString()
-      currentInit = redirectInit(currentInit, response.status)
+      currentInit = redirectInit(currentInit, response.status, crossOrigin)
     }
 
     throw new Error(`${label}: too many redirects while fetching: ${url}`)
