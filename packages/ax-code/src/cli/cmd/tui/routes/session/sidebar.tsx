@@ -142,8 +142,13 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
   // already-addressed users as still pending and offer a delete that
   // the server (correctly) refuses with a busy error. The parent-link
   // signal matches what the server checks on delete.
+  //
+  // Do NOT gate on session status: the session is briefly "idle" between
+  // draining successive queued messages, and messages submitted before the
+  // session starts are also visible while status is idle. The parentID check
+  // is sufficient — a genuinely-finished session has assistant messages
+  // covering all user IDs, so queued() returns [] naturally.
   const queued = createMemo(() => {
-    if (status().type === "idle") return []
     const msgs = messages()
     const addressed = new Set<string>()
     for (const m of msgs) {
