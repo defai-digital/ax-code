@@ -1026,6 +1026,61 @@ pub fn detect_hardcodes_native(input_json: &str) -> Result<String, String> {
     serde_json::to_string(&result).map_err(|e| e.to_string())
 }
 
+// ─── Shared file collection ────────────────────────────────────────
+
+fn collect_scan_files(
+    cwd: &str,
+    include: &[String],
+    max_files: usize,
+    exclude_tests: bool,
+) -> Result<Vec<(String, PathBuf)>, String> {
+    let root = PathBuf::from(cwd);
+    let globs: Vec<globset::GlobMatcher> = include
+        .iter()
+        .filter_map(|p| globset::Glob::new(p).ok().map(|g| g.compile_matcher()))
+        .collect();
+
+    let mut builder = ignore::WalkBuilder::new(&root);
+    builder
+        .hidden(true)
+        .git_ignore(true)
+        .git_global(true)
+        .git_exclude(true);
+
+    let mut files = Vec::new();
+    for entry in builder.build().flatten() {
+        if files.len() >= max_files {
+            break;
+        }
+        if !entry.file_type().is_some_and(|ft| ft.is_file()) {
+            continue;
+        }
+        let full = entry.path().to_path_buf();
+        let rel = match full.strip_prefix(&root) {
+            Ok(p) => p,
+            Err(_) => continue,
+        };
+        let rel_str = match rel.to_str() {
+            Some(s) => s,
+            None => continue,
+        };
+        if rel.components().any(|c| c.as_os_str() == ".git") {
+            continue;
+        }
+        if is_excluded_dir(rel_str) {
+            continue;
+        }
+        if exclude_tests && is_test_file(rel_str) {
+            continue;
+        }
+        if !globs.is_empty() && !globs.iter().any(|g| g.is_match(rel_str)) {
+            continue;
+        }
+        files.push((rel_str.to_string(), full));
+    }
+    Ok(files)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1087,59 +1142,4 @@ function run() {
         assert_eq!(findings[0].resource_type, "timer");
         assert_eq!(findings[0].line, 5);
     }
-}
-
-// ─── Shared file collection ────────────────────────────────────────
-
-fn collect_scan_files(
-    cwd: &str,
-    include: &[String],
-    max_files: usize,
-    exclude_tests: bool,
-) -> Result<Vec<(String, PathBuf)>, String> {
-    let root = PathBuf::from(cwd);
-    let globs: Vec<globset::GlobMatcher> = include
-        .iter()
-        .filter_map(|p| globset::Glob::new(p).ok().map(|g| g.compile_matcher()))
-        .collect();
-
-    let mut builder = ignore::WalkBuilder::new(&root);
-    builder
-        .hidden(true)
-        .git_ignore(true)
-        .git_global(true)
-        .git_exclude(true);
-
-    let mut files = Vec::new();
-    for entry in builder.build().flatten() {
-        if files.len() >= max_files {
-            break;
-        }
-        if !entry.file_type().is_some_and(|ft| ft.is_file()) {
-            continue;
-        }
-        let full = entry.path().to_path_buf();
-        let rel = match full.strip_prefix(&root) {
-            Ok(p) => p,
-            Err(_) => continue,
-        };
-        let rel_str = match rel.to_str() {
-            Some(s) => s,
-            None => continue,
-        };
-        if rel.components().any(|c| c.as_os_str() == ".git") {
-            continue;
-        }
-        if is_excluded_dir(rel_str) {
-            continue;
-        }
-        if exclude_tests && is_test_file(rel_str) {
-            continue;
-        }
-        if !globs.is_empty() && !globs.iter().any(|g| g.is_match(rel_str)) {
-            continue;
-        }
-        files.push((rel_str.to_string(), full));
-    }
-    Ok(files)
 }
