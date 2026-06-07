@@ -1276,13 +1276,17 @@ export namespace ACP {
       const sessionUpdateTimer = setTimeout(() => {
         this.pendingSessionUpdates.delete(sessionUpdateTimer)
         if (this.eventAbort.signal.aborted) return
-        this.connection.sessionUpdate({
-          sessionId,
-          update: {
-            sessionUpdate: "available_commands_update",
-            availableCommands,
-          },
-        })
+        void this.connection
+          .sessionUpdate({
+            sessionId,
+            update: {
+              sessionUpdate: "available_commands_update",
+              availableCommands,
+            },
+          })
+          .catch((error) => {
+            log.error("failed to send available_commands_update", { sessionId, error })
+          })
       }, 0)
       this.pendingSessionUpdates.add(sessionUpdateTimer)
 

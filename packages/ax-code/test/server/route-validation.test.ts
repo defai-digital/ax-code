@@ -189,13 +189,13 @@ describe("server route validation", () => {
     await Instance.provide({
       directory: root,
       fn: async () => {
-        const sessionID = SessionID.descending()
+        const session = await Session.create({})
         const busySpy = spyOn(SessionPrompt, "assertNotBusy").mockImplementation(() => {
-          throw new Session.BusyError(sessionID)
+          throw new Session.BusyError(session.id)
         })
 
         try {
-          const res = await Server.Default().request(`/session/${sessionID}/summarize`, {
+          const res = await Server.Default().request(`/session/${session.id}/summarize`, {
             method: "POST",
             headers: { "content-type": "application/json" },
             body: JSON.stringify({
@@ -214,6 +214,7 @@ describe("server route validation", () => {
           })
         } finally {
           busySpy.mockRestore()
+          await Session.remove(session.id)
         }
       },
     })

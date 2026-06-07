@@ -197,16 +197,19 @@ export namespace SessionCompaction {
         if (selectedTokens > PRUNE_MINIMUM) break
       }
 
-      const compactedParts = selectedCandidates.flatMap(({ part }) => {
+      const compactedParts = selectedCandidates.flatMap(({ part, tier }) => {
         if (part.state.status !== "completed") return []
         return [
           {
-            ...part,
-            state: {
-              ...part.state,
-              time: {
-                ...(part.state.time ?? { start: timestamp, end: timestamp }),
-                compacted: timestamp,
+            tier,
+            part: {
+              ...part,
+              state: {
+                ...part.state,
+                time: {
+                  ...(part.state.time ?? { start: timestamp, end: timestamp }),
+                  compacted: timestamp,
+                },
               },
             },
           },
@@ -218,13 +221,13 @@ export namespace SessionCompaction {
       // hid the count of successful writes.
       let succeeded = 0
       let failed = 0
-      for (const [index, part] of compactedParts.entries()) {
+      for (const { part, tier } of compactedParts) {
         try {
           await Session.updatePart.force(part)
           succeeded += 1
         } catch (e) {
           failed += 1
-          log.warn("failed to compact part", { partID: part.id, tier: selectedCandidates[index]?.tier, err: e })
+          log.warn("failed to compact part", { partID: part.id, tier, err: e })
         }
       }
       log.info("pruned", { count: compactedParts.length, selectedTokens, succeeded, failed })
