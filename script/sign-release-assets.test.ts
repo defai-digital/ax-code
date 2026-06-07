@@ -8,6 +8,7 @@ import {
   findReleaseAssets,
   parseSignReleaseArgs,
   prepareSignaturePath,
+  requirePinnedPublicKey,
   releaseAssetsForOptions,
   secretKeyPermissionIssue,
   sha256File,
@@ -63,6 +64,35 @@ describe("sign-release-assets helpers", () => {
     expect(options.verifyOnly).toBe(true)
     expect(options.force).toBe(true)
     expect(options.files).toEqual([path.join("/repo", "packages/ax-code/dist/ax-code.zip")])
+  })
+
+  test("requires the pinned AX Code minisign public key", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ax-code-sign-public-key-"))
+    try {
+      const matching = path.join(dir, "ax-code.pub")
+      fs.writeFileSync(
+        matching,
+        [
+          "untrusted comment: minisign public key 8138FAD32CAD95BA",
+          "RWS6la0s0/o4gdFUZ0Bk/BkrnN8qC2CFOfLXVP5OtQTrvm1BQeOvXgao",
+          "",
+        ].join("\n"),
+      )
+      expect(() => requirePinnedPublicKey(matching)).not.toThrow()
+
+      const mismatched = path.join(dir, "other.pub")
+      fs.writeFileSync(
+        mismatched,
+        [
+          "untrusted comment: minisign public key 0000000000000000",
+          "RWS000000000000000000000000000000000000000000000000000000000",
+          "",
+        ].join("\n"),
+      )
+      expect(() => requirePinnedPublicKey(mismatched)).toThrow("does not match the pinned AX Code release key")
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true })
+    }
   })
 
   test("uses explicit files before scanning the dist directory", () => {

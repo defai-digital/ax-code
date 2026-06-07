@@ -147,7 +147,7 @@ function requireRegularFile(file: string, label: string) {
   return stat
 }
 
-function readMinisignPublicKey(file: string) {
+export function readMinisignPublicKey(file: string) {
   return fs
     .readFileSync(file, "utf8")
     .split(/\r?\n/)
@@ -155,7 +155,7 @@ function readMinisignPublicKey(file: string) {
     .find((line) => line.startsWith("RW"))
 }
 
-function requirePinnedPublicKey(file: string) {
+export function requirePinnedPublicKey(file: string) {
   const publicKey = readMinisignPublicKey(file)
   if (publicKey !== AX_CODE_MINISIGN_PUBLIC_KEY) {
     throw new Error(
