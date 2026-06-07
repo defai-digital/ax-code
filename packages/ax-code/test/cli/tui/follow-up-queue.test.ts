@@ -19,8 +19,10 @@ import {
   hasRecentFollowUpAbort,
   markFollowUpAbort,
   peekQueuedFollowUp,
+  reconcileFollowUpDrain,
   removeQueuedFollowUp,
   requestFollowUpEdit,
+  resetFollowUpDrainState,
 } from "../../../src/cli/cmd/tui/component/prompt/follow-up-queue-store"
 
 const item = (id: string, text = "hi"): QueuedFollowUp =>
@@ -123,6 +125,9 @@ describe("follow-up-queue-store", () => {
       parts: [{ id: "p1", type: "text", text: "go" }],
     })
     expect(typeof calls[0].messageID).toBe("string")
+    // Removal happens inside dispatch (while the in-flight guard is held) so no
+    // other caller can re-dispatch the same head.
+    expect(followUpQueue(sid)).toEqual([])
     clearFollowUpQueue(sid)
   })
 
@@ -151,5 +156,68 @@ describe("follow-up-queue-store", () => {
     expect(second).toBe(false)
     release?.()
     expect(await first).toBe(true)
+  })
+})
+
+describe("reconcileFollowUpDrain", () => {
+  const fakeSdk = (calls: any[]) =>
+    ({ client: { session: { promptAsync: async (args: any) => (calls.push(args), {}) } } }) as any
+
+  test("dispatches the head only on a busy -> idle transition, once", () => {
+    resetFollowUpDrainState()
+    const sid = "ses_drain"
+    clearFollowUpQueue(sid)
+    enqueueFollowUp(sid, { parts: [{ type: "text", text: "next" }] })
+    const calls: any[] = []
+    const sdk = fakeSdk(calls)
+
+    // First observation only establishes a baseline — no drain.
+    reconcileFollowUpDrain(sdk, [[sid, "busy"]])
+    expect(calls).toHaveLength(0)
+
+    // busy -> idle drains the head.
+    reconcileFollowUpDrain(sdk, [[sid, "idle"]])
+    expect(calls).toHaveLength(1)
+    expect(calls[0].sessionID).toBe(sid)
+    clearFollowUpQueue(sid)
+  })
+
+  test("does not drain on idle -> idle or when there is no queued item", () => {
+    resetFollowUpDrainState()
+    const sid = "ses_drain_none"
+    clearFollowUpQueue(sid)
+    const calls: any[] = []
+    const sdk = fakeSdk(calls)
+    reconcileFollowUpDrain(sdk, [[sid, "busy"]])
+    reconcileFollowUpDrain(sdk, [[sid, "idle"]]) // no queued item
+    expect(calls).toHaveLength(0)
+  })
+
+  test("a recent abort suppresses the drain on that transition", () => {
+    resetFollowUpDrainState()
+    const sid = "ses_drain_abort"
+    clearFollowUpQueue(sid)
+    enqueueFollowUp(sid, { parts: [{ type: "text", text: "x" }] })
+    const calls: any[] = []
+    const sdk = fakeSdk(calls)
+    reconcileFollowUpDrain(sdk, [[sid, "busy"]])
+    markFollowUpAbort(sid)
+    reconcileFollowUpDrain(sdk, [[sid, "idle"]])
+    expect(calls).toHaveLength(0)
+    clearFollowUpQueue(sid)
+  })
+
+  test("shared baseline dedupes repeated reconcile calls for the same transition", () => {
+    resetFollowUpDrainState()
+    const sid = "ses_drain_dedupe"
+    clearFollowUpQueue(sid)
+    enqueueFollowUp(sid, { parts: [{ type: "text", text: "y" }] })
+    const calls: any[] = []
+    const sdk = fakeSdk(calls)
+    reconcileFollowUpDrain(sdk, [[sid, "busy"]])
+    reconcileFollowUpDrain(sdk, [[sid, "idle"]]) // drains
+    reconcileFollowUpDrain(sdk, [[sid, "idle"]]) // same baseline now idle -> no second drain
+    expect(calls).toHaveLength(1)
+    clearFollowUpQueue(sid)
   })
 })

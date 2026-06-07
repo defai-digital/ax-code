@@ -13,6 +13,7 @@ import {
   headFollowUp,
   makeFollowUp,
   removeFollowUp,
+  shouldDrainOnIdle,
   type FollowUpInput,
   type QueuedFollowUp,
 } from "./follow-up-queue"
@@ -97,11 +98,13 @@ type PromptAsyncBody = Parameters<SdkContext["client"]["session"]["promptAsync"]
 /**
  * Dispatch a single follow-up to the server via the normal async prompt route.
  *
- * Returns `true` when the item was dispatched (caller removes it from the queue)
- * and `false` when the dispatch was skipped because another dispatch for the
- * same session is already in flight (caller leaves it queued, no error). A real
- * server/transport failure throws so callers can surface it — distinguishing a
- * harmless skip from an actual failure.
+ * Returns `true` when the item was dispatched — it is removed from the queue
+ * here, while the in-flight guard is still held, so there is no window in which
+ * another caller can re-dispatch the same head. Returns `false` when skipped
+ * because another dispatch for the same session is already in flight (caller
+ * leaves it queued, no error). A real server/transport failure throws (the item
+ * stays queued) so callers can surface it — distinguishing a harmless skip from
+ * an actual failure.
  */
 export async function dispatchFollowUp(sdk: SdkContext, sessionID: string, item: QueuedFollowUp): Promise<boolean> {
   if (inflight.has(sessionID)) return false
@@ -120,8 +123,42 @@ export async function dispatchFollowUp(sdk: SdkContext, sessionID: string, item:
       const detail = (error as { data?: { message?: string }; message?: string })?.data?.message
       throw new Error(detail ?? (error as { message?: string })?.message ?? "prompt_async failed")
     }
+    removeQueuedFollowUp(sessionID, item.id)
     return true
   } finally {
     inflight.delete(sessionID)
   }
+}
+
+// Previous status per session, shared across every mounted Prompt instance so
+// the global drain dedupes: the first instance to observe a transition handles
+// it and updates the baseline; the rest see the new baseline and skip.
+const previousStatusBySession = new Map<string, string>()
+
+/**
+ * Drain the head follow-up of any session that just transitioned busy/retry ->
+ * idle. `snapshot` is `[sessionID, statusType]` for every known session. Safe to
+ * call from several Prompt instances (see `previousStatusBySession`); failures
+ * are reported via `onError` and leave the item queued.
+ */
+export function reconcileFollowUpDrain(
+  sdk: SdkContext,
+  snapshot: ReadonlyArray<readonly [string, string]>,
+  onError?: (sessionID: string, error: unknown) => void,
+): void {
+  for (const [sessionID, currentType] of snapshot) {
+    const previous = previousStatusBySession.get(sessionID)
+    previousStatusBySession.set(sessionID, currentType)
+    if (previous === undefined) continue
+    if (!shouldDrainOnIdle(previous, currentType)) continue
+    if (hasRecentFollowUpAbort(sessionID)) continue
+    const head = headFollowUp(queues[sessionID])
+    if (!head) continue
+    void dispatchFollowUp(sdk, sessionID, head).catch((error) => onError?.(sessionID, error))
+  }
+}
+
+/** Test-only: reset the global drain baseline so cases don't bleed into each other. */
+export function resetFollowUpDrainState(): void {
+  previousStatusBySession.clear()
 }

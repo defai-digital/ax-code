@@ -182,15 +182,13 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
     requestFollowUpEdit(props.sessionID, followUpText(item))
   }
 
-  // Send a queued follow-up immediately. Dispatch first, then remove on success
-  // so a failed send keeps the item in the queue rather than losing it. A `false`
-  // result means another dispatch is in flight — leave it queued without error.
+  // Send a queued follow-up immediately. dispatchFollowUp removes it from the
+  // queue on success; a thrown error keeps it queued so the user can retry.
   async function sendQueuedNow(id: string) {
     const item = queued().find((entry) => entry.id === id)
     if (!item) return
     try {
-      const dispatched = await dispatchFollowUp(sdk, props.sessionID, item)
-      if (dispatched) removeQueuedFollowUp(props.sessionID, id)
+      await dispatchFollowUp(sdk, props.sessionID, item)
     } catch (error) {
       log.warn("send queued follow-up failed", {
         command: "tui.sidebar.queue.send",

@@ -36,16 +36,13 @@ import { useSDK } from "@tui/context/sdk"
 import { useRoute } from "@tui/context/route"
 import { useSync } from "@tui/context/sync"
 import { MessageID, PartID, SessionID } from "@/session/schema"
-import { isQueueableStatus, shouldDrainOnIdle } from "./follow-up-queue"
+import { isQueueableStatus } from "./follow-up-queue"
 import {
   clearFollowUpEdit,
-  dispatchFollowUp,
   enqueueFollowUp,
   followUpEditRequest,
-  hasRecentFollowUpAbort,
   markFollowUpAbort,
-  peekQueuedFollowUp,
-  removeQueuedFollowUp,
+  reconcileFollowUpDrain,
 } from "./follow-up-queue-store"
 import { createStore, produce } from "solid-js/store"
 import { useKeybind } from "@tui/context/keybind"
@@ -216,43 +213,29 @@ export function Prompt(props: PromptProps) {
   // disabling falls back to immediate async send.
   const [queueModeEnabled] = kv.signal("prompt_queue_mode", true)
 
-  // Drain the client follow-up queue on a real busy/retry -> idle transition.
-  // Tracked per-session so navigating between sessions never fires a stale drain.
-  let drainSessionID: string | undefined
-  let previousStatusType: string | undefined
+  // Drain the client follow-up queue when any session transitions busy/retry ->
+  // idle. This watches every session's status (not just the one on screen) so a
+  // background session's queue still replays when it finishes — matching the
+  // desktop auto-send hook. The store dedupes across the multiple mounted Prompt
+  // instances, so running this effect in each is safe.
   createEffect(() => {
-    const sessionID = props.sessionID
-    const currentType = status().type
+    const record = sync.data.session_status ?? {}
+    const snapshot: Array<readonly [string, string]> = []
+    for (const id of Object.keys(record)) {
+      snapshot.push([id, (record[id] as { type?: string } | undefined)?.type ?? "idle"] as const)
+    }
     untrack(() => {
-      if (sessionID !== drainSessionID) {
-        drainSessionID = sessionID
-        previousStatusType = currentType
-        return
-      }
-      const previous = previousStatusType
-      previousStatusType = currentType
-      if (!sessionID) return
-      if (!shouldDrainOnIdle(previous, currentType)) return
-      if (hasRecentFollowUpAbort(sessionID)) return
-      const head = peekQueuedFollowUp(sessionID)
-      if (!head) return
-      void dispatchFollowUp(sdk, sessionID, head)
-        .then((dispatched) => {
-          // `false` means another dispatch is already in flight — leave the item
-          // queued for the next idle transition rather than flagging an error.
-          if (dispatched) removeQueuedFollowUp(sessionID, head.id)
+      reconcileFollowUpDrain(sdk, snapshot, (sessionID, error) => {
+        log.warn("follow-up queue drain failed", {
+          command: "tui.prompt.queue.drain",
+          status: "error",
+          sessionID,
+          error,
         })
-        .catch((error) => {
-          log.warn("follow-up queue drain failed", {
-            command: "tui.prompt.queue.drain",
-            status: "error",
-            sessionID,
-            error,
-          })
-          // Keep the item queued (it stays visible with send-now/edit) and let
-          // the user know the auto-send did not go through.
-          toast.show({ message: "Failed to send queued message", variant: "error" })
-        })
+        // Keep the item queued (it stays visible with send-now/edit) and let the
+        // user know the auto-send did not go through.
+        toast.show({ message: "Failed to send queued message", variant: "error" })
+      })
     })
   })
   const [localStatusTick, setLocalStatusTick] = createSignal(0)
@@ -445,7 +428,12 @@ export function Prompt(props: PromptProps) {
     const request = followUpEditRequest()
     if (!request) return
     untrack(() => {
-      if (request.sessionID === props.sessionID && input && !input.isDestroyed) {
+      // Several Prompt instances are mounted at once (session, permission,
+      // home). Only the instance the request targets consumes it — otherwise a
+      // non-matching instance could clear the request before the right one
+      // applies it, silently dropping the user's edited text.
+      if (request.sessionID !== props.sessionID) return
+      if (input && !input.isDestroyed) {
         input.insertText(request.text)
         requestInputLayoutRefresh({ gotoBufferEnd: true })
       }
@@ -1222,8 +1210,7 @@ export function Prompt(props: PromptProps) {
     // client-owned queue and let the drain effect replay them when idle. Slash
     // commands and shell input keep the existing async routes; new sessions and
     // idle sessions dispatch immediately below.
-    const isKnownSlashCommand =
-      inputText.startsWith("/") && sync.data.command.some((x) => x.name === firstLine.split(" ")[0].slice(1))
+    const isKnownSlashCommand = slashName != null && sync.data.command.some((x) => x.name === slashName)
     if (
       queueModeEnabled() &&
       currentMode === "normal" &&
