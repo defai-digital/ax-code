@@ -19,6 +19,7 @@ import {
   createSignal,
   onCleanup,
   on,
+  untrack,
   Show,
   Switch,
   Match,
@@ -35,6 +36,14 @@ import { useSDK } from "@tui/context/sdk"
 import { useRoute } from "@tui/context/route"
 import { useSync } from "@tui/context/sync"
 import { MessageID, PartID, SessionID } from "@/session/schema"
+import { isQueueableStatus } from "./follow-up-queue"
+import {
+  clearFollowUpEdit,
+  enqueueFollowUp,
+  followUpEditRequest,
+  markFollowUpAbort,
+  reconcileFollowUpDrain,
+} from "./follow-up-queue-store"
 import { createStore, produce } from "solid-js/store"
 import { useKeybind } from "@tui/context/keybind"
 import { usePromptHistory, type PromptInfo } from "./history"
@@ -197,6 +206,38 @@ export function Prompt(props: PromptProps) {
   const [draftSessionID, setDraftSessionID] = createSignal<string | undefined>()
   const [expandedPastes, setExpandedPastes] = createSignal<Set<number>>(new Set<number>())
   const inputBlocked = createMemo(() => props.disabled || submitPending())
+
+  // ADR-028: interactive follow-up queueing. While the session is busy, plain
+  // prompts are buffered client-side and replayed when the session goes idle,
+  // instead of parking durable `waiting_for_idle` task-queue rows. Default on;
+  // disabling falls back to immediate async send.
+  const [queueModeEnabled] = kv.signal("prompt_queue_mode", true)
+
+  // Drain the client follow-up queue when any session transitions busy/retry ->
+  // idle. This watches every session's status (not just the one on screen) so a
+  // background session's queue still replays when it finishes — matching the
+  // desktop auto-send hook. The store dedupes across the multiple mounted Prompt
+  // instances, so running this effect in each is safe.
+  createEffect(() => {
+    const record = sync.data.session_status ?? {}
+    const snapshot: Array<readonly [string, string]> = []
+    for (const id of Object.keys(record)) {
+      snapshot.push([id, (record[id] as { type?: string } | undefined)?.type ?? "idle"] as const)
+    }
+    untrack(() => {
+      reconcileFollowUpDrain(sdk, snapshot, (sessionID, error) => {
+        log.warn("follow-up queue drain failed", {
+          command: "tui.prompt.queue.drain",
+          status: "error",
+          sessionID,
+          error,
+        })
+        // Keep the item queued (it stays visible with send-now/edit) and let the
+        // user know the auto-send did not go through.
+        toast.show({ message: "Failed to send queued message", variant: "error" })
+      })
+    })
+  })
   const [localStatusTick, setLocalStatusTick] = createSignal(0)
   const statusTick = () => props.statusTick?.() ?? localStatusTick()
   const pendingCancelHint = createMemo(() => {
@@ -380,6 +421,25 @@ export function Prompt(props: PromptProps) {
     requestInputLayoutRefresh({ gotoBufferEnd: true })
   })
   onCleanup(() => unsubPromptAppend())
+
+  // ADR-028: edit a queued follow-up — the sidebar removes it from the queue and
+  // requests its text here so the user can revise and resubmit it.
+  createEffect(() => {
+    const request = followUpEditRequest()
+    if (!request) return
+    untrack(() => {
+      // Several Prompt instances are mounted at once (session, permission,
+      // home). Only the instance the request targets consumes it — otherwise a
+      // non-matching instance could clear the request before the right one
+      // applies it, silently dropping the user's edited text.
+      if (request.sessionID !== props.sessionID) return
+      if (input && !input.isDestroyed) {
+        input.insertText(request.text)
+        requestInputLayoutRefresh({ gotoBufferEnd: true })
+      }
+      clearFollowUpEdit()
+    })
+  })
 
   createEffect(() => {
     if (inputBlocked()) input.cursorColor = theme.backgroundElement
@@ -623,6 +683,9 @@ export function Prompt(props: PromptProps) {
           }
 
           if (nextInterrupt >= 2) {
+            // Suppress auto-draining the follow-up queue right after a manual
+            // interrupt so we don't immediately resend on the busy -> idle edge.
+            markFollowUpAbort(props.sessionID)
             void sdk.client.session
               .abort({
                 sessionID: props.sessionID,
@@ -1141,6 +1204,36 @@ export function Prompt(props: PromptProps) {
           sessionID: nextSessionID,
         })
       }, 0)
+    }
+
+    // ADR-028: while the session is busy, buffer plain follow-up prompts in the
+    // client-owned queue and let the drain effect replay them when idle. Slash
+    // commands and shell input keep the existing async routes; new sessions and
+    // idle sessions dispatch immediately below.
+    const isKnownSlashCommand = slashName != null && sync.data.command.some((x) => x.name === slashName)
+    if (
+      queueModeEnabled() &&
+      currentMode === "normal" &&
+      !isKnownSlashCommand &&
+      props.sessionID &&
+      isQueueableStatus(status().type)
+    ) {
+      enqueueFollowUp(props.sessionID, {
+        parts: [
+          {
+            id: PartID.ascending(),
+            type: "text",
+            text: inputText,
+          },
+          ...nonTextParts.map(assign),
+        ],
+        agent: local.agent.current().name,
+        model: selectedModel,
+        variant,
+      })
+      settlePromptLocally({ clearPrompt: true })
+      finishPendingSubmit()
+      return
     }
 
     try {
