@@ -122,12 +122,17 @@ export namespace Isolation {
 
   export function canWrite(state: State, filepath: string, directory: string, worktree: string): boolean {
     if (state.mode === "full-access") return true
-    const resolved = resolvePath(filepath)
-    if (isBypassed(state, resolved)) return true
+    // read-only is an absolute floor: even an explicit per-path bypass cannot
+    // grant a write here. Checked before isBypassed so the bypass list can never
+    // override read-only (mirrors assertBash, which rejects read-only first).
     if (state.mode === "read-only") return false
+    if (isBypassed(state, resolvePath(filepath))) return true
     const targetPaths = securityPaths(filepath)
     const writeRoots = securityPaths(directory)
-    if (worktree !== "/") writeRoots.push(...securityPaths(worktree))
+    // Guard worktree truthiness the same way roots() does. A "" or undefined
+    // worktree must NOT be passed to securityPaths(): it resolves to the process
+    // cwd and would silently widen the write boundary (or throw on undefined).
+    if (worktree && worktree !== "/") writeRoots.push(...securityPaths(worktree))
     if (isProtected(state, filepath)) return false
     return isInsideAnyRoot(Array.from(new Set(writeRoots)), targetPaths)
   }
@@ -167,7 +172,9 @@ export namespace Isolation {
       throw new DeniedError("bash", "Isolation mode is read-only. Bash commands are not allowed.")
     }
     const roots = securityPaths(directory)
-    if (worktree !== "/") roots.push(...securityPaths(worktree))
+    // Same worktree truthiness guard as roots()/canWrite — a "" worktree
+    // resolves to cwd and would widen the bash boundary; undefined would throw.
+    if (worktree && worktree !== "/") roots.push(...securityPaths(worktree))
     const current = resolvePath(cwd)
     const currentPaths = securityPaths(cwd)
     // workspace-write: check cwd is within workspace
