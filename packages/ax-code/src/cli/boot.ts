@@ -16,6 +16,7 @@ import { TraceCommand } from "./cmd/trace"
 import { CompareCommand } from "./cmd/compare"
 import { RollbackCommand } from "./cmd/rollback"
 import { BranchCommand } from "./cmd/branch"
+import { CapabilityCommand } from "./cmd/capability"
 import { ExportCommand } from "./cmd/export"
 import { GenerateCommand } from "./cmd/generate"
 import { GithubCommand } from "./cmd/github"
@@ -70,6 +71,7 @@ const cmds = [
   CompareCommand,
   RollbackCommand,
   BranchCommand,
+  CapabilityCommand,
   ConsoleCommand,
   ProvidersCommand,
   AgentCommand,

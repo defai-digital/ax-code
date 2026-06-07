@@ -11,9 +11,8 @@ import matter from "gray-matter"
 import { Instance } from "../../project/instance"
 import { EOL } from "os"
 import type { Argv } from "yargs"
-import { isNonEmptyRecord } from "../../util/record"
 
-type AgentMode = "all" | "primary" | "subagent"
+export type AgentMode = "all" | "primary" | "subagent"
 
 const AVAILABLE_TOOLS = [
   "bash",
@@ -28,6 +27,34 @@ const AVAILABLE_TOOLS = [
   "todowrite",
   "todoread",
 ]
+
+export type AgentCreateFrontmatter = {
+  description: string
+  mode: AgentMode
+  permission?: Record<string, "allow" | "deny">
+}
+
+export function buildAgentCreatePermission(selectedTools: string[]) {
+  const selected = new Set(selectedTools)
+  if (AVAILABLE_TOOLS.every((tool) => selected.has(tool))) return undefined
+
+  return Object.fromEntries(
+    AVAILABLE_TOOLS.map((tool) => [tool, selected.has(tool) ? "allow" : "deny"] as const),
+  ) satisfies Record<string, "allow" | "deny">
+}
+
+export function buildAgentCreateFrontmatter(input: {
+  description: string
+  mode: AgentMode
+  selectedTools: string[]
+}): AgentCreateFrontmatter {
+  const permission = buildAgentCreatePermission(input.selectedTools)
+  return {
+    description: input.description,
+    mode: input.mode,
+    ...(permission ? { permission } : {}),
+  }
+}
 
 const AgentCreateCommand = cmd({
   command: "create",
@@ -177,26 +204,12 @@ const AgentCreateCommand = cmd({
           mode = modeResult
         }
 
-        // Build tools config
-        const tools: Record<string, boolean> = {}
-        for (const tool of AVAILABLE_TOOLS) {
-          if (!selectedTools.includes(tool)) {
-            tools[tool] = false
-          }
-        }
-
         // Build frontmatter
-        const frontmatter: {
-          description: string
-          mode: AgentMode
-          tools?: Record<string, boolean>
-        } = {
+        const frontmatter = buildAgentCreateFrontmatter({
           description: generated.whenToUse,
           mode,
-        }
-        if (isNonEmptyRecord(tools)) {
-          frontmatter.tools = tools
-        }
+          selectedTools,
+        })
 
         // Write file
         const content = matter.stringify(generated.systemPrompt, frontmatter)

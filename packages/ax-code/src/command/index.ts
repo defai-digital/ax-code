@@ -10,6 +10,7 @@ import { Skill } from "../skill"
 import { Truncate } from "../tool/truncate"
 import { Policy } from "../quality/policy"
 import { Log } from "../util/log"
+import { FileCommand } from "./file-command"
 import PROMPT_INITIALIZE from "./template/initialize.txt"
 import PROMPT_REVIEW from "./template/review.txt"
 import PROMPT_ADR from "./template/adr.txt"
@@ -31,6 +32,11 @@ export namespace Command {
         sessionID: SessionID.zod,
         arguments: z.string(),
         messageID: MessageID.zod,
+        source: z.enum(["command", "file", "mcp", "skill"]).optional(),
+        sourceTool: z.string().optional(),
+        workflow: z.string().optional(),
+        workflowRunID: z.string().optional(),
+        warnings: z.array(FileCommand.Warning).optional(),
       }),
     ),
   }
@@ -41,7 +47,13 @@ export namespace Command {
       description: z.string().optional(),
       agent: z.string().optional(),
       model: z.string().optional(),
-      source: z.enum(["command", "mcp", "skill"]).optional(),
+      source: z.enum(["command", "file", "mcp", "skill"]).optional(),
+      sourceTool: z.enum(["ax-code", "agents", "opencode", "claude", "builtin", "config"]).optional(),
+      scope: z.enum(["builtin", "project", "user", "config", "mcp"]).optional(),
+      location: z.string().optional(),
+      warnings: z.array(FileCommand.Warning).optional(),
+      workflow: z.string().optional(),
+      allowShell: z.boolean().optional(),
       // workaround for zod not supporting async functions natively so we use getters
       // https://zod.dev/v4/changelog?id=zfunction
       template: z.promise(z.string()).or(z.string()),
@@ -112,6 +124,8 @@ export namespace Command {
           name: Default.INIT,
           description: "create/update AGENTS.md",
           source: "command",
+          sourceTool: "builtin",
+          scope: "builtin",
           get template() {
             return PROMPT_INITIALIZE.replace("${path}", () => ctx.worktree)
           },
@@ -121,6 +135,8 @@ export namespace Command {
           name: Default.REVIEW,
           description: "review changes [commit|branch|pr], defaults to uncommitted",
           source: "command",
+          sourceTool: "builtin",
+          scope: "builtin",
           get template() {
             return (async () => {
               const policy = await Policy.loadReviewPolicy({ worktree: ctx.worktree })
@@ -141,6 +157,8 @@ export namespace Command {
           name: Default.ADR,
           description: "generate an Architecture Decision Record",
           source: "command",
+          sourceTool: "builtin",
+          scope: "builtin",
           get template() {
             return PROMPT_ADR.replace("${path}", () => ctx.worktree)
           },
@@ -150,6 +168,8 @@ export namespace Command {
           name: Default.IMPACT,
           description: "generate an Impact Assessment for a proposed change",
           source: "command",
+          sourceTool: "builtin",
+          scope: "builtin",
           get template() {
             return PROMPT_IMPACT.replace("${path}", () => ctx.worktree)
           },
@@ -159,6 +179,8 @@ export namespace Command {
           name: Default.PRD,
           description: "generate a Product Requirements Document for a feature",
           source: "command",
+          sourceTool: "builtin",
+          scope: "builtin",
           get template() {
             return PROMPT_PRD.replace("${path}", () => ctx.worktree)
           },
@@ -168,6 +190,8 @@ export namespace Command {
           name: Default.GOAL,
           description: "set, view, pause, resume, or clear a durable session goal",
           source: "command",
+          sourceTool: "builtin",
+          scope: "builtin",
           template: "",
           hints: ["$ARGUMENTS"],
         }
@@ -178,7 +202,37 @@ export namespace Command {
             agent: command.agent,
             model: command.model,
             description: command.description,
-            source: "command",
+            source: command.location ? "file" : "command",
+            sourceTool: command.sourceTool ?? "config",
+            scope: command.scope ?? "config",
+            location: command.location,
+            warnings: command.warnings,
+            workflow: command.workflow,
+            allowShell: command.allowShell,
+            get template() {
+              return command.template
+            },
+            subtask: command.subtask,
+            hints: hints(command.template),
+          }
+        }
+
+        for (const command of yield* Effect.promise(() =>
+          FileCommand.discover({ directory: ctx.directory, worktree: ctx.worktree }),
+        )) {
+          if (commands[command.name]) continue
+          commands[command.name] = {
+            name: command.name,
+            agent: command.agent,
+            model: command.model,
+            description: command.description,
+            source: "file",
+            sourceTool: command.sourceTool,
+            scope: command.scope,
+            location: command.location,
+            warnings: command.warnings,
+            workflow: command.workflow,
+            allowShell: command.allowShell,
             get template() {
               return command.template
             },

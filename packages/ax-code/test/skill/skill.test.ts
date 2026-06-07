@@ -258,6 +258,38 @@ description: A skill in the .agents/skills directory.
   })
 })
 
+test("discovers skills from .opencode/skills/ directory", async () => {
+  await using tmp = await tmpdir({
+    git: true,
+    init: async (dir) => {
+      const skillDir = path.join(dir, ".opencode", "skills", "opencode-skill")
+      await Bun.write(
+        path.join(skillDir, "SKILL.md"),
+        `---
+name: opencode-skill
+description: A skill in the .opencode/skills directory.
+---
+
+# OpenCode Skill
+`,
+      )
+    },
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const skills = userSkills(await Skill.all())
+      expect(skills.length).toBe(1)
+      const opencodeSkill = skills.find((s) => s.name === "opencode-skill")
+      expect(opencodeSkill).toBeDefined()
+      expect(opencodeSkill!.location).toContain(path.join(".opencode", "skills", "opencode-skill", "SKILL.md"))
+      expect(opencodeSkill!.sourceTool).toBe("opencode")
+      expect(opencodeSkill!.scope).toBe("project")
+    },
+  })
+})
+
 test("discovers global skills from ~/.agents/skills/ directory", async () => {
   await using tmp = await tmpdir({ git: true })
 
@@ -288,6 +320,44 @@ This skill is loaded from the global home directory.
         expect(skills[0].name).toBe("global-agent-skill")
         expect(skills[0].description).toBe("A global skill from ~/.agents/skills for testing.")
         expect(skills[0].location).toContain(path.join(".agents", "skills", "global-agent-skill", "SKILL.md"))
+      },
+    })
+  } finally {
+    process.env.AX_CODE_TEST_HOME = originalHome
+  }
+})
+
+test("discovers global skills from ~/.opencode/skills/ directory", async () => {
+  await using tmp = await tmpdir({ git: true })
+  const homeDir = path.join(tmp.path, "home")
+
+  const originalHome = process.env.AX_CODE_TEST_HOME
+  process.env.AX_CODE_TEST_HOME = homeDir
+
+  try {
+    const skillDir = path.join(homeDir, ".opencode", "skills", "global-opencode-skill")
+    await fs.mkdir(skillDir, { recursive: true })
+    await Bun.write(
+      path.join(skillDir, "SKILL.md"),
+      `---
+name: global-opencode-skill
+description: A global skill from ~/.opencode/skills for testing.
+---
+
+# Global OpenCode Skill
+`,
+    )
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const skills = userSkills(await Skill.all())
+        expect(skills.length).toBe(1)
+        expect(skills[0].name).toBe("global-opencode-skill")
+        expect(skills[0].description).toBe("A global skill from ~/.opencode/skills for testing.")
+        expect(skills[0].location).toContain(path.join(".opencode", "skills", "global-opencode-skill", "SKILL.md"))
+        expect(skills[0].sourceTool).toBe("opencode")
+        expect(skills[0].scope).toBe("user")
       },
     })
   } finally {
@@ -624,6 +694,7 @@ test("properly resolves directories that skills live in", async () => {
       const opencodeSkillsDir = path.join(dir, ".ax-code", "skills", "agent-skill")
       const claudeDir = path.join(dir, ".claude", "skills", "claude-skill")
       const agentDir = path.join(dir, ".agents", "skills", "agent-skill")
+      const opencodeDir = path.join(dir, ".opencode", "skills", "external-opencode-skill")
       await Bun.write(
         path.join(claudeDir, "SKILL.md"),
         `---
@@ -642,6 +713,16 @@ description: A skill in the .agents/skills directory.
 ---
 
 # Agent Skill
+`,
+      )
+      await Bun.write(
+        path.join(opencodeDir, "SKILL.md"),
+        `---
+name: external-opencode-skill
+description: A skill in the .opencode/skills directory.
+---
+
+# External OpenCode Skill
 `,
       )
       await Bun.write(
@@ -671,7 +752,7 @@ description: A skill in the .ax-code/skills directory.
     directory: tmp.path,
     fn: async () => {
       const dirs = await Skill.dirs()
-      expect(dirs.length).toBe(4)
+      expect(dirs.length).toBe(5)
     },
   })
 })

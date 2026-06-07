@@ -19,7 +19,7 @@ import { Discovery } from "./discovery"
 
 export namespace Skill {
   const log = Log.create({ service: "skill" })
-  const EXTERNAL_DIRS = [".claude", ".agents"]
+  const EXTERNAL_DIRS = [".claude", ".agents", ".opencode"]
   const EXTERNAL_SKILL_PATTERN = "skills/**/SKILL.md"
   const AX_CODE_SKILL_PATTERN = "{skill,skills}/**/SKILL.md"
   const SKILL_PATTERN = "**/SKILL.md"
@@ -37,6 +37,8 @@ export namespace Skill {
     allowedTools: z.array(z.string()).optional(),
     argumentHint: z.string().optional(),
     standardIssues: z.array(z.string()).optional(),
+    sourceTool: z.enum(["ax-code", "agents", "opencode", "claude", "builtin", "config"]).optional(),
+    scope: z.enum(["builtin", "project", "user", "config", "compat"]).optional(),
     builtin: z.boolean().optional(),
   })
   export type Info = z.infer<typeof Info>
@@ -53,7 +55,7 @@ export namespace Skill {
     readonly available: (agent?: Agent.Info) => Effect.Effect<Info[]>
   }
 
-  const addSkill = (state: State, match: string) =>
+  const addSkill = (state: State, match: string, source?: { sourceTool?: Info["sourceTool"]; scope?: Info["scope"] }) =>
     Effect.promise(async () => {
       const md = await ConfigMarkdown.parse(match).catch(async (err) => {
         const message = ConfigMarkdown.FrontmatterError.isInstance(err)
@@ -120,10 +122,17 @@ export namespace Skill {
         ...(allowedTools?.length ? { allowedTools } : {}),
         ...(argumentHint ? { argumentHint } : {}),
         ...(standardIssues.length ? { standardIssues } : {}),
+        ...(source?.sourceTool ? { sourceTool: source.sourceTool } : {}),
+        ...(source?.scope ? { scope: source.scope } : {}),
       }
     })
 
-  const scanDir = (state: State, root: string, pattern: string, opts?: { dot?: boolean; scope?: string }) =>
+  const scanDir = (
+    state: State,
+    root: string,
+    pattern: string,
+    opts?: { dot?: boolean; scope?: string; sourceTool?: Info["sourceTool"]; skillScope?: Info["scope"] },
+  ) =>
     Effect.promise(() =>
       Glob.scan(pattern, {
         cwd: root,
@@ -138,7 +147,15 @@ export namespace Skill {
         }
         throw error
       }),
-    ).pipe(Effect.flatMap((matches) => Effect.forEach(matches, (match) => addSkill(state, match), { discard: true })))
+    ).pipe(
+      Effect.flatMap((matches) =>
+        Effect.forEach(
+          matches,
+          (match) => addSkill(state, match, { sourceTool: opts?.sourceTool, scope: opts?.skillScope }),
+          { discard: true },
+        ),
+      ),
+    )
 
   export const BUILTIN_NAMES = new Set(["debug-only", "debug-n-fix", "improve-overall", "security-harden"])
 
@@ -185,6 +202,8 @@ export namespace Skill {
         location: entry.location,
         content: md.content,
         ...(argumentHint ? { argumentHint } : {}),
+        sourceTool: "builtin",
+        scope: "builtin",
         builtin: true,
       }
     })
@@ -208,7 +227,12 @@ export namespace Skill {
               const root = path.join(Global.Path.home, dir)
               const exists = yield* Effect.promise(() => Filesystem.isDir(root))
               if (!exists) continue
-              yield* scanDir(s, root, EXTERNAL_SKILL_PATTERN, { dot: true, scope: "global" })
+              yield* scanDir(s, root, EXTERNAL_SKILL_PATTERN, {
+                dot: true,
+                scope: "global",
+                sourceTool: sourceToolFromDir(dir),
+                skillScope: "user",
+              })
             }
 
             const roots = yield* Effect.promise(async () => {
@@ -224,13 +248,23 @@ export namespace Skill {
             })
             yield* Effect.forEach(
               roots,
-              (root) => scanDir(s, root, EXTERNAL_SKILL_PATTERN, { dot: true, scope: "project" }),
+              (root) =>
+                scanDir(s, root, EXTERNAL_SKILL_PATTERN, {
+                  dot: true,
+                  scope: "project",
+                  sourceTool: sourceToolFromDir(path.basename(root)),
+                  skillScope: "project",
+                }),
               { discard: true },
             )
           }
 
           const configDirs = yield* Effect.promise(() => Config.directories())
-          yield* Effect.forEach(configDirs, (dir) => scanDir(s, dir, AX_CODE_SKILL_PATTERN), { discard: true })
+          yield* Effect.forEach(
+            configDirs,
+            (dir) => scanDir(s, dir, AX_CODE_SKILL_PATTERN, { sourceTool: "ax-code", skillScope: "config" }),
+            { discard: true },
+          )
 
           const cfg = yield* Effect.promise(() => Config.get())
           for (const item of cfg.skills?.paths ?? []) {
@@ -255,14 +289,14 @@ export namespace Skill {
               log.warn("skill path not found", { path: resolved })
               continue
             }
-            yield* scanDir(s, resolved, SKILL_PATTERN)
+            yield* scanDir(s, resolved, SKILL_PATTERN, { sourceTool: "config", skillScope: "config" })
           }
 
           for (const url of cfg.skills?.urls ?? []) {
             const dirs = yield* discovery.pull(url)
             for (const dir of dirs) {
               s.dirs.add(dir)
-              yield* scanDir(s, dir, SKILL_PATTERN)
+              yield* scanDir(s, dir, SKILL_PATTERN, { sourceTool: "config", skillScope: "config" })
             }
           }
 
@@ -381,6 +415,13 @@ export namespace Skill {
   }
 
   const runPromise = makeRunPromise(Service, defaultLayer)
+
+  function sourceToolFromDir(dir: string): Info["sourceTool"] {
+    if (dir === ".opencode") return "opencode"
+    if (dir === ".claude") return "claude"
+    if (dir === ".agents") return "agents"
+    return "ax-code"
+  }
 
   export async function get(name: string) {
     return runPromise((skill) => skill.get(name))

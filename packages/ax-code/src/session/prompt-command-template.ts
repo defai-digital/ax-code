@@ -48,8 +48,10 @@ export async function commandTemplateText(input: {
   template: string
   arguments: string
   run?: (cmd: string) => Promise<string>
+  allowShell?: boolean
 }) {
   let text = commandTemplate(input.template, input.arguments)
+  if (input.allowShell === false) return text.trim()
   const matches = ConfigMarkdown.shell(text)
   if (matches.length === 0) return text.trim()
 

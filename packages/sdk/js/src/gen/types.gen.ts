@@ -3499,13 +3499,41 @@ export type Command = {
   description?: string
   agent?: string
   model?: string
-  source?: "command" | "mcp" | "skill"
+  source?: "command" | "file" | "mcp" | "skill"
+  sourceTool?: "ax-code" | "agents" | "opencode" | "claude" | "builtin" | "config"
+  scope?: "builtin" | "project" | "user" | "config" | "mcp"
+  location?: string
+  warnings?: Array<{
+    code: string
+    message: string
+    severity: "info" | "warn" | "error"
+  }>
+  workflow?: string
+  allowShell?: boolean
   template: string
   subtask?: boolean
   hints: Array<string>
   mcpPrompt?: {
     client: string
     name: string
+  }
+}
+
+export type CapabilityInfo = {
+  kind: "command" | "skill" | "agent" | "workflow"
+  name: string
+  description?: string
+  source?: string
+  sourceTool?: string
+  scope?: string
+  location?: string
+  warnings?: Array<{
+    code: string
+    message: string
+    severity: "info" | "warn" | "error"
+  }>
+  metadata?: {
+    [key: string]: unknown
   }
 }
 
@@ -12664,6 +12692,24 @@ export type CommandListResponses = {
 }
 
 export type CommandListResponse = CommandListResponses[keyof CommandListResponses]
+
+export type CapabilityListData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/capability"
+}
+
+export type CapabilityListResponses = {
+  /**
+   * List of capabilities
+   */
+  200: Array<CapabilityInfo>
+}
+
+export type CapabilityListResponse = CapabilityListResponses[keyof CapabilityListResponses]
 
 export type AppLogData = {
   body?: {

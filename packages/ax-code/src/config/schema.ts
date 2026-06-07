@@ -184,6 +184,20 @@ export const Command = z.object({
   agent: z.string().optional(),
   model: ModelId.optional(),
   subtask: z.boolean().optional(),
+  workflow: z.string().optional(),
+  location: z.string().optional(),
+  sourceTool: z.enum(["ax-code", "agents", "opencode", "claude", "builtin", "config"]).optional(),
+  scope: z.enum(["project", "user", "config"]).optional(),
+  warnings: z
+    .array(
+      z.object({
+        code: z.string(),
+        message: z.string(),
+        severity: z.enum(["info", "warn", "error"]),
+      }),
+    )
+    .optional(),
+  allowShell: z.boolean().optional(),
 })
 export type Command = z.infer<typeof Command>
 

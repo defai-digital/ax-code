@@ -21,6 +21,7 @@ import {
   autocompletePopupPlacement,
   autocompleteSelectionScrollDelta,
 } from "./autocomplete-scroll"
+import { commandAutocompleteSuffix } from "./autocomplete-command"
 import { useKV } from "@tui/context/kv"
 import { buildGlyphSet, NERD_FONT_KV_KEY, resolveNerdFontEnabled } from "@tui/ui/glyphs"
 import { Flag } from "@/flag/flag"
@@ -382,7 +383,7 @@ export function Autocomplete(props: {
 
     for (const serverCommand of sync.data.command) {
       if (serverCommand.source === "command" && !defaultCommandSlashAllowlist.has(serverCommand.name)) continue
-      const label = serverCommand.source === "mcp" ? ":mcp" : ""
+      const label = commandAutocompleteSuffix(serverCommand)
       results.push({
         display: "/" + serverCommand.name + label,
         description: serverCommand.description,

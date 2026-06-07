@@ -5,6 +5,7 @@ import { Log } from "../util/log"
 import type { MessageV2 } from "./message-v2"
 import { commandSetup } from "./prompt-command-setup"
 import { resolveCommandForExecution } from "./prompt-command"
+import { createWorkflowCommandRun, workflowCommandPrompt } from "./prompt-command-workflow"
 import { executeGoalCommand } from "./prompt-goal-command"
 import type { CommandInput, PromptInput } from "./prompt-input"
 
@@ -22,7 +23,34 @@ export async function executePromptCommand(input: CommandInput, prompt: PromptRu
   if (input.command === Command.Default.GOAL) {
     return executeGoalCommand(input, prompt)
   }
-  const command = await resolveCommandForExecution({ sessionID: input.sessionID, name: input.command })
+  let command = await resolveCommandForExecution({ sessionID: input.sessionID, name: input.command })
+  const commandTelemetry = {
+    source: command.source,
+    sourceTool: command.sourceTool,
+    workflow: command.workflow,
+    warnings: command.warnings,
+  }
+  let workflowRunID: string | undefined
+  if (command.workflow) {
+    const run = await createWorkflowCommandRun({
+      commandName: input.command,
+      command,
+      arguments: input.arguments,
+      sessionID: input.sessionID,
+    })
+    workflowRunID = run.id
+    command = {
+      ...command,
+      template: workflowCommandPrompt({
+        commandName: input.command,
+        templateID: command.workflow,
+        run,
+        template: await command.template,
+      }),
+      workflow: undefined,
+      allowShell: false,
+    }
+  }
   const prepared = await commandSetup({
     command,
     name: input.command,
@@ -57,6 +85,8 @@ export async function executePromptCommand(input: CommandInput, prompt: PromptRu
     sessionID: input.sessionID,
     arguments: input.arguments,
     messageID: result.info.id,
+    ...commandTelemetry,
+    ...(workflowRunID ? { workflowRunID } : {}),
   })
 
   return result

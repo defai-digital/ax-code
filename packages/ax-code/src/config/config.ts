@@ -44,6 +44,7 @@ import * as ConfigSchema from "./schema"
 import { isRecord } from "../util/record"
 import { FeatureFlag } from "../util/feature-flags"
 import { parseJsonResult } from "../util/json-value"
+import { FileCommand } from "../command/file-command"
 
 // Single source of truth for the public config schema URL. Written
 // into every user's ax-code.json on first load, into legacy-TOML
@@ -375,7 +376,10 @@ export namespace Config {
         }
       }
 
-      result.command = mergeDeep(result.command ?? {}, await loadCommand(dir))
+      result.command = mergeDeep(
+        result.command ?? {},
+        await loadCommand(dir, inWorktree && !isUserConfigDir ? "project" : "config"),
+      )
       result.agent = mergeDeep(result.agent, await loadAgent(dir))
       result.agent = mergeDeep(result.agent, await loadMode(dir))
       const pluginFiles = await loadPlugin(dir)
@@ -666,7 +670,7 @@ export namespace Config {
     })
   }
 
-  async function loadCommand(dir: string) {
+  async function loadCommand(dir: string, scope: FileCommand.Scope) {
     const result: Record<string, Command> = {}
     for (const item of await Glob.scan("{command,commands}/**/*.md", {
       cwd: dir,
@@ -688,7 +692,23 @@ export namespace Config {
       }
       const parsed = Command.safeParse(config)
       if (parsed.success) {
-        result[config.name] = parsed.data
+        const fileCommand = await FileCommand.parse({
+          name: config.name,
+          location: item,
+          sourceTool: "ax-code",
+          scope,
+          data: md.data as Record<string, unknown>,
+          content: md.content,
+        })
+        result[config.name] = Command.parse({
+          ...parsed.data,
+          workflow: fileCommand.workflow,
+          location: fileCommand.location,
+          sourceTool: fileCommand.sourceTool,
+          scope: fileCommand.scope,
+          warnings: fileCommand.warnings,
+          allowShell: fileCommand.allowShell,
+        })
         continue
       }
       log.warn("invalid command definition, skipping", { path: item, issues: parsed.error.issues })

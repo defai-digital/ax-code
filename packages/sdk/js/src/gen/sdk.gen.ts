@@ -22,6 +22,7 @@ import type {
   AuthSetResponses,
   AutonomousGetResponses,
   AutonomousSetResponses,
+  CapabilityListResponses,
   CommandListResponses,
   Config as Config3,
   ConfigGetResponses,
@@ -6090,6 +6091,27 @@ export class Command extends HeyApiClient {
   }
 }
 
+export class Capability extends HeyApiClient {
+  /**
+   * List capabilities
+   *
+   * Get a unified catalog of reusable commands, skills, agents, and workflow templates.
+   */
+  public list<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).get<CapabilityListResponses, unknown, ThrowOnError>({
+      url: "/capability",
+      ...options,
+      ...params,
+    })
+  }
+}
+
 export class App extends HeyApiClient {
   /**
    * Write log
@@ -6560,6 +6582,11 @@ export class OpencodeClient extends HeyApiClient {
   private _command?: Command
   get command(): Command {
     return (this._command ??= new Command({ client: this.client }))
+  }
+
+  private _capability?: Capability
+  get capability(): Capability {
+    return (this._capability ??= new Capability({ client: this.client }))
   }
 
   private _app?: App

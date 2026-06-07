@@ -15,6 +15,7 @@ export async function commandSetup(input: {
     template: string | Promise<string>
     description?: string
     subtask?: boolean
+    allowShell?: boolean
     mcpPrompt?: {
       client: string
       name: string
@@ -66,6 +67,7 @@ export async function commandSetup(input: {
   const template = await commandTemplateText({
     template: await input.command.template,
     arguments: input.arguments,
+    allowShell: input.command.allowShell,
   })
 
   const result = await commandParts({

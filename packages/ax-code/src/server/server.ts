@@ -22,6 +22,7 @@ import { Skill } from "../skill"
 import { Auth } from "../auth"
 import { Flag } from "../flag/flag"
 import { Command } from "../command"
+import { Capability } from "../capability"
 import { Global } from "../global"
 import { ProviderID } from "../provider/schema"
 import { ProjectRoutes } from "./routes/project"
@@ -922,6 +923,28 @@ export namespace Server {
         async (c) => {
           const commands = await Command.list()
           return c.json(commands)
+        },
+      )
+      .get(
+        "/capability",
+        describeRoute({
+          summary: "List capabilities",
+          description: "Get a unified catalog of reusable commands, skills, agents, and workflow templates.",
+          operationId: "capability.list",
+          responses: {
+            200: {
+              description: "List of capabilities",
+              content: {
+                "application/json": {
+                  schema: resolver(Capability.Info.array()),
+                },
+              },
+            },
+          },
+        }),
+        async (c) => {
+          const capabilities = await Capability.list()
+          return c.json(capabilities)
         },
       )
       .post(
