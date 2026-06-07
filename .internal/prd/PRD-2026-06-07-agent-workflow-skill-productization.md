@@ -1,7 +1,7 @@
 # PRD: Agent Workflow and Skill Productization
 
 **Date:** 2026-06-07
-**Status:** Draft - proposal
+**Status:** Implemented - initial productization slice
 **Scope:** Internal
 **Owner:** ax-code maintainers
 **Related:** ADR-029, ADR-024, ADR-025, ADR-027, ADR-028,

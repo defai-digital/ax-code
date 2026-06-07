@@ -15,7 +15,7 @@ state and its role in the roadmap.
 | --- | --- | --- |
 | [ADR-026](ADR-026-opus48-market-response-boundary.md) | Organize the Opus 4.8 market response around Workflow Runtime, not vendor feature cloning | Proposed - umbrella market response boundary |
 | [ADR-027](ADR-027-opencode-low-risk-feature-learning-boundary.md) | Learn low-risk OpenCode and OpenTUI patterns without copying high-risk runtime features | Accepted - supporting feature-learning boundary; OpenTUI, structured error, projection, and metadata foundations landed |
-| [ADR-029](ADR-029-agent-workflow-skill-productization-boundary.md) | Productize Skills, Commands, Agents, and Workflows as One Reusable Capability Layer | Proposed - reusable capability layer for skills, commands, agents, workflow templates, and compatibility import |
+| [ADR-029](ADR-029-agent-workflow-skill-productization-boundary.md) | Productize Skills, Commands, Agents, and Workflows as One Reusable Capability Layer | Accepted - initial reusable capability layer implemented |
 | [ADR-025](ADR-025-workflow-runtime-boundary.md) | Make Dynamic Workflow Runtime a bounded orchestration boundary | Proposed - P0 market alignment boundary |
 | [ADR-028](ADR-028-task-queue-layering-boundary.md) | Separate interactive follow-up queueing from the durable task queue | Proposed - supporting interactive UX boundary; reduce-not-remove the queue |
 | [ADR-006](ADR-006-v5-agent-control-plane.md) | Make Agent Control Plane the v5 autonomous architecture foundation | Partially implemented; now supplies policy and safety under Workflow Runtime |

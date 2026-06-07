@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed
+Accepted
 
 ## Date
 
@@ -226,4 +226,3 @@ User-generated `.agents` files should not be deleted automatically.
 3. Should built-in command override be allowed for trusted projects?
 4. Should capability catalog be a stable public SDK contract in the first implementation slice?
 5. Should workflow template authoring eventually support YAML/Markdown frontmatter, or remain JSON-only?
-

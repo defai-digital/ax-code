@@ -2,6 +2,9 @@ import { describe, expect, test } from "bun:test"
 import path from "path"
 import { Agent } from "../../src/agent/agent"
 import { Instance } from "../../src/project/instance"
+import { EventQuery } from "../../src/replay/query"
+import { Recorder } from "../../src/replay/recorder"
+import { Session } from "../../src/session"
 import { SystemPrompt } from "../../src/session/system"
 import { tmpdir } from "../fixture/fixture"
 
@@ -119,9 +122,10 @@ paths:
         directory: tmp.path,
         fn: async () => {
           const build = await Agent.get("build")
+          const session = await Session.create({})
           const messages = [
             {
-              info: { id: "m1", sessionID: "s1", role: "assistant" as const },
+              info: { id: "m1", sessionID: session.id, role: "assistant" as const },
               parts: [
                 {
                   type: "tool" as const,
@@ -140,10 +144,25 @@ paths:
             },
           ] as any
 
+          Recorder.begin(session.id)
           const result = await SystemPrompt.skills(build!, messages)
+          Recorder.flushAll()
+          const events = EventQuery.bySessionAndType(session.id, "skill.recommended")
+          await Recorder.end(session.id)
+          EventQuery.deleteBySession(session.id)
+          await Session.remove(session.id)
+
           expect(result).toContain(`recommended="true"`)
           expect(result).toContain("ts-skill")
           expect(result).toContain("recommended for loading")
+          expect(events).toHaveLength(1)
+          expect(events[0]).toMatchObject({
+            type: "skill.recommended",
+            agent: "build",
+            source: "path_match",
+            filePaths: ["src/index.ts"],
+            skills: [{ name: "ts-skill", paths: ["**/*.ts"] }],
+          })
         },
       })
     } finally {

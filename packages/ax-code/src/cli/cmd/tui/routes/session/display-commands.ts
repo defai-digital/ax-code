@@ -52,6 +52,7 @@ export function displayCommands(input: {
   currentModel: () => Model | undefined
   dialogReplaceActivity: (dialog: DialogContext) => void
   dialogReplaceBranch: (dialog: DialogContext) => void
+  dialogReplaceCapability: (dialog: DialogContext) => void
   dialogReplaceCompare: (dialog: DialogContext) => void
   dialogReplaceDre: (dialog: DialogContext) => void
   dialogReplaceDreGraph: (dialog: DialogContext) => void
@@ -182,6 +183,16 @@ export function displayCommands(input: {
       value: "session.activity",
       category: "Session",
       onSelect: (dialog: DialogContext) => input.dialogReplaceActivity(dialog),
+    },
+    {
+      title: "View capability catalog",
+      value: "session.capability.catalog",
+      category: "Session",
+      slash: {
+        name: "capabilities",
+        aliases: ["capability"],
+      },
+      onSelect: (dialog: DialogContext) => input.dialogReplaceCapability(dialog),
     },
     {
       title: "View session trust (DRE)",

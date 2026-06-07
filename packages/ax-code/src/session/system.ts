@@ -18,6 +18,7 @@ import { getContext as getMemoryContext } from "../memory/injector"
 import type { MessageV2 } from "./message-v2"
 import { DecisionHints } from "./decision-hints"
 import { EventQuery } from "@/replay/query"
+import { Recorder } from "../replay/recorder"
 import type { SessionID } from "./schema"
 import { Log } from "@/util/log"
 import { Flag } from "../flag/flag"
@@ -202,7 +203,10 @@ export namespace SystemPrompt {
     if (messages) {
       const filePaths = extractFilePaths(messages)
       const matched = Skill.matchByPaths(list, filePaths)
-      if (matched.length > 0) recommended = new Set(matched.map((s) => s.name))
+      if (matched.length > 0) {
+        recommended = new Set(matched.map((s) => s.name))
+        recordSkillRecommendations({ agent, available: list, matched, filePaths, messages })
+      }
     }
 
     return [
@@ -235,6 +239,32 @@ export namespace SystemPrompt {
       if (sessionID) return sessionID
     }
     return undefined
+  }
+
+  function recordSkillRecommendations(input: {
+    agent: Agent.Info
+    available: Skill.Info[]
+    matched: Skill.Info[]
+    filePaths: string[]
+    messages: MessageV2.WithParts[]
+  }) {
+    const sessionID = inferSessionID(input.messages)
+    if (!sessionID) return
+    Recorder.emit({
+      type: "skill.recommended",
+      sessionID,
+      messageID: input.messages.at(-1)?.info.id,
+      agent: input.agent.name,
+      source: "path_match",
+      availableSkillCount: input.available.length,
+      filePaths: input.filePaths,
+      skills: input.matched.map((skill) => ({
+        name: skill.name,
+        sourceTool: skill.sourceTool,
+        scope: skill.scope,
+        paths: skill.paths,
+      })),
+    })
   }
 
   export function extractFilePaths(messages: MessageV2.WithParts[]): string[] {

@@ -5,6 +5,9 @@ import z from "zod"
 import type { Permission } from "../../src/permission"
 import type { Tool } from "../../src/tool/tool"
 import { Instance } from "../../src/project/instance"
+import { EventQuery } from "../../src/replay/query"
+import { Recorder } from "../../src/replay/recorder"
+import { Session } from "../../src/session"
 import { SkillTool } from "../../src/tool/skill"
 import { tmpdir } from "../fixture/fixture"
 import { SessionID, MessageID } from "../../src/session/schema"
@@ -138,15 +141,23 @@ Use this skill.
         directory: tmp.path,
         fn: async () => {
           const tool = await SkillTool.init()
+          const session = await Session.create({})
           const requests: Array<Omit<Permission.Request, "id" | "sessionID" | "tool">> = []
           const ctx: Tool.Context = {
             ...baseCtx,
+            sessionID: session.id,
             ask: async (req) => {
               requests.push(req)
             },
           }
 
+          Recorder.begin(ctx.sessionID)
           const result = await tool.execute({ name: "tool-skill" }, ctx)
+          Recorder.flushAll()
+          const events = EventQuery.bySessionAndType(ctx.sessionID, "skill.loaded")
+          await Recorder.end(ctx.sessionID)
+          EventQuery.deleteBySession(ctx.sessionID)
+          await Session.remove(session.id)
           const dir = path.join(tmp.path, ".ax-code", "skill", "tool-skill")
           const file = path.resolve(dir, "scripts", "demo.txt")
 
@@ -159,6 +170,16 @@ Use this skill.
           expect(result.output).toContain(`<skill_content name="tool-skill">`)
           expect(result.output).toContain(`Base directory for this skill: ${pathToFileURL(dir).href}`)
           expect(result.output).toContain(`<file>${file}</file>`)
+          expect(events).toHaveLength(1)
+          expect(events[0]).toMatchObject({
+            type: "skill.loaded",
+            sessionID: ctx.sessionID,
+            messageID: ctx.messageID,
+            skillName: "tool-skill",
+            sourceTool: "ax-code",
+            scope: "config",
+            fileCount: 1,
+          })
         },
       })
     } finally {

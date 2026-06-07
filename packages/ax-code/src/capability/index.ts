@@ -1,8 +1,12 @@
+import path from "path"
 import z from "zod"
 import { Agent } from "../agent/agent"
 import { Command } from "../command"
 import { Config } from "../config/config"
+import { Instance } from "../project/instance"
+import { InstructionPrompt } from "../session/instruction"
 import { Skill } from "../skill"
+import { Filesystem } from "../util/filesystem"
 import { WorkflowTemplate } from "../workflow/template"
 
 export namespace Capability {
@@ -14,7 +18,7 @@ export namespace Capability {
   export type Warning = z.infer<typeof Warning>
 
   export const Info = z.object({
-    kind: z.enum(["command", "skill", "agent", "workflow"]),
+    kind: z.enum(["instruction", "command", "skill", "agent", "workflow"]),
     name: z.string(),
     description: z.string().optional(),
     source: z.string().optional(),
@@ -26,8 +30,9 @@ export namespace Capability {
   })
   export type Info = z.infer<typeof Info>
 
-  export async function list(): Promise<Info[]> {
-    const [commands, skills, agents, workflows, config] = await Promise.all([
+  export async function list(input: { filePaths?: string[] } = {}): Promise<Info[]> {
+    const [instructions, commands, skills, agents, workflows, config] = await Promise.all([
+      instructionEntries(),
       Command.list(),
       Skill.all(),
       Agent.list(),
@@ -41,8 +46,9 @@ export namespace Capability {
     )
 
     const entries = [
+      ...instructions,
       ...commands.map(fromCommand),
-      ...skills.map(fromSkill),
+      ...skills.map((skill) => fromSkill(skill, input.filePaths ?? [])),
       ...agents.map((agent) => fromAgent(agent, deprecatedToolsAgents.has(agent.name))),
       ...workflows.map(fromWorkflow),
     ]
@@ -68,13 +74,22 @@ export namespace Capability {
         subtask: command.subtask,
         hints: command.hints,
         workflow: command.workflow,
+        requiresWorkflowRuntime: command.workflow !== undefined,
         allowShell: command.allowShell,
         mcpPrompt: command.mcpPrompt,
+        permissionImpact: command.workflow
+          ? "workflow"
+          : command.source === "mcp"
+            ? "mcp_prompt_permission"
+            : command.agent
+              ? "agent_permissions"
+              : "default_agent_permissions",
       }),
     }
   }
 
-  function fromSkill(skill: Skill.Info): Info {
+  function fromSkill(skill: Skill.Info, filePaths: string[]): Info {
+    const recommended = Skill.matchByPaths([skill], filePaths).length > 0
     return {
       kind: "skill",
       name: skill.name,
@@ -95,6 +110,8 @@ export namespace Capability {
         allowedTools: skill.allowedTools,
         argumentHint: skill.argumentHint,
         builtin: skill.builtin,
+        recommended,
+        permissionImpact: skill.allowedTools?.length ? "declares_allowed_tools" : "instructions_only",
       }),
     }
   }
@@ -123,6 +140,7 @@ export namespace Capability {
         hidden: agent.hidden,
         model: agent.model,
         steps: agent.steps,
+        permissionImpact: permissionImpact(agent.permission),
       }),
     }
   }
@@ -142,8 +160,29 @@ export namespace Capability {
         tags: template.tags,
         revision: template.revision,
         specHash: template.specHash,
+        requiresWorkflowRuntime: true,
+        permissionImpact: template.spec.permissions,
       }),
     }
+  }
+
+  async function instructionEntries(): Promise<Info[]> {
+    const paths = Array.from(await InstructionPrompt.systemPaths()).sort((a, b) => a.localeCompare(b))
+    return Promise.all(
+      paths.map(async (file) => ({
+        kind: "instruction" as const,
+        name: instructionName(file),
+        description: "Always-on instruction context loaded for this project.",
+        source: "instruction",
+        sourceTool: "ax-code",
+        scope: Filesystem.contains(Instance.worktree, file) ? "project" : "config",
+        location: file,
+        metadata: compactMetadata({
+          permissionImpact: "instructions_only",
+          recommended: true,
+        }),
+      })),
+    )
   }
 
   function compactMetadata(input: Record<string, unknown>): Record<string, unknown> | undefined {
@@ -169,5 +208,17 @@ export namespace Capability {
         },
       ]
     }
+  }
+
+  function permissionImpact(ruleset: Agent.Info["permission"]) {
+    const counts: Record<"allow" | "ask" | "deny", number> = { allow: 0, ask: 0, deny: 0 }
+    for (const rule of ruleset) counts[rule.action]++
+    return counts
+  }
+
+  function instructionName(file: string) {
+    const relative = path.relative(Instance.worktree, file)
+    if (!relative.startsWith("..") && !path.isAbsolute(relative)) return relative
+    return path.basename(file)
   }
 }

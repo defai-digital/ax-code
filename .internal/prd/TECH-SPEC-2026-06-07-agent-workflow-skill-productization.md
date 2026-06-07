@@ -1,7 +1,7 @@
 # Tech Spec: Agent Workflow and Skill Productization
 
 **Date:** 2026-06-07
-**Status:** Draft - proposal
+**Status:** Implemented - initial productization slice
 **Scope:** Internal technical design
 **Related:** `.internal/prd/PRD-2026-06-07-agent-workflow-skill-productization.md`, ADR-029, ADR-024, ADR-025,
 ADR-027, ADR-028
@@ -523,4 +523,3 @@ Generated `.agents` files from importers are user files and must not be deleted 
 3. Should workflow command frontmatter support input mappings in MVP?
 4. Should capability catalog live in a new domain module or stay as separate CLI/server aggregation?
 5. Should `.claude/commands` be auto-discovered or import-only?
-

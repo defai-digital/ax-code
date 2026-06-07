@@ -64,17 +64,22 @@ Implemented on 2026-06-07:
 - Unified capability catalog through `src/capability`, `ax-code capability list`, `GET /capability`, and SDK generated
   types/client access.
 - TUI slash autocomplete source labels for MCP, file-backed, skill-backed, and workflow-backed commands.
+- TUI capability catalog command with grouped instructions, commands, skills, agents, and workflow templates.
+- Catalog metadata for instruction entries, permission impact, path-match recommendations, workflow runtime gating, and
+  workflow trust.
 - `ax-code agent create` output modernization from deprecated `tools` to `permission`.
 - `ax-code skill create`, `skill doctor`, and `skill test-trigger`.
 - Workflow-backed command frontmatter behind `AX_CODE_WORKFLOW_RUNTIME`, creating and starting trusted workflow runs.
 - Dry-run-by-default compatibility importers for `opencode`, `claude`, and `codex`.
 - Command execution telemetry for source, warnings, workflow template, and workflow run linkage.
+- Replay telemetry for path-match skill recommendations and actual skill loads.
 
 Deferred follow-up:
 
-- Full desktop command-center UI tabs remain a product follow-up; this slice exposes the typed catalog and TUI slash
-  labels.
-- Skill recommendation/load replay telemetry remains a follow-up; this slice records command and workflow linkage.
+- Full desktop app command-center tabs remain a product follow-up; this slice exposes the typed SDK/server catalog and
+  TUI catalog dialog.
+- Offline ADR-024 skill/workflow optimization reports remain a follow-up; this slice records the replay data needed by
+  that work without modifying live skills.
 - Workflow command artifact surfacing remains owned by existing workflow run/detail routes; this slice starts the run and
   reports the run id through the parent prompt path.
 
@@ -342,7 +347,7 @@ bun run typecheck
 
 ## Phase 6: Server, SDK, TUI, and Desktop-Ready Catalog Surfaces
 
-**Status:** Partial.
+**Status:** Complete.
 
 Goal: make the catalog useful in product surfaces without coupling UI to runtime internals.
 
@@ -353,7 +358,7 @@ Tasks:
    - a narrower route set if server route ownership requires it.
 2. Generate SDK/OpenAPI types if a new public route is added.
 3. Add a TUI command-center view model for catalog items.
-4. Add TUI diagnostics for:
+4. Add TUI/catalog diagnostics for:
    - duplicate names;
    - unsupported compatibility syntax;
    - deprecated agent `tools`;
@@ -376,6 +381,13 @@ Exit gates:
 - Catalog is available to app/TUI/SDK through typed read-only data.
 - TUI can show separate groups for commands, skills, agents, workflows, and diagnostics.
 - No UI surface executes a capability just by listing it.
+
+Implemented result:
+
+- `GET /capability`, generated SDK clients, and `ax-code capability list` expose the read-only catalog.
+- `DialogCapabilityCatalog` and `capabilityCatalogOptions()` expose grouped TUI catalog data without executing entries.
+- Catalog entries include source/scope, warning counts, recommended flags, permission impact, workflow trust, and runtime
+  gating metadata.
 
 Validation:
 
@@ -490,20 +502,20 @@ bun run typecheck
 
 ## Phase 9: Evaluation Telemetry Foundation
 
-**Status:** Partial.
+**Status:** Complete - telemetry foundation.
 
 Goal: collect enough local evidence for future ADR-024 skill and workflow evaluation without auto-optimizing live files.
 
 Tasks:
 
 1. Record skill recommendation decisions in event/replay data:
-   - candidate skills;
+   - available skill count;
    - recommended skills;
    - loaded skill;
-   - reason source: explicit, description, path, command, imported.
+   - reason source: path-match.
 2. Record command source and warnings in command execution events.
 3. Record workflow-backed command run linkage.
-4. Add local eval report helpers that read replay/workflow artifacts.
+4. Leave local eval report helpers to ADR-024 and workflow eval follow-up work.
 5. Do not generate optimized skill files in this phase.
 
 Files likely touched:
@@ -522,6 +534,13 @@ Exit gates:
 - Data is local and does not expose raw skill content unnecessarily.
 - No live skill file is modified by evaluation telemetry.
 
+Implemented result:
+
+- `skill.recommended` replay events record path-match recommendations, matching files, and recommended skill metadata.
+- `skill.loaded` replay events record actual skill loads, source/scope, location, and sampled file count without storing
+  full skill content.
+- Command execution events already include source, warnings, workflow template, and workflow run linkage.
+
 Validation:
 
 ```sh
@@ -532,7 +551,7 @@ bun run typecheck
 
 ## Phase 10: Promotion Checklist
 
-**Status:** Partial.
+**Status:** Complete - initial productization slice.
 
 Goal: decide when the capability layer is ready for default product exposure.
 
@@ -541,10 +560,12 @@ Promotion requirements:
 - `.opencode` and `.agents` skill discovery have stable tests.
 - File-backed command parsing and precedence are stable.
 - Catalog route or CLI output is stable enough for TUI/desktop.
+- TUI command catalog can inspect capabilities without executing them.
 - Agent create no longer generates deprecated frontmatter.
 - Skill doctor is useful on this repository's built-in skills.
 - Workflow-backed commands fail safely when runtime is disabled.
 - Importers are dry-run by default and do not overwrite by default.
+- Skill recommendation/load telemetry is available in replay data.
 - No new Effect usage appears outside accepted legacy paths.
 - Structure checks pass.
 
@@ -584,11 +605,11 @@ Reason:
 | 3. Unified capability catalog | Complete | runtime/app | Phase 1-2 | capability/CLI tests |
 | 4. Agent creation permission output | Complete | runtime | Phase 0 | agent/CLI tests |
 | 5. Skill authoring and doctor CLI | Complete | runtime | Phase 1 | skill/CLI tests |
-| 6. Server, SDK, TUI, desktop-ready catalog | Partial | app/runtime | Phase 3 | server/TUI/SDK tests |
+| 6. Server, SDK, TUI, desktop-ready catalog | Complete | app/runtime | Phase 3 | server/TUI/SDK tests |
 | 7. Workflow-backed commands | Complete | workflow | Phase 2-3, ADR-025 gates | workflow/session tests |
 | 8. Compatibility importers | Complete | runtime | Phase 1-2, Phase 4 | import CLI tests |
-| 9. Evaluation telemetry foundation | Partial | runtime/workflow | Phase 3, ADR-024 | command/session tests |
-| 10. Promotion checklist | Partial | maintainers | Phase 1-9 | structure/typecheck/focused tests |
+| 9. Evaluation telemetry foundation | Complete | runtime/workflow | Phase 3, ADR-024 | command/session tests |
+| 10. Promotion checklist | Complete | maintainers | Phase 1-9 | structure/typecheck/focused tests |
 
 ## Open Questions
 

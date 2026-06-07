@@ -36,11 +36,14 @@ Check release $ARGUMENTS.
 
       const skillDir = path.join(dir, ".opencode", "skills", "release-check")
       await fs.mkdir(skillDir, { recursive: true })
+      await Bun.write(path.join(dir, "AGENTS.md"), "# Project Instructions\n")
       await Bun.write(
         path.join(skillDir, "SKILL.md"),
         `---
 name: release-check
 description: Review release readiness.
+paths:
+  - "releases/**/*.md"
 ---
 
 # Release Check
@@ -53,9 +56,21 @@ description: Review release readiness.
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const capabilities = await Capability.list()
+        const capabilities = await Capability.list({ filePaths: ["releases/v1.md"] })
         const keys = capabilities.map((capability) => `${capability.kind}:${capability.name}`)
         expect(keys).toEqual([...keys].sort())
+
+        const instruction = capabilities.find((item) => item.kind === "instruction" && item.name === "AGENTS.md")
+        expect(instruction).toMatchObject({
+          kind: "instruction",
+          source: "instruction",
+          sourceTool: "ax-code",
+          scope: "project",
+        })
+        expect(instruction?.metadata).toMatchObject({
+          permissionImpact: "instructions_only",
+          recommended: true,
+        })
 
         const command = capabilities.find((item) => item.kind === "command" && item.name === "release-check")
         expect(command).toMatchObject({
@@ -68,6 +83,7 @@ description: Review release readiness.
         expect(command?.metadata).toMatchObject({
           hints: ["$ARGUMENTS"],
           allowShell: false,
+          permissionImpact: "default_agent_permissions",
         })
 
         const skill = capabilities.find((item) => item.kind === "skill" && item.name === "release-check")
@@ -78,6 +94,10 @@ description: Review release readiness.
           scope: "project",
         })
         expect(skill?.warnings?.map((warning) => warning.code)).toContain("duplicate_command_skill_name")
+        expect(skill?.metadata).toMatchObject({
+          recommended: true,
+          permissionImpact: "instructions_only",
+        })
 
         const agent = capabilities.find((item) => item.kind === "agent" && item.name === "build")
         expect(agent).toMatchObject({
@@ -87,6 +107,7 @@ description: Review release readiness.
           sourceTool: "builtin",
           scope: "builtin",
         })
+        expect(agent?.metadata?.permissionImpact).toBeDefined()
 
         const workflow = capabilities.find((item) => item.kind === "workflow" && item.name === "builtin:noop-dry-run")
         expect(workflow).toMatchObject({
@@ -95,6 +116,10 @@ description: Review release readiness.
           source: "builtin",
           sourceTool: "ax-code",
           scope: "builtin",
+        })
+        expect(workflow?.metadata).toMatchObject({
+          trust: "trusted",
+          requiresWorkflowRuntime: true,
         })
       },
     })

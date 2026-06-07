@@ -106,6 +106,33 @@ export const ToolResultEvent = Base.extend({
   durationMs: z.number(),
 })
 
+export const SkillRecommendedEvent = Base.extend({
+  type: z.literal("skill.recommended"),
+  agent: z.string(),
+  source: z.literal("path_match"),
+  availableSkillCount: z.number().int(),
+  filePaths: z.string().array(),
+  skills: z
+    .object({
+      name: z.string(),
+      sourceTool: z.string().optional(),
+      scope: z.string().optional(),
+      paths: z.string().array().optional(),
+    })
+    .array(),
+})
+
+export const SkillLoadedEvent = Base.extend({
+  type: z.literal("skill.loaded"),
+  skillName: z.string(),
+  callID: z.string().optional(),
+  sourceTool: z.string().optional(),
+  scope: z.string().optional(),
+  location: z.string().optional(),
+  builtin: z.boolean().optional(),
+  fileCount: z.number().int().optional(),
+})
+
 export const PermissionAskEvent = Base.extend({
   type: z.literal("permission.ask"),
   permission: z.string(),
@@ -278,6 +305,8 @@ export const ReplayEvent = z.discriminatedUnion("type", [
   StepFinishEvent,
   ToolCallEvent,
   ToolResultEvent,
+  SkillRecommendedEvent,
+  SkillLoadedEvent,
   PermissionAskEvent,
   PermissionReplyEvent,
   ErrorEvent,

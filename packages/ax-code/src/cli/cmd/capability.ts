@@ -22,13 +22,20 @@ const CapabilityListCommand = cmd({
   command: "list",
   describe: "list reusable commands, skills, agents, and workflow templates",
   builder: (yargs: Argv) =>
-    yargs.option("json", {
-      type: "boolean",
-      describe: "output machine-readable JSON",
-    }),
+    yargs
+      .option("json", {
+        type: "boolean",
+        describe: "output machine-readable JSON",
+      })
+      .option("file", {
+        type: "array",
+        describe: "file paths used to mark path-matching skills as recommended",
+      }),
   async handler(args) {
     await bootstrap(process.cwd(), async () => {
-      const capabilities = await Capability.list()
+      const capabilities = await Capability.list({
+        filePaths: (args.file as string[] | undefined)?.map(String),
+      })
       if (args.json) {
         process.stdout.write(JSON.stringify(capabilities, null, 2) + EOL)
         return

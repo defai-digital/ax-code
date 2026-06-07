@@ -6,6 +6,7 @@ import { Skill } from "../skill"
 import { Ripgrep } from "../file/ripgrep"
 import { iife } from "@/util/iife"
 import { Filesystem } from "@/util/filesystem"
+import { Recorder } from "../replay/recorder"
 
 function escapeXmlAttribute(value: string) {
   return value
@@ -75,7 +76,7 @@ export const SkillTool = Tool.define("skill", async (ctx) => {
       const base = skill.builtin ? `builtin://${encodeURIComponent(skill.name)}/` : pathToFileURL(dir).href
 
       const limit = 10
-      const files = await iife(async () => {
+      const sampledFiles = await iife(async () => {
         if (skill.builtin || !(await Filesystem.isDir(dir))) return []
         const arr = []
         for await (const file of Ripgrep.files({
@@ -93,7 +94,21 @@ export const SkillTool = Tool.define("skill", async (ctx) => {
           }
         }
         return arr
-      }).then((f) => f.map((file) => `<file>${escapeXmlAttribute(file)}</file>`).join("\n"))
+      })
+      const files = sampledFiles.map((file) => `<file>${escapeXmlAttribute(file)}</file>`).join("\n")
+
+      Recorder.emit({
+        type: "skill.loaded",
+        sessionID: ctx.sessionID,
+        messageID: ctx.messageID,
+        callID: ctx.callID,
+        skillName: skill.name,
+        sourceTool: skill.sourceTool,
+        scope: skill.scope,
+        location: skill.location,
+        builtin: skill.builtin,
+        fileCount: sampledFiles.length,
+      })
 
       return {
         title: `Loaded skill: ${skill.name}`,

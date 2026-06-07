@@ -429,6 +429,14 @@ export namespace Replay {
         case "tool.result":
           lines.push(`[tool]    ${event.status} ${event.tool} ${event.durationMs}ms`)
           break
+        case "skill.recommended":
+          lines.push(
+            `[skill]   recommended ${event.skills.map((skill) => skill.name).join(",")} paths=${event.filePaths.join(",")}`,
+          )
+          break
+        case "skill.loaded":
+          lines.push(`[skill]   loaded ${event.skillName}${event.callID ? ` call=${event.callID}` : ""}`)
+          break
         case "permission.ask":
           lines.push(`[perm]    ask ${event.permission} patterns=${event.patterns.join(",")}`)
           break

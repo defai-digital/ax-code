@@ -3520,7 +3520,7 @@ export type Command = {
 }
 
 export type CapabilityInfo = {
-  kind: "command" | "skill" | "agent" | "workflow"
+  kind: "instruction" | "command" | "skill" | "agent" | "workflow"
   name: string
   description?: string
   source?: string

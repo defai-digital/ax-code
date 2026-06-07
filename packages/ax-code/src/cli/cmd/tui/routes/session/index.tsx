@@ -27,6 +27,7 @@ import { Header } from "./header"
 import { useDialog } from "../../ui/dialog"
 import { DialogMessage } from "./dialog-message"
 import { DialogActivity } from "./dialog-activity"
+import { DialogCapabilityCatalog } from "./dialog-capability-catalog"
 import { DialogTimeline } from "./dialog-timeline"
 import { DialogQuality } from "./dialog-quality"
 import { DialogWorkflow } from "./dialog-workflow"
@@ -500,6 +501,7 @@ export function Session() {
       conceal,
       currentModel: () => local.model.current(),
       dialogReplaceActivity: (dialog) => dialog.replace(() => <DialogActivity sessionID={route.sessionID} />),
+      dialogReplaceCapability: (dialog) => dialog.replace(() => <DialogCapabilityCatalog />),
       dialogReplaceDre: (dialog) => dialog.replace(() => <DialogDre sessionID={route.sessionID} />),
       dialogReplaceDreGraph: (dialog) => dialog.replace(() => <DialogDreGraph sessionID={route.sessionID} />),
       dialogReplaceGoal: (dialog) =>
