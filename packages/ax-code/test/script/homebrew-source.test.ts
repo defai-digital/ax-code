@@ -71,15 +71,20 @@ describe("distribution support guardrails", () => {
   test("default homebrew update separates release-read and tap-write tokens", async () => {
     const text = await Bun.file(homebrewDefaultScript).text()
     expect(text).toContain('RELEASE_READ_TOKEN="${GH_TOKEN:-}"')
-    expect(text).toContain('TAP_AUTH_TOKEN="${TAP_TOKEN:-}"')
+    expect(text).toContain('LEGACY_TAP_AUTH_TOKEN="${TAP_TOKEN:-}"')
+    expect(text).toContain('NAMED_TAP_AUTH_TOKEN="${HOMEBREW_TAP_TOKEN:-}"')
+    expect(text).toContain('add_tap_token "TAP_TOKEN" "${LEGACY_TAP_AUTH_TOKEN}"')
+    expect(text).toContain('add_tap_token "HOMEBREW_TAP_TOKEN" "${NAMED_TAP_AUTH_TOKEN}"')
     expect(text).toContain('HOMEBREW_TAP_TOKEN is not configured; stable releases must update the Homebrew tap')
-    expect(text).toContain('TAP_AUTH_TOKEN="${GH_TOKEN:-}"')
+    expect(text).toContain('add_tap_token "GH_TOKEN" "${GH_TOKEN:-}"')
     expect(text).toContain('export GH_TOKEN="${RELEASE_READ_TOKEN}"')
-    expect(text).toContain('export GH_TOKEN="${TAP_AUTH_TOKEN}"')
+    expect(text).toContain('export GH_TOKEN="${token}"')
+    expect(text).toContain("trying next configured token")
+    expect(text).toContain("All configured Homebrew tap tokens failed")
     expect(text.indexOf('export GH_TOKEN="${RELEASE_READ_TOKEN}"')).toBeLessThan(
       text.indexOf('DARWIN_ARM64_SHA="$(download_asset "${DARWIN_ARM64_ASSET}")"'),
     )
-    expect(text.indexOf('export GH_TOKEN="${TAP_AUTH_TOKEN}"')).toBeGreaterThan(
+    expect(text.indexOf('export GH_TOKEN="${token}"')).toBeGreaterThan(
       text.indexOf('DARWIN_ARM64_SHA="$(download_asset "${DARWIN_ARM64_ASSET}")"'),
     )
   })
@@ -138,7 +143,10 @@ describe("distribution support guardrails", () => {
     expect(text).toMatch(/\n  homebrew:/)
     expect(text).toContain("bash .github/scripts/update-homebrew.sh")
     expect(text).toContain("secrets.HOMEBREW_TAP_TOKEN")
+    expect(text).toContain("secrets.TAP_TOKEN")
+    expect(text).not.toContain("secrets.HOMEBREW_TAP_TOKEN || secrets.TAP_TOKEN")
     expect(text).toContain("TAP_TOKEN")
+    expect(text).toContain("HOMEBREW_TAP_TOKEN")
     expect(text).toContain("!contains(github.ref_name, '-')")
   })
 

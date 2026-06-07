@@ -8,8 +8,10 @@
 # Inputs (env):
 #   GITHUB_REF_NAME — release tag (e.g. v5.5.1)
 #   GH_TOKEN        — read access to the ax-code release assets
-#   TAP_TOKEN       — write access to the Homebrew tap repo. Local manual runs
-#                    may fall back to GH_TOKEN when it has tap write access.
+#   TAP_TOKEN       — legacy write token for the Homebrew tap repo.
+#   HOMEBREW_TAP_TOKEN — preferred write token for the Homebrew tap repo.
+#                    Local manual runs may fall back to GH_TOKEN when it has
+#                    tap write access.
 set -euo pipefail
 
 VERSION="${GITHUB_REF_NAME#v}"
@@ -17,21 +19,52 @@ TAG="v${VERSION}"
 RELEASE_BASE="https://github.com/defai-digital/ax-code/releases/download/${TAG}"
 SOURCE_REPO="${GITHUB_REPOSITORY:-defai-digital/ax-code}"
 RELEASE_READ_TOKEN="${GH_TOKEN:-}"
-TAP_AUTH_TOKEN="${TAP_TOKEN:-}"
+LEGACY_TAP_AUTH_TOKEN="${TAP_TOKEN:-}"
+NAMED_TAP_AUTH_TOKEN="${HOMEBREW_TAP_TOKEN:-}"
+TAP_AUTH_LABELS=()
+TAP_AUTH_TOKENS=()
+
+add_tap_token() {
+  local label="$1"
+  local token="$2"
+  local existing
+
+  if [ -z "${token}" ]; then
+    return
+  fi
+
+  if [ "${#TAP_AUTH_TOKENS[@]}" -gt 0 ]; then
+    for existing in "${TAP_AUTH_TOKENS[@]}"; do
+      if [ "${existing}" = "${token}" ]; then
+        return
+      fi
+    done
+  fi
+
+  TAP_AUTH_LABELS+=("${label}")
+  TAP_AUTH_TOKENS+=("${token}")
+}
 
 if [ -z "${RELEASE_READ_TOKEN}" ]; then
   echo "::error::GH_TOKEN is required to read release assets from ${SOURCE_REPO}"
   exit 1
 fi
-if [ -z "${TAP_AUTH_TOKEN}" ]; then
+
+# Prefer the legacy TAP_TOKEN first so existing tap-write credentials keep
+# working even if the newer HOMEBREW_TAP_TOKEN secret is present but scoped
+# incorrectly.
+add_tap_token "TAP_TOKEN" "${LEGACY_TAP_AUTH_TOKEN}"
+add_tap_token "HOMEBREW_TAP_TOKEN" "${NAMED_TAP_AUTH_TOKEN}"
+
+if [ "${#TAP_AUTH_TOKENS[@]}" -eq 0 ]; then
   if [ "${GITHUB_ACTIONS:-}" = "true" ]; then
     echo "::error::HOMEBREW_TAP_TOKEN is not configured; stable releases must update the Homebrew tap"
     exit 1
   fi
-  TAP_AUTH_TOKEN="${GH_TOKEN:-}"
+  add_tap_token "GH_TOKEN" "${GH_TOKEN:-}"
 fi
-if [ -z "${TAP_AUTH_TOKEN}" ]; then
-  echo "::error::TAP_TOKEN or a tap-write GH_TOKEN is required to update the Homebrew tap"
+if [ "${#TAP_AUTH_TOKENS[@]}" -eq 0 ]; then
+  echo "::error::TAP_TOKEN, HOMEBREW_TAP_TOKEN, or a tap-write GH_TOKEN is required to update the Homebrew tap"
   exit 1
 fi
 # Keep release downloads on the source-repo token. The tap write token may be
@@ -113,22 +146,61 @@ HEADER
 echo "Generated formula:"
 cat /tmp/ax-code.rb
 
-TAP_DIR="$(mktemp -d)"
-trap 'rm -rf "${TAP_DIR}"' EXIT
-# Switch to the tap write token only after all source-repo release assets have
-# been downloaded and hashed.
-export GH_TOKEN="${TAP_AUTH_TOKEN}"
-gh auth setup-git
-gh repo clone defai-digital/homebrew-ax-code "${TAP_DIR}" -- --depth 1
-cp /tmp/ax-code.rb "${TAP_DIR}/ax-code.rb"
-cd "${TAP_DIR}"
-git config user.name "github-actions[bot]"
-git config user.email "github-actions[bot]@users.noreply.github.com"
-git add ax-code.rb
-if ! git diff --cached --quiet; then
-  git commit -m "Update ax-code to v${VERSION}"
-  git push
-  echo "Homebrew tap updated to v${VERSION}"
-else
-  echo "Formula unchanged, skipping push"
-fi
+try_update_tap() {
+  local label="$1"
+  local token="$2"
+  local tap_dir
+  local status
+
+  tap_dir="$(mktemp -d)"
+  echo "Updating Homebrew tap with ${label}"
+
+  # Switch to the tap write token only after all source-repo release assets have
+  # been downloaded and hashed.
+  export GH_TOKEN="${token}"
+  gh auth setup-git || {
+    status=$?
+    rm -rf "${tap_dir}"
+    return "${status}"
+  }
+  gh repo clone defai-digital/homebrew-ax-code "${tap_dir}" -- --depth 1 || {
+    status=$?
+    rm -rf "${tap_dir}"
+    return "${status}"
+  }
+  cp /tmp/ax-code.rb "${tap_dir}/ax-code.rb" || {
+    status=$?
+    rm -rf "${tap_dir}"
+    return "${status}"
+  }
+  (
+    cd "${tap_dir}" || exit
+    git config user.name "github-actions[bot]" || exit
+    git config user.email "github-actions[bot]@users.noreply.github.com" || exit
+    git add ax-code.rb || exit
+    if git diff --cached --quiet; then
+      echo "Formula unchanged, skipping push"
+    else
+      git commit -m "Update ax-code to v${VERSION}" || exit
+      git push || exit
+      echo "Homebrew tap updated to v${VERSION}"
+    fi
+  )
+  status=$?
+  rm -rf "${tap_dir}"
+  return "${status}"
+}
+
+last_index=$((${#TAP_AUTH_TOKENS[@]} - 1))
+for index in "${!TAP_AUTH_TOKENS[@]}"; do
+  if try_update_tap "${TAP_AUTH_LABELS[$index]}" "${TAP_AUTH_TOKENS[$index]}"; then
+    exit 0
+  fi
+
+  if [ "${index}" -lt "${last_index}" ]; then
+    echo "::warning::Homebrew tap update failed with ${TAP_AUTH_LABELS[$index]}; trying next configured token"
+  fi
+done
+
+echo "::error::All configured Homebrew tap tokens failed to update defai-digital/homebrew-ax-code"
+exit 1

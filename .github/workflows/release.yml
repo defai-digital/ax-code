@@ -253,8 +253,8 @@ jobs:
   homebrew:
     # Update the Homebrew tap automatically after a STABLE release. Beta /
     # prerelease tags (those containing a hyphen) skip the stable tap update.
-    # Requires the HOMEBREW_TAP_TOKEN secret: a PAT with write access to
-    # defai-digital/homebrew-ax-code.
+    # Requires HOMEBREW_TAP_TOKEN or TAP_TOKEN to hold a PAT with write access
+    # to defai-digital/homebrew-ax-code.
     needs: publish
     if: ${{ !contains(github.ref_name, '-') }}
     runs-on: ubuntu-latest
@@ -265,8 +265,10 @@ jobs:
       - name: Update Homebrew tap
         env:
           GITHUB_REF_NAME: ${{ github.ref_name }}
-          # Read this repo's release assets with the default token; write the
-          # separate homebrew-ax-code tap with the scoped PAT secret.
+          # Read this repo's release assets with the default token. Pass both
+          # tap-write secret names so the script can fall back if one is present
+          # but lacks access to defai-digital/homebrew-ax-code.
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN || secrets.TAP_TOKEN }}
+          TAP_TOKEN: ${{ secrets.TAP_TOKEN }}
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
         run: bash .github/scripts/update-homebrew.sh
