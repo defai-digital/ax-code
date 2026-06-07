@@ -88,6 +88,8 @@ describe("distribution support guardrails", () => {
     expect(publishJob).not.toBeNull()
     expect(publishJob![0]).toContain("gh release create")
     expect(publishJob![0]).toContain("gh release upload")
+    expect(publishJob![0]).toContain("*.tar.gz.minisig")
+    expect(publishJob![0]).toContain("*.zip.minisig")
     expect(publishJob![0]).not.toMatch(/\n\s+--draft(?:\s|\\|$)/)
     expect(text).not.toMatch(/\n  finalize:/)
     expect(text).not.toContain("gh workflow run install-matrix-smoke.yml")

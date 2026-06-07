@@ -194,7 +194,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="${{ github.ref_name }}"
-          for f in packages/ax-code/dist/*.tar.gz packages/ax-code/dist/*.zip; do
+          for f in packages/ax-code/dist/*.tar.gz packages/ax-code/dist/*.tar.gz.minisig packages/ax-code/dist/*.zip packages/ax-code/dist/*.zip.minisig; do
             [ -f "$f" ] && gh release upload "$TAG" "$f" --clobber || true
           done
 
