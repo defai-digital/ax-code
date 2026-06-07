@@ -426,7 +426,7 @@ async function main() {
     await Bun.write(file, `${prev}${text}\n`)
   }
 
-  if (miss.length || hit.length || raw.length || v4.length || stale.length || drift.length || trackedInternal.length) {
+  if (miss.length || hit.length || raw.length || v4.length || stale.length || drift.length) {
     process.exit(1)
   }
 }

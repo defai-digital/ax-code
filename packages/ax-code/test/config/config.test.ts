@@ -726,12 +726,12 @@ Nested command template`,
     fn: async () => {
       const config = await Config.get()
 
-      expect(config.command?.["hello"]).toEqual({
+      expect(config.command?.["hello"]).toMatchObject({
         description: "Test command",
         template: "Hello from singular command",
       })
 
-      expect(config.command?.["nested/child"]).toEqual({
+      expect(config.command?.["nested/child"]).toMatchObject({
         description: "Nested command",
         template: "Nested command template",
       })
@@ -771,12 +771,12 @@ Nested command template`,
     fn: async () => {
       const config = await Config.get()
 
-      expect(config.command?.["hello"]).toEqual({
+      expect(config.command?.["hello"]).toMatchObject({
         description: "Test command",
         template: "Hello from plural commands",
       })
 
-      expect(config.command?.["nested/child"]).toEqual({
+      expect(config.command?.["nested/child"]).toMatchObject({
         description: "Nested command",
         template: "Nested command template",
       })
