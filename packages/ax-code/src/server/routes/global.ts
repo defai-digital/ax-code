@@ -13,7 +13,7 @@ import { Installation } from "@/installation"
 import { Log } from "../../util/log"
 import { lazy } from "../../util/lazy"
 import { Config } from "../../config/config"
-import { redactConfig } from "./config"
+import { redactConfig, stripRedactedConfig } from "./config"
 import { errors, invalidRequest } from "../error"
 import { pushSseFrame } from "../sse-queue"
 import { Event } from "../event"
@@ -171,9 +171,9 @@ export const GlobalRoutes = lazy(() =>
       }),
       validator("json", Config.Info),
       async (c) => {
-        const config = c.req.valid("json")
+        const config = stripRedactedConfig(c.req.valid("json"))
         const next = await Config.updateGlobal(config)
-        return c.json(next)
+        return c.json(redactConfig(next))
       },
     )
     .post(

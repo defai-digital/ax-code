@@ -30,7 +30,7 @@ import { PermissionID } from "@/permission/schema"
 import { ModelID, ProviderID } from "@/provider/schema"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
-import { parseExistingSessionID, parseSessionID, type SessionRouteContext, SESSION_ID_PARAM } from "./route-params"
+import { parseSessionID, type SessionRouteContext, SESSION_ID_PARAM } from "./route-params"
 import { QueryBoolean } from "./query"
 
 const log = Log.create({ service: "server" })
@@ -350,7 +350,7 @@ export const SessionRoutes = lazy(() =>
         }),
       ),
       async (c) => {
-        const sessionID = await parseExistingSessionID(c)
+        const sessionID = await parseCurrentProjectSessionID(c)
         const query = c.req.valid("query")
         const ranked = await SessionBranchRank.family(sessionID, { deep: query.deep })
         return c.json(ranked)
@@ -378,7 +378,7 @@ export const SessionRoutes = lazy(() =>
       }),
       validator("param", SESSION_ID_PARAM),
       async (c) => {
-        const sessionID = await parseExistingSessionID(c)
+        const sessionID = await parseCurrentProjectSessionID(c)
         return c.json(await SessionDre.snapshot(sessionID))
       },
     )
@@ -403,7 +403,7 @@ export const SessionRoutes = lazy(() =>
       }),
       validator("param", SESSION_ID_PARAM),
       async (c) => {
-        const sessionID = await parseExistingSessionID(c)
+        const sessionID = await parseCurrentProjectSessionID(c)
         return c.json(SessionGraph.snapshot(sessionID))
       },
     )
@@ -454,7 +454,7 @@ export const SessionRoutes = lazy(() =>
         }),
       ),
       async (c) => {
-        const sessionID = await parseExistingSessionID(c)
+        const sessionID = await parseCurrentProjectSessionID(c)
         const query = c.req.valid("query")
         return c.json(
           await SessionRisk.load(sessionID, {
@@ -489,7 +489,7 @@ export const SessionRoutes = lazy(() =>
       }),
       validator("param", SESSION_ID_PARAM),
       async (c) => {
-        const sessionID = await parseExistingSessionID(c)
+        const sessionID = await parseCurrentProjectSessionID(c)
         return c.json((await SessionSemanticDiff.load(sessionID)) ?? null)
       },
     )
@@ -525,6 +525,8 @@ export const SessionRoutes = lazy(() =>
       async (c) => {
         const params = c.req.valid("param")
         const query = c.req.valid("query")
+        await requireCurrentProjectSession(params.sessionID)
+        await requireCurrentProjectSession(params.otherSessionID)
         const result = await SessionCompare.compare({
           sessionID: params.sessionID,
           otherSessionID: params.otherSessionID,
@@ -560,7 +562,7 @@ export const SessionRoutes = lazy(() =>
         }),
       ),
       async (c) => {
-        const sessionID = await parseExistingSessionID(c)
+        const sessionID = await parseCurrentProjectSessionID(c)
         const query = c.req.valid("query")
         return c.json(SessionRollback.filter(await SessionRollback.points(sessionID), query.tool))
       },
@@ -711,7 +713,7 @@ export const SessionRoutes = lazy(() =>
       validator("param", SESSION_ID_PARAM),
       validator("json", Session.initialize.schema.omit({ sessionID: true })),
       async (c) => {
-        const sessionID = parseSessionID(c)
+        const sessionID = await parseCurrentProjectSessionID(c)
         const body = c.req.valid("json")
         await Session.initialize({ ...body, sessionID })
         return c.json(true)
@@ -737,7 +739,7 @@ export const SessionRoutes = lazy(() =>
       validator("param", SESSION_ID_PARAM),
       validator("json", Session.fork.schema.omit({ sessionID: true })),
       async (c) => {
-        const sessionID = parseSessionID(c)
+        const sessionID = await parseCurrentProjectSessionID(c)
         const body = c.req.valid("json")
         const result = await Session.fork({ ...body, sessionID })
         return c.json(result)
@@ -819,7 +821,7 @@ export const SessionRoutes = lazy(() =>
       ),
       async (c) => {
         const query = c.req.valid("query")
-        const sessionID = parseSessionID(c)
+        const sessionID = await parseCurrentProjectSessionID(c)
         const result = await SessionSummary.diff({
           sessionID,
           messageID: query.messageID,

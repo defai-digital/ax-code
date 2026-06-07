@@ -216,6 +216,31 @@ describe("session.prompt_async error handling", () => {
     expect(abortRoute).toContain("SessionPrompt.cancel(await parseCurrentProjectSessionID(c))")
     expect(abortRoute).not.toContain("SessionPrompt.cancel(parseSessionID(c))")
   })
+
+  test("session detail routes require current project ownership", async () => {
+    const src = await Bun.file(path.join(import.meta.dir, "../../src/server/routes/session.ts")).text()
+    expect(src).not.toContain("parseExistingSessionID")
+
+    for (const route of [
+      ['"/:sessionID/branch/rank"', '"/:sessionID/dre"'],
+      ['"/:sessionID/dre"', '"/:sessionID/graph"'],
+      ['"/:sessionID/graph"', '"/:sessionID/risk"'],
+      ['"/:sessionID/risk"', '"/:sessionID/diff/semantic"'],
+      ['"/:sessionID/diff/semantic"', '"/:sessionID/compare/:otherSessionID"'],
+      ['"/:sessionID/rollback"', '"/:sessionID/todo"'],
+      ['"/:sessionID/init"', '"/:sessionID/fork"'],
+      ['"/:sessionID/fork"', '"/:sessionID/abort"'],
+      ['"/:sessionID/diff"', '"/:sessionID/share"'],
+    ] as const) {
+      const body = await extractRoute(route[0], route[1])
+      expect(body).toContain("await parseCurrentProjectSessionID(c)")
+      expect(body).not.toContain("const sessionID = parseSessionID(c)")
+    }
+
+    const compareRoute = await extractRoute('"/:sessionID/compare/:otherSessionID"', '"/:sessionID/rollback"')
+    expect(compareRoute).toContain("await requireCurrentProjectSession(params.sessionID)")
+    expect(compareRoute).toContain("await requireCurrentProjectSession(params.otherSessionID)")
+  })
 })
 
 describe("session.deleteMessage queue gate", () => {

@@ -77,4 +77,52 @@ describe("executeShellCommand signal exits", () => {
       },
     })
   })
+
+  test("pre-aborted commands observe process close without abort timeout", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      config: {
+        agent: {
+          build: {
+            model: "openai/gpt-5.2",
+          },
+        },
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const controller = new AbortController()
+        const started = Date.now()
+
+        const result = await executeShellCommand(
+          {
+            sessionID: session.id,
+            agent: "build",
+            model: {
+              providerID: ProviderID.make("openai"),
+              modelID: ModelID.make("gpt-5.2"),
+            },
+            command: "already-aborted",
+          },
+          {
+            start: () => {
+              queueMicrotask(() => controller.abort())
+              return controller.signal
+            },
+            queuedCallbacks: () => [],
+            cancel: async () => {},
+            resumeLoop: async () => ({ info: session as any, parts: [] as any }),
+          },
+        )
+
+        expect(Date.now() - started).toBeLessThan(1000)
+        const shellPart = result!.parts[0] as { type: string; state: { status: string; output?: string } }
+        expect(shellPart.state.status).toBe("completed")
+        expect(shellPart.state.output).toContain("User aborted the command")
+      },
+    })
+  })
 })

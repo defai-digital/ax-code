@@ -82,4 +82,161 @@ describe("/global/config redaction", () => {
       Config.global.reset()
     }
   })
+
+  test("patch response stays redacted and redacted sentinels do not overwrite secrets", async () => {
+    const previousConfigPath = Global.Path.config
+    await using tmp = await tmpdir()
+
+    try {
+      ;(Global.Path as { config: string }).config = tmp.path
+      Config.global.reset()
+
+      await fs.mkdir(tmp.path, { recursive: true })
+      const configPath = path.join(tmp.path, "ax-code.json")
+      await Filesystem.write(
+        configPath,
+        JSON.stringify({
+          provider: {
+            openai: {
+              options: {
+                apiKey: "openai-secret",
+                baseURL: "https://api.openai.com",
+              },
+            },
+          },
+          mcp: {
+            remote: {
+              type: "remote",
+              url: "https://mcp.example",
+              headers: {
+                Authorization: "Bearer mcp-secret",
+              },
+              oauth: {
+                clientId: "client-id",
+                clientSecret: "oauth-secret",
+              },
+            },
+            local: {
+              type: "local",
+              command: ["node", "server.js"],
+              environment: {
+                TOKEN: "local-secret",
+              },
+            },
+          },
+        }),
+      )
+
+      const response = await Server.Default().request("/global/config", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          provider: {
+            openai: {
+              options: {
+                apiKey: "[redacted]",
+                baseURL: "https://proxy.example",
+              },
+            },
+          },
+          mcp: {
+            remote: {
+              type: "remote",
+              url: "https://mcp.example",
+              headers: {
+                Authorization: "[redacted]",
+              },
+              oauth: {
+                clientId: "client-id",
+                clientSecret: "[redacted]",
+              },
+            },
+            local: {
+              type: "local",
+              command: ["node", "server.js"],
+              environment: {
+                TOKEN: "[redacted]",
+              },
+            },
+          },
+        }),
+      })
+      expect(response.status).toBe(200)
+
+      const payload = (await response.json()) as {
+        provider?: Record<string, { options?: { apiKey?: string; baseURL?: string } }>
+        mcp?: Record<string, { headers?: Record<string, string>; oauth?: { clientSecret?: string } }>
+      }
+      expect(payload.provider?.openai?.options?.apiKey).toBe("[redacted]")
+      expect(payload.provider?.openai?.options?.baseURL).toBe("https://proxy.example")
+      expect(payload.mcp?.remote?.headers?.Authorization).toBe("[redacted]")
+      expect(payload.mcp?.remote?.oauth?.clientSecret).toBe("[redacted]")
+
+      const stored = JSON.parse(await Filesystem.readText(configPath)) as {
+        provider?: Record<string, { options?: { apiKey?: string; baseURL?: string } }>
+        mcp?: Record<
+          string,
+          { headers?: Record<string, string>; oauth?: { clientSecret?: string }; environment?: Record<string, string> }
+        >
+      }
+      expect(stored.provider?.openai?.options?.apiKey).toBe("openai-secret")
+      expect(stored.provider?.openai?.options?.baseURL).toBe("https://proxy.example")
+      expect(stored.mcp?.remote?.headers?.Authorization).toBe("Bearer mcp-secret")
+      expect(stored.mcp?.remote?.oauth?.clientSecret).toBe("oauth-secret")
+      expect(stored.mcp?.local?.environment?.TOKEN).toBe("local-secret")
+    } finally {
+      ;(Global.Path as { config: string }).config = previousConfigPath
+      Config.global.reset()
+    }
+  })
+
+  test("project config patch ignores redacted sentinels", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const configPath = path.join(tmp.path, "ax-code.json")
+    await Filesystem.write(
+      configPath,
+      JSON.stringify({
+        provider: {
+          openai: {
+            options: {
+              apiKey: "project-secret",
+              baseURL: "https://api.openai.com",
+            },
+          },
+        },
+      }),
+    )
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const response = await Server.Default().request(`/config?directory=${encodeURIComponent(tmp.path)}`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            provider: {
+              openai: {
+                options: {
+                  apiKey: "[redacted]",
+                  baseURL: "https://proxy.example",
+                },
+              },
+            },
+          }),
+        })
+        expect(response.status).toBe(200)
+        const payload = (await response.json()) as {
+          provider?: Record<string, { options?: { apiKey?: string; baseURL?: string } }>
+        }
+        expect(payload.provider?.openai?.options?.apiKey).toBe("[redacted]")
+        expect(payload.provider?.openai?.options?.baseURL).toBe("https://proxy.example")
+      },
+    })
+
+    const stored = JSON.parse(await Filesystem.readText(configPath)) as {
+      provider?: Record<string, { options?: { apiKey?: string; baseURL?: string } }>
+    }
+    expect(stored.provider?.openai?.options?.apiKey).toBe("project-secret")
+    expect(stored.provider?.openai?.options?.baseURL).toBe("https://proxy.example")
+  })
 })

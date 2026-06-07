@@ -154,9 +154,10 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
           let oldContent: string
           try {
             const stats = await fs.stat(filePath)
-            if (stats.isDirectory()) throw new Error("is directory")
+            if (stats.isDirectory()) throw new Error(`Path is a directory: ${filePath}`)
             oldContent = await fs.readFile(filePath, "utf-8")
-          } catch {
+          } catch (error) {
+            if (error instanceof Error && error.message.startsWith("Path is a directory:")) throw error
             throw new Error(`apply_patch verification failed: Failed to read file to update: ${filePath}`)
           }
           let newContent = oldContent

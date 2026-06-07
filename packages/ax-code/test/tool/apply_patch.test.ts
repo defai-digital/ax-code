@@ -533,6 +533,24 @@ describe("tool.apply_patch freeform", () => {
     })
   })
 
+  test("rejects update when target path is a directory", async () => {
+    await using fixture = await tmpdir()
+    const { ctx } = makeCtx()
+
+    await Instance.provide({
+      directory: fixture.path,
+      fn: async () => {
+        const dirPath = path.join(fixture.path, "dir")
+        await fs.mkdir(dirPath)
+        await FileTime.read(SESSION, dirPath)
+
+        const patchText = "*** Begin Patch\n*** Update File: dir\n@@\n-old\n+new\n*** End Patch"
+
+        await expect(execute({ patchText }, ctx)).rejects.toThrow(`Path is a directory: ${dirPath}`)
+      },
+    })
+  })
+
   test("rejects invalid hunk header", async () => {
     await using fixture = await tmpdir()
     const { ctx } = makeCtx()

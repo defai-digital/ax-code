@@ -13,6 +13,52 @@ const log = Log.create({ service: "server" })
 
 export const REDACTED = "[redacted]"
 
+function stripRedactedRecord(record: Record<string, string> | undefined) {
+  if (!record) return record
+  return Object.fromEntries(Object.entries(record).filter(([, value]) => value !== REDACTED))
+}
+
+export function stripRedactedConfig(config: Config.Info): Config.Info {
+  return {
+    ...config,
+    provider: config.provider
+      ? Object.fromEntries(
+          Object.entries(config.provider).map(([id, p]) => [
+            id,
+            {
+              ...p,
+              options:
+                p.options && p.options.apiKey === REDACTED
+                  ? Object.fromEntries(Object.entries(p.options).filter(([key]) => key !== "apiKey"))
+                  : p.options,
+            },
+          ]),
+        )
+      : config.provider,
+    mcp: config.mcp
+      ? Object.fromEntries(
+          Object.entries(config.mcp).map(([name, m]) => {
+            if (!("type" in m)) return [name, m]
+            if (m.type === "remote") {
+              return [
+                name,
+                {
+                  ...m,
+                  headers: stripRedactedRecord(m.headers),
+                  oauth:
+                    m.oauth && typeof m.oauth === "object" && m.oauth.clientSecret === REDACTED
+                      ? Object.fromEntries(Object.entries(m.oauth).filter(([key]) => key !== "clientSecret"))
+                      : m.oauth,
+                },
+              ]
+            }
+            return [name, { ...m, environment: stripRedactedRecord(m.environment) }]
+          }),
+        )
+      : config.mcp,
+  }
+}
+
 export function redactConfig(config: Config.Info): Config.Info {
   const maskRecord = (rec: Record<string, string> | undefined) =>
     rec ? Object.fromEntries(Object.entries(rec).map(([k, v]) => [k, v ? REDACTED : v])) : rec
@@ -98,7 +144,7 @@ export const ConfigRoutes = lazy(() =>
       }),
       validator("json", Config.Info),
       async (c) => {
-        const config = c.req.valid("json")
+        const config = stripRedactedConfig(c.req.valid("json"))
         await Config.update(config)
         return c.json(redactConfig(await Config.get()))
       },

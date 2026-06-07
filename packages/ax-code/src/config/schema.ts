@@ -739,21 +739,15 @@ export const Info = z
         disable: z
           .boolean()
           .optional()
-          .describe(
-            "@deprecated Agent auto-routing was removed; specialists are invoked via @-mention. Field accepted for backwards compatibility but ignored.",
-          ),
+          .describe("Disable automatic specialist agent routing based on message keywords. Default: false."),
         mode: z
           .enum(["off", "delegate", "switch"])
           .optional()
-          .describe(
-            "@deprecated Agent auto-routing was removed. Field accepted for backwards compatibility but ignored.",
-          ),
+          .describe("@deprecated Routing mode is no longer used. Field accepted for backwards compatibility but ignored."),
         auto_switch: z
           .boolean()
           .optional()
-          .describe(
-            "@deprecated Agent auto-routing was removed. Field accepted for backwards compatibility but ignored.",
-          ),
+          .describe("@deprecated Use routing.disable instead. Field accepted for backwards compatibility but ignored."),
         llm: z
           .boolean()
           .optional()
@@ -762,7 +756,7 @@ export const Info = z
           ),
       })
       .optional()
-      .describe("Message-complexity routing for fast-model selection"),
+      .describe("Specialist agent auto-routing and message-complexity routing settings"),
     compaction: z
       .object({
         auto: z.boolean().optional().describe("Enable automatic compaction when context is full (default: true)"),

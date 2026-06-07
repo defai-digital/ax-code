@@ -415,9 +415,9 @@ export namespace ScheduledTask {
     for (const task of due) {
       if (task.nextRunAt === undefined || task.nextRunAt > now) continue
       try {
-        const result = await runNow(task.id)
         const next = nextRunAt(task.schedule, now + 1)
         await updateNextRunAt(task.id, next)
+        const result = await runNow(task.id)
         results.push(result)
       } catch (error) {
         log.warn("scheduled task run failed, skipping", { taskID: task.id, error })

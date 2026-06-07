@@ -1,7 +1,18 @@
 import { afterEach, describe, expect, test } from "bun:test"
+import path from "path"
 import { route, classifyComplexity } from "../../src/agent/router"
 
 describe("v2-style keyword route", () => {
+  test("schema descriptions do not claim specialist auto-routing is removed", async () => {
+    const schema = await Bun.file(path.join(import.meta.dir, "../../src/config/schema.ts")).text()
+    const promptInput = await Bun.file(path.join(import.meta.dir, "../../src/session/prompt-input.ts")).text()
+
+    expect(schema).toContain("Disable automatic specialist agent routing")
+    expect(schema).toContain("Specialist agent auto-routing and message-complexity routing settings")
+    expect(schema).not.toContain("Agent auto-routing was removed")
+    expect(promptInput).not.toContain("Agent auto-routing was removed")
+  })
+
   test("routes obvious specialist topics on bare keywords", () => {
     expect(route("scan for vulnerabilities in the auth module", "build")?.agent).toBe("security")
     expect(route("debug this crash in the login flow", "build")?.agent).toBe("debug")

@@ -201,6 +201,7 @@ describe("scheduled task routes", () => {
           const refreshed = await ScheduledTask.get(task.id)
           expect(refreshed.error).toContain("Workflow runtime is disabled")
           expect(refreshed.lastRunAt).toBeGreaterThan(0)
+          expect(refreshed.nextRunAt).toBeUndefined()
         },
       })
     } finally {

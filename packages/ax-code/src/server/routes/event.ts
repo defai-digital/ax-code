@@ -83,7 +83,13 @@ export const EventRoutes = lazy(() =>
           })
         }, HEARTBEAT_INTERVAL_MS)
 
+        const shouldForward = (event: { properties?: { directory?: string } }) => {
+          const directory = event.properties?.directory
+          return directory === undefined || directory === Instance.directory
+        }
+
         unsub = Bus.subscribeAll((event) => {
+          if (!shouldForward(event)) return
           push(event)
           if (event.type === Bus.InstanceDisposed.type) stop()
         })

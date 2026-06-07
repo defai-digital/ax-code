@@ -18,7 +18,7 @@ export const PromptInput = z.object({
   userSelectedAgent: z
     .boolean()
     .optional()
-    .describe("@deprecated Agent auto-routing was removed. Field accepted for backwards compatibility but ignored."),
+    .describe("@deprecated Use agentRouting to control automatic specialist routing."),
   agentRouting: z
     .enum(["auto", "preserve"])
     .optional()

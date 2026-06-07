@@ -435,6 +435,13 @@ describe("server route validation", () => {
     expect(globalSrc).toContain("q.push(null)")
   })
 
+  test("event stream only forwards bus events from the current project", async () => {
+    const eventSrc = await Bun.file(path.join(import.meta.dir, "../../src/server/routes/event.ts")).text()
+    expect(eventSrc).toContain("const shouldForward")
+    expect(eventSrc).toContain("directory === undefined || directory === Instance.directory")
+    expect(eventSrc).toMatch(/Bus\.subscribeAll\(\(event\) => \{\s*if \(!shouldForward\(event\)\) return/)
+  })
+
   test("log endpoint rejects oversized messages", async () => {
     await Instance.provide({
       directory: root,

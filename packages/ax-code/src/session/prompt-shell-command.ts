@@ -170,11 +170,6 @@ export async function executeShellCommand(
 
   const kill = () => Shell.killTree(proc, { exited: () => exited })
 
-  if (abort.aborted) {
-    aborted = true
-    await kill()
-  }
-
   const abortHandler = () => {
     aborted = true
     void kill().catch((error) => {
@@ -241,11 +236,8 @@ export async function executeShellCommand(
   abort.addEventListener("abort", abortTimeoutHandler, { once: true })
 
   try {
-    await new Promise<void>((resolve, reject) => {
+    const waitForExit = new Promise<void>((resolve, reject) => {
       rejectPromise = reject
-      if (abort.aborted) {
-        abortTimeoutHandler()
-      }
       proc.once("exit", (code, signal) => {
         exited = true
         exitSignal = signal ?? null
@@ -271,6 +263,14 @@ export async function executeShellCommand(
         reject(err)
       })
     })
+    if (abort.aborted && !aborted) {
+      aborted = true
+      await kill()
+    }
+    if (abort.aborted && !exited) {
+      abortTimeoutHandler()
+    }
+    await waitForExit
   } finally {
     clearShellCommandTimers()
     clearShellCommandListeners()
