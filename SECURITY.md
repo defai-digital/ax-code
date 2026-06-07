@@ -78,6 +78,14 @@ RWS6la0s0/o4gdFUZ0Bk/BkrnN8qC2CFOfLXVP5OtQTrvm1BQeOvXgao
 
 The installer downloads the matching `.minisig` asset for the selected archive and fails closed when `minisign` is unavailable or verification fails. Set `AX_CODE_SKIP_MINISIGN_VERIFY=1` only when you intentionally accept an unverifiable release download.
 
+Maintainers should keep the minisign secret key encrypted. For local release signing on macOS, store the passphrase in Keychain instead of a plaintext file:
+
+```bash
+security add-generic-password -U -a ax-code-release -s ax-code-minisign -w
+```
+
+Release tooling reads that Keychain item automatically when `AX_CODE_MINISIGN_PASSWORD` is not set.
+
 ---
 
 ## Scope

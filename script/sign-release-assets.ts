@@ -9,6 +9,8 @@ import { parseArgs } from "util"
 
 export const ROOT = path.resolve(import.meta.dir, "..")
 export const AX_CODE_MINISIGN_PUBLIC_KEY = "RWS6la0s0/o4gdFUZ0Bk/BkrnN8qC2CFOfLXVP5OtQTrvm1BQeOvXgao"
+export const DEFAULT_MINISIGN_KEYCHAIN_SERVICE = "ax-code-minisign"
+export const DEFAULT_MINISIGN_KEYCHAIN_ACCOUNT = "ax-code-release"
 
 export type SignReleaseOptions = {
   distDir: string
@@ -130,9 +132,15 @@ Environment:
   AX_CODE_MINISIGN_KEY_DIR
   AX_CODE_MINISIGN_SECRET_KEY
   AX_CODE_MINISIGN_PUBLIC_KEY
+  AX_CODE_MINISIGN_PASSWORD
+  AX_CODE_MINISIGN_KEYCHAIN_SERVICE
+  AX_CODE_MINISIGN_KEYCHAIN_ACCOUNT
 
 Generate a password-protected local key:
   minisign -G -s ~/signkey/ax-code.sec -p ~/signkey/ax-code.pub
+
+Store the release key passphrase in macOS Keychain:
+  security add-generic-password -U -a ax-code-release -s ax-code-minisign -w
 `
 }
 
@@ -165,6 +173,28 @@ export function requirePinnedPublicKey(file: string) {
   }
 }
 
+export function minisignPasswordFromKeychain(
+  env: NodeJS.ProcessEnv = process.env,
+  platform: NodeJS.Platform = process.platform,
+) {
+  if (platform !== "darwin") return undefined
+  const service = env.AX_CODE_MINISIGN_KEYCHAIN_SERVICE ?? DEFAULT_MINISIGN_KEYCHAIN_SERVICE
+  const account = env.AX_CODE_MINISIGN_KEYCHAIN_ACCOUNT ?? DEFAULT_MINISIGN_KEYCHAIN_ACCOUNT
+  const result = childProcess.spawnSync("security", ["find-generic-password", "-w", "-s", service, "-a", account], {
+    cwd: ROOT,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"],
+    env,
+  })
+  if (result.status !== 0) return undefined
+  const password = typeof result.stdout === "string" ? result.stdout.replace(/\r?\n$/, "") : ""
+  return password.length > 0 ? password : undefined
+}
+
+export function minisignPassword(env: NodeJS.ProcessEnv = process.env, platform: NodeJS.Platform = process.platform) {
+  return env.AX_CODE_MINISIGN_PASSWORD ?? minisignPasswordFromKeychain(env, platform)
+}
+
 export function secretKeyPermissionIssue(file: string, platform: NodeJS.Platform = process.platform) {
   if (platform === "win32") return undefined
   const stat = requireRegularFile(file, "Secret key")
@@ -186,10 +216,12 @@ function runMinisign(args: string[], options: { dryRun: boolean; dryRunArgs?: st
     return
   }
 
+  const password = minisignPassword()
   const result = childProcess.spawnSync("minisign", args, {
     cwd: ROOT,
-    stdio: "inherit",
+    stdio: password ? ["pipe", "inherit", "inherit"] : "inherit",
     env: process.env,
+    input: password ? `${password}\n` : undefined,
   })
 
   if (result.error) throw result.error

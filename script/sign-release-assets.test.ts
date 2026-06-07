@@ -6,6 +6,7 @@ import {
   defaultKeyPaths,
   expandHome,
   findReleaseAssets,
+  minisignPassword,
   parseSignReleaseArgs,
   prepareSignaturePath,
   requirePinnedPublicKey,
@@ -93,6 +94,11 @@ describe("sign-release-assets helpers", () => {
     } finally {
       fs.rmSync(dir, { recursive: true, force: true })
     }
+  })
+
+  test("uses explicit minisign password before keychain lookup", () => {
+    expect(minisignPassword({ AX_CODE_MINISIGN_PASSWORD: "secret" } as NodeJS.ProcessEnv, "darwin")).toBe("secret")
+    expect(minisignPassword({} as NodeJS.ProcessEnv, "linux")).toBeUndefined()
   })
 
   test("uses explicit files before scanning the dist directory", () => {

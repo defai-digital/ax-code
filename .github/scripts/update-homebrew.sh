@@ -25,8 +25,8 @@ if [ -z "${RELEASE_READ_TOKEN}" ]; then
 fi
 if [ -z "${TAP_AUTH_TOKEN}" ]; then
   if [ "${GITHUB_ACTIONS:-}" = "true" ]; then
-    echo "::warning::HOMEBREW_TAP_TOKEN is not configured; skipping Homebrew tap update"
-    exit 0
+    echo "::error::HOMEBREW_TAP_TOKEN is not configured; stable releases must update the Homebrew tap"
+    exit 1
   fi
   TAP_AUTH_TOKEN="${GH_TOKEN:-}"
 fi
