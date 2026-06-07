@@ -73,6 +73,9 @@ Implemented on 2026-06-07:
 - Dry-run-by-default compatibility importers for `opencode`, `claude`, and `codex`.
 - Command execution telemetry for source, warnings, workflow template, and workflow run linkage.
 - Replay telemetry for path-match skill recommendations and actual skill loads.
+- Workflow command artifact surfacing: the parent prompt now includes a compact run projection (status, phase/child
+  progress, budget usage, blocked reason) plus artifacts explicitly marked `exposeToMainContext`, using each artifact's
+  redaction-aware `summary` text only (never raw payloads or child transcripts), per ADR-025.
 
 Deferred follow-up:
 
@@ -80,8 +83,6 @@ Deferred follow-up:
   TUI catalog dialog.
 - Offline ADR-024 skill/workflow optimization reports remain a follow-up; this slice records the replay data needed by
   that work without modifying live skills.
-- Workflow command artifact surfacing remains owned by existing workflow run/detail routes; this slice starts the run and
-  reports the run id through the parent prompt path.
 
 ## Phase 0: Planning Baseline
 

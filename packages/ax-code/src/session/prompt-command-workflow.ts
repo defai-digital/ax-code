@@ -1,7 +1,8 @@
 import type { Command } from "../command"
 import { WorkflowTemplate } from "../workflow/template"
 import { WorkflowScheduler } from "../workflow/scheduler"
-import type { WorkflowRunDetail } from "../workflow/state"
+import type { WorkflowArtifactRecord, WorkflowRunDetail } from "../workflow/state"
+import { summarizeWorkflowRunDetail } from "../workflow/projection"
 import { isWorkflowRuntimeEnabled } from "../workflow/spec"
 import type { SessionID } from "./schema"
 
@@ -55,21 +56,91 @@ export async function createWorkflowCommandRun(input: {
   })
 }
 
+const MAX_EXPOSED_ARTIFACTS = 10
+const MAX_ARTIFACT_SUMMARY_LENGTH = 280
+
 export function workflowCommandPrompt(input: {
   commandName: string
   templateID: string
-  run: Pick<WorkflowRunDetail, "id" | "status">
+  run: WorkflowRunDetail
   template: string
 }) {
+  const summary = summarizeWorkflowCommandRun(input.run)
   return [
     `Workflow command "${input.commandName}" started workflow run ${input.run.id}.`,
     `Template: ${input.templateID}`,
-    `Status: ${input.run.status}`,
+    summary,
     input.template ? `Command notes:\n${input.template}` : undefined,
-    "Tell the user the workflow run was created and include the run id.",
+    [
+      "Tell the user the workflow run was created and include the run id.",
+      "Report only the compact status above; do not invent results that are not listed.",
+      "Full phase, child, and artifact detail is available through the workflow run routes for this run id.",
+    ].join(" "),
   ]
     .filter(Boolean)
     .join("\n\n")
+}
+
+/**
+ * Build a compact, ADR-025-compliant summary of a workflow command run for the parent session.
+ * Surfaces status, progress counts, budget usage, and artifacts explicitly marked
+ * `exposeToMainContext` — using each artifact's `summary` text only, never raw payloads,
+ * and honoring redaction state.
+ */
+export function summarizeWorkflowCommandRun(run: WorkflowRunDetail): string {
+  const projection = summarizeWorkflowRunDetail(run)
+  const lines: string[] = [`Status: ${projection.status}`]
+
+  if (projection.currentPhaseName) {
+    const phaseStatus = projection.currentPhaseStatus ? ` (${projection.currentPhaseStatus})` : ""
+    lines.push(`Current phase: ${projection.currentPhaseName}${phaseStatus}`)
+  }
+
+  const phases = projection.phaseCounts
+  const phaseTotal = phases.queued + phases.running + phases.blocked + phases.paused + phases.failed + phases.completed + phases.cancelled
+  const children = projection.childCounts
+  const childTotal =
+    children.queued +
+    children.running +
+    children.blockedPermission +
+    children.blockedQuestion +
+    children.paused +
+    children.failed +
+    children.completed +
+    children.cancelled
+  lines.push(`Progress: phases ${phases.completed}/${phaseTotal} completed, children ${children.completed}/${childTotal} completed`)
+
+  lines.push(
+    `Budget: ${projection.budgetUsage.totalTokens}/${projection.budgetLimit.maxTotalTokens} tokens, ${projection.elapsedMs}ms elapsed`,
+  )
+
+  if (projection.blockedReason) lines.push(`Blocked: ${projection.blockedReason}`)
+
+  const exposed = run.artifacts.filter((artifact) => artifact.exposeToMainContext)
+  if (exposed.length > 0) {
+    lines.push(`Exposed artifacts (${exposed.length}):`)
+    for (const artifact of exposed.slice(0, MAX_EXPOSED_ARTIFACTS)) {
+      lines.push(`- [${artifact.kind}] ${exposedArtifactText(artifact)}`)
+    }
+    if (exposed.length > MAX_EXPOSED_ARTIFACTS) {
+      lines.push(`- ...and ${exposed.length - MAX_EXPOSED_ARTIFACTS} more (see workflow run detail).`)
+    }
+  }
+
+  return lines.join("\n")
+}
+
+function exposedArtifactText(artifact: WorkflowArtifactRecord): string {
+  const redaction = artifact.redaction
+  if (redaction?.status === "redacted") return clampSummary(redaction.summary ?? "[redacted]")
+  if (redaction?.status === "pending") return clampSummary(artifact.summary ?? "[pending redaction]")
+  return clampSummary(artifact.summary ?? "[no summary]")
+}
+
+function clampSummary(text: string): string {
+  const compact = text.replace(/\s+/g, " ").trim()
+  if (!compact) return "[no summary]"
+  return compact.length <= MAX_ARTIFACT_SUMMARY_LENGTH ? compact : `${compact.slice(0, MAX_ARTIFACT_SUMMARY_LENGTH - 3)}...`
 }
 
 function stripQuotes(input: string) {
