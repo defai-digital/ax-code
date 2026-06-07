@@ -103,12 +103,19 @@ function dispatchHeadlessProjectionEvent<
   setStore: SetStoreFunction<SyncEventStoreState<TSession, TTodo, TDiff, TStatus, TMessage, TPart>>,
 ) {
   // Provider discovery (CLI/local model lists) finishes after startup and is
-  // pushed as `provider.updated`. Refetch only the provider list — a targeted
-  // refresh, not a full bootstrap, so an in-flight session is not disrupted.
-  // Handled before the shared reducer since it owns no projection state.
-  if (input.event.type === "provider.updated") {
+  // pushed as `provider.updated`. It is edge-triggered with no replay, so if
+  // discovery completes before this client's SSE stream subscribes the event
+  // is lost. Refetch the provider list on BOTH `provider.updated` and the
+  // `server.connected` handshake: `server.connected` arrives exactly when the
+  // subscription registers, so a refetch on it observes any discovery that
+  // already finished, while the live event covers discovery that finishes
+  // later. The refetch is targeted (provider list only), not a full bootstrap,
+  // so an in-flight session is not disrupted. `provider.updated` carries no
+  // shared projection state and returns here; `server.connected` falls through
+  // to the reducer below, which still drives `stream_health`.
+  if (input.event.type === "provider.updated" || input.event.type === "server.connected") {
     void Promise.resolve(input.refreshProviders?.()).catch((error) => input.onWarn("refresh providers", error))
-    return true
+    if (input.event.type === "provider.updated") return true
   }
 
   // Route projection updates through the shared headless reducer first.

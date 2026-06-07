@@ -713,7 +713,15 @@ export namespace Provider {
       Bus.publishDetached(Event.Updated, {})
     }
 
-    const discovery = Object.keys(discoveryLoaders).length > 0 ? runDiscovery() : Promise.resolve()
+    // `.catch` here is load-bearing: in the warmup path nothing awaits
+    // `discovery`, so an unexpected throw inside `runDiscovery` (it already
+    // swallows per-loader failures, but the cleanup/publish steps could
+    // regress) would surface as an unhandled rejection. Resolving to `void`
+    // also keeps `ready()`/`getModel()` awaiters from ever seeing a rejection.
+    const discovery: Promise<void> =
+      Object.keys(discoveryLoaders).length > 0
+        ? runDiscovery().catch((err) => log.warn("provider discovery failed", { err }))
+        : Promise.resolve()
 
     const providerCount = recordCount(providers)
     if (initFailures.length > 0) {
@@ -1064,17 +1072,25 @@ export namespace Provider {
     return state().then((s) => s.providers[providerID])
   }
 
-  export async function getModel(providerID: ProviderID, modelID: ModelID, awaitedDiscovery = false): Promise<Model> {
+  export async function getModel(
+    providerID: ProviderID,
+    modelID: ModelID,
+    awaitedDiscovery?: Promise<void>,
+  ): Promise<Model> {
     const s = await state()
     const provider = s.providers[providerID]
     // Discovery (CLI/local model lists) runs in the background after `state()`
     // resolves, so a model can be legitimately missing only because discovery
-    // hasn't finished. Await it once and retry before reporting not-found —
-    // this keeps headless/session resolution of a freshly-discovered model
-    // correct without forcing every `list()` caller to wait for discovery.
-    if ((!provider || !provider.models[modelID]) && !awaitedDiscovery) {
+    // hasn't finished. Await it and retry before reporting not-found — this
+    // keeps headless/session resolution of a freshly-discovered model correct
+    // without forcing every `list()` caller to wait for discovery. Guarding on
+    // the discovery promise identity (rather than a boolean) awaits each
+    // distinct discovery exactly once: a genuinely-missing model terminates
+    // immediately after the first wait, while a concurrent `invalidate()` that
+    // swaps in a fresh, still-in-flight discovery is re-awaited correctly.
+    if ((!provider || !provider.models[modelID]) && awaitedDiscovery !== s.discovery) {
       await s.discovery
-      return getModel(providerID, modelID, true)
+      return getModel(providerID, modelID, s.discovery)
     }
     if (!provider) {
       const availableProviders = Object.keys(s.providers)
@@ -1244,6 +1260,12 @@ export namespace Provider {
     const cfg = await Config.get()
     if (cfg.model) return parseModel(cfg.model)
 
+    // Wait for background discovery: the persisted "recent" model may point at
+    // a CLI/local provider whose `models` are only populated by discovery. On
+    // a cache miss `list()` would skip that recent entry (its model is absent
+    // pre-discovery) and silently fall through to a different default. Unlike
+    // `getModel()`, this resolution has no retry, so block until complete.
+    await ready()
     const providers = await list()
     const recent = (await Filesystem.readJson<{ recent?: unknown }>(path.join(Global.Path.state, "model.json"))
       .then((x) => providerModelList(x.recent))
