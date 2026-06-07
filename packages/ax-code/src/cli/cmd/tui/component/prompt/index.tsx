@@ -19,6 +19,7 @@ import {
   createSignal,
   onCleanup,
   on,
+  untrack,
   Show,
   Switch,
   Match,
@@ -35,6 +36,15 @@ import { useSDK } from "@tui/context/sdk"
 import { useRoute } from "@tui/context/route"
 import { useSync } from "@tui/context/sync"
 import { MessageID, PartID, SessionID } from "@/session/schema"
+import { shouldDrainOnIdle } from "./follow-up-queue"
+import {
+  dispatchFollowUp,
+  enqueueFollowUp,
+  hasRecentFollowUpAbort,
+  markFollowUpAbort,
+  peekQueuedFollowUp,
+  removeQueuedFollowUp,
+} from "./follow-up-queue-store"
 import { createStore, produce } from "solid-js/store"
 import { useKeybind } from "@tui/context/keybind"
 import { usePromptHistory, type PromptInfo } from "./history"
@@ -197,6 +207,42 @@ export function Prompt(props: PromptProps) {
   const [draftSessionID, setDraftSessionID] = createSignal<string | undefined>()
   const [expandedPastes, setExpandedPastes] = createSignal<Set<number>>(new Set<number>())
   const inputBlocked = createMemo(() => props.disabled || submitPending())
+
+  // ADR-028: interactive follow-up queueing. While the session is busy, plain
+  // prompts are buffered client-side and replayed when the session goes idle,
+  // instead of parking durable `waiting_for_idle` task-queue rows. Default on;
+  // disabling falls back to immediate async send.
+  const [queueModeEnabled] = kv.signal("prompt_queue_mode", true)
+
+  // Drain the client follow-up queue on a real busy/retry -> idle transition.
+  // Tracked per-session so navigating between sessions never fires a stale drain.
+  let drainSessionID: string | undefined
+  let previousStatusType: string | undefined
+  createEffect(() => {
+    const sessionID = props.sessionID
+    const currentType = status().type
+    untrack(() => {
+      if (sessionID !== drainSessionID) {
+        drainSessionID = sessionID
+        previousStatusType = currentType
+        return
+      }
+      const previous = previousStatusType
+      previousStatusType = currentType
+      if (!sessionID) return
+      if (!shouldDrainOnIdle(previous, currentType)) return
+      if (hasRecentFollowUpAbort(sessionID)) return
+      const head = peekQueuedFollowUp(sessionID)
+      if (!head) return
+      void dispatchFollowUp(sdk, sessionID, head)
+        .then((dispatched) => {
+          if (dispatched) removeQueuedFollowUp(sessionID, head.id)
+        })
+        .catch((error) => {
+          log.warn("follow-up queue drain failed", { sessionID, error })
+        })
+    })
+  })
   const [localStatusTick, setLocalStatusTick] = createSignal(0)
   const statusTick = () => props.statusTick?.() ?? localStatusTick()
   const pendingCancelHint = createMemo(() => {
@@ -623,6 +669,9 @@ export function Prompt(props: PromptProps) {
           }
 
           if (nextInterrupt >= 2) {
+            // Suppress auto-draining the follow-up queue right after a manual
+            // interrupt so we don't immediately resend on the busy -> idle edge.
+            markFollowUpAbort(props.sessionID)
             void sdk.client.session
               .abort({
                 sessionID: props.sessionID,
@@ -1141,6 +1190,37 @@ export function Prompt(props: PromptProps) {
           sessionID: nextSessionID,
         })
       }, 0)
+    }
+
+    // ADR-028: while the session is busy, buffer plain follow-up prompts in the
+    // client-owned queue and let the drain effect replay them when idle. Slash
+    // commands and shell input keep the existing async routes; new sessions and
+    // idle sessions dispatch immediately below.
+    const isKnownSlashCommand =
+      inputText.startsWith("/") && sync.data.command.some((x) => x.name === firstLine.split(" ")[0].slice(1))
+    if (
+      queueModeEnabled() &&
+      currentMode === "normal" &&
+      !isKnownSlashCommand &&
+      props.sessionID &&
+      status().type !== "idle"
+    ) {
+      enqueueFollowUp(props.sessionID, {
+        parts: [
+          {
+            id: PartID.ascending(),
+            type: "text",
+            text: inputText,
+          },
+          ...nonTextParts.map(assign),
+        ],
+        agent: local.agent.current().name,
+        model: selectedModel,
+        variant,
+      })
+      settlePromptLocally({ clearPrompt: true })
+      finishPendingSubmit()
+      return
     }
 
     try {

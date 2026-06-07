@@ -19,6 +19,7 @@ import { SessionRollbackView } from "./rollback"
 import { SessionSemanticDiff } from "@/session/semantic-diff"
 import { Todo } from "@/session/todo"
 import { footerSessionStatusOrIdle, footerSessionStatusView } from "./footer-view-model"
+import { dispatchFollowUp, followUpQueue, removeQueuedFollowUp } from "../../component/prompt/follow-up-queue-store"
 import { computeSidebarWidth } from "./layout"
 import { sidebarGraphIndexStatusText } from "./sidebar-index-view-model"
 import { Locale } from "@/util/locale"
@@ -47,6 +48,8 @@ const log = Log.create({ service: "tui.sidebar.queue" })
 
 const QUEUED_DELETE_ICON = "🗑️"
 const QUEUED_DELETE_ICON_WIDTH = 2
+const QUEUED_SEND_ICON = "▸"
+const QUEUED_SEND_ICON_WIDTH = 2
 const QUEUE_SNIPPET_MAX = 48
 
 function queuedSnippet(parts: { type: string; text?: string; synthetic?: boolean; ignored?: boolean }[]) {
@@ -134,28 +137,13 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
 
   const todoRemaining = createMemo(() => Todo.countActive(todo()))
 
-  // A user message is "queued" iff the loop has not yet picked it up,
-  // i.e. no assistant message references it as `parentID`. We can't gate
-  // on assistant `finish` strings: in autonomous tool-heavy turns the
-  // whole turn is a chain of `finish: "tool-calls"` steps with no
-  // terminal `stop` ever emitted, so a finish-based cutoff would treat
-  // already-addressed users as still pending and offer a delete that
-  // the server (correctly) refuses with a busy error. The parent-link
-  // signal matches what the server checks on delete.
-  //
-  // Do NOT gate on session status: the session is briefly "idle" between
-  // draining successive queued messages, and messages submitted before the
-  // session starts are also visible while status is idle. The parentID check
-  // is sufficient — a genuinely-finished session has assistant messages
-  // covering all user IDs, so queued() returns [] naturally.
-  const queued = createMemo(() => {
-    const msgs = messages()
-    const addressed = new Set<string>()
-    for (const m of msgs) {
-      if (m.role === "assistant") addressed.add(m.parentID)
-    }
-    return msgs.filter((m) => m.role === "user" && !addressed.has(m.id))
-  })
+  // ADR-028: the "Queued" section reflects the client-owned interactive
+  // follow-up queue, not persisted messages. Follow-ups typed while the
+  // session is busy are buffered client-side (see prompt/follow-up-queue-store)
+  // and replayed when the session goes idle, so this is the single source of
+  // truth for what is actually pending. Deriving from messages was wrong: a
+  // truly-queued follow-up has no persisted message until it runs.
+  const queued = createMemo(() => followUpQueue(props.sessionID))
 
   const [expanded, setExpanded] = createStore({
     mcp: true,
@@ -171,34 +159,29 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
     activity: true,
   })
 
-  async function dropQueued(messageID: string) {
-    if (!queued().some((m) => m.id === messageID)) return
-    // The generated SDK has ThrowOnError=false by default, so server-side
-    // 4xx/5xx come back via `result.error` instead of a thrown exception.
-    // Without this branch the failure was swallowed silently.
-    try {
-      const result = await sdk.client.session.deleteMessage({ sessionID: props.sessionID, messageID })
-      if (result.error) {
-        const detail = (result.error as { data?: { message?: string } })?.data?.message
-        log.warn("delete queued message rejected", {
-          command: "tui.sidebar.queue.delete",
-          status: "error",
-          sessionID: props.sessionID,
-          messageID,
-          error: result.error,
-        })
-        toast.show({ message: detail ?? "Failed to remove queued message", variant: "error" })
-      }
-    } catch (error) {
-      log.warn("delete queued message failed", {
-        command: "tui.sidebar.queue.delete",
+  // Removing a queued follow-up is purely client-side: the item never reached
+  // the server, so dropping it from the buffer guarantees it will not run.
+  function dropQueued(id: string) {
+    removeQueuedFollowUp(props.sessionID, id)
+  }
+
+  // Send a queued follow-up immediately. Dispatch first, then remove on success
+  // so a failed send keeps the item in the queue rather than losing it.
+  async function sendQueuedNow(id: string) {
+    const item = queued().find((entry) => entry.id === id)
+    if (!item) return
+    const dispatched = await dispatchFollowUp(sdk, props.sessionID, item).catch((error) => {
+      log.warn("send queued follow-up failed", {
+        command: "tui.sidebar.queue.send",
         status: "error",
         sessionID: props.sessionID,
-        messageID,
+        id,
         error,
       })
-      toast.show({ message: "Failed to remove queued message", variant: "error" })
-    }
+      return false
+    })
+    if (dispatched) removeQueuedFollowUp(props.sessionID, id)
+    else toast.show({ message: "Failed to send queued message", variant: "error" })
   }
 
   const activity = createMemo(() => {
@@ -539,19 +522,28 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
                   <box border={["top"]} borderColor={theme.borderSubtle} />
                   <Show when={queued().length <= 2 || expanded.queued}>
                     <For each={queued()}>
-                      {(message) => (
+                      {(item) => (
                         <box flexDirection="row" gap={1}>
+                          <box
+                            flexShrink={0}
+                            width={QUEUED_SEND_ICON_WIDTH}
+                            onMouseUp={() => {
+                              void sendQueuedNow(item.id)
+                            }}
+                          >
+                            <text style={{ fg: theme.primary }}>{QUEUED_SEND_ICON}</text>
+                          </box>
                           <box
                             flexShrink={0}
                             width={QUEUED_DELETE_ICON_WIDTH}
                             onMouseUp={() => {
-                              void dropQueued(message.id)
+                              dropQueued(item.id)
                             }}
                           >
                             <text style={{ fg: theme.warning }}>{QUEUED_DELETE_ICON}</text>
                           </box>
                           <text fg={theme.textMuted} wrapMode="word">
-                            {queuedSnippet(sync.data.part[message.id] ?? [])}
+                            {queuedSnippet(item.parts)}
                           </text>
                         </box>
                       )}
