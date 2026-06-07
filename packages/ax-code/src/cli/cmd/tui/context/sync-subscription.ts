@@ -102,6 +102,15 @@ export function subscribeStoreBackedSyncEvents<
     TStore
   >["scheduleRuntimeProbe"]
   bootstrap: DispatchStoreBackedSyncEventInput<TSession, TTodo, TDiff, TStatus, TMessage, TPart, TStore>["bootstrap"]
+  refreshProviders?: DispatchStoreBackedSyncEventInput<
+    TSession,
+    TTodo,
+    TDiff,
+    TStatus,
+    TMessage,
+    TPart,
+    TStore
+  >["refreshProviders"]
   onWarn: DispatchStoreBackedSyncEventInput<TSession, TTodo, TDiff, TStatus, TMessage, TPart, TStore>["onWarn"]
   maxSessionMessages: DispatchStoreBackedSyncEventInput<
     TSession,
@@ -134,6 +143,7 @@ export function subscribeStoreBackedSyncEvents<
         syncWorkflowDashboard: input.syncWorkflowDashboard,
         scheduleRuntimeProbe: input.scheduleRuntimeProbe,
         bootstrap: input.bootstrap,
+        refreshProviders: input.refreshProviders,
         onWarn: input.onWarn,
         maxSessionMessages: input.maxSessionMessages,
       })

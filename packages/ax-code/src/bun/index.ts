@@ -112,6 +112,30 @@ export namespace BunProc {
   // (e.g. plugin loading from `ax-code.json`).
   const VALID_NPM_PKG = /^(@[\w][\w.-]*\/)?[\w][\w.-]*$/
 
+  // How long a successful "is this 'latest' SDK outdated?" registry check is
+  // trusted before we hit the network again. One day keeps the first prompt
+  // of every session fast while still picking up SDK updates within 24h.
+  const VERSION_CHECK_TTL_MS = 1000 * 60 * 60 * 24
+
+  function versionCheckPath() {
+    return path.join(Global.Path.cache, "version-checks.json")
+  }
+
+  async function recentlyVersionChecked(pkg: string): Promise<boolean> {
+    const data = await Filesystem.readJson<Record<string, number>>(versionCheckPath()).catch(() => null)
+    const at = data?.[pkg]
+    if (typeof at !== "number") return false
+    return Date.now() - at < VERSION_CHECK_TTL_MS
+  }
+
+  async function recordVersionChecked(pkg: string) {
+    const data = (await Filesystem.readJson<Record<string, number>>(versionCheckPath()).catch(() => null)) ?? {}
+    data[pkg] = Date.now()
+    await Filesystem.writeJson(versionCheckPath(), data).catch((err) =>
+      log.warn("failed to record provider version check", { pkg, error: err }),
+    )
+  }
+
   export async function install(pkg: string, version = "latest") {
     if (!VALID_NPM_PKG.test(pkg) || pkg.includes("..")) {
       throw new Error(`Invalid package name: ${pkg}`)
@@ -137,7 +161,17 @@ export namespace BunProc {
     } else if (version !== "latest" && cachedVersion === version) {
       return mod
     } else if (version === "latest") {
+      // Only hit the npm registry (PackageRegistry.isOutdated → `bun info`, a
+      // network round-trip serialized behind this install lock) once per TTL
+      // window. Without this gate, every session's first `getSDK(model)`
+      // re-checks "latest" for an already-installed SDK — adding a registry
+      // round-trip (and a full timeout when offline, e.g. a local-only LLM
+      // user whose model uses @ai-sdk/openai-compatible) before the first
+      // prompt can run. A stale check at worst delays picking up a newer SDK
+      // by the TTL; explicit version pins and mismatches still force install.
+      if (await recentlyVersionChecked(pkg)) return mod
       const isOutdated = await PackageRegistry.isOutdated(pkg, cachedVersion, Global.Path.cache)
+      await recordVersionChecked(pkg)
       if (!isOutdated) return mod
       log.info("Cached version is outdated, proceeding with install", { pkg, cachedVersion })
     }

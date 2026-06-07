@@ -24,6 +24,7 @@ export type HeadlessRuntimeProbeKey = "mcp" | "lsp" | "debug-engine" | "workflow
 export type HeadlessRuntimeStatusEvent =
   | { type: "mcp.tools.changed" }
   | { type: "lsp.updated" }
+  | { type: "provider.updated" }
   | { type: "code.index.progress" }
   | { type: "code.index.state" }
   | { type: "vcs.branch.updated"; properties: { branch: string } }
@@ -127,6 +128,7 @@ export const HEADLESS_RUNTIME_EVENT_TYPES = new Set<string>([
   "scheduled.task.deleted",
   "mcp.tools.changed",
   "lsp.updated",
+  "provider.updated",
   "code.index.progress",
   "code.index.state",
   "vcs.branch.updated",

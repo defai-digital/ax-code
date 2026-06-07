@@ -212,6 +212,12 @@ export function applyHeadlessProjectionEvent<
       effects.push({ type: "runtime.probe", key: "lsp" }, { type: "runtime.probe", key: "debug-engine" })
       return { handled: true, effects }
 
+    // Provider discovery completion carries no shared projection state — the
+    // TUI refetches its provider list directly off this event. Treat it as a
+    // no-op here so non-TUI headless consumers ignore it cleanly.
+    case "provider.updated":
+      return { handled: false, effects }
+
     case "code.index.progress":
     case "code.index.state":
       effects.push({ type: "runtime.probe", key: "debug-engine" })

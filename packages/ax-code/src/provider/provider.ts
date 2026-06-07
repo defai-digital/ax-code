@@ -40,9 +40,19 @@ import {
   type CustomDiscoverModels,
   type CustomLoader,
 } from "./loaders"
+import { Bus } from "../bus"
+import { BusEvent } from "../bus/bus-event"
 
 export namespace Provider {
   const log = Log.create({ service: "provider" })
+
+  // Emitted after background model discovery (CLI subprocess probes, local
+  // LLM model-list fetches) finishes mutating the provider state. The TUI
+  // refetches its provider list on this so discovered models appear once
+  // ready, while startup itself never blocks on discovery. See `state()`.
+  export const Event = {
+    Updated: BusEvent.define("provider.updated", z.object({})),
+  }
   const supported = isModelSupportedForProvider
   let modelCacheGeneration = 0
   const MODEL_CACHE_INVALIDATION_RETRY_LIMIT = 8
@@ -654,33 +664,56 @@ export namespace Provider {
       log.info("found", { providerID })
     }
 
-    await Promise.all(
-      Object.entries(discoveryLoaders).map(async ([id, loader]) => {
-        const providerID = ProviderID.make(id)
-        if (!providers[providerID]) return
-        await (async () => {
-          const discovered = await withTimeout(
-            loader(providers[providerID]),
-            10_000,
-            `discovery loader '${id}' timed out`,
-          )
-          for (const [modelID, model] of Object.entries(discovered)) {
-            providers[providerID].models[modelID] = model
-          }
-          applyModelFilters(providerID, providers[providerID])
-        })().catch((e) => {
-          initFailures.push({ source: `discovery:${id}`, error: e })
-          log.warn("state discovery error", { id, error: e })
-        })
-      }),
-    )
+    // Run model discovery (CLI subprocess auth probes, local LLM /models and
+    // /api/tags fetches) WITHOUT blocking state resolution. These were the
+    // dominant startup cost: a `Promise.all` here waited on the slowest probe
+    // — e.g. the claude-code auth `ping` — gating the provider list the TUI
+    // blocks on before the prompt is usable. Cloud and CLI providers already
+    // carry their snapshot models and are returned immediately; discovered
+    // models stream in afterwards and the TUI refetches on `Event.Updated`.
+    // Consumers that need the complete list await `state().discovery` (see
+    // `ready()` and the cache-miss retry in `getModel()`).
+    const runDiscovery = async () => {
+      await Promise.all(
+        Object.entries(discoveryLoaders).map(async ([id, loader]) => {
+          const providerID = ProviderID.make(id)
+          if (!providers[providerID]) return
+          await (async () => {
+            const discovered = await withTimeout(
+              loader(providers[providerID]),
+              10_000,
+              `discovery loader '${id}' timed out`,
+            )
+            for (const [modelID, model] of Object.entries(discovered)) {
+              providers[providerID].models[modelID] = model
+            }
+            applyModelFilters(providerID, providers[providerID])
+          })().catch((e) => {
+            initFailures.push({ source: `discovery:${id}`, error: e })
+            log.warn("state discovery error", { id, error: e })
+          })
+        }),
+      )
 
-    for (const [id, provider] of Object.entries(providers)) {
-      const providerID = ProviderID.make(id)
-      if (!isNonEmptyRecord(provider.models)) {
-        delete providers[providerID]
+      // Drop providers whose models come solely from discovery (e.g. a local
+      // LLM endpoint that turned out to expose nothing) now that discovery has
+      // settled. Providers with snapshot/config models are unaffected.
+      for (const [id, provider] of Object.entries(providers)) {
+        const providerID = ProviderID.make(id)
+        if (!isNonEmptyRecord(provider.models)) {
+          delete providers[providerID]
+        }
       }
+
+      log.info("provider discovery completed", {
+        command: "provider.discovery",
+        status: "ok",
+        providers: recordCount(providers),
+      })
+      Bus.publishDetached(Event.Updated, {})
     }
+
+    const discovery = Object.keys(discoveryLoaders).length > 0 ? runDiscovery() : Promise.resolve()
 
     const providerCount = recordCount(providers)
     if (initFailures.length > 0) {
@@ -707,6 +740,7 @@ export namespace Provider {
       sdkPending,
       modelLoaders,
       varsLoaders,
+      discovery,
     }
   })
 
@@ -722,6 +756,15 @@ export namespace Provider {
 
   export async function list() {
     return state().then((state) => state.providers)
+  }
+
+  // Await background model discovery (CLI probes, local LLM model lists) to
+  // settle. `list()` deliberately returns before discovery so the TUI is not
+  // blocked; callers that must observe the COMPLETE set — e.g. the `models`
+  // command — await this first. Resolves immediately when there is nothing to
+  // discover. Never rejects: discovery swallows per-loader failures.
+  export async function ready() {
+    await state().then((s) => s.discovery)
   }
 
   // Drop the cached provider state so the next `list()` / `getSDK()`
@@ -1021,9 +1064,18 @@ export namespace Provider {
     return state().then((s) => s.providers[providerID])
   }
 
-  export async function getModel(providerID: ProviderID, modelID: ModelID) {
+  export async function getModel(providerID: ProviderID, modelID: ModelID, awaitedDiscovery = false): Promise<Model> {
     const s = await state()
     const provider = s.providers[providerID]
+    // Discovery (CLI/local model lists) runs in the background after `state()`
+    // resolves, so a model can be legitimately missing only because discovery
+    // hasn't finished. Await it once and retry before reporting not-found —
+    // this keeps headless/session resolution of a freshly-discovered model
+    // correct without forcing every `list()` caller to wait for discovery.
+    if ((!provider || !provider.models[modelID]) && !awaitedDiscovery) {
+      await s.discovery
+      return getModel(providerID, modelID, true)
+    }
     if (!provider) {
       const availableProviders = Object.keys(s.providers)
       const fuzzyMatches = fuzzysort.go(providerID, availableProviders, { limit: 3, threshold: -10000 })

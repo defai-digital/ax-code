@@ -35,6 +35,7 @@ import { createBootstrapController } from "./sync-bootstrap-controller"
 import { createStoreBackedRuntimeSyncActions } from "./sync-runtime-adapter"
 import { createStoreBackedSessionSyncController } from "./sync-session-sync"
 import { createStoreBackedBootstrapTasks } from "./sync-bootstrap-assembly"
+import { applyProviderBootstrapState, createProviderBootstrapSuccess } from "./sync-bootstrap-store"
 import { createInitialSyncState, type SyncStoreState } from "./sync-state"
 import { createSyncStartupCoordinator } from "./sync-startup"
 import { createSyncBootstrapFlow } from "./sync-bootstrap-flow"
@@ -220,6 +221,20 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
       syncWorkflowDashboard,
       scheduleRuntimeProbe: runtimeProbeScheduler.schedule,
       bootstrap,
+      // Targeted provider refetch on `provider.updated` (background discovery
+      // finished). Re-reads only the provider list and merges it into the
+      // store so the model picker gains discovered models without re-running
+      // the full bootstrap.
+      async refreshProviders() {
+        const response = await sdk.client.config.providers({}, { throwOnError: true })
+        const data = response.data
+        if (!data) return
+        setStore(
+          produce((draft) => {
+            applyProviderBootstrapState(draft, createProviderBootstrapSuccess(data))
+          }),
+        )
+      },
       onWarn(label, error) {
         Log.Default.warn(label, { error })
       },

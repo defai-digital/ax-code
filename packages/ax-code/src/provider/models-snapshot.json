@@ -63503,6 +63503,250 @@
       }
     }
   },
+  "freemodel": {
+    "id": "freemodel",
+    "env": [
+      "FREEMODEL_API_KEY"
+    ],
+    "npm": "@ai-sdk/anthropic",
+    "api": "https://cc.freemodel.dev/v1",
+    "name": "FreeModel",
+    "doc": "https://freemodel.dev",
+    "models": {
+      "claude-sonnet-4-6": {
+        "id": "claude-sonnet-4-6",
+        "name": "Claude Sonnet 4.6",
+        "family": "claude-sonnet",
+        "attachment": true,
+        "reasoning": true,
+        "tool_call": true,
+        "temperature": true,
+        "knowledge": "2025-08-31",
+        "release_date": "2026-02-17",
+        "last_updated": "2026-03-13",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 64000
+        }
+      },
+      "claude-haiku-4-5-20251001": {
+        "id": "claude-haiku-4-5-20251001",
+        "name": "Claude Haiku 4.5",
+        "family": "claude-haiku",
+        "attachment": true,
+        "reasoning": true,
+        "tool_call": true,
+        "temperature": true,
+        "knowledge": "2025-02-28",
+        "release_date": "2025-10-15",
+        "last_updated": "2025-10-15",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 200000,
+          "output": 64000
+        }
+      },
+      "gpt-5.4": {
+        "id": "gpt-5.4",
+        "name": "GPT-5.4",
+        "family": "gpt",
+        "attachment": true,
+        "reasoning": true,
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": false,
+        "knowledge": "2025-08-31",
+        "release_date": "2026-03-05",
+        "last_updated": "2026-03-05",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1050000,
+          "input": 922000,
+          "output": 128000
+        },
+        "provider": {
+          "npm": "@ai-sdk/openai-compatible",
+          "api": "https://api.freemodel.dev/v1"
+        }
+      },
+      "gpt-5.3-codex": {
+        "id": "gpt-5.3-codex",
+        "name": "GPT-5.3 Codex",
+        "family": "gpt-codex",
+        "attachment": true,
+        "reasoning": true,
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": false,
+        "knowledge": "2025-08-31",
+        "release_date": "2026-02-05",
+        "last_updated": "2026-02-05",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 400000,
+          "input": 272000,
+          "output": 128000
+        },
+        "provider": {
+          "npm": "@ai-sdk/openai-compatible",
+          "api": "https://api.freemodel.dev/v1"
+        }
+      },
+      "claude-opus-4-8": {
+        "id": "claude-opus-4-8",
+        "name": "Claude Opus 4.8",
+        "family": "claude-opus",
+        "attachment": true,
+        "reasoning": true,
+        "tool_call": true,
+        "temperature": false,
+        "release_date": "2026-05-28",
+        "last_updated": "2026-05-28",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        }
+      },
+      "gpt-5.4-mini": {
+        "id": "gpt-5.4-mini",
+        "name": "GPT-5.4 mini",
+        "family": "gpt-mini",
+        "attachment": true,
+        "reasoning": true,
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": false,
+        "knowledge": "2025-08-31",
+        "release_date": "2026-03-17",
+        "last_updated": "2026-03-17",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 400000,
+          "input": 272000,
+          "output": 128000
+        },
+        "provider": {
+          "npm": "@ai-sdk/openai-compatible",
+          "api": "https://api.freemodel.dev/v1"
+        }
+      },
+      "claude-opus-4-6": {
+        "id": "claude-opus-4-6",
+        "name": "Claude Opus 4.6",
+        "family": "claude-opus",
+        "attachment": true,
+        "reasoning": true,
+        "tool_call": true,
+        "temperature": true,
+        "knowledge": "2025-05-31",
+        "release_date": "2026-02-05",
+        "last_updated": "2026-03-13",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        }
+      },
+      "claude-opus-4-7": {
+        "id": "claude-opus-4-7",
+        "name": "Claude Opus 4.7",
+        "family": "claude-opus",
+        "attachment": true,
+        "reasoning": true,
+        "tool_call": true,
+        "temperature": false,
+        "knowledge": "2026-01-31",
+        "release_date": "2026-04-16",
+        "last_updated": "2026-04-16",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        }
+      }
+    }
+  },
   "lilac": {
     "id": "lilac",
     "env": [
@@ -86700,7 +86944,9 @@
         "last_updated": "2025-12-01",
         "modalities": {
           "input": [
-            "text"
+            "text",
+            "image",
+            "pdf"
           ],
           "output": [
             "text"
@@ -86708,7 +86954,7 @@
         },
         "open_weights": false,
         "limit": {
-          "context": 163842,
+          "context": 128000,
           "output": 8000
         }
       },
@@ -86726,7 +86972,9 @@
         "last_updated": "2025-12-01",
         "modalities": {
           "input": [
-            "text"
+            "text",
+            "image",
+            "pdf"
           ],
           "output": [
             "text"
@@ -86735,7 +86983,7 @@
         "open_weights": false,
         "limit": {
           "context": 128000,
-          "output": 64000
+          "output": 8000
         }
       },
       "deepseek/deepseek-v3.1-terminus": {
@@ -86770,12 +87018,16 @@
         "attachment": false,
         "reasoning": true,
         "tool_call": true,
+        "structured_output": true,
         "temperature": true,
+        "knowledge": "2025-05",
         "release_date": "2026-04-23",
         "last_updated": "2026-04-24",
         "modalities": {
           "input": [
-            "text"
+            "text",
+            "image",
+            "pdf"
           ],
           "output": [
             "text"
@@ -86809,7 +87061,7 @@
         "open_weights": false,
         "limit": {
           "context": 163840,
-          "output": 16384
+          "output": 163840
         }
       },
       "deepseek/deepseek-v3.2-exp": {
@@ -86844,12 +87096,15 @@
         "attachment": false,
         "reasoning": true,
         "tool_call": true,
+        "structured_output": true,
         "temperature": true,
+        "knowledge": "2025-05",
         "release_date": "2026-04-23",
         "last_updated": "2026-04-24",
         "modalities": {
           "input": [
-            "text"
+            "text",
+            "pdf"
           ],
           "output": [
             "text"
@@ -86883,7 +87138,7 @@
         "open_weights": false,
         "limit": {
           "context": 163840,
-          "output": 128000
+          "output": 8192
         }
       },
       "deepseek/deepseek-r1": {
@@ -86909,6 +87164,30 @@
         "limit": {
           "context": 128000,
           "output": 32768
+        }
+      },
+      "inception/mercury-coder-small": {
+        "id": "inception/mercury-coder-small",
+        "name": "Mercury Coder Small Beta",
+        "family": "mercury",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": true,
+        "temperature": true,
+        "release_date": "2025-02-26",
+        "last_updated": "2025-02-26",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 32000,
+          "output": 16384
         }
       },
       "inception/mercury-edit-2": {
@@ -86992,7 +87271,7 @@
         "temperature": true,
         "knowledge": "2025-08-31",
         "release_date": "2026-02-17",
-        "last_updated": "2026-02-17",
+        "last_updated": "2026-03-13",
         "modalities": {
           "input": [
             "text",
@@ -87019,7 +87298,7 @@
         "interleaved": true,
         "temperature": true,
         "knowledge": "2025-03-31",
-        "release_date": "2025-11-24",
+        "release_date": "2024-11-24",
         "last_updated": "2025-11-24",
         "modalities": {
           "input": [
@@ -87044,7 +87323,8 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
+        "knowledge": "2026-01-31",
         "release_date": "2026-04-16",
         "last_updated": "2026-04-16",
         "modalities": {
@@ -87073,8 +87353,8 @@
         "interleaved": true,
         "temperature": true,
         "knowledge": "2025-05-31",
-        "release_date": "2026-02",
-        "last_updated": "2026-02",
+        "release_date": "2026-02-05",
+        "last_updated": "2026-03-13",
         "modalities": {
           "input": [
             "text",
@@ -87459,7 +87739,7 @@
         "tool_call": true,
         "temperature": true,
         "knowledge": "2025-04",
-        "release_date": "2025-04",
+        "release_date": "2025-04-01",
         "last_updated": "2025-04",
         "modalities": {
           "input": [
@@ -87485,7 +87765,7 @@
         "temperature": true,
         "knowledge": "2025-04",
         "release_date": "2025-09-12",
-        "last_updated": "2025-09-12",
+        "last_updated": "2025-09",
         "modalities": {
           "input": [
             "text"
@@ -87496,7 +87776,7 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 262144,
+          "context": 131072,
           "output": 32768
         }
       },
@@ -87539,7 +87819,8 @@
         "modalities": {
           "input": [
             "text",
-            "image"
+            "image",
+            "pdf"
           ],
           "output": [
             "text"
@@ -87548,7 +87829,7 @@
         "open_weights": true,
         "limit": {
           "context": 131072,
-          "output": 129024
+          "output": 32768
         }
       },
       "alibaba/qwen3-vl-235b-a22b-instruct": {
@@ -87564,7 +87845,8 @@
         "modalities": {
           "input": [
             "text",
-            "image"
+            "image",
+            "pdf"
           ],
           "output": [
             "text"
@@ -87583,9 +87865,10 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
+        "structured_output": true,
         "temperature": true,
         "release_date": "2026-04-22",
-        "last_updated": "2026-05-01",
+        "last_updated": "2026-04-22",
         "modalities": {
           "input": [
             "text",
@@ -87610,8 +87893,9 @@
         "reasoning": true,
         "tool_call": true,
         "temperature": true,
+        "knowledge": "2025-04",
         "release_date": "2026-02-16",
-        "last_updated": "2026-02-19",
+        "last_updated": "2026-02-16",
         "modalities": {
           "input": [
             "text",
@@ -87675,7 +87959,7 @@
         "open_weights": true,
         "limit": {
           "context": 1000000,
-          "output": 1000000
+          "output": 65536
         }
       },
       "alibaba/qwen3-coder-next": {
@@ -87741,7 +88025,6 @@
         "modalities": {
           "input": [
             "text",
-            "image",
             "pdf"
           ],
           "output": [
@@ -87762,8 +88045,9 @@
         "reasoning": true,
         "tool_call": true,
         "temperature": true,
+        "knowledge": "2025-04",
         "release_date": "2026-04-02",
-        "last_updated": "2026-04-03",
+        "last_updated": "2026-04-02",
         "modalities": {
           "input": [
             "text",
@@ -87790,7 +88074,7 @@
         "temperature": true,
         "knowledge": "2025-09",
         "release_date": "2025-09-12",
-        "last_updated": "2025-09-12",
+        "last_updated": "2025-09",
         "modalities": {
           "input": [
             "text"
@@ -87802,7 +88086,7 @@
         "open_weights": true,
         "limit": {
           "context": 131072,
-          "output": 65536
+          "output": 32768
         }
       },
       "alibaba/qwen3-embedding-8b": {
@@ -87812,7 +88096,7 @@
         "attachment": false,
         "reasoning": false,
         "tool_call": false,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2025-06-05",
         "last_updated": "2025-06-05",
         "modalities": {
@@ -87836,7 +88120,7 @@
         "attachment": false,
         "reasoning": false,
         "tool_call": false,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2025-06-05",
         "last_updated": "2025-06-05",
         "modalities": {
@@ -87860,7 +88144,7 @@
         "attachment": false,
         "reasoning": false,
         "tool_call": false,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2025-11-14",
         "last_updated": "2025-11-14",
         "modalities": {
@@ -87886,57 +88170,7 @@
         "tool_call": true,
         "temperature": true,
         "knowledge": "2025-04",
-        "release_date": "2025-04",
-        "last_updated": "2025-04",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 40960,
-          "output": 16384
-        }
-      },
-      "alibaba/qwen3-coder-30b-a3b": {
-        "id": "alibaba/qwen3-coder-30b-a3b",
-        "name": "Qwen 3 Coder 30B A3B Instruct",
-        "family": "qwen",
-        "attachment": false,
-        "reasoning": true,
-        "tool_call": true,
-        "temperature": true,
-        "knowledge": "2025-04",
-        "release_date": "2025-04",
-        "last_updated": "2025-04",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 160000,
-          "output": 32768
-        }
-      },
-      "alibaba/qwen3-coder": {
-        "id": "alibaba/qwen3-coder",
-        "name": "Qwen3 Coder 480B A35B Instruct",
-        "family": "qwen",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": true,
-        "temperature": true,
-        "knowledge": "2025-04",
-        "release_date": "2025-04",
+        "release_date": "2025-04-01",
         "last_updated": "2025-04",
         "modalities": {
           "input": [
@@ -87949,19 +88183,19 @@
         "open_weights": false,
         "limit": {
           "context": 262144,
-          "output": 66536
+          "output": 16384
         }
       },
-      "alibaba/qwen-3-32b": {
-        "id": "alibaba/qwen-3-32b",
-        "name": "Qwen 3.32B",
+      "alibaba/qwen3-coder-30b-a3b": {
+        "id": "alibaba/qwen3-coder-30b-a3b",
+        "name": "Qwen 3 Coder 30B A3B Instruct",
         "family": "qwen",
         "attachment": false,
         "reasoning": true,
         "tool_call": true,
         "temperature": true,
         "knowledge": "2025-04",
-        "release_date": "2025-04",
+        "release_date": "2025-04-01",
         "last_updated": "2025-04",
         "modalities": {
           "input": [
@@ -87973,8 +88207,85 @@
         },
         "open_weights": false,
         "limit": {
-          "context": 40960,
-          "output": 16384
+          "context": 262144,
+          "output": 8192
+        }
+      },
+      "alibaba/qwen3-coder": {
+        "id": "alibaba/qwen3-coder",
+        "name": "Qwen3 Coder 480B A35B Instruct",
+        "family": "qwen",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": true,
+        "temperature": true,
+        "knowledge": "2025-04",
+        "release_date": "2025-04-01",
+        "last_updated": "2025-04",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 262144,
+          "output": 65536
+        }
+      },
+      "alibaba/qwen3.7-plus": {
+        "id": "alibaba/qwen3.7-plus",
+        "name": "Qwen 3.7 Plus",
+        "family": "qwen3.7-plus",
+        "attachment": true,
+        "reasoning": true,
+        "tool_call": true,
+        "temperature": true,
+        "knowledge": "2025-04",
+        "release_date": "2026-06-01",
+        "last_updated": "2026-06-02",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 64000
+        }
+      },
+      "alibaba/qwen-3-32b": {
+        "id": "alibaba/qwen-3-32b",
+        "name": "Qwen 3.32B",
+        "family": "qwen",
+        "attachment": false,
+        "reasoning": true,
+        "tool_call": true,
+        "temperature": true,
+        "knowledge": "2025-04",
+        "release_date": "2025-04-01",
+        "last_updated": "2025-04",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 128000,
+          "output": 8192
         }
       },
       "alibaba/qwen3-235b-a22b-thinking": {
@@ -87986,7 +88297,7 @@
         "tool_call": true,
         "temperature": true,
         "knowledge": "2025-04",
-        "release_date": "2025-04",
+        "release_date": "2025-09-24",
         "last_updated": "2025-04",
         "modalities": {
           "input": [
@@ -88000,8 +88311,8 @@
         },
         "open_weights": false,
         "limit": {
-          "context": 262114,
-          "output": 262114
+          "context": 131072,
+          "output": 32768
         }
       },
       "alibaba/qwen3-max-thinking": {
@@ -88042,7 +88353,6 @@
         "modalities": {
           "input": [
             "text",
-            "image",
             "pdf"
           ],
           "output": [
@@ -88064,7 +88374,7 @@
         "tool_call": true,
         "temperature": true,
         "knowledge": "2025-04",
-        "release_date": "2025-04",
+        "release_date": "2025-04-01",
         "last_updated": "2025-04",
         "modalities": {
           "input": [
@@ -88094,7 +88404,8 @@
         "modalities": {
           "input": [
             "text",
-            "image"
+            "image",
+            "pdf"
           ],
           "output": [
             "text"
@@ -88114,8 +88425,9 @@
         "reasoning": true,
         "tool_call": true,
         "temperature": true,
+        "knowledge": "2024-12",
         "release_date": "2026-03-18",
-        "last_updated": "2026-03-20",
+        "last_updated": "2026-03-18",
         "modalities": {
           "input": [
             "text"
@@ -88138,14 +88450,14 @@
         "reasoning": true,
         "tool_call": true,
         "temperature": true,
+        "knowledge": "2024-12",
         "release_date": "2026-04-22",
-        "last_updated": "2026-05-01",
+        "last_updated": "2026-04-22",
         "modalities": {
           "input": [
             "text",
             "image",
-            "audio",
-            "video"
+            "pdf"
           ],
           "output": [
             "text"
@@ -88167,7 +88479,7 @@
         "temperature": true,
         "knowledge": "2024-10",
         "release_date": "2025-12-17",
-        "last_updated": "2025-12-17",
+        "last_updated": "2026-02-04",
         "modalities": {
           "input": [
             "text"
@@ -88190,11 +88502,14 @@
         "reasoning": true,
         "tool_call": true,
         "temperature": true,
+        "knowledge": "2024-12",
         "release_date": "2026-04-22",
-        "last_updated": "2026-05-01",
+        "last_updated": "2026-04-22",
         "modalities": {
           "input": [
-            "text"
+            "text",
+            "image",
+            "pdf"
           ],
           "output": [
             "text"
@@ -88213,7 +88528,7 @@
         "attachment": false,
         "reasoning": false,
         "tool_call": false,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2025-05-28",
         "last_updated": "2025-05-28",
         "modalities": {
@@ -88288,7 +88603,7 @@
         "attachment": false,
         "reasoning": false,
         "tool_call": false,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2023-12-11",
         "last_updated": "2023-12-11",
         "modalities": {
@@ -88326,8 +88641,8 @@
         },
         "open_weights": false,
         "limit": {
-          "context": 60288,
-          "output": 16000
+          "context": 131072,
+          "output": 131072
         }
       },
       "mistral/mistral-medium-3.5": {
@@ -88701,9 +89016,10 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
+        "structured_output": true,
         "temperature": true,
         "release_date": "2026-05-20",
-        "last_updated": "2026-05-21",
+        "last_updated": "2026-04-16",
         "modalities": {
           "input": [
             "text",
@@ -88728,7 +89044,7 @@
         "tool_call": true,
         "temperature": true,
         "release_date": "2026-04-30",
-        "last_updated": "2026-05-01",
+        "last_updated": "2026-04-17",
         "modalities": {
           "input": [
             "text",
@@ -88752,7 +89068,7 @@
         "attachment": false,
         "reasoning": false,
         "tool_call": false,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2025-04-15",
         "last_updated": "2025-04-15",
         "modalities": {
@@ -88801,9 +89117,11 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
+        "structured_output": true,
         "temperature": true,
+        "knowledge": "2025-01",
         "release_date": "2026-04-20",
-        "last_updated": "2026-04-24",
+        "last_updated": "2026-04-21",
         "modalities": {
           "input": [
             "text",
@@ -88931,8 +89249,8 @@
         "tool_call": false,
         "temperature": true,
         "knowledge": "2024-10",
-        "release_date": "2024-12",
-        "last_updated": "2024-12",
+        "release_date": "2024-12-01",
+        "last_updated": "2025-12-15",
         "modalities": {
           "input": [
             "text"
@@ -88972,6 +89290,30 @@
           "output": 131072
         }
       },
+      "nvidia/nemotron-3-ultra-550b-a55b": {
+        "id": "nvidia/nemotron-3-ultra-550b-a55b",
+        "name": "Nemotron 3 Ultra",
+        "family": "nemotron",
+        "attachment": false,
+        "reasoning": true,
+        "tool_call": true,
+        "temperature": true,
+        "release_date": "2026-06-04",
+        "last_updated": "2026-06-04",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 65000
+        }
+      },
       "nvidia/nemotron-nano-12b-v2-vl": {
         "id": "nvidia/nemotron-nano-12b-v2-vl",
         "name": "Nvidia Nemotron Nano 12B V2 VL",
@@ -88981,8 +89323,8 @@
         "tool_call": true,
         "temperature": true,
         "knowledge": "2024-10",
-        "release_date": "2024-12",
-        "last_updated": "2024-12",
+        "release_date": "2024-12-01",
+        "last_updated": "2025-10-28",
         "modalities": {
           "input": [
             "text",
@@ -89007,7 +89349,7 @@
         "tool_call": false,
         "temperature": true,
         "release_date": "2026-03-18",
-        "last_updated": "2026-03-30",
+        "last_updated": "2026-03-11",
         "modalities": {
           "input": [
             "text"
@@ -89031,7 +89373,7 @@
         "tool_call": true,
         "temperature": true,
         "knowledge": "2024-10",
-        "release_date": "2025-01",
+        "release_date": "2025-01-01",
         "last_updated": "2025-01",
         "modalities": {
           "input": [
@@ -89056,7 +89398,7 @@
         "tool_call": false,
         "temperature": true,
         "knowledge": "2024-10",
-        "release_date": "2025-12",
+        "release_date": "2025-12-01",
         "last_updated": "2025-12",
         "modalities": {
           "input": [
@@ -89117,8 +89459,8 @@
         },
         "open_weights": false,
         "limit": {
-          "context": 131072,
-          "output": 16384
+          "context": 128000,
+          "output": 8192
         }
       },
       "meta/llama-3.1-70b": {
@@ -89142,8 +89484,8 @@
         },
         "open_weights": false,
         "limit": {
-          "context": 131072,
-          "output": 16384
+          "context": 128000,
+          "output": 8192
         }
       },
       "meta/llama-3.2-3b": {
@@ -89325,6 +89667,56 @@
           "output": 4096
         }
       },
+      "stepfun/step-3.7-flash": {
+        "id": "stepfun/step-3.7-flash",
+        "name": "Step 3.7 Flash",
+        "family": "step",
+        "attachment": true,
+        "reasoning": true,
+        "tool_call": true,
+        "temperature": true,
+        "release_date": "2026-05-28",
+        "last_updated": "2026-05-28",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 256000,
+          "output": 256000
+        }
+      },
+      "stepfun/step-3.5-flash": {
+        "id": "stepfun/step-3.5-flash",
+        "name": "StepFun 3.5 Flash",
+        "family": "step",
+        "attachment": false,
+        "reasoning": true,
+        "tool_call": true,
+        "temperature": true,
+        "knowledge": "2025-01",
+        "release_date": "2026-01-29",
+        "last_updated": "2026-02-13",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 262114,
+          "output": 262114
+        }
+      },
       "amazon/nova-2-lite": {
         "id": "amazon/nova-2-lite",
         "name": "Nova 2 Lite",
@@ -89358,8 +89750,8 @@
         "attachment": false,
         "reasoning": false,
         "tool_call": false,
-        "temperature": false,
-        "release_date": "2024-04",
+        "temperature": true,
+        "release_date": "2024-04-01",
         "last_updated": "2024-04",
         "modalities": {
           "input": [
@@ -89463,7 +89855,7 @@
         "tool_call": true,
         "temperature": true,
         "release_date": "2026-02-12",
-        "last_updated": "2026-02-19",
+        "last_updated": "2026-02-11",
         "modalities": {
           "input": [
             "text"
@@ -89475,7 +89867,7 @@
         "open_weights": true,
         "limit": {
           "context": 202800,
-          "output": 131072
+          "output": 131100
         }
       },
       "zai/glm-5-turbo": {
@@ -89485,9 +89877,10 @@
         "attachment": false,
         "reasoning": true,
         "tool_call": true,
+        "structured_output": true,
         "temperature": true,
         "release_date": "2026-03-15",
-        "last_updated": "2026-03-17",
+        "last_updated": "2026-03-16",
         "modalities": {
           "input": [
             "text"
@@ -89509,9 +89902,10 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
+        "structured_output": true,
         "temperature": true,
         "release_date": "2026-04-07",
-        "last_updated": "2026-04-16",
+        "last_updated": "2026-03-27",
         "modalities": {
           "input": [
             "text",
@@ -89524,8 +89918,8 @@
         },
         "open_weights": false,
         "limit": {
-          "context": 202752,
-          "output": 202752
+          "context": 202800,
+          "output": 64000
         }
       },
       "meituan/longcat-flash-thinking-2601": {
@@ -89574,7 +89968,7 @@
         "open_weights": false,
         "limit": {
           "context": 128000,
-          "output": 8192
+          "output": 100000
         }
       },
       "meituan/longcat-flash-thinking": {
@@ -89609,8 +90003,8 @@
         "attachment": false,
         "reasoning": false,
         "tool_call": false,
-        "temperature": false,
-        "release_date": "2024-01",
+        "temperature": true,
+        "release_date": "2024-01-01",
         "last_updated": "2024-01",
         "modalities": {
           "input": [
@@ -89633,8 +90027,8 @@
         "attachment": false,
         "reasoning": false,
         "tool_call": false,
-        "temperature": false,
-        "release_date": "2024-09",
+        "temperature": true,
+        "release_date": "2024-09-01",
         "last_updated": "2024-09",
         "modalities": {
           "input": [
@@ -89657,8 +90051,8 @@
         "attachment": false,
         "reasoning": false,
         "tool_call": false,
-        "temperature": false,
-        "release_date": "2024-03",
+        "temperature": true,
+        "release_date": "2024-03-01",
         "last_updated": "2024-03",
         "modalities": {
           "input": [
@@ -89681,7 +90075,7 @@
         "attachment": false,
         "reasoning": false,
         "tool_call": false,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2025-05-20",
         "last_updated": "2025-05-20",
         "modalities": {
@@ -89729,7 +90123,7 @@
         "attachment": false,
         "reasoning": false,
         "tool_call": false,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2025-05-20",
         "last_updated": "2025-05-20",
         "modalities": {
@@ -89777,8 +90171,8 @@
         "attachment": false,
         "reasoning": false,
         "tool_call": false,
-        "temperature": false,
-        "release_date": "2024-09",
+        "temperature": true,
+        "release_date": "2024-09-01",
         "last_updated": "2024-09",
         "modalities": {
           "input": [
@@ -89801,8 +90195,8 @@
         "attachment": false,
         "reasoning": false,
         "tool_call": false,
-        "temperature": false,
-        "release_date": "2024-03",
+        "temperature": true,
+        "release_date": "2024-03-01",
         "last_updated": "2024-03",
         "modalities": {
           "input": [
@@ -89964,6 +90358,32 @@
           "output": 0
         }
       },
+      "google/gemini-3.1-flash-image": {
+        "id": "google/gemini-3.1-flash-image",
+        "name": "Gemini 3.1 Flash Image (Nano Banana 2)",
+        "family": "gemini",
+        "attachment": true,
+        "reasoning": true,
+        "tool_call": false,
+        "temperature": true,
+        "release_date": "2026-05-28",
+        "last_updated": "2026-05-28",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text",
+            "image"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 131072,
+          "output": 32768
+        }
+      },
       "google/gemini-3.1-flash-lite-preview": {
         "id": "google/gemini-3.1-flash-lite-preview",
         "name": "Gemini 3.1 Flash Lite Preview",
@@ -89971,9 +90391,11 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
+        "structured_output": true,
         "temperature": true,
+        "knowledge": "2025-01",
         "release_date": "2026-03-03",
-        "last_updated": "2026-03-06",
+        "last_updated": "2026-03-03",
         "modalities": {
           "input": [
             "text",
@@ -89997,9 +90419,10 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
+        "structured_output": true,
         "temperature": true,
         "release_date": "2026-04-02",
-        "last_updated": "2026-04-03",
+        "last_updated": "2026-04-02",
         "modalities": {
           "input": [
             "text",
@@ -90047,8 +90470,8 @@
         "attachment": false,
         "reasoning": false,
         "tool_call": false,
-        "temperature": false,
-        "release_date": "2024-08",
+        "temperature": true,
+        "release_date": "2024-08-01",
         "last_updated": "2024-08",
         "modalities": {
           "input": [
@@ -90088,7 +90511,7 @@
         "open_weights": false,
         "limit": {
           "context": 1000000,
-          "output": 64000
+          "output": 65000
         }
       },
       "google/gemini-3.1-pro-preview": {
@@ -90098,9 +90521,11 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
+        "structured_output": true,
         "temperature": true,
-        "release_date": "2026-02-19",
-        "last_updated": "2026-02-24",
+        "knowledge": "2025-01",
+        "release_date": "2025-11-18",
+        "last_updated": "2026-02-19",
         "modalities": {
           "input": [
             "text",
@@ -90124,9 +90549,11 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
+        "structured_output": true,
         "temperature": true,
+        "knowledge": "2025-01",
         "release_date": "2026-05-07",
-        "last_updated": "2026-05-08",
+        "last_updated": "2026-05-07",
         "modalities": {
           "input": [
             "text",
@@ -90150,9 +90577,10 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
+        "structured_output": true,
         "temperature": true,
         "release_date": "2026-04-02",
-        "last_updated": "2026-04-03",
+        "last_updated": "2026-04-02",
         "modalities": {
           "input": [
             "text",
@@ -90176,9 +90604,11 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
+        "structured_output": true,
         "temperature": true,
+        "knowledge": "2025-01",
         "release_date": "2026-05-19",
-        "last_updated": "2026-05-21",
+        "last_updated": "2026-05-19",
         "modalities": {
           "input": [
             "text",
@@ -90226,6 +90656,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
+        "structured_output": true,
         "temperature": true,
         "knowledge": "2025-01",
         "release_date": "2025-11-18",
@@ -90234,8 +90665,6 @@
           "input": [
             "text",
             "image",
-            "video",
-            "audio",
             "pdf"
           ],
           "output": [
@@ -90255,7 +90684,8 @@
         "attachment": false,
         "reasoning": false,
         "tool_call": false,
-        "temperature": false,
+        "temperature": true,
+        "knowledge": "2025-05",
         "release_date": "2025-05-20",
         "last_updated": "2025-05-20",
         "modalities": {
@@ -90281,7 +90711,7 @@
         "tool_call": false,
         "temperature": true,
         "knowledge": "2025-03",
-        "release_date": "2025-09",
+        "release_date": "2025-09-01",
         "last_updated": "2025-09",
         "modalities": {
           "input": [
@@ -90329,8 +90759,8 @@
         "attachment": false,
         "reasoning": false,
         "tool_call": false,
-        "temperature": false,
-        "release_date": "2024-03",
+        "temperature": true,
+        "release_date": "2024-03-01",
         "last_updated": "2024-03",
         "modalities": {
           "input": [
@@ -90354,8 +90784,9 @@
         "reasoning": true,
         "tool_call": false,
         "temperature": true,
+        "knowledge": "2025-01",
         "release_date": "2026-02-26",
-        "last_updated": "2026-03-06",
+        "last_updated": "2026-02-26",
         "modalities": {
           "input": [
             "text",
@@ -90379,10 +90810,11 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
+        "structured_output": true,
         "temperature": true,
         "knowledge": "2024-10",
         "release_date": "2025-08-07",
-        "last_updated": "2025-08-07",
+        "last_updated": "2025-10-06",
         "modalities": {
           "input": [
             "text",
@@ -90437,10 +90869,11 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
+        "structured_output": true,
         "temperature": true,
         "knowledge": "2024-10",
-        "release_date": "2025-08-07",
-        "last_updated": "2025-08-07",
+        "release_date": "2025-12-11",
+        "last_updated": "2025-12-11",
         "modalities": {
           "input": [
             "text",
@@ -90465,7 +90898,7 @@
         "attachment": false,
         "reasoning": false,
         "tool_call": false,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2024-01-25",
         "last_updated": "2024-01-25",
         "modalities": {
@@ -90490,9 +90923,11 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
+        "structured_output": false,
         "temperature": true,
+        "knowledge": "2025-08-31",
         "release_date": "2026-03-05",
-        "last_updated": "2026-03-06",
+        "last_updated": "2026-03-05",
         "modalities": {
           "input": [
             "text",
@@ -90517,7 +90952,7 @@
         "attachment": false,
         "reasoning": false,
         "tool_call": false,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2024-01-25",
         "last_updated": "2024-01-25",
         "modalities": {
@@ -90542,10 +90977,11 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
+        "structured_output": false,
         "temperature": true,
         "knowledge": "2024-10",
-        "release_date": "2025-08-07",
-        "last_updated": "2025-08-07",
+        "release_date": "2025-12-11",
+        "last_updated": "2025-12-11",
         "modalities": {
           "input": [
             "text",
@@ -90570,10 +91006,11 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "structured_output": true,
+        "temperature": true,
         "knowledge": "2024-10",
         "release_date": "2025-04-16",
-        "last_updated": "2025-04-16",
+        "last_updated": "2025-06-10",
         "modalities": {
           "input": [
             "text",
@@ -90601,7 +91038,7 @@
         "structured_output": false,
         "temperature": true,
         "knowledge": "2023-09",
-        "release_date": "2025-01",
+        "release_date": "2025-03-12",
         "last_updated": "2025-01",
         "modalities": {
           "input": [
@@ -90625,9 +91062,11 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
+        "structured_output": true,
         "temperature": true,
+        "knowledge": "2025-08-31",
         "release_date": "2026-03-05",
-        "last_updated": "2026-03-06",
+        "last_updated": "2026-03-05",
         "modalities": {
           "input": [
             "text",
@@ -90667,7 +91106,8 @@
         "open_weights": true,
         "limit": {
           "context": 131072,
-          "output": 131072
+          "input": 72,
+          "output": 131000
         }
       },
       "openai/gpt-5.1-codex-max": {
@@ -90677,10 +91117,11 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
+        "structured_output": true,
         "temperature": true,
         "knowledge": "2024-10",
-        "release_date": "2025-08-07",
-        "last_updated": "2025-08-07",
+        "release_date": "2025-11-19",
+        "last_updated": "2025-11-13",
         "modalities": {
           "input": [
             "text",
@@ -90705,10 +91146,11 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
+        "structured_output": true,
         "temperature": true,
         "knowledge": "2024-10",
-        "release_date": "2025-05-16",
-        "last_updated": "2025-05-16",
+        "release_date": "2025-11-12",
+        "last_updated": "2025-11-13",
         "modalities": {
           "input": [
             "text",
@@ -90733,7 +91175,7 @@
         "attachment": false,
         "reasoning": false,
         "tool_call": false,
-        "temperature": false,
+        "temperature": true,
         "release_date": "2022-12-15",
         "last_updated": "2022-12-15",
         "modalities": {
@@ -90773,8 +91215,8 @@
         "open_weights": true,
         "limit": {
           "context": 131072,
-          "input": 98304,
-          "output": 32768
+          "input": 122880,
+          "output": 8192
         }
       },
       "openai/o3-deep-research": {
@@ -90784,7 +91226,7 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "knowledge": "2024-10",
         "release_date": "2024-06-26",
         "last_updated": "2024-06-26",
@@ -90812,7 +91254,9 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
+        "structured_output": true,
         "temperature": true,
+        "knowledge": "2025-08-31",
         "release_date": "2026-03-17",
         "last_updated": "2026-03-17",
         "modalities": {
@@ -90839,9 +91283,11 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
+        "structured_output": true,
         "temperature": true,
+        "knowledge": "2025-08-31",
         "release_date": "2026-02-24",
-        "last_updated": "2026-02-24",
+        "last_updated": "2026-02-05",
         "modalities": {
           "input": [
             "text",
@@ -90866,10 +91312,11 @@
         "attachment": false,
         "reasoning": false,
         "tool_call": false,
+        "structured_output": false,
         "temperature": true,
         "knowledge": "2021-09",
-        "release_date": "2023-03-01",
-        "last_updated": "2023-03-01",
+        "release_date": "2023-05-28",
+        "last_updated": "2023-11-06",
         "modalities": {
           "input": [
             "text"
@@ -90894,7 +91341,7 @@
         "tool_call": true,
         "temperature": true,
         "knowledge": "2024-10",
-        "release_date": "2025-08-07",
+        "release_date": "2025-12-11",
         "last_updated": "2025-08-07",
         "modalities": {
           "input": [
@@ -90922,7 +91369,7 @@
         "tool_call": false,
         "temperature": true,
         "knowledge": "2021-09",
-        "release_date": "2023-03-01",
+        "release_date": "2023-09-28",
         "last_updated": "2023-03-01",
         "modalities": {
           "input": [
@@ -90948,7 +91395,7 @@
         "tool_call": true,
         "temperature": true,
         "knowledge": "2024-10",
-        "release_date": "2025-08-07",
+        "release_date": "2025-11-12",
         "last_updated": "2025-08-07",
         "modalities": {
           "input": [
@@ -90957,8 +91404,7 @@
             "pdf"
           ],
           "output": [
-            "text",
-            "image"
+            "text"
           ]
         },
         "open_weights": false,
@@ -90975,10 +91421,11 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
+        "structured_output": true,
         "temperature": true,
         "knowledge": "2024-10",
-        "release_date": "2025-12",
-        "last_updated": "2025-12",
+        "release_date": "2025-12-18",
+        "last_updated": "2025-12-11",
         "modalities": {
           "input": [
             "text",
@@ -91003,10 +91450,11 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
+        "structured_output": true,
         "temperature": true,
         "knowledge": "2024-10",
-        "release_date": "2025-08-07",
-        "last_updated": "2025-08-07",
+        "release_date": "2025-11-12",
+        "last_updated": "2025-11-13",
         "modalities": {
           "input": [
             "text",
@@ -91057,7 +91505,9 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
+        "structured_output": true,
         "temperature": true,
+        "knowledge": "2025-08-31",
         "release_date": "2026-03-17",
         "last_updated": "2026-03-17",
         "modalities": {
@@ -91084,9 +91534,9 @@
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
-        "temperature": false,
+        "temperature": true,
         "knowledge": "2024-10",
-        "release_date": "2025-08-07",
+        "release_date": "2025-11-12",
         "last_updated": "2025-08-07",
         "modalities": {
           "input": [
@@ -91557,7 +92007,7 @@
         "tool_call": true,
         "temperature": true,
         "knowledge": "2024-10",
-        "release_date": "2025-09",
+        "release_date": "2025-09-01",
         "last_updated": "2025-09",
         "modalities": {
           "input": [
@@ -91582,7 +92032,7 @@
         "tool_call": true,
         "temperature": true,
         "knowledge": "2024-10",
-        "release_date": "2025-10",
+        "release_date": "2025-09-01",
         "last_updated": "2025-10",
         "modalities": {
           "input": [
@@ -91647,6 +92097,32 @@
           "output": 0
         }
       },
+      "minimax/minimax-m3": {
+        "id": "minimax/minimax-m3",
+        "name": "MiniMax M3",
+        "family": "minimax-m3",
+        "attachment": true,
+        "reasoning": true,
+        "tool_call": true,
+        "temperature": true,
+        "release_date": "2026-05-31",
+        "last_updated": "2026-06-01",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 1000000
+        }
+      },
       "minimax/minimax-m2.7-highspeed": {
         "id": "minimax/minimax-m2.7-highspeed",
         "name": "MiniMax M2.7 High Speed",
@@ -91659,8 +92135,7 @@
         "last_updated": "2026-03-18",
         "modalities": {
           "input": [
-            "text",
-            "image"
+            "text"
           ],
           "output": [
             "text"
@@ -91683,7 +92158,7 @@
         "temperature": true,
         "knowledge": "2024-10",
         "release_date": "2025-10-27",
-        "last_updated": "2025-10-27",
+        "last_updated": "2025-12-23",
         "modalities": {
           "input": [
             "text"
@@ -91710,9 +92185,7 @@
         "last_updated": "2026-03-18",
         "modalities": {
           "input": [
-            "text",
-            "image",
-            "pdf"
+            "text"
           ],
           "output": [
             "text"
@@ -91746,8 +92219,8 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 262114,
-          "output": 262114
+          "context": 205000,
+          "output": 205000
         }
       },
       "minimax/minimax-m2.5": {
@@ -91759,7 +92232,7 @@
         "tool_call": true,
         "temperature": true,
         "release_date": "2026-02-12",
-        "last_updated": "2026-02-19",
+        "last_updated": "2026-02-12",
         "modalities": {
           "input": [
             "text"
@@ -91783,7 +92256,7 @@
         "tool_call": true,
         "temperature": true,
         "release_date": "2026-02-12",
-        "last_updated": "2026-03-13",
+        "last_updated": "2026-02-13",
         "modalities": {
           "input": [
             "text"
@@ -91794,8 +92267,8 @@
         },
         "open_weights": false,
         "limit": {
-          "context": 0,
-          "output": 0
+          "context": 204800,
+          "output": 131000
         }
       },
       "minimax/minimax-m2.1-lightning": {
@@ -93794,7 +94267,7 @@
         },
         "open_weights": false,
         "limit": {
-          "context": 65536,
+          "context": 131072,
           "output": 32768
         }
       },
@@ -96124,6 +96597,7 @@
           "context": 200000,
           "output": 32000
         },
+        "status": "deprecated",
         "provider": {
           "npm": "@ai-sdk/anthropic"
         }

@@ -66,6 +66,10 @@ export interface DispatchStoreBackedSyncEventInput<
   syncWorkflowDashboard?: RuntimeSyncProbeHandlers["syncWorkflowDashboard"]
   scheduleRuntimeProbe?: RuntimeSyncProbeScheduler["schedule"]
   bootstrap: () => Promise<void> | void
+  // Refetch just the provider list (not a full bootstrap) when the server
+  // signals discovery finished via `provider.updated`. Optional so non-TUI
+  // dispatch callers can omit it.
+  refreshProviders?: () => Promise<void> | void
   onWarn: (label: string, error: unknown) => void
   maxSessionMessages: number
 }
@@ -98,6 +102,15 @@ function dispatchHeadlessProjectionEvent<
   input: DispatchStoreBackedSyncEventInput<TSession, TTodo, TDiff, TStatus, TMessage, TPart, TStore>,
   setStore: SetStoreFunction<SyncEventStoreState<TSession, TTodo, TDiff, TStatus, TMessage, TPart>>,
 ) {
+  // Provider discovery (CLI/local model lists) finishes after startup and is
+  // pushed as `provider.updated`. Refetch only the provider list — a targeted
+  // refresh, not a full bootstrap, so an in-flight session is not disrupted.
+  // Handled before the shared reducer since it owns no projection state.
+  if (input.event.type === "provider.updated") {
+    void Promise.resolve(input.refreshProviders?.()).catch((error) => input.onWarn("refresh providers", error))
+    return true
+  }
+
   // Route projection updates through the shared headless reducer first.
   // Runtime probes and bootstrap still have TUI adapter scheduler/lifecycle
   // wiring that needs parity work before they can move safely.

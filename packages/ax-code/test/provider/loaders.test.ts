@@ -193,6 +193,7 @@ describe("offline provider loaders", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
+        await Provider.ready()
         const providers = await Provider.list()
         const ollama = providers[ProviderID.make("ollama")]
         expect(ollama).toBeDefined()
@@ -241,6 +242,7 @@ describe("offline provider loaders", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
+        await Provider.ready()
         const providers = await Provider.list()
         const axServing = providers[ProviderID.make("ax-serving")]
         const model = axServing.models[ModelID.make("default")]
@@ -280,6 +282,7 @@ describe("offline provider loaders", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
+        await Provider.ready()
         const providers = await Provider.list()
         const axServing = providers[ProviderID.make("ax-serving")]
         expect(axServing).toBeUndefined()
@@ -309,6 +312,7 @@ describe("offline provider loaders", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
+        await Provider.ready()
         const providers = await Provider.list()
         expect(providers[ProviderID.make("ax-serving")]).toBeUndefined()
       },
@@ -351,6 +355,7 @@ describe("offline provider loaders", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
+        await Provider.ready()
         const providers = await Provider.list()
         const axServing = providers[ProviderID.make("ax-serving")]
         expect(Object.keys(axServing.models)).toEqual(["allowed"])
@@ -379,6 +384,7 @@ describe("offline provider loaders", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
+        await Provider.ready()
         const providers = await Provider.list()
         expect(providers[ProviderID.make("ollama")]).toBeUndefined()
       },

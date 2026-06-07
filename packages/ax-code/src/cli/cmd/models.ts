@@ -35,6 +35,9 @@ export const ModelsCommand = cmd({
     await Instance.provide({
       directory: process.cwd(),
       async fn() {
+        // Wait for background discovery (CLI/local model lists) so the listing
+        // is complete — unlike the TUI, this command has nothing to refresh.
+        await Provider.ready()
         const providers = await Provider.list()
 
         function printModels(providerID: ProviderID, verbose?: boolean) {
