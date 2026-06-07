@@ -19,3 +19,56 @@ test("pinnedFetch rejects non-http redirect targets before following them", asyn
   expect(dnsResolveFn).toHaveBeenCalledTimes(1)
   expect(fetchCalls).toBe(1)
 })
+
+test("assertPublicUrl rejects hex-form IPv4-mapped IPv6 literals (loopback + cloud metadata)", async () => {
+  // ::ffff:7f00:1 == 127.0.0.1, ::ffff:a9fe:a9fe == 169.254.169.254 (metadata).
+  await expect(Ssrf.assertPublicUrl("http://[::ffff:7f00:1]/", "t")).rejects.toThrow("private/reserved")
+  await expect(Ssrf.assertPublicUrl("http://[::ffff:a9fe:a9fe]/latest/meta-data/", "t")).rejects.toThrow(
+    "private/reserved",
+  )
+  // Uncompressed and dotted forms of the same address must also be rejected.
+  await expect(Ssrf.assertPublicUrl("http://[0:0:0:0:0:ffff:7f00:1]/", "t")).rejects.toThrow("private/reserved")
+  await expect(Ssrf.assertPublicUrl("http://[::ffff:127.0.0.1]/", "t")).rejects.toThrow("private/reserved")
+})
+
+test("assertPublicUrl rejects bare and deprecated/NAT64 private IPv6 forms", async () => {
+  await expect(Ssrf.assertPublicUrl("http://[::1]/", "t")).rejects.toThrow("private/reserved")
+  await expect(Ssrf.assertPublicUrl("http://[fd00::1]/", "t")).rejects.toThrow("private/reserved")
+  await expect(Ssrf.assertPublicUrl("http://[fe80::1]/", "t")).rejects.toThrow("private/reserved")
+  await expect(Ssrf.assertPublicUrl("http://[64:ff9b::7f00:1]/", "t")).rejects.toThrow("private/reserved") // NAT64 127.0.0.1
+})
+
+test("assertPublicUrl allows genuine public IPv6 (literal and mapped)", async () => {
+  await expect(Ssrf.assertPublicUrl("http://[2606:4700:4700::1111]/", "t")).resolves.toBeUndefined()
+  await expect(Ssrf.assertPublicUrl("http://[::ffff:8.8.8.8]/", "t")).resolves.toBeUndefined()
+})
+
+test("pinnedFetch strips credentials on a cross-origin redirect but keeps them same-origin", async () => {
+  const dnsResolveFn = mock(async (_hostname: string) => [{ address: "1.2.3.4", family: 4 }])
+
+  const run = async (location: string) => {
+    const seen: Array<string | null> = []
+    let n = 0
+    const fetchFn: NonNullable<Parameters<typeof Ssrf.pinnedFetch>[2]> = async (_url, init) => {
+      seen.push(new Headers(init?.headers).get("authorization"))
+      n++
+      if (n === 1) return new Response(null, { status: 302, headers: { location } })
+      return new Response("ok", { status: 200 })
+    }
+    await Ssrf.pinnedFetch(
+      "http://trusted.invalid/start",
+      { label: "t", headers: { Authorization: "Bearer secret" } },
+      fetchFn,
+      dnsResolveFn,
+    )
+    return seen
+  }
+
+  const cross = await run("http://evil.invalid/x")
+  expect(cross[0]).toBe("Bearer secret") // sent to the original origin
+  expect(cross[1]).toBeNull() // stripped crossing to evil.invalid
+
+  const same = await run("http://trusted.invalid/next")
+  expect(same[0]).toBe("Bearer secret")
+  expect(same[1]).toBe("Bearer secret") // same origin keeps it
+})
