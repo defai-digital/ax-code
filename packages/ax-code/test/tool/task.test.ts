@@ -505,6 +505,171 @@ describe("tool.task", () => {
     })
   })
 
+  test("preserves the session and returns a resumable result when the subagent prompt throws", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({})
+        const user = await Session.updateMessage({
+          id: MessageID.ascending(),
+          sessionID: parent.id,
+          role: "user",
+          time: { created: Date.now() },
+          agent: "build",
+          model: { providerID: "test" as any, modelID: "test-model" as any },
+          tools: {},
+          mode: "build",
+        } as any)
+        const assistant = await Session.updateMessage({
+          id: MessageID.ascending(),
+          parentID: user.id,
+          sessionID: parent.id,
+          role: "assistant",
+          mode: "build",
+          agent: "build",
+          path: { cwd: tmp.path, root: tmp.path },
+          tokens: {
+            input: 0,
+            output: 0,
+            reasoning: 0,
+            cache: { read: 0, write: 0 },
+          },
+          modelID: "test-model",
+          providerID: "test",
+          time: { created: Date.now() },
+        } as MessageV2.Assistant)
+
+        const promptSpy = spyOn(SessionPrompt, "prompt").mockImplementation((async () => {
+          throw new Error("Subagent timed out after 10 minutes — provider may be unresponsive")
+        }) as any)
+        const cancelSpy = spyOn(SessionPrompt, "cancel").mockResolvedValue(undefined as never)
+        const removeSpy = spyOn(Session, "remove")
+
+        try {
+          const result = await (
+            await TaskTool.init()
+          ).execute(
+            {
+              description: "Analyze Python code for bugs",
+              prompt: "find bugs",
+              subagent_type: "general",
+            },
+            {
+              sessionID: parent.id,
+              messageID: assistant.id,
+              callID: "",
+              agent: "build",
+              abort: AbortSignal.any([]),
+              messages: [],
+              metadata: () => {},
+              ask: async () => {},
+              extra: {},
+            } as any,
+          )
+
+          // The in-flight processor is cancelled, but the session is NOT
+          // removed — it must stay resumable via task_id.
+          expect(cancelSpy).toHaveBeenCalledTimes(1)
+          expect(removeSpy).not.toHaveBeenCalled()
+
+          const taskID = result.metadata.sessionId
+          expect(String(taskID)).toMatch(/^ses_/)
+          // The surfaced task_id is a real, resumable child of the parent.
+          const resumable = await Session.get(SessionID.make(String(taskID)))
+          expect(resumable.parentID).toBe(parent.id)
+
+          expect(result.output).toContain(`task_id: ${taskID}`)
+          expect(result.output).toContain("Subagent failed before returning a usable result")
+          expect(result.output).toContain("resume the task_id above")
+          expect(result.metadata.emptyResult).toBe(true)
+          expect(result.metadata.subagentError).toBe(true)
+          expect(result.metadata.errorName).toBe("Error")
+          expect(result.metadata.errorMessage).toContain("provider may be unresponsive")
+        } finally {
+          promptSpy.mockRestore()
+          cancelSpy.mockRestore()
+          removeSpy.mockRestore()
+        }
+      },
+    })
+  })
+
+  test("removes the orphaned session and rethrows when the subagent prompt is aborted", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({})
+        const user = await Session.updateMessage({
+          id: MessageID.ascending(),
+          sessionID: parent.id,
+          role: "user",
+          time: { created: Date.now() },
+          agent: "build",
+          model: { providerID: "test" as any, modelID: "test-model" as any },
+          tools: {},
+          mode: "build",
+        } as any)
+        const assistant = await Session.updateMessage({
+          id: MessageID.ascending(),
+          parentID: user.id,
+          sessionID: parent.id,
+          role: "assistant",
+          mode: "build",
+          agent: "build",
+          path: { cwd: tmp.path, root: tmp.path },
+          tokens: {
+            input: 0,
+            output: 0,
+            reasoning: 0,
+            cache: { read: 0, write: 0 },
+          },
+          modelID: "test-model",
+          providerID: "test",
+          time: { created: Date.now() },
+        } as MessageV2.Assistant)
+
+        const promptSpy = spyOn(SessionPrompt, "prompt").mockImplementation((async () => {
+          throw new DOMException("Aborted", "AbortError")
+        }) as any)
+        const cancelSpy = spyOn(SessionPrompt, "cancel").mockResolvedValue(undefined as never)
+        const removeSpy = spyOn(Session, "remove").mockResolvedValue(undefined as never)
+
+        try {
+          await expect(
+            (await TaskTool.init()).execute(
+              {
+                description: "Analyze Python code for bugs",
+                prompt: "find bugs",
+                subagent_type: "general",
+              },
+              {
+                sessionID: parent.id,
+                messageID: assistant.id,
+                callID: "",
+                agent: "build",
+                abort: AbortSignal.any([]),
+                messages: [],
+                metadata: () => {},
+                ask: async () => {},
+                extra: {},
+              } as any,
+            ),
+          ).rejects.toThrow(/AbortError|Aborted/)
+          expect(cancelSpy).toHaveBeenCalledTimes(1)
+          expect(removeSpy).toHaveBeenCalledTimes(1)
+        } finally {
+          promptSpy.mockRestore()
+          cancelSpy.mockRestore()
+          removeSpy.mockRestore()
+        }
+      },
+    })
+  })
+
   test("does not finalize over an errored empty subagent result", async () => {
     await using tmp = await tmpdir({ git: true })
 

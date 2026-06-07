@@ -55,6 +55,10 @@ function errorDetails(error: unknown) {
   }
 }
 
+function isAbortError(error: unknown) {
+  return error instanceof DOMException && error.name === "AbortError"
+}
+
 function needsRecoveredResultReview(text: string) {
   return /\b(?:incomplete|unresolved|insufficient|no usable|not enough evidence|unable to determine|could not verify|needs? validation|requires? validation)\b/i.test(
     text,
@@ -303,8 +307,8 @@ export const TaskTool = Tool.define("task", async (ctx) => {
           }
         }
       } catch (e) {
-        // Cancel the in-flight processor before removing the session.
-        // Without this, a timed-out subagent's processor continues
+        // Cancel the in-flight processor before deciding how to surface the
+        // failure. Without this, a timed-out subagent's processor continues
         // running (making LLM calls, executing tools) in the background
         // even though the parent has moved on.
         await SessionPrompt.cancel(session.id).catch((error) => {
@@ -313,10 +317,62 @@ export const TaskTool = Tool.define("task", async (ctx) => {
             error,
           })
         })
-        await Session.remove(session.id).catch((error) => {
-          log.warn("failed to remove session after task error", { sessionID: session.id, error })
+
+        // A genuine abort tears the whole session tree down — the parent is
+        // gone and there is nothing left to resume, so remove the orphaned
+        // subagent session and propagate the cancellation.
+        if (ctx.abort.aborted || aborted || isAbortError(e)) {
+          await Session.remove(session.id).catch((error) => {
+            log.warn("failed to remove session after task abort", { sessionID: session.id, error })
+          })
+          throw e
+        }
+
+        // Operational failure (subagent timeout, a provider error that threw,
+        // etc.). Do NOT remove the session: it holds the subagent's partial
+        // work (including any nested children) and must stay resumable. If we
+        // rethrew here the tool would surface a bare ToolStateError with no
+        // task_id, which the control-plane completion gate flags as "failed
+        // before returning usable evidence" — and the auto-continuation prompt
+        // then tells the model to "resume the task_id" that no longer exists,
+        // so the gate can never be satisfied and the retry budget is burned for
+        // nothing. Instead return a structured, recoverable result that
+        // surfaces the task_id so the model can actually resume this session.
+        const failure = errorDetails(e)
+        log.warn("subagent task failed; preserving session for resume", {
+          sessionID: session.id,
+          errorCode: failure.name,
+          errorMessage: failure.message,
         })
-        throw e
+        const recoverableText = [
+          `Subagent failed before returning a usable result: ${failure.name}: ${failure.message}.`,
+          "Treat this as incomplete evidence: resume the task_id above to continue this subagent, " +
+            "retry the task, or explain that no usable subagent result was returned.",
+        ].join("\n")
+        return {
+          title: params.description,
+          metadata: {
+            sessionId: session.id,
+            model,
+            emptyResult: true,
+            finalizeAttempted,
+            recoveredFromEmpty: false,
+            recoveredResultNeedsReview: false,
+            subagentError: true,
+            errorName: failure.name as string | undefined,
+            errorMessage: failure.message as string | undefined,
+            finalizeError: !!finalizeError,
+            finalizeErrorName: finalizeError?.name,
+            finalizeErrorMessage: finalizeError?.message,
+          },
+          output: [
+            `task_id: ${session.id} (for resuming to continue this task if needed)`,
+            "",
+            "<task_result>",
+            recoverableText,
+            "</task_result>",
+          ].join("\n"),
+        }
       }
 
       const text = result.parts.findLast((x) => x.type === "text")?.text ?? ""
