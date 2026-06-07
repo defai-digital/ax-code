@@ -16,6 +16,7 @@ import {
   enqueueFollowUp,
   followUpEditRequest,
   followUpQueue,
+  forgetFollowUpSession,
   hasRecentFollowUpAbort,
   markFollowUpAbort,
   peekQueuedFollowUp,
@@ -136,13 +137,23 @@ describe("follow-up-queue-store", () => {
     expect(dispatchFollowUp(sdk, "ses_err", item("1"))).rejects.toThrow("boom")
   })
 
-  test("edit channel carries a pending request and clears", () => {
+  test("edit channel carries a pending request (with item id) and clears", () => {
     clearFollowUpEdit()
     expect(followUpEditRequest()).toBeUndefined()
-    requestFollowUpEdit("ses_edit", "revise me")
-    expect(followUpEditRequest()).toEqual({ sessionID: "ses_edit", text: "revise me" })
+    requestFollowUpEdit("ses_edit", "followup-1", "revise me")
+    expect(followUpEditRequest()).toEqual({ sessionID: "ses_edit", id: "followup-1", text: "revise me" })
     clearFollowUpEdit()
     expect(followUpEditRequest()).toBeUndefined()
+  })
+
+  test("forgetFollowUpSession clears queue, baseline, and abort marks", () => {
+    const sid = "ses_forget"
+    enqueueFollowUp(sid, { parts: [{ type: "text", text: "x" }] })
+    markFollowUpAbort(sid)
+    expect(followUpQueue(sid).length).toBe(1)
+    forgetFollowUpSession(sid)
+    expect(followUpQueue(sid)).toEqual([])
+    expect(hasRecentFollowUpAbort(sid)).toBe(false)
   })
 
   test("dispatchFollowUp skips a concurrent dispatch for the same session", async () => {
@@ -204,6 +215,33 @@ describe("reconcileFollowUpDrain", () => {
     markFollowUpAbort(sid)
     reconcileFollowUpDrain(sdk, [[sid, "idle"]])
     expect(calls).toHaveLength(0)
+    clearFollowUpQueue(sid)
+  })
+
+  test("does not dispatch (or strand) the head while another dispatch is in flight", async () => {
+    resetFollowUpDrainState()
+    const sid = "ses_drain_inflight"
+    clearFollowUpQueue(sid)
+    enqueueFollowUp(sid, { parts: [{ type: "text", text: "head" }] })
+
+    // A manual send grabs the per-session in-flight guard.
+    let release: (() => void) | undefined
+    const gate = new Promise<void>((resolve) => (release = resolve))
+    const gatedSdk = { client: { session: { promptAsync: async () => (await gate, {}) } } } as any
+    const manual = dispatchFollowUp(gatedSdk, sid, peekQueuedFollowUp(sid)!)
+
+    // The auto-drain edge arrives while the manual dispatch is in flight: it must
+    // not dispatch again (no double-send).
+    const calls: any[] = []
+    const drainSdk = fakeSdk(calls)
+    reconcileFollowUpDrain(drainSdk, [[sid, "busy"]])
+    reconcileFollowUpDrain(drainSdk, [[sid, "idle"]])
+    expect(calls).toHaveLength(0)
+
+    release?.()
+    expect(await manual).toBe(true)
+    // The manual dispatch removed the head on success — nothing stranded.
+    expect(followUpQueue(sid)).toEqual([])
     clearFollowUpQueue(sid)
   })
 

@@ -173,13 +173,13 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
     removeQueuedFollowUp(props.sessionID, id)
   }
 
-  // Editing pops the follow-up out of the queue and back into the composer so
-  // the user can revise and resubmit it.
+  // Editing loads the follow-up's text back into the composer so the user can
+  // revise it. The composer removes it from the queue only once the text lands
+  // (see the prompt edit effect), so a dropped request never loses the message.
   function editQueued(id: string) {
     const item = queued().find((entry) => entry.id === id)
     if (!item) return
-    removeQueuedFollowUp(props.sessionID, id)
-    requestFollowUpEdit(props.sessionID, followUpText(item))
+    requestFollowUpEdit(props.sessionID, id, followUpText(item))
   }
 
   // Send a queued follow-up immediately. dispatchFollowUp removes it from the
@@ -188,7 +188,10 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
     const item = queued().find((entry) => entry.id === id)
     if (!item) return
     try {
-      await dispatchFollowUp(sdk, props.sessionID, item)
+      const dispatched = await dispatchFollowUp(sdk, props.sessionID, item)
+      // `false` = a dispatch for this session is already in flight; the item is
+      // left queued and will drain — tell the user the click wasn't a no-op.
+      if (!dispatched) toast.show({ message: "Already sending — left in queue", variant: "info" })
     } catch (error) {
       log.warn("send queued follow-up failed", {
         command: "tui.sidebar.queue.send",

@@ -28,10 +28,12 @@ const inflight = new Set<string>()
 const abortAt = new Map<string, number>()
 let counter = 0
 
-// Client-only "edit" channel: the sidebar removes a queued follow-up and asks
-// the prompt composer (which owns the textarea ref) to load its text back for
-// editing. A new object each request retriggers the prompt's consuming effect.
-const [editRequest, setEditRequest] = createSignal<{ sessionID: string; text: string } | undefined>()
+// Client-only "edit" channel: the sidebar asks the prompt composer (which owns
+// the textarea ref) to load a queued follow-up's text back for editing. The
+// composer removes the item from the queue only once the text actually lands,
+// so a dropped request never loses the message. A new object each request
+// retriggers the prompt's consuming effect.
+const [editRequest, setEditRequest] = createSignal<{ sessionID: string; id: string; text: string } | undefined>()
 
 /** Reactive accessor — read inside a tracking scope to subscribe to changes. */
 export function followUpQueue(sessionID: string): QueuedFollowUp[] {
@@ -69,6 +71,17 @@ export function clearFollowUpQueue(sessionID: string): void {
   )
 }
 
+/**
+ * Forget all client state for a session that no longer exists (deleted/forked
+ * away). Prevents the queue, drain baseline, and abort marks from leaking — and
+ * stops a recreated id from inheriting a stale baseline and mis-draining.
+ */
+export function forgetFollowUpSession(sessionID: string): void {
+  clearFollowUpQueue(sessionID)
+  previousStatusBySession.delete(sessionID)
+  abortAt.delete(sessionID)
+}
+
 export function markFollowUpAbort(sessionID: string, now: number = Date.now()): void {
   abortAt.set(sessionID, now)
 }
@@ -78,13 +91,13 @@ export function hasRecentFollowUpAbort(sessionID: string, now: number = Date.now
   return at !== undefined && now - at < RECENT_ABORT_WINDOW_MS
 }
 
-/** Ask the prompt composer to load `text` for editing (see sidebar edit control). */
-export function requestFollowUpEdit(sessionID: string, text: string): void {
-  setEditRequest({ sessionID, text })
+/** Ask the prompt composer to load a queued item's `text` for editing (sidebar edit control). */
+export function requestFollowUpEdit(sessionID: string, id: string, text: string): void {
+  setEditRequest({ sessionID, id, text })
 }
 
 /** Reactive accessor for a pending edit request — consumed by the prompt composer. */
-export function followUpEditRequest(): { sessionID: string; text: string } | undefined {
+export function followUpEditRequest(): { sessionID: string; id: string; text: string } | undefined {
   return editRequest()
 }
 
@@ -148,12 +161,23 @@ export function reconcileFollowUpDrain(
 ): void {
   for (const [sessionID, currentType] of snapshot) {
     const previous = previousStatusBySession.get(sessionID)
-    previousStatusBySession.set(sessionID, currentType)
-    if (previous === undefined) continue
-    if (!shouldDrainOnIdle(previous, currentType)) continue
-    if (hasRecentFollowUpAbort(sessionID)) continue
+    if (previous === undefined) {
+      previousStatusBySession.set(sessionID, currentType)
+      continue
+    }
+    if (!shouldDrainOnIdle(previous, currentType)) {
+      previousStatusBySession.set(sessionID, currentType)
+      continue
+    }
+    // busy/retry -> idle edge. If a dispatch for this session is already in
+    // flight (e.g. a manual send-now), do NOT consume the edge: keep the
+    // baseline so the next status change retries, rather than stranding the
+    // head with no future transition to drain it.
     const head = headFollowUp(queues[sessionID])
+    if (head && !hasRecentFollowUpAbort(sessionID) && inflight.has(sessionID)) continue
+    previousStatusBySession.set(sessionID, currentType)
     if (!head) continue
+    if (hasRecentFollowUpAbort(sessionID)) continue
     void dispatchFollowUp(sdk, sessionID, head).catch((error) => onError?.(sessionID, error))
   }
 }
