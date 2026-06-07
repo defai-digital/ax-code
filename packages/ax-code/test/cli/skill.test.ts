@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { afterEach, describe, expect, test } from "bun:test"
 import type { Skill } from "../../src/skill"
 import {
   applySkillValidationExitCode,
@@ -12,6 +12,13 @@ import {
   skillCreateContent,
   skillCreatePath,
 } from "../../src/cli/cmd/skill"
+import { Instance } from "../../src/project/instance"
+import { createSkill, SkillInputError } from "../../src/skill/authoring"
+import { tmpdir } from "../fixture/fixture"
+
+afterEach(async () => {
+  await Instance.disposeAll()
+})
 
 const baseSkill = (overrides: Partial<Skill.Info>): Skill.Info => ({
   name: "release-notes",
@@ -147,10 +154,7 @@ describe("skill command helpers", () => {
 
   test("buildSkillTriggerReport matches path globs", () => {
     const report = buildSkillTriggerReport(
-      [
-        baseSkill({ name: "ts", paths: ["**/*.ts"] }),
-        baseSkill({ name: "css", paths: ["**/*.css"] }),
-      ],
+      [baseSkill({ name: "ts", paths: ["**/*.ts"] }), baseSkill({ name: "css", paths: ["**/*.css"] })],
       ["src/index.ts"],
     )
 
@@ -170,5 +174,16 @@ describe("skill command helpers", () => {
     expect(content).toContain("name: release-notes")
     expect(content).toContain("description: Draft release notes.")
     expect(content).toContain("# release-notes")
+  })
+
+  test("createSkill validates names at the shared authoring boundary", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await expect(
+      Instance.provide({
+        directory: tmp.path,
+        fn: () => createSkill({ name: "../../escape", description: "Attempted traversal." }),
+      }),
+    ).rejects.toThrow(SkillInputError)
   })
 })

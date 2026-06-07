@@ -68,6 +68,13 @@ export type EventServerInstanceDisposed = {
   }
 }
 
+export type EventProviderUpdated = {
+  type: "provider.updated"
+  properties: {
+    [key: string]: unknown
+  }
+}
+
 export type EventLspClientDiagnostics = {
   type: "lsp.client.diagnostics"
   properties: {
@@ -833,247 +840,15 @@ export type EventCommandExecuted = {
     sessionID: string
     arguments: string
     messageID: string
-  }
-}
-
-export type PermissionAction = "allow" | "deny" | "ask"
-
-export type PermissionRule = {
-  permission: string
-  pattern: string
-  action: PermissionAction
-}
-
-export type PermissionRuleset = Array<PermissionRule>
-
-export type Session = {
-  id: string
-  slug: string
-  projectID: string
-  directory: string
-  parentID?: string
-  summary?: {
-    additions: number
-    deletions: number
-    files: number
-    diffs?: Array<FileDiff>
-  }
-  share?: {
-    url: string
-  }
-  title: string
-  version: string
-  time: {
-    created: number
-    updated: number
-    compacting?: number
-    archived?: number
-  }
-  permission?: PermissionRuleset
-  revert?: {
-    messageID: string
-    partID?: string
-    snapshot?: string
-    diff?: string
-  }
-  metadata?: {
-    [key: string]: unknown
-  }
-}
-
-export type EventSessionCreated = {
-  type: "session.created"
-  properties: {
-    info: Session
-  }
-}
-
-export type EventSessionUpdated = {
-  type: "session.updated"
-  properties: {
-    info: Session
-  }
-}
-
-export type EventSessionDeleted = {
-  type: "session.deleted"
-  properties: {
-    info: Session
-  }
-}
-
-export type EventSessionDiff = {
-  type: "session.diff"
-  properties: {
-    sessionID: string
-    diff: Array<FileDiff>
-  }
-}
-
-export type EventSessionError = {
-  type: "session.error"
-  properties: {
-    sessionID?: string
-    error?:
-      | ProviderAuthError
-      | UnknownError
-      | MessageOutputLengthError
-      | MessageAbortedError
-      | StructuredOutputError
-      | ContextOverflowError
-      | ApiError
-  }
-}
-
-export type EventVcsBranchUpdated = {
-  type: "vcs.branch.updated"
-  properties: {
-    branch?: string
-  }
-}
-
-export type EventTaskQueueCreated = {
-  type: "task.queue.created"
-  properties: {
-    item: {
-      id: string
-      projectID: string
-      directory: string
-      worktree?: string
-      sessionID?: string
-      kind: "prompt" | "command" | "shell" | "followup" | "subagent" | "review" | "automation"
-      status:
-        | "queued"
-        | "waiting_for_idle"
-        | "running"
-        | "blocked_permission"
-        | "blocked_question"
-        | "paused"
-        | "failed"
-        | "completed"
-        | "cancelled"
-      priority: number
-      position: number
-      title: string
-      agent?: string
-      model?: unknown
-      sourceMessageID?: string
-      sourceTaskID?: string
-      payload: {
-        [key: string]: unknown
-      }
-      error?: string
-      time: {
-        created: number
-        updated?: number
-        started?: number
-        completed?: number
-      }
-    }
-  }
-}
-
-export type EventTaskQueueUpdated = {
-  type: "task.queue.updated"
-  properties: {
-    item: {
-      id: string
-      projectID: string
-      directory: string
-      worktree?: string
-      sessionID?: string
-      kind: "prompt" | "command" | "shell" | "followup" | "subagent" | "review" | "automation"
-      status:
-        | "queued"
-        | "waiting_for_idle"
-        | "running"
-        | "blocked_permission"
-        | "blocked_question"
-        | "paused"
-        | "failed"
-        | "completed"
-        | "cancelled"
-      priority: number
-      position: number
-      title: string
-      agent?: string
-      model?: unknown
-      sourceMessageID?: string
-      sourceTaskID?: string
-      payload: {
-        [key: string]: unknown
-      }
-      error?: string
-      time: {
-        created: number
-        updated?: number
-        started?: number
-        completed?: number
-      }
-    }
-  }
-}
-
-export type EventTaskQueueDeleted = {
-  type: "task.queue.deleted"
-  properties: {
-    id: string
-    projectID: string
-    sessionID?: string
-  }
-}
-
-export type Pty = {
-  id: string
-  title: string
-  command: string
-  args: Array<string>
-  cwd: string
-  status: "running" | "exited"
-  pid: number
-}
-
-export type EventPtyCreated = {
-  type: "pty.created"
-  properties: {
-    info: Pty
-  }
-}
-
-export type EventPtyUpdated = {
-  type: "pty.updated"
-  properties: {
-    info: Pty
-  }
-}
-
-export type EventPtyExited = {
-  type: "pty.exited"
-  properties: {
-    id: string
-    exitCode: number
-  }
-}
-
-export type EventPtyDeleted = {
-  type: "pty.deleted"
-  properties: {
-    id: string
-  }
-}
-
-export type EventWorktreeReady = {
-  type: "worktree.ready"
-  properties: {
-    name: string
-    branch: string
-  }
-}
-
-export type EventWorktreeFailed = {
-  type: "worktree.failed"
-  properties: {
-    message: string
+    source?: "command" | "file" | "mcp" | "skill"
+    sourceTool?: string
+    workflow?: string
+    workflowRunID?: string
+    warnings?: Array<{
+      code: string
+      message: string
+      severity: "info" | "warn" | "error"
+    }>
   }
 }
 
@@ -1544,6 +1319,247 @@ export type EventWorkflowVerificationAttached = {
   }
 }
 
+export type PermissionAction = "allow" | "deny" | "ask"
+
+export type PermissionRule = {
+  permission: string
+  pattern: string
+  action: PermissionAction
+}
+
+export type PermissionRuleset = Array<PermissionRule>
+
+export type Session = {
+  id: string
+  slug: string
+  projectID: string
+  directory: string
+  parentID?: string
+  summary?: {
+    additions: number
+    deletions: number
+    files: number
+    diffs?: Array<FileDiff>
+  }
+  share?: {
+    url: string
+  }
+  title: string
+  version: string
+  time: {
+    created: number
+    updated: number
+    compacting?: number
+    archived?: number
+  }
+  permission?: PermissionRuleset
+  revert?: {
+    messageID: string
+    partID?: string
+    snapshot?: string
+    diff?: string
+  }
+  metadata?: {
+    [key: string]: unknown
+  }
+}
+
+export type EventSessionCreated = {
+  type: "session.created"
+  properties: {
+    info: Session
+  }
+}
+
+export type EventSessionUpdated = {
+  type: "session.updated"
+  properties: {
+    info: Session
+  }
+}
+
+export type EventSessionDeleted = {
+  type: "session.deleted"
+  properties: {
+    info: Session
+  }
+}
+
+export type EventSessionDiff = {
+  type: "session.diff"
+  properties: {
+    sessionID: string
+    diff: Array<FileDiff>
+  }
+}
+
+export type EventSessionError = {
+  type: "session.error"
+  properties: {
+    sessionID?: string
+    error?:
+      | ProviderAuthError
+      | UnknownError
+      | MessageOutputLengthError
+      | MessageAbortedError
+      | StructuredOutputError
+      | ContextOverflowError
+      | ApiError
+  }
+}
+
+export type EventVcsBranchUpdated = {
+  type: "vcs.branch.updated"
+  properties: {
+    branch?: string
+  }
+}
+
+export type EventTaskQueueCreated = {
+  type: "task.queue.created"
+  properties: {
+    item: {
+      id: string
+      projectID: string
+      directory: string
+      worktree?: string
+      sessionID?: string
+      kind: "prompt" | "command" | "shell" | "followup" | "subagent" | "review" | "automation"
+      status:
+        | "queued"
+        | "waiting_for_idle"
+        | "running"
+        | "blocked_permission"
+        | "blocked_question"
+        | "paused"
+        | "failed"
+        | "completed"
+        | "cancelled"
+      priority: number
+      position: number
+      title: string
+      agent?: string
+      model?: unknown
+      sourceMessageID?: string
+      sourceTaskID?: string
+      payload: {
+        [key: string]: unknown
+      }
+      error?: string
+      time: {
+        created: number
+        updated?: number
+        started?: number
+        completed?: number
+      }
+    }
+  }
+}
+
+export type EventTaskQueueUpdated = {
+  type: "task.queue.updated"
+  properties: {
+    item: {
+      id: string
+      projectID: string
+      directory: string
+      worktree?: string
+      sessionID?: string
+      kind: "prompt" | "command" | "shell" | "followup" | "subagent" | "review" | "automation"
+      status:
+        | "queued"
+        | "waiting_for_idle"
+        | "running"
+        | "blocked_permission"
+        | "blocked_question"
+        | "paused"
+        | "failed"
+        | "completed"
+        | "cancelled"
+      priority: number
+      position: number
+      title: string
+      agent?: string
+      model?: unknown
+      sourceMessageID?: string
+      sourceTaskID?: string
+      payload: {
+        [key: string]: unknown
+      }
+      error?: string
+      time: {
+        created: number
+        updated?: number
+        started?: number
+        completed?: number
+      }
+    }
+  }
+}
+
+export type EventTaskQueueDeleted = {
+  type: "task.queue.deleted"
+  properties: {
+    id: string
+    projectID: string
+    sessionID?: string
+  }
+}
+
+export type Pty = {
+  id: string
+  title: string
+  command: string
+  args: Array<string>
+  cwd: string
+  status: "running" | "exited"
+  pid: number
+}
+
+export type EventPtyCreated = {
+  type: "pty.created"
+  properties: {
+    info: Pty
+  }
+}
+
+export type EventPtyUpdated = {
+  type: "pty.updated"
+  properties: {
+    info: Pty
+  }
+}
+
+export type EventPtyExited = {
+  type: "pty.exited"
+  properties: {
+    id: string
+    exitCode: number
+  }
+}
+
+export type EventPtyDeleted = {
+  type: "pty.deleted"
+  properties: {
+    id: string
+  }
+}
+
+export type EventWorktreeReady = {
+  type: "worktree.ready"
+  properties: {
+    name: string
+    branch: string
+  }
+}
+
+export type EventWorktreeFailed = {
+  type: "worktree.failed"
+  properties: {
+    message: string
+  }
+}
+
 export type EventScheduledTaskCreated = {
   type: "scheduled.task.created"
   properties: {
@@ -1665,6 +1681,7 @@ export type Event =
   | EventServerConnected
   | EventGlobalDisposed
   | EventServerInstanceDisposed
+  | EventProviderUpdated
   | EventLspClientDiagnostics
   | EventFileWatcherUpdated
   | EventLspUpdated
@@ -1693,21 +1710,6 @@ export type Event =
   | EventMcpToolsChanged
   | EventMcpBrowserOpenFailed
   | EventCommandExecuted
-  | EventSessionCreated
-  | EventSessionUpdated
-  | EventSessionDeleted
-  | EventSessionDiff
-  | EventSessionError
-  | EventVcsBranchUpdated
-  | EventTaskQueueCreated
-  | EventTaskQueueUpdated
-  | EventTaskQueueDeleted
-  | EventPtyCreated
-  | EventPtyUpdated
-  | EventPtyExited
-  | EventPtyDeleted
-  | EventWorktreeReady
-  | EventWorktreeFailed
   | EventWorkflowRunCreated
   | EventWorkflowRunUpdated
   | EventWorkflowRunStarted
@@ -1732,6 +1734,21 @@ export type Event =
   | EventWorkflowBudgetWarning
   | EventWorkflowBudgetExceeded
   | EventWorkflowVerificationAttached
+  | EventSessionCreated
+  | EventSessionUpdated
+  | EventSessionDeleted
+  | EventSessionDiff
+  | EventSessionError
+  | EventVcsBranchUpdated
+  | EventTaskQueueCreated
+  | EventTaskQueueUpdated
+  | EventTaskQueueDeleted
+  | EventPtyCreated
+  | EventPtyUpdated
+  | EventPtyExited
+  | EventPtyDeleted
+  | EventWorktreeReady
+  | EventWorktreeFailed
   | EventScheduledTaskCreated
   | EventScheduledTaskUpdated
   | EventScheduledTaskDeleted
@@ -2073,6 +2090,16 @@ export type Config = {
       agent?: string
       model?: Model
       subtask?: boolean
+      workflow?: string
+      location?: string
+      sourceTool?: "ax-code" | "agents" | "opencode" | "claude" | "builtin" | "config"
+      scope?: "project" | "user" | "config"
+      warnings?: Array<{
+        code: string
+        message: string
+        severity: "info" | "warn" | "error"
+      }>
+      allowShell?: boolean
     }
   }
   /**
@@ -2268,19 +2295,19 @@ export type Config = {
     max_todo_retries?: number
   }
   /**
-   * Message-complexity routing for fast-model selection
+   * Specialist agent auto-routing and message-complexity routing settings
    */
   routing?: {
     /**
-     * @deprecated Agent auto-routing was removed; specialists are invoked via @-mention. Field accepted for backwards compatibility but ignored.
+     * Disable automatic specialist agent routing based on message keywords. Default: false.
      */
     disable?: boolean
     /**
-     * @deprecated Agent auto-routing was removed. Field accepted for backwards compatibility but ignored.
+     * @deprecated Routing mode is no longer used. Field accepted for backwards compatibility but ignored.
      */
     mode?: "off" | "delegate" | "switch"
     /**
-     * @deprecated Agent auto-routing was removed. Field accepted for backwards compatibility but ignored.
+     * @deprecated Use routing.disable instead. Field accepted for backwards compatibility but ignored.
      */
     auto_switch?: boolean
     /**
@@ -3516,24 +3543,6 @@ export type Command = {
   mcpPrompt?: {
     client: string
     name: string
-  }
-}
-
-export type CapabilityInfo = {
-  kind: "instruction" | "command" | "skill" | "agent" | "workflow"
-  name: string
-  description?: string
-  source?: string
-  sourceTool?: string
-  scope?: string
-  location?: string
-  warnings?: Array<{
-    code: string
-    message: string
-    severity: "info" | "warn" | "error"
-  }>
-  metadata?: {
-    [key: string]: unknown
   }
 }
 
@@ -10949,7 +10958,7 @@ export type SessionPromptData = {
     }
     agent?: string
     /**
-     * @deprecated Agent auto-routing was removed. Field accepted for backwards compatibility but ignored.
+     * @deprecated Use agentRouting to control automatic specialist routing.
      */
     userSelectedAgent?: boolean
     /**
@@ -11157,7 +11166,7 @@ export type SessionPromptAsyncData = {
     }
     agent?: string
     /**
-     * @deprecated Agent auto-routing was removed. Field accepted for backwards compatibility but ignored.
+     * @deprecated Use agentRouting to control automatic specialist routing.
      */
     userSelectedAgent?: boolean
     /**
@@ -12706,7 +12715,23 @@ export type CapabilityListResponses = {
   /**
    * List of capabilities
    */
-  200: Array<CapabilityInfo>
+  200: Array<{
+    kind: "instruction" | "command" | "skill" | "agent" | "workflow"
+    name: string
+    description?: string
+    source?: string
+    sourceTool?: string
+    scope?: string
+    location?: string
+    warnings?: Array<{
+      code: string
+      message: string
+      severity: "info" | "warn" | "error"
+    }>
+    metadata?: {
+      [key: string]: unknown
+    }
+  }>
 }
 
 export type CapabilityListResponse = CapabilityListResponses[keyof CapabilityListResponses]
@@ -12927,11 +12952,136 @@ export type AppSkillsResponses = {
     allowedTools?: Array<string>
     argumentHint?: string
     standardIssues?: Array<string>
+    sourceTool?: "ax-code" | "agents" | "opencode" | "claude" | "builtin" | "config"
+    scope?: "builtin" | "project" | "user" | "config" | "compat"
     builtin?: boolean
   }>
 }
 
 export type AppSkillsResponse = AppSkillsResponses[keyof AppSkillsResponses]
+
+export type SkillCreateData = {
+  body?: {
+    name: string
+    description: string
+    path?: string
+  }
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/skill"
+}
+
+export type SkillCreateErrors = {
+  /**
+   * Bad request
+   */
+  400: AppErrorEnvelope
+  /**
+   * Conflict
+   */
+  409: AppErrorEnvelope
+}
+
+export type SkillCreateError = SkillCreateErrors[keyof SkillCreateErrors]
+
+export type SkillCreateResponses = {
+  /**
+   * Created skill
+   */
+  200: {
+    path: string
+  }
+}
+
+export type SkillCreateResponse = SkillCreateResponses[keyof SkillCreateResponses]
+
+export type SkillValidateData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/skill/validate"
+}
+
+export type SkillValidateResponses = {
+  /**
+   * Skill validation report
+   */
+  200: {
+    total: number
+    valid: number
+    invalid: number
+    issues: Array<{
+      name: string
+      location: string
+      issues: Array<string>
+    }>
+  }
+}
+
+export type SkillValidateResponse = SkillValidateResponses[keyof SkillValidateResponses]
+
+export type SkillDoctorData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/skill/doctor"
+}
+
+export type SkillDoctorResponses = {
+  /**
+   * Skill doctor report
+   */
+  200: {
+    total: number
+    valid: number
+    invalid: number
+    issues: Array<{
+      name: string
+      location: string
+      issues: Array<string>
+    }>
+    sources: {
+      [key: string]: number
+    }
+  }
+}
+
+export type SkillDoctorResponse = SkillDoctorResponses[keyof SkillDoctorResponses]
+
+export type SkillTestTriggerData = {
+  body?: {
+    files?: Array<string>
+  }
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/skill/test-trigger"
+}
+
+export type SkillTestTriggerResponses = {
+  /**
+   * Skill trigger report
+   */
+  200: {
+    files: Array<string>
+    matched: Array<{
+      name: string
+      description: string
+      location: string
+      sourceTool?: "ax-code" | "agents" | "opencode" | "claude" | "builtin" | "config"
+      scope?: "builtin" | "project" | "user" | "config" | "compat"
+    }>
+  }
+}
+
+export type SkillTestTriggerResponse = SkillTestTriggerResponses[keyof SkillTestTriggerResponses]
 
 export type LspStatusData = {
   body?: never

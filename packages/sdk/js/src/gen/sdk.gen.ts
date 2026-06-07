@@ -208,6 +208,11 @@ import type {
   SessionUnshareResponses,
   SessionUpdateErrors,
   SessionUpdateResponses,
+  SkillCreateErrors,
+  SkillCreateResponses,
+  SkillDoctorResponses,
+  SkillTestTriggerResponses,
+  SkillValidateResponses,
   SmartLlmGetResponses,
   SmartLlmSetResponses,
   SubtaskPartInput,
@@ -6287,6 +6292,120 @@ export class App extends HeyApiClient {
   }
 }
 
+export class Skill extends HeyApiClient {
+  /**
+   * Create skill
+   *
+   * Create a local Agent Skill skeleton in the current worktree.
+   */
+  public create<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      name?: string
+      description?: string
+      path?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "body", key: "name" },
+            { in: "body", key: "description" },
+            { in: "body", key: "path" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<SkillCreateResponses, SkillCreateErrors, ThrowOnError>({
+      url: "/skill",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Validate skills
+   *
+   * Validate discovered skills against the Agent Skills standard.
+   */
+  public validate<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).get<SkillValidateResponses, unknown, ThrowOnError>({
+      url: "/skill/validate",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Diagnose skills
+   *
+   * Diagnose discovered skills, source breakdown, and compatibility metadata.
+   */
+  public doctor<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).get<SkillDoctorResponses, unknown, ThrowOnError>({
+      url: "/skill/doctor",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Test skill triggers
+   *
+   * Show which skills would be recommended for the given file paths.
+   */
+  public testTrigger<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      files?: Array<string>
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "body", key: "files" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<SkillTestTriggerResponses, unknown, ThrowOnError>({
+      url: "/skill/test-trigger",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+}
+
 export class Lsp extends HeyApiClient {
   /**
    * Get LSP status
@@ -6592,6 +6711,11 @@ export class OpencodeClient extends HeyApiClient {
   private _app?: App
   get app(): App {
     return (this._app ??= new App({ client: this.client }))
+  }
+
+  private _skill?: Skill
+  get skill(): Skill {
+    return (this._skill ??= new Skill({ client: this.client }))
   }
 
   private _lsp?: Lsp
