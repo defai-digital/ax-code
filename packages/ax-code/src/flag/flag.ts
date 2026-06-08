@@ -44,12 +44,10 @@ function defineBooleanFlagWithOverride(name: string, overrideName: string, fallb
 }
 
 export namespace Flag {
-  export const AX_CODE_AUTO_SHARE = truthy("AX_CODE_AUTO_SHARE")
   export const AX_CODE_GIT_BASH_PATH = process.env["AX_CODE_GIT_BASH_PATH"]
   export const AX_CODE_CONFIG = process.env["AX_CODE_CONFIG"]
   export declare const AX_CODE_TUI_CONFIG: string | undefined
   export declare const AX_CODE_CONFIG_DIR: string | undefined
-  export declare const AX_CODE_SHARE_URL: string | undefined
   export declare const AX_CODE_CONFIG_CONTENT: string | undefined
   export const AX_CODE_DISABLE_AUTOUPDATE = truthy("AX_CODE_DISABLE_AUTOUPDATE")
   export const AX_CODE_ALWAYS_NOTIFY_UPDATE = truthy("AX_CODE_ALWAYS_NOTIFY_UPDATE")
@@ -73,7 +71,6 @@ export namespace Flag {
   export const AX_CODE_DISABLE_EXTERNAL_SKILLS =
     AX_CODE_DISABLE_CLAUDE_CODE_SKILLS || truthy("AX_CODE_DISABLE_EXTERNAL_SKILLS")
   export declare const AX_CODE_DISABLE_PROJECT_CONFIG: boolean
-  export declare const AX_CODE_DISABLE_SHARE: boolean
   export declare const AX_CODE_AUTONOMOUS: boolean
   export declare const AX_CODE_SMART_LLM: boolean
   export declare const AX_CODE_WORKFLOW_RUNTIME: boolean
@@ -239,7 +236,6 @@ defineBooleanFlagWithOverride("AX_CODE_SUPER_LONG", "AX_CODE_SUPER_LONG_SESSION_
 
 // Evaluate at access time so test/runtime overrides can be flipped
 // without requiring a module reload.
-defineBooleanFlag("AX_CODE_DISABLE_SHARE")
 
 // Some IDE detection paths read this at request time.
 defineStringFlag("AX_CODE_CALLER")
@@ -275,8 +271,6 @@ defineBooleanFlag("AX_CODE_ENABLE_HTTP_DOCS")
 // This must be evaluated at access time, not module load time,
 // because tests and external tooling may set this env var at runtime
 defineStringFlag("AX_CODE_TUI_CONFIG")
-
-defineStringFlag("AX_CODE_SHARE_URL")
 
 // This must be evaluated at access time, not module load time,
 // because external tooling may set this env var at runtime

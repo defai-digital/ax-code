@@ -332,26 +332,12 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(dialogLoading).toContain("return () => <DialogLoading {...props} />")
   })
 
-  test("handles session share, DRE web, and unshare command failures without leaving stale dialogs behind", async () => {
+  test("handles DRE web command failures without leaving stale dialogs behind", async () => {
     const displayCommands = await fs.readFile(DISPLAY_COMMANDS_SRC, "utf8")
-    const session = await fs.readFile(SESSION_ROUTE_SRC, "utf8")
-
-    expect(displayCommands).toContain('value: "session.share"')
-    expect(displayCommands).toContain('title: "Share session"')
-    expect(displayCommands).toContain('message: "Creating share URL..."')
-    expect(displayCommands).toContain('throw new Error("Share endpoint returned no URL")')
-    expect(displayCommands).toContain('message: error instanceof Error ? error.message : "Failed to share session"')
-    expect(displayCommands).toContain(".then(() => dialog.clear())")
-    expect(displayCommands).toContain("dialog.clear()")
 
     expect(displayCommands).toContain('value: "session.dre.web"')
     expect(displayCommands).toContain('message: "Failed to open DRE graph in the browser"')
     expect(displayCommands).toContain(".finally(() => dialog.clear())")
-
-    expect(session).toContain('value: "session.unshare"')
-    expect(session).toContain('message: "Session unshared successfully"')
-    expect(session).toContain('message: error instanceof Error ? error.message : "Failed to unshare session"')
-    expect(session).toContain("dialog.clear()")
   })
 
   test("closes transcript copy and export commands when the session is no longer available", async () => {

@@ -12,7 +12,6 @@ const GROUPS = [
       { label: "New session", key: "session_new" },
       { label: "Switch session", key: "session_list" },
       { label: "Compact session", key: "session_compact" },
-      { label: "Share session", key: "session_share" },
       { label: "Rename session", key: "session_rename" },
       { label: "Export session", key: "session_export" },
       { label: "Jump to message", key: "session_timeline" },

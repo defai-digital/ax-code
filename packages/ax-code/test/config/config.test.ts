@@ -530,28 +530,6 @@ test("handles command configuration", async () => {
   })
 })
 
-test("migrates autoshare to share field", async () => {
-  await using tmp = await tmpdir({
-    init: async (dir) => {
-      await Filesystem.write(
-        path.join(dir, "ax-code.json"),
-        JSON.stringify({
-          $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
-          autoshare: true,
-        }),
-      )
-    },
-  })
-  await Instance.provide({
-    directory: tmp.path,
-    fn: async () => {
-      const config = await Config.get()
-      expect(config.share).toBe("auto")
-      expect(config.autoshare).toBe(true)
-    },
-  })
-})
-
 test("migrates mode field to agent field", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
@@ -1341,7 +1319,6 @@ test("managed settings override user settings", async () => {
       await writeConfig(dir, {
         $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
         model: "user/model",
-        share: "auto",
         username: "testuser",
       })
     },
@@ -1350,7 +1327,6 @@ test("managed settings override user settings", async () => {
   await writeManagedSettings({
     $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
     model: "managed/model",
-    share: "disabled",
   })
 
   await Instance.provide({
@@ -1358,7 +1334,6 @@ test("managed settings override user settings", async () => {
     fn: async () => {
       const config = await Config.get()
       expect(config.model).toBe("managed/model")
-      expect(config.share).toBe("disabled")
       expect(config.username).toBe("testuser")
     },
   })

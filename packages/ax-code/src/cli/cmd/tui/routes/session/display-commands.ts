@@ -6,19 +6,15 @@ import type { DialogContext } from "@tui/ui/dialog"
 import { Clipboard } from "../../util/clipboard"
 import { Editor } from "../../util/editor"
 import { DialogExportOptions } from "../../ui/dialog-export-options"
-import { renderDialogLoading } from "../../ui/dialog-loading"
 import { formatTranscript, type MessageWithParts, type SessionInfo } from "../../util/transcript"
 import { lastAssistantText, scrollDelta, scrollTo, transcriptItems } from "./display"
-import { shareTitle, transcriptFilename } from "./display-command-helpers"
+import { transcriptFilename } from "./display-command-helpers"
 import { Filesystem } from "@/util/filesystem"
 import { DreGraphServer } from "@/cli/cmd/dre-graph-server"
 import open from "open"
 
 type Session = SessionInfo & {
   directory?: string
-  share?: {
-    url?: string
-  }
   revert?: {
     messageID?: string
   }
@@ -76,7 +72,6 @@ export function displayCommands(input: {
     url: string
     client: {
       session: {
-        share: (input: { sessionID: string }) => Promise<{ data?: { share?: { url: string } } }>
         summarize: (input: { sessionID: string; modelID: string; providerID: string }) => unknown
       }
     }
@@ -92,7 +87,6 @@ export function displayCommands(input: {
   setSidebarOpen: (value: boolean) => void
   setMetadataDensity: (next: "auto" | "full" | "compact") => void
   setTimestamps: (next: Setter<"hide" | "show">) => void
-  shareEnabled: boolean
   metadataDensity: Accessor<"auto" | "full" | "compact">
   showAssistantMetadata: Accessor<boolean>
   showDetails: Accessor<boolean>
@@ -121,47 +115,6 @@ export function displayCommands(input: {
   }
 
   return [
-    {
-      title: shareTitle(input.session()?.share?.url),
-      value: "session.share",
-      suggested: input.suggested,
-      keybind: "session_share",
-      category: "Session",
-      enabled: input.shareEnabled,
-      slash: {
-        name: "share",
-      },
-      onSelect: async (dialog: DialogContext) => {
-        const copy = (url: string) =>
-          Clipboard.copy(url)
-            .then(() => input.toast.show({ message: "Share URL copied to clipboard!", variant: "success" }))
-            .catch(() => input.toast.show({ message: "Failed to copy URL to clipboard", variant: "error" }))
-        const url = input.session()?.share?.url
-        if (url) {
-          await copy(url)
-          dialog.clear()
-          return
-        }
-        dialog.replace(renderDialogLoading({ title: "Share session", message: "Creating share URL..." }))
-        await input.sdk.client.session
-          .share({
-            sessionID: input.routeSessionID,
-          })
-          .then((res) => {
-            const url = res.data?.share?.url
-            if (!url) throw new Error("Share endpoint returned no URL")
-            return copy(url)
-          })
-          .then(() => dialog.clear())
-          .catch((error) => {
-            input.toast.show({
-              message: error instanceof Error ? error.message : "Failed to share session",
-              variant: "error",
-            })
-            dialog.clear()
-          })
-      },
-    },
     {
       title: "Rename session",
       value: "session.rename",

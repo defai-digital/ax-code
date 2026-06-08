@@ -124,29 +124,6 @@ export const PrCommand = cmd({
                 cwd: Instance.worktree,
               })
             }
-
-            // Check for ax-code session link in PR body
-            if (prInfo?.body) {
-              const sessionMatch = prInfo.body.match(/https:\/\/opncd\.ai\/s\/([a-zA-Z0-9_-]+)/)
-              if (sessionMatch) {
-                const sessionUrl = sessionMatch[0]
-                UI.println(`Found ax-code session: ${sessionUrl}`)
-                UI.println(`Importing session...`)
-
-                const importResult = await Process.text(["ax-code", "import", sessionUrl], {
-                  nothrow: true,
-                })
-                if (importResult.code === 0) {
-                  const importOutput = importResult.text.trim()
-                  // Extract session ID from the output (format: "Imported session: <session-id>")
-                  const sessionIdMatch = importOutput.match(/Imported session: ([a-zA-Z0-9_-]+)/)
-                  if (sessionIdMatch) {
-                    sessionId = sessionIdMatch[1]
-                    UI.println(`Session imported: ${sessionId}`)
-                  }
-                }
-              }
-            }
           }
         }
 

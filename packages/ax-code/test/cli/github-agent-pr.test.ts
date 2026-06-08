@@ -9,7 +9,7 @@ describe("cli.github-agent.pr", () => {
         headRepository: { name: "forked-repo", extra: true },
         headRepositoryOwner: { login: "alice" },
         headRefName: "feature",
-        body: "Session: https://opncd.ai/s/session_123",
+        body: "Session: https://example.com/s/session_123",
         ignored: "value",
       }),
     ).toEqual({
@@ -17,7 +17,7 @@ describe("cli.github-agent.pr", () => {
       headRepository: { name: "forked-repo" },
       headRepositoryOwner: { login: "alice" },
       headRefName: "feature",
-      body: "Session: https://opncd.ai/s/session_123",
+      body: "Session: https://example.com/s/session_123",
     })
   })
 

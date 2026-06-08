@@ -631,7 +631,6 @@ export function Session() {
       setSidebarOpen,
       setMetadataDensity: (next) => setMetadataDensity(() => next),
       setTimestamps,
-      shareEnabled: sync.data.config.share !== "disabled",
       metadataDensity,
       showAssistantMetadata,
       showDetails,
@@ -778,27 +777,6 @@ export function Session() {
           parts: [],
         })
         promptRef.current?.focus()
-        dialog.clear()
-      },
-    },
-    {
-      title: "Unshare session",
-      value: "session.unshare",
-      keybind: "session_unshare",
-      category: "Session",
-      enabled: !!session()?.share?.url,
-      onSelect: async (dialog) => {
-        await sdk.client.session
-          .unshare({
-            sessionID: route.sessionID,
-          })
-          .then(() => toast.show({ message: "Session unshared successfully", variant: "success" }))
-          .catch((error) => {
-            toast.show({
-              message: error instanceof Error ? error.message : "Failed to unshare session",
-              variant: "error",
-            })
-          })
         dialog.clear()
       },
     },

@@ -13,7 +13,6 @@ const log = Log.create({ service: "server.tui" })
 
 const TUI_COMMAND_MAPPINGS: Record<string, string> = {
   session_new: "session.new",
-  session_share: "session.share",
   session_interrupt: "session.interrupt",
   session_compact: "session.compact",
   messages_page_up: "session.page.up",

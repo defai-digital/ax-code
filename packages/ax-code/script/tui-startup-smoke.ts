@@ -239,7 +239,6 @@ export async function runTuiStartupSmoke(input: TuiStartupSmokeOptions) {
     AX_CODE_DISABLE_LSP_DOWNLOAD: "1",
     AX_CODE_DISABLE_MODELS_FETCH: "1",
     AX_CODE_DISABLE_PROJECT_CONFIG: "1",
-    AX_CODE_DISABLE_SHARE: "1",
     AX_CODE_EXPERIMENTAL_DISABLE_FILEWATCHER: "1",
     AX_CODE_TUI_BACKEND_TRANSPORT: input.backendTransport,
     AX_CODE_TUI_UPGRADE_CHECK_DELAY_MS: "0",

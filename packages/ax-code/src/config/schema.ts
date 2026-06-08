@@ -326,8 +326,6 @@ export const Keybinds = z
     stash_delete: z.string().optional().default("ctrl+d").describe("Delete stash entry"),
     model_provider_list: z.string().optional().default("ctrl+a").describe("Open provider list from model dialog"),
     model_favorite_toggle: z.string().optional().default("ctrl+f").describe("Toggle model favorite status"),
-    session_share: z.string().optional().default("none").describe("Share current session"),
-    session_unshare: z.string().optional().default("none").describe("Unshare current session"),
     session_interrupt: z.string().optional().default("escape").describe("Interrupt current session"),
     session_compact: z.string().optional().default("<leader>c").describe("Compact the session"),
     session_pin_toggle: z.string().optional().default("ctrl+f").describe("Pin or unpin session in the session list"),
@@ -562,16 +560,6 @@ export const Info = z
       .describe(
         "Enable or disable snapshot tracking. When false, filesystem snapshots are not recorded and undoing or reverting will not undo/redo file changes. Defaults to true.",
       ),
-    share: z
-      .enum(["manual", "auto", "disabled"])
-      .optional()
-      .describe(
-        "Control sharing behavior:'manual' allows manual sharing via commands, 'auto' enables automatic sharing, 'disabled' disables all sharing",
-      ),
-    autoshare: z
-      .boolean()
-      .optional()
-      .describe("@deprecated Use 'share' field instead. Share newly created sessions automatically"),
     autoupdate: z
       .union([z.boolean(), z.literal("notify")])
       .optional()
@@ -709,11 +697,6 @@ export const Info = z
       .describe("Enable Super-Long supervised long-run mode (default: on for Qwen3.7-Max, off otherwise)"),
     isolation: Isolation.optional().describe("Execution isolation configuration"),
     tools: z.record(z.string(), z.boolean()).optional().describe("@deprecated Use 'permission' field instead"),
-    enterprise: z
-      .object({
-        url: z.string().optional().describe("Enterprise URL"),
-      })
-      .optional(),
     session: z
       .object({
         ttl_days: z

@@ -425,11 +425,6 @@ export namespace Session {
         }),
       )
     })
-    const cfg = await Config.get()
-    if (!result.parentID && (Flag.AX_CODE_AUTO_SHARE || cfg.share === "auto"))
-      share(result.id).catch((e) => {
-        log.warn("auto-share failed for session", { sessionID: result.id, error: e })
-      })
     // Event.Created already fired in the transaction above — skip redundant Updated
     return result
   }
@@ -456,33 +451,6 @@ export namespace Session {
     return next
   })
 
-  export const share = fn(SessionID.zod, async (id) => {
-    const cfg = await Config.get()
-    if (cfg.share === "disabled") {
-      throw new Error("Sharing is disabled in configuration")
-    }
-    const { ShareNext } = await import("@/share/share-next")
-    const share = await ShareNext.create(id)
-    Database.use((db) => {
-      const row = db.update(SessionTable).set({ share_url: share.url }).where(eq(SessionTable.id, id)).returning().get()
-      if (!row) throw new NotFoundError({ message: `Session not found: ${id}` })
-      const info = fromRow(row)
-      Database.effect(() => Bus.publishDetached(Event.Updated, { info }))
-    })
-    return share
-  })
-
-  export const unshare = fn(SessionID.zod, async (id) => {
-    // Use ShareNext to remove the share (same as share function uses ShareNext to create)
-    const { ShareNext } = await import("@/share/share-next")
-    await ShareNext.remove(id)
-    Database.use((db) => {
-      const row = db.update(SessionTable).set({ share_url: null }).where(eq(SessionTable.id, id)).returning().get()
-      if (!row) throw new NotFoundError({ message: `Session not found: ${id}` })
-      const info = fromRow(row)
-      Database.effect(() => Bus.publishDetached(Event.Updated, { info }))
-    })
-  })
 
   function updateAndPublish(sessionID: SessionID, fields: Record<string, unknown>): Info {
     return Database.use((db) => {
@@ -764,28 +732,23 @@ export namespace Session {
     // so subscribers can treat `session.deleted` as an "all resources
     // released" signal (BUG-013):
     //
-    //   1. unshare — independent of the prompt; do first so external
-    //      share URLs are invalidated as early as possible.
-    //   2. SessionPrompt.cancel — must complete BEFORE clearing
+    //   1. SessionPrompt.cancel — must complete BEFORE clearing
     //      in-process state. The prompt's blast-radius writes go through
     //      `BlastRadius.get` which lazily re-creates an entry on miss; if
     //      we cleared first and the dying prompt then logged one final
     //      tool call, we'd leak a fresh State. Awaiting cancel guarantees
     //      no further writes can land on a cleared map.
-    //   3. Drop in-process per-session caches — `SelfCorrection`,
+    //   2. Drop in-process per-session caches — `SelfCorrection`,
     //      `BlastRadius`, `SessionStatus` (BUG-001 / BUG-002).
     //      `SessionStatus.clear` is used instead of `set(..., idle)` so
     //      we don't fire spurious `session.status` / `session.idle`
     //      events for a session that's being destroyed, not transitioning
     //      idle.
-    //   4. Publish `session.deleted` directly via `Bus.publishDetached`
+    //   3. Publish `session.deleted` directly via `Bus.publishDetached`
     //      (not `Database.effect`) — we're outside the transaction
     //      context anyway, so `Database.effect` would fall through to
     //      immediate execution; calling Bus directly is clearer.
     const items = [...allDescendants, session]
-    for (const item of items) {
-      await unshare(item.id).catch((e) => log.warn("session unshare failed", { sessionID: item.id, error: e }))
-    }
     for (const item of items) {
       await SessionPrompt.cancel(item.id).catch((e) =>
         log.warn("session cancel failed", { sessionID: item.id, error: e }),

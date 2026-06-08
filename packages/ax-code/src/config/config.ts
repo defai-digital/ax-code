@@ -521,11 +521,6 @@ export namespace Config {
 
     if (!result.username) result.username = os.userInfo().username
 
-    // Handle migration from autoshare to share field
-    if (result.autoshare === true && !result.share) {
-      result.share = "auto"
-    }
-
     // Apply flag overrides for compaction settings
     if (Flag.AX_CODE_DISABLE_AUTOCOMPACT) {
       result.compaction = { ...result.compaction, auto: false }

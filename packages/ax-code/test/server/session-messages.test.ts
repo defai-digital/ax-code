@@ -212,7 +212,7 @@ describe("session.prompt_async error handling", () => {
     expect(deleteRoute).toContain("const sessionID = await parseCurrentProjectSessionID(c)")
     expect(deleteRoute).not.toContain("const sessionID = parseSessionID(c)")
 
-    const abortRoute = await extractRoute('"/:sessionID/abort"', '"/:sessionID/share"')
+    const abortRoute = await extractRoute('"/:sessionID/abort"', '"/:sessionID/diff"')
     expect(abortRoute).toContain("SessionPrompt.cancel(await parseCurrentProjectSessionID(c))")
     expect(abortRoute).not.toContain("SessionPrompt.cancel(parseSessionID(c))")
   })
@@ -230,7 +230,7 @@ describe("session.prompt_async error handling", () => {
       ['"/:sessionID/rollback"', '"/:sessionID/todo"'],
       ['"/:sessionID/init"', '"/:sessionID/fork"'],
       ['"/:sessionID/fork"', '"/:sessionID/abort"'],
-      ['"/:sessionID/diff"', '"/:sessionID/share"'],
+      ['"/:sessionID/diff"', '"/:sessionID/summarize"'],
     ] as const) {
       const body = await extractRoute(route[0], route[1])
       expect(body).toContain("await parseCurrentProjectSessionID(c)")

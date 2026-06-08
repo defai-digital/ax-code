@@ -1,90 +1,10 @@
 import type { Argv } from "yargs"
-import type { Session as SDKSession, Message, Part } from "@ax-code/sdk/v2"
 import { cmd } from "../cmd"
 import { bootstrap } from "../../bootstrap"
-import { ShareNext } from "../../../share/share-next"
 import { EOL } from "os"
 import { Filesystem } from "../../../util/filesystem"
-import type { ReplayEvent } from "../../../replay/event"
 import type { SessionTransfer } from "./transfer"
 import { writeTransfer } from "./transfer"
-
-/** Discriminated union returned by the ShareNext API (GET /api/shares/:id/data) */
-export type ShareData =
-  | { type: "session"; data: SDKSession }
-  | { type: "message"; data: Message }
-  | { type: "part"; data: Part }
-  | {
-      type: "event"
-      data: { event: ReplayEvent; timeCreated?: number; sequence?: number; stepID?: string; id?: string }
-    }
-  | { type: "session_diff"; data: unknown }
-  | { type: "model"; data: unknown }
-
-/** Extract share ID from a share URL like https://opncd.ai/share/abc123 */
-export function parseShareUrl(url: string): string | null {
-  const match = url.match(/^https?:\/\/[^/]+\/share\/([a-zA-Z0-9_-]+)$/)
-  return match ? match[1] : null
-}
-
-export function shouldAttachShareAuthHeaders(shareUrl: string, accountBaseUrl: string): boolean {
-  try {
-    return new URL(shareUrl).origin === new URL(accountBaseUrl).origin
-  } catch {
-    return false
-  }
-}
-
-/**
- * Transform ShareNext API response (flat array) into the nested structure for local file storage.
- *
- * The API returns a flat array: [session, message, message, part, part, ...]
- * Local storage expects: { info: session, messages: [{ info: message, parts: [part, ...] }, ...] }
- *
- * This groups parts by their messageID to reconstruct the hierarchy before writing to disk.
- */
-export function transformShareData(shareData: ShareData[]): {
-  info: SDKSession
-  messages: Array<{ info: Message; parts: Part[] }>
-  events?: SessionTransfer["events"]
-} | null {
-  const sessionItem = shareData.find((d) => d.type === "session")
-  if (!sessionItem) return null
-
-  const messageMap = new Map<string, Message>()
-  const partMap = new Map<string, Part[]>()
-  const events = [] as NonNullable<SessionTransfer["events"]>
-
-  for (const item of shareData) {
-    if (item.type === "message") {
-      messageMap.set(item.data.id, item.data)
-    } else if (item.type === "part") {
-      if (!partMap.has(item.data.messageID)) {
-        partMap.set(item.data.messageID, [])
-      }
-      partMap.get(item.data.messageID)!.push(item.data)
-    } else if (item.type === "event") {
-      events.push({
-        id: item.data.id,
-        stepID: item.data.stepID,
-        sequence: item.data.sequence ?? events.length,
-        timeCreated: item.data.timeCreated ?? Date.now(),
-        event: item.data.event,
-      })
-    }
-  }
-
-  if (messageMap.size === 0) return null
-
-  return {
-    info: sessionItem.data,
-    messages: Array.from(messageMap.values()).map((msg) => ({
-      info: msg,
-      parts: partMap.get(msg.id) ?? [],
-    })),
-    events: events.length > 0 ? events : undefined,
-  }
-}
 
 export async function readSessionTransferFile(file: string): Promise<
   | {
@@ -110,88 +30,24 @@ export async function readSessionTransferFile(file: string): Promise<
 
 export const ImportCommand = cmd({
   command: "import <file>",
-  describe: "import session data from JSON file or URL",
+  describe: "import session data from a JSON file",
   builder: (yargs: Argv) => {
     return yargs.positional("file", {
-      describe: "path to JSON file or share URL",
+      describe: "path to session JSON file",
       type: "string",
       demandOption: true,
     })
   },
   handler: async (args) => {
     await bootstrap(process.cwd(), async () => {
-      let exportData: SessionTransfer | undefined
-
-      const isUrl = args.file.startsWith("http://") || args.file.startsWith("https://")
-
-      if (isUrl) {
-        const slug = parseShareUrl(args.file)
-        if (!slug) {
-          const baseUrl = await ShareNext.url()
-          process.stdout.write(`Invalid URL format. Expected: ${baseUrl}/share/<slug>`)
-          process.stdout.write(EOL)
-          return
-        }
-
-        const { Ssrf } = await import("../../../util/ssrf")
-
-        const parsed = new URL(args.file)
-        const baseUrl = parsed.origin
-        const req = await ShareNext.request()
-        const headers = shouldAttachShareAuthHeaders(args.file, req.baseUrl) ? req.headers : {}
-
-        const dataPath = req.api.data(slug)
-        let response = await Ssrf.pinnedFetch(new URL(dataPath, baseUrl).toString(), {
-          headers,
-          label: "storage-import",
-        })
-
-        if (!response.ok && dataPath !== `/api/share/${slug}/data`) {
-          response = await Ssrf.pinnedFetch(new URL(`/api/share/${slug}/data`, baseUrl).toString(), {
-            headers,
-            label: "storage-import",
-          })
-        }
-
-        if (!response.ok) {
-          process.stdout.write(`Failed to fetch share data: ${response.statusText}`)
-          process.stdout.write(EOL)
-          return
-        }
-
-        let shareData: ShareData[]
-        try {
-          const data = await response.json()
-          if (!Array.isArray(data)) {
-            process.stdout.write("Failed to parse share data: server returned an invalid response")
-            process.stdout.write(EOL)
-            return
-          }
-          shareData = data as ShareData[]
-        } catch {
-          process.stdout.write("Failed to parse share data: server returned invalid JSON")
-          process.stdout.write(EOL)
-          return
-        }
-        const transformed = transformShareData(shareData)
-
-        if (!transformed) {
-          process.stdout.write(`Share not found or empty: ${slug}`)
-          process.stdout.write(EOL)
-          return
-        }
-
-        exportData = transformed
-      } else {
-        const result = await readSessionTransferFile(args.file)
-        if (result.error) {
-          process.stdout.write(result.error)
-          process.stdout.write(EOL)
-          return
-        }
-        exportData = result.data
+      const result = await readSessionTransferFile(args.file)
+      if (result.error) {
+        process.stdout.write(result.error)
+        process.stdout.write(EOL)
+        return
       }
 
+      const exportData = result.data
       if (!exportData) {
         process.stdout.write(`Failed to read session data`)
         process.stdout.write(EOL)

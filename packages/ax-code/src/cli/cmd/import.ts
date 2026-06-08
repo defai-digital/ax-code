@@ -3,15 +3,7 @@ import type { Argv } from "yargs"
 import { CompatibilityImport } from "../../import/compatibility"
 import { bootstrap } from "../bootstrap"
 import { cmd } from "./cmd"
-import {
-  ImportCommand as StorageImportCommand,
-  parseShareUrl,
-  shouldAttachShareAuthHeaders,
-  transformShareData,
-  type ShareData,
-} from "./storage/import"
-
-export { parseShareUrl, shouldAttachShareAuthHeaders, transformShareData, type ShareData }
+import { ImportCommand as StorageImportCommand } from "./storage/import"
 
 export function formatCompatibilityImportReport(report: CompatibilityImport.Report) {
   const lines = [
@@ -32,7 +24,7 @@ export const ImportCommand = cmd({
   builder: (yargs: Argv) =>
     yargs
       .positional("file", {
-        describe: "path to JSON file, share URL, or one of: opencode, claude, codex",
+        describe: "path to JSON file, or one of: opencode, claude, codex",
         type: "string",
         demandOption: true,
       })

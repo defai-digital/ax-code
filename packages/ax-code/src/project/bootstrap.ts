@@ -10,7 +10,6 @@ import { Bus } from "../bus"
 import { Command } from "../command"
 import { Instance } from "./instance"
 import { Log } from "@/util/log"
-import { ShareNext } from "@/share/share-next"
 import { Config } from "../config/config"
 import { Session } from "../session"
 import { ScheduledTask } from "@/session/scheduled-task"
@@ -78,7 +77,6 @@ function background(input: {
 
 export async function InstanceBootstrap() {
   Log.Default.info("bootstrapping", { directory: Instance.directory })
-  ShareNext.init()
   await runtimeTask({
     service: "TaskQueue.recoverInterrupted",
     label: "task queue restart recovery",
