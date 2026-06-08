@@ -16,7 +16,6 @@ import { Auth } from "../auth/index.js"
 import { seedRuntimeFlags } from "../cli/bootstrap/env.js"
 import { ToolRegistry } from "../tool/registry.js"
 import { Tool } from "../tool/tool.js"
-import { setLanguage, t } from "../i18n/index.js"
 import { createOpencodeClient } from "@ax-code/sdk/v2/client"
 import type {
   ApiError,
@@ -445,27 +444,27 @@ function classifyError(errMsg: string): Error {
     return new AgentNotFoundError(agentMatch[1], agentMatch[2].split(", "))
   }
 
-  // Provider errors (with i18n messages)
+  // Provider errors
   if (lower.includes("rate limit") || lower.includes("429")) {
-    return new ProviderError(t("errors.rateLimited"), { status: 429 })
+    return new ProviderError("Rate limited. Please wait and try again.", { status: 429 })
   }
   if (lower.includes("unauthorized") || lower.includes("401") || lower.includes("invalid api key")) {
-    return new ProviderError(t("errors.apiError"), { status: 401 })
+    return new ProviderError("API error", { status: 401 })
   }
   if (lower.includes("500") || lower.includes("internal server error")) {
-    return new ProviderError(t("errors.apiError"), { status: 500 })
+    return new ProviderError("API error", { status: 500 })
   }
   if (lower.includes("timeout") || lower.includes("timed out")) {
-    return new ProviderError(t("errors.timeout"), { status: 408 })
+    return new ProviderError("Request timed out", { status: 408 })
   }
   if (lower.includes("permission") || lower.includes("forbidden")) {
-    return new ProviderError(t("errors.permissionDenied"), { status: 403 })
+    return new ProviderError("Permission denied", { status: 403 })
   }
   if (lower.includes("not found") && lower.includes("file")) {
-    return new ProviderError(t("errors.fileNotFound"), { status: 404 })
+    return new ProviderError("File not found", { status: 404 })
   }
   if (lower.includes("connection") || lower.includes("econnrefused")) {
-    return new ProviderError(t("errors.connectionFailed"), { status: 0 })
+    return new ProviderError("Connection failed", { status: 0 })
   }
 
   // Tool errors
@@ -949,11 +948,6 @@ export async function createAgent(options?: AgentOptions): Promise<Agent> {
 
   const initPromise = new Promise<void>((resolve, reject) => {
     bootstrap(opts.directory, async () => {
-      // Set language for error messages
-      if (opts.language === "en") {
-        setLanguage(opts.language)
-      }
-
       // Enhancement #5: Direct API key auth
       if (opts.auth) {
         await Auth.set(opts.auth.provider, { type: "api", key: opts.auth.apiKey })

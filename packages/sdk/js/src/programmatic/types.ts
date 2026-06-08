@@ -123,8 +123,8 @@ export interface AgentOptions {
   system?: string
   /** Provider variant (e.g., "high" for high-effort reasoning) */
   variant?: string
-  /** UI language for error messages (e.g., "en", "zh-CN", "ja"). Default: "en" */
-  language?: "en" | "zh-CN" | "zh-TW" | "ja" | "ko" | "es" | "fr" | "de" | "pt" | "th" | "vi"
+  /** @deprecated English is the only supported language. */
+  language?: "en"
   /** Abort signal for cancellation */
   signal?: AbortSignal
   /** Event hooks */
