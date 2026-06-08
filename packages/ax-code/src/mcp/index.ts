@@ -326,6 +326,7 @@ export namespace MCP {
 
           if (result.mcpClient) {
             clients[key] = result.mcpClient
+            registerClientOnClose(key, result.mcpClient)
           }
         }),
       )
@@ -376,6 +377,23 @@ export namespace MCP {
 
   function rememberClientTransport(client: MCPClient, transport: unknown) {
     ;(client as { transport?: unknown }).transport ??= transport
+  }
+
+  // When a server drops the connection, clear the stale "connected" status and
+  // remove the dead client so a later reconnect isn't short-circuited by the
+  // early-return in connect() (status === "connected" && clients[name]). This
+  // must be wired on EVERY path that stores a client — both the lazy startup
+  // bulk-connect in state() and the explicit connect() — otherwise servers
+  // connected at startup (the common case) would stall on reconnect.
+  function registerClientOnClose(name: string, client: MCPClient) {
+    client.onclose = () => {
+      void state().then((s) => {
+        if (s.clients[name] === client) {
+          delete s.clients[name]
+          s.status[name] = { status: "failed", error: "Server closed the connection" }
+        }
+      })
+    }
   }
 
   function needsTrustStatus(decision: McpTrust.Decision): Status {
@@ -814,14 +832,7 @@ export namespace MCP {
         await closeIfPossible(existingClient, name, "disconnecting existing client")
       }
       s.clients[name] = result.mcpClient
-      result.mcpClient.onclose = () => {
-        void state().then((s) => {
-          if (s.clients[name] === result.mcpClient) {
-            delete s.clients[name]
-            s.status[name] = { status: "failed", error: "Server closed the connection" }
-          }
-        })
-      }
+      registerClientOnClose(name, result.mcpClient)
     }
   }
 

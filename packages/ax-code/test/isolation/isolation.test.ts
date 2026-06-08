@@ -81,6 +81,24 @@ describe("isolation.assertWrite", () => {
     expect(body).not.toContain("if (isProtected(state, resolved)) return false")
   })
 
+  test.skipIf(process.platform !== "darwin" && process.platform !== "win32")(
+    "denies writes to a case-variant of a not-yet-existing protected path on case-insensitive filesystems",
+    async () => {
+      await using tmp = await tmpdir()
+      const dir = path.join(tmp.path, "project")
+      await fs.mkdir(dir, { recursive: true })
+      // Note: .ax-code / .git intentionally do NOT exist yet — that is the
+      // window in which the case-insensitive bypass used to slip through.
+      const state = Isolation.resolve({ mode: "workspace-write", network: false }, dir)
+      expect(() => Isolation.assertWrite(state, path.join(dir, ".AX-CODE/auth.json"), dir, dir)).toThrow(
+        "Path is protected by isolation policy",
+      )
+      expect(() => Isolation.assertBash(state, dir, dir, dir, [path.join(dir, ".GIT/hooks/pre-commit")])).toThrow(
+        "Bash command targets protected path",
+      )
+    },
+  )
+
   test("denies writes outside workspace boundary", () => {
     const state = Isolation.resolve({ mode: "workspace-write", network: false }, root)
     expect(() => Isolation.assertWrite(state, "/tmp/other/file.txt", root, worktree)).toThrow(

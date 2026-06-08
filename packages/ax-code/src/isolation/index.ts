@@ -54,6 +54,22 @@ export namespace Isolation {
     return targets.every((target) => roots.some((root) => Filesystem.contains(root, target)))
   }
 
+  const CASE_INSENSITIVE_FS = process.platform === "darwin" || process.platform === "win32"
+
+  // Containment check for protected paths that is case-insensitive on
+  // case-insensitive filesystems (macOS, Windows). resolveClosestExistingPath
+  // only canonicalizes the EXISTING prefix of a path, so a not-yet-existing
+  // protected dir (e.g. `.ax-code`, `.git`) can be addressed via a case
+  // variant (`.AX-CODE`, `.GIT`) that never gets case-corrected. A plain
+  // case-sensitive comparison would then let that variant slip past the guard,
+  // allowing a write into `.ax-code/policy.json` or `.git/hooks/*` on a fresh
+  // checkout. Fold case here so the variant is still recognized as protected.
+  function isInsideProtected(protectedPath: string, target: string): boolean {
+    if (Filesystem.contains(protectedPath, target)) return true
+    if (CASE_INSENSITIVE_FS) return Filesystem.contains(protectedPath.toLowerCase(), target.toLowerCase())
+    return false
+  }
+
   function roots(directory: string, worktree: string) {
     const result = [resolvePath(directory)]
     if (worktree && worktree !== "/" && resolvePath(worktree) !== result[0]) result.push(resolvePath(worktree))
@@ -92,7 +108,7 @@ export namespace Isolation {
   export function isProtected(state: State, filepath: string): boolean {
     if (state.mode === "full-access") return false
     const targets = securityPaths(filepath)
-    return targets.some((target) => state.protected.some((p) => Filesystem.contains(p, target)))
+    return targets.some((target) => state.protected.some((p) => isInsideProtected(p, target)))
   }
 
   function isBypassed(state: State, resolved: string): boolean {
@@ -107,7 +123,7 @@ export namespace Isolation {
     // Even an explicit approval cannot override DEFAULT_PROTECTED
     // (.git, .ax-code) or user-configured protected entries.
     for (const protectedPath of state.protected) {
-      if (Filesystem.contains(protectedPath, canonical)) return false
+      if (isInsideProtected(protectedPath, canonical)) return false
     }
     // A bypass entry matches if it equals either the literal resolved
     // form or the canonical form. Compare both representations so an
