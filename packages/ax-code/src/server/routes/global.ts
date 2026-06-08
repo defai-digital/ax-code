@@ -20,6 +20,130 @@ import { Event } from "../event"
 
 const log = Log.create({ service: "server" })
 
+const GlobalHealthInfo = z.object({
+  healthy: z.literal(true),
+  version: z.string(),
+  readiness: z.object({
+    processAlive: z.literal(true),
+    apiReady: z.literal(true),
+    providersReady: z.enum(["ready", "degraded", "unknown"]),
+    indexReady: z.enum(["ready", "degraded", "unknown"]),
+  }),
+})
+
+const GlobalCapabilitiesInfo = z.object({
+  schemaVersion: z.literal(1),
+  product: z.literal("ax-code"),
+  version: z.string(),
+  compatibility: z.object({
+    minDesktopVersion: z.string().nullable(),
+    sdkHeadless: z.object({
+      schemaVersion: z.literal(1),
+      supportsManagedLifecycle: z.literal(true),
+      supportsExplicitBinary: z.literal(true),
+      supportsExplicitArgs: z.literal(true),
+      supportsStructuredDiagnostics: z.literal(true),
+      authSchemes: z.array(z.literal("basic")),
+      defaultTransport: z.literal("http-sse"),
+    }),
+  }),
+  endpoints: z.object({
+    health: z.literal("/global/health"),
+    events: z.literal("/global/event"),
+    config: z.literal("/global/config"),
+    capabilityCatalog: z.literal("/capability"),
+    fileSearch: z.literal("/find/file"),
+    sessions: z.literal("/session"),
+    providers: z.literal("/config/providers"),
+    agents: z.literal("/agent"),
+  }),
+  features: z.object({
+    sessions: z.literal(true),
+    asyncPrompt: z.literal(true),
+    globalEvents: z.literal(true),
+    fileSearch: z.literal(true),
+    skills: z.literal(true),
+    plugins: z.literal(true),
+    mcp: z.literal(true),
+    worktrees: z.literal(true),
+    providerManagement: z.literal(true),
+    usage: z.literal(true),
+  }),
+  events: z.object({
+    heartbeat: z.literal("server.heartbeat"),
+    connected: z.literal("server.connected"),
+    sessionCreated: z.literal("session.created"),
+    sessionStatus: z.literal("session.status"),
+    sessionError: z.literal("session.error"),
+    permission: z.literal("permission"),
+    question: z.literal("question"),
+  }),
+})
+
+function getGlobalHealthInfo(): z.infer<typeof GlobalHealthInfo> {
+  return {
+    healthy: true,
+    version: Installation.VERSION,
+    readiness: {
+      processAlive: true,
+      apiReady: true,
+      providersReady: "unknown",
+      indexReady: "unknown",
+    },
+  }
+}
+
+function getGlobalCapabilitiesInfo(): z.infer<typeof GlobalCapabilitiesInfo> {
+  return {
+    schemaVersion: 1,
+    product: "ax-code",
+    version: Installation.VERSION,
+    compatibility: {
+      minDesktopVersion: null,
+      sdkHeadless: {
+        schemaVersion: 1,
+        supportsManagedLifecycle: true,
+        supportsExplicitBinary: true,
+        supportsExplicitArgs: true,
+        supportsStructuredDiagnostics: true,
+        authSchemes: ["basic"],
+        defaultTransport: "http-sse",
+      },
+    },
+    endpoints: {
+      health: "/global/health",
+      events: "/global/event",
+      config: "/global/config",
+      capabilityCatalog: "/capability",
+      fileSearch: "/find/file",
+      sessions: "/session",
+      providers: "/config/providers",
+      agents: "/agent",
+    },
+    features: {
+      sessions: true,
+      asyncPrompt: true,
+      globalEvents: true,
+      fileSearch: true,
+      skills: true,
+      plugins: true,
+      mcp: true,
+      worktrees: true,
+      providerManagement: true,
+      usage: true,
+    },
+    events: {
+      heartbeat: "server.heartbeat",
+      connected: "server.connected",
+      sessionCreated: "session.created",
+      sessionStatus: "session.status",
+      sessionError: "session.error",
+      permission: "permission",
+      question: "question",
+    },
+  }
+}
+
 export const GlobalRoutes = lazy(() =>
   new Hono()
     .get(
@@ -33,14 +157,36 @@ export const GlobalRoutes = lazy(() =>
             description: "Health information",
             content: {
               "application/json": {
-                schema: resolver(z.object({ healthy: z.literal(true), version: z.string() })),
+                schema: resolver(GlobalHealthInfo),
               },
             },
           },
         },
       }),
       async (c) => {
-        return c.json({ healthy: true, version: Installation.VERSION })
+        return c.json(getGlobalHealthInfo())
+      },
+    )
+    .get(
+      "/capabilities",
+      describeRoute({
+        summary: "Get runtime capabilities",
+        description:
+          "Get stable runtime capability metadata for desktop and app integrations. This endpoint describes supported API contracts; use /capability for user-facing commands, skills, agents, and workflows.",
+        operationId: "global.capabilities",
+        responses: {
+          200: {
+            description: "Runtime capability metadata",
+            content: {
+              "application/json": {
+                schema: resolver(GlobalCapabilitiesInfo),
+              },
+            },
+          },
+        },
+      }),
+      async (c) => {
+        return c.json(getGlobalCapabilitiesInfo())
       },
     )
     .get(

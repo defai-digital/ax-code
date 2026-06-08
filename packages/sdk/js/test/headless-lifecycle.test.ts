@@ -16,6 +16,7 @@ const originalPidFile = process.env.AX_CODE_FAKE_PID_FILE
 const originalTermFile = process.env.AX_CODE_FAKE_TERM_FILE
 const originalAuthFile = process.env.AX_CODE_FAKE_AUTH_FILE
 const originalArgsFile = process.env.AX_CODE_FAKE_ARGS_FILE
+const originalExtraEnvFile = process.env.AX_CODE_FAKE_EXTRA_ENV_FILE
 
 afterEach(() => {
   process.env.PATH = originalPath
@@ -23,6 +24,7 @@ afterEach(() => {
   setEnv("AX_CODE_FAKE_TERM_FILE", originalTermFile)
   setEnv("AX_CODE_FAKE_AUTH_FILE", originalAuthFile)
   setEnv("AX_CODE_FAKE_ARGS_FILE", originalArgsFile)
+  setEnv("AX_CODE_FAKE_EXTRA_ENV_FILE", originalExtraEnvFile)
 })
 
 describe("headless backend lifecycle", () => {
@@ -44,6 +46,15 @@ describe("headless backend lifecycle", () => {
 
     expect(backend.url).toBe("http://127.0.0.1:18456")
     expect(backend.headers.Authorization).toBe("Basic " + Buffer.from("app:secret").toString("base64"))
+    expect(backend.diagnostics).toMatchObject({
+      binary: "ax-code",
+      args: ["serve", "--hostname=127.0.0.1", "--port=18456"],
+      hostname: "127.0.0.1",
+      port: 18456,
+      authUsername: "app",
+      readyUrl: "http://127.0.0.1:18456",
+      health: { ok: true, status: 200, body: { healthy: true } },
+    })
     expect(healthRequests.map((request) => new URL(request.url).pathname)).toEqual(["/global/health"])
     expect(healthRequests[0].headers.get("authorization")).toBe(backend.headers.Authorization)
     expect(await waitForFile(fake.authFile)).toBe("app:secret\n")
@@ -71,6 +82,31 @@ describe("headless backend lifecycle", () => {
     })
 
     expect(await waitForFile(fake.argsFile)).toContain("serve --hostname=127.0.0.1 --port=18457")
+
+    await backend.close()
+  })
+
+  test("supports explicit backend binary, args, env, and structured diagnostics", async () => {
+    await using fake = await createReadyFakeAxCode()
+
+    const backend = await startHeadlessBackend({
+      binary: fake.bin,
+      args: ["serve", "--hostname=127.0.0.1", "--port=18456", "--desktop-managed"],
+      env: { AX_CODE_FAKE_EXTRA_ENV_VALUE: "desktop" },
+      reservePort: async () => 18456,
+      fetch: (async () => jsonResponse({ healthy: true, version: "9.9.9" })) as typeof fetch,
+    })
+
+    expect(await waitForFile(fake.argsFile)).toContain("serve --hostname=127.0.0.1 --port=18456 --desktop-managed")
+    expect(await waitForFile(fake.extraEnvFile)).toBe("desktop\n")
+    expect(backend.diagnostics).toMatchObject({
+      binary: fake.bin,
+      args: ["serve", "--hostname=127.0.0.1", "--port=18456", "--desktop-managed"],
+      envKeys: ["AX_CODE_FAKE_EXTRA_ENV_VALUE"],
+      readyUrl: "http://127.0.0.1:18456",
+      health: { ok: true, status: 200, body: { healthy: true, version: "9.9.9" } },
+    })
+    expect(backend.diagnostics.capturedOutput).toBeUndefined()
 
     await backend.close()
   })
@@ -134,7 +170,66 @@ describe("headless backend lifecycle", () => {
       calls.push(`${request.method} ${url.pathname}`)
 
       if (url.pathname === "/global/health") {
-        return jsonResponse({ healthy: true })
+        return jsonResponse({
+          healthy: true,
+          version: "9.9.9",
+          readiness: {
+            processAlive: true,
+            apiReady: true,
+            providersReady: "unknown",
+            indexReady: "unknown",
+          },
+        })
+      }
+      if (url.pathname === "/global/capabilities") {
+        return jsonResponse({
+          schemaVersion: 1,
+          product: "ax-code",
+          version: "9.9.9",
+          compatibility: {
+            minDesktopVersion: null,
+            sdkHeadless: {
+              schemaVersion: 1,
+              supportsManagedLifecycle: true,
+              supportsExplicitBinary: true,
+              supportsExplicitArgs: true,
+              supportsStructuredDiagnostics: true,
+              authSchemes: ["basic"],
+              defaultTransport: "http-sse",
+            },
+          },
+          endpoints: {
+            health: "/global/health",
+            events: "/global/event",
+            config: "/global/config",
+            capabilityCatalog: "/capability",
+            fileSearch: "/find/file",
+            sessions: "/session",
+            providers: "/config/providers",
+            agents: "/agent",
+          },
+          features: {
+            sessions: true,
+            asyncPrompt: true,
+            globalEvents: true,
+            fileSearch: true,
+            skills: true,
+            plugins: true,
+            mcp: true,
+            worktrees: true,
+            providerManagement: true,
+            usage: true,
+          },
+          events: {
+            heartbeat: "server.heartbeat",
+            connected: "server.connected",
+            sessionCreated: "session.created",
+            sessionStatus: "session.status",
+            sessionError: "session.error",
+            permission: "permission",
+            question: "question",
+          },
+        })
       }
       if (request.method === "POST" && url.pathname === "/session") {
         return jsonResponse({ id: "sess-1", title: "App smoke" })
@@ -164,6 +259,17 @@ describe("headless backend lifecycle", () => {
         { id: string; messageID: string }
       >()
 
+      expect(await client.health()).toMatchObject({ healthy: true, version: "9.9.9" })
+      expect(await client.capabilities()).toMatchObject({
+        schemaVersion: 1,
+        compatibility: {
+          sdkHeadless: {
+            supportsExplicitBinary: true,
+            supportsExplicitArgs: true,
+            supportsStructuredDiagnostics: true,
+          },
+        },
+      })
       const session = await client.createSession({ title: "App smoke" })
       await client.sendPrompt(session.id, { parts: [{ type: "text", text: "hello" }] })
 
@@ -174,7 +280,14 @@ describe("headless backend lifecycle", () => {
       expect(HEADLESS_RUNTIME_SCHEMA_VERSION).toBe(1)
       expect(state.session).toEqual([{ id: "sess-1", title: "App smoke" }])
       expect(state.session_status["sess-1"]).toEqual({ type: "idle" })
-      expect(calls).toEqual(["GET /global/health", "POST /session", "POST /session/sess-1/prompt_async", "GET /event"])
+      expect(calls).toEqual([
+        "GET /global/health",
+        "GET /global/health",
+        "GET /global/capabilities",
+        "POST /session",
+        "POST /session/sess-1/prompt_async",
+        "GET /event",
+      ])
     } finally {
       await backend.close()
     }
@@ -239,6 +352,7 @@ async function createReadyFakeAxCode() {
   const termFile = path.join(dir, "terminated")
   const authFile = path.join(dir, "auth")
   const argsFile = path.join(dir, "args")
+  const extraEnvFile = path.join(dir, "extra-env")
   await writeFile(
     bin,
     [
@@ -246,6 +360,7 @@ async function createReadyFakeAxCode() {
       'printf "%s\\n" "$$" > "$AX_CODE_FAKE_PID_FILE"',
       'printf "%s:%s\\n" "$AX_CODE_SERVER_USERNAME" "$AX_CODE_SERVER_PASSWORD" > "$AX_CODE_FAKE_AUTH_FILE"',
       'printf "%s\\n" "$*" > "$AX_CODE_FAKE_ARGS_FILE"',
+      'if [ -n "$AX_CODE_FAKE_EXTRA_ENV_FILE" ]; then printf "%s\\n" "$AX_CODE_FAKE_EXTRA_ENV_VALUE" > "$AX_CODE_FAKE_EXTRA_ENV_FILE"; fi',
       'trap \'printf "terminated" > "$AX_CODE_FAKE_TERM_FILE"; exit 0\' TERM INT',
       'printf "ax-code server listening on http://127.0.0.1:18456\\n"',
       "while true; do sleep 1; done",
@@ -259,12 +374,15 @@ async function createReadyFakeAxCode() {
   process.env.AX_CODE_FAKE_TERM_FILE = termFile
   process.env.AX_CODE_FAKE_AUTH_FILE = authFile
   process.env.AX_CODE_FAKE_ARGS_FILE = argsFile
+  process.env.AX_CODE_FAKE_EXTRA_ENV_FILE = extraEnvFile
 
   return {
+    bin,
     pidFile,
     termFile,
     authFile,
     argsFile,
+    extraEnvFile,
     async [Symbol.asyncDispose]() {
       await rm(dir, { recursive: true, force: true })
     },

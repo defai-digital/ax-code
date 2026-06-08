@@ -60,6 +60,66 @@ export type HeadlessCreateSessionInput = {
 
 export type HeadlessClient = ReturnType<typeof createHeadlessClient>
 
+export type HeadlessGlobalHealth = {
+  healthy: true
+  version: string
+  readiness?: {
+    processAlive: true
+    apiReady: true
+    providersReady: "ready" | "degraded" | "unknown"
+    indexReady: "ready" | "degraded" | "unknown"
+  }
+}
+
+export type HeadlessRuntimeCapabilities = {
+  schemaVersion: 1
+  product: "ax-code"
+  version: string
+  compatibility: {
+    minDesktopVersion: string | null
+    sdkHeadless: {
+      schemaVersion: 1
+      supportsManagedLifecycle: true
+      supportsExplicitBinary: true
+      supportsExplicitArgs: true
+      supportsStructuredDiagnostics: true
+      authSchemes: Array<"basic">
+      defaultTransport: "http-sse"
+    }
+  }
+  endpoints: {
+    health: "/global/health"
+    events: "/global/event"
+    config: "/global/config"
+    capabilityCatalog: "/capability"
+    fileSearch: "/find/file"
+    sessions: "/session"
+    providers: "/config/providers"
+    agents: "/agent"
+  }
+  features: {
+    sessions: true
+    asyncPrompt: true
+    globalEvents: true
+    fileSearch: true
+    skills: true
+    plugins: true
+    mcp: true
+    worktrees: true
+    providerManagement: true
+    usage: true
+  }
+  events: {
+    heartbeat: "server.heartbeat"
+    connected: "server.connected"
+    sessionCreated: "session.created"
+    sessionStatus: "session.status"
+    sessionError: "session.error"
+    permission: "permission"
+    question: "question"
+  }
+}
+
 export type HeadlessTaskQueueKind = "prompt" | "command" | "shell" | "followup" | "subagent" | "review" | "automation"
 
 export type HeadlessTaskQueueStatus =
@@ -278,6 +338,28 @@ export function createHeadlessClient(input: HeadlessClientOptions) {
 
   return {
     client,
+    health() {
+      return requestJson<HeadlessGlobalHealth>({
+        baseUrl: input.baseUrl,
+        fetch: fetchFn,
+        headers: input.headers,
+        directory: input.directory,
+        experimental_workspaceID: input.experimental_workspaceID,
+        path: "/global/health",
+        method: "GET",
+      })
+    },
+    capabilities() {
+      return requestJson<HeadlessRuntimeCapabilities>({
+        baseUrl: input.baseUrl,
+        fetch: fetchFn,
+        headers: input.headers,
+        directory: input.directory,
+        experimental_workspaceID: input.experimental_workspaceID,
+        path: "/global/capabilities",
+        method: "GET",
+      })
+    },
     async createSession(session?: HeadlessCreateSessionInput) {
       const result = await client.session.create(session ?? {})
       const created = result.data

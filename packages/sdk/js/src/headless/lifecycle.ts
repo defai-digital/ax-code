@@ -12,6 +12,17 @@ export type HeadlessBackendOptions = {
   hostname?: string
   port?: number
   /**
+   * Executable used to start the backend. Defaults to `ax-code`.
+   * App shells can pass an absolute binary path while keeping the SDK-owned
+   * readiness, auth, diagnostics, and shutdown behavior.
+   */
+  binary?: string
+  /**
+   * Full argument vector for the backend executable. When omitted, the SDK
+   * launches `ax-code serve --hostname=<host> --port=<port>`.
+   */
+  args?: string[]
+  /**
    * HTTP headless backend helpers are desktop compatibility fallbacks.
    * Network binds must be explicit so GUI apps do not accidentally expose the full HTTP API.
    */
@@ -31,9 +42,34 @@ export type HeadlessBackendOptions = {
   fetch?: typeof fetch
 }
 
+export type HeadlessBackendDiagnostics = {
+  launchedAt: string
+  binary: string
+  args: string[]
+  cwd?: string
+  hostname: string
+  port: number
+  authUsername: string
+  envKeys: string[]
+  readyUrl?: string
+  health?: {
+    ok: boolean
+    status: number
+    body?: unknown
+    error?: string
+  }
+  exit?: {
+    code: number | null
+    signal: NodeJS.Signals | null
+    beforeReady: boolean
+  }
+  capturedOutput?: string
+}
+
 export type HeadlessBackendHandle = {
   url: string
   headers: Record<string, string>
+  diagnostics: HeadlessBackendDiagnostics
   closed: Promise<void>
   close(): Promise<void>
 }
@@ -59,9 +95,20 @@ export async function startHeadlessBackend(options: HeadlessBackendOptions = {})
   const authHeader = "Basic " + Buffer.from(`${username}:${password}`).toString("base64")
   const headers = { Authorization: authHeader }
 
-  const args = ["serve", `--hostname=${hostname}`, `--port=${port}`]
+  const binary = options.binary?.trim() || "ax-code"
+  const args = options.args ?? ["serve", `--hostname=${hostname}`, `--port=${port}`]
+  const diagnostics: HeadlessBackendDiagnostics = {
+    launchedAt: new Date().toISOString(),
+    binary,
+    args: [...args],
+    cwd: options.directory,
+    hostname,
+    port,
+    authUsername: username,
+    envKeys: Object.keys(options.env ?? {}).sort(),
+  }
 
-  const proc = spawn("ax-code", args, {
+  const proc = spawn(binary, args, {
     cwd: options.directory,
     stdio: ["ignore", "pipe", "pipe"],
     detached: process.platform !== "win32",
@@ -92,13 +139,25 @@ export async function startHeadlessBackend(options: HeadlessBackendOptions = {})
     let stderrBuf = ""
 
     const onReadyUrl = (urlStr: string) => {
+      diagnostics.readyUrl = urlStr
       void waitForBackendHealth({
         url: urlStr,
         headers,
         fetch: fetchFn,
       }).then(
-        () => succeed(urlStr),
-        (error) => failStartup(error instanceof Error ? error : new Error(String(error))),
+        (health) => {
+          diagnostics.health = health
+          succeed(urlStr)
+        },
+        (error) => {
+          const message = error instanceof Error ? error.message : String(error)
+          diagnostics.health = {
+            ok: false,
+            status: 0,
+            error: message,
+          }
+          failStartup(error instanceof Error ? error : new Error(message))
+        },
       )
     }
 
@@ -113,6 +172,7 @@ export async function startHeadlessBackend(options: HeadlessBackendOptions = {})
     const failStartup = (error: Error) => {
       if (settled) return
       settled = true
+      diagnostics.capturedOutput = capturedOutput
       clearTimeout(timer)
       cleanup()
       void killProc(proc)
@@ -163,6 +223,7 @@ export async function startHeadlessBackend(options: HeadlessBackendOptions = {})
 
     const onExit = (code: number | null, signal: NodeJS.Signals | null) => {
       const reason = signal ? `signal ${signal}` : `code ${code}`
+      diagnostics.exit = { code, signal, beforeReady: !settled }
       failStartup(
         new Error(`ax-code backend exited before becoming ready (${reason})\nCaptured output:\n${capturedOutput}`),
       )
@@ -183,6 +244,7 @@ export async function startHeadlessBackend(options: HeadlessBackendOptions = {})
   return {
     url,
     headers,
+    diagnostics,
     closed,
     async close() {
       await killProc(proc)
@@ -244,14 +306,27 @@ function isIpv4Loopback(hostname: string) {
   return numbers.every((part) => Number.isInteger(part) && part >= 0 && part <= 255) && numbers[0] === 127
 }
 
-async function waitForBackendHealth(input: { url: string; headers: Record<string, string>; fetch: typeof fetch }) {
+async function waitForBackendHealth(input: {
+  url: string
+  headers: Record<string, string>
+  fetch: typeof fetch
+}): Promise<HeadlessBackendDiagnostics["health"]> {
   const response = await input.fetch(new URL("/global/health", input.url), {
     method: "GET",
     headers: input.headers,
   })
+  const contentType = response.headers.get("content-type") ?? ""
+  const body = contentType.includes("application/json")
+    ? await response.json().catch(() => undefined)
+    : await response.text().catch(() => undefined)
   if (!response.ok) {
-    const text = await response.text().catch(() => "")
+    const text = typeof body === "string" ? body : body === undefined ? "" : JSON.stringify(body)
     throw new Error(`ax-code backend health check failed (${response.status}): ${text || response.statusText}`)
+  }
+  return {
+    ok: true,
+    status: response.status,
+    body,
   }
 }
 
