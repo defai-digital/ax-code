@@ -25,7 +25,7 @@
  * ```
  */
 
-export { startHeadlessBackend } from "./headless/lifecycle.js"
+export { HeadlessBackendStartupError, startHeadlessBackend } from "./headless/lifecycle.js"
 export type { HeadlessBackendDiagnostics, HeadlessBackendOptions, HeadlessBackendHandle } from "./headless/lifecycle.js"
 
 export {

@@ -74,6 +74,16 @@ export type HeadlessBackendHandle = {
   close(): Promise<void>
 }
 
+export class HeadlessBackendStartupError extends Error {
+  readonly diagnostics: HeadlessBackendDiagnostics
+
+  constructor(message: string, diagnostics: HeadlessBackendDiagnostics, options?: ErrorOptions) {
+    super(message, options)
+    this.name = "HeadlessBackendStartupError"
+    this.diagnostics = diagnostics
+  }
+}
+
 export async function startHeadlessBackend(options: HeadlessBackendOptions = {}): Promise<HeadlessBackendHandle> {
   const hostname = options.hostname ?? "127.0.0.1"
   assertSdkHttpLoopbackBind(hostname, options.allowNetworkBind)
@@ -172,12 +182,16 @@ export async function startHeadlessBackend(options: HeadlessBackendOptions = {})
     const failStartup = (error: Error) => {
       if (settled) return
       settled = true
-      diagnostics.capturedOutput = capturedOutput
+      diagnostics.capturedOutput = capturedOutput + stdoutBuf
       clearTimeout(timer)
       cleanup()
+      const startupError =
+        error instanceof HeadlessBackendStartupError
+          ? error
+          : new HeadlessBackendStartupError(error.message, diagnostics, { cause: error })
       void killProc(proc)
         .catch(() => undefined)
-        .finally(() => reject(error))
+        .finally(() => reject(startupError))
     }
 
     const onAbort = () => {

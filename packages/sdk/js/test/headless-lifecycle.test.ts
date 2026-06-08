@@ -7,6 +7,7 @@ import {
   createHeadlessClient,
   createHeadlessProjectionState,
   HEADLESS_RUNTIME_SCHEMA_VERSION,
+  HeadlessBackendStartupError,
   startHeadlessBackend,
 } from "../src/headless.js"
 import { startAxCodeGrpcHeadlessBackend } from "../src/grpc"
@@ -150,13 +151,56 @@ describe("headless backend lifecycle", () => {
   test("kills the backend when health readiness fails", async () => {
     await using fake = await createReadyFakeAxCode()
 
-    await expect(
-      startHeadlessBackend({
+    let caught: unknown
+    try {
+      await startHeadlessBackend({
         timeout: 1_000,
         reservePort: async () => 18456,
         fetch: (async () => new Response("not ready", { status: 503 })) as typeof fetch,
-      }),
-    ).rejects.toThrow("ax-code backend health check failed (503): not ready")
+      })
+    } catch (error) {
+      caught = error
+    }
+
+    expect(caught).toBeInstanceOf(HeadlessBackendStartupError)
+    expect((caught as HeadlessBackendStartupError).message).toContain(
+      "ax-code backend health check failed (503): not ready",
+    )
+    expect((caught as HeadlessBackendStartupError).diagnostics).toMatchObject({
+      binary: "ax-code",
+      args: ["serve", "--hostname=127.0.0.1", "--port=18456"],
+      readyUrl: "http://127.0.0.1:18456",
+      health: {
+        ok: false,
+        status: 0,
+        error: "ax-code backend health check failed (503): not ready",
+      },
+    })
+
+    await waitForProcessExit(Number(await waitForFile(fake.pidFile)))
+  })
+
+  test("startup failures expose diagnostics and partial stdout output", async () => {
+    await using fake = await createPartialOutputFakeAxCode()
+
+    let caught: unknown
+    try {
+      await startHeadlessBackend({
+        timeout: 250,
+        reservePort: async () => 18456,
+        fetch: (async () => jsonResponse({ healthy: true })) as typeof fetch,
+      })
+    } catch (error) {
+      caught = error
+    }
+
+    expect(caught).toBeInstanceOf(HeadlessBackendStartupError)
+    expect((caught as HeadlessBackendStartupError).message).toContain("ax-code backend did not become ready")
+    expect((caught as HeadlessBackendStartupError).diagnostics).toMatchObject({
+      binary: "ax-code",
+      args: ["serve", "--hostname=127.0.0.1", "--port=18456"],
+      capturedOutput: "partial ready line without newline",
+    })
 
     await waitForProcessExit(Number(await waitForFile(fake.pidFile)))
   })
@@ -383,6 +427,37 @@ async function createReadyFakeAxCode() {
     authFile,
     argsFile,
     extraEnvFile,
+    async [Symbol.asyncDispose]() {
+      await rm(dir, { recursive: true, force: true })
+    },
+  }
+}
+
+async function createPartialOutputFakeAxCode() {
+  const dir = await mkdtemp(path.join(tmpdir(), "ax-code-headless-partial-output-"))
+  const bin = path.join(dir, "ax-code")
+  const pidFile = path.join(dir, "pid")
+  const termFile = path.join(dir, "terminated")
+  await writeFile(
+    bin,
+    [
+      "#!/bin/sh",
+      'printf "%s\\n" "$$" > "$AX_CODE_FAKE_PID_FILE"',
+      'trap \'printf "terminated" > "$AX_CODE_FAKE_TERM_FILE"; exit 0\' TERM INT',
+      'printf "partial ready line without newline"',
+      "while true; do sleep 1; done",
+      "",
+    ].join("\n"),
+  )
+  await chmod(bin, 0o755)
+
+  process.env.PATH = `${dir}${path.delimiter}${originalPath ?? ""}`
+  process.env.AX_CODE_FAKE_PID_FILE = pidFile
+  process.env.AX_CODE_FAKE_TERM_FILE = termFile
+
+  return {
+    pidFile,
+    termFile,
     async [Symbol.asyncDispose]() {
       await rm(dir, { recursive: true, force: true })
     },
