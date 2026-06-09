@@ -252,7 +252,7 @@ test("no requestInit when headers are not provided", async () => {
 })
 
 test("converted MCP tools forward the tool abort signal to client.callTool", async () => {
-  const source = await Bun.file(new URL("../../src/mcp/index.ts", import.meta.url)).text()
+  const source = await Bun.file(new URL("../../src/mcp/tool-conversion.ts", import.meta.url)).text()
   expect(source).toContain("execute: async (args: unknown, opts: ToolCallOptions)")
   expect(source).toContain("signal: opts.abortSignal")
 })
