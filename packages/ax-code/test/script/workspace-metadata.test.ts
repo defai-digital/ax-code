@@ -14,4 +14,18 @@ describe("script.workspace-metadata", () => {
 
     expect(packageJson.workspaces).toEqual(extractWorkspaceGlobs(pnpmWorkspaceYaml))
   })
+
+  test("OpenTUI peer exceptions stay scoped to opentui-spinner", async () => {
+    const repoRoot = path.resolve(import.meta.dir, "../../../../")
+    const packageJson = JSON.parse(await readFile(path.join(repoRoot, "package.json"), "utf8"))
+    const allowedVersions = packageJson.pnpm?.peerDependencyRules?.allowedVersions ?? {}
+    const opentuiRules = Object.fromEntries(
+      Object.entries(allowedVersions).filter(([selector]) => selector.includes("@opentui/")),
+    )
+
+    expect(opentuiRules).toEqual({
+      "opentui-spinner@0.0.6>@opentui/core": "0.3.4",
+      "opentui-spinner@0.0.6>@opentui/solid": "0.3.4",
+    })
+  })
 })
