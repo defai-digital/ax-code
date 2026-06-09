@@ -97,6 +97,20 @@ test("path route resolves symlinked directory requests to their canonical path",
   }
 })
 
+test("runtime status routes stay mounted at their public paths", async () => {
+  await using tmp = await tmpdir({ git: true })
+  const app = Server.Default()
+  const directory = encodeURIComponent(tmp.path)
+
+  const formatter = await app.request(`/formatter?directory=${directory}`)
+  expect(formatter.status).toBe(200)
+  expect(Array.isArray(await formatter.json())).toBe(true)
+
+  const lsp = await app.request(`/lsp?directory=${directory}`)
+  expect(lsp.status).toBe(200)
+  expect(Array.isArray(await lsp.json())).toBe(true)
+})
+
 test("experimental worktree delete removes sandbox using the canonical path", async () => {
   await using tmp = await tmpdir({ git: true })
   const sandbox = path.join(tmp.path, "sandbox")
