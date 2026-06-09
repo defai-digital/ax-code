@@ -25,7 +25,7 @@ import { McpAuth } from "./auth"
 import { McpTrust } from "./trust"
 import { BusEvent } from "../bus/bus-event"
 import { Bus } from "@/bus"
-import { TuiEvent } from "@/cli/cmd/tui/event"
+import { NotificationEvent } from "@/notification/events"
 import open from "open"
 import { isRecord } from "@/util/record"
 import { KeyedSerialQueue } from "@/util/queue"
@@ -588,7 +588,7 @@ export namespace MCP {
                 error: "Server does not support dynamic client registration. Please provide clientId in config.",
               }
               // Show toast for needs_client_registration
-              Bus.publishDetached(TuiEvent.ToastShow, {
+              Bus.publishDetached(NotificationEvent.ToastShow, {
                 title: "MCP Authentication Required",
                 message: `Server "${key}" requires a pre-registered client ID. Add clientId to your config.`,
                 variant: "warning",
@@ -609,7 +609,7 @@ export namespace MCP {
               pendingOAuthTransports.set(key, transport)
               status = { status: "needs_auth" as const }
               // Show toast for needs_auth
-              Bus.publishDetached(TuiEvent.ToastShow, {
+              Bus.publishDetached(NotificationEvent.ToastShow, {
                 title: "MCP Authentication Required",
                 message: `Server "${key}" requires authentication. Run: ax-code mcp auth ${key}`,
                 variant: "warning",

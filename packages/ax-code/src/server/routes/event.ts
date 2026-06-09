@@ -9,6 +9,7 @@ import { AsyncQueue } from "../../util/queue"
 import { Instance } from "@/project/instance"
 import { pushSseFrame } from "../sse-queue"
 import { Event } from "../event"
+import "@/notification/events"
 
 const log = Log.create({ service: "server" })
 const HEARTBEAT_INTERVAL_MS = 10_000

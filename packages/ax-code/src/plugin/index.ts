@@ -3,11 +3,7 @@ import { xaiAuthPlugin } from "../provider/xai/auth-plugin"
 import { Config } from "../config/config"
 import { Bus } from "../bus"
 import { Log } from "../util/log"
-import { createOpencodeClient } from "@ax-code/sdk/v2"
-import { Server } from "../server/server"
-import { ServerRuntimeAuth } from "../server/runtime-auth"
 import { BunProc } from "../bun"
-import { Flag } from "../flag/flag"
 import { Session } from "../session"
 import { NamedError } from "@ax-code/util/error"
 import { Env } from "@/util/env"
@@ -17,6 +13,7 @@ import { Filesystem } from "@/util/filesystem"
 import { Instance } from "@/project/instance"
 import { Global } from "@/global"
 import { toErrorMessage } from "../util/error-message"
+import { RuntimeLocalClient } from "@/runtime/local-client"
 
 export namespace Plugin {
   const log = Log.create({ service: "plugin" })
@@ -41,20 +38,7 @@ export namespace Plugin {
     async () => {
       const hooks: Hooks[] = []
       const ctx = Instance.current
-      const localFetch = (async (request: Request) => {
-        ServerRuntimeAuth.apply(request.headers)
-        return Server.Default().fetch(request)
-      }) as typeof fetch
-      const client = createOpencodeClient({
-        baseUrl: "http://localhost:4096",
-        directory: ctx.directory,
-        headers: Flag.AX_CODE_SERVER_PASSWORD
-          ? {
-              Authorization: `Basic ${Buffer.from(`${Flag.AX_CODE_SERVER_USERNAME ?? "ax-code"}:${Flag.AX_CODE_SERVER_PASSWORD}`).toString("base64")}`,
-            }
-          : undefined,
-        fetch: localFetch,
-      })
+      const client = RuntimeLocalClient.create({ directory: ctx.directory })
       const cfg = await Config.get()
       const input: PluginInput = {
         client,
@@ -62,7 +46,7 @@ export namespace Plugin {
         worktree: ctx.worktree,
         directory: ctx.directory,
         get serverUrl(): URL {
-          return Server.url ?? new URL("http://localhost:4096")
+          return RuntimeLocalClient.url()
         },
         $: Bun.$.env(Env.sanitize(process.env)),
       }

@@ -3,9 +3,18 @@ import { createSimpleContext } from "./helper"
 import { createGlobalEmitter } from "@solid-primitives/event-bus"
 import { batch, createSignal, onCleanup, onMount } from "solid-js"
 import { runResilientStream, type StreamConnectionStatus } from "../util/resilient-stream"
+import { NotificationEvent } from "@/notification/events"
+import type { z } from "zod"
+
+export type TuiRuntimeEvent =
+  | Event
+  | {
+      type: typeof NotificationEvent.ToastShow.type
+      properties: z.infer<typeof NotificationEvent.ToastShow.properties>
+    }
 
 export type EventSource = {
-  on: (handler: (event: Event) => void) => () => void
+  on: (handler: (event: TuiRuntimeEvent) => void) => () => void
   onStatus?: (handler: (status: StreamConnectionStatus) => void) => () => void
   status?: () => StreamConnectionStatus | undefined
   setWorkspace?: (workspaceID?: string) => void
@@ -39,10 +48,10 @@ export const { use: useSDK, provider: SDKProvider } = createSimpleContext({
     let sdk = createSDK()
 
     const emitter = createGlobalEmitter<{
-      [key in Event["type"]]: Extract<Event, { type: key }>
+      [key in TuiRuntimeEvent["type"]]: Extract<TuiRuntimeEvent, { type: key }>
     }>()
 
-    let queue: Event[] = []
+    let queue: TuiRuntimeEvent[] = []
     let timer: Timer | undefined
     let last = 0
     let sseGeneration = 0
@@ -61,7 +70,7 @@ export const { use: useSDK, provider: SDKProvider } = createSimpleContext({
       })
     }
 
-    const handleEvent = (event: Event) => {
+    const handleEvent = (event: TuiRuntimeEvent) => {
       setSseConnected(true)
       queue.push(event)
       const elapsed = Date.now() - last
@@ -89,7 +98,7 @@ export const { use: useSDK, provider: SDKProvider } = createSimpleContext({
       abort.signal.addEventListener("abort", abortOuter, { once: true })
       ctrl.signal.addEventListener("abort", abortOuter, { once: true })
       const isCurrentStream = () => generation === sseGeneration && sse === ctrl
-      void runResilientStream<Event>({
+      void runResilientStream<TuiRuntimeEvent>({
         signal: outer.signal,
         subscribe: (signal) => sdk.event.subscribe({}, { signal }),
         onEvent: (event) => {

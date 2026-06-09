@@ -7,7 +7,7 @@ import { AsyncQueue } from "@/util/queue"
 import { Flag } from "@/flag/flag"
 import { WorkspaceID } from "../schema"
 import { Log } from "@/util/log"
-import { assertAuthenticatedNetworkBind } from "@/server/listen-security"
+import { assertAuthenticatedNetworkBind } from "@/runtime/listen-security"
 
 const log = Log.create({ service: "workspace-server" })
 

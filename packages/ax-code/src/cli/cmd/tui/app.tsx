@@ -39,6 +39,7 @@ import { ToastProvider, useToast } from "./ui/toast"
 import { ExitProvider, useExit } from "./context/exit"
 import { Session as SessionApi } from "@/session"
 import { TuiEvent } from "./event"
+import { NotificationEvent } from "@/notification/events"
 import { KVProvider, useKV } from "./context/kv"
 import { Provider } from "@/provider/provider"
 import { ArgsProvider, useArgs, type Args } from "./context/args"
@@ -1078,6 +1079,15 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
     }),
 
     sdk.event.on(TuiEvent.ToastShow.type, (evt) => {
+      toast.show({
+        title: evt.properties.title,
+        message: evt.properties.message,
+        variant: evt.properties.variant,
+        duration: evt.properties.duration,
+      })
+    }),
+
+    sdk.event.on(NotificationEvent.ToastShow.type, (evt) => {
       toast.show({
         title: evt.properties.title,
         message: evt.properties.message,

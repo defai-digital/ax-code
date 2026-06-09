@@ -28,7 +28,7 @@ import { Installation } from "@/installation"
 import { ConfigMarkdown } from "./markdown"
 import { constants, existsSync } from "fs"
 import { GlobalBus } from "@/bus/global"
-import { Event } from "../server/event"
+import { RuntimeEvent } from "@/runtime/events"
 import { Glob } from "../util/glob"
 import { PackageRegistry } from "@/bun/registry"
 import { iife } from "@/util/iife"
@@ -1151,7 +1151,7 @@ export namespace Config {
     GlobalBus.emit("event", {
       directory: "global",
       payload: {
-        type: Event.Disposed.type,
+        type: RuntimeEvent.Disposed.type,
         properties: {},
       },
     })

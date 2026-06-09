@@ -5,9 +5,9 @@ import { useTerminalDimensions } from "@opentui/solid"
 import { SplitBorder } from "../component/border"
 import { TextAttributes } from "@opentui/core"
 import z from "zod"
-import { TuiEvent } from "../event"
+import { NotificationEvent } from "@/notification/events"
 
-export type ToastOptions = z.infer<typeof TuiEvent.ToastShow.properties>
+export type ToastOptions = z.infer<typeof NotificationEvent.ToastShow.properties>
 
 const VARIANT_ICON: Record<ToastOptions["variant"], string> = {
   error: "▲",
@@ -82,7 +82,7 @@ function init() {
 
   const toast = {
     show(options: ToastOptions) {
-      const parsedOptions = TuiEvent.ToastShow.properties.parse(options)
+      const parsedOptions = NotificationEvent.ToastShow.properties.parse(options)
       if (store.currentToast) {
         setStore("queue", (queue) => [...queue, parsedOptions])
         return
