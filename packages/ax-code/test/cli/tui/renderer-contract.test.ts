@@ -7,6 +7,7 @@ import { TUI_PERFORMANCE_CRITERIA } from "../../../src/cli/cmd/tui/performance-c
 const SRC_ROOT = path.resolve(import.meta.dir, "../../../src")
 const TUI_SRC = path.join(SRC_ROOT, "cli/cmd/tui")
 const OPENTUI_RE = /(?:from\s+["'](?:@opentui\/|opentui-spinner)|import\s+["'](?:@opentui\/|opentui-spinner))/
+const SPINNER_SOLID_RE = /(?:from\s+["']opentui-spinner\/solid["']|import\s+["']opentui-spinner\/solid["'])/
 const OPENTUI_ALLOWED_OUTSIDE_TUI = new Set([
   path.join(SRC_ROOT, "cli/cmd/doctor.ts"),
   // Entry point must register the OpenTUI Solid transform plugin before
@@ -67,6 +68,24 @@ describe("tui renderer replacement contract", () => {
     }
 
     expect(offenders).toEqual([])
+  })
+
+  test("keeps the opentui-spinner solid adapter isolated", async () => {
+    const offenders: string[] = []
+    const adapter = path.join(TUI_SRC, "component/spinner.tsx")
+
+    for (const file of await files(TUI_SRC)) {
+      const text = await fs.readFile(file, "utf8")
+      if (SPINNER_SOLID_RE.test(text) && file !== adapter) offenders.push(path.relative(TUI_SRC, file))
+    }
+
+    expect(offenders).toEqual([])
+  })
+
+  test("detects every opentui-spinner solid import form", () => {
+    expect(SPINNER_SOLID_RE.test('import "opentui-spinner/solid"')).toBe(true)
+    expect(SPINNER_SOLID_RE.test('import spinner from "opentui-spinner/solid"')).toBe(true)
+    expect(SPINNER_SOLID_RE.test('import { spinner } from "opentui-spinner/solid"')).toBe(true)
   })
 
   test("keeps renderer-neutral planning helpers independent of OpenTUI", async () => {

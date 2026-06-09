@@ -28,4 +28,15 @@ describe("script.workspace-metadata", () => {
       "opentui-spinner@0.0.6>@opentui/solid": "0.3.4",
     })
   })
+
+  test("OpenTUI dependencies stay on the validated renderer set", async () => {
+    const repoRoot = path.resolve(import.meta.dir, "../../../../")
+    const packageJson = JSON.parse(await readFile(path.join(repoRoot, "packages/ax-code/package.json"), "utf8"))
+    const dependencies = packageJson.dependencies ?? {}
+
+    expect(dependencies["@opentui/core"]).toBe("0.3.4")
+    expect(dependencies["@opentui/solid"]).toBe("0.3.4")
+    expect(dependencies["@opentui/keymap"]).toBeUndefined()
+    expect(dependencies["opentui-spinner"]).toBe("0.0.6")
+  })
 })

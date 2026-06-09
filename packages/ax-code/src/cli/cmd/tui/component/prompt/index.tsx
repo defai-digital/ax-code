@@ -25,7 +25,6 @@ import {
   Match,
   For,
 } from "solid-js"
-import "opentui-spinner/solid"
 import path from "path"
 import { Filesystem } from "@/util/filesystem"
 import { providerModelKey } from "@/provider/model-key"
@@ -73,6 +72,7 @@ import { Usage } from "../../routes/session/usage"
 import { Log } from "@/util/log"
 import { DiagnosticLog } from "@/debug/diagnostic-log"
 import { promptEscapeClearIntent, isPromptExitCommand, promptSubmissionView } from "./view-model"
+import { OpenTuiSpinner } from "../spinner"
 import { upsert } from "../../context/sync-util"
 import { summarizedPasteViews } from "./paste-view-model"
 import { withTimeout } from "@/util/timeout"
@@ -1977,7 +1977,7 @@ export function Prompt(props: PromptProps) {
                       </text>
                     }
                   >
-                    <spinner color={spinnerDef().color} frames={spinnerDef().frames} interval={40} />
+                    <OpenTuiSpinner color={spinnerDef().color} frames={spinnerDef().frames} interval={40} />
                   </Show>
                   <Show when={status().type === "busy" && busyStatus()?.stale}>
                     <text fg={theme.warning}>!</text>
