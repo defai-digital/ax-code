@@ -45,15 +45,11 @@ import { isRecord } from "../util/record"
 import { FeatureFlag } from "../util/feature-flags"
 import { parseJsonResult } from "../util/json-value"
 import { FileCommand } from "../command/file-command"
+// Single source of truth for the public config schema URL. Written into
+// every user's ax-code.json on first load, into legacy-TOML migrations,
+// and into remote wellknown configs that omit `$schema`. See issue #17.
+import { CONFIG_SCHEMA_URL } from "@/constants/project"
 
-// Single source of truth for the public config schema URL. Written
-// into every user's ax-code.json on first load, into legacy-TOML
-// migrations, and into remote wellknown configs that omit `$schema`.
-// Used to be copy-pasted in 4 places — a domain rename or versioning
-// change would have missed at least one site and persisted wrong
-// schema URLs into random users' configs. See issue #17.
-const CONFIG_SCHEMA_URL =
-  "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json"
 const PROGRAM_DATA_FALLBACK_DIR = "C:\\ProgramData"
 const UNIX_SYSTEM_CONFIG_DIR = "/etc/ax-code"
 const PLATFORM_CONFIG_DIR = "ax-code"

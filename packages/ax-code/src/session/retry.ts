@@ -1,6 +1,7 @@
 import type { NamedError } from "@ax-code/util/error"
 import { MessageV2 } from "./message-v2"
 import { parseJsonRecord } from "@/util/json-record"
+import { GITHUB_REPO_URL } from "@/constants/project"
 import { isRecord } from "@/util/record"
 
 export namespace SessionRetry {
@@ -133,7 +134,7 @@ export namespace SessionRetry {
       // `isRetryable: true` on all 429 responses.
       if (isPermanentError(message)) return undefined
       if (error.data.responseBody?.includes("FreeUsageLimitError"))
-        return `Free usage exceeded, add credits https://github.com/defai-digital/ax-code`
+        return `Free usage exceeded, add credits ${GITHUB_REPO_URL}`
       return message.includes("Overloaded") ? "Provider is overloaded" : message
     }
 

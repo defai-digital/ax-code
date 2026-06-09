@@ -48,6 +48,7 @@ import { TuiConfigProvider } from "./context/tui-config"
 import { TuiConfig } from "@/config/tui"
 import { DiagnosticLog } from "@/debug/diagnostic-log"
 import { Log } from "@/util/log"
+import { GITHUB_REPO_URL, GITHUB_NEW_ISSUE_URL } from "@/constants/project"
 import {
   clearTuiTerminalTitle,
   destroyTuiRenderer,
@@ -897,7 +898,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       value: "docs.open",
       onSelect: () => {
         void import("open")
-          .then(({ default: open }) => open("https://github.com/defai-digital/ax-code"))
+          .then(({ default: open }) => open(GITHUB_REPO_URL))
           .catch((error) => {
             Log.Default.warn("failed to open docs", { error })
             toast.show({
@@ -1250,7 +1251,7 @@ function ErrorComponent(props: {
   const [copied, setCopied] = createSignal(false)
   const [copyError, setCopyError] = createSignal<string | undefined>()
 
-  const issueURL = new URL("https://github.com/defai-digital/ax-code/issues/new?template=bug-report.yml")
+  const issueURL = new URL(`${GITHUB_NEW_ISSUE_URL}?template=bug-report.yml`)
 
   // Choose safe fallback colors per mode since theme context may not be available
   const isLight = props.mode === "light"

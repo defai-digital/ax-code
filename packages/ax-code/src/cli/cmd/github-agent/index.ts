@@ -1,5 +1,6 @@
 import path from "path"
 import { execFile } from "child_process"
+import { GITHUB_REPO_URL, GITHUB_ACTION_REF } from "@/constants/project"
 import { Filesystem } from "../../../util/filesystem"
 import { Ssrf } from "../../../util/ssrf"
 import * as prompts from "@clack/prompts"
@@ -120,7 +121,7 @@ export const GithubInstallCommand = cmd({
                 "",
                 "    3. Go to a GitHub issue and comment `/oc summarize` to see the agent in action",
                 "",
-                "   Learn more about the GitHub agent - https://github.com/defai-digital/ax-code",
+                `   Learn more about the GitHub agent - ${GITHUB_REPO_URL}`,
               ].join("\n"),
             )
           }
@@ -277,7 +278,7 @@ jobs:
           persist-credentials: false
 
       - name: Run ax-code
-        uses: defai-digital/ax-code/github@latest${envStr}
+        uses: ${GITHUB_ACTION_REF}@latest${envStr}
         with:
           model: ${provider}/${model}`,
             )

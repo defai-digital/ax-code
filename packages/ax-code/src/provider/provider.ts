@@ -1,6 +1,7 @@
 import z from "zod"
 import os from "os"
 import fuzzysort from "fuzzysort"
+import { GITHUB_REPO_URL } from "@/constants/project"
 import { Config } from "../config/config"
 import { mapValues, mergeDeep, omit, pickBy, sortBy } from "remeda"
 import { NoSuchModelError, type LanguageModel } from "ai"
@@ -687,7 +688,7 @@ export namespace Provider {
           ...((options["extraBody"] as Record<string, unknown> | undefined) ?? {}),
         }
         options["headers"] = {
-          "HTTP-Referer": "https://github.com/defai-digital/ax-code",
+          "HTTP-Referer": GITHUB_REPO_URL,
           "X-Title": "ax-code",
           ...((options["headers"] as Record<string, string> | undefined) ?? {}),
         }

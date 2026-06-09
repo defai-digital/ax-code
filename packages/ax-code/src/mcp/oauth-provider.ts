@@ -7,6 +7,7 @@ import type {
 } from "@modelcontextprotocol/sdk/shared/auth.js"
 import { McpAuth } from "./auth"
 import { Log } from "../util/log"
+import { GITHUB_REPO_URL } from "@/constants/project"
 
 const log = Log.create({ service: "mcp.oauth" })
 
@@ -51,7 +52,7 @@ export class McpOAuthProvider implements OAuthClientProvider {
     return {
       redirect_uris: [this.redirectUrl],
       client_name: "ax-code",
-      client_uri: "https://github.com/defai-digital/ax-code",
+      client_uri: GITHUB_REPO_URL,
       grant_types: ["authorization_code", "refresh_token"],
       response_types: ["code"],
       token_endpoint_auth_method: this.config.clientSecret ? "client_secret_post" : "none",
