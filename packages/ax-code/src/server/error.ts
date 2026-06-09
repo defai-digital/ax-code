@@ -177,10 +177,7 @@ export function appErrorEnvelope(input: NormalizedErrorInput): AppErrorEnvelope 
   }
 }
 
-export function appErrorResponse(
-  c: Context,
-  envelope: AppErrorEnvelope,
-): Response {
+export function appErrorResponse(c: Context, envelope: AppErrorEnvelope): Response {
   return c.json(envelope, { status: envelope.status as ContentfulStatusCode })
 }
 
@@ -196,10 +193,7 @@ export function invalidRequest(
   })
 }
 
-export function notFound(
-  c: Context,
-  input: { name?: string; message?: string; resource?: string } = {},
-): Response {
+export function notFound(c: Context, input: { name?: string; message?: string; resource?: string } = {}): Response {
   return appErrorResponse(c, {
     name: input.name ?? "NotFoundError",
     message: input.message ?? "Resource not found",
@@ -208,10 +202,7 @@ export function notFound(
   })
 }
 
-export function forbidden(
-  c: Context,
-  input: { message?: string; details?: Record<string, unknown> } = {},
-): Response {
+export function forbidden(c: Context, input: { message?: string; details?: Record<string, unknown> } = {}): Response {
   return appErrorResponse(c, {
     name: "InvalidRequestError",
     message: input.message ?? "Forbidden",

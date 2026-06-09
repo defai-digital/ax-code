@@ -16,13 +16,13 @@ The HTTP/OpenAPI path is compatibility and generated-client infrastructure. It l
 
 ## Choose a Path
 
-| Need                                             | Recommended path                                   | Why                                                                                                 |
-| ------------------------------------------------ | -------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| TypeScript or JavaScript in the same process     | `@ax-code/sdk` with `createAgent()`                | Lowest startup overhead and access to programmatic helpers, custom tools, and testing utilities     |
-| First-party desktop/native GUI                   | `@ax-code/sdk/grpc`                                | Narrower headless contract, server streaming, metadata/deadline friendly, and less WebView exposure |
-| TypeScript or JavaScript with a local backend    | `@ax-code/sdk/headless`                            | Keeps lifecycle and event projection typed without exposing the full HTTP SDK surface                |
-| Python, Go, Java, Rust, or another runtime       | Generate a client from `packages/sdk/openapi.json` | Reuses the HTTP contract without adding first-party package maintenance for every language          |
-| CI, automation, or one-off scripts               | HTTP calls against `ax-code serve`                 | Simple deployment model and easy process isolation                                                  |
+| Need                                          | Recommended path                                   | Why                                                                                                 |
+| --------------------------------------------- | -------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| TypeScript or JavaScript in the same process  | `@ax-code/sdk` with `createAgent()`                | Lowest startup overhead and access to programmatic helpers, custom tools, and testing utilities     |
+| First-party desktop/native GUI                | `@ax-code/sdk/grpc`                                | Narrower headless contract, server streaming, metadata/deadline friendly, and less WebView exposure |
+| TypeScript or JavaScript with a local backend | `@ax-code/sdk/headless`                            | Keeps lifecycle and event projection typed without exposing the full HTTP SDK surface               |
+| Python, Go, Java, Rust, or another runtime    | Generate a client from `packages/sdk/openapi.json` | Reuses the HTTP contract without adding first-party package maintenance for every language          |
+| CI, automation, or one-off scripts            | HTTP calls against `ax-code serve`                 | Simple deployment model and easy process isolation                                                  |
 
 ## What Is Official Today
 

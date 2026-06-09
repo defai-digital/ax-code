@@ -11,13 +11,13 @@ Use the SDK when you want AX Code's runtime inside your own TypeScript or JavaSc
 
 ## Choose the Right Integration Surface
 
-| Need                                           | Use                                 | Why                                                                                          |
-| ---------------------------------------------- | ----------------------------------- | -------------------------------------------------------------------------------------------- |
-| Interactive repository work                    | `ax-code` TUI or `ax-code run`      | Fastest path for humans working directly in a checkout                                       |
-| In-process TypeScript or JavaScript automation | `@ax-code/sdk` with `createAgent()` | Lowest overhead, custom tools, streaming, multi-turn sessions, and testing helpers           |
-| App shell or GUI backend                       | `@ax-code/sdk/headless`             | Starts or attaches to a local backend with typed events and projected app state              |
-| Native desktop boundary                        | `@ax-code/sdk/grpc`                 | Stable command/event contract, streaming, metadata, deadlines, and native host adapters      |
-| Editor-native workflow                         | VS Code integration                 | Uses the installed CLI/runtime while staying inside the editor                               |
+| Need                                           | Use                                 | Why                                                                                     |
+| ---------------------------------------------- | ----------------------------------- | --------------------------------------------------------------------------------------- |
+| Interactive repository work                    | `ax-code` TUI or `ax-code run`      | Fastest path for humans working directly in a checkout                                  |
+| In-process TypeScript or JavaScript automation | `@ax-code/sdk` with `createAgent()` | Lowest overhead, custom tools, streaming, multi-turn sessions, and testing helpers      |
+| App shell or GUI backend                       | `@ax-code/sdk/headless`             | Starts or attaches to a local backend with typed events and projected app state         |
+| Native desktop boundary                        | `@ax-code/sdk/grpc`                 | Stable command/event contract, streaming, metadata, deadlines, and native host adapters |
+| Editor-native workflow                         | VS Code integration                 | Uses the installed CLI/runtime while staying inside the editor                          |
 
 The JavaScript package no longer exposes first-party HTTP client/server subpaths. HTTP/OpenAPI remains an internal
 runtime, fallback, and diagnostics layer behind the headless and gRPC SDKs. The legacy `@ax-code/sdk/v2` subpaths remain

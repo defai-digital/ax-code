@@ -244,17 +244,17 @@ function summarizeDispatchChildOutput(result: DispatchResult) {
 }
 
 function summarizeDispatchFiles(result: DispatchResult) {
-  return [
-    summarizeFileList("files", result.filesModified),
-    summarizeFileList("proposed", result.filesProposed),
-  ]
+  return [summarizeFileList("files", result.filesModified), summarizeFileList("proposed", result.filesProposed)]
     .filter(Boolean)
     .join("; ")
 }
 
 function summarizeFileList(label: string, files: readonly string[] | undefined) {
   if (!files || files.length === 0) return undefined
-  const shown = files.slice(0, 3).map((file) => summarizePath(file)).join(", ")
+  const shown = files
+    .slice(0, 3)
+    .map((file) => summarizePath(file))
+    .join(", ")
   const suffix = files.length > 3 ? `, +${files.length - 3} more` : ""
   return `${label}=${files.length} (${shown}${suffix})`
 }

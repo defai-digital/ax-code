@@ -650,7 +650,9 @@ export const RunCommand = cmd({
         const msgs = msgsRes?.data ?? []
         const limited = replayLimit !== undefined ? msgs.slice(-replayLimit) : msgs
         if (limited.length > 0) {
-          UI.println(UI.Style.TEXT_DIM + `── session replay (${limited.length} message${limited.length === 1 ? "" : "s"}) ──`)
+          UI.println(
+            UI.Style.TEXT_DIM + `── session replay (${limited.length} message${limited.length === 1 ? "" : "s"}) ──`,
+          )
           for (const entry of limited) {
             const role = entry.info.role === "user" ? "You" : "Assistant"
             const trimmed = entry.parts
@@ -659,7 +661,13 @@ export const RunCommand = cmd({
               .join("")
               .trim()
             if (trimmed) {
-              UI.println(UI.Style.TEXT_DIM + `[${role}] ` + UI.Style.TEXT_NORMAL + trimmed.slice(0, 200) + (trimmed.length > 200 ? "…" : ""))
+              UI.println(
+                UI.Style.TEXT_DIM +
+                  `[${role}] ` +
+                  UI.Style.TEXT_NORMAL +
+                  trimmed.slice(0, 200) +
+                  (trimmed.length > 200 ? "…" : ""),
+              )
             }
           }
           UI.println(UI.Style.TEXT_DIM + "────────────────────────────────────")

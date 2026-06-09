@@ -282,9 +282,7 @@ async function prepareChildRuntimeTarget(
   }
 
   const { Worktree } = await import("../worktree")
-  const info = await Worktree.makeWorktreeInfo(
-    `workflow-${runID}-${phase.specPhaseID}-${childPlan.index + 1}`,
-  )
+  const info = await Worktree.makeWorktreeInfo(`workflow-${runID}-${phase.specPhaseID}-${childPlan.index + 1}`)
   const bootstrap = await Worktree.createFromInfo(info)
   await bootstrap()
   return {

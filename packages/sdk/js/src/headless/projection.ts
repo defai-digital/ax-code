@@ -51,17 +51,9 @@ export function createHeadlessProjectionState<
   TRisk = unknown,
   TGoal = unknown,
   TTaskQueueItem extends { id: string } = { id: string },
->(input: { streamHealth?: HeadlessStreamHealth } = {}): HeadlessProjectionState<
-  TSession,
-  TTodo,
-  TDiff,
-  TStatus,
-  TMessage,
-  TPart,
-  TRisk,
-  TGoal,
-  TTaskQueueItem
-> {
+>(
+  input: { streamHealth?: HeadlessStreamHealth } = {},
+): HeadlessProjectionState<TSession, TTodo, TDiff, TStatus, TMessage, TPart, TRisk, TGoal, TTaskQueueItem> {
   return {
     stream_health: input.streamHealth ?? "connecting",
     permission: {},

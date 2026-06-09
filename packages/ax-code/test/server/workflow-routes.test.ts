@@ -267,9 +267,7 @@ describe("workflow routes", () => {
         specArtifactID?: string
         payload?: unknown
       }>
-      const finalReport = finalReportArtifacts.find(
-        (artifact) => artifact.specArtifactID === "workflow-final-report",
-      )
+      const finalReport = finalReportArtifacts.find((artifact) => artifact.specArtifactID === "workflow-final-report")
       const finalReportPayload = finalReport?.payload as
         | {
             kind?: string

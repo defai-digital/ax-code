@@ -96,14 +96,14 @@ That source launcher should report `Runtime: Bun X.Y.Z (source)` and is intentio
 
 AX Code is designed for agent work that touches real files, shells, sessions, and team policy. The same runtime powers every surface:
 
-| Need                         | Use                                                                                          |
-| ---------------------------- | -------------------------------------------------------------------------------------------- |
+| Need                         | Use                                                                                            |
+| ---------------------------- | ---------------------------------------------------------------------------------------------- |
 | Desktop app                  | [AX Code Desktop](https://github.com/defai-digital/ax-code-desktop) provides the graphical app |
-| Interactive coding           | `ax-code` opens the terminal UI with provider, model, agent, session, MCP, and skill flows   |
-| One-shot automation          | `ax-code run "review the auth flow"` runs a bounded headless task                            |
-| Local service / integrations | `ax-code serve` exposes the runtime over a local HTTP API and OpenAPI contract               |
-| TypeScript embedding         | `@ax-code/sdk` provides `createAgent()`, streaming events, sessions, custom tools, and tests |
-| VS Code                      | The VS Code integration uses the installed CLI/server while staying editor-native            |
+| Interactive coding           | `ax-code` opens the terminal UI with provider, model, agent, session, MCP, and skill flows     |
+| One-shot automation          | `ax-code run "review the auth flow"` runs a bounded headless task                              |
+| Local service / integrations | `ax-code serve` exposes the runtime over a local HTTP API and OpenAPI contract                 |
+| TypeScript embedding         | `@ax-code/sdk` provides `createAgent()`, streaming events, sessions, custom tools, and tests   |
+| VS Code                      | The VS Code integration uses the installed CLI/server while staying editor-native              |
 
 ## Current Capabilities
 

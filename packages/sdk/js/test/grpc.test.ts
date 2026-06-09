@@ -145,7 +145,8 @@ describe("gRPC SDK facade", () => {
         if (method === AX_CODE_GRPC_METHOD.RejectQuestion) return { value: true }
         if (method === AX_CODE_GRPC_METHOD.GetAutonomousMode) return { value: { enabled: true } }
         if (method === AX_CODE_GRPC_METHOD.SetAutonomousMode) return { value: { enabled: false } }
-        if (method === AX_CODE_GRPC_METHOD.GetIsolationMode) return { value: { mode: "workspace-write", network: false } }
+        if (method === AX_CODE_GRPC_METHOD.GetIsolationMode)
+          return { value: { mode: "workspace-write", network: false } }
         if (method === AX_CODE_GRPC_METHOD.SetIsolationMode) return { value: { mode: "read-only", network: false } }
         if (method === AX_CODE_GRPC_METHOD.GetSmartLlmRouting) return { value: { enabled: true } }
         if (method === AX_CODE_GRPC_METHOD.SetSmartLlmRouting) return { value: { enabled: false } }
@@ -669,7 +670,9 @@ describe("gRPC SDK facade", () => {
     }
 
     expect(listMissingAxCodeGrpcNativeHandlers(handlers, { methods: [AX_CODE_GRPC_METHOD.GetSession] })).toEqual([])
-    expect(listMissingAxCodeGrpcNativeHandlers(handlers, { domain: "mcp" }).map((descriptor) => descriptor.name)).toEqual([
+    expect(
+      listMissingAxCodeGrpcNativeHandlers(handlers, { domain: "mcp" }).map((descriptor) => descriptor.name),
+    ).toEqual([
       "ListMcpResources",
       "AddMcpServer",
       "StartMcpAuth",
@@ -1126,7 +1129,8 @@ describe("gRPC SDK facade", () => {
         if (parsed.pathname === "/provider/auth") return Response.json({ anthropic: [{ type: "api" }] })
         if (parsed.pathname === "/auth/anthropic" && request.method === "PUT") return Response.json(true)
         if (parsed.pathname === "/auth/anthropic" && request.method === "DELETE") return Response.json(true)
-        if (parsed.pathname === "/provider/anthropic/oauth/authorize") return Response.json({ url: "https://auth.example" })
+        if (parsed.pathname === "/provider/anthropic/oauth/authorize")
+          return Response.json({ url: "https://auth.example" })
         if (parsed.pathname === "/provider/anthropic/oauth/callback") return Response.json(true)
         return new Response("not found", { status: 404 })
       }) as typeof fetch,
@@ -1321,9 +1325,7 @@ describe("gRPC SDK facade", () => {
       }) as typeof fetch,
     })
 
-    await expect(
-      client.bootstrap.load({ include: { path: true, vcs: true, commands: true } }),
-    ).resolves.toEqual({
+    await expect(client.bootstrap.load({ include: { path: true, vcs: true, commands: true } })).resolves.toEqual({
       path: { root: "/repo", config: "/repo/ax-code.json" },
       vcs: { branch: "main" },
       commands: [{ name: "init" }],

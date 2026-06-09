@@ -23,11 +23,15 @@ function computeDiffLines(before: string, after: string): Array<{ type: "add" | 
   let j = n
   while (i > 0 || j > 0) {
     if (i > 0 && j > 0 && beforeLines[i - 1] === afterLines[j - 1]) {
-      ops.push("="); i--; j--
+      ops.push("=")
+      i--
+      j--
     } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
-      ops.push("+"); j--
+      ops.push("+")
+      j--
     } else {
-      ops.push("-"); i--
+      ops.push("-")
+      i--
     }
   }
   ops.reverse()
@@ -36,9 +40,17 @@ function computeDiffLines(before: string, after: string): Array<{ type: "add" | 
   let bi = 0
   let ai = 0
   for (const op of ops) {
-    if (op === "=") { result.push({ type: "context", text: "  " + beforeLines[bi] }); bi++; ai++ }
-    else if (op === "-") { result.push({ type: "remove", text: "- " + beforeLines[bi] }); bi++ }
-    else { result.push({ type: "add", text: "+ " + afterLines[ai] }); ai++ }
+    if (op === "=") {
+      result.push({ type: "context", text: "  " + beforeLines[bi] })
+      bi++
+      ai++
+    } else if (op === "-") {
+      result.push({ type: "remove", text: "- " + beforeLines[bi] })
+      bi++
+    } else {
+      result.push({ type: "add", text: "+ " + afterLines[ai] })
+      ai++
+    }
   }
   return result
 }
@@ -116,5 +128,11 @@ export function DialogDiffViewer(props: { sessionID: string }) {
     })
   })
 
-  return <DialogSelect title={`Changes (${diffs().length} file${diffs().length !== 1 ? "s" : ""})`} options={options()} skipFilter={true} />
+  return (
+    <DialogSelect
+      title={`Changes (${diffs().length} file${diffs().length !== 1 ? "s" : ""})`}
+      options={options()}
+      skipFilter={true}
+    />
+  )
 }

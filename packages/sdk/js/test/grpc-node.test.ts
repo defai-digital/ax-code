@@ -30,7 +30,9 @@ describe("gRPC Node HTTP/2 host", () => {
       },
     })
 
-    const response = await grpcUnary(handle.url, AX_CODE_GRPC_METHOD.GetSession, "SessionRequest", { sessionID: "sess-1" })
+    const response = await grpcUnary(handle.url, AX_CODE_GRPC_METHOD.GetSession, "SessionRequest", {
+      sessionID: "sess-1",
+    })
 
     expect(decodeAxCodeGrpcProtoMessage("JsonResponse", response.messages[0]!)).toEqual({
       value: { id: "sess-1", nested: { ok: true }, tags: ["a"] },

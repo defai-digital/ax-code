@@ -403,8 +403,7 @@ export const WorkflowRunRoutes = lazy(() =>
       }),
       validator("param", WORKFLOW_RUN_ID_PARAM),
       validator("json", WorkflowScheduler.StartOptions.partial().optional()),
-      async (c) =>
-        c.json(compactWorkflowRunDetail(await WorkflowScheduler.start(runID(c), c.req.valid("json") ?? {}))),
+      async (c) => c.json(compactWorkflowRunDetail(await WorkflowScheduler.start(runID(c), c.req.valid("json") ?? {}))),
     )
     .post(
       "/:runID/pause",
@@ -512,7 +511,8 @@ export const WorkflowTemplateRoutes = lazy(() =>
       "/",
       describeRoute({
         summary: "Save workflow template",
-        description: "Save a user-local or project-local workflow template candidate. Promote after review to trust it.",
+        description:
+          "Save a user-local or project-local workflow template candidate. Promote after review to trust it.",
         operationId: "workflowTemplate.save",
         responses: {
           200: {

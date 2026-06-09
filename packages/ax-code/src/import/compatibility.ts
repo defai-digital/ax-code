@@ -47,7 +47,9 @@ export namespace CompatibilityImport {
     if (parsedSource === "codex") {
       const agents = path.join(input.directory, "AGENTS.md")
       if (await Filesystem.exists(agents)) {
-        candidates.push(await candidate(parsedSource, "instruction", agents, path.join(targetRoot, "instructions", "AGENTS.md")))
+        candidates.push(
+          await candidate(parsedSource, "instruction", agents, path.join(targetRoot, "instructions", "AGENTS.md")),
+        )
       }
     }
 
@@ -124,7 +126,8 @@ export namespace CompatibilityImport {
     if (!md) return ["invalid_frontmatter"]
     const warnings: string[] = []
     if (ConfigMarkdown.shell(md.content).length > 0) warnings.push("unsupported_shell_interpolation")
-    if (typeof (md.data as Record<string, unknown>).workflow === "string") warnings.push("workflow_requires_runtime_flag")
+    if (typeof (md.data as Record<string, unknown>).workflow === "string")
+      warnings.push("workflow_requires_runtime_flag")
     return warnings
   }
 

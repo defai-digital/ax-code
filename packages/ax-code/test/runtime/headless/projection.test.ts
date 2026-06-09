@@ -289,7 +289,14 @@ describe("headless projection", () => {
   })
 
   test("deduplicates metadata updates and keeps the latest product state", () => {
-    const state = createHeadlessProjectionState<Session & { metadata?: Record<string, unknown> }, Todo, Diff, Status, Message, Part>()
+    const state = createHeadlessProjectionState<
+      Session & { metadata?: Record<string, unknown> },
+      Todo,
+      Diff,
+      Status,
+      Message,
+      Part
+    >()
 
     applyHeadlessProjectionEvent(state, {
       type: "session.updated",
@@ -304,7 +311,17 @@ describe("headless projection", () => {
   })
 
   test("tracks queue items and clears session-scoped queue state on session delete", () => {
-    const state = createHeadlessProjectionState<Session, Todo, Diff, Status, Message, Part, unknown, unknown, TaskQueueItem>()
+    const state = createHeadlessProjectionState<
+      Session,
+      Todo,
+      Diff,
+      Status,
+      Message,
+      Part,
+      unknown,
+      unknown,
+      TaskQueueItem
+    >()
 
     applyHeadlessProjectionEvent(state, {
       type: "task.queue.created",

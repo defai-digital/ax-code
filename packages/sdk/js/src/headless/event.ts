@@ -19,14 +19,7 @@ export type HeadlessRequestEvent =
   | { type: "question.replied"; properties: { sessionID: string; requestID: string } }
   | { type: "question.rejected"; properties: { sessionID: string; requestID: string } }
 
-export type WorkflowRunStatus =
-  | "queued"
-  | "running"
-  | "blocked"
-  | "paused"
-  | "completed"
-  | "failed"
-  | "cancelled"
+export type WorkflowRunStatus = "queued" | "running" | "blocked" | "paused" | "completed" | "failed" | "cancelled"
 
 export type WorkflowPhaseStatus = "queued" | "running" | "completed" | "failed" | "cancelled"
 

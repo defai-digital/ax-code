@@ -451,7 +451,6 @@ export namespace Session {
     return next
   })
 
-
   function updateAndPublish(sessionID: SessionID, fields: Record<string, unknown>): Info {
     return Database.use((db) => {
       const row = db.update(SessionTable).set(fields).where(eq(SessionTable.id, sessionID)).returning().get()
@@ -483,7 +482,10 @@ export namespace Session {
   export const setMetadata = fn(
     z.object({ sessionID: SessionID.zod, metadata: SessionMetadata.Metadata }),
     async (input) =>
-      updateAndPublish(input.sessionID, { metadata: SessionMetadata.validate(input.metadata), time_updated: Date.now() }),
+      updateAndPublish(input.sessionID, {
+        metadata: SessionMetadata.validate(input.metadata),
+        time_updated: Date.now(),
+      }),
   )
 
   export const setProductMetadata = fn(

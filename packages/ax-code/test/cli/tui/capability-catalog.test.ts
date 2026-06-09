@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test"
-import { capabilityCatalogDescription, capabilityCatalogOptions } from "../../../src/cli/cmd/tui/routes/session/capability-catalog"
+import {
+  capabilityCatalogDescription,
+  capabilityCatalogOptions,
+} from "../../../src/cli/cmd/tui/routes/session/capability-catalog"
 
 describe("tui capability catalog", () => {
   test("groups catalog entries and exposes safety metadata", () => {

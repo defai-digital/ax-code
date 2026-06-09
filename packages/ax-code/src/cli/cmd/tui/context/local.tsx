@@ -493,7 +493,9 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
       })
       const state = { pending: false, saveWarningShown: false, disposed: false }
 
-      onCleanup(() => { state.disposed = true })
+      onCleanup(() => {
+        state.disposed = true
+      })
 
       function save() {
         if (state.disposed) return
@@ -503,7 +505,9 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
         }
         state.pending = false
         void Filesystem.writeJson(filePath, { pinned: sessionStore.pinned })
-          .then(() => { state.saveWarningShown = false })
+          .then(() => {
+            state.saveWarningShown = false
+          })
           .catch((error) => {
             state.pending = true
             if (state.saveWarningShown) return
@@ -530,9 +534,15 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
       const route = useRoute()
 
       return {
-        pinned() { return sessionStore.pinned },
-        slots() { return slots() },
-        isPinned(id: string) { return sessionStore.pinned.includes(id) },
+        pinned() {
+          return sessionStore.pinned
+        },
+        slots() {
+          return slots()
+        },
+        isPinned(id: string) {
+          return sessionStore.pinned.includes(id)
+        },
         togglePin(sessionID: string) {
           batch(() => {
             const exists = sessionStore.pinned.includes(sessionID)
