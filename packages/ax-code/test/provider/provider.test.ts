@@ -1621,9 +1621,11 @@ test("Alibaba providers keep coding plan and token plan endpoints separate", asy
         "deepseek-v4-pro",
         "glm-5.1",
         "kimi-k2.6",
+        "qwen3-coder-plus",
         "qwen3.6-flash",
         "qwen3.6-plus",
         "qwen3.7-max",
+        "qwen3.7-plus",
       ]
       expect(Object.keys(codingPlan.models).sort()).toEqual(expectedAlibabaPlanModels)
       expect(Object.keys(codingPlanCn.models).sort()).toEqual(expectedAlibabaPlanModels)

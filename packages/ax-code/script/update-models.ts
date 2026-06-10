@@ -279,7 +279,9 @@ cloneProvider("alibaba-coding-plan-cn", "alibaba-token-plan-cn", {
 // — they show up so callers using the provider via SDK / API can pick them.
 const alibabaModels = [
   // Qwen text / reasoning
+  "qwen3-coder-plus",
   "qwen3.7-max",
+  "qwen3.7-plus",
   "qwen3.6-plus",
   "qwen3.6-flash",
   // DeepSeek text / reasoning
@@ -296,6 +298,8 @@ const alibabaModels = [
   "wan2.7-image-pro",
 ]
 const alibabaModelFallbackProviders: Record<string, string[]> = {
+  "qwen3-coder-plus": ["llmgateway", "iflowcn"],
+  "qwen3.7-plus": ["llmgateway", "opencode-go", "nano-gpt"],
   "qwen3.6-flash": ["aihubmix"],
   "deepseek-v4-pro": ["auriko", "cortecs", "302ai", "llmgateway"],
   "deepseek-v4-flash": ["cortecs", "auriko", "302ai", "llmgateway"],
@@ -420,7 +424,7 @@ for (const [id, doc] of Object.entries(docOverrides)) {
 // these with input modalities ["text","image","video"] but attachment=false,
 // which leaves ax-code's picker refusing image uploads even though the upstream
 // API accepts them. Override here so the capability flag matches the modality.
-const alibabaAttachmentForceTrue = ["qwen3.6-plus"]
+const alibabaAttachmentForceTrue = ["qwen3.7-plus", "qwen3.6-plus"]
 for (const id of ["alibaba-coding-plan", "alibaba-coding-plan-cn", "alibaba-token-plan", "alibaba-token-plan-cn"]) {
   const models = fetched[id]?.models as Record<string, { attachment?: boolean }> | undefined
   if (!models) continue
