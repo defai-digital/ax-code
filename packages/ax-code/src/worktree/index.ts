@@ -277,7 +277,7 @@ export namespace Worktree {
     const abs = path.resolve(input)
     const real = await fs.realpath(abs).catch(() => abs)
     const normalized = path.normalize(real)
-    return process.platform === "win32" ? normalized.toLowerCase() : normalized
+    return process.platform === "win32" || process.platform === "darwin" ? normalized.toLowerCase() : normalized
   }
 
   function worktreeName(directory: string) {

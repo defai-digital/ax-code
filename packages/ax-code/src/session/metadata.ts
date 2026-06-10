@@ -1,5 +1,5 @@
 import z from "zod"
-import { MAX_PATH_LENGTH } from "@/server/constants"
+import { MAX_PATH_LENGTH } from "@/constants/server"
 
 export namespace SessionMetadata {
   export const MAX_PRODUCT_METADATA_BYTES = 8 * 1024

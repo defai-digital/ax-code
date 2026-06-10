@@ -628,6 +628,18 @@ test("parseModel handles model IDs with slashes", () => {
   expect(String(result.modelID)).toBe("openai/gpt-oss-20b")
 })
 
+test("parseModel rejects a bare provider without a model id", () => {
+  expect(() => Provider.parseModel("openai")).toThrow('expected "provider/model"')
+})
+
+test("parseModel rejects a trailing slash without a model id", () => {
+  expect(() => Provider.parseModel("openai/")).toThrow('expected "provider/model"')
+})
+
+test("parseModel rejects object input without a model id", () => {
+  expect(() => Provider.parseModel({ providerID: "openai" })).toThrow('expected "provider/model"')
+})
+
 test("defaultModel returns first available model when no config set", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {

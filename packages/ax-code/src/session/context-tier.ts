@@ -99,6 +99,7 @@ export namespace ContextTier {
         p.type === "tool" &&
         p.state.status === "completed" &&
         (p.tool === "code_intelligence" ||
+          p.tool === "lsp" ||
           p.tool === "findSymbol" ||
           p.tool === "findReferences" ||
           p.tool === "findCallers"),

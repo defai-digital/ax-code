@@ -1158,21 +1158,27 @@ export namespace Provider {
   }
 
   export function parseModel(model: string | { providerID: string; modelID?: string; id?: string }) {
-    if (typeof model !== "string") {
-      return {
-        providerID: ProviderID.make(model.providerID),
-        modelID: ModelID.make(model.modelID ?? model.id ?? ""),
+    const validate = (providerID: string | undefined, modelID: string | undefined, source: string) => {
+      const provider = providerID?.trim() ?? ""
+      const id = modelID?.trim() ?? ""
+      if (!provider || !id) {
+        throw new Error(`Invalid model format "${source}"; expected "provider/model"`)
       }
+      return {
+        providerID: ProviderID.make(provider),
+        modelID: ModelID.make(id),
+      }
+    }
+
+    if (typeof model !== "string") {
+      return validate(model.providerID, model.modelID ?? model.id, model.providerID)
     }
     // Auto-correct "provider:model" → "provider/model"
     if (!model.includes("/") && model.includes(":")) {
       model = model.replace(":", "/")
     }
     const [providerID, ...rest] = model.split("/")
-    return {
-      providerID: ProviderID.make(providerID),
-      modelID: ModelID.make(rest.join("/")),
-    }
+    return validate(providerID, rest.join("/"), model)
   }
 
   export const ModelNotFoundError = NamedError.create(

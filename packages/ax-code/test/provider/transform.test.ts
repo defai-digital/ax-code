@@ -508,6 +508,28 @@ describe("ProviderTransform.schema - gemini non-object properties removal", () =
   })
 })
 
+describe("ProviderTransform.schema - gemini circular schemas", () => {
+  const geminiModel = {
+    providerID: "google",
+    api: {
+      id: "gemini-3-pro",
+    },
+  } as any
+
+  test("does not recurse forever on circular schema objects", () => {
+    const schema = {
+      type: "object",
+      properties: {},
+    } as any
+    schema.properties.self = schema
+
+    const result = ProviderTransform.schema(geminiModel, schema) as any
+
+    expect(result.properties.self).toEqual({})
+    expect(() => JSON.stringify(result)).not.toThrow()
+  })
+})
+
 describe("ProviderTransform.message - DeepSeek reasoning content", () => {
   test("DeepSeek with tool calls includes reasoning_content in providerOptions", () => {
     const msgs = [

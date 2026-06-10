@@ -117,6 +117,24 @@ describe("ContextTier", () => {
       expect(classified[0].tier).toBe(2)
     })
 
+    test("lsp results are Tier 2 even when old", () => {
+      const messages = [
+        makeMessage({
+          role: "assistant",
+          parts: [makeToolPart("lsp")],
+        }),
+        makeMessage({ role: "user" }),
+        makeMessage({ role: "user" }),
+        makeMessage({ role: "assistant" }),
+        makeMessage({ role: "user" }),
+        makeMessage({ role: "assistant" }),
+        makeMessage({ role: "user" }),
+        makeMessage({ role: "assistant" }),
+      ]
+      const classified = ContextTier.classify(messages, { recentTurns: 2, supportingTurns: 2 })
+      expect(classified[0].tier).toBe(2)
+    })
+
     test("file edit results are Tier 2 even when old", () => {
       const messages = [
         makeMessage({
