@@ -1,0 +1,646 @@
+{
+  "contract": "visual.design-system-snapshot",
+  "logo": {
+    "truecolor": {
+      "dark": [
+        [
+          {
+            "text": "___",
+            "color": "#58a6ff"
+          },
+          {
+            "text": "____",
+            "color": "#5fa4ff"
+          },
+          {
+            "text": "____",
+            "color": "#65a3ff"
+          },
+          {
+            "text": "  __",
+            "color": "#6ca1ff"
+          },
+          {
+            "text": "     ",
+            "color": "#739fff"
+          },
+          {
+            "text": "____",
+            "color": "#799dff"
+          },
+          {
+            "text": "____",
+            "color": "#809cff"
+          },
+          {
+            "text": "____",
+            "color": "#879aff"
+          },
+          {
+            "text": "_____",
+            "color": "#8d98ff"
+          },
+          {
+            "text": "____",
+            "color": "#9496ff"
+          },
+          {
+            "text": "____",
+            "color": "#9b95ff"
+          },
+          {
+            "text": "_____",
+            "color": "#a193ff"
+          },
+          {
+            "text": "___",
+            "color": "#a891ff"
+          }
+        ],
+        [
+          {
+            "text": "___ ",
+            "color": "#5fa4ff"
+          },
+          {
+            "text": "   |",
+            "color": "#65a3ff"
+          },
+          {
+            "text": "_  |",
+            "color": "#6ca1ff"
+          },
+          {
+            "text": "/ /  ",
+            "color": "#739fff"
+          },
+          {
+            "text": "   _",
+            "color": "#799dff"
+          },
+          {
+            "text": "_  _",
+            "color": "#809cff"
+          },
+          {
+            "text": "___/",
+            "color": "#879aff"
+          },
+          {
+            "text": "_  __",
+            "color": "#8d98ff"
+          },
+          {
+            "text": " \\__",
+            "color": "#9496ff"
+          },
+          {
+            "text": "  __",
+            "color": "#9b95ff"
+          },
+          {
+            "text": " \\__ ",
+            "color": "#a193ff"
+          },
+          {
+            "text": " ___",
+            "color": "#a891ff"
+          },
+          {
+            "text": "_/",
+            "color": "#af8fff"
+          }
+        ],
+        [
+          {
+            "text": "_",
+            "color": "#5fa4ff"
+          },
+          {
+            "text": "_  /",
+            "color": "#65a3ff"
+          },
+          {
+            "text": "| |_",
+            "color": "#6ca1ff"
+          },
+          {
+            "text": "    /",
+            "color": "#739fff"
+          },
+          {
+            "text": "____",
+            "color": "#799dff"
+          },
+          {
+            "text": "___ ",
+            "color": "#809cff"
+          },
+          {
+            "text": " /  ",
+            "color": "#879aff"
+          },
+          {
+            "text": "  _  ",
+            "color": "#8d98ff"
+          },
+          {
+            "text": "/ / ",
+            "color": "#9496ff"
+          },
+          {
+            "text": "/_  ",
+            "color": "#9b95ff"
+          },
+          {
+            "text": "/ / /",
+            "color": "#a193ff"
+          },
+          {
+            "text": "_  _",
+            "color": "#a891ff"
+          },
+          {
+            "text": "_/  ",
+            "color": "#af8fff"
+          },
+          {
+            "text": " ",
+            "color": "#b58eff"
+          }
+        ],
+        [
+          {
+            "text": "_ ",
+            "color": "#65a3ff"
+          },
+          {
+            "text": " ___",
+            "color": "#6ca1ff"
+          },
+          {
+            "text": " |   ",
+            "color": "#739fff"
+          },
+          {
+            "text": " |_/",
+            "color": "#799dff"
+          },
+          {
+            "text": "____",
+            "color": "#809cff"
+          },
+          {
+            "text": "_/ /",
+            "color": "#879aff"
+          },
+          {
+            "text": "___  ",
+            "color": "#8d98ff"
+          },
+          {
+            "text": "/ /_",
+            "color": "#9496ff"
+          },
+          {
+            "text": "/ /_",
+            "color": "#9b95ff"
+          },
+          {
+            "text": "  /_/",
+            "color": "#a193ff"
+          },
+          {
+            "text": " /_ ",
+            "color": "#a891ff"
+          },
+          {
+            "text": " /__",
+            "color": "#af8fff"
+          },
+          {
+            "text": "_   ",
+            "color": "#b58eff"
+          }
+        ],
+        [
+          {
+            "text": "/_/",
+            "color": "#6ca1ff"
+          },
+          {
+            "text": "  |_/",
+            "color": "#739fff"
+          },
+          {
+            "text": "_/|_",
+            "color": "#799dff"
+          },
+          {
+            "text": "|   ",
+            "color": "#809cff"
+          },
+          {
+            "text": "    ",
+            "color": "#879aff"
+          },
+          {
+            "text": "\\____",
+            "color": "#8d98ff"
+          },
+          {
+            "text": "/  \\",
+            "color": "#9496ff"
+          },
+          {
+            "text": "____",
+            "color": "#9b95ff"
+          },
+          {
+            "text": "/ /__",
+            "color": "#a193ff"
+          },
+          {
+            "text": "___/",
+            "color": "#a891ff"
+          },
+          {
+            "text": " /__",
+            "color": "#af8fff"
+          },
+          {
+            "text": "___/",
+            "color": "#b58eff"
+          },
+          {
+            "text": "   ",
+            "color": "#bc8cff"
+          }
+        ]
+      ],
+      "light": [
+        [
+          {
+            "text": "___",
+            "color": "#0969da"
+          },
+          {
+            "text": "____",
+            "color": "#1167da"
+          },
+          {
+            "text": "____",
+            "color": "#1966db"
+          },
+          {
+            "text": "  __",
+            "color": "#2164db"
+          },
+          {
+            "text": "     ",
+            "color": "#2962db"
+          },
+          {
+            "text": "____",
+            "color": "#3161dc"
+          },
+          {
+            "text": "____",
+            "color": "#395fdc"
+          },
+          {
+            "text": "____",
+            "color": "#415ddc"
+          },
+          {
+            "text": "_____",
+            "color": "#4a5cdd"
+          },
+          {
+            "text": "____",
+            "color": "#525add"
+          },
+          {
+            "text": "____",
+            "color": "#5a58dd"
+          },
+          {
+            "text": "_____",
+            "color": "#6257de"
+          },
+          {
+            "text": "___",
+            "color": "#6a55de"
+          }
+        ],
+        [
+          {
+            "text": "___ ",
+            "color": "#1167da"
+          },
+          {
+            "text": "   |",
+            "color": "#1966db"
+          },
+          {
+            "text": "_  |",
+            "color": "#2164db"
+          },
+          {
+            "text": "/ /  ",
+            "color": "#2962db"
+          },
+          {
+            "text": "   _",
+            "color": "#3161dc"
+          },
+          {
+            "text": "_  _",
+            "color": "#395fdc"
+          },
+          {
+            "text": "___/",
+            "color": "#415ddc"
+          },
+          {
+            "text": "_  __",
+            "color": "#4a5cdd"
+          },
+          {
+            "text": " \\__",
+            "color": "#525add"
+          },
+          {
+            "text": "  __",
+            "color": "#5a58dd"
+          },
+          {
+            "text": " \\__ ",
+            "color": "#6257de"
+          },
+          {
+            "text": " ___",
+            "color": "#6a55de"
+          },
+          {
+            "text": "_/",
+            "color": "#7253de"
+          }
+        ],
+        [
+          {
+            "text": "_",
+            "color": "#1167da"
+          },
+          {
+            "text": "_  /",
+            "color": "#1966db"
+          },
+          {
+            "text": "| |_",
+            "color": "#2164db"
+          },
+          {
+            "text": "    /",
+            "color": "#2962db"
+          },
+          {
+            "text": "____",
+            "color": "#3161dc"
+          },
+          {
+            "text": "___ ",
+            "color": "#395fdc"
+          },
+          {
+            "text": " /  ",
+            "color": "#415ddc"
+          },
+          {
+            "text": "  _  ",
+            "color": "#4a5cdd"
+          },
+          {
+            "text": "/ / ",
+            "color": "#525add"
+          },
+          {
+            "text": "/_  ",
+            "color": "#5a58dd"
+          },
+          {
+            "text": "/ / /",
+            "color": "#6257de"
+          },
+          {
+            "text": "_  _",
+            "color": "#6a55de"
+          },
+          {
+            "text": "_/  ",
+            "color": "#7253de"
+          },
+          {
+            "text": " ",
+            "color": "#7a52df"
+          }
+        ],
+        [
+          {
+            "text": "_ ",
+            "color": "#1966db"
+          },
+          {
+            "text": " ___",
+            "color": "#2164db"
+          },
+          {
+            "text": " |   ",
+            "color": "#2962db"
+          },
+          {
+            "text": " |_/",
+            "color": "#3161dc"
+          },
+          {
+            "text": "____",
+            "color": "#395fdc"
+          },
+          {
+            "text": "_/ /",
+            "color": "#415ddc"
+          },
+          {
+            "text": "___  ",
+            "color": "#4a5cdd"
+          },
+          {
+            "text": "/ /_",
+            "color": "#525add"
+          },
+          {
+            "text": "/ /_",
+            "color": "#5a58dd"
+          },
+          {
+            "text": "  /_/",
+            "color": "#6257de"
+          },
+          {
+            "text": " /_ ",
+            "color": "#6a55de"
+          },
+          {
+            "text": " /__",
+            "color": "#7253de"
+          },
+          {
+            "text": "_   ",
+            "color": "#7a52df"
+          }
+        ],
+        [
+          {
+            "text": "/_/",
+            "color": "#2164db"
+          },
+          {
+            "text": "  |_/",
+            "color": "#2962db"
+          },
+          {
+            "text": "_/|_",
+            "color": "#3161dc"
+          },
+          {
+            "text": "|   ",
+            "color": "#395fdc"
+          },
+          {
+            "text": "    ",
+            "color": "#415ddc"
+          },
+          {
+            "text": "\\____",
+            "color": "#4a5cdd"
+          },
+          {
+            "text": "/  \\",
+            "color": "#525add"
+          },
+          {
+            "text": "____",
+            "color": "#5a58dd"
+          },
+          {
+            "text": "/ /__",
+            "color": "#6257de"
+          },
+          {
+            "text": "___/",
+            "color": "#6a55de"
+          },
+          {
+            "text": " /__",
+            "color": "#7253de"
+          },
+          {
+            "text": "___/",
+            "color": "#7a52df"
+          },
+          {
+            "text": "   ",
+            "color": "#8250df"
+          }
+        ]
+      ]
+    },
+    "fallback": {
+      "dark": "#c9d1d9",
+      "light": "#24292f",
+      "lines": [
+        "___________  __     _________________________________",
+        "___    |_  |/ /     __  ____/_  __ \\__  __ \\__  ____/",
+        "__  /| |_    /_______  /    _  / / /_  / / /_  __/   ",
+        "_  ___ |    |_/_____/ /___  / /_/ /_  /_/ /_  /___   ",
+        "/_/  |_/_/|_|       \\____/  \\____/ /_____/ /_____/   "
+      ]
+    }
+  },
+  "gauge": {
+    "0": "▱▱▱▱▱",
+    "1": "▰▰▰▰▰",
+    "0.01": "▰▱▱▱▱",
+    "0.42": "▰▰▱▱▱",
+    "0.6": "▰▰▰▱▱",
+    "0.8": "▰▰▰▰▱",
+    "0.95": "▰▰▰▰▰"
+  },
+  "borders": {
+    "rounded": {
+      "topLeft": "╭",
+      "bottomLeft": "╰",
+      "vertical": "│",
+      "topRight": "╮",
+      "bottomRight": "╯",
+      "horizontal": "─",
+      "bottomT": "",
+      "topT": "",
+      "cross": "",
+      "leftT": "",
+      "rightT": ""
+    },
+    "split": {
+      "topLeft": "",
+      "bottomLeft": "",
+      "vertical": "┃",
+      "topRight": "",
+      "bottomRight": "",
+      "horizontal": " ",
+      "bottomT": "",
+      "topT": "",
+      "cross": "",
+      "leftT": "",
+      "rightT": ""
+    },
+    "empty": {
+      "topLeft": "",
+      "bottomLeft": "",
+      "vertical": "",
+      "topRight": "",
+      "bottomRight": "",
+      "horizontal": " ",
+      "bottomT": "",
+      "topT": "",
+      "cross": "",
+      "leftT": "",
+      "rightT": ""
+    }
+  },
+  "glyphs": {
+    "nerd": {
+      "files": {
+        "main.ts": "",
+        "app.tsx": "",
+        "lib.rs": "",
+        "tool.py": "",
+        "doc.md": "",
+        "data.unknownext": ""
+      },
+      "folder": "",
+      "branch": ""
+    },
+    "safe": {
+      "files": {
+        "main.ts": "",
+        "app.tsx": "",
+        "lib.rs": "",
+        "tool.py": "",
+        "doc.md": "",
+        "data.unknownext": ""
+      },
+      "folder": "",
+      "branch": ""
+    }
+  }
+}

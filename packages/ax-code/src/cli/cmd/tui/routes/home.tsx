@@ -1,13 +1,14 @@
 import { Prompt, type PromptRef } from "@tui/component/prompt"
-import { createEffect, createMemo, Match, on, onMount, Show, Switch } from "solid-js"
+import { createEffect, createMemo, For, Match, on, onMount, Show, Switch } from "solid-js"
 import { useTheme } from "@tui/context/theme"
 import { Logo } from "../component/logo"
+import { recentSessions, recentSessionTitle } from "../component/home-view-model"
 import { Locale } from "@/util/locale"
 import { useSync } from "../context/sync"
 import { Toast } from "../ui/toast"
 import { useArgs } from "../context/args"
 import { useDirectory } from "../context/directory"
-import { useRouteData } from "@tui/context/route"
+import { useRoute, useRouteData } from "@tui/context/route"
 import { usePromptRef } from "../context/prompt"
 import { Installation } from "@/installation"
 import { useLocal } from "../context/local"
@@ -17,6 +18,7 @@ import { isNonEmptyRecord } from "@/util/record"
 export function Home() {
   const sync = useSync()
   const { theme } = useTheme()
+  const nav = useRoute()
   const route = useRouteData("home")
   const promptRef = usePromptRef()
   const args = useArgs()
@@ -34,6 +36,11 @@ export function Home() {
   const modelLoading = createMemo(
     () => !sync.data.provider_failed && (!sync.data.provider_loaded || !local.model.ready),
   )
+  const recent = createMemo(() => recentSessions(sync.data.session))
+  const agentLabel = createMemo(() => {
+    const agent = local.agent.current()
+    return agent.displayName ?? Locale.titlecase(agent.name)
+  })
 
   const Hint = (
     <Switch>
@@ -101,6 +108,13 @@ export function Home() {
         <box flexShrink={0}>
           <Logo />
         </box>
+        <Show when={!modelLoading()}>
+          <box flexShrink={0} maxWidth={75} paddingTop={1}>
+            <text fg={theme.textMuted} selectable={false}>
+              {agentLabel()} · {local.model.parsed().model} · {directory()}
+            </text>
+          </box>
+        </Show>
         <box height={1} minHeight={0} flexShrink={1} />
         <box width="100%" maxWidth={75} zIndex={1000} paddingTop={1} flexShrink={0}>
           <Prompt
@@ -138,6 +152,34 @@ export function Home() {
               {"  "}
               <span style={{ fg: theme.text }}>@filename</span>
               <span style={{ fg: theme.textMuted }}> · attach files from your project</span>
+            </text>
+          </box>
+        </Show>
+        <Show when={!isFirstTimeUser() && recent().length > 0}>
+          <box
+            flexDirection="column"
+            alignItems="flex-start"
+            flexShrink={0}
+            width="100%"
+            maxWidth={75}
+            paddingLeft={2}
+            paddingRight={2}
+            paddingTop={1}
+          >
+            <For each={recent()}>
+              {(session) => (
+                <box flexDirection="row" onMouseUp={() => nav.navigate({ type: "session", sessionID: session.id })}>
+                  <text selectable={false}>
+                    <span style={{ fg: theme.accent }}>●</span>
+                    {"  "}
+                    <span style={{ fg: theme.text }}>{recentSessionTitle(session)}</span>
+                    <span style={{ fg: theme.textMuted }}> {Locale.todayTimeOrDateTime(session.time.updated)}</span>
+                  </text>
+                </box>
+              )}
+            </For>
+            <text fg={theme.textMuted} selectable={false}>
+              {"   "}click to resume · /sessions for all
             </text>
           </box>
         </Show>

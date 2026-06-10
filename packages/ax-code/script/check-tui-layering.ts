@@ -74,6 +74,8 @@ export namespace TuiLayeringGuardrails {
     "src/cli/cmd/tui/routes/session/route.ts",
     "src/cli/cmd/tui/routes/session/sidebar-eta.ts",
     "src/cli/cmd/tui/routes/session/usage.ts",
+    "src/cli/cmd/tui/ui/primitives/capability.ts",
+    "src/cli/cmd/tui/ui/primitives/format.ts",
     "src/cli/cmd/tui/util/microtask.ts",
     "src/cli/cmd/tui/util/request-headers.ts",
     "src/cli/cmd/tui/util/reconnect-recovery.ts",

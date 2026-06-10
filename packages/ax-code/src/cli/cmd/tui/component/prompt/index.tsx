@@ -31,6 +31,7 @@ import { providerModelKey } from "@/provider/model-key"
 import { useLocal } from "@tui/context/local"
 import { useTheme } from "@tui/context/theme"
 import { EmptyBorder } from "@tui/component/border"
+import { Card } from "@tui/ui/primitives/card"
 import { useSDK } from "@tui/context/sdk"
 import { useRoute } from "@tui/context/route"
 import { useSync } from "@tui/context/sync"
@@ -76,7 +77,9 @@ import { OpenTuiSpinner } from "../spinner"
 import { upsert } from "../../context/sync-util"
 import { summarizedPasteViews } from "./paste-view-model"
 import { withTimeout } from "@/util/timeout"
-import { footerSessionStatusView, footerTokenChip } from "../../routes/session/footer-view-model"
+import { footerContextGauge, footerSessionStatusView, footerTokenChip } from "../../routes/session/footer-view-model"
+import { Gauge } from "@tui/ui/primitives/gauge"
+import { KeyHint } from "@tui/ui/primitives/key-hint"
 import { selectedForeground } from "@tui/context/theme"
 import { footerToggleLabel } from "./footer-toggle"
 import { footerHintWidth, promptFooterLayout } from "./footer-layout"
@@ -1495,18 +1498,17 @@ export function Prompt(props: PromptProps) {
     }
   })
 
-  const tokenInfo = createMemo(() => {
+  // Context-window usage for the footer gauge (ADR-031 R8). Anchored on
+  // the most recent assistant message with usage data, against that
+  // model's context limit.
+  const contextGauge = createMemo(() => {
     if (!props.sessionID) return
     const msgs = sync.data.message[props.sessionID]
     if (!msgs) return
     const last = Usage.last(msgs) as any
     if (!last?.tokens) return
-    const total = Usage.total(last)
-    if (total === 0) return
     const model = sync.data.provider.find((x: any) => x.id === last.providerID)?.models?.[last.modelID]
-    const pct = model?.limit?.context ? Math.round((total / model.limit.context) * 100) : undefined
-    const formatted = total >= 1000 ? (total / 1000).toFixed(1) + "K" : String(total)
-    return pct !== undefined ? `${formatted} (${pct}%)` : formatted
+    return footerContextGauge({ totalTokens: Usage.total(last), contextLimit: model?.limit?.context })
   })
 
   const busyStatus = createMemo(() => {
@@ -1575,19 +1577,10 @@ export function Prompt(props: PromptProps) {
         promptPartTypeId={() => promptPartTypeId}
       />
       <box ref={(r) => (anchor = r)} visible={props.visible !== false}>
-        <box
-          border={["left"]}
-          borderColor={highlight()}
-          customBorderChars={{
-            ...EmptyBorder,
-            vertical: "┃",
-            bottomLeft: "╹",
-          }}
-        >
+        <Card accentColor={highlight()}>
           <box
             paddingLeft={2}
             paddingRight={2}
-            paddingTop={1}
             flexShrink={0}
             backgroundColor={theme.backgroundElement}
             flexGrow={1}
@@ -1911,33 +1904,7 @@ export function Prompt(props: PromptProps) {
               </box>
             </Show>
           </box>
-        </box>
-        <box
-          height={1}
-          border={["left"]}
-          borderColor={highlight()}
-          customBorderChars={{
-            ...EmptyBorder,
-            vertical: theme.backgroundElement.a !== 0 ? "╹" : " ",
-          }}
-        >
-          <box
-            height={1}
-            border={["bottom"]}
-            borderColor={theme.backgroundElement}
-            customBorderChars={
-              theme.backgroundElement.a !== 0
-                ? {
-                    ...EmptyBorder,
-                    horizontal: "▀",
-                  }
-                : {
-                    ...EmptyBorder,
-                    horizontal: " ",
-                  }
-            }
-          />
-        </box>
+        </Card>
         <box
           flexDirection={footerLayout().stacked ? "column" : "row"}
           justifyContent={footerLayout().stacked ? "flex-start" : "space-between"}
@@ -2055,12 +2022,11 @@ export function Prompt(props: PromptProps) {
                   })()}
                 </box>
               </box>
-              <text fg={store.interrupt > 0 ? theme.primary : theme.text}>
-                esc{" "}
-                <span style={{ fg: store.interrupt > 0 ? theme.primary : theme.textMuted }}>
-                  {store.interrupt > 0 ? "again to interrupt" : "interrupt"}
-                </span>
-              </text>
+              <KeyHint
+                keys="esc"
+                label={store.interrupt > 0 ? "again to interrupt" : "interrupt"}
+                active={store.interrupt > 0}
+              />
             </box>
           </Show>
           <Show when={status().type !== "retry"}>
@@ -2069,6 +2035,11 @@ export function Prompt(props: PromptProps) {
               flexDirection={footerLayout().stacked ? "column" : "row"}
               flexShrink={0}
             >
+              <Show when={contextGauge()}>
+                <box flexDirection="row" flexShrink={0} paddingRight={1}>
+                  <Gauge view={contextGauge()} />
+                </box>
+              </Show>
               <box flexDirection="row" flexShrink={0}>
                 {footerToggleChip({
                   label: "Super-Long",
@@ -2100,16 +2071,12 @@ export function Prompt(props: PromptProps) {
                   <Switch>
                     <Match when={store.mode === "normal"}>
                       <Show when={footerLayout().showVariants}>
-                        <text fg={theme.text}>
-                          {keybind.print("variant_cycle")} <span style={{ fg: theme.textMuted }}>variants</span>
-                        </text>
+                        <KeyHint keys={keybind.print("variant_cycle")} label="variants" />
                       </Show>
                     </Match>
                     <Match when={store.mode === "shell"}>
                       <Show when={footerLayout().showShellHint}>
-                        <text fg={theme.text}>
-                          esc <span style={{ fg: theme.textMuted }}>exit shell mode</span>
-                        </text>
+                        <KeyHint keys="esc" label="exit shell mode" />
                       </Show>
                     </Match>
                   </Switch>

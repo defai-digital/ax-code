@@ -57,7 +57,7 @@ function detectTerminalMode(colors: TerminalColors): "dark" | "light" | undefine
   return colorModeFromHex(colors.defaultBackground) ?? colorModeFromHex(colors.palette[0])
 }
 
-function resolveTheme(theme: ThemeJson, mode: "dark" | "light") {
+export function resolveTheme(theme: ThemeJson, mode: "dark" | "light") {
   const defs = theme.defs ?? {}
   function resolveColor(c: ColorValue, visiting = new Set<string>()): RGBA {
     if (c instanceof RGBA) return c
@@ -86,9 +86,16 @@ function resolveTheme(theme: ThemeJson, mode: "dark" | "light") {
     return resolveColor(c[mode], visiting)
   }
 
+  const optionalKeys = new Set([
+    "selectedListItemText",
+    "backgroundMenu",
+    "brandGradientStart",
+    "brandGradientEnd",
+    "thinkingOpacity",
+  ])
   const resolved = Object.fromEntries(
     Object.entries(theme.theme)
-      .filter(([key]) => key !== "selectedListItemText" && key !== "backgroundMenu" && key !== "thinkingOpacity")
+      .filter(([key]) => !optionalKeys.has(key))
       .map(([key, value]) => {
         return [key, resolveColor(value as ColorValue)]
       }),
@@ -110,6 +117,13 @@ function resolveTheme(theme: ThemeJson, mode: "dark" | "light") {
   } else {
     resolved.backgroundMenu = resolved.backgroundElement
   }
+
+  // Brand gradient ramp - optional with fallback to primary→secondary
+  // (ADR-031 R12), so every existing theme keeps a sensible ramp.
+  resolved.brandGradientStart =
+    theme.theme.brandGradientStart !== undefined ? resolveColor(theme.theme.brandGradientStart) : resolved.primary
+  resolved.brandGradientEnd =
+    theme.theme.brandGradientEnd !== undefined ? resolveColor(theme.theme.brandGradientEnd) : resolved.secondary
 
   // Handle thinkingOpacity - optional with default of 0.6
   const thinkingOpacity = theme.theme.thinkingOpacity ?? 0.6
@@ -852,11 +866,14 @@ function getSyntaxRules(theme: Theme) {
         bold: true,
       },
     },
+    // H1/H2 get an underline on top of bold so top-level structure stays
+    // scannable in long assistant answers (ADR-031 R9).
     {
       scope: ["markup.heading.1"],
       style: {
         foreground: theme.markdownHeading,
         bold: true,
+        underline: true,
       },
     },
     {
@@ -864,6 +881,7 @@ function getSyntaxRules(theme: Theme) {
       style: {
         foreground: theme.markdownHeading,
         bold: true,
+        underline: true,
       },
     },
     {

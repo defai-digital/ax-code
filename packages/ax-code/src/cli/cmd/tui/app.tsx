@@ -44,6 +44,7 @@ import { KVProvider, useKV } from "./context/kv"
 import { Provider } from "@/provider/provider"
 import { ArgsProvider, useArgs, type Args } from "./context/args"
 import { PromptRefProvider, usePromptRef } from "./context/prompt"
+import { VisualCapabilityProvider } from "./ui/primitives/capability-context"
 import { TuiConfigProvider } from "./context/tui-config"
 import { TuiConfig } from "@/config/tui"
 import { DiagnosticLog } from "@/debug/diagnostic-log"
@@ -130,7 +131,9 @@ export function tui(input: TuiInput) {
                                           <FrecencyProvider>
                                             <PromptHistoryProvider>
                                               <PromptRefProvider>
-                                                <App onSnapshot={input.onSnapshot} />
+                                                <VisualCapabilityProvider>
+                                                  <App onSnapshot={input.onSnapshot} />
+                                                </VisualCapabilityProvider>
                                               </PromptRefProvider>
                                             </PromptHistoryProvider>
                                           </FrecencyProvider>
@@ -858,6 +861,10 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       title: "Switch theme",
       value: "theme.switch",
       keybind: "theme_list",
+      slash: {
+        name: "theme",
+        aliases: ["themes"],
+      },
       onSelect: () => {
         void showThemeListDialog()
       },
