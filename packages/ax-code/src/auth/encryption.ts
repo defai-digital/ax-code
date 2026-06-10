@@ -17,6 +17,7 @@ import path from "path"
 import os from "os"
 import { toErrorMessage } from "@/util/error-message"
 import { Log } from "../util/log"
+import { NativePerf } from "@/perf/native"
 import { Global } from "../global"
 
 const log = Log.create({ service: "auth/encryption" })
@@ -26,9 +27,17 @@ const KEY_LENGTH = 32 // 256 bits
 const IV_LENGTH = 16 // 128 bits
 const SALT_LENGTH = 32 // 256 bits
 const AUTH_TAG_LENGTH = 16 // 128 bits
-const PBKDF2_ITERATIONS = 600_000 // OWASP 2024 recommendation
+const PBKDF2_ITERATIONS = 600_000 // OWASP 2024 recommendation (for the low-entropy legacy password)
 const PBKDF2_LEGACY_ITERATIONS = 100_000 // backward compat
-const ENCRYPTION_VERSION = 1
+// Version 2: when the per-install secret exists, the derivation password
+// contains 256 bits of randomness — PBKDF2 stretching adds nothing against
+// brute force at that entropy (OWASP iteration guidance targets human
+// passwords). 600k iterations cost ~35ms per field and Auth.all() decrypts
+// every field, which made it the dominant startup cost. Keep a non-trivial
+// count so v2 still goes through the same code path and remains
+// indistinguishable on disk apart from the version number.
+const PBKDF2_ITERATIONS_V2 = 10_000
+const ENCRYPTION_VERSION = 2
 const TEST_KEY_VALUE = "test-api-key-12345"
 
 // Sentinel value encrypted alongside real keys. On startup we try to
@@ -91,12 +100,29 @@ function machineId(): string {
   return `${os.hostname()}-${os.platform()}-${os.arch()}-${secret}`
 }
 
-function deriveKey(salt: Buffer, iterations: number): Buffer {
-  return pbkdf2Sync(machineId(), salt, iterations, KEY_LENGTH, "sha256")
-}
+// PBKDF2 is deterministic, so within one process the same
+// (password, salt, iterations) triple always yields the same key. Auth.all()
+// is called from several init paths (config load, provider state) and each
+// call decrypts every stored field — without this cache every call re-paid
+// the full derivation cost. Holding derived keys in memory is no more
+// sensitive than the decrypted plaintexts already held by those callers.
+const KEY_CACHE_LIMIT = 512
+const keyCache = new Map<string, Buffer>()
 
 function deriveKeyWithPassword(password: string, salt: Buffer, iterations: number): Buffer {
-  return pbkdf2Sync(password, salt, iterations, KEY_LENGTH, "sha256")
+  const cacheKey = `${password}|${salt.toString("base64")}|${iterations}`
+  const cached = keyCache.get(cacheKey)
+  if (cached) return cached
+  const key = NativePerf.run("auth.deriveKey", iterations, () =>
+    pbkdf2Sync(password, salt, iterations, KEY_LENGTH, "sha256"),
+  )
+  if (keyCache.size >= KEY_CACHE_LIMIT) keyCache.clear()
+  keyCache.set(cacheKey, key)
+  return key
+}
+
+function deriveKey(salt: Buffer, iterations: number): Buffer {
+  return deriveKeyWithPassword(machineId(), salt, iterations)
 }
 
 /**
@@ -105,7 +131,10 @@ function deriveKeyWithPassword(password: string, salt: Buffer, iterations: numbe
 export function encrypt(plaintext: string): EncryptedValue {
   const salt = randomBytes(SALT_LENGTH)
   const iv = randomBytes(IV_LENGTH)
-  const key = deriveKey(salt, PBKDF2_ITERATIONS)
+  // Without an install secret the password degrades to hostname-platform-arch
+  // (low entropy), so keep the full v1 stretching in that fallback case.
+  const version = getInstallSecret() ? ENCRYPTION_VERSION : 1
+  const key = deriveKey(salt, version >= 2 ? PBKDF2_ITERATIONS_V2 : PBKDF2_ITERATIONS)
 
   const cipher = createCipheriv(ALGORITHM, key, iv, { authTagLength: AUTH_TAG_LENGTH })
   const encrypted = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()])
@@ -116,7 +145,7 @@ export function encrypt(plaintext: string): EncryptedValue {
     iv: iv.toString("base64"),
     salt: salt.toString("base64"),
     tag: tag.toString("base64"),
-    version: ENCRYPTION_VERSION,
+    version,
   }
 }
 
@@ -141,6 +170,15 @@ export function decrypt(value: EncryptedValue): string {
   // compatibility. Callers should re-encrypt via encrypt() to migrate
   // legacy entries to a proper 32-byte random salt.
   const salt = value.salt ? Buffer.from(value.salt, "base64") : iv.subarray(0, SALT_LENGTH)
+
+  // v2 entries were derived with the reduced iteration count.
+  if (value.version >= 2) {
+    try {
+      return decryptWith(encrypted, iv, salt, tag, PBKDF2_ITERATIONS_V2)
+    } catch {
+      log.debug("v2 iterations failed, trying v1 fallbacks")
+    }
+  }
 
   // Try current machineId (with install secret) + current iterations
   try {
@@ -246,8 +284,12 @@ export function decryptField<T extends Record<string, unknown>>(obj: T, field: s
   if (!isEncrypted(val)) return obj
   try {
     const plaintext = decrypt(val)
-    if (isLegacySalt(val)) {
-      // Re-encrypt with a proper 32-byte random salt to migrate legacy entries
+    // Re-encrypt when the entry uses the legacy IV-as-salt derivation, or
+    // when it predates the current version and encrypt() would actually
+    // upgrade it (it only writes v2 when the install secret exists —
+    // without that guard, secret-less environments would re-mark v1
+    // entries on every start and rewrite the file for nothing).
+    if (isLegacySalt(val) || (val.version < ENCRYPTION_VERSION && getInstallSecret() !== "")) {
       return { ...obj, [field]: plaintext, __needsReEncrypt: true }
     }
     return { ...obj, [field]: plaintext }

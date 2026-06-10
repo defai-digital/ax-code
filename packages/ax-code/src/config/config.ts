@@ -182,7 +182,7 @@ export namespace Config {
   export const state = Instance.state(() => NativePerf.runAsync("config.load", undefined, loadState))
 
   async function loadState() {
-    const auth = await Auth.all()
+    const auth = await NativePerf.runAsync("config.load.auth", undefined, () => Auth.all())
     const mcpSources: Record<string, McpSource> = {}
 
     function recordMcpSources(config: Info, source: McpSource) {
@@ -235,7 +235,7 @@ export namespace Config {
         wellknownEntries.push({ url, key: value.key, token: value.token })
       }
     }
-    const wellknownConfigs = await Promise.all(
+    const wellknownPromise = Promise.all(
       wellknownEntries.map(async ({ url }) => {
         try {
           const endpoint = `${url}/.well-known/ax-code`
@@ -296,12 +296,20 @@ export namespace Config {
         }
       }),
     )
+    const wellknownConfigs = await NativePerf.runAsync(
+      "config.load.wellknown",
+      wellknownEntries.length,
+      () => wellknownPromise,
+    )
     for (const cfg of wellknownConfigs) {
       if (cfg) mergeFromSource(cfg.source, cfg.loaded)
     }
 
     // Global user config overrides remote config.
-    mergeFromSource(trustedMcpSource("global", { path: Global.Path.config }), await global())
+    mergeFromSource(
+      trustedMcpSource("global", { path: Global.Path.config }),
+      await NativePerf.runAsync("config.load.global", undefined, () => global()),
+    )
 
     // Custom config path overrides global config.
     if (Flag.AX_CODE_CONFIG) {
@@ -311,7 +319,9 @@ export namespace Config {
 
     // Project config overrides global and remote config.
     if (!Flag.AX_CODE_DISABLE_PROJECT_CONFIG) {
-      const projectFiles = await ConfigPaths.projectFiles("ax-code", Instance.directory, Instance.worktree)
+      const projectFiles = await NativePerf.runAsync("config.load.projectFiles", undefined, () =>
+        ConfigPaths.projectFiles("ax-code", Instance.directory, Instance.worktree),
+      )
       // Project configs live inside the worktree and may be checked
       // in by anyone — treat them as untrusted so a malicious
       // `ax-code.json` committed to a shared repo cannot read files
@@ -337,7 +347,9 @@ export namespace Config {
     result.mode = result.mode ?? {}
     result.plugin = result.plugin ?? []
 
-    const directories = await ConfigPaths.directories(Instance.directory, Instance.worktree)
+    const directories = await NativePerf.runAsync("config.load.directories", undefined, () =>
+      ConfigPaths.directories(Instance.directory, Instance.worktree),
+    )
 
     // .ax-code directory config overrides (project and global) config sources.
     if (Flag.AX_CODE_CONFIG_DIR) {
@@ -420,7 +432,7 @@ export namespace Config {
       log.debug("loaded custom config from AX_CODE_CONFIG_CONTENT", { command: "config.load", status: "ok" })
     }
 
-    const active = await Account.active()
+    const active = await NativePerf.runAsync("config.load.account", undefined, () => Account.active())
     if (active?.active_org_id) {
       try {
         let accountTimer: ReturnType<typeof setTimeout>
