@@ -42,7 +42,7 @@ export function runModeLabel(mode: RunMode): string {
     case "none":
       return "Manual"
     case "auto":
-      return "Auto"
+      return "Autonomous"
     case "super-long":
       return "Super-Long"
   }

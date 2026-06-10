@@ -31,7 +31,7 @@ describe("nextRunMode", () => {
 describe("runModeLabel", () => {
   test("labels every mode", () => {
     expect(runModeLabel("none")).toBe("Manual")
-    expect(runModeLabel("auto")).toBe("Auto")
+    expect(runModeLabel("auto")).toBe("Autonomous")
     expect(runModeLabel("super-long")).toBe("Super-Long")
   })
 })
