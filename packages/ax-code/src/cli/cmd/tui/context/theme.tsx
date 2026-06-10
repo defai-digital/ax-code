@@ -196,7 +196,7 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
       themes: DEFAULT_THEMES,
       mode: lock ?? pick(kv.get("theme_mode", props.mode)) ?? props.mode,
       lock,
-      active: (config.theme ?? kv.get("theme", "github")) as string,
+      active: (config.theme ?? kv.get("theme", "automatosx")) as string,
       ready: false,
     })
 
@@ -247,7 +247,7 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
           )
         })
         .catch(() => {
-          setStore("active", "github")
+          setStore("active", "automatosx")
         })
         .finally(() => {
           customThemesPromise = undefined
@@ -299,7 +299,7 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
               produce((draft) => {
                 draft.mode = nextMode
                 if (draft.active === "system") {
-                  draft.active = "github"
+                  draft.active = "automatosx"
                   draft.ready = true
                 }
               }),
@@ -353,7 +353,7 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
     })
 
     const values = createMemo(() => {
-      return resolveTheme(store.themes[store.active] ?? store.themes.github, store.mode)
+      return resolveTheme(store.themes[store.active] ?? store.themes.automatosx, store.mode)
     })
 
     createEffect(() => {

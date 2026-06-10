@@ -6,275 +6,275 @@
         [
           {
             "text": "___",
-            "color": "#58a6ff"
+            "color": "#6ee7b7"
           },
           {
             "text": "____",
-            "color": "#5fa4ff"
+            "color": "#68e4b3"
           },
           {
             "text": "____",
-            "color": "#65a3ff"
+            "color": "#61e1b0"
           },
           {
             "text": "  __",
-            "color": "#6ca1ff"
+            "color": "#5bdeac"
           },
           {
             "text": "     ",
-            "color": "#739fff"
+            "color": "#55dba9"
           },
           {
             "text": "____",
-            "color": "#799dff"
+            "color": "#4fd8a5"
           },
           {
             "text": "____",
-            "color": "#809cff"
+            "color": "#48d5a1"
           },
           {
             "text": "____",
-            "color": "#879aff"
+            "color": "#42d29e"
           },
           {
             "text": "_____",
-            "color": "#8d98ff"
+            "color": "#3cce9a"
           },
           {
             "text": "____",
-            "color": "#9496ff"
+            "color": "#36cb97"
           },
           {
             "text": "____",
-            "color": "#9b95ff"
+            "color": "#2fc893"
           },
           {
             "text": "_____",
-            "color": "#a193ff"
+            "color": "#29c58f"
           },
           {
             "text": "___",
-            "color": "#a891ff"
+            "color": "#23c28c"
           }
         ],
         [
           {
             "text": "___ ",
-            "color": "#5fa4ff"
+            "color": "#68e4b3"
           },
           {
             "text": "   |",
-            "color": "#65a3ff"
+            "color": "#61e1b0"
           },
           {
             "text": "_  |",
-            "color": "#6ca1ff"
+            "color": "#5bdeac"
           },
           {
             "text": "/ /  ",
-            "color": "#739fff"
+            "color": "#55dba9"
           },
           {
             "text": "   _",
-            "color": "#799dff"
+            "color": "#4fd8a5"
           },
           {
             "text": "_  _",
-            "color": "#809cff"
+            "color": "#48d5a1"
           },
           {
             "text": "___/",
-            "color": "#879aff"
+            "color": "#42d29e"
           },
           {
             "text": "_  __",
-            "color": "#8d98ff"
+            "color": "#3cce9a"
           },
           {
             "text": " \\__",
-            "color": "#9496ff"
+            "color": "#36cb97"
           },
           {
             "text": "  __",
-            "color": "#9b95ff"
+            "color": "#2fc893"
           },
           {
             "text": " \\__ ",
-            "color": "#a193ff"
+            "color": "#29c58f"
           },
           {
             "text": " ___",
-            "color": "#a891ff"
+            "color": "#23c28c"
           },
           {
             "text": "_/",
-            "color": "#af8fff"
+            "color": "#1dbf88"
           }
         ],
         [
           {
             "text": "_",
-            "color": "#5fa4ff"
+            "color": "#68e4b3"
           },
           {
             "text": "_  /",
-            "color": "#65a3ff"
+            "color": "#61e1b0"
           },
           {
             "text": "| |_",
-            "color": "#6ca1ff"
+            "color": "#5bdeac"
           },
           {
             "text": "    /",
-            "color": "#739fff"
+            "color": "#55dba9"
           },
           {
             "text": "____",
-            "color": "#799dff"
+            "color": "#4fd8a5"
           },
           {
             "text": "___ ",
-            "color": "#809cff"
+            "color": "#48d5a1"
           },
           {
             "text": " /  ",
-            "color": "#879aff"
+            "color": "#42d29e"
           },
           {
             "text": "  _  ",
-            "color": "#8d98ff"
+            "color": "#3cce9a"
           },
           {
             "text": "/ / ",
-            "color": "#9496ff"
+            "color": "#36cb97"
           },
           {
             "text": "/_  ",
-            "color": "#9b95ff"
+            "color": "#2fc893"
           },
           {
             "text": "/ / /",
-            "color": "#a193ff"
+            "color": "#29c58f"
           },
           {
             "text": "_  _",
-            "color": "#a891ff"
+            "color": "#23c28c"
           },
           {
             "text": "_/  ",
-            "color": "#af8fff"
+            "color": "#1dbf88"
           },
           {
             "text": " ",
-            "color": "#b58eff"
+            "color": "#16bc85"
           }
         ],
         [
           {
             "text": "_ ",
-            "color": "#65a3ff"
+            "color": "#61e1b0"
           },
           {
             "text": " ___",
-            "color": "#6ca1ff"
+            "color": "#5bdeac"
           },
           {
             "text": " |   ",
-            "color": "#739fff"
+            "color": "#55dba9"
           },
           {
             "text": " |_/",
-            "color": "#799dff"
+            "color": "#4fd8a5"
           },
           {
             "text": "____",
-            "color": "#809cff"
+            "color": "#48d5a1"
           },
           {
             "text": "_/ /",
-            "color": "#879aff"
+            "color": "#42d29e"
           },
           {
             "text": "___  ",
-            "color": "#8d98ff"
+            "color": "#3cce9a"
           },
           {
             "text": "/ /_",
-            "color": "#9496ff"
+            "color": "#36cb97"
           },
           {
             "text": "/ /_",
-            "color": "#9b95ff"
+            "color": "#2fc893"
           },
           {
             "text": "  /_/",
-            "color": "#a193ff"
+            "color": "#29c58f"
           },
           {
             "text": " /_ ",
-            "color": "#a891ff"
+            "color": "#23c28c"
           },
           {
             "text": " /__",
-            "color": "#af8fff"
+            "color": "#1dbf88"
           },
           {
             "text": "_   ",
-            "color": "#b58eff"
+            "color": "#16bc85"
           }
         ],
         [
           {
             "text": "/_/",
-            "color": "#6ca1ff"
+            "color": "#5bdeac"
           },
           {
             "text": "  |_/",
-            "color": "#739fff"
+            "color": "#55dba9"
           },
           {
             "text": "_/|_",
-            "color": "#799dff"
+            "color": "#4fd8a5"
           },
           {
             "text": "|   ",
-            "color": "#809cff"
+            "color": "#48d5a1"
           },
           {
             "text": "    ",
-            "color": "#879aff"
+            "color": "#42d29e"
           },
           {
             "text": "\\____",
-            "color": "#8d98ff"
+            "color": "#3cce9a"
           },
           {
             "text": "/  \\",
-            "color": "#9496ff"
+            "color": "#36cb97"
           },
           {
             "text": "____",
-            "color": "#9b95ff"
+            "color": "#2fc893"
           },
           {
             "text": "/ /__",
-            "color": "#a193ff"
+            "color": "#29c58f"
           },
           {
             "text": "___/",
-            "color": "#a891ff"
+            "color": "#23c28c"
           },
           {
             "text": " /__",
-            "color": "#af8fff"
+            "color": "#1dbf88"
           },
           {
             "text": "___/",
-            "color": "#b58eff"
+            "color": "#16bc85"
           },
           {
             "text": "   ",
-            "color": "#bc8cff"
+            "color": "#10b981"
           }
         ]
       ],
@@ -282,282 +282,282 @@
         [
           {
             "text": "___",
-            "color": "#0969da"
+            "color": "#0d9488"
           },
           {
             "text": "____",
-            "color": "#1167da"
+            "color": "#0c9486"
           },
           {
             "text": "____",
-            "color": "#1966db"
+            "color": "#0c9484"
           },
           {
             "text": "  __",
-            "color": "#2164db"
+            "color": "#0b9482"
           },
           {
             "text": "     ",
-            "color": "#2962db"
+            "color": "#0b9580"
           },
           {
             "text": "____",
-            "color": "#3161dc"
+            "color": "#0a957e"
           },
           {
             "text": "____",
-            "color": "#395fdc"
+            "color": "#0a957c"
           },
           {
             "text": "____",
-            "color": "#415ddc"
+            "color": "#09957a"
           },
           {
             "text": "_____",
-            "color": "#4a5cdd"
+            "color": "#099577"
           },
           {
             "text": "____",
-            "color": "#525add"
+            "color": "#089575"
           },
           {
             "text": "____",
-            "color": "#5a58dd"
+            "color": "#089573"
           },
           {
             "text": "_____",
-            "color": "#6257de"
+            "color": "#079571"
           },
           {
             "text": "___",
-            "color": "#6a55de"
+            "color": "#07966f"
           }
         ],
         [
           {
             "text": "___ ",
-            "color": "#1167da"
+            "color": "#0c9486"
           },
           {
             "text": "   |",
-            "color": "#1966db"
+            "color": "#0c9484"
           },
           {
             "text": "_  |",
-            "color": "#2164db"
+            "color": "#0b9482"
           },
           {
             "text": "/ /  ",
-            "color": "#2962db"
+            "color": "#0b9580"
           },
           {
             "text": "   _",
-            "color": "#3161dc"
+            "color": "#0a957e"
           },
           {
             "text": "_  _",
-            "color": "#395fdc"
+            "color": "#0a957c"
           },
           {
             "text": "___/",
-            "color": "#415ddc"
+            "color": "#09957a"
           },
           {
             "text": "_  __",
-            "color": "#4a5cdd"
+            "color": "#099577"
           },
           {
             "text": " \\__",
-            "color": "#525add"
+            "color": "#089575"
           },
           {
             "text": "  __",
-            "color": "#5a58dd"
+            "color": "#089573"
           },
           {
             "text": " \\__ ",
-            "color": "#6257de"
+            "color": "#079571"
           },
           {
             "text": " ___",
-            "color": "#6a55de"
+            "color": "#07966f"
           },
           {
             "text": "_/",
-            "color": "#7253de"
+            "color": "#06966d"
           }
         ],
         [
           {
             "text": "_",
-            "color": "#1167da"
+            "color": "#0c9486"
           },
           {
             "text": "_  /",
-            "color": "#1966db"
+            "color": "#0c9484"
           },
           {
             "text": "| |_",
-            "color": "#2164db"
+            "color": "#0b9482"
           },
           {
             "text": "    /",
-            "color": "#2962db"
+            "color": "#0b9580"
           },
           {
             "text": "____",
-            "color": "#3161dc"
+            "color": "#0a957e"
           },
           {
             "text": "___ ",
-            "color": "#395fdc"
+            "color": "#0a957c"
           },
           {
             "text": " /  ",
-            "color": "#415ddc"
+            "color": "#09957a"
           },
           {
             "text": "  _  ",
-            "color": "#4a5cdd"
+            "color": "#099577"
           },
           {
             "text": "/ / ",
-            "color": "#525add"
+            "color": "#089575"
           },
           {
             "text": "/_  ",
-            "color": "#5a58dd"
+            "color": "#089573"
           },
           {
             "text": "/ / /",
-            "color": "#6257de"
+            "color": "#079571"
           },
           {
             "text": "_  _",
-            "color": "#6a55de"
+            "color": "#07966f"
           },
           {
             "text": "_/  ",
-            "color": "#7253de"
+            "color": "#06966d"
           },
           {
             "text": " ",
-            "color": "#7a52df"
+            "color": "#06966b"
           }
         ],
         [
           {
             "text": "_ ",
-            "color": "#1966db"
+            "color": "#0c9484"
           },
           {
             "text": " ___",
-            "color": "#2164db"
+            "color": "#0b9482"
           },
           {
             "text": " |   ",
-            "color": "#2962db"
+            "color": "#0b9580"
           },
           {
             "text": " |_/",
-            "color": "#3161dc"
+            "color": "#0a957e"
           },
           {
             "text": "____",
-            "color": "#395fdc"
+            "color": "#0a957c"
           },
           {
             "text": "_/ /",
-            "color": "#415ddc"
+            "color": "#09957a"
           },
           {
             "text": "___  ",
-            "color": "#4a5cdd"
+            "color": "#099577"
           },
           {
             "text": "/ /_",
-            "color": "#525add"
+            "color": "#089575"
           },
           {
             "text": "/ /_",
-            "color": "#5a58dd"
+            "color": "#089573"
           },
           {
             "text": "  /_/",
-            "color": "#6257de"
+            "color": "#079571"
           },
           {
             "text": " /_ ",
-            "color": "#6a55de"
+            "color": "#07966f"
           },
           {
             "text": " /__",
-            "color": "#7253de"
+            "color": "#06966d"
           },
           {
             "text": "_   ",
-            "color": "#7a52df"
+            "color": "#06966b"
           }
         ],
         [
           {
             "text": "/_/",
-            "color": "#2164db"
+            "color": "#0b9482"
           },
           {
             "text": "  |_/",
-            "color": "#2962db"
+            "color": "#0b9580"
           },
           {
             "text": "_/|_",
-            "color": "#3161dc"
+            "color": "#0a957e"
           },
           {
             "text": "|   ",
-            "color": "#395fdc"
+            "color": "#0a957c"
           },
           {
             "text": "    ",
-            "color": "#415ddc"
+            "color": "#09957a"
           },
           {
             "text": "\\____",
-            "color": "#4a5cdd"
+            "color": "#099577"
           },
           {
             "text": "/  \\",
-            "color": "#525add"
+            "color": "#089575"
           },
           {
             "text": "____",
-            "color": "#5a58dd"
+            "color": "#089573"
           },
           {
             "text": "/ /__",
-            "color": "#6257de"
+            "color": "#079571"
           },
           {
             "text": "___/",
-            "color": "#6a55de"
+            "color": "#07966f"
           },
           {
             "text": " /__",
-            "color": "#7253de"
+            "color": "#06966d"
           },
           {
             "text": "___/",
-            "color": "#7a52df"
+            "color": "#06966b"
           },
           {
             "text": "   ",
-            "color": "#8250df"
+            "color": "#059669"
           }
         ]
       ]
     },
     "fallback": {
-      "dark": "#c9d1d9",
-      "light": "#24292f",
+      "dark": "#d7e2dc",
+      "light": "#1a231e",
       "lines": [
         "___________  __     _________________________________",
         "___    |_  |/ /     __  ____/_  __ \\__  __ \\__  ____/",
