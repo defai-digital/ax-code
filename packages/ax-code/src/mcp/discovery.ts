@@ -15,6 +15,8 @@ import { Env } from "../util/env"
 
 const log = Log.create({ service: "mcp.discovery" })
 
+const CDP_DEFAULT_PORT = 9222
+
 // Capability probe: spawn a short-lived process and report whether it
 // exits cleanly within the given budget. Used for "does this binary
 // work on this machine" checks during MCP discovery.
@@ -158,12 +160,12 @@ export async function discoverPlaywrightCandidate(options: PlaywrightDiscoveryOp
   const npxAvailable = globalInstalled || (await spawnProbe("npx", ["--help"]))
   if (!npxAvailable) return base
 
-  const cdpOpen = await tcpProbe(9222)
+  const cdpOpen = await tcpProbe(CDP_DEFAULT_PORT)
   if (globalInstalled) {
     return {
       ...base,
       command: "playwright-mcp",
-      args: cdpOpen ? ["--cdp-url", "http://localhost:9222"] : ["--browser", "chromium", "--headless"],
+      args: cdpOpen ? ["--cdp-url", `http://localhost:${CDP_DEFAULT_PORT}`] : ["--browser", "chromium", "--headless"],
       detected: true,
     }
   }
@@ -171,7 +173,7 @@ export async function discoverPlaywrightCandidate(options: PlaywrightDiscoveryOp
   return {
     ...base,
     args: cdpOpen
-      ? [...PLAYWRIGHT_DEFAULT_ARGS, "--cdp-url", "http://localhost:9222"]
+      ? [...PLAYWRIGHT_DEFAULT_ARGS, "--cdp-url", `http://localhost:${CDP_DEFAULT_PORT}`]
       : [...PLAYWRIGHT_DEFAULT_ARGS, "--browser", "chromium", "--headless"],
     detected: true,
   }
@@ -217,7 +219,7 @@ const CANDIDATES: Candidate[] = [
     type: "stdio",
     command: "npx",
     // Default args — resolveArgs() below overrides these at discovery time
-    // based on whether Chrome is running with CDP on port 9222.
+    // based on whether Chrome is running with CDP on the default port.
     args: PLAYWRIGHT_DEFAULT_ARGS,
     check: async () => (await discoverPlaywrightCandidate()).detected,
     // Single resolve() probes global binary + CDP port once each, eliminating

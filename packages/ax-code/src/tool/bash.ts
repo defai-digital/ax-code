@@ -12,6 +12,7 @@ import fs from "fs/promises"
 import { Filesystem } from "@/util/filesystem"
 import { Env } from "@/util/env"
 import { toErrorMessage } from "@/util/error-message"
+import { TOAST_DURATION_LONG_MS } from "@/server/constants"
 import { fileURLToPath } from "url"
 import { Flag } from "@/flag/flag.ts"
 import { Shell } from "@/shell/shell"
@@ -221,7 +222,7 @@ export const BashTool = Tool.define("bash", async () => {
           title: "Browser preview ready",
           message: `${browserOpenIntercept} — open manually when ready`,
           variant: "info",
-          duration: 8000,
+          duration: TOAST_DURATION_LONG_MS,
         })
         const msg = `[Browser open intercepted] Preview is ready at: ${browserOpenIntercept}\n\nThe browser was not opened automatically to avoid disrupting your active development session. Open it manually when ready, or ask to open it explicitly.`
         return {

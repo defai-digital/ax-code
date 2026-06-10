@@ -49,6 +49,7 @@ import { assertAuthenticatedNetworkBind, isLoopbackHostname } from "./listen-sec
 import { toErrorMessage } from "../util/error-message"
 import { requestDirectory } from "./request-directory"
 import { createRateLimitMiddleware, createRequestLoggingMiddleware } from "./middleware"
+import { DEFAULT_SERVER_PORT } from "./constants"
 
 // @ts-ignore This global is needed to prevent ai-sdk from logging warnings to stdout https://github.com/vercel/ai/blob/2dc67e0ef538307f21368db32d5a12345d98831b/packages/ai/src/logger/log-warnings.ts#L85
 globalThis.AI_SDK_LOG_WARNINGS = false
@@ -56,7 +57,7 @@ globalThis.AI_SDK_LOG_WARNINGS = false
 export namespace Server {
   const log = Log.create({ service: "server" })
 
-  export const Default = lazy(() => createApp({ port: 4096 }))
+  export const Default = lazy(() => createApp({ port: DEFAULT_SERVER_PORT }))
 
   async function invalidateProviderState(directory: string) {
     await Instance.provide({
@@ -318,7 +319,7 @@ export namespace Server {
         return undefined
       }
     }
-    const server = opts.port === 0 ? (tryServe(4096) ?? tryServe(0)) : tryServe(opts.port)
+    const server = opts.port === 0 ? (tryServe(DEFAULT_SERVER_PORT) ?? tryServe(0)) : tryServe(opts.port)
     if (!server) {
       const reason = toErrorMessage(lastServeError)
       throw new Error(`Failed to start server on port ${opts.port}: ${reason}`)

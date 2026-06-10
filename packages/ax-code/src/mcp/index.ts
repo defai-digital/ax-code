@@ -8,6 +8,7 @@ import { Config } from "../config/config"
 import { Log } from "../util/log"
 import { Env } from "../util/env"
 import { toError, toErrorMessage } from "../util/error-message"
+import { TOAST_DURATION_LONG_MS } from "@/server/constants"
 import { NamedError } from "@ax-code/util/error"
 import z from "zod/v4"
 import { Instance } from "../project/instance"
@@ -528,7 +529,7 @@ export namespace MCP {
                 title: "MCP Authentication Required",
                 message: `Server "${key}" requires a pre-registered client ID. Add clientId to your config.`,
                 variant: "warning",
-                duration: 8000,
+                duration: TOAST_DURATION_LONG_MS,
               })
             } else {
               // needs_auth path: the client/transport will be reused by
@@ -549,7 +550,7 @@ export namespace MCP {
                 title: "MCP Authentication Required",
                 message: `Server "${key}" requires authentication. Run: ax-code mcp auth ${key}`,
                 variant: "warning",
-                duration: 8000,
+                duration: TOAST_DURATION_LONG_MS,
               })
             }
             break

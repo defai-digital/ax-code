@@ -16,7 +16,7 @@ try {
     proc.stdout?.on("data", (chunk) => {
       output += chunk.toString()
       const match = output.match(/listening on\s+(https?:\/\/[^\s]+)/)
-      if (match) {
+      if (match && match[1]) {
         clearTimeout(timeout)
         resolve(match[1])
       }
@@ -39,7 +39,7 @@ try {
   console.log("Server URL:", url)
 
   // Now create client and session
-  const { createOpencodeClient } = await import("@ax-code/sdk")
+  const { createOpencodeClient } = await import("@ax-code/sdk/v2/client")
   const client = createOpencodeClient({ baseUrl: url })
 
   const s2 = Date.now()

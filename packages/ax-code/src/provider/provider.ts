@@ -978,6 +978,9 @@ export namespace Provider {
 
     const cached = s.models.get(key)
     if (cached && s.generation === modelCacheGeneration) return cached
+    // In-flight dedup: the pending check below and the `s.modelPending.set(key, promise)`
+    // after the loader promise is created run with no await in between, so concurrent
+    // callers cannot both miss the pending entry and start duplicate loads.
     const pending = s.modelPending.get(key)
     if (pending) {
       const language = await pending

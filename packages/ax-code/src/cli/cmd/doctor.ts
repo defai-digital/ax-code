@@ -26,6 +26,7 @@ import { getRecentLogsChecks, getRunningInstancesCheck } from "./doctor-health"
 import path from "path"
 import { ProjectIdentity } from "../../project/project-identity"
 import { isLoopbackHostname } from "../../runtime/listen-security"
+import { DEFAULT_SERVER_PORT } from "@/server/constants"
 import type { Isolation as IsolationConfig } from "../../config/schema"
 import { Isolation } from "../../isolation"
 import { toErrorMessage } from "@/util/error-message"
@@ -99,7 +100,7 @@ async function getConfiguredTuiPort(): Promise<number> {
   } catch (error) {
     Log.Default.warn("failed to read configured TUI port; falling back to default", { error })
   }
-  return 4096
+  return DEFAULT_SERVER_PORT
 }
 
 export async function getDuplicateProjectIdentityCheck(input: {

@@ -1,4 +1,5 @@
 import z from "zod"
+import { MAX_PATH_LENGTH } from "@/server/constants"
 
 export namespace SessionMetadata {
   export const MAX_PRODUCT_METADATA_BYTES = 8 * 1024
@@ -22,7 +23,7 @@ export namespace SessionMetadata {
       variantId: ID,
       model: OptionalID,
       agent: OptionalID,
-      worktree: z.string().min(1).max(4096).optional(),
+      worktree: z.string().min(1).max(MAX_PATH_LENGTH).optional(),
     })
     .strict()
     .meta({ ref: "MultiRunSessionMetadata" })
@@ -41,7 +42,7 @@ export namespace SessionMetadata {
   export const Review = z
     .object({
       reviewId: OptionalID,
-      baseline: z.string().min(1).max(4096).optional(),
+      baseline: z.string().min(1).max(MAX_PATH_LENGTH).optional(),
     })
     .strict()
     .meta({ ref: "ReviewSessionMetadata" })

@@ -7,9 +7,10 @@ import { Ripgrep } from "../../file/ripgrep"
 import { LSP } from "../../lsp"
 import { Instance } from "../../project/instance"
 import { lazy } from "../../util/lazy"
+import { MAX_PATH_LENGTH } from "../constants"
 
 const FilePathQuery = z.object({
-  path: z.string().max(4096),
+  path: z.string().max(MAX_PATH_LENGTH),
 })
 
 export const FileRoutes = lazy(() =>

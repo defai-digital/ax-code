@@ -16,6 +16,7 @@ import { Agent } from "../../agent/agent"
 import { Permission } from "../../permission"
 import { Log } from "../../util/log"
 import { toErrorMessage } from "../../util/error-message"
+import { DEFAULT_SERVER_PORT } from "@/server/constants"
 import { Tool } from "../../tool/tool"
 import { GlobTool } from "../../tool/glob"
 import { GrepTool } from "../../tool/grep"
@@ -303,7 +304,7 @@ export const RunCommand = cmd({
       })
       .option("attach", {
         type: "string",
-        describe: "attach to a running ax-code server (e.g., http://localhost:4096)",
+        describe: `attach to a running ax-code server (e.g., http://localhost:${DEFAULT_SERVER_PORT})`,
       })
       .option("password", {
         alias: ["p"],

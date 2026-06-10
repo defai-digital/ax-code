@@ -1,11 +1,12 @@
 import { createOpencodeClient } from "@ax-code/sdk/v2"
 import { Flag } from "@/flag/flag"
 import { Server } from "@/server/server"
+import { DEFAULT_SERVER_PORT } from "@/server/constants"
 import { ServerRuntimeAuth } from "@/server/runtime-auth"
 
 export namespace RuntimeLocalClient {
   export function url() {
-    return Server.url ?? new URL("http://localhost:4096")
+    return Server.url ?? new URL(`http://localhost:${DEFAULT_SERVER_PORT}`)
   }
 
   export function create(input: { directory: string }) {
@@ -15,7 +16,7 @@ export namespace RuntimeLocalClient {
     }) as typeof fetch
 
     return createOpencodeClient({
-      baseUrl: "http://localhost:4096",
+      baseUrl: `http://localhost:${DEFAULT_SERVER_PORT}`,
       directory: input.directory,
       headers: Flag.AX_CODE_SERVER_PASSWORD
         ? {

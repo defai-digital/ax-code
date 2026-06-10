@@ -4,6 +4,7 @@ import { Filesystem } from "@/util/filesystem"
 import { internalBaseUrl, isInternalHostname } from "@/util/internal-url"
 import { buildAttachAuthHeaders } from "../attach-auth"
 import { Server } from "@/server/server"
+import { DEFAULT_SERVER_PORT } from "@/server/constants"
 import { ServerRuntimeAuth } from "@/server/runtime-auth"
 import { Provider } from "@/provider/provider"
 import {
@@ -75,7 +76,7 @@ export const HeadlessRunCommand = cmd({
         type: "string",
       })
       .option("attach", {
-        describe: "attach to a running ax-code server, e.g. http://localhost:4096",
+        describe: `attach to a running ax-code server, e.g. http://localhost:${DEFAULT_SERVER_PORT}`,
         type: "string",
       })
       .option("password", {
