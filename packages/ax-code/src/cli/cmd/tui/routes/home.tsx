@@ -9,6 +9,7 @@ import { Toast } from "../ui/toast"
 import { useArgs } from "../context/args"
 import { useDirectory } from "../context/directory"
 import { useRoute, useRouteData } from "@tui/context/route"
+import { useKeybind } from "../context/keybind"
 import { usePromptRef } from "../context/prompt"
 import { Installation } from "@/installation"
 import { useLocal } from "../context/local"
@@ -19,6 +20,7 @@ export function Home() {
   const sync = useSync()
   const { theme } = useTheme()
   const nav = useRoute()
+  const keybind = useKeybind()
   const route = useRouteData("home")
   const promptRef = usePromptRef()
   const args = useArgs()
@@ -179,7 +181,7 @@ export function Home() {
               )}
             </For>
             <text fg={theme.textMuted} selectable={false}>
-              {"   "}click to resume · /sessions for all
+              {"   "}click to resume · /sessions or {keybind.print("session_list")} for all
             </text>
           </box>
         </Show>

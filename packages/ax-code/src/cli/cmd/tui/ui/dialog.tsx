@@ -4,6 +4,7 @@ import { useTheme } from "@tui/context/theme"
 import { MouseButton, Renderable, RGBA } from "@opentui/core"
 import { createStore } from "solid-js/store"
 import { useToast } from "./toast"
+import { RoundedBorder } from "./primitives/card"
 import { scheduleMicrotaskTask } from "@tui/util/microtask"
 import { Flag } from "@/flag/flag"
 import { Selection } from "@tui/util/selection"
@@ -54,7 +55,8 @@ export function Dialog(
         maxWidth={dimensions().width - 2}
         backgroundColor={theme.backgroundPanel}
         paddingTop={1}
-        border={["top"]}
+        border={["top", "right", "bottom", "left"]}
+        customBorderChars={RoundedBorder}
         borderColor={theme.borderActive}
       >
         {props.children}
