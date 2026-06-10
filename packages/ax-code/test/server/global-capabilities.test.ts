@@ -9,21 +9,47 @@ test("GET /global/health exposes structured readiness without breaking the stabl
   const payload = (await response.json()) as {
     healthy?: boolean
     version?: string
+    startup?: {
+      startedAt?: number
+      uptimeMs?: number
+      checkedAt?: number
+    }
     readiness?: {
       processAlive?: boolean
       apiReady?: boolean
       providersReady?: string
       indexReady?: string
     }
+    runtime?: {
+      directory?: string
+      services?: Array<{
+        name?: string
+        state?: string
+        pendingTasks?: number
+      }>
+      taskSummary?: Record<string, number>
+    }
   }
 
   expect(payload.healthy).toBe(true)
   expect(payload.version).toBe(Installation.VERSION)
-  expect(payload.readiness).toEqual({
+  expect(payload.startup?.startedAt).toEqual(expect.any(Number))
+  expect(payload.startup?.uptimeMs).toEqual(expect.any(Number))
+  expect(payload.startup?.checkedAt).toEqual(expect.any(Number))
+  expect(payload.readiness).toMatchObject({
     processAlive: true,
     apiReady: true,
-    providersReady: "unknown",
-    indexReady: "unknown",
+  })
+  expect(["ready", "degraded", "unknown"]).toContain(payload.readiness?.providersReady ?? "")
+  expect(["ready", "degraded", "unknown"]).toContain(payload.readiness?.indexReady ?? "")
+  expect(payload.runtime?.directory).toEqual(expect.any(String))
+  expect(Array.isArray(payload.runtime?.services)).toBe(true)
+  expect(payload.runtime?.taskSummary).toMatchObject({
+    queued: expect.any(Number),
+    running: expect.any(Number),
+    completed: expect.any(Number),
+    failed: expect.any(Number),
+    aborted: expect.any(Number),
   })
 })
 

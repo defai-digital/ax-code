@@ -63,11 +63,34 @@ export type HeadlessClient = ReturnType<typeof createHeadlessClient>
 export type HeadlessGlobalHealth = {
   healthy: true
   version: string
+  startup?: {
+    startedAt: number
+    uptimeMs: number
+    checkedAt: number
+  }
   readiness?: {
     processAlive: true
     apiReady: true
     providersReady: "ready" | "degraded" | "unknown"
     indexReady: "ready" | "degraded" | "unknown"
+  }
+  runtime?: {
+    directory: string
+    services: Array<{
+      name: string
+      state: "idle" | "starting" | "running" | "stopping" | "stopped" | "failed"
+      pendingTasks: number
+      startedAt?: number
+      stoppedAt?: number
+      lastError?: string
+    }>
+    taskSummary: {
+      queued: number
+      running: number
+      completed: number
+      failed: number
+      aborted: number
+    }
   }
 }
 

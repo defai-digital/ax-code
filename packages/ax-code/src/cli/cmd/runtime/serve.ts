@@ -2,6 +2,21 @@ import { Server } from "../../../server/server"
 import { cmd } from "../cmd"
 import { withNetworkOptions, resolveNetworkOptions, requireAuthForNetwork, isLocalhostOnly } from "../../network"
 import { registerShutdownSignals } from "../../../util/signals"
+import { Instance } from "../../../project/instance"
+import { InstanceBootstrap } from "../../../project/bootstrap"
+import { Filesystem } from "../../../util/filesystem"
+import { toErrorMessage } from "../../../util/error-message"
+
+function prewarmServeInstance() {
+  const directory = process.env.AX_CODE_PROJECT || Filesystem.callerCwd()
+  void Instance.provide({
+    directory,
+    init: InstanceBootstrap,
+    fn: () => undefined,
+  }).catch((error) => {
+    console.warn(`ax-code server project prewarm failed: ${toErrorMessage(error)}`)
+  })
+}
 
 export const ServeCommand = cmd({
   command: "serve",
@@ -15,6 +30,7 @@ export const ServeCommand = cmd({
     }
     const server = Server.listen(opts)
     console.log(`ax-code server listening on http://${server.hostname}:${server.port}`)
+    prewarmServeInstance()
 
     const shutdown = async () => {
       await server.stop()
