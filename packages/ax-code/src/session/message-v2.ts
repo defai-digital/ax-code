@@ -611,13 +611,30 @@ export namespace MessageV2 {
     })
   }
 
+  // Per-message conversion cache. The prompt loop reuses message objects
+  // across steps (loopMessages only appends newer messages to its cache) and
+  // every code path that changes message content swaps in new objects
+  // (remindQueuedMessages, insertReminders, fresh DB loads), so object
+  // identity is a safe staleness signal. The inner key carries the model and
+  // option inputs the conversion depends on. Callers must not enable `cache`
+  // when something may mutate messages in place (e.g. a plugin implementing
+  // experimental.chat.messages.transform).
+  const modelMessageCache = new WeakMap<WithParts, Map<string, ModelMessage[]>>()
+
+  function conversionStable(msg: WithParts) {
+    if (msg.info.role !== "assistant") return true
+    // Pending/running tool parts convert to a synthetic "interrupted" error;
+    // don't pin that transient state to the message object.
+    return !msg.parts.some(
+      (part) => part.type === "tool" && (part.state.status === "pending" || part.state.status === "running"),
+    )
+  }
+
   export async function toModelMessages(
     input: WithParts[],
     model: Provider.Model,
-    options?: { stripMedia?: boolean },
+    options?: { stripMedia?: boolean; cache?: boolean },
   ): Promise<ModelMessage[]> {
-    const result: UIMessage[] = []
-    const toolNames = new Set<string>()
     // Track media from tool results that need to be injected as user messages
     // for providers that don't support media in tool results.
     //
@@ -634,6 +651,42 @@ export namespace MessageV2 {
       }
       return false
     })()
+
+    const cacheKey = [model.providerID, model.id, model.api.npm, model.api.id, options?.stripMedia ? "strip" : ""].join(
+      "|",
+    )
+    const result: ModelMessage[] = []
+    for (const msg of input) {
+      if (msg.parts.length === 0) continue
+      if (options?.cache) {
+        const hit = modelMessageCache.get(msg)?.get(cacheKey)
+        if (hit) {
+          result.push(...hit)
+          continue
+        }
+      }
+      const converted = await convertMessage(msg, model, options, supportsMediaInToolResults)
+      if (options?.cache && conversionStable(msg)) {
+        let byKey = modelMessageCache.get(msg)
+        if (!byKey) {
+          byKey = new Map()
+          modelMessageCache.set(msg, byKey)
+        }
+        byKey.set(cacheKey, converted)
+      }
+      result.push(...converted)
+    }
+    return result
+  }
+
+  async function convertMessage(
+    msg: WithParts,
+    model: Provider.Model,
+    options: { stripMedia?: boolean; cache?: boolean } | undefined,
+    supportsMediaInToolResults: boolean,
+  ): Promise<ModelMessage[]> {
+    const result: UIMessage[] = []
+    const toolNames = new Set<string>()
 
     const toModelOutput = (opts: { toolCallId: string; input: unknown; output: unknown } | unknown) => {
       // AI SDK v6 passes { toolCallId, input, output }, v5 passed output directly
@@ -674,9 +727,7 @@ export namespace MessageV2 {
       return { type: "json", value: output as never }
     }
 
-    for (const msg of input) {
-      if (msg.parts.length === 0) continue
-
+    {
       if (msg.info.role === "user") {
         const userMessage: UIMessage = {
           id: msg.info.id,
@@ -734,7 +785,7 @@ export namespace MessageV2 {
             msg.parts.some((part) => part.type !== "step-start" && part.type !== "reasoning")
           )
         ) {
-          continue
+          return []
         }
         const assistantMessage: UIMessage = {
           id: msg.info.id,
@@ -841,7 +892,7 @@ export namespace MessageV2 {
     const tools = Object.fromEntries(Array.from(toolNames).map((toolName) => [toolName, { toModelOutput }]))
 
     return await convertToModelMessages(
-      result.filter((msg) => msg.parts.some((part) => part.type !== "step-start")),
+      result.filter((message) => message.parts.some((part) => part.type !== "step-start")),
       {
         //@ts-expect-error (convertToModelMessages expects a ToolSet but only actually needs tools[name]?.toModelOutput)
         tools,

@@ -1049,3 +1049,88 @@ describe("session.message-v2.fromError", () => {
     })
   })
 })
+
+describe("session.message-v2.toModelMessages cache", () => {
+  function cacheFixture() {
+    const userID = "m-user-cache"
+    const message: MessageV2.WithParts = {
+      info: userInfo(userID),
+      parts: [
+        {
+          ...basePart(userID, "u1"),
+          type: "text",
+          text: "original",
+        },
+      ] as MessageV2.Part[],
+    }
+    return message
+  }
+
+  test("reuses the conversion for an identical message object", async () => {
+    const message = cacheFixture()
+    const first = await MessageV2.toModelMessages([message], model, { cache: true })
+    const second = await MessageV2.toModelMessages([message], model, { cache: true })
+    expect(second).toStrictEqual(first)
+    // Same object identity proves the cached entry was reused.
+    expect(second[0]).toBe(first[0])
+  })
+
+  test("invalidates when the message object is replaced", async () => {
+    const message = cacheFixture()
+    await MessageV2.toModelMessages([message], model, { cache: true })
+    const replaced: MessageV2.WithParts = {
+      ...message,
+      parts: [{ ...message.parts[0], text: "updated" } as MessageV2.Part],
+    }
+    const result = await MessageV2.toModelMessages([replaced], model, { cache: true })
+    expect(result).toStrictEqual([{ role: "user", content: [{ type: "text", text: "updated" }] }])
+  })
+
+  test("does not cache assistant messages with pending tool parts", async () => {
+    const userID = "m-user-pending"
+    const assistantID = "m-assistant-pending"
+    const user: MessageV2.WithParts = {
+      info: userInfo(userID),
+      parts: [{ ...basePart(userID, "u1"), type: "text", text: "run" }] as MessageV2.Part[],
+    }
+    const assistant: MessageV2.WithParts = {
+      info: assistantInfo(assistantID, userID),
+      parts: [
+        {
+          ...basePart(assistantID, "a1"),
+          type: "tool",
+          callID: "call-1",
+          tool: "bash",
+          state: { status: "pending", input: { cmd: "ls" }, raw: "" },
+        },
+      ] as MessageV2.Part[],
+    }
+    const first = await MessageV2.toModelMessages([user, assistant], model, { cache: true })
+    expect(first.some((msg) => JSON.stringify(msg).includes("interrupted"))).toBe(true)
+
+    // Same object transitions to completed (in-memory state update); the
+    // pending conversion must not have been pinned to the object.
+    assistant.parts[0] = {
+      ...assistant.parts[0],
+      state: {
+        status: "completed",
+        input: { cmd: "ls" },
+        output: "done",
+        title: "",
+        metadata: {},
+        time: { start: 0, end: 1 },
+      },
+    } as MessageV2.Part
+    const second = await MessageV2.toModelMessages([user, assistant], model, { cache: true })
+    expect(second.some((msg) => JSON.stringify(msg).includes("interrupted"))).toBe(false)
+    expect(second.some((msg) => JSON.stringify(msg).includes("done"))).toBe(true)
+  })
+
+  test("does not cache unless requested", async () => {
+    const message = cacheFixture()
+    await MessageV2.toModelMessages([message], model)
+    ;(message.parts[0] as MessageV2.TextPart).text = "mutated in place"
+    const result = await MessageV2.toModelMessages([message], model)
+    expect(result).toStrictEqual([{ role: "user", content: [{ type: "text", text: "mutated in place" }] }])
+  })
+})
