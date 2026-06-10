@@ -166,11 +166,10 @@ test("experimental worktree list includes branch metadata", async () => {
 
     expect(response.status).toBe(200)
     const body = (await response.json()) as Array<{ name: string; directory: string; branch?: string }>
-    expect(body).toContainEqual({
-      name: path.basename(sandboxRealpath),
-      directory: sandboxRealpath,
-      branch,
-    })
+    const item = body.find((entry) => entry.branch === branch)
+    expect(item).toBeDefined()
+    expect(item?.name).toBe(path.basename(sandboxRealpath))
+    expect(item?.directory ? await fs.realpath(item.directory) : undefined).toBe(sandboxRealpath)
   } finally {
     await $`git worktree remove --force ${sandbox}`.cwd(tmp.path).quiet().nothrow()
     await fs.rm(sandbox, { recursive: true, force: true }).catch(() => {})
