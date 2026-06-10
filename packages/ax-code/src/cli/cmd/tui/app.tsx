@@ -45,6 +45,14 @@ import { Provider } from "@/provider/provider"
 import { ArgsProvider, useArgs, type Args } from "./context/args"
 import { PromptRefProvider, usePromptRef } from "./context/prompt"
 import { VisualCapabilityProvider } from "./ui/primitives/capability-context"
+import {
+  runMode,
+  nextRunMode,
+  runModeFlags,
+  runModeLabel,
+  runModeTransition,
+  type RunMode,
+} from "./component/prompt/run-mode-view-model"
 import { TuiConfigProvider } from "./context/tui-config"
 import { TuiConfig } from "@/config/tui"
 import { DiagnosticLog } from "@/debug/diagnostic-log"
@@ -526,32 +534,48 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       message: "Failed to save fast-model routing setting",
     },
   })
-  const autonomousToggle = createBooleanRuntimeToggle({
-    endpoint: "/autonomous",
-    getCurrent: () => sync.data.autonomous,
-    setCurrent: (value) => sync.set("autonomous", value),
-    label: {
-      warn: "failed to update autonomous setting",
-      message: "Failed to save autonomous setting",
-    },
-  })
-  const superLongToggle = createBooleanRuntimeToggle({
-    endpoint: "/super-long",
-    getCurrent: () => sync.data.superLong,
-    setCurrent: (value) => sync.set("superLong", value),
-    label: {
-      warn: "failed to update super-long setting",
-      message: "Failed to save Super-Long setting",
-    },
-  })
+  // Autonomous and Super-Long are a dependent pair (Super-Long requires
+  // autonomous; disabling autonomous clears Super-Long server-side), so
+  // they change together through ordered run-mode transitions instead of
+  // two independent boolean toggles. See run-mode-view-model.ts.
+  let runModeController: AbortController | undefined
+  const currentRunMode = () => runMode({ autonomous: sync.data.autonomous, superLong: sync.data.superLong })
+  function setRunMode(mode: RunMode) {
+    const previous = { autonomous: sync.data.autonomous, superLong: sync.data.superLong }
+    const steps = runModeTransition(previous, mode)
+    if (steps.length === 0) return
+    runModeController?.abort()
+    const controller = new AbortController()
+    runModeController = controller
+    const desired = runModeFlags(mode)
+    sync.set("autonomous", desired.autonomous)
+    sync.set("superLong", desired.superLong)
+    // Track which steps actually landed so a mid-sequence failure rolls
+    // the client back to what the server really holds, not to `previous`.
+    const applied = { ...previous }
+    void (async () => {
+      for (const step of steps) {
+        await putJsonWithTimeout(step.endpoint, { enabled: step.enabled }, undefined, { signal: controller.signal })
+        applied[step.key] = step.enabled
+      }
+    })().catch((error) => {
+      if (controller.signal.aborted || runModeController !== controller) return
+      Log.Default.warn("failed to update run mode", { error, mode })
+      sync.set("autonomous", applied.autonomous)
+      sync.set("superLong", applied.superLong)
+      toast.show({
+        message: error instanceof Error ? error.message : "Failed to save run mode",
+        variant: "error",
+      })
+    })
+  }
 
   onCleanup(() => {
     forkRetryDisposed = true
     for (const timer of retryTimers) clearTimeout(timer)
     retryTimers.clear()
     smartLlmToggle.dispose()
-    autonomousToggle.dispose()
-    superLongToggle.dispose()
+    runModeController?.abort()
     sandboxPutController?.abort()
   })
 
@@ -1029,20 +1053,29 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       },
     },
     {
-      title: sync.data.autonomous ? "Turn autonomous off" : "Turn autonomous on",
-      value: "app.toggle.autonomous",
+      title: `Cycle run mode (current: ${runModeLabel(currentRunMode())})`,
+      value: "app.cycle.run_mode",
       category: "System",
       onSelect: (dialog) => {
-        autonomousToggle.toggle()
+        setRunMode(nextRunMode(currentRunMode()))
         dialog.clear()
       },
     },
     {
-      title: sync.data.superLong ? "Turn Super-Long off" : "Turn Super-Long on",
+      title: sync.data.autonomous ? "Turn autonomous off" : "Turn autonomous on",
+      value: "app.toggle.autonomous",
+      category: "System",
+      onSelect: (dialog) => {
+        setRunMode(currentRunMode() === "none" ? "auto" : "none")
+        dialog.clear()
+      },
+    },
+    {
+      title: currentRunMode() === "super-long" ? "Turn Super-Long off" : "Turn Super-Long on (implies autonomous)",
       value: "app.toggle.super_long",
       category: "System",
       onSelect: (dialog) => {
-        superLongToggle.toggle()
+        setRunMode(currentRunMode() === "super-long" ? "auto" : "super-long")
         dialog.clear()
       },
     },

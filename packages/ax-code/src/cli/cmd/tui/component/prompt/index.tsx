@@ -78,6 +78,7 @@ import { upsert } from "../../context/sync-util"
 import { summarizedPasteViews } from "./paste-view-model"
 import { withTimeout } from "@/util/timeout"
 import { footerContextGauge, footerSessionStatusView, footerTokenChip } from "../../routes/session/footer-view-model"
+import { runMode, runModeLabel } from "./run-mode-view-model"
 import { Gauge } from "@tui/ui/primitives/gauge"
 import { KeyHint } from "@tui/ui/primitives/key-hint"
 import { selectedForeground } from "@tui/context/theme"
@@ -539,12 +540,15 @@ export function Prompt(props: PromptProps) {
     return true
   }
 
+  const footerRunMode = createMemo(() =>
+    runMode({ autonomous: sync.data.autonomous, superLong: sync.data.superLong }),
+  )
+
   const footerLayout = createMemo(() =>
     promptFooterLayout({
       contentWidth: promptContentWidth(),
       toggleWidth:
-        footerToggleLabel("Super-Long", sync.data.superLong).length +
-        footerToggleLabel("Auto", sync.data.autonomous).length +
+        footerToggleLabel(runModeLabel(footerRunMode()), footerRunMode() !== "none").length +
         footerToggleLabel("Sandbox", sync.data.isolation.mode !== "full-access").length,
       mode: store.mode,
       variantsWidth:
@@ -2042,20 +2046,12 @@ export function Prompt(props: PromptProps) {
               </Show>
               <box flexDirection="row" flexShrink={0}>
                 {footerToggleChip({
-                  label: "Super-Long",
-                  active: sync.data.superLong,
+                  label: runModeLabel(footerRunMode()),
+                  active: footerRunMode() !== "none",
                   activeFg: theme.text,
                   inactiveFg: theme.textMuted,
-                  background: SUPER_LONG_PINK,
-                  onMouseUp: () => command.trigger("app.toggle.super_long"),
-                })}
-                {footerToggleChip({
-                  label: "Auto",
-                  active: sync.data.autonomous,
-                  activeFg: theme.text,
-                  inactiveFg: theme.textMuted,
-                  background: theme.warning,
-                  onMouseUp: () => command.trigger("app.toggle.autonomous"),
+                  background: footerRunMode() === "super-long" ? SUPER_LONG_PINK : theme.warning,
+                  onMouseUp: () => command.trigger("app.cycle.run_mode"),
                 })}
                 {footerToggleChip({
                   label: "Sandbox",
