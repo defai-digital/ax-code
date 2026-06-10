@@ -7,6 +7,29 @@ import type { Isolation as IsolationConfig } from "@/config/schema"
 export namespace Isolation {
   export const DEFAULT_PROTECTED = [".git", ".ax-code"]
 
+  // Command basenames whose sole purpose is to open a network connection.
+  // When network access is disabled these are blocked at the bash layer so
+  // the network policy is not trivially defeated by `curl https://evil/...`.
+  // Deliberately excludes dual-use tools (git, npm, pip, go, ssh-with-local
+  // subcommands) whose offline invocations are common — those are not
+  // statically distinguishable from their networked ones and would cause
+  // excessive false denials. See docs/sandbox.md for the documented limits.
+  export const NETWORK_COMMANDS = new Set([
+    "curl",
+    "wget",
+    "nc",
+    "ncat",
+    "netcat",
+    "telnet",
+    "ftp",
+    "tftp",
+    "scp",
+    "sftp",
+    "dig",
+    "nslookup",
+    "host",
+  ])
+
   export type Mode = "read-only" | "workspace-write" | "full-access"
 
   export interface State {
@@ -173,6 +196,28 @@ export namespace Isolation {
       "network",
       `Network access is disabled by isolation policy (mode: ${state.mode}). Set isolation.network to true or use full-access mode.`,
     )
+  }
+
+  // Block network-only commands (curl, wget, nc, …) when network access is
+  // disabled. Without this, the bash tool would let the model reach the
+  // network freely even though webfetch/websearch/codesearch are gated,
+  // making the `network: false` policy meaningless. Thrown as a "network"
+  // DeniedError so the same escalation prompt used by the network tools
+  // lets the user approve a single invocation.
+  export function assertBashNetwork(state: State | undefined, commandNames: Iterable<string>) {
+    if (!state) return
+    if (state.mode === "full-access") return
+    if (state.network) return
+    for (const name of commandNames) {
+      if (!name) continue
+      const base = name.split(/[\\/]/).pop() ?? name
+      if (NETWORK_COMMANDS.has(base)) {
+        throw new DeniedError(
+          "network",
+          `Network access is disabled by isolation policy (mode: ${state.mode}). The command "${base}" requires network access. Set isolation.network to true or use full-access mode.`,
+        )
+      }
+    }
   }
 
   export function assertBash(

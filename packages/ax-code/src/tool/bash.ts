@@ -272,6 +272,7 @@ export const BashTool = Tool.define("bash", async () => {
       const directories = new Set<string>()
       if (!Instance.containsPath(cwd)) directories.add(cwd)
       const resolvedPaths = new Set<string>()
+      const commandNames = new Set<string>()
       const redirectWritePaths = new Set<string>()
       const patterns = new Set<string>()
       const always = new Set<string>()
@@ -294,6 +295,7 @@ export const BashTool = Tool.define("bash", async () => {
       const recordInnerCommandPaths = async (parts: string[]) => {
         const name = parts[0]
         if (!name) return
+        commandNames.add(name)
         const args = parts.slice(1)
 
         if (["cd", "rm", "cp", "mv", "mkdir", "touch", "chmod", "chown", "cat", "tee", "install"].includes(name)) {
@@ -367,7 +369,21 @@ export const BashTool = Tool.define("bash", async () => {
         for (const arg of args) {
           if (arg.startsWith("-")) continue
           const unquoted = stripShellQuotes(arg)
-          if (path.isAbsolute(unquoted)) await recordResolvedPath(unquoted)
+          if (!unquoted || hasDynamicShellExpansion(unquoted)) continue
+          if (path.isAbsolute(unquoted)) {
+            await recordResolvedPath(unquoted)
+            continue
+          }
+          // Relative args that traverse out of the workspace (e.g.
+          // `../../etc/passwd`) are potential escape targets even for
+          // commands we don't model explicitly. Without this, a write via an
+          // unrecognized command (`sed -i ... ../../outside`) slips past the
+          // workspace boundary. We only record args that actually resolve
+          // outside the workspace so harmless in-workspace barewords (sed
+          // expressions, grep patterns, subcommands) aren't flagged.
+          if (unquoted.includes("..") && !Instance.containsPath(path.resolve(cwd, unquoted))) {
+            await recordResolvedPath(unquoted)
+          }
         }
       }
 
@@ -580,6 +596,7 @@ export const BashTool = Tool.define("bash", async () => {
       }
 
       Isolation.assertBash(ctx.extra?.isolation, cwd, Instance.directory, Instance.worktree, [...resolvedPaths])
+      Isolation.assertBashNetwork(ctx.extra?.isolation, commandNames)
 
       if (directories.size > 0) {
         const globs = Array.from(directories).map((dir) => {

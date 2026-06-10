@@ -744,6 +744,80 @@ describe("tool.bash isolation", () => {
     })
   })
 
+  test("rejects relative `..` escape via an unmodeled command (sed -i)", async () => {
+    await using outerTmp = await tmpdir()
+    await using tmp = await tmpdir({ git: true })
+    const victim = path.join(outerTmp.path, "victim.txt")
+    await fs.writeFile(victim, "original\n")
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const bash = await BashTool.init()
+        const isolation = Isolation.resolve({ mode: "workspace-write", network: false }, tmp.path, tmp.path)
+        const testCtx = { ...ctx, ask: async () => {}, extra: { isolation } }
+        const rel = path.relative(tmp.path, victim)
+        // `sed` is not in the modeled-command list. A relative `..` path must
+        // still be checked against the workspace boundary, otherwise an
+        // in-place edit silently mutates a file outside the workspace.
+        await expect(
+          bash.execute({ command: `sed -i '' 's/original/PWNED/' ${rel}`, description: "Escape via sed" }, testCtx),
+        ).rejects.toThrow(/outside workspace boundary|protected/)
+        expect(await fs.readFile(victim, "utf8")).toBe("original\n")
+      },
+    })
+  })
+
+  test("allows in-workspace barewords that are not paths", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const bash = await BashTool.init()
+        const isolation = Isolation.resolve({ mode: "workspace-write", network: false }, tmp.path, tmp.path)
+        const testCtx = { ...ctx, ask: async () => {}, extra: { isolation } }
+        // Regression guard: tightening the relative-path check must not flag
+        // harmless barewords/subcommands that resolve inside the workspace.
+        const result = await bash.execute({ command: `git status --short`, description: "git status" }, testCtx)
+        expect(result.metadata.exit).toBe(0)
+      },
+    })
+  })
+
+  test("blocks network-only commands when network is disabled", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const bash = await BashTool.init()
+        const isolation = Isolation.resolve({ mode: "workspace-write", network: false }, tmp.path, tmp.path)
+        const testCtx = { ...ctx, ask: async () => {}, extra: { isolation } }
+        // `curl --version` reaches no path outside the workspace, so the path
+        // checks pass — the network guard is what must block it.
+        await expect(
+          bash.execute({ command: `curl --version`, description: "probe network" }, testCtx),
+        ).rejects.toThrow(/Network access is disabled/)
+        // Same vector hidden inside `bash -c`.
+        await expect(
+          bash.execute({ command: `bash -c "wget --version"`, description: "probe network" }, testCtx),
+        ).rejects.toThrow(/Network access is disabled/)
+      },
+    })
+  })
+
+  test("allows network-only commands when network is enabled", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const bash = await BashTool.init()
+        const isolation = Isolation.resolve({ mode: "workspace-write", network: true }, tmp.path, tmp.path)
+        const testCtx = { ...ctx, ask: async () => {}, extra: { isolation } }
+        const result = await bash.execute({ command: `curl --version`, description: "curl version" }, testCtx)
+        expect(result.metadata.exit).toBe(0)
+      },
+    })
+  })
+
   describe("path existence pre-validation", () => {
     test("rejects cd to non-existent directory", async () => {
       await using tmp = await tmpdir()

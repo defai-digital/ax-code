@@ -191,6 +191,46 @@ describe("isolation.assertBash", () => {
   })
 })
 
+describe("isolation.assertBashNetwork", () => {
+  test("blocks network-only commands when network is disabled", () => {
+    const state = Isolation.resolve({ mode: "workspace-write", network: false }, root)
+    expect(() => Isolation.assertBashNetwork(state, ["curl"])).toThrow("Network access is disabled")
+    expect(() => Isolation.assertBashNetwork(state, ["echo", "wget"])).toThrow("Network access is disabled")
+  })
+
+  test("matches on the command basename, not the full path", () => {
+    const state = Isolation.resolve({ mode: "workspace-write", network: false }, root)
+    expect(() => Isolation.assertBashNetwork(state, ["/usr/bin/curl"])).toThrow("Network access is disabled")
+  })
+
+  test("allows non-network commands when network is disabled", () => {
+    const state = Isolation.resolve({ mode: "workspace-write", network: false }, root)
+    expect(() => Isolation.assertBashNetwork(state, ["echo", "ls", "git", "npm"])).not.toThrow()
+  })
+
+  test("allows network commands when network is enabled or full-access", () => {
+    const enabled = Isolation.resolve({ mode: "workspace-write", network: true }, root)
+    expect(() => Isolation.assertBashNetwork(enabled, ["curl"])).not.toThrow()
+    const full = Isolation.resolve({ mode: "full-access", network: false }, root)
+    expect(() => Isolation.assertBashNetwork(full, ["curl"])).not.toThrow()
+  })
+
+  test("no-op when state is undefined", () => {
+    expect(() => Isolation.assertBashNetwork(undefined, ["curl"])).not.toThrow()
+  })
+
+  test("surfaces a network DeniedError so escalation can prompt", () => {
+    const state = Isolation.resolve({ mode: "workspace-write", network: false }, root)
+    try {
+      Isolation.assertBashNetwork(state, ["curl"])
+      throw new Error("expected DeniedError")
+    } catch (e) {
+      expect(e).toBeInstanceOf(Isolation.DeniedError)
+      expect((e as Isolation.DeniedError).reason).toBe("network")
+    }
+  })
+})
+
 describe("isolation.DeniedError", () => {
   test("carries the offending resolved path so callers can scope a bypass", () => {
     const state = Isolation.resolve({ mode: "workspace-write", network: false }, root)

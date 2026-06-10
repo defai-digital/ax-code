@@ -33,6 +33,7 @@ The setting persists across sessions in `ax-code.json`.
 | Bash targeting `.git/`, `.ax-code/`  | Allowed      | **Blocked**        |
 | Bash targeting outside workspace     | Allowed      | **Blocked**        |
 | Network access (webfetch, websearch) | Allowed      | **Blocked**        |
+| Bash network clients (curl, wget, …) | Allowed      | **Blocked**        |
 | Read operations (read, glob, grep)   | Unrestricted | Unrestricted       |
 
 ## Configuration
@@ -116,6 +117,9 @@ Network is disabled by default in `workspace-write` and `read-only` modes. Tools
 - `webfetch` — blocked
 - `websearch` — blocked
 - `codesearch` — blocked
+- `bash` — network-only clients (`curl`, `wget`, `nc`/`ncat`/`netcat`, `telnet`, `ftp`, `tftp`, `scp`, `sftp`, `dig`, `nslookup`, `host`) are blocked
+
+> **Limitation:** Network blocking in `bash` is application-layer and covers the dedicated network clients above. It does **not** intercept dual-use tools that also work offline (`git`, `npm`/`pnpm`/`yarn`, `pip`, `go`, language interpreters such as `python`/`node`), because their offline invocations cannot be distinguished statically and blocking them would break common workflows. True, exhaustive network isolation requires OS-level controls, which this sandbox does not provide. When a denied client is hit, the agent prompts for a one-time escalation.
 
 To allow network while keeping write restrictions:
 
@@ -134,7 +138,7 @@ Sandbox enforcement is application-layer, checked at each tool invocation:
 
 | Tool          | Check                                                           |
 | ------------- | --------------------------------------------------------------- |
-| `bash`        | Working directory + all resolved paths must be inside workspace |
+| `bash`        | Working directory + all resolved paths must be inside workspace; network-only clients blocked when network is disabled |
 | `edit`        | Target file must be inside workspace and not protected          |
 | `write`       | Target file must be inside workspace and not protected          |
 | `apply_patch` | All target files must be inside workspace and not protected     |
