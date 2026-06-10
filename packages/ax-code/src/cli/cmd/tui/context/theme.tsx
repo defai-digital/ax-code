@@ -205,6 +205,33 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
       if (theme) setStore("active", theme)
     })
 
+    // kv.json loads asynchronously, so the store init above almost always
+    // runs before the persisted values land and falls back to defaults —
+    // the user's saved theme/mode would silently revert every launch.
+    // Re-apply the persisted values once kv is ready, unless the config
+    // pins a theme or the user already changed them in this session.
+    let userSetTheme = false
+    let userSetMode = false
+    createEffect(
+      on(
+        () => kv.ready,
+        (ready) => {
+          if (!ready) return
+          const savedLock = pick(kv.get("theme_mode_lock"))
+          const savedMode = savedLock ?? pick(kv.get("theme_mode"))
+          if (!userSetMode) {
+            if (savedLock && savedLock !== store.lock) setStore("lock", savedLock)
+            if (savedMode && savedMode !== store.mode) setStore("mode", savedMode)
+          }
+          const savedTheme = kv.get("theme")
+          if (!userSetTheme && !config.theme && typeof savedTheme === "string" && savedTheme !== store.active) {
+            if (savedTheme !== "system" && !store.themes[savedTheme]) void ensureCustomThemesLoaded()
+            setStore("active", savedTheme)
+          }
+        },
+      ),
+    )
+
     let customThemesLoaded = false
     let customThemesPromise: Promise<void> | undefined
     function ensureCustomThemesLoaded() {
@@ -374,15 +401,19 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
         return store.lock !== undefined
       },
       lock() {
+        userSetMode = true
         pin(store.mode)
       },
       unlock() {
+        userSetMode = true
         free()
       },
       setMode(mode: "dark" | "light") {
+        userSetMode = true
         pin(mode)
       },
       set(theme: string) {
+        userSetTheme = true
         if (theme !== "system" && !store.themes[theme]) {
           void ensureCustomThemesLoaded()
         }
