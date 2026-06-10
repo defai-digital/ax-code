@@ -398,6 +398,7 @@ export namespace ProviderTransform {
     if (model.api.npm !== "@ai-sdk/openai-compatible") return false
     const pid = model.providerID
     if (!pid.startsWith("alibaba-coding-plan") && !pid.startsWith("alibaba-token-plan")) return false
+    if (model.capabilities.output?.text === false) return false
     return model.api.id.toLowerCase().startsWith("qwen")
   }
 

@@ -53409,31 +53409,6 @@
     "name": "Alibaba Coding Plan",
     "doc": "https://www.alibabacloud.com/help/en/model-studio/coding-plan",
     "models": {
-      "qwen3-coder-plus": {
-        "id": "qwen3-coder-plus",
-        "name": "Qwen3 Coder Plus 🌐",
-        "family": "qwen",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": true,
-        "temperature": true,
-        "knowledge": "2025-04",
-        "release_date": "2025-07-23",
-        "last_updated": "2025-07-23",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 1000000,
-          "output": 65536
-        }
-      },
       "qwen3.7-max": {
         "id": "qwen3.7-max",
         "name": "Qwen3.7 Max 🌐",
@@ -53653,6 +53628,102 @@
           "context": 200000,
           "output": 131072
         }
+      },
+      "qwen-image-2.0": {
+        "id": "qwen-image-2.0",
+        "name": "Qwen Image 2.0",
+        "family": "qwen-image",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": false,
+        "temperature": true,
+        "release_date": "2026-06-10",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "image"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 8192,
+          "output": 1
+        },
+        "status": "active"
+      },
+      "qwen-image-2.0-pro": {
+        "id": "qwen-image-2.0-pro",
+        "name": "Qwen Image 2.0 Pro",
+        "family": "qwen-image",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": false,
+        "temperature": true,
+        "release_date": "2026-06-10",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "image"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 8192,
+          "output": 1
+        },
+        "status": "active"
+      },
+      "wan2.7-image": {
+        "id": "wan2.7-image",
+        "name": "Wan 2.7 Image",
+        "family": "wan",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": false,
+        "temperature": true,
+        "release_date": "2026-06-10",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "image"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 8192,
+          "output": 1
+        },
+        "status": "active"
+      },
+      "wan2.7-image-pro": {
+        "id": "wan2.7-image-pro",
+        "name": "Wan 2.7 Image Pro",
+        "family": "wan",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": false,
+        "temperature": true,
+        "release_date": "2026-06-10",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "image"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 8192,
+          "output": 1
+        },
+        "status": "active"
       }
     }
   },
@@ -102483,31 +102554,6 @@
     "name": "Alibaba Token Plan",
     "doc": "https://www.alibabacloud.com/help/en/model-studio/opencode-token-plan",
     "models": {
-      "qwen3-coder-plus": {
-        "id": "qwen3-coder-plus",
-        "name": "Qwen3 Coder Plus 🌐",
-        "family": "qwen",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": true,
-        "temperature": true,
-        "knowledge": "2025-04",
-        "release_date": "2025-07-23",
-        "last_updated": "2025-07-23",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 1000000,
-          "output": 65536
-        }
-      },
       "qwen3.7-max": {
         "id": "qwen3.7-max",
         "name": "Qwen3.7 Max 🌐",
@@ -102727,6 +102773,102 @@
           "context": 200000,
           "output": 131072
         }
+      },
+      "qwen-image-2.0": {
+        "id": "qwen-image-2.0",
+        "name": "Qwen Image 2.0",
+        "family": "qwen-image",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": false,
+        "temperature": true,
+        "release_date": "2026-06-10",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "image"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 8192,
+          "output": 1
+        },
+        "status": "active"
+      },
+      "qwen-image-2.0-pro": {
+        "id": "qwen-image-2.0-pro",
+        "name": "Qwen Image 2.0 Pro",
+        "family": "qwen-image",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": false,
+        "temperature": true,
+        "release_date": "2026-06-10",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "image"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 8192,
+          "output": 1
+        },
+        "status": "active"
+      },
+      "wan2.7-image": {
+        "id": "wan2.7-image",
+        "name": "Wan 2.7 Image",
+        "family": "wan",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": false,
+        "temperature": true,
+        "release_date": "2026-06-10",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "image"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 8192,
+          "output": 1
+        },
+        "status": "active"
+      },
+      "wan2.7-image-pro": {
+        "id": "wan2.7-image-pro",
+        "name": "Wan 2.7 Image Pro",
+        "family": "wan",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": false,
+        "temperature": true,
+        "release_date": "2026-06-10",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "image"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 8192,
+          "output": 1
+        },
+        "status": "active"
       }
     }
   },
@@ -102777,31 +102919,6 @@
     "name": "Alibaba Coding Plan (China)",
     "doc": "https://help.aliyun.com/zh/model-studio/coding-plan",
     "models": {
-      "qwen3-coder-plus": {
-        "id": "qwen3-coder-plus",
-        "name": "Qwen3 Coder Plus 🌐",
-        "family": "qwen",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": true,
-        "temperature": true,
-        "knowledge": "2025-04",
-        "release_date": "2025-07-23",
-        "last_updated": "2025-07-23",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 1000000,
-          "output": 65536
-        }
-      },
       "qwen3.7-max": {
         "id": "qwen3.7-max",
         "name": "Qwen3.7 Max 🌐",
@@ -103021,6 +103138,102 @@
           "context": 200000,
           "output": 131072
         }
+      },
+      "qwen-image-2.0": {
+        "id": "qwen-image-2.0",
+        "name": "Qwen Image 2.0",
+        "family": "qwen-image",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": false,
+        "temperature": true,
+        "release_date": "2026-06-10",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "image"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 8192,
+          "output": 1
+        },
+        "status": "active"
+      },
+      "qwen-image-2.0-pro": {
+        "id": "qwen-image-2.0-pro",
+        "name": "Qwen Image 2.0 Pro",
+        "family": "qwen-image",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": false,
+        "temperature": true,
+        "release_date": "2026-06-10",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "image"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 8192,
+          "output": 1
+        },
+        "status": "active"
+      },
+      "wan2.7-image": {
+        "id": "wan2.7-image",
+        "name": "Wan 2.7 Image",
+        "family": "wan",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": false,
+        "temperature": true,
+        "release_date": "2026-06-10",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "image"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 8192,
+          "output": 1
+        },
+        "status": "active"
+      },
+      "wan2.7-image-pro": {
+        "id": "wan2.7-image-pro",
+        "name": "Wan 2.7 Image Pro",
+        "family": "wan",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": false,
+        "temperature": true,
+        "release_date": "2026-06-10",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "image"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 8192,
+          "output": 1
+        },
+        "status": "active"
       }
     }
   },
@@ -104931,31 +105144,6 @@
     "name": "Alibaba Token Plan (China)",
     "doc": "https://help.aliyun.com/zh/model-studio/opencode-token-plan",
     "models": {
-      "qwen3-coder-plus": {
-        "id": "qwen3-coder-plus",
-        "name": "Qwen3 Coder Plus 🌐",
-        "family": "qwen",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": true,
-        "temperature": true,
-        "knowledge": "2025-04",
-        "release_date": "2025-07-23",
-        "last_updated": "2025-07-23",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 1000000,
-          "output": 65536
-        }
-      },
       "qwen3.7-max": {
         "id": "qwen3.7-max",
         "name": "Qwen3.7 Max 🌐",
@@ -105175,6 +105363,102 @@
           "context": 200000,
           "output": 131072
         }
+      },
+      "qwen-image-2.0": {
+        "id": "qwen-image-2.0",
+        "name": "Qwen Image 2.0",
+        "family": "qwen-image",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": false,
+        "temperature": true,
+        "release_date": "2026-06-10",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "image"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 8192,
+          "output": 1
+        },
+        "status": "active"
+      },
+      "qwen-image-2.0-pro": {
+        "id": "qwen-image-2.0-pro",
+        "name": "Qwen Image 2.0 Pro",
+        "family": "qwen-image",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": false,
+        "temperature": true,
+        "release_date": "2026-06-10",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "image"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 8192,
+          "output": 1
+        },
+        "status": "active"
+      },
+      "wan2.7-image": {
+        "id": "wan2.7-image",
+        "name": "Wan 2.7 Image",
+        "family": "wan",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": false,
+        "temperature": true,
+        "release_date": "2026-06-10",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "image"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 8192,
+          "output": 1
+        },
+        "status": "active"
+      },
+      "wan2.7-image-pro": {
+        "id": "wan2.7-image-pro",
+        "name": "Wan 2.7 Image Pro",
+        "family": "wan",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": false,
+        "temperature": true,
+        "release_date": "2026-06-10",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "image"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 8192,
+          "output": 1
+        },
+        "status": "active"
       }
     }
   }

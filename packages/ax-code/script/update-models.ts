@@ -279,7 +279,6 @@ cloneProvider("alibaba-coding-plan-cn", "alibaba-token-plan-cn", {
 // — they show up so callers using the provider via SDK / API can pick them.
 const alibabaModels = [
   // Qwen text / reasoning
-  "qwen3-coder-plus",
   "qwen3.7-max",
   "qwen3.7-plus",
   "qwen3.6-plus",
@@ -298,7 +297,6 @@ const alibabaModels = [
   "wan2.7-image-pro",
 ]
 const alibabaModelFallbackProviders: Record<string, string[]> = {
-  "qwen3-coder-plus": ["llmgateway", "iflowcn"],
   "qwen3.7-plus": ["llmgateway", "opencode-go", "nano-gpt"],
   "qwen3.6-flash": ["aihubmix"],
   "deepseek-v4-pro": ["auriko", "cortecs", "302ai", "llmgateway"],
@@ -306,25 +304,64 @@ const alibabaModelFallbackProviders: Record<string, string[]> = {
   "kimi-k2.6": ["moonshot", "moonshot-cn", "302ai", "llmgateway"],
   "glm-5.1": ["zai-coding-plan", "zhipuai", "auriko", "302ai"],
 }
+const alibabaModelFallbackDefaults: Record<string, RawModel> = {
+  "qwen-image-2.0": alibabaImageModel("qwen-image-2.0", "Qwen Image 2.0", "qwen-image"),
+  "qwen-image-2.0-pro": alibabaImageModel("qwen-image-2.0-pro", "Qwen Image 2.0 Pro", "qwen-image"),
+  "wan2.7-image": alibabaImageModel("wan2.7-image", "Wan 2.7 Image", "wan"),
+  "wan2.7-image-pro": alibabaImageModel("wan2.7-image-pro", "Wan 2.7 Image Pro", "wan"),
+}
+function alibabaImageModel(id: string, name: string, family: string): RawModel {
+  return {
+    id,
+    name,
+    family,
+    attachment: false,
+    reasoning: false,
+    tool_call: false,
+    temperature: true,
+    release_date: "2026-06-10",
+    modalities: {
+      input: ["text"],
+      output: ["image"],
+    },
+    open_weights: false,
+    limit: {
+      context: 8192,
+      output: 1,
+    },
+    status: "active",
+  } as RawModel
+}
+function withAlibabaModelFallbackDefault(mid: string, model: unknown) {
+  const fallback = alibabaModelFallbackDefaults[mid]
+  if (!fallback) return JSON.parse(JSON.stringify(model))
+  return {
+    ...JSON.parse(JSON.stringify(fallback)),
+    ...JSON.parse(JSON.stringify(model)),
+  }
+}
 for (const id of ["alibaba-coding-plan", "alibaba-coding-plan-cn", "alibaba-token-plan", "alibaba-token-plan-cn"]) {
   if (!fetched[id]) continue
   const models = fetched[id].models ?? {}
   const kept: Record<string, unknown> = {}
   for (const mid of alibabaModels) {
-    if (models[mid]) kept[mid] = models[mid]
+    if (models[mid]) kept[mid] = withAlibabaModelFallbackDefault(mid, models[mid])
     if (kept[mid]) continue
 
     const existingModel = existing[id]?.models?.[mid]
     if (existingModel) {
-      kept[mid] = JSON.parse(JSON.stringify(existingModel))
+      kept[mid] = withAlibabaModelFallbackDefault(mid, existingModel)
       continue
     }
 
     for (const fallbackID of alibabaModelFallbackProviders[mid] ?? []) {
       const fallback = fetched[fallbackID]?.models?.[mid] ?? existing[fallbackID]?.models?.[mid]
       if (!fallback) continue
-      kept[mid] = JSON.parse(JSON.stringify(fallback))
+      kept[mid] = withAlibabaModelFallbackDefault(mid, fallback)
       break
+    }
+    if (!kept[mid] && alibabaModelFallbackDefaults[mid]) {
+      kept[mid] = JSON.parse(JSON.stringify(alibabaModelFallbackDefaults[mid]))
     }
   }
   fetched[id].models = kept
@@ -461,6 +498,10 @@ function unmarkSearch(model: { name?: string } | undefined) {
     model.name = model.name.slice(0, -SEARCH_MARKER.length)
   }
 }
+function supportsTextOutput(model: { modalities?: { output?: unknown } } | undefined) {
+  const output = model?.modalities?.output
+  return !Array.isArray(output) || output.includes("text")
+}
 // xAI: only Grok 4.3 has Live Search wired via providerOptions.searchParameters.
 const xaiSearchModelIds = ["grok-4.3", "grok-4-3"]
 const xaiModels = fetched["xai"]?.models as Record<string, { name?: string }> | undefined
@@ -472,10 +513,11 @@ if (xaiModels) {
 // Non-Qwen models (DeepSeek/GLM/Kimi/MiniMax) served on the same plans don't
 // honor the knob, so they stay unmarked.
 for (const id of ["alibaba-coding-plan", "alibaba-coding-plan-cn", "alibaba-token-plan", "alibaba-token-plan-cn"]) {
-  const models = fetched[id]?.models as Record<string, { name?: string }> | undefined
+  const models = fetched[id]?.models as Record<string, { name?: string; modalities?: { output?: unknown } }> | undefined
   if (!models) continue
   for (const [mid, model] of Object.entries(models)) {
-    if (mid.toLowerCase().startsWith("qwen")) markSearch(model)
+    unmarkSearch(model)
+    if (mid.toLowerCase().startsWith("qwen") && supportsTextOutput(model)) markSearch(model)
   }
 }
 
