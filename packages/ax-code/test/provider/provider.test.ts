@@ -344,13 +344,49 @@ test("OpenRouter SDK options include explicit bearer auth when a provider key is
   expect(start).toBeGreaterThan(-1)
   expect(end).toBeGreaterThan(start)
   const body = src.slice(start, end)
-  const apiKeyFallback = body.indexOf('if (options["apiKey"] === undefined && provider.key) options["apiKey"] = provider.key')
+  const apiKeyFallback = body.indexOf('else if (providerApiKey) options["apiKey"] = providerApiKey')
   const openrouterBranch = body.indexOf('if (model.api.npm === "@openrouter/ai-sdk-provider")')
-  const authHeader = body.indexOf("Authorization: `Bearer ${apiKey}`")
+  const authHeader = body.indexOf("withOpenRouterAuthorization")
+  const modelHeaders = body.indexOf("...model.headers")
+  const finalAuthHeader = body.indexOf("withOpenRouterAuthorization", modelHeaders)
 
   expect(apiKeyFallback).toBeGreaterThan(-1)
   expect(openrouterBranch).toBeGreaterThan(apiKeyFallback)
   expect(authHeader).toBeGreaterThan(openrouterBranch)
+  expect(modelHeaders).toBeGreaterThan(openrouterBranch)
+  expect(finalAuthHeader).toBeGreaterThan(modelHeaders)
+})
+
+test("blank configured api keys do not suppress OpenRouter credential fallback", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await Bun.write(
+        path.join(dir, "ax-code.json"),
+        JSON.stringify({
+          $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+          enabled_providers: ["openrouter"],
+          provider: {
+            openrouter: {
+              options: {
+                apiKey: " \n ",
+              },
+            },
+          },
+        }),
+      )
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    init: async () => {
+      Env.set("OPENROUTER_API_KEY", "test-openrouter-key")
+    },
+    fn: async () => {
+      const providers = await Provider.list()
+      expect(providers[ProviderID.make("openrouter")].key).toBe("test-openrouter-key")
+      expect(providers[ProviderID.make("openrouter")].options.apiKey).toBeUndefined()
+    },
+  })
 })
 
 test("disabled_providers excludes provider", async () => {

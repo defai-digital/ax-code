@@ -74,24 +74,45 @@ export namespace Provider {
 
   function sanitizeAuthString(value: unknown): unknown {
     if (typeof value !== "string") return value
-    return value.replace(/[\r\n]+/g, "").trim()
+    const next = value.replace(/[\r\n]+/g, "").trim()
+    return next === "" ? undefined : next
+  }
+
+  export function authString(value: unknown): string | undefined {
+    const sanitized = sanitizeAuthString(value)
+    return typeof sanitized === "string" ? sanitized : undefined
   }
 
   function sanitizeProviderAuth<T extends Partial<Info>>(provider: T): T {
     const next = { ...provider }
-    if (typeof next.key === "string") next.key = sanitizeAuthString(next.key) as string
+    if (typeof next.key === "string") {
+      const key = sanitizeAuthString(next.key)
+      if (typeof key === "string") next.key = key
+      else delete next.key
+    }
     if (next.options && typeof next.options === "object" && "apiKey" in next.options) {
+      const apiKey = sanitizeAuthString(next.options.apiKey)
       next.options = {
         ...next.options,
-        apiKey: sanitizeAuthString(next.options.apiKey),
       }
+      if (apiKey === undefined) delete next.options.apiKey
+      else next.options.apiKey = apiKey
     }
     return next
   }
 
-  function hasHeader(headers: Record<string, string>, name: string): boolean {
-    const lower = name.toLowerCase()
-    return Object.keys(headers).some((key) => key.toLowerCase() === lower)
+  export function withOpenRouterAuthorization(headers: Record<string, string>, apiKey: unknown) {
+    const resolvedApiKey = authString(apiKey)
+    const next = { ...headers }
+    let userAuthorization: string | undefined
+    for (const [key, value] of Object.entries(headers)) {
+      if (key.toLowerCase() !== "authorization") continue
+      if (typeof value === "string" && value.trim() !== "") userAuthorization ??= value
+      delete next[key]
+    }
+    const authorization = userAuthorization ?? (resolvedApiKey ? `Bearer ${resolvedApiKey}` : undefined)
+    if (authorization) next.Authorization = authorization
+    return next
   }
 
   function addLegacyXaiModelAliases(providerID: ProviderID, models: Record<string, Model>) {
@@ -688,7 +709,11 @@ export namespace Provider {
       if (model.api.npm.includes("@ai-sdk/openai-compatible") && options["includeUsage"] !== false) {
         options["includeUsage"] = true
       }
-      if (options["apiKey"] === undefined && provider.key) options["apiKey"] = provider.key
+      const optionApiKey = authString(options["apiKey"])
+      const providerApiKey = authString(provider.key)
+      if (optionApiKey) options["apiKey"] = optionApiKey
+      else if (providerApiKey) options["apiKey"] = providerApiKey
+      else delete options["apiKey"]
 
       // OpenRouter-specific quirks. Applied here at the SDK funnel so they
       // fire regardless of whether the provider was discovered via env var,
@@ -709,17 +734,19 @@ export namespace Provider {
       // User-supplied options win in both maps so config overrides hold.
       if (model.api.npm === "@openrouter/ai-sdk-provider") {
         const userHeaders = (options["headers"] as Record<string, string> | undefined) ?? {}
-        const apiKey = typeof options["apiKey"] === "string" ? options["apiKey"] : undefined
+        const apiKey = authString(options["apiKey"])
         options["extraBody"] = {
           usage: { include: true },
           ...((options["extraBody"] as Record<string, unknown> | undefined) ?? {}),
         }
-        options["headers"] = {
-          "HTTP-Referer": GITHUB_REPO_URL,
-          "X-Title": "ax-code",
-          ...(apiKey && !hasHeader(userHeaders, "authorization") ? { Authorization: `Bearer ${apiKey}` } : {}),
-          ...userHeaders,
-        }
+        options["headers"] = withOpenRouterAuthorization(
+          {
+            "HTTP-Referer": GITHUB_REPO_URL,
+            "X-Title": "ax-code",
+            ...userHeaders,
+          },
+          apiKey,
+        )
       }
 
       // Disable provider-level retries — ax-code handles retries via
@@ -761,6 +788,13 @@ export namespace Provider {
           ...options["headers"],
           ...model.headers,
         }
+
+      if (model.api.npm === "@openrouter/ai-sdk-provider") {
+        options["headers"] = withOpenRouterAuthorization(
+          (options["headers"] as Record<string, string> | undefined) ?? {},
+          authString(options["apiKey"]),
+        )
+      }
 
       const key = Hash.fast(JSON.stringify({ providerID: model.providerID, npm: model.api.npm, options }))
       const existing = s.sdk.get(key)

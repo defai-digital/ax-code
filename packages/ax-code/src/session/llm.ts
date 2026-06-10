@@ -315,6 +315,27 @@ export namespace LLM {
       })
     }
 
+    let requestHeaders: Record<string, string> = {
+      ...(input.model.providerID.startsWith("ax-code")
+        ? {
+            "x-ax-code-project": Instance.project.id,
+            "x-ax-code-session": input.sessionID,
+            "x-ax-code-request": input.user.id,
+            "x-ax-code-client": Flag.AX_CODE_CLIENT,
+          }
+        : {
+            "User-Agent": `ax-code/${Installation.VERSION}`,
+          }),
+      ...input.model.headers,
+      ...headers,
+    }
+    if (input.model.api.npm === "@openrouter/ai-sdk-provider") {
+      requestHeaders = Provider.withOpenRouterAuthorization(
+        requestHeaders,
+        Provider.authString(provider?.options.apiKey) ?? Provider.authString(provider?.key),
+      )
+    }
+
     let output: StreamOutput
     try {
       output = streamText({
@@ -355,20 +376,7 @@ export namespace LLM {
         toolChoice: input.toolChoice,
         maxOutputTokens,
         abortSignal: input.abort,
-        headers: {
-          ...(input.model.providerID.startsWith("ax-code")
-            ? {
-                "x-ax-code-project": Instance.project.id,
-                "x-ax-code-session": input.sessionID,
-                "x-ax-code-request": input.user.id,
-                "x-ax-code-client": Flag.AX_CODE_CLIENT,
-              }
-            : {
-                "User-Agent": `ax-code/${Installation.VERSION}`,
-              }),
-          ...input.model.headers,
-          ...headers,
-        },
+        headers: requestHeaders,
         maxRetries: input.retries ?? 0,
         messages,
         model: wrapLanguageModel({
