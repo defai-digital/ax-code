@@ -199,6 +199,10 @@ export const GrepTool = Tool.define("grep", {
     // Handle both Unix (\n) and Windows (\r\n) line endings
     const lines = output.trim().split(/\r?\n/)
     const matches = []
+    // mtime is only needed once per file for sorting, but ripgrep emits one
+    // line per match — wide searches would otherwise stat the same file
+    // hundreds of times.
+    const mtimeCache = new Map<string, number | undefined>()
 
     for (const line of lines) {
       if (!line) continue
@@ -213,12 +217,16 @@ export const GrepTool = Tool.define("grep", {
       // files or terminal escape sequences).
       const lineText = lineTextParts.join(FIELD_SEP)
 
-      const stats = Filesystem.stat(filePath)
-      if (!stats) continue
+      let modTime = mtimeCache.get(filePath)
+      if (modTime === undefined && !mtimeCache.has(filePath)) {
+        modTime = Filesystem.stat(filePath)?.mtime.getTime()
+        mtimeCache.set(filePath, modTime)
+      }
+      if (modTime === undefined) continue
 
       matches.push({
         path: filePath,
-        modTime: stats.mtime.getTime(),
+        modTime,
         lineNum,
         lineText,
       })

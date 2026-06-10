@@ -72,6 +72,7 @@ await Promise.allSettled([
 })
 
 const CACHE_VERSION = "21"
+const TRASH_PREFIX = ".trash-"
 
 const version = await Filesystem.readText(path.join(Global.Path.cache, "version")).catch(() => "0")
 
@@ -81,17 +82,29 @@ if (version !== CACHE_VERSION) {
   // (permission, disk full, EBUSY), which meant partial cleanups were
   // treated as complete on the next start and stale files were never
   // revisited.
+  //
+  // The wipe itself renames entries into a trash directory instead of
+  // deleting them inline: rename is O(1) per entry while a recursive
+  // `fs.rm` of a large cache can stall startup for hundreds of ms. The
+  // trash directory is deleted in the background (and swept on later
+  // starts if the process exits first).
   let cleaned = true
   try {
     const contents = await fs.readdir(Global.Path.cache)
-    await Promise.all(
-      contents.map((item) =>
-        fs.rm(path.join(Global.Path.cache, item), {
-          recursive: true,
-          force: true,
-        }),
-      ),
-    )
+    const stale = contents.filter((item) => !item.startsWith(TRASH_PREFIX))
+    if (stale.length > 0) {
+      const trash = path.join(Global.Path.cache, `${TRASH_PREFIX}${Date.now()}`)
+      await fs.mkdir(trash, { recursive: true })
+      await Promise.all(
+        stale.map((item) =>
+          fs.rename(path.join(Global.Path.cache, item), path.join(trash, item)).catch(() =>
+            // Rename can fail on locked files (Windows EBUSY/EPERM);
+            // fall back to deleting that entry in place.
+            fs.rm(path.join(Global.Path.cache, item), { recursive: true, force: true }),
+          ),
+        ),
+      )
+    }
   } catch (e) {
     cleaned = false
     warnGlobalInit("cache cleanup failed, leaving version marker unchanged", e, {
@@ -106,3 +119,15 @@ if (version !== CACHE_VERSION) {
     })
   }
 }
+
+// Sweep trash from this or earlier interrupted wipes off the startup path.
+void fs
+  .readdir(Global.Path.cache)
+  .then((items) =>
+    Promise.allSettled(
+      items
+        .filter((item) => item.startsWith(TRASH_PREFIX))
+        .map((item) => fs.rm(path.join(Global.Path.cache, item), { recursive: true, force: true })),
+    ),
+  )
+  .catch(() => {})

@@ -888,6 +888,35 @@ export namespace Session {
     return part
   })
 
+  // Batch variant of updatePart: one transaction instead of one DB
+  // round-trip per part. Used by compaction pruning, which can touch
+  // hundreds of parts at once.
+  export async function updateParts(parts: MessageV2.Part[]) {
+    if (parts.length === 0) return parts
+    const time = Date.now()
+    Database.transaction((db) => {
+      for (const part of parts) {
+        const { id, messageID, sessionID, ...data } = part
+        db.insert(PartTable)
+          .values({
+            id,
+            message_id: messageID,
+            session_id: sessionID,
+            time_created: time,
+            data,
+          })
+          .onConflictDoUpdate({ target: PartTable.id, set: { data, time_updated: time } })
+          .run()
+      }
+      Database.effect(() => {
+        for (const part of parts) {
+          Bus.publishDetached(MessageV2.Event.PartUpdated, { part: { ...part } })
+        }
+      })
+    })
+    return parts
+  }
+
   export async function updateMessageWithParts(info: MessageV2.Info, parts: MessageV2.Part[]) {
     const messageTimeUpdated = Date.now()
     const partTime = Date.now()

@@ -195,6 +195,45 @@ export namespace FileWatcher {
         })
       }
 
+      const subscribeParcel = async (dir: string, ignore: string[]) => {
+        const parcel = watcher()
+        if (!parcel) throw new Error("@parcel/watcher binding unavailable")
+
+        // Best-effort kernel-level pruning: parcel accepts absolute paths and
+        // globs. Plain folder names are anchored to the watched dir. Anything
+        // this misses is caught by the `ignored()` post-filter below, which
+        // applies the exact same semantics as the poll watcher.
+        const parcelIgnore = ignore.map((item) => (path.isAbsolute(item) ? item : path.join(dir, item)))
+
+        const handleEvents = Instance.bind((events: import("@parcel/watcher").Event[]) => {
+          for (const evt of events) {
+            const file = path.resolve(evt.path)
+            if (ignored(dir, ignore, file)) continue
+            const event =
+              evt.type === "create"
+                ? ("add" as const)
+                : evt.type === "update"
+                  ? ("change" as const)
+                  : ("unlink" as const)
+            Bus.publishDetached(Event.Updated, { file, event })
+          }
+        })
+
+        const subscription = await parcel.subscribe(
+          dir,
+          (error, events) => {
+            if (error) {
+              log.warn("parcel watcher error", { dir, error })
+              return
+            }
+            handleEvents(events)
+          },
+          { ignore: parcelIgnore },
+        )
+
+        handles.push(() => subscription.unsubscribe())
+      }
+
       const subscribePoll = async (dir: string, ignore: string[]) => {
         try {
           let prev = await withTimeout(
@@ -261,6 +300,24 @@ export namespace FileWatcher {
           } catch {
             await subscribePoll(dir, ignore)
             return
+          }
+        }
+
+        // Prefer the event-based @parcel/watcher binding when available: the
+        // poll watcher re-walks the entire tree (readdir + stat per file)
+        // every POLL_MS, which is a constant CPU/IO drain on large repos.
+        // Polling remains the fallback where the binding is missing
+        // (e.g. some CI Linux images) or via AX_CODE_POLL_WATCHER=true.
+        if (!flagBoolean("AX_CODE_POLL_WATCHER", false)) {
+          try {
+            await withTimeout(
+              subscribeParcel(dir, ignore),
+              SUBSCRIBE_TIMEOUT_MS,
+              `Timed out after ${SUBSCRIBE_TIMEOUT_MS}ms`,
+            )
+            return
+          } catch (error) {
+            log.warn("parcel watcher unavailable, falling back to polling", { dir, error })
           }
         }
 

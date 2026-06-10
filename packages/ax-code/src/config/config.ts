@@ -251,12 +251,16 @@ export namespace Config {
             })
             return undefined
           }
-          const response = await Ssrf.pinnedFetch(endpoint, { signal: AbortSignal.timeout(10_000) })
+          // Keep this short: the fetch sits on the Config.get() critical path
+          // (so effectively on every command's startup), the legacy fallback
+          // can double the wait, and a missing wellknown config is tolerated.
+          const WELLKNOWN_TIMEOUT_MS = 3_000
+          const response = await Ssrf.pinnedFetch(endpoint, { signal: AbortSignal.timeout(WELLKNOWN_TIMEOUT_MS) })
             .then((res) => {
               if (res.ok || res.status !== 404) return res
-              return Ssrf.pinnedFetch(legacy, { signal: AbortSignal.timeout(10_000) })
+              return Ssrf.pinnedFetch(legacy, { signal: AbortSignal.timeout(WELLKNOWN_TIMEOUT_MS) })
             })
-            .catch(() => Ssrf.pinnedFetch(legacy, { signal: AbortSignal.timeout(10_000) }))
+            .catch(() => Ssrf.pinnedFetch(legacy, { signal: AbortSignal.timeout(WELLKNOWN_TIMEOUT_MS) }))
           if (!response.ok) {
             log.warn("failed to fetch remote config", {
               command: "config.load",
@@ -418,7 +422,7 @@ export namespace Config {
       try {
         let accountTimer: ReturnType<typeof setTimeout>
         const accountTimeout = new Promise<never>((_, reject) => {
-          accountTimer = setTimeout(() => reject(new Error("account config fetch timed out")), 10_000)
+          accountTimer = setTimeout(() => reject(new Error("account config fetch timed out")), 5_000)
         })
         const [config, token] = await Promise.race([
           Promise.all([Account.config(active.id, active.active_org_id), Account.token(active.id)]),
