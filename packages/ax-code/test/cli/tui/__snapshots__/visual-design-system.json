@@ -6,275 +6,275 @@
         [
           {
             "text": "___",
-            "color": "#6ee7b7"
+            "color": "#34d399"
           },
           {
             "text": "____",
-            "color": "#68e4b3"
+            "color": "#31cf96"
           },
           {
             "text": "____",
-            "color": "#61e1b0"
+            "color": "#2ecb93"
           },
           {
             "text": "  __",
-            "color": "#5bdeac"
+            "color": "#2bc78f"
           },
           {
             "text": "     ",
-            "color": "#55dba9"
+            "color": "#27c38c"
           },
           {
             "text": "____",
-            "color": "#4fd8a5"
+            "color": "#24bf89"
           },
           {
             "text": "____",
-            "color": "#48d5a1"
+            "color": "#21bb86"
           },
           {
             "text": "____",
-            "color": "#42d29e"
+            "color": "#1eb783"
           },
           {
             "text": "_____",
-            "color": "#3cce9a"
+            "color": "#1bb27f"
           },
           {
             "text": "____",
-            "color": "#36cb97"
+            "color": "#18ae7c"
           },
           {
             "text": "____",
-            "color": "#2fc893"
+            "color": "#15aa79"
           },
           {
             "text": "_____",
-            "color": "#29c58f"
+            "color": "#12a676"
           },
           {
             "text": "___",
-            "color": "#23c28c"
+            "color": "#0ea273"
           }
         ],
         [
           {
             "text": "___ ",
-            "color": "#68e4b3"
+            "color": "#31cf96"
           },
           {
             "text": "   |",
-            "color": "#61e1b0"
+            "color": "#2ecb93"
           },
           {
             "text": "_  |",
-            "color": "#5bdeac"
+            "color": "#2bc78f"
           },
           {
             "text": "/ /  ",
-            "color": "#55dba9"
+            "color": "#27c38c"
           },
           {
             "text": "   _",
-            "color": "#4fd8a5"
+            "color": "#24bf89"
           },
           {
             "text": "_  _",
-            "color": "#48d5a1"
+            "color": "#21bb86"
           },
           {
             "text": "___/",
-            "color": "#42d29e"
+            "color": "#1eb783"
           },
           {
             "text": "_  __",
-            "color": "#3cce9a"
+            "color": "#1bb27f"
           },
           {
             "text": " \\__",
-            "color": "#36cb97"
+            "color": "#18ae7c"
           },
           {
             "text": "  __",
-            "color": "#2fc893"
+            "color": "#15aa79"
           },
           {
             "text": " \\__ ",
-            "color": "#29c58f"
+            "color": "#12a676"
           },
           {
             "text": " ___",
-            "color": "#23c28c"
+            "color": "#0ea273"
           },
           {
             "text": "_/",
-            "color": "#1dbf88"
+            "color": "#0b9e6f"
           }
         ],
         [
           {
             "text": "_",
-            "color": "#68e4b3"
+            "color": "#31cf96"
           },
           {
             "text": "_  /",
-            "color": "#61e1b0"
+            "color": "#2ecb93"
           },
           {
             "text": "| |_",
-            "color": "#5bdeac"
+            "color": "#2bc78f"
           },
           {
             "text": "    /",
-            "color": "#55dba9"
+            "color": "#27c38c"
           },
           {
             "text": "____",
-            "color": "#4fd8a5"
+            "color": "#24bf89"
           },
           {
             "text": "___ ",
-            "color": "#48d5a1"
+            "color": "#21bb86"
           },
           {
             "text": " /  ",
-            "color": "#42d29e"
+            "color": "#1eb783"
           },
           {
             "text": "  _  ",
-            "color": "#3cce9a"
+            "color": "#1bb27f"
           },
           {
             "text": "/ / ",
-            "color": "#36cb97"
+            "color": "#18ae7c"
           },
           {
             "text": "/_  ",
-            "color": "#2fc893"
+            "color": "#15aa79"
           },
           {
             "text": "/ / /",
-            "color": "#29c58f"
+            "color": "#12a676"
           },
           {
             "text": "_  _",
-            "color": "#23c28c"
+            "color": "#0ea273"
           },
           {
             "text": "_/  ",
-            "color": "#1dbf88"
+            "color": "#0b9e6f"
           },
           {
             "text": " ",
-            "color": "#16bc85"
+            "color": "#089a6c"
           }
         ],
         [
           {
             "text": "_ ",
-            "color": "#61e1b0"
+            "color": "#2ecb93"
           },
           {
             "text": " ___",
-            "color": "#5bdeac"
+            "color": "#2bc78f"
           },
           {
             "text": " |   ",
-            "color": "#55dba9"
+            "color": "#27c38c"
           },
           {
             "text": " |_/",
-            "color": "#4fd8a5"
+            "color": "#24bf89"
           },
           {
             "text": "____",
-            "color": "#48d5a1"
+            "color": "#21bb86"
           },
           {
             "text": "_/ /",
-            "color": "#42d29e"
+            "color": "#1eb783"
           },
           {
             "text": "___  ",
-            "color": "#3cce9a"
+            "color": "#1bb27f"
           },
           {
             "text": "/ /_",
-            "color": "#36cb97"
+            "color": "#18ae7c"
           },
           {
             "text": "/ /_",
-            "color": "#2fc893"
+            "color": "#15aa79"
           },
           {
             "text": "  /_/",
-            "color": "#29c58f"
+            "color": "#12a676"
           },
           {
             "text": " /_ ",
-            "color": "#23c28c"
+            "color": "#0ea273"
           },
           {
             "text": " /__",
-            "color": "#1dbf88"
+            "color": "#0b9e6f"
           },
           {
             "text": "_   ",
-            "color": "#16bc85"
+            "color": "#089a6c"
           }
         ],
         [
           {
             "text": "/_/",
-            "color": "#5bdeac"
+            "color": "#2bc78f"
           },
           {
             "text": "  |_/",
-            "color": "#55dba9"
+            "color": "#27c38c"
           },
           {
             "text": "_/|_",
-            "color": "#4fd8a5"
+            "color": "#24bf89"
           },
           {
             "text": "|   ",
-            "color": "#48d5a1"
+            "color": "#21bb86"
           },
           {
             "text": "    ",
-            "color": "#42d29e"
+            "color": "#1eb783"
           },
           {
             "text": "\\____",
-            "color": "#3cce9a"
+            "color": "#1bb27f"
           },
           {
             "text": "/  \\",
-            "color": "#36cb97"
+            "color": "#18ae7c"
           },
           {
             "text": "____",
-            "color": "#2fc893"
+            "color": "#15aa79"
           },
           {
             "text": "/ /__",
-            "color": "#29c58f"
+            "color": "#12a676"
           },
           {
             "text": "___/",
-            "color": "#23c28c"
+            "color": "#0ea273"
           },
           {
             "text": " /__",
-            "color": "#1dbf88"
+            "color": "#0b9e6f"
           },
           {
             "text": "___/",
-            "color": "#16bc85"
+            "color": "#089a6c"
           },
           {
             "text": "   ",
-            "color": "#10b981"
+            "color": "#059669"
           }
         ]
       ],
@@ -556,7 +556,7 @@
       ]
     },
     "fallback": {
-      "dark": "#d7e2dc",
+      "dark": "#c9d6cf",
       "light": "#1a231e",
       "lines": [
         "___________  __     _________________________________",
