@@ -85,7 +85,10 @@ test("getLanguage registers pending model loads before awaiting them", async () 
   const end = src.indexOf("export async function closest(", start)
   expect(start).toBeGreaterThan(-1)
   expect(end).toBeGreaterThan(start)
-  const body = src.slice(start, end)
+  // Strip line comments: an explanatory comment quoting one of the code
+  // patterns below would otherwise match indexOf() first and break the
+  // ordering assertions even though the code itself is correct.
+  const body = src.slice(start, end).replace(/\/\/[^\n]*/g, "")
 
   const pendingCheck = body.indexOf("const pending = s.modelPending.get(key)")
   const promiseCreate = body.indexOf("const promise = Promise.resolve().then")
