@@ -28,6 +28,7 @@ import { Installation } from "@/installation"
 import { ConfigMarkdown } from "./markdown"
 import { constants, existsSync } from "fs"
 import { GlobalBus } from "@/bus/global"
+import { NativePerf } from "@/perf/native"
 import { RuntimeEvent } from "@/runtime/events"
 import { Glob } from "../util/glob"
 import { PackageRegistry } from "@/bun/registry"
@@ -178,7 +179,9 @@ export namespace Config {
     return merged
   }
 
-  export const state = Instance.state(async () => {
+  export const state = Instance.state(() => NativePerf.runAsync("config.load", undefined, loadState))
+
+  async function loadState() {
     const auth = await Auth.all()
     const mcpSources: Record<string, McpSource> = {}
 
@@ -537,7 +540,7 @@ export namespace Config {
       deps,
       mcpSources,
     }
-  })
+  }
 
   export async function waitForDependencies() {
     const deps = await state().then((x) => x.deps)

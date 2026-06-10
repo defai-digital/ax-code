@@ -247,7 +247,7 @@ export namespace FileWatcher {
             if (busy) return
             busy = true
             try {
-              const next = await snapshot(dir, ignore)
+              const next = await NativePerf.runAsync("fs.watcher.pollSnapshot", dir, () => snapshot(dir, ignore))
               for (const [file, hash] of next) {
                 const last = prev.get(file)
                 if (!last) await Bus.publish(Event.Updated, { file, event: "add" })

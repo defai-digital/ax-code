@@ -1,4 +1,5 @@
 import type { Agent } from "../agent/agent"
+import { NativePerf } from "../perf/native"
 import { Plugin } from "../plugin"
 import type { Provider } from "../provider/provider"
 import MAX_STEPS from "./prompt/max-steps.txt"
@@ -21,6 +22,14 @@ export async function preparePromptRequest(input: {
   cache: PromptRequestCache
   structuredPrompt: string
 }) {
+  return NativePerf.runAsync(
+    "session.preparePromptRequest",
+    { step: input.step, messages: input.messages.length },
+    () => buildPromptRequest(input),
+  )
+}
+
+async function buildPromptRequest(input: Parameters<typeof preparePromptRequest>[0]) {
   let messages = input.messages
   // Ephemerally wrap queued user messages with a reminder to stay on track.
   if (input.step > 1) messages = remindQueuedMessages(messages, input.lastFinished)
