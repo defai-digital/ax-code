@@ -316,3 +316,60 @@ describe("CodeGraphWatcher.start / stop", () => {
     })
   })
 })
+
+describe("CodeGraphWatcher batching", () => {
+  test("a burst of change events coalesces into a single batch reindex", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        CodeIntelligence.__clearProject(projectID)
+        const files = Array.from({ length: 5 }, (_, i) => `${tmp.path}/burst-${i}.ts`)
+        const indexFiles = spyOn(CodeGraphBuilder, "indexFiles").mockResolvedValue({
+          nodes: 0,
+          edges: 0,
+          files: 0,
+          unchanged: 5,
+          skipped: 0,
+          failed: 0,
+          pruned: { files: 0, nodes: 0, edges: 0 },
+          timings: {
+            readFile: 0,
+            lspTouch: 0,
+            lspDocumentSymbol: 0,
+            symbolWalk: 0,
+            lspReferences: 0,
+            edgeResolve: 0,
+            dbTransaction: 0,
+            total: 0,
+          },
+        })
+
+        try {
+          CodeGraphWatcher.start(projectID)
+          // Simulate a git checkout firing change events across many files
+          // at once. The per-file debounce timers expire together, land in
+          // the same flush window, and must produce one indexFiles() call
+          // with all files instead of one LSP round-trip per file.
+          for (const file of files) {
+            await Bus.publish(FileWatcher.Event.Updated, { file, event: "change" })
+          }
+          await CodeGraphWatcher.__drainForTests(projectID)
+
+          expect(indexFiles).toHaveBeenCalledTimes(1)
+          expect(indexFiles.mock.calls[0]?.[1]).toEqual(files)
+          expect(indexFiles.mock.calls[0]?.[2]).toMatchObject({
+            concurrency: 4,
+            lock: "none",
+            pruneOrphans: false,
+          })
+        } finally {
+          CodeGraphWatcher.stop(projectID)
+          indexFiles.mockRestore()
+          CodeIntelligence.__clearProject(projectID)
+        }
+      },
+    })
+  })
+})

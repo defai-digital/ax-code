@@ -21,16 +21,20 @@ const DEBOUNCE_MS = 1_000
 // operations.
 const MAX_CONCURRENT_REINDEX = 4
 
-// Backpressure cap for the per-project reindex queue. The per-file
-// debounce in `pending` already ensures at most one queued job per
-// distinct file, but a `git checkout` switching branches across a
-// large monorepo can fire events on hundreds of files at once, and
-// each closure captures the project id + file path. Without a cap the
-// queue grows proportional to the change set. When the cap is reached
-// we drop the oldest queued job so the most recent file changes still
-// get indexed promptly; the dropped file will be picked up on its next
-// modification or by a full reindex.
+// Backpressure cap for the per-project reindex queue. Queue entries are
+// batch jobs (one per flush window), so the cap is rarely approached, but
+// a runaway event source could still grow the queue without it. When the
+// cap is reached we drop the oldest queued job so the most recent file
+// changes still get indexed promptly; dropped files will be picked up on
+// their next modification or by a full reindex.
 const MAX_QUEUE_DEPTH = 256
+
+// After a file's debounce expires it joins the current batch; the batch
+// flushes after this window. Burst events (git checkout firing hundreds of
+// per-file timers within the same second) coalesce into one indexFiles()
+// call instead of one LSP round-trip per file, while a single file save
+// only pays this much extra latency on top of the debounce.
+const BATCH_FLUSH_MS = 100
 
 export namespace CodeGraphWatcher {
   type Pending = {
@@ -41,6 +45,8 @@ export namespace CodeGraphWatcher {
   type State = {
     projectID: ProjectID
     pending: Map<string, Pending>
+    ripe: Map<string, "add" | "change" | "unlink">
+    flushTimer?: ReturnType<typeof setTimeout>
     activeReindex: number
     queue: Array<() => Promise<void>>
     unsubscribe?: () => void
@@ -81,34 +87,54 @@ export namespace CodeGraphWatcher {
     }
   }
 
-  function enqueueReindex(state: State, file: string, event: "add" | "change" | "unlink") {
+  function enqueue(state: State, job: () => Promise<void>) {
     if (state.disposed) return
     if (state.queue.length >= MAX_QUEUE_DEPTH) {
       // Drop oldest queued job so we keep up with the most recent file
-      // events. Each entry is one file's reindex; the dropped file will
-      // be picked up on its next change or by a future full reindex.
+      // events; dropped files will be picked up on their next change or
+      // by a future full reindex.
       state.queue.shift()
-      log.warn("reindex queue at cap, dropping oldest job", {
-        cap: MAX_QUEUE_DEPTH,
-        droppedFor: file,
-        droppedEvent: event,
+      log.warn("reindex queue at cap, dropping oldest job", { cap: MAX_QUEUE_DEPTH })
+    }
+    state.queue.push(job)
+    runNext(state)
+  }
+
+  function flushRipe(state: State) {
+    if (state.disposed || state.ripe.size === 0) return
+    const entries = [...state.ripe.entries()]
+    state.ripe.clear()
+    const unlinked = entries.filter(([, event]) => event === "unlink").map(([file]) => file)
+    const changed = entries.filter(([, event]) => event !== "unlink").map(([file]) => file)
+
+    if (unlinked.length > 0) {
+      enqueue(state, async () => {
+        if (state.disposed) return
+        for (const file of unlinked) {
+          log.info("purging file from graph", { file })
+          CodeGraphBuilder.purgeFile(state.projectID, file)
+        }
       })
     }
-    state.queue.push(async () => {
-      if (state.disposed) return
-      if (event === "unlink") {
-        log.info("purging file from graph", { file })
-        CodeGraphBuilder.purgeFile(state.projectID, file)
-        return
-      }
-      log.info("reindexing file", { file, event })
-      await CodeGraphBuilder.indexFiles(state.projectID, [file], {
-        concurrency: 1,
-        lock: "none",
-        pruneOrphans: false,
+    if (changed.length > 0) {
+      enqueue(state, async () => {
+        if (state.disposed) return
+        log.info("reindexing files", { count: changed.length })
+        await CodeGraphBuilder.indexFiles(state.projectID, changed, {
+          concurrency: Math.min(changed.length, MAX_CONCURRENT_REINDEX),
+          lock: "none",
+          pruneOrphans: false,
+        })
       })
-    })
-    runNext(state)
+    }
+  }
+
+  function scheduleFlush(state: State) {
+    if (state.disposed || state.flushTimer) return
+    state.flushTimer = setTimeout(() => {
+      state.flushTimer = undefined
+      flushRipe(state)
+    }, BATCH_FLUSH_MS)
   }
 
   function handleEvent(state: State, file: string, event: "add" | "change" | "unlink") {
@@ -127,7 +153,8 @@ export namespace CodeGraphWatcher {
     const nextEvent = event === "unlink" ? "unlink" : existing?.event === "unlink" ? "unlink" : event
     const timer = setTimeout(() => {
       state.pending.delete(file)
-      enqueueReindex(state, file, nextEvent)
+      state.ripe.set(file, nextEvent)
+      scheduleFlush(state)
     }, DEBOUNCE_MS)
     state.pending.set(file, { timer, event: nextEvent })
   }
@@ -146,6 +173,7 @@ export namespace CodeGraphWatcher {
     const state: State = {
       projectID,
       pending: new Map(),
+      ripe: new Map(),
       activeReindex: 0,
       queue: [],
       disposed: false,
@@ -174,6 +202,9 @@ export namespace CodeGraphWatcher {
       clearTimeout(pending.timer)
     }
     state.pending.clear()
+    if (state.flushTimer) clearTimeout(state.flushTimer)
+    state.flushTimer = undefined
+    state.ripe.clear()
     state.queue.length = 0
     state.unsubscribe?.()
     instances.delete(projectID)
@@ -198,8 +229,14 @@ export namespace CodeGraphWatcher {
     for (const [file, p] of pending) {
       clearTimeout(p.timer)
       state.pending.delete(file)
-      enqueueReindex(state, file, p.event)
+      state.ripe.set(file, p.event)
     }
+    // Flush the batch immediately instead of waiting for the flush timer.
+    if (state.flushTimer) {
+      clearTimeout(state.flushTimer)
+      state.flushTimer = undefined
+    }
+    flushRipe(state)
     // Wait for the queue to drain.
     while (state.queue.length > 0 || state.activeReindex > 0) {
       await new Promise((r) => setTimeout(r, 10))

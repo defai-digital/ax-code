@@ -176,6 +176,13 @@ export namespace AutoIndex {
     return lang !== undefined && lang !== "plaintext"
   }
 
+  // Globs matching every LSP-indexable extension. Passed to ripgrep so the
+  // walk only emits candidate files instead of streaming the entire tree
+  // through the JS-side isIndexable filter.
+  const INDEXABLE_GLOBS = Object.entries(LANGUAGE_EXTENSIONS)
+    .filter(([, lang]) => lang !== "plaintext")
+    .map(([ext]) => `*${ext}`)
+
   // Standalone release binaries may not ship the code-intelligence native
   // addon set. The pure TypeScript path is still valid, but it should be
   // gentler when it runs in the background so it does not monopolize the
@@ -306,7 +313,7 @@ export namespace AutoIndex {
         // CLI command in cli/cmd/index-graph.ts, extracted here
         // so auto-index doesn't depend on CLI internals.
         const files: string[] = []
-        for await (const rel of Ripgrep.files({ cwd: directory })) {
+        for await (const rel of Ripgrep.files({ cwd: directory, glob: INDEXABLE_GLOBS })) {
           const abs = path.join(directory, rel)
           if (!isIndexable(abs)) continue
           files.push(abs)
