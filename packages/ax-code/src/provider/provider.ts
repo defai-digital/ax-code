@@ -72,6 +72,28 @@ export namespace Provider {
     return modelID
   }
 
+  function sanitizeAuthString(value: unknown): unknown {
+    if (typeof value !== "string") return value
+    return value.replace(/[\r\n]+/g, "").trim()
+  }
+
+  function sanitizeProviderAuth<T extends Partial<Info>>(provider: T): T {
+    const next = { ...provider }
+    if (typeof next.key === "string") next.key = sanitizeAuthString(next.key) as string
+    if (next.options && typeof next.options === "object" && "apiKey" in next.options) {
+      next.options = {
+        ...next.options,
+        apiKey: sanitizeAuthString(next.options.apiKey),
+      }
+    }
+    return next
+  }
+
+  function hasHeader(headers: Record<string, string>, name: string): boolean {
+    const lower = name.toLowerCase()
+    return Object.keys(headers).some((key) => key.toLowerCase() === lower)
+  }
+
   function addLegacyXaiModelAliases(providerID: ProviderID, models: Record<string, Model>) {
     if (providerID !== ProviderID.xai) return
 
@@ -246,16 +268,17 @@ export namespace Provider {
     const configProviders = Object.entries(config.provider ?? {})
 
     function mergeProvider(providerID: ProviderID, provider: Partial<Info>) {
+      const sanitized = sanitizeProviderAuth(provider)
       const existing = providers[providerID]
       if (existing) {
         // @ts-expect-error
-        providers[providerID] = mergeDeep(existing, provider)
+        providers[providerID] = mergeDeep(existing, sanitized)
         return
       }
       const match = database[providerID]
       if (!match) return
       // @ts-expect-error
-      providers[providerID] = mergeDeep(match, provider)
+      providers[providerID] = mergeDeep(match, sanitized)
     }
 
     function applyModelFilters(providerID: ProviderID, provider: Info) {
@@ -313,7 +336,8 @@ export namespace Provider {
         id: ProviderID.make(providerID),
         name: provider.name ?? existing?.name ?? providerID,
         env: provider.env ?? existing?.env ?? [],
-        options: mergeDeep(existing?.options ?? {}, provider.options ?? {}),
+        options:
+          sanitizeProviderAuth({ options: mergeDeep(existing?.options ?? {}, provider.options ?? {}) }).options ?? {},
         source: "config",
         models: existing?.models ?? {},
       }
@@ -664,6 +688,7 @@ export namespace Provider {
       if (model.api.npm.includes("@ai-sdk/openai-compatible") && options["includeUsage"] !== false) {
         options["includeUsage"] = true
       }
+      if (options["apiKey"] === undefined && provider.key) options["apiKey"] = provider.key
 
       // OpenRouter-specific quirks. Applied here at the SDK funnel so they
       // fire regardless of whether the provider was discovered via env var,
@@ -683,6 +708,8 @@ export namespace Provider {
       //
       // User-supplied options win in both maps so config overrides hold.
       if (model.api.npm === "@openrouter/ai-sdk-provider") {
+        const userHeaders = (options["headers"] as Record<string, string> | undefined) ?? {}
+        const apiKey = typeof options["apiKey"] === "string" ? options["apiKey"] : undefined
         options["extraBody"] = {
           usage: { include: true },
           ...((options["extraBody"] as Record<string, unknown> | undefined) ?? {}),
@@ -690,7 +717,8 @@ export namespace Provider {
         options["headers"] = {
           "HTTP-Referer": GITHUB_REPO_URL,
           "X-Title": "ax-code",
-          ...((options["headers"] as Record<string, string> | undefined) ?? {}),
+          ...(apiKey && !hasHeader(userHeaders, "authorization") ? { Authorization: `Bearer ${apiKey}` } : {}),
+          ...userHeaders,
         }
       }
 
@@ -728,7 +756,6 @@ export namespace Provider {
       })
 
       if (baseURL !== undefined) options["baseURL"] = baseURL
-      if (options["apiKey"] === undefined && provider.key) options["apiKey"] = provider.key
       if (model.headers)
         options["headers"] = {
           ...options["headers"],

@@ -300,6 +300,59 @@ test("provider loaded from config with apiKey option", async () => {
   })
 })
 
+test("provider api keys are stripped of pasted newlines before SDK use", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await Bun.write(
+        path.join(dir, "ax-code.json"),
+        JSON.stringify({
+          $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+          provider: {
+            xai: {
+              options: {
+                apiKey: " config-key\n ",
+              },
+            },
+          },
+        }),
+      )
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    init: async () => {
+      Env.set("OPENROUTER_API_KEY", "ak-test\nsk-or-v1-test")
+      await Auth.set("zai-coding-plan", { type: "api", key: "\rzai-test-key\n" })
+    },
+    fn: async () => {
+      try {
+        const providers = await Provider.list()
+        expect(providers[ProviderID.xai].options.apiKey).toBe("config-key")
+        expect(providers[ProviderID.make("openrouter")].key).toBe("ak-testsk-or-v1-test")
+        expect(providers[ProviderID.make("zai-coding-plan")].key).toBe("zai-test-key")
+      } finally {
+        await Auth.remove("zai-coding-plan")
+      }
+    },
+  })
+})
+
+test("OpenRouter SDK options include explicit bearer auth when a provider key is present", async () => {
+  const src = await Bun.file(path.join(import.meta.dir, "../../src/provider/provider.ts")).text()
+  const start = src.indexOf("async function getSDK")
+  const end = src.indexOf("const key = Hash.fast", start)
+  expect(start).toBeGreaterThan(-1)
+  expect(end).toBeGreaterThan(start)
+  const body = src.slice(start, end)
+  const apiKeyFallback = body.indexOf('if (options["apiKey"] === undefined && provider.key) options["apiKey"] = provider.key')
+  const openrouterBranch = body.indexOf('if (model.api.npm === "@openrouter/ai-sdk-provider")')
+  const authHeader = body.indexOf("Authorization: `Bearer ${apiKey}`")
+
+  expect(apiKeyFallback).toBeGreaterThan(-1)
+  expect(openrouterBranch).toBeGreaterThan(apiKeyFallback)
+  expect(authHeader).toBeGreaterThan(openrouterBranch)
+})
+
 test("disabled_providers excludes provider", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
