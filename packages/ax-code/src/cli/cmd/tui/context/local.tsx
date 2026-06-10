@@ -2,7 +2,6 @@ import { createStore } from "solid-js/store"
 import { batch, createEffect, createMemo, onCleanup } from "solid-js"
 import { useSync } from "@tui/context/sync"
 import { useTheme } from "@tui/context/theme"
-import { uniqueBy } from "remeda"
 import path from "path"
 import { Global } from "@/global"
 import { iife } from "@/util/iife"
@@ -22,7 +21,13 @@ import { useRoute } from "./route"
 import { RGBA } from "@opentui/core"
 import { Filesystem } from "@/util/filesystem"
 import { optionalStateErrorMessage, shouldSurfaceOptionalStateError } from "@tui/util/optional-state"
-import { normalizeModelVariantStore, resolveCurrentAgent } from "./local-util"
+import {
+  modelIdentity,
+  normalizeModelVariantStore,
+  normalizeRecentModels,
+  rememberRecentModel as rememberRecentModelEntry,
+  resolveCurrentAgent,
+} from "./local-util"
 import { Log } from "@/util/log"
 import { modelDisplayInfo } from "@tui/component/model-vision-label"
 
@@ -173,14 +178,8 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
         saveWarningShown: false,
       }
 
-      function modelIdentity(model: ProviderModelKeyInput) {
-        return { providerID: model.providerID, modelID: model.modelID }
-      }
-
       function rememberRecentModel(model: ProviderModelKeyInput) {
-        const uniq = uniqueBy([model, ...modelStore.recent], providerModelKey)
-        if (uniq.length > 10) uniq.pop()
-        setModelStore("recent", uniq.map(modelIdentity))
+        setModelStore("recent", rememberRecentModelEntry(modelStore.recent, model))
       }
 
       function save() {
@@ -213,7 +212,7 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
 
       Filesystem.readJson(filePath)
         .then((x: any) => {
-          setModelStore("recent", providerModelList(x?.recent))
+          setModelStore("recent", normalizeRecentModels(x?.recent))
           setModelStore("favorite", providerModelList(x?.favorite))
           setModelStore("variant", normalizeModelVariantStore(x?.variant))
         })

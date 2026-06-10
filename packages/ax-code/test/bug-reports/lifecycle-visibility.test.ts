@@ -141,7 +141,7 @@ describe("bug report lifecycle visibility guards", () => {
 
     expect(local).toContain("if (!sync.data.provider_loaded) {")
     expect(local).toContain('setModelStore("model", currentAgentName, model)')
-    expect(local).toContain("const uniq = uniqueBy([model, ...modelStore.recent]")
+    expect(local).toContain("rememberRecentModelEntry(modelStore.recent, model)")
     expect(local).toContain("save()\n              return")
     expect(local).toContain("removing invalid model override after providers loaded")
   })

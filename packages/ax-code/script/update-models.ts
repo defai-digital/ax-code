@@ -106,6 +106,11 @@ if (!fetched["grok-build-cli"].models?.["grok-build-cli"]) {
 }
 
 // Remove providers we don't support
+const removedProviderSources = Object.fromEntries(
+  ["moonshotai", "moonshotai-cn", "kimi-for-coding"].flatMap((id) =>
+    fetched[id] ? [[id, JSON.parse(JSON.stringify(fetched[id]))]] : [],
+  ),
+)
 for (const id of [
   "groq",
   "azure",
@@ -206,6 +211,29 @@ for (const [providerID, provider] of Object.entries(fetched) as Array<
       continue
     }
     if (isUnsupportedModel(model)) delete provider.models[mid]
+  }
+}
+
+// OpenRouter is intentionally a gap-filling provider in ax-code: avoid
+// duplicating models that have first-party providers, but keep high-value coding
+// models that are not otherwise exposed directly. models.dev can publish those
+// models under other reseller blocks before adding them to the openrouter block,
+// so backfill the curated OpenRouter set from trusted snapshot/provider copies.
+const openrouterModelFallbackProviders: Record<string, string[]> = {
+  "minimax/minimax-m3": ["openrouter", "nano-gpt", "zenmux", "vercel"],
+  "mistralai/mistral-medium-3-5": ["openrouter", "kilo"],
+  "inclusionai/ring-2.6-1t": ["openrouter", "nano-gpt", "novita-ai", "kilo", "zenmux"],
+}
+if (fetched["openrouter"]?.models) {
+  const openrouterModels = fetched["openrouter"].models as Record<string, RawModel>
+  for (const mid of Object.keys(openrouterModelFallbackProviders)) {
+    if (!supportsOpenRouterModelID(mid) || openrouterModels[mid]) continue
+    for (const fallbackID of openrouterModelFallbackProviders[mid] ?? []) {
+      const fallback = fetched[fallbackID]?.models?.[mid] ?? existing[fallbackID]?.models?.[mid]
+      if (!fallback) continue
+      openrouterModels[mid] = JSON.parse(JSON.stringify(fallback))
+      break
+    }
   }
 }
 if (!fetched["grok-build-cli"].models?.["grok-build-cli"]) {
@@ -365,6 +393,52 @@ for (const id of ["alibaba-coding-plan", "alibaba-coding-plan-cn", "alibaba-toke
     }
   }
   fetched[id].models = kept
+}
+
+// Kimi Cloud Plan is a first-party Moonshot endpoint surfaced as a narrow plan
+// provider. Keep it separate from the generic upstream Moonshot provider so the
+// picker only shows the currently validated coding model instead of every legacy
+// Kimi alias published by models.dev.
+const kimiCloudPlanModels = ["kimi-k2.6"]
+const kimiCloudPlanFallbackProviders: Record<string, string[]> = {
+  "kimi-k2.6": [
+    "moonshotai",
+    "moonshotai-cn",
+    "kimi-for-coding",
+    "alibaba-coding-plan",
+    "alibaba-token-plan",
+    "llmgateway",
+    "opencode",
+  ],
+}
+const kimiCloudPlanID = "kimi-cloud-plan"
+const kimiCloudPlanKept: Record<string, unknown> = {}
+for (const mid of kimiCloudPlanModels) {
+  for (const fallbackID of kimiCloudPlanFallbackProviders[mid] ?? []) {
+    const fallback =
+      fetched[fallbackID]?.models?.[mid] ??
+      existing[fallbackID]?.models?.[mid] ??
+      removedProviderSources[fallbackID]?.models?.[mid]
+    if (!fallback) continue
+    kimiCloudPlanKept[mid] = {
+      ...JSON.parse(JSON.stringify(fallback)),
+      id: mid,
+      name: "Kimi K2.6",
+      family: "kimi-k2.6",
+    }
+    break
+  }
+}
+if (Object.keys(kimiCloudPlanKept).length > 0) {
+  fetched[kimiCloudPlanID] = {
+    id: kimiCloudPlanID,
+    name: "Kimi Cloud Plan",
+    env: ["KIMI_CLOUD_PLAN_API_KEY", "MOONSHOT_API_KEY"],
+    npm: "@ai-sdk/openai-compatible",
+    api: "https://api.moonshot.ai/v1",
+    doc: "https://platform.moonshot.ai/docs/api/chat",
+    models: kimiCloudPlanKept,
+  }
 }
 
 // xAI ships Grok Build as the canonical coding model name, with the older

@@ -17,21 +17,9 @@ type ModelSupportProbeInput = {
 
 export const OPENROUTER_SUPPORTED_MODEL_IDS = [
   "openrouter/auto",
-  "openai/gpt-5.1-codex",
-  "openai/gpt-5.1-codex-mini",
-  "openai/gpt-5.1-codex-max",
-  "openai/gpt-5-codex",
-  "openai/gpt-5.2-codex",
-  "openai/gpt-5.3-codex",
-  "anthropic/claude-sonnet-4.5",
-  "anthropic/claude-sonnet-4.6",
-  "anthropic/claude-opus-4.7",
-  "x-ai/grok-4.3",
-  "moonshotai/kimi-k2.6",
-  "z-ai/glm-5.1",
-  "deepseek/deepseek-v4-pro",
-  "qwen/qwen3-coder",
-  "qwen/qwen3.6-plus",
+  "minimax/minimax-m3",
+  "mistralai/mistral-medium-3-5",
+  "inclusionai/ring-2.6-1t",
 ] as const
 
 const OPENROUTER_SUPPORTED_MODEL_ID_SET = new Set<string>(OPENROUTER_SUPPORTED_MODEL_IDS)

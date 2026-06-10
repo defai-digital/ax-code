@@ -1312,7 +1312,7 @@ test("openai provider only exposes GPT-4 or later models", async () => {
   })
 })
 
-test("openrouter provider only exposes curated coding models", async () => {
+test("openrouter provider only exposes curated gap-filling coding models", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await Bun.write(
@@ -1649,6 +1649,26 @@ test("Alibaba providers keep coding plan and token plan endpoints separate", asy
         "https://www.alibabacloud.com/help/en/model-studio/opencode-token-plan",
       )
       expect(snapshot["alibaba-token-plan-cn"]?.doc).toBe("https://help.aliyun.com/zh/model-studio/opencode-token-plan")
+    },
+  })
+})
+
+test("Kimi Cloud Plan exposes only the current validated Kimi coding model", async () => {
+  await using tmp = await tmpdir()
+  await Instance.provide({
+    directory: tmp.path,
+    init: async () => {
+      Env.set("KIMI_CLOUD_PLAN_API_KEY", "test-kimi-cloud-plan-key")
+    },
+    fn: async () => {
+      const providers = await Provider.list()
+      const kimiCloudPlan = providers[ProviderID.make("kimi-cloud-plan")]
+
+      expect(kimiCloudPlan).toBeDefined()
+      expect(kimiCloudPlan.name).toBe("Kimi Cloud Plan")
+      expect(kimiCloudPlan.key).toBe("test-kimi-cloud-plan-key")
+      expect(Object.keys(kimiCloudPlan.models).sort()).toEqual(["kimi-k2.6"])
+      expect(kimiCloudPlan.models["kimi-k2.6"].api.url).toBe("https://api.moonshot.ai/v1")
     },
   })
 })

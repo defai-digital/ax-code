@@ -1,3 +1,7 @@
+import { providerModelKey, providerModelList, type ProviderModelKeyInput } from "@/provider/model-key"
+
+export const RECENT_MODEL_LIMIT = 5
+
 export function resolveCurrentAgent<
   T extends { name: string; displayName?: string; model?: unknown } = {
     name: string
@@ -23,4 +27,28 @@ export function normalizeModelVariantStore(input: unknown): Record<string, strin
       (entry): entry is [string, string | undefined] => entry[1] === undefined || typeof entry[1] === "string",
     ),
   )
+}
+
+export function modelIdentity(model: ProviderModelKeyInput) {
+  return { providerID: model.providerID, modelID: model.modelID }
+}
+
+export function normalizeRecentModels(input: unknown): ProviderModelKeyInput[] {
+  return providerModelList(input).slice(0, RECENT_MODEL_LIMIT).map(modelIdentity)
+}
+
+export function rememberRecentModel(
+  recent: readonly ProviderModelKeyInput[],
+  model: ProviderModelKeyInput,
+): ProviderModelKeyInput[] {
+  const out: ProviderModelKeyInput[] = []
+  const seen = new Set<string>()
+  for (const item of [model, ...recent]) {
+    const key = providerModelKey(item)
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(modelIdentity(item))
+    if (out.length === RECENT_MODEL_LIMIT) break
+  }
+  return out
 }
