@@ -34,5 +34,6 @@ export function truncateMiddle(text: string, maxLength: number = 20) {
   const available = maxLength - 1 // -1 for ellipsis
   const start = Math.ceil(available / 2)
   const end = Math.floor(available / 2)
-  return text.slice(0, start) + "…" + text.slice(-end)
+  // slice(-0) returns the entire string, not empty — guard against it
+  return text.slice(0, start) + "…" + (end > 0 ? text.slice(-end) : "")
 }
