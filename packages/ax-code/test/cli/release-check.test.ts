@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { mkdtemp, writeFile, mkdir } from "node:fs/promises"
+import { chmod, mkdtemp, writeFile, mkdir } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { Process } from "../../src/util/process"
@@ -117,6 +117,39 @@ describe("release check (full checks)", () => {
 
     expect(find(results, "version").status).toBe("fail")
     expect(find(results, "version").detail).toContain("not greater than")
+  })
+
+  test("withdrawn prerelease GitHub releases are ignored when selecting prior tag", async () => {
+    const repo = await makeRepo("6.0.0", "v5.13.0")
+    await run("git", ["tag", "v6.3.1"], repo)
+
+    const binDir = path.join(repo, "bin")
+    await mkdir(binDir)
+    const gh = path.join(binDir, "gh")
+    await writeFile(
+      gh,
+      [
+        "#!/bin/sh",
+        'if [ "$3" = "v6.3.1" ]; then',
+        '  printf \'[true,"Withdrawn: v6.3.1","This release is withdrawn"]\\n\'',
+        "else",
+        '  printf \'[false,"",""]\\n\'',
+        "fi",
+        "",
+      ].join("\n"),
+    )
+    await chmod(gh, 0o755)
+
+    const originalPath = process.env.PATH
+    process.env.PATH = `${binDir}${path.delimiter}${originalPath ?? ""}`
+    try {
+      const results = await runChecks(mkCtx(repo, "6.0.0", { fetch: true }))
+
+      expect(find(results, "version").status).toBe("ok")
+      expect(find(results, "version").detail).toContain("greater than v5.13.0")
+    } finally {
+      process.env.PATH = originalPath
+    }
   })
 
   test("malformed version fails", async () => {

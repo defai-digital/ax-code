@@ -195,7 +195,11 @@ async function readPackageVersion(repoRoot: string): Promise<string> {
  *
  * If `relativeTo` is omitted, returns the overall latest semver tag.
  */
-async function latestTag(repoRoot: string, relativeTo?: string): Promise<string | undefined> {
+async function latestTag(
+  repoRoot: string,
+  relativeTo?: string,
+  options: { skipWithdrawnReleases?: boolean } = {},
+): Promise<string | undefined> {
   const result = await git(["tag", "--sort=-v:refname", "--list", "v*"], { cwd: repoRoot })
   if (result.exitCode !== 0) return undefined
   const tags = result
@@ -209,6 +213,7 @@ async function latestTag(repoRoot: string, relativeTo?: string): Promise<string 
     if (!semver.valid(v)) continue
     if (semver.prerelease(v)) continue // skip beta/rc tags
     if (major !== undefined && semver.major(v) !== major) continue
+    if (options.skipWithdrawnReleases && (await isWithdrawnGitHubRelease(repoRoot, t))) continue
     return t
   }
   // Fallback: if no same-major tag exists (e.g. first release on new major),
@@ -216,10 +221,33 @@ async function latestTag(repoRoot: string, relativeTo?: string): Promise<string 
   if (major !== undefined) {
     for (const t of tags) {
       const v = t.replace(/^v/, "")
-      if (semver.valid(v) && !semver.prerelease(v)) return t
+      if (!semver.valid(v) || semver.prerelease(v)) continue
+      if (options.skipWithdrawnReleases && (await isWithdrawnGitHubRelease(repoRoot, t))) continue
+      return t
     }
   }
   return undefined
+}
+
+async function isWithdrawnGitHubRelease(repoRoot: string, tag: string): Promise<boolean> {
+  const result = await Process.run(
+    ["gh", "release", "view", tag, "--json", "name,isPrerelease,body", "--jq", "[.isPrerelease,.name,.body] | @json"],
+    {
+      cwd: repoRoot,
+      stdin: "ignore",
+      nothrow: true,
+      timeout: NETWORK_TIMEOUT_MS,
+    },
+  ).catch(() => undefined)
+  if (!result || result.code !== 0) return false
+
+  try {
+    const [isPrerelease, name, body] = JSON.parse(result.stdout.toString()) as [unknown, unknown, unknown]
+    const text = `${typeof name === "string" ? name : ""}\n${typeof body === "string" ? body : ""}`.toLowerCase()
+    return isPrerelease === true && text.includes("withdrawn")
+  } catch {
+    return false
+  }
 }
 
 // ───── individual checks ──────────────────────────────────────────
@@ -236,7 +264,7 @@ async function checkVersion(ctx: CheckContext): Promise<CheckResult> {
         `Edit ${AX_CODE_PKG}/package.json and set a valid semver.`,
       )
     }
-    const prev = await latestTag(ctx.repoRoot, ctx.version)
+    const prev = await latestTag(ctx.repoRoot, ctx.version, { skipWithdrawnReleases: ctx.fetch })
     if (!prev) {
       return mkResult("Version format", "version", "ok", `${ctx.version} is valid semver (no prior tag)`, 0)
     }
