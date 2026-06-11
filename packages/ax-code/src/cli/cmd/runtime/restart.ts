@@ -1,4 +1,5 @@
 import { cmd } from "../cmd"
+import { DEFAULT_SERVER_PORT } from "@/server/constants"
 
 export const RestartCommand = cmd({
   command: "restart",
@@ -7,7 +8,7 @@ export const RestartCommand = cmd({
     yargs.option("port", {
       type: "number",
       describe: "server port",
-      default: 4096,
+      default: DEFAULT_SERVER_PORT,
     }),
   handler: async (args) => {
     const url = `http://127.0.0.1:${args.port}/instance/restart`

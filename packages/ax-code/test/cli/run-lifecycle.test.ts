@@ -84,9 +84,9 @@ test("headless-run attach mode rejects non-internal fetch targets", async () => 
 })
 
 test("shell env loading uses shared process timeout cleanup", async () => {
-  const src = await Bun.file(path.join(import.meta.dir, "../../src/cli/bootstrap/env.ts")).text()
+  const src = await Bun.file(path.join(import.meta.dir, "../../src/runtime/shell-env.ts")).text()
   const start = src.indexOf("async function loadShellEnv(")
-  const end = src.indexOf("export async function init(", start)
+  const end = src.length
   expect(start).toBeGreaterThan(-1)
   expect(end).toBeGreaterThan(start)
   const body = src.slice(start, end)
@@ -107,7 +107,7 @@ test("shell env loading starts after logging is configured", async () => {
   const body = src.slice(start)
 
   expect(body.indexOf("await log({")).toBeGreaterThan(-1)
-  expect(body.indexOf("shellEnvReady = loadShellEnv(env)")).toBeGreaterThan(body.indexOf("await log({"))
+  expect(body.indexOf("startShellEnvLoad(env)")).toBeGreaterThan(body.indexOf("await log({"))
 })
 
 test("debug wait unrefs the underlying timer", async () => {

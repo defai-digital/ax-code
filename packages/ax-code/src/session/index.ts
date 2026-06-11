@@ -451,7 +451,6 @@ export namespace Session {
     return next
   })
 
-
   function updateAndPublish(sessionID: SessionID, fields: Record<string, unknown>): Info {
     return Database.use((db) => {
       const row = db.update(SessionTable).set(fields).where(eq(SessionTable.id, sessionID)).returning().get()
@@ -483,7 +482,10 @@ export namespace Session {
   export const setMetadata = fn(
     z.object({ sessionID: SessionID.zod, metadata: SessionMetadata.Metadata }),
     async (input) =>
-      updateAndPublish(input.sessionID, { metadata: SessionMetadata.validate(input.metadata), time_updated: Date.now() }),
+      updateAndPublish(input.sessionID, {
+        metadata: SessionMetadata.validate(input.metadata),
+        time_updated: Date.now(),
+      }),
   )
 
   export const setProductMetadata = fn(
@@ -885,6 +887,35 @@ export namespace Session {
     })
     return part
   })
+
+  // Batch variant of updatePart: one transaction instead of one DB
+  // round-trip per part. Used by compaction pruning, which can touch
+  // hundreds of parts at once.
+  export async function updateParts(parts: MessageV2.Part[]) {
+    if (parts.length === 0) return parts
+    const time = Date.now()
+    Database.transaction((db) => {
+      for (const part of parts) {
+        const { id, messageID, sessionID, ...data } = part
+        db.insert(PartTable)
+          .values({
+            id,
+            message_id: messageID,
+            session_id: sessionID,
+            time_created: time,
+            data,
+          })
+          .onConflictDoUpdate({ target: PartTable.id, set: { data, time_updated: time } })
+          .run()
+      }
+      Database.effect(() => {
+        for (const part of parts) {
+          Bus.publishDetached(MessageV2.Event.PartUpdated, { part: { ...part } })
+        }
+      })
+    })
+    return parts
+  }
 
   export async function updateMessageWithParts(info: MessageV2.Info, parts: MessageV2.Part[]) {
     const messageTimeUpdated = Date.now()

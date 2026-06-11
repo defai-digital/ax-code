@@ -14,4 +14,29 @@ describe("script.workspace-metadata", () => {
 
     expect(packageJson.workspaces).toEqual(extractWorkspaceGlobs(pnpmWorkspaceYaml))
   })
+
+  test("OpenTUI peer exceptions stay scoped to opentui-spinner", async () => {
+    const repoRoot = path.resolve(import.meta.dir, "../../../../")
+    const packageJson = JSON.parse(await readFile(path.join(repoRoot, "package.json"), "utf8"))
+    const allowedVersions = packageJson.pnpm?.peerDependencyRules?.allowedVersions ?? {}
+    const opentuiRules = Object.fromEntries(
+      Object.entries(allowedVersions).filter(([selector]) => selector.includes("@opentui/")),
+    )
+
+    expect(opentuiRules).toEqual({
+      "opentui-spinner@0.0.6>@opentui/core": "0.3.4",
+      "opentui-spinner@0.0.6>@opentui/solid": "0.3.4",
+    })
+  })
+
+  test("OpenTUI dependencies stay on the validated renderer set", async () => {
+    const repoRoot = path.resolve(import.meta.dir, "../../../../")
+    const packageJson = JSON.parse(await readFile(path.join(repoRoot, "packages/ax-code/package.json"), "utf8"))
+    const dependencies = packageJson.dependencies ?? {}
+
+    expect(dependencies["@opentui/core"]).toBe("0.3.4")
+    expect(dependencies["@opentui/solid"]).toBe("0.3.4")
+    expect(dependencies["@opentui/keymap"]).toBeUndefined()
+    expect(dependencies["opentui-spinner"]).toBe("0.0.6")
+  })
 })

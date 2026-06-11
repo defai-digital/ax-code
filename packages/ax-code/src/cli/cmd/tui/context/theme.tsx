@@ -57,7 +57,7 @@ function detectTerminalMode(colors: TerminalColors): "dark" | "light" | undefine
   return colorModeFromHex(colors.defaultBackground) ?? colorModeFromHex(colors.palette[0])
 }
 
-function resolveTheme(theme: ThemeJson, mode: "dark" | "light") {
+export function resolveTheme(theme: ThemeJson, mode: "dark" | "light") {
   const defs = theme.defs ?? {}
   function resolveColor(c: ColorValue, visiting = new Set<string>()): RGBA {
     if (c instanceof RGBA) return c
@@ -86,9 +86,16 @@ function resolveTheme(theme: ThemeJson, mode: "dark" | "light") {
     return resolveColor(c[mode], visiting)
   }
 
+  const optionalKeys = new Set([
+    "selectedListItemText",
+    "backgroundMenu",
+    "brandGradientStart",
+    "brandGradientEnd",
+    "thinkingOpacity",
+  ])
   const resolved = Object.fromEntries(
     Object.entries(theme.theme)
-      .filter(([key]) => key !== "selectedListItemText" && key !== "backgroundMenu" && key !== "thinkingOpacity")
+      .filter(([key]) => !optionalKeys.has(key))
       .map(([key, value]) => {
         return [key, resolveColor(value as ColorValue)]
       }),
@@ -110,6 +117,13 @@ function resolveTheme(theme: ThemeJson, mode: "dark" | "light") {
   } else {
     resolved.backgroundMenu = resolved.backgroundElement
   }
+
+  // Brand gradient ramp - optional with fallback to primary→secondary
+  // (ADR-031 R12), so every existing theme keeps a sensible ramp.
+  resolved.brandGradientStart =
+    theme.theme.brandGradientStart !== undefined ? resolveColor(theme.theme.brandGradientStart) : resolved.primary
+  resolved.brandGradientEnd =
+    theme.theme.brandGradientEnd !== undefined ? resolveColor(theme.theme.brandGradientEnd) : resolved.secondary
 
   // Handle thinkingOpacity - optional with default of 0.6
   const thinkingOpacity = theme.theme.thinkingOpacity ?? 0.6
@@ -182,7 +196,7 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
       themes: DEFAULT_THEMES,
       mode: lock ?? pick(kv.get("theme_mode", props.mode)) ?? props.mode,
       lock,
-      active: (config.theme ?? kv.get("theme", "github")) as string,
+      active: (config.theme ?? kv.get("theme", "automatosx")) as string,
       ready: false,
     })
 
@@ -190,6 +204,33 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
       const theme = config.theme
       if (theme) setStore("active", theme)
     })
+
+    // kv.json loads asynchronously, so the store init above almost always
+    // runs before the persisted values land and falls back to defaults —
+    // the user's saved theme/mode would silently revert every launch.
+    // Re-apply the persisted values once kv is ready, unless the config
+    // pins a theme or the user already changed them in this session.
+    let userSetTheme = false
+    let userSetMode = false
+    createEffect(
+      on(
+        () => kv.ready,
+        (ready) => {
+          if (!ready) return
+          const savedLock = pick(kv.get("theme_mode_lock"))
+          const savedMode = savedLock ?? pick(kv.get("theme_mode"))
+          if (!userSetMode) {
+            if (savedLock && savedLock !== store.lock) setStore("lock", savedLock)
+            if (savedMode && savedMode !== store.mode) setStore("mode", savedMode)
+          }
+          const savedTheme = kv.get("theme")
+          if (!userSetTheme && !config.theme && typeof savedTheme === "string" && savedTheme !== store.active) {
+            if (savedTheme !== "system" && !store.themes[savedTheme]) void ensureCustomThemesLoaded()
+            setStore("active", savedTheme)
+          }
+        },
+      ),
+    )
 
     let customThemesLoaded = false
     let customThemesPromise: Promise<void> | undefined
@@ -206,7 +247,7 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
           )
         })
         .catch(() => {
-          setStore("active", "github")
+          setStore("active", "automatosx")
         })
         .finally(() => {
           customThemesPromise = undefined
@@ -258,7 +299,7 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
               produce((draft) => {
                 draft.mode = nextMode
                 if (draft.active === "system") {
-                  draft.active = "github"
+                  draft.active = "automatosx"
                   draft.ready = true
                 }
               }),
@@ -312,7 +353,7 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
     })
 
     const values = createMemo(() => {
-      return resolveTheme(store.themes[store.active] ?? store.themes.github, store.mode)
+      return resolveTheme(store.themes[store.active] ?? store.themes.automatosx, store.mode)
     })
 
     createEffect(() => {
@@ -360,15 +401,19 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
         return store.lock !== undefined
       },
       lock() {
+        userSetMode = true
         pin(store.mode)
       },
       unlock() {
+        userSetMode = true
         free()
       },
       setMode(mode: "dark" | "light") {
+        userSetMode = true
         pin(mode)
       },
       set(theme: string) {
+        userSetTheme = true
         if (theme !== "system" && !store.themes[theme]) {
           void ensureCustomThemesLoaded()
         }
@@ -852,11 +897,14 @@ function getSyntaxRules(theme: Theme) {
         bold: true,
       },
     },
+    // H1/H2 get an underline on top of bold so top-level structure stays
+    // scannable in long assistant answers (ADR-031 R9).
     {
       scope: ["markup.heading.1"],
       style: {
         foreground: theme.markdownHeading,
         bold: true,
+        underline: true,
       },
     },
     {
@@ -864,6 +912,7 @@ function getSyntaxRules(theme: Theme) {
       style: {
         foreground: theme.markdownHeading,
         bold: true,
+        underline: true,
       },
     },
     {

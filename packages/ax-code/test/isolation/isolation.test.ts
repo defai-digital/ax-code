@@ -81,6 +81,24 @@ describe("isolation.assertWrite", () => {
     expect(body).not.toContain("if (isProtected(state, resolved)) return false")
   })
 
+  test.skipIf(process.platform !== "darwin" && process.platform !== "win32")(
+    "denies writes to a case-variant of a not-yet-existing protected path on case-insensitive filesystems",
+    async () => {
+      await using tmp = await tmpdir()
+      const dir = path.join(tmp.path, "project")
+      await fs.mkdir(dir, { recursive: true })
+      // Note: .ax-code / .git intentionally do NOT exist yet — that is the
+      // window in which the case-insensitive bypass used to slip through.
+      const state = Isolation.resolve({ mode: "workspace-write", network: false }, dir)
+      expect(() => Isolation.assertWrite(state, path.join(dir, ".AX-CODE/auth.json"), dir, dir)).toThrow(
+        "Path is protected by isolation policy",
+      )
+      expect(() => Isolation.assertBash(state, dir, dir, dir, [path.join(dir, ".GIT/hooks/pre-commit")])).toThrow(
+        "Bash command targets protected path",
+      )
+    },
+  )
+
   test("denies writes outside workspace boundary", () => {
     const state = Isolation.resolve({ mode: "workspace-write", network: false }, root)
     expect(() => Isolation.assertWrite(state, "/tmp/other/file.txt", root, worktree)).toThrow(
@@ -170,6 +188,46 @@ describe("isolation.assertBash", () => {
     expect(() =>
       Isolation.assertBash(state, path.join(dir, "pkg"), dir, tree, [path.join(dir, "pkg", "link")]),
     ).toThrow("Bash command targets path outside workspace boundary")
+  })
+})
+
+describe("isolation.assertBashNetwork", () => {
+  test("blocks network-only commands when network is disabled", () => {
+    const state = Isolation.resolve({ mode: "workspace-write", network: false }, root)
+    expect(() => Isolation.assertBashNetwork(state, ["curl"])).toThrow("Network access is disabled")
+    expect(() => Isolation.assertBashNetwork(state, ["echo", "wget"])).toThrow("Network access is disabled")
+  })
+
+  test("matches on the command basename, not the full path", () => {
+    const state = Isolation.resolve({ mode: "workspace-write", network: false }, root)
+    expect(() => Isolation.assertBashNetwork(state, ["/usr/bin/curl"])).toThrow("Network access is disabled")
+  })
+
+  test("allows non-network commands when network is disabled", () => {
+    const state = Isolation.resolve({ mode: "workspace-write", network: false }, root)
+    expect(() => Isolation.assertBashNetwork(state, ["echo", "ls", "git", "npm"])).not.toThrow()
+  })
+
+  test("allows network commands when network is enabled or full-access", () => {
+    const enabled = Isolation.resolve({ mode: "workspace-write", network: true }, root)
+    expect(() => Isolation.assertBashNetwork(enabled, ["curl"])).not.toThrow()
+    const full = Isolation.resolve({ mode: "full-access", network: false }, root)
+    expect(() => Isolation.assertBashNetwork(full, ["curl"])).not.toThrow()
+  })
+
+  test("no-op when state is undefined", () => {
+    expect(() => Isolation.assertBashNetwork(undefined, ["curl"])).not.toThrow()
+  })
+
+  test("surfaces a network DeniedError so escalation can prompt", () => {
+    const state = Isolation.resolve({ mode: "workspace-write", network: false }, root)
+    try {
+      Isolation.assertBashNetwork(state, ["curl"])
+      throw new Error("expected DeniedError")
+    } catch (e) {
+      expect(e).toBeInstanceOf(Isolation.DeniedError)
+      expect((e as Isolation.DeniedError).reason).toBe("network")
+    }
   })
 })
 

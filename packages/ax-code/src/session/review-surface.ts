@@ -117,7 +117,8 @@ export function buildReviewSurfaceModel(input: BuildReviewSurfaceModelInput): Re
       recommendedDecision: result.recommendedDecision,
       summary: result.summary,
     })),
-    emptyState: input.emptyState ?? emptyState({ files, findings, verificationEnvelopes, reviewResults, rollbackPoints }),
+    emptyState:
+      input.emptyState ?? emptyState({ files, findings, verificationEnvelopes, reviewResults, rollbackPoints }),
   }
 }
 

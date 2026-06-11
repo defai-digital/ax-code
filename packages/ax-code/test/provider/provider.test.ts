@@ -85,7 +85,10 @@ test("getLanguage registers pending model loads before awaiting them", async () 
   const end = src.indexOf("export async function closest(", start)
   expect(start).toBeGreaterThan(-1)
   expect(end).toBeGreaterThan(start)
-  const body = src.slice(start, end)
+  // Strip line comments: an explanatory comment quoting one of the code
+  // patterns below would otherwise match indexOf() first and break the
+  // ordering assertions even though the code itself is correct.
+  const body = src.slice(start, end).replace(/\/\/[^\n]*/g, "")
 
   const pendingCheck = body.indexOf("const pending = s.modelPending.get(key)")
   const promiseCreate = body.indexOf("const promise = Promise.resolve().then")
@@ -293,6 +296,95 @@ test("provider loaded from config with apiKey option", async () => {
     fn: async () => {
       const providers = await Provider.list()
       expect(providers[ProviderID.xai]).toBeDefined()
+    },
+  })
+})
+
+test("provider api keys are stripped of pasted newlines before SDK use", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await Bun.write(
+        path.join(dir, "ax-code.json"),
+        JSON.stringify({
+          $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+          provider: {
+            xai: {
+              options: {
+                apiKey: " config-key\n ",
+              },
+            },
+          },
+        }),
+      )
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    init: async () => {
+      Env.set("OPENROUTER_API_KEY", "ak-test\nsk-or-v1-test")
+      await Auth.set("zai-coding-plan", { type: "api", key: "\rzai-test-key\n" })
+    },
+    fn: async () => {
+      try {
+        const providers = await Provider.list()
+        expect(providers[ProviderID.xai].options.apiKey).toBe("config-key")
+        expect(providers[ProviderID.make("openrouter")].key).toBe("ak-testsk-or-v1-test")
+        expect(providers[ProviderID.make("zai-coding-plan")].key).toBe("zai-test-key")
+      } finally {
+        await Auth.remove("zai-coding-plan")
+      }
+    },
+  })
+})
+
+test("OpenRouter SDK options include explicit bearer auth when a provider key is present", async () => {
+  const src = await Bun.file(path.join(import.meta.dir, "../../src/provider/provider.ts")).text()
+  const start = src.indexOf("async function getSDK")
+  const end = src.indexOf("const key = Hash.fast", start)
+  expect(start).toBeGreaterThan(-1)
+  expect(end).toBeGreaterThan(start)
+  const body = src.slice(start, end)
+  const apiKeyFallback = body.indexOf('else if (providerApiKey) options["apiKey"] = providerApiKey')
+  const openrouterBranch = body.indexOf('if (model.api.npm === "@openrouter/ai-sdk-provider")')
+  const authHeader = body.indexOf("withOpenRouterAuthorization")
+  const modelHeaders = body.indexOf("...model.headers")
+  const finalAuthHeader = body.indexOf("withOpenRouterAuthorization", modelHeaders)
+
+  expect(apiKeyFallback).toBeGreaterThan(-1)
+  expect(openrouterBranch).toBeGreaterThan(apiKeyFallback)
+  expect(authHeader).toBeGreaterThan(openrouterBranch)
+  expect(modelHeaders).toBeGreaterThan(openrouterBranch)
+  expect(finalAuthHeader).toBeGreaterThan(modelHeaders)
+})
+
+test("blank configured api keys do not suppress OpenRouter credential fallback", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await Bun.write(
+        path.join(dir, "ax-code.json"),
+        JSON.stringify({
+          $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+          enabled_providers: ["openrouter"],
+          provider: {
+            openrouter: {
+              options: {
+                apiKey: " \n ",
+              },
+            },
+          },
+        }),
+      )
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    init: async () => {
+      Env.set("OPENROUTER_API_KEY", "test-openrouter-key")
+    },
+    fn: async () => {
+      const providers = await Provider.list()
+      expect(providers[ProviderID.make("openrouter")].key).toBe("test-openrouter-key")
+      expect(providers[ProviderID.make("openrouter")].options.apiKey).toBeUndefined()
     },
   })
 })
@@ -623,6 +715,18 @@ test("parseModel handles model IDs with slashes", () => {
   const result = Provider.parseModel("lmstudio/openai/gpt-oss-20b")
   expect(String(result.providerID)).toBe("lmstudio")
   expect(String(result.modelID)).toBe("openai/gpt-oss-20b")
+})
+
+test("parseModel rejects a bare provider without a model id", () => {
+  expect(() => Provider.parseModel("openai")).toThrow('expected "provider/model"')
+})
+
+test("parseModel rejects a trailing slash without a model id", () => {
+  expect(() => Provider.parseModel("openai/")).toThrow('expected "provider/model"')
+})
+
+test("parseModel rejects object input without a model id", () => {
+  expect(() => Provider.parseModel({ providerID: "openai" })).toThrow('expected "provider/model"')
 })
 
 test("defaultModel returns first available model when no config set", async () => {
@@ -1297,7 +1401,7 @@ test("openai provider only exposes GPT-4 or later models", async () => {
   })
 })
 
-test("openrouter provider only exposes curated coding models", async () => {
+test("openrouter provider only exposes curated gap-filling coding models", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await Bun.write(
@@ -1606,9 +1710,14 @@ test("Alibaba providers keep coding plan and token plan endpoints separate", asy
         "deepseek-v4-pro",
         "glm-5.1",
         "kimi-k2.6",
+        "qwen-image-2.0",
+        "qwen-image-2.0-pro",
         "qwen3.6-flash",
         "qwen3.6-plus",
         "qwen3.7-max",
+        "qwen3.7-plus",
+        "wan2.7-image",
+        "wan2.7-image-pro",
       ]
       expect(Object.keys(codingPlan.models).sort()).toEqual(expectedAlibabaPlanModels)
       expect(Object.keys(codingPlanCn.models).sort()).toEqual(expectedAlibabaPlanModels)
@@ -1629,6 +1738,26 @@ test("Alibaba providers keep coding plan and token plan endpoints separate", asy
         "https://www.alibabacloud.com/help/en/model-studio/opencode-token-plan",
       )
       expect(snapshot["alibaba-token-plan-cn"]?.doc).toBe("https://help.aliyun.com/zh/model-studio/opencode-token-plan")
+    },
+  })
+})
+
+test("Kimi Cloud Plan exposes only the current validated Kimi coding model", async () => {
+  await using tmp = await tmpdir()
+  await Instance.provide({
+    directory: tmp.path,
+    init: async () => {
+      Env.set("KIMI_CLOUD_PLAN_API_KEY", "test-kimi-cloud-plan-key")
+    },
+    fn: async () => {
+      const providers = await Provider.list()
+      const kimiCloudPlan = providers[ProviderID.make("kimi-cloud-plan")]
+
+      expect(kimiCloudPlan).toBeDefined()
+      expect(kimiCloudPlan.name).toBe("Kimi Cloud Plan")
+      expect(kimiCloudPlan.key).toBe("test-kimi-cloud-plan-key")
+      expect(Object.keys(kimiCloudPlan.models).sort()).toEqual(["kimi-k2.6"])
+      expect(kimiCloudPlan.models["kimi-k2.6"].api.url).toBe("https://api.moonshot.ai/v1")
     },
   })
 })

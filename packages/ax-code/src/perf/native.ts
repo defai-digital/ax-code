@@ -92,6 +92,23 @@ export namespace NativePerf {
     }
   }
 
+  // Async variant for awaited hot paths: run() would only measure the
+  // synchronous time to create the promise, not the work behind it.
+  export async function runAsync<T>(name: string, input: unknown, fn: () => Promise<T>): Promise<T> {
+    if (!enabled()) return fn()
+
+    const start = performance.now()
+
+    try {
+      const result = await fn()
+      record(name, input, result, performance.now() - start, false)
+      return result
+    } catch (error) {
+      record(name, input, undefined, performance.now() - start, true)
+      throw error
+    }
+  }
+
   export function snapshot(): NativePerfSnapshot {
     const rows = [...stats.entries()]
       .map(([name, item]) => ({

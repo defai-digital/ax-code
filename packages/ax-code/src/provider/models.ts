@@ -184,7 +184,16 @@ export namespace ModelsDev {
     throw new Error("bundled model snapshot is invalid")
   })
 
+  // Memoize the sanitized view keyed on the Data() result reference:
+  // Data() is lazy (stable object), but get() is called from several init
+  // paths and sanitize() rebuilds the whole provider/model tree each time.
+  // Callers treat the result as read-only (provider state converts entries
+  // into fresh Info objects; the rest are display/serialization reads).
+  let sanitized: { source: Record<string, Provider>; result: Record<string, Provider> } | undefined
+
   export async function get() {
-    return sanitize(await Data())
+    const data = await Data()
+    if (sanitized?.source !== data) sanitized = { source: data, result: sanitize(data) }
+    return sanitized.result
   }
 }

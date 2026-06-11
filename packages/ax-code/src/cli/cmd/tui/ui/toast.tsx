@@ -2,12 +2,12 @@ import { createContext, onCleanup, useContext, type ParentProps, Show } from "so
 import { createStore } from "solid-js/store"
 import { useTheme } from "@tui/context/theme"
 import { useTerminalDimensions } from "@opentui/solid"
-import { SplitBorder } from "../component/border"
+import { RoundedBorder } from "./primitives/card"
 import { TextAttributes } from "@opentui/core"
 import z from "zod"
-import { TuiEvent } from "../event"
+import { NotificationEvent } from "@/notification/events"
 
-export type ToastOptions = z.infer<typeof TuiEvent.ToastShow.properties>
+export type ToastOptions = z.infer<typeof NotificationEvent.ToastShow.properties>
 
 const VARIANT_ICON: Record<ToastOptions["variant"], string> = {
   error: "▲",
@@ -37,8 +37,8 @@ export function Toast() {
           paddingBottom={1}
           backgroundColor={theme.backgroundPanel}
           borderColor={theme[current().variant]}
-          border={["left", "right"]}
-          customBorderChars={SplitBorder.customBorderChars}
+          border={["top", "right", "bottom", "left"]}
+          customBorderChars={RoundedBorder}
         >
           <Show when={current().title}>
             <text attributes={TextAttributes.BOLD} marginBottom={1} fg={theme.text}>
@@ -82,7 +82,7 @@ function init() {
 
   const toast = {
     show(options: ToastOptions) {
-      const parsedOptions = TuiEvent.ToastShow.properties.parse(options)
+      const parsedOptions = NotificationEvent.ToastShow.properties.parse(options)
       if (store.currentToast) {
         setStore("queue", (queue) => [...queue, parsedOptions])
         return

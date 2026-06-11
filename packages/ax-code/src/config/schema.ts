@@ -3,9 +3,9 @@ import { isRecord } from "@/util/record"
 import { ModelsDev } from "../provider/models"
 import { Log } from "../util/log"
 import { LSPServer } from "../lsp/server"
+import { GITHUB_REPO_URL as REPO_URL } from "@/constants/project"
 
 const MODEL_SCHEMA_URL = "https://models.dev/model-schema.json#/$defs/Model"
-const REPO_URL = "https://github.com/defai-digital/ax-code"
 const MCP_TIMEOUT_MS = 5000
 const MCP_TIMEOUT_SECONDS = MCP_TIMEOUT_MS / 1000
 const PROVIDER_TIMEOUT_MS = 300_000
@@ -566,7 +566,12 @@ export const Info = z
       .describe(
         "Automatically update to the latest version. Set to true to auto-update, false to disable, or 'notify' to show update notifications",
       ),
-    shell: z.string().optional().describe("Default shell to use for terminal and bash tool (e.g. /bin/bash, /usr/bin/zsh). Overrides $SHELL environment variable."),
+    shell: z
+      .string()
+      .optional()
+      .describe(
+        "Default shell to use for terminal and bash tool (e.g. /bin/bash, /usr/bin/zsh). Overrides $SHELL environment variable.",
+      ),
     language: z.literal("en").optional().describe("UI language (English only)"),
     disabled_providers: z.array(z.string()).optional().describe("Disable providers that are loaded automatically"),
     enabled_providers: z
@@ -740,7 +745,9 @@ export const Info = z
         mode: z
           .enum(["off", "delegate", "switch"])
           .optional()
-          .describe("@deprecated Routing mode is no longer used. Field accepted for backwards compatibility but ignored."),
+          .describe(
+            "@deprecated Routing mode is no longer used. Field accepted for backwards compatibility but ignored.",
+          ),
         auto_switch: z
           .boolean()
           .optional()
@@ -781,10 +788,23 @@ export const Info = z
       .object({
         image: z
           .object({
-            auto_resize: z.boolean().optional().describe("Automatically resize images that exceed limits before sending to the model (default: true)"),
+            auto_resize: z
+              .boolean()
+              .optional()
+              .describe("Automatically resize images that exceed limits before sending to the model (default: true)"),
             max_width: z.number().int().positive().optional().describe("Maximum image width in pixels (default: 2000)"),
-            max_height: z.number().int().positive().optional().describe("Maximum image height in pixels (default: 2000)"),
-            max_base64_bytes: z.number().int().positive().optional().describe("Maximum image size in base64 bytes (default: 5242880 = 5MiB)"),
+            max_height: z
+              .number()
+              .int()
+              .positive()
+              .optional()
+              .describe("Maximum image height in pixels (default: 2000)"),
+            max_base64_bytes: z
+              .number()
+              .int()
+              .positive()
+              .optional()
+              .describe("Maximum image size in base64 bytes (default: 5242880 = 5MiB)"),
           })
           .optional(),
       })

@@ -28,7 +28,8 @@ import { Installation } from "@/installation"
 import { ConfigMarkdown } from "./markdown"
 import { constants, existsSync } from "fs"
 import { GlobalBus } from "@/bus/global"
-import { Event } from "../server/event"
+import { NativePerf } from "@/perf/native"
+import { RuntimeEvent } from "@/runtime/events"
 import { Glob } from "../util/glob"
 import { PackageRegistry } from "@/bun/registry"
 import { iife } from "@/util/iife"
@@ -45,15 +46,11 @@ import { isRecord } from "../util/record"
 import { FeatureFlag } from "../util/feature-flags"
 import { parseJsonResult } from "../util/json-value"
 import { FileCommand } from "../command/file-command"
+// Single source of truth for the public config schema URL. Written into
+// every user's ax-code.json on first load, into legacy-TOML migrations,
+// and into remote wellknown configs that omit `$schema`. See issue #17.
+import { CONFIG_SCHEMA_URL } from "@/constants/project"
 
-// Single source of truth for the public config schema URL. Written
-// into every user's ax-code.json on first load, into legacy-TOML
-// migrations, and into remote wellknown configs that omit `$schema`.
-// Used to be copy-pasted in 4 places — a domain rename or versioning
-// change would have missed at least one site and persisted wrong
-// schema URLs into random users' configs. See issue #17.
-const CONFIG_SCHEMA_URL =
-  "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json"
 const PROGRAM_DATA_FALLBACK_DIR = "C:\\ProgramData"
 const UNIX_SYSTEM_CONFIG_DIR = "/etc/ax-code"
 const PLATFORM_CONFIG_DIR = "ax-code"
@@ -182,8 +179,10 @@ export namespace Config {
     return merged
   }
 
-  export const state = Instance.state(async () => {
-    const auth = await Auth.all()
+  export const state = Instance.state(() => NativePerf.runAsync("config.load", undefined, loadState))
+
+  async function loadState() {
+    const auth = await NativePerf.runAsync("config.load.auth", undefined, () => Auth.all())
     const mcpSources: Record<string, McpSource> = {}
 
     function recordMcpSources(config: Info, source: McpSource) {
@@ -236,7 +235,7 @@ export namespace Config {
         wellknownEntries.push({ url, key: value.key, token: value.token })
       }
     }
-    const wellknownConfigs = await Promise.all(
+    const wellknownPromise = Promise.all(
       wellknownEntries.map(async ({ url }) => {
         try {
           const endpoint = `${url}/.well-known/ax-code`
@@ -255,12 +254,16 @@ export namespace Config {
             })
             return undefined
           }
-          const response = await Ssrf.pinnedFetch(endpoint, { signal: AbortSignal.timeout(10_000) })
+          // Keep this short: the fetch sits on the Config.get() critical path
+          // (so effectively on every command's startup), the legacy fallback
+          // can double the wait, and a missing wellknown config is tolerated.
+          const WELLKNOWN_TIMEOUT_MS = 3_000
+          const response = await Ssrf.pinnedFetch(endpoint, { signal: AbortSignal.timeout(WELLKNOWN_TIMEOUT_MS) })
             .then((res) => {
               if (res.ok || res.status !== 404) return res
-              return Ssrf.pinnedFetch(legacy, { signal: AbortSignal.timeout(10_000) })
+              return Ssrf.pinnedFetch(legacy, { signal: AbortSignal.timeout(WELLKNOWN_TIMEOUT_MS) })
             })
-            .catch(() => Ssrf.pinnedFetch(legacy, { signal: AbortSignal.timeout(10_000) }))
+            .catch(() => Ssrf.pinnedFetch(legacy, { signal: AbortSignal.timeout(WELLKNOWN_TIMEOUT_MS) }))
           if (!response.ok) {
             log.warn("failed to fetch remote config", {
               command: "config.load",
@@ -293,12 +296,20 @@ export namespace Config {
         }
       }),
     )
+    const wellknownConfigs = await NativePerf.runAsync(
+      "config.load.wellknown",
+      wellknownEntries.length,
+      () => wellknownPromise,
+    )
     for (const cfg of wellknownConfigs) {
       if (cfg) mergeFromSource(cfg.source, cfg.loaded)
     }
 
     // Global user config overrides remote config.
-    mergeFromSource(trustedMcpSource("global", { path: Global.Path.config }), await global())
+    mergeFromSource(
+      trustedMcpSource("global", { path: Global.Path.config }),
+      await NativePerf.runAsync("config.load.global", undefined, () => global()),
+    )
 
     // Custom config path overrides global config.
     if (Flag.AX_CODE_CONFIG) {
@@ -308,7 +319,9 @@ export namespace Config {
 
     // Project config overrides global and remote config.
     if (!Flag.AX_CODE_DISABLE_PROJECT_CONFIG) {
-      const projectFiles = await ConfigPaths.projectFiles("ax-code", Instance.directory, Instance.worktree)
+      const projectFiles = await NativePerf.runAsync("config.load.projectFiles", undefined, () =>
+        ConfigPaths.projectFiles("ax-code", Instance.directory, Instance.worktree),
+      )
       // Project configs live inside the worktree and may be checked
       // in by anyone — treat them as untrusted so a malicious
       // `ax-code.json` committed to a shared repo cannot read files
@@ -334,7 +347,9 @@ export namespace Config {
     result.mode = result.mode ?? {}
     result.plugin = result.plugin ?? []
 
-    const directories = await ConfigPaths.directories(Instance.directory, Instance.worktree)
+    const directories = await NativePerf.runAsync("config.load.directories", undefined, () =>
+      ConfigPaths.directories(Instance.directory, Instance.worktree),
+    )
 
     // .ax-code directory config overrides (project and global) config sources.
     if (Flag.AX_CODE_CONFIG_DIR) {
@@ -417,12 +432,12 @@ export namespace Config {
       log.debug("loaded custom config from AX_CODE_CONFIG_CONTENT", { command: "config.load", status: "ok" })
     }
 
-    const active = await Account.active()
+    const active = await NativePerf.runAsync("config.load.account", undefined, () => Account.active())
     if (active?.active_org_id) {
       try {
         let accountTimer: ReturnType<typeof setTimeout>
         const accountTimeout = new Promise<never>((_, reject) => {
-          accountTimer = setTimeout(() => reject(new Error("account config fetch timed out")), 10_000)
+          accountTimer = setTimeout(() => reject(new Error("account config fetch timed out")), 5_000)
         })
         const [config, token] = await Promise.race([
           Promise.all([Account.config(active.id, active.active_org_id), Account.token(active.id)]),
@@ -537,7 +552,7 @@ export namespace Config {
       deps,
       mcpSources,
     }
-  })
+  }
 
   export async function waitForDependencies() {
     const deps = await state().then((x) => x.deps)
@@ -1151,7 +1166,7 @@ export namespace Config {
     GlobalBus.emit("event", {
       directory: "global",
       payload: {
-        type: Event.Disposed.type,
+        type: RuntimeEvent.Disposed.type,
         properties: {},
       },
     })

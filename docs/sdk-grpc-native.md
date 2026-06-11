@@ -168,20 +168,12 @@ const ptyDescriptor = listAxCodeGrpcMethods({ kind: "bidiStream" })[0]
 // ptyDescriptor.responseType === "PtyServerEvent"
 
 assertAxCodeGrpcNativeHandlers(handlers, {
-  methods: [
-    AX_CODE_GRPC_METHOD.GetSession,
-    AX_CODE_GRPC_METHOD.SubscribeEvents,
-    AX_CODE_GRPC_METHOD.ConnectPty,
-  ],
+  methods: [AX_CODE_GRPC_METHOD.GetSession, AX_CODE_GRPC_METHOD.SubscribeEvents, AX_CODE_GRPC_METHOD.ConnectPty],
 })
 
 const bridge = createAxCodeGrpcNativeBridgeFromHandlers(handlers, {
   requireHandlers: {
-    methods: [
-      AX_CODE_GRPC_METHOD.GetSession,
-      AX_CODE_GRPC_METHOD.SubscribeEvents,
-      AX_CODE_GRPC_METHOD.ConnectPty,
-    ],
+    methods: [AX_CODE_GRPC_METHOD.GetSession, AX_CODE_GRPC_METHOD.SubscribeEvents, AX_CODE_GRPC_METHOD.ConnectPty],
   },
 })
 ```

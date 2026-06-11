@@ -3,7 +3,6 @@
   "extends": "@tsconfig/bun/tsconfig.json",
   "exclude": [
     "bench-both.ts",
-    "bench-opencode.ts",
     "src/cli/cmd/workspace-serve.ts",
     "src/server/routes/workspace.ts",
     "src/storage/db.node.ts",

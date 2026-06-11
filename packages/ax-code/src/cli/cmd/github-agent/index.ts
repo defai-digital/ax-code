@@ -1,5 +1,6 @@
 import path from "path"
 import { execFile } from "child_process"
+import { GITHUB_REPO_URL, GITHUB_ACTION_REF } from "@/constants/project"
 import { Filesystem } from "../../../util/filesystem"
 import { Ssrf } from "../../../util/ssrf"
 import * as prompts from "@clack/prompts"
@@ -120,7 +121,7 @@ export const GithubInstallCommand = cmd({
                 "",
                 "    3. Go to a GitHub issue and comment `/oc summarize` to see the agent in action",
                 "",
-                "   Learn more about the GitHub agent - https://github.com/defai-digital/ax-code",
+                `   Learn more about the GitHub agent - ${GITHUB_REPO_URL}`,
               ].join("\n"),
             )
           }
@@ -277,7 +278,7 @@ jobs:
           persist-credentials: false
 
       - name: Run ax-code
-        uses: defai-digital/ax-code/github@latest${envStr}
+        uses: ${GITHUB_ACTION_REF}@latest${envStr}
         with:
           model: ${provider}/${model}`,
             )
@@ -939,6 +940,9 @@ export const GithubRunCommand = cmd({
         return responseJson.token
       }
 
+      let savedUserName: string | undefined
+      let savedUserEmail: string | undefined
+
       async function configureGit(appToken: string) {
         // Do not change git config when running locally
         if (isMock) return
@@ -953,6 +957,16 @@ export const GithubRunCommand = cmd({
           await gitRun(["config", "--local", "--unset-all", config])
         }
 
+        // Save original user.name / user.email so we can restore them later
+        const savedNameRet = await gitStatus(["config", "--local", "--get", "user.name"])
+        if (savedNameRet.exitCode === 0) {
+          savedUserName = savedNameRet.stdout.toString().trim()
+        }
+        const savedEmailRet = await gitStatus(["config", "--local", "--get", "user.email"])
+        if (savedEmailRet.exitCode === 0) {
+          savedUserEmail = savedEmailRet.stdout.toString().trim()
+        }
+
         const newCredentials = Buffer.from(`x-access-token:${appToken}`, "utf8").toString("base64")
 
         await gitRun(["config", "--local", config, `AUTHORIZATION: basic ${newCredentials}`])
@@ -961,9 +975,23 @@ export const GithubRunCommand = cmd({
       }
 
       async function restoreGitConfig() {
-        if (gitConfig === undefined) return
-        const config = "http.https://github.com/.extraheader"
-        await gitRun(["config", "--local", config, gitConfig])
+        // Always restore user.name / user.email (they are always set by configureGit)
+        if (savedUserName !== undefined) {
+          await gitRun(["config", "--local", "user.name", savedUserName])
+        } else {
+          await gitRun(["config", "--local", "--unset-all", "user.name"])
+        }
+        if (savedUserEmail !== undefined) {
+          await gitRun(["config", "--local", "user.email", savedUserEmail])
+        } else {
+          await gitRun(["config", "--local", "--unset-all", "user.email"])
+        }
+
+        // Restore the HTTP extraheader only if we captured one
+        if (gitConfig !== undefined) {
+          const config = "http.https://github.com/.extraheader"
+          await gitRun(["config", "--local", config, gitConfig])
+        }
       }
 
       async function checkoutNewBranch(type: "issue" | "schedule" | "dispatch") {
@@ -990,7 +1018,12 @@ export const GithubRunCommand = cmd({
         const localBranch = generateBranchName("pr")
         const depth = Math.max(pr.commits.totalCount, 20)
 
-        await gitRun(["remote", "add", "fork", `https://github.com/${pr.headRepository.nameWithOwner}.git`])
+        // Check if "fork" remote already exists to avoid crashing on retry
+        const remotes = await gitStatus(["remote"])
+        const remoteList = remotes.stdout.toString().trim().split("\n").filter(Boolean)
+        if (!remoteList.includes("fork")) {
+          await gitRun(["remote", "add", "fork", `https://github.com/${pr.headRepository.nameWithOwner}.git`])
+        }
         await gitRun(["fetch", "fork", `--depth=${depth}`, remoteBranch])
         await gitRun(["checkout", "-b", localBranch, `fork/${remoteBranch}`])
         return localBranch

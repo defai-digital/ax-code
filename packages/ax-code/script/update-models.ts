@@ -106,6 +106,11 @@ if (!fetched["grok-build-cli"].models?.["grok-build-cli"]) {
 }
 
 // Remove providers we don't support
+const removedProviderSources = Object.fromEntries(
+  ["moonshotai", "moonshotai-cn", "kimi-for-coding"].flatMap((id) =>
+    fetched[id] ? [[id, JSON.parse(JSON.stringify(fetched[id]))]] : [],
+  ),
+)
 for (const id of [
   "groq",
   "azure",
@@ -208,6 +213,29 @@ for (const [providerID, provider] of Object.entries(fetched) as Array<
     if (isUnsupportedModel(model)) delete provider.models[mid]
   }
 }
+
+// OpenRouter is intentionally a gap-filling provider in ax-code: avoid
+// duplicating models that have first-party providers, but keep high-value coding
+// models that are not otherwise exposed directly. models.dev can publish those
+// models under other reseller blocks before adding them to the openrouter block,
+// so backfill the curated OpenRouter set from trusted snapshot/provider copies.
+const openrouterModelFallbackProviders: Record<string, string[]> = {
+  "minimax/minimax-m3": ["openrouter", "nano-gpt", "zenmux", "vercel"],
+  "mistralai/mistral-medium-3-5": ["openrouter", "kilo"],
+  "inclusionai/ring-2.6-1t": ["openrouter", "nano-gpt", "novita-ai", "kilo", "zenmux"],
+}
+if (fetched["openrouter"]?.models) {
+  const openrouterModels = fetched["openrouter"].models as Record<string, RawModel>
+  for (const mid of Object.keys(openrouterModelFallbackProviders)) {
+    if (!supportsOpenRouterModelID(mid) || openrouterModels[mid]) continue
+    for (const fallbackID of openrouterModelFallbackProviders[mid] ?? []) {
+      const fallback = fetched[fallbackID]?.models?.[mid] ?? existing[fallbackID]?.models?.[mid]
+      if (!fallback) continue
+      openrouterModels[mid] = JSON.parse(JSON.stringify(fallback))
+      break
+    }
+  }
+}
 if (!fetched["grok-build-cli"].models?.["grok-build-cli"]) {
   fetched["grok-build-cli"].models = {
     ...(fetched["grok-build-cli"].models ?? {}),
@@ -280,6 +308,7 @@ cloneProvider("alibaba-coding-plan-cn", "alibaba-token-plan-cn", {
 const alibabaModels = [
   // Qwen text / reasoning
   "qwen3.7-max",
+  "qwen3.7-plus",
   "qwen3.6-plus",
   "qwen3.6-flash",
   // DeepSeek text / reasoning
@@ -296,34 +325,120 @@ const alibabaModels = [
   "wan2.7-image-pro",
 ]
 const alibabaModelFallbackProviders: Record<string, string[]> = {
+  "qwen3.7-plus": ["llmgateway", "opencode-go", "nano-gpt"],
   "qwen3.6-flash": ["aihubmix"],
   "deepseek-v4-pro": ["auriko", "cortecs", "302ai", "llmgateway"],
   "deepseek-v4-flash": ["cortecs", "auriko", "302ai", "llmgateway"],
   "kimi-k2.6": ["moonshot", "moonshot-cn", "302ai", "llmgateway"],
   "glm-5.1": ["zai-coding-plan", "zhipuai", "auriko", "302ai"],
 }
+const alibabaModelFallbackDefaults: Record<string, RawModel> = {
+  "qwen-image-2.0": alibabaImageModel("qwen-image-2.0", "Qwen Image 2.0", "qwen-image"),
+  "qwen-image-2.0-pro": alibabaImageModel("qwen-image-2.0-pro", "Qwen Image 2.0 Pro", "qwen-image"),
+  "wan2.7-image": alibabaImageModel("wan2.7-image", "Wan 2.7 Image", "wan"),
+  "wan2.7-image-pro": alibabaImageModel("wan2.7-image-pro", "Wan 2.7 Image Pro", "wan"),
+}
+function alibabaImageModel(id: string, name: string, family: string): RawModel {
+  return {
+    id,
+    name,
+    family,
+    attachment: false,
+    reasoning: false,
+    tool_call: false,
+    temperature: true,
+    release_date: "2026-06-10",
+    modalities: {
+      input: ["text"],
+      output: ["image"],
+    },
+    open_weights: false,
+    limit: {
+      context: 8192,
+      output: 1,
+    },
+    status: "active",
+  } as RawModel
+}
+function withAlibabaModelFallbackDefault(mid: string, model: unknown) {
+  const fallback = alibabaModelFallbackDefaults[mid]
+  if (!fallback) return JSON.parse(JSON.stringify(model))
+  return {
+    ...JSON.parse(JSON.stringify(fallback)),
+    ...JSON.parse(JSON.stringify(model)),
+  }
+}
 for (const id of ["alibaba-coding-plan", "alibaba-coding-plan-cn", "alibaba-token-plan", "alibaba-token-plan-cn"]) {
   if (!fetched[id]) continue
   const models = fetched[id].models ?? {}
   const kept: Record<string, unknown> = {}
   for (const mid of alibabaModels) {
-    if (models[mid]) kept[mid] = models[mid]
+    if (models[mid]) kept[mid] = withAlibabaModelFallbackDefault(mid, models[mid])
     if (kept[mid]) continue
 
     const existingModel = existing[id]?.models?.[mid]
     if (existingModel) {
-      kept[mid] = JSON.parse(JSON.stringify(existingModel))
+      kept[mid] = withAlibabaModelFallbackDefault(mid, existingModel)
       continue
     }
 
     for (const fallbackID of alibabaModelFallbackProviders[mid] ?? []) {
       const fallback = fetched[fallbackID]?.models?.[mid] ?? existing[fallbackID]?.models?.[mid]
       if (!fallback) continue
-      kept[mid] = JSON.parse(JSON.stringify(fallback))
+      kept[mid] = withAlibabaModelFallbackDefault(mid, fallback)
       break
+    }
+    if (!kept[mid] && alibabaModelFallbackDefaults[mid]) {
+      kept[mid] = JSON.parse(JSON.stringify(alibabaModelFallbackDefaults[mid]))
     }
   }
   fetched[id].models = kept
+}
+
+// Kimi Cloud Plan is a first-party Moonshot endpoint surfaced as a narrow plan
+// provider. Keep it separate from the generic upstream Moonshot provider so the
+// picker only shows the currently validated coding model instead of every legacy
+// Kimi alias published by models.dev.
+const kimiCloudPlanModels = ["kimi-k2.6"]
+const kimiCloudPlanFallbackProviders: Record<string, string[]> = {
+  "kimi-k2.6": [
+    "moonshotai",
+    "moonshotai-cn",
+    "kimi-for-coding",
+    "alibaba-coding-plan",
+    "alibaba-token-plan",
+    "llmgateway",
+    "opencode",
+  ],
+}
+const kimiCloudPlanID = "kimi-cloud-plan"
+const kimiCloudPlanKept: Record<string, unknown> = {}
+for (const mid of kimiCloudPlanModels) {
+  for (const fallbackID of kimiCloudPlanFallbackProviders[mid] ?? []) {
+    const fallback =
+      fetched[fallbackID]?.models?.[mid] ??
+      existing[fallbackID]?.models?.[mid] ??
+      removedProviderSources[fallbackID]?.models?.[mid]
+    if (!fallback) continue
+    kimiCloudPlanKept[mid] = {
+      ...JSON.parse(JSON.stringify(fallback)),
+      id: mid,
+      name: "Kimi K2.6",
+      family: "kimi-k2.6",
+    }
+    break
+  }
+}
+if (Object.keys(kimiCloudPlanKept).length > 0) {
+  fetched[kimiCloudPlanID] = {
+    id: kimiCloudPlanID,
+    name: "Kimi Cloud Plan",
+    env: ["KIMI_CLOUD_PLAN_API_KEY", "MOONSHOT_API_KEY"],
+    npm: "@ai-sdk/openai-compatible",
+    api: "https://api.moonshot.ai/v1",
+    doc: "https://platform.moonshot.ai/docs/api/chat",
+    models: kimiCloudPlanKept,
+  }
 }
 
 // xAI ships Grok Build as the canonical coding model name, with the older
@@ -420,7 +535,7 @@ for (const [id, doc] of Object.entries(docOverrides)) {
 // these with input modalities ["text","image","video"] but attachment=false,
 // which leaves ax-code's picker refusing image uploads even though the upstream
 // API accepts them. Override here so the capability flag matches the modality.
-const alibabaAttachmentForceTrue = ["qwen3.6-plus"]
+const alibabaAttachmentForceTrue = ["qwen3.7-plus", "qwen3.6-plus"]
 for (const id of ["alibaba-coding-plan", "alibaba-coding-plan-cn", "alibaba-token-plan", "alibaba-token-plan-cn"]) {
   const models = fetched[id]?.models as Record<string, { attachment?: boolean }> | undefined
   if (!models) continue
@@ -457,6 +572,10 @@ function unmarkSearch(model: { name?: string } | undefined) {
     model.name = model.name.slice(0, -SEARCH_MARKER.length)
   }
 }
+function supportsTextOutput(model: { modalities?: { output?: unknown } } | undefined) {
+  const output = model?.modalities?.output
+  return !Array.isArray(output) || output.includes("text")
+}
 // xAI: only Grok 4.3 has Live Search wired via providerOptions.searchParameters.
 const xaiSearchModelIds = ["grok-4.3", "grok-4-3"]
 const xaiModels = fetched["xai"]?.models as Record<string, { name?: string }> | undefined
@@ -468,10 +587,11 @@ if (xaiModels) {
 // Non-Qwen models (DeepSeek/GLM/Kimi/MiniMax) served on the same plans don't
 // honor the knob, so they stay unmarked.
 for (const id of ["alibaba-coding-plan", "alibaba-coding-plan-cn", "alibaba-token-plan", "alibaba-token-plan-cn"]) {
-  const models = fetched[id]?.models as Record<string, { name?: string }> | undefined
+  const models = fetched[id]?.models as Record<string, { name?: string; modalities?: { output?: unknown } }> | undefined
   if (!models) continue
   for (const [mid, model] of Object.entries(models)) {
-    if (mid.toLowerCase().startsWith("qwen")) markSearch(model)
+    unmarkSearch(model)
+    if (mid.toLowerCase().startsWith("qwen") && supportsTextOutput(model)) markSearch(model)
   }
 }
 

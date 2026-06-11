@@ -25,8 +25,8 @@
  * ```
  */
 
-export { startHeadlessBackend } from "./headless/lifecycle.js"
-export type { HeadlessBackendOptions, HeadlessBackendHandle } from "./headless/lifecycle.js"
+export { HeadlessBackendStartupError, startHeadlessBackend } from "./headless/lifecycle.js"
+export type { HeadlessBackendDiagnostics, HeadlessBackendOptions, HeadlessBackendHandle } from "./headless/lifecycle.js"
 
 export {
   createHeadlessClient,
@@ -37,6 +37,8 @@ export type {
   HeadlessClient,
   HeadlessClientOptions,
   HeadlessCreateSessionInput,
+  HeadlessGlobalHealth,
+  HeadlessRuntimeCapabilities,
   HeadlessSessionEvidence,
   HeadlessSessionEvidenceInput,
   HeadlessScheduledTask,

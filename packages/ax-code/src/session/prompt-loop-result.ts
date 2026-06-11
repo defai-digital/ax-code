@@ -10,9 +10,18 @@ type PromptLoopResultDeps = {
   stream: typeof MessageV2.stream
 }
 
+// Resolve lazily via getters: this module sits on an import cycle with
+// compaction.ts, so when a consumer loads compaction first (e.g. running
+// compaction tests standalone), the SessionCompaction namespace object is
+// still undefined while this module's top level evaluates. Reading the
+// properties eagerly here threw "undefined is not an object" at load time.
 const defaultDeps: PromptLoopResultDeps = {
-  prune: SessionCompaction.prune,
-  stream: MessageV2.stream,
+  get prune() {
+    return SessionCompaction.prune
+  },
+  get stream() {
+    return MessageV2.stream
+  },
 }
 
 export async function resolvePromptLoopResult(

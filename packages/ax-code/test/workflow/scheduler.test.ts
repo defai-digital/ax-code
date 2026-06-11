@@ -637,17 +637,18 @@ describe("WorkflowScheduler", () => {
           expect(result.children.every((child) => child.taskQueueID?.startsWith("tsk_"))).toBe(true)
           expect(result.children.every((child) => child.sessionID?.startsWith("ses_"))).toBe(true)
           expect(result.budgetUsage.childAgents).toBe(8)
-          expect(result.artifacts.find((artifact) => artifact.specArtifactID === "phase-prompt-collect-issues"))
-            .toMatchObject({
-              kind: "log",
-              exposeToMainContext: false,
-              payload: {
-                kind: "phase-prompt-summary",
-                specPhaseID: "collect-issues",
-                maxParallel: 8,
-                estimatedChildren: 8,
-              },
-            })
+          expect(
+            result.artifacts.find((artifact) => artifact.specArtifactID === "phase-prompt-collect-issues"),
+          ).toMatchObject({
+            kind: "log",
+            exposeToMainContext: false,
+            payload: {
+              kind: "phase-prompt-summary",
+              specPhaseID: "collect-issues",
+              maxParallel: 8,
+              estimatedChildren: 8,
+            },
+          })
 
           const { TaskQueue } = await import("../../src/session/task-queue")
           const queue = await TaskQueue.list()
@@ -1118,9 +1119,12 @@ describe("WorkflowScheduler", () => {
             "completed",
           ])
           const queue = await TaskQueue.list()
-          expect(queue.filter((item) => workflowSpecPhaseID(item) === "race").map((item) => item.status).sort()).toEqual(
-            ["cancelled", "cancelled", "completed"],
-          )
+          expect(
+            queue
+              .filter((item) => workflowSpecPhaseID(item) === "race")
+              .map((item) => item.status)
+              .sort(),
+          ).toEqual(["cancelled", "cancelled", "completed"])
           expect(queue.filter((item) => workflowSpecPhaseID(item) === "summarize")).toHaveLength(1)
         },
       })
@@ -1583,9 +1587,7 @@ function verificationEnvelope(runID: string, status: "passed" | "failed", passed
       output: status === "passed" ? "ok" : "typecheck failed",
     },
     structuredFailures:
-      status === "passed"
-        ? []
-        : [{ kind: "custom", message: "typecheck failed", details: { runID } }],
+      status === "passed" ? [] : [{ kind: "custom", message: "typecheck failed", details: { runID } }],
     artifactRefs: [],
     source: { tool: "workflow-test", version: "1.0.0", runId: runID },
   }

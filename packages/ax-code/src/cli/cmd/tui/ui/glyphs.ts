@@ -13,7 +13,10 @@
 //   1. AX_CODE_NERD_FONT=1 / =0 — explicit env override (CI, docs)
 //   2. kv "nerd_font_enabled" — user preference toggled from the settings
 //      menu, persisted in ~/.local/share/ax-code/kv.json
-//   3. default false — preserves backward compatibility for users without
+//   3. terminal auto-detection — allowlist of terminals that bundle the
+//      Symbols Nerd Font as a built-in fallback, so PUA glyphs render
+//      regardless of the user's configured font (ADR-031 R5)
+//   4. default false — preserves backward compatibility for users without
 //      a Nerd Font installed.
 //
 // Existing safe-Unicode glyphs (◆ ● ✓ ✗ ▲ █ ░ → ←) render in any monospace
@@ -26,11 +29,24 @@ import path from "node:path"
 
 export const NERD_FONT_KV_KEY = "nerd_font_enabled"
 
-// Resolve the effective nerd-font flag from env + a kv getter. Pure
-// function so it is unit-testable without solid context.
-export function resolveNerdFontEnabled(input: { env?: boolean; kv?: boolean }): boolean {
+// Terminals that ship the Symbols Nerd Font as a built-in font fallback,
+// so PUA glyphs render even when the user has not installed a patched
+// font. Allowlist-only and env-based — never probe the terminal (escape
+// sequence capability probes are a known hang class, see renderer.ts).
+// iTerm2 and Windows Terminal are deliberately absent: they render PUA
+// glyphs only when the user configured a patched font themselves.
+const NERD_FONT_TERM_PROGRAMS = new Set(["WezTerm", "ghostty"])
+
+export function detectNerdFontTerminal(input: { termProgram?: string; term?: string }): boolean {
+  if (input.term === "xterm-kitty") return true
+  return input.termProgram !== undefined && NERD_FONT_TERM_PROGRAMS.has(input.termProgram)
+}
+
+// Resolve the effective nerd-font flag from env + kv + terminal detection.
+// Pure function so it is unit-testable without solid context.
+export function resolveNerdFontEnabled(input: { env?: boolean; kv?: boolean; detected?: boolean }): boolean {
   if (input.env !== undefined) return input.env
-  return input.kv ?? false
+  return input.kv ?? input.detected ?? false
 }
 
 // File-type glyph table. Codepoints come from the Nerd Font "seti" and
@@ -135,8 +151,15 @@ export function buildGlyphSet(enabled: boolean): GlyphSet {
 }
 
 // Resolve the glyph set without solid context — for non-reactive call
-// sites and tests. Reads env override at call time.
+// sites and tests. Reads env override and terminal detection at call time.
 export function getGlyphSet(input: { kv?: boolean } = {}): GlyphSet {
-  const enabled = resolveNerdFontEnabled({ env: Flag.AX_CODE_NERD_FONT_ENV, kv: input.kv })
+  const enabled = resolveNerdFontEnabled({
+    env: Flag.AX_CODE_NERD_FONT_ENV,
+    kv: input.kv,
+    detected: detectNerdFontTerminal({
+      termProgram: process.env["TERM_PROGRAM"],
+      term: process.env["TERM"],
+    }),
+  })
   return buildGlyphSet(enabled)
 }

@@ -1,7 +1,7 @@
 import { Agent } from "../agent/agent"
 import { classifyComplexity, route as routeAgent } from "../agent/router"
 import { Bus } from "../bus"
-import { TuiEvent } from "../cli/cmd/tui/event"
+import { NotificationEvent } from "@/notification/events"
 import { Config } from "../config/config"
 import { Provider } from "../provider/provider"
 import { ModelID, ProviderID } from "../provider/schema"
@@ -60,7 +60,7 @@ export async function resolveUserMessageRouting(input: {
           agent: routeResult.agent,
           confidence: routeResult.confidence,
         })
-        Bus.publishDetached(TuiEvent.ToastShow, {
+        Bus.publishDetached(NotificationEvent.ToastShow, {
           title: "Agent Auto-Switched",
           message: `Switched to "${routedLabel}" agent for this task`,
           variant: "info",

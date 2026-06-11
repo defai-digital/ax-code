@@ -1,4 +1,5 @@
 import { RGBA } from "@opentui/core"
+import automatosx from "./theme/automatosx.json" with { type: "json" }
 import aura from "./theme/aura.json" with { type: "json" }
 import ayu from "./theme/ayu.json" with { type: "json" }
 import catppuccin from "./theme/catppuccin.json" with { type: "json" }
@@ -37,6 +38,11 @@ export type ThemeColors = {
   primary: RGBA
   secondary: RGBA
   accent: RGBA
+  // Brand gradient ramp shared by the logo, gauges, and other gradient
+  // surfaces (ADR-031 R12). Optional in theme JSON — defaults to
+  // primary→secondary so all existing themes keep working.
+  brandGradientStart: RGBA
+  brandGradientEnd: RGBA
   error: RGBA
   warning: RGBA
   success: RGBA
@@ -98,14 +104,20 @@ export type ColorValue = HexColor | RefName | Variant | RGBA
 export type ThemeJson = {
   $schema?: string
   defs?: Record<string, HexColor | RefName>
-  theme: Omit<Record<keyof ThemeColors, ColorValue>, "selectedListItemText" | "backgroundMenu"> & {
+  theme: Omit<
+    Record<keyof ThemeColors, ColorValue>,
+    "selectedListItemText" | "backgroundMenu" | "brandGradientStart" | "brandGradientEnd"
+  > & {
     selectedListItemText?: ColorValue
     backgroundMenu?: ColorValue
+    brandGradientStart?: ColorValue
+    brandGradientEnd?: ColorValue
     thinkingOpacity?: number
   }
 }
 
 export const DEFAULT_THEMES: Record<string, ThemeJson> = {
+  automatosx,
   aura,
   ayu,
   catppuccin,

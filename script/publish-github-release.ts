@@ -72,6 +72,35 @@ export function readPackageVersion(root = ROOT) {
   return pkg.version
 }
 
+export function trackedInternalFiles(root = ROOT) {
+  const result = childProcess.spawnSync("git", ["ls-files", ".internal"], {
+    cwd: root,
+    encoding: "utf8",
+    stdio: ["inherit", "pipe", "pipe"],
+  })
+  if (result.error) throw result.error
+  if (result.status !== 0) {
+    const stderr = typeof result.stderr === "string" ? result.stderr.trim() : ""
+    throw new Error(`git ls-files .internal exited with status ${result.status}${stderr ? `: ${stderr}` : ""}`)
+  }
+  return result.stdout
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+}
+
+export function trackedInternalPrivacyIssue(files: readonly string[]) {
+  if (files.length === 0) return undefined
+  const sample = files.slice(0, 5).join(", ")
+  const suffix = files.length > 5 ? `, and ${files.length - 5} more` : ""
+  return `.internal files are tracked: ${sample}${suffix}. Remove them from git index before publishing.`
+}
+
+export function assertNoTrackedInternalFiles(root = ROOT) {
+  const issue = trackedInternalPrivacyIssue(trackedInternalFiles(root))
+  if (issue) throw new Error(issue)
+}
+
 export function parsePublishGithubReleaseArgs(
   args = Bun.argv.slice(2),
   env: NodeJS.ProcessEnv = process.env,
@@ -190,6 +219,8 @@ function ensurePreflight(options: PublishGithubReleaseOptions) {
   if (packageVersion !== options.version) {
     throw new Error(`Version mismatch: packages/ax-code is ${packageVersion}, requested ${options.version}`)
   }
+
+  assertNoTrackedInternalFiles()
 
   if (!options.allowDirty) {
     const status = run("git", ["status", "--porcelain"], { capture: true })

@@ -1,0 +1,5 @@
+export const DEFAULT_SERVER_PORT = 4096
+
+export const MAX_PATH_LENGTH = 4096
+
+export const TOAST_DURATION_LONG_MS = 8000

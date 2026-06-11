@@ -45,7 +45,12 @@ function asOllamaTags(input: unknown): { models: { name: string }[] } | null {
   if (!input || typeof input !== "object") return null
   const models = (input as { models?: unknown }).models
   if (!Array.isArray(models)) return null
-  return { models: models.filter((item): item is { name: string } => !!item && typeof item === "object" && typeof (item as { name?: unknown }).name === "string") }
+  return {
+    models: models.filter(
+      (item): item is { name: string } =>
+        !!item && typeof item === "object" && typeof (item as { name?: unknown }).name === "string",
+    ),
+  }
 }
 
 function openAICompatibleCapabilities(item: OpenAICompatibleModelItem): Provider.Model["capabilities"] {

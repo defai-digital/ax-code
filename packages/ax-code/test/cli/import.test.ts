@@ -19,7 +19,9 @@ test("compatibility import dry-run reports candidates without writing", async ()
 description: Snapshot
 ---
 Snapshot
-!` + "`echo should-not-run`" + `
+!` +
+          "`echo should-not-run`" +
+          `
 `,
       )
       await Filesystem.write(

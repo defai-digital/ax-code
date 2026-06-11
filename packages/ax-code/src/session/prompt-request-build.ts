@@ -1,4 +1,5 @@
 import type { Agent } from "../agent/agent"
+import { NativePerf } from "../perf/native"
 import { Plugin } from "../plugin"
 import type { Provider } from "../provider/provider"
 import MAX_STEPS from "./prompt/max-steps.txt"
@@ -21,11 +22,24 @@ export async function preparePromptRequest(input: {
   cache: PromptRequestCache
   structuredPrompt: string
 }) {
+  return NativePerf.runAsync(
+    "session.preparePromptRequest",
+    { step: input.step, messages: input.messages.length },
+    () => buildPromptRequest(input),
+  )
+}
+
+async function buildPromptRequest(input: Parameters<typeof preparePromptRequest>[0]) {
   let messages = input.messages
   // Ephemerally wrap queued user messages with a reminder to stay on track.
   if (input.step > 1) messages = remindQueuedMessages(messages, input.lastFinished)
 
   await Plugin.trigger("experimental.chat.messages.transform", {}, { messages })
+  // The per-message conversion cache relies on message objects being
+  // replaced (never mutated in place) when their content changes. A plugin
+  // implementing the transform hook can mutate messages arbitrarily, so
+  // disable the cache when one is registered.
+  const hasTransformPlugin = (await Plugin.list()).some((hook) => hook["experimental.chat.messages.transform"])
 
   // Build system prompt and convert messages to model format in parallel.
   // Both walk the same messages/model independently with no side effects.
@@ -40,7 +54,7 @@ export async function preparePromptRequest(input: {
       sessionID: input.sessionID,
       structuredPrompt: input.structuredPrompt,
     }),
-    MessageV2.toModelMessages(messages, input.model),
+    MessageV2.toModelMessages(messages, input.model, { cache: !hasTransformPlugin }),
   ])
   const requestMessages = [
     ...modelMessages,

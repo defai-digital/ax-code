@@ -1,5 +1,6 @@
 import { Auth } from "../../auth"
 import { cmd } from "./cmd"
+import { GITHUB_REPO_URL } from "@/constants/project"
 import * as prompts from "@clack/prompts"
 import { UI } from "../ui"
 import { ModelsDev } from "../../provider/models"
@@ -553,7 +554,7 @@ export const ProvidersLoginCommand = cmd({
 
         if (["cloudflare", "cloudflare-ai-gateway"].includes(provider)) {
           prompts.log.info(
-            "Cloudflare AI Gateway can be configured with CLOUDFLARE_GATEWAY_ID, CLOUDFLARE_ACCOUNT_ID, and CLOUDFLARE_API_TOKEN environment variables. Read more: https://github.com/defai-digital/ax-code",
+            `Cloudflare AI Gateway can be configured with CLOUDFLARE_GATEWAY_ID, CLOUDFLARE_ACCOUNT_ID, and CLOUDFLARE_API_TOKEN environment variables. Read more: ${GITHUB_REPO_URL}`,
           )
         }
 

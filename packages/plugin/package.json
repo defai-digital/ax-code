@@ -8,9 +8,19 @@
     "typecheck": "tsgo --noEmit",
     "build": "tsc"
   },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
-    ".": "./src/index.ts",
-    "./tool": "./src/tool.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./tool": {
+      "types": "./dist/tool.d.ts",
+      "import": "./dist/tool.js",
+      "default": "./dist/tool.js"
+    }
   },
   "files": [
     "dist"

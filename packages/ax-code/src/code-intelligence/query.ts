@@ -551,6 +551,17 @@ export namespace CodeGraphQuery {
     )
   }
 
+  export function incrementLspCacheHits(entries: Iterable<readonly [LspCacheID, number]>): void {
+    Database.transaction((db) => {
+      for (const [id, count] of entries) {
+        db.update(LspCacheTable)
+          .set({ hit_count: sql`${LspCacheTable.hit_count} + ${count}` })
+          .where(eq(LspCacheTable.id, id))
+          .run()
+      }
+    })
+  }
+
   export type LspCacheInsert = {
     projectID: ProjectID
     operation: LspCacheOperation

@@ -65,7 +65,10 @@ export function DialogSessionList() {
       .toSorted((a: Session, b: Session) => b.time.updated - a.time.updated)
 
     const pinnedSet = new Set(pinnedIDs.filter((id) => allSessions.some((s) => s.id === id)))
-    const pinnedSessions = pinnedIDs.filter((id) => pinnedSet.has(id)).map((id) => allSessions.find((s) => s.id === id)!).filter(Boolean)
+    const pinnedSessions = pinnedIDs
+      .filter((id) => pinnedSet.has(id))
+      .map((id) => allSessions.find((s) => s.id === id)!)
+      .filter(Boolean)
     const unpinnedSessions = allSessions.filter((s) => !pinnedSet.has(s.id))
     const ordered = [...pinnedSessions, ...unpinnedSessions]
 
@@ -79,11 +82,7 @@ export function DialogSessionList() {
       const status = sync.data.session_status?.[x.id]
       const isWorking = status?.type === "busy"
       const slot = slotByID.get(x.id)
-      const gutter = isWorking
-        ? <Spinner />
-        : slot !== undefined
-          ? <text fg={theme.accent}>{slot}</text>
-          : undefined
+      const gutter = isWorking ? <Spinner /> : slot !== undefined ? <text fg={theme.accent}>{slot}</text> : undefined
       return {
         title: isDeleting ? `Press ${keybind.print("session_delete")} again to confirm` : x.title,
         bg: isDeleting ? theme.error : undefined,

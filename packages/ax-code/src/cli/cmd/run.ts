@@ -16,6 +16,7 @@ import { Agent } from "../../agent/agent"
 import { Permission } from "../../permission"
 import { Log } from "../../util/log"
 import { toErrorMessage } from "../../util/error-message"
+import { DEFAULT_SERVER_PORT } from "@/server/constants"
 import { Tool } from "../../tool/tool"
 import { GlobTool } from "../../tool/glob"
 import { GrepTool } from "../../tool/grep"
@@ -303,7 +304,7 @@ export const RunCommand = cmd({
       })
       .option("attach", {
         type: "string",
-        describe: "attach to a running ax-code server (e.g., http://localhost:4096)",
+        describe: `attach to a running ax-code server (e.g., http://localhost:${DEFAULT_SERVER_PORT})`,
       })
       .option("password", {
         alias: ["p"],
@@ -650,7 +651,9 @@ export const RunCommand = cmd({
         const msgs = msgsRes?.data ?? []
         const limited = replayLimit !== undefined ? msgs.slice(-replayLimit) : msgs
         if (limited.length > 0) {
-          UI.println(UI.Style.TEXT_DIM + `── session replay (${limited.length} message${limited.length === 1 ? "" : "s"}) ──`)
+          UI.println(
+            UI.Style.TEXT_DIM + `── session replay (${limited.length} message${limited.length === 1 ? "" : "s"}) ──`,
+          )
           for (const entry of limited) {
             const role = entry.info.role === "user" ? "You" : "Assistant"
             const trimmed = entry.parts
@@ -659,7 +662,13 @@ export const RunCommand = cmd({
               .join("")
               .trim()
             if (trimmed) {
-              UI.println(UI.Style.TEXT_DIM + `[${role}] ` + UI.Style.TEXT_NORMAL + trimmed.slice(0, 200) + (trimmed.length > 200 ? "…" : ""))
+              UI.println(
+                UI.Style.TEXT_DIM +
+                  `[${role}] ` +
+                  UI.Style.TEXT_NORMAL +
+                  trimmed.slice(0, 200) +
+                  (trimmed.length > 200 ? "…" : ""),
+              )
             }
           }
           UI.println(UI.Style.TEXT_DIM + "────────────────────────────────────")

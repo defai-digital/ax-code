@@ -8,6 +8,12 @@ import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process"
 import path from "path"
 import z from "zod"
 import { BusEvent } from "@/bus/bus-event"
+import {
+  HOMEBREW_TAP,
+  HOMEBREW_FORMULA_API_URL,
+  INSTALL_SCRIPT_URL,
+  GITHUB_LATEST_RELEASE_API_URL,
+} from "@/constants/project"
 import { Flag } from "../flag/flag"
 import { Log } from "../util/log"
 import { toErrorMessage } from "../util/error-message"
@@ -158,18 +164,18 @@ export namespace Installation {
           // The tap historically used both "ax-code" and "ax" as formula
           // names. Probe both so we work on existing installs regardless
           // of which name the user's brew has tapped.
-          const tapAxCode = yield* text(["brew", "list", "--formula", "defai-digital/ax-code/ax-code"])
-          if (tapAxCode.includes("ax-code")) return "defai-digital/ax-code/ax-code"
-          const tapAx = yield* text(["brew", "list", "--formula", "defai-digital/ax-code/ax"])
-          if (tapAx.includes("ax")) return "defai-digital/ax-code/ax"
+          const tapAxCode = yield* text(["brew", "list", "--formula", `${HOMEBREW_TAP}/ax-code`])
+          if (tapAxCode.includes("ax-code")) return `${HOMEBREW_TAP}/ax-code`
+          const tapAx = yield* text(["brew", "list", "--formula", `${HOMEBREW_TAP}/ax`])
+          if (tapAx.includes("ax")) return `${HOMEBREW_TAP}/ax`
           const coreFormula = yield* text(["brew", "list", "--formula", "ax-code"])
           if (coreFormula.includes("ax-code")) return "ax-code"
-          return "defai-digital/ax-code/ax"
+          return `${HOMEBREW_TAP}/ax`
         })
 
         const upgradeCurl = Effect.fnUntraced(
           function* (target: string) {
-            const scriptUrl = "https://raw.githubusercontent.com/defai-digital/ax-code/main/install"
+            const scriptUrl = INSTALL_SCRIPT_URL
             const sha256Url = `${scriptUrl}.sha256`
             const response = yield* httpOk.execute(HttpClientRequest.get(scriptUrl))
             const body = yield* response.text
@@ -221,7 +227,7 @@ export namespace Installation {
           if (process.execPath.includes(path.join(".ax-code", "bin"))) return "curl" as Method
           if (process.execPath.includes(path.join(".local", "bin"))) return "curl" as Method
 
-          for (const formula of ["defai-digital/ax-code/ax-code", "defai-digital/ax-code/ax", "ax-code"]) {
+          for (const formula of [`${HOMEBREW_TAP}/ax-code`, `${HOMEBREW_TAP}/ax`, "ax-code"]) {
             const out = yield* text(["brew", "list", "--formula", formula])
             if (out.trim()) {
               return "brew" as Method
@@ -243,18 +249,14 @@ export namespace Installation {
               return info.formulae[0].versions.stable
             }
             const response = yield* httpOk.execute(
-              HttpClientRequest.get("https://formulae.brew.sh/api/formula/ax-code.json").pipe(
-                HttpClientRequest.acceptJson,
-              ),
+              HttpClientRequest.get(HOMEBREW_FORMULA_API_URL).pipe(HttpClientRequest.acceptJson),
             )
             const data = yield* HttpClientResponse.schemaBodyJson(BrewFormula)(response)
             return data.versions.stable
           }
 
           const response = yield* httpOk.execute(
-            HttpClientRequest.get("https://api.github.com/repos/defai-digital/ax-code/releases/latest").pipe(
-              HttpClientRequest.acceptJson,
-            ),
+            HttpClientRequest.get(GITHUB_LATEST_RELEASE_API_URL).pipe(HttpClientRequest.acceptJson),
           )
           const data = yield* HttpClientResponse.schemaBodyJson(GitHubRelease)(response)
           return data.tag_name.replace(/^v/, "")

@@ -55,11 +55,10 @@ describe("WorkflowDispatchAdapter", () => {
           expect(result.children[0]?.outputSummary).toContain("files=2 (src/alpha.ts, src/beta.ts)")
           expect(result.children[0]?.outputSummary).toContain("proposed=1 (src/gamma.ts)")
           expect(result.children.every((child) => child.evidenceRefs[0]?.kind === "artifact")).toBe(true)
+          expect(result.children.every((child) => child.evidenceRefs[0]?.id === child.artifactIDs[0])).toBe(true)
           expect(
-            result.children.every((child) => child.evidenceRefs[0]?.id === child.artifactIDs[0]),
+            result.children.every((child) => childLogs.some((artifact) => artifact.id === child.artifactIDs[0])),
           ).toBe(true)
-          expect(result.children.every((child) => childLogs.some((artifact) => artifact.id === child.artifactIDs[0])))
-            .toBe(true)
           expect(result.artifacts.some((artifact) => artifact.kind === "summary" && artifact.exposeToMainContext)).toBe(
             true,
           )

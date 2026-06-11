@@ -202,9 +202,7 @@ function aggregateCriticPhaseStatus(children: WorkflowChildRecord[]): WorkflowRu
   if (critic?.status === "completed" && completed > children.length / 2) return "completed"
   if (critic && isTerminalChildStatus(critic.status)) return "failed"
 
-  const failedOrCancelled = children.filter(
-    (child) => child.status === "failed" || child.status === "cancelled",
-  ).length
+  const failedOrCancelled = children.filter((child) => child.status === "failed" || child.status === "cancelled").length
   if (failedOrCancelled > children.length / 2) return "failed"
   if (children.some((child) => child.status === "blocked_permission" || child.status === "blocked_question")) {
     return "blocked"
@@ -233,4 +231,6 @@ function aggregateRunStatus(phases: WorkflowRunDetailPhase[]): WorkflowRun.Statu
 }
 
 type WorkflowRunDetailPhase = Awaited<ReturnType<typeof WorkflowRun.getDetail>>["phases"][number]
-type WorkflowPhaseMergeStrategy = Awaited<ReturnType<typeof WorkflowRun.getDetail>>["spec"]["phases"][number]["mergeStrategy"]
+type WorkflowPhaseMergeStrategy = Awaited<
+  ReturnType<typeof WorkflowRun.getDetail>
+>["spec"]["phases"][number]["mergeStrategy"]

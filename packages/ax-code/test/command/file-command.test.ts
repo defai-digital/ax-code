@@ -71,7 +71,9 @@ test("discovers global .opencode commands and reports unsupported shell interpol
 description: Snapshot status
 ---
 Snapshot $ARGUMENTS
-!` + "`echo should-not-run`" + `
+!` +
+      "`echo should-not-run`" +
+      `
 `,
   )
 
@@ -145,7 +147,9 @@ test("marks .ax-code commands loaded through config as file-backed and shell-dis
 description: Local command
 ---
 Local template
-!` + "`echo should-not-run`" + `
+!` +
+          "`echo should-not-run`" +
+          `
 `,
       )
     },

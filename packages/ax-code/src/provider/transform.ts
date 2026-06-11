@@ -398,6 +398,7 @@ export namespace ProviderTransform {
     if (model.api.npm !== "@ai-sdk/openai-compatible") return false
     const pid = model.providerID
     if (!pid.startsWith("alibaba-coding-plan") && !pid.startsWith("alibaba-token-plan")) return false
+    if (model.capabilities.output?.text === false) return false
     return model.api.id.toLowerCase().startsWith("qwen")
   }
 
@@ -504,57 +505,69 @@ export namespace ProviderTransform {
         ].some((key) => key in node)
       }
 
+      const active = new WeakSet<object>()
       const sanitizeGemini = (obj: any): any => {
         if (obj === null || typeof obj !== "object") {
           return obj
         }
 
+        if (active.has(obj)) return {}
+        active.add(obj)
+
         if (Array.isArray(obj)) {
-          return obj.map(sanitizeGemini)
-        }
-
-        const result: any = {}
-        for (const [key, value] of Object.entries(obj)) {
-          if (key === "enum" && Array.isArray(value)) {
-            // Convert all enum values to strings
-            result[key] = value.map((v) => String(v))
-          } else if (isRecord(value) || Array.isArray(value)) {
-            result[key] = sanitizeGemini(value)
-          } else {
-            result[key] = value
-          }
-        }
-        // Post-process: if the schema has an enum and its type is integer or
-        // number, promote the type to string. Done after the copy loop so the
-        // conversion is independent of JSON key order — previously this lived
-        // inside the loop and silently missed schemas where enum appeared
-        // before type.
-        if (Array.isArray(result.enum) && (result.type === "integer" || result.type === "number")) {
-          result.type = "string"
-        }
-
-        // Filter required array to only include fields that exist in properties
-        if (result.type === "object" && result.properties && Array.isArray(result.required)) {
-          result.required = result.required.filter((field: any) => field in result.properties)
-        }
-
-        if (result.type === "array" && !hasCombiner(result)) {
-          if (result.items == null) {
-            result.items = {}
-          }
-          // Ensure items has a type only when it's still schema-empty.
-          if (isPlainObject(result.items) && !hasSchemaIntent(result.items)) {
-            result.items.type = "string"
+          try {
+            return obj.map(sanitizeGemini)
+          } finally {
+            active.delete(obj)
           }
         }
 
-        // Remove properties/required from non-object types (Gemini rejects these)
-        if (result.type && result.type !== "object" && !hasCombiner(result)) {
-          delete result.properties
-          delete result.required
-        }
+        try {
+          const result: any = {}
+          for (const [key, value] of Object.entries(obj)) {
+            if (key === "enum" && Array.isArray(value)) {
+              // Convert all enum values to strings
+              result[key] = value.map((v) => String(v))
+            } else if (isRecord(value) || Array.isArray(value)) {
+              result[key] = sanitizeGemini(value)
+            } else {
+              result[key] = value
+            }
+          }
+          // Post-process: if the schema has an enum and its type is integer or
+          // number, promote the type to string. Done after the copy loop so the
+          // conversion is independent of JSON key order — previously this lived
+          // inside the loop and silently missed schemas where enum appeared
+          // before type.
+          if (Array.isArray(result.enum) && (result.type === "integer" || result.type === "number")) {
+            result.type = "string"
+          }
 
-        return result
+          // Filter required array to only include fields that exist in properties
+          if (result.type === "object" && result.properties && Array.isArray(result.required)) {
+            result.required = result.required.filter((field: any) => field in result.properties)
+          }
+
+          if (result.type === "array" && !hasCombiner(result)) {
+            if (result.items == null) {
+              result.items = {}
+            }
+            // Ensure items has a type only when it's still schema-empty.
+            if (isPlainObject(result.items) && !hasSchemaIntent(result.items)) {
+              result.items.type = "string"
+            }
+          }
+
+          // Remove properties/required from non-object types (Gemini rejects these)
+          if (result.type && result.type !== "object" && !hasCombiner(result)) {
+            delete result.properties
+            delete result.required
+          }
+
+          return result
+        } finally {
+          active.delete(obj)
+        }
       }
 
       schema = sanitizeGemini(schema)

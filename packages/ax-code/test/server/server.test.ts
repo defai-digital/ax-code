@@ -97,6 +97,20 @@ test("path route resolves symlinked directory requests to their canonical path",
   }
 })
 
+test("runtime status routes stay mounted at their public paths", async () => {
+  await using tmp = await tmpdir({ git: true })
+  const app = Server.Default()
+  const directory = encodeURIComponent(tmp.path)
+
+  const formatter = await app.request(`/formatter?directory=${directory}`)
+  expect(formatter.status).toBe(200)
+  expect(Array.isArray(await formatter.json())).toBe(true)
+
+  const lsp = await app.request(`/lsp?directory=${directory}`)
+  expect(lsp.status).toBe(200)
+  expect(Array.isArray(await lsp.json())).toBe(true)
+})
+
 test("experimental worktree delete removes sandbox using the canonical path", async () => {
   await using tmp = await tmpdir({ git: true })
   const sandbox = path.join(tmp.path, "sandbox")
@@ -152,11 +166,10 @@ test("experimental worktree list includes branch metadata", async () => {
 
     expect(response.status).toBe(200)
     const body = (await response.json()) as Array<{ name: string; directory: string; branch?: string }>
-    expect(body).toContainEqual({
-      name: path.basename(sandboxRealpath),
-      directory: sandboxRealpath,
-      branch,
-    })
+    const item = body.find((entry) => entry.branch === branch)
+    expect(item).toBeDefined()
+    expect(item?.name).toBe(path.basename(sandboxRealpath))
+    expect(item?.directory ? await fs.realpath(item.directory) : undefined).toBe(sandboxRealpath)
   } finally {
     await $`git worktree remove --force ${sandbox}`.cwd(tmp.path).quiet().nothrow()
     await fs.rm(sandbox, { recursive: true, force: true }).catch(() => {})

@@ -92,6 +92,25 @@ export function footerTokenChip(input: {
   return view
 }
 
+export type FooterContextGaugeTone = "muted" | "warning" | "error"
+export type FooterContextGauge = { ratio: number; percent: number; tone: FooterContextGaugeTone }
+
+// Context-window usage for the footer gauge (ADR-031 R8). Undefined when
+// the model's context limit is unknown or no tokens have accumulated —
+// the caller hides the gauge entirely rather than guessing.
+export function footerContextGauge(input: {
+  totalTokens?: number
+  contextLimit?: number
+}): FooterContextGauge | undefined {
+  const total = input.totalTokens ?? 0
+  const limit = input.contextLimit ?? 0
+  if (total <= 0 || limit <= 0) return undefined
+  const ratio = Math.min(1, total / limit)
+  const percent = Math.round(ratio * 100)
+  const tone: FooterContextGaugeTone = ratio >= 0.95 ? "error" : ratio >= 0.8 ? "warning" : "muted"
+  return { ratio, percent, tone }
+}
+
 function footerToolLabel(tool: string) {
   const normalized = tool.replace(/[_-]+/g, " ").trim()
   return Locale.titlecase(normalized || "tool")

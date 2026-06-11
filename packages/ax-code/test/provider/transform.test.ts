@@ -508,6 +508,28 @@ describe("ProviderTransform.schema - gemini non-object properties removal", () =
   })
 })
 
+describe("ProviderTransform.schema - gemini circular schemas", () => {
+  const geminiModel = {
+    providerID: "google",
+    api: {
+      id: "gemini-3-pro",
+    },
+  } as any
+
+  test("does not recurse forever on circular schema objects", () => {
+    const schema = {
+      type: "object",
+      properties: {},
+    } as any
+    schema.properties.self = schema
+
+    const result = ProviderTransform.schema(geminiModel, schema) as any
+
+    expect(result.properties.self).toEqual({})
+    expect(() => JSON.stringify(result)).not.toThrow()
+  })
+})
+
 describe("ProviderTransform.message - DeepSeek reasoning content", () => {
   test("DeepSeek with tool calls includes reasoning_content in providerOptions", () => {
     const msgs = [
@@ -973,6 +995,24 @@ describe("ProviderTransform.variants", () => {
     test("options() skips enable_search for non-Qwen models on Alibaba plans", () => {
       const result = ProviderTransform.options({
         model: mkQwen("alibaba-coding-plan", "deepseek-v4-pro"),
+        sessionID: "s1",
+        providerOptions: {},
+      })
+      expect(result.enable_search).toBeUndefined()
+      expect(result.search_options).toBeUndefined()
+    })
+
+    test("options() skips enable_search for image-only Qwen models on Alibaba plans", () => {
+      const result = ProviderTransform.options({
+        model: createMockModel({
+          id: "alibaba-coding-plan/qwen-image-2.0",
+          providerID: "alibaba-coding-plan",
+          api: { id: "qwen-image-2.0", url: "https://dashscope.aliyuncs.com", npm: "@ai-sdk/openai-compatible" },
+          capabilities: {
+            input: { text: true, audio: false, image: false, video: false, pdf: false },
+            output: { text: false, audio: false, image: true, video: false, pdf: false },
+          },
+        }),
         sessionID: "s1",
         providerOptions: {},
       })

@@ -215,19 +215,26 @@ export namespace SessionCompaction {
           },
         ]
       })
-      // Per-iteration try/catch so a single failing updatePart doesn't
-      // abort the rest of the prune. The previous outer try wrapped the
-      // whole loop, so the first DB write failure stopped pruning and
-      // hid the count of successful writes.
+      // Write all pruned parts in a single transaction; per-part writes
+      // meant one DB round-trip per part, which dominated prune time on
+      // large sessions. If the batch fails (e.g. one corrupt part aborts
+      // the transaction), fall back to per-part writes with per-iteration
+      // try/catch so a single failing part doesn't abort the rest.
       let succeeded = 0
       let failed = 0
-      for (const { part, tier } of compactedParts) {
-        try {
-          await Session.updatePart.force(part)
-          succeeded += 1
-        } catch (e) {
-          failed += 1
-          log.warn("failed to compact part", { partID: part.id, tier, err: e })
+      try {
+        await Session.updateParts(compactedParts.map(({ part }) => part))
+        succeeded = compactedParts.length
+      } catch (batchError) {
+        log.warn("batch prune write failed, retrying per part", { err: batchError })
+        for (const { part, tier } of compactedParts) {
+          try {
+            await Session.updatePart.force(part)
+            succeeded += 1
+          } catch (e) {
+            failed += 1
+            log.warn("failed to compact part", { partID: part.id, tier, err: e })
+          }
         }
       }
       log.info("pruned", { count: compactedParts.length, selectedTokens, succeeded, failed })

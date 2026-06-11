@@ -12,6 +12,7 @@ import fs from "fs/promises"
 import { Filesystem } from "@/util/filesystem"
 import { Env } from "@/util/env"
 import { toErrorMessage } from "@/util/error-message"
+import { TOAST_DURATION_LONG_MS } from "@/constants/server"
 import { fileURLToPath } from "url"
 import { Flag } from "@/flag/flag.ts"
 import { Shell } from "@/shell/shell"
@@ -19,7 +20,7 @@ import { Shell } from "@/shell/shell"
 import { BashArity } from "@/permission/arity"
 import { Config } from "@/config/config"
 import { Bus } from "@/bus"
-import { TuiEvent } from "@/cli/cmd/tui/event"
+import { NotificationEvent } from "@/notification/events"
 import { Truncate } from "./truncate"
 import { Plugin } from "@/plugin"
 import { Isolation } from "@/isolation"
@@ -217,11 +218,11 @@ export const BashTool = Tool.define("bash", async () => {
           status: "intercepted",
           durationMs: 0,
         })
-        Bus.publishDetached(TuiEvent.ToastShow, {
+        Bus.publishDetached(NotificationEvent.ToastShow, {
           title: "Browser preview ready",
           message: `${browserOpenIntercept} — open manually when ready`,
           variant: "info",
-          duration: 8000,
+          duration: TOAST_DURATION_LONG_MS,
         })
         const msg = `[Browser open intercepted] Preview is ready at: ${browserOpenIntercept}\n\nThe browser was not opened automatically to avoid disrupting your active development session. Open it manually when ready, or ask to open it explicitly.`
         return {
@@ -271,6 +272,7 @@ export const BashTool = Tool.define("bash", async () => {
       const directories = new Set<string>()
       if (!Instance.containsPath(cwd)) directories.add(cwd)
       const resolvedPaths = new Set<string>()
+      const commandNames = new Set<string>()
       const redirectWritePaths = new Set<string>()
       const patterns = new Set<string>()
       const always = new Set<string>()
@@ -293,6 +295,7 @@ export const BashTool = Tool.define("bash", async () => {
       const recordInnerCommandPaths = async (parts: string[]) => {
         const name = parts[0]
         if (!name) return
+        commandNames.add(name)
         const args = parts.slice(1)
 
         if (["cd", "rm", "cp", "mv", "mkdir", "touch", "chmod", "chown", "cat", "tee", "install"].includes(name)) {
@@ -366,7 +369,21 @@ export const BashTool = Tool.define("bash", async () => {
         for (const arg of args) {
           if (arg.startsWith("-")) continue
           const unquoted = stripShellQuotes(arg)
-          if (path.isAbsolute(unquoted)) await recordResolvedPath(unquoted)
+          if (!unquoted || hasDynamicShellExpansion(unquoted)) continue
+          if (path.isAbsolute(unquoted)) {
+            await recordResolvedPath(unquoted)
+            continue
+          }
+          // Relative args that traverse out of the workspace (e.g.
+          // `../../etc/passwd`) are potential escape targets even for
+          // commands we don't model explicitly. Without this, a write via an
+          // unrecognized command (`sed -i ... ../../outside`) slips past the
+          // workspace boundary. We only record args that actually resolve
+          // outside the workspace so harmless in-workspace barewords (sed
+          // expressions, grep patterns, subcommands) aren't flagged.
+          if (unquoted.includes("..") && !Instance.containsPath(path.resolve(cwd, unquoted))) {
+            await recordResolvedPath(unquoted)
+          }
         }
       }
 
@@ -579,6 +596,7 @@ export const BashTool = Tool.define("bash", async () => {
       }
 
       Isolation.assertBash(ctx.extra?.isolation, cwd, Instance.directory, Instance.worktree, [...resolvedPaths])
+      Isolation.assertBashNetwork(ctx.extra?.isolation, commandNames)
 
       if (directories.size > 0) {
         const globs = Array.from(directories).map((dir) => {

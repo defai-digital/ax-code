@@ -2,12 +2,23 @@ export type TuiRendererContractGate = "automated" | "manual" | "adr"
 
 export type TuiRendererContractRequirement = {
   id: string
-  area: "frame" | "input" | "focus" | "scroll" | "text" | "prompt" | "dialog" | "debug" | "extension" | "packaging"
+  area:
+    | "frame"
+    | "input"
+    | "focus"
+    | "scroll"
+    | "text"
+    | "prompt"
+    | "dialog"
+    | "debug"
+    | "extension"
+    | "packaging"
+    | "visual"
   requirement: string
   gate: TuiRendererContractGate
 }
 
-export const TUI_RENDERER_CONTRACT_VERSION = "2026-04-13"
+export const TUI_RENDERER_CONTRACT_VERSION = "2026-06-10"
 
 export const TUI_RENDERER_CONTRACT: TuiRendererContractRequirement[] = [
   {
@@ -76,6 +87,13 @@ export const TUI_RENDERER_CONTRACT: TuiRendererContractRequirement[] = [
     requirement: "Enterprise builds remain deterministic and offline-capable with no runtime renderer downloads.",
     gate: "adr",
   },
+  {
+    id: "visual.design-system-snapshot",
+    area: "visual",
+    requirement:
+      "Design-system outputs (brand gradient runs, gauge fills, border charsets, glyph sets) match the checked-in visual snapshot for both truecolor and fallback profiles (ADR-031).",
+    gate: "automated",
+  },
 ]
 
 export const TUI_RENDERER_CONTRACT_REQUIRED_AREAS = [
@@ -89,4 +107,5 @@ export const TUI_RENDERER_CONTRACT_REQUIRED_AREAS = [
   "debug",
   "extension",
   "packaging",
+  "visual",
 ] as const

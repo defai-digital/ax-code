@@ -57,18 +57,26 @@ describe("supportsGrok41OrAllowedCodingModel", () => {
 })
 
 describe("supportsOpenRouterModelID", () => {
-  test("accepts the curated OpenRouter coding allow-list", () => {
+  test("accepts the curated OpenRouter gap-filling coding allow-list", () => {
     for (const id of OPENROUTER_SUPPORTED_MODEL_IDS) {
       expect(supportsOpenRouterModelID(id)).toBe(true)
     }
   })
 
-  test.each(["openrouter/free", "openrouter/bodybuilder", "openai/gpt-5.2", "anthropic/claude-3-haiku"])(
-    "rejects %s",
-    (id) => {
-      expect(supportsOpenRouterModelID(id)).toBe(false)
-    },
-  )
+  test.each([
+    "openrouter/free",
+    "openrouter/bodybuilder",
+    "openai/gpt-5.2",
+    "openai/gpt-5.1-codex",
+    "anthropic/claude-sonnet-4.6",
+    "x-ai/grok-4.3",
+    "qwen/qwen3.6-plus",
+    "deepseek/deepseek-v4-pro",
+    "moonshotai/kimi-k2.6",
+    "z-ai/glm-5.1",
+  ])("rejects %s", (id) => {
+    expect(supportsOpenRouterModelID(id)).toBe(false)
+  })
 })
 
 describe("isModelSupportedForProvider", () => {
@@ -78,8 +86,9 @@ describe("isModelSupportedForProvider", () => {
   })
 
   test("uses the curated OpenRouter allow-list against the raw model id", () => {
-    expect(isModelSupportedForProvider("openrouter", "openai/gpt-5.1-codex")).toBe(true)
-    expect(isModelSupportedForProvider("openrouter", "gpt-5.1-codex")).toBe(false)
+    expect(isModelSupportedForProvider("openrouter", "minimax/minimax-m3")).toBe(true)
+    expect(isModelSupportedForProvider("openrouter", "minimax-m3")).toBe(false)
+    expect(isModelSupportedForProvider("openrouter", "openai/gpt-5.1-codex")).toBe(false)
   })
 
   test("keeps Gemini filtering scoped to Google providers", () => {

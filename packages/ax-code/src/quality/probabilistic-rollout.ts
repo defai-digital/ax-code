@@ -7,6 +7,8 @@ import { Risk } from "../risk/score"
 import { Snapshot } from "../snapshot"
 import { FindingSchema, type Finding } from "./finding"
 import { asRecordOrUndefined } from "@/util/record"
+import * as ProbabilisticRolloutReadiness from "./probabilistic-rollout-readiness"
+import * as ProbabilisticRolloutSchema from "./probabilistic-rollout-schema"
 
 const REVIEW_TOOLS = new Set([
   "impact_analyze",
@@ -47,377 +49,118 @@ export namespace ProbabilisticRollout {
     summary: ToolSummary
   }
 
-  export const Workflow = z.enum(["review", "debug", "qa"])
+  export const Workflow = ProbabilisticRolloutSchema.Workflow
   export type Workflow = z.output<typeof Workflow>
 
-  export const ArtifactKind = z.enum([
-    "review_run",
-    "review_finding",
-    "debug_case",
-    "debug_hypothesis",
-    "qa_run",
-    "qa_failure",
-  ])
+  export const ArtifactKind = ProbabilisticRolloutSchema.ArtifactKind
   export type ArtifactKind = z.output<typeof ArtifactKind>
 
-  export const LabelSource = z.enum(["human", "system", "imported"])
+  export const LabelSource = ProbabilisticRolloutSchema.LabelSource
   export type LabelSource = z.output<typeof LabelSource>
 
-  export const ReviewRunOutcome = z.enum(["clean", "findings_accepted", "findings_dismissed", "unresolved"])
-  export const ReviewFindingOutcome = z.enum(["accepted", "dismissed", "superseded", "unresolved"])
-  export const DebugOutcome = z.enum(["validated", "rejected", "superseded", "unresolved"])
-  export const QARunOutcome = z.enum(["passed", "failed", "flaky", "unresolved"])
-  export const QAFailureOutcome = z.enum(["reproduced", "resolved", "not_reproduced", "unresolved"])
+  export const ReviewRunOutcome = ProbabilisticRolloutSchema.ReviewRunOutcome
 
-  const LabelBase = z.object({
-    labelID: z.string(),
-    artifactID: z.string(),
-    workflow: Workflow,
-    projectID: z.string(),
-    sessionID: z.string().optional(),
-    labeledAt: z.string(),
-    labelSource: LabelSource,
-    labelVersion: z.number().int().positive().default(1),
-    outcomeReason: z.string().optional(),
-  })
+  export const ReviewFindingOutcome = ProbabilisticRolloutSchema.ReviewFindingOutcome
 
-  export const ReviewRunLabel = LabelBase.extend({
-    artifactKind: z.literal("review_run"),
-    workflow: z.literal("review"),
-    outcome: ReviewRunOutcome,
-  })
+  export const DebugOutcome = ProbabilisticRolloutSchema.DebugOutcome
 
-  export const ReviewFindingLabel = LabelBase.extend({
-    artifactKind: z.literal("review_finding"),
-    workflow: z.literal("review"),
-    outcome: ReviewFindingOutcome,
-  })
+  export const QARunOutcome = ProbabilisticRolloutSchema.QARunOutcome
 
-  export const DebugCaseLabel = LabelBase.extend({
-    artifactKind: z.literal("debug_case"),
-    workflow: z.literal("debug"),
-    outcome: DebugOutcome,
-  })
+  export const QAFailureOutcome = ProbabilisticRolloutSchema.QAFailureOutcome
 
-  export const DebugHypothesisLabel = LabelBase.extend({
-    artifactKind: z.literal("debug_hypothesis"),
-    workflow: z.literal("debug"),
-    outcome: DebugOutcome,
-  })
+  export const ReviewRunLabel = ProbabilisticRolloutSchema.ReviewRunLabel
 
-  export const QARunLabel = LabelBase.extend({
-    artifactKind: z.literal("qa_run"),
-    workflow: z.literal("qa"),
-    outcome: QARunOutcome,
-  })
+  export const ReviewFindingLabel = ProbabilisticRolloutSchema.ReviewFindingLabel
 
-  export const QAFailureLabel = LabelBase.extend({
-    artifactKind: z.literal("qa_failure"),
-    workflow: z.literal("qa"),
-    outcome: QAFailureOutcome,
-  })
+  export const DebugCaseLabel = ProbabilisticRolloutSchema.DebugCaseLabel
 
-  export const Label = z.discriminatedUnion("artifactKind", [
-    ReviewRunLabel,
-    ReviewFindingLabel,
-    DebugCaseLabel,
-    DebugHypothesisLabel,
-    QARunLabel,
-    QAFailureLabel,
-  ])
+  export const DebugHypothesisLabel = ProbabilisticRolloutSchema.DebugHypothesisLabel
+
+  export const QARunLabel = ProbabilisticRolloutSchema.QARunLabel
+
+  export const QAFailureLabel = ProbabilisticRolloutSchema.QAFailureLabel
+
+  export const Label = ProbabilisticRolloutSchema.Label
   export type Label = z.output<typeof Label>
 
-  export const LabelFile = z.object({
-    schemaVersion: z.literal(1),
-    kind: z.literal("ax-code-quality-label-file"),
-    labels: Label.array(),
-  })
+  export const LabelFile = ProbabilisticRolloutSchema.LabelFile
   export type LabelFile = z.output<typeof LabelFile>
 
-  export const ToolSummary = z.object({
-    tool: z.string(),
-    callID: z.string(),
-    status: z.enum(["completed", "error"]),
-    timeCreated: z.number(),
-    durationMs: z.number(),
-    findingCount: z.number().int().nonnegative().optional(),
-    riskLabel: z.string().optional(),
-    riskScore: z.number().optional(),
-    confidence: z.number().optional(),
-    truncated: z.boolean().optional(),
-    error: z.string().optional(),
-    input: z.record(z.string(), z.unknown()).optional(),
-  })
+  export const ToolSummary = ProbabilisticRolloutSchema.ToolSummary
   export type ToolSummary = z.output<typeof ToolSummary>
 
-  export const ReplayItem = z.object({
-    schemaVersion: z.literal(1),
-    kind: z.literal("ax-code-quality-replay-item"),
-    workflow: Workflow,
-    artifactKind: ArtifactKind,
-    artifactID: z.string(),
-    sessionID: z.string(),
-    projectID: z.string(),
-    title: z.string(),
-    createdAt: z.string(),
-    baseline: z.object({
-      source: z.string(),
-      confidence: z.number().nullable(),
-      score: z.number().nullable().optional(),
-      readiness: z.string().nullable().optional(),
-      rank: z.number().int().nullable().optional(),
-    }),
-    context: z.object({
-      directory: z.string(),
-      graphCommitSha: z.string().nullable(),
-      touchedFiles: z.string().array(),
-      diffSummary: z.object({
-        files: z.number().int().nonnegative(),
-        additions: z.number().int().nonnegative(),
-        deletions: z.number().int().nonnegative(),
-      }),
-      eventCount: z.number().int().nonnegative(),
-      toolCount: z.number().int().nonnegative(),
-    }),
-    evidence: z.object({
-      toolSummaries: ToolSummary.array(),
-      summary: z.record(z.string(), z.unknown()).optional(),
-      finding: z.record(z.string(), z.unknown()).optional(),
-    }),
-  })
+  export const ReplayItem = ProbabilisticRolloutSchema.ReplayItem
   export type ReplayItem = z.output<typeof ReplayItem>
 
-  export const ReplayExport = z.object({
-    schemaVersion: z.literal(1),
-    kind: z.literal("ax-code-quality-replay-export"),
-    workflow: Workflow,
-    sessionID: z.string(),
-    exportedAt: z.string(),
-    items: ReplayItem.array(),
-  })
+  export const ReplayExport = ProbabilisticRolloutSchema.ReplayExport
   export type ReplayExport = z.output<typeof ReplayExport>
 
-  export const ReplayReadinessGate = z.object({
-    name: z.string(),
-    status: z.enum(["pass", "warn", "fail"]),
-    detail: z.string(),
-  })
+  export const ReplayReadinessGate = ProbabilisticRolloutSchema.ReplayReadinessGate
   export type ReplayReadinessGate = z.output<typeof ReplayReadinessGate>
 
-  export const ReplayReadinessSummary = z.object({
-    schemaVersion: z.literal(1),
-    kind: z.literal("ax-code-quality-replay-readiness-summary"),
-    workflow: Workflow,
-    sessionID: z.string(),
-    projectID: z.string(),
-    exportedAt: z.string(),
-    totalItems: z.number().int().nonnegative(),
-    anchorItems: z.number().int().nonnegative(),
-    evidenceItems: z.number().int().nonnegative(),
-    toolSummaryCount: z.number().int().nonnegative(),
-    labeledItems: z.number().int().nonnegative(),
-    resolvedLabeledItems: z.number().int().nonnegative(),
-    unresolvedLabeledItems: z.number().int().nonnegative(),
-    missingLabels: z.number().int().nonnegative(),
-    readyForBenchmark: z.boolean(),
-    overallStatus: z.enum(["pass", "warn", "fail"]),
-    nextAction: z.string().nullable(),
-    gates: ReplayReadinessGate.array(),
-  })
+  export const ReplayReadinessSummary = ProbabilisticRolloutSchema.ReplayReadinessSummary
   export type ReplayReadinessSummary = z.output<typeof ReplayReadinessSummary>
 
-  export const ReplayReadinessFile = z.object({
-    schemaVersion: z.literal(1),
-    kind: z.literal("ax-code-quality-replay-readiness-file"),
-    workflow: Workflow,
-    generatedAt: z.string(),
-    summaries: ReplayReadinessSummary.array(),
-  })
+  export const ReplayReadinessFile = ProbabilisticRolloutSchema.ReplayReadinessFile
   export type ReplayReadinessFile = z.output<typeof ReplayReadinessFile>
 
-  export const UserFacingReadinessState = z.enum(["blocked", "needs_labels", "not_ready", "ready"])
+  export const UserFacingReadinessState = ProbabilisticRolloutSchema.UserFacingReadinessState
   export type UserFacingReadinessState = z.output<typeof UserFacingReadinessState>
-  export type UserFacingReadinessKind = "low" | "medium" | "high"
 
-  export const CalibrationRecord = z.object({
-    artifactID: z.string(),
-    sessionID: z.string(),
-    workflow: Workflow,
-    artifactKind: ArtifactKind,
-    source: z.string(),
-    confidence: z.number(),
-    score: z.number().nullable().optional(),
-    readiness: z.string().nullable().optional(),
-    actualPositive: z.boolean(),
-    predictedPositive: z.boolean(),
-    abstained: z.boolean(),
-    outcome: z.string(),
-  })
+  export const CalibrationRecord = ProbabilisticRolloutSchema.CalibrationRecord
   export type CalibrationRecord = z.output<typeof CalibrationRecord>
 
-  export const CalibrationSummary = z.object({
-    schemaVersion: z.literal(1),
-    kind: z.literal("ax-code-quality-calibration-summary"),
-    source: z.string(),
-    threshold: z.number(),
-    abstainBelow: z.number().nullable(),
-    totalItems: z.number().int().nonnegative(),
-    scoredItems: z.number().int().nonnegative(),
-    missingPredictionItems: z.number().int().nonnegative(),
-    labeledItems: z.number().int().nonnegative(),
-    consideredItems: z.number().int().nonnegative(),
-    abstainedItems: z.number().int().nonnegative(),
-    positives: z.number().int().nonnegative(),
-    negatives: z.number().int().nonnegative(),
-    precision: z.number().nullable(),
-    recall: z.number().nullable(),
-    falsePositiveRate: z.number().nullable(),
-    falseNegativeRate: z.number().nullable(),
-    precisionAt1: z.number().nullable(),
-    precisionAt3: z.number().nullable(),
-    calibrationError: z.number().nullable(),
-    bins: z.array(
-      z.object({
-        start: z.number(),
-        end: z.number(),
-        count: z.number().int().nonnegative(),
-        avgConfidence: z.number().nullable(),
-        empiricalRate: z.number().nullable(),
-      }),
-    ),
-  })
+  export const CalibrationSummary = ProbabilisticRolloutSchema.CalibrationSummary
   export type CalibrationSummary = z.output<typeof CalibrationSummary>
 
-  export const Prediction = z.object({
-    artifactID: z.string(),
-    sessionID: z.string().optional(),
-    workflow: Workflow.optional(),
-    artifactKind: ArtifactKind.optional(),
-    source: z.string(),
-    confidence: z.number().nullable(),
-    score: z.number().nullable().optional(),
-    readiness: z.string().nullable().optional(),
-    rank: z.number().int().nullable().optional(),
-  })
+  export const Prediction = ProbabilisticRolloutSchema.Prediction
   export type Prediction = z.output<typeof Prediction>
 
-  export const PredictionFile = z.object({
-    schemaVersion: z.literal(1),
-    kind: z.literal("ax-code-quality-prediction-file"),
-    source: z.string(),
-    generatedAt: z.string(),
-    predictions: Prediction.array(),
-  })
+  export const PredictionFile = ProbabilisticRolloutSchema.PredictionFile
   export type PredictionFile = z.output<typeof PredictionFile>
 
-  export const MetricComparison = z.object({
-    baseline: z.number().nullable(),
-    candidate: z.number().nullable(),
-    delta: z.number().nullable(),
-    direction: z.enum(["higher_is_better", "lower_is_better"]),
-    improvement: z.boolean(),
-    regression: z.boolean(),
-  })
+  export const MetricComparison = ProbabilisticRolloutSchema.MetricComparison
   export type MetricComparison = z.output<typeof MetricComparison>
 
-  export const ComparisonGate = z.object({
-    name: z.string(),
-    status: z.enum(["pass", "warn", "fail"]),
-    detail: z.string(),
-  })
+  export const ComparisonGate = ProbabilisticRolloutSchema.ComparisonGate
   export type ComparisonGate = z.output<typeof ComparisonGate>
 
-  export const CalibrationComparison = z.object({
-    schemaVersion: z.literal(1),
-    kind: z.literal("ax-code-quality-calibration-comparison"),
-    baselineSource: z.string(),
-    candidateSource: z.string(),
-    overallStatus: z.enum(["pass", "warn", "fail"]),
-    dataset: z.object({
-      baselineTotalItems: z.number().int().nonnegative(),
-      candidateTotalItems: z.number().int().nonnegative(),
-      baselineScoredItems: z.number().int().nonnegative(),
-      candidateScoredItems: z.number().int().nonnegative(),
-      baselineLabeledItems: z.number().int().nonnegative(),
-      candidateLabeledItems: z.number().int().nonnegative(),
-      baselineMissingPredictionItems: z.number().int().nonnegative(),
-      candidateMissingPredictionItems: z.number().int().nonnegative(),
-    }),
-    metrics: z.object({
-      precision: MetricComparison,
-      recall: MetricComparison,
-      falsePositiveRate: MetricComparison,
-      falseNegativeRate: MetricComparison,
-      precisionAt1: MetricComparison,
-      precisionAt3: MetricComparison,
-      calibrationError: MetricComparison,
-    }),
-    gates: ComparisonGate.array(),
-  })
+  export const CalibrationComparison = ProbabilisticRolloutSchema.CalibrationComparison
   export type CalibrationComparison = z.output<typeof CalibrationComparison>
 
-  export const ShadowDecision = z.object({
-    source: z.string(),
-    available: z.boolean(),
-    confidence: z.number().nullable(),
-    score: z.number().nullable().optional(),
-    readiness: z.string().nullable().optional(),
-    rank: z.number().int().nullable().optional(),
-    threshold: z.number(),
-    abstainBelow: z.number().nullable(),
-    predictedPositive: z.boolean().nullable(),
-    abstained: z.boolean(),
-  })
+  export const ShadowDecision = ProbabilisticRolloutSchema.ShadowDecision
   export type ShadowDecision = z.output<typeof ShadowDecision>
 
-  export const ShadowRecord = z.object({
-    schemaVersion: z.literal(1),
-    kind: z.literal("ax-code-quality-shadow-record"),
-    artifactID: z.string(),
-    sessionID: z.string(),
-    workflow: Workflow,
-    artifactKind: ArtifactKind,
-    title: z.string(),
-    createdAt: z.string(),
-    capturedAt: z.string().optional(),
-    baseline: ShadowDecision,
-    candidate: ShadowDecision,
-    disagreement: z.object({
-      candidateMissing: z.boolean(),
-      predictionChanged: z.boolean(),
-      abstentionChanged: z.boolean(),
-      confidenceDelta: z.number().nullable(),
-      rankDelta: z.number().int().nullable(),
-    }),
-  })
+  export const ShadowRecord = ProbabilisticRolloutSchema.ShadowRecord
   export type ShadowRecord = z.output<typeof ShadowRecord>
 
-  export const ShadowFile = z.object({
-    schemaVersion: z.literal(1),
-    kind: z.literal("ax-code-quality-shadow-file"),
-    baselineSource: z.string(),
-    candidateSource: z.string(),
-    generatedAt: z.string(),
-    records: ShadowRecord.array(),
-  })
+  export const ShadowFile = ProbabilisticRolloutSchema.ShadowFile
   export type ShadowFile = z.output<typeof ShadowFile>
 
-  export const ShadowSummary = z.object({
-    schemaVersion: z.literal(1),
-    kind: z.literal("ax-code-quality-shadow-summary"),
-    baselineSource: z.string(),
-    candidateSource: z.string(),
-    totalItems: z.number().int().nonnegative(),
-    comparableItems: z.number().int().nonnegative(),
-    missingCandidateItems: z.number().int().nonnegative(),
-    predictionChangedItems: z.number().int().nonnegative(),
-    abstentionChangedItems: z.number().int().nonnegative(),
-    avgConfidenceDelta: z.number().nullable(),
-    maxAbsConfidenceDelta: z.number().nullable(),
-    candidatePromotions: z.number().int().nonnegative(),
-    candidateDemotions: z.number().int().nonnegative(),
-  })
+  export const ShadowSummary = ProbabilisticRolloutSchema.ShadowSummary
   export type ShadowSummary = z.output<typeof ShadowSummary>
+
+  export type UserFacingReadinessKind = ProbabilisticRolloutSchema.UserFacingReadinessKind
+
+  export const BLOCKING_GATE_NAMES = ProbabilisticRolloutReadiness.BLOCKING_GATE_NAMES
+
+  export const readinessState = ProbabilisticRolloutReadiness.readinessState
+
+  export const readinessStateLabel = ProbabilisticRolloutReadiness.readinessStateLabel
+
+  export const readinessStateKind = ProbabilisticRolloutReadiness.readinessStateKind
+
+  export const readinessCounts = ProbabilisticRolloutReadiness.readinessCounts
+
+  export const readinessResolvedLabelsSummary = ProbabilisticRolloutReadiness.readinessResolvedLabelsSummary
+
+  export const readinessDetailLabel = ProbabilisticRolloutReadiness.readinessDetailLabel
+
+  export const readinessNextActionLabel = ProbabilisticRolloutReadiness.readinessNextActionLabel
+
+  export const renderReplayReadinessReport = ProbabilisticRolloutReadiness.renderReplayReadinessReport
+
+  export const targetedTestRecommendations = ProbabilisticRolloutReadiness.targetedTestRecommendations
 
   type ToolCall = {
     callID: string
@@ -768,230 +511,6 @@ export namespace ProbabilisticRollout {
     const improvement = direction === "higher_is_better" ? delta > 0 : delta < 0
     const regression = direction === "higher_is_better" ? delta < 0 : delta > 0
     return { baseline, candidate, delta, direction, improvement, regression }
-  }
-
-  function readinessSeverity(status: ReplayReadinessGate["status"]) {
-    return status === "fail" ? 2 : status === "warn" ? 1 : 0
-  }
-
-  // Gates whose failure means the replay export itself is broken (no anchor
-  // items, no workflow evidence). These are real, user-visible breakage; gates
-  // outside this set that fail/warn are pipeline progress signals (label
-  // coverage, benchmark readiness) that are noisy for ordinary sessions.
-  export const BLOCKING_GATE_NAMES = ["exportable-session-shape", "workflow-evidence-present"] as const
-
-  function findBlockingGate(gates: ReadonlyArray<ReplayReadinessGate> | undefined) {
-    const list = gates ?? []
-    return (
-      list.find((gate) => gate.status === "fail" && (BLOCKING_GATE_NAMES as readonly string[]).includes(gate.name)) ??
-      list.find((gate) => gate.status === "fail")
-    )
-  }
-
-  function summarizeReplayReadinessOverall(gates: ReplayReadinessGate[]) {
-    const highest = gates.reduce((max, gate) => Math.max(max, readinessSeverity(gate.status)), 0)
-    return highest === 2 ? "fail" : highest === 1 ? "warn" : "pass"
-  }
-
-  function normalizedReadinessCounts(
-    summary: Pick<
-      ReplayReadinessSummary,
-      "totalItems" | "labeledItems" | "resolvedLabeledItems" | "unresolvedLabeledItems" | "missingLabels"
-    >,
-  ) {
-    const totalItems = Math.max(summary.totalItems, 0)
-    const resolvedLabeledItems = Math.min(Math.max(summary.resolvedLabeledItems, 0), totalItems)
-    const declaredLabeledItems = Math.max(summary.labeledItems ?? 0, 0)
-    const declaredUnresolvedLabeledItems = Math.max(summary.unresolvedLabeledItems ?? 0, 0)
-    const labeledItems = Math.min(
-      totalItems,
-      Math.max(declaredLabeledItems, resolvedLabeledItems + declaredUnresolvedLabeledItems),
-    )
-    const unresolvedLabeledItems = Math.min(
-      totalItems - resolvedLabeledItems,
-      Math.max(declaredUnresolvedLabeledItems, labeledItems - resolvedLabeledItems),
-    )
-    const missingLabels = Math.max(0, totalItems - labeledItems)
-
-    return {
-      totalItems,
-      resolvedLabeledItems,
-      labeledItems,
-      unresolvedLabeledItems,
-      missingLabels,
-    }
-  }
-
-  function workflowPromptLabel(workflow: Workflow) {
-    return workflow === "qa" ? "QA" : workflow
-  }
-
-  function normalizedLabelCoverageMode(
-    summary: Pick<
-      ReplayReadinessSummary,
-      "totalItems" | "labeledItems" | "resolvedLabeledItems" | "unresolvedLabeledItems" | "missingLabels"
-    >,
-  ) {
-    const counts = normalizedReadinessCounts(summary)
-    if (counts.missingLabels === 0 && counts.unresolvedLabeledItems === 0) return "complete" as const
-    if (counts.missingLabels > 0 && counts.unresolvedLabeledItems === 0) return "missing_only" as const
-    if (counts.missingLabels === 0 && counts.unresolvedLabeledItems > 0) return "unresolved_only" as const
-    return "mixed" as const
-  }
-
-  export function readinessState(
-    summary: Pick<
-      ReplayReadinessSummary,
-      | "readyForBenchmark"
-      | "totalItems"
-      | "labeledItems"
-      | "resolvedLabeledItems"
-      | "unresolvedLabeledItems"
-      | "missingLabels"
-      | "gates"
-    >,
-  ): UserFacingReadinessState {
-    const counts = normalizedReadinessCounts(summary)
-    const blockingGate = findBlockingGate(summary.gates)
-    if (summary.readyForBenchmark) return "ready"
-    if (blockingGate) return "blocked"
-    if (counts.totalItems === 0) return "blocked"
-    if (counts.missingLabels > 0 || counts.unresolvedLabeledItems > 0) return "needs_labels"
-    return "not_ready"
-  }
-
-  export function readinessStateLabel(
-    summary: Pick<
-      ReplayReadinessSummary,
-      | "readyForBenchmark"
-      | "totalItems"
-      | "labeledItems"
-      | "resolvedLabeledItems"
-      | "unresolvedLabeledItems"
-      | "missingLabels"
-      | "gates"
-    >,
-  ) {
-    const state = readinessState(summary)
-    if (state === "needs_labels") return "needs labels"
-    if (state === "not_ready") return "not ready"
-    return state
-  }
-
-  export function readinessStateKind(
-    summary: Pick<
-      ReplayReadinessSummary,
-      | "overallStatus"
-      | "readyForBenchmark"
-      | "totalItems"
-      | "labeledItems"
-      | "resolvedLabeledItems"
-      | "unresolvedLabeledItems"
-      | "missingLabels"
-      | "gates"
-    >,
-  ): UserFacingReadinessKind {
-    if (summary.overallStatus === "fail") return "high"
-    if (summary.overallStatus === "warn") return "medium"
-    return "low"
-  }
-
-  export function readinessCounts(
-    summary: Pick<
-      ReplayReadinessSummary,
-      "totalItems" | "labeledItems" | "resolvedLabeledItems" | "unresolvedLabeledItems" | "missingLabels"
-    >,
-  ) {
-    return normalizedReadinessCounts(summary)
-  }
-
-  export function readinessResolvedLabelsSummary(
-    summary: Pick<
-      ReplayReadinessSummary,
-      "totalItems" | "labeledItems" | "resolvedLabeledItems" | "unresolvedLabeledItems" | "missingLabels"
-    >,
-  ) {
-    const counts = normalizedReadinessCounts(summary)
-    return `${counts.resolvedLabeledItems}/${counts.totalItems} resolved labels`
-  }
-
-  export function readinessDetailLabel(
-    summary: Pick<
-      ReplayReadinessSummary,
-      | "readyForBenchmark"
-      | "totalItems"
-      | "labeledItems"
-      | "resolvedLabeledItems"
-      | "unresolvedLabeledItems"
-      | "missingLabels"
-      | "gates"
-    >,
-  ) {
-    const state = readinessState(summary)
-    if (state === "blocked") {
-      return findBlockingGate(summary.gates)?.detail ?? "no replay evidence yet"
-    }
-    if (state === "ready") return `benchmark ready · ${readinessResolvedLabelsSummary(summary)}`
-    if (state === "not_ready") return `label coverage complete · ${readinessResolvedLabelsSummary(summary)}`
-
-    const counts = normalizedReadinessCounts(summary)
-    const detail = [readinessResolvedLabelsSummary(summary)]
-    if (counts.missingLabels > 0) detail.push(`${counts.missingLabels} missing`)
-    if (counts.unresolvedLabeledItems > 0) detail.push(`${counts.unresolvedLabeledItems} unresolved`)
-    return detail.join(" · ")
-  }
-
-  export function readinessNextActionLabel(
-    summary: Pick<
-      ReplayReadinessSummary,
-      | "workflow"
-      | "nextAction"
-      | "readyForBenchmark"
-      | "totalItems"
-      | "labeledItems"
-      | "resolvedLabeledItems"
-      | "unresolvedLabeledItems"
-      | "missingLabels"
-      | "gates"
-    >,
-  ): string | null {
-    const nextAction = summary.nextAction?.trim() || null
-    const state = readinessState(summary)
-
-    if (state === "ready") {
-      return nextAction || "Ready to benchmark the current replay export."
-    }
-
-    if (state === "blocked") {
-      return (
-        nextAction ||
-        `Capture ${workflowPromptLabel(summary.workflow)} workflow activity before exporting replay again.`
-      )
-    }
-
-    const coverageMode = normalizedLabelCoverageMode(summary)
-    const fallback =
-      coverageMode === "complete"
-        ? `Check ${workflowPromptLabel(summary.workflow)} replay readiness gates before benchmarking.`
-        : coverageMode === "missing_only"
-          ? "Record outcome labels for the remaining exported artifacts."
-          : coverageMode === "unresolved_only"
-            ? "Revisit unresolved outcome labels using the current session evidence."
-            : "Finish label coverage for the remaining exported artifacts."
-
-    if (!nextAction) return fallback
-
-    if (
-      nextAction === "Finish label coverage for the remaining exported artifacts." ||
-      nextAction === "Finish QA label coverage for the remaining exported test artifacts." ||
-      nextAction === "Record QA outcomes for the exported test artifacts." ||
-      nextAction === "Resolve at least one QA label before benchmarking." ||
-      nextAction === "Resolve at least one exported artifact label before benchmarking."
-    ) {
-      return fallback
-    }
-
-    return nextAction
   }
 
   export async function exportReplay(sessionID: SessionID, workflow: Workflow): Promise<ReplayExport> {
@@ -1437,50 +956,10 @@ export namespace ProbabilisticRollout {
       unresolvedLabeledItems,
       missingLabels,
       readyForBenchmark: exportable && hasWorkflowEvidence && resolvedLabeledItems > 0,
-      overallStatus: summarizeReplayReadinessOverall(gates),
+      overallStatus: ProbabilisticRolloutReadiness.summarizeReplayReadinessOverall(gates),
       nextAction,
       gates,
     })
-  }
-
-  export function renderReplayReadinessReport(summary: ReplayReadinessSummary) {
-    const lines: string[] = []
-    lines.push("## ax-code quality replay readiness")
-    lines.push("")
-    lines.push(`- workflow: ${summary.workflow}`)
-    lines.push(`- session id: ${summary.sessionID}`)
-    lines.push(`- project id: ${summary.projectID}`)
-    lines.push(`- exported at: ${summary.exportedAt}`)
-    lines.push(`- overall status: ${summary.overallStatus}`)
-    lines.push(`- total items: ${summary.totalItems}`)
-    lines.push(`- anchor items: ${summary.anchorItems}`)
-    lines.push(`- evidence items: ${summary.evidenceItems}`)
-    lines.push(`- tool summaries: ${summary.toolSummaryCount}`)
-    lines.push(`- labeled items: ${summary.labeledItems}`)
-    lines.push(`- resolved labels: ${summary.resolvedLabeledItems}`)
-    lines.push(`- unresolved labels: ${summary.unresolvedLabeledItems}`)
-    lines.push(`- missing labels: ${summary.missingLabels}`)
-    lines.push(`- ready for benchmark: ${summary.readyForBenchmark}`)
-    lines.push(`- next action: ${readinessNextActionLabel(summary) ?? "none"}`)
-    lines.push("")
-    for (const gate of summary.gates) {
-      lines.push(`- [${gate.status}] ${gate.name}: ${gate.detail}`)
-    }
-    lines.push("")
-    return lines.join("\n")
-  }
-
-  export function targetedTestRecommendations(summary: Pick<ReplayReadinessSummary, "workflow" | "gates">) {
-    if (summary.workflow !== "qa") return []
-    const gate = summary.gates.find((item) => item.name === "targeted-test-recommendation")
-    if (!gate) return []
-    const separator = gate.detail.indexOf(":")
-    if (separator === -1) return []
-    return gate.detail
-      .slice(separator + 1)
-      .split("|")
-      .map((item) => item.trim())
-      .filter((item) => item.length > 0)
   }
 
   function actualPositive(label: Label) {

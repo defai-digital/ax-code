@@ -1,7 +1,3 @@
-import { BusEvent } from "@/bus/bus-event"
-import z from "zod"
+import { RuntimeEvent } from "@/runtime/events"
 
-export const Event = {
-  Connected: BusEvent.define("server.connected", z.object({})),
-  Disposed: BusEvent.define("global.disposed", z.object({})),
-}
+export const Event = RuntimeEvent

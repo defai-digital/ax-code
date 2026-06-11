@@ -83,6 +83,9 @@ jobs:
         run: bun tsc
         working-directory: packages/sdk/js
 
+      - name: Build Plugin
+        run: pnpm --dir packages/plugin run build
+
       - name: Typecheck ax-code
         run: pnpm --dir packages/ax-code run typecheck
 
@@ -190,6 +193,13 @@ jobs:
 
       - name: Install deps
         run: pnpm install --frozen-lockfile
+
+      - name: Build SDK
+        run: bun tsc
+        working-directory: packages/sdk/js
+
+      - name: Build Plugin
+        run: pnpm --dir packages/plugin run build
 
       - name: Run live ax-code tests
         run: pnpm --dir packages/ax-code run test:ci -- live

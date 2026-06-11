@@ -10,6 +10,7 @@ import {
   normalizeVersion,
   parsePublishGithubReleaseArgs,
   publishPlan,
+  trackedInternalPrivacyIssue,
 } from "./publish-github-release"
 
 describe("publish-github-release helpers", () => {
@@ -49,6 +50,22 @@ describe("publish-github-release helpers", () => {
         "ax-code-darwin-arm64.zip.minisig",
       ]),
     ).toEqual(["ax-code-windows-x64.zip.minisig", "ax-code-windows-arm64.zip.minisig"])
+  })
+
+  test("reports tracked internal files as a release privacy issue", () => {
+    expect(trackedInternalPrivacyIssue([])).toBeUndefined()
+    expect(
+      trackedInternalPrivacyIssue([
+        ".internal/prd/private.md",
+        ".internal/adr/private.md",
+        ".internal/bugs/private.md",
+        ".internal/release/private.md",
+        ".internal/reports/private.md",
+        ".internal/archive/private.md",
+      ]),
+    ).toBe(
+      ".internal files are tracked: .internal/prd/private.md, .internal/adr/private.md, .internal/bugs/private.md, .internal/release/private.md, .internal/reports/private.md, and 1 more. Remove them from git index before publishing.",
+    )
   })
 
   test("parses publish options with safe defaults", () => {

@@ -1,18 +1,14 @@
-import { dynamicTool, type Tool, type ToolCallOptions, jsonSchema, type JSONSchema7 } from "ai"
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js"
 import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js"
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { UnauthorizedError } from "@modelcontextprotocol/sdk/client/auth.js"
-import {
-  CallToolResultSchema,
-  type Tool as MCPToolDef,
-  ToolListChangedNotificationSchema,
-} from "@modelcontextprotocol/sdk/types.js"
+import { ToolListChangedNotificationSchema } from "@modelcontextprotocol/sdk/types.js"
 import { Config } from "../config/config"
 import { Log } from "../util/log"
 import { Env } from "../util/env"
 import { toError, toErrorMessage } from "../util/error-message"
+import { TOAST_DURATION_LONG_MS } from "@/constants/server"
 import { NamedError } from "@ax-code/util/error"
 import z from "zod/v4"
 import { Instance } from "../project/instance"
@@ -25,17 +21,16 @@ import { McpAuth } from "./auth"
 import { McpTrust } from "./trust"
 import { BusEvent } from "../bus/bus-event"
 import { Bus } from "@/bus"
-import { TuiEvent } from "@/cli/cmd/tui/event"
+import { NotificationEvent } from "@/notification/events"
 import open from "open"
 import { isRecord } from "@/util/record"
 import { KeyedSerialQueue } from "@/util/queue"
 import { Shell } from "../shell/shell"
+import { convertMcpTool, mcpItemKey, mcpToolPermissionKey, type ConvertedMcpTool } from "./tool-conversion"
 
 export namespace MCP {
   const log = Log.create({ service: "mcp" })
   const DEFAULT_TIMEOUT = 30_000
-  const MAX_TOOL_DESCRIPTION = 4_000
-  const MAX_TOOL_SCHEMA_BYTES = 64 * 1024
   const MAX_STDERR_LINE = 2_000
   const SECRET_PATTERN = /(?:token|secret|password|credential|authorization|api[_-]?key)=?[^ \t\r\n]*/gi
   const isErrnoException = (error: unknown): error is NodeJS.ErrnoException =>
@@ -165,51 +160,6 @@ export namespace MCP {
     })
   }
 
-  // Convert MCP tool definition to AI SDK Tool type
-  async function convertMcpTool(mcpTool: MCPToolDef, client: MCPClient, timeout?: number): Promise<Tool> {
-    const inputSchema = mcpTool.inputSchema
-
-    // Spread first, then override type to ensure it's always "object"
-    const schema: JSONSchema7 = {
-      ...(inputSchema as JSONSchema7),
-      type: "object",
-      properties: (inputSchema.properties ?? {}) as JSONSchema7["properties"],
-      additionalProperties: (inputSchema as JSONSchema7).additionalProperties ?? false,
-    }
-    const schemaBytes = Buffer.byteLength(JSON.stringify(schema), "utf8")
-    if (schemaBytes > MAX_TOOL_SCHEMA_BYTES) {
-      throw new Error(`MCP tool schema too large: ${mcpTool.name}`)
-    }
-    const description =
-      (mcpTool.description ?? "").length > MAX_TOOL_DESCRIPTION
-        ? `${(mcpTool.description ?? "").slice(0, MAX_TOOL_DESCRIPTION)}...`
-        : (mcpTool.description ?? "")
-
-    return dynamicTool({
-      description,
-      inputSchema: jsonSchema(schema),
-      execute: async (args: unknown, opts: ToolCallOptions) => {
-        try {
-          return await client.callTool(
-            {
-              name: mcpTool.name,
-              arguments: (args || {}) as Record<string, unknown>,
-            },
-            CallToolResultSchema,
-            {
-              resetTimeoutOnProgress: true,
-              signal: opts.abortSignal,
-              timeout,
-            },
-          )
-        } catch (e) {
-          log.error("MCP tool call failed", { tool: mcpTool.name, error: toErrorMessage(e) })
-          throw e
-        }
-      },
-    })
-  }
-
   // Store transports for OAuth servers to allow finishing auth
   type TransportWithAuth = StreamableHTTPClientTransport | SSEClientTransport
   type ClosableMcpObject = {
@@ -326,6 +276,7 @@ export namespace MCP {
 
           if (result.mcpClient) {
             clients[key] = result.mcpClient
+            registerClientOnClose(key, result.mcpClient)
           }
         }),
       )
@@ -354,19 +305,6 @@ export namespace MCP {
     },
   )
 
-  // MCP identifiers (client name, tool name, prompt name, resource
-  // name) can contain characters that aren't valid in the registry
-  // keys the agent layer expects — slashes, spaces, colons, etc. We
-  // replace every non-alphanumeric / non-underscore / non-hyphen
-  // byte with `_`. The rule must be identical for tools, prompts,
-  // and resources: if it drifts, a prompt's lookup key stops
-  // matching the client's registration and the feature silently
-  // breaks. Extracted so the rule has exactly one definition.
-  // See issue #14.
-  function sanitize(name: string): string {
-    return name.replace(/[^a-zA-Z0-9_-]/g, "_")
-  }
-
   function createClient() {
     return new Client({
       name: "ax-code",
@@ -376,6 +314,23 @@ export namespace MCP {
 
   function rememberClientTransport(client: MCPClient, transport: unknown) {
     ;(client as { transport?: unknown }).transport ??= transport
+  }
+
+  // When a server drops the connection, clear the stale "connected" status and
+  // remove the dead client so a later reconnect isn't short-circuited by the
+  // early-return in connect() (status === "connected" && clients[name]). This
+  // must be wired on EVERY path that stores a client — both the lazy startup
+  // bulk-connect in state() and the explicit connect() — otherwise servers
+  // connected at startup (the common case) would stall on reconnect.
+  function registerClientOnClose(name: string, client: MCPClient) {
+    client.onclose = () => {
+      void state().then((s) => {
+        if (s.clients[name] === client) {
+          delete s.clients[name]
+          s.status[name] = { status: "failed", error: "Server closed the connection" }
+        }
+      })
+    }
   }
 
   function needsTrustStatus(decision: McpTrust.Decision): Status {
@@ -411,7 +366,7 @@ export namespace MCP {
     if (!items) return
     const result: Record<string, T & { client: string }> = {}
     for (const item of items) {
-      const key = sanitize(clientName) + ":" + sanitize(item.name)
+      const key = mcpItemKey(clientName, item.name)
       result[key] = { ...item, client: clientName }
     }
     return result
@@ -570,11 +525,11 @@ export namespace MCP {
                 error: "Server does not support dynamic client registration. Please provide clientId in config.",
               }
               // Show toast for needs_client_registration
-              Bus.publishDetached(TuiEvent.ToastShow, {
+              Bus.publishDetached(NotificationEvent.ToastShow, {
                 title: "MCP Authentication Required",
                 message: `Server "${key}" requires a pre-registered client ID. Add clientId to your config.`,
                 variant: "warning",
-                duration: 8000,
+                duration: TOAST_DURATION_LONG_MS,
               })
             } else {
               // needs_auth path: the client/transport will be reused by
@@ -591,11 +546,11 @@ export namespace MCP {
               pendingOAuthTransports.set(key, transport)
               status = { status: "needs_auth" as const }
               // Show toast for needs_auth
-              Bus.publishDetached(TuiEvent.ToastShow, {
+              Bus.publishDetached(NotificationEvent.ToastShow, {
                 title: "MCP Authentication Required",
                 message: `Server "${key}" requires authentication. Run: ax-code mcp auth ${key}`,
                 variant: "warning",
-                duration: 8000,
+                duration: TOAST_DURATION_LONG_MS,
               })
             }
             break
@@ -814,14 +769,7 @@ export namespace MCP {
         await closeIfPossible(existingClient, name, "disconnecting existing client")
       }
       s.clients[name] = result.mcpClient
-      result.mcpClient.onclose = () => {
-        void state().then((s) => {
-          if (s.clients[name] === result.mcpClient) {
-            delete s.clients[name]
-            s.status[name] = { status: "failed", error: "Server closed the connection" }
-          }
-        })
-      }
+      registerClientOnClose(name, result.mcpClient)
     }
   }
 
@@ -873,8 +821,8 @@ export namespace MCP {
     return status()
   }
 
-  let cachedTools: Record<string, Tool> | undefined
-  let toolsPromise: Promise<Record<string, Tool>> | undefined
+  let cachedTools: Record<string, ConvertedMcpTool> | undefined
+  let toolsPromise: Promise<Record<string, ConvertedMcpTool>> | undefined
   let toolsCacheSubscribed = false
   let toolsCacheUnsub: (() => void) | undefined
   let toolsCacheGeneration = 0
@@ -903,7 +851,7 @@ export namespace MCP {
     if (toolsPromise) return toolsPromise
     const generation = toolsCacheGeneration
     toolsPromise = (async () => {
-      const result: Record<string, Tool> = {}
+      const result: Record<string, ConvertedMcpTool> = {}
       const s = await state()
       const cfg = await Config.get()
       const config = cfg.mcp ?? {}
@@ -944,7 +892,7 @@ export namespace MCP {
         const entry = isConfigured(mcpConfig) ? mcpConfig : undefined
         const timeout = entry?.timeout ?? defaultTimeout
         for (const mcpTool of toolsResult.tools) {
-          const key = sanitize(clientName) + "_" + sanitize(mcpTool.name)
+          const key = mcpToolPermissionKey(clientName, mcpTool.name)
           conversions.push(
             convertMcpTool(mcpTool, client, timeout)
               .then((tool) => {
@@ -987,7 +935,7 @@ export namespace MCP {
   // helper as the ONLY public source of the key derivation rule so the
   // CLI and tests cannot drift from the runtime in session/prompt.ts.
   export function permissionKey(server: string, tool: string): string {
-    return sanitize(server) + "_" + sanitize(tool)
+    return mcpToolPermissionKey(server, tool)
   }
 
   export type ToolListing = {

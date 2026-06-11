@@ -332,6 +332,20 @@ describe("filesystem", () => {
     })
   })
 
+  describe("contains()", () => {
+    test("treats a path as contained in itself", () => {
+      expect(Filesystem.contains("/tmp/project", "/tmp/project")).toBe(true)
+    })
+
+    test("rejects sibling paths with a shared prefix", () => {
+      expect(Filesystem.contains("/tmp/project", "/tmp/project-other/file.txt")).toBe(false)
+    })
+
+    test.skipIf(process.platform !== "win32")("rejects Windows paths on a different drive", () => {
+      expect(Filesystem.contains("C:\\repo", "D:\\outside\\file.txt")).toBe(false)
+    })
+  })
+
   describe("writeStream()", () => {
     test("writes from Web ReadableStream", async () => {
       await using tmp = await tmpdir()

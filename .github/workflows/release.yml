@@ -34,6 +34,9 @@ jobs:
         run: bun tsc
         working-directory: packages/sdk/js
 
+      - name: Build Plugin
+        run: pnpm --dir packages/plugin run build
+
       - name: Typecheck
         run: pnpm --dir packages/ax-code run typecheck
 
@@ -101,6 +104,9 @@ jobs:
       - name: Build SDK
         run: bun tsc
         working-directory: packages/sdk/js
+
+      - name: Build Plugin
+        run: pnpm --dir packages/plugin run build
 
       - name: Build
         working-directory: packages/ax-code

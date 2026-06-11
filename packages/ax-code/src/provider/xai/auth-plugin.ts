@@ -48,7 +48,9 @@ const hooks: Hooks = {
             async callback() {
               while (Date.now() < expiresAt) {
                 const remaining = expiresAt - Date.now()
-                await new Promise((r) => setTimeout(r, Math.min(intervalMs + OAUTH_POLLING_SAFETY_MARGIN_MS, remaining)))
+                await new Promise((r) =>
+                  setTimeout(r, Math.min(intervalMs + OAUTH_POLLING_SAFETY_MARGIN_MS, remaining)),
+                )
 
                 let body: { error?: string; access_token?: string; refresh_token?: string; expires_in?: number }
                 try {
@@ -67,7 +69,10 @@ const hooks: Hooks = {
                 }
 
                 if (body.error === "authorization_pending") continue
-                if (body.error === "slow_down") { intervalMs += DEVICE_CODE_SLOW_DOWN_INCREMENT_MS; continue }
+                if (body.error === "slow_down") {
+                  intervalMs += DEVICE_CODE_SLOW_DOWN_INCREMENT_MS
+                  continue
+                }
                 if (body.error || !body.access_token) return { type: "failed" as const }
 
                 return {

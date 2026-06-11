@@ -171,9 +171,7 @@ function verificationEnvelope(runID: string, status: "passed" | "failed", passed
       output: status === "passed" ? "ok" : "typecheck failed",
     },
     structuredFailures:
-      status === "passed"
-        ? []
-        : [{ kind: "custom", message: "typecheck failed", details: { runID } }],
+      status === "passed" ? [] : [{ kind: "custom", message: "typecheck failed", details: { runID } }],
     artifactRefs: [],
     source: { tool: "workflow-eval-test", version: "1.0.0", runId: runID },
   }

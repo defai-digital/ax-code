@@ -100,3 +100,16 @@ Log.init({
   dev: true,
   level: "DEBUG",
 })
+
+// Opt-in perf profiling for test runs: AX_CODE_PROFILE_NATIVE=1 bun test ...
+// prints the NativePerf table (timing points across config load, prompt
+// step preparation, watcher ticks, key derivation, native bridges) after
+// the suite finishes. Uses afterAll because bun test does not reliably
+// deliver process "exit" handler output. No-op when the flag is off.
+if (process.env["AX_CODE_PROFILE_NATIVE"]) {
+  const { NativePerf } = await import("../src/perf/native")
+  afterAll(() => {
+    const report = NativePerf.render()
+    if (report) console.error("\n" + report)
+  })
+}

@@ -21,7 +21,10 @@ function finding(path = "src/app.ts"): Finding {
   }
 }
 
-function verification(path = "src/app.ts", status: VerificationEnvelope["result"]["status"] = "passed"): VerificationEnvelope {
+function verification(
+  path = "src/app.ts",
+  status: VerificationEnvelope["result"]["status"] = "passed",
+): VerificationEnvelope {
   return {
     schemaVersion: 1,
     workflow: "review",

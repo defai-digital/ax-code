@@ -3,10 +3,15 @@ import { useTheme } from "../context/theme"
 import { useKV } from "../context/kv"
 import type { JSX } from "@opentui/solid"
 import type { RGBA } from "@opentui/core"
+import type { ColorGenerator } from "opentui-spinner"
 import "opentui-spinner/solid"
 import { shouldUseTuiAnimations } from "./spinner-profile"
 
 const frames = ["|", "/", "-", "\\"]
+
+export function OpenTuiSpinner(props: { frames: string[]; interval: number; color: RGBA | ColorGenerator }) {
+  return <spinner frames={props.frames} interval={props.interval} color={props.color} />
+}
 
 export function Spinner(props: { children?: JSX.Element; color?: RGBA }) {
   const { theme } = useTheme()
@@ -18,7 +23,7 @@ export function Spinner(props: { children?: JSX.Element; color?: RGBA }) {
       fallback={<text fg={color()}>... {props.children}</text>}
     >
       <box flexDirection="row" gap={1}>
-        <spinner frames={frames} interval={80} color={color()} />
+        <OpenTuiSpinner frames={frames} interval={80} color={color()} />
         <Show when={props.children}>
           <text fg={color()}>{props.children}</text>
         </Show>

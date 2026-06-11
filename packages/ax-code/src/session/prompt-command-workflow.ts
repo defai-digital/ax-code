@@ -97,7 +97,14 @@ export function summarizeWorkflowCommandRun(run: WorkflowRunDetail): string {
   }
 
   const phases = projection.phaseCounts
-  const phaseTotal = phases.queued + phases.running + phases.blocked + phases.paused + phases.failed + phases.completed + phases.cancelled
+  const phaseTotal =
+    phases.queued +
+    phases.running +
+    phases.blocked +
+    phases.paused +
+    phases.failed +
+    phases.completed +
+    phases.cancelled
   const children = projection.childCounts
   const childTotal =
     children.queued +
@@ -108,7 +115,9 @@ export function summarizeWorkflowCommandRun(run: WorkflowRunDetail): string {
     children.failed +
     children.completed +
     children.cancelled
-  lines.push(`Progress: phases ${phases.completed}/${phaseTotal} completed, children ${children.completed}/${childTotal} completed`)
+  lines.push(
+    `Progress: phases ${phases.completed}/${phaseTotal} completed, children ${children.completed}/${childTotal} completed`,
+  )
 
   lines.push(
     `Budget: ${projection.budgetUsage.totalTokens}/${projection.budgetLimit.maxTotalTokens} tokens, ${projection.elapsedMs}ms elapsed`,
@@ -140,7 +149,9 @@ function exposedArtifactText(artifact: WorkflowArtifactRecord): string {
 function clampSummary(text: string): string {
   const compact = text.replace(/\s+/g, " ").trim()
   if (!compact) return "[no summary]"
-  return compact.length <= MAX_ARTIFACT_SUMMARY_LENGTH ? compact : `${compact.slice(0, MAX_ARTIFACT_SUMMARY_LENGTH - 3)}...`
+  return compact.length <= MAX_ARTIFACT_SUMMARY_LENGTH
+    ? compact
+    : `${compact.slice(0, MAX_ARTIFACT_SUMMARY_LENGTH - 3)}...`
 }
 
 function stripQuotes(input: string) {

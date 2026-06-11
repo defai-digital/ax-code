@@ -20,6 +20,14 @@ const rule = [] as { name: string; dir: string; bad: string[] }[]
 const hot = ["packages/ax-code/src/cli/cmd"]
 const workspacePackageRoots = ["packages", "packages/sdk/js"]
 const dependencyFields = ["dependencies", "devDependencies", "peerDependencies", "optionalDependencies"] as const
+const axCodeSrcRoot = path.join(root, "packages/ax-code/src")
+const runtimeBoundaryAllowedFiles = new Set([
+  "packages/ax-code/src/index.ts",
+  "packages/ax-code/src/index-compiled.ts",
+  "packages/ax-code/src/node.ts",
+  "packages/ax-code/src/sdk/programmatic.ts",
+  "packages/ax-code/src/runtime/local-client.ts",
+])
 
 const ext = new Set([".ts", ".tsx", ".js", ".jsx", ".mts", ".cts"])
 const old = ["ADRS", "PRDS", "BUGS", "TODOS", "specs", "sdks", "github", "scripts"]
@@ -74,6 +82,7 @@ function spec(text: string) {
   const out = [] as string[]
   for (const match of text.matchAll(/from\s+["']([^"']+)["']/g)) out.push(match[1])
   for (const match of text.matchAll(/import\s+["']([^"']+)["']/g)) out.push(match[1])
+  for (const match of text.matchAll(/import\(\s*["']([^"']+)["']\s*\)/g)) out.push(match[1])
   return out
 }
 
@@ -156,6 +165,48 @@ async function sdkSourceImports() {
         seen.add(key)
         out.push(item)
       }
+    }
+  }
+  return out
+}
+
+function resolveAxCodeImport(file: string, name: string) {
+  if (name.startsWith("@/")) return path.join(axCodeSrcRoot, name.slice(2))
+  if (name.startsWith("./") || name.startsWith("../")) return path.resolve(path.dirname(file), name)
+  return undefined
+}
+
+function isAxCodeInterfaceTarget(target: string) {
+  const normalized = rel(target).split(path.sep).join("/")
+  return (
+    normalized === "packages/ax-code/src/cli" ||
+    normalized.startsWith("packages/ax-code/src/cli/") ||
+    normalized === "packages/ax-code/src/server" ||
+    normalized.startsWith("packages/ax-code/src/server/")
+  )
+}
+
+function isAxCodeInterfaceFile(file: string) {
+  const normalized = rel(file).split(path.sep).join("/")
+  return normalized.startsWith("packages/ax-code/src/cli/") || normalized.startsWith("packages/ax-code/src/server/")
+}
+
+async function runtimeInternalBoundaries() {
+  const out = [] as { file: string; spec: string }[]
+  const seen = new Set<string>()
+  for (const file of await list("packages/ax-code/src")) {
+    const relative = rel(file).split(path.sep).join("/")
+    if (isAxCodeInterfaceFile(file)) continue
+    if (runtimeBoundaryAllowedFiles.has(relative)) continue
+
+    const text = await Bun.file(file).text()
+    for (const name of spec(text)) {
+      const target = resolveAxCodeImport(file, name)
+      if (!target || !isAxCodeInterfaceTarget(target)) continue
+      const key = `${relative}\0${name}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      out.push({ file: relative, spec: name })
     }
   }
   return out
@@ -325,6 +376,7 @@ async function main() {
   const hit = await deps()
   const raw = await deep()
   const sdkRaw = await sdkSourceImports()
+  const runtimeBoundary = await runtimeInternalBoundaries()
   const cycles = dependencyCycles()
   const v4 = await V4Guardrails.check(path.join(root, "packages/ax-code"))
   const all = await size()
@@ -363,6 +415,14 @@ async function main() {
     out.push("- ok: runtime imports SDK contracts through package exports")
   }
   out.push("")
+  out.push("## Runtime Internal Boundaries")
+  if (runtimeBoundary.length) {
+    out.push("- error: domain files import CLI/server interface modules directly")
+    for (const row of runtimeBoundary) out.push(`- ${row.file} imports ${row.spec}`)
+  } else {
+    out.push("- ok: domain files do not import CLI or server interface modules directly")
+  }
+  out.push("")
   out.push("## Workspace Dependency Cycles")
   if (cycles.length) {
     out.push("- warning: workspace package manifest cycles found")
@@ -373,7 +433,7 @@ async function main() {
   out.push("")
   out.push("## Internal Files")
   if (trackedInternal.length) {
-    out.push("- warning: .internal files are tracked; keep internal planning local-only")
+    out.push("- error: .internal files are tracked; remove them from git index before publishing")
     for (const file of trackedInternal) out.push(`- ${file}`)
   } else {
     out.push("- ok: no .internal files are tracked")
@@ -426,7 +486,16 @@ async function main() {
     await Bun.write(file, `${prev}${text}\n`)
   }
 
-  if (miss.length || hit.length || raw.length || v4.length || stale.length || drift.length) {
+  if (
+    miss.length ||
+    hit.length ||
+    raw.length ||
+    runtimeBoundary.length ||
+    v4.length ||
+    stale.length ||
+    drift.length ||
+    trackedInternal.length
+  ) {
     process.exit(1)
   }
 }

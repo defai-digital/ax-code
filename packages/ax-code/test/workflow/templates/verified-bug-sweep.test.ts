@@ -201,9 +201,7 @@ function verificationEnvelope(runID: string, status: "passed" | "failed", passed
       output: status === "passed" ? "ok" : "seeded eval failed",
     },
     structuredFailures:
-      status === "passed"
-        ? []
-        : [{ kind: "custom", message: "seeded eval failed", details: { runID } }],
+      status === "passed" ? [] : [{ kind: "custom", message: "seeded eval failed", details: { runID } }],
     artifactRefs: [],
     source: { tool: "workflow-seeded-test", version: "1.0.0", runId: runID },
   }

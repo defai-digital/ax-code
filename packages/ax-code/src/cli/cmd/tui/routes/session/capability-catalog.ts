@@ -35,7 +35,10 @@ const CATEGORY_ORDER = new Map(Object.values(CATEGORY).map((category, index) => 
 export function capabilityCatalogOptions(capabilities: CapabilityCatalogItem[]): CapabilityCatalogOption[] {
   return [...capabilities]
     .sort((a, b) => {
-      const category = compareNumber(CATEGORY_ORDER.get(CATEGORY[a.kind]) ?? 0, CATEGORY_ORDER.get(CATEGORY[b.kind]) ?? 0)
+      const category = compareNumber(
+        CATEGORY_ORDER.get(CATEGORY[a.kind]) ?? 0,
+        CATEGORY_ORDER.get(CATEGORY[b.kind]) ?? 0,
+      )
       if (category !== 0) return category
       return a.name.localeCompare(b.name)
     })

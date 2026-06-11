@@ -4,6 +4,7 @@ import { useRoute, useRouteData } from "@tui/context/route"
 import { useSync } from "@tui/context/sync"
 import { SplitBorder } from "@tui/component/border"
 import { Spinner } from "@tui/component/spinner"
+import { Chip } from "@tui/ui/primitives/chip"
 import { selectedForeground, tint, useTheme } from "@tui/context/theme"
 import {
   BoxRenderable,
@@ -1745,21 +1746,10 @@ function CoalescedTool(props: {
     <Show
       when={props.expanded}
       fallback={
-        <box paddingLeft={3}>
-          <Show
-            when={isRunning()}
-            fallback={
-              <text paddingLeft={3} fg={theme.textMuted} onMouseUp={() => props.onToggle(true)}>
-                <span style={{ bold: true }}>→</span> {label()} <span style={{ fg: theme.borderSubtle }}>▸</span>
-              </text>
-            }
-          >
-            <box paddingLeft={3} onMouseUp={() => props.onToggle(true)}>
-              <Spinner color={theme.textMuted}>
-                {label()} <span style={{ fg: theme.borderSubtle }}>▸</span>
-              </Spinner>
-            </box>
-          </Show>
+        <box paddingLeft={3} flexDirection="row">
+          <Chip status={isRunning() ? "running" : "done"} spinner={isRunning()} onMouseUp={() => props.onToggle(true)}>
+            {label()} <span style={{ fg: theme.borderSubtle }}>▸</span>
+          </Chip>
         </box>
       }
     >

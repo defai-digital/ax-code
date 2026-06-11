@@ -184,118 +184,119 @@ export type AxCodeGrpcMetadata = Record<string, string>
 export type AxCodeGrpcJsonResponse<T = unknown> = { value: T }
 export type AxCodeGrpcRuntimeEvent = { type: string; properties?: unknown }
 
-const AX_CODE_GRPC_PROTO_TYPES: Readonly<Record<AxCodeGrpcMethodName, { requestType: string; responseType: string }>> = {
-  Health: { requestType: "HealthRequest", responseType: "HealthResponse" },
-  CreateSession: { requestType: "CreateSessionRequest", responseType: "JsonResponse" },
-  SendRuntimeCommand: { requestType: "SendRuntimeCommandRequest", responseType: "RuntimeCommandResponse" },
-  LoadBootstrap: { requestType: "BootstrapRequest", responseType: "JsonResponse" },
-  LoadSessionEvidence: { requestType: "LoadSessionEvidenceRequest", responseType: "JsonResponse" },
-  ListSessions: { requestType: "QueryRequest", responseType: "JsonResponse" },
-  GetSessionStatus: { requestType: "QueryRequest", responseType: "JsonResponse" },
-  GetSession: { requestType: "SessionRequest", responseType: "JsonResponse" },
-  UpdateSession: { requestType: "SessionJsonRequest", responseType: "JsonResponse" },
-  DeleteSession: { requestType: "SessionRequest", responseType: "JsonResponse" },
-  ListSessionMessages: { requestType: "SessionQueryRequest", responseType: "JsonResponse" },
-  GetSessionMessage: { requestType: "SessionMessageRequest", responseType: "JsonResponse" },
-  DeleteSessionMessage: { requestType: "SessionMessageRequest", responseType: "JsonResponse" },
-  ListSessionChildren: { requestType: "SessionRequest", responseType: "JsonResponse" },
-  GetSessionGoal: { requestType: "SessionRequest", responseType: "JsonResponse" },
-  GetSessionTodo: { requestType: "SessionRequest", responseType: "JsonResponse" },
-  GetSessionDiff: { requestType: "SessionQueryRequest", responseType: "JsonResponse" },
-  ForkSession: { requestType: "SessionJsonRequest", responseType: "JsonResponse" },
-  ShareSession: { requestType: "SessionRequest", responseType: "JsonResponse" },
-  UnshareSession: { requestType: "SessionRequest", responseType: "JsonResponse" },
-  SummarizeSession: { requestType: "SessionJsonRequest", responseType: "JsonResponse" },
-  ListAgents: { requestType: "QueryRequest", responseType: "JsonResponse" },
-  ListSkills: { requestType: "QueryRequest", responseType: "JsonResponse" },
-  WriteAppLog: { requestType: "JsonRequest", responseType: "JsonResponse" },
-  DisposeInstance: { requestType: "EmptyRequest", responseType: "JsonResponse" },
-  RestartInstance: { requestType: "EmptyRequest", responseType: "JsonResponse" },
-  ListProjects: { requestType: "QueryRequest", responseType: "JsonResponse" },
-  GetCurrentProject: { requestType: "QueryRequest", responseType: "JsonResponse" },
-  GetPath: { requestType: "QueryRequest", responseType: "JsonResponse" },
-  GetVcs: { requestType: "QueryRequest", responseType: "JsonResponse" },
-  ListCommands: { requestType: "QueryRequest", responseType: "JsonResponse" },
-  GetProjectContext: { requestType: "QueryRequest", responseType: "JsonResponse" },
-  CreateProjectContextTemplate: { requestType: "JsonRequest", responseType: "JsonResponse" },
-  WarmupProjectMemory: { requestType: "EmptyRequest", responseType: "JsonResponse" },
-  ClearProjectMemory: { requestType: "EmptyRequest", responseType: "JsonResponse" },
-  GetDebugEnginePendingPlans: { requestType: "QueryRequest", responseType: "JsonResponse" },
-  ListFiles: { requestType: "QueryRequest", responseType: "JsonResponse" },
-  ReadFile: { requestType: "QueryRequest", responseType: "JsonResponse" },
-  GetFileStatus: { requestType: "QueryRequest", responseType: "JsonResponse" },
-  FindText: { requestType: "QueryRequest", responseType: "JsonResponse" },
-  FindFiles: { requestType: "QueryRequest", responseType: "JsonResponse" },
-  FindSymbols: { requestType: "QueryRequest", responseType: "JsonResponse" },
-  ListToolIDs: { requestType: "QueryRequest", responseType: "JsonResponse" },
-  ListTools: { requestType: "QueryRequest", responseType: "JsonResponse" },
-  ListPermissions: { requestType: "QueryRequest", responseType: "JsonResponse" },
-  ReplyPermission: { requestType: "RequestJsonRequest", responseType: "JsonResponse" },
-  ListQuestions: { requestType: "QueryRequest", responseType: "JsonResponse" },
-  ReplyQuestion: { requestType: "RequestJsonRequest", responseType: "JsonResponse" },
-  RejectQuestion: { requestType: "RequestRequest", responseType: "JsonResponse" },
-  GetConfig: { requestType: "QueryRequest", responseType: "JsonResponse" },
-  UpdateConfig: { requestType: "JsonRequest", responseType: "JsonResponse" },
-  ListConfigProviders: { requestType: "QueryRequest", responseType: "JsonResponse" },
-  GetAutonomousMode: { requestType: "QueryRequest", responseType: "JsonResponse" },
-  SetAutonomousMode: { requestType: "JsonRequest", responseType: "JsonResponse" },
-  GetIsolationMode: { requestType: "QueryRequest", responseType: "JsonResponse" },
-  SetIsolationMode: { requestType: "JsonRequest", responseType: "JsonResponse" },
-  GetSmartLlmRouting: { requestType: "QueryRequest", responseType: "JsonResponse" },
-  SetSmartLlmRouting: { requestType: "JsonRequest", responseType: "JsonResponse" },
-  GetMcpStatus: { requestType: "QueryRequest", responseType: "JsonResponse" },
-  ListMcpResources: { requestType: "QueryRequest", responseType: "JsonResponse" },
-  AddMcpServer: { requestType: "McpAddRequest", responseType: "JsonResponse" },
-  StartMcpAuth: { requestType: "NamedRequest", responseType: "JsonResponse" },
-  CompleteMcpAuth: { requestType: "McpAuthCallbackRequest", responseType: "JsonResponse" },
-  AuthenticateMcp: { requestType: "NamedRequest", responseType: "JsonResponse" },
-  RemoveMcpAuth: { requestType: "NamedRequest", responseType: "JsonResponse" },
-  ConnectMcp: { requestType: "NamedRequest", responseType: "JsonResponse" },
-  DisconnectMcp: { requestType: "NamedRequest", responseType: "JsonResponse" },
-  ListProviders: { requestType: "QueryRequest", responseType: "JsonResponse" },
-  GetProviderAuth: { requestType: "QueryRequest", responseType: "JsonResponse" },
-  SetAuth: { requestType: "ProviderAuthRequest", responseType: "JsonResponse" },
-  RemoveAuth: { requestType: "ProviderRequest", responseType: "JsonResponse" },
-  ProviderOauthAuthorize: { requestType: "ProviderJsonRequest", responseType: "JsonResponse" },
-  ProviderOauthCallback: { requestType: "ProviderJsonRequest", responseType: "JsonResponse" },
-  GetLspStatus: { requestType: "QueryRequest", responseType: "JsonResponse" },
-  GetFormatterStatus: { requestType: "QueryRequest", responseType: "JsonResponse" },
-  ListPty: { requestType: "QueryRequest", responseType: "JsonResponse" },
-  CreatePty: { requestType: "JsonRequest", responseType: "JsonResponse" },
-  GetPty: { requestType: "IdRequest", responseType: "JsonResponse" },
-  UpdatePty: { requestType: "IdJsonRequest", responseType: "JsonResponse" },
-  RemovePty: { requestType: "IdRequest", responseType: "JsonResponse" },
-  ConnectPty: { requestType: "PtyClientEvent", responseType: "PtyServerEvent" },
-  ListTaskQueue: { requestType: "QueryRequest", responseType: "JsonResponse" },
-  EnqueueTaskQueue: { requestType: "JsonRequest", responseType: "JsonResponse" },
-  EditTaskQueue: { requestType: "IdJsonRequest", responseType: "JsonResponse" },
-  TaskQueueCommand: { requestType: "CommandRequest", responseType: "JsonResponse" },
-  ReorderTaskQueue: { requestType: "ReorderRequest", responseType: "JsonResponse" },
-  RemoveTaskQueue: { requestType: "IdRequest", responseType: "JsonResponse" },
-  ListScheduledTasks: { requestType: "QueryRequest", responseType: "JsonResponse" },
-  CreateScheduledTask: { requestType: "JsonRequest", responseType: "JsonResponse" },
-  UpdateScheduledTask: { requestType: "IdJsonRequest", responseType: "JsonResponse" },
-  ScheduledTaskCommand: { requestType: "CommandRequest", responseType: "JsonResponse" },
-  RunScheduledTaskNow: { requestType: "IdRequest", responseType: "JsonResponse" },
-  RemoveScheduledTask: { requestType: "IdRequest", responseType: "JsonResponse" },
-  ListWorkflowTemplates: { requestType: "EmptyRequest", responseType: "JsonResponse" },
-  GetWorkflowTemplate: { requestType: "TemplateRequest", responseType: "JsonResponse" },
-  SaveWorkflowTemplate: { requestType: "JsonRequest", responseType: "JsonResponse" },
-  PromoteWorkflowTemplate: { requestType: "TemplateRequest", responseType: "JsonResponse" },
-  ListWorkflowRuns: { requestType: "QueryRequest", responseType: "JsonResponse" },
-  WorkflowRunDashboard: { requestType: "QueryRequest", responseType: "JsonResponse" },
-  WorkflowRunEvalCases: { requestType: "EmptyRequest", responseType: "JsonResponse" },
-  CreateWorkflowRun: { requestType: "JsonRequest", responseType: "JsonResponse" },
-  GetWorkflowRun: { requestType: "RunRequest", responseType: "JsonResponse" },
-  WorkflowRunArtifacts: { requestType: "RunQueryRequest", responseType: "JsonResponse" },
-  WorkflowRunEvalSummary: { requestType: "RunJsonRequest", responseType: "JsonResponse" },
-  WorkflowRunEvalCase: { requestType: "RunJsonRequest", responseType: "JsonResponse" },
-  SaveWorkflowRunTemplate: { requestType: "RunJsonRequest", responseType: "JsonResponse" },
-  WorkflowRunCommand: { requestType: "WorkflowRunCommandRequest", responseType: "JsonResponse" },
-  ListWorkflowRoutines: { requestType: "EmptyRequest", responseType: "JsonResponse" },
-  RunWorkflowRoutine: { requestType: "JsonRequest", responseType: "JsonResponse" },
-  SubscribeEvents: { requestType: "SubscribeEventsRequest", responseType: "RuntimeEvent" },
-}
+const AX_CODE_GRPC_PROTO_TYPES: Readonly<Record<AxCodeGrpcMethodName, { requestType: string; responseType: string }>> =
+  {
+    Health: { requestType: "HealthRequest", responseType: "HealthResponse" },
+    CreateSession: { requestType: "CreateSessionRequest", responseType: "JsonResponse" },
+    SendRuntimeCommand: { requestType: "SendRuntimeCommandRequest", responseType: "RuntimeCommandResponse" },
+    LoadBootstrap: { requestType: "BootstrapRequest", responseType: "JsonResponse" },
+    LoadSessionEvidence: { requestType: "LoadSessionEvidenceRequest", responseType: "JsonResponse" },
+    ListSessions: { requestType: "QueryRequest", responseType: "JsonResponse" },
+    GetSessionStatus: { requestType: "QueryRequest", responseType: "JsonResponse" },
+    GetSession: { requestType: "SessionRequest", responseType: "JsonResponse" },
+    UpdateSession: { requestType: "SessionJsonRequest", responseType: "JsonResponse" },
+    DeleteSession: { requestType: "SessionRequest", responseType: "JsonResponse" },
+    ListSessionMessages: { requestType: "SessionQueryRequest", responseType: "JsonResponse" },
+    GetSessionMessage: { requestType: "SessionMessageRequest", responseType: "JsonResponse" },
+    DeleteSessionMessage: { requestType: "SessionMessageRequest", responseType: "JsonResponse" },
+    ListSessionChildren: { requestType: "SessionRequest", responseType: "JsonResponse" },
+    GetSessionGoal: { requestType: "SessionRequest", responseType: "JsonResponse" },
+    GetSessionTodo: { requestType: "SessionRequest", responseType: "JsonResponse" },
+    GetSessionDiff: { requestType: "SessionQueryRequest", responseType: "JsonResponse" },
+    ForkSession: { requestType: "SessionJsonRequest", responseType: "JsonResponse" },
+    ShareSession: { requestType: "SessionRequest", responseType: "JsonResponse" },
+    UnshareSession: { requestType: "SessionRequest", responseType: "JsonResponse" },
+    SummarizeSession: { requestType: "SessionJsonRequest", responseType: "JsonResponse" },
+    ListAgents: { requestType: "QueryRequest", responseType: "JsonResponse" },
+    ListSkills: { requestType: "QueryRequest", responseType: "JsonResponse" },
+    WriteAppLog: { requestType: "JsonRequest", responseType: "JsonResponse" },
+    DisposeInstance: { requestType: "EmptyRequest", responseType: "JsonResponse" },
+    RestartInstance: { requestType: "EmptyRequest", responseType: "JsonResponse" },
+    ListProjects: { requestType: "QueryRequest", responseType: "JsonResponse" },
+    GetCurrentProject: { requestType: "QueryRequest", responseType: "JsonResponse" },
+    GetPath: { requestType: "QueryRequest", responseType: "JsonResponse" },
+    GetVcs: { requestType: "QueryRequest", responseType: "JsonResponse" },
+    ListCommands: { requestType: "QueryRequest", responseType: "JsonResponse" },
+    GetProjectContext: { requestType: "QueryRequest", responseType: "JsonResponse" },
+    CreateProjectContextTemplate: { requestType: "JsonRequest", responseType: "JsonResponse" },
+    WarmupProjectMemory: { requestType: "EmptyRequest", responseType: "JsonResponse" },
+    ClearProjectMemory: { requestType: "EmptyRequest", responseType: "JsonResponse" },
+    GetDebugEnginePendingPlans: { requestType: "QueryRequest", responseType: "JsonResponse" },
+    ListFiles: { requestType: "QueryRequest", responseType: "JsonResponse" },
+    ReadFile: { requestType: "QueryRequest", responseType: "JsonResponse" },
+    GetFileStatus: { requestType: "QueryRequest", responseType: "JsonResponse" },
+    FindText: { requestType: "QueryRequest", responseType: "JsonResponse" },
+    FindFiles: { requestType: "QueryRequest", responseType: "JsonResponse" },
+    FindSymbols: { requestType: "QueryRequest", responseType: "JsonResponse" },
+    ListToolIDs: { requestType: "QueryRequest", responseType: "JsonResponse" },
+    ListTools: { requestType: "QueryRequest", responseType: "JsonResponse" },
+    ListPermissions: { requestType: "QueryRequest", responseType: "JsonResponse" },
+    ReplyPermission: { requestType: "RequestJsonRequest", responseType: "JsonResponse" },
+    ListQuestions: { requestType: "QueryRequest", responseType: "JsonResponse" },
+    ReplyQuestion: { requestType: "RequestJsonRequest", responseType: "JsonResponse" },
+    RejectQuestion: { requestType: "RequestRequest", responseType: "JsonResponse" },
+    GetConfig: { requestType: "QueryRequest", responseType: "JsonResponse" },
+    UpdateConfig: { requestType: "JsonRequest", responseType: "JsonResponse" },
+    ListConfigProviders: { requestType: "QueryRequest", responseType: "JsonResponse" },
+    GetAutonomousMode: { requestType: "QueryRequest", responseType: "JsonResponse" },
+    SetAutonomousMode: { requestType: "JsonRequest", responseType: "JsonResponse" },
+    GetIsolationMode: { requestType: "QueryRequest", responseType: "JsonResponse" },
+    SetIsolationMode: { requestType: "JsonRequest", responseType: "JsonResponse" },
+    GetSmartLlmRouting: { requestType: "QueryRequest", responseType: "JsonResponse" },
+    SetSmartLlmRouting: { requestType: "JsonRequest", responseType: "JsonResponse" },
+    GetMcpStatus: { requestType: "QueryRequest", responseType: "JsonResponse" },
+    ListMcpResources: { requestType: "QueryRequest", responseType: "JsonResponse" },
+    AddMcpServer: { requestType: "McpAddRequest", responseType: "JsonResponse" },
+    StartMcpAuth: { requestType: "NamedRequest", responseType: "JsonResponse" },
+    CompleteMcpAuth: { requestType: "McpAuthCallbackRequest", responseType: "JsonResponse" },
+    AuthenticateMcp: { requestType: "NamedRequest", responseType: "JsonResponse" },
+    RemoveMcpAuth: { requestType: "NamedRequest", responseType: "JsonResponse" },
+    ConnectMcp: { requestType: "NamedRequest", responseType: "JsonResponse" },
+    DisconnectMcp: { requestType: "NamedRequest", responseType: "JsonResponse" },
+    ListProviders: { requestType: "QueryRequest", responseType: "JsonResponse" },
+    GetProviderAuth: { requestType: "QueryRequest", responseType: "JsonResponse" },
+    SetAuth: { requestType: "ProviderAuthRequest", responseType: "JsonResponse" },
+    RemoveAuth: { requestType: "ProviderRequest", responseType: "JsonResponse" },
+    ProviderOauthAuthorize: { requestType: "ProviderJsonRequest", responseType: "JsonResponse" },
+    ProviderOauthCallback: { requestType: "ProviderJsonRequest", responseType: "JsonResponse" },
+    GetLspStatus: { requestType: "QueryRequest", responseType: "JsonResponse" },
+    GetFormatterStatus: { requestType: "QueryRequest", responseType: "JsonResponse" },
+    ListPty: { requestType: "QueryRequest", responseType: "JsonResponse" },
+    CreatePty: { requestType: "JsonRequest", responseType: "JsonResponse" },
+    GetPty: { requestType: "IdRequest", responseType: "JsonResponse" },
+    UpdatePty: { requestType: "IdJsonRequest", responseType: "JsonResponse" },
+    RemovePty: { requestType: "IdRequest", responseType: "JsonResponse" },
+    ConnectPty: { requestType: "PtyClientEvent", responseType: "PtyServerEvent" },
+    ListTaskQueue: { requestType: "QueryRequest", responseType: "JsonResponse" },
+    EnqueueTaskQueue: { requestType: "JsonRequest", responseType: "JsonResponse" },
+    EditTaskQueue: { requestType: "IdJsonRequest", responseType: "JsonResponse" },
+    TaskQueueCommand: { requestType: "CommandRequest", responseType: "JsonResponse" },
+    ReorderTaskQueue: { requestType: "ReorderRequest", responseType: "JsonResponse" },
+    RemoveTaskQueue: { requestType: "IdRequest", responseType: "JsonResponse" },
+    ListScheduledTasks: { requestType: "QueryRequest", responseType: "JsonResponse" },
+    CreateScheduledTask: { requestType: "JsonRequest", responseType: "JsonResponse" },
+    UpdateScheduledTask: { requestType: "IdJsonRequest", responseType: "JsonResponse" },
+    ScheduledTaskCommand: { requestType: "CommandRequest", responseType: "JsonResponse" },
+    RunScheduledTaskNow: { requestType: "IdRequest", responseType: "JsonResponse" },
+    RemoveScheduledTask: { requestType: "IdRequest", responseType: "JsonResponse" },
+    ListWorkflowTemplates: { requestType: "EmptyRequest", responseType: "JsonResponse" },
+    GetWorkflowTemplate: { requestType: "TemplateRequest", responseType: "JsonResponse" },
+    SaveWorkflowTemplate: { requestType: "JsonRequest", responseType: "JsonResponse" },
+    PromoteWorkflowTemplate: { requestType: "TemplateRequest", responseType: "JsonResponse" },
+    ListWorkflowRuns: { requestType: "QueryRequest", responseType: "JsonResponse" },
+    WorkflowRunDashboard: { requestType: "QueryRequest", responseType: "JsonResponse" },
+    WorkflowRunEvalCases: { requestType: "EmptyRequest", responseType: "JsonResponse" },
+    CreateWorkflowRun: { requestType: "JsonRequest", responseType: "JsonResponse" },
+    GetWorkflowRun: { requestType: "RunRequest", responseType: "JsonResponse" },
+    WorkflowRunArtifacts: { requestType: "RunQueryRequest", responseType: "JsonResponse" },
+    WorkflowRunEvalSummary: { requestType: "RunJsonRequest", responseType: "JsonResponse" },
+    WorkflowRunEvalCase: { requestType: "RunJsonRequest", responseType: "JsonResponse" },
+    SaveWorkflowRunTemplate: { requestType: "RunJsonRequest", responseType: "JsonResponse" },
+    WorkflowRunCommand: { requestType: "WorkflowRunCommandRequest", responseType: "JsonResponse" },
+    ListWorkflowRoutines: { requestType: "EmptyRequest", responseType: "JsonResponse" },
+    RunWorkflowRoutine: { requestType: "JsonRequest", responseType: "JsonResponse" },
+    SubscribeEvents: { requestType: "SubscribeEventsRequest", responseType: "RuntimeEvent" },
+  }
 
 export const AX_CODE_GRPC_METHOD_DESCRIPTORS: readonly AxCodeGrpcMethodDescriptor[] = Object.freeze(
   Object.entries(AX_CODE_GRPC_METHOD).map(([name, method]) => {
@@ -887,7 +888,8 @@ export function createAxCodeGrpcNativeIpcBridgeFromChannels(
       call: AxCodeGrpcNativeIpcBidiStreamCall<TRequest>,
       input: AsyncIterable<TInput>,
     ): AsyncIterable<TResponse> {
-      if (!bridge.bidiStream) throw new Error("AX Code native IPC channel bridge does not support bidirectional streaming")
+      if (!bridge.bidiStream)
+        throw new Error("AX Code native IPC channel bridge does not support bidirectional streaming")
       return createAxCodeGrpcNativeIpcStream<TResponse>((controller) => bridge.bidiStream!(call, input, controller))
     },
   }
@@ -1104,13 +1106,19 @@ export function createAxCodeGrpcClient(input: AxCodeGrpcClientOptions) {
       return send({ type: "question.reply", body }, options)
     },
     session: {
-      list(parameters?: Parameters<HeadlessHttpClient["client"]["session"]["list"]>[0], options?: AxCodeGrpcCallOptions) {
+      list(
+        parameters?: Parameters<HeadlessHttpClient["client"]["session"]["list"]>[0],
+        options?: AxCodeGrpcCallOptions,
+      ) {
         return value(AX_CODE_GRPC_METHOD.ListSessions, { parameters }, options)
       },
       create(session?: HeadlessCreateSessionInput, options?: AxCodeGrpcCallOptions) {
         return value<AxCodeGrpcCreateSessionRequest, unknown>(AX_CODE_GRPC_METHOD.CreateSession, { session }, options)
       },
-      status(parameters?: Parameters<HeadlessHttpClient["client"]["session"]["status"]>[0], options?: AxCodeGrpcCallOptions) {
+      status(
+        parameters?: Parameters<HeadlessHttpClient["client"]["session"]["status"]>[0],
+        options?: AxCodeGrpcCallOptions,
+      ) {
         return value(AX_CODE_GRPC_METHOD.GetSessionStatus, { parameters }, options)
       },
       get(sessionID: string, options?: AxCodeGrpcCallOptions) {
@@ -1128,7 +1136,10 @@ export function createAxCodeGrpcClient(input: AxCodeGrpcClientOptions) {
       },
       messages(
         sessionID: string,
-        parameters?: Omit<Parameters<HeadlessHttpClient["client"]["session"]["messages"]>[0], "sessionID" | "directory">,
+        parameters?: Omit<
+          Parameters<HeadlessHttpClient["client"]["session"]["messages"]>[0],
+          "sessionID" | "directory"
+        >,
         options?: AxCodeGrpcCallOptions,
       ) {
         return value(AX_CODE_GRPC_METHOD.ListSessionMessages, { sessionID, parameters }, options)
@@ -1185,10 +1196,16 @@ export function createAxCodeGrpcClient(input: AxCodeGrpcClientOptions) {
       },
     },
     app: {
-      agents(parameters?: Parameters<HeadlessHttpClient["client"]["app"]["agents"]>[0], options?: AxCodeGrpcCallOptions) {
+      agents(
+        parameters?: Parameters<HeadlessHttpClient["client"]["app"]["agents"]>[0],
+        options?: AxCodeGrpcCallOptions,
+      ) {
         return value(AX_CODE_GRPC_METHOD.ListAgents, { parameters }, options)
       },
-      skills(parameters?: Parameters<HeadlessHttpClient["client"]["app"]["skills"]>[0], options?: AxCodeGrpcCallOptions) {
+      skills(
+        parameters?: Parameters<HeadlessHttpClient["client"]["app"]["skills"]>[0],
+        options?: AxCodeGrpcCallOptions,
+      ) {
         return value(AX_CODE_GRPC_METHOD.ListSkills, { parameters }, options)
       },
       log(
@@ -1207,7 +1224,10 @@ export function createAxCodeGrpcClient(input: AxCodeGrpcClientOptions) {
       },
     },
     project: {
-      list(parameters?: Parameters<HeadlessHttpClient["client"]["project"]["list"]>[0], options?: AxCodeGrpcCallOptions) {
+      list(
+        parameters?: Parameters<HeadlessHttpClient["client"]["project"]["list"]>[0],
+        options?: AxCodeGrpcCallOptions,
+      ) {
         return value(AX_CODE_GRPC_METHOD.ListProjects, { parameters }, options)
       },
       current(
@@ -1228,7 +1248,10 @@ export function createAxCodeGrpcClient(input: AxCodeGrpcClientOptions) {
       },
     },
     command: {
-      list(parameters?: Parameters<HeadlessHttpClient["client"]["command"]["list"]>[0], options?: AxCodeGrpcCallOptions) {
+      list(
+        parameters?: Parameters<HeadlessHttpClient["client"]["command"]["list"]>[0],
+        options?: AxCodeGrpcCallOptions,
+      ) {
         return value(AX_CODE_GRPC_METHOD.ListCommands, { parameters }, options)
       },
     },
@@ -1266,7 +1289,10 @@ export function createAxCodeGrpcClient(input: AxCodeGrpcClientOptions) {
       read(path: string, options?: AxCodeGrpcCallOptions) {
         return value(AX_CODE_GRPC_METHOD.ReadFile, { parameters: { path } }, options)
       },
-      status(parameters?: Parameters<HeadlessHttpClient["client"]["file"]["status"]>[0], options?: AxCodeGrpcCallOptions) {
+      status(
+        parameters?: Parameters<HeadlessHttpClient["client"]["file"]["status"]>[0],
+        options?: AxCodeGrpcCallOptions,
+      ) {
         return value(AX_CODE_GRPC_METHOD.GetFileStatus, { parameters }, options)
       },
     },
@@ -1289,11 +1315,7 @@ export function createAxCodeGrpcClient(input: AxCodeGrpcClientOptions) {
       ids(parameters?: Parameters<HeadlessHttpClient["client"]["tool"]["ids"]>[0], options?: AxCodeGrpcCallOptions) {
         return value(AX_CODE_GRPC_METHOD.ListToolIDs, { parameters }, options)
       },
-      list(
-        provider: string,
-        model: string,
-        options?: AxCodeGrpcCallOptions,
-      ) {
+      list(provider: string, model: string, options?: AxCodeGrpcCallOptions) {
         return value(AX_CODE_GRPC_METHOD.ListTools, { parameters: { provider, model } }, options)
       },
     },
@@ -1304,11 +1326,7 @@ export function createAxCodeGrpcClient(input: AxCodeGrpcClientOptions) {
       ) {
         return value(AX_CODE_GRPC_METHOD.ListPermissions, { parameters }, options)
       },
-      reply(
-        requestID: string,
-        body?: Omit<HeadlessPermissionReplyBody, "requestID">,
-        options?: AxCodeGrpcCallOptions,
-      ) {
+      reply(requestID: string, body?: Omit<HeadlessPermissionReplyBody, "requestID">, options?: AxCodeGrpcCallOptions) {
         return value<AxCodeGrpcRequestBodyRequest<Omit<HeadlessPermissionReplyBody, "requestID">>, unknown>(
           AX_CODE_GRPC_METHOD.ReplyPermission,
           { requestID, body },
@@ -1323,11 +1341,7 @@ export function createAxCodeGrpcClient(input: AxCodeGrpcClientOptions) {
       ) {
         return value(AX_CODE_GRPC_METHOD.ListQuestions, { parameters }, options)
       },
-      reply(
-        requestID: string,
-        body: Omit<HeadlessQuestionReplyBody, "requestID">,
-        options?: AxCodeGrpcCallOptions,
-      ) {
+      reply(requestID: string, body: Omit<HeadlessQuestionReplyBody, "requestID">, options?: AxCodeGrpcCallOptions) {
         return value<AxCodeGrpcRequestBodyRequest<Omit<HeadlessQuestionReplyBody, "requestID">>, unknown>(
           AX_CODE_GRPC_METHOD.ReplyQuestion,
           { requestID, body },
@@ -1394,7 +1408,10 @@ export function createAxCodeGrpcClient(input: AxCodeGrpcClientOptions) {
       },
     },
     mcp: {
-      status(parameters?: Parameters<HeadlessHttpClient["client"]["mcp"]["status"]>[0], options?: AxCodeGrpcCallOptions) {
+      status(
+        parameters?: Parameters<HeadlessHttpClient["client"]["mcp"]["status"]>[0],
+        options?: AxCodeGrpcCallOptions,
+      ) {
         return value(AX_CODE_GRPC_METHOD.GetMcpStatus, { parameters }, options)
       },
       resources(
@@ -1403,11 +1420,7 @@ export function createAxCodeGrpcClient(input: AxCodeGrpcClientOptions) {
       ) {
         return value(AX_CODE_GRPC_METHOD.ListMcpResources, { parameters }, options)
       },
-      add(
-        name: string,
-        config: AxCodeGrpcMcpAddRequest["config"],
-        options?: AxCodeGrpcCallOptions,
-      ) {
+      add(name: string, config: AxCodeGrpcMcpAddRequest["config"], options?: AxCodeGrpcCallOptions) {
         return value<AxCodeGrpcMcpAddRequest, unknown>(AX_CODE_GRPC_METHOD.AddMcpServer, { name, config }, options)
       },
       connect(name: string, options?: AxCodeGrpcCallOptions) {
@@ -1436,7 +1449,10 @@ export function createAxCodeGrpcClient(input: AxCodeGrpcClientOptions) {
       },
     },
     lsp: {
-      status(parameters?: Parameters<HeadlessHttpClient["client"]["lsp"]["status"]>[0], options?: AxCodeGrpcCallOptions) {
+      status(
+        parameters?: Parameters<HeadlessHttpClient["client"]["lsp"]["status"]>[0],
+        options?: AxCodeGrpcCallOptions,
+      ) {
         return value(AX_CODE_GRPC_METHOD.GetLspStatus, { parameters }, options)
       },
     },
@@ -1449,23 +1465,35 @@ export function createAxCodeGrpcClient(input: AxCodeGrpcClientOptions) {
       },
     },
     provider: {
-      list(parameters?: Parameters<HeadlessHttpClient["client"]["provider"]["list"]>[0], options?: AxCodeGrpcCallOptions) {
+      list(
+        parameters?: Parameters<HeadlessHttpClient["client"]["provider"]["list"]>[0],
+        options?: AxCodeGrpcCallOptions,
+      ) {
         return value(AX_CODE_GRPC_METHOD.ListProviders, { parameters }, options)
       },
-      auth(parameters?: Parameters<HeadlessHttpClient["client"]["provider"]["auth"]>[0], options?: AxCodeGrpcCallOptions) {
+      auth(
+        parameters?: Parameters<HeadlessHttpClient["client"]["provider"]["auth"]>[0],
+        options?: AxCodeGrpcCallOptions,
+      ) {
         return value(AX_CODE_GRPC_METHOD.GetProviderAuth, { parameters }, options)
       },
       oauth: {
         authorize(
           providerID: string,
-          body?: Omit<Parameters<HeadlessHttpClient["client"]["provider"]["oauth"]["authorize"]>[0], "providerID" | "directory">,
+          body?: Omit<
+            Parameters<HeadlessHttpClient["client"]["provider"]["oauth"]["authorize"]>[0],
+            "providerID" | "directory"
+          >,
           options?: AxCodeGrpcCallOptions,
         ) {
           return value(AX_CODE_GRPC_METHOD.ProviderOauthAuthorize, { providerID, body }, options)
         },
         callback(
           providerID: string,
-          body?: Omit<Parameters<HeadlessHttpClient["client"]["provider"]["oauth"]["callback"]>[0], "providerID" | "directory">,
+          body?: Omit<
+            Parameters<HeadlessHttpClient["client"]["provider"]["oauth"]["callback"]>[0],
+            "providerID" | "directory"
+          >,
           options?: AxCodeGrpcCallOptions,
         ) {
           return value(AX_CODE_GRPC_METHOD.ProviderOauthCallback, { providerID, body }, options)
@@ -1747,7 +1775,13 @@ export function createAxCodeGrpcHttpBridge(input: AxCodeGrpcHttpBridgeOptions): 
     ) {
       if (method !== AX_CODE_GRPC_METHOD.ConnectPty) throw new Error(`Unsupported AX Code gRPC stream: ${method}`)
       const body = request as AxCodeGrpcPtyConnectRequest
-      return connectPtyOverWebSocket(input, clientFor(options), body, stream as AsyncIterable<AxCodeGrpcPtyClientEvent>, options) as AsyncIterable<TResponse>
+      return connectPtyOverWebSocket(
+        input,
+        clientFor(options),
+        body,
+        stream as AsyncIterable<AxCodeGrpcPtyClientEvent>,
+        options,
+      ) as AsyncIterable<TResponse>
     },
   }
 }
@@ -1816,7 +1850,9 @@ async function handleHttpBridgeUnary(
       )
     case AX_CODE_GRPC_METHOD.DeleteSession:
       return wrap(
-        unwrapHttpSdkResponse(await client.client.session.delete({ sessionID: body.sessionID }, { throwOnError: true })),
+        unwrapHttpSdkResponse(
+          await client.client.session.delete({ sessionID: body.sessionID }, { throwOnError: true }),
+        ),
       )
     case AX_CODE_GRPC_METHOD.ListSessionMessages:
       return wrap(
@@ -1842,7 +1878,9 @@ async function handleHttpBridgeUnary(
       )
     case AX_CODE_GRPC_METHOD.ListSessionChildren:
       return wrap(
-        unwrapHttpSdkResponse(await client.client.session.children({ sessionID: body.sessionID }, { throwOnError: true })),
+        unwrapHttpSdkResponse(
+          await client.client.session.children({ sessionID: body.sessionID }, { throwOnError: true }),
+        ),
       )
     case AX_CODE_GRPC_METHOD.GetSessionGoal:
       return wrap(
@@ -1868,7 +1906,9 @@ async function handleHttpBridgeUnary(
       )
     case AX_CODE_GRPC_METHOD.UnshareSession:
       return wrap(
-        unwrapHttpSdkResponse(await client.client.session.unshare({ sessionID: body.sessionID }, { throwOnError: true })),
+        unwrapHttpSdkResponse(
+          await client.client.session.unshare({ sessionID: body.sessionID }, { throwOnError: true }),
+        ),
       )
     case AX_CODE_GRPC_METHOD.SummarizeSession:
       return wrap(
@@ -1942,7 +1982,9 @@ async function handleHttpBridgeUnary(
       )
     case AX_CODE_GRPC_METHOD.RejectQuestion:
       return wrap(
-        unwrapHttpSdkResponse(await client.client.question.reject({ requestID: body.requestID }, { throwOnError: true })),
+        unwrapHttpSdkResponse(
+          await client.client.question.reject({ requestID: body.requestID }, { throwOnError: true }),
+        ),
       )
     case AX_CODE_GRPC_METHOD.GetConfig:
       return wrap(unwrapHttpSdkResponse(await client.client.config.get(body.parameters)))
@@ -1991,9 +2033,7 @@ async function handleHttpBridgeUnary(
         unwrapHttpSdkResponse(await client.client.mcp.auth.remove({ name: body.name }, { throwOnError: true })),
       )
     case AX_CODE_GRPC_METHOD.ConnectMcp:
-      return wrap(
-        unwrapHttpSdkResponse(await client.client.mcp.connect({ name: body.name }, { throwOnError: true })),
-      )
+      return wrap(unwrapHttpSdkResponse(await client.client.mcp.connect({ name: body.name }, { throwOnError: true })))
     case AX_CODE_GRPC_METHOD.DisconnectMcp:
       return wrap(
         unwrapHttpSdkResponse(await client.client.mcp.disconnect({ name: body.name }, { throwOnError: true })),
@@ -2024,7 +2064,10 @@ async function handleHttpBridgeUnary(
     case AX_CODE_GRPC_METHOD.ProviderOauthCallback:
       return wrap(
         unwrapHttpSdkResponse(
-          await client.client.provider.oauth.callback({ providerID: body.providerID, ...body.body }, { throwOnError: true }),
+          await client.client.provider.oauth.callback(
+            { providerID: body.providerID, ...body.body },
+            { throwOnError: true },
+          ),
         ),
       )
     case AX_CODE_GRPC_METHOD.GetLspStatus:
@@ -2038,7 +2081,9 @@ async function handleHttpBridgeUnary(
     case AX_CODE_GRPC_METHOD.GetPty:
       return wrap(unwrapHttpSdkResponse(await client.client.pty.get({ ptyID: body.id }, { throwOnError: true })))
     case AX_CODE_GRPC_METHOD.UpdatePty:
-      return wrap(unwrapHttpSdkResponse(await client.client.pty.update({ ptyID: body.id, ...body.body }, { throwOnError: true })))
+      return wrap(
+        unwrapHttpSdkResponse(await client.client.pty.update({ ptyID: body.id, ...body.body }, { throwOnError: true })),
+      )
     case AX_CODE_GRPC_METHOD.RemovePty:
       return wrap(unwrapHttpSdkResponse(await client.client.pty.remove({ ptyID: body.id }, { throwOnError: true })))
     case AX_CODE_GRPC_METHOD.ListTaskQueue:
@@ -2182,7 +2227,9 @@ function isIpv4Loopback(hostname: string) {
   })
 }
 
-function isCallOptions(input: AxCodeGrpcSubscribeEventsRequest | AxCodeGrpcCallOptions | undefined): input is AxCodeGrpcCallOptions {
+function isCallOptions(
+  input: AxCodeGrpcSubscribeEventsRequest | AxCodeGrpcCallOptions | undefined,
+): input is AxCodeGrpcCallOptions {
   if (!input || typeof input !== "object") return false
   return "metadata" in input || "signal" in input || "timeoutMs" in input
 }
@@ -2190,7 +2237,11 @@ function isCallOptions(input: AxCodeGrpcSubscribeEventsRequest | AxCodeGrpcCallO
 function matchesEventSubscription(event: AxCodeGrpcRuntimeEvent, request: AxCodeGrpcSubscribeEventsRequest = {}) {
   if (request.types?.length && !request.types.includes(event.type)) return false
   if (!request.sessionID) return true
-  if (event.type === "server.connected" || event.type === "server.heartbeat" || event.type === "server.instance.disposed") {
+  if (
+    event.type === "server.connected" ||
+    event.type === "server.heartbeat" ||
+    event.type === "server.instance.disposed"
+  ) {
     return true
   }
   return eventSessionID(event) === request.sessionID
@@ -2200,7 +2251,12 @@ function eventSessionID(event: AxCodeGrpcRuntimeEvent) {
   const properties = event.properties
   if (!properties || typeof properties !== "object") return undefined
   if ("sessionID" in properties && typeof properties.sessionID === "string") return properties.sessionID
-  if ("info" in properties && properties.info && typeof properties.info === "object" && "sessionID" in properties.info) {
+  if (
+    "info" in properties &&
+    properties.info &&
+    typeof properties.info === "object" &&
+    "sessionID" in properties.info
+  ) {
     const sessionID = properties.info.sessionID
     return typeof sessionID === "string" ? sessionID : undefined
   }
@@ -2208,21 +2264,24 @@ function eventSessionID(event: AxCodeGrpcRuntimeEvent) {
     const id = properties.info.id
     return typeof id === "string" ? id : undefined
   }
-  if ("item" in properties && properties.item && typeof properties.item === "object" && "sessionID" in properties.item) {
+  if (
+    "item" in properties &&
+    properties.item &&
+    typeof properties.item === "object" &&
+    "sessionID" in properties.item
+  ) {
     const sessionID = properties.item.sessionID
     return typeof sessionID === "string" ? sessionID : undefined
   }
   return undefined
 }
 
-function nativeHandlerContext<TMethod extends AxCodeGrpcMethod>(
-  call: {
-    method: TMethod
-    metadata?: AxCodeGrpcMetadata
-    signal?: AbortSignal
-    timeoutMs?: number
-  },
-): AxCodeGrpcNativeHandlerContext<TMethod> {
+function nativeHandlerContext<TMethod extends AxCodeGrpcMethod>(call: {
+  method: TMethod
+  metadata?: AxCodeGrpcMetadata
+  signal?: AbortSignal
+  timeoutMs?: number
+}): AxCodeGrpcNativeHandlerContext<TMethod> {
   return {
     method: call.method,
     metadata: call.metadata,
@@ -2341,7 +2400,10 @@ function parsePtyServerEvent(data: unknown): AxCodeGrpcPtyServerEvent | undefine
   if (!bytes) return
   if (bytes[0] === 0) {
     const json = new TextDecoder().decode(bytes.slice(1))
-    return { type: "replay", ...(JSON.parse(json) as Omit<Extract<AxCodeGrpcPtyServerEvent, { type: "replay" }>, "type">) }
+    return {
+      type: "replay",
+      ...(JSON.parse(json) as Omit<Extract<AxCodeGrpcPtyServerEvent, { type: "replay" }>, "type">),
+    }
   }
   return { type: "output", data: new TextDecoder().decode(bytes) }
 }

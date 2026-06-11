@@ -306,9 +306,7 @@ function scheduleWorkflowPacingRetry(item: TaskQueue.Info, waitMs: number) {
 
 async function activeWorkflowPhaseItems(workflow: WorkflowQueuePayload, currentTaskID?: TaskQueueID) {
   const items = await Promise.all(activeStatuses.map((status) => TaskQueue.list({ status, limit: 100 })))
-  return items
-    .flat()
-    .filter((candidate) => candidate.id !== currentTaskID && sameWorkflowPhase(candidate, workflow))
+  return items.flat().filter((candidate) => candidate.id !== currentTaskID && sameWorkflowPhase(candidate, workflow))
 }
 
 function sessionPromptBusy(sessionID: SessionID) {
@@ -396,8 +394,7 @@ function queueItemExecution(item: TaskQueue.Info): QueueExecution | undefined {
       if (!body) return undefined
       return {
         sessionID: item.sessionID,
-        run: () =>
-          runInQueueItemInstance(item, () => SessionPrompt.prompt({ ...body, sessionID: item.sessionID! })),
+        run: () => runInQueueItemInstance(item, () => SessionPrompt.prompt({ ...body, sessionID: item.sessionID! })),
       }
     }
     case "command": {
@@ -405,8 +402,7 @@ function queueItemExecution(item: TaskQueue.Info): QueueExecution | undefined {
       if (!body) return undefined
       return {
         sessionID: item.sessionID,
-        run: () =>
-          runInQueueItemInstance(item, () => SessionPrompt.command({ ...body, sessionID: item.sessionID! })),
+        run: () => runInQueueItemInstance(item, () => SessionPrompt.command({ ...body, sessionID: item.sessionID! })),
       }
     }
     case "shell": {
@@ -414,8 +410,7 @@ function queueItemExecution(item: TaskQueue.Info): QueueExecution | undefined {
       if (!body) return undefined
       return {
         sessionID: item.sessionID,
-        run: () =>
-          runInQueueItemInstance(item, () => SessionPrompt.shell({ ...body, sessionID: item.sessionID! })),
+        run: () => runInQueueItemInstance(item, () => SessionPrompt.shell({ ...body, sessionID: item.sessionID! })),
       }
     }
     case "subagent":

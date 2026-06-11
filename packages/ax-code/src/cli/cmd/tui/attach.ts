@@ -5,6 +5,7 @@ import { TuiConfig } from "@/config/tui"
 import { Instance } from "@/project/instance"
 import { existsSync } from "fs"
 import { buildAttachAuthHeaders } from "../../attach-auth"
+import { DEFAULT_SERVER_PORT } from "@/server/constants"
 
 export const AttachCommand = cmd({
   command: "attach <url>",
@@ -13,7 +14,7 @@ export const AttachCommand = cmd({
     yargs
       .positional("url", {
         type: "string",
-        describe: "http://localhost:4096",
+        describe: `http://localhost:${DEFAULT_SERVER_PORT}`,
         demandOption: true,
       })
       .option("dir", {

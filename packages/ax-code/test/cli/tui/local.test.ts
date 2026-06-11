@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test"
-import { normalizeModelVariantStore, resolveCurrentAgent } from "../../../src/cli/cmd/tui/context/local-util"
+import {
+  RECENT_MODEL_LIMIT,
+  normalizeModelVariantStore,
+  normalizeRecentModels,
+  rememberRecentModel,
+  resolveCurrentAgent,
+} from "../../../src/cli/cmd/tui/context/local-util"
 
 describe("tui local agent selection", () => {
   test("preserves pending startup agent name until agents load", () => {
@@ -40,6 +46,10 @@ describe("tui local agent selection", () => {
 })
 
 describe("tui local model preferences", () => {
+  function model(n: number) {
+    return { providerID: "provider", modelID: `model-${n}` }
+  }
+
   test("normalizes stored model variants to string values", () => {
     expect(
       normalizeModelVariantStore({
@@ -58,5 +68,22 @@ describe("tui local model preferences", () => {
     expect(normalizeModelVariantStore(null)).toEqual({})
     expect(normalizeModelVariantStore(["openai/gpt-5"])).toEqual({})
     expect(normalizeModelVariantStore("openai/gpt-5")).toEqual({})
+  })
+
+  test("normalizes stored recent models to the most recent five entries", () => {
+    expect(normalizeRecentModels([model(1), model(2), model(3), model(4), model(5), model(6)])).toEqual([
+      model(1),
+      model(2),
+      model(3),
+      model(4),
+      model(5),
+    ])
+  })
+
+  test("rememberRecentModel keeps the current model first and caps the list at five", () => {
+    const result = rememberRecentModel([model(1), model(2), model(3), model(4), model(5)], model(3))
+
+    expect(result).toEqual([model(3), model(1), model(2), model(4), model(5)])
+    expect(result).toHaveLength(RECENT_MODEL_LIMIT)
   })
 })
