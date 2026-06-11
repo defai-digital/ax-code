@@ -1,4 +1,5 @@
 import { CodeGraphQuery } from "../code-intelligence/query"
+import type { LspCacheID } from "../code-intelligence/id"
 import type { LspCacheOperation } from "../code-intelligence/schema.sql"
 import { Flag } from "../flag/flag"
 import { Instance } from "../project/instance"
@@ -42,7 +43,7 @@ export namespace LSPCache {
 
   function flushHits() {
     if (pendingHits.size === 0) return
-    const entries = [...pendingHits.entries()] as [Parameters<typeof CodeGraphQuery.incrementLspCacheHits>[0] extends Iterable<readonly [infer K, unknown]> ? K : never, number][]
+    const entries = [...pendingHits.entries()] as [LspCacheID, number][]
     pendingHits.clear()
     pendingHitTotal = 0
     try {
