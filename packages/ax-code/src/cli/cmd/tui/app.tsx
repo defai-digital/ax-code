@@ -626,14 +626,12 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
     batch(() => {
       if (args.agent) local.agent.set(args.agent)
       if (args.model) {
-        const { providerID, modelID } = Provider.parseModel(args.model)
-        if (!providerID || !modelID)
-          return toast.show({
-            variant: "warning",
-            message: `Invalid model format: ${args.model}`,
-            duration: 3000,
-          })
-        local.model.set({ providerID, modelID }, { recent: true })
+        try {
+          const { providerID, modelID } = Provider.parseModel(args.model)
+          local.model.set({ providerID, modelID }, { recent: true })
+        } catch {
+          toast.show({ variant: "warning", message: `Invalid model format: ${args.model}`, duration: 3000 })
+        }
       }
       // Handle --session without --fork immediately (fork is handled in createEffect below)
       if (args.sessionID && !args.fork) {

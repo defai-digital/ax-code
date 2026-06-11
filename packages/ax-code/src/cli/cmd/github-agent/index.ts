@@ -975,7 +975,7 @@ export const GithubRunCommand = cmd({
       }
 
       async function restoreGitConfig() {
-        // Always restore user.name / user.email (they are always set by configureGit)
+        if (isMock) return
         if (savedUserName !== undefined) {
           await gitRun(["config", "--local", "user.name", savedUserName])
         } else {

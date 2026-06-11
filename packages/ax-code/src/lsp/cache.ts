@@ -42,7 +42,7 @@ export namespace LSPCache {
 
   function flushHits() {
     if (pendingHits.size === 0) return
-    const entries = [...pendingHits.entries()] as [Parameters<typeof CodeGraphQuery.incrementLspCacheHit>[0], number][]
+    const entries = [...pendingHits.entries()] as [Parameters<typeof CodeGraphQuery.incrementLspCacheHits>[0] extends Iterable<readonly [infer K, unknown]> ? K : never, number][]
     pendingHits.clear()
     pendingHitTotal = 0
     try {
