@@ -795,11 +795,7 @@ fn scan_hardcodes(
                     line: i + 1,
                     column: caps.get(0).unwrap().start() + 1,
                     kind: "inline_secret_shape".into(),
-                    value: if val.len() > 120 {
-                        format!("{}...", &val[..117])
-                    } else {
-                        val.to_string()
-                    },
+                    value: truncate_with_ellipsis(val, 120),
                     suggestion: "Move to environment variable or secrets manager".into(),
                     severity: "high".into(),
                 });
