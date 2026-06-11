@@ -13,10 +13,10 @@ export function getDirectory(path: string | undefined) {
 }
 
 export function getFileExtension(path: string | undefined) {
-  if (!path) return ""
-  const dotIdx = path.lastIndexOf(".")
-  if (dotIdx <= 0 || dotIdx === path.length - 1) return ""
-  return path.slice(dotIdx + 1)
+  const filename = getFilename(path)
+  const dotIdx = filename.lastIndexOf(".")
+  if (dotIdx <= 0 || dotIdx === filename.length - 1) return ""
+  return filename.slice(dotIdx + 1)
 }
 
 export function getFilenameTruncated(path: string | undefined, maxLength: number = 20) {

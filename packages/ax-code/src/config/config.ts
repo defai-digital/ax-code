@@ -441,9 +441,7 @@ export namespace Config {
         })
         const [config, token] = await Promise.race([
           Promise.all([Account.config(active.id, active.active_org_id), Account.token(active.id)]),
-          accountTimeout.then(() => {
-            throw new Error("timeout")
-          }),
+          accountTimeout,
         ]).finally(() => clearTimeout(accountTimer!))
         if (token) {
           FeatureFlag.set("AX_CODE_CONSOLE_TOKEN", token)
