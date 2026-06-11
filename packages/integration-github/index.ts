@@ -125,7 +125,6 @@ let octoGraph: typeof graphql
 let commentId: number | undefined
 let gitConfig: string
 let session: { id: string; title: string; version: string }
-let shareId: string | undefined
 let exitCode = 0
 type PromptFiles = Awaited<ReturnType<typeof getUserPrompt>>["promptFiles"]
 
@@ -151,16 +150,7 @@ try {
   const repoData = await fetchRepo()
   session = await client.session.create<true>().then((r) => r.data)
   await subscribeSessionEvents()
-  shareId = await (async () => {
-    if (useEnvShare() === false) return
-    if (!useEnvShare() && repoData.data.private) return
-    await client.session.share<true>({ sessionID: session.id })
-    return session.id.slice(-8)
-  })()
   console.log("ax-code session", session.id)
-  if (shareId) {
-    console.log("Share link:", `${useShareUrl()}/s/${shareId}`)
-  }
 
   // Handle 3 cases
   // 1. Issue
@@ -177,8 +167,7 @@ try {
         const summary = await summarize(response)
         await pushToLocalBranch(summary)
       }
-      const hasShared = prData.comments.nodes.some((c) => c.body.includes(`${useShareUrl()}/s/${shareId}`))
-      await updateComment(`${response}${footer({ image: !hasShared })}`)
+      await updateComment(`${response}${footer()}`)
     }
     // Fork PR
     else {
@@ -189,8 +178,7 @@ try {
         const summary = await summarize(response)
         await pushToForkBranch(summary, prData)
       }
-      const hasShared = prData.comments.nodes.some((c) => c.body.includes(`${useShareUrl()}/s/${shareId}`))
-      await updateComment(`${response}${footer({ image: !hasShared })}`)
+      await updateComment(`${response}${footer()}`)
     }
   }
   // Issue
@@ -206,11 +194,11 @@ try {
         repoData.data.default_branch,
         branch,
         summary,
-        `${response}\n\nCloses #${useIssueId()}${footer({ image: true })}`,
+        `${response}\n\nCloses #${useIssueId()}${footer()}`,
       )
-      await updateComment(`Created PR #${pr}${footer({ image: true })}`)
+      await updateComment(`Created PR #${pr}${footer()}`)
     } else {
-      await updateComment(`${response}${footer({ image: true })}`)
+      await updateComment(`${response}${footer()}`)
     }
   }
 } catch (e: any) {
@@ -326,14 +314,6 @@ function useEnvAgent() {
   return process.env["AGENT"] || undefined
 }
 
-function useEnvShare() {
-  const value = process.env["SHARE"]
-  if (!value) return undefined
-  if (value === "true") return true
-  if (value === "false") return false
-  throw new Error(`Invalid share value: ${value}. Share must be a boolean.`)
-}
-
 function useEnvMock() {
   return {
     mockEvent: process.env["MOCK_EVENT"],
@@ -369,10 +349,6 @@ function useContext() {
 function useIssueId() {
   const payload = useContext().payload as IssueCommentEvent
   return payload.issue.number
-}
-
-function useShareUrl() {
-  return process.env["AX_CODE_SHARE_URL"] || "https://github.com/defai-digital/ax-code"
 }
 
 function useOidcBaseUrl(): string {
@@ -850,9 +826,8 @@ async function createPR(base: string, branch: string, title: string, body: strin
   return pr.data.number
 }
 
-function footer(_opts?: { image?: boolean }) {
-  const shareUrl = shareId ? `[ax-code session](${useShareUrl()}/s/${shareId})&nbsp;&nbsp;|&nbsp;&nbsp;` : ""
-  return `\n\n${shareUrl}[github run](${useEnvRunUrl()})`
+function footer() {
+  return `\n\n[github run](${useEnvRunUrl()})`
 }
 
 async function fetchRepo() {

@@ -22,8 +22,14 @@ test("parseDeletedPaths decodes git path lines", () => {
   expect(parseDeletedPaths('src/old.ts\n"deleted\\tfile.ts"\n')).toEqual(["src/old.ts", "deleted\tfile.ts"])
 })
 
-test("untrackedFileStatus preserves existing line counting behavior", () => {
+test("untrackedFileStatus counts lines like git numstat", () => {
   expect(untrackedFileStatus("new.ts", "a\nb\n")).toEqual({
+    path: "new.ts",
+    added: 2,
+    removed: 0,
+    status: "added",
+  })
+  expect(untrackedFileStatus("new.ts", "a\nb")).toEqual({
     path: "new.ts",
     added: 2,
     removed: 0,
@@ -31,7 +37,7 @@ test("untrackedFileStatus preserves existing line counting behavior", () => {
   })
   expect(untrackedFileStatus("new.ts", "")).toEqual({
     path: "new.ts",
-    added: 1,
+    added: 0,
     removed: 0,
     status: "added",
   })

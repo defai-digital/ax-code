@@ -41,7 +41,7 @@ export function untrackedFileStatus(file: string, content: string): FileStatusEn
   const lines = content.split("\n")
   return {
     path: file,
-    added: content.endsWith("\n") ? lines.length - 1 : lines.length,
+    added: content.length === 0 ? 0 : content.endsWith("\n") ? lines.length - 1 : lines.length,
     removed: 0,
     status: "added",
   }
