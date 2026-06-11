@@ -73,6 +73,34 @@ describe("planner.execute", () => {
     expect(result.warnings.some((item) => item.includes("stopping plan"))).toBe(true)
   })
 
+  test("runs a failing phase only once when fallbackStrategy is not retry", async () => {
+    const plan = Planner.create("test", [
+      {
+        name: "first",
+        fallbackStrategy: "skip",
+        maxRetries: 3,
+      },
+    ])
+
+    const calls: string[] = []
+    const result = await Planner.execute(plan, async (phase) => {
+      calls.push(phase.id)
+      return {
+        phaseId: phase.id,
+        success: false,
+        error: "failed",
+        duration: 0,
+        tokensUsed: 0,
+        filesModified: [],
+        wasRetry: false,
+        retryAttempt: 1,
+      }
+    })
+
+    expect(calls).toEqual(["phase-1"])
+    expect(result.phaseResults).toHaveLength(1)
+  })
+
   test("executes every phase when a parallel batch exceeds maxParallelPhases", async () => {
     const plan = Planner.create("test", [
       {

@@ -73,7 +73,7 @@ export namespace Telemetry {
     if (!initialized) await init()
     if (!initialized) return
 
-    const { trace } = await import("@opentelemetry/api")
+    const { trace, context } = await import("@opentelemetry/api")
     const tracer = trace.getTracer("ax-code")
     const events = EventQuery.bySession(sessionID)
     if (events.length === 0) return
@@ -92,6 +92,10 @@ export namespace Telemetry {
     const sessionSpan = tracer.startSpan("session", {
       attributes: { "session.id": sessionID },
     })
+    const sessionCtx = trace.setSpan(context.active(), sessionSpan)
+    // Tool spans nest under the most recent step span (falling back to the
+    // session span for tool calls seen before any step).
+    let stepCtx = sessionCtx
 
     for (const event of events) {
       switch (event.type) {
@@ -101,9 +105,13 @@ export namespace Telemetry {
           sessionSpan.setAttribute("session.directory", event.directory)
           break
         case "step.start": {
-          const stepSpan = tracer.startSpan(`step.${event.stepIndex}`, {
-            attributes: { "step.index": event.stepIndex },
-          })
+          const stepSpan = tracer.startSpan(
+            `step.${event.stepIndex}`,
+            {
+              attributes: { "step.index": event.stepIndex },
+            },
+            sessionCtx,
+          )
           const finish = stepFinishes.get(event.stepIndex)
           if (finish && finish.type === "step.finish") {
             stepSpan.setAttribute("step.finish_reason", finish.finishReason)
@@ -111,15 +119,20 @@ export namespace Telemetry {
             stepSpan.setAttribute("step.tokens.output", finish.tokens.output)
           }
           stepSpan.end()
+          stepCtx = trace.setSpan(sessionCtx, stepSpan)
           break
         }
         case "tool.call": {
-          const toolSpan = tracer.startSpan(`tool.${event.tool}`, {
-            attributes: {
-              "tool.name": event.tool,
-              "tool.call_id": event.callID,
+          const toolSpan = tracer.startSpan(
+            `tool.${event.tool}`,
+            {
+              attributes: {
+                "tool.name": event.tool,
+                "tool.call_id": event.callID,
+              },
             },
-          })
+            stepCtx,
+          )
           const result = toolResults.get(event.callID)
           if (result && result.type === "tool.result") {
             toolSpan.setAttribute("tool.status", result.status)

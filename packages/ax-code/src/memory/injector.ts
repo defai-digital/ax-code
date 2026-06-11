@@ -82,7 +82,7 @@ export interface BuildContextOptions {
  * Build context string from project + optional global memory.
  *
  * Injection order (highest actionability first):
- *   1. Global Settings (cross-project feedback + user prefs)
+ *   1. Global Settings (cross-project feedback, prefs, decisions, references)
  *   2. Feedback Rules (project)
  *   3. User Preferences (project)
  *   4. Project Decisions
@@ -101,7 +101,7 @@ export function buildContext(memory: ProjectMemory, opts: BuildContextOptions = 
   const global = opts.global
   if (global) {
     const globalEntries: string[] = []
-    for (const kind of ["feedback", "userPrefs", "reference"] as const) {
+    for (const kind of ["feedback", "userPrefs", "decisions", "reference"] as const) {
       const section = global.sections[kind]
       if (!section) continue
       for (const entry of orderEntriesForPrompt(section.entries)) {

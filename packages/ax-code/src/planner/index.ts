@@ -439,6 +439,9 @@ export namespace Planner {
           phase.retryCount++
           continue
         }
+        // Non-retry strategies (skip/abort/replan) run the phase once —
+        // without this break the for loop would re-execute it anyway.
+        break
       } catch (e) {
         const error = toErrorMessage(e)
         lastResult = {
@@ -458,6 +461,7 @@ export namespace Planner {
           phase.retryCount++
           continue
         }
+        break
       }
     }
 
