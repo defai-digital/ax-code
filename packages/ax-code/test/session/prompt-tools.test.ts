@@ -1,10 +1,24 @@
-import { describe, expect, test } from "bun:test"
+import { afterEach, describe, expect, spyOn, test } from "bun:test"
+import z from "zod"
 import { Agent } from "../../src/agent/agent"
+import { ProviderTransform } from "../../src/provider/transform"
 import { Instance } from "../../src/project/instance"
-import { collectMcpToolContent, resolveTools, shouldBypassAgentCheck } from "../../src/session/prompt-tools"
+import {
+  collectMcpToolContent,
+  resolveTools,
+  shouldBypassAgentCheck,
+  transformMcpInputSchema,
+} from "../../src/session/prompt-tools"
 import { tmpdir } from "../fixture/fixture"
 
 describe("session.prompt-tools", () => {
+  let schemaSpy: ReturnType<typeof spyOn> | undefined
+
+  afterEach(() => {
+    schemaSpy?.mockRestore()
+    schemaSpy = undefined
+  })
+
   test("bypasses agent checks only when the turn explicitly includes an agent part", () => {
     expect(shouldBypassAgentCheck(undefined)).toBe(false)
     expect(shouldBypassAgentCheck([{ type: "text", text: "hello" } as any])).toBe(false)
@@ -63,6 +77,28 @@ describe("session.prompt-tools", () => {
     const attachment = result.attachments[0]!
     expect(attachment.mime).toBe("image/png")
     expect(attachment.url).toMatch(/^data:image\/png;base64,/)
+  })
+
+  test("deduplicates concurrent MCP schema transforms for the same cache key", async () => {
+    const model = {
+      id: "test-model",
+      providerID: "test-provider",
+      api: { id: "test-model", npm: "@ai-sdk/openai-compatible" },
+    } as any
+    const inputSchema = z.object({ query: z.string() })
+    const cacheKey = `mcp:test-tool:${Date.now()}:${Math.random()}`
+    const originalSchema = ProviderTransform.schema
+    schemaSpy = spyOn(ProviderTransform, "schema").mockImplementation((modelArg, schemaArg) =>
+      originalSchema(modelArg, schemaArg),
+    )
+
+    const [first, second] = await Promise.all([
+      transformMcpInputSchema({ cacheKey, model, inputSchema }),
+      transformMcpInputSchema({ cacheKey, model, inputSchema }),
+    ])
+
+    expect(first).toBe(second)
+    expect(schemaSpy).toHaveBeenCalledTimes(1)
   })
 
   test("filters tools denied by the active agent ruleset", async () => {

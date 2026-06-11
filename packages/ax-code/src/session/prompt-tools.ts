@@ -31,6 +31,65 @@ const log = Log.create({ service: "session.prompt.tools" })
 
 // Cache transformed schemas across steps — key: "toolId:npm:provider"
 let _schemaCache: Map<string, any> | undefined
+const mcpSchemaPending = new Map<string, Promise<any>>()
+const SCHEMA_CACHE_MAX = 500
+const SCHEMA_CACHE_DROP = 100
+
+function schemaCache() {
+  if (!_schemaCache) _schemaCache = new Map()
+  return _schemaCache
+}
+
+function touchSchemaCache(cacheKey: string, value: any) {
+  const cache = schemaCache()
+  cache.delete(cacheKey)
+  cache.set(cacheKey, value)
+}
+
+function setSchemaCache(cacheKey: string, value: any) {
+  const cache = schemaCache()
+  if (!cache.has(cacheKey) && cache.size >= SCHEMA_CACHE_MAX) {
+    let dropped = 0
+    for (const key of cache.keys()) {
+      cache.delete(key)
+      if (++dropped >= SCHEMA_CACHE_DROP) break
+    }
+  }
+  cache.set(cacheKey, value)
+}
+
+export async function transformMcpInputSchema(input: {
+  cacheKey: string
+  model: Provider.Model
+  inputSchema: Parameters<typeof asSchema>[0]
+}) {
+  const cached = schemaCache().get(input.cacheKey)
+  if (cached !== undefined) {
+    touchSchemaCache(input.cacheKey, cached)
+    return cached
+  }
+
+  const pending = mcpSchemaPending.get(input.cacheKey)
+  if (pending) return pending
+
+  const promise = (async () => {
+    const schemaJson = await Promise.resolve(asSchema(input.inputSchema).jsonSchema)
+    const cachedAfterAwait = schemaCache().get(input.cacheKey)
+    if (cachedAfterAwait !== undefined) {
+      touchSchemaCache(input.cacheKey, cachedAfterAwait)
+      return cachedAfterAwait
+    }
+    const transformed = ProviderTransform.schema(input.model, schemaJson)
+    setSchemaCache(input.cacheKey, transformed)
+    return transformed
+  })()
+  mcpSchemaPending.set(input.cacheKey, promise)
+  try {
+    return await promise
+  } finally {
+    if (mcpSchemaPending.get(input.cacheKey) === promise) mcpSchemaPending.delete(input.cacheKey)
+  }
+}
 
 /**
  * Compute the isolation state with path and network bypasses applied.
@@ -130,9 +189,8 @@ export async function resolveTools(input: ResolveToolsInput) {
     input.session.permission ?? [],
     permissionRulesetFromLegacyTools(input.tools),
   )
-  // Initialize schema cache on first use
-  if (!_schemaCache) _schemaCache = new Map()
-  const schemaCache = _schemaCache
+  // Share transformed schemas across tool resolution calls.
+  const cache = schemaCache()
   const schemaCacheKey = (toolId: string) => `${toolId}:${input.model.api.npm}:${input.model.providerID}`
   const isDisabledByConfig = (toolID: string) => input.tools?.[toolID] === false
 
@@ -196,11 +254,11 @@ export async function resolveTools(input: ResolveToolsInput) {
     if (isDisabledByConfig(item.id) || disabledRegistryTools.has(item.id)) continue
 
     const cacheKey = schemaCacheKey(item.id)
-    const cached = schemaCache.get(cacheKey)
+    const cached = cache.get(cacheKey)
     const schema =
       cached !== undefined
         ? // LRU: move to end so recently-used entries survive eviction
-          (schemaCache.delete(cacheKey), schemaCache.set(cacheKey, cached), cached)
+          (touchSchemaCache(cacheKey, cached), cached)
         : (() => {
             const s = ProviderTransform.schema(input.model, z.toJSONSchema(item.parameters))
             // Bound the cache to avoid a slow memory leak in long-running
@@ -208,16 +266,7 @@ export async function resolveTools(input: ResolveToolsInput) {
             // across session lifetimes. LRU eviction: when we reach the
             // cap, drop the 100 least-recently-used entries. Maps preserve
             // insertion order, so `.keys()` iterates oldest first.
-            const SCHEMA_CACHE_MAX = 500
-            if (schemaCache.size >= SCHEMA_CACHE_MAX) {
-              const drop = 100
-              let dropped = 0
-              for (const key of schemaCache.keys()) {
-                schemaCache.delete(key)
-                if (++dropped >= drop) break
-              }
-            }
-            schemaCache.set(cacheKey, s)
+            setSchemaCache(cacheKey, s)
             return s
           })()
     tools[item.id] = tool({
@@ -341,17 +390,11 @@ export async function resolveTools(input: ResolveToolsInput) {
     // the transformation is idempotent across iterations.
     const mcpTool = { ...item }
     const mcpCacheKey = schemaCacheKey(`mcp:${key}`)
-    let transformed = schemaCache.get(mcpCacheKey)
-    if (transformed !== undefined) {
-      // LRU: move to end
-      schemaCache.delete(mcpCacheKey)
-      schemaCache.set(mcpCacheKey, transformed)
-    } else {
-      const schemaJson = await Promise.resolve(asSchema(mcpTool.inputSchema).jsonSchema)
-      // Re-check after await — a concurrent session may have computed and cached already
-      transformed = schemaCache.get(mcpCacheKey) ?? ProviderTransform.schema(input.model, schemaJson)
-      schemaCache.set(mcpCacheKey, transformed)
-    }
+    const transformed = await transformMcpInputSchema({
+      cacheKey: mcpCacheKey,
+      model: input.model,
+      inputSchema: mcpTool.inputSchema,
+    })
     mcpTool.inputSchema = jsonSchema(transformed)
     // Wrap execute to add plugin hooks and format output
     mcpTool.execute = async (args, opts) => {
