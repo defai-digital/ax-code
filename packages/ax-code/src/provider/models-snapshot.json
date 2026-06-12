@@ -21944,7 +21944,7 @@
       },
       "minimax-m3": {
         "id": "minimax-m3",
-        "name": "MiniMax M3",
+        "name": "MiniMax M3 (3x usage)",
         "family": "minimax-m3",
         "attachment": false,
         "reasoning": true,
