@@ -10,9 +10,11 @@ async function withCleanSuperLongEnv(fn: () => Promise<void>) {
   const previous = {
     superLong: process.env.AX_CODE_SUPER_LONG,
     override: process.env[OVERRIDE],
+    autonomous: process.env.AX_CODE_AUTONOMOUS,
   }
   delete process.env.AX_CODE_SUPER_LONG
   delete process.env[OVERRIDE]
+  delete process.env.AX_CODE_AUTONOMOUS
   try {
     await fn()
   } finally {
@@ -20,6 +22,10 @@ async function withCleanSuperLongEnv(fn: () => Promise<void>) {
     else process.env.AX_CODE_SUPER_LONG = previous.superLong
     if (previous.override === undefined) delete process.env[OVERRIDE]
     else process.env[OVERRIDE] = previous.override
+    // Config loads with an explicit `autonomous` key sync the env flag, so
+    // restore it to keep that from leaking across tests.
+    if (previous.autonomous === undefined) delete process.env.AX_CODE_AUTONOMOUS
+    else process.env.AX_CODE_AUTONOMOUS = previous.autonomous
   }
 }
 
@@ -246,7 +252,7 @@ describe("super-long route", () => {
   test("disabling autonomous prevents a session Super-Long override from reviving", async () => {
     await withCleanSuperLongEnv(async () => {
       await using tmp = await tmpdir({ git: true })
-      await Bun.write(path.join(tmp.path, "ax-code.json"), JSON.stringify({ autonomous: true }))
+      await Bun.write(path.join(tmp.path, "ax-code.json"), JSON.stringify({}))
 
       await Instance.provide({
         directory: tmp.path,

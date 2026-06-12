@@ -544,6 +544,17 @@ export namespace Config {
 
     result.plugin = deduplicatePlugins(result.plugin ?? [])
 
+    // Reconcile the autonomous runtime flag from config at load time so
+    // non-server entrypoints (headless run, ACP, direct CLI) honor an
+    // explicit `autonomous: false` the same way the /autonomous route does
+    // for the TUI — previously only the HTTP route synced config into the
+    // env, so headless runs ignored the setting. An explicit
+    // AX_CODE_AUTONOMOUS env var always wins, and projects that don't set
+    // the key keep the flag default (on).
+    if (process.env["AX_CODE_AUTONOMOUS"] === undefined && result.autonomous !== undefined) {
+      FeatureFlag.set("AX_CODE_AUTONOMOUS", result.autonomous !== false)
+    }
+
     return {
       config: result,
       directories,

@@ -6,7 +6,7 @@ import { Log } from "../../util/log"
 import { lazy } from "../../util/lazy"
 import { BooleanFeatureState, readProjectConfig } from "./project-config"
 import { FeatureFlag } from "../../util/feature-flags"
-import { Flag } from "../../flag/flag"
+import { Env } from "../../util/env"
 import { SuperLongPolicy } from "../../session/super-long-policy"
 import { SuperLongRuntime } from "../../session/super-long-runtime"
 import type { Config } from "../../config/config"
@@ -34,7 +34,14 @@ function configuredModelID(config: Config.Info | undefined, explicitModel?: stri
 }
 
 function autonomousEnabled(config: Config.Info | undefined) {
-  return Flag.AX_CODE_AUTONOMOUS && config?.autonomous !== false
+  // Same precedence as the config-load reconciliation: an explicit env
+  // value wins (with config `autonomous: false` still able to veto),
+  // otherwise the project config decides with the default being on.
+  // Reading the project config directly keeps this GET correct even when
+  // the in-process env was last synced for a different project.
+  const env = Env.parseBoolean(process.env["AX_CODE_AUTONOMOUS"])
+  if (env !== undefined) return env && config?.autonomous !== false
+  return config?.autonomous !== false
 }
 
 function superLongRuntimeState(config: Config.Info | undefined, explicitModel?: string) {

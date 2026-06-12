@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, spyOn, test } from "bun:test"
+import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test"
 import { Instance } from "../../src/project/instance"
 import { Provider } from "../../src/provider/provider"
 import { Session } from "../../src/session"
@@ -39,7 +39,20 @@ const model: Provider.Model = {
 let streamSpy: ReturnType<typeof spyOn> | undefined
 let modelSpy: ReturnType<typeof spyOn> | undefined
 
+// Goal auto-continuation runs inside the autonomous prompt loop. Pin the
+// flag explicitly: config loads with an `autonomous` key sync the env, so
+// earlier tests in the process could otherwise leak it off.
+const origAutonomous = process.env.AX_CODE_AUTONOMOUS
+beforeEach(() => {
+  process.env.AX_CODE_AUTONOMOUS = "1"
+})
+
 afterEach(() => {
+  if (origAutonomous === undefined) {
+    delete process.env.AX_CODE_AUTONOMOUS
+  } else {
+    process.env.AX_CODE_AUTONOMOUS = origAutonomous
+  }
   streamSpy?.mockRestore()
   streamSpy = undefined
   modelSpy?.mockRestore()

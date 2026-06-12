@@ -950,6 +950,10 @@ describe("session.llm.stream - Phase 1 long-agent profile wiring", () => {
 
   beforeEach(() => {
     process.env.AX_CODE_SUPER_LONG_DURABLE_PACING = "0"
+    // Super-Long requires autonomous. Pin the flag explicitly: config loads
+    // with an `autonomous` key sync the env, so earlier tests in the process
+    // could otherwise leak it off.
+    process.env.AX_CODE_AUTONOMOUS = "1"
   })
 
   afterEach(() => {
