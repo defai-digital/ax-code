@@ -116,7 +116,56 @@ describe("tui sync store event", () => {
     })
   })
 
-  test("routes autonomous permission requests to reply callbacks without mutating the permission bucket", async () => {
+  test("keeps autonomous permission requests in the supervised TUI bucket by default", async () => {
+    const [store, setStore] = createTestStore()
+    const replies: unknown[] = []
+    const request = {
+      id: "perm_1",
+      sessionID: "ses_1",
+      permission: "shell",
+      patterns: [],
+      metadata: {},
+      always: [],
+    }
+
+    const handled = dispatchStoreBackedSyncEvent<
+      Session,
+      Todo,
+      Diff,
+      Status,
+      Message,
+      Part,
+      SyncEventStoreState<Session, Todo, Diff, Status, Message, Part>
+    >({
+      event: {
+        type: "permission.asked",
+        properties: request,
+      },
+      autonomous: true,
+      setStore,
+      clearSessionSyncState: () => undefined,
+      replyPermission(payload) {
+        replies.push(payload)
+      },
+      replyQuestion: () => undefined,
+      syncMcpStatus: () => undefined,
+      syncLspStatus: () => undefined,
+      syncDebugEngine: () => undefined,
+      bootstrap: () => undefined,
+      onWarn: () => undefined,
+      maxSessionMessages: 100,
+    })
+
+    await Promise.resolve()
+
+    expect(handled).toBe(true)
+    expect(replies).toEqual([])
+    expect(store.permission).toEqual({
+      ses_1: [request],
+    })
+  })
+
+  test("routes autonomous permission requests to reply callbacks only when explicitly opted in", async () => {
     const [store, setStore] = createTestStore()
     const replies: unknown[] = []
 
@@ -141,6 +190,7 @@ describe("tui sync store event", () => {
         },
       },
       autonomous: true,
+      autoReplyRequests: true,
       setStore,
       clearSessionSyncState: () => undefined,
       replyPermission(payload) {
@@ -160,6 +210,58 @@ describe("tui sync store event", () => {
     expect(handled).toBe(true)
     expect(replies).toHaveLength(1)
     expect(store.permission).toEqual({})
+  })
+
+  test("keeps autonomous questions in the supervised TUI bucket by default", async () => {
+    const [store, setStore] = createTestStore()
+    const replies: unknown[] = []
+    const request = {
+      id: "q_1",
+      sessionID: "ses_1",
+      questions: [
+        {
+          header: "Scope",
+          question: "Which scope should be used?",
+          options: [{ label: "Narrow", description: "Only the targeted files." }],
+        },
+      ],
+    }
+
+    const handled = dispatchStoreBackedSyncEvent<
+      Session,
+      Todo,
+      Diff,
+      Status,
+      Message,
+      Part,
+      SyncEventStoreState<Session, Todo, Diff, Status, Message, Part>
+    >({
+      event: {
+        type: "question.asked",
+        properties: request,
+      },
+      autonomous: true,
+      setStore,
+      clearSessionSyncState: () => undefined,
+      replyPermission: () => undefined,
+      replyQuestion(payload) {
+        replies.push(payload)
+      },
+      syncMcpStatus: () => undefined,
+      syncLspStatus: () => undefined,
+      syncDebugEngine: () => undefined,
+      bootstrap: () => undefined,
+      onWarn: () => undefined,
+      maxSessionMessages: 100,
+    })
+
+    await Promise.resolve()
+
+    expect(handled).toBe(true)
+    expect(replies).toEqual([])
+    expect(store.question).toEqual({
+      ses_1: [request],
+    })
   })
 
   test("clears session sync state and removes session-scoped data on session deletion", () => {

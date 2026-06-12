@@ -56,6 +56,7 @@ export interface DispatchStoreBackedSyncEventInput<
 > {
   event: SyncEvent<TSession, TTodo, TDiff, TStatus, TMessage, TPart>
   autonomous: boolean
+  autoReplyRequests?: boolean
   setStore: SetStoreFunction<TStore>
   clearSessionSyncState: (sessionID: string) => void
   replyPermission: HeadlessReplyPermission
@@ -185,7 +186,7 @@ function dispatchHeadlessProjectionEvent<
       setStore(
         produce((draft) => {
           effects = applyHeadlessProjectionEvent(draft, input.event, {
-            autonomous: input.autonomous,
+            autonomous: input.autonomous && input.autoReplyRequests === true,
             maxSessionMessages: input.maxSessionMessages,
           }).effects
         }),
