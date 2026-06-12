@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test"
-import { DOUBLE_ESCAPE_CLEAR_MS, promptEscapeClearIntent } from "../../../src/cli/cmd/tui/component/prompt/view-model"
+import {
+  DOUBLE_ESCAPE_CLEAR_MS,
+  promptEscapeClearIntent,
+  windowsClipboardTextPaste,
+} from "../../../src/cli/cmd/tui/component/prompt/view-model"
 
 describe("prompt view model", () => {
   test("arms clear on the first escape when the prompt has draft text", () => {
@@ -60,5 +64,41 @@ describe("prompt view model", () => {
         now: 1_500,
       }),
     ).toEqual({ action: "passthrough" })
+  })
+
+  test("uses Windows clipboard text as a direct paste fallback", () => {
+    expect(
+      windowsClipboardTextPaste({
+        platform: "win32",
+        content: { mime: "text/plain", data: "first\r\nsecond\rthird" },
+      }),
+    ).toBe("first\nsecond\nthird")
+  })
+
+  test("ignores empty Windows clipboard text fallback", () => {
+    expect(
+      windowsClipboardTextPaste({
+        platform: "win32",
+        content: { mime: "text/plain", data: "\r\n  \t" },
+      }),
+    ).toBeUndefined()
+  })
+
+  test("does not turn non-text clipboard data into pasted prompt text", () => {
+    expect(
+      windowsClipboardTextPaste({
+        platform: "win32",
+        content: { mime: "image/png", data: "base64" },
+      }),
+    ).toBeUndefined()
+  })
+
+  test("leaves non-Windows text paste to the terminal paste event", () => {
+    expect(
+      windowsClipboardTextPaste({
+        platform: "darwin",
+        content: { mime: "text/plain", data: "hello" },
+      }),
+    ).toBeUndefined()
   })
 })

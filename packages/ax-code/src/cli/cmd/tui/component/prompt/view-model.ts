@@ -11,6 +11,11 @@ export type PromptSubmissionView = {
   parts: PromptInfo["parts"]
 }
 
+export type ClipboardContentView = {
+  data: string
+  mime: string
+}
+
 export const DOUBLE_ESCAPE_CLEAR_MS = 3_000
 
 export function promptEscapeClearIntent(input: {
@@ -40,6 +45,17 @@ export function promptEscapeClearIntent(input: {
 export function isPromptExitCommand(input: string) {
   const trimmed = input.trim()
   return trimmed === "exit" || trimmed === "quit" || trimmed === ":q"
+}
+
+export function windowsClipboardTextPaste(input: {
+  content: ClipboardContentView | undefined
+  platform: NodeJS.Platform
+}) {
+  if (input.platform !== "win32") return undefined
+  if (input.content?.mime !== "text/plain") return undefined
+
+  const text = input.content.data.replace(/\r\n/g, "\n").replace(/\r/g, "\n")
+  return text.trim().length > 0 ? text : undefined
 }
 
 export function promptSubmissionView(input: {

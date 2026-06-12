@@ -4,6 +4,7 @@ import {
   MouseEvent,
   PasteEvent,
   KeyEvent,
+  MouseButton,
   decodePasteBytes,
   RGBA,
   t,
@@ -72,7 +73,12 @@ import { useTextareaKeybindings } from "../textarea-keybindings"
 import { Usage } from "../../routes/session/usage"
 import { Log } from "@/util/log"
 import { DiagnosticLog } from "@/debug/diagnostic-log"
-import { promptEscapeClearIntent, isPromptExitCommand, promptSubmissionView } from "./view-model"
+import {
+  promptEscapeClearIntent,
+  isPromptExitCommand,
+  promptSubmissionView,
+  windowsClipboardTextPaste,
+} from "./view-model"
 import { OpenTuiSpinner } from "../spinner"
 import { upsert } from "../../context/sync-util"
 import { summarizedPasteViews } from "./paste-view-model"
@@ -1460,6 +1466,18 @@ export function Prompt(props: PromptProps) {
     return
   }
 
+  async function pasteWindowsClipboardText() {
+    const text = windowsClipboardTextPaste({
+      content: await Clipboard.read(),
+      platform: process.platform,
+    })
+    if (!text) return false
+
+    input.insertText(text)
+    requestInputLayoutRefresh()
+    return true
+  }
+
   const highlight = createMemo(() => {
     if (keybind.leader) return theme.border
     if (store.mode === "shell") return theme.primary
@@ -1650,7 +1668,14 @@ export function Prompt(props: PromptProps) {
                     })
                     return
                   }
-                  // If no image, let the default paste behavior continue
+                  const text = windowsClipboardTextPaste({ content, platform: process.platform })
+                  if (text) {
+                    e.preventDefault()
+                    input.insertText(text)
+                    requestInputLayoutRefresh()
+                    return
+                  }
+                  // If no supported clipboard fallback applies, let the default paste behavior continue.
                 }
                 if (keybind.match("input_clear", e) && store.prompt.input !== "") {
                   clearPromptDraft()
@@ -1818,7 +1843,14 @@ export function Prompt(props: PromptProps) {
                 props.ref?.(ref)
                 syncInputCursorColor()
               }}
-              onMouseDown={(r: MouseEvent) => r.target?.focus()}
+              onMouseDown={(r: MouseEvent) => {
+                r.target?.focus()
+                if (r.button !== MouseButton.RIGHT || process.platform !== "win32") return
+
+                r.preventDefault()
+                r.stopPropagation()
+                void pasteWindowsClipboardText()
+              }}
               focusedBackgroundColor={theme.backgroundElement}
               cursorColor={theme.text}
               syntaxStyle={syntax()}
