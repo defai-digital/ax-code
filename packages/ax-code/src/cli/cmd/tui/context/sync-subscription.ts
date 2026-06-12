@@ -28,6 +28,10 @@ export function subscribeStoreBackedSyncEvents<
 >(input: {
   listen: (handler: (event: SyncEventEnvelope<unknown>) => void) => () => void
   getAutonomous: () => boolean
+  // When true, autonomous permission/question requests are auto-replied even
+  // in the TUI (Super-Long runs unsupervised); plain autonomous keeps
+  // interactive supervision.
+  getAutoReplyRequests?: () => boolean
   setStore: DispatchStoreBackedSyncEventInput<TSession, TTodo, TDiff, TStatus, TMessage, TPart, TStore>["setStore"]
   clearSessionSyncState: DispatchStoreBackedSyncEventInput<
     TSession,
@@ -133,6 +137,7 @@ export function subscribeStoreBackedSyncEvents<
       dispatch({
         event: envelope.details as SyncEvent<TSession, TTodo, TDiff, TStatus, TMessage, TPart>,
         autonomous: input.getAutonomous(),
+        autoReplyRequests: input.getAutoReplyRequests?.(),
         setStore: input.setStore,
         clearSessionSyncState: input.clearSessionSyncState,
         replyPermission: input.replyPermission,

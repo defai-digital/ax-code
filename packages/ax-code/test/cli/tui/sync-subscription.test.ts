@@ -84,6 +84,64 @@ describe("tui sync subscription", () => {
     ])
   })
 
+  test("forwards the latest auto-reply opt-in so Super-Long runs unsupervised", () => {
+    const [_store, setStore] = createTestStore()
+    const dispatched: Array<{ autonomous: boolean; autoReplyRequests: boolean | undefined; type: string }> = []
+    let listener: ((event: { details: unknown }) => void) | undefined
+    let superLong = false
+
+    subscribeStoreBackedSyncEvents<
+      Session,
+      Todo,
+      Diff,
+      Status,
+      Message,
+      Part,
+      SyncEventStoreState<Session, Todo, Diff, Status, Message, Part>
+    >({
+      listen(handler) {
+        listener = handler
+        return () => undefined
+      },
+      getAutonomous: () => true,
+      getAutoReplyRequests: () => superLong,
+      setStore,
+      clearSessionSyncState: () => undefined,
+      replyPermission: () => undefined,
+      replyQuestion: () => undefined,
+      syncMcpStatus: () => undefined,
+      syncLspStatus: () => undefined,
+      syncDebugEngine: () => undefined,
+      bootstrap: () => undefined,
+      onWarn: () => undefined,
+      maxSessionMessages: 100,
+      onHandlerError: () => undefined,
+      dispatch(input) {
+        dispatched.push({
+          autonomous: input.autonomous,
+          autoReplyRequests: input.autoReplyRequests,
+          type: input.event.type,
+        })
+        return true
+      },
+    })
+
+    const permissionAsked = {
+      details: {
+        type: "permission.asked",
+        properties: { id: "perm_1", sessionID: "ses_1", permission: "shell", patterns: [], metadata: {}, always: [] },
+      },
+    }
+    listener?.(permissionAsked)
+    superLong = true
+    listener?.(permissionAsked)
+
+    expect(dispatched).toEqual([
+      { autonomous: true, autoReplyRequests: false, type: "permission.asked" },
+      { autonomous: true, autoReplyRequests: true, type: "permission.asked" },
+    ])
+  })
+
   test("reports handler errors with the event type and stringified error", () => {
     const [_store, setStore] = createTestStore()
     const errors: Array<{ type: string | undefined; error: string }> = []

@@ -207,6 +207,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
     >({
       listen: sdk.event.listen,
       getAutonomous: () => store.autonomous,
+      getAutoReplyRequests: () => store.superLong,
       setStore,
       clearSessionSyncState: sessionSync.clear,
       replyPermission(payload) {
