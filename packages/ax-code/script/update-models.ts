@@ -12,7 +12,6 @@
 
 import path from "path"
 import { fileURLToPath } from "url"
-import { supportsOpenRouterModelID } from "../src/provider/model-support"
 
 const dir = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const snapshotPath = process.env.AX_CODE_MODELS_SNAPSHOT_PATH || path.join(dir, "src/provider/models-snapshot.json")
@@ -115,6 +114,7 @@ for (const id of [
   "groq",
   "azure",
   "azure-cognitive-services",
+  "openrouter",
   "moonshotai",
   "moonshotai-cn",
   "kimi-for-coding",
@@ -126,7 +126,7 @@ for (const id of [
 }
 
 // Strip unsupported models from every remaining provider — multi-host
-// resellers (openrouter, novita, vercel, baseten, chutes, nano-gpt, …)
+// resellers (novita, vercel, baseten, chutes, nano-gpt, ...)
 // surface the same upstream models, so a single filter catches all
 // hosting variants. Probes match against family, id, and name because
 // models.dev tags inconsistently across providers.
@@ -206,7 +206,7 @@ for (const [providerID, provider] of Object.entries(fetched) as Array<
 >) {
   if (!provider.models) continue
   for (const [mid, model] of Object.entries(provider.models)) {
-    if (providerID === "openrouter" && !supportsOpenRouterModelID(mid)) {
+    if (mid.toLowerCase().startsWith("openrouter/") || model.id?.toLowerCase().startsWith("openrouter/")) {
       delete provider.models[mid]
       continue
     }
@@ -214,28 +214,6 @@ for (const [providerID, provider] of Object.entries(fetched) as Array<
   }
 }
 
-// OpenRouter is intentionally a gap-filling provider in ax-code: avoid
-// duplicating models that have first-party providers, but keep high-value coding
-// models that are not otherwise exposed directly. models.dev can publish those
-// models under other reseller blocks before adding them to the openrouter block,
-// so backfill the curated OpenRouter set from trusted snapshot/provider copies.
-const openrouterModelFallbackProviders: Record<string, string[]> = {
-  "minimax/minimax-m3": ["openrouter", "nano-gpt", "zenmux", "vercel"],
-  "mistralai/mistral-medium-3-5": ["openrouter", "kilo"],
-  "inclusionai/ring-2.6-1t": ["openrouter", "nano-gpt", "novita-ai", "kilo", "zenmux"],
-}
-if (fetched["openrouter"]?.models) {
-  const openrouterModels = fetched["openrouter"].models as Record<string, RawModel>
-  for (const mid of Object.keys(openrouterModelFallbackProviders)) {
-    if (!supportsOpenRouterModelID(mid) || openrouterModels[mid]) continue
-    for (const fallbackID of openrouterModelFallbackProviders[mid] ?? []) {
-      const fallback = fetched[fallbackID]?.models?.[mid] ?? existing[fallbackID]?.models?.[mid]
-      if (!fallback) continue
-      openrouterModels[mid] = JSON.parse(JSON.stringify(fallback))
-      break
-    }
-  }
-}
 if (!fetched["grok-build-cli"].models?.["grok-build-cli"]) {
   fetched["grok-build-cli"].models = {
     ...(fetched["grok-build-cli"].models ?? {}),

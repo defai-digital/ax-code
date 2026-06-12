@@ -21,7 +21,7 @@ function mimeToModality(mime: string): Modality | undefined {
 export namespace ProviderTransform {
   export const OUTPUT_TOKEN_MAX = Flag.AX_CODE_EXPERIMENTAL_OUTPUT_TOKEN_MAX || 32_000
   // Qwen 3.7 Max's documented output limit is 65 536 tokens across all
-  // non-Alibaba routes (OpenRouter, TogetherAI, Vercel). We raise the cap
+  // non-Alibaba routes (TogetherAI, Vercel). We raise the cap
   // specifically for this model so callers get the full generation budget
   // without lifting OUTPUT_TOKEN_MAX for every other model.
   const QWEN37_MAX_OUTPUT_TOKENS = 65_536
@@ -80,7 +80,7 @@ export namespace ProviderTransform {
             // Read the extension field through a narrow structural
             // shape instead of `as any`. Keeps the rest of the object
             // fully type-checked while acknowledging openaiCompatible
-            // is an openrouter/openai extension not modelled by the
+            // is an openai-compatible extension not modelled by the
             // core ModelMessage type.
             const existing = (msg.providerOptions as { openaiCompatible?: Record<string, string> } | undefined)
               ?.openaiCompatible
@@ -272,12 +272,6 @@ export namespace ProviderTransform {
     }
 
     switch (model.api.npm) {
-      case "@openrouter/ai-sdk-provider":
-        // OpenRouter uses a vendor-specific `reasoning` body field, not `reasoningEffort`.
-        // These options land in providerOptions.openrouter and are spread into the request
-        // body by the SDK, letting OpenRouter route them to the underlying model.
-        return Object.fromEntries(WIDELY_SUPPORTED_EFFORTS.map((effort) => [effort, { reasoning: { effort } }]))
-
       case "venice-ai-sdk-provider":
       // https://docs.venice.ai/overview/guides/reasoning-models#reasoning-effort
       case "@ai-sdk/openai-compatible":

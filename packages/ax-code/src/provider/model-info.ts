@@ -81,7 +81,7 @@ export type ProviderInfo = z.infer<typeof ProviderInfo>
 // Hardening contract (matches v4.6.2 permissiveness, with extra safety):
 //
 // 1. Missing api URL is allowed. Many providers (xai, google,
-//    openrouter, claude-code, gemini-cli, codex-cli, etc.) intentionally
+//    claude-code, gemini-cli, codex-cli, etc.) intentionally
 //    omit api.url in the bundled snapshot because their URL is supplied
 //    by the bundled npm SDK package itself. Throwing here would kill
 //    Provider.warmup and leave /connect empty.

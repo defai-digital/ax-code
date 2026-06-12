@@ -7,9 +7,9 @@
 //   tool schemas, AGENTS.md, warmed repo-memory entries, stable context packs.
 // - "Dynamic" = content that changes per turn: current user request, recent
 //   tool results, failed command output, transient retry prompts.
-// - The DashScope/OpenRouter Alibaba explicit-cache path requires per-block
-//   cache_control with a 5-minute TTL. Until a route probe confirms support,
-//   the policy defaults to off for unverified provider routes.
+// - DashScope explicit-cache requires per-block cache_control with a 5-minute
+//   TTL. Until a route probe confirms support, the policy defaults to off for
+//   unverified provider routes.
 
 export namespace PromptCachePolicy {
   export type BlockKind = "stable" | "dynamic"

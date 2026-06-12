@@ -10,8 +10,8 @@ describe("PromptCachePolicy.policyMode", () => {
     expect(PromptCachePolicy.policyMode("alibaba-token-plan-cn")).toBe("alibaba-explicit")
   })
 
-  test("returns off for openrouter", () => {
-    expect(PromptCachePolicy.policyMode("openrouter")).toBe("off")
+  test("returns off for unverified providers", () => {
+    expect(PromptCachePolicy.policyMode("togetherai")).toBe("off")
   })
 
   test("returns off for anthropic", () => {
@@ -119,7 +119,7 @@ describe("PromptCachePolicy.render - off mode", () => {
       { kind: "stable", content: "sys", label: "system" },
       { kind: "stable", content: "tools", label: "tools" },
     ]
-    const result = PromptCachePolicy.render(blocks, "openrouter")
+    const result = PromptCachePolicy.render(blocks, "togetherai")
     expect(result.mode).toBe("off")
     expect(result.blocks.every((b) => b.cacheControl === undefined)).toBe(true)
   })

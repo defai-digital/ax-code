@@ -9,7 +9,7 @@ export interface Qwen37MaxReadinessMatrix {
   webOrBuiltInTools: FeatureSupport
 }
 
-export type Qwen37MaxRouteClassification = "alibaba" | "openrouter" | "together" | "gateway" | "unknown"
+export type Qwen37MaxRouteClassification = "alibaba" | "together" | "gateway" | "unknown"
 
 const ALIBABA_PROVIDER_IDS = new Set([
   "alibaba-coding-plan",
@@ -20,7 +20,6 @@ const ALIBABA_PROVIDER_IDS = new Set([
 
 export function classifyQwen37MaxRoute(providerId: string): Qwen37MaxRouteClassification {
   if (ALIBABA_PROVIDER_IDS.has(providerId)) return "alibaba"
-  if (providerId === "openrouter") return "openrouter"
   if (providerId === "togetherai") return "together"
   if (providerId === "llmgateway" || providerId === "vercel") return "gateway"
   return "unknown"
@@ -34,15 +33,6 @@ const READINESS_BY_ROUTE: Record<Qwen37MaxRouteClassification, Qwen37MaxReadines
     structuredOutput: "supported",
     promptCache: "supported",
     webOrBuiltInTools: "supported",
-  },
-  openrouter: {
-    thinking: "supported",
-    preserveThinking: "experimental",
-    toolCalling: "supported",
-    structuredOutput: "supported",
-    // OR docs did not list qwen3.7-max in the Alibaba explicit-cache model list at ADR-013 review time
-    promptCache: "experimental",
-    webOrBuiltInTools: "blocked",
   },
   together: {
     thinking: "supported",

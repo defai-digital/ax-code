@@ -28,7 +28,6 @@ const NATIVE_PROVIDERS = new Set([
   "github-copilot",
   "xai",
   "zai-coding-plan",
-  "openrouter",
   "claude-code",
   "gemini-cli",
   "codex-cli",

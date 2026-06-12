@@ -1553,8 +1553,7 @@ function ReasoningPart(props: { last: boolean; part: ReasoningPart; message: Ass
   const { theme, subtleSyntax } = useTheme()
   const ctx = use()
   const content = createMemo(() => {
-    // Filter out redacted reasoning chunks from OpenRouter
-    // OpenRouter sends encrypted reasoning data that appears as [REDACTED]
+    // Some providers send encrypted reasoning data that appears as [REDACTED].
     return props.part.text.replaceAll("[REDACTED]", "").trim()
   })
   const display = createMemo(() =>

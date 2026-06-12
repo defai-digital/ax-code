@@ -181,7 +181,7 @@ describe("AgentOptimizationTrace replay event", () => {
 })
 
 describe("AgentOptimizationTrace.estimateCostUsd", () => {
-  // Qwen3.7-Max via OpenRouter pricing: $2.50 input / $7.50 output per 1M tokens
+  // Qwen3.7-Max gateway pricing: $2.50 input / $7.50 output per 1M tokens
   const inputPrice = 2.5
   const outputPrice = 7.5
 

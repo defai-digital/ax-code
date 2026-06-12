@@ -334,13 +334,6 @@ export namespace LLM {
       ...input.model.headers,
       ...headers,
     }
-    if (input.model.api.npm === "@openrouter/ai-sdk-provider") {
-      requestHeaders = Provider.withOpenRouterAuthorization(
-        requestHeaders,
-        Provider.authString(provider?.options.apiKey) ?? Provider.authString(provider?.key),
-      )
-    }
-
     let output: StreamOutput
     try {
       output = streamText({

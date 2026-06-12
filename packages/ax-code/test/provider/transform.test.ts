@@ -1022,9 +1022,9 @@ describe("ProviderTransform.variants", () => {
 
     test("options() skips enable_search for Qwen on non-Alibaba providers", () => {
       const model = createMockModel({
-        id: "openrouter/qwen3.6-plus",
-        providerID: "openrouter",
-        api: { id: "qwen3.6-plus", url: "https://openrouter.ai", npm: "@ai-sdk/openai-compatible" },
+        id: "together/qwen3.6-plus",
+        providerID: "togetherai",
+        api: { id: "qwen3.6-plus", url: "https://api.together.xyz/v1", npm: "@ai-sdk/openai-compatible" },
       })
       const result = ProviderTransform.options({ model, sessionID: "s1", providerOptions: {} })
       expect(result.enable_search).toBeUndefined()
@@ -1338,7 +1338,7 @@ describe("ProviderTransform.maxOutputTokens", () => {
   test("raises output cap to 65 536 for qwen3.7-max on non-Alibaba routes", () => {
     const model = {
       id: "qwen3.7-max",
-      providerID: ProviderID.make("openrouter"),
+      providerID: ProviderID.make("togetherai"),
       limit: { output: 65_536 },
     } as any
     expect(ProviderTransform.maxOutputTokens(model)).toBe(65_536)

@@ -8,7 +8,6 @@ import { ProviderID, ModelID } from "../../src/provider/schema"
 import { Env } from "../../src/env"
 import { Auth } from "../../src/auth"
 import bundledSnapshot from "../../src/provider/models-snapshot.json"
-import { OPENROUTER_SUPPORTED_MODEL_IDS } from "../../src/provider/model-support"
 import { CUSTOM_LOADERS, type CustomLoader } from "../../src/provider/loaders"
 
 function deferred<T = void>() {
@@ -321,70 +320,16 @@ test("provider api keys are stripped of pasted newlines before SDK use", async (
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("OPENROUTER_API_KEY", "ak-test\nsk-or-v1-test")
       await Auth.set("zai-coding-plan", { type: "api", key: "\rzai-test-key\n" })
     },
     fn: async () => {
       try {
         const providers = await Provider.list()
         expect(providers[ProviderID.xai].options.apiKey).toBe("config-key")
-        expect(providers[ProviderID.make("openrouter")].key).toBe("ak-testsk-or-v1-test")
         expect(providers[ProviderID.make("zai-coding-plan")].key).toBe("zai-test-key")
       } finally {
         await Auth.remove("zai-coding-plan")
       }
-    },
-  })
-})
-
-test("OpenRouter SDK options include explicit bearer auth when a provider key is present", async () => {
-  const src = await Bun.file(path.join(import.meta.dir, "../../src/provider/provider.ts")).text()
-  const start = src.indexOf("async function getSDK")
-  const end = src.indexOf("const key = Hash.fast", start)
-  expect(start).toBeGreaterThan(-1)
-  expect(end).toBeGreaterThan(start)
-  const body = src.slice(start, end)
-  const apiKeyFallback = body.indexOf('else if (providerApiKey) options["apiKey"] = providerApiKey')
-  const openrouterBranch = body.indexOf('if (model.api.npm === "@openrouter/ai-sdk-provider")')
-  const authHeader = body.indexOf("withOpenRouterAuthorization")
-  const modelHeaders = body.indexOf("...model.headers")
-  const finalAuthHeader = body.indexOf("withOpenRouterAuthorization", modelHeaders)
-
-  expect(apiKeyFallback).toBeGreaterThan(-1)
-  expect(openrouterBranch).toBeGreaterThan(apiKeyFallback)
-  expect(authHeader).toBeGreaterThan(openrouterBranch)
-  expect(modelHeaders).toBeGreaterThan(openrouterBranch)
-  expect(finalAuthHeader).toBeGreaterThan(modelHeaders)
-})
-
-test("blank configured api keys do not suppress OpenRouter credential fallback", async () => {
-  await using tmp = await tmpdir({
-    init: async (dir) => {
-      await Bun.write(
-        path.join(dir, "ax-code.json"),
-        JSON.stringify({
-          $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
-          enabled_providers: ["openrouter"],
-          provider: {
-            openrouter: {
-              options: {
-                apiKey: " \n ",
-              },
-            },
-          },
-        }),
-      )
-    },
-  })
-  await Instance.provide({
-    directory: tmp.path,
-    init: async () => {
-      Env.set("OPENROUTER_API_KEY", "test-openrouter-key")
-    },
-    fn: async () => {
-      const providers = await Provider.list()
-      expect(providers[ProviderID.make("openrouter")].key).toBe("test-openrouter-key")
-      expect(providers[ProviderID.make("openrouter")].options.apiKey).toBeUndefined()
     },
   })
 })
@@ -1401,36 +1346,6 @@ test("openai provider only exposes GPT-4 or later models", async () => {
   })
 })
 
-test("openrouter provider only exposes curated gap-filling coding models", async () => {
-  await using tmp = await tmpdir({
-    init: async (dir) => {
-      await Bun.write(
-        path.join(dir, "ax-code.json"),
-        JSON.stringify({
-          $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
-          enabled_providers: ["openrouter"],
-          provider: {
-            openrouter: {
-              options: {
-                apiKey: "test-openrouter-key",
-              },
-            },
-          },
-        }),
-      )
-    },
-  })
-  await Instance.provide({
-    directory: tmp.path,
-    fn: async () => {
-      const providers = await Provider.list()
-      const openrouter = providers[ProviderID.make("openrouter")]
-      expect(openrouter).toBeDefined()
-      expect(Object.keys(openrouter.models).sort()).toEqual([...OPENROUTER_SUPPORTED_MODEL_IDS].sort())
-    },
-  })
-})
-
 test("provider list filters GPT-5.5 from configured provider models", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
@@ -1463,29 +1378,6 @@ test("provider list filters GPT-5.5 from configured provider models", async () =
                 "gpt-5": {
                   id: "gpt-5",
                   name: "GPT-5",
-                },
-              },
-            },
-            openrouter: {
-              options: {
-                apiKey: "test-openrouter-key",
-              },
-              models: {
-                "openrouter/auto": {
-                  id: "openrouter/auto",
-                  name: "Auto Router",
-                },
-                "openrouter/free": {
-                  id: "openrouter/free",
-                  name: "OpenRouter Free",
-                },
-                "openai/gpt-5.5": {
-                  id: "openai/gpt-5.5",
-                  name: "GPT-5.5",
-                },
-                "my-openrouter-alias": {
-                  id: "openai/gpt-5.1-codex",
-                  name: "GPT-5.1 Codex Alias",
                 },
               },
             },
@@ -1571,10 +1463,6 @@ test("provider list filters GPT-5.5 from configured provider models", async () =
       expect(providers[ProviderID.make("openai")]?.models["my-spaced-gpt-alias"]).toBeUndefined()
       expect(providers[ProviderID.make("openai")]?.models["my-separated-gpt-alias"]).toBeUndefined()
       expect(providers[ProviderID.make("openai")]?.models["gpt-5"]).toBeDefined()
-      expect(providers[ProviderID.make("openrouter")]?.models["openrouter/auto"]).toBeDefined()
-      expect(providers[ProviderID.make("openrouter")]?.models["openrouter/free"]).toBeUndefined()
-      expect(providers[ProviderID.make("openrouter")]?.models["openai/gpt-5.5"]).toBeUndefined()
-      expect(providers[ProviderID.make("openrouter")]?.models["my-openrouter-alias"]).toBeUndefined()
       expect(providers[ProviderID.xai]?.models["grok-4"]).toBeUndefined()
       expect(providers[ProviderID.xai]?.models["my-old-grok-alias"]).toBeUndefined()
       // "my-grok-alias" carries name "Grok 4.1 Fast" → normalizes to grok-4-1-fast,
@@ -1990,7 +1878,7 @@ test("disabled_providers and enabled_providers interaction", async () => {
     directory: tmp.path,
     init: async () => {
       Env.set("XAI_API_KEY", "test-openai")
-      Env.set("GROQ_API_KEY", "test-openrouter")
+      Env.set("GROQ_API_KEY", "test-groq")
       Env.set("GOOGLE_GENERATIVE_AI_API_KEY", "test-google")
     },
     fn: async () => {

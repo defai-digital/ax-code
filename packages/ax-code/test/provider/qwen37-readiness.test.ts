@@ -9,10 +9,6 @@ describe("classifyQwen37MaxRoute", () => {
     expect(classifyQwen37MaxRoute("alibaba-token-plan-cn")).toBe("alibaba")
   })
 
-  test("recognizes OpenRouter provider", () => {
-    expect(classifyQwen37MaxRoute("openrouter")).toBe("openrouter")
-  })
-
   test("recognizes Together AI provider", () => {
     expect(classifyQwen37MaxRoute("togetherai")).toBe("together")
   })
@@ -46,24 +42,6 @@ describe("qwen37MaxReadiness — Alibaba", () => {
 
   test("web/built-in tools are supported", () => {
     expect(qwen37MaxReadiness("alibaba-coding-plan").webOrBuiltInTools).toBe("supported")
-  })
-})
-
-describe("qwen37MaxReadiness — OpenRouter", () => {
-  test("thinking is supported", () => {
-    expect(qwen37MaxReadiness("openrouter").thinking).toBe("supported")
-  })
-
-  test("preserve-thinking is experimental", () => {
-    expect(qwen37MaxReadiness("openrouter").preserveThinking).toBe("experimental")
-  })
-
-  test("prompt cache is experimental (not verified in OR docs)", () => {
-    expect(qwen37MaxReadiness("openrouter").promptCache).toBe("experimental")
-  })
-
-  test("web/built-in tools are blocked", () => {
-    expect(qwen37MaxReadiness("openrouter").webOrBuiltInTools).toBe("blocked")
   })
 })
 

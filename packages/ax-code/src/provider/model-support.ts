@@ -15,19 +15,6 @@ type ModelSupportProbeInput = {
   family?: unknown
 }
 
-export const OPENROUTER_SUPPORTED_MODEL_IDS = [
-  "openrouter/auto",
-  "minimax/minimax-m3",
-  "mistralai/mistral-medium-3-5",
-  "inclusionai/ring-2.6-1t",
-] as const
-
-const OPENROUTER_SUPPORTED_MODEL_ID_SET = new Set<string>(OPENROUTER_SUPPORTED_MODEL_IDS)
-
-export function supportsOpenRouterModelID(modelID: string) {
-  return OPENROUTER_SUPPORTED_MODEL_ID_SET.has(modelID.toLowerCase().trim())
-}
-
 function parseModelProbes(value: string) {
   const lower = value.toLowerCase().trim()
   const normalized = lower.replace(/[\s_]+/g, "-")
@@ -46,7 +33,6 @@ export function isModelSupportedForProvider(providerID: string, modelID: string,
   if (probes.some((probe) => probe.includes("gpt-5.5") || probe.includes("gpt-5-5") || probe.includes("gpt55"))) {
     return false
   }
-  if (providerID === "openrouter") return supportsOpenRouterModelID(modelID)
   if (providerID === "google" || providerID === "google-vertex") {
     if (!lower.includes("gemini")) return true
     return lower.includes("gemini-3")

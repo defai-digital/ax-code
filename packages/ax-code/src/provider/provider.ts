@@ -1,7 +1,6 @@
 import z from "zod"
 import os from "os"
 import fuzzysort from "fuzzysort"
-import { GITHUB_REPO_URL } from "@/constants/project"
 import { Config } from "../config/config"
 import { mapValues, mergeDeep, omit, pickBy, sortBy } from "remeda"
 import { NoSuchModelError, type LanguageModel } from "ai"
@@ -27,7 +26,6 @@ import { isNonEmptyRecord, recordCount } from "@/util/record"
 import { createGoogleGenerativeAI } from "@ai-sdk/google"
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible"
 import { createXai } from "@ai-sdk/xai"
-import { createOpenRouter } from "@openrouter/ai-sdk-provider"
 import { ProviderTransform } from "./transform"
 import { Installation } from "../installation"
 import { providerModelKey, providerModelList } from "./model-key"
@@ -98,20 +96,6 @@ export namespace Provider {
       if (apiKey === undefined) delete next.options.apiKey
       else next.options.apiKey = apiKey
     }
-    return next
-  }
-
-  export function withOpenRouterAuthorization(headers: Record<string, string>, apiKey: unknown) {
-    const resolvedApiKey = authString(apiKey)
-    const next = { ...headers }
-    let userAuthorization: string | undefined
-    for (const [key, value] of Object.entries(headers)) {
-      if (key.toLowerCase() !== "authorization") continue
-      if (typeof value === "string" && value.trim() !== "") userAuthorization ??= value
-      delete next[key]
-    }
-    const authorization = userAuthorization ?? (resolvedApiKey ? `Bearer ${resolvedApiKey}` : undefined)
-    if (authorization) next.Authorization = authorization
     return next
   }
 
@@ -229,7 +213,6 @@ export namespace Provider {
     "@ai-sdk/google": createGoogleGenerativeAI,
     "@ai-sdk/openai-compatible": createOpenAICompatible,
     "@ai-sdk/xai": createXai,
-    "@openrouter/ai-sdk-provider": createOpenRouter,
   }
 
   function useLanguageModel(sdk: Record<string, unknown>) {
@@ -312,8 +295,7 @@ export namespace Provider {
           ...model.api,
           id: providerID === ProviderID.xai ? canonicalXaiApiModelID(supportModelID) : supportModelID,
         }
-        const filterID = providerID === "openrouter" ? modelID : supportModelID
-        if (!supported(providerID, filterID, model)) {
+        if (!supported(providerID, supportModelID, model)) {
           delete provider.models[modelID]
           continue
         }
@@ -366,8 +348,7 @@ export namespace Provider {
 
       for (const [modelID, model] of Object.entries(provider.models ?? {})) {
         const nextID = model.id ?? modelID
-        const filterID = providerID === "openrouter" ? modelID : nextID
-        if (!supported(providerID, filterID, model)) continue
+        if (!supported(providerID, nextID, model)) continue
         const existingModel = parsed.models[model.id ?? modelID]
         const name = iife(() => {
           if (model.name) return model.name
@@ -715,40 +696,6 @@ export namespace Provider {
       else if (providerApiKey) options["apiKey"] = providerApiKey
       else delete options["apiKey"]
 
-      // OpenRouter-specific quirks. Applied here at the SDK funnel so they
-      // fire regardless of whether the provider was discovered via env var,
-      // auth.json, or ax-code.json config. The custom-loader path runs
-      // before config-load, so config-only users would otherwise miss these.
-      //
-      //   - extraBody.usage.include = true: forces OpenRouter to return
-      //     promptTokens/completionTokens on every response. Without this,
-      //     streamed responses omit token counts in default `compatible`
-      //     mode (SDK only emits stream_options in `strict` mode). Token
-      //     counts feed Assistant.tokens, compaction, and context-window
-      //     tracking. SDK reference: this.config.extraBody is spread into
-      //     every request body (index.mjs:3565).
-      //   - HTTP-Referer + X-Title: documented attribution headers for
-      //     the OpenRouter dashboard
-      //     (https://openrouter.ai/docs/api-reference/overview).
-      //
-      // User-supplied options win in both maps so config overrides hold.
-      if (model.api.npm === "@openrouter/ai-sdk-provider") {
-        const userHeaders = (options["headers"] as Record<string, string> | undefined) ?? {}
-        const apiKey = authString(options["apiKey"])
-        options["extraBody"] = {
-          usage: { include: true },
-          ...((options["extraBody"] as Record<string, unknown> | undefined) ?? {}),
-        }
-        options["headers"] = withOpenRouterAuthorization(
-          {
-            "HTTP-Referer": GITHUB_REPO_URL,
-            "X-Title": "ax-code",
-            ...userHeaders,
-          },
-          apiKey,
-        )
-      }
-
       // Disable provider-level retries — ax-code handles retries via
       // SessionRetry with smarter logic (permanent error detection,
       // provider fallback, abort signal checks). The AI SDK default
@@ -788,13 +735,6 @@ export namespace Provider {
           ...options["headers"],
           ...model.headers,
         }
-
-      if (model.api.npm === "@openrouter/ai-sdk-provider") {
-        options["headers"] = withOpenRouterAuthorization(
-          (options["headers"] as Record<string, string> | undefined) ?? {},
-          authString(options["apiKey"]),
-        )
-      }
 
       const key = Hash.fast(JSON.stringify({ providerID: model.providerID, npm: model.api.npm, options }))
       const existing = s.sdk.get(key)

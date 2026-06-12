@@ -1,12 +1,10 @@
 import { describe, expect, test } from "bun:test"
 import {
-  OPENROUTER_SUPPORTED_MODEL_IDS,
   buildModelProbes,
   isModelSupportedForProvider,
   supportsGlmModels,
   supportsGrok41OrAllowedCodingModel,
   supportsOpenAIGptModels,
-  supportsOpenRouterModelID,
 } from "../../src/provider/model-support"
 import { supportsLiveSearch } from "../../src/provider/xai/server-tools"
 
@@ -56,39 +54,10 @@ describe("supportsGrok41OrAllowedCodingModel", () => {
   })
 })
 
-describe("supportsOpenRouterModelID", () => {
-  test("accepts the curated OpenRouter gap-filling coding allow-list", () => {
-    for (const id of OPENROUTER_SUPPORTED_MODEL_IDS) {
-      expect(supportsOpenRouterModelID(id)).toBe(true)
-    }
-  })
-
-  test.each([
-    "openrouter/free",
-    "openrouter/bodybuilder",
-    "openai/gpt-5.2",
-    "openai/gpt-5.1-codex",
-    "anthropic/claude-sonnet-4.6",
-    "x-ai/grok-4.3",
-    "qwen/qwen3.6-plus",
-    "deepseek/deepseek-v4-pro",
-    "moonshotai/kimi-k2.6",
-    "z-ai/glm-5.1",
-  ])("rejects %s", (id) => {
-    expect(supportsOpenRouterModelID(id)).toBe(false)
-  })
-})
-
 describe("isModelSupportedForProvider", () => {
   test("applies the global future GPT rejection before provider filters", () => {
     expect(isModelSupportedForProvider("custom", "gpt-5.5")).toBe(false)
-    expect(isModelSupportedForProvider("openrouter", "openai/gpt-5.5-codex")).toBe(false)
-  })
-
-  test("uses the curated OpenRouter allow-list against the raw model id", () => {
-    expect(isModelSupportedForProvider("openrouter", "minimax/minimax-m3")).toBe(true)
-    expect(isModelSupportedForProvider("openrouter", "minimax-m3")).toBe(false)
-    expect(isModelSupportedForProvider("openrouter", "openai/gpt-5.1-codex")).toBe(false)
+    expect(isModelSupportedForProvider("custom", "openai/gpt-5.5-codex")).toBe(false)
   })
 
   test("keeps Gemini filtering scoped to Google providers", () => {
