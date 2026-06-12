@@ -44,10 +44,29 @@ const existing = await Bun.file(snapshotPath)
 
 // Preserve local-only provider entries that models.dev doesn't include
 const cliImageProviderIDs = ["claude-code", "gemini-cli", "codex-cli", "grok-build-cli"] as const
-const localProviderIDs = [...cliImageProviderIDs, "ollama", "ax-serving"]
+const localProviderIDs = ["ax-studio", ...cliImageProviderIDs, "ollama"]
 for (const id of localProviderIDs) {
   if (existing[id] && !fetched[id]) fetched[id] = JSON.parse(JSON.stringify(existing[id]))
 }
+if (fetched["ax-serving"] && !fetched["ax-studio"]) {
+  fetched["ax-studio"] = JSON.parse(JSON.stringify(fetched["ax-serving"]))
+}
+if (!fetched["ax-studio"]) {
+  fetched["ax-studio"] = {
+    id: "ax-studio",
+    name: "AX Studio",
+    env: ["AX_STUDIO_HOST"],
+    npm: "@ai-sdk/openai-compatible",
+    api: "http://localhost:18080/v1",
+    doc: "https://github.com/defai-digital/ax-studio",
+    models: {},
+  }
+}
+fetched["ax-studio"].id = "ax-studio"
+fetched["ax-studio"].name = "AX Studio"
+fetched["ax-studio"].env = ["AX_STUDIO_HOST"]
+fetched["ax-studio"].npm = "@ai-sdk/openai-compatible"
+fetched["ax-studio"].doc = "https://github.com/defai-digital/ax-studio"
 if (!fetched["grok-build-cli"]) {
   fetched["grok-build-cli"] = {
     id: "grok-build-cli",
@@ -115,6 +134,8 @@ for (const id of [
   "azure",
   "azure-cognitive-services",
   "openrouter",
+  "lmstudio",
+  "ax-serving",
   "moonshotai",
   "moonshotai-cn",
   "kimi-for-coding",
@@ -494,7 +515,7 @@ const apiOverrides: Record<string, string> = {
   "alibaba-coding-plan-cn": "https://coding.dashscope.aliyuncs.com/v1",
   "alibaba-token-plan": "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
   "alibaba-token-plan-cn": "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
-  "ax-serving": "http://localhost:18080/v1",
+  "ax-studio": "http://localhost:18080/v1",
   ollama: "http://localhost:11434/v1",
 }
 for (const [id, api] of Object.entries(apiOverrides)) {
@@ -504,6 +525,7 @@ for (const [id, api] of Object.entries(apiOverrides)) {
 const docOverrides: Record<string, string> = {
   "alibaba-token-plan": "https://www.alibabacloud.com/help/en/model-studio/opencode-token-plan",
   "alibaba-token-plan-cn": "https://help.aliyun.com/zh/model-studio/opencode-token-plan",
+  "ax-studio": "https://github.com/defai-digital/ax-studio",
 }
 for (const [id, doc] of Object.entries(docOverrides)) {
   if (fetched[id]) fetched[id].doc = doc
@@ -581,16 +603,6 @@ const envOverrides: Record<string, string[]> = {
 }
 for (const [id, env] of Object.entries(envOverrides)) {
   if (fetched[id]) fetched[id].env = env
-}
-
-// Rename ax-studio -> ax-serving if models.dev still uses old name
-if (fetched["ax-studio"]) {
-  const entry = fetched["ax-studio"]
-  delete fetched["ax-studio"]
-  entry.id = "ax-serving"
-  entry.name = "AX Serving"
-  entry.env = ["AX_SERVING_HOST"]
-  fetched["ax-serving"] = entry
 }
 
 // Inject the 1M-context beta header on Claude models that declare

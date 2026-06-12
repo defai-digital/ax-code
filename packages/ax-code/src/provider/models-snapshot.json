@@ -107661,6 +107661,17 @@
       }
     }
   },
+  "ax-studio": {
+    "id": "ax-studio",
+    "env": [
+      "AX_STUDIO_HOST"
+    ],
+    "npm": "@ai-sdk/openai-compatible",
+    "api": "http://localhost:18080/v1",
+    "name": "AX Studio",
+    "doc": "https://github.com/defai-digital/ax-studio",
+    "models": {}
+  },
   "claude-code": {
     "id": "claude-code",
     "name": "Anthropic (Claude Code)",
@@ -107801,17 +107812,6 @@
     "npm": "@ai-sdk/openai-compatible",
     "api": "http://localhost:11434/v1",
     "name": "Ollama",
-    "models": {}
-  },
-  "ax-studio": {
-    "id": "ax-studio",
-    "env": [
-      "AX_STUDIO_HOST"
-    ],
-    "npm": "@ai-sdk/openai-compatible",
-    "api": "http://localhost:18080/v1",
-    "name": "AX Studio",
-    "doc": "https://github.com/defai-digital/ax-studio",
     "models": {}
   },
   "kimi-cloud-plan": {

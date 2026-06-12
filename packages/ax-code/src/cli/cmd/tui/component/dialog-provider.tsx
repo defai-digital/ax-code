@@ -25,9 +25,8 @@ import {
 } from "./dialog-provider-options"
 
 const OFFLINE_PROVIDER_HOSTS: Record<string, { envVar: string; defaultHost: string }> = {
-  "ax-serving": { envVar: "AX_SERVING_HOST", defaultHost: "http://localhost:18080" },
+  "ax-studio": { envVar: "AX_STUDIO_HOST", defaultHost: "http://localhost:18080" },
   ollama: { envVar: "OLLAMA_HOST", defaultHost: "http://localhost:11434" },
-  lmstudio: { envVar: "LMSTUDIO_HOST", defaultHost: "http://127.0.0.1:1234" },
 }
 
 function offlineProviderHint() {

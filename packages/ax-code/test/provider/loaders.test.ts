@@ -11,7 +11,7 @@ const originalFetch = globalThis.fetch
 
 afterEach(async () => {
   globalThis.fetch = originalFetch
-  delete process.env.AX_SERVING_HOST
+  delete process.env.AX_STUDIO_HOST
   await Instance.disposeAll()
 })
 
@@ -202,8 +202,8 @@ describe("offline provider loaders", () => {
     })
   })
 
-  test("ax-serving uses OpenAI-compatible /v1/models discovery", async () => {
-    process.env.AX_SERVING_HOST = "http://localhost:18080"
+  test("ax-studio uses OpenAI-compatible /v1/models discovery", async () => {
+    process.env.AX_STUDIO_HOST = "http://localhost:18080"
     let modelFetches = 0
     globalThis.fetch = (async (input: string | URL | Request) => {
       const url = String(input)
@@ -244,21 +244,21 @@ describe("offline provider loaders", () => {
       fn: async () => {
         await Provider.ready()
         const providers = await Provider.list()
-        const axServing = providers[ProviderID.make("ax-serving")]
-        const model = axServing.models[ModelID.make("default")]
-        expect(axServing).toBeDefined()
-        expect(Object.keys(axServing.models)).toContain("default")
-        expect(axServing.options?.baseURL).toBe("http://localhost:18080/v1")
+        const axStudio = providers[ProviderID.make("ax-studio")]
+        const model = axStudio.models[ModelID.make("default")]
+        expect(axStudio).toBeDefined()
+        expect(Object.keys(axStudio.models)).toContain("default")
+        expect(axStudio.options?.baseURL).toBe("http://localhost:18080/v1")
         expect(model.capabilities.input.image).toBe(true)
         expect(model.limit).toEqual({ context: 8192, output: 2048 })
         expect(modelFetches).toBe(2)
-        expect(Object.keys(axServing.models)).not.toContain("initial")
+        expect(Object.keys(axStudio.models)).not.toContain("initial")
       },
     })
   })
 
-  test("ax-serving is not discovered when /v1/models is unavailable", async () => {
-    process.env.AX_SERVING_HOST = "http://localhost:18080"
+  test("ax-studio is not discovered when /v1/models is unavailable", async () => {
+    process.env.AX_STUDIO_HOST = "http://localhost:18080"
     globalThis.fetch = (async (input: string | URL | Request) => {
       const url = String(input)
       if (url === "http://localhost:18080/v1/models") {
@@ -284,14 +284,14 @@ describe("offline provider loaders", () => {
       fn: async () => {
         await Provider.ready()
         const providers = await Provider.list()
-        const axServing = providers[ProviderID.make("ax-serving")]
-        expect(axServing).toBeUndefined()
+        const axStudio = providers[ProviderID.make("ax-studio")]
+        expect(axStudio).toBeUndefined()
       },
     })
   })
 
-  test("ax-serving ignores invalid /v1/models schema", async () => {
-    process.env.AX_SERVING_HOST = "http://localhost:18080"
+  test("ax-studio ignores invalid /v1/models schema", async () => {
+    process.env.AX_STUDIO_HOST = "http://localhost:18080"
     globalThis.fetch = (async (input: string | URL | Request) => {
       const url = String(input)
       if (url === "http://localhost:18080/v1/models") {
@@ -314,13 +314,13 @@ describe("offline provider loaders", () => {
       fn: async () => {
         await Provider.ready()
         const providers = await Provider.list()
-        expect(providers[ProviderID.make("ax-serving")]).toBeUndefined()
+        expect(providers[ProviderID.make("ax-studio")]).toBeUndefined()
       },
     })
   })
 
-  test("ax-serving applies model filters to discovered models", async () => {
-    process.env.AX_SERVING_HOST = "http://localhost:18080"
+  test("ax-studio applies model filters to discovered models", async () => {
+    process.env.AX_STUDIO_HOST = "http://localhost:18080"
     globalThis.fetch = (async (input: string | URL | Request) => {
       const url = String(input)
       if (url === "http://localhost:18080/v1/models") {
@@ -343,7 +343,7 @@ describe("offline provider loaders", () => {
           path.join(dir, "ax-code.json"),
           JSON.stringify({
             provider: {
-              "ax-serving": {
+              "ax-studio": {
                 whitelist: ["allowed"],
               },
             },
@@ -357,8 +357,8 @@ describe("offline provider loaders", () => {
       fn: async () => {
         await Provider.ready()
         const providers = await Provider.list()
-        const axServing = providers[ProviderID.make("ax-serving")]
-        expect(Object.keys(axServing.models)).toEqual(["allowed"])
+        const axStudio = providers[ProviderID.make("ax-studio")]
+        expect(Object.keys(axStudio.models)).toEqual(["allowed"])
       },
     })
   })

@@ -12,7 +12,7 @@ export const CLI_BINARIES: Record<string, string> = {
   "grok-build-cli": "grok",
 }
 
-export const OFFLINE_PROVIDERS = new Set(["ax-serving", "ollama", "lmstudio"])
+export const OFFLINE_PROVIDERS = new Set(["ax-studio", "ollama"])
 export const CLI_PROVIDERS = new Set(["claude-code", "gemini-cli", "codex-cli", "grok-build-cli"])
 
 const HIDDEN_PROVIDERS = new Set(["google", "github-copilot"])

@@ -379,8 +379,7 @@ export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
     }
   },
   ollama: ollamaCompatibleLoader("ollama", "OLLAMA_HOST", "http://localhost:11434"),
-  lmstudio: openAICompatibleLoader("lmstudio", "LMSTUDIO_HOST", "http://127.0.0.1:1234"),
-  "ax-serving": openAICompatibleLoader("ax-serving", "AX_SERVING_HOST", "http://localhost:18080"),
+  "ax-studio": openAICompatibleLoader("ax-studio", "AX_STUDIO_HOST", "http://localhost:18080"),
   "claude-code": cliLoader({
     providerID: "claude-code",
     binary: claudeCode.binary,

@@ -98,7 +98,11 @@ describe("update-models script", () => {
     expect(data.xai?.models?.["grok-build-0.1"]?.id).toBe("grok-build-0.1")
     expect(data["grok-build-cli"]?.name).toBe("Grok Build CLI")
     expect(data.ollama?.api).toBe("http://localhost:11434/v1")
-    expect(data["ax-serving"]?.api).toBe("http://localhost:18080/v1")
+    expect(data["ax-studio"]?.name).toBe("AX Studio")
+    expect(data["ax-studio"]?.api).toBe("http://localhost:18080/v1")
+    expect(data["ax-studio"]?.env).toEqual(["AX_STUDIO_HOST"])
+    expect(data["ax-serving"]).toBeUndefined()
+    expect(data.lmstudio).toBeUndefined()
   })
 
   test("normalizes local provider endpoints during snapshot regeneration", async () => {
@@ -108,7 +112,7 @@ describe("update-models script", () => {
       snapshotPath,
       JSON.stringify({
         ollama: localProvider("ollama", "Ollama", "OLLAMA_HOST", "http://wrong-host/v1"),
-        "ax-serving": localProvider("ax-serving", "AX Serving", "AX_SERVING_HOST", "http://localhost:11434/v1"),
+        "ax-studio": localProvider("ax-studio", "AX Studio", "AX_STUDIO_HOST", "http://localhost:11434/v1"),
       }),
     )
 
@@ -125,7 +129,9 @@ describe("update-models script", () => {
     expect(result.exitCode).toBe(0)
     const data = await Bun.file(snapshotPath).json()
     expect(data.ollama?.api).toBe("http://localhost:11434/v1")
-    expect(data["ax-serving"]?.api).toBe("http://localhost:18080/v1")
+    expect(data["ax-studio"]?.api).toBe("http://localhost:18080/v1")
+    expect(data["ax-studio"]?.env).toEqual(["AX_STUDIO_HOST"])
+    expect(data["ax-studio"]?.doc).toBe("https://github.com/defai-digital/ax-studio")
   })
 
   test("idempotent — running twice produces same result", async () => {

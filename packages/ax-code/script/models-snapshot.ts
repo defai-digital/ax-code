@@ -4,7 +4,7 @@ export const LOCAL_PROVIDER_IDS = [
   "codex-cli",
   "grok-build-cli",
   "ollama",
-  "ax-serving",
+  "ax-studio",
 ] as const
 
 export type ModelsSnapshot = Record<string, unknown>

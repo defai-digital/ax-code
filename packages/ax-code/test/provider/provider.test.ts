@@ -657,8 +657,8 @@ test("parseModel correctly parses provider/model string", () => {
 })
 
 test("parseModel handles model IDs with slashes", () => {
-  const result = Provider.parseModel("lmstudio/openai/gpt-oss-20b")
-  expect(String(result.providerID)).toBe("lmstudio")
+  const result = Provider.parseModel("ax-studio/openai/gpt-oss-20b")
+  expect(String(result.providerID)).toBe("ax-studio")
   expect(String(result.modelID)).toBe("openai/gpt-oss-20b")
 })
 
@@ -2371,7 +2371,7 @@ test("custom model inherits api.url from models.dev provider", async () => {
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
           provider: {
-            lmstudio: {
+            "ax-studio": {
               models: {
                 "my-custom-model": {},
                 "another-custom-model": {
@@ -2387,21 +2387,21 @@ test("custom model inherits api.url from models.dev provider", async () => {
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("LMSTUDIO_API_KEY", "test-api-key")
+      Env.set("AX_STUDIO_HOST", "http://localhost:18080")
     },
     fn: async () => {
       const providers = await Provider.list()
-      expect(providers[ProviderID.make("lmstudio")]).toBeDefined()
+      expect(providers[ProviderID.make("ax-studio")]).toBeDefined()
 
       // New model not in database should inherit api.url from provider
-      const custom = providers[ProviderID.make("lmstudio")].models["my-custom-model"]
+      const custom = providers[ProviderID.make("ax-studio")].models["my-custom-model"]
       expect(custom).toBeDefined()
-      expect(custom.api.url).toBe("http://127.0.0.1:1234/v1")
+      expect(custom.api.url).toBe("http://localhost:18080/v1")
 
       // Another new model should also inherit api.url
-      const another = providers[ProviderID.make("lmstudio")].models["another-custom-model"]
+      const another = providers[ProviderID.make("ax-studio")].models["another-custom-model"]
       expect(another).toBeDefined()
-      expect(another.api.url).toBe("http://127.0.0.1:1234/v1")
+      expect(another.api.url).toBe("http://localhost:18080/v1")
       expect(another.name).toBe("Custom Model")
     },
   })
