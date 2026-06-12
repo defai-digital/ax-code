@@ -577,7 +577,7 @@ export namespace Session {
     if (input?.roots) {
       conditions.push(isNull(SessionTable.parent_id))
     }
-    if (input?.start) {
+    if (input?.start !== undefined) {
       conditions.push(gte(SessionTable.time_updated, input.start))
     }
     if (input?.search) {
@@ -624,10 +624,10 @@ export namespace Session {
     if (input?.roots) {
       conditions.push(isNull(SessionTable.parent_id))
     }
-    if (input?.start) {
+    if (input?.start !== undefined) {
       conditions.push(gte(SessionTable.time_updated, input.start))
     }
-    if (input?.cursor) {
+    if (input?.cursor !== undefined) {
       conditions.push(lt(SessionTable.time_updated, input.cursor))
     }
     if (input?.search) {

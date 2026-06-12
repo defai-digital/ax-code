@@ -1091,7 +1091,6 @@ export namespace Config {
     }
 
     return Object.entries(patch).reduce((result, [key, value]) => {
-      if (value === undefined) return result
       return patchJsonc(result, value, [...path, key])
     }, input)
   }
