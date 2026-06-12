@@ -6,44 +6,13 @@ import { Ssrf } from "../util/ssrf"
 import { Global } from "../global"
 import { Instance } from "../project/instance"
 import { Flag } from "../flag/flag"
-import {
-  buildModelProbes,
-  supportsOpenRouterModelID,
-  supportsGlmModels,
-  supportsOpenAIGptModels,
-  supportsGrok41OrAllowedCodingModel,
-} from "./model-support"
+import { isModelSupportedForProvider } from "./model-support"
 import bundledSnapshot from "./models-snapshot.json"
 
 export namespace ModelsDev {
   const log = Log.create({ service: "models" })
 
-  function gemini3(id: string) {
-    return id.toLowerCase().includes("gemini-3")
-  }
-
-  function supported(providerID: string, modelID: string, model?: { id?: unknown; name?: unknown; family?: unknown }) {
-    const probes = buildModelProbes(modelID, model)
-    const lower = probes[0] ?? modelID.toLowerCase()
-    if (probes.some((probe) => probe.includes("gpt-5.5"))) return false
-    if (providerID === "openrouter") return supportsOpenRouterModelID(modelID)
-    if (providerID === "google" || providerID === "google-vertex") {
-      if (!lower.includes("gemini")) return true
-      return gemini3(lower)
-    }
-    if (providerID === "openai") return supportsOpenAIGptModels(probes)
-    if (providerID === "xai") {
-      return supportsGrok41OrAllowedCodingModel(probes)
-    }
-    if (
-      providerID === "zhipuai" ||
-      providerID === "zhipuai-coding-plan" ||
-      providerID === "zai" ||
-      providerID === "zai-coding-plan"
-    )
-      return supportsGlmModels(probes)
-    return true
-  }
+  const supported = isModelSupportedForProvider
 
   function sanitize(input: Record<string, Provider>) {
     return Object.fromEntries(
