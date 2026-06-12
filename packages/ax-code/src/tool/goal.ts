@@ -1,5 +1,8 @@
 import z from "zod"
+import { Session } from "@/session"
 import { SessionGoal } from "@/session/goal"
+import { GoalVerification } from "@/session/goal-verification"
+import { Todo } from "@/session/todo"
 import { Tool } from "./tool"
 
 function goalOutput(goal: SessionGoal.Info | undefined) {
@@ -54,11 +57,24 @@ export const CreateGoalTool = Tool.define("create_goal", {
 
 export const UpdateGoalTool = Tool.define("update_goal", {
   description:
-    "Update the existing goal. Use this tool only to mark the goal achieved or genuinely blocked. Set status to complete only when the objective has actually been achieved and no required work remains. Set status to blocked only when the same blocking condition has repeated and meaningful progress cannot continue without user input or an external-state change. You cannot use this tool to pause, resume, budget-limit, usage-limit, or clear a goal.",
+    "Update the existing goal. Use this tool only to mark the goal achieved or genuinely blocked. Set status to complete only when the objective has actually been achieved and no required work remains; completion is verified — it is rejected while todos are pending, and if files were modified you must run a verification command (tests/build) after the last change before completing. Set status to blocked only when the same blocking condition has repeated and meaningful progress cannot continue without user input or an external-state change. You cannot use this tool to pause, resume, budget-limit, usage-limit, or clear a goal.",
   parameters: z.object({
     status: z.enum(["complete", "blocked"]),
   }),
   async execute(params, ctx) {
+    if (params.status === "complete") {
+      // Evidence gate: the goal continuation prompt alone does not stop a
+      // model from declaring success early (observed in the field — a goal
+      // to "implement, test, and commit" was marked complete after edits
+      // with no verification run). Throwing a regular Error surfaces the
+      // requirement to the model so it can recover by finishing todos or
+      // running its tests, then calling update_goal again.
+      const decision = GoalVerification.decide({
+        messages: await Session.messages({ sessionID: ctx.sessionID }),
+        pendingTodos: Todo.active(ctx.sessionID),
+      })
+      if (!decision.ok) throw new Error(decision.message)
+    }
     const goal = await SessionGoal.setStatus({
       sessionID: ctx.sessionID,
       status: params.status,
