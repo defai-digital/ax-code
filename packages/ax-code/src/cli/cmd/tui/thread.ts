@@ -16,6 +16,8 @@ import { TuiConfig } from "@/config/tui"
 import { Instance } from "@/project/instance"
 import { writeHeapSnapshot } from "v8"
 import { DiagnosticLog } from "@/debug/diagnostic-log"
+import { Global } from "@/global"
+import { Installation } from "@/installation"
 import { internalBaseUrl } from "@/util/internal-url"
 import type { StreamConnectionStatus } from "./util/resilient-stream"
 import { runtimeMode } from "@/installation/runtime-mode"
@@ -25,6 +27,11 @@ import { parseIntegerEnv } from "./util/env"
 import { parseTuiJsonPayload } from "./util/json"
 import { toErrorMessage } from "@/util/error-message"
 import { Shell } from "@/shell/shell"
+import {
+  nextTuiStartupUpgradeCheckState,
+  shouldRunTuiStartupUpgradeCheck,
+  type TuiStartupUpgradeCheckState,
+} from "./upgrade-check-view-model"
 
 declare global {
   const AX_CODE_WORKER_PATH: string
@@ -35,6 +42,7 @@ const log = Log.create({ service: "tui.thread" })
 
 export const DEFAULT_TUI_WORKER_READY_TIMEOUT_MS = 10_000
 export const DEFAULT_TUI_UPGRADE_CHECK_DELAY_MS = 30_000
+export const DEFAULT_TUI_UPGRADE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1_000
 export const DEFAULT_TUI_BACKEND_SHUTDOWN_TIMEOUT_MS = 5_000
 export const DEFAULT_TUI_BACKEND_TERMINATE_GRACE_MS = 1_000
 
@@ -79,6 +87,47 @@ export function tuiUpgradeCheckDelayMs(env: Record<string, string | undefined> =
     fallback: DEFAULT_TUI_UPGRADE_CHECK_DELAY_MS,
     min: 0,
   })
+}
+
+export function tuiUpgradeCheckIntervalMs(env: Record<string, string | undefined> = process.env) {
+  return parseIntegerEnv({
+    env,
+    name: "AX_CODE_TUI_UPGRADE_CHECK_INTERVAL_MS",
+    fallback: DEFAULT_TUI_UPGRADE_CHECK_INTERVAL_MS,
+    min: 0,
+  })
+}
+
+function tuiUpgradeCheckStatePath() {
+  return path.join(Global.Path.state, "upgrade-check.json")
+}
+
+async function shouldRunStartupUpgradeCheck() {
+  const intervalMs = tuiUpgradeCheckIntervalMs()
+  const statePath = tuiUpgradeCheckStatePath()
+  const nowMs = Date.now()
+  const state = await Filesystem.readJson<TuiStartupUpgradeCheckState>(statePath).catch(() => undefined)
+  const shouldRun = shouldRunTuiStartupUpgradeCheck({
+    state,
+    currentVersion: Installation.VERSION,
+    nowMs,
+    intervalMs,
+  })
+  if (!shouldRun) return false
+
+  await Filesystem.writeJson(
+    statePath,
+    nextTuiStartupUpgradeCheckState({
+      currentVersion: Installation.VERSION,
+      nowMs,
+    }),
+  ).catch((error) => {
+    log.debug("failed to persist upgrade check state", {
+      statePath,
+      error,
+    })
+  })
+  return true
 }
 
 function backendProcessCommand() {
@@ -639,12 +688,17 @@ export const TuiThreadCommand = cmd({
         upgradeDelayMs === 0
           ? undefined
           : setTimeout(() => {
-              client.call("checkUpgrade", { directory: cwd }).catch((error) => {
-                log.debug("upgrade check request failed", {
-                  directory: cwd,
-                  error,
+              shouldRunStartupUpgradeCheck()
+                .then((shouldRun) => {
+                  if (!shouldRun) return
+                  return client.call("checkUpgrade", { directory: cwd })
                 })
-              })
+                .catch((error) => {
+                  log.debug("upgrade check request failed", {
+                    directory: cwd,
+                    error,
+                  })
+                })
             }, upgradeDelayMs)
       upgradeTimer?.unref?.()
 
