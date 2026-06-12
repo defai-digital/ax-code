@@ -170,4 +170,4 @@ Report bugs, feature requests, and questions through [GitHub Issues](https://git
 
 ## License
 
-[MIT](LICENSE) — Copyright (c) 2025 [DEFAI Private Limited](https://github.com/defai-digital). Portions derived from [OpenCode](https://github.com/anomalyco/opencode), Copyright (c) 2025 opencode.
+[MIT](LICENSE) — Copyright (c) 2025 [DEFAI Private Limited](https://github.com/defai-digital). Portions derived from [OpenCode](https://github.com/anomalyco/opencode), Copyright (c) 2025 opencode. See [NOTICE](NOTICE) for project history and upstream attribution.

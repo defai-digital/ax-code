@@ -52,11 +52,17 @@ ISC License
 - minimatch - Copyright npm, Inc.
 
 ========================================================================
-Base Project
+Project History and Attribution
 ========================================================================
 
-AX Code is based on OpenCode (https://github.com/anomalyco/opencode),
-licensed under the MIT License. Copyright opencode.
+AX Code began as a DEFAI-maintained product built on the OpenCode codebase
+(https://github.com/anomalyco/opencode), licensed under the MIT License.
+Copyright opencode.
 
-Selected features ported from ax-cli (https://github.com/defai-digital/ax-cli),
-licensed under the MIT License. Copyright DEFAI Private Limited.
+Selected AX/ax-cli capabilities were also ported from DEFAI's ax-cli project
+(https://github.com/defai-digital/ax-cli), licensed under the MIT License.
+Copyright DEFAI Private Limited.
+
+These notices preserve upstream attribution and license history. They do not
+mean that upstream OpenCode or ax-cli contributors maintain AX Code unless
+they are separately listed in this repository's current contribution history.
