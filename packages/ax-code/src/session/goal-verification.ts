@@ -76,7 +76,7 @@ export namespace GoalVerification {
       sawWord = true
       if (!TRIVIAL_COMMANDS.has(word)) return false
     }
-    return sawWord
+    return true
   }
 
   function isVerificationRun(state: Record<string, unknown> | undefined) {

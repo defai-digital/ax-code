@@ -219,7 +219,7 @@ export const GrepTool = Tool.define("grep", {
 
       let modTime = mtimeCache.get(filePath)
       if (modTime === undefined && !mtimeCache.has(filePath)) {
-        modTime = Filesystem.stat(filePath)?.mtime.getTime()
+        modTime = Filesystem.stat(filePath)?.mtime?.getTime()
         mtimeCache.set(filePath, modTime)
       }
       if (modTime === undefined) continue

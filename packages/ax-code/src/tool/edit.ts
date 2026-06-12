@@ -202,7 +202,7 @@ export const EditTool = Tool.define("edit", {
     const newLines = contentNew.split("\n")
     const oldLines = contentOld.split("\n")
     let editIdx = newLines.findIndex((line, i) => oldLines[i] !== line)
-    if (editIdx === -1) editIdx = 0
+    if (editIdx === -1) editIdx = Math.min(newLines.length, oldLines.length)
     const snippetStart = Math.max(0, editIdx - 3)
     const snippetEnd = Math.min(newLines.length, editIdx + params.newString.split("\n").length + 3)
     const snippet =
