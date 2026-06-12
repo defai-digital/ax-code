@@ -1,3 +1,5 @@
+import { isQwen37MaxModel } from "./qwen37-readiness"
+
 export type TaskRouteClass = "cheap" | "premium" | "premiumCrossCheck"
 
 export interface TaskRouteClassification {
@@ -57,8 +59,7 @@ export function defaultLongAgentProfile(): LongAgentProfile {
 }
 
 export function longAgentProfileForModel(modelId: string): LongAgentProfile {
-  const lower = modelId.toLowerCase()
-  if (lower.includes("qwen3.7-max") || lower.includes("qwen37-max")) {
+  if (isQwen37MaxModel(modelId)) {
     return qwen37MaxLongAgentProfile()
   }
   return defaultLongAgentProfile()

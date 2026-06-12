@@ -75,6 +75,9 @@ export function qwen37MaxReadiness(providerId: string): Qwen37MaxReadinessMatrix
 }
 
 export function isQwen37MaxModel(modelId: string): boolean {
-  const lower = modelId.toLowerCase()
-  return lower.includes("qwen3.7-max") || lower.includes("qwen37-max")
+  // Providers spell the same model differently: "qwen3.7-max" (Alibaba,
+  // most gateways), "Qwen/Qwen3.7-Max" (Together), "qwen-3-7-max" (Venice).
+  // Normalize separators away so every spelling is recognized.
+  const normalized = modelId.toLowerCase().replace(/[._-]/g, "")
+  return normalized.includes("qwen37max")
 }

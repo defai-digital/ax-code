@@ -107,6 +107,22 @@ describe("isQwen37MaxModel", () => {
     expect(isQwen37MaxModel("QWEN37-MAX")).toBe(true)
   })
 
+  test("recognizes provider-specific spellings", () => {
+    // Venice lists the model with dash separators
+    expect(isQwen37MaxModel("qwen-3-7-max")).toBe(true)
+    // Together prefixes the org
+    expect(isQwen37MaxModel("Qwen/Qwen3.7-Max")).toBe(true)
+    // nano-gpt appends a variant suffix
+    expect(isQwen37MaxModel("qwen3.7-max:thinking")).toBe(true)
+  })
+
+  test("does not match qwen3.7-plus or other qwen tiers", () => {
+    expect(isQwen37MaxModel("qwen3.7-plus")).toBe(false)
+    expect(isQwen37MaxModel("qwen-3-7-plus")).toBe(false)
+    expect(isQwen37MaxModel("qwen3.6-plus")).toBe(false)
+    expect(isQwen37MaxModel("qwen-max")).toBe(false)
+  })
+
   test("does not match unrelated models", () => {
     expect(isQwen37MaxModel("qwen3-max")).toBe(false)
     expect(isQwen37MaxModel("claude-opus-4")).toBe(false)
