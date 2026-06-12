@@ -74,7 +74,9 @@ export function DialogConfirm(props: DialogConfirmProps) {
             <box
               paddingLeft={1}
               paddingRight={1}
-              backgroundColor={key === store.active ? theme.primary : undefined}
+              backgroundColor={key === store.active ? theme.primary : theme.backgroundElement}
+              onMouseOver={() => setStore("active", key)}
+              onMouseDown={() => setStore("active", key)}
               onMouseUp={(evt) => {
                 if (key === "confirm") {
                   runDialogConfirmAction(() => props.onConfirm?.(), `Failed to confirm ${props.title.toLowerCase()}`)

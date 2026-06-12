@@ -825,6 +825,14 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(dialogConfirm).toContain("void Promise.resolve()")
   })
 
+  test("keeps dialog confirm cancel actions clickable when inactive", async () => {
+    const dialogConfirm = await fs.readFile(DIALOG_CONFIRM_SRC, "utf8")
+
+    expect(dialogConfirm).toContain("backgroundColor={key === store.active ? theme.primary : theme.backgroundElement}")
+    expect(dialogConfirm).toContain('onMouseOver={() => setStore("active", key)}')
+    expect(dialogConfirm).toContain('onMouseDown={() => setStore("active", key)}')
+  })
+
   test("opens clicked tui links through a failure-safe browser launch path", async () => {
     const link = await fs.readFile(LINK_SRC, "utf8")
 
