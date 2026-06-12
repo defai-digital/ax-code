@@ -160,7 +160,11 @@ export namespace LLM {
         modelID: input.model.id,
         config: { enabled: cfg.super_long },
       }).enabled
-    if (superLongEnabled && longAgentProfile.verificationLoopEnabled) {
+    // The verification-loop reminder is provider-agnostic supervision text —
+    // it must fire for every Super-Long run, not just models whose long-agent
+    // profile enables the extra request shaping below. Gating it on the
+    // profile left Super-Long with no observable behavior on non-Qwen models.
+    if (superLongEnabled) {
       system.push(
         "You are operating in Super-Long mode. Before declaring any task complete: run available tests or verification commands, confirm the build is clean, and surface any repeated failure patterns explicitly rather than retrying silently.",
       )
@@ -202,11 +206,12 @@ export namespace LLM {
         mergeDeep(reasoningPolicyDecision.options),
       ),
     )
-    // Phase 4: build and inject a long-agent context pack.
-    // Only active in Super-Long mode for models with a wide context profile
-    // (e.g. Qwen3.7-Max). Keep existing system instructions outside the pack
-    // to avoid duplicating the provider prompt.
-    if (superLongEnabled && longAgentProfile.contextPackingBudget === "wide") {
+    // Phase 4: build and inject a long-agent context pack for Super-Long runs.
+    // The token budget follows the model profile (wide for Qwen3.7-Max,
+    // narrow otherwise) — the pack itself is provider-agnostic prompt text.
+    // Keep existing system instructions outside the pack to avoid duplicating
+    // the provider prompt.
+    if (superLongEnabled) {
       const task = extractLastUserTask(input.messages)
       const touchedFiles = extractTouchedFiles(input.messages)
       const packResult = LongAgentContextPacker.pack({
