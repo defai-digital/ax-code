@@ -298,6 +298,7 @@ export namespace LLM {
       sessionID: input.sessionID,
       small: input.small,
       abort: input.abort,
+      baseURL: typeof provider.options?.baseURL === "string" ? provider.options.baseURL : undefined,
     })
 
     // LiteLLM and some Anthropic proxies require the tools parameter to be present
@@ -419,13 +420,15 @@ export namespace LLM {
     sessionID: string
     small?: boolean
     abort: AbortSignal
+    baseURL?: string
     policy?: SuperLongPolicy.PacingPolicy
     now?: () => number
     sleep?: (ms: number, signal: AbortSignal) => Promise<void>
   }): Promise<SuperLongPacingReservation | undefined> {
     if (!input.enabled || input.small) return
     const key = superLongPacingKey(input)
-    const policy = input.policy ?? SuperLongPolicy.providerPacing(input.providerID)
+    const policy = input.policy ?? SuperLongPolicy.providerPacing(input.providerID, { baseURL: input.baseURL })
+    if (!policy) return
     const durablePacingDisabled = isSuperLongDurablePacingDisabled()
     const inMemoryOnly =
       durablePacingDisabled || input.policy !== undefined || input.now !== undefined || input.sleep !== undefined

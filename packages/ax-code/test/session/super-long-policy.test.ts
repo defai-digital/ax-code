@@ -91,11 +91,30 @@ describe("SuperLongPolicy.runtimeState", () => {
 
 describe("SuperLongPolicy.providerPacing", () => {
   test("returns provider-specific pacing without sharing mutable policy objects", () => {
-    const first = SuperLongPolicy.providerPacing("alibaba-qwen")
+    const first = SuperLongPolicy.providerPacing("alibaba-qwen")!
     first.maxRequests = 99
 
-    expect(SuperLongPolicy.providerPacing("alibaba-qwen").maxRequests).toBe(4)
-    expect(SuperLongPolicy.providerPacing("openai").maxRequests).toBe(6)
+    expect(SuperLongPolicy.providerPacing("alibaba-qwen")!.maxRequests).toBe(4)
+    expect(SuperLongPolicy.providerPacing("openai")!.maxRequests).toBe(6)
+  })
+
+  test("skips pacing for local inference providers", () => {
+    expect(SuperLongPolicy.providerPacing("ollama")).toBeUndefined()
+    expect(SuperLongPolicy.providerPacing("ax-studio")).toBeUndefined()
+  })
+
+  test("skips pacing for self-hosted endpoints on a local hostname", () => {
+    expect(SuperLongPolicy.providerPacing("my-vllm", { baseURL: "http://localhost:8000/v1" })).toBeUndefined()
+    expect(SuperLongPolicy.providerPacing("my-vllm", { baseURL: "http://127.0.0.1:8080" })).toBeUndefined()
+    expect(SuperLongPolicy.providerPacing("my-vllm", { baseURL: "http://[::1]:8000/v1" })).toBeUndefined()
+  })
+
+  test("keeps pacing for remote endpoints and malformed base URLs", () => {
+    expect(SuperLongPolicy.providerPacing("my-proxy", { baseURL: "https://api.example.com/v1" })?.maxRequests).toBe(6)
+    expect(SuperLongPolicy.providerPacing("my-proxy", { baseURL: "not a url" })?.maxRequests).toBe(6)
+    expect(SuperLongPolicy.providerPacing("alibaba-qwen", { baseURL: "https://dashscope.example" })?.maxRequests).toBe(
+      4,
+    )
   })
 })
 

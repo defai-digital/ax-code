@@ -9,6 +9,7 @@ import { getCliProviderDefinition } from "./cli/config"
 import { checkCliProviderAuth } from "./cli/connect"
 import { URL } from "url"
 import { Log } from "@/util/log"
+import { isLocalHostname } from "@/util/local-host"
 
 const log = Log.create({ service: "provider.loaders" })
 
@@ -124,10 +125,7 @@ function trimTrailingSlash(input: string) {
 }
 
 function isLocalProviderHost(hostname: string) {
-  if (hostname === "localhost" || hostname === "0.0.0.0" || hostname === "::1") return true
-  if (hostname.endsWith(".localhost")) return true
-  if (hostname.startsWith("127.")) return true
-  return false
+  return isLocalHostname(hostname)
 }
 
 function resolveLocalProviderEndpoint(input: {

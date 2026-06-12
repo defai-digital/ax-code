@@ -98,6 +98,55 @@ describe("SessionGoal", () => {
     })
   })
 
+  test("forking a session carries the goal and its usage to the fork", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        await SessionGoal.create({
+          sessionID: session.id,
+          objective: "ship the feature",
+          tokenBudget: 1_000,
+        })
+        await SessionGoal.addUsage({
+          sessionID: session.id,
+          message: {
+            id: "message_goal_fork_usage" as any,
+            sessionID: session.id,
+            parentID: "message_parent" as any,
+            role: "assistant",
+            time: { created: 1_000, completed: 3_000 },
+            modelID: "test-model" as any,
+            providerID: "test" as any,
+            mode: "build",
+            agent: "build",
+            path: { cwd: tmp.path, root: tmp.path },
+            tokens: {
+              total: 30,
+              input: 10,
+              output: 15,
+              reasoning: 5,
+              cache: { read: 0, write: 0 },
+            },
+          },
+        })
+
+        const fork = await Session.fork({ sessionID: session.id })
+        const copied = await SessionGoal.get(fork.id)
+        expect(copied?.objective).toBe("ship the feature")
+        expect(copied?.status).toBe("active")
+        expect(copied?.tokenBudget).toBe(1_000)
+        expect(copied?.tokensUsed).toBe(30)
+
+        const bare = await Session.create({})
+        const bareFork = await Session.fork({ sessionID: bare.id })
+        expect(await SessionGoal.get(bareFork.id)).toBeUndefined()
+      },
+    })
+  })
+
   test("re-creating over a terminal goal resets usage and creation time", async () => {
     await using tmp = await tmpdir({ git: true })
 

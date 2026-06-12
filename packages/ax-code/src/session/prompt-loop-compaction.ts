@@ -58,9 +58,14 @@ export async function maybeScheduleUsageCompaction(input: {
   userModel: MessageV2.User["model"]
   model: Provider.Model
   lastFinished?: MessageV2.Assistant
+  superLong?: boolean
 }) {
   const overflow = input.lastFinished
-    ? await SessionCompaction.isOverflow({ tokens: input.lastFinished.tokens, model: input.model })
+    ? await SessionCompaction.isOverflow({
+        tokens: input.lastFinished.tokens,
+        model: input.model,
+        superLong: input.superLong,
+      })
     : false
   if (!shouldScheduleUsageCompaction({ lastFinished: input.lastFinished, overflow })) return false
 

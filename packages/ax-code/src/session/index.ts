@@ -11,6 +11,7 @@ import { Installation } from "../installation"
 import { Database, NotFoundError, eq, and, or, gte, isNull, desc, like, inArray, lt } from "../storage/db"
 import type { SQL } from "../storage/db"
 import { SessionTable, MessageTable, PartTable } from "./session.sql"
+import { SessionGoal } from "./goal"
 import { ProjectTable } from "../project/project.sql"
 import { Storage } from "@/storage/storage"
 import { Log } from "../util/log"
@@ -375,6 +376,11 @@ export namespace Session {
           await Bus.publish(MessageV2.Event.PartUpdated, { part })
         }
       }
+
+      // The fork inherits the message history, so it inherits the goal that
+      // history was pursuing — otherwise a forked goal/Super-Long run loses
+      // its objective and budget tracking.
+      await SessionGoal.copyTo({ from: input.sessionID, to: session.id })
 
       return session
     },

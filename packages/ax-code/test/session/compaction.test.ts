@@ -66,6 +66,23 @@ describe("session.compaction.isOverflow", () => {
     })
   })
 
+  test("super-long runs overflow earlier at 75% of the usable budget", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        // cap = 100k → usable = 90k → super-long limit = 67.5k.
+        const model = createModel({ context: 100_000, output: 32_000 })
+        const tokens = { input: 70_000, output: 0, reasoning: 0, cache: { read: 0, write: 0 } }
+        expect(await SessionCompaction.isOverflow({ tokens, model })).toBe(false)
+        expect(await SessionCompaction.isOverflow({ tokens, model, superLong: true })).toBe(true)
+
+        const belowEarlyLimit = { input: 60_000, output: 0, reasoning: 0, cache: { read: 0, write: 0 } }
+        expect(await SessionCompaction.isOverflow({ tokens: belowEarlyLimit, model, superLong: true })).toBe(false)
+      },
+    })
+  })
+
   test("includes cache.read in token count", async () => {
     await using tmp = await tmpdir()
     await Instance.provide({

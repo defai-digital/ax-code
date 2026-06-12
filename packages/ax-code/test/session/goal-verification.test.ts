@@ -5,6 +5,10 @@ function toolPart(tool: string, status: "completed" | "error" = "completed") {
   return { type: "tool", tool, state: { status } }
 }
 
+function bashPart(command: string, exit: number) {
+  return { type: "tool", tool: "bash", state: { status: "completed", input: { command }, metadata: { exit } } }
+}
+
 function assistant(...parts: unknown[]): GoalVerification.Message {
   return { info: { role: "assistant" }, parts }
 }
@@ -80,6 +84,46 @@ describe("GoalVerification.decide", () => {
     expect(
       GoalVerification.decide({
         messages: [assistant(toolPart("read"), toolPart("task"), toolPart("grep"))],
+        pendingTodos: [],
+      }),
+    ).toEqual({ ok: true })
+  })
+
+  test("a bash run with a non-zero exit code does not count as verification", () => {
+    const decision = GoalVerification.decide({
+      messages: [assistant(toolPart("edit")), assistant(bashPart("bun test", 1))],
+      pendingTodos: [],
+    })
+    expect(decision.ok).toBe(false)
+    if (decision.ok) throw new Error("expected rejection")
+    expect(decision.reason).toBe("unverified_changes")
+  })
+
+  test("trivial commands do not count as verification", () => {
+    for (const command of ["echo done", "true", "sleep 5", "echo a && echo b", "CI=1 echo ok"]) {
+      const decision = GoalVerification.decide({
+        messages: [assistant(toolPart("edit")), assistant(bashPart(command, 0))],
+        pendingTodos: [],
+      })
+      expect(decision.ok).toBe(false)
+    }
+  })
+
+  test("a passing real command counts as verification", () => {
+    for (const command of ["bun test", "echo start && bun run typecheck", "CI=1 bun test --timeout 30000"]) {
+      expect(
+        GoalVerification.decide({
+          messages: [assistant(toolPart("edit")), assistant(bashPart(command, 0))],
+          pendingTodos: [],
+        }),
+      ).toEqual({ ok: true })
+    }
+  })
+
+  test("legacy bash parts without exit metadata still count as verification", () => {
+    expect(
+      GoalVerification.decide({
+        messages: [assistant(toolPart("edit")), assistant(toolPart("bash"))],
         pendingTodos: [],
       }),
     ).toEqual({ ok: true })

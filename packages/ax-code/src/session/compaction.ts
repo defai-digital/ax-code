@@ -74,10 +74,21 @@ export namespace SessionCompaction {
     return { cap, reserved, usable }
   }
 
-  export async function isOverflow(input: { tokens: MessageV2.Assistant["tokens"]; model: Provider.Model }) {
+  // Super-Long runs compact earlier (~75% of the usable budget instead of
+  // 100%): nobody is watching to /compact manually, per-turn latency grows
+  // with history — which is the dominant cost on local inference — and a
+  // multi-day run otherwise spends its tail end permanently near the cap.
+  const SUPER_LONG_USABLE_FRACTION = 0.75
+
+  export async function isOverflow(input: {
+    tokens: MessageV2.Assistant["tokens"]
+    model: Provider.Model
+    superLong?: boolean
+  }) {
     const tokenBudget = await budget(input.model)
     if (!tokenBudget) return false
-    return effectiveTotal(input.tokens) >= tokenBudget.usable
+    const limit = input.superLong ? tokenBudget.usable * SUPER_LONG_USABLE_FRACTION : tokenBudget.usable
+    return effectiveTotal(input.tokens) >= limit
   }
 
   const PRUNE_PROTECTED_TOOLS = ["skill"]

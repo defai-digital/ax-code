@@ -16,6 +16,12 @@ import { asRecordOrUndefined } from "../util/record"
  *      to run its tests/build before claiming success. Goals that never
  *      modified files (research/review goals) are not affected.
  *
+ * A bash run only counts as verification when it exited 0 and was not a
+ * purely trivial command (`echo done`, `true`, `sleep` …) — otherwise the
+ * gate could be satisfied without exercising the changes at all. Parts
+ * recorded before exit codes were captured (no metadata.exit) are still
+ * accepted so old sessions can complete.
+ *
  * Both rejections are recoverable: the model finishes the todos or runs
  * a verification command, then calls update_goal again.
  */
@@ -34,6 +40,55 @@ export namespace GoalVerification {
 
   const MUTATION_TOOLS = new Set(["edit", "write", "apply_patch", "multiedit", "patch"])
   const VERIFICATION_TOOLS = new Set(["bash"])
+
+  // Commands that observe or wait but cannot verify a change. A bash call
+  // counts as verification only if at least one pipeline segment starts
+  // with something outside this set.
+  const TRIVIAL_COMMANDS: ReadonlySet<string> = new Set([
+    "echo",
+    "printf",
+    "true",
+    ":",
+    "sleep",
+    "pwd",
+    "cd",
+    "touch",
+    "exit",
+  ])
+
+  function firstWord(segment: string) {
+    const tokens = segment.trim().split(/\s+/)
+    // Skip leading VAR=value assignments so `CI=1 bun test` is judged by
+    // the actual command.
+    for (const token of tokens) {
+      if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(token)) continue
+      return token
+    }
+    return ""
+  }
+
+  function isTrivialCommand(command: string) {
+    const segments = command.split(/&&|\|\||;|\||\n/)
+    let sawWord = false
+    for (const segment of segments) {
+      const word = firstWord(segment)
+      if (!word) continue
+      sawWord = true
+      if (!TRIVIAL_COMMANDS.has(word)) return false
+    }
+    return sawWord
+  }
+
+  function isVerificationRun(state: Record<string, unknown> | undefined) {
+    const metadata = asRecordOrUndefined(state?.["metadata"])
+    const exit = metadata?.["exit"]
+    // A failed command proves nothing — the change is not verified.
+    if (typeof exit === "number" && exit !== 0) return false
+    const params = asRecordOrUndefined(state?.["input"])
+    const command = params?.["command"]
+    if (typeof command === "string" && isTrivialCommand(command)) return false
+    return true
+  }
 
   export function decide(input: { messages: readonly Message[]; pendingTodos: readonly Todo[] }): Decision {
     const pending = input.pendingTodos.filter(isActiveTodo)
@@ -61,7 +116,7 @@ export namespace GoalVerification {
         if (MUTATION_TOOLS.has(tool)) {
           sawMutation = true
           verifiedAfterMutation = false
-        } else if (VERIFICATION_TOOLS.has(tool)) {
+        } else if (VERIFICATION_TOOLS.has(tool) && isVerificationRun(state)) {
           verifiedAfterMutation = true
         }
       }

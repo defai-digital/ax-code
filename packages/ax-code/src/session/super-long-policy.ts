@@ -1,5 +1,6 @@
 import { isQwen37MaxModel } from "@/provider/qwen37-readiness"
 import { Env } from "@/util/env"
+import { isLocalHostname } from "@/util/local-host"
 
 export namespace SuperLongPolicy {
   const MAX_DURATION_MS = 72 * 60 * 60 * 1000
@@ -84,7 +85,27 @@ export namespace SuperLongPolicy {
     minDelayMs: 10_000,
   }
 
-  export function providerPacing(providerID: string): PacingPolicy {
+  // Providers that always run on the user's machine. Self-hosted endpoints
+  // configured with a custom baseURL are caught by the hostname check instead.
+  const LOCAL_PROVIDER_IDS: ReadonlySet<string> = new Set(["ollama", "ax-studio"])
+
+  function isLocalBaseURL(baseURL: string) {
+    try {
+      return isLocalHostname(new URL(baseURL).hostname)
+    } catch {
+      return false
+    }
+  }
+
+  /**
+   * Returns the pacing policy for a provider, or undefined when no pacing
+   * should apply. Local/self-hosted inference has no remote quota to
+   * protect, and wall-clock throughput is the only resource a local run
+   * spends — pacing it would just stall the loop.
+   */
+  export function providerPacing(providerID: string, options?: { baseURL?: string }): PacingPolicy | undefined {
+    if (LOCAL_PROVIDER_IDS.has(providerID)) return undefined
+    if (options?.baseURL !== undefined && isLocalBaseURL(options.baseURL)) return undefined
     const policy = providerID.startsWith("alibaba-") ? ALIBABA_PACING : DEFAULT_PACING
     return { ...policy }
   }

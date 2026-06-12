@@ -204,6 +204,36 @@ export namespace SessionGoal {
     publish(undefined, sessionID)
   }
 
+  /**
+   * Clone the goal onto a forked session. The fork inherits the full
+   * message history, so status, budget, and usage counters carry over
+   * verbatim — only the creation timestamp is fresh. No-op when the
+   * source session has no goal.
+   */
+  export async function copyTo(input: { from: SessionID; to: SessionID }): Promise<Info | undefined> {
+    const now = Date.now()
+    const goal = Database.transaction((db) => {
+      const row = db.select().from(SessionGoalTable).where(eq(SessionGoalTable.session_id, input.from)).get()
+      if (!row) return undefined
+      const values = {
+        objective: row.objective,
+        status: row.status,
+        token_budget: row.token_budget,
+        tokens_used: row.tokens_used,
+        time_used_seconds: row.time_used_seconds,
+        time_created: now,
+        time_updated: now,
+      }
+      db.insert(SessionGoalTable)
+        .values({ session_id: input.to, ...values })
+        .onConflictDoUpdate({ target: SessionGoalTable.session_id, set: values })
+        .run()
+      return fromRow(db.select().from(SessionGoalTable).where(eq(SessionGoalTable.session_id, input.to)).get()!)
+    })
+    if (goal) publish(goal)
+    return goal
+  }
+
   export async function addUsage(input: {
     sessionID: SessionID
     message: MessageV2.Assistant
