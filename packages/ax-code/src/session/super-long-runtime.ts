@@ -39,6 +39,17 @@ export namespace SuperLongRuntime {
     }, input.now)
   }
 
+  /**
+   * Read-only lookup of a session's durable run start. Unlike
+   * `sessionStartedAt` this never creates a record — status reporting
+   * must not start the 72h clock for sessions that have not run yet.
+   */
+  export async function peekSessionStartedAt(sessionID: string): Promise<number | undefined> {
+    const store = await readStore()
+    const run = store.runs?.[sessionID]
+    return run && validRunState(run) ? run.startedAt : undefined
+  }
+
   export async function reservePacing(input: {
     key: string
     now: number

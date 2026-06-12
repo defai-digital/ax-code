@@ -158,7 +158,7 @@ export namespace LLM {
       autonomousEnabled &&
       SuperLongPolicy.runtimeState({
         modelID: input.model.id,
-        config: { enabled: cfg.super_long },
+        config: SuperLongPolicy.fromConfig(cfg.super_long),
       }).enabled
     // The verification-loop reminder is provider-agnostic supervision text —
     // it must fire for every Super-Long run, not just models whose long-agent

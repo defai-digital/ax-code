@@ -31,6 +31,15 @@ function optionalReportTodoClosureGuidance(input: { include: boolean; mode: Repo
   return input.include ? reportTodoClosureGuidance(input.mode) : ""
 }
 
+// Super-Long mode lifts the continuation cap (maxContinuations becomes
+// Infinity); render the counter without the cap in that case so the model
+// is not shown a "1/Infinity" budget.
+function continuationCounter(continuation: number, maxContinuations: number) {
+  return Number.isFinite(maxContinuations)
+    ? `${continuation}/${maxContinuations}`
+    : `${continuation} (Super-Long mode: no continuation cap)`
+}
+
 export namespace AutonomousContinuationPrompt {
   export function goal(input: { objective: string; continuation: number }) {
     return (
@@ -64,7 +73,7 @@ export namespace AutonomousContinuationPrompt {
   export function stepLimit(input: { stepLimit: number; continuation: number; maxContinuations: number }) {
     return (
       `Continue from where you left off. You have used ${input.stepLimit} steps. ` +
-      `This is auto-continuation ${input.continuation}/${input.maxContinuations}. ` +
+      `This is auto-continuation ${continuationCounter(input.continuation, input.maxContinuations)}. ` +
       `Prioritize completing the most important remaining work. Avoid over-engineering: prefer the simplest ` +
       `common-practice change that solves the task, avoid new abstractions unless there are 3+ concrete use cases, ` +
       `and verify before expanding scope.`
@@ -81,7 +90,7 @@ export namespace AutonomousContinuationPrompt {
       `Autonomous mode reached the ${input.agentName} agent step limit (${input.maxSteps} steps). ` +
       `Continue from where you left off with the same agent. Do not summarize the task as complete ` +
       `unless the work is actually complete; use tools to finish the remaining work and verify it. ` +
-      `This is agent step-limit auto-continuation ${input.continuation}/${input.maxContinuations}.`
+      `This is agent step-limit auto-continuation ${continuationCounter(input.continuation, input.maxContinuations)}.`
     )
   }
 

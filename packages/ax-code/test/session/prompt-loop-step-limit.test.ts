@@ -45,6 +45,21 @@ describe("prompt loop global step limit", () => {
     expect(result.text).toContain("auto-continuation 2/3")
   })
 
+  test("keeps continuing past the configured cap when Super-Long lifts it to Infinity", () => {
+    const result = handlePromptLoopGlobalStepLimit({
+      sessionID: SessionID.descending(),
+      step: 10,
+      stepLimit: 10,
+      autonomous: true,
+      continuations: 250,
+      maxContinuations: Number.POSITIVE_INFINITY,
+    })
+
+    expect(result.action).toBe("continue_autonomous")
+    if (result.action !== "continue_autonomous") throw new Error("expected autonomous continuation")
+    expect(result.text).toContain("auto-continuation 251 (Super-Long mode: no continuation cap)")
+  })
+
   test("logs and publishes a user-facing error when the global step limit stops the loop", () => {
     const sessionID = SessionID.descending()
     const warnings: { message: string; fields: Record<string, unknown> }[] = []

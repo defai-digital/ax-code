@@ -697,7 +697,18 @@ export const Info = z
     permission: Permission.optional(),
     autonomous: z.boolean().optional().describe("Enable autonomous mode (default: true)"),
     super_long: z
-      .boolean()
+      .union([
+        z.boolean(),
+        z.object({
+          enabled: z.boolean().optional().describe("Enable Super-Long supervised long-run mode"),
+          duration_hours: z
+            .number()
+            .positive()
+            .max(72)
+            .optional()
+            .describe("Runtime ceiling for a Super-Long run in hours (default and hard maximum: 72)"),
+        }),
+      ])
       .optional()
       .describe("Enable Super-Long supervised long-run mode (default: on for Qwen3.7-Max, off otherwise)"),
     isolation: Isolation.optional().describe("Execution isolation configuration"),

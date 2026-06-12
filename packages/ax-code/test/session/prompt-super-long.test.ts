@@ -53,10 +53,70 @@ describe("enforceSuperLongDeadline", () => {
           config: { enabled: false },
           now: 1_000,
         }),
-      ).resolves.toEqual({ action: "continue" })
+      ).resolves.toEqual({ action: "continue", enabled: false })
       expect(startedAt).not.toHaveBeenCalled()
     } finally {
       startedAt.mockRestore()
+    }
+  })
+
+  test("reports enabled=true while an active super-long run is within its deadline", async () => {
+    clearSuperLongEnv()
+    const startedAt = spyOn(SuperLongRuntime, "sessionStartedAt").mockResolvedValue(0)
+    try {
+      await expect(
+        enforceSuperLongDeadline({
+          sessionID: "ses_test" as any,
+          lastUser: userMessage(),
+          autonomous: true,
+          config: { enabled: true },
+          now: 1_000,
+        }),
+      ).resolves.toEqual({ action: "continue", enabled: true })
+      expect(startedAt).toHaveBeenCalledTimes(1)
+    } finally {
+      startedAt.mockRestore()
+    }
+  })
+
+  test("honors a configured duration shorter than the 72h ceiling", async () => {
+    clearSuperLongEnv()
+    const startedAt = spyOn(SuperLongRuntime, "sessionStartedAt").mockResolvedValue(0)
+    const updateMessageWithParts = spyOn(Session, "updateMessageWithParts").mockResolvedValue(undefined as any)
+    const publishError = spyOn(Session, "publishError").mockImplementation((() => undefined) as any)
+    try {
+      await using tmp = await tmpdir({ git: true })
+      const twoHoursMs = 2 * 60 * 60 * 1000
+      const config = { enabled: true, requestedDurationMs: twoHoursMs }
+      const within = await Instance.provide({
+        directory: tmp.path,
+        fn: () =>
+          enforceSuperLongDeadline({
+            sessionID: "ses_test" as any,
+            lastUser: userMessage(),
+            autonomous: true,
+            config,
+            now: twoHoursMs - 1,
+          }),
+      })
+      expect(within).toEqual({ action: "continue", enabled: true })
+
+      const expired = await Instance.provide({
+        directory: tmp.path,
+        fn: () =>
+          enforceSuperLongDeadline({
+            sessionID: "ses_test" as any,
+            lastUser: userMessage(),
+            autonomous: true,
+            config,
+            now: twoHoursMs,
+          }),
+      })
+      expect(expired).toEqual({ action: "stop", reason: "step_limit", invalidatedMessages: true })
+    } finally {
+      startedAt.mockRestore()
+      updateMessageWithParts.mockRestore()
+      publishError.mockRestore()
     }
   })
 

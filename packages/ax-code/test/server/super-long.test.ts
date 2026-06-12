@@ -169,6 +169,80 @@ describe("super-long route", () => {
     })
   })
 
+  test("status reports duration from object config and per-session timing", async () => {
+    await withCleanSuperLongEnv(async () => {
+      await using tmp = await tmpdir({ git: true })
+      const storePath = path.join(tmp.path, "super-long-runtime.json")
+      const previousStore = process.env.AX_CODE_SUPER_LONG_RUNTIME_STORE
+      process.env.AX_CODE_SUPER_LONG_RUNTIME_STORE = storePath
+      try {
+        await Bun.write(
+          path.join(tmp.path, "ax-code.json"),
+          JSON.stringify({
+            model: "anthropic/claude-opus-4-8",
+            super_long: { enabled: true, duration_hours: 2 },
+          }),
+        )
+        const startedAt = Date.now() - 60_000
+        await Bun.write(
+          storePath,
+          JSON.stringify({ runs: { ses_status_test: { startedAt, lastSeenAt: startedAt } } }),
+        )
+
+        await Instance.provide({
+          directory: tmp.path,
+          fn: async () => {
+            const response = await Server.Default().request(
+              `/super-long/status?directory=${encodeURIComponent(tmp.path)}&sessionID=ses_status_test`,
+            )
+            expect(response.status).toBe(200)
+            const body = (await response.json()) as {
+              enabled: boolean
+              source: string
+              durationMs: number | null
+              startedAt: number | null
+              elapsedMs: number | null
+              remainingMs: number | null
+            }
+            expect(body.enabled).toBe(true)
+            expect(body.source).toBe("config")
+            expect(body.durationMs).toBe(2 * 60 * 60 * 1000)
+            expect(body.startedAt).toBe(startedAt)
+            expect(body.elapsedMs).toBeGreaterThanOrEqual(60_000)
+            expect(body.remainingMs).toBeLessThanOrEqual(2 * 60 * 60 * 1000 - 60_000)
+            expect(body.remainingMs).toBeGreaterThan(0)
+          },
+        })
+      } finally {
+        if (previousStore === undefined) delete process.env.AX_CODE_SUPER_LONG_RUNTIME_STORE
+        else process.env.AX_CODE_SUPER_LONG_RUNTIME_STORE = previousStore
+      }
+    })
+  })
+
+  test("status reports null timing when the session has no durable run", async () => {
+    await withCleanSuperLongEnv(async () => {
+      await using tmp = await tmpdir({ git: true })
+      await Bun.write(path.join(tmp.path, "ax-code.json"), JSON.stringify({ model: "anthropic/claude-opus-4-8" }))
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const response = await Server.Default().request(`/super-long/status?directory=${encodeURIComponent(tmp.path)}`)
+          expect(response.status).toBe(200)
+          expect(await response.json()).toEqual({
+            enabled: false,
+            source: "model-default",
+            durationMs: 72 * 60 * 60 * 1000,
+            startedAt: null,
+            elapsedMs: null,
+            remainingMs: null,
+          })
+        },
+      })
+    })
+  })
+
   test("disabling autonomous prevents a session Super-Long override from reviving", async () => {
     await withCleanSuperLongEnv(async () => {
       await using tmp = await tmpdir({ git: true })

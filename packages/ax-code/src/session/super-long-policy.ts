@@ -11,6 +11,22 @@ export namespace SuperLongPolicy {
     requestedDurationMs?: number
   }
 
+  export type ConfigValue = boolean | { enabled?: boolean; duration_hours?: number } | undefined
+
+  /**
+   * Normalize the `super_long` config value (legacy boolean or object form)
+   * into the runtime config shape. duration_hours is converted to ms here;
+   * the 72h hard ceiling is still enforced by `duration()`.
+   */
+  export function fromConfig(value: ConfigValue): RuntimeConfig {
+    if (value === undefined) return {}
+    if (typeof value === "boolean") return { enabled: value }
+    return {
+      enabled: value.enabled,
+      requestedDurationMs: value.duration_hours === undefined ? undefined : value.duration_hours * 60 * 60 * 1000,
+    }
+  }
+
   export type StateDecision = {
     enabled: boolean
     source: "session-override" | "env" | "config" | "model-default"
@@ -182,11 +198,12 @@ export namespace SuperLongPolicy {
     }
 
     if (input.deadline.expired) {
+      const hours = Math.round((input.deadline.durationMs / (60 * 60 * 1000)) * 10) / 10
       return {
         action: "stop",
         reason: "step_limit",
         message:
-          `Super-Long mode stopped after reaching the hard 72 hour runtime ceiling. ` +
+          `Super-Long mode stopped after reaching the configured ${hours} hour runtime ceiling. ` +
           `Review the current state, then resume with a new supervised run if more work is required.`,
         logMessage: "super-long deadline reached",
         status: "stopped",

@@ -99,6 +99,28 @@ describe("SuperLongPolicy.providerPacing", () => {
   })
 })
 
+describe("SuperLongPolicy.fromConfig", () => {
+  test("maps undefined to an empty runtime config", () => {
+    expect(SuperLongPolicy.fromConfig(undefined)).toEqual({})
+  })
+
+  test("maps the legacy boolean form", () => {
+    expect(SuperLongPolicy.fromConfig(true)).toEqual({ enabled: true })
+    expect(SuperLongPolicy.fromConfig(false)).toEqual({ enabled: false })
+  })
+
+  test("maps the object form and converts duration_hours to ms", () => {
+    expect(SuperLongPolicy.fromConfig({ enabled: true, duration_hours: 2 })).toEqual({
+      enabled: true,
+      requestedDurationMs: 2 * 60 * 60 * 1000,
+    })
+    expect(SuperLongPolicy.fromConfig({})).toEqual({
+      enabled: undefined,
+      requestedDurationMs: undefined,
+    })
+  })
+})
+
 describe("SuperLongPolicy.duration", () => {
   test("accepts exactly the 72 hour ceiling", () => {
     expect(SuperLongPolicy.duration(SEVENTY_TWO_HOURS_MS)).toEqual({
@@ -257,7 +279,7 @@ describe("SuperLongPolicy.deadlineStopDecision", () => {
       action: "stop",
       reason: "step_limit",
       message:
-        `Super-Long mode stopped after reaching the hard 72 hour runtime ceiling. ` +
+        `Super-Long mode stopped after reaching the configured 72 hour runtime ceiling. ` +
         `Review the current state, then resume with a new supervised run if more work is required.`,
       logMessage: "super-long deadline reached",
       status: "stopped",

@@ -10,7 +10,7 @@ import { SuperLongRuntime } from "./super-long-runtime"
 const log = Log.create({ service: "session.prompt" })
 
 export type PromptSuperLongDeadlineResult =
-  | { action: "continue" }
+  | { action: "continue"; enabled: boolean }
   | { action: "stop"; reason: "step_limit"; invalidatedMessages: boolean }
 
 export async function enforceSuperLongDeadline(input: {
@@ -26,26 +26,28 @@ export async function enforceSuperLongDeadline(input: {
     config: input.config,
   })
   const enabled = input.autonomous && state.enabled
+  // Skip entirely when disabled — a misconfigured duration must not stop
+  // sessions that never opted into Super-Long.
+  if (!enabled) return { action: "continue", enabled: false }
   const now = input.now ?? Date.now()
-  const startedAt = enabled
-    ? await SuperLongRuntime.sessionStartedAt({ sessionID: input.sessionID, now }).catch((error) => {
-        log.warn("failed to load durable super-long session start; using current loop start", {
-          sessionID: input.sessionID,
-          error,
-        })
-        return now
-      })
-    : now
+  const startedAt = await SuperLongRuntime.sessionStartedAt({ sessionID: input.sessionID, now }).catch((error) => {
+    log.warn("failed to load durable super-long session start; using current loop start", {
+      sessionID: input.sessionID,
+      error,
+    })
+    return now
+  })
   const deadline = SuperLongPolicy.deadline({
     enabled,
     startedAt,
     now,
+    requestedDurationMs: input.config?.requestedDurationMs,
   })
   const stop = SuperLongPolicy.deadlineStopDecision({
     deadline,
     source: state.source,
   })
-  if (stop.action === "continue") return { action: "continue" }
+  if (stop.action === "continue") return { action: "continue", enabled: true }
 
   log.warn(stop.logMessage, {
     command: "session.prompt.loop",

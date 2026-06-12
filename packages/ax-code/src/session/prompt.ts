@@ -56,6 +56,7 @@ import { createDeferredCodeGraphAutoIndex } from "./prompt-code-graph"
 import { recordPromptSessionStart } from "./prompt-session-start"
 import { scheduleFirstTurnSummary } from "./prompt-session-summary"
 import { enforceSuperLongDeadline } from "./prompt-super-long"
+import { SuperLongPolicy } from "./super-long-policy"
 import { createAutonomousTextContinuation, createUserMessage } from "./prompt-user-message"
 import { permissionRulesetFromLegacyTools } from "./prompt-permission"
 import { resolvePromptIsolationPolicy } from "./prompt-runtime-policy"
@@ -169,6 +170,12 @@ export namespace SessionPrompt {
     let consecutiveErrors = 0
     let continuations = 0
     let goalBudgetLimitContinuationSent = false
+    // Whether Super-Long mode was active (enabled and unexpired) as of the
+    // most recent deadline check. While active, the continuation cap is
+    // lifted — the Super-Long deadline, doom-loop detection, and
+    // blast-radius caps are the guardrails instead, so a supervised long
+    // run is not cut short by session.max_continuations.
+    let superLongActive = false
     const deferredCodeGraphAutoIndex = createDeferredCodeGraphAutoIndex({ sessionID, abort })
     await using _autoIndex = defer(deferredCodeGraphAutoIndex.flush)
     const session = await Session.get(sessionID)
@@ -258,13 +265,14 @@ export namespace SessionPrompt {
       }
 
       // Safety: prevent infinite loops
+      const effectiveMaxContinuations = superLongActive ? Number.POSITIVE_INFINITY : maxContinuations
       const globalStepLimit = handlePromptLoopGlobalStepLimit({
         sessionID,
         step,
         stepLimit: sessionStepLimit,
         autonomous,
         continuations,
-        maxContinuations,
+        maxContinuations: effectiveMaxContinuations,
       })
       if (globalStepLimit.action === "continue_autonomous") {
         await continueAutonomousLoop({
@@ -296,13 +304,14 @@ export namespace SessionPrompt {
         lastUser,
         lastAssistant,
         autonomous,
-        config: { enabled: cfg.super_long },
+        config: SuperLongPolicy.fromConfig(cfg.super_long),
       })
       if (superLongDeadline.action === "stop") {
         if (superLongDeadline.invalidatedMessages) cachedMsgs = undefined
         reason = superLongDeadline.reason
         break
       }
+      superLongActive = superLongDeadline.enabled
       const assistantExit = resolvePromptLoopAssistantExit({
         sessionID,
         lastUserID: lastUser.id,
@@ -410,7 +419,7 @@ export namespace SessionPrompt {
         maxSteps,
         autonomous,
         continuations,
-        maxContinuations,
+        maxContinuations: superLongActive ? Number.POSITIVE_INFINITY : maxContinuations,
       })
       if (agentStepLimit.action === "stop") {
         reason = agentStepLimit.reason
