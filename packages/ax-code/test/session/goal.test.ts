@@ -98,6 +98,36 @@ describe("SessionGoal", () => {
     })
   })
 
+  test("re-creating over a terminal goal resets usage and creation time", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const first = await SessionGoal.create({
+          sessionID: session.id,
+          objective: "first goal",
+        })
+        await SessionGoal.setStatus({ sessionID: session.id, status: "complete" })
+
+        await new Promise((r) => setTimeout(r, 5))
+        const second = await SessionGoal.create({
+          sessionID: session.id,
+          objective: "second goal",
+        })
+
+        expect(second.objective).toBe("second goal")
+        expect(second.status).toBe("active")
+        expect(second.tokensUsed).toBe(0)
+        expect(second.time.created).toBeGreaterThan(first.time.created)
+
+        await SessionGoal.clear(session.id)
+        await Session.remove(session.id)
+      },
+    })
+  })
+
   test("adds concurrent usage updates without losing increments", async () => {
     await using tmp = await tmpdir({ git: true })
 

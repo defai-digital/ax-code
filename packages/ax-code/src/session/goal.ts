@@ -139,6 +139,7 @@ export namespace SessionGoal {
               token_budget: input.tokenBudget ?? null,
               tokens_used: 0,
               time_used_seconds: 0,
+              time_created: now,
               time_updated: now,
             },
           })
@@ -161,6 +162,7 @@ export namespace SessionGoal {
           token_budget: input.tokenBudget ?? null,
           tokens_used: 0,
           time_used_seconds: 0,
+          time_created: now,
           time_updated: now,
         })
         .where(eq(SessionGoalTable.session_id, input.sessionID))
