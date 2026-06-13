@@ -1352,6 +1352,34 @@ describe("ProviderTransform.maxOutputTokens", () => {
     } as any
     expect(ProviderTransform.maxOutputTokens(model)).toBe(4_096)
   })
+
+  test("raises output cap to 131 072 for GLM 5.x including the [1m] variant", () => {
+    for (const [providerID, id] of [
+      ["zai-coding-plan", "glm-5.2"],
+      ["zai-coding-plan", "glm-5.2[1m]"],
+      ["zhipuai-coding-plan", "glm-5.1[1m]"],
+      ["zhipuai", "glm-5.1"],
+      ["zhipuai", "glm-5-turbo"],
+    ] as const) {
+      const model = {
+        id,
+        family: "glm",
+        providerID: ProviderID.make(providerID),
+        limit: { output: 131_072 },
+      } as any
+      expect(ProviderTransform.maxOutputTokens(model)).toBe(131_072)
+    }
+  })
+
+  test("keeps Alibaba quota cap for GLM routed through a DashScope plan", () => {
+    const model = {
+      id: "glm-5.1",
+      family: "glm",
+      providerID: ProviderID.make("alibaba-coding-plan"),
+      limit: { output: 131_072 },
+    } as any
+    expect(ProviderTransform.maxOutputTokens(model)).toBe(4_096)
+  })
 })
 
 describe("ProviderTransform.options - Alibaba Token Plan Team Edition", () => {

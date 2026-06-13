@@ -25,6 +25,13 @@ export namespace ProviderTransform {
   // specifically for this model so callers get the full generation budget
   // without lifting OUTPUT_TOKEN_MAX for every other model.
   const QWEN37_MAX_OUTPUT_TOKENS = 65_536
+  // GLM 5.x (Z.AI / Zhipu coding + general endpoints) documents a 131 072-token
+  // output limit. Raise the cap to that ceiling for the glm family so the large
+  // coding generations the model is built for aren't clipped at the 32k default,
+  // without lifting OUTPUT_TOKEN_MAX for every other provider. The Alibaba
+  // short-window guard runs first, so GLM routed through a DashScope plan still
+  // gets the conservative reservation cap.
+  const GLM_OUTPUT_TOKEN_MAX = 131_072
   // DashScope and Token Plan both reserve `prompt + max_tokens` against a
   // sliding short-window quota *before* generation. Defaulting to 4k keeps
   // headroom for parallel agents and long-context requests while still letting
@@ -207,7 +214,7 @@ export namespace ProviderTransform {
       const next = value[family.length]
       return next === undefined || /[^a-z0-9]/.test(next)
     }
-    const segment = model.id.toLowerCase().split("/").filter(Boolean).at(-1)
+    const segment = model.id?.toLowerCase().split("/").filter(Boolean).at(-1)
     const declared = model.family?.toLowerCase()
     return matches(segment) || matches(declared)
   }
@@ -468,7 +475,11 @@ export namespace ProviderTransform {
       return Math.min(limit, OUTPUT_TOKEN_MAX, ALIBABA_OUTPUT_TOKEN_MAX)
     }
     const limit = model.limit.output
-    const cap = isQwen37MaxModel(model.id ?? "") ? QWEN37_MAX_OUTPUT_TOKENS : OUTPUT_TOKEN_MAX
+    const cap = isQwen37MaxModel(model.id ?? "")
+      ? QWEN37_MAX_OUTPUT_TOKENS
+      : hasFamily(model, "glm")
+        ? GLM_OUTPUT_TOKEN_MAX
+        : OUTPUT_TOKEN_MAX
     return limit > 0 ? Math.min(limit, cap) : cap
   }
 
