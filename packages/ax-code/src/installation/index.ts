@@ -1,11 +1,5 @@
-import { NodeFileSystem, NodePath } from "@effect/platform-node"
-import { Effect, Layer, Schema, ServiceMap, Stream } from "effect"
-import { FetchHttpClient, HttpClient, HttpClientRequest, HttpClientResponse } from "effect/unstable/http"
-import * as CrossSpawnSpawner from "@/effect/cross-spawn-spawner"
-import { makeRunPromise } from "@/effect/run-service"
-import { withTransientReadRetry } from "@/util/effect-http-client"
-import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process"
 import path from "path"
+import { buffer } from "node:stream/consumers"
 import z from "zod"
 import { BusEvent } from "@/bus/bus-event"
 import {
@@ -17,6 +11,7 @@ import {
 import { Flag } from "../flag/flag"
 import { Log } from "../util/log"
 import { toErrorMessage } from "../util/error-message"
+import { Process } from "../util/process"
 
 declare global {
   const AX_CODE_VERSION: string
@@ -97,257 +92,229 @@ export namespace Installation {
     return CHANNEL === "local"
   }
 
-  export class UpgradeFailedError extends Schema.TaggedErrorClass<UpgradeFailedError>()("UpgradeFailedError", {
-    stderr: Schema.String,
-  }) {}
+  export class UpgradeFailedError extends Error {
+    override readonly name = "UpgradeFailedError"
 
-  // Response schemas for external version APIs
-  const GitHubRelease = Schema.Struct({ tag_name: Schema.String })
-  const BrewFormula = Schema.Struct({ versions: Schema.Struct({ stable: Schema.String }) })
-  const BrewInfoV2 = Schema.Struct({
-    formulae: Schema.Array(Schema.Struct({ versions: Schema.Struct({ stable: Schema.String }) })),
-  })
+    constructor(readonly input: { stderr: string }) {
+      super(input.stderr || "Upgrade failed")
+      this.name = "UpgradeFailedError"
+    }
 
-  export interface Interface {
-    readonly info: () => Effect.Effect<Info>
-    readonly method: () => Effect.Effect<Method>
-    readonly latest: (method?: Method) => Effect.Effect<string>
-    readonly upgrade: (method: Method, target: string) => Effect.Effect<void, UpgradeFailedError>
+    get stderr() {
+      return this.input.stderr
+    }
   }
 
-  export class Service extends ServiceMap.Service<Service, Interface>()("@ax-code/Installation") {}
+  // Response schemas for external version APIs
+  const GitHubRelease = z.object({ tag_name: z.string() })
+  const BrewFormula = z.object({ versions: z.object({ stable: z.string() }) })
+  const BrewInfoV2 = z.object({
+    formulae: z.array(z.object({ versions: z.object({ stable: z.string() }) })),
+  })
 
-  export const layer: Layer.Layer<Service, never, HttpClient.HttpClient | ChildProcessSpawner.ChildProcessSpawner> =
-    Layer.effect(
-      Service,
-      Effect.gen(function* () {
-        const http = yield* HttpClient.HttpClient
-        const httpOk = HttpClient.filterStatusOk(withTransientReadRetry(http))
-        const spawner = yield* ChildProcessSpawner.ChildProcessSpawner
+  interface CommandResult {
+    code: number
+    stdout: string
+    stderr: string
+  }
 
-        const text = Effect.fnUntraced(
-          function* (cmd: string[], opts?: { cwd?: string; env?: Record<string, string> }) {
-            const proc = ChildProcess.make(cmd[0], cmd.slice(1), {
-              cwd: opts?.cwd,
-              env: opts?.env,
-              extendEnv: true,
-            })
-            const handle = yield* spawner.spawn(proc)
-            const out = yield* Stream.mkString(Stream.decodeText(handle.stdout))
-            yield* handle.exitCode
-            return out
-          },
-          Effect.scoped,
-          Effect.catch(() => Effect.succeed("")),
-        )
+  interface RunOptions {
+    cwd?: string
+    env?: Record<string, string>
+    input?: Uint8Array
+  }
 
-        const run = Effect.fnUntraced(
-          function* (cmd: string[], opts?: { cwd?: string; env?: Record<string, string> }) {
-            const proc = ChildProcess.make(cmd[0], cmd.slice(1), {
-              cwd: opts?.cwd,
-              env: opts?.env,
-              extendEnv: true,
-            })
-            const handle = yield* spawner.spawn(proc)
-            const [stdout, stderr] = yield* Effect.all(
-              [Stream.mkString(Stream.decodeText(handle.stdout)), Stream.mkString(Stream.decodeText(handle.stderr))],
-              { concurrency: 2 },
-            )
-            const code = yield* handle.exitCode
-            return { code, stdout, stderr }
-          },
-          Effect.scoped,
-          Effect.catch(() => Effect.succeed({ code: ChildProcessSpawner.ExitCode(1), stdout: "", stderr: "" })),
-        )
+  interface Dependencies {
+    fetch: typeof fetch
+    run: (cmd: string[], opts?: RunOptions) => Promise<CommandResult>
+  }
 
-        const getBrewFormula = Effect.fnUntraced(function* () {
-          // The tap historically used both "ax-code" and "ax" as formula
-          // names. Probe both so we work on existing installs regardless
-          // of which name the user's brew has tapped.
-          const tapAxCode = yield* text(["brew", "list", "--formula", `${HOMEBREW_TAP}/ax-code`])
-          if (tapAxCode.includes("ax-code")) return `${HOMEBREW_TAP}/ax-code`
-          const tapAx = yield* text(["brew", "list", "--formula", `${HOMEBREW_TAP}/ax`])
-          if (tapAx.includes("ax")) return `${HOMEBREW_TAP}/ax`
-          const coreFormula = yield* text(["brew", "list", "--formula", "ax-code"])
-          if (coreFormula.includes("ax-code")) return "ax-code"
-          return `${HOMEBREW_TAP}/ax`
-        })
+  const defaultDependencies: Dependencies = {
+    fetch: globalThis.fetch.bind(globalThis),
+    run: runCommand,
+  }
 
-        const upgradeCurl = Effect.fnUntraced(
-          function* (target: string) {
-            const scriptUrl = INSTALL_SCRIPT_URL
-            const sha256Url = `${scriptUrl}.sha256`
-            const response = yield* httpOk.execute(HttpClientRequest.get(scriptUrl))
-            const body = yield* response.text
-            // Encode once; reuse for both the SHA-256 check and the bash stdin
-            // so the hash is computed over exactly the bytes that get executed.
-            const bodyBytes = new TextEncoder().encode(body)
-            // Verify SHA256 integrity sidecar when available. A hash mismatch
-            // is a hard failure; a missing sidecar file only warns and proceeds
-            // so existing deployments without a .sha256 file keep working.
-            yield* Effect.promise(async () => {
-              try {
-                const sha256Res = await fetch(sha256Url)
-                if (!sha256Res.ok) {
-                  log.warn("install script .sha256 sidecar not found — skipping integrity check")
-                  return
-                }
-                const expected = (await sha256Res.text()).trim().split(/\s+/)[0]
-                if (!expected) return
-                const hashBuffer = await crypto.subtle.digest("SHA-256", bodyBytes)
-                const actual = Array.from(new Uint8Array(hashBuffer))
-                  .map((b) => b.toString(16).padStart(2, "0"))
-                  .join("")
-                if (actual !== expected)
-                  throw new Error(`Install script integrity check failed: expected ${expected}, got ${actual}`)
-              } catch (e) {
-                const msg = toErrorMessage(e)
-                if (msg.startsWith("Install script integrity check failed")) throw e
-                log.warn("could not verify install script integrity", { error: e })
-              }
-            })
-            const proc = ChildProcess.make("bash", [], {
-              stdin: Stream.make(bodyBytes),
-              env: { VERSION: target },
-              extendEnv: true,
-            })
-            const handle = yield* spawner.spawn(proc)
-            const [stdout, stderr] = yield* Effect.all(
-              [Stream.mkString(Stream.decodeText(handle.stdout)), Stream.mkString(Stream.decodeText(handle.stderr))],
-              { concurrency: 2 },
-            )
-            const code = yield* handle.exitCode
-            return { code, stdout, stderr }
-          },
-          Effect.scoped,
-          Effect.orDie,
-        )
+  let dependencies = defaultDependencies
 
-        const methodImpl = Effect.fn("Installation.method")(function* () {
-          if (process.execPath.includes(path.join(".ax-code", "bin"))) return "curl" as Method
-          if (process.execPath.includes(path.join(".local", "bin"))) return "curl" as Method
+  export async function withDependencies<T>(next: Partial<Dependencies>, fn: () => Promise<T>): Promise<T> {
+    const previous = dependencies
+    dependencies = { ...dependencies, ...next }
+    try {
+      return await fn()
+    } finally {
+      dependencies = previous
+    }
+  }
 
-          for (const formula of [`${HOMEBREW_TAP}/ax-code`, `${HOMEBREW_TAP}/ax`, "ax-code"]) {
-            const out = yield* text(["brew", "list", "--formula", formula])
-            if (out.trim()) {
-              return "brew" as Method
-            }
-          }
+  async function runCommand(cmd: string[], opts: RunOptions = {}): Promise<CommandResult> {
+    const proc = Process.spawn(cmd, {
+      cwd: opts.cwd,
+      env: opts.env ? { ...process.env, ...opts.env } : undefined,
+      stdin: opts.input ? "pipe" : "ignore",
+      stdout: "pipe",
+      stderr: "pipe",
+    })
+    if (opts.input) proc.stdin?.end(opts.input)
+    if (!proc.stdout || !proc.stderr) return { code: 1, stdout: "", stderr: "Process output not available" }
+    const [code, stdout, stderr] = await Promise.all([proc.exited, buffer(proc.stdout), buffer(proc.stderr)])
+    return {
+      code,
+      stdout: stdout.toString(),
+      stderr: stderr.toString(),
+    }
+  }
 
-          return "unknown" as Method
-        })
+  async function text(cmd: string[], opts?: RunOptions) {
+    const out = await dependencies.run(cmd, opts).catch(() => ({ code: 1, stdout: "", stderr: "" }))
+    return out.code === 0 ? out.stdout : ""
+  }
 
-        const latestImpl = Effect.fn("Installation.latest")(function* (installMethod?: Method) {
-          const detectedMethod = installMethod || (yield* methodImpl())
+  async function fetchOk(url: string, options?: RequestInit) {
+    const response = await dependencies.fetch(url, options)
+    if (!response.ok) throw new Error(`HTTP ${response.status} for ${url}`)
+    return response
+  }
 
-          if (detectedMethod === "brew") {
-            const formula = yield* getBrewFormula()
-            if (formula.includes("/")) {
-              const infoJson = yield* text(["brew", "info", "--json=v2", formula])
-              const info = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(BrewInfoV2))(infoJson)
-              if (!info.formulae.length) return "unknown"
-              return info.formulae[0].versions.stable
-            }
-            const response = yield* httpOk.execute(
-              HttpClientRequest.get(HOMEBREW_FORMULA_API_URL).pipe(HttpClientRequest.acceptJson),
-            )
-            const data = yield* HttpClientResponse.schemaBodyJson(BrewFormula)(response)
-            return data.versions.stable
-          }
+  async function fetchJson<T>(schema: z.ZodType<T>, url: string) {
+    const response = await fetchOk(url, { headers: { accept: "application/json" } })
+    return schema.parse(await response.json())
+  }
 
-          const response = yield* httpOk.execute(
-            HttpClientRequest.get(GITHUB_LATEST_RELEASE_API_URL).pipe(HttpClientRequest.acceptJson),
-          )
-          const data = yield* HttpClientResponse.schemaBodyJson(GitHubRelease)(response)
-          return data.tag_name.replace(/^v/, "")
-        }, Effect.orDie)
+  async function getBrewFormula() {
+    // The tap historically used both "ax-code" and "ax" as formula
+    // names. Probe both so we work on existing installs regardless
+    // of which name the user's brew has tapped.
+    const tapAxCode = await text(["brew", "list", "--formula", `${HOMEBREW_TAP}/ax-code`])
+    if (tapAxCode.includes("ax-code")) return `${HOMEBREW_TAP}/ax-code`
+    const tapAx = await text(["brew", "list", "--formula", `${HOMEBREW_TAP}/ax`])
+    if (tapAx.includes("ax")) return `${HOMEBREW_TAP}/ax`
+    const coreFormula = await text(["brew", "list", "--formula", "ax-code"])
+    if (coreFormula.includes("ax-code")) return "ax-code"
+    return `${HOMEBREW_TAP}/ax`
+  }
 
-        const upgradeImpl = Effect.fn("Installation.upgrade")(function* (m: Method, target: string) {
-          let result: { code: ChildProcessSpawner.ExitCode; stdout: string; stderr: string } | undefined
-          switch (m) {
-            case "curl":
-              result = yield* upgradeCurl(target)
-              break
-            case "brew": {
-              const formula = yield* getBrewFormula()
-              const env = { HOMEBREW_NO_AUTO_UPDATE: "1" }
-              if (formula.includes("/")) {
-                const tapName = formula.split("/").slice(0, 2).join("/")
-                const tap = yield* run(["brew", "tap", tapName], { env })
-                if (tap.code !== 0) {
-                  result = tap
-                  break
-                }
-                const repo = yield* text(["brew", "--repo", tapName])
-                const dir = repo.trim()
-                if (dir) {
-                  const pull = yield* run(["git", "pull", "--ff-only"], { cwd: dir, env })
-                  if (pull.code !== 0) {
-                    result = pull
-                    break
-                  }
-                }
-              }
-              result = yield* run(["brew", "upgrade", formula], { env })
-              break
-            }
-            case "unknown":
-              // Fallback to curl installer script when method can't be detected —
-              // works regardless of install location (legacy npm global, manual copy, etc.)
-              result = yield* upgradeCurl(target)
-              break
-            default:
-              return yield* new UpgradeFailedError({ stderr: `Unknown method: ${m}` })
-          }
-          if (!result || result.code !== 0) {
-            const stderr = result?.stderr || ""
-            return yield* new UpgradeFailedError({ stderr })
-          }
-          log.info("upgraded", {
-            method: m,
-            target,
-            stdout: result.stdout,
-            stderr: result.stderr,
-          })
-          yield* text([process.execPath, "--version"])
-        })
-
-        return Service.of({
-          info: Effect.fn("Installation.info")(function* () {
-            return {
-              version: VERSION,
-              latest: yield* latestImpl(),
-            }
-          }),
-          method: methodImpl,
-          latest: latestImpl,
-          upgrade: upgradeImpl,
-        })
-      }),
-    )
-
-  export const defaultLayer = layer.pipe(
-    Layer.provide(FetchHttpClient.layer),
-    Layer.provide(CrossSpawnSpawner.layer),
-    Layer.provide(NodeFileSystem.layer),
-    Layer.provide(NodePath.layer),
-  )
-
-  const runPromise = makeRunPromise(Service, defaultLayer)
+  async function upgradeCurl(target: string) {
+    const scriptUrl = INSTALL_SCRIPT_URL
+    const sha256Url = `${scriptUrl}.sha256`
+    const response = await fetchOk(scriptUrl)
+    const body = await response.text()
+    // Encode once; reuse for both the SHA-256 check and the bash stdin
+    // so the hash is computed over exactly the bytes that get executed.
+    const bodyBytes = new TextEncoder().encode(body)
+    // Verify SHA256 integrity sidecar when available. A hash mismatch
+    // is a hard failure; a missing sidecar file only warns and proceeds
+    // so existing deployments without a .sha256 file keep working.
+    try {
+      const sha256Res = await dependencies.fetch(sha256Url)
+      if (!sha256Res.ok) {
+        log.warn("install script .sha256 sidecar not found — skipping integrity check")
+      } else {
+        const expected = (await sha256Res.text()).trim().split(/\s+/)[0]
+        if (expected) {
+          const hashBuffer = await crypto.subtle.digest("SHA-256", bodyBytes)
+          const actual = Array.from(new Uint8Array(hashBuffer))
+            .map((b) => b.toString(16).padStart(2, "0"))
+            .join("")
+          if (actual !== expected)
+            throw new Error(`Install script integrity check failed: expected ${expected}, got ${actual}`)
+        }
+      }
+    } catch (e) {
+      const msg = toErrorMessage(e)
+      if (msg.startsWith("Install script integrity check failed")) throw e
+      log.warn("could not verify install script integrity", { error: e })
+    }
+    return dependencies.run(["bash"], {
+      input: bodyBytes,
+      env: { VERSION: target },
+    })
+  }
 
   export async function info(): Promise<Info> {
-    return runPromise((svc) => svc.info())
+    return {
+      version: VERSION,
+      latest: await latest(),
+    }
   }
 
   export async function method(): Promise<Method> {
-    return runPromise((svc) => svc.method())
+    if (process.execPath.includes(path.join(".ax-code", "bin"))) return "curl"
+    if (process.execPath.includes(path.join(".local", "bin"))) return "curl"
+
+    for (const formula of [`${HOMEBREW_TAP}/ax-code`, `${HOMEBREW_TAP}/ax`, "ax-code"]) {
+      const out = await text(["brew", "list", "--formula", formula])
+      if (out.trim()) return "brew"
+    }
+
+    return "unknown"
   }
 
   export async function latest(installMethod?: Method): Promise<string> {
-    return runPromise((svc) => svc.latest(installMethod))
+    const detectedMethod = installMethod || (await method())
+
+    if (detectedMethod === "brew") {
+      const formula = await getBrewFormula()
+      if (formula.includes("/")) {
+        const infoJson = await text(["brew", "info", "--json=v2", formula])
+        const info = BrewInfoV2.parse(JSON.parse(infoJson))
+        if (!info.formulae.length) return "unknown"
+        return info.formulae[0].versions.stable
+      }
+      const data = await fetchJson(BrewFormula, HOMEBREW_FORMULA_API_URL)
+      return data.versions.stable
+    }
+
+    const data = await fetchJson(GitHubRelease, GITHUB_LATEST_RELEASE_API_URL)
+    return data.tag_name.replace(/^v/, "")
   }
 
   export async function upgrade(m: Method, target: string): Promise<void> {
-    return runPromise((svc) => svc.upgrade(m, target))
+    let result: CommandResult | undefined
+    switch (m) {
+      case "curl":
+        result = await upgradeCurl(target)
+        break
+      case "brew": {
+        const formula = await getBrewFormula()
+        const env = { HOMEBREW_NO_AUTO_UPDATE: "1" }
+        if (formula.includes("/")) {
+          const tapName = formula.split("/").slice(0, 2).join("/")
+          const tap = await dependencies.run(["brew", "tap", tapName], { env })
+          if (tap.code !== 0) {
+            result = tap
+            break
+          }
+          const repo = await text(["brew", "--repo", tapName])
+          const dir = repo.trim()
+          if (dir) {
+            const pull = await dependencies.run(["git", "pull", "--ff-only"], { cwd: dir, env })
+            if (pull.code !== 0) {
+              result = pull
+              break
+            }
+          }
+        }
+        result = await dependencies.run(["brew", "upgrade", formula], { env })
+        break
+      }
+      case "unknown":
+        // Fallback to curl installer script when method can't be detected —
+        // works regardless of install location (legacy npm global, manual copy, etc.)
+        result = await upgradeCurl(target)
+        break
+      default:
+        throw new UpgradeFailedError({ stderr: `Unknown method: ${m}` })
+    }
+    if (!result || result.code !== 0) {
+      const stderr = result?.stderr || ""
+      throw new UpgradeFailedError({ stderr })
+    }
+    log.info("upgraded", {
+      method: m,
+      target,
+      stdout: result.stdout,
+      stderr: result.stderr,
+    })
+    await text([process.execPath, "--version"])
   }
 }

@@ -1,37 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { Effect, Layer, Stream } from "effect"
-import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/unstable/http"
-import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process"
 import { Installation } from "../../src/installation"
-
-const encoder = new TextEncoder()
-
-function mockHttpClient(handler: (request: HttpClientRequest.HttpClientRequest) => Response) {
-  const client = HttpClient.make((request) => Effect.succeed(HttpClientResponse.fromWeb(request, handler(request))))
-  return Layer.succeed(HttpClient.HttpClient, client)
-}
-
-function mockSpawner(handler: (cmd: string, args: readonly string[]) => string = () => "") {
-  const spawner = ChildProcessSpawner.make((command) => {
-    const std = ChildProcess.isStandardCommand(command) ? command : undefined
-    const output = handler(std?.command ?? "", std?.args ?? [])
-    return Effect.succeed(
-      ChildProcessSpawner.makeHandle({
-        pid: ChildProcessSpawner.ProcessId(0),
-        exitCode: Effect.succeed(ChildProcessSpawner.ExitCode(0)),
-        isRunning: Effect.succeed(false),
-        kill: () => Effect.void,
-        stdin: { [Symbol.for("effect/Sink/TypeId")]: Symbol.for("effect/Sink/TypeId") } as any,
-        stdout: output ? Stream.make(encoder.encode(output)) : Stream.empty,
-        stderr: Stream.empty,
-        all: Stream.empty,
-        getInputFd: () => ({ [Symbol.for("effect/Sink/TypeId")]: Symbol.for("effect/Sink/TypeId") }) as any,
-        getOutputFd: () => Stream.empty,
-      }),
-    )
-  })
-  return Layer.succeed(ChildProcessSpawner.ChildProcessSpawner, spawner)
-}
 
 function jsonResponse(body: unknown) {
   return new Response(JSON.stringify(body), {
@@ -40,11 +8,26 @@ function jsonResponse(body: unknown) {
   })
 }
 
-function testLayer(
-  httpHandler: (request: HttpClientRequest.HttpClientRequest) => Response,
-  spawnHandler?: (cmd: string, args: readonly string[]) => string,
+function withTestDependencies<T>(
+  options: {
+    fetch?: (url: string, init?: RequestInit) => Promise<Response> | Response
+    run?: (
+      cmd: string[],
+      opts?: { cwd?: string; env?: Record<string, string>; input?: Uint8Array },
+    ) => Promise<{ code: number; stdout: string; stderr: string }> | { code: number; stdout: string; stderr: string }
+  },
+  fn: () => Promise<T>,
 ) {
-  return Installation.layer.pipe(Layer.provide(mockHttpClient(httpHandler)), Layer.provide(mockSpawner(spawnHandler)))
+  return Installation.withDependencies(
+    {
+      fetch: ((url, init) => Promise.resolve(options.fetch?.(String(url), init) ?? jsonResponse({}))) as typeof fetch,
+      run: async (cmd, opts) => {
+        const result = await options.run?.(cmd, opts)
+        return result ?? { code: 0, stdout: "", stderr: "" }
+      },
+    },
+    fn,
+  )
 }
 
 describe("installation", () => {
@@ -63,39 +46,41 @@ describe("installation", () => {
 
   describe("latest", () => {
     test("reads release version from GitHub releases", async () => {
-      const layer = testLayer(() => jsonResponse({ tag_name: "v1.2.3" }))
-
-      const result = await Effect.runPromise(
-        Installation.Service.use((svc) => svc.latest("unknown")).pipe(Effect.provide(layer)),
+      const result = await withTestDependencies(
+        {
+          fetch: () => jsonResponse({ tag_name: "v1.2.3" }),
+        },
+        () => Installation.latest("unknown"),
       )
+
       expect(result).toBe("1.2.3")
     })
 
     test("strips v prefix from GitHub release tag", async () => {
-      const layer = testLayer(() => jsonResponse({ tag_name: "v4.0.0-beta.1" }))
-
-      const result = await Effect.runPromise(
-        Installation.Service.use((svc) => svc.latest("curl")).pipe(Effect.provide(layer)),
+      const result = await withTestDependencies(
+        {
+          fetch: () => jsonResponse({ tag_name: "v4.0.0-beta.1" }),
+        },
+        () => Installation.latest("curl"),
       )
+
       expect(result).toBe("4.0.0-beta.1")
     })
 
     test("reads brew formulae API versions", async () => {
-      const layer = testLayer(
-        () => jsonResponse({ versions: { stable: "2.0.0" } }),
-        (cmd, args) => {
-          // getBrewFormula: no tap formula found, falls back to default tap
-          if (cmd === "brew" && args.includes("--formula")) return ""
-          // brew info --json=v2: return valid JSON so the parse doesn't fail
-          if (cmd === "brew" && args.includes("--json=v2"))
-            return JSON.stringify({ formulae: [{ versions: { stable: "2.0.0" } }] })
-          return ""
+      const result = await withTestDependencies(
+        {
+          fetch: () => jsonResponse({ versions: { stable: "2.0.0" } }),
+          run: (cmd) => {
+            if (cmd[0] === "brew" && cmd[1] === "list" && cmd[2] === "--formula" && cmd[3] === "ax-code") {
+              return { code: 0, stdout: "ax-code\n", stderr: "" }
+            }
+            return { code: 0, stdout: "", stderr: "" }
+          },
         },
+        () => Installation.latest("brew"),
       )
 
-      const result = await Effect.runPromise(
-        Installation.Service.use((svc) => svc.latest("brew")).pipe(Effect.provide(layer)),
-      )
       expect(result).toBe("2.0.0")
     })
 
@@ -103,74 +88,77 @@ describe("installation", () => {
       const brewInfoJson = JSON.stringify({
         formulae: [{ versions: { stable: "2.1.0" } }],
       })
-      const layer = testLayer(
-        () => jsonResponse({}), // HTTP not used for tap formula
-        (cmd, args) => {
-          if (cmd === "brew" && args.includes("defai-digital/tap/ax-code") && args.includes("--formula"))
-            return "ax-code"
-          if (cmd === "brew" && args.includes("--json=v2")) return brewInfoJson
-          return ""
+
+      const result = await withTestDependencies(
+        {
+          run: (cmd) => {
+            if (cmd[0] === "brew" && cmd.includes("defai-digital/tap/ax-code") && cmd.includes("--formula")) {
+              return { code: 0, stdout: "ax-code", stderr: "" }
+            }
+            if (cmd[0] === "brew" && cmd.includes("--json=v2")) return { code: 0, stdout: brewInfoJson, stderr: "" }
+            return { code: 0, stdout: "", stderr: "" }
+          },
         },
+        () => Installation.latest("brew"),
       )
 
-      const result = await Effect.runPromise(
-        Installation.Service.use((svc) => svc.latest("brew")).pipe(Effect.provide(layer)),
-      )
       expect(result).toBe("2.1.0")
     })
   })
 
   describe("method", () => {
     test("ignores legacy npm global installs as an unsupported channel", async () => {
-      const layer = testLayer(
-        () => jsonResponse({}),
-        (cmd, args) => {
-          if (cmd === "npm" && args.includes("--depth=0")) return "└── @defai.digital/ax-code@3.2.0\n"
-          return ""
+      const result = await withTestDependencies(
+        {
+          run: (cmd) => {
+            if (cmd[0] === "npm" && cmd.includes("--depth=0")) {
+              return { code: 0, stdout: "└── @defai.digital/ax-code@3.2.0\n", stderr: "" }
+            }
+            return { code: 0, stdout: "", stderr: "" }
+          },
         },
+        () => Installation.method(),
       )
 
-      const result = await Effect.runPromise(
-        Installation.Service.use((svc) => svc.method()).pipe(Effect.provide(layer)),
-      )
       expect(result).toBe("unknown")
     })
 
     test("detects Homebrew installs", async () => {
-      const layer = testLayer(
-        () => jsonResponse({}),
-        (cmd, args) => {
-          if (cmd === "brew" && args.includes("--formula")) return "ax-code\n"
-          return ""
+      const result = await withTestDependencies(
+        {
+          run: (cmd) => {
+            if (cmd[0] === "brew" && cmd.includes("--formula")) return { code: 0, stdout: "ax-code\n", stderr: "" }
+            return { code: 0, stdout: "", stderr: "" }
+          },
         },
+        () => Installation.method(),
       )
 
-      const result = await Effect.runPromise(
-        Installation.Service.use((svc) => svc.method()).pipe(Effect.provide(layer)),
-      )
       expect(result).toBe("brew")
     })
   })
 
   describe("upgrade", () => {
     test("refreshes the detected Homebrew tap before upgrading", async () => {
-      const calls: Array<{ cmd: string; args: readonly string[] }> = []
-      const layer = testLayer(
-        () => jsonResponse({}),
-        (cmd, args) => {
-          calls.push({ cmd, args })
-          if (cmd === "brew" && args.includes("--formula")) return "ax-code\n"
-          if (cmd === "brew" && args.includes("--repo")) return "/tmp/homebrew-ax-code\n"
-          return ""
+      const calls: Array<{ cmd: string[]; cwd?: string }> = []
+
+      await withTestDependencies(
+        {
+          run: (cmd, opts) => {
+            calls.push({ cmd, cwd: opts?.cwd })
+            if (cmd[0] === "brew" && cmd.includes("--formula")) return { code: 0, stdout: "ax-code\n", stderr: "" }
+            if (cmd[0] === "brew" && cmd.includes("--repo")) {
+              return { code: 0, stdout: "/tmp/homebrew-ax-code\n", stderr: "" }
+            }
+            return { code: 0, stdout: "", stderr: "" }
+          },
         },
+        () => Installation.upgrade("brew", "5.3.0"),
       )
 
-      await Effect.runPromise(
-        Installation.Service.use((svc) => svc.upgrade("brew", "5.3.0")).pipe(Effect.provide(layer)),
-      )
-
-      expect(calls).toContainEqual({ cmd: "brew", args: ["tap", "defai-digital/ax-code"] })
-      expect(calls).toContainEqual({ cmd: "brew", args: ["upgrade", "defai-digital/ax-code/ax-code"] })
+      expect(calls).toContainEqual({ cmd: ["brew", "tap", "defai-digital/ax-code"], cwd: undefined })
+      expect(calls).toContainEqual({ cmd: ["git", "pull", "--ff-only"], cwd: "/tmp/homebrew-ax-code" })
+      expect(calls).toContainEqual({ cmd: ["brew", "upgrade", "defai-digital/ax-code/ax-code"], cwd: undefined })
     })
   })
 })
