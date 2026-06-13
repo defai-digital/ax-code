@@ -1279,12 +1279,23 @@ test("bundled Z.AI coding plan providers expose GLM flagship and long-context va
     fn: async () => {
       const providers = await Provider.list()
       const expected = ["glm-5.2", "glm-5.2[1m]", "glm-5.1[1m]"]
+      // The "[1m]" suffix is a client-side context-window selector; the z.ai API
+      // only accepts the bare model name, so api.id must drop the suffix while
+      // the lookup id keeps it.
+      const expectedApiID: Record<string, string> = {
+        "glm-5.2": "glm-5.2",
+        "glm-5.2[1m]": "glm-5.2",
+        "glm-5.1[1m]": "glm-5.1",
+      }
 
       for (const providerID of ["zai-coding-plan", "zhipuai-coding-plan"]) {
         const provider = providers[ProviderID.make(providerID)]
         expect(provider).toBeDefined()
         for (const modelID of expected) {
-          expect(provider.models[modelID]).toBeDefined()
+          const model = provider.models[modelID]
+          expect(model).toBeDefined()
+          expect(String(model.id)).toBe(modelID)
+          expect(String(model.api.id)).toBe(expectedApiID[modelID])
         }
       }
     },

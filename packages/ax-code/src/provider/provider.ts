@@ -70,6 +70,22 @@ export namespace Provider {
     return modelID
   }
 
+  // The "[Nm]" suffix (e.g. "glm-5.2[1m]") is a client-side context-window
+  // selector: it picks the larger context window for ax-code's own bookkeeping
+  // (limit.context drives compaction), but it is NOT part of the model name the
+  // provider's API accepts. Sending "glm-5.2[1m]" to z.ai returns "Unknown
+  // Model"; the API expects the bare "glm-5.2". Strip the suffix when deriving
+  // the API model id, exactly as Claude Code does with the same convention. The
+  // model's lookup id / picker entry keeps the suffix; only api.id is bare.
+  function stripContextWindowSuffix(modelID: string) {
+    return modelID.replace(/\[\d+m\]$/, "")
+  }
+
+  function canonicalApiModelID(providerID: ProviderID, modelID: string) {
+    const base = stripContextWindowSuffix(modelID)
+    return providerID === ProviderID.xai ? canonicalXaiApiModelID(base) : base
+  }
+
   function sanitizeAuthString(value: unknown): unknown {
     if (typeof value !== "string") return value
     const next = value.replace(/[\r\n]+/g, "").trim()
@@ -293,7 +309,7 @@ export namespace Provider {
         const supportModelID = model.api.id ?? model.id ?? modelID
         model.api = {
           ...model.api,
-          id: providerID === ProviderID.xai ? canonicalXaiApiModelID(supportModelID) : supportModelID,
+          id: canonicalApiModelID(providerID, supportModelID),
         }
         if (!supported(providerID, supportModelID, model)) {
           delete provider.models[modelID]
