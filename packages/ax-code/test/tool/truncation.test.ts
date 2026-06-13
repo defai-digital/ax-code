@@ -1,13 +1,10 @@
 import { describe, test, expect } from "bun:test"
-import { NodeFileSystem } from "@effect/platform-node"
-import { Effect, FileSystem, Layer } from "effect"
-import { Truncate, Truncate as TruncateSvc } from "../../src/tool/truncate"
+import fs from "node:fs/promises"
+import { Truncate } from "../../src/tool/truncate"
 import { Identifier } from "../../src/id/id"
 import { Process } from "../../src/util/process"
 import { Filesystem } from "../../src/util/filesystem"
 import path from "path"
-import { testEffect } from "../lib/effect"
-import { writeFileStringScoped } from "../lib/filesystem"
 
 const FIXTURES_DIR = path.join(import.meta.dir, "fixtures")
 const ROOT = path.resolve(import.meta.dir, "..", "..")
@@ -179,7 +176,7 @@ describe("Truncate", () => {
       expect(result.contentHint).toBe("code output")
     })
 
-    test("loads truncate effect in a fresh process", async () => {
+    test("loads truncate module in a fresh process", async () => {
       const out = await Process.run([process.execPath, "run", path.join(ROOT, "src", "tool", "truncate.ts")], {
         cwd: ROOT,
       })
@@ -190,24 +187,29 @@ describe("Truncate", () => {
 
   describe("cleanup", () => {
     const DAY_MS = 24 * 60 * 60 * 1000
-    const it = testEffect(Layer.mergeAll(TruncateSvc.defaultLayer, NodeFileSystem.layer))
 
-    it.effect("deletes files older than 7 days and preserves recent files", () =>
-      Effect.gen(function* () {
-        const fs = yield* FileSystem.FileSystem
+    test("deletes files older than 7 days and preserves recent files", async () => {
+      await fs.mkdir(Truncate.DIR, { recursive: true })
+      const old = path.join(Truncate.DIR, Identifier.create("tool", false, Date.now() - 10 * DAY_MS))
+      const recent = path.join(Truncate.DIR, Identifier.create("tool", false, Date.now() - 3 * DAY_MS))
+      try {
+        await fs.writeFile(old, "old content")
+        await fs.writeFile(recent, "recent content")
+        await Truncate.cleanup()
 
-        yield* fs.makeDirectory(Truncate.DIR, { recursive: true })
-
-        const old = path.join(Truncate.DIR, Identifier.create("tool", false, Date.now() - 10 * DAY_MS))
-        const recent = path.join(Truncate.DIR, Identifier.create("tool", false, Date.now() - 3 * DAY_MS))
-
-        yield* writeFileStringScoped(old, "old content")
-        yield* writeFileStringScoped(recent, "recent content")
-        yield* TruncateSvc.Service.use((s) => s.cleanup())
-
-        expect(yield* fs.exists(old)).toBe(false)
-        expect(yield* fs.exists(recent)).toBe(true)
-      }),
-    )
+        expect(await exists(old)).toBe(false)
+        expect(await exists(recent)).toBe(true)
+      } finally {
+        await fs.rm(old, { force: true }).catch(() => undefined)
+        await fs.rm(recent, { force: true }).catch(() => undefined)
+      }
+    })
   })
 })
+
+async function exists(filepath: string) {
+  return fs
+    .access(filepath)
+    .then(() => true)
+    .catch(() => false)
+}

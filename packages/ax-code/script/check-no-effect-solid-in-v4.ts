@@ -128,7 +128,6 @@ export namespace EffectGuard {
     "src/skill/discovery.ts",
     "src/skill/index.ts",
     "src/tool/registry.ts",
-    "src/tool/truncate.ts",
     "src/util/effect-http-client.ts",
     "src/util/schema.ts",
   ])
