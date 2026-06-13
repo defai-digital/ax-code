@@ -315,7 +315,6 @@ const alibabaModels = [
   "deepseek-v4-flash",
   // Other vendors aggregated under the Alibaba plan
   "kimi-k2.6",
-  "glm-5.1",
   // Qwen image generation
   "qwen-image-2.0",
   "qwen-image-2.0-pro",
@@ -329,7 +328,6 @@ const alibabaModelFallbackProviders: Record<string, string[]> = {
   "deepseek-v4-pro": ["auriko", "cortecs", "302ai", "llmgateway"],
   "deepseek-v4-flash": ["cortecs", "auriko", "302ai", "llmgateway"],
   "kimi-k2.6": ["moonshot", "moonshot-cn", "302ai", "llmgateway"],
-  "glm-5.1": ["zai-coding-plan", "zhipuai", "auriko", "302ai"],
 }
 const alibabaModelFallbackDefaults: Record<string, RawModel> = {
   "qwen-image-2.0": alibabaImageModel("qwen-image-2.0", "Qwen Image 2.0", "qwen-image"),

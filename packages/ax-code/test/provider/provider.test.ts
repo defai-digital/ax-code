@@ -1184,7 +1184,7 @@ test("getSmallModel uses a supported Alibaba plan model", async () => {
       const model = await Provider.getSmallModel(ProviderID.make("alibaba-token-plan"))
       expect(model).toBeDefined()
       if (!model) throw new Error("expected Alibaba token-plan small model")
-      expect(["qwen3.6-flash", "deepseek-v4-flash", "deepseek-v4-pro", "qwen3.6-plus", "glm-5.1"]).toContain(model.id)
+      expect(["qwen3.6-flash", "deepseek-v4-flash", "deepseek-v4-pro", "qwen3.6-plus"]).toContain(model.id)
     },
   })
 })
@@ -1628,7 +1628,6 @@ test("Alibaba providers keep coding plan and token plan endpoints separate", asy
       const expectedAlibabaPlanModels = [
         "deepseek-v4-flash",
         "deepseek-v4-pro",
-        "glm-5.1",
         "kimi-k2.6",
         "qwen-image-2.0",
         "qwen-image-2.0-pro",
