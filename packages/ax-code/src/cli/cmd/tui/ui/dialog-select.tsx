@@ -296,7 +296,11 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
       >
         <scrollbox
           paddingLeft={1}
-          paddingRight={1}
+          // When the scrollbar is shown, the viewport's paddingRight provides the
+          // content-to-bar gap, so drop the outer paddingRight to avoid stacking
+          // it (which would inset the bar from the edge and shift the content
+          // margin as the bar toggles).
+          paddingRight={overflow() ? 0 : 1}
           viewportOptions={{
             paddingRight: overflow() ? 1 : 0,
           }}
