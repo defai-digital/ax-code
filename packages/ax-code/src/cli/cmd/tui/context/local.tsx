@@ -25,6 +25,7 @@ import {
   modelIdentity,
   normalizeModelVariantStore,
   normalizeRecentModels,
+  pruneModelPreferences,
   rememberRecentModel as rememberRecentModelEntry,
   resolveCurrentAgent,
 } from "./local-util"
@@ -303,6 +304,26 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
             })
           }
         }
+        const pruned = pruneModelPreferences(
+          {
+            recent: modelStore.recent,
+            favorite: modelStore.favorite,
+            variant: modelStore.variant,
+          },
+          isModelValid,
+        )
+        if (pruned.changed) {
+          log.info("removing invalid stored model preferences after providers loaded", {
+            recentBefore: modelStore.recent.length,
+            recentAfter: pruned.recent.length,
+            favoriteBefore: modelStore.favorite.length,
+            favoriteAfter: pruned.favorite.length,
+          })
+          setModelStore("recent", pruned.recent)
+          setModelStore("favorite", pruned.favorite)
+          setModelStore("variant", pruned.variant)
+          save()
+        }
       })
 
       return {
@@ -342,7 +363,7 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
         cycle(direction: 1 | -1) {
           const current = currentModel()
           if (!current) return
-          const recent = modelStore.recent
+          const recent = modelStore.recent.filter((item) => isModelValid(item))
           const index = recent.findIndex((x) => providerModelEquals(x, current))
           if (index === -1) return
           let next = index + direction

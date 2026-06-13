@@ -3,6 +3,7 @@ import {
   RECENT_MODEL_LIMIT,
   normalizeModelVariantStore,
   normalizeRecentModels,
+  pruneModelPreferences,
   rememberRecentModel,
   resolveCurrentAgent,
 } from "../../../src/cli/cmd/tui/context/local-util"
@@ -85,5 +86,30 @@ describe("tui local model preferences", () => {
 
     expect(result).toEqual([model(3), model(1), model(2), model(4), model(5)])
     expect(result).toHaveLength(RECENT_MODEL_LIMIT)
+  })
+
+  test("pruneModelPreferences removes invalid stored model selections after providers load", () => {
+    const valid = new Set(["provider/model-1", "provider/model-3", "openrouter/vendor/model"])
+    const result = pruneModelPreferences(
+      {
+        recent: [model(1), { providerID: "missing", modelID: "model-2" }, model(3), model(1)],
+        favorite: [model(3), { providerID: "missing", modelID: "model-4" }],
+        variant: {
+          "provider/model-1": "high",
+          "missing/model-2": "low",
+          "openrouter/vendor/model": "medium",
+          malformed: "ignored",
+        },
+      },
+      (item) => valid.has(`${item.providerID}/${item.modelID}`),
+    )
+
+    expect(result.recent).toEqual([model(1), model(3)])
+    expect(result.favorite).toEqual([model(3)])
+    expect(result.variant).toEqual({
+      "provider/model-1": "high",
+      "openrouter/vendor/model": "medium",
+    })
+    expect(result.changed).toBe(true)
   })
 })

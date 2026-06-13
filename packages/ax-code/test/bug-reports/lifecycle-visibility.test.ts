@@ -144,5 +144,8 @@ describe("bug report lifecycle visibility guards", () => {
     expect(local).toContain("rememberRecentModelEntry(modelStore.recent, model)")
     expect(local).toContain("save()\n              return")
     expect(local).toContain("removing invalid model override after providers loaded")
+    expect(local).toContain("pruneModelPreferences(")
+    expect(local).toContain("removing invalid stored model preferences after providers loaded")
+    expect(local).toContain("const recent = modelStore.recent.filter((item) => isModelValid(item))")
   })
 })
