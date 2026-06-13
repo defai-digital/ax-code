@@ -118,6 +118,8 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
 
   const dimensions = useTerminalDimensions()
   const height = createMemo(() => dialogSelectVisibleHeight(rows(), dimensions().height))
+  // Show the vertical scrollbar only when the list is taller than the viewport.
+  const overflow = createMemo(() => rows() > height())
 
   const selected = createMemo(() => dialogSelectActionOption(flat(), store.selected))
 
@@ -295,7 +297,20 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
         <scrollbox
           paddingLeft={1}
           paddingRight={1}
-          scrollbarOptions={{ visible: false }}
+          viewportOptions={{
+            paddingRight: overflow() ? 1 : 0,
+          }}
+          verticalScrollbarOptions={{
+            paddingLeft: 1,
+            visible: overflow(),
+            trackOptions: {
+              // Thumb uses the theme's primary accent (same color as the
+              // selected-row highlight) so the scrollbar stays clearly visible
+              // against any selected theme; the track stays subtle.
+              backgroundColor: theme.backgroundElement,
+              foregroundColor: theme.primary,
+            },
+          }}
           ref={(r: ScrollBoxRenderable) => (scroll = r)}
           maxHeight={height()}
         >
