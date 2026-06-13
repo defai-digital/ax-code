@@ -1,8 +1,6 @@
 import { BusEvent } from "@/bus/bus-event"
-import { InstanceState } from "@/effect/instance-state"
-import { makeRunPromise } from "@/effect/run-service"
+import { Instance } from "@/project/instance"
 import { SessionID, MessageID } from "@/session/schema"
-import { Effect, Layer, ServiceMap } from "effect"
 import z from "zod"
 import { Config } from "../config/config"
 import { MCP } from "../mcp"
@@ -106,211 +104,184 @@ export namespace Command {
     GOAL: "goal",
   } as const
 
-  export interface Interface {
-    readonly get: (name: string) => Effect.Effect<Info | undefined>
-    readonly list: () => Effect.Effect<Info[]>
-  }
+  const state = Instance.state(async () => {
+    const ctx = Instance.current
+    const cfg = await Config.get()
+    const commands: Record<string, Info> = {}
 
-  export class Service extends ServiceMap.Service<Service, Interface>()("@ax-code/Command") {}
+    commands[Default.INIT] = {
+      name: Default.INIT,
+      description: "create/update AGENTS.md",
+      source: "command",
+      sourceTool: "builtin",
+      scope: "builtin",
+      get template() {
+        return PROMPT_INITIALIZE.replace("${path}", () => ctx.worktree)
+      },
+      hints: hints(PROMPT_INITIALIZE),
+    }
+    commands[Default.REVIEW] = {
+      name: Default.REVIEW,
+      description: "review changes [commit|branch|pr], defaults to uncommitted",
+      source: "command",
+      sourceTool: "builtin",
+      scope: "builtin",
+      get template() {
+        return (async () => {
+          const policy = await Policy.loadReviewPolicy({ worktree: ctx.worktree })
+          const policyText = policy ? policy.trim() : "(no project-specific review policy configured)"
+          // Use replacement functions so user-provided content (worktree
+          // path, policy file body) is inserted verbatim. String.replace
+          // with a string replacement interprets $1, $&, $$, etc. as
+          // special patterns, which would mangle a worktree path that
+          // contains literal $ characters or any policy content with the
+          // same.
+          return PROMPT_REVIEW.replace("${path}", () => ctx.worktree).replace("${review_policy}", () => policyText)
+        })()
+      },
+      subtask: true,
+      hints: hints(PROMPT_REVIEW),
+    }
+    commands[Default.ADR] = {
+      name: Default.ADR,
+      description: "generate an Architecture Decision Record",
+      source: "command",
+      sourceTool: "builtin",
+      scope: "builtin",
+      get template() {
+        return PROMPT_ADR.replace("${path}", () => ctx.worktree)
+      },
+      hints: hints(PROMPT_ADR),
+    }
+    commands[Default.IMPACT] = {
+      name: Default.IMPACT,
+      description: "generate an Impact Assessment for a proposed change",
+      source: "command",
+      sourceTool: "builtin",
+      scope: "builtin",
+      get template() {
+        return PROMPT_IMPACT.replace("${path}", () => ctx.worktree)
+      },
+      hints: hints(PROMPT_IMPACT),
+    }
+    commands[Default.PRD] = {
+      name: Default.PRD,
+      description: "generate a Product Requirements Document for a feature",
+      source: "command",
+      sourceTool: "builtin",
+      scope: "builtin",
+      get template() {
+        return PROMPT_PRD.replace("${path}", () => ctx.worktree)
+      },
+      hints: hints(PROMPT_PRD),
+    }
+    commands[Default.GOAL] = {
+      name: Default.GOAL,
+      description: "set, view, pause, resume, or clear a durable session goal",
+      source: "command",
+      sourceTool: "builtin",
+      scope: "builtin",
+      template: "",
+      hints: ["$ARGUMENTS"],
+    }
 
-  export const layer = Layer.effect(
-    Service,
-    Effect.gen(function* () {
-      const init = Effect.fn("Command.state")(function* (ctx) {
-        const cfg = yield* Effect.promise(() => Config.get())
-        const commands: Record<string, Info> = {}
+    for (const [name, command] of Object.entries(cfg.command ?? {})) {
+      commands[name] = {
+        name,
+        agent: command.agent,
+        model: command.model,
+        description: command.description,
+        source: command.location ? "file" : "command",
+        sourceTool: command.sourceTool ?? "config",
+        scope: command.scope ?? "config",
+        location: command.location,
+        warnings: command.warnings,
+        workflow: command.workflow,
+        allowShell: command.allowShell,
+        get template() {
+          return command.template
+        },
+        subtask: command.subtask,
+        hints: hints(command.template),
+      }
+    }
 
-        commands[Default.INIT] = {
-          name: Default.INIT,
-          description: "create/update AGENTS.md",
-          source: "command",
-          sourceTool: "builtin",
-          scope: "builtin",
-          get template() {
-            return PROMPT_INITIALIZE.replace("${path}", () => ctx.worktree)
-          },
-          hints: hints(PROMPT_INITIALIZE),
-        }
-        commands[Default.REVIEW] = {
-          name: Default.REVIEW,
-          description: "review changes [commit|branch|pr], defaults to uncommitted",
-          source: "command",
-          sourceTool: "builtin",
-          scope: "builtin",
-          get template() {
-            return (async () => {
-              const policy = await Policy.loadReviewPolicy({ worktree: ctx.worktree })
-              const policyText = policy ? policy.trim() : "(no project-specific review policy configured)"
-              // Use replacement functions so user-provided content (worktree
-              // path, policy file body) is inserted verbatim. String.replace
-              // with a string replacement interprets $1, $&, $$, etc. as
-              // special patterns, which would mangle a worktree path that
-              // contains literal $ characters or any policy content with the
-              // same.
-              return PROMPT_REVIEW.replace("${path}", () => ctx.worktree).replace("${review_policy}", () => policyText)
-            })()
-          },
-          subtask: true,
-          hints: hints(PROMPT_REVIEW),
-        }
-        commands[Default.ADR] = {
-          name: Default.ADR,
-          description: "generate an Architecture Decision Record",
-          source: "command",
-          sourceTool: "builtin",
-          scope: "builtin",
-          get template() {
-            return PROMPT_ADR.replace("${path}", () => ctx.worktree)
-          },
-          hints: hints(PROMPT_ADR),
-        }
-        commands[Default.IMPACT] = {
-          name: Default.IMPACT,
-          description: "generate an Impact Assessment for a proposed change",
-          source: "command",
-          sourceTool: "builtin",
-          scope: "builtin",
-          get template() {
-            return PROMPT_IMPACT.replace("${path}", () => ctx.worktree)
-          },
-          hints: hints(PROMPT_IMPACT),
-        }
-        commands[Default.PRD] = {
-          name: Default.PRD,
-          description: "generate a Product Requirements Document for a feature",
-          source: "command",
-          sourceTool: "builtin",
-          scope: "builtin",
-          get template() {
-            return PROMPT_PRD.replace("${path}", () => ctx.worktree)
-          },
-          hints: hints(PROMPT_PRD),
-        }
-        commands[Default.GOAL] = {
-          name: Default.GOAL,
-          description: "set, view, pause, resume, or clear a durable session goal",
-          source: "command",
-          sourceTool: "builtin",
-          scope: "builtin",
-          template: "",
-          hints: ["$ARGUMENTS"],
-        }
+    for (const command of await FileCommand.discover({ directory: ctx.directory, worktree: ctx.worktree })) {
+      if (commands[command.name]) continue
+      commands[command.name] = {
+        name: command.name,
+        agent: command.agent,
+        model: command.model,
+        description: command.description,
+        source: "file",
+        sourceTool: command.sourceTool,
+        scope: command.scope,
+        location: command.location,
+        warnings: command.warnings,
+        workflow: command.workflow,
+        allowShell: command.allowShell,
+        get template() {
+          return command.template
+        },
+        subtask: command.subtask,
+        hints: hints(command.template),
+      }
+    }
 
-        for (const [name, command] of Object.entries(cfg.command ?? {})) {
-          commands[name] = {
-            name,
-            agent: command.agent,
-            model: command.model,
-            description: command.description,
-            source: command.location ? "file" : "command",
-            sourceTool: command.sourceTool ?? "config",
-            scope: command.scope ?? "config",
-            location: command.location,
-            warnings: command.warnings,
-            workflow: command.workflow,
-            allowShell: command.allowShell,
-            get template() {
-              return command.template
-            },
-            subtask: command.subtask,
-            hints: hints(command.template),
-          }
-        }
-
-        for (const command of yield* Effect.promise(() =>
-          FileCommand.discover({ directory: ctx.directory, worktree: ctx.worktree }),
-        )) {
-          if (commands[command.name]) continue
-          commands[command.name] = {
-            name: command.name,
-            agent: command.agent,
-            model: command.model,
-            description: command.description,
-            source: "file",
-            sourceTool: command.sourceTool,
-            scope: command.scope,
-            location: command.location,
-            warnings: command.warnings,
-            workflow: command.workflow,
-            allowShell: command.allowShell,
-            get template() {
-              return command.template
-            },
-            subtask: command.subtask,
-            hints: hints(command.template),
-          }
-        }
-
-        for (const [name, prompt] of Object.entries(yield* Effect.promise(() => MCP.prompts()))) {
-          commands[name] = {
-            name,
-            source: "mcp",
-            description: prompt.description,
-            mcpPrompt: {
+    for (const [name, prompt] of Object.entries(await MCP.prompts())) {
+      commands[name] = {
+        name,
+        source: "mcp",
+        description: prompt.description,
+        mcpPrompt: {
+          client: prompt.client,
+          name: prompt.name,
+        },
+        get template() {
+          return (async () => {
+            const template = await MCP.getPrompt(
+              prompt.client,
+              prompt.name,
+              prompt.arguments
+                ? Object.fromEntries(prompt.arguments.map((argument, i) => [argument.name, `$${i + 1}`]))
+                : {},
+            )
+            return mcpPromptTemplateText({
               client: prompt.client,
               name: prompt.name,
-            },
-            get template() {
-              return (async () => {
-                const template = await MCP.getPrompt(
-                  prompt.client,
-                  prompt.name,
-                  prompt.arguments
-                    ? Object.fromEntries(prompt.arguments.map((argument, i) => [argument.name, `$${i + 1}`]))
-                    : {},
-                )
-                return mcpPromptTemplateText({
-                  client: prompt.client,
-                  name: prompt.name,
-                  messages: template?.messages ?? [],
-                })
-              })()
-            },
-            hints: prompt.arguments?.map((_, i) => `$${i + 1}`) ?? [],
-          }
-        }
+              messages: template?.messages ?? [],
+            })
+          })()
+        },
+        hints: prompt.arguments?.map((_, i) => `$${i + 1}`) ?? [],
+      }
+    }
 
-        for (const skill of yield* Effect.promise(() => Skill.all())) {
-          if (commands[skill.name]) continue
-          commands[skill.name] = {
-            name: skill.name,
-            description: skill.description,
-            source: "skill",
-            get template() {
-              return skill.content
-            },
-            hints: [],
-          }
-        }
+    for (const skill of await Skill.all()) {
+      if (commands[skill.name]) continue
+      commands[skill.name] = {
+        name: skill.name,
+        description: skill.description,
+        source: "skill",
+        get template() {
+          return skill.content
+        },
+        hints: [],
+      }
+    }
 
-        return {
-          commands,
-        }
-      })
-
-      const cache = yield* InstanceState.make<State>((ctx) => init(ctx))
-
-      const get = Effect.fn("Command.get")(function* (name: string) {
-        const state = yield* InstanceState.get(cache)
-        return state.commands[name]
-      })
-
-      const list = Effect.fn("Command.list")(function* () {
-        const state = yield* InstanceState.get(cache)
-        return Object.values(state.commands)
-      })
-
-      return Service.of({ get, list })
-    }),
-  )
-
-  const runPromise = makeRunPromise(Service, layer)
+    return {
+      commands,
+    }
+  })
 
   export async function get(name: string) {
-    return runPromise((svc) => svc.get(name))
+    const current = await state()
+    return current.commands[name]
   }
 
   export async function list() {
-    return runPromise((svc) => svc.list())
+    const current = await state()
+    return Object.values(current.commands)
   }
 }
