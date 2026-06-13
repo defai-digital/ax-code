@@ -1,30 +1,16 @@
-import { Schema } from "effect"
-import z from "zod"
+import { defineBrandedString, type BrandedIdentifier } from "@/id/branded"
 
-import { withStatics } from "@/util/schema"
+export type ProviderID = BrandedIdentifier<"ProviderID">
+export type ModelID = BrandedIdentifier<"ModelID">
 
-const providerIdSchema = Schema.String.pipe(Schema.brand("ProviderID"))
+const providerID = defineBrandedString("ProviderID")
 
-export type ProviderID = typeof providerIdSchema.Type
+export const ProviderID = {
+  ...providerID,
+  // Well-known providers
+  axCode: providerID.make("ax-code"),
+  google: providerID.make("google"),
+  xai: providerID.make("xai"),
+} as const
 
-export const ProviderID = providerIdSchema.pipe(
-  withStatics((schema: typeof providerIdSchema) => ({
-    make: (id: string) => schema.makeUnsafe(id),
-    zod: z.string().pipe(z.custom<ProviderID>()),
-    // Well-known providers
-    axCode: schema.makeUnsafe("ax-code"),
-    google: schema.makeUnsafe("google"),
-    xai: schema.makeUnsafe("xai"),
-  })),
-)
-
-const modelIdSchema = Schema.String.pipe(Schema.brand("ModelID"))
-
-export type ModelID = typeof modelIdSchema.Type
-
-export const ModelID = modelIdSchema.pipe(
-  withStatics((schema: typeof modelIdSchema) => ({
-    make: (id: string) => schema.makeUnsafe(id),
-    zod: z.string().pipe(z.custom<ModelID>()),
-  })),
-)
+export const ModelID = defineBrandedString("ModelID")

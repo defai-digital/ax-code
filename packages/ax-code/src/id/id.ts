@@ -31,7 +31,9 @@ export namespace Identifier {
     workflow_budget: "wfb",
   } as const
 
-  export function schema(prefix: keyof typeof prefixes) {
+  export type Prefix = keyof typeof prefixes
+
+  export function schema(prefix: Prefix) {
     return z.string().startsWith(prefixes[prefix])
   }
 
@@ -41,15 +43,15 @@ export namespace Identifier {
   let lastTimestamp = 0
   let counter = 0
 
-  export function ascending(prefix: keyof typeof prefixes, given?: string) {
+  export function ascending(prefix: Prefix, given?: string) {
     return generateID(prefix, false, given)
   }
 
-  export function descending(prefix: keyof typeof prefixes, given?: string) {
+  export function descending(prefix: Prefix, given?: string) {
     return generateID(prefix, true, given)
   }
 
-  function generateID(prefix: keyof typeof prefixes, descending: boolean, given?: string): string {
+  function generateID(prefix: Prefix, descending: boolean, given?: string): string {
     if (!given) {
       return create(prefix, descending)
     }
@@ -78,7 +80,7 @@ export namespace Identifier {
     return result
   }
 
-  export function create(prefix: keyof typeof prefixes, descending: boolean, timestamp?: number): string {
+  export function create(prefix: Prefix, descending: boolean, timestamp?: number): string {
     const currentTimestamp = timestamp ?? Date.now()
 
     if (currentTimestamp !== lastTimestamp) {

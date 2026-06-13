@@ -1,17 +1,5 @@
-import { Schema } from "effect"
-import z from "zod"
+import { defineBrandedIdentifier, type BrandedIdentifier } from "@/id/branded"
 
-import { Identifier } from "@/id/id"
-import { Newtype } from "@/util/schema"
+export type PermissionID = BrandedIdentifier<"PermissionID">
 
-export class PermissionID extends Newtype<PermissionID>()("PermissionID", Schema.String) {
-  static make(id: string): PermissionID {
-    return this.makeUnsafe(id)
-  }
-
-  static ascending(id?: string): PermissionID {
-    return this.makeUnsafe(Identifier.ascending("permission", id))
-  }
-
-  static readonly zod = Identifier.schema("permission") as unknown as z.ZodType<PermissionID>
-}
+export const PermissionID = defineBrandedIdentifier("PermissionID", "permission")

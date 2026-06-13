@@ -99,9 +99,9 @@ export namespace V4Guardrails {
 // src/util/effect-zod.ts. Everything else is in scope for the H2
 // migration backlog tracked in PRD-2026-05-17-stability-audit-remediation.
 //
-// To keep CI green while H2 is in progress, the current 33 violators
-// are listed in `ExistingViolations` and skipped. Each file deleted
-// from that list as the migration lands narrows the allowed surface.
+// To keep CI green while H2 is in progress, the remaining violators are
+// listed in `ExistingViolations` and skipped. Each file deleted from
+// that list as the migration lands narrows the allowed surface.
 // A new Effect import in any other file becomes a CI failure.
 export namespace EffectGuard {
   export const AllowedDirs = ["src/effect/", "src/session/"] as const
@@ -116,34 +116,24 @@ export namespace EffectGuard {
     "src/account/repo.ts",
     "src/account/schema.ts",
     "src/agent/agent.ts",
-    "src/audit/id.ts",
     "src/auth/index.ts",
     "src/cli/cmd/account.ts",
     "src/cli/effect/prompt.ts",
-    "src/code-intelligence/id.ts",
     "src/command/index.ts",
     "src/config/markdown.ts",
-    "src/control-plane/schema.ts",
-    "src/debug-engine/id.ts",
     "src/file/time.ts",
     "src/filesystem/index.ts",
     "src/flag/flag.ts",
     "src/installation/index.ts",
     "src/permission/index.ts",
-    "src/permission/schema.ts",
     "src/project/project.ts",
-    "src/project/schema.ts",
     "src/provider/auth.ts",
-    "src/provider/schema.ts",
     "src/pty/index.ts",
-    "src/pty/schema.ts",
     "src/question/index.ts",
-    "src/question/schema.ts",
     "src/replay/index.ts",
     "src/skill/discovery.ts",
     "src/skill/index.ts",
     "src/tool/registry.ts",
-    "src/tool/schema.ts",
     "src/tool/truncate.ts",
     "src/util/effect-http-client.ts",
     "src/util/schema.ts",

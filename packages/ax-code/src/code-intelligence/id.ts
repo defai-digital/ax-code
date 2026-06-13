@@ -1,50 +1,18 @@
-import { Schema } from "effect"
-import z from "zod"
-
-import { Identifier } from "@/id/id"
-import { withStatics } from "@/util/schema"
+import { defineBrandedIdentifier, type BrandedIdentifier } from "@/id/branded"
 
 // Branded IDs for code graph entities. Each ID carries its entity kind in
 // the prefix so we can tell at a glance whether a string is a node, edge,
 // or file ID. Mirrors the Identifier helper used by event logs, sessions,
 // and projects.
 
-export const CodeNodeID = Schema.String.pipe(
-  Schema.brand("CodeNodeID"),
-  withStatics((s) => ({
-    make: (id: string) => s.makeUnsafe(id),
-    ascending: (id?: string) => s.makeUnsafe(Identifier.ascending("code_node", id)),
-    zod: Identifier.schema("code_node").pipe(z.custom<Schema.Schema.Type<typeof s>>()),
-  })),
-)
-export type CodeNodeID = Schema.Schema.Type<typeof CodeNodeID>
+export const CodeNodeID = defineBrandedIdentifier("CodeNodeID", "code_node")
+export type CodeNodeID = BrandedIdentifier<"CodeNodeID">
 
-export const CodeEdgeID = Schema.String.pipe(
-  Schema.brand("CodeEdgeID"),
-  withStatics((s) => ({
-    make: (id: string) => s.makeUnsafe(id),
-    ascending: (id?: string) => s.makeUnsafe(Identifier.ascending("code_edge", id)),
-    zod: Identifier.schema("code_edge").pipe(z.custom<Schema.Schema.Type<typeof s>>()),
-  })),
-)
-export type CodeEdgeID = Schema.Schema.Type<typeof CodeEdgeID>
+export const CodeEdgeID = defineBrandedIdentifier("CodeEdgeID", "code_edge")
+export type CodeEdgeID = BrandedIdentifier<"CodeEdgeID">
 
-export const CodeFileID = Schema.String.pipe(
-  Schema.brand("CodeFileID"),
-  withStatics((s) => ({
-    make: (id: string) => s.makeUnsafe(id),
-    ascending: (id?: string) => s.makeUnsafe(Identifier.ascending("code_file", id)),
-    zod: Identifier.schema("code_file").pipe(z.custom<Schema.Schema.Type<typeof s>>()),
-  })),
-)
-export type CodeFileID = Schema.Schema.Type<typeof CodeFileID>
+export const CodeFileID = defineBrandedIdentifier("CodeFileID", "code_file")
+export type CodeFileID = BrandedIdentifier<"CodeFileID">
 
-export const LspCacheID = Schema.String.pipe(
-  Schema.brand("LspCacheID"),
-  withStatics((s) => ({
-    make: (id: string) => s.makeUnsafe(id),
-    ascending: (id?: string) => s.makeUnsafe(Identifier.ascending("code_intel_lsp_cache", id)),
-    zod: Identifier.schema("code_intel_lsp_cache").pipe(z.custom<Schema.Schema.Type<typeof s>>()),
-  })),
-)
-export type LspCacheID = Schema.Schema.Type<typeof LspCacheID>
+export const LspCacheID = defineBrandedIdentifier("LspCacheID", "code_intel_lsp_cache")
+export type LspCacheID = BrandedIdentifier<"LspCacheID">

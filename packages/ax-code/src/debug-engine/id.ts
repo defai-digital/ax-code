@@ -1,39 +1,14 @@
-import { Schema } from "effect"
-import z from "zod"
-
-import { Identifier } from "@/id/id"
-import { withStatics } from "@/util/schema"
+import { defineBrandedIdentifier, type BrandedIdentifier } from "@/id/branded"
 
 // Branded IDs for debug-engine entities. Mirrors code-intelligence/id.ts.
 // Each ID carries its entity kind in the prefix (`refactor_plan`,
 // `embedding_cache`) so a raw string is self-describing.
 
-export const RefactorPlanID = Schema.String.pipe(
-  Schema.brand("RefactorPlanID"),
-  withStatics((s) => ({
-    make: (id: string) => s.makeUnsafe(id),
-    ascending: (id?: string) => s.makeUnsafe(Identifier.ascending("refactor_plan", id)),
-    zod: Identifier.schema("refactor_plan").pipe(z.custom<Schema.Schema.Type<typeof s>>()),
-  })),
-)
-export type RefactorPlanID = Schema.Schema.Type<typeof RefactorPlanID>
+export const RefactorPlanID = defineBrandedIdentifier("RefactorPlanID", "refactor_plan")
+export type RefactorPlanID = BrandedIdentifier<"RefactorPlanID">
 
-export const EmbeddingCacheID = Schema.String.pipe(
-  Schema.brand("EmbeddingCacheID"),
-  withStatics((s) => ({
-    make: (id: string) => s.makeUnsafe(id),
-    ascending: (id?: string) => s.makeUnsafe(Identifier.ascending("embedding_cache", id)),
-    zod: Identifier.schema("embedding_cache").pipe(z.custom<Schema.Schema.Type<typeof s>>()),
-  })),
-)
-export type EmbeddingCacheID = Schema.Schema.Type<typeof EmbeddingCacheID>
+export const EmbeddingCacheID = defineBrandedIdentifier("EmbeddingCacheID", "embedding_cache")
+export type EmbeddingCacheID = BrandedIdentifier<"EmbeddingCacheID">
 
-export const DebugPatternID = Schema.String.pipe(
-  Schema.brand("DebugPatternID"),
-  withStatics((s) => ({
-    make: (id: string) => s.makeUnsafe(id),
-    ascending: (id?: string) => s.makeUnsafe(Identifier.ascending("debug_pattern", id)),
-    zod: Identifier.schema("debug_pattern").pipe(z.custom<Schema.Schema.Type<typeof s>>()),
-  })),
-)
-export type DebugPatternID = Schema.Schema.Type<typeof DebugPatternID>
+export const DebugPatternID = defineBrandedIdentifier("DebugPatternID", "debug_pattern")
+export type DebugPatternID = BrandedIdentifier<"DebugPatternID">
