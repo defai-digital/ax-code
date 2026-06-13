@@ -2,13 +2,11 @@ import os from "os"
 import path from "path"
 import { pathToFileURL } from "url"
 import z from "zod"
-import { Effect, Layer, ServiceMap } from "effect"
 import type { Agent } from "@/agent/agent"
-import { InstanceState } from "@/effect/instance-state"
-import { makeRunPromise } from "@/effect/run-service"
 import { Flag } from "@/flag/flag"
 import { Global } from "@/global"
 import { Permission } from "@/permission"
+import { Instance } from "@/project/instance"
 import { Filesystem } from "@/util/filesystem"
 import { recordCount } from "@/util/record"
 import { Config } from "../config/config"
@@ -48,118 +46,106 @@ export namespace Skill {
     dirs: Set<string>
   }
 
-  export interface Interface {
-    readonly get: (name: string) => Effect.Effect<Info | undefined>
-    readonly all: () => Effect.Effect<Info[]>
-    readonly dirs: () => Effect.Effect<string[]>
-    readonly available: (agent?: Agent.Info) => Effect.Effect<Info[]>
-  }
-
-  const addSkill = (state: State, match: string, source?: { sourceTool?: Info["sourceTool"]; scope?: Info["scope"] }) =>
-    Effect.promise(async () => {
-      const md = await ConfigMarkdown.parse(match).catch(async (err) => {
-        const message = ConfigMarkdown.FrontmatterError.isInstance(err)
-          ? err.data.message
-          : `Failed to parse skill ${match}`
-        const { Session } = await import("@/session")
-        Session.publishError({ message })
-        log.error("failed to load skill", { skill: match, err })
-        return undefined
-      })
-
-      if (!md) return
-
-      const data = md.data as Record<string, unknown>
-      const parsed = Info.pick({ name: true, description: true }).safeParse(data)
-      if (!parsed.success) return
-
-      if (state.skills[parsed.data.name]) {
-        log.warn("duplicate skill name", {
-          name: parsed.data.name,
-          existing: state.skills[parsed.data.name].location,
-          duplicate: match,
-        })
-      }
-
-      const raw = data.paths
-      const paths = Array.isArray(raw)
-        ? raw.filter((p: unknown) => typeof p === "string")
-        : typeof raw === "string"
-          ? raw
-              .split(",")
-              .map((s: string) => s.trim())
-              .filter(Boolean)
-          : undefined
-      const license = typeof data.license === "string" ? data.license : undefined
-      const compatibility = typeof data.compatibility === "string" ? data.compatibility : undefined
-      const metadata = z.record(z.string(), z.string()).safeParse(data.metadata)
-      const allowedTools =
-        typeof data["allowed-tools"] === "string"
-          ? data["allowed-tools"]
-              .split(/\s+/)
-              .map((s: string) => s.trim())
-              .filter(Boolean)
-          : undefined
-      const argumentHint = typeof data["argument-hint"] === "string" ? data["argument-hint"] : undefined
-      const standardIssues = validateStandardSkill({
-        name: parsed.data.name,
-        description: parsed.data.description,
-        location: match,
-        compatibility,
-        hasInvalidMetadata: data.metadata !== undefined && !metadata.success,
-      })
-
-      state.dirs.add(path.dirname(match))
-      state.skills[parsed.data.name] = {
-        name: parsed.data.name,
-        description: parsed.data.description,
-        location: match,
-        content: md.content,
-        ...(paths?.length ? { paths } : {}),
-        ...(license ? { license } : {}),
-        ...(compatibility ? { compatibility } : {}),
-        ...(metadata.success ? { metadata: metadata.data } : {}),
-        ...(allowedTools?.length ? { allowedTools } : {}),
-        ...(argumentHint ? { argumentHint } : {}),
-        ...(standardIssues.length ? { standardIssues } : {}),
-        ...(source?.sourceTool ? { sourceTool: source.sourceTool } : {}),
-        ...(source?.scope ? { scope: source.scope } : {}),
-      }
+  async function addSkill(
+    state: State,
+    match: string,
+    source?: { sourceTool?: Info["sourceTool"]; scope?: Info["scope"] },
+  ) {
+    const md = await ConfigMarkdown.parse(match).catch(async (err) => {
+      const message = ConfigMarkdown.FrontmatterError.isInstance(err)
+        ? err.data.message
+        : `Failed to parse skill ${match}`
+      const { Session } = await import("@/session")
+      Session.publishError({ message })
+      log.error("failed to load skill", { skill: match, err })
+      return undefined
     })
 
-  const scanDir = (
+    if (!md) return
+
+    const data = md.data as Record<string, unknown>
+    const parsed = Info.pick({ name: true, description: true }).safeParse(data)
+    if (!parsed.success) return
+
+    if (state.skills[parsed.data.name]) {
+      log.warn("duplicate skill name", {
+        name: parsed.data.name,
+        existing: state.skills[parsed.data.name].location,
+        duplicate: match,
+      })
+    }
+
+    const raw = data.paths
+    const paths = Array.isArray(raw)
+      ? raw.filter((p: unknown) => typeof p === "string")
+      : typeof raw === "string"
+        ? raw
+            .split(",")
+            .map((s: string) => s.trim())
+            .filter(Boolean)
+        : undefined
+    const license = typeof data.license === "string" ? data.license : undefined
+    const compatibility = typeof data.compatibility === "string" ? data.compatibility : undefined
+    const metadata = z.record(z.string(), z.string()).safeParse(data.metadata)
+    const allowedTools =
+      typeof data["allowed-tools"] === "string"
+        ? data["allowed-tools"]
+            .split(/\s+/)
+            .map((s: string) => s.trim())
+            .filter(Boolean)
+        : undefined
+    const argumentHint = typeof data["argument-hint"] === "string" ? data["argument-hint"] : undefined
+    const standardIssues = validateStandardSkill({
+      name: parsed.data.name,
+      description: parsed.data.description,
+      location: match,
+      compatibility,
+      hasInvalidMetadata: data.metadata !== undefined && !metadata.success,
+    })
+
+    state.dirs.add(path.dirname(match))
+    state.skills[parsed.data.name] = {
+      name: parsed.data.name,
+      description: parsed.data.description,
+      location: match,
+      content: md.content,
+      ...(paths?.length ? { paths } : {}),
+      ...(license ? { license } : {}),
+      ...(compatibility ? { compatibility } : {}),
+      ...(metadata.success ? { metadata: metadata.data } : {}),
+      ...(allowedTools?.length ? { allowedTools } : {}),
+      ...(argumentHint ? { argumentHint } : {}),
+      ...(standardIssues.length ? { standardIssues } : {}),
+      ...(source?.sourceTool ? { sourceTool: source.sourceTool } : {}),
+      ...(source?.scope ? { scope: source.scope } : {}),
+    }
+  }
+
+  async function scanDir(
     state: State,
     root: string,
     pattern: string,
     opts?: { dot?: boolean; scope?: string; sourceTool?: Info["sourceTool"]; skillScope?: Info["scope"] },
-  ) =>
-    Effect.promise(() =>
-      Glob.scan(pattern, {
-        cwd: root,
-        absolute: true,
-        include: "file",
-        symlink: true,
-        dot: opts?.dot,
-      }).catch((error) => {
-        if (opts?.scope) {
-          log.error(`failed to scan ${opts.scope} skills`, { dir: root, error })
-          return [] as string[]
-        }
-        throw error
-      }),
-    ).pipe(
-      Effect.flatMap((matches) =>
-        Effect.forEach(
-          matches,
-          (match) => addSkill(state, match, { sourceTool: opts?.sourceTool, scope: opts?.skillScope }),
-          { discard: true },
-        ),
-      ),
-    )
+  ) {
+    const matches = await Glob.scan(pattern, {
+      cwd: root,
+      absolute: true,
+      include: "file",
+      symlink: true,
+      dot: opts?.dot,
+    }).catch((error) => {
+      if (opts?.scope) {
+        log.error(`failed to scan ${opts.scope} skills`, { dir: root, error })
+        return [] as string[]
+      }
+      throw error
+    })
+    for (const match of matches) {
+      await addSkill(state, match, { sourceTool: opts?.sourceTool, scope: opts?.skillScope })
+    }
+  }
 
   export const BUILTIN_NAMES = new Set(["debug-only", "debug-n-fix", "improve-overall", "security-harden"])
-
-  export class Service extends ServiceMap.Service<Service, Interface>()("@ax-code/Skill") {}
 
   declare const AX_CODE_BUILTIN_SKILLS: unknown
 
@@ -185,152 +171,113 @@ export namespace Skill {
     return Promise.all(entries.map(async (location) => ({ location, content: await Filesystem.readText(location) })))
   }
 
-  const addBuiltinSkill = (state: State, entry: { location: string; content: string }) =>
-    Effect.promise(async () => {
-      const md = await ConfigMarkdown.parseText(entry.location, entry.content).catch((err) => {
-        log.error("failed to load built-in skill", { location: entry.location, err })
-        return undefined
-      })
-      if (!md) return
-      const data = md.data as Record<string, unknown>
-      const parsed = Info.pick({ name: true, description: true }).safeParse(data)
-      if (!parsed.success) return
-      const argumentHint = typeof data["argument-hint"] === "string" ? data["argument-hint"] : undefined
-      state.skills[parsed.data.name] = {
-        name: parsed.data.name,
-        description: parsed.data.description,
-        location: entry.location,
-        content: md.content,
-        ...(argumentHint ? { argumentHint } : {}),
-        sourceTool: "builtin",
-        scope: "builtin",
-        builtin: true,
-      }
+  async function addBuiltinSkill(state: State, entry: { location: string; content: string }) {
+    const md = await ConfigMarkdown.parseText(entry.location, entry.content).catch((err) => {
+      log.error("failed to load built-in skill", { location: entry.location, err })
+      return undefined
     })
+    if (!md) return
+    const data = md.data as Record<string, unknown>
+    const parsed = Info.pick({ name: true, description: true }).safeParse(data)
+    if (!parsed.success) return
+    const argumentHint = typeof data["argument-hint"] === "string" ? data["argument-hint"] : undefined
+    state.skills[parsed.data.name] = {
+      name: parsed.data.name,
+      description: parsed.data.description,
+      location: entry.location,
+      content: md.content,
+      ...(argumentHint ? { argumentHint } : {}),
+      sourceTool: "builtin",
+      scope: "builtin",
+      builtin: true,
+    }
+  }
 
-  export const layer: Layer.Layer<Service> = Layer.effect(
-    Service,
-    Effect.gen(function* () {
-      const state = yield* InstanceState.make(
-        Effect.fn("Skill.state")(function* (ctx) {
-          const s: State = {
-            skills: {},
-            dirs: new Set<string>(),
-          }
+  const state = Instance.state(async () => {
+    const ctx = Instance.current
+    const s: State = {
+      skills: {},
+      dirs: new Set<string>(),
+    }
 
-          const builtins = yield* Effect.promise(() => loadBuiltinSkills())
-          yield* Effect.forEach(builtins, (entry) => addBuiltinSkill(s, entry), { discard: true })
+    const builtins = await loadBuiltinSkills()
+    for (const entry of builtins) {
+      await addBuiltinSkill(s, entry)
+    }
 
-          if (!Flag.AX_CODE_DISABLE_EXTERNAL_SKILLS) {
-            for (const dir of EXTERNAL_DIRS) {
-              const root = path.join(Global.Path.home, dir)
-              const exists = yield* Effect.promise(() => Filesystem.isDir(root))
-              if (!exists) continue
-              yield* scanDir(s, root, EXTERNAL_SKILL_PATTERN, {
-                dot: true,
-                scope: "global",
-                sourceTool: sourceToolFromDir(dir),
-                skillScope: "user",
-              })
-            }
+    if (!Flag.AX_CODE_DISABLE_EXTERNAL_SKILLS) {
+      for (const dir of EXTERNAL_DIRS) {
+        const root = path.join(Global.Path.home, dir)
+        const exists = await Filesystem.isDir(root)
+        if (!exists) continue
+        await scanDir(s, root, EXTERNAL_SKILL_PATTERN, {
+          dot: true,
+          scope: "global",
+          sourceTool: sourceToolFromDir(dir),
+          skillScope: "user",
+        })
+      }
 
-            const roots = yield* Effect.promise(async () => {
-              const result: string[] = []
-              for await (const root of Filesystem.up({
-                targets: EXTERNAL_DIRS,
-                start: ctx.directory,
-                stop: ctx.worktree,
-              })) {
-                result.push(root)
-              }
-              return result
-            })
-            yield* Effect.forEach(
-              roots,
-              (root) =>
-                scanDir(s, root, EXTERNAL_SKILL_PATTERN, {
-                  dot: true,
-                  scope: "project",
-                  sourceTool: sourceToolFromDir(path.basename(root)),
-                  skillScope: "project",
-                }),
-              { discard: true },
-            )
-          }
+      const roots: string[] = []
+      for await (const root of Filesystem.up({
+        targets: EXTERNAL_DIRS,
+        start: ctx.directory,
+        stop: ctx.worktree,
+      })) {
+        roots.push(root)
+      }
+      for (const root of roots) {
+        await scanDir(s, root, EXTERNAL_SKILL_PATTERN, {
+          dot: true,
+          scope: "project",
+          sourceTool: sourceToolFromDir(path.basename(root)),
+          skillScope: "project",
+        })
+      }
+    }
 
-          const configDirs = yield* Effect.promise(() => Config.directories())
-          yield* Effect.forEach(
-            configDirs,
-            (dir) => scanDir(s, dir, AX_CODE_SKILL_PATTERN, { sourceTool: "ax-code", skillScope: "config" }),
-            { discard: true },
-          )
+    const configDirs = await Config.directories()
+    for (const dir of configDirs) {
+      await scanDir(s, dir, AX_CODE_SKILL_PATTERN, { sourceTool: "ax-code", skillScope: "config" })
+    }
 
-          const cfg = yield* Effect.promise(() => Config.get())
-          for (const item of cfg.skills?.paths ?? []) {
-            const expanded = item.startsWith("~/") ? path.join(os.homedir(), item.slice(2)) : item
-            const dir = path.isAbsolute(expanded) ? expanded : path.join(ctx.directory, expanded)
-            // Resolve symlinks and normalize before the containment check
-            // so `../../etc` can't escape via relative path segments.
-            const resolved = path.resolve(dir)
-            const home = os.homedir()
-            const workspace = path.resolve(ctx.directory)
-            if (
-              !resolved.startsWith(workspace + path.sep) &&
-              !resolved.startsWith(home + path.sep) &&
-              resolved !== workspace &&
-              resolved !== home
-            ) {
-              log.warn("skill path outside workspace and home; skipping", { path: dir, resolved })
-              continue
-            }
-            const exists = yield* Effect.promise(() => Filesystem.isDir(resolved))
-            if (!exists) {
-              log.warn("skill path not found", { path: resolved })
-              continue
-            }
-            yield* scanDir(s, resolved, SKILL_PATTERN, { sourceTool: "config", skillScope: "config" })
-          }
+    const cfg = await Config.get()
+    for (const item of cfg.skills?.paths ?? []) {
+      const expanded = item.startsWith("~/") ? path.join(os.homedir(), item.slice(2)) : item
+      const dir = path.isAbsolute(expanded) ? expanded : path.join(ctx.directory, expanded)
+      // Resolve symlinks and normalize before the containment check
+      // so `../../etc` can't escape via relative path segments.
+      const resolved = path.resolve(dir)
+      const home = os.homedir()
+      const workspace = path.resolve(ctx.directory)
+      if (
+        !resolved.startsWith(workspace + path.sep) &&
+        !resolved.startsWith(home + path.sep) &&
+        resolved !== workspace &&
+        resolved !== home
+      ) {
+        log.warn("skill path outside workspace and home; skipping", { path: dir, resolved })
+        continue
+      }
+      const exists = await Filesystem.isDir(resolved)
+      if (!exists) {
+        log.warn("skill path not found", { path: resolved })
+        continue
+      }
+      await scanDir(s, resolved, SKILL_PATTERN, { sourceTool: "config", skillScope: "config" })
+    }
 
-          for (const url of cfg.skills?.urls ?? []) {
-            const dirs = yield* Effect.promise(() => Discovery.pull(url))
-            for (const dir of dirs) {
-              s.dirs.add(dir)
-              yield* scanDir(s, dir, SKILL_PATTERN, { sourceTool: "config", skillScope: "config" })
-            }
-          }
+    for (const url of cfg.skills?.urls ?? []) {
+      const dirs = await Discovery.pull(url)
+      for (const dir of dirs) {
+        s.dirs.add(dir)
+        await scanDir(s, dir, SKILL_PATTERN, { sourceTool: "config", skillScope: "config" })
+      }
+    }
 
-          log.info("init", { count: recordCount(s.skills) })
-          return s
-        }),
-      )
-
-      const get = Effect.fn("Skill.get")(function* (name: string) {
-        const s = yield* InstanceState.get(state)
-        return s.skills[name]
-      })
-
-      const all = Effect.fn("Skill.all")(function* () {
-        const s = yield* InstanceState.get(state)
-        return Object.values(s.skills)
-      })
-
-      const dirs = Effect.fn("Skill.dirs")(function* () {
-        const s = yield* InstanceState.get(state)
-        return Array.from(s.dirs)
-      })
-
-      const available = Effect.fn("Skill.available")(function* (agent?: Agent.Info) {
-        const s = yield* InstanceState.get(state)
-        const list = Object.values(s.skills).toSorted((a, b) => a.name.localeCompare(b.name))
-        if (!agent) return list
-        return list.filter((skill) => Permission.evaluate("skill", skill.name, agent.permission).action !== "deny")
-      })
-
-      return Service.of({ get, all, dirs, available })
-    }),
-  )
-
-  export const defaultLayer: Layer.Layer<Service> = layer
+    log.info("init", { count: recordCount(s.skills) })
+    return s
+  })
 
   function escapeMetadata(value: string) {
     return value
@@ -413,8 +360,6 @@ export namespace Skill {
     return issues
   }
 
-  const runPromise = makeRunPromise(Service, defaultLayer)
-
   function sourceToolFromDir(dir: string): Info["sourceTool"] {
     if (dir === ".opencode") return "opencode"
     if (dir === ".claude") return "claude"
@@ -423,18 +368,24 @@ export namespace Skill {
   }
 
   export async function get(name: string) {
-    return runPromise((skill) => skill.get(name))
+    const s = await state()
+    return s.skills[name]
   }
 
   export async function all() {
-    return runPromise((skill) => skill.all())
+    const s = await state()
+    return Object.values(s.skills)
   }
 
   export async function dirs() {
-    return runPromise((skill) => skill.dirs())
+    const s = await state()
+    return Array.from(s.dirs)
   }
 
   export async function available(agent?: Agent.Info) {
-    return runPromise((skill) => skill.available(agent))
+    const s = await state()
+    const list = Object.values(s.skills).toSorted((a, b) => a.name.localeCompare(b.name))
+    if (!agent) return list
+    return list.filter((skill) => Permission.evaluate("skill", skill.name, agent.permission).action !== "deny")
   }
 }
