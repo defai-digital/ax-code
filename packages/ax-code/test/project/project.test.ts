@@ -4,62 +4,49 @@ import { Database } from "../../src/storage/db"
 import { Log } from "../../src/util/log"
 import { $ } from "bun"
 import path from "path"
+import fs from "fs/promises"
 import { tmpdir } from "../fixture/fixture"
 import { GlobalBus } from "../../src/bus/global"
 import { ProjectID } from "../../src/project/schema"
-import { Effect, Layer, Stream } from "effect"
-import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process"
-import { NodeFileSystem, NodePath } from "@effect/platform-node"
-import { AppFileSystem } from "../../src/filesystem"
-import * as CrossSpawnSpawner from "../../src/effect/cross-spawn-spawner"
 import { ProjectTable } from "../../src/project/project.sql"
 import { eq } from "drizzle-orm"
 import { Filesystem } from "../../src/util/filesystem"
+import { which } from "../../src/util/which"
 
 Log.init({ print: false })
 
-const encoder = new TextEncoder()
-
-/**
- * Creates a mock ChildProcessSpawner layer that intercepts git subcommands
- * matching `failArg` and returns exit code 128, while delegating everything
- * else to the real CrossSpawnSpawner.
- */
-function mockGitFailure(failArg: string) {
-  return Layer.effect(
-    ChildProcessSpawner.ChildProcessSpawner,
-    Effect.gen(function* () {
-      const real = yield* ChildProcessSpawner.ChildProcessSpawner
-      return ChildProcessSpawner.make(
-        Effect.fnUntraced(function* (command) {
-          const std = ChildProcess.isStandardCommand(command) ? command : undefined
-          if (std?.command === "git" && std.args.some((a) => a === failArg)) {
-            return ChildProcessSpawner.makeHandle({
-              pid: ChildProcessSpawner.ProcessId(0),
-              exitCode: Effect.succeed(ChildProcessSpawner.ExitCode(128)),
-              isRunning: Effect.succeed(false),
-              kill: () => Effect.void,
-              stdin: { [Symbol.for("effect/Sink/TypeId")]: Symbol.for("effect/Sink/TypeId") } as any,
-              stdout: Stream.empty,
-              stderr: Stream.make(encoder.encode("fatal: simulated failure\n")),
-              all: Stream.empty,
-              getInputFd: () => ({ [Symbol.for("effect/Sink/TypeId")]: Symbol.for("effect/Sink/TypeId") }) as any,
-              getOutputFd: () => Stream.empty,
-            })
-          }
-          return yield* real.spawn(command)
-        }),
-      )
-    }),
-  ).pipe(Layer.provide(CrossSpawnSpawner.layer), Layer.provide(NodeFileSystem.layer), Layer.provide(NodePath.layer))
+function shellQuote(value: string) {
+  return `'${value.replace(/'/g, `'\\''`)}'`
 }
 
-function projectLayerWithFailure(failArg: string) {
-  return Project.layer.pipe(
-    Layer.provide(mockGitFailure(failArg)),
-    Layer.provide(AppFileSystem.defaultLayer),
-    Layer.provide(NodePath.layer),
+async function withGitFailure(directory: string, failArg: string, fn: () => Promise<void>) {
+  const realGit = which("git")
+  if (!realGit) throw new Error("git not found")
+
+  const bin = path.join(directory, "fake-bin")
+  const shim = path.join(bin, "git")
+  await fs.mkdir(bin, { recursive: true })
+  await fs.writeFile(
+    shim,
+    `#!/bin/sh
+for arg in "$@"; do
+  if [ "$arg" = ${shellQuote(failArg)} ]; then
+    echo "fatal: simulated failure" >&2
+    exit 128
+  fi
+done
+exec ${shellQuote(realGit)} "$@"
+`,
+    { mode: 0o755 },
   )
+
+  const previousPath = process.env.PATH
+  process.env.PATH = [bin, previousPath].filter(Boolean).join(path.delimiter)
+  try {
+    await fn()
+  } finally {
+    process.env.PATH = previousPath
+  }
 }
 
 describe("Project.fromDirectory", () => {
@@ -155,24 +142,22 @@ describe("Project.fromDirectory git failure paths", () => {
 
   test("handles show-toplevel failure gracefully", async () => {
     await using tmp = await tmpdir({ git: true })
-    const layer = projectLayerWithFailure("--show-toplevel")
 
-    const { project, sandbox } = await Effect.runPromise(
-      Project.Service.use((svc) => svc.fromDirectory(tmp.path)).pipe(Effect.provide(layer)),
-    )
-    expect(project.worktree).toBe(tmp.path)
-    expect(sandbox).toBe(tmp.path)
+    await withGitFailure(tmp.path, "--show-toplevel", async () => {
+      const { project, sandbox } = await Project.fromDirectory(tmp.path)
+      expect(project.worktree).toBe(tmp.path)
+      expect(sandbox).toBe(tmp.path)
+    })
   })
 
   test("handles git-common-dir failure gracefully", async () => {
     await using tmp = await tmpdir({ git: true })
-    const layer = projectLayerWithFailure("--git-common-dir")
 
-    const { project, sandbox } = await Effect.runPromise(
-      Project.Service.use((svc) => svc.fromDirectory(tmp.path)).pipe(Effect.provide(layer)),
-    )
-    expect(project.worktree).toBe(tmp.path)
-    expect(sandbox).toBe(tmp.path)
+    await withGitFailure(tmp.path, "--git-common-dir", async () => {
+      const { project, sandbox } = await Project.fromDirectory(tmp.path)
+      expect(project.worktree).toBe(tmp.path)
+      expect(sandbox).toBe(tmp.path)
+    })
   })
 })
 

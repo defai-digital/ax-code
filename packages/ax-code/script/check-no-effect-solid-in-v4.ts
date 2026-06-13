@@ -118,7 +118,6 @@ export namespace EffectGuard {
     "src/cli/cmd/account.ts",
     "src/cli/effect/prompt.ts",
     "src/filesystem/index.ts",
-    "src/project/project.ts",
     "src/util/effect-http-client.ts",
     "src/util/schema.ts",
   ])
