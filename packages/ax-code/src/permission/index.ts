@@ -4,7 +4,6 @@ import { Config } from "@/config/config"
 import { AgentControlEvents } from "@/control-plane/agent-control-events"
 import { SafetyPolicy } from "@/control-plane/safety-policy"
 import { Recorder } from "@/replay/recorder"
-import { makeRunPromise } from "@/effect/run-service"
 import { ProjectID } from "@/project/schema"
 import { Instance } from "@/project/instance"
 import { MessageID, SessionID } from "@/session/schema"
@@ -12,7 +11,6 @@ import { PermissionTable } from "@/session/session.sql"
 import { Database, eq } from "@/storage/db"
 import { Log } from "@/util/log"
 import { Wildcard } from "@/util/wildcard"
-import { Effect, Layer, Schema, ServiceMap } from "effect"
 import os from "os"
 import path from "path"
 import z from "zod"
@@ -80,28 +78,40 @@ export namespace Permission {
     ),
   }
 
-  export class RejectedError extends Schema.TaggedErrorClass<RejectedError>()("PermissionRejectedError", {}) {
-    override get message() {
-      return "The user rejected permission to use this specific tool call."
+  export class RejectedError extends Error {
+    override name = "PermissionRejectedError"
+
+    constructor() {
+      super("The user rejected permission to use this specific tool call.")
     }
   }
 
-  export class CorrectedError extends Schema.TaggedErrorClass<CorrectedError>()("PermissionCorrectedError", {
-    feedback: Schema.String,
-  }) {
-    override get message() {
-      return `The user rejected permission to use this specific tool call with the following feedback: ${this.feedback}`
+  export class CorrectedError extends Error {
+    override name = "PermissionCorrectedError"
+    readonly feedback: string
+
+    constructor(input: { feedback: string }) {
+      super(
+        `The user rejected permission to use this specific tool call with the following feedback: ${input.feedback}`,
+      )
+      this.feedback = input.feedback
     }
   }
 
-  export class DeniedError extends Schema.TaggedErrorClass<DeniedError>()("PermissionDeniedError", {
-    ruleset: Schema.Any,
-    agent: Schema.optional(Schema.String),
-  }) {
-    override get message() {
-      const base = `The user has specified a rule which prevents you from using this specific tool call. Here are some of the relevant rules ${JSON.stringify(this.ruleset)}`
-      if (!this.agent) return base
-      return `${base}\n\nThis is because you are running as the "${this.agent}" agent, which is read-only and cannot modify files. You should inform the user that this task requires code changes, and suggest they switch to the Dev agent (press Tab or use @build).`
+  export class DeniedError extends Error {
+    override name = "PermissionDeniedError"
+    readonly ruleset: unknown
+    readonly agent?: string
+
+    constructor(input: { ruleset: unknown; agent?: string }) {
+      const base = `The user has specified a rule which prevents you from using this specific tool call. Here are some of the relevant rules ${JSON.stringify(input.ruleset)}`
+      super(
+        input.agent
+          ? `${base}\n\nThis is because you are running as the "${input.agent}" agent, which is read-only and cannot modify files. You should inform the user that this task requires code changes, and suggest they switch to the Dev agent (press Tab or use @build).`
+          : base,
+      )
+      this.ruleset = input.ruleset
+      this.agent = input.agent
     }
   }
 
@@ -117,12 +127,6 @@ export namespace Permission {
     reply: Reply,
     message: z.string().optional(),
   })
-
-  export interface Interface {
-    readonly ask: (input: z.infer<typeof AskInput>) => Effect.Effect<void, Error>
-    readonly reply: (input: z.infer<typeof ReplyInput>) => Effect.Effect<void>
-    readonly list: () => Effect.Effect<Request[]>
-  }
 
   interface PromiseDeferred<T> {
     promise: Promise<T>
@@ -441,28 +445,6 @@ export namespace Permission {
     return evalRule(permission, pattern, ...rulesets)
   }
 
-  export class Service extends ServiceMap.Service<Service, Interface>()("@ax-code/Permission") {}
-
-  export const layer = Layer.effect(
-    Service,
-    Effect.sync(() => {
-      const ask = Effect.fn("Permission.ask")((input: z.infer<typeof AskInput>) =>
-        Effect.tryPromise({
-          try: (signal) => askPromise(input, { signal }),
-          catch: (error) => error as Error,
-        }),
-      )
-
-      const reply = Effect.fn("Permission.reply")((input: z.infer<typeof ReplyInput>) =>
-        Effect.promise(() => replyPromise(input)),
-      )
-
-      const list = Effect.fn("Permission.list")(() => Effect.promise(() => listPromise()))
-
-      return Service.of({ ask, reply, list })
-    }),
-  )
-
   function expand(pattern: string): string {
     if (pattern.startsWith("~/")) return os.homedir() + pattern.slice(1)
     if (pattern === "~") return os.homedir()
@@ -572,8 +554,6 @@ export namespace Permission {
     }
     return result
   }
-
-  export const runPromise = makeRunPromise(Service, layer)
 
   export async function ask(input: z.infer<typeof AskInput>, options?: { signal?: AbortSignal }) {
     return askPromise(input, options)

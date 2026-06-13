@@ -1350,16 +1350,15 @@ test("ask - abort should clear pending request", async () => {
     directory: tmp.path,
     fn: async () => {
       const ctl = new AbortController()
-      const ask = Permission.runPromise(
-        (svc) =>
-          svc.ask({
-            sessionID: SessionID.make("session_test"),
-            permission: "bash",
-            patterns: ["ls"],
-            metadata: {},
-            always: [],
-            ruleset: [{ permission: "bash", pattern: "*", action: "ask" }],
-          }),
+      const ask = Permission.ask(
+        {
+          sessionID: SessionID.make("session_test"),
+          permission: "bash",
+          patterns: ["ls"],
+          metadata: {},
+          always: [],
+          ruleset: [{ permission: "bash", pattern: "*", action: "ask" }],
+        },
         { signal: ctl.signal },
       )
 
