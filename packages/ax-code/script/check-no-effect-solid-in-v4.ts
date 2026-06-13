@@ -122,7 +122,6 @@ export namespace EffectGuard {
     "src/permission/index.ts",
     "src/project/project.ts",
     "src/provider/auth.ts",
-    "src/pty/index.ts",
     "src/util/effect-http-client.ts",
     "src/util/schema.ts",
   ])
