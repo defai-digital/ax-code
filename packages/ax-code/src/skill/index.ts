@@ -208,10 +208,9 @@ export namespace Skill {
       }
     })
 
-  export const layer: Layer.Layer<Service, never, Discovery.Service> = Layer.effect(
+  export const layer: Layer.Layer<Service> = Layer.effect(
     Service,
     Effect.gen(function* () {
-      const discovery = yield* Discovery.Service
       const state = yield* InstanceState.make(
         Effect.fn("Skill.state")(function* (ctx) {
           const s: State = {
@@ -293,7 +292,7 @@ export namespace Skill {
           }
 
           for (const url of cfg.skills?.urls ?? []) {
-            const dirs = yield* discovery.pull(url)
+            const dirs = yield* Effect.promise(() => Discovery.pull(url))
             for (const dir of dirs) {
               s.dirs.add(dir)
               yield* scanDir(s, dir, SKILL_PATTERN, { sourceTool: "config", skillScope: "config" })
@@ -331,7 +330,7 @@ export namespace Skill {
     }),
   )
 
-  export const defaultLayer: Layer.Layer<Service> = layer.pipe(Layer.provide(Discovery.defaultLayer))
+  export const defaultLayer: Layer.Layer<Service> = layer
 
   function escapeMetadata(value: string) {
     return value

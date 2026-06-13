@@ -1,5 +1,4 @@
 import { describe, test, expect, beforeAll, afterAll, spyOn } from "bun:test"
-import { Effect } from "effect"
 import { Discovery } from "../../src/skill/discovery"
 import { Global } from "../../src/global"
 import { Filesystem } from "../../src/util/filesystem"
@@ -118,8 +117,7 @@ afterAll(async () => {
 })
 
 describe("Discovery.pull", () => {
-  const pull = (url: string) =>
-    Effect.runPromise(Discovery.Service.use((s) => s.pull(url)).pipe(Effect.provide(Discovery.defaultLayer)))
+  const pull = (url: string) => Discovery.pull(url)
 
   test("decodes skill discovery index values", () => {
     expect(

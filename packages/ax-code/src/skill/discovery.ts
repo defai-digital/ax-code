@@ -1,244 +1,215 @@
-import { NodePath } from "@effect/platform-node"
-import { Effect, Layer, Path, Schema, ServiceMap } from "effect"
 import { createHash } from "crypto"
-import { AppFileSystem } from "@/filesystem"
+import { rm } from "fs/promises"
+import path from "path"
+import z from "zod"
 import { Global } from "../global"
+import { Filesystem } from "../util/filesystem"
+import { parseJsonStrict } from "../util/json-value"
 import { Log } from "../util/log"
-import { Ssrf } from "@/util/ssrf"
-import { parseJsonStrict } from "@/util/json-value"
+import { Ssrf } from "../util/ssrf"
 
 export namespace Discovery {
+  const log = Log.create({ service: "skill-discovery" })
   const skillConcurrency = 4
   const fileConcurrency = 8
   const MAX_SKILL_FILE_BYTES = 1024 * 1024
   const SKILL_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/
   const SHA256_PATTERN = /^[a-f0-9]{64}$/i
 
-  class DiscoveryError extends Schema.TaggedErrorClass<DiscoveryError>()("SkillDiscoveryError", {
-    message: Schema.String,
-    cause: Schema.optional(Schema.Defect),
-  }) {}
+  class DiscoveryError extends Error {
+    override readonly name = "SkillDiscoveryError"
 
-  const asDiscoveryError = (message: string, cause?: unknown) =>
-    new DiscoveryError({
-      message,
-      ...(cause === undefined ? {} : { cause }),
-    })
+    constructor(message: string, options?: { cause?: unknown }) {
+      super(message, { cause: options?.cause })
+      this.name = "SkillDiscoveryError"
+    }
+  }
 
-  class IndexSkillFile extends Schema.Class<IndexSkillFile>("IndexSkillFile")({
-    path: Schema.String,
-    sha256: Schema.optional(Schema.String),
-  }) {}
+  const asDiscoveryError = (message: string, cause?: unknown) => new DiscoveryError(message, { cause })
 
-  const IndexSkillFileEntry = Schema.Union([Schema.String, IndexSkillFile])
+  const IndexSkillFile = z.object({
+    path: z.string(),
+    sha256: z.string().optional(),
+  })
 
-  class IndexSkill extends Schema.Class<IndexSkill>("IndexSkill")({
-    name: Schema.String,
-    files: Schema.Array(IndexSkillFileEntry),
-  }) {}
+  type IndexSkillFile = z.infer<typeof IndexSkillFile>
 
-  class Index extends Schema.Class<Index>("Index")({
-    skills: Schema.Array(IndexSkill),
-  }) {}
+  const IndexSkillFileEntry = z.union([z.string(), IndexSkillFile])
 
-  export type IndexData = Schema.Schema.Type<typeof Index>
+  const IndexSkill = z.object({
+    name: z.string(),
+    files: z.array(IndexSkillFileEntry),
+  })
+
+  const Index = z.object({
+    skills: z.array(IndexSkill),
+  })
+
+  export type IndexData = z.infer<typeof Index>
 
   export function decodeIndexValue(value: unknown): IndexData {
-    return Schema.decodeUnknownSync(Index)(value)
+    return Index.parse(value)
   }
 
   export function parseIndexText(text: string): IndexData {
     return decodeIndexValue(parseJsonStrict(text))
   }
 
-  export interface Interface {
-    readonly pull: (url: string) => Effect.Effect<string[]>
+  async function mapWithConcurrency<T, R>(
+    items: readonly T[],
+    concurrency: number,
+    mapper: (item: T) => Promise<R>,
+  ): Promise<R[]> {
+    const result = new Array<R>(items.length)
+    let next = 0
+    const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+      while (next < items.length) {
+        const index = next++
+        result[index] = await mapper(items[index])
+      }
+    })
+    await Promise.all(workers)
+    return result
   }
 
-  export class Service extends ServiceMap.Service<Service, Interface>()("@ax-code/SkillDiscovery") {}
+  const isExternalFileReference = (file: string) => /^[A-Za-z][A-Za-z0-9+.-]*:/.test(file) || file.startsWith("//")
 
-  export const layer: Layer.Layer<Service, never, AppFileSystem.Service | Path.Path> = Layer.effect(
-    Service,
-    Effect.gen(function* () {
-      const log = Log.create({ service: "skill-discovery" })
-      const fs = yield* AppFileSystem.Service
-      const path = yield* Path.Path
-      const cache = path.join(Global.Path.cache, "skills")
-      const isExternalFileReference = (file: string) => /^[A-Za-z][A-Za-z0-9+.-]*:/.test(file) || file.startsWith("//")
+  const normalizeFile = (file: string | IndexSkillFile) =>
+    typeof file === "string" ? { path: file, sha256: undefined } : file
 
-      const normalizeFile = (file: string | IndexSkillFile) =>
-        typeof file === "string" ? { path: file, sha256: undefined } : file
+  const verifyFile = (body: ArrayBuffer | Uint8Array, expectedSha256: string | undefined, source: string) => {
+    const buffer = Buffer.from(body instanceof ArrayBuffer ? new Uint8Array(body) : body)
+    if (buffer.byteLength > MAX_SKILL_FILE_BYTES) {
+      throw asDiscoveryError(`skill-discovery: ${source} exceeds ${MAX_SKILL_FILE_BYTES} bytes`)
+    }
+    if (!expectedSha256) return buffer
+    const expected = expectedSha256.toLowerCase()
+    if (!SHA256_PATTERN.test(expected)) {
+      throw asDiscoveryError(`skill-discovery: invalid sha256 for ${source}`)
+    }
+    const actual = createHash("sha256").update(buffer).digest("hex")
+    if (actual !== expected) {
+      throw asDiscoveryError(`skill-discovery: sha256 mismatch for ${source}`)
+    }
+    return buffer
+  }
 
-      const verifyFile = (body: ArrayBuffer | Uint8Array, expectedSha256: string | undefined, source: string) => {
-        const buffer = Buffer.from(body instanceof ArrayBuffer ? new Uint8Array(body) : body)
-        if (buffer.byteLength > MAX_SKILL_FILE_BYTES) {
-          throw asDiscoveryError(`skill-discovery: ${source} exceeds ${MAX_SKILL_FILE_BYTES} bytes`)
+  const verifyCachedFile = (body: Uint8Array, expectedSha256: string, source: string) => {
+    try {
+      verifyFile(body, expectedSha256, source)
+      return true
+    } catch (err) {
+      log.warn("cached skill file failed integrity check", { source, err })
+      return false
+    }
+  }
+
+  async function fetchArrayBuffer(url: string, init?: RequestInit) {
+    try {
+      const res = await Ssrf.pinnedFetch(url, { ...init, label: "skill-discovery" })
+      if (!res.ok) throw asDiscoveryError(`skill-discovery: fetch failed for ${url}: HTTP ${res.status}`)
+      return res.arrayBuffer()
+    } catch (err) {
+      if (err instanceof DiscoveryError) throw err
+      throw asDiscoveryError(`skill-discovery: fetch failed for ${url}`, err)
+    }
+  }
+
+  async function download(url: string, dest: string, expectedSha256?: string) {
+    try {
+      if (await Filesystem.exists(dest)) {
+        if (!expectedSha256) return true
+
+        const cached = await Filesystem.readBytes(dest).catch(() => undefined)
+        if (cached && verifyCachedFile(cached, expectedSha256, dest)) {
+          return true
         }
-        if (!expectedSha256) return buffer
-        const expected = expectedSha256.toLowerCase()
-        if (!SHA256_PATTERN.test(expected)) {
-          throw asDiscoveryError(`skill-discovery: invalid sha256 for ${source}`)
-        }
-        const actual = createHash("sha256").update(buffer).digest("hex")
-        if (actual !== expected) {
-          throw asDiscoveryError(`skill-discovery: sha256 mismatch for ${source}`)
-        }
-        return buffer
+        if (cached) await rm(dest, { force: true }).catch(() => undefined)
       }
 
-      const verifyCachedFile = (body: Uint8Array, expectedSha256: string, source: string) => {
-        try {
-          verifyFile(body, expectedSha256, source)
-          return true
-        } catch (err) {
-          log.warn("cached skill file failed integrity check", { source, err })
+      const body = await fetchArrayBuffer(url)
+      const verified = verifyFile(body, expectedSha256, url)
+      await Filesystem.write(dest, verified)
+      return true
+    } catch (err) {
+      log.error("failed to download", { url, err })
+      return false
+    }
+  }
+
+  export async function pull(url: string): Promise<string[]> {
+    const base = url.endsWith("/") ? url : `${url}/`
+    const index = new URL("index.json", base).href
+    const host = base.slice(0, -1)
+    const cache = path.join(Global.Path.cache, "skills")
+
+    log.info("fetching index", { url: index })
+
+    const data = await fetchArrayBuffer(index, { headers: { Accept: "application/json" } })
+      .then((body) => parseIndexText(Buffer.from(body).toString("utf8")))
+      .catch((err) => {
+        log.error("failed to fetch index", { url: index, err })
+        return null
+      })
+
+    if (!data) return []
+
+    const list = data.skills.filter((skill) => {
+      if (!SKILL_NAME_PATTERN.test(skill.name)) {
+        log.warn("skill entry has unsafe name", { url: index, skill: skill.name })
+        return false
+      }
+      const files = skill.files.map(normalizeFile)
+      if (!files.some((file) => file.path === "SKILL.md")) {
+        log.warn("skill entry missing SKILL.md", { url: index, skill: skill.name })
+        return false
+      }
+      const hashless = files.find((file) => !file.sha256)
+      if (hashless) {
+        log.warn("skill entry missing sha256", { url: index, skill: skill.name, file: hashless.path })
+        return false
+      }
+      const invalidHash = files.find((file) => file.sha256 && !SHA256_PATTERN.test(file.sha256))
+      if (invalidHash) {
+        log.warn("skill entry has invalid sha256", { url: index, skill: skill.name, file: invalidHash.path })
+        return false
+      }
+      return true
+    })
+
+    const dirs = await mapWithConcurrency(list, skillConcurrency, async (skill) => {
+      const files = skill.files.map(normalizeFile)
+      const cacheRoot = path.resolve(cache)
+      const root = path.resolve(cache, skill.name)
+      const rootPrefix = root + path.sep
+      const cachePrefix = cacheRoot + path.sep
+      if (root !== cacheRoot && !rootPrefix.startsWith(cachePrefix)) {
+        log.warn("skill entry escapes cache root", { url: index, skill: skill.name, root })
+        return null
+      }
+
+      const safeFiles = files.filter((file) => {
+        if (isExternalFileReference(file.path)) {
+          log.warn("skill entry has external file reference", { url: index, skill: skill.name, file })
           return false
         }
-      }
-
-      const fetchArrayBuffer = (url: string, init?: RequestInit) =>
-        Effect.tryPromise({
-          try: async () => {
-            const res = await Ssrf.pinnedFetch(url, { ...init, label: "skill-discovery" })
-            if (!res.ok) throw asDiscoveryError(`skill-discovery: fetch failed for ${url}: HTTP ${res.status}`)
-            return res.arrayBuffer()
-          },
-          catch: (err) =>
-            err instanceof DiscoveryError ? err : asDiscoveryError(`skill-discovery: fetch failed for ${url}`, err),
-        })
-
-      const download = Effect.fn("Discovery.download")(function* (url: string, dest: string, expectedSha256?: string) {
-        if (yield* fs.exists(dest).pipe(Effect.orDie)) {
-          if (!expectedSha256) return true
-
-          const cached = yield* fs.readFile(dest).pipe(Effect.catch(() => Effect.void))
-          if (cached && verifyCachedFile(cached, expectedSha256, dest)) {
-            return true
-          }
-          if (cached) yield* fs.remove(dest).pipe(Effect.catch(() => Effect.void))
+        if (file.sha256 && !SHA256_PATTERN.test(file.sha256)) {
+          log.warn("skill entry has invalid sha256", { url: index, skill: skill.name, file })
+          return false
         }
-
-        return yield* fetchArrayBuffer(url).pipe(
-          Effect.flatMap((body) =>
-            Effect.try({
-              try: () => verifyFile(body, expectedSha256, url),
-              catch: (err) =>
-                err instanceof DiscoveryError
-                  ? err
-                  : asDiscoveryError(`skill-discovery: integrity check failed for ${url}`, err),
-            }),
-          ),
-          Effect.flatMap((body) => fs.writeWithDirs(dest, body)),
-          Effect.as(true),
-          Effect.catch((err) =>
-            Effect.sync(() => {
-              log.error("failed to download", { url, err })
-              return false
-            }),
-          ),
-        )
+        const resolved = path.resolve(root, file.path)
+        return (resolved + path.sep).startsWith(rootPrefix)
       })
 
-      const pull = Effect.fn("Discovery.pull")(function* (url: string) {
-        const base = url.endsWith("/") ? url : `${url}/`
-        const index = new URL("index.json", base).href
-        const host = base.slice(0, -1)
+      const downloads = await mapWithConcurrency(safeFiles, fileConcurrency, (file) =>
+        download(new URL(file.path, `${host}/${skill.name}/`).href, path.join(root, file.path), file.sha256),
+      )
+      if (!downloads.every(Boolean)) return null
 
-        log.info("fetching index", { url: index })
+      const md = path.join(root, "SKILL.md")
+      return (await Filesystem.exists(md)) ? root : null
+    })
 
-        const data = yield* fetchArrayBuffer(index, { headers: { Accept: "application/json" } }).pipe(
-          Effect.map((body) => parseIndexText(Buffer.from(body).toString("utf8"))),
-          Effect.catch((err) =>
-            Effect.sync(() => {
-              log.error("failed to fetch index", { url: index, err })
-              return null
-            }),
-          ),
-        )
-
-        if (!data) return []
-
-        const list = data.skills.filter((skill) => {
-          if (!SKILL_NAME_PATTERN.test(skill.name)) {
-            log.warn("skill entry has unsafe name", { url: index, skill: skill.name })
-            return false
-          }
-          const files = skill.files.map(normalizeFile)
-          if (!files.some((file) => file.path === "SKILL.md")) {
-            log.warn("skill entry missing SKILL.md", { url: index, skill: skill.name })
-            return false
-          }
-          const hashless = files.find((file) => !file.sha256)
-          if (hashless) {
-            log.warn("skill entry missing sha256", { url: index, skill: skill.name, file: hashless.path })
-            return false
-          }
-          const invalidHash = files.find((file) => file.sha256 && !SHA256_PATTERN.test(file.sha256))
-          if (invalidHash) {
-            log.warn("skill entry has invalid sha256", { url: index, skill: skill.name, file: invalidHash.path })
-            return false
-          }
-          return true
-        })
-
-        const dirs = yield* Effect.forEach(
-          list,
-          (skill) =>
-            Effect.gen(function* () {
-              const files = skill.files.map(normalizeFile)
-              const cacheRoot = path.resolve(cache)
-              const root = path.resolve(cache, skill.name)
-              const rootPrefix = root + path.sep
-              const cachePrefix = cacheRoot + path.sep
-              if (root !== cacheRoot && !rootPrefix.startsWith(cachePrefix)) {
-                log.warn("skill entry escapes cache root", { url: index, skill: skill.name, root })
-                return null
-              }
-              // Path-traversal guard: a compromised remote index
-              // could list file paths like `../../etc/cron.d/evil`,
-              // which `path.join(root, file)` would resolve outside
-              // the cache directory. Reject any file whose resolved
-              // path doesn't stay within `root` so a malicious skill
-              // repo cannot write arbitrary files to disk.
-              const safeFiles = files.filter((file) => {
-                if (isExternalFileReference(file.path)) {
-                  log.warn("skill entry has external file reference", { url: index, skill: skill.name, file })
-                  return false
-                }
-                if (file.sha256 && !SHA256_PATTERN.test(file.sha256)) {
-                  log.warn("skill entry has invalid sha256", { url: index, skill: skill.name, file })
-                  return false
-                }
-                const resolved = path.resolve(root, file.path)
-                if ((resolved + path.sep).startsWith(rootPrefix)) return true
-                return false
-              })
-
-              const downloads = yield* Effect.forEach(
-                safeFiles,
-                (file) =>
-                  download(new URL(file.path, `${host}/${skill.name}/`).href, path.join(root, file.path), file.sha256),
-                {
-                  concurrency: fileConcurrency,
-                },
-              )
-              if (!downloads.every(Boolean)) return null
-
-              const md = path.join(root, "SKILL.md")
-              return (yield* fs.exists(md).pipe(Effect.orDie)) ? root : null
-            }),
-          { concurrency: skillConcurrency },
-        )
-
-        return dirs.filter((dir): dir is string => dir !== null)
-      })
-
-      return Service.of({ pull })
-    }),
-  )
-
-  export const defaultLayer: Layer.Layer<Service> = layer.pipe(
-    Layer.provide(AppFileSystem.defaultLayer),
-    Layer.provide(NodePath.layer),
-  )
+    return dirs.filter((dir): dir is string => dir !== null)
+  }
 }
