@@ -56,7 +56,34 @@ export async function executeGoalCommand(input: CommandInput, prompt: PromptRunn
     return goalControlMessage(input, await goalControlText(() => SessionGoal.pause(input.sessionID)))
   }
   if (parsed.action === "resume") {
-    return goalControlMessage(input, await goalControlText(() => SessionGoal.resume(input.sessionID)))
+    // resume is an activation: it sets status back to "active", so it must
+    // restart the prompt loop just like create does — otherwise the goal is
+    // active on paper but the agent sits dormant until the next user message.
+    // If resume rejects (no goal / budget exhausted), surface the error as a
+    // control message instead of letting it escape as a 500/failed task,
+    // matching how create reports validation errors in-session.
+    let goal: SessionGoal.Info
+    try {
+      goal = await SessionGoal.resume(input.sessionID)
+    } catch (error) {
+      return goalControlMessage(input, goalErrorMessage(error))
+    }
+    return prompt({
+      sessionID: input.sessionID,
+      messageID: input.messageID,
+      agent: input.agent,
+      model: await commandModel({ model: input.model, sessionID: input.sessionID }),
+      variant: input.variant,
+      parts: [
+        {
+          type: "text",
+          text:
+            `Goal resumed: ${goal.objective}\n\n` +
+            `Continue working toward this goal until it is complete, blocked, paused, cleared, or budget-limited.`,
+        },
+        ...(input.parts ?? []),
+      ],
+    })
   }
   if (parsed.action === "clear") {
     await SessionGoal.clear(input.sessionID)

@@ -567,6 +567,66 @@ describe("SessionGoal", () => {
     })
   })
 
+  test("/goal resume restarts the prompt loop after a pause", async () => {
+    // Regression: resume is an activation that flips status back to "active",
+    // so it must re-enter the prompt loop the same way /goal <objective>
+    // (create) does. Previously it only wrote a stopped control message and
+    // the agent sat dormant until the next user message.
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        await SessionGoal.create({ sessionID: session.id, objective: "resume and continue" })
+        modelSpy = spyOn(Provider, "getModel").mockResolvedValue(model)
+        let streams = 0
+        streamSpy = spyOn(LLM, "stream").mockImplementation((async () => {
+          streams++
+          // On the first stream after resume, mark the goal complete so the
+          // loop terminates instead of auto-continuing forever.
+          if (streams >= 2) {
+            await SessionGoal.setStatus({ sessionID: session.id, status: "complete" })
+          }
+          return {
+            fullStream: (async function* () {
+              yield { type: "start" }
+              yield { type: "start-step" }
+              yield { type: "text-start", id: `text_${streams}` }
+              yield { type: "text-delta", id: `text_${streams}`, text: `turn ${streams}` }
+              yield { type: "text-end", id: `text_${streams}` }
+              yield {
+                type: "finish-step",
+                finishReason: "stop",
+                usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+              }
+              yield { type: "finish" }
+            })(),
+          } as any
+        }) as any)
+
+        // Pause the goal, then resume it via the /goal command.
+        await SessionGoal.pause(session.id)
+        expect((await SessionGoal.get(session.id))?.status).toBe("paused")
+        const beforeResume = streamSpy?.mock.calls.length ?? 0
+
+        await SessionPrompt.command({
+          sessionID: session.id,
+          command: "goal",
+          arguments: "resume",
+          agent: "build",
+          model: "test/test-model",
+        })
+
+        // resume must have invoked the model (re-entered the loop) at least once.
+        expect(streamSpy?.mock.calls.length ?? 0).toBeGreaterThan(beforeResume)
+        expect((await SessionGoal.get(session.id))?.status).toBe("complete")
+
+        await Session.remove(session.id)
+      },
+    })
+  })
+
   test("budget-limited goal schedules one wrap-up continuation", async () => {
     await using tmp = await tmpdir({ git: true, config: { session: { max_continuations: 2 } } })
 
