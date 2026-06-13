@@ -31,8 +31,9 @@ describe("prompt loop error transitions", () => {
         step: 4,
       },
       {
-        async findFallback(providerID) {
+        async findFallback(providerID, preferredModelID) {
           expect(providerID).toBe(primaryModel.providerID)
+          expect(preferredModelID).toBe(primaryModel.modelID)
           return fallbackModel
         },
         warn(message, fields) {
@@ -64,6 +65,51 @@ describe("prompt loop error transitions", () => {
       {
         sessionID,
         message: "Provider primary failed: rate limited. Switching to fallback/fallback-model.",
+      },
+    ])
+  })
+
+  test("switches to fallback model immediately for provider quota exhaustion", async () => {
+    const sessionID = SessionID.descending()
+    const published: { sessionID: SessionID; message: string }[] = []
+
+    const result = await handlePromptLoopError(
+      {
+        sessionID,
+        currentModel: primaryModel,
+        error: {
+          name: "APIError",
+          data: {
+            statusCode: 429,
+            message: "Your token-plan quota has been exhausted.",
+          },
+        },
+        consecutiveErrors: 1,
+        step: 1,
+      },
+      {
+        async findFallback(providerID, preferredModelID) {
+          expect(providerID).toBe(primaryModel.providerID)
+          expect(preferredModelID).toBe(primaryModel.modelID)
+          return fallbackModel
+        },
+        warn() {},
+        publishError(input) {
+          published.push(input)
+        },
+      },
+    )
+
+    expect(result).toEqual({
+      action: "fallback",
+      fallbackModel,
+      consecutiveErrors: 0,
+    })
+    expect(published).toEqual([
+      {
+        sessionID,
+        message:
+          "Provider primary failed: Your token-plan quota has been exhausted. Switching to fallback/fallback-model.",
       },
     ])
   })

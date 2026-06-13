@@ -197,6 +197,39 @@ describe("session.retry.retryable", () => {
 
     expect(SessionRetry.retryable(error)).toBeUndefined()
   })
+
+  test("does not retry token-plan account quota exhaustion", () => {
+    const messageError = new MessageV2.APIError({
+      message: "Your token-plan quota has been exhausted.",
+      isRetryable: true,
+      statusCode: 429,
+    }).toObject() as ReturnType<NamedError["toObject"]>
+
+    const codeError = new MessageV2.APIError({
+      message: "insufficient_quota",
+      isRetryable: true,
+      statusCode: 429,
+    }).toObject() as ReturnType<NamedError["toObject"]>
+
+    expect(SessionRetry.retryable(messageError)).toBeUndefined()
+    expect(SessionRetry.retryable(codeError)).toBeUndefined()
+  })
+
+  test("does not retry account quota exhaustion when only response body has the quota code", () => {
+    const error = new MessageV2.APIError({
+      message: "Too Many Requests",
+      isRetryable: true,
+      statusCode: 429,
+      responseBody: JSON.stringify({
+        error: {
+          message: "Quota unavailable",
+          code: "insufficient_quota",
+        },
+      }),
+    }).toObject() as ReturnType<NamedError["toObject"]>
+
+    expect(SessionRetry.retryable(error)).toBeUndefined()
+  })
 })
 
 describe("session.message-v2.fromError", () => {

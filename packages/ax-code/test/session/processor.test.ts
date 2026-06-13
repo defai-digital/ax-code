@@ -196,6 +196,18 @@ describe("session.processor", () => {
     })
   })
 
+  test("prompt loop resolves provider errors before processor stop decisions", async () => {
+    const src = await Bun.file(path.join(import.meta.dir, "../../src/session/prompt.ts")).text()
+    const errorTransitionStart = src.indexOf("const errorTransition = await resolvePromptLoopErrorTransition")
+    const processorDecisionStart = src.indexOf("const processorDecision = processorLoopDecision")
+
+    expect(errorTransitionStart).toBeGreaterThan(-1)
+    expect(processorDecisionStart).toBeGreaterThan(-1)
+    expect(errorTransitionStart).toBeLessThan(processorDecisionStart)
+    expect(src.slice(errorTransitionStart, processorDecisionStart)).toContain("if (processor.message.error)")
+    expect(src.slice(errorTransitionStart, processorDecisionStart)).toContain("continue")
+  })
+
   test("marks tool-using steps as tool-calls even when provider finish reason is stop", async () => {
     await using tmp = await tmpdir({ git: true })
 

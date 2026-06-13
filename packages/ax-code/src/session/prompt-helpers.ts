@@ -12,7 +12,7 @@ export { systemPrompt } from "./prompt-system"
 export { loopMessages, remindQueuedMessages, scanLoopMessages } from "./prompt-loop-messages"
 export { createStructuredOutputTool, createStructuredOutputTurn } from "./prompt-structured-output"
 export { parseGoalArguments } from "./prompt-goal-arguments"
-export { findFallbackModel } from "./prompt-provider-fallback"
+export { chooseFallbackModel, findFallbackModel } from "./prompt-provider-fallback"
 export {
   assistantLoopExitDecision,
   assistantRespondedAfterUser,

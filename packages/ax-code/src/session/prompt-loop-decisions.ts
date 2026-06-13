@@ -1,5 +1,6 @@
 import { providerModelKey } from "../provider/model-key"
 import { ModelID, ProviderID } from "../provider/schema"
+import { parseJsonRecord } from "../util/json-record"
 import type { SessionCompaction } from "./compaction"
 import type { MessageV2 } from "./message-v2"
 import { formatDecisionCount, modelTurnFinished } from "./prompt-autonomous-decisions"
@@ -135,23 +136,113 @@ function fallbackErrorReason(message: string | undefined) {
   return reason ? reason : "unknown error"
 }
 
+function fallbackSwitchMessage(input: { providerID: ProviderID; reason: string; to: string }) {
+  const punctuation = /[.!?]$/.test(input.reason) ? "" : "."
+  return `Provider ${input.providerID} failed: ${input.reason}${punctuation} Switching to ${input.to}.`
+}
+
 export function providerFallbackLookupDecision(input: {
   consecutiveErrors: number
   error: unknown
 }): ProviderFallbackLookupDecision {
-  if (!hasRepeatedErrors(input.consecutiveErrors, 2)) return { action: "skip" }
   if (!input.error || typeof input.error !== "object") return { action: "skip" }
 
-  const error = input.error as { name?: unknown; data?: { statusCode?: unknown; message?: unknown } }
-  const statusCode = error.data?.statusCode
-  if (error.name !== "APIError" || typeof statusCode !== "number" || !PROVIDER_FALLBACK_STATUS_CODES.has(statusCode)) {
+  const statusCode = providerErrorStatusCode(input.error)
+  if (
+    !providerErrorName(input.error) ||
+    typeof statusCode !== "number" ||
+    !PROVIDER_FALLBACK_STATUS_CODES.has(statusCode)
+  ) {
+    return { action: "skip" }
+  }
+
+  const errorMessage = providerErrorMessage(input.error)
+  if (
+    !shouldFallbackForProviderError({ statusCode, message: errorMessage, consecutiveErrors: input.consecutiveErrors })
+  ) {
     return { action: "skip" }
   }
 
   return {
     action: "lookup",
-    errorMessage: typeof error.data?.message === "string" ? error.data.message : undefined,
+    errorMessage,
   }
+}
+
+function providerErrorName(error: object) {
+  const name = (error as { name?: unknown }).name
+  return name === "APIError" || name === "AI_APICallError"
+}
+
+function providerErrorStatusCode(error: object) {
+  const direct = (error as { statusCode?: unknown }).statusCode
+  if (typeof direct === "number") return direct
+  const data = (error as { data?: unknown }).data
+  if (data && typeof data === "object") {
+    const nested = (data as { statusCode?: unknown }).statusCode
+    if (typeof nested === "number") return nested
+  }
+  return undefined
+}
+
+function providerErrorMessage(error: object) {
+  const direct = (error as { message?: unknown }).message
+  if (typeof direct === "string") return direct
+
+  const data = (error as { data?: unknown }).data
+  if (data && typeof data === "object") {
+    const message = (data as { message?: unknown }).message
+    if (typeof message === "string") return message
+
+    const nestedError = (data as { error?: unknown }).error
+    if (nestedError && typeof nestedError === "object") {
+      const nestedMessage = (nestedError as { message?: unknown }).message
+      if (typeof nestedMessage === "string") return nestedMessage
+    }
+
+    const parsedMessage = responseBodyMessage((data as { responseBody?: unknown }).responseBody)
+    if (parsedMessage) return parsedMessage
+  }
+
+  return responseBodyMessage((error as { responseBody?: unknown }).responseBody)
+}
+
+function responseBodyMessage(responseBody: unknown) {
+  if (typeof responseBody !== "string") return undefined
+  const parsed = parseJsonRecord(responseBody)
+  const direct = parsed && typeof parsed.message === "string" ? parsed.message : undefined
+  if (direct) return direct
+  const directCode = parsed && typeof parsed.code === "string" ? parsed.code : undefined
+  if (directCode) return directCode
+  const nestedError = parsed && typeof parsed.error === "object" && parsed.error !== null ? parsed.error : undefined
+  if (nestedError && "message" in nestedError && typeof nestedError.message === "string") return nestedError.message
+  if (nestedError && "code" in nestedError && typeof nestedError.code === "string") return nestedError.code
+  if (nestedError && "type" in nestedError && typeof nestedError.type === "string") return nestedError.type
+  return undefined
+}
+
+function shouldFallbackForProviderError(input: {
+  statusCode: number
+  message: string | undefined
+  consecutiveErrors: number
+}) {
+  if (input.statusCode === 401 || input.statusCode === 402 || input.statusCode === 403) return true
+  if (providerAccountFailureMessage(input.message)) return true
+  return hasRepeatedErrors(input.consecutiveErrors, 2)
+}
+
+function providerAccountFailureMessage(message: string | undefined) {
+  const normalized = message?.toLowerCase() ?? ""
+  if (!normalized) return false
+  return (
+    normalized.includes("quota") ||
+    normalized.includes("credit") ||
+    normalized.includes("billing") ||
+    normalized.includes("exhausted") ||
+    normalized.includes("insufficient") ||
+    normalized.includes("unauthorized") ||
+    normalized.includes("forbidden")
+  )
 }
 
 export function providerFallbackSwitchState(input: {
@@ -167,7 +258,7 @@ export function providerFallbackSwitchState(input: {
     from,
     to,
     reason,
-    message: `Provider ${input.current.providerID} failed: ${reason}. Switching to ${to}.`,
+    message: fallbackSwitchMessage({ providerID: input.current.providerID, reason, to }),
     nextConsecutiveErrors: reduceFallbackConsecutiveErrors(input.consecutiveErrors),
   }
 }

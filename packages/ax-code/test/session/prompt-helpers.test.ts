@@ -18,6 +18,7 @@ import {
   modelInfo,
   pendingCompactionDecision,
   parseGoalArguments,
+  chooseFallbackModel,
   providerFallbackLookupDecision,
   providerFallbackSwitchState,
   processorLoopDecision,
@@ -485,7 +486,7 @@ describe("session.prompt helpers", () => {
     })
   })
 
-  test("looks up fallback providers only for repeated retryable account or rate-limit API failures", () => {
+  test("looks up fallback providers immediately for account failures and after repeated rate limits", () => {
     expect(
       providerFallbackLookupDecision({
         consecutiveErrors: 1,
@@ -500,6 +501,72 @@ describe("session.prompt helpers", () => {
     ).toEqual({
       action: "lookup",
       errorMessage: "rate limited",
+    })
+    expect(
+      providerFallbackLookupDecision({
+        consecutiveErrors: 1,
+        error: {
+          name: "APIError",
+          data: { statusCode: 429, message: "Your token-plan quota has been exhausted." },
+        },
+      }),
+    ).toEqual({
+      action: "lookup",
+      errorMessage: "Your token-plan quota has been exhausted.",
+    })
+    expect(
+      providerFallbackLookupDecision({
+        consecutiveErrors: 1,
+        error: {
+          name: "AI_APICallError",
+          statusCode: 429,
+          responseBody: JSON.stringify({
+            error: {
+              message: "Your token-plan quota has been exhausted.",
+              type: "insufficient_quota",
+              code: "insufficient_quota",
+            },
+          }),
+        },
+      }),
+    ).toEqual({
+      action: "lookup",
+      errorMessage: "Your token-plan quota has been exhausted.",
+    })
+    expect(
+      providerFallbackLookupDecision({
+        consecutiveErrors: 1,
+        error: {
+          name: "AI_APICallError",
+          statusCode: 429,
+          responseBody: JSON.stringify({
+            error: {
+              code: "insufficient_quota",
+            },
+          }),
+        },
+      }),
+    ).toEqual({
+      action: "lookup",
+      errorMessage: "insufficient_quota",
+    })
+    expect(
+      providerFallbackLookupDecision({
+        consecutiveErrors: 1,
+        error: { name: "APIError", data: { statusCode: 402, message: "payment required" } },
+      }),
+    ).toEqual({
+      action: "lookup",
+      errorMessage: "payment required",
+    })
+    expect(
+      providerFallbackLookupDecision({
+        consecutiveErrors: 1,
+        error: { name: "APIError", data: { statusCode: 403, message: "forbidden" } },
+      }),
+    ).toEqual({
+      action: "lookup",
+      errorMessage: "forbidden",
     })
     expect(
       providerFallbackLookupDecision({
@@ -519,6 +586,43 @@ describe("session.prompt helpers", () => {
         error: { name: "APIError", data: { statusCode: 429, message: "rate limited" } },
       }),
     ).toEqual({ action: "skip" })
+  })
+
+  test("chooses the same model from another provider before sorted fallback models", () => {
+    const providers = {
+      "alibaba-token-plan": {
+        id: ProviderID.make("alibaba-token-plan"),
+        name: "Alibaba Token Plan",
+        models: {
+          "glm-5.1": { id: ModelID.make("glm-5.1") },
+        },
+      } as any,
+      "zai-coding-plan": {
+        id: ProviderID.make("zai-coding-plan"),
+        name: "ZAI Coding Plan",
+        models: {
+          "zai-small": { id: ModelID.make("zai-small") },
+          "glm-5.1": { id: ModelID.make("glm-5.1") },
+        },
+      } as any,
+      openrouter: {
+        id: ProviderID.make("openrouter"),
+        name: "OpenRouter",
+        models: {
+          "z-model": { id: ModelID.make("z-model") },
+        },
+      } as any,
+    } as any
+
+    const result = chooseFallbackModel(providers, {
+      failedProviderID: ProviderID.make("alibaba-token-plan"),
+      preferredModelID: ModelID.make("glm-5.1"),
+    })
+
+    expect(result).toEqual({
+      providerID: ProviderID.make("zai-coding-plan"),
+      modelID: ModelID.make("glm-5.1"),
+    })
   })
 
   test("builds fallback provider switch state", () => {

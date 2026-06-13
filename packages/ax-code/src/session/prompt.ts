@@ -707,16 +707,6 @@ export namespace SessionPrompt {
         }
       }
 
-      const processorDecision = processorLoopDecision({
-        result,
-        messageFinish: processor.message.finish,
-        hasError: Boolean(processor.message.error),
-      })
-      if (processorDecision.action === "stop") {
-        reason = processorDecision.reason
-        break
-      }
-
       const errorTransition = await resolvePromptLoopErrorTransition({
         sessionID,
         currentModel: lastUser.model,
@@ -735,6 +725,19 @@ export namespace SessionPrompt {
       }
       if (errorTransition.action === "stop") {
         reason = errorTransition.reason
+        break
+      }
+      if (processor.message.error) {
+        continue
+      }
+
+      const processorDecision = processorLoopDecision({
+        result,
+        messageFinish: processor.message.finish,
+        hasError: false,
+      })
+      if (processorDecision.action === "stop") {
+        reason = processorDecision.reason
         break
       }
 

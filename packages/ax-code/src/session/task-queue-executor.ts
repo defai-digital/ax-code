@@ -3,6 +3,7 @@ import { DiagnosticLog } from "@/debug/diagnostic-log"
 import { Permission } from "@/permission"
 import { Instance } from "@/project/instance"
 import { Question } from "@/question"
+import { EventQuery } from "@/replay/query"
 import { Log } from "@/util/log"
 import { KeyedSerialQueue } from "@/util/queue"
 import { NamedError } from "@ax-code/util/error"
@@ -140,7 +141,9 @@ async function executeClaimedItem(item: TaskQueue.Info, execution: QueueExecutio
     // fall into the catch and mark a successfully-run task as "failed".
     let succeeded = false
     try {
-      await execution.run()
+      const result = await execution.run()
+      const failure = replayFailureForQueueExecution(item, result)
+      if (failure) throw new Error(failure)
       succeeded = true
     } catch (error) {
       DiagnosticLog.recordProcess("server.taskQueueTaskFailed", {
@@ -333,6 +336,34 @@ async function activeSessionItems(sessionID: SessionID) {
 
 function isActiveQueueStatus(status: TaskQueue.Status) {
   return activeStatuses.includes(status as (typeof activeStatuses)[number])
+}
+
+function replayFailureForQueueExecution(item: TaskQueue.Info, result: unknown): string | undefined {
+  if (!item.sessionID) return undefined
+  const startedAt = item.time.started ?? item.time.created
+  const events = EventQuery.bySessionLog(item.sessionID).filter((event) => event.time_created >= startedAt)
+  const latestEnd = events.findLast((event) => event.event_data.type === "session.end")?.event_data
+  if (latestEnd?.type !== "session.end" || latestEnd.reason !== "error") return undefined
+
+  const messageID = resultMessageID(result)
+  const latestError = events.findLast((event) => {
+    const data = event.event_data
+    if (data.type !== "error") return false
+    return !messageID || !data.messageID || data.messageID === messageID
+  })?.event_data
+
+  if (latestError?.type === "error" && latestError.message.trim()) {
+    return latestError.message.trim()
+  }
+  return "Session ended with an error"
+}
+
+function resultMessageID(result: unknown): string | undefined {
+  if (!result || typeof result !== "object") return undefined
+  const info = (result as { info?: unknown }).info
+  if (!info || typeof info !== "object") return undefined
+  const id = (info as { id?: unknown }).id
+  return typeof id === "string" && id.length > 0 ? id : undefined
 }
 
 function ensureSessionBlockObservers() {

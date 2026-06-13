@@ -43,7 +43,10 @@ type PromptLoopErrorTransitionDeps = {
 }
 
 type PromptLoopErrorDeps = {
-  findFallback?: (providerID: MessageV2.User["model"]["providerID"]) => Promise<MessageV2.User["model"] | undefined>
+  findFallback?: (
+    providerID: MessageV2.User["model"]["providerID"],
+    preferredModelID?: MessageV2.User["model"]["modelID"],
+  ) => Promise<MessageV2.User["model"] | undefined>
   warn?: (message: string, fields: Record<string, unknown>) => void
   publishError?: (input: { sessionID: SessionID; message: string }) => void
 }
@@ -66,9 +69,10 @@ export async function handlePromptLoopError(
     error: input.error,
   })
   if (fallbackLookup.action === "lookup") {
-    const fallback = await (deps.findFallback ?? findFallbackModel)(input.currentModel.providerID).catch(
-      () => undefined,
-    )
+    const fallback = await (deps.findFallback ?? findFallbackModel)(
+      input.currentModel.providerID,
+      input.currentModel.modelID,
+    ).catch(() => undefined)
     if (fallback) {
       const fallbackSwitch = providerFallbackSwitchState({
         current: input.currentModel,

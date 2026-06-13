@@ -3,6 +3,7 @@ import { Bus } from "../../src/bus"
 import { Permission } from "../../src/permission"
 import { Instance } from "../../src/project/instance"
 import { Question } from "../../src/question"
+import { Recorder } from "../../src/replay/recorder"
 import { Session } from "../../src/session"
 import { SessionPrompt } from "../../src/session/prompt"
 import { TaskQueueTable } from "../../src/session/session.sql"
@@ -288,6 +289,60 @@ describe("TaskQueue", () => {
       if (previousAutonomous === undefined) delete process.env.AX_CODE_AUTONOMOUS
       else process.env.AX_CODE_AUTONOMOUS = previousAutonomous
     }
+  })
+
+  test("marks prompt queue items failed when the prompt loop ends with a replay error", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const prompt = spyOn(SessionPrompt, "prompt")
+        ;(prompt as any).mockImplementation(async (input: any) => {
+          const messageID = "msg_queue_replay_error"
+          Recorder.begin(input.sessionID)
+          Recorder.emit({
+            type: "error",
+            sessionID: input.sessionID,
+            messageID,
+            errorType: "AI_APICallError",
+            message: "Your token-plan quota has been exhausted.",
+            stepIndex: 0,
+          })
+          Recorder.emit({
+            type: "session.end",
+            sessionID: input.sessionID,
+            reason: "error",
+            totalSteps: 1,
+          })
+          await Recorder.end(input.sessionID)
+          return {
+            info: { id: messageID, sessionID: input.sessionID, role: "assistant" },
+            parts: [],
+          } as any
+        })
+
+        try {
+          const item = await TaskQueue.enqueue({
+            sessionID: session.id,
+            kind: "prompt",
+            title: "Continue after quota failure",
+            payload: { text: "continue" },
+          })
+
+          await TaskQueueExecutor.start(item)
+          await waitForQueueStatus(item.id, "failed")
+
+          const failed = await TaskQueue.get(item.id)
+          expect(failed.error).toBe("Your token-plan quota has been exhausted.")
+          expect(failed.time.completed).toBeDefined()
+        } finally {
+          prompt.mockRestore()
+          await Session.remove(session.id)
+        }
+      },
+    })
   })
 
   test("applies workflow child tool and isolation policy as turn-scoped prompt metadata", async () => {

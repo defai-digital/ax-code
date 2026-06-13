@@ -105,15 +105,18 @@ export namespace SessionRetry {
     "increase your quota limit",
     "no resource package",
     "quota exceeded",
+    "quota has been exhausted",
     "token-limit",
+    "insufficient quota",
+    "insufficient_quota",
     "billing",
     "payment required",
     "account suspended",
     "subscription",
   ]
 
-  function isPermanentError(message: string): boolean {
-    const lower = message.toLowerCase()
+  function isPermanentError(message: string, responseBody?: string): boolean {
+    const lower = `${message}\n${responseBody ?? ""}`.toLowerCase()
     return NON_RETRYABLE_PATTERNS.some((p) => lower.includes(p))
   }
 
@@ -132,7 +135,7 @@ export namespace SessionRetry {
       // balance. Surface the error immediately instead of burning 60s
       // of exponential backoff. This overrides the AI SDK's blanket
       // `isRetryable: true` on all 429 responses.
-      if (isPermanentError(message)) return undefined
+      if (isPermanentError(message, error.data.responseBody)) return undefined
       if (error.data.responseBody?.includes("FreeUsageLimitError"))
         return `Free usage exceeded, add credits ${GITHUB_REPO_URL}`
       return message.includes("Overloaded") ? "Provider is overloaded" : message
