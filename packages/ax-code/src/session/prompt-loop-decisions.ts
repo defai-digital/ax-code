@@ -38,6 +38,7 @@ type ProviderFallbackLookupDecision =
   | {
       action: "lookup"
       errorMessage: string | undefined
+      stopWithoutFallback: boolean
     }
 
 type ProviderModelIdentity = {
@@ -157,15 +158,15 @@ export function providerFallbackLookupDecision(input: {
   }
 
   const errorMessage = providerErrorMessage(input.error)
-  if (
-    !shouldFallbackForProviderError({ statusCode, message: errorMessage, consecutiveErrors: input.consecutiveErrors })
-  ) {
+  const stopWithoutFallback = shouldStopWithoutFallbackForProviderError({ statusCode, message: errorMessage })
+  if (!stopWithoutFallback && !hasRepeatedErrors(input.consecutiveErrors, 2)) {
     return { action: "skip" }
   }
 
   return {
     action: "lookup",
     errorMessage,
+    stopWithoutFallback,
   }
 }
 
@@ -186,25 +187,29 @@ function providerErrorStatusCode(error: object) {
 }
 
 function providerErrorMessage(error: object) {
+  const candidates: Array<string | undefined> = []
   const direct = (error as { message?: unknown }).message
-  if (typeof direct === "string") return direct
+  if (typeof direct === "string") candidates.push(direct)
 
   const data = (error as { data?: unknown }).data
   if (data && typeof data === "object") {
     const message = (data as { message?: unknown }).message
-    if (typeof message === "string") return message
+    if (typeof message === "string") candidates.push(message)
 
     const nestedError = (data as { error?: unknown }).error
     if (nestedError && typeof nestedError === "object") {
       const nestedMessage = (nestedError as { message?: unknown }).message
-      if (typeof nestedMessage === "string") return nestedMessage
+      if (typeof nestedMessage === "string") candidates.push(nestedMessage)
     }
 
     const parsedMessage = responseBodyMessage((data as { responseBody?: unknown }).responseBody)
-    if (parsedMessage) return parsedMessage
+    if (parsedMessage) candidates.push(parsedMessage)
   }
 
-  return responseBodyMessage((error as { responseBody?: unknown }).responseBody)
+  const parsedMessage = responseBodyMessage((error as { responseBody?: unknown }).responseBody)
+  if (parsedMessage) candidates.push(parsedMessage)
+
+  return candidates.find(providerAccountFailureMessage) ?? candidates.find((message) => message !== undefined)
 }
 
 function responseBodyMessage(responseBody: unknown) {
@@ -221,14 +226,10 @@ function responseBodyMessage(responseBody: unknown) {
   return undefined
 }
 
-function shouldFallbackForProviderError(input: {
-  statusCode: number
-  message: string | undefined
-  consecutiveErrors: number
-}) {
+function shouldStopWithoutFallbackForProviderError(input: { statusCode: number; message: string | undefined }) {
   if (input.statusCode === 401 || input.statusCode === 402 || input.statusCode === 403) return true
   if (providerAccountFailureMessage(input.message)) return true
-  return hasRepeatedErrors(input.consecutiveErrors, 2)
+  return false
 }
 
 function providerAccountFailureMessage(message: string | undefined) {

@@ -201,6 +201,7 @@ export namespace SessionPrompt {
     let cachedAgent: PromptCacheEntry<Agent.Info>
     let cachedModel: PromptCacheEntry<Provider.Model>
     let fallbackModelOverride: MessageV2.User["model"] | undefined
+    const failedFallbackProviderIDs = new Set<ProviderID>()
     // Cache session history — only load from DB on first step, refresh on subsequent steps
     let cachedMsgs: MessageV2.WithParts[] | undefined
 
@@ -221,6 +222,7 @@ export namespace SessionPrompt {
       step = 0
       consecutiveErrors = 0
       fallbackModelOverride = undefined
+      failedFallbackProviderIDs.clear()
       cachedMsgs = undefined
       cachedAgent = undefined
       cachedModel = undefined
@@ -714,6 +716,7 @@ export namespace SessionPrompt {
         consecutiveErrors,
         fallbackModelOverride,
         step,
+        failedProviderIDs: failedFallbackProviderIDs,
       })
       consecutiveErrors = errorTransition.consecutiveErrors
       fallbackModelOverride = errorTransition.fallbackModelOverride
@@ -721,6 +724,7 @@ export namespace SessionPrompt {
         cachedModel = undefined
       }
       if (errorTransition.action === "retry") {
+        failedFallbackProviderIDs.add(lastUser.model.providerID)
         continue
       }
       if (errorTransition.action === "stop") {

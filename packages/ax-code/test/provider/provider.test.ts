@@ -1259,6 +1259,38 @@ test("config-defined Z.AI Coding Plan models filter GLM <5 and keep GLM 5+", asy
   })
 })
 
+test("bundled Z.AI coding plan providers expose GLM flagship and long-context variants", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await Bun.write(
+        path.join(dir, "ax-code.json"),
+        JSON.stringify({
+          $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+          enabled_providers: ["zai-coding-plan", "zhipuai-coding-plan"],
+        }),
+      )
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    init: async () => {
+      Env.set("ZHIPU_API_KEY", "test-zhipu-key")
+    },
+    fn: async () => {
+      const providers = await Provider.list()
+      const expected = ["glm-5.2", "glm-5.2[1m]", "glm-5.1[1m]"]
+
+      for (const providerID of ["zai-coding-plan", "zhipuai-coding-plan"]) {
+        const provider = providers[ProviderID.make(providerID)]
+        expect(provider).toBeDefined()
+        for (const modelID of expected) {
+          expect(provider.models[modelID]).toBeDefined()
+        }
+      }
+    },
+  })
+})
+
 test("google provider only exposes Gemini 3 or later models", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {

@@ -501,6 +501,7 @@ describe("session.prompt helpers", () => {
     ).toEqual({
       action: "lookup",
       errorMessage: "rate limited",
+      stopWithoutFallback: false,
     })
     expect(
       providerFallbackLookupDecision({
@@ -513,6 +514,7 @@ describe("session.prompt helpers", () => {
     ).toEqual({
       action: "lookup",
       errorMessage: "Your token-plan quota has been exhausted.",
+      stopWithoutFallback: true,
     })
     expect(
       providerFallbackLookupDecision({
@@ -532,6 +534,7 @@ describe("session.prompt helpers", () => {
     ).toEqual({
       action: "lookup",
       errorMessage: "Your token-plan quota has been exhausted.",
+      stopWithoutFallback: true,
     })
     expect(
       providerFallbackLookupDecision({
@@ -549,6 +552,26 @@ describe("session.prompt helpers", () => {
     ).toEqual({
       action: "lookup",
       errorMessage: "insufficient_quota",
+      stopWithoutFallback: true,
+    })
+    expect(
+      providerFallbackLookupDecision({
+        consecutiveErrors: 1,
+        error: {
+          name: "AI_APICallError",
+          message: "Too Many Requests",
+          statusCode: 429,
+          responseBody: JSON.stringify({
+            error: {
+              code: "insufficient_quota",
+            },
+          }),
+        },
+      }),
+    ).toEqual({
+      action: "lookup",
+      errorMessage: "insufficient_quota",
+      stopWithoutFallback: true,
     })
     expect(
       providerFallbackLookupDecision({
@@ -558,6 +581,7 @@ describe("session.prompt helpers", () => {
     ).toEqual({
       action: "lookup",
       errorMessage: "payment required",
+      stopWithoutFallback: true,
     })
     expect(
       providerFallbackLookupDecision({
@@ -567,6 +591,7 @@ describe("session.prompt helpers", () => {
     ).toEqual({
       action: "lookup",
       errorMessage: "forbidden",
+      stopWithoutFallback: true,
     })
     expect(
       providerFallbackLookupDecision({
@@ -622,6 +647,17 @@ describe("session.prompt helpers", () => {
     expect(result).toEqual({
       providerID: ProviderID.make("zai-coding-plan"),
       modelID: ModelID.make("glm-5.1"),
+    })
+
+    const excludedResult = chooseFallbackModel(providers, {
+      failedProviderID: ProviderID.make("alibaba-token-plan"),
+      preferredModelID: ModelID.make("glm-5.1"),
+      excludedProviderIDs: [ProviderID.make("zai-coding-plan")],
+    })
+
+    expect(excludedResult).toEqual({
+      providerID: ProviderID.make("openrouter"),
+      modelID: ModelID.make("z-model"),
     })
   })
 

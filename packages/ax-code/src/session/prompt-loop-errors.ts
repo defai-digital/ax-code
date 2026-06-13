@@ -46,9 +46,19 @@ type PromptLoopErrorDeps = {
   findFallback?: (
     providerID: MessageV2.User["model"]["providerID"],
     preferredModelID?: MessageV2.User["model"]["modelID"],
+    excludedProviderIDs?: Iterable<MessageV2.User["model"]["providerID"]>,
   ) => Promise<MessageV2.User["model"] | undefined>
   warn?: (message: string, fields: Record<string, unknown>) => void
   publishError?: (input: { sessionID: SessionID; message: string }) => void
+}
+
+function providerFallbackUnavailableMessage(input: {
+  providerID: MessageV2.User["model"]["providerID"]
+  errorMessage: string | undefined
+}) {
+  const reason = input.errorMessage?.trim() || "unknown error"
+  const punctuation = /[.!?]$/.test(reason) ? "" : "."
+  return `Provider ${input.providerID} failed: ${reason}${punctuation} No fallback provider available.`
 }
 
 export async function handlePromptLoopError(
@@ -58,6 +68,7 @@ export async function handlePromptLoopError(
     error: unknown
     consecutiveErrors: number
     step: number
+    failedProviderIDs?: Iterable<MessageV2.User["model"]["providerID"]>
   },
   deps: PromptLoopErrorDeps = {},
 ): Promise<PromptLoopErrorResult> {
@@ -72,6 +83,7 @@ export async function handlePromptLoopError(
     const fallback = await (deps.findFallback ?? findFallbackModel)(
       input.currentModel.providerID,
       input.currentModel.modelID,
+      input.failedProviderIDs,
     ).catch(() => undefined)
     if (fallback) {
       const fallbackSwitch = providerFallbackSwitchState({
@@ -95,6 +107,25 @@ export async function handlePromptLoopError(
         fallbackModel: fallback,
         consecutiveErrors: fallbackSwitch.nextConsecutiveErrors,
       }
+    }
+
+    if (fallbackLookup.stopWithoutFallback) {
+      const message = providerFallbackUnavailableMessage({
+        providerID: input.currentModel.providerID,
+        errorMessage: fallbackLookup.errorMessage,
+      })
+      ;(deps.warn ?? log.warn)("no fallback provider available", {
+        command: "session.prompt.loop",
+        status: "error",
+        errorCode: "PROVIDER_FALLBACK_UNAVAILABLE",
+        providerID: input.currentModel.providerID,
+        reason: fallbackLookup.errorMessage ?? "unknown error",
+      })
+      ;(deps.publishError ?? Session.publishError)({
+        sessionID: input.sessionID,
+        message,
+      })
+      return { action: "stop", reason: "error", consecutiveErrors: input.consecutiveErrors }
     }
   }
 
@@ -138,6 +169,7 @@ export async function resolvePromptLoopErrorTransition(
     consecutiveErrors: number
     fallbackModelOverride: MessageV2.User["model"] | undefined
     step: number
+    failedProviderIDs?: Iterable<MessageV2.User["model"]["providerID"]>
   },
   deps: PromptLoopErrorTransitionDeps = {},
 ): Promise<PromptLoopErrorTransition> {
@@ -156,6 +188,7 @@ export async function resolvePromptLoopErrorTransition(
     error: input.error,
     consecutiveErrors: input.consecutiveErrors + 1,
     step: input.step,
+    failedProviderIDs: input.failedProviderIDs,
   })
 
   if (errorResult.action === "fallback") {

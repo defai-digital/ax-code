@@ -479,6 +479,76 @@ if (fetched["xai"]?.models) {
   }
 }
 
+// GLM flagship + 1M-context variants on the Z.AI coding-plan endpoints.
+// Z.AI exposes a 1M-token window by appending a "[1m]" suffix to the model
+// name (e.g. "glm-5.2[1m]"); the suffix is forwarded verbatim as the
+// OpenAI-compatible `model` field, so it is just another model id to ax-code.
+// models.dev publishes only the 200K base ids and GLM-5.2 is coding-plan-only
+// at launch (general API / open weights ship later), so re-inject the GLM-5.2
+// flagship plus the glm-5.2[1m] and glm-5.1[1m] long-context variants on every
+// regeneration. Prefer the upstream entry when models.dev catches up; fall back
+// to the template otherwise. Scoped to the coding providers where the [1m]
+// suffix is documented (https://docs.z.ai/devpack/latest-model).
+const GLM_CODING_PROVIDER_IDS = ["zai-coding-plan", "zhipuai-coding-plan"]
+function glmCodingModel(id: string, name: string, context: number, releaseDate: string): RawModel {
+  return {
+    id,
+    name,
+    family: "glm",
+    attachment: false,
+    reasoning: true,
+    reasoning_options: [{ type: "toggle" }],
+    tool_call: true,
+    interleaved: { field: "reasoning_content" },
+    structured_output: true,
+    temperature: true,
+    release_date: releaseDate,
+    last_updated: releaseDate,
+    modalities: { input: ["text"], output: ["text"] },
+    open_weights: false,
+    limit: { context, output: 131072 },
+  } as RawModel
+}
+const glmInjectedModels: Array<{ id: string; name: string; context: number; release: string }> = [
+  { id: "glm-5.2", name: "GLM-5.2", context: 200000, release: "2026-06-13" },
+  { id: "glm-5.2[1m]", name: "GLM-5.2 (1M context)", context: 1000000, release: "2026-06-13" },
+  { id: "glm-5.1[1m]", name: "GLM-5.1 (1M context)", context: 1000000, release: "2026-03-27" },
+]
+for (const providerID of GLM_CODING_PROVIDER_IDS) {
+  const provider = fetched[providerID]
+  if (!provider) continue
+  const models = (provider.models ?? {}) as Record<string, RawModel>
+  const merged: Record<string, RawModel> = {}
+  // Surface the injected ids first so they lead the model picker, preferring
+  // any richer upstream metadata once models.dev publishes the base id.
+  for (const m of glmInjectedModels) {
+    merged[m.id] = models[m.id] ?? glmCodingModel(m.id, m.name, m.context, m.release)
+  }
+  for (const [mid, model] of Object.entries(models)) {
+    if (!merged[mid]) merged[mid] = model
+  }
+  provider.models = merged
+}
+
+// General Zhipu AI API (open.bigmodel.cn/api/paas/v4) gets the GLM-5.2 base
+// flagship only — the [1m] long-context variants stay scoped to the coding
+// endpoints where the suffix is documented. The general API ships GLM-5.2
+// shortly after the coding-plan launch, so inject it forward-looking until
+// models.dev publishes it; prefer the upstream entry once it does.
+{
+  const provider = fetched["zhipuai"]
+  if (provider) {
+    const models = (provider.models ?? {}) as Record<string, RawModel>
+    const merged: Record<string, RawModel> = {
+      "glm-5.2": models["glm-5.2"] ?? glmCodingModel("glm-5.2", "GLM-5.2", 200000, "2026-06-13"),
+    }
+    for (const [mid, model] of Object.entries(models)) {
+      if (!merged[mid]) merged[mid] = model
+    }
+    provider.models = merged
+  }
+}
+
 // Strip cost fields from every model — cost telemetry is removed from
 // ax-code, and zod will silently drop these on parse anyway. Removing them
 // here keeps the snapshot small and prevents the pre-commit hook from

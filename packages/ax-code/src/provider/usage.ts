@@ -36,8 +36,15 @@ export function usageSource(usage: unknown): UsageSource {
   const input = tokenCount(record.inputTokens)
   const output = tokenCount(record.outputTokens)
   const total = tokenCount(record.totalTokens)
-  // Check for absence of fields rather than zero values, since providers
-  // may legitimately report zero tokens (e.g., cached responses)
   if (record.inputTokens == null && record.outputTokens == null && record.totalTokens == null) return "missing"
+  const reasoning = tokenCount(record.reasoningTokens)
+  const inputDetails = record.inputTokens as Record<string, unknown> | undefined
+  const outputDetails = record.outputTokens as Record<string, unknown> | undefined
+  const cacheRead = tokenCount(record.cachedInputTokens ?? inputDetails?.cacheRead)
+  const cacheWrite = tokenCount(inputDetails?.cacheWrite)
+  const outputReasoning = tokenCount(outputDetails?.reasoning)
+  if (record.totalTokens == null && input + output + reasoning + cacheRead + cacheWrite + outputReasoning === 0) {
+    return "missing"
+  }
   return "exact"
 }
