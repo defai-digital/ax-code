@@ -24,8 +24,8 @@ describe("script.workspace-metadata", () => {
     )
 
     expect(opentuiRules).toEqual({
-      "opentui-spinner@0.0.6>@opentui/core": "0.3.4",
-      "opentui-spinner@0.0.6>@opentui/solid": "0.3.4",
+      "opentui-spinner@0.0.6>@opentui/core": "0.4.1",
+      "opentui-spinner@0.0.6>@opentui/solid": "0.4.1",
     })
   })
 
@@ -34,8 +34,8 @@ describe("script.workspace-metadata", () => {
     const packageJson = JSON.parse(await readFile(path.join(repoRoot, "packages/ax-code/package.json"), "utf8"))
     const dependencies = packageJson.dependencies ?? {}
 
-    expect(dependencies["@opentui/core"]).toBe("0.3.4")
-    expect(dependencies["@opentui/solid"]).toBe("0.3.4")
+    expect(dependencies["@opentui/core"]).toBe("0.4.1")
+    expect(dependencies["@opentui/solid"]).toBe("0.4.1")
     expect(dependencies["@opentui/keymap"]).toBeUndefined()
     expect(dependencies["opentui-spinner"]).toBe("0.0.6")
   })
