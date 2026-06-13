@@ -1496,7 +1496,7 @@ function AssistantMessage(props: { message: AssistantMessage; parts: Part[]; las
           customBorderChars={SplitBorder.customBorderChars}
           borderColor={theme.error}
         >
-          <text fg={theme.text}>{props.message.error?.data?.message ?? "An error occurred"}</text>
+          <text fg={theme.text}>{String(props.message.error?.data?.message ?? "An error occurred")}</text>
         </box>
       </Show>
       <Switch>

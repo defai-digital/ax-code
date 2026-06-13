@@ -88,8 +88,8 @@
     },
     "peerDependencyRules": {
       "allowedVersions": {
-        "opentui-spinner@0.0.6>@opentui/core": "0.3.4",
-        "opentui-spinner@0.0.6>@opentui/solid": "0.3.4"
+        "opentui-spinner@0.0.6>@opentui/core": "0.4.1",
+        "opentui-spinner@0.0.6>@opentui/solid": "0.4.1"
       }
     }
   },

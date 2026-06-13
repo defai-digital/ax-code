@@ -1,7 +1,7 @@
 import { TextareaRenderable, TextAttributes } from "@opentui/core"
 import { useTheme } from "../context/theme"
 import { useDialog, type DialogContext } from "./dialog"
-import { onCleanup, onMount, type JSX } from "solid-js"
+import { onCleanup, onMount, Show, type JSX } from "solid-js"
 import { scheduleMicrotaskTask } from "@tui/util/microtask"
 import { useToast } from "./toast"
 import { Log } from "@/util/log"
@@ -59,7 +59,10 @@ export function DialogPrompt(props: DialogPromptProps) {
         </text>
       </box>
       <box gap={1}>
-        {props.description}
+        {/* OpenTUI 0.4.x tightened JSX child types to `string | Element`, so the
+            optional `() => JSX.Element` description thunk must be invoked (and
+            its `undefined` case guarded) rather than passed as a raw child. */}
+        <Show when={props.description}>{(description) => description()()}</Show>
         <textarea
           onSubmit={() => {
             runDialogPromptAction(
