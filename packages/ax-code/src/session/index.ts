@@ -379,8 +379,18 @@ export namespace Session {
 
       // The fork inherits the message history, so it inherits the goal that
       // history was pursuing — otherwise a forked goal/Super-Long run loses
-      // its objective and budget tracking.
-      await SessionGoal.copyTo({ from: input.sessionID, to: session.id })
+      // its objective and budget tracking. The fork itself is already
+      // committed and its events published by this point, so a failure to
+      // copy the goal (e.g. a lock-timeout in copyTo's transaction) must not
+      // turn a successful fork into a rejected call that leaves an orphan
+      // session behind — log and return the fork without the goal.
+      await SessionGoal.copyTo({ from: input.sessionID, to: session.id }).catch((error) => {
+        log.warn("failed to copy goal to forked session", {
+          from: input.sessionID,
+          to: session.id,
+          error,
+        })
+      })
 
       return session
     },

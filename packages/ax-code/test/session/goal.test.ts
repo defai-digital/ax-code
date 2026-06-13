@@ -160,6 +160,30 @@ describe("SessionGoal", () => {
     })
   })
 
+  test("a failing goal copy does not fail the fork", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        await SessionGoal.create({ sessionID: session.id, objective: "ship the feature" })
+
+        // copyTo runs after the fork is already committed and its events
+        // published; a failure there must not reject the whole fork.
+        const copySpy = spyOn(SessionGoal, "copyTo").mockRejectedValue(new Error("database is locked"))
+        try {
+          const fork = await Session.fork({ sessionID: session.id })
+          expect(fork.id).toBeTruthy()
+          // The fork session itself is fully persisted and retrievable.
+          expect(await Session.get(fork.id)).toBeTruthy()
+        } finally {
+          copySpy.mockRestore()
+        }
+      },
+    })
+  })
+
   test("re-creating over a terminal goal resets usage and creation time", async () => {
     await using tmp = await tmpdir({ git: true })
 

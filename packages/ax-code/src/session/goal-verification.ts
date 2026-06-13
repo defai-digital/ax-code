@@ -58,11 +58,16 @@ export namespace GoalVerification {
 
   function firstWord(segment: string) {
     const tokens = segment.trim().split(/\s+/)
-    // Skip leading VAR=value assignments so `CI=1 bun test` is judged by
-    // the actual command.
     for (const token of tokens) {
-      if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(token)) continue
-      return token
+      // Strip leading subshell/group punctuation so `(sleep 5)` is judged by
+      // `sleep`, not `(sleep` — otherwise a trivial command wrapped in a
+      // subshell escapes the trivial check and wrongly counts as verification.
+      const cleaned = token.replace(/^[({]+/, "")
+      if (cleaned === "") continue
+      // Skip leading VAR=value assignments so `CI=1 bun test` is judged by
+      // the actual command.
+      if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(cleaned)) continue
+      return cleaned
     }
     return ""
   }
