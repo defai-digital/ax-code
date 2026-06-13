@@ -1,11 +1,9 @@
 import type { AuthOuathResult, Hooks } from "@ax-code/plugin"
 import { NamedError } from "@ax-code/util/error"
 import { Auth } from "@/auth"
-import { InstanceState } from "@/effect/instance-state"
-import { makeRunPromise } from "@/effect/run-service"
+import { Instance } from "@/project/instance"
 import { Plugin } from "../plugin"
 import { ProviderID } from "./schema"
-import { Array as Arr, Effect, Layer, Record, Result, ServiceMap } from "effect"
 import z from "zod"
 
 export namespace ProviderAuth {
@@ -94,162 +92,54 @@ export namespace ProviderAuth {
 
   type Hook = NonNullable<Hooks["auth"]>
 
-  export interface Interface {
-    readonly methods: () => Effect.Effect<Record<ProviderID, Method[]>>
-    readonly authorize: (input: {
-      providerID: ProviderID
-      method: number
-      inputs?: Record<string, string>
-    }) => Effect.Effect<Authorization | undefined, Error>
-    readonly callback: (input: { providerID: ProviderID; method: number; code?: string }) => Effect.Effect<void, Error>
-  }
-
   interface State {
     hooks: Record<ProviderID, Hook>
     pending: Map<ProviderID, AuthOuathResult>
   }
 
-  export class Service extends ServiceMap.Service<Service, Interface>()("@ax-code/ProviderAuth") {}
-
-  export const layer = Layer.effect(
-    Service,
-    Effect.gen(function* () {
-      const auth = yield* Auth.Service
-      const state = yield* InstanceState.make<State>(
-        Effect.fn("ProviderAuth.state")(() =>
-          Effect.promise(async () => {
-            const plugins = await Plugin.list()
-            return {
-              hooks: Record.fromEntries(
-                Arr.filterMap(plugins, (x) =>
-                  x.auth?.provider !== undefined
-                    ? Result.succeed([ProviderID.make(x.auth.provider), x.auth] as const)
-                    : Result.failVoid,
-                ),
-              ),
-              pending: new Map<ProviderID, AuthOuathResult>(),
-            }
-          }),
-        ),
-      )
-
-      const methods = Effect.fn("ProviderAuth.methods")(function* () {
-        const hooks = (yield* InstanceState.get(state)).hooks
-        return Record.map(hooks, (item) =>
-          item.methods.map(
-            (method): Method => ({
-              type: method.type,
-              label: method.label,
-              prompts: method.prompts?.map((prompt) => {
-                if (prompt.type === "select") {
-                  return {
-                    type: "select" as const,
-                    key: prompt.key,
-                    message: prompt.message,
-                    options: prompt.options,
-                    when: prompt.when,
-                  }
-                }
-                return {
-                  type: "text" as const,
-                  key: prompt.key,
-                  message: prompt.message,
-                  placeholder: prompt.placeholder,
-                  when: prompt.when,
-                }
-              }),
-            }),
-          ),
-        )
-      })
-
-      const authorize = Effect.fn("ProviderAuth.authorize")(function* (input: {
-        providerID: ProviderID
-        method: number
-        inputs?: Record<string, string>
-      }) {
-        const { hooks, pending } = yield* InstanceState.get(state)
-        // Bounds-check both `providerID` and `method` before chaining
-        // property accesses. Previously an invalid providerID or
-        // out-of-range method index crashed the Effect service with a
-        // raw TypeError, taking down the whole auth flow for every
-        // provider until the service restarted. Reuse the existing
-        // `OauthMissing` typed error so the failure flows through the
-        // service's declared error channel.
-        const provider = hooks[input.providerID]
-        if (!provider) {
-          return yield* Effect.fail(new OauthMissing({ providerID: input.providerID }))
-        }
-        const method = provider.methods[input.method]
-        if (!method) {
-          return yield* Effect.fail(new OauthMissing({ providerID: input.providerID }))
-        }
-        if (method.type !== "oauth") return
-
-        if (method.prompts && input.inputs) {
-          for (const prompt of method.prompts) {
-            if (prompt.type === "text" && prompt.validate && input.inputs[prompt.key] !== undefined) {
-              const error = prompt.validate(input.inputs[prompt.key])
-              if (error) return yield* Effect.fail(new ValidationFailed({ field: prompt.key, message: error }))
-            }
-          }
-        }
-
-        const result = yield* Effect.promise(() => method.authorize(input.inputs))
-        pending.set(input.providerID, result)
-        return {
-          url: result.url,
-          method: result.method,
-          instructions: result.instructions,
-        }
-      })
-
-      const callback = Effect.fn("ProviderAuth.callback")(function* (input: {
-        providerID: ProviderID
-        method: number
-        code?: string
-      }) {
-        const pending = (yield* InstanceState.get(state)).pending
-        const match = pending.get(input.providerID)
-        if (!match) return yield* Effect.fail(new OauthMissing({ providerID: input.providerID }))
-        if (match.method === "code" && !input.code) {
-          return yield* Effect.fail(new OauthCodeMissing({ providerID: input.providerID }))
-        }
-
-        const result = yield* Effect.promise(() =>
-          match.method === "code" ? match.callback(input.code!) : match.callback(),
-        )
-        pending.delete(input.providerID)
-        if (!result || result.type !== "success") return yield* Effect.fail(new OauthCallbackFailed({}))
-
-        if ("key" in result) {
-          yield* auth.set(input.providerID, {
-            type: "api",
-            key: result.key,
-          })
-        }
-
-        if ("refresh" in result) {
-          yield* auth.set(input.providerID, {
-            type: "oauth",
-            access: result.access,
-            refresh: result.refresh,
-            expires: result.expires,
-            ...(result.accountId ? { accountId: result.accountId } : {}),
-          })
-        }
-      })
-
-      return Service.of({ methods, authorize, callback })
-    }),
-  )
-
-  export const defaultLayer = layer.pipe(Layer.provide(Auth.layer))
-
-  const runPromise = makeRunPromise(Service, defaultLayer)
+  const state = Instance.state(async (): Promise<State> => {
+    const plugins = await Plugin.list()
+    return {
+      hooks: Object.fromEntries(
+        plugins
+          .filter((plugin) => plugin.auth?.provider !== undefined)
+          .map((plugin) => [ProviderID.make(plugin.auth!.provider), plugin.auth!] as const),
+      ) as Record<ProviderID, Hook>,
+      pending: new Map<ProviderID, AuthOuathResult>(),
+    }
+  })
 
   export async function methods() {
-    return runPromise((svc) => svc.methods())
+    const hooks = (await state()).hooks
+    return Object.fromEntries(
+      Object.entries(hooks).map(([providerID, item]) => [
+        providerID,
+        item.methods.map(
+          (method): Method => ({
+            type: method.type,
+            label: method.label,
+            prompts: method.prompts?.map((prompt) => {
+              if (prompt.type === "select") {
+                return {
+                  type: "select" as const,
+                  key: prompt.key,
+                  message: prompt.message,
+                  options: prompt.options,
+                  when: prompt.when,
+                }
+              }
+              return {
+                type: "text" as const,
+                key: prompt.key,
+                message: prompt.message,
+                placeholder: prompt.placeholder,
+                when: prompt.when,
+              }
+            }),
+          }),
+        ),
+      ]),
+    ) as Record<ProviderID, Method[]>
   }
 
   export async function authorize(input: {
@@ -257,10 +147,69 @@ export namespace ProviderAuth {
     method: number
     inputs?: Record<string, string>
   }): Promise<Authorization | undefined> {
-    return runPromise((svc) => svc.authorize(input))
+    const { hooks, pending } = await state()
+    // Bounds-check both `providerID` and `method` before chaining
+    // property accesses. Previously an invalid providerID or
+    // out-of-range method index crashed the Effect service with a
+    // raw TypeError, taking down the whole auth flow for every
+    // provider until the service restarted. Reuse the existing
+    // `OauthMissing` typed error so the failure flows through the
+    // service's declared error channel.
+    const provider = hooks[input.providerID]
+    if (!provider) {
+      throw new OauthMissing({ providerID: input.providerID })
+    }
+    const method = provider.methods[input.method]
+    if (!method) {
+      throw new OauthMissing({ providerID: input.providerID })
+    }
+    if (method.type !== "oauth") return
+
+    if (method.prompts && input.inputs) {
+      for (const prompt of method.prompts) {
+        if (prompt.type === "text" && prompt.validate && input.inputs[prompt.key] !== undefined) {
+          const error = prompt.validate(input.inputs[prompt.key])
+          if (error) throw new ValidationFailed({ field: prompt.key, message: error })
+        }
+      }
+    }
+
+    const result = await method.authorize(input.inputs)
+    pending.set(input.providerID, result)
+    return {
+      url: result.url,
+      method: result.method,
+      instructions: result.instructions,
+    }
   }
 
   export async function callback(input: { providerID: ProviderID; method: number; code?: string }) {
-    return runPromise((svc) => svc.callback(input))
+    const pending = (await state()).pending
+    const match = pending.get(input.providerID)
+    if (!match) throw new OauthMissing({ providerID: input.providerID })
+    if (match.method === "code" && !input.code) {
+      throw new OauthCodeMissing({ providerID: input.providerID })
+    }
+
+    const result = match.method === "code" ? await match.callback(input.code!) : await match.callback()
+    pending.delete(input.providerID)
+    if (!result || result.type !== "success") throw new OauthCallbackFailed({})
+
+    if ("key" in result) {
+      await Auth.set(input.providerID, {
+        type: "api",
+        key: result.key,
+      })
+    }
+
+    if ("refresh" in result) {
+      await Auth.set(input.providerID, {
+        type: "oauth",
+        access: result.access,
+        refresh: result.refresh,
+        expires: result.expires,
+        ...(result.accountId ? { accountId: result.accountId } : {}),
+      })
+    }
   }
 }
