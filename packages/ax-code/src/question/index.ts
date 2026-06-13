@@ -1,4 +1,3 @@
-import { Schema } from "effect"
 import { Bus } from "@/bus"
 import { BusEvent } from "@/bus/bus-event"
 import { Config } from "@/config/config"
@@ -126,7 +125,14 @@ export namespace Question {
     ),
   }
 
-  export class RejectedError extends Schema.TaggedErrorClass<RejectedError>()("QuestionRejectedError", {}) {
+  export class RejectedError extends Error {
+    override readonly name = "QuestionRejectedError"
+
+    constructor(options?: ErrorOptions) {
+      super("The user dismissed this question", options)
+      this.name = "QuestionRejectedError"
+    }
+
     override get message() {
       return "The user dismissed this question"
     }

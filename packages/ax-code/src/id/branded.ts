@@ -22,6 +22,9 @@ export function defineBrandedIdentifier<const Tag extends string, const Prefix e
     ascending(id?: string): ID {
       return Identifier.ascending(prefix, id) as ID
     },
+    descending(id?: string): ID {
+      return Identifier.descending(prefix, id) as ID
+    },
     zod: schema,
     tag,
     prefix,

@@ -1,5 +1,4 @@
 import { expect, test, describe } from "bun:test"
-import { Effect } from "effect"
 import { ConfigMarkdown } from "../../src/config/markdown"
 
 describe("ConfigMarkdown: normal template", () => {
@@ -231,8 +230,8 @@ describe("ConfigMarkdown: frontmatter has weird model id", async () => {
 describe("ConfigMarkdown: frontmatter parsing failure", () => {
   const file = import.meta.dir + "/fixtures/invalid-frontmatter.md"
 
-  test("parseEffect returns typed frontmatter error", async () => {
-    const err = await Effect.runPromise(ConfigMarkdown.parseEffect(file).pipe(Effect.flip))
+  test("parse returns typed frontmatter error", async () => {
+    const err = await ConfigMarkdown.parse(file).catch((error) => error)
     if (!ConfigMarkdown.FrontmatterError.isInstance(err)) throw new Error("expected FrontmatterError")
     expect(err.data.path).toBe(file)
     expect(err.data.message).toContain("Failed to parse YAML frontmatter")

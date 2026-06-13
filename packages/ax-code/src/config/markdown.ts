@@ -1,4 +1,3 @@
-import { Effect, Schema } from "effect"
 import matter from "gray-matter"
 import { z } from "zod"
 import { NamedError } from "@ax-code/util/error"
@@ -7,12 +6,6 @@ import { Filesystem } from "../util/filesystem"
 export namespace ConfigMarkdown {
   export const FILE_REGEX = /(?<![\w`])@(\.?[^\s`,.]*(?:\.[^\s`,.]+)*)/g
   export const SHELL_REGEX = /!`([^`]+)`/g
-
-  class ReadError extends Schema.TaggedErrorClass<ReadError>()("ConfigMarkdownReadError", {
-    path: Schema.String,
-    message: Schema.String,
-    cause: Schema.optional(Schema.Defect),
-  }) {}
 
   export function files(template: string) {
     return Array.from(template.matchAll(FILE_REGEX))
@@ -84,39 +77,33 @@ export namespace ConfigMarkdown {
       { cause: err },
     )
 
-  const load = Effect.fn("ConfigMarkdown.load")((file: string, text: string) =>
-    Effect.try({
-      try: () => matter(text),
-      catch: wrap(file),
-    }).pipe(
-      Effect.catch(() =>
-        Effect.try({
-          try: () => matter(fallbackSanitization(text)),
-          catch: wrap(file),
-        }),
-      ),
-    ),
-  )
+  async function load(file: string, text: string) {
+    try {
+      return matter(text)
+    } catch {
+      try {
+        return matter(fallbackSanitization(text))
+      } catch (err) {
+        throw wrap(file)(err)
+      }
+    }
+  }
 
-  export const parseEffect = Effect.fn("ConfigMarkdown.parse")(function* (file: string) {
-    const text = yield* Effect.tryPromise({
-      try: () => Filesystem.readText(file),
-      catch: (err) =>
-        new ReadError({
+  export async function parse(file: string) {
+    const text = await Filesystem.readText(file).catch((err) => {
+      throw new FrontmatterError(
+        {
           path: file,
-          message: `${file}: Failed to read markdown config`,
-          cause: err,
-        }),
+          message: `${file}: Failed to read markdown config: ${NamedError.message(err)}`,
+        },
+        { cause: err },
+      )
     })
-    return yield* load(file, text)
-  })
-
-  export function parse(file: string) {
-    return Effect.runPromise(parseEffect(file))
+    return load(file, text)
   }
 
   export function parseText(location: string, content: string) {
-    return Effect.runPromise(load(location, content))
+    return load(location, content)
   }
 
   export const FrontmatterError = NamedError.create(

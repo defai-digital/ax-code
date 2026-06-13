@@ -1,7 +1,7 @@
 /**
  * @deprecated Effect-Schema helpers. New code should not import from
- * here. Per ARCHITECTURE.md, Effect is frozen outside src/effect/,
- * src/session/, src/file/watcher.ts, and src/util/effect-zod.ts. Use Zod
+ * here. Per ARCHITECTURE.md, Effect is frozen outside src/effect/ and
+ * src/util/effect-zod.ts. Use Zod
  * (`z.object()`) for all new schema work; use the existing effect-zod
  * bridge if you need to interoperate with legacy Effect-Schema IDs.
  */

@@ -44,11 +44,13 @@ New code must NOT introduce Effect dependencies unless modifying an existing Eff
 - `Log.create()` for structured logging
 - Plain TypeScript functions
 
-**Where Effect remains (core only):**
+**Where new Effect imports are still allowed:**
 
 - `src/effect/` — runtime infrastructure
-- `src/session/` — session processing loop
-- `src/file/watcher.ts` — subscription lifecycle
+- `src/util/effect-zod.ts` — deliberate bridge for legacy Effect Schema IDs
+
+Other Effect imports are legacy allowlist entries tracked by
+`script/check-no-effect-solid-in-v4.ts`; remove entries as modules migrate.
 
 ## Coding Patterns (AI-first)
 

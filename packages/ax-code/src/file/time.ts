@@ -1,10 +1,8 @@
-import { DateTime, Effect, Layer, Semaphore, ServiceMap } from "effect"
-import { InstanceState } from "@/effect/instance-state"
-import { makeRunPromise } from "@/effect/run-service"
 import { Flag } from "@/flag/flag"
 import type { SessionID } from "@/session/schema"
 import { Filesystem } from "../util/filesystem"
 import { Log } from "../util/log"
+import { Instance } from "@/project/instance"
 
 export namespace FileTime {
   const log = Log.create({ service: "file.time" })
@@ -16,18 +14,28 @@ export namespace FileTime {
     readonly size: number | undefined
   }
 
-  const stamp = Effect.fnUntraced(function* (file: string) {
+  interface State {
+    reads: Map<SessionID, Map<string, Stamp>>
+    locks: Map<string, Promise<void>>
+  }
+
+  const state = Instance.state<State>(() => ({
+    reads: new Map<SessionID, Map<string, Stamp>>(),
+    locks: new Map<string, Promise<void>>(),
+  }))
+
+  function stamp(file: string): Stamp {
     const stat = Filesystem.stat(file)
     const size = typeof stat?.size === "bigint" ? Number(stat.size) : stat?.size
     return {
-      read: yield* DateTime.nowAsDate,
+      read: new Date(),
       mtime: stat?.mtime?.getTime(),
       ctime: stat?.ctime?.getTime(),
       size,
     }
-  })
+  }
 
-  const session = (reads: Map<SessionID, Map<string, Stamp>>, sessionID: SessionID) => {
+  function session(reads: Map<SessionID, Map<string, Stamp>>, sessionID: SessionID) {
     const value = reads.get(sessionID)
     if (value) return value
 
@@ -36,102 +44,47 @@ export namespace FileTime {
     return next
   }
 
-  interface State {
-    reads: Map<SessionID, Map<string, Stamp>>
-    locks: Map<string, Semaphore.Semaphore>
+  export async function read(sessionID: SessionID, file: string) {
+    const reads = state().reads
+    log.info("read", { sessionID, file })
+    session(reads, sessionID).set(file, stamp(file))
   }
 
-  export interface Interface {
-    readonly read: (sessionID: SessionID, file: string) => Effect.Effect<void>
-    readonly get: (sessionID: SessionID, file: string) => Effect.Effect<Date | undefined>
-    readonly assert: (sessionID: SessionID, filepath: string) => Effect.Effect<void>
-    readonly withLock: <T>(filepath: string, fn: () => Promise<T>) => Effect.Effect<T>
-  }
-
-  export class Service extends ServiceMap.Service<Service, Interface>()("@ax-code/FileTime") {}
-
-  export const layer = Layer.effect(
-    Service,
-    Effect.gen(function* () {
-      const disableCheck = yield* Flag.AX_CODE_DISABLE_FILETIME_CHECK
-      const state = yield* InstanceState.make<State>(
-        Effect.fn("FileTime.state")(() =>
-          Effect.succeed({
-            reads: new Map<SessionID, Map<string, Stamp>>(),
-            locks: new Map<string, Semaphore.Semaphore>(),
-          }),
-        ),
-      )
-
-      const getLock = Effect.fn("FileTime.lock")(function* (filepath: string) {
-        // IMPORTANT: once `locks` is obtained there MUST be no yield
-        // points (no `yield*`, no `await`) between the `.get` check and
-        // the `.set` — otherwise two concurrent fibers could both see
-        // `undefined`, both create a new Semaphore, and both write,
-        // defeating mutual exclusion. The double-check after creation
-        // is a belt-and-braces guard so a future refactor that adds a
-        // yield between the check and set cannot silently reintroduce
-        // the race.
-        const locks = (yield* InstanceState.get(state)).locks
-        const existing = locks.get(filepath)
-        if (existing) return existing
-        const next = Semaphore.makeUnsafe(1)
-        const winner = locks.get(filepath)
-        if (winner) return winner
-        locks.set(filepath, next)
-        return next
-      })
-
-      const read = Effect.fn("FileTime.read")(function* (sessionID: SessionID, file: string) {
-        const reads = (yield* InstanceState.get(state)).reads
-        log.info("read", { sessionID, file })
-        session(reads, sessionID).set(file, yield* stamp(file))
-      })
-
-      const get = Effect.fn("FileTime.get")(function* (sessionID: SessionID, file: string) {
-        const reads = (yield* InstanceState.get(state)).reads
-        return reads.get(sessionID)?.get(file)?.read
-      })
-
-      const assert = Effect.fn("FileTime.assert")(function* (sessionID: SessionID, filepath: string) {
-        if (disableCheck) return
-
-        const reads = (yield* InstanceState.get(state)).reads
-        const time = reads.get(sessionID)?.get(filepath)
-        if (!time) throw new Error(`You must read file ${filepath} before overwriting it. Use the Read tool first`)
-
-        const next = yield* stamp(filepath)
-        const changed = next.mtime !== time.mtime || next.ctime !== time.ctime || next.size !== time.size
-        if (!changed) return
-
-        throw new Error(
-          `File ${filepath} has been modified since it was last read.\nLast modification: ${new Date(next.mtime ?? next.read.getTime()).toISOString()}\nLast read: ${time.read.toISOString()}\n\nPlease read the file again before modifying it.`,
-        )
-      })
-
-      const withLock = Effect.fn("FileTime.withLock")(function* <T>(filepath: string, fn: () => Promise<T>) {
-        return yield* Effect.promise(fn).pipe((yield* getLock(filepath)).withPermits(1))
-      })
-
-      return Service.of({ read, get, assert, withLock })
-    }),
-  ).pipe(Layer.orDie)
-
-  const runPromise = makeRunPromise(Service, layer)
-
-  export function read(sessionID: SessionID, file: string) {
-    return runPromise((s) => s.read(sessionID, file))
-  }
-
-  export function get(sessionID: SessionID, file: string) {
-    return runPromise((s) => s.get(sessionID, file))
+  export async function get(sessionID: SessionID, file: string) {
+    return state().reads.get(sessionID)?.get(file)?.read
   }
 
   export async function assert(sessionID: SessionID, filepath: string) {
-    return runPromise((s) => s.assert(sessionID, filepath))
+    if (Flag.AX_CODE_DISABLE_FILETIME_CHECK) return
+
+    const time = state().reads.get(sessionID)?.get(filepath)
+    if (!time) throw new Error(`You must read file ${filepath} before overwriting it. Use the Read tool first`)
+
+    const next = stamp(filepath)
+    const changed = next.mtime !== time.mtime || next.ctime !== time.ctime || next.size !== time.size
+    if (!changed) return
+
+    throw new Error(
+      `File ${filepath} has been modified since it was last read.\nLast modification: ${new Date(next.mtime ?? next.read.getTime()).toISOString()}\nLast read: ${time.read.toISOString()}\n\nPlease read the file again before modifying it.`,
+    )
   }
 
   export async function withLock<T>(filepath: string, fn: () => Promise<T>): Promise<T> {
-    return runPromise((s) => s.withLock(filepath, fn))
+    const locks = state().locks
+    const previous = locks.get(filepath) ?? Promise.resolve()
+    let release!: () => void
+    const waitForRelease = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const current = previous.catch(() => {}).then(() => waitForRelease)
+    locks.set(filepath, current)
+
+    await previous.catch(() => {})
+    try {
+      return await fn()
+    } finally {
+      release()
+      if (locks.get(filepath) === current) locks.delete(filepath)
+    }
   }
 }

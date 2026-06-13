@@ -94,9 +94,8 @@ export namespace V4Guardrails {
 
 // EffectGuard scans the entire src/ tree for `from "effect"` (and
 // related @effect/*, effect/* paths). Per ARCHITECTURE.md the only
-// places allowed to introduce new Effect usage are src/effect/,
-// src/session/, src/file/watcher.ts, and the deliberate Zod bridge at
-// src/util/effect-zod.ts. Everything else is in scope for the H2
+// places allowed to introduce new Effect usage are src/effect/ and the
+// deliberate Zod bridge at src/util/effect-zod.ts. Everything else is in scope for the H2
 // migration backlog tracked in PRD-2026-05-17-stability-audit-remediation.
 //
 // To keep CI green while H2 is in progress, the remaining violators are
@@ -104,8 +103,8 @@ export namespace V4Guardrails {
 // that list as the migration lands narrows the allowed surface.
 // A new Effect import in any other file becomes a CI failure.
 export namespace EffectGuard {
-  export const AllowedDirs = ["src/effect/", "src/session/"] as const
-  export const AllowedFiles = ["src/file/watcher.ts", "src/util/effect-zod.ts"] as const
+  export const AllowedDirs = ["src/effect/"] as const
+  export const AllowedFiles = ["src/util/effect-zod.ts"] as const
 
   // Temporary allowlist of pre-existing Effect importers outside the
   // documented allowlist. Remove entries from this list as each file
@@ -120,17 +119,12 @@ export namespace EffectGuard {
     "src/cli/cmd/account.ts",
     "src/cli/effect/prompt.ts",
     "src/command/index.ts",
-    "src/config/markdown.ts",
-    "src/file/time.ts",
     "src/filesystem/index.ts",
-    "src/flag/flag.ts",
     "src/installation/index.ts",
     "src/permission/index.ts",
     "src/project/project.ts",
     "src/provider/auth.ts",
     "src/pty/index.ts",
-    "src/question/index.ts",
-    "src/replay/index.ts",
     "src/skill/discovery.ts",
     "src/skill/index.ts",
     "src/tool/registry.ts",
@@ -212,9 +206,7 @@ if (import.meta.main) {
   }
   if (effectViolations.length > 0) {
     failed = true
-    console.log(
-      "# Effect Guard Violations (outside src/effect, src/session, src/file/watcher.ts, src/util/effect-zod.ts)",
-    )
+    console.log("# Effect Guard Violations (outside src/effect and src/util/effect-zod.ts)")
     for (const item of effectViolations) console.log(`- ${EffectGuard.format(item)}`)
     console.log("\nNew code must use async/await + Zod + Result<T,E> instead of Effect (ARCHITECTURE.md).")
   }

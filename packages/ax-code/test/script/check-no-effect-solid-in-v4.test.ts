@@ -52,17 +52,25 @@ describe("script.check-no-effect-solid-in-v4 EffectGuard", () => {
     expect(violations).toEqual([{ file: "src/account/new.ts", spec: "effect" }])
   })
 
-  test("ignores effect imports inside allowed dirs and bridge file", async () => {
+  test("ignores effect imports inside runtime infrastructure and bridge file", async () => {
     await using tmp = await tmpdir()
     await mkdir(path.join(tmp.path, "src/effect"), { recursive: true })
-    await mkdir(path.join(tmp.path, "src/session"), { recursive: true })
-    await mkdir(path.join(tmp.path, "src/file"), { recursive: true })
     await mkdir(path.join(tmp.path, "src/util"), { recursive: true })
     await writeFile(path.join(tmp.path, "src/effect/ok.ts"), `import { Effect } from "effect"\n`)
-    await writeFile(path.join(tmp.path, "src/session/ok.ts"), `import { Schema } from "effect"\n`)
-    await writeFile(path.join(tmp.path, "src/file/watcher.ts"), `import { Effect } from "effect"\n`)
     await writeFile(path.join(tmp.path, "src/util/effect-zod.ts"), `import { Schema } from "effect"\n`)
     expect(await EffectGuard.check(tmp.path)).toEqual([])
+  })
+
+  test("flags new session and file watcher effect imports", async () => {
+    await using tmp = await tmpdir()
+    await mkdir(path.join(tmp.path, "src/session"), { recursive: true })
+    await mkdir(path.join(tmp.path, "src/file"), { recursive: true })
+    await writeFile(path.join(tmp.path, "src/session/new.ts"), `import { Schema } from "effect"\n`)
+    await writeFile(path.join(tmp.path, "src/file/watcher.ts"), `import { Effect } from "effect"\n`)
+    expect(await EffectGuard.check(tmp.path)).toEqual([
+      { file: "src/file/watcher.ts", spec: "effect" },
+      { file: "src/session/new.ts", spec: "effect" },
+    ])
   })
 
   test("does not double-report files listed in ExistingViolations", async () => {

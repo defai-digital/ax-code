@@ -1,4 +1,3 @@
-import { Config } from "effect"
 import { Env } from "../util/env"
 
 function truthy(key: string) {
@@ -140,12 +139,8 @@ export namespace Flag {
 
   // Experimental
   export const AX_CODE_EXPERIMENTAL = truthy("AX_CODE_EXPERIMENTAL")
-  export const AX_CODE_EXPERIMENTAL_FILEWATCHER = Config.boolean("AX_CODE_EXPERIMENTAL_FILEWATCHER").pipe(
-    Config.withDefault(false),
-  )
-  export const AX_CODE_EXPERIMENTAL_DISABLE_FILEWATCHER = Config.boolean(
-    "AX_CODE_EXPERIMENTAL_DISABLE_FILEWATCHER",
-  ).pipe(Config.withDefault(false))
+  export declare const AX_CODE_EXPERIMENTAL_FILEWATCHER: boolean
+  export declare const AX_CODE_EXPERIMENTAL_DISABLE_FILEWATCHER: boolean
   export const AX_CODE_EXPERIMENTAL_ICON_DISCOVERY =
     AX_CODE_EXPERIMENTAL || truthy("AX_CODE_EXPERIMENTAL_ICON_DISCOVERY")
 
@@ -189,9 +184,7 @@ export namespace Flag {
   // rows populate themselves without user intervention. See v2.3.9
   // release notes.
   export const AX_CODE_DISABLE_AUTO_INDEX = truthy("AX_CODE_DISABLE_AUTO_INDEX")
-  export const AX_CODE_DISABLE_FILETIME_CHECK = Config.boolean("AX_CODE_DISABLE_FILETIME_CHECK").pipe(
-    Config.withDefault(false),
-  )
+  export declare const AX_CODE_DISABLE_FILETIME_CHECK: boolean
   export const AX_CODE_EXPERIMENTAL_PLAN_MODE = AX_CODE_EXPERIMENTAL || truthy("AX_CODE_EXPERIMENTAL_PLAN_MODE")
   export const AX_CODE_EXPERIMENTAL_WORKSPACES = AX_CODE_EXPERIMENTAL || truthy("AX_CODE_EXPERIMENTAL_WORKSPACES")
   export const AX_CODE_EXPERIMENTAL_MARKDOWN = !falsy("AX_CODE_EXPERIMENTAL_MARKDOWN")
@@ -227,6 +220,10 @@ defineBooleanFlag("AX_CODE_AUTONOMOUS", true)
 
 // Evaluate each access so toggles and env overrides remain live.
 defineBooleanFlag("AX_CODE_SMART_LLM")
+
+defineBooleanFlag("AX_CODE_EXPERIMENTAL_FILEWATCHER")
+
+defineBooleanFlag("AX_CODE_EXPERIMENTAL_DISABLE_FILEWATCHER")
 
 // Dynamic workflow runtime is off by default until the scheduler, storage,
 // TUI, and permission surfaces are wired behind the same runtime contract.
@@ -298,6 +295,8 @@ defineBooleanFlag("AX_CODE_NATIVE_INDEX", true)
 defineBooleanFlag("AX_CODE_NATIVE_FS", true)
 defineBooleanFlag("AX_CODE_NATIVE_DIFF", true)
 defineBooleanFlag("AX_CODE_NATIVE_PARSER", true)
+
+defineBooleanFlag("AX_CODE_DISABLE_FILETIME_CHECK")
 
 // Dynamic getter for AX_CODE_ISOLATION_MODE
 // Must be evaluated at access time because --sandbox CLI flag
