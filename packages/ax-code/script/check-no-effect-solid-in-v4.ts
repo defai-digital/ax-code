@@ -117,7 +117,6 @@ export namespace EffectGuard {
     "src/cli/cmd/account.ts",
     "src/cli/effect/prompt.ts",
     "src/util/effect-http-client.ts",
-    "src/util/schema.ts",
   ])
 
   export interface Violation {
