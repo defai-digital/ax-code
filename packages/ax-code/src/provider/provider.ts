@@ -764,7 +764,8 @@ export namespace Provider {
         options["fetch"] = async (input: string | Request | URL, init?: BunFetchRequestInit) => {
           // Preserve custom fetch if it exists, wrap it with timeout logic
           const fetchFn = customFetch ?? fetch
-          const opts = init ?? {}
+          // Shallow copy to avoid mutating caller's init object
+          const opts = init ? { ...init } : {}
           const chunkAbortCtl = typeof chunkTimeout === "number" && chunkTimeout > 0 ? new AbortController() : undefined
           const signals: AbortSignal[] = []
 

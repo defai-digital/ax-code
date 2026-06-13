@@ -546,9 +546,7 @@ export function Prompt(props: PromptProps) {
     return true
   }
 
-  const footerRunMode = createMemo(() =>
-    runMode({ autonomous: sync.data.autonomous, superLong: sync.data.superLong }),
-  )
+  const footerRunMode = createMemo(() => runMode({ autonomous: sync.data.autonomous, superLong: sync.data.superLong }))
 
   const footerLayout = createMemo(() =>
     promptFooterLayout({
@@ -1600,13 +1598,7 @@ export function Prompt(props: PromptProps) {
       />
       <box ref={(r) => (anchor = r)} visible={props.visible !== false}>
         <Card accentColor={highlight()}>
-          <box
-            paddingLeft={2}
-            paddingRight={2}
-            flexShrink={0}
-            backgroundColor={theme.backgroundElement}
-            flexGrow={1}
-          >
+          <box paddingLeft={2} paddingRight={2} flexShrink={0} backgroundColor={theme.backgroundElement} flexGrow={1}>
             <textarea
               placeholder={placeholderText()}
               textColor={keybind.leader ? theme.textMuted : theme.text}
@@ -1795,7 +1787,7 @@ export function Prompt(props: PromptProps) {
                         pasteText(content, `[SVG: ${filename ?? "image"}]`)
                         return
                       }
-                      return
+                      // Fall through to plain-text paste if read failed
                     }
                     if (mime.startsWith("image/")) {
                       event.preventDefault()
@@ -1817,7 +1809,7 @@ export function Prompt(props: PromptProps) {
                         })
                         return
                       }
-                      return
+                      // Fall through to plain-text paste if read failed
                     }
                   } catch {}
                 }

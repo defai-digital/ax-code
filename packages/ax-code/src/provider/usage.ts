@@ -36,6 +36,8 @@ export function usageSource(usage: unknown): UsageSource {
   const input = tokenCount(record.inputTokens)
   const output = tokenCount(record.outputTokens)
   const total = tokenCount(record.totalTokens)
-  if (input === 0 && output === 0 && total === 0) return "missing"
+  // Check for absence of fields rather than zero values, since providers
+  // may legitimately report zero tokens (e.g., cached responses)
+  if (record.inputTokens == null && record.outputTokens == null && record.totalTokens == null) return "missing"
   return "exact"
 }
