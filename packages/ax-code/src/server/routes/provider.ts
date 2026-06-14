@@ -10,6 +10,7 @@ import { mapValues } from "remeda"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
 import { PROVIDER_ID_PARAM, withProviderID } from "./route-params"
+import { redactProviderInfo } from "./config"
 import { Log } from "../../util/log"
 
 const log = Log.create({ service: "server" })
@@ -76,7 +77,7 @@ export const ProviderRoutes = lazy(() =>
         }
 
         const connectedRaw = await Provider.list()
-        const connected = mapValues(connectedRaw, ({ key: _key, ...rest }) => rest)
+        const connected = mapValues(connectedRaw, redactProviderInfo)
         // fromModelsDevProvider may return undefined for malformed
         // entries. Drop those so the dialog never sees holes.
         const converted: Record<string, Provider.Info> = {}

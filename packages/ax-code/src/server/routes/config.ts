@@ -101,6 +101,25 @@ export function redactConfig(config: Config.Info): Config.Info {
   }
 }
 
+// Provider `options` is an opaque bag that config and auth loaders fill with
+// credentials (apiKey, OAuth/access tokens, client secrets). The providers
+// list/discovery endpoints must not leak these, so drop the top-level `key`
+// and redact any secret-looking option value — mirroring the redactConfig
+// contract used by the /config endpoints. Non-secret options (e.g. baseURL)
+// are preserved.
+const SECRET_OPTION_PATTERN = /key|secret|token|password|credential|auth/i
+
+export function redactProviderInfo(info: Provider.Info): Provider.Info {
+  const { key: _key, ...rest } = info
+  if (!rest.options) return rest
+  return {
+    ...rest,
+    options: Object.fromEntries(
+      Object.entries(rest.options).map(([k, v]) => [k, v != null && SECRET_OPTION_PATTERN.test(k) ? REDACTED : v]),
+    ),
+  }
+}
+
 export const ConfigRoutes = lazy(() =>
   new Hono()
     .get(
@@ -173,7 +192,7 @@ export const ConfigRoutes = lazy(() =>
       }),
       async (c) => {
         using _ = log.time("providers")
-        const providers = await Provider.list().then((x) => mapValues(x, ({ key: _key, ...rest }) => rest))
+        const providers = await Provider.list().then((x) => mapValues(x, redactProviderInfo))
         return c.json({
           providers: Object.values(providers),
           default: mapValues(providers, (item) => Provider.sort(Object.values(item.models))[0]?.id ?? ""),

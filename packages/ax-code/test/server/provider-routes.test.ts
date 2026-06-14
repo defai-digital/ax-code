@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { Auth } from "../../src/auth"
 import { Instance } from "../../src/project/instance"
 import { Server } from "../../src/server/server"
+import { redactProviderInfo } from "../../src/server/routes/config"
 import { Log } from "../../src/util/log"
 import { tmpdir } from "../fixture/fixture"
 
@@ -56,5 +57,24 @@ describe("provider routes", () => {
         expect(ids).toContain("grok-build-cli")
       },
     })
+  })
+
+  test("redactProviderInfo drops the key and masks secret-bearing options", () => {
+    const redacted = redactProviderInfo({
+      id: "openai",
+      name: "OpenAI",
+      env: [],
+      source: "config",
+      key: "sk-top-secret",
+      options: { apiKey: "sk-top-secret", accessToken: "oauth-tok", baseURL: "https://example.test/v1" },
+      models: {},
+    } as any)
+
+    // The top-level credential and any secret-looking option value must be
+    // redacted; non-secret options (baseURL) are preserved.
+    expect(redacted.key).toBeUndefined()
+    expect((redacted.options as Record<string, unknown>).apiKey).toBe("[redacted]")
+    expect((redacted.options as Record<string, unknown>).accessToken).toBe("[redacted]")
+    expect((redacted.options as Record<string, unknown>).baseURL).toBe("https://example.test/v1")
   })
 })
