@@ -41,7 +41,7 @@ export const AppContextRoutes = lazy(() =>
           if (Filesystem.contains(Instance.directory, p)) return "project"
           return "global"
         }
-        const names = ["AGENTS.md", "CLAUDE.md", "AX.md"]
+        const names = ["AGENTS.md", "CLAUDE.md"]
         const files = await Promise.all(
           names.map(async (name) => {
             const found = (await Filesystem.findUp(name, Instance.directory, root))[0]

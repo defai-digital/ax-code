@@ -70,6 +70,27 @@ describe("InstructionPrompt.resolve", () => {
       },
     })
   })
+
+  test("does not use legacy project instruction files", async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await Bun.write(path.join(dir, "AX.md"), "# Legacy AX Instructions")
+        await Bun.write(path.join(dir, "CONTEXT.md"), "# Legacy Context Instructions")
+        await Bun.write(path.join(dir, "src", "file.ts"), "const x = 1")
+      },
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const system = await InstructionPrompt.systemPaths()
+        expect(system.has(path.join(tmp.path, "AX.md"))).toBe(false)
+        expect(system.has(path.join(tmp.path, "CONTEXT.md"))).toBe(false)
+
+        const results = await InstructionPrompt.resolve([], path.join(tmp.path, "src", "file.ts"), "test-message-legacy")
+        expect(results).toEqual([])
+      },
+    })
+  })
 })
 
 describe("InstructionPrompt.systemPaths AX_CODE_CONFIG_DIR", () => {

@@ -135,7 +135,6 @@ export async function doctorProjectContext(callerCwd = Filesystem.callerCwd()) {
       async (dir) => (await exists(path.join(dir, ".git", "HEAD"))) || (await exists(path.join(dir, ".git"))),
     )) ?? callerCwd
   const agentsPath = await findAncestor(callerCwd, (dir) => exists(path.join(dir, "AGENTS.md")))
-  const legacyAxPath = await findAncestor(callerCwd, (dir) => exists(path.join(dir, "AX.md")))
   const configPath = await findAncestor(
     callerCwd,
     async (dir) =>
@@ -146,7 +145,6 @@ export async function doctorProjectContext(callerCwd = Filesystem.callerCwd()) {
     callerCwd,
     projectRoot,
     agentsPath,
-    legacyAxPath,
     configPath,
   }
 }
@@ -269,13 +267,7 @@ export const DoctorCommand: CommandModule = {
     checks.push({
       name: "AGENTS.md context",
       status: project.agentsPath ? "ok" : "warn",
-      detail: project.agentsPath
-        ? project.legacyAxPath
-          ? "Found — project context will be injected (legacy AX.md also present; safe to delete)"
-          : "Found — project context will be injected"
-        : project.legacyAxPath
-          ? 'Legacy AX.md found — run "ax-code init --force" to migrate to AGENTS.md'
-          : 'Not found — run "ax-code init" to generate',
+      detail: project.agentsPath ? "Found — project context will be injected" : 'Not found — run "ax-code init" to generate',
     })
 
     // 8. Git

@@ -17,7 +17,6 @@ export namespace Context {
   const log = Log.create({ service: "context" })
 
   export const OUTPUT_FILENAME = "AGENTS.md"
-  export const LEGACY_FILENAME = "AX.md"
 
   export interface InitOptions {
     root: string
@@ -31,19 +30,14 @@ export namespace Context {
     content: string
     info: ProjectInfo
     created: boolean
-    legacyPath?: string
   }
 
   export async function init(opts: InitOptions): Promise<InitResult> {
     const root = opts.root
     const depth = opts.depth ?? "standard"
     const outputPath = path.join(root, OUTPUT_FILENAME)
-    const legacyPath = path.join(root, LEGACY_FILENAME)
 
     log.info("analyzing project", { root, depth })
-
-    const legacyFile = Bun.file(legacyPath)
-    const legacyExists = await legacyFile.exists()
 
     const file = Bun.file(outputPath)
     if ((await file.exists()) && !opts.force) {
@@ -55,7 +49,6 @@ export namespace Context {
         content,
         info,
         created: false,
-        legacyPath: legacyExists ? legacyPath : undefined,
       }
     }
 
@@ -69,7 +62,6 @@ export namespace Context {
         content,
         info,
         created: false,
-        legacyPath: legacyExists ? legacyPath : undefined,
       }
     }
 
@@ -81,15 +73,12 @@ export namespace Context {
       content,
       info,
       created: true,
-      legacyPath: legacyExists ? legacyPath : undefined,
     }
   }
 
   export async function read(root: string): Promise<string | null> {
     const primary = Bun.file(path.join(root, OUTPUT_FILENAME))
     if (await primary.exists()) return primary.text()
-    const legacy = Bun.file(path.join(root, LEGACY_FILENAME))
-    if (await legacy.exists()) return legacy.text()
     return null
   }
 

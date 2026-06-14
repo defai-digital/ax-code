@@ -54,9 +54,6 @@ export const InitCommand: CommandModule<{}, { depth: string; force: boolean; "dr
 
       if (!result.created) {
         console.log("AGENTS.md already exists. Use --force to regenerate.")
-        if (result.legacyPath) {
-          console.log(`Note: legacy ${result.legacyPath} is also present and will be ignored in favor of AGENTS.md.`)
-        }
         return
       }
 
@@ -67,9 +64,6 @@ export const InitCommand: CommandModule<{}, { depth: string; force: boolean; "dr
       console.log(`  Stack: ${result.info.techStack.join(", ")}`)
       if (c) {
         console.log(`  Complexity: ${c.level} (${c.fileCount} files, ~${c.linesOfCode} LOC)`)
-      }
-      if (result.legacyPath) {
-        console.log(`\nLegacy ${result.legacyPath} detected. You can delete it — AGENTS.md is the canonical file now.`)
       }
     },
   }

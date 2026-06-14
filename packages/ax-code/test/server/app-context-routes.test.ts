@@ -32,6 +32,8 @@ test("GET /context returns project context metadata", async () => {
   expect(payload.directory).toBe(tmp.path)
   expect(payload.worktree).toBe(tmp.path)
   expect(payload.files?.some((file) => file.name === "AGENTS.md")).toBe(true)
+  expect(payload.files?.some((file) => file.name === "CLAUDE.md")).toBe(true)
+  expect(payload.files?.some((file) => file.name === "AX.md")).toBe(false)
   expect(payload.templates?.some((template) => template.key === "repo-rules")).toBe(true)
   expect(payload.checks?.some((check) => check.command === "npm run typecheck")).toBe(true)
 })
