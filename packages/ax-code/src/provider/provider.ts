@@ -48,6 +48,8 @@ import {
 } from "./loaders"
 import { Bus } from "../bus"
 import { BusEvent } from "../bus/bus-event"
+import { AX_ENGINE_PROVIDER_ID } from "./ax-engine/constants"
+import { isSupportedHost as isAxEngineSupportedHost } from "./ax-engine/platform"
 
 export namespace Provider {
   const log = Log.create({ service: "provider" })
@@ -62,6 +64,18 @@ export namespace Provider {
   const supported = isModelSupportedForProvider
   let modelCacheGeneration = 0
   const MODEL_CACHE_INVALIDATION_RETRY_LIMIT = 8
+
+  export function shouldAllowProviderInCore(input: {
+    providerID: string
+    disabled: Set<string>
+    enabled?: Set<string> | null
+    axEngineSupported?: boolean
+  }) {
+    if (input.enabled && !input.enabled.has(input.providerID)) return false
+    if (input.disabled.has(input.providerID)) return false
+    if (input.providerID === AX_ENGINE_PROVIDER_ID && !input.axEngineSupported) return false
+    return true
+  }
 
   function canonicalXaiApiModelID(modelID: string) {
     if (modelID === "grok-code-fast" || modelID === "grok-code-fast-1" || modelID === "grok-code-fast-1-0825") {
@@ -261,11 +275,10 @@ export namespace Provider {
 
     const disabled = new Set(config.disabled_providers ?? [])
     const enabled = config.enabled_providers ? new Set(config.enabled_providers) : null
+    const axEngineSupported = await isAxEngineSupportedHost().catch(() => false)
 
     function isProviderAllowed(providerID: ProviderID): boolean {
-      if (enabled && !enabled.has(providerID)) return false
-      if (disabled.has(providerID)) return false
-      return true
+      return shouldAllowProviderInCore({ providerID, disabled, enabled, axEngineSupported })
     }
 
     const providers: Record<ProviderID, Info> = {} as Record<ProviderID, Info>

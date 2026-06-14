@@ -376,6 +376,35 @@ describe("ax-engine provider integration", () => {
       }),
     ).toBe(true)
   })
+
+  test("core provider list also gates ax-engine even when explicitly enabled", () => {
+    expect(
+      Provider.shouldAllowProviderInCore({
+        providerID: AX_ENGINE_PROVIDER_ID,
+        disabled: new Set(),
+        enabled: new Set([AX_ENGINE_PROVIDER_ID]),
+        axEngineSupported: false,
+      }),
+    ).toBe(false)
+
+    expect(
+      Provider.shouldAllowProviderInCore({
+        providerID: AX_ENGINE_PROVIDER_ID,
+        disabled: new Set(),
+        enabled: new Set([AX_ENGINE_PROVIDER_ID]),
+        axEngineSupported: true,
+      }),
+    ).toBe(true)
+
+    expect(
+      Provider.shouldAllowProviderInCore({
+        providerID: "xai",
+        disabled: new Set(),
+        enabled: new Set(["xai"]),
+        axEngineSupported: false,
+      }),
+    ).toBe(true)
+  })
 })
 
 describe("ax-engine doctor status", () => {
