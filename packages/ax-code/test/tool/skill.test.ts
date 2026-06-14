@@ -208,6 +208,21 @@ Use this skill.
           expect(result.metadata.dir).toBe("builtin://debug-only")
           expect(result.output).toContain(`<skill_content name="debug-only">`)
           expect(result.output).toContain("Base directory for this skill: builtin://debug-only/")
+          expect(result.output).toContain("## Bug Reality Gate")
+          expect(result.output).toContain("confirmed bug")
+          expect(result.output).toContain("confirmed by failing test")
+          expect(result.output).toContain("unconfirmed hypothesis")
+          expect(result.output).toContain("not reproduced")
+          expect(result.output).toContain("Do not treat a plausible code smell")
+          expect(result.output).toContain(
+            "Include this only for `confirmed bug` or `confirmed by failing test`.",
+          )
+
+          const fixResult = await tool.execute({ name: "debug-n-fix" }, ctx)
+          expect(fixResult.metadata.dir).toBe("builtin://debug-n-fix")
+          expect(fixResult.output).toContain(`<skill_content name="debug-n-fix">`)
+          expect(fixResult.output).toContain("Bug reality gate")
+          expect(fixResult.output).toContain("pre-fix failure evidence")
         },
       })
     } finally {
