@@ -449,6 +449,96 @@ describe("session.llm.stream", () => {
     })
   })
 
+  test("omits tool schemas for models that do not support tool calling", async () => {
+    const providerID = "alibaba-coding-plan"
+    const modelID = "qwen3.6-plus"
+    const fixture = await loadFixture(providerID, modelID)
+    const model = fixture.model
+
+    const request = waitRequest(
+      "/chat/completions",
+      new Response(createChatStream("Hello"), {
+        status: 200,
+        headers: { "Content-Type": "text/event-stream" },
+      }),
+    )
+
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await Bun.write(
+          path.join(dir, "ax-code.json"),
+          JSON.stringify({
+            $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+            enabled_providers: [providerID],
+            provider: {
+              [providerID]: {
+                options: {
+                  apiKey: "test-key",
+                  baseURL: `${state.server.url.origin}/v1`,
+                },
+              },
+            },
+          }),
+        )
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const resolved = await Provider.getModel(ProviderID.make(providerID), ModelID.make(model.id))
+        const withoutToolCalls = {
+          ...resolved,
+          capabilities: {
+            ...resolved.capabilities,
+            toolcall: false,
+          },
+        }
+        const sessionID = SessionID.make("session-test-no-toolcall")
+        const agent = {
+          name: "test",
+          mode: "primary",
+          options: {},
+          permission: [{ permission: "*", pattern: "*", action: "allow" }],
+        } satisfies Agent.Info
+
+        const user = {
+          id: MessageID.make("user-no-toolcall"),
+          sessionID,
+          role: "user",
+          time: { created: Date.now() },
+          agent: agent.name,
+          model: { providerID: ProviderID.make(providerID), modelID: resolved.id },
+          tools: { question: true },
+        } satisfies MessageV2.User
+
+        const stream = await LLM.stream({
+          user,
+          sessionID,
+          model: withoutToolCalls,
+          agent,
+          system: ["You are a helpful assistant."],
+          abort: new AbortController().signal,
+          messages: [{ role: "user", content: "Hello" }],
+          tools: {
+            question: tool({
+              description: "Ask a question",
+              inputSchema: z.object({}),
+              execute: async () => ({ output: "" }),
+            }),
+          },
+        })
+
+        for await (const _ of stream.fullStream) {
+        }
+
+        const capture = await request
+        expect(capture.body.tools).toBeUndefined()
+        expect(capture.body.tool_choice).toBeUndefined()
+      },
+    })
+  })
+
   test("sends required StructuredOutput tool schema for json_schema output", async () => {
     const providerID = "alibaba-coding-plan"
     const modelID = "qwen3.6-plus"

@@ -3,6 +3,7 @@ import { NotFoundError } from "@/storage/db"
 import { iife } from "@/util/iife"
 import { Agent } from "../agent/agent"
 import { Provider } from "../provider/provider"
+import { AX_ENGINE_PROVIDER_ID } from "../provider/ax-engine"
 import { ModelID, ProviderID } from "../provider/schema"
 import { DiagnosticLog } from "@/debug/diagnostic-log"
 import { Log } from "../util/log"
@@ -15,6 +16,10 @@ const log = Log.create({ service: "session.prompt" })
 
 const TITLE_CONTEXT_MAX_TOKENS = 3_000
 const TITLE_CONTEXT_MAX_CHARS = TITLE_CONTEXT_MAX_TOKENS * 4
+
+export function shouldSkipAutomaticTitle(input: { providerID: ProviderID }) {
+  return input.providerID === AX_ENGINE_PROVIDER_ID
+}
 
 function titleFilePlaceholder(part: MessageV2.FilePart) {
   const filename = part.filename ?? "file"
@@ -60,6 +65,7 @@ export async function ensureTitle(input: {
   abort?: AbortSignal
 }) {
   if (!Session.isDefaultTitle(input.session.title)) return
+  if (shouldSkipAutomaticTitle(input)) return
 
   const firstRealUserIdx = input.history.findIndex(
     (m) => m.info.role === "user" && !m.parts.every((p) => "synthetic" in p && p.synthetic),

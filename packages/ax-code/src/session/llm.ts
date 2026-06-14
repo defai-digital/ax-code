@@ -290,7 +290,8 @@ export namespace LLM {
 
     const maxOutputTokens = ProviderTransform.maxOutputTokens(input.model)
 
-    const tools = await resolveTools(input, cfg)
+    const supportsToolCalls = input.model.capabilities.toolcall !== false
+    const tools = supportsToolCalls ? await resolveTools(input, cfg) : {}
     const pacingReservation = await applySuperLongPacing({
       enabled: superLongEnabled,
       providerID: input.model.providerID,
@@ -370,9 +371,9 @@ export namespace LLM {
         topP: params.topP,
         topK: params.topK,
         providerOptions: ProviderTransform.providerOptions(input.model, paramsOptions),
-        activeTools: Object.keys(tools).filter((x) => x !== "invalid"),
+        activeTools: supportsToolCalls ? Object.keys(tools).filter((x) => x !== "invalid") : [],
         tools,
-        toolChoice: input.toolChoice,
+        toolChoice: supportsToolCalls ? input.toolChoice : "none",
         maxOutputTokens,
         abortSignal: input.abort,
         headers: requestHeaders,
