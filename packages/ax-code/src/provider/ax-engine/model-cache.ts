@@ -87,6 +87,10 @@ export function requiredDiskBytes(quantization: AxEngineQuantization): number {
   return AX_ENGINE_MIN_DISK_BYTES[quantization]
 }
 
+export function resolveDownloadDestination(quantization: AxEngineQuantization, dest?: string) {
+  return dest ?? AxEnginePaths.managedModelDir(quantization)
+}
+
 export function parseDfPkAvailableBytes(text: string): number | undefined {
   const lines = text
     .trim()
@@ -275,11 +279,12 @@ export async function downloadModel(input: {
 }): Promise<AxEnginePrepareState> {
   const quantization = input.quantization ?? AX_ENGINE_DEFAULT_QUANTIZATION
   const repo = AX_ENGINE_HF_REPOS[quantization]
+  const dest = resolveDownloadDestination(quantization, input.dest)
   const cmd = [input.binaryPath, "download", repo, "--json"]
-  if (input.dest) cmd.push("--dest", input.dest)
+  cmd.push("--dest", dest)
 
   using _ = await FileLock.acquire(AxEnginePaths.prepareLock, { timeoutMs: 30_000, staleMs: 60 * 60_000 })
-  await assertDiskSpace({ quantization, downloadDir: input.dest })
+  await assertDiskSpace({ quantization, downloadDir: dest })
   const result = await Process.text(cmd, {
     timeout: 6 * 60 * 60 * 1000,
     abort: input.signal,

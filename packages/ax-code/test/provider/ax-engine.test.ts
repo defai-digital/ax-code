@@ -20,6 +20,7 @@ import {
   parseChipGeneration,
   parseMacosMajor,
   prepareAxEngine,
+  resolveDownloadDestination,
 } from "../../src/provider/ax-engine"
 
 const originalFetch = globalThis.fetch
@@ -104,6 +105,12 @@ describe("ax-engine model cache", () => {
   test("normalizes unknown quantization to the conservative default", () => {
     expect(normalizeQuantization("mlx6bit")).toBe("mlx6bit")
     expect(normalizeQuantization("surprise")).toBe("mlx4bit")
+  })
+
+  test("defaults downloads into the deterministic AX Code managed model cache", () => {
+    expect(resolveDownloadDestination("mlx4bit")).toContain("ax-engine/models/qwen3-coder-next/mlx4bit")
+    expect(resolveDownloadDestination("mlx6bit")).toContain("ax-engine/models/qwen3-coder-next/mlx6bit")
+    expect(resolveDownloadDestination("mlx4bit", "/Volumes/Models/qwen")).toBe("/Volumes/Models/qwen")
   })
 
   test("parses POSIX df output and blocks downloads without enough free space", () => {
