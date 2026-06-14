@@ -32,6 +32,18 @@ describe("Patch namespace", () => {
       })
     })
 
+    test("strips CRLF so added content keeps no trailing carriage return", () => {
+      const patchText = ["*** Begin Patch", "*** Add File: test.txt", "+Hello World", "*** End Patch"].join("\r\n")
+
+      const result = Patch.parsePatch(patchText)
+      expect(result.hunks).toHaveLength(1)
+      expect(result.hunks[0]).toEqual({
+        type: "add",
+        path: "test.txt",
+        contents: "Hello World",
+      })
+    })
+
     test("should parse delete file patch", () => {
       const patchText = `*** Begin Patch
 *** Delete File: old.txt

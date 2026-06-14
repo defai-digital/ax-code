@@ -8,6 +8,7 @@ import { Tool } from "./tool"
 import { assertExternalDirectory, assertSymlinkInsideProject } from "./external-directory"
 import { notifyFileEdited, collectDiagnostics } from "./diagnostics"
 import { replace, trimDiff } from "./edit"
+import { convertToLineEnding, detectLineEnding, normalizeLineEndings } from "./edit-helpers"
 import { Isolation } from "@/isolation"
 import DESCRIPTION from "./multiedit.txt"
 import { Log } from "@/util/log"
@@ -82,7 +83,13 @@ export const MultiEditTool = Tool.define("multiedit", {
         if (before === undefined) {
           throw new Error(`File ${file} not found`)
         }
-        const after = replace(before, edit.oldString, edit.newString, edit.replaceAll)
+        // Normalize oldString/newString to the file's detected line ending,
+        // matching the single-edit `edit` tool. Without this, replaceAll on a
+        // CRLF file fails to match the model's LF-only oldString.
+        const ending = detectLineEnding(before)
+        const oldString = convertToLineEnding(normalizeLineEndings(edit.oldString), ending)
+        const newString = convertToLineEnding(normalizeLineEndings(edit.newString), ending)
+        const after = replace(before, oldString, newString, edit.replaceAll)
         const diff = trimDiff(
           createTwoFilesPatch(file, file, before.replaceAll("\r\n", "\n"), after.replaceAll("\r\n", "\n")),
         )

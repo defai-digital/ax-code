@@ -67,15 +67,21 @@ export namespace Filesystem {
   export async function write(p: string, content: string | Buffer | Uint8Array, mode?: number): Promise<void> {
     const dir = dirname(p)
     const tmp = join(dir, `.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`)
+    // Preserve the target's existing permissions on overwrite (e.g. a script's
+    // executable bit, or a restrictive 0600) when the caller didn't request a
+    // specific mode. Writing to a fresh temp file and renaming would otherwise
+    // reset every edited file to the default umask mode.
+    const resolvedMode = mode ?? (await fs.stat(p).then((s) => s.mode & 0o777).catch(() => undefined))
+    const writeOptions = resolvedMode !== undefined ? { mode: resolvedMode } : undefined
     try {
       await fs.mkdir(dir, { recursive: true })
-      await fs.writeFile(tmp, content, mode ? { mode } : undefined)
+      await fs.writeFile(tmp, content, writeOptions)
       await fs.rename(tmp, p)
     } catch (error) {
       if (isEnoent(error)) {
         try {
           await fs.mkdir(dir, { recursive: true })
-          await fs.writeFile(tmp, content, mode ? { mode } : undefined)
+          await fs.writeFile(tmp, content, writeOptions)
           await fs.rename(tmp, p)
         } catch (retryError) {
           await fs.unlink(tmp).catch(() => {})

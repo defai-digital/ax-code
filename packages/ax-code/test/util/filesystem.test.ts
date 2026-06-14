@@ -208,6 +208,23 @@ describe("filesystem", () => {
       }
     })
 
+    test("preserves the existing file mode on overwrite", async () => {
+      await using tmp = await tmpdir()
+      const filepath = path.join(tmp.path, "script.sh")
+
+      await Filesystem.write(filepath, "#!/bin/sh\necho one\n")
+      await fs.chmod(filepath, 0o755)
+
+      // Overwriting without an explicit mode must keep the executable bit.
+      await Filesystem.write(filepath, "#!/bin/sh\necho two\n")
+
+      const stats = await fs.stat(filepath)
+      if (process.platform !== "win32") {
+        expect(stats.mode & 0o777).toBe(0o755)
+      }
+      expect(await fs.readFile(filepath, "utf-8")).toBe("#!/bin/sh\necho two\n")
+    })
+
     test("creates parent directories", async () => {
       await using tmp = await tmpdir()
       const filepath = path.join(tmp.path, "nested", "deep", "file.txt")

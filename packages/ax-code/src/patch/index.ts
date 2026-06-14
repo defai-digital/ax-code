@@ -221,7 +221,11 @@ export namespace Patch {
 
   export function parsePatch(patchText: string): { hunks: Hunk[] } {
     const cleaned = stripHeredoc(patchText.trim())
-    const lines = cleaned.split("\n")
+    // Split on CRLF or LF so a patch delivered with Windows line endings does
+    // not leave a trailing \r on every line. Without this, inserted/added
+    // content keeps its \r while surrounding untouched LF lines do not,
+    // silently corrupting a clean LF file into mixed CRLF/LF endings.
+    const lines = cleaned.split(/\r?\n/)
     const hunks: Hunk[] = []
     let i = 0
 
