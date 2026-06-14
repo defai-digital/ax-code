@@ -16,7 +16,9 @@ const truncate = Layer.effectDiscard(
   }),
 )
 
-const it = testEffect(Layer.merge(AccountRepo.layer, truncate))
+const it = testEffect(truncate)
+
+const repo = <A>(operation: () => Promise<A>) => Effect.promise(operation)
 
 const live = (client: HttpClient.HttpClient) =>
   Account.layer.pipe(Layer.provide(Layer.succeed(HttpClient.HttpClient, client)))
@@ -56,27 +58,27 @@ const poll = (body: unknown, status = 400) =>
 
 it.effect("orgsByAccount groups orgs per account", () =>
   Effect.gen(function* () {
-    yield* AccountRepo.use((r) =>
-      r.persistAccount({
+    yield* repo(() =>
+      AccountRepo.persistAccount({
         id: AccountID.make("user-1"),
         email: "one@example.com",
         url: "https://one.example.com",
         accessToken: AccessToken.make("at_1"),
         refreshToken: RefreshToken.make("rt_1"),
         expiry: Date.now() + 60_000,
-        orgID: Option.none(),
+        orgID: undefined,
       }),
     )
 
-    yield* AccountRepo.use((r) =>
-      r.persistAccount({
+    yield* repo(() =>
+      AccountRepo.persistAccount({
         id: AccountID.make("user-2"),
         email: "two@example.com",
         url: "https://two.example.com",
         accessToken: AccessToken.make("at_2"),
         refreshToken: RefreshToken.make("rt_2"),
         expiry: Date.now() + 60_000,
-        orgID: Option.none(),
+        orgID: undefined,
       }),
     )
 
@@ -111,15 +113,15 @@ it.effect("token refresh persists the new token", () =>
   Effect.gen(function* () {
     const id = AccountID.make("user-1")
 
-    yield* AccountRepo.use((r) =>
-      r.persistAccount({
+    yield* repo(() =>
+      AccountRepo.persistAccount({
         id,
         email: "user@example.com",
         url: "https://one.example.com",
         accessToken: AccessToken.make("at_old"),
         refreshToken: RefreshToken.make("rt_old"),
         expiry: Date.now() - 1_000,
-        orgID: Option.none(),
+        orgID: undefined,
       }),
     )
 
@@ -140,8 +142,8 @@ it.effect("token refresh persists the new token", () =>
     expect(Option.getOrThrow(token)).toBeDefined()
     expect(String(Option.getOrThrow(token))).toBe("at_new")
 
-    const row = yield* AccountRepo.use((r) => r.getRow(id))
-    const value = Option.getOrThrow(row)
+    const row = yield* repo(() => AccountRepo.getRow(id))
+    const value = row!
     expect(value.access_token).toBe(AccessToken.make("at_new"))
     expect(value.refresh_token).toBe(RefreshToken.make("rt_new"))
     expect(value.token_expiry).toBeGreaterThan(Date.now())
@@ -152,15 +154,15 @@ it.effect("config sends the selected org header", () =>
   Effect.gen(function* () {
     const id = AccountID.make("user-1")
 
-    yield* AccountRepo.use((r) =>
-      r.persistAccount({
+    yield* repo(() =>
+      AccountRepo.persistAccount({
         id,
         email: "user@example.com",
         url: "https://one.example.com",
         accessToken: AccessToken.make("at_1"),
         refreshToken: RefreshToken.make("rt_1"),
         expiry: Date.now() + 60_000,
-        orgID: Option.none(),
+        orgID: undefined,
       }),
     )
 
@@ -214,8 +216,8 @@ it.effect("poll stores the account and first org on success", () =>
       expect(res.email).toBe("user@example.com")
     }
 
-    const active = yield* AccountRepo.use((r) => r.active())
-    expect(Option.getOrThrow(active)).toEqual(
+    const active = yield* repo(() => AccountRepo.active())
+    expect(active!).toEqual(
       expect.objectContaining({
         id: "user-1",
         email: "user@example.com",

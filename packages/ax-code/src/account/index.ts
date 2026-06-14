@@ -5,6 +5,7 @@ import { makeRunPromise } from "@/effect/run-service"
 import { AccountRepo, type AccountRow } from "./repo"
 import {
   type AccountError,
+  AccountRepoError,
   AccessToken,
   AccountID,
   DeviceCode,
@@ -156,14 +157,22 @@ export namespace Account {
 
   export class Service extends ServiceMap.Service<Service, Interface>()("@ax-code/Account") {}
 
-  export const layer: Layer.Layer<Service, never, AccountRepo | HttpClient.HttpClient> = Layer.effect(
+  export const layer: Layer.Layer<Service, never, HttpClient.HttpClient> = Layer.effect(
     Service,
     Effect.gen(function* () {
-      const repo = yield* AccountRepo
       const http = yield* HttpClient.HttpClient
       const httpRead = withTransientReadRetry(http)
       const httpOk = HttpClient.filterStatusOk(http)
       const httpReadOk = HttpClient.filterStatusOk(httpRead)
+
+      const repoEffect = <A>(operation: () => Promise<A>) =>
+        Effect.tryPromise({
+          try: operation,
+          catch: (cause) =>
+            cause instanceof AccountRepoError
+              ? cause
+              : new AccountRepoError({ message: "Database operation failed", cause }),
+        })
 
       const executeRead = (request: HttpClientRequest.HttpClientRequest) =>
         httpRead.execute(request).pipe(mapAccountServiceError("HTTP request failed"))
@@ -204,23 +213,23 @@ export namespace Account {
           mapAccountServiceError("Failed to decode response"),
         )
 
-        const expiry = Option.some(now + Duration.toMillis(parsed.expires_in))
-
-        yield* repo.persistToken({
-          accountID: row.id,
-          accessToken: parsed.access_token,
-          refreshToken: parsed.refresh_token,
-          expiry,
-        })
+        yield* repoEffect(() =>
+          AccountRepo.persistToken({
+            accountID: row.id,
+            accessToken: parsed.access_token,
+            refreshToken: parsed.refresh_token,
+            expiry: now + Duration.toMillis(parsed.expires_in),
+          }),
+        )
 
         return parsed.access_token
       })
 
       const resolveAccess = Effect.fnUntraced(function* (accountID: AccountID) {
-        const maybeAccount = yield* repo.getRow(accountID)
-        if (Option.isNone(maybeAccount)) return Option.none()
+        const maybeAccount = yield* repoEffect(() => AccountRepo.getRow(accountID))
+        if (!maybeAccount) return Option.none()
 
-        const account = maybeAccount.value
+        const account = maybeAccount
         const accessToken = yield* resolveToken(account)
         return Option.some({ account, accessToken })
       })
@@ -256,7 +265,7 @@ export namespace Account {
       )
 
       const orgsByAccount = Effect.fn("Account.orgsByAccount")(function* () {
-        const accounts = yield* repo.list()
+        const accounts = yield* repoEffect(() => AccountRepo.list())
         const [errors, results] = yield* Effect.partition(
           accounts,
           (account) => orgs(account.id).pipe(Effect.map((orgs) => ({ account, orgs }))),
@@ -357,25 +366,28 @@ export namespace Account {
         const expiry = now + Duration.toMillis(parsed.expires_in)
         const refreshToken = parsed.refresh_token
 
-        yield* repo.persistAccount({
-          id: account.id,
-          email: account.email,
-          url: input.server,
-          accessToken,
-          refreshToken,
-          expiry,
-          orgID: firstOrgID,
-        })
+        yield* repoEffect(() =>
+          AccountRepo.persistAccount({
+            id: account.id,
+            email: account.email,
+            url: input.server,
+            accessToken,
+            refreshToken,
+            expiry,
+            orgID: Option.getOrUndefined(firstOrgID),
+          }),
+        )
 
         return new PollSuccess({ email: account.email })
       })
 
       return Service.of({
-        active: repo.active,
-        list: repo.list,
+        active: () => repoEffect(() => AccountRepo.active()).pipe(Effect.map(Option.fromNullishOr)),
+        list: () => repoEffect(() => AccountRepo.list()),
         orgsByAccount,
-        remove: repo.remove,
-        use: repo.use,
+        remove: (accountID) => repoEffect(() => AccountRepo.remove(accountID)).pipe(Effect.asVoid),
+        use: (accountID, orgID) =>
+          repoEffect(() => AccountRepo.use(accountID, Option.getOrUndefined(orgID))).pipe(Effect.asVoid),
         orgs,
         config,
         token,
@@ -385,7 +397,7 @@ export namespace Account {
     }),
   )
 
-  export const defaultLayer = layer.pipe(Layer.provide(AccountRepo.layer), Layer.provide(FetchHttpClient.layer))
+  export const defaultLayer = layer.pipe(Layer.provide(FetchHttpClient.layer))
 
   export const runPromise = makeRunPromise(Service, defaultLayer)
 

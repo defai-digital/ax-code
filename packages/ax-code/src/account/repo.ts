@@ -1,5 +1,4 @@
 import { eq } from "drizzle-orm"
-import { Effect, Layer, Option, Schema, ServiceMap } from "effect"
 
 import { Database } from "@/storage/db"
 import { encrypt, isEncrypted, decrypt, type EncryptedValue } from "@/auth/encryption"
@@ -46,175 +45,162 @@ type DbClient = Parameters<typeof Database.use>[0] extends (db: infer T) => unkn
 const ACCOUNT_STATE_ID = 1
 const log = Log.create({ service: "account.repo" })
 
-export interface AccountRepoService {
-  readonly active: () => Effect.Effect<Option.Option<Info>, AccountRepoError>
-  readonly list: () => Effect.Effect<Info[], AccountRepoError>
-  readonly remove: (accountID: AccountID) => Effect.Effect<void, AccountRepoError>
-  readonly use: (accountID: AccountID, orgID: Option.Option<OrgID>) => Effect.Effect<void, AccountRepoError>
-  readonly getRow: (accountID: AccountID) => Effect.Effect<Option.Option<AccountRow>, AccountRepoError>
-  readonly persistToken: (input: {
+function safe(row: unknown): Info | undefined {
+  if (!row || typeof row !== "object") return
+  const candidate = row as Record<string, unknown>
+  if (typeof candidate.id !== "string" || typeof candidate.email !== "string" || typeof candidate.url !== "string") {
+    log.warn("invalid account row", { accountID: candidate.id })
+    return
+  }
+  if (candidate.active_org_id !== null && typeof candidate.active_org_id !== "string") {
+    log.warn("invalid account row", { accountID: candidate.id })
+    return
+  }
+  return {
+    id: AccountID.make(candidate.id),
+    email: candidate.email,
+    url: candidate.url,
+    active_org_id: candidate.active_org_id === null ? null : OrgID.make(candidate.active_org_id),
+  } as Info
+}
+
+function query<A>(f: (db: DbClient) => A): A {
+  try {
+    return Database.use(f)
+  } catch (cause) {
+    throw new AccountRepoError({ message: "Database operation failed", cause })
+  }
+}
+
+function tx<A>(f: (db: DbClient) => A): A {
+  try {
+    return Database.transaction(f) as A
+  } catch (cause) {
+    throw new AccountRepoError({ message: "Database operation failed", cause })
+  }
+}
+
+function current(db: DbClient) {
+  const state = db.select().from(AccountStateTable).where(eq(AccountStateTable.id, ACCOUNT_STATE_ID)).get()
+  if (!state?.active_account_id) return
+  const account = db.select().from(AccountTable).where(eq(AccountTable.id, state.active_account_id)).get()
+  if (!account) return
+  return { ...account, active_org_id: state.active_org_id ?? null }
+}
+
+function state(db: DbClient, accountID: AccountID, orgID?: OrgID) {
+  return db
+    .insert(AccountStateTable)
+    .values({ id: ACCOUNT_STATE_ID, active_account_id: accountID, active_org_id: orgID ?? null })
+    .onConflictDoUpdate({
+      target: AccountStateTable.id,
+      set: { active_account_id: accountID, active_org_id: orgID ?? null },
+    })
+    .run()
+}
+
+function decryptRow(row: AccountRow): AccountRow {
+  return {
+    ...row,
+    access_token: decryptToken(row.access_token, AccessToken.make),
+    refresh_token: decryptToken(row.refresh_token, RefreshToken.make),
+  }
+}
+
+export namespace AccountRepo {
+  export async function active(): Promise<Info | undefined> {
+    return query((db) => {
+      const row = current(db)
+      return row ? safe(row) : undefined
+    })
+  }
+
+  export async function list(): Promise<Info[]> {
+    return query((db) =>
+      db
+        .select()
+        .from(AccountTable)
+        .all()
+        .flatMap((row: AccountRow) => {
+          const next = safe({ ...row, active_org_id: null })
+          return next ? [next] : []
+        }),
+    )
+  }
+
+  export async function remove(accountID: AccountID): Promise<void> {
+    tx((db) => {
+      db.update(AccountStateTable)
+        .set({ active_account_id: null, active_org_id: null })
+        .where(eq(AccountStateTable.active_account_id, accountID))
+        .run()
+      db.delete(AccountTable).where(eq(AccountTable.id, accountID)).run()
+    })
+  }
+
+  export async function use(accountID: AccountID, orgID?: OrgID): Promise<void> {
+    query((db) => state(db, accountID, orgID))
+  }
+
+  export async function getRow(accountID: AccountID): Promise<AccountRow | undefined> {
+    return query((db) => {
+      const row = db.select().from(AccountTable).where(eq(AccountTable.id, accountID)).get()
+      return row ? decryptRow(row) : undefined
+    })
+  }
+
+  export async function persistToken(input: {
     accountID: AccountID
     accessToken: AccessToken
     refreshToken: RefreshToken
-    expiry: Option.Option<number>
-  }) => Effect.Effect<void, AccountRepoError>
-  readonly persistAccount: (input: {
+    expiry?: number
+  }): Promise<void> {
+    query((db) =>
+      db
+        .update(AccountTable)
+        .set({
+          access_token: encryptToken(input.accessToken) as AccessToken,
+          refresh_token: encryptToken(input.refreshToken) as RefreshToken,
+          token_expiry: input.expiry ?? null,
+        })
+        .where(eq(AccountTable.id, input.accountID))
+        .run(),
+    )
+  }
+
+  export async function persistAccount(input: {
     id: AccountID
     email: string
     url: string
     accessToken: AccessToken
     refreshToken: RefreshToken
     expiry: number
-    orgID: Option.Option<OrgID>
-  }) => Effect.Effect<void, AccountRepoError>
-}
-
-export class AccountRepo extends ServiceMap.Service<AccountRepo, AccountRepoService>()("@ax-code/AccountRepo") {
-  static readonly layer: Layer.Layer<AccountRepo> = Layer.effect(
-    AccountRepo,
-    Effect.gen(function* () {
-      const decode = Schema.decodeUnknownSync(Info)
-      const safe = (row: unknown) => {
-        try {
-          return decode(row)
-        } catch {
-          const id = row && typeof row === "object" && "id" in row ? row.id : undefined
-          log.warn("invalid account row", { accountID: id })
-        }
-      }
-
-      const query = <A>(f: (db: DbClient) => A) =>
-        Effect.try({
-          try: () => Database.use(f),
-          catch: (cause) => new AccountRepoError({ message: "Database operation failed", cause }),
+    orgID?: OrgID
+  }): Promise<void> {
+    tx((db) => {
+      const encAccess = encryptToken(input.accessToken) as AccessToken
+      const encRefresh = encryptToken(input.refreshToken) as RefreshToken
+      db.insert(AccountTable)
+        .values({
+          id: input.id,
+          email: input.email,
+          url: input.url,
+          access_token: encAccess,
+          refresh_token: encRefresh,
+          token_expiry: input.expiry,
         })
-
-      const tx = <A>(f: (db: DbClient) => A) =>
-        Effect.try({
-          try: () => Database.transaction(f),
-          catch: (cause) => new AccountRepoError({ message: "Database operation failed", cause }),
+        .onConflictDoUpdate({
+          target: AccountTable.id,
+          set: {
+            email: input.email,
+            url: input.url,
+            access_token: encAccess,
+            refresh_token: encRefresh,
+            token_expiry: input.expiry,
+          },
         })
-
-      const current = (db: DbClient) => {
-        const state = db.select().from(AccountStateTable).where(eq(AccountStateTable.id, ACCOUNT_STATE_ID)).get()
-        if (!state?.active_account_id) return
-        const account = db.select().from(AccountTable).where(eq(AccountTable.id, state.active_account_id)).get()
-        if (!account) return
-        return { ...account, active_org_id: state.active_org_id ?? null }
-      }
-
-      const state = (db: DbClient, accountID: AccountID, orgID: Option.Option<OrgID>) => {
-        const id = Option.getOrNull(orgID)
-        return db
-          .insert(AccountStateTable)
-          .values({ id: ACCOUNT_STATE_ID, active_account_id: accountID, active_org_id: id })
-          .onConflictDoUpdate({
-            target: AccountStateTable.id,
-            set: { active_account_id: accountID, active_org_id: id },
-          })
-          .run()
-      }
-
-      const active = Effect.fn("AccountRepo.active")(() =>
-        query((db) => current(db)).pipe(
-          Effect.map((row) => {
-            if (!row) return Option.none()
-            const next = safe(row)
-            return next ? Option.some(next) : Option.none()
-          }),
-        ),
-      )
-
-      const list = Effect.fn("AccountRepo.list")(() =>
-        query((db) =>
-          db
-            .select()
-            .from(AccountTable)
-            .all()
-            .flatMap((row: AccountRow) => {
-              const next = safe({ ...row, active_org_id: null })
-              return next ? [next] : []
-            }),
-        ),
-      )
-
-      const remove = Effect.fn("AccountRepo.remove")((accountID: AccountID) =>
-        tx((db) => {
-          db.update(AccountStateTable)
-            .set({ active_account_id: null, active_org_id: null })
-            .where(eq(AccountStateTable.active_account_id, accountID))
-            .run()
-          db.delete(AccountTable).where(eq(AccountTable.id, accountID)).run()
-        }).pipe(Effect.asVoid),
-      )
-
-      const use = Effect.fn("AccountRepo.use")((accountID: AccountID, orgID: Option.Option<OrgID>) =>
-        query((db) => state(db, accountID, orgID)).pipe(Effect.asVoid),
-      )
-
-      const decryptRow = (row: AccountRow): AccountRow => ({
-        ...row,
-        access_token: decryptToken(row.access_token, AccessToken.make),
-        refresh_token: decryptToken(row.refresh_token, RefreshToken.make),
-      })
-
-      const getRow = Effect.fn("AccountRepo.getRow")((accountID: AccountID) =>
-        query((db) => db.select().from(AccountTable).where(eq(AccountTable.id, accountID)).get()).pipe(
-          Effect.map((row) => Option.fromNullishOr(row ? decryptRow(row) : row)),
-        ),
-      )
-
-      const persistToken = Effect.fn("AccountRepo.persistToken")((input) =>
-        query((db) =>
-          db
-            .update(AccountTable)
-            .set({
-              access_token: encryptToken(input.accessToken) as AccessToken,
-              refresh_token: encryptToken(input.refreshToken) as RefreshToken,
-              token_expiry: Option.getOrNull(input.expiry),
-            })
-            .where(eq(AccountTable.id, input.accountID))
-            .run(),
-        ).pipe(Effect.asVoid),
-      )
-
-      const persistAccount = Effect.fn("AccountRepo.persistAccount")((input) =>
-        tx((db) => {
-          const encAccess = encryptToken(input.accessToken) as AccessToken
-          const encRefresh = encryptToken(input.refreshToken) as RefreshToken
-          db.insert(AccountTable)
-            .values({
-              id: input.id,
-              email: input.email,
-              url: input.url,
-              access_token: encAccess,
-              refresh_token: encRefresh,
-              token_expiry: input.expiry,
-            })
-            .onConflictDoUpdate({
-              target: AccountTable.id,
-              set: {
-                email: input.email,
-                url: input.url,
-                access_token: encAccess,
-                refresh_token: encRefresh,
-                token_expiry: input.expiry,
-              },
-            })
-            .run()
-          void state(db, input.id, input.orgID)
-        }).pipe(Effect.asVoid),
-      )
-
-      return AccountRepo.of({
-        active,
-        list,
-        remove,
-        use,
-        getRow,
-        persistToken,
-        persistAccount,
-      })
-    }),
-  )
+        .run()
+      void state(db, input.id, input.orgID)
+    })
+  }
 }

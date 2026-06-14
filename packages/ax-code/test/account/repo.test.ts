@@ -1,386 +1,316 @@
-import { expect } from "bun:test"
-import { Effect, Layer, Option } from "effect"
+import { beforeEach, expect, test } from "bun:test"
 
 import { AccountRepo } from "../../src/account/repo"
 import { AccessToken, AccountID, OrgID, RefreshToken } from "../../src/account/schema"
 import { Database } from "../../src/storage/db"
-import { testEffect } from "../lib/effect"
 
-const truncate = Layer.effectDiscard(
-  Effect.sync(() => {
-    const db = Database.Client()
-    db.run(/*sql*/ `DELETE FROM account_state`)
-    db.run(/*sql*/ `DELETE FROM account`)
-  }),
-)
+beforeEach(() => {
+  const db = Database.Client()
+  db.run(/*sql*/ `DELETE FROM account_state`)
+  db.run(/*sql*/ `DELETE FROM account`)
+})
 
-const it = testEffect(Layer.merge(AccountRepo.layer, truncate))
+test("list returns empty when no accounts exist", async () => {
+  const accounts = await AccountRepo.list()
+  expect(accounts).toEqual([])
+})
 
-it.effect("list returns empty when no accounts exist", () =>
-  Effect.gen(function* () {
-    const accounts = yield* AccountRepo.use((r) => r.list())
-    expect(accounts).toEqual([])
-  }),
-)
+test("active returns none when no accounts exist", async () => {
+  const active = await AccountRepo.active()
+  expect(active).toBeUndefined()
+})
 
-it.effect("active returns none when no accounts exist", () =>
-  Effect.gen(function* () {
-    const active = yield* AccountRepo.use((r) => r.active())
-    expect(Option.isNone(active)).toBe(true)
-  }),
-)
+test("persistAccount inserts and getRow retrieves", async () => {
+  const id = AccountID.make("user-1")
+  await AccountRepo.persistAccount({
+    id,
+    email: "test@example.com",
+    url: "https://control.example.com",
+    accessToken: AccessToken.make("at_123"),
+    refreshToken: RefreshToken.make("rt_456"),
+    expiry: Date.now() + 3600_000,
+    orgID: OrgID.make("org-1"),
+  })
 
-it.effect("persistAccount inserts and getRow retrieves", () =>
-  Effect.gen(function* () {
-    const id = AccountID.make("user-1")
-    yield* AccountRepo.use((r) =>
-      r.persistAccount({
-        id,
-        email: "test@example.com",
-        url: "https://control.example.com",
-        accessToken: AccessToken.make("at_123"),
-        refreshToken: RefreshToken.make("rt_456"),
-        expiry: Date.now() + 3600_000,
-        orgID: Option.some(OrgID.make("org-1")),
-      }),
-    )
+  const row = await AccountRepo.getRow(id)
+  expect(row).toBeDefined()
+  const value = row!
+  expect(value.id).toBe(AccountID.make("user-1"))
+  expect(value.email).toBe("test@example.com")
 
-    const row = yield* AccountRepo.use((r) => r.getRow(id))
-    expect(Option.isSome(row)).toBe(true)
-    const value = Option.getOrThrow(row)
-    expect(value.id).toBe(AccountID.make("user-1"))
-    expect(value.email).toBe("test@example.com")
+  const active = await AccountRepo.active()
+  expect(active!.active_org_id).toBe(OrgID.make("org-1"))
+})
 
-    const active = yield* AccountRepo.use((r) => r.active())
-    expect(Option.getOrThrow(active).active_org_id).toBe(OrgID.make("org-1"))
-  }),
-)
+test("persistAccount sets the active account and org", async () => {
+  const id1 = AccountID.make("user-1")
+  const id2 = AccountID.make("user-2")
 
-it.effect("persistAccount sets the active account and org", () =>
-  Effect.gen(function* () {
-    const id1 = AccountID.make("user-1")
-    const id2 = AccountID.make("user-2")
+  await AccountRepo.persistAccount({
+    id: id1,
+    email: "first@example.com",
+    url: "https://control.example.com",
+    accessToken: AccessToken.make("at_1"),
+    refreshToken: RefreshToken.make("rt_1"),
+    expiry: Date.now() + 3600_000,
+    orgID: OrgID.make("org-1"),
+  })
 
-    yield* AccountRepo.use((r) =>
-      r.persistAccount({
-        id: id1,
-        email: "first@example.com",
-        url: "https://control.example.com",
-        accessToken: AccessToken.make("at_1"),
-        refreshToken: RefreshToken.make("rt_1"),
-        expiry: Date.now() + 3600_000,
-        orgID: Option.some(OrgID.make("org-1")),
-      }),
-    )
+  await AccountRepo.persistAccount({
+    id: id2,
+    email: "second@example.com",
+    url: "https://control.example.com",
+    accessToken: AccessToken.make("at_2"),
+    refreshToken: RefreshToken.make("rt_2"),
+    expiry: Date.now() + 3600_000,
+    orgID: OrgID.make("org-2"),
+  })
 
-    yield* AccountRepo.use((r) =>
-      r.persistAccount({
-        id: id2,
-        email: "second@example.com",
-        url: "https://control.example.com",
-        accessToken: AccessToken.make("at_2"),
-        refreshToken: RefreshToken.make("rt_2"),
-        expiry: Date.now() + 3600_000,
-        orgID: Option.some(OrgID.make("org-2")),
-      }),
-    )
+  // Last persisted account is active with its org
+  const active = await AccountRepo.active()
+  expect(active).toBeDefined()
+  expect(active!.id).toBe(AccountID.make("user-2"))
+  expect(active!.active_org_id).toBe(OrgID.make("org-2"))
+})
 
-    // Last persisted account is active with its org
-    const active = yield* AccountRepo.use((r) => r.active())
-    expect(Option.isSome(active)).toBe(true)
-    expect(Option.getOrThrow(active).id).toBe(AccountID.make("user-2"))
-    expect(Option.getOrThrow(active).active_org_id).toBe(OrgID.make("org-2"))
-  }),
-)
+test("list returns all accounts", async () => {
+  const id1 = AccountID.make("user-1")
+  const id2 = AccountID.make("user-2")
 
-it.effect("list returns all accounts", () =>
-  Effect.gen(function* () {
-    const id1 = AccountID.make("user-1")
-    const id2 = AccountID.make("user-2")
+  await AccountRepo.persistAccount({
+    id: id1,
+    email: "a@example.com",
+    url: "https://control.example.com",
+    accessToken: AccessToken.make("at_1"),
+    refreshToken: RefreshToken.make("rt_1"),
+    expiry: Date.now() + 3600_000,
+    orgID: undefined,
+  })
 
-    yield* AccountRepo.use((r) =>
-      r.persistAccount({
-        id: id1,
-        email: "a@example.com",
-        url: "https://control.example.com",
-        accessToken: AccessToken.make("at_1"),
-        refreshToken: RefreshToken.make("rt_1"),
-        expiry: Date.now() + 3600_000,
-        orgID: Option.none(),
-      }),
-    )
+  await AccountRepo.persistAccount({
+    id: id2,
+    email: "b@example.com",
+    url: "https://control.example.com",
+    accessToken: AccessToken.make("at_2"),
+    refreshToken: RefreshToken.make("rt_2"),
+    expiry: Date.now() + 3600_000,
+    orgID: OrgID.make("org-1"),
+  })
 
-    yield* AccountRepo.use((r) =>
-      r.persistAccount({
-        id: id2,
-        email: "b@example.com",
-        url: "https://control.example.com",
-        accessToken: AccessToken.make("at_2"),
-        refreshToken: RefreshToken.make("rt_2"),
-        expiry: Date.now() + 3600_000,
-        orgID: Option.some(OrgID.make("org-1")),
-      }),
-    )
+  const accounts = await AccountRepo.list()
+  expect(accounts.length).toBe(2)
+  expect(accounts.map((a) => a.email).sort()).toEqual(["a@example.com", "b@example.com"])
+})
 
-    const accounts = yield* AccountRepo.use((r) => r.list())
-    expect(accounts.length).toBe(2)
-    expect(accounts.map((a) => a.email).sort()).toEqual(["a@example.com", "b@example.com"])
-  }),
-)
+test("remove deletes an account", async () => {
+  const id = AccountID.make("user-1")
 
-it.effect("remove deletes an account", () =>
-  Effect.gen(function* () {
-    const id = AccountID.make("user-1")
+  await AccountRepo.persistAccount({
+    id,
+    email: "test@example.com",
+    url: "https://control.example.com",
+    accessToken: AccessToken.make("at_1"),
+    refreshToken: RefreshToken.make("rt_1"),
+    expiry: Date.now() + 3600_000,
+    orgID: undefined,
+  })
 
-    yield* AccountRepo.use((r) =>
-      r.persistAccount({
-        id,
-        email: "test@example.com",
-        url: "https://control.example.com",
-        accessToken: AccessToken.make("at_1"),
-        refreshToken: RefreshToken.make("rt_1"),
-        expiry: Date.now() + 3600_000,
-        orgID: Option.none(),
-      }),
-    )
+  await AccountRepo.remove(id)
 
-    yield* AccountRepo.use((r) => r.remove(id))
+  const row = await AccountRepo.getRow(id)
+  expect(row).toBeUndefined()
+})
 
-    const row = yield* AccountRepo.use((r) => r.getRow(id))
-    expect(Option.isNone(row)).toBe(true)
-  }),
-)
+test("use stores the selected org and marks the account active", async () => {
+  const id1 = AccountID.make("user-1")
+  const id2 = AccountID.make("user-2")
 
-it.effect("use stores the selected org and marks the account active", () =>
-  Effect.gen(function* () {
-    const id1 = AccountID.make("user-1")
-    const id2 = AccountID.make("user-2")
+  await AccountRepo.persistAccount({
+    id: id1,
+    email: "first@example.com",
+    url: "https://control.example.com",
+    accessToken: AccessToken.make("at_1"),
+    refreshToken: RefreshToken.make("rt_1"),
+    expiry: Date.now() + 3600_000,
+    orgID: undefined,
+  })
 
-    yield* AccountRepo.use((r) =>
-      r.persistAccount({
-        id: id1,
-        email: "first@example.com",
-        url: "https://control.example.com",
-        accessToken: AccessToken.make("at_1"),
-        refreshToken: RefreshToken.make("rt_1"),
-        expiry: Date.now() + 3600_000,
-        orgID: Option.none(),
-      }),
-    )
+  await AccountRepo.persistAccount({
+    id: id2,
+    email: "second@example.com",
+    url: "https://control.example.com",
+    accessToken: AccessToken.make("at_2"),
+    refreshToken: RefreshToken.make("rt_2"),
+    expiry: Date.now() + 3600_000,
+    orgID: undefined,
+  })
 
-    yield* AccountRepo.use((r) =>
-      r.persistAccount({
-        id: id2,
-        email: "second@example.com",
-        url: "https://control.example.com",
-        accessToken: AccessToken.make("at_2"),
-        refreshToken: RefreshToken.make("rt_2"),
-        expiry: Date.now() + 3600_000,
-        orgID: Option.none(),
-      }),
-    )
+  await AccountRepo.use(id1, OrgID.make("org-99"))
+  const active1 = await AccountRepo.active()
+  expect(active1!.id).toBe(id1)
+  expect(active1!.active_org_id).toBe(OrgID.make("org-99"))
 
-    yield* AccountRepo.use((r) => r.use(id1, Option.some(OrgID.make("org-99"))))
-    const active1 = yield* AccountRepo.use((r) => r.active())
-    expect(Option.getOrThrow(active1).id).toBe(id1)
-    expect(Option.getOrThrow(active1).active_org_id).toBe(OrgID.make("org-99"))
+  await AccountRepo.use(id1)
+  const active2 = await AccountRepo.active()
+  expect(active2!.active_org_id).toBeNull()
+})
 
-    yield* AccountRepo.use((r) => r.use(id1, Option.none()))
-    const active2 = yield* AccountRepo.use((r) => r.active())
-    expect(Option.getOrThrow(active2).active_org_id).toBeNull()
-  }),
-)
+test("persistToken updates token fields", async () => {
+  const id = AccountID.make("user-1")
 
-it.effect("persistToken updates token fields", () =>
-  Effect.gen(function* () {
-    const id = AccountID.make("user-1")
+  await AccountRepo.persistAccount({
+    id,
+    email: "test@example.com",
+    url: "https://control.example.com",
+    accessToken: AccessToken.make("old_token"),
+    refreshToken: RefreshToken.make("old_refresh"),
+    expiry: 1000,
+    orgID: undefined,
+  })
 
-    yield* AccountRepo.use((r) =>
-      r.persistAccount({
-        id,
-        email: "test@example.com",
-        url: "https://control.example.com",
-        accessToken: AccessToken.make("old_token"),
-        refreshToken: RefreshToken.make("old_refresh"),
-        expiry: 1000,
-        orgID: Option.none(),
-      }),
-    )
+  const expiry = Date.now() + 7200_000
+  await AccountRepo.persistToken({
+    accountID: id,
+    accessToken: AccessToken.make("new_token"),
+    refreshToken: RefreshToken.make("new_refresh"),
+    expiry: expiry,
+  })
 
-    const expiry = Date.now() + 7200_000
-    yield* AccountRepo.use((r) =>
-      r.persistToken({
-        accountID: id,
-        accessToken: AccessToken.make("new_token"),
-        refreshToken: RefreshToken.make("new_refresh"),
-        expiry: Option.some(expiry),
-      }),
-    )
+  const row = await AccountRepo.getRow(id)
+  const value = row!
+  expect(value.access_token).toBe(AccessToken.make("new_token"))
+  expect(value.refresh_token).toBe(RefreshToken.make("new_refresh"))
+  expect(value.token_expiry).toBe(expiry)
+})
 
-    const row = yield* AccountRepo.use((r) => r.getRow(id))
-    const value = Option.getOrThrow(row)
-    expect(value.access_token).toBe(AccessToken.make("new_token"))
-    expect(value.refresh_token).toBe(RefreshToken.make("new_refresh"))
-    expect(value.token_expiry).toBe(expiry)
-  }),
-)
+test("persistToken with no expiry sets token_expiry to null", async () => {
+  const id = AccountID.make("user-1")
 
-it.effect("persistToken with no expiry sets token_expiry to null", () =>
-  Effect.gen(function* () {
-    const id = AccountID.make("user-1")
+  await AccountRepo.persistAccount({
+    id,
+    email: "test@example.com",
+    url: "https://control.example.com",
+    accessToken: AccessToken.make("old_token"),
+    refreshToken: RefreshToken.make("old_refresh"),
+    expiry: 1000,
+    orgID: undefined,
+  })
 
-    yield* AccountRepo.use((r) =>
-      r.persistAccount({
-        id,
-        email: "test@example.com",
-        url: "https://control.example.com",
-        accessToken: AccessToken.make("old_token"),
-        refreshToken: RefreshToken.make("old_refresh"),
-        expiry: 1000,
-        orgID: Option.none(),
-      }),
-    )
+  await AccountRepo.persistToken({
+    accountID: id,
+    accessToken: AccessToken.make("new_token"),
+    refreshToken: RefreshToken.make("new_refresh"),
+    expiry: undefined,
+  })
 
-    yield* AccountRepo.use((r) =>
-      r.persistToken({
-        accountID: id,
-        accessToken: AccessToken.make("new_token"),
-        refreshToken: RefreshToken.make("new_refresh"),
-        expiry: Option.none(),
-      }),
-    )
+  const row = await AccountRepo.getRow(id)
+  expect(row!.token_expiry).toBeNull()
+})
 
-    const row = yield* AccountRepo.use((r) => r.getRow(id))
-    expect(Option.getOrThrow(row).token_expiry).toBeNull()
-  }),
-)
+test("persistAccount upserts on conflict", async () => {
+  const id = AccountID.make("user-1")
 
-it.effect("persistAccount upserts on conflict", () =>
-  Effect.gen(function* () {
-    const id = AccountID.make("user-1")
+  await AccountRepo.persistAccount({
+    id,
+    email: "test@example.com",
+    url: "https://control.example.com",
+    accessToken: AccessToken.make("at_v1"),
+    refreshToken: RefreshToken.make("rt_v1"),
+    expiry: 1000,
+    orgID: OrgID.make("org-1"),
+  })
 
-    yield* AccountRepo.use((r) =>
-      r.persistAccount({
-        id,
-        email: "test@example.com",
-        url: "https://control.example.com",
-        accessToken: AccessToken.make("at_v1"),
-        refreshToken: RefreshToken.make("rt_v1"),
-        expiry: 1000,
-        orgID: Option.some(OrgID.make("org-1")),
-      }),
-    )
+  await AccountRepo.persistAccount({
+    id,
+    email: "test@example.com",
+    url: "https://control.example.com",
+    accessToken: AccessToken.make("at_v2"),
+    refreshToken: RefreshToken.make("rt_v2"),
+    expiry: 2000,
+    orgID: OrgID.make("org-2"),
+  })
 
-    yield* AccountRepo.use((r) =>
-      r.persistAccount({
-        id,
-        email: "test@example.com",
-        url: "https://control.example.com",
-        accessToken: AccessToken.make("at_v2"),
-        refreshToken: RefreshToken.make("rt_v2"),
-        expiry: 2000,
-        orgID: Option.some(OrgID.make("org-2")),
-      }),
-    )
+  const accounts = await AccountRepo.list()
+  expect(accounts.length).toBe(1)
 
-    const accounts = yield* AccountRepo.use((r) => r.list())
-    expect(accounts.length).toBe(1)
+  const row = await AccountRepo.getRow(id)
+  const value = row!
+  expect(value.access_token).toBe(AccessToken.make("at_v2"))
 
-    const row = yield* AccountRepo.use((r) => r.getRow(id))
-    const value = Option.getOrThrow(row)
-    expect(value.access_token).toBe(AccessToken.make("at_v2"))
+  const active = await AccountRepo.active()
+  expect(active!.active_org_id).toBe(OrgID.make("org-2"))
+})
 
-    const active = yield* AccountRepo.use((r) => r.active())
-    expect(Option.getOrThrow(active).active_org_id).toBe(OrgID.make("org-2"))
-  }),
-)
+test("remove clears active state when deleting the active account", async () => {
+  const id = AccountID.make("user-1")
 
-it.effect("remove clears active state when deleting the active account", () =>
-  Effect.gen(function* () {
-    const id = AccountID.make("user-1")
+  await AccountRepo.persistAccount({
+    id,
+    email: "test@example.com",
+    url: "https://control.example.com",
+    accessToken: AccessToken.make("at_1"),
+    refreshToken: RefreshToken.make("rt_1"),
+    expiry: Date.now() + 3600_000,
+    orgID: OrgID.make("org-1"),
+  })
 
-    yield* AccountRepo.use((r) =>
-      r.persistAccount({
-        id,
-        email: "test@example.com",
-        url: "https://control.example.com",
-        accessToken: AccessToken.make("at_1"),
-        refreshToken: RefreshToken.make("rt_1"),
-        expiry: Date.now() + 3600_000,
-        orgID: Option.some(OrgID.make("org-1")),
-      }),
-    )
+  await AccountRepo.remove(id)
 
-    yield* AccountRepo.use((r) => r.remove(id))
+  const active = await AccountRepo.active()
+  expect(active).toBeUndefined()
+})
 
-    const active = yield* AccountRepo.use((r) => r.active())
-    expect(Option.isNone(active)).toBe(true)
-  }),
-)
+test("getRow returns none for nonexistent account", async () => {
+  const row = await AccountRepo.getRow(AccountID.make("nope"))
+  expect(row).toBeUndefined()
+})
 
-it.effect("getRow returns none for nonexistent account", () =>
-  Effect.gen(function* () {
-    const row = yield* AccountRepo.use((r) => r.getRow(AccountID.make("nope")))
-    expect(Option.isNone(row)).toBe(true)
-  }),
-)
+test("list skips malformed account rows", async () => {
+  const id1 = AccountID.make("user-1")
+  const id2 = AccountID.make("user-2")
 
-it.effect("list skips malformed account rows", () =>
-  Effect.gen(function* () {
-    const id1 = AccountID.make("user-1")
-    const id2 = AccountID.make("user-2")
+  await AccountRepo.persistAccount({
+    id: id1,
+    email: "first@example.com",
+    url: "https://control.example.com",
+    accessToken: AccessToken.make("at_1"),
+    refreshToken: RefreshToken.make("rt_1"),
+    expiry: Date.now() + 3600_000,
+    orgID: undefined,
+  })
 
-    yield* AccountRepo.use((r) =>
-      r.persistAccount({
-        id: id1,
-        email: "first@example.com",
-        url: "https://control.example.com",
-        accessToken: AccessToken.make("at_1"),
-        refreshToken: RefreshToken.make("rt_1"),
-        expiry: Date.now() + 3600_000,
-        orgID: Option.none(),
-      }),
-    )
+  await AccountRepo.persistAccount({
+    id: id2,
+    email: "second@example.com",
+    url: "https://control.example.com",
+    accessToken: AccessToken.make("at_2"),
+    refreshToken: RefreshToken.make("rt_2"),
+    expiry: Date.now() + 3600_000,
+    orgID: undefined,
+  })
 
-    yield* AccountRepo.use((r) =>
-      r.persistAccount({
-        id: id2,
-        email: "second@example.com",
-        url: "https://control.example.com",
-        accessToken: AccessToken.make("at_2"),
-        refreshToken: RefreshToken.make("rt_2"),
-        expiry: Date.now() + 3600_000,
-        orgID: Option.none(),
-      }),
-    )
+  Database.Client().run(`UPDATE account SET url = CAST(x'0011' AS BLOB) WHERE id = '${id2}'`)
 
-    Database.Client().run(`UPDATE account SET url = CAST(x'0011' AS BLOB) WHERE id = '${id2}'`)
+  const accounts = await AccountRepo.list()
+  expect(accounts.map((item) => item.id)).toEqual([id1])
+})
 
-    const accounts = yield* AccountRepo.use((r) => r.list())
-    expect(accounts.map((item) => item.id)).toEqual([id1])
-  }),
-)
+test("active returns none for malformed active account rows", async () => {
+  const id = AccountID.make("user-1")
 
-it.effect("active returns none for malformed active account rows", () =>
-  Effect.gen(function* () {
-    const id = AccountID.make("user-1")
+  await AccountRepo.persistAccount({
+    id,
+    email: "test@example.com",
+    url: "https://control.example.com",
+    accessToken: AccessToken.make("at_1"),
+    refreshToken: RefreshToken.make("rt_1"),
+    expiry: Date.now() + 3600_000,
+    orgID: OrgID.make("org-1"),
+  })
 
-    yield* AccountRepo.use((r) =>
-      r.persistAccount({
-        id,
-        email: "test@example.com",
-        url: "https://control.example.com",
-        accessToken: AccessToken.make("at_1"),
-        refreshToken: RefreshToken.make("rt_1"),
-        expiry: Date.now() + 3600_000,
-        orgID: Option.some(OrgID.make("org-1")),
-      }),
-    )
+  Database.Client().run(`UPDATE account SET url = CAST(x'0011' AS BLOB) WHERE id = '${id}'`)
+  Database.Client().run(`UPDATE account_state SET active_account_id = '${id}' WHERE id = 1`)
 
-    Database.Client().run(`UPDATE account SET url = CAST(x'0011' AS BLOB) WHERE id = '${id}'`)
-    Database.Client().run(`UPDATE account_state SET active_account_id = '${id}' WHERE id = 1`)
-
-    const active = yield* AccountRepo.use((r) => r.active())
-    expect(Option.isNone(active)).toBe(true)
-  }),
-)
+  const active = await AccountRepo.active()
+  expect(active).toBeUndefined()
+})
