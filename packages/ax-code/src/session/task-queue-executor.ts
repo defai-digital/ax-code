@@ -394,9 +394,17 @@ async function refreshSessionBlockStatus(sessionID: SessionID) {
     const target = await sessionBlockStatus(sessionID)
     const active = await activeSessionItems(sessionID)
     await Promise.all(
-      active.map((item) => {
+      active.map(async (item) => {
+        // Re-read the live status before writing: the item may have completed,
+        // failed, or been cancelled between the snapshot above and now (e.g.
+        // run() finished right after the permission reply that triggered this
+        // refresh). Never transition an item that is no longer active, or we'd
+        // resurrect a terminal item back to "running" and wedge it forever.
+        const current = await TaskQueue.get(item.id).catch(() => undefined)
+        if (!current || !isActiveQueueStatus(current.status)) return
         const status = target ?? "running"
-        return item.status === status ? item : TaskQueue.setStatus({ id: item.id, status })
+        if (current.status === status) return
+        await TaskQueue.setStatus({ id: item.id, status })
       }),
     )
   } catch (error) {

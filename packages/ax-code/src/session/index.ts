@@ -14,6 +14,7 @@ import { SessionTable, MessageTable, PartTable } from "./session.sql"
 import { SessionGoal } from "./goal"
 import { ProjectTable } from "../project/project.sql"
 import { Storage } from "@/storage/storage"
+import { Lock } from "@/util/lock"
 import { Log } from "../util/log"
 import { MessageV2 } from "./message-v2"
 import { Instance } from "../project/instance"
@@ -511,6 +512,11 @@ export namespace Session {
       value: z.unknown().optional(),
     }),
     async (input) => {
+      // Serialize the read-merge-write: two concurrent setProductMetadata
+      // calls for different namespaces on the same session would otherwise
+      // both read the same base metadata and the second write would clobber
+      // the first namespace's update (lost update).
+      using _lock = await Lock.write(`session:metadata:${input.sessionID}`)
       const session = await get(input.sessionID)
       const metadata = SessionMetadata.mergeNamespace(session.metadata, input.namespace, input.value)
       return updateAndPublish(input.sessionID, { metadata, time_updated: Date.now() })
@@ -776,6 +782,12 @@ export namespace Session {
       SelfCorrection.reset(item.id)
       BlastRadius.reset(item.id)
       SessionStatus.clear(item.id)
+      // Drop the out-of-band session_diff blob written by revert/summary.
+      // CASCADE only covers DB rows, so without this every session that ever
+      // recorded a diff would leak its file on delete.
+      await Storage.remove(["session_diff", item.id]).catch((e) =>
+        log.warn("session_diff cleanup failed", { sessionID: item.id, error: e }),
+      )
     }
     for (const desc of allDescendants) {
       Bus.publishDetached(Event.Deleted, { info: desc })
