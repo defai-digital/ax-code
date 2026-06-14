@@ -26,6 +26,7 @@ import {
   getModelStatus,
   markPrepared,
   normalizeQuantization,
+  requirePlatformEligibility,
   stopServer,
 } from "@/provider/ax-engine"
 
@@ -331,6 +332,7 @@ export const ProvidersAxEngineCommand = cmd({
 
     if (action === "prepare") {
       const quantization = normalizeQuantization(args.quantization)
+      await requirePlatformEligibility()
       if (args.modelPath) {
         const prepared = await markPrepared({ modelPath: args.modelPath, quantization })
         if (args.json) console.log(JSON.stringify(prepared, null, 2))

@@ -1,7 +1,7 @@
 import type { Provider } from "../provider"
 import type { CustomLoader } from "../loaders"
 import { AX_ENGINE_API_KEY, AX_ENGINE_DEFAULT_PORT, AX_ENGINE_MODEL_ID } from "./constants"
-import { isPlausiblySupportedHost } from "./platform"
+import { isSupportedHost, requirePlatformEligibility } from "./platform"
 import { getDependencyStatus } from "./dependency"
 import { getModelStatus } from "./model-cache"
 import { ensureServer, isServerReady } from "./server"
@@ -21,6 +21,8 @@ function configuredBaseURL(provider: Provider.Info) {
 async function ensureReady(provider: Provider.Info, signal?: AbortSignal) {
   const baseURL = configuredBaseURL(provider)
   if (baseURL && (await isServerReady(baseURL, signal))) return
+
+  await requirePlatformEligibility()
 
   const model = await getModelStatus(provider.options)
   if (!model.present || !model.path) {
@@ -43,7 +45,7 @@ async function ensureReady(provider: Provider.Info, signal?: AbortSignal) {
 export function axEngineLoader(): CustomLoader {
   return async (provider) => {
     const baseURL = configuredBaseURL(provider) ?? `http://127.0.0.1:${AX_ENGINE_DEFAULT_PORT}/v1`
-    const autoload = isPlausiblySupportedHost() || !!process.env.AX_ENGINE_HOST
+    const autoload = await isSupportedHost()
     return {
       autoload,
       options: {

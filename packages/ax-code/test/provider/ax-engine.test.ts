@@ -7,6 +7,7 @@ import { ModelsDev } from "../../src/provider/models"
 import { ProviderID } from "../../src/provider/schema"
 import { Instance } from "../../src/project/instance"
 import { getAxEngineDoctorCheck } from "../../src/cli/cmd/doctor"
+import { shouldShowProviderInList } from "../../src/server/routes/provider"
 import {
   AX_ENGINE_MODEL_ID,
   AX_ENGINE_PROVIDER_ID,
@@ -77,8 +78,21 @@ describe("ax-engine platform gate", () => {
         memoryBytes: 32 * 1024 ** 3,
       }),
     ).toMatchObject({
+      supported: false,
+      blockers: expect.arrayContaining([expect.stringContaining("AX_ENGINE_INSUFFICIENT_MEMORY")]),
+    })
+
+    expect(
+      evaluatePlatformEligibility({
+        platform: "darwin",
+        arch: "arm64",
+        macosVersion: "26.0",
+        chip: "Apple M2 Max",
+        memoryBytes: 64 * 1024 ** 3,
+      }),
+    ).toMatchObject({
       supported: true,
-      warnings: expect.arrayContaining([expect.stringContaining("AX_ENGINE_INSUFFICIENT_MEMORY")]),
+      blockers: [],
     })
   })
 })
@@ -164,6 +178,31 @@ describe("ax-engine provider integration", () => {
     const res = await loader.options!.fetch("http://127.0.0.1:18181/v1/chat/completions")
     expect(res.status).toBe(200)
     expect(seen).toEqual(["http://127.0.0.1:18181/v1/models", "http://127.0.0.1:18181/v1/chat/completions"])
+  })
+
+  test("provider list exposes ax-engine only after full host eligibility passes", () => {
+    expect(
+      shouldShowProviderInList({
+        key: AX_ENGINE_PROVIDER_ID,
+        disabled: new Set(),
+        axEngineSupported: false,
+      }),
+    ).toBe(false)
+    expect(
+      shouldShowProviderInList({
+        key: AX_ENGINE_PROVIDER_ID,
+        disabled: new Set(),
+        enabled: new Set([AX_ENGINE_PROVIDER_ID]),
+        axEngineSupported: false,
+      }),
+    ).toBe(false)
+    expect(
+      shouldShowProviderInList({
+        key: AX_ENGINE_PROVIDER_ID,
+        disabled: new Set(),
+        axEngineSupported: true,
+      }),
+    ).toBe(true)
   })
 })
 

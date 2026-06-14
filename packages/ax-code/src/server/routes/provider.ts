@@ -20,7 +20,7 @@ import {
   markPrepared,
   stopServer,
 } from "@/provider/ax-engine"
-import { isPlausiblySupportedHost } from "@/provider/ax-engine/platform"
+import { isSupportedHost, requirePlatformEligibility } from "@/provider/ax-engine/platform"
 import { normalizeQuantization } from "@/provider/ax-engine/model-cache"
 
 const log = Log.create({ service: "server" })
@@ -44,6 +44,19 @@ const NATIVE_PROVIDERS = new Set([
   "codex-cli",
   "grok-build-cli",
 ])
+
+export function shouldShowProviderInList(input: {
+  key: string
+  disabled: Set<string>
+  enabled?: Set<string>
+  axEngineSupported?: boolean
+}) {
+  if (input.disabled.has(input.key)) return false
+  if (input.key === "ax-engine" && !input.axEngineSupported) return false
+  const alwaysShow = input.key === "ollama" || input.key === "ax-studio"
+  if (alwaysShow) return true
+  return input.enabled ? input.enabled.has(input.key) : NATIVE_PROVIDERS.has(input.key)
+}
 
 export const ProviderRoutes = lazy(() =>
   new Hono()
@@ -77,13 +90,9 @@ export const ProviderRoutes = lazy(() =>
 
         const allProviders = await ModelsDev.get()
         const filteredProviders: Record<string, (typeof allProviders)[string]> = {}
-        // Offline providers are always shown — they're local services that
-        // should be discoverable regardless of enabled_providers config.
-        const ALWAYS_SHOW = new Set(["ollama", "ax-studio"])
+        const axEngineSupported = await isSupportedHost().catch(() => false)
         for (const [key, value] of Object.entries(allProviders)) {
-          if (disabled.has(key)) continue
-          if (key === "ax-engine" && !isPlausiblySupportedHost() && !enabled?.has(key)) continue
-          if (ALWAYS_SHOW.has(key) || (enabled ? enabled.has(key) : NATIVE_PROVIDERS.has(key))) {
+          if (shouldShowProviderInList({ key, disabled, enabled, axEngineSupported })) {
             filteredProviders[key] = value
           }
         }
@@ -160,6 +169,7 @@ export const ProviderRoutes = lazy(() =>
       async (c) => {
         const body = c.req.valid("json")
         const quantization = normalizeQuantization(body.quantization)
+        await requirePlatformEligibility()
         if (body.modelPath) {
           return c.json(await markPrepared({ modelPath: body.modelPath, quantization }))
         }

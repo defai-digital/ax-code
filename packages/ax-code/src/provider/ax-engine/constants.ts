@@ -29,4 +29,4 @@ export const AX_ENGINE_ERROR = {
 } as const
 
 export const AX_ENGINE_MIN_MACOS_MAJOR = 26
-export const AX_ENGINE_WARN_MEMORY_BYTES = 64 * 1024 ** 3
+export const AX_ENGINE_MIN_MEMORY_BYTES = 64 * 1024 ** 3

@@ -2,7 +2,7 @@ import os from "os"
 import z from "zod"
 import { Process } from "@/util/process"
 import { toErrorMessage } from "@/util/error-message"
-import { AX_ENGINE_ERROR, AX_ENGINE_MIN_MACOS_MAJOR, AX_ENGINE_WARN_MEMORY_BYTES } from "./constants"
+import { AX_ENGINE_ERROR, AX_ENGINE_MIN_MACOS_MAJOR, AX_ENGINE_MIN_MEMORY_BYTES } from "./constants"
 
 export const AxEngineChipGeneration = z.enum(["unknown", "m1", "m2", "m3", "m4", "m5-or-newer"])
 export type AxEngineChipGeneration = z.infer<typeof AxEngineChipGeneration>
@@ -72,10 +72,10 @@ export function evaluatePlatformEligibility(input: AxEnginePlatformProbeInput): 
     }
   }
 
-  if (input.memoryBytes !== undefined && input.memoryBytes < AX_ENGINE_WARN_MEMORY_BYTES) {
-    warnings.push(
-      `${AX_ENGINE_ERROR.InsufficientMemory}: Qwen3-Coder-Next is large; 64 GB unified memory or more is recommended`,
-    )
+  if (input.memoryBytes === undefined) {
+    blockers.push(`${AX_ENGINE_ERROR.InsufficientMemory}: unable to determine system memory`)
+  } else if (input.memoryBytes < AX_ENGINE_MIN_MEMORY_BYTES) {
+    blockers.push(`${AX_ENGINE_ERROR.InsufficientMemory}: 64 GB unified memory or more is required`)
   }
 
   return {
@@ -134,4 +134,16 @@ export async function getPlatformEligibility(): Promise<AxEnginePlatformEligibil
 
 export function isPlausiblySupportedHost() {
   return process.platform === "darwin" && process.arch === "arm64"
+}
+
+export async function isSupportedHost() {
+  return (await getPlatformEligibility()).supported
+}
+
+export async function requirePlatformEligibility() {
+  const eligibility = await getPlatformEligibility()
+  if (!eligibility.supported) {
+    throw new Error(eligibility.blockers.join("; ") || "ax-engine provider is not supported on this host")
+  }
+  return eligibility
 }
