@@ -126,7 +126,7 @@ test("debug wait unrefs the underlying timer", async () => {
 test("auth lock polling does not keep the process alive while waiting", async () => {
   const src = await Bun.file(path.join(import.meta.dir, "../../src/auth/index.ts")).text()
   const start = src.indexOf("async function acquireFileLock")
-  const end = src.indexOf("const fail =", start)
+  const end = src.indexOf("async function invalidateProviderCacheAfterAuthChange", start)
   expect(start).toBeGreaterThan(-1)
   expect(end).toBeGreaterThan(start)
 
