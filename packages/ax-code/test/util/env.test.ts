@@ -1,6 +1,26 @@
 import { describe, expect, test } from "bun:test"
 import { Env } from "../../src/util/env"
 
+describe("Env.parseBoolean", () => {
+  test("recognizes true/1/yes/on as true", () => {
+    for (const value of ["true", "TRUE", "1", "yes", "YES", "on", "ON", " on "]) {
+      expect(Env.parseBoolean(value)).toBe(true)
+    }
+  })
+
+  test("recognizes false/0/no/off as false", () => {
+    for (const value of ["false", "FALSE", "0", "no", "NO", "off", "OFF", " off "]) {
+      expect(Env.parseBoolean(value)).toBe(false)
+    }
+  })
+
+  test("returns undefined for unset or unrecognized values", () => {
+    for (const value of [undefined, "", "maybe", "2", "enabled"]) {
+      expect(Env.parseBoolean(value)).toBeUndefined()
+    }
+  })
+})
+
 describe("Env.sanitize", () => {
   test("redacts secret-like environment variable names even without separators", () => {
     const env = {

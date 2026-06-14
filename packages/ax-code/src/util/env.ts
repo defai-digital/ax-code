@@ -51,13 +51,16 @@ export namespace Env {
   }
 
   // Interpret an environment-variable string as a tri-state boolean.
-  // "true"/"1" → true, "false"/"0" → false, anything else (incl. unset) →
-  // undefined so callers can distinguish "explicitly set" from "default".
+  // Truthy: "true"/"1"/"yes"/"on"; falsy: "false"/"0"/"no"/"off"; anything
+  // else (incl. unset) → undefined so callers can distinguish "explicitly
+  // set" from "default". The yes/on/no/off forms match the prior Effect
+  // `Config.boolean` semantics that flags such as AX_CODE_DISABLE_FILETIME_CHECK
+  // relied on before the Effect removal.
   export function parseBoolean(value: string | undefined): boolean | undefined {
     if (!value) return undefined
     const normalized = value.trim().toLowerCase()
-    if (normalized === "true" || normalized === "1") return true
-    if (normalized === "false" || normalized === "0") return false
+    if (normalized === "true" || normalized === "1" || normalized === "yes" || normalized === "on") return true
+    if (normalized === "false" || normalized === "0" || normalized === "no" || normalized === "off") return false
     return undefined
   }
 }
