@@ -144,12 +144,14 @@ export async function ensureServer(options: AxEngineServerOptions): Promise<AxEn
     : await selectPort(options.preferredPort)
   const resolvedBaseURL = baseURL ?? baseURLForPort(port)
   const origin = originFromBaseURL(resolvedBaseURL)
+  const logFile = await fs.open(AxEnginePaths.serverLog, "a")
   const proc = Process.spawn([options.binaryPath, "serve", options.modelPath, "--port", String(port)], {
-    stdout: "ignore",
-    stderr: "ignore",
+    stdout: logFile.fd,
+    stderr: logFile.fd,
     detached: true,
     abort: options.signal,
   })
+  await logFile.close().catch(() => undefined)
   proc.unref?.()
 
   const ready = await waitForReady(resolvedBaseURL, options.signal)

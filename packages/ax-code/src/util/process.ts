@@ -7,7 +7,7 @@ import { toErrorMessage } from "./error-message"
 const TIMEOUT_FORCE_KILL_GRACE_MS = 250
 
 export namespace Process {
-  export type Stdio = "inherit" | "pipe" | "ignore"
+  export type Stdio = "inherit" | "pipe" | "ignore" | number
   export type Shell = boolean | string
 
   export interface Options {
