@@ -134,16 +134,29 @@ function shouldRetry(response: Response) {
   return response.status === 408 || response.status === 429 || response.status >= 500
 }
 
+// Exponential backoff with jitter, matching the previous Effect client
+// (Schedule.exponential(200).jittered): wait before each retry so a
+// transient 429/5xx isn't immediately hammered with back-to-back requests.
+async function backoff(attempt: number): Promise<void> {
+  const base = 200 * 2 ** attempt
+  const jittered = base * (0.5 + Math.random())
+  await new Promise((resolve) => setTimeout(resolve, jittered))
+}
+
 async function fetchWithReadRetry(fetcher: Fetcher, input: string, init: RequestInit): Promise<Response> {
   let lastError: unknown
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
       const response = await fetcher(input, init)
-      if (attempt < 2 && shouldRetry(response)) continue
+      if (attempt < 2 && shouldRetry(response)) {
+        await backoff(attempt)
+        continue
+      }
       return response
     } catch (error) {
       lastError = error
       if (attempt === 2) break
+      await backoff(attempt)
     }
   }
   throw accountServiceError("HTTP request failed", lastError)
