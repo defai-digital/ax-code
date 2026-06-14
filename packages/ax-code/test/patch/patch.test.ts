@@ -85,6 +85,17 @@ describe("Patch namespace", () => {
 
       expect(() => Patch.parsePatch(invalidPatch)).toThrow("Invalid patch format")
     })
+
+    test("parses *** End of File anchor into is_end_of_file", () => {
+      const patchText = "*** Begin Patch\n*** Update File: tail.txt\n@@\n-last\n+end\n*** End of File\n*** End Patch"
+
+      const result = Patch.parsePatch(patchText)
+      expect(result.hunks).toHaveLength(1)
+      const hunk = result.hunks[0]
+      if (hunk.type !== "update") throw new Error("expected update hunk")
+      expect(hunk.chunks).toHaveLength(1)
+      expect(hunk.chunks[0].is_end_of_file).toBe(true)
+    })
   })
 
   describe("maybeParseApplyPatch", () => {

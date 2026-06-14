@@ -137,7 +137,14 @@ export namespace Patch {
         let isEndOfFile = false
 
         // Parse change lines
-        while (i < lines.length && !lines[i].startsWith("@@") && !lines[i].startsWith("***")) {
+        while (
+          i < lines.length &&
+          !lines[i].startsWith("@@") &&
+          // *** End of File is a chunk-level anchor, not a file header, so it
+          // must reach the body below to set is_end_of_file. Other *** lines
+          // (Add/Delete/Update/Move to/Begin/End Patch) terminate the chunk.
+          (lines[i] === "*** End of File" || !lines[i].startsWith("***"))
+        ) {
           const changeLine = lines[i]
 
           if (changeLine === "*** End of File") {
