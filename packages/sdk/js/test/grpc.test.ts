@@ -125,7 +125,7 @@ describe("gRPC SDK facade", () => {
         if (method === AX_CODE_GRPC_METHOD.LoadBootstrap) return { value: { path: { root: "/repo" }, errors: [] } }
         if (method === AX_CODE_GRPC_METHOD.GetSession) return { value: { id: "sess-1", title: "GUI" } }
         if (method === AX_CODE_GRPC_METHOD.ListSessionMessages) return { value: [{ id: "msg-1" }] }
-        if (method === AX_CODE_GRPC_METHOD.ListSkills) return { value: [{ id: "security-harden" }] }
+        if (method === AX_CODE_GRPC_METHOD.ListSkills) return { value: [{ id: "improve-security" }] }
         if (method === AX_CODE_GRPC_METHOD.WriteAppLog) return { value: true }
         if (method === AX_CODE_GRPC_METHOD.DisposeInstance) return { value: true }
         if (method === AX_CODE_GRPC_METHOD.RestartInstance) return { value: true }
@@ -189,7 +189,7 @@ describe("gRPC SDK facade", () => {
     expect(await client.bootstrap.load({ include: { path: true } })).toEqual({ path: { root: "/repo" }, errors: [] })
     expect(await client.session.get("sess-1")).toEqual({ id: "sess-1", title: "GUI" })
     expect(await client.session.messages("sess-1", { limit: 10 })).toEqual([{ id: "msg-1" }])
-    expect(await client.app.skills()).toEqual([{ id: "security-harden" }])
+    expect(await client.app.skills()).toEqual([{ id: "improve-security" }])
     expect(await client.app.log({ service: "gui", level: "info", message: "ready" })).toBe(true)
     expect(await client.instance.dispose()).toBe(true)
     expect(await client.instance.restart()).toBe(true)
@@ -799,7 +799,7 @@ describe("gRPC SDK facade", () => {
         const request = url instanceof Request ? url : new Request(url, init)
         const parsed = new URL(request.url)
         calls.push(`${request.method} ${parsed.pathname}${parsed.search}`)
-        if (parsed.pathname === "/skill") return Response.json([{ id: "security-harden" }])
+        if (parsed.pathname === "/skill") return Response.json([{ id: "improve-security" }])
         if (parsed.pathname === "/agent") return Response.json([{ id: "general" }])
         if (parsed.pathname === "/project/current") return Response.json({ id: "proj-1" })
         if (parsed.pathname === "/project") return Response.json([{ id: "proj-1" }])
@@ -820,7 +820,7 @@ describe("gRPC SDK facade", () => {
       }) as typeof fetch,
     })
 
-    await expect(client.app.skills()).resolves.toEqual([{ id: "security-harden" }])
+    await expect(client.app.skills()).resolves.toEqual([{ id: "improve-security" }])
     await expect(client.app.agents()).resolves.toEqual([{ id: "general" }])
     await expect(client.project.current()).resolves.toEqual({ id: "proj-1" })
     await expect(client.project.list()).resolves.toEqual([{ id: "proj-1" }])

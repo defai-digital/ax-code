@@ -1,16 +1,29 @@
 ---
 name: improve-overall
 description: Reduce duplication and dead code, improve module and component boundary clarity, and remove overengineering. Conservative by default - prefers small safe moves over sweeping rewrites.
-argument-hint: [file or directory to focus on]
+argument-hint: "[file or directory to focus on]"
 ---
 
-Review and improve the code in $ARGUMENTS. If no argument is given, focus on files changed in the current branch (`git diff --name-only main`).
+Review and improve the code in $ARGUMENTS. If no argument is given, start from files changed in the current branch (`git diff --name-only main`) and narrow the working set before editing.
+
+## Scope selection
+
+- List the candidate files first and exclude generated files, snapshots, lockfiles, vendored files, build outputs, and unrelated docs.
+- Prefer source and test files that are directly connected to the requested improvement.
+- If the changed-file set crosses multiple packages or mixes unrelated domains, pick one coherent slice and report the rest as follow-up candidates.
+- Do not use this skill for speculative broad cleanup. Every edit should have a local reason: removes proven dead code, reduces real duplication, clarifies a boundary, or removes an abstraction that is actively making the code harder to follow.
 
 ## Focus areas (in priority order)
 
 ### 1. Dead code
 
-Remove unexported symbols with no callers, unreachable branches, and unused imports. Confirm a symbol is unused with a grep before deleting it.
+Remove unexported symbols with no callers, unreachable branches, and unused imports.
+
+Before deleting a symbol:
+
+- Use `rg` to search for direct references.
+- Check barrel exports, registries, CLI command maps, tool registration, config names, route tables, test fixtures, and dynamic lookups.
+- If a symbol may be reached dynamically, leave it in place unless typecheck/tests or repository conventions prove it is unused.
 
 ### 2. Duplication
 
@@ -43,5 +56,12 @@ If a file is over 500 lines and has natural split points, describe how it could 
 - No changes to public API signatures, exported types, or observable behaviour.
 - Skip anything that touches more than 3 call sites without a clear mechanical transformation.
 - High-risk actions (renaming exports, reshaping interfaces, moving files referenced by CI) must be described and confirmed before execution.
-- Follow ax-code architecture rules: no Effect outside `src/effect/`, `src/session/`, `src/file/watcher.ts`; Zod for new validation; `async/await` for async; `Log.create` for structured logging.
-- Run `bun run typecheck` after changes to confirm no type errors.
+- Follow ax-code architecture rules: do not introduce Effect or Effect Schema; use Zod for new validation; use `async/await` for async; use `Log.create` for structured logging.
+
+## Verification
+
+- Run the most specific relevant tests for touched behavior from `packages/ax-code/` when the change touches `packages/ax-code`.
+- Run `bun run typecheck` from `packages/ax-code/` for package-local TypeScript changes.
+- Run root `pnpm typecheck` when the change crosses workspace packages or touches shared package boundaries.
+- If no focused test exists, say that explicitly and explain why typecheck/static inspection is the available verification.
+- Read verification output carefully; do not report success if a relevant check failed, timed out, or was skipped.

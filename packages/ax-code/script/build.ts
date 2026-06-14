@@ -5,6 +5,7 @@ import fs from "fs"
 import path from "path"
 import { fileURLToPath } from "url"
 import solidPlugin from "@opentui/solid/bun-plugin"
+import { SkillLint } from "./check-skills"
 import { formatModelsSnapshot, preserveLocalProviders } from "./models-snapshot"
 
 const __filename = fileURLToPath(import.meta.url)
@@ -80,6 +81,15 @@ const builtinSkills = await (async () => {
   )
 })()
 console.log(`Loaded ${builtinSkills.length} built-in skills`)
+
+const skillIssues = await SkillLint.check(skillsDir)
+if (skillIssues.length > 0) {
+  console.error("Built-in skill validation failed:")
+  for (const { skill, problems } of skillIssues) {
+    for (const problem of problems) console.error(`  - ${skill}: ${problem}`)
+  }
+  process.exit(1)
+}
 
 const singleFlag = process.argv.includes("--single")
 const baselineFlag = process.argv.includes("--baseline")

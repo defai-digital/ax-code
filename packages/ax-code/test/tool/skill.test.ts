@@ -223,6 +223,26 @@ Use this skill.
           expect(fixResult.output).toContain(`<skill_content name="debug-n-fix">`)
           expect(fixResult.output).toContain("Bug reality gate")
           expect(fixResult.output).toContain("pre-fix failure evidence")
+
+          const improveResult = await tool.execute({ name: "improve-overall" }, ctx)
+          expect(improveResult.metadata.dir).toBe("builtin://improve-overall")
+          expect(improveResult.output).toContain(`<skill_content name="improve-overall">`)
+          expect(improveResult.output).toContain("## Scope selection")
+          expect(improveResult.output).toContain("do not introduce Effect or Effect Schema")
+          expect(improveResult.output).toContain("Run root `pnpm typecheck`")
+          expect(improveResult.output).toContain("Check barrel exports, registries, CLI command maps")
+
+          const securityResult = await tool.execute({ name: "improve-security" }, ctx)
+          expect(securityResult.metadata.dir).toBe("builtin://improve-security")
+          expect(securityResult.output).toContain(`<skill_content name="improve-security">`)
+          expect(securityResult.output).toContain("## Exploitability gate")
+          expect(securityResult.output).toContain("Confirmed vulnerability")
+          expect(securityResult.output).toContain("False positive / already guarded")
+          expect(securityResult.output).toContain("Do not flag safe argument-array usage")
+
+          await expect(tool.execute({ name: "security-harden" }, ctx)).rejects.toThrow(
+            `Skill "security-harden" not found`,
+          )
         },
       })
     } finally {

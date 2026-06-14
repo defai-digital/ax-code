@@ -15,6 +15,8 @@
     "test:live": "bun run script/test-groups.ts live",
     "test:ci": "bun run script/test-ci.ts",
     "test:risk": "bun run script/test-risk.ts",
+    "check:skills": "bun run script/check-skills.ts",
+    "check:skills:all": "bun run script/check-skills.ts --all",
     "check:tui-layering": "bun run script/check-tui-layering.ts",
     "check:tui-snapshot": "bun run script/check-tui-snapshot.ts",
     "quality:rollout": "bun run script/quality-rollout.ts",
