@@ -1,8 +1,7 @@
-import { Clock, Duration, Effect, Layer, Option, Schema, SchemaGetter, ServiceMap } from "effect"
+import { Clock, Duration, Effect, Layer, Option, Schema, SchemaGetter, Schedule, ServiceMap } from "effect"
 import { FetchHttpClient, HttpClient, HttpClientRequest, HttpClientResponse } from "effect/unstable/http"
 
 import { makeRunPromise } from "@/effect/run-service"
-import { withTransientReadRetry } from "@/util/effect-http-client"
 import { AccountRepo, type AccountRow } from "./repo"
 import {
   type AccountError,
@@ -119,6 +118,15 @@ class TokenRefreshRequest extends Schema.Class<TokenRefreshRequest>("TokenRefres
 }) {}
 
 const clientId = "ax-code-cli"
+
+const withTransientReadRetry = <E, R>(client: HttpClient.HttpClient.With<E, R>) =>
+  client.pipe(
+    HttpClient.retryTransient({
+      retryOn: "errors-and-responses",
+      times: 2,
+      schedule: Schedule.exponential(200).pipe(Schedule.jittered),
+    }),
+  )
 
 const mapAccountServiceError =
   (message = "Account service operation failed") =>
