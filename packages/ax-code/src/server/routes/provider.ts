@@ -12,15 +12,8 @@ import { lazy } from "../../util/lazy"
 import { PROVIDER_ID_PARAM, withProviderID } from "./route-params"
 import { redactProviderInfo } from "./config"
 import { Log } from "../../util/log"
-import {
-  getAxEngineStatus,
-  downloadModel,
-  getDependencyStatus,
-  getModelStatus,
-  markPrepared,
-  stopServer,
-} from "@/provider/ax-engine"
-import { isSupportedHost, requirePlatformEligibility } from "@/provider/ax-engine/platform"
+import { getAxEngineStatus, prepareAxEngine, stopServer } from "@/provider/ax-engine"
+import { isSupportedHost } from "@/provider/ax-engine/platform"
 import { normalizeQuantization } from "@/provider/ax-engine/model-cache"
 
 const log = Log.create({ service: "server" })
@@ -162,6 +155,7 @@ export const ProviderRoutes = lazy(() =>
             binaryPath: z.string().optional(),
             quantization: z.enum(["mlx4bit", "mlx6bit"]).optional(),
             download: z.boolean().optional(),
+            start: z.boolean().optional(),
           })
           .optional()
           .default({}),
@@ -169,18 +163,61 @@ export const ProviderRoutes = lazy(() =>
       async (c) => {
         const body = c.req.valid("json")
         const quantization = normalizeQuantization(body.quantization)
-        await requirePlatformEligibility()
-        if (body.modelPath) {
-          return c.json(await markPrepared({ modelPath: body.modelPath, quantization }))
-        }
-        if (!body.download) {
-          return c.json(await getModelStatus({ quantization }))
-        }
-        const dependency = await getDependencyStatus({ binaryPath: body.binaryPath })
-        if (!dependency.available || !dependency.binaryPath) {
-          throw new Error(dependency.blockers[0] ?? "ax-engine binary is not available")
-        }
-        return c.json(await downloadModel({ binaryPath: dependency.binaryPath, quantization }))
+        return c.json(
+          await prepareAxEngine({
+            binaryPath: body.binaryPath,
+            modelPath: body.modelPath,
+            quantization,
+            download: body.download,
+            start: body.start,
+            signal: c.req.raw.signal,
+          }),
+        )
+      },
+    )
+    .post(
+      "/ax-engine/start",
+      describeRoute({
+        summary: "Start managed ax-engine server",
+        description: "Start ax-engine for an already prepared or explicitly provided Qwen3-Coder-Next MLX model.",
+        operationId: "provider.axEngine.start",
+        responses: {
+          200: {
+            description: "Start result",
+            content: {
+              "application/json": {
+                schema: resolver(z.any()),
+              },
+            },
+          },
+          ...errors(400),
+        },
+      }),
+      validator(
+        "json",
+        z
+          .object({
+            modelPath: z.string().optional(),
+            binaryPath: z.string().optional(),
+            quantization: z.enum(["mlx4bit", "mlx6bit"]).optional(),
+            download: z.boolean().optional(),
+          })
+          .optional()
+          .default({}),
+      ),
+      async (c) => {
+        const body = c.req.valid("json")
+        const quantization = normalizeQuantization(body.quantization)
+        return c.json(
+          await prepareAxEngine({
+            binaryPath: body.binaryPath,
+            modelPath: body.modelPath,
+            quantization,
+            download: body.download,
+            start: true,
+            signal: c.req.raw.signal,
+          }),
+        )
       },
     )
     .post(

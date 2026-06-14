@@ -29,6 +29,15 @@ const OFFLINE_PROVIDER_HOSTS: Record<string, { envVar: string; defaultHost: stri
   ollama: { envVar: "OLLAMA_HOST", defaultHost: "http://localhost:11434" },
 }
 
+type AxEngineTuiStatus = {
+  eligibility?: { supported?: boolean; blockers?: string[]; warnings?: string[] }
+  dependency?: { available?: boolean; binaryPath?: string; blockers?: string[] }
+  disk?: { ok?: boolean; blockers?: string[]; freeBytes?: number }
+  model?: { present?: boolean; path?: string; blockers?: string[] }
+  server?: { running?: boolean; ready?: boolean; state?: { baseURL?: string }; blockers?: string[] }
+  capability?: { toolcall?: boolean; reason?: string }
+}
+
 function offlineProviderHint() {
   return "not running"
 }
@@ -73,6 +82,68 @@ function runProviderDialogAction(input: {
     })
 }
 
+async function axEngineRequest<T>(
+  sdk: ReturnType<typeof useSDK>,
+  path: "status" | "prepare" | "start" | "stop",
+  body?: Record<string, unknown>,
+): Promise<T> {
+  const response = await sdk.fetch(new URL(`/provider/ax-engine/${path}`, sdk.url), {
+    method: path === "status" ? "GET" : "POST",
+    headers: path === "status" ? undefined : { "content-type": "application/json" },
+    body: path === "status" ? undefined : JSON.stringify(body ?? {}),
+  })
+  if (!response.ok) {
+    const text = await response.text().catch(() => "")
+    throw new Error(text || `AX Engine request failed with HTTP ${response.status}`)
+  }
+  return (await response.json()) as T
+}
+
+function renderAxEngineStatusText(status: AxEngineTuiStatus) {
+  const lines = [
+    `Eligibility: ${status.eligibility?.supported ? "ok" : "blocked"}`,
+    ...(status.eligibility?.blockers ?? []),
+    ...(status.eligibility?.warnings ?? []),
+    `Dependency: ${status.dependency?.available ? status.dependency.binaryPath : "missing"}`,
+    ...(status.dependency?.blockers ?? []),
+    `Disk: ${status.disk?.ok ? "ok" : "blocked"}`,
+    ...(status.disk?.blockers ?? []),
+    `Model: ${status.model?.present ? status.model.path : "not prepared"}`,
+    ...(status.model?.blockers ?? []),
+    `Server: ${
+      status.server?.ready ? status.server.state?.baseURL : status.server?.running ? "running but not ready" : "stopped"
+    }`,
+    ...(status.server?.blockers ?? []),
+    status.capability?.toolcall === false ? status.capability.reason : undefined,
+  ]
+  return lines.filter((line): line is string => !!line)
+}
+
+function showAxEngineStatusDialog(input: {
+  dialog: ReturnType<typeof useDialog>
+  theme: ReturnType<typeof useTheme>["theme"]
+  status: AxEngineTuiStatus
+}) {
+  const lines = renderAxEngineStatusText(input.status)
+  input.dialog.replace(() => (
+    <box paddingLeft={2} paddingRight={2} gap={1} paddingBottom={1}>
+      <box flexDirection="row" justifyContent="space-between">
+        <text attributes={TextAttributes.BOLD} fg={input.theme.text}>
+          AX Engine status
+        </text>
+        <text fg={input.theme.textMuted} onMouseUp={() => input.dialog.clear()}>
+          esc
+        </text>
+      </box>
+      <box gap={1}>
+        {lines.map((line) => (
+          <text fg={line.includes("AX_ENGINE_") ? input.theme.warning : input.theme.textMuted}>{line}</text>
+        ))}
+      </box>
+    </box>
+  ))
+}
+
 export function createDialogProviderOptions() {
   const sync = useSync()
   const dialog = useDialog()
@@ -110,6 +181,85 @@ export function createDialogProviderOptions() {
                   connected: sync.data.provider_next.connected,
                   configured: sync.data.provider,
                 })
+
+                if (provider.id === "ax-engine") {
+                  const status = await axEngineRequest<AxEngineTuiStatus>(sdk, "status")
+                  const actions: Array<{
+                    title: string
+                    value: "status" | "download-start" | "start" | "stop"
+                    description?: string
+                  }> = [
+                    {
+                      title: "View status",
+                      value: "status",
+                      description: status.eligibility?.blockers?.[0] ?? status.model?.blockers?.[0],
+                    },
+                  ]
+
+                  if (status.eligibility?.supported && status.dependency?.available) {
+                    if (!status.model?.present) {
+                      actions.push({
+                        title: "Download and start",
+                        value: "download-start",
+                        description: "Downloads Qwen3-Coder-Next 4-bit, then waits for readiness",
+                      })
+                    } else {
+                      actions.push({
+                        title: status.server?.ready ? "Restart local server" : "Start local server",
+                        value: "start",
+                        description: status.model.path,
+                      })
+                    }
+                  }
+                  if (status.server?.running) {
+                    actions.push({
+                      title: "Stop local server",
+                      value: "stop",
+                      description: status.server.state?.baseURL,
+                    })
+                  }
+
+                  const action = await new Promise<(typeof actions)[number]["value"] | null>((resolve) => {
+                    dialog.replace(
+                      () => (
+                        <DialogSelect
+                          title="AX Engine"
+                          options={actions}
+                          onSelect={(option) => resolve(option.value)}
+                        />
+                      ),
+                      () => resolve(null),
+                    )
+                  })
+                  if (action === null) return
+                  if (action === "status") {
+                    showAxEngineStatusDialog({ dialog, theme, status })
+                    return
+                  }
+                  if (action === "stop") {
+                    await axEngineRequest(sdk, "stop")
+                    await sdk.client.instance.dispose()
+                    await sync.bootstrap()
+                    toast.show({ variant: "success", message: "AX Engine server stopped" })
+                    dialog.clear()
+                    return
+                  }
+
+                  toast.show({
+                    variant: "info",
+                    message: action === "download-start" ? "Preparing AX Engine model" : "Starting AX Engine",
+                  })
+                  await axEngineRequest(sdk, action === "download-start" ? "prepare" : "start", {
+                    download: action === "download-start",
+                    start: true,
+                    quantization: "mlx4bit",
+                  })
+                  await sdk.client.instance.dispose()
+                  await sync.bootstrap()
+                  toast.show({ variant: "success", message: "AX Engine ready" })
+                  dialog.clear()
+                  return
+                }
 
                 if (isOfflineKind) {
                   const saveEndpoint = async (value: string) => {

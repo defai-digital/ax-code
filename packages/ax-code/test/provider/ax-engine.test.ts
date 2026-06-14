@@ -19,6 +19,7 @@ import {
   parseDfPkAvailableBytes,
   parseChipGeneration,
   parseMacosMajor,
+  prepareAxEngine,
 } from "../../src/provider/ax-engine"
 
 const originalFetch = globalThis.fetch
@@ -141,6 +142,145 @@ describe("ax-engine model cache", () => {
       "model path does not exist",
     )
     await expect(markPrepared({ modelPath: tmp.path })).rejects.toThrow("model-manifest.json")
+  })
+})
+
+describe("ax-engine prepare lifecycle", () => {
+  const eligibility = {
+    supported: true,
+    platform: "darwin",
+    arch: "arm64",
+    macosVersion: "26.0",
+    macosMajor: 26,
+    chip: "Apple M2 Max",
+    chipGeneration: "m2",
+    memoryBytes: 64 * 1024 ** 3,
+    blockers: [],
+    warnings: [],
+  } as any
+
+  test("checks prepared model status without starting server unless requested", async () => {
+    const calls: string[] = []
+    const result = await prepareAxEngine(
+      { quantization: "mlx4bit" },
+      {
+        requireEligibility: async () => eligibility,
+        getModelStatus: async () => {
+          calls.push("model")
+          return {
+            present: false,
+            modelID: AX_ENGINE_MODEL_ID,
+            quantization: "mlx4bit",
+            complete: false,
+            blockers: ["AX_ENGINE_MODEL_MISSING: missing"],
+          }
+        },
+        ensureServer: async () => {
+          throw new Error("should not start")
+        },
+      },
+    )
+
+    expect(calls).toEqual(["model"])
+    expect(result.model.present).toBe(false)
+    expect(result.server).toBeUndefined()
+  })
+
+  test("can start an already prepared model through the shared lifecycle helper", async () => {
+    const calls: string[] = []
+    const result = await prepareAxEngine(
+      { quantization: "mlx4bit", start: true },
+      {
+        requireEligibility: async () => eligibility,
+        getModelStatus: async () => {
+          calls.push("model")
+          return {
+            present: true,
+            modelID: AX_ENGINE_MODEL_ID,
+            quantization: "mlx4bit",
+            path: "/models/qwen",
+            revision: "abc123",
+            complete: true,
+            blockers: [],
+          }
+        },
+        getDependencyStatus: async () => {
+          calls.push("dependency")
+          return {
+            available: true,
+            mode: "configured",
+            binaryPath: "/bin/ax-engine",
+            blockers: [],
+          }
+        },
+        ensureServer: async (input) => {
+          calls.push("server")
+          expect(input.modelPath).toBe("/models/qwen")
+          expect(input.modelRevision).toBe("abc123")
+          return {
+            pid: 123,
+            port: 18181,
+            baseURL: "http://127.0.0.1:18181/v1",
+            modelID: AX_ENGINE_MODEL_ID,
+            modelPath: input.modelPath,
+            modelRevision: input.modelRevision,
+            binaryPath: input.binaryPath,
+            startedAt: 1,
+            lastHealthAt: 2,
+          }
+        },
+      },
+    )
+
+    expect(calls).toEqual(["model", "dependency", "server"])
+    expect(result.server?.baseURL).toBe("http://127.0.0.1:18181/v1")
+  })
+
+  test("download prepare reuses the resolved dependency when starting", async () => {
+    const calls: string[] = []
+    const result = await prepareAxEngine(
+      { quantization: "mlx4bit", download: true, start: true },
+      {
+        requireEligibility: async () => eligibility,
+        getDependencyStatus: async () => {
+          calls.push("dependency")
+          return {
+            available: true,
+            mode: "configured",
+            binaryPath: "/bin/ax-engine",
+            blockers: [],
+          }
+        },
+        downloadModel: async (input) => {
+          calls.push("download")
+          expect(input.binaryPath).toBe("/bin/ax-engine")
+          return {
+            modelID: AX_ENGINE_MODEL_ID,
+            quantization: "mlx4bit",
+            path: "/models/qwen",
+            revision: "def456",
+            preparedAt: 1,
+          }
+        },
+        ensureServer: async () => {
+          calls.push("server")
+          return {
+            pid: 123,
+            port: 18181,
+            baseURL: "http://127.0.0.1:18181/v1",
+            modelID: AX_ENGINE_MODEL_ID,
+            modelPath: "/models/qwen",
+            modelRevision: "def456",
+            binaryPath: "/bin/ax-engine",
+            startedAt: 1,
+          }
+        },
+      },
+    )
+
+    expect(calls).toEqual(["dependency", "download", "server"])
+    expect(result.prepared?.path).toBe("/models/qwen")
+    expect(result.server?.modelRevision).toBe("def456")
   })
 })
 
