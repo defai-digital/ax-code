@@ -410,7 +410,11 @@ export function Prompt(props: PromptProps) {
   function isPromptSubmitKey(event: KeyEvent) {
     if (keybind.match("input_submit", event)) return true
     if (event.ctrl || event.meta || event.shift || event.super || event.hyper) return false
-    return event.name === "return" || event.name === "linefeed"
+    // `kpenter` is the numeric-keypad Enter (kitty keyboard protocol reports it
+    // as a distinct key from the main `return`). Without it here, pressing the
+    // keypad Enter falls through to the textarea's default `kpenter` -> newline
+    // binding, so it inserts a blank line instead of submitting.
+    return event.name === "return" || event.name === "linefeed" || event.name === "kpenter"
   }
 
   useKeyboard((evt) => {

@@ -671,7 +671,7 @@ describe("tui OpenTUI stability guardrails", () => {
     const keyboardHandlerEnd = prompt.indexOf("const fileStyleId", keyboardHandlerStart)
     const keyboardHandler = prompt.slice(keyboardHandlerStart, keyboardHandlerEnd)
     expect(keyboardHandler).toContain("if (autocomplete?.visible) return")
-    expect(autocomplete).toContain('if (name === "return" || name === "linefeed")')
+    expect(autocomplete).toContain('if (name === "return" || name === "linefeed" || name === "kpenter")')
 
     const submitStart = prompt.indexOf("async function submit()")
     const submitEnd = prompt.indexOf("const selectedModel", submitStart)
