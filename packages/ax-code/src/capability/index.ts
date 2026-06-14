@@ -73,6 +73,8 @@ export namespace Capability {
         model: command.model,
         subtask: command.subtask,
         hints: command.hints,
+        argumentHint: command.argumentHint,
+        requiresArguments: command.requiresArguments,
         workflow: command.workflow,
         requiresWorkflowRuntime: command.workflow !== undefined,
         allowShell: command.allowShell,

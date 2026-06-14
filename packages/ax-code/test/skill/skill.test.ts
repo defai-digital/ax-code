@@ -108,6 +108,25 @@ test("loads built-in debug skills with debug agent metadata", async () => {
   })
 })
 
+test("built-in skill instructions are portable across repositories", async () => {
+  await using tmp = await tmpdir({ git: true })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const builtins = (await Skill.all()).filter((skill) => Skill.BUILTIN_NAMES.has(skill.name))
+      expect(builtins.map((skill) => skill.name).sort()).toEqual([...Skill.BUILTIN_NAMES].sort())
+      for (const skill of builtins) {
+        expect(skill.content).not.toContain("packages/ax-code")
+        expect(skill.content).not.toContain("Follow ax-code")
+        expect(skill.content).not.toContain("Filesystem.contains")
+        expect(skill.content).not.toContain("Instance.containsPath")
+        expect(skill.content).not.toContain("Isolation.isProtected")
+      }
+    },
+  })
+})
+
 test("returns skill directories from Skill.dirs", async () => {
   await using tmp = await tmpdir({
     git: true,

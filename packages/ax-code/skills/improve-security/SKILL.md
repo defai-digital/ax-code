@@ -30,7 +30,7 @@ Work through each class for every file in scope:
 
 ### 1. Path traversal
 
-User-controlled input used in file paths without normalization or a containment check (`Filesystem.contains`). Look for string concatenation or `path.join` with external input that is never validated against a root boundary.
+User-controlled input used in file paths without normalization or a containment check against the intended root directory. Look for string concatenation or path joins with external input that are never validated against a project, workspace, upload, or sandbox boundary.
 
 ### 2. Symlink escape
 
@@ -42,19 +42,19 @@ User input that changes shell command structure, flags, redirections, pipes, env
 
 ### 4. Isolation bypass
 
-Permission checks that compare logical paths without also comparing canonical (`realpath`) paths. A symlink can make a protected path appear to be an approved bypass target. Reference the existing `resolveClosestExistingPath` + `securityPaths` pattern in `src/isolation/index.ts`.
+Permission checks that compare logical paths without also comparing canonical (`realpath`) paths. A symlink can make a protected path appear to be an approved bypass target. Reuse the repository's existing canonical-path or sandbox-boundary helper when one exists.
 
 ### 5. SSRF / URL validation
 
-URLs constructed from user input without an allowlist or SSRF guard. Check for `fetch(userInput)` or similar. Reference `src/util/ssrf.ts` for the correct guard.
+URLs constructed from user input without an allowlist or SSRF guard. Check for `fetch(userInput)` or similar. Prefer the repository's existing SSRF guard, URL allowlist, or network policy helper when one exists.
 
 ### 6. Untrusted deserialization
 
-Data from external sources (MCP, config files, remote skill indexes) parsed without schema validation. Fix: gate all external data through a Zod schema before use.
+Data from external sources (plugins, config files, remote indexes, API responses, or extension boundaries) parsed without schema validation. Fix: gate external data through the repository's established schema or validation library before use.
 
 ### 7. Tool scope creep
 
-Tool implementations (`src/tool/`) that read or write outside the declared project/worktree boundary without going through `assertSymlinkInsideProject` or `Instance.containsPath`.
+Tool, plugin, command, or integration implementations that read or write outside the declared project/worktree boundary without going through the repository's containment or permission checks.
 
 ### 8. Secret or credential exposure
 
@@ -70,13 +70,14 @@ Routes, commands, workflow actions, or MCP/tool calls that trust caller-supplied
 - Cite the missing or insufficient guard and any existing guard that does not cover the scenario.
 - Patch the minimal fix without broad refactors or behavior changes outside the security boundary.
 - Add or update a focused regression test when the exploit path is locally testable.
-- After patching, confirm the fix with the relevant focused test from `packages/ax-code/` and run `bun run typecheck` for package-local TypeScript changes.
-- Run root `pnpm typecheck` when the change crosses workspace packages or shared package boundaries.
+- After patching, confirm the fix with the most specific relevant test or verification command for the current repository.
+- Run the repository's local typecheck or equivalent static validation when the change touches typed code.
+- Run broader workspace validation when the change crosses package, workspace, or shared library boundaries.
 - If no focused test is practical, say why and describe the static/runtime evidence used instead.
 
 ## Skip
 
-- Issues already addressed by existing guards (e.g. paths already checked via `Isolation.isProtected`).
+- Issues already addressed by existing guards such as containment checks, permission checks, allowlists, escaping, or sandbox policy.
 - Theoretical findings with no concrete exploitation path in the current codebase.
 - Style or correctness issues that are not security-relevant.
 - Findings based only on keyword matches without a reachable trust boundary and sink.

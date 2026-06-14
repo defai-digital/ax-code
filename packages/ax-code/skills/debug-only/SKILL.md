@@ -61,3 +61,4 @@ Produce a structured report:
 - Read-only: no edits, writes, shell mutations, or tool calls that modify state.
 - Do not implement a fix; describe it in the report.
 - Do not clean up unrelated code or add comments while investigating.
+- Follow the current repository's instructions from AGENTS.md or equivalent local guidance.

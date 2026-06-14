@@ -35,9 +35,10 @@ Do not fix an unconfirmed hypothesis unless the user explicitly asks for a specu
 
 ## Phase 3 - Verify
 
-8. Run the relevant test file: `bun test test/path/to/file.test.ts` from `packages/ax-code/`.
-   - If no specific test file covers the fix, run `bun run test:unit`.
-   - Do not run the full suite unless the fix touches a cross-cutting concern.
+8. Run the most specific relevant test or verification command for the current repository.
+   - Prefer a single focused test file or package-local command when one covers the fix.
+   - If no focused test exists, run the smallest broader check that gives meaningful coverage.
+   - Do not run a full suite unless the fix touches a cross-cutting concern or repository instructions require it.
 9. Verify the original failure path no longer fails. This is separate from general regression tests.
 10. If tests fail after the fix, diagnose and resolve before reporting done.
 11. Check that no related path regresses by reading the test output carefully.
@@ -47,4 +48,4 @@ Do not fix an unconfirmed hypothesis unless the user explicitly asks for a specu
 
 - Fix only what the root cause requires - one bug, one fix.
 - If the root cause reveals a design problem that needs more than a targeted fix, stop and describe the larger issue rather than attempting a partial rewrite.
-- Follow ax-code repository rules: do not introduce Effect or Effect Schema; use Zod for validation; use `async/await` for async; use `Log.create` for structured logging.
+- Follow the current repository's instructions from AGENTS.md or equivalent local guidance.

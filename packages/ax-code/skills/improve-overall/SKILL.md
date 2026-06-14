@@ -56,12 +56,12 @@ If a file is over 500 lines and has natural split points, describe how it could 
 - No changes to public API signatures, exported types, or observable behaviour.
 - Skip anything that touches more than 3 call sites without a clear mechanical transformation.
 - High-risk actions (renaming exports, reshaping interfaces, moving files referenced by CI) must be described and confirmed before execution.
-- Follow ax-code architecture rules: do not introduce Effect or Effect Schema; use Zod for new validation; use `async/await` for async; use `Log.create` for structured logging.
+- Follow the current repository's instructions from AGENTS.md or equivalent local guidance.
 
 ## Verification
 
-- Run the most specific relevant tests for touched behavior from `packages/ax-code/` when the change touches `packages/ax-code`.
-- Run `bun run typecheck` from `packages/ax-code/` for package-local TypeScript changes.
-- Run root `pnpm typecheck` when the change crosses workspace packages or touches shared package boundaries.
+- Run the most specific relevant tests for the touched behavior.
+- Run the repository's local typecheck or equivalent static validation when the change touches typed code.
+- Run broader workspace validation when the change crosses package, workspace, or shared library boundaries.
 - If no focused test exists, say that explicitly and explain why typecheck/static inspection is the available verification.
 - Read verification output carefully; do not report success if a relevant check failed, timed out, or was skipped.

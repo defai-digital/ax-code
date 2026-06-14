@@ -4,7 +4,7 @@ import { Plugin } from "../plugin"
 import { Log } from "../util/log"
 import type { MessageV2 } from "./message-v2"
 import { commandSetup } from "./prompt-command-setup"
-import { resolveCommandForExecution } from "./prompt-command"
+import { resolveCommandForExecution, validateCommandArguments } from "./prompt-command"
 import { createWorkflowCommandRun, workflowCommandPrompt } from "./prompt-command-workflow"
 import { executeGoalCommand } from "./prompt-goal-command"
 import type { CommandInput, PromptInput } from "./prompt-input"
@@ -24,6 +24,7 @@ export async function executePromptCommand(input: CommandInput, prompt: PromptRu
     return executeGoalCommand(input, prompt)
   }
   let command = await resolveCommandForExecution({ sessionID: input.sessionID, name: input.command })
+  validateCommandArguments({ sessionID: input.sessionID, command, arguments: input.arguments })
   const commandTelemetry = {
     source: command.source,
     sourceTool: command.sourceTool,

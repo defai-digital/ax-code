@@ -16,3 +16,17 @@ export async function resolveCommandForExecution(input: {
   Session.publishError({ sessionID: input.sessionID, error: error.toObject() })
   throw error
 }
+
+export function validateCommandArguments(input: {
+  sessionID: SessionID
+  command: NonNullable<Awaited<ReturnType<typeof Command.get>>>
+  arguments: string
+}) {
+  if (!input.command.requiresArguments || input.arguments.trim()) return
+  const hint = input.command.argumentHint ? ` ${input.command.argumentHint}` : " <argument>"
+  const error = new NamedError.Unknown({
+    message: `Command "${input.command.name}" requires an argument. Usage: /${input.command.name}${hint}`,
+  })
+  Session.publishError({ sessionID: input.sessionID, error: error.toObject() })
+  throw error
+}

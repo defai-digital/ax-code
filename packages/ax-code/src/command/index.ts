@@ -47,11 +47,13 @@ export namespace Command {
       model: z.string().optional(),
       source: z.enum(["command", "file", "mcp", "skill"]).optional(),
       sourceTool: z.enum(["ax-code", "agents", "opencode", "claude", "builtin", "config"]).optional(),
-      scope: z.enum(["builtin", "project", "user", "config", "mcp"]).optional(),
+      scope: z.enum(["builtin", "project", "user", "config", "compat", "mcp"]).optional(),
       location: z.string().optional(),
       warnings: z.array(FileCommand.Warning).optional(),
       workflow: z.string().optional(),
       allowShell: z.boolean().optional(),
+      argumentHint: z.string().optional(),
+      requiresArguments: z.boolean().optional(),
       // workaround for zod not supporting async functions natively so we use getters
       // https://zod.dev/v4/changelog?id=zfunction
       template: z.promise(z.string()).or(z.string()),
@@ -81,6 +83,11 @@ export namespace Command {
     }
     if (template.includes("$ARGUMENTS")) result.push("$ARGUMENTS")
     return result
+  }
+
+  function skillRequiresArguments(skill: Skill.Info) {
+    if (!skill.argumentHint) return false
+    return !skill.argumentHint.trim().startsWith("[")
   }
 
   export async function mcpPromptTemplateText(input: {
@@ -264,10 +271,15 @@ export namespace Command {
         agent: skill.agent,
         description: skill.description,
         source: "skill",
+        sourceTool: skill.sourceTool,
+        scope: skill.scope,
+        location: skill.location,
+        argumentHint: skill.argumentHint,
+        requiresArguments: skillRequiresArguments(skill),
         get template() {
           return skill.content
         },
-        hints: [],
+        hints: hints(skill.content),
       }
     }
 
