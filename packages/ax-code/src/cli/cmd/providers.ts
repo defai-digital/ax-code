@@ -327,6 +327,7 @@ export const ProvidersAxEngineCommand = cmd({
 
     if (action === "stop") {
       await stopServer()
+      await Provider.invalidate().catch(() => {})
       if (args.json) console.log(JSON.stringify({ stopped: true }, null, 2))
       else prompts.outro("AX Engine server stopped")
       return
@@ -341,6 +342,7 @@ export const ProvidersAxEngineCommand = cmd({
         download: args.download,
         start: args.start,
       })
+      await Provider.invalidate().catch(() => {})
       if (args.json) console.log(JSON.stringify(result, null, 2))
       else {
         prompts.intro("AX Engine prepare")
@@ -361,6 +363,7 @@ export const ProvidersAxEngineCommand = cmd({
         download: args.download,
         start: true,
       })
+      await Provider.invalidate().catch(() => {})
       if (args.json) console.log(JSON.stringify(result, null, 2))
       else {
         prompts.intro("AX Engine start")

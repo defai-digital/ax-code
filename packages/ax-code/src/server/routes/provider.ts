@@ -163,16 +163,18 @@ export const ProviderRoutes = lazy(() =>
       async (c) => {
         const body = c.req.valid("json")
         const quantization = normalizeQuantization(body.quantization)
-        return c.json(
-          await prepareAxEngine({
-            binaryPath: body.binaryPath,
-            modelPath: body.modelPath,
-            quantization,
-            download: body.download,
-            start: body.start,
-            signal: c.req.raw.signal,
-          }),
+        const result = await prepareAxEngine({
+          binaryPath: body.binaryPath,
+          modelPath: body.modelPath,
+          quantization,
+          download: body.download,
+          start: body.start,
+          signal: c.req.raw.signal,
+        })
+        await Provider.invalidate().catch((error) =>
+          log.warn("failed to invalidate provider after ax-engine prepare", { error }),
         )
+        return c.json(result)
       },
     )
     .post(
@@ -208,16 +210,18 @@ export const ProviderRoutes = lazy(() =>
       async (c) => {
         const body = c.req.valid("json")
         const quantization = normalizeQuantization(body.quantization)
-        return c.json(
-          await prepareAxEngine({
-            binaryPath: body.binaryPath,
-            modelPath: body.modelPath,
-            quantization,
-            download: body.download,
-            start: true,
-            signal: c.req.raw.signal,
-          }),
+        const result = await prepareAxEngine({
+          binaryPath: body.binaryPath,
+          modelPath: body.modelPath,
+          quantization,
+          download: body.download,
+          start: true,
+          signal: c.req.raw.signal,
+        })
+        await Provider.invalidate().catch((error) =>
+          log.warn("failed to invalidate provider after ax-engine start", { error }),
         )
+        return c.json(result)
       },
     )
     .post(
@@ -238,6 +242,9 @@ export const ProviderRoutes = lazy(() =>
       }),
       async (c) => {
         await stopServer()
+        await Provider.invalidate().catch((error) =>
+          log.warn("failed to invalidate provider after ax-engine stop", { error }),
+        )
         return c.json(true)
       },
     )
