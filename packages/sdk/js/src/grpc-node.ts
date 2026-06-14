@@ -306,13 +306,21 @@ async function handleAxCodeGrpcHttp2Stream(
       assertAxCodeGrpcMethodSupported(descriptor.method, "serverStream")
       if (!bridge.serverStream) throw new Error("AX Code native bridge does not support server streaming")
       const request = await readUnaryGrpcMessage(stream, descriptor.requestType)
-      sendGrpcHeaders(stream)
-      for await (const response of bridge.serverStream({
-        method: descriptor.method as AxCodeGrpcStreamingMethod,
-        request,
-        metadata,
-      })) {
-        stream.write(encodeAxCodeGrpcFrame(encodeAxCodeGrpcProtoMessage(descriptor.responseType, response)))
+      const trailer = sendGrpcHeaders(stream)
+      try {
+        for await (const response of bridge.serverStream({
+          method: descriptor.method as AxCodeGrpcStreamingMethod,
+          request,
+          metadata,
+        })) {
+          stream.write(encodeAxCodeGrpcFrame(encodeAxCodeGrpcProtoMessage(descriptor.responseType, response)))
+        }
+      } catch (error) {
+        // Headers are already sent; report the failure via a non-OK trailer
+        // instead of letting it reach sendGrpcError, which would double-respond
+        // and the armed wantTrailers handler would still send grpc-status 0.
+        trailer.status = 13
+        trailer.message = errorMessage(error)
       }
       stream.end()
       break
@@ -322,14 +330,21 @@ async function handleAxCodeGrpcHttp2Stream(
       if (!bridge.bidiStream) throw new Error("AX Code native bridge does not support bidirectional streaming")
       const input = readGrpcMessages(stream, descriptor.requestType) as AsyncIterable<Record<string, unknown>>
       const prepared = await preparePtyBidiInput(input)
-      sendGrpcHeaders(stream)
-      for await (const response of bridge.bidiStream({
-        method: descriptor.method as AxCodeGrpcBidirectionalStreamingMethod,
-        request: prepared.request,
-        input: prepared.input,
-        metadata,
-      })) {
-        stream.write(encodeAxCodeGrpcFrame(encodeAxCodeGrpcProtoMessage(descriptor.responseType, response)))
+      const trailer = sendGrpcHeaders(stream)
+      try {
+        for await (const response of bridge.bidiStream({
+          method: descriptor.method as AxCodeGrpcBidirectionalStreamingMethod,
+          request: prepared.request,
+          input: prepared.input,
+          metadata,
+        })) {
+          stream.write(encodeAxCodeGrpcFrame(encodeAxCodeGrpcProtoMessage(descriptor.responseType, response)))
+        }
+      } catch (error) {
+        // Headers are already sent; report the failure via a non-OK trailer
+        // instead of letting it reach sendGrpcError (see serverStream above).
+        trailer.status = 13
+        trailer.message = errorMessage(error)
       }
       stream.end()
       break
@@ -408,7 +423,14 @@ function normalizePtyClientEvent(value: Record<string, unknown>): AxCodeGrpcPtyC
   return typeof value.data === "string" ? value.data : ""
 }
 
-function sendGrpcHeaders(stream: Http2.ServerHttp2Stream) {
+type GrpcTrailerState = { status: number; message?: string }
+
+// Sends the gRPC response headers and arms the trailer. The returned state
+// defaults to grpc-status 0 (OK); a streaming handler that fails mid-stream
+// can flip it to a non-OK status before calling stream.end() so the client
+// sees the error in the trailer rather than a false success.
+function sendGrpcHeaders(stream: Http2.ServerHttp2Stream): GrpcTrailerState {
+  const trailer: GrpcTrailerState = { status: 0 }
   stream.respond(
     {
       ":status": 200,
@@ -417,8 +439,12 @@ function sendGrpcHeaders(stream: Http2.ServerHttp2Stream) {
     { waitForTrailers: true },
   )
   stream.once("wantTrailers", () => {
-    if (!stream.destroyed) stream.sendTrailers({ "grpc-status": "0" })
+    if (stream.destroyed) return
+    const trailers: Record<string, string> = { "grpc-status": String(trailer.status) }
+    if (trailer.message !== undefined) trailers["grpc-message"] = encodeURIComponent(trailer.message)
+    stream.sendTrailers(trailers)
   })
+  return trailer
 }
 
 function sendGrpcError(stream: Http2.ServerHttp2Stream, code: number, message: string) {

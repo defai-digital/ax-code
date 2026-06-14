@@ -26,6 +26,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   private isProcessing = false
   private activeController: AbortController | null = null
   private activeCancelReason: CancelReason = null
+  private viewDisposables: vscode.Disposable[] = []
 
   constructor(private readonly context: vscode.ExtensionContext) {
     const storedModel = context.workspaceState.get<SelectedModel>(STATE_SELECTED_MODEL)
@@ -54,6 +55,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   }
 
   resolveWebviewView(webviewView: vscode.WebviewView) {
+    // A prior resolution's listeners belong to a now-replaced webview; dispose
+    // them so they don't accumulate each time the view is re-resolved.
+    this.disposeView()
     this.webviewView = webviewView
 
     webviewView.webview.options = {
@@ -63,30 +67,36 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
     webviewView.webview.html = buildChatHtml(generateNonce(), webviewView.webview.cspSource)
 
-    webviewView.webview.onDidReceiveMessage(async (message) => {
-      switch (message.type) {
-        case "ready":
-          this.postInitialState()
-          break
-        case "send":
-          await this.handleUserMessage(message.text)
-          break
-        case "clear":
-          await this.handleClear()
-          break
-        case "stop":
-          await this.handleStop()
-          break
-        case "selectModel":
-          await this.handleSelectModel()
-          break
-      }
-    })
+    this.viewDisposables.push(
+      webviewView.webview.onDidReceiveMessage(async (message) => {
+        switch (message.type) {
+          case "ready":
+            this.postInitialState()
+            break
+          case "send":
+            await this.handleUserMessage(message.text)
+            break
+          case "clear":
+            await this.handleClear()
+            break
+          case "stop":
+            await this.handleStop()
+            break
+          case "selectModel":
+            await this.handleSelectModel()
+            break
+        }
+      }),
+      webviewView.onDidDispose(() => {
+        if (this.webviewView === webviewView) this.webviewView = undefined
+        this.session.dispose()
+        this.server.dispose()
+      }),
+    )
+  }
 
-    webviewView.onDidDispose(() => {
-      this.session.dispose()
-      this.server.dispose()
-    })
+  private disposeView() {
+    for (const disposable of this.viewDisposables.splice(0)) disposable.dispose()
   }
 
   async sendMessage(text: string) {
@@ -107,6 +117,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   }
 
   dispose() {
+    this.disposeView()
     this.session.dispose()
     this.server.dispose()
   }

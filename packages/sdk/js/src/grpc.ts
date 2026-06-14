@@ -2315,7 +2315,10 @@ function connectPtyOverWebSocket(
   stream: AsyncIterable<AxCodeGrpcPtyClientEvent>,
   options: AxCodeGrpcCallOptions | undefined,
 ): AsyncIterable<AxCodeGrpcPtyServerEvent> {
-  const queue = createAsyncQueue<AxCodeGrpcPtyServerEvent>()
+  // Close the socket if the consumer abandons the iterator early; `close` is
+  // initialized below and only invoked when the consumer returns, so the
+  // forward reference is safe.
+  const queue = createAsyncQueue<AxCodeGrpcPtyServerEvent>(() => close(1000, "consumer left"))
   const socket = createPtyWebSocket(input, request)
   socket.binaryType = "arraybuffer"
   let opened = false
@@ -2472,7 +2475,10 @@ function headerValue(headers: RequestInit["headers"] | undefined, name: string) 
   return Object.entries(headers).find(([key]) => key.toLowerCase() === lower)?.[1]
 }
 
-function createAsyncQueue<T>() {
+// onReturn fires when a consumer abandons the iterator early (break/throw in a
+// `for await`), letting the producer tear down its backing resource (e.g. the
+// PTY WebSocket) instead of leaking it until server-initiated close.
+function createAsyncQueue<T>(onReturn?: () => void) {
   const values: T[] = []
   const waiters: Array<{
     resolve: (result: IteratorResult<T>) => void
@@ -2505,7 +2511,15 @@ function createAsyncQueue<T>() {
   return {
     iterable: {
       [Symbol.asyncIterator]() {
-        return { next }
+        return {
+          next,
+          return(): Promise<IteratorResult<T>> {
+            onReturn?.()
+            closed = true
+            flush()
+            return Promise.resolve({ value: undefined, done: true })
+          },
+        }
       },
     } satisfies AsyncIterable<T>,
     push(value: T) {

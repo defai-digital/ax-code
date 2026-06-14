@@ -1044,7 +1044,10 @@ async function revokeAppToken() {
   if (!accessToken) return
   console.log("Revoking app token...")
 
-  await fetch("https://api.github.com/installation/token", {
+  // fetch only rejects on network errors, so an HTTP error (e.g. 401/422)
+  // would otherwise be ignored and leave the installation token valid until
+  // its natural expiry. Surface it.
+  const response = await fetch("https://api.github.com/installation/token", {
     method: "DELETE",
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -1052,4 +1055,7 @@ async function revokeAppToken() {
       "X-GitHub-Api-Version": "2022-11-28",
     },
   })
+  if (!response.ok) {
+    console.error(`Failed to revoke app token: HTTP ${response.status} ${response.statusText}`)
+  }
 }

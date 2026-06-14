@@ -6,6 +6,8 @@
  * `webview.asWebviewUri` plus a more permissive script-src. The nonce-bound
  * inline script keeps the surface area minimal.
  */
+import { randomBytes } from "node:crypto"
+
 export function buildChatHtml(nonce: string, cspSource: string): string {
   return `<!DOCTYPE html>
 <html lang="en">
@@ -362,5 +364,7 @@ export function buildChatHtml(nonce: string, cspSource: string): string {
 }
 
 export function generateNonce(): string {
-  return Array.from({ length: 32 }, () => Math.floor(Math.random() * 36).toString(36)).join("")
+  // CSP nonces must be cryptographically unpredictable — Math.random() is not
+  // a CSPRNG and would weaken the script-src guarantee.
+  return randomBytes(16).toString("base64url")
 }

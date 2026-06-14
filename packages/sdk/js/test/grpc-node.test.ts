@@ -81,6 +81,33 @@ describe("gRPC Node HTTP/2 host", () => {
     ])
   })
 
+  test("reports a mid-stream server-streaming failure as a non-OK trailer", async () => {
+    handle = await startAxCodeGrpcNodeHttp2Server({
+      bridge: {
+        async unary() {
+          return { status: "SERVING" }
+        },
+        async *serverStream() {
+          yield { type: "session.updated", properties: { sessionID: "sess-1", count: 1 } }
+          throw new Error("stream boom")
+        },
+      },
+    })
+
+    const response = await grpcUnary(handle.url, AX_CODE_GRPC_METHOD.SubscribeEvents, "SubscribeEventsRequest", {
+      types: ["session.updated"],
+      sessionID: "sess-1",
+    })
+
+    // The first event is delivered, then the mid-stream throw must surface as
+    // grpc-status 13 (INTERNAL) rather than the false success (0) that the
+    // unconditional wantTrailers handler used to send.
+    expect(response.messages.map((message) => decodeAxCodeGrpcProtoMessage("RuntimeEvent", message))).toEqual([
+      { type: "session.updated", properties: { sessionID: "sess-1", count: 1 } },
+    ])
+    expect(response.grpcStatus).toBe("13")
+  })
+
   test("serves bidirectional PTY protobuf streams over HTTP/2", async () => {
     const calls: unknown[] = []
     handle = await startAxCodeGrpcNodeHttp2Server({
