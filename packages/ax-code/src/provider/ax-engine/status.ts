@@ -1,13 +1,14 @@
 import z from "zod"
 import { getPlatformEligibility } from "./platform"
 import { getDependencyStatus } from "./dependency"
-import { getModelStatus } from "./model-cache"
+import { getDiskStatus, getModelStatus } from "./model-cache"
 import { getServerStatus } from "./server"
 import { AX_ENGINE_ERROR } from "./constants"
 
 export const AxEngineStatus = z.object({
   eligibility: z.any(),
   dependency: z.any(),
+  disk: z.any(),
   model: z.any(),
   server: z.any(),
   capability: z.object({
@@ -26,9 +27,10 @@ export type AxEngineRuntimeOptions = {
 }
 
 export async function getAxEngineStatus(options: AxEngineRuntimeOptions = {}): Promise<AxEngineStatus> {
-  const [eligibility, dependency, model, server] = await Promise.all([
+  const [eligibility, dependency, disk, model, server] = await Promise.all([
     getPlatformEligibility(),
     getDependencyStatus(options),
+    getDiskStatus(options),
     getModelStatus(options),
     getServerStatus(),
   ])
@@ -36,6 +38,7 @@ export async function getAxEngineStatus(options: AxEngineRuntimeOptions = {}): P
   return {
     eligibility,
     dependency,
+    disk,
     model,
     server,
     capability: {

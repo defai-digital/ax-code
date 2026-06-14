@@ -20,6 +20,7 @@ export const AX_ENGINE_ERROR = {
   UnsupportedMacos: "AX_ENGINE_UNSUPPORTED_MACOS",
   UnsupportedChip: "AX_ENGINE_UNSUPPORTED_CHIP",
   InsufficientMemory: "AX_ENGINE_INSUFFICIENT_MEMORY",
+  InsufficientDisk: "AX_ENGINE_INSUFFICIENT_DISK",
   BinaryMissing: "AX_ENGINE_BINARY_MISSING",
   ModelMissing: "AX_ENGINE_MODEL_MISSING",
   DownloadFailed: "AX_ENGINE_DOWNLOAD_FAILED",
@@ -30,3 +31,8 @@ export const AX_ENGINE_ERROR = {
 
 export const AX_ENGINE_MIN_MACOS_MAJOR = 26
 export const AX_ENGINE_MIN_MEMORY_BYTES = 64 * 1024 ** 3
+
+export const AX_ENGINE_MIN_DISK_BYTES = {
+  mlx4bit: 64 * 1024 ** 3,
+  mlx6bit: 96 * 1024 ** 3,
+} as const satisfies Record<AxEngineQuantization, number>

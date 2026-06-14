@@ -6,7 +6,13 @@ import { Filesystem } from "@/util/filesystem"
 import { Process } from "@/util/process"
 import { parseJsonResult } from "@/util/json-value"
 import { toErrorMessage } from "@/util/error-message"
-import { AX_ENGINE_ERROR, AX_ENGINE_HF_REPOS, AX_ENGINE_MODEL_ID, AX_ENGINE_DEFAULT_QUANTIZATION } from "./constants"
+import {
+  AX_ENGINE_ERROR,
+  AX_ENGINE_HF_REPOS,
+  AX_ENGINE_MIN_DISK_BYTES,
+  AX_ENGINE_MODEL_ID,
+  AX_ENGINE_DEFAULT_QUANTIZATION,
+} from "./constants"
 import type { AxEngineQuantization } from "./constants"
 import { AxEnginePaths } from "./paths"
 
@@ -31,9 +37,20 @@ export const AxEnginePrepareState = z.object({
 })
 export type AxEnginePrepareState = z.infer<typeof AxEnginePrepareState>
 
+export const AxEngineDiskStatus = z.object({
+  path: z.string(),
+  quantization: z.enum(["mlx4bit", "mlx6bit"]),
+  freeBytes: z.number().optional(),
+  requiredBytes: z.number(),
+  ok: z.boolean(),
+  blockers: z.array(z.string()).default([]),
+})
+export type AxEngineDiskStatus = z.infer<typeof AxEngineDiskStatus>
+
 export type AxEngineModelOptions = {
   modelPath?: unknown
   quantization?: unknown
+  downloadDir?: unknown
   [key: string]: unknown
 }
 
@@ -64,6 +81,76 @@ async function directorySize(dir: string): Promise<number | undefined> {
   } catch {
     return undefined
   }
+}
+
+export function requiredDiskBytes(quantization: AxEngineQuantization): number {
+  return AX_ENGINE_MIN_DISK_BYTES[quantization]
+}
+
+export function parseDfPkAvailableBytes(text: string): number | undefined {
+  const lines = text
+    .trim()
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+  const dataLine = lines.at(-1)
+  if (!dataLine || lines.length < 2) return undefined
+  const columns = dataLine.split(/\s+/)
+  const availableBlocks = Number(columns[3])
+  if (!Number.isFinite(availableBlocks) || availableBlocks < 0) return undefined
+  return availableBlocks * 1024
+}
+
+export function evaluateDiskStatus(input: {
+  path: string
+  quantization?: AxEngineQuantization
+  freeBytes?: number
+  requiredBytes?: number
+}): AxEngineDiskStatus {
+  const quantization = input.quantization ?? AX_ENGINE_DEFAULT_QUANTIZATION
+  const requiredBytes = input.requiredBytes ?? requiredDiskBytes(quantization)
+  const blockers: string[] = []
+
+  if (input.freeBytes === undefined) {
+    blockers.push(`${AX_ENGINE_ERROR.InsufficientDisk}: could not determine free disk space at ${input.path}`)
+  } else if (input.freeBytes < requiredBytes) {
+    blockers.push(
+      `${AX_ENGINE_ERROR.InsufficientDisk}: ${Math.ceil(requiredBytes / 1024 ** 3)} GiB free is required for ${quantization}`,
+    )
+  }
+
+  return {
+    path: input.path,
+    quantization,
+    freeBytes: input.freeBytes,
+    requiredBytes,
+    ok: blockers.length === 0,
+    blockers,
+  }
+}
+
+export async function getDiskStatus(options: AxEngineModelOptions = {}): Promise<AxEngineDiskStatus> {
+  const quantization = normalizeQuantization(options.quantization)
+  const target =
+    typeof options.downloadDir === "string" && options.downloadDir.trim()
+      ? options.downloadDir.trim()
+      : AxEnginePaths.downloads
+  await fs.mkdir(target, { recursive: true })
+  const result = await Process.text(["df", "-Pk", target], { nothrow: true })
+  const freeBytes = result.code === 0 ? parseDfPkAvailableBytes(result.text) : undefined
+  return evaluateDiskStatus({
+    path: target,
+    quantization,
+    freeBytes,
+  })
+}
+
+async function assertDiskSpace(options: AxEngineModelOptions = {}): Promise<AxEngineDiskStatus> {
+  const status = await getDiskStatus(options)
+  if (!status.ok) {
+    throw new Error(status.blockers.join("; "))
+  }
+  return status
 }
 
 async function hasManifest(dir: string) {
@@ -192,6 +279,7 @@ export async function downloadModel(input: {
   if (input.dest) cmd.push("--dest", input.dest)
 
   using _ = await FileLock.acquire(AxEnginePaths.prepareLock, { timeoutMs: 30_000, staleMs: 60 * 60_000 })
+  await assertDiskSpace({ quantization, downloadDir: input.dest })
   const result = await Process.text(cmd, {
     timeout: 6 * 60 * 60 * 1000,
     abort: input.signal,

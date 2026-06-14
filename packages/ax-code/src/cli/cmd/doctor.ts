@@ -104,6 +104,13 @@ export function getAxEngineDoctorCheck(status: Awaited<ReturnType<typeof getAxEn
       detail: status.dependency.blockers.join("; "),
     }
   }
+  if (!status.model.present && status.disk && !status.disk.ok) {
+    return {
+      name: "AX Engine local provider",
+      status: "warn",
+      detail: status.disk.blockers.join("; "),
+    }
+  }
   if (!status.model.present) {
     return {
       name: "AX Engine local provider",

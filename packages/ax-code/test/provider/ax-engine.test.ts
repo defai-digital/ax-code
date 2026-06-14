@@ -12,9 +12,11 @@ import {
   AX_ENGINE_MODEL_ID,
   AX_ENGINE_PROVIDER_ID,
   axEngineLoader,
+  evaluateDiskStatus,
   evaluatePlatformEligibility,
   markPrepared,
   normalizeQuantization,
+  parseDfPkAvailableBytes,
   parseChipGeneration,
   parseMacosMajor,
 } from "../../src/provider/ax-engine"
@@ -101,6 +103,36 @@ describe("ax-engine model cache", () => {
   test("normalizes unknown quantization to the conservative default", () => {
     expect(normalizeQuantization("mlx6bit")).toBe("mlx6bit")
     expect(normalizeQuantization("surprise")).toBe("mlx4bit")
+  })
+
+  test("parses POSIX df output and blocks downloads without enough free space", () => {
+    expect(
+      parseDfPkAvailableBytes(`Filesystem 1024-blocks Used Available Capacity Mounted on
+/dev/disk3s5 994662584 650000000 344662584 66% /System/Volumes/Data
+`),
+    ).toBe(344662584 * 1024)
+
+    expect(
+      evaluateDiskStatus({
+        path: "/tmp/ax-engine",
+        quantization: "mlx4bit",
+        freeBytes: 16 * 1024 ** 3,
+      }),
+    ).toMatchObject({
+      ok: false,
+      blockers: expect.arrayContaining([expect.stringContaining("AX_ENGINE_INSUFFICIENT_DISK")]),
+    })
+
+    expect(
+      evaluateDiskStatus({
+        path: "/tmp/ax-engine",
+        quantization: "mlx4bit",
+        freeBytes: 80 * 1024 ** 3,
+      }),
+    ).toMatchObject({
+      ok: true,
+      blockers: [],
+    })
   })
 
   test("refuses to mark a missing or manifest-less model path prepared", async () => {
@@ -207,10 +239,26 @@ describe("ax-engine provider integration", () => {
 })
 
 describe("ax-engine doctor status", () => {
+  test("reports disk blockers before model preparation when dependency is available", () => {
+    const check = getAxEngineDoctorCheck({
+      eligibility: { supported: true, blockers: [], warnings: [] },
+      dependency: { available: true, binaryPath: "/bin/ax-engine", blockers: [] },
+      disk: { ok: false, blockers: ["AX_ENGINE_INSUFFICIENT_DISK: 64 GiB free is required"] },
+      model: { present: false, blockers: ["AX_ENGINE_MODEL_MISSING: missing"] },
+      server: { running: false, ready: false, blockers: [] },
+      capability: { toolcall: false, attachment: false },
+    } as any)
+
+    expect(check.name).toBe("AX Engine local provider")
+    expect(check.status).toBe("warn")
+    expect(check.detail).toContain("AX_ENGINE_INSUFFICIENT_DISK")
+  })
+
   test("reports missing model after eligibility and dependency pass", () => {
     const check = getAxEngineDoctorCheck({
       eligibility: { supported: true, blockers: [], warnings: [] },
       dependency: { available: true, binaryPath: "/bin/ax-engine", blockers: [] },
+      disk: { ok: true, blockers: [] },
       model: { present: false, blockers: ["AX_ENGINE_MODEL_MISSING: missing"] },
       server: { running: false, ready: false, blockers: [] },
       capability: { toolcall: false, attachment: false },
