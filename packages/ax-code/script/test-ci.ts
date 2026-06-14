@@ -92,7 +92,7 @@ async function tee(stream: ReadableStream<Uint8Array> | null, writer: NodeJS.Wri
 
 async function run(group: string, files: string[], dir: string, run: number) {
   const file = path.join(dir, `${group}-${run}.xml`)
-  const setup = path.join(root, "test/setup/effect-interrupt.ts")
+  const setup = path.join(root, "test/setup/harmless-interrupt.ts")
   const coverageDir = flag("--coverage") ? path.join(root, arg("--coverage-dir") ?? ".tmp/coverage") : undefined
   const command = [
     process.execPath,

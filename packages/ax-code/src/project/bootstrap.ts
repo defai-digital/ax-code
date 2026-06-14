@@ -15,7 +15,7 @@ import { Session } from "../session"
 import { ScheduledTask } from "@/session/scheduled-task"
 import { TaskQueue } from "@/session/task-queue"
 import { Provider } from "../provider/provider"
-import { isHarmlessEffectInterrupt } from "@/effect/interrupt"
+import { isHarmlessInterrupt } from "@/util/harmless-interrupt"
 import { toErrorMessage } from "@/util/error-message"
 import {
   BOOTSTRAP_PREWARM_MAX_FILES,
@@ -28,7 +28,7 @@ const BOOTSTRAP_TIMEOUT_MS = 30_000
 
 function fireAndForget(label: string, task: () => Promise<unknown> | unknown) {
   const handle = (err: unknown) => {
-    if (isHarmlessEffectInterrupt(err)) return
+    if (isHarmlessInterrupt(err)) return
     Log.Default.warn(`${label} failed`, {
       error: toErrorMessage(err),
     })

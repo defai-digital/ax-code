@@ -143,17 +143,6 @@ const inventory = [
     phase0Action: "observe_only",
     notes: "Question request tracking now uses per-instance Promise state while retaining the legacy service wrapper.",
   },
-  {
-    name: "disposeInstance",
-    kind: "disposer",
-    module: "src/effect/instance-registry.ts",
-    owner: "Instance.reload / Instance.dispose / Instance.disposeAll",
-    triggers: ["workspace_switch", "reload", "shutdown"],
-    dependencyMode: "promise",
-    phase0Action: "observe_only",
-    notes:
-      "Reload and shutdown call registered disposers through Promise cleanup hooks without Effect-managed disposal.",
-  },
 ] as const
 
 export namespace RuntimeHotPath {

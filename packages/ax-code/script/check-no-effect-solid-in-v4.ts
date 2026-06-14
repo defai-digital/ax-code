@@ -93,18 +93,16 @@ export namespace V4Guardrails {
 }
 
 // EffectGuard scans the entire src/ tree for `from "effect"` (and
-// related @effect/*, effect/* paths). Per ARCHITECTURE.md the only
-// places allowed to introduce new Effect usage are src/effect/ and the
-// deliberate Zod bridge at src/util/effect-zod.ts. Everything else is in scope for the H2
-// migration backlog tracked in PRD-2026-05-17-stability-audit-remediation.
+// related @effect/*, effect/* paths). Effect usage has been removed
+// from product code; any new Effect import in src/ is a CI failure.
 //
 // To keep CI green while H2 is in progress, the remaining violators are
 // listed in `ExistingViolations` and skipped. Each file deleted from
 // that list as the migration lands narrows the allowed surface.
 // A new Effect import in any other file becomes a CI failure.
 export namespace EffectGuard {
-  export const AllowedDirs = ["src/effect/"] as const
-  export const AllowedFiles = ["src/util/effect-zod.ts"] as const
+  export const AllowedDirs = [] as const
+  export const AllowedFiles = [] as const
 
   // Temporary allowlist of pre-existing Effect importers outside the
   // documented allowlist. Remove entries from this list as each file
@@ -185,7 +183,7 @@ if (import.meta.main) {
   }
   if (effectViolations.length > 0) {
     failed = true
-    console.log("# Effect Guard Violations (outside src/effect and src/util/effect-zod.ts)")
+    console.log("# Effect Guard Violations")
     for (const item of effectViolations) console.log(`- ${EffectGuard.format(item)}`)
     console.log("\nNew code must use async/await + Zod + Result<T,E> instead of Effect (ARCHITECTURE.md).")
   }

@@ -1,7 +1,6 @@
 import { GlobalBus } from "@/bus/global"
 import { DiagnosticLog } from "@/debug/diagnostic-log"
-import { disposeInstance } from "@/effect/instance-registry"
-import { isHarmlessEffectInterrupt } from "@/effect/interrupt"
+import { isHarmlessInterrupt } from "@/util/harmless-interrupt"
 import { RuntimeDebugSnapshot } from "@/runtime/debug-snapshot"
 import { RuntimeFailureClass } from "@/runtime/failure-class"
 import { ServiceManager } from "@/runtime/service-manager"
@@ -281,7 +280,7 @@ export const Instance = {
       directory,
     })
     try {
-      await Promise.allSettled([State.dispose(directory), disposeInstance(directory)])
+      await Promise.allSettled([State.dispose(directory)])
       cache.delete(directory)
       const next = track(directory, boot({ ...input, directory }))
       emit(directory)
@@ -318,7 +317,7 @@ export const Instance = {
       projectID: Instance.project.id,
     })
     try {
-      await Promise.allSettled([State.dispose(directory), disposeInstance(directory)])
+      await Promise.allSettled([State.dispose(directory)])
       cache.delete(directory)
       emit(directory)
       ServiceManager.clear(directory)
@@ -366,7 +365,7 @@ export const Instance = {
               await Instance.dispose()
             })
             .catch((error) => {
-              if (isHarmlessEffectInterrupt(error)) return
+              if (isHarmlessInterrupt(error)) return
               throw error
             })
         } catch (error) {
@@ -378,7 +377,7 @@ export const Instance = {
       }
     })
       .catch((error) => {
-        if (isHarmlessEffectInterrupt(error)) return
+        if (isHarmlessInterrupt(error)) return
         emitLifecycle({
           kind: "dispose_all.failed",
           ...errorMetadata(error),

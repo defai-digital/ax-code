@@ -2,7 +2,6 @@ import { $ } from "bun"
 import { afterEach, describe, expect, test } from "bun:test"
 import fs from "fs/promises"
 import path from "path"
-import { Deferred, Effect, Option } from "effect"
 import { tmpdir } from "../fixture/fixture"
 import { Bus } from "../../src/bus"
 import { FileWatcher } from "../../src/file/watcher"
@@ -18,14 +17,14 @@ const describeWatcher = FileWatcher.hasNativeBinding() && !process.env.CI ? desc
 type WatcherEvent = { file: string; event: "add" | "change" | "unlink" }
 
 /** Run `body` with a live FileWatcher service. */
-function withWatcher<E>(directory: string, body: Effect.Effect<void, E>) {
+function withWatcher(directory: string, body: () => Promise<void>) {
   return Instance.provide({
     directory,
     fn: async () => {
       try {
         await FileWatcher.init({ enabled: true, disabled: false })
-        await Effect.runPromise(ready(directory))
-        await Effect.runPromise(body)
+        await ready(directory)
+        await body()
       } finally {
         await Instance.dispose()
       }
@@ -49,81 +48,83 @@ function listen(directory: string, check: (evt: WatcherEvent) => boolean, hit: (
   }
 }
 
-function wait(directory: string, check: (evt: WatcherEvent) => boolean) {
-  return Effect.gen(function* () {
-    const deferred = yield* Deferred.make<WatcherEvent>()
-    const cleanup = yield* Effect.sync(() => {
-      let off = () => {}
-      off = listen(directory, check, (evt) => {
-        off()
-        Deferred.doneUnsafe(deferred, Effect.succeed(evt))
-      })
-      return off
+function nextUpdate(
+  directory: string,
+  check: (evt: WatcherEvent) => boolean,
+  trigger: () => Promise<void>,
+): Promise<WatcherEvent> {
+  return new Promise((resolve, reject) => {
+    const cleanup = listen(directory, check, (evt) => {
+      cleanup()
+      clearTimeout(timer)
+      resolve(evt)
     })
-    return { cleanup, deferred }
+
+    const timer = setTimeout(() => {
+      cleanup()
+      reject(new Error("Timed out waiting for watcher event"))
+    }, 5_000)
+
+    void trigger().catch((error) => {
+      cleanup()
+      clearTimeout(timer)
+      reject(error)
+    })
   })
 }
 
-function nextUpdate<E>(directory: string, check: (evt: WatcherEvent) => boolean, trigger: Effect.Effect<void, E>) {
-  return Effect.acquireUseRelease(
-    wait(directory, check),
-    ({ deferred }) =>
-      Effect.gen(function* () {
-        yield* trigger
-        return yield* Deferred.await(deferred).pipe(Effect.timeout("5 seconds"))
-      }),
-    ({ cleanup }) => Effect.sync(cleanup),
-  )
+/** Assert that no matching event arrives within `ms`. */
+function noUpdate(directory: string, check: (evt: WatcherEvent) => boolean, trigger: () => Promise<void>, ms = 500) {
+  return new Promise<void>((resolve, reject) => {
+    const cleanup = listen(directory, check, (evt) => {
+      cleanup()
+      clearTimeout(timer)
+      reject(new Error(`Unexpected watcher event: ${JSON.stringify(evt)}`))
+    })
+
+    const timer = setTimeout(() => {
+      cleanup()
+      resolve()
+    }, ms)
+
+    void trigger().catch((error) => {
+      cleanup()
+      clearTimeout(timer)
+      reject(error)
+    })
+  })
 }
 
-/** Effect that asserts no matching event arrives within `ms`. */
-function noUpdate<E>(
-  directory: string,
-  check: (evt: WatcherEvent) => boolean,
-  trigger: Effect.Effect<void, E>,
-  ms = 500,
-) {
-  return Effect.acquireUseRelease(
-    wait(directory, check),
-    ({ deferred }) =>
-      Effect.gen(function* () {
-        yield* trigger
-        expect(yield* Deferred.await(deferred).pipe(Effect.timeoutOption(`${ms} millis`))).toEqual(Option.none())
-      }),
-    ({ cleanup }) => Effect.sync(cleanup),
-  )
-}
-
-function ready(directory: string) {
+async function ready(directory: string) {
   const file = path.join(directory, `.watcher-${Math.random().toString(36).slice(2)}`)
   const head = path.join(directory, ".git", "HEAD")
 
-  return Effect.gen(function* () {
-    yield* nextUpdate(
+  try {
+    await nextUpdate(
       directory,
       (evt) => evt.file === file && evt.event === "add",
-      Effect.promise(() => fs.writeFile(file, "ready")),
-    ).pipe(Effect.ensuring(Effect.promise(() => fs.rm(file, { force: true }).catch(() => undefined))), Effect.asVoid)
-
-    const git = yield* Effect.promise(() =>
-      fs
-        .stat(head)
-        .then(() => true)
-        .catch(() => false),
+      () => fs.writeFile(file, "ready"),
     )
-    if (!git) return
+  } finally {
+    await fs.rm(file, { force: true }).catch(() => undefined)
+  }
 
-    const branch = `watch-${Math.random().toString(36).slice(2)}`
-    const hash = yield* Effect.promise(() => $`git rev-parse HEAD`.cwd(directory).quiet().text())
-    yield* nextUpdate(
-      directory,
-      (evt) => evt.file === head && evt.event !== "unlink",
-      Effect.promise(async () => {
-        await fs.writeFile(path.join(directory, ".git", "refs", "heads", branch), hash.trim() + "\n")
-        await fs.writeFile(head, `ref: refs/heads/${branch}\n`)
-      }),
-    ).pipe(Effect.asVoid)
-  })
+  const git = await fs
+    .stat(head)
+    .then(() => true)
+    .catch(() => false)
+  if (!git) return
+
+  const branch = `watch-${Math.random().toString(36).slice(2)}`
+  const hash = await $`git rev-parse HEAD`.cwd(directory).quiet().text()
+  await nextUpdate(
+    directory,
+    (evt) => evt.file === head && evt.event !== "unlink",
+    async () => {
+      await fs.writeFile(path.join(directory, ".git", "refs", "heads", branch), hash.trim() + "\n")
+      await fs.writeFile(head, `ref: refs/heads/${branch}\n`)
+    },
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -161,19 +162,17 @@ describeWatcher("FileWatcher", () => {
     const file = path.join(tmp.path, "watch.txt")
     const dir = tmp.path
     const cases = [
-      { event: "add" as const, trigger: Effect.promise(() => fs.writeFile(file, "a")) },
-      { event: "change" as const, trigger: Effect.promise(() => fs.writeFile(file, "b")) },
-      { event: "unlink" as const, trigger: Effect.promise(() => fs.unlink(file)) },
+      { event: "add" as const, trigger: () => fs.writeFile(file, "a") },
+      { event: "change" as const, trigger: () => fs.writeFile(file, "b") },
+      { event: "unlink" as const, trigger: () => fs.unlink(file) },
     ]
 
-    await withWatcher(
-      dir,
-      Effect.forEach(cases, ({ event, trigger }) =>
-        nextUpdate(dir, (evt) => evt.file === file && evt.event === event, trigger).pipe(
-          Effect.tap((evt) => Effect.sync(() => expect(evt).toEqual({ file, event }))),
-        ),
-      ),
-    )
+    await withWatcher(dir, async () => {
+      for (const { event, trigger } of cases) {
+        const evt = await nextUpdate(dir, (evt) => evt.file === file && evt.event === event, trigger)
+        expect(evt).toEqual({ file, event })
+      }
+    })
   })
 
   test("watches non-git roots", async () => {
@@ -181,14 +180,14 @@ describeWatcher("FileWatcher", () => {
     const file = path.join(tmp.path, "plain.txt")
     const dir = tmp.path
 
-    await withWatcher(
-      dir,
-      nextUpdate(
+    await withWatcher(dir, async () => {
+      const evt = await nextUpdate(
         dir,
         (e) => e.file === file && e.event === "add",
-        Effect.promise(() => fs.writeFile(file, "plain")),
-      ).pipe(Effect.tap((evt) => Effect.sync(() => expect(evt).toEqual({ file, event: "add" })))),
-    )
+        () => fs.writeFile(file, "plain"),
+      )
+      expect(evt).toEqual({ file, event: "add" })
+    })
   })
 
   test("cleanup stops publishing events", async () => {
@@ -196,18 +195,16 @@ describeWatcher("FileWatcher", () => {
     const file = path.join(tmp.path, "after-dispose.txt")
 
     // Start and immediately stop the watcher (withWatcher disposes on exit)
-    await withWatcher(tmp.path, Effect.void)
+    await withWatcher(tmp.path, async () => {})
 
     // Now write a file — no watcher should be listening
     await Instance.provide({
       directory: tmp.path,
       fn: () =>
-        Effect.runPromise(
-          noUpdate(
-            tmp.path,
-            (e) => e.file === file,
-            Effect.promise(() => fs.writeFile(file, "gone")),
-          ),
+        noUpdate(
+          tmp.path,
+          (e) => e.file === file,
+          () => fs.writeFile(file, "gone"),
         ),
     })
   })
@@ -222,14 +219,12 @@ describeWatcher("FileWatcher", () => {
         try {
           await FileWatcher.init({ enabled: false, disabled: true })
           await FileWatcher.init({ enabled: true, disabled: false })
-          await Effect.runPromise(ready(tmp.path))
+          await ready(tmp.path)
 
-          const evt = await Effect.runPromise(
-            nextUpdate(
-              tmp.path,
-              (e) => e.file === file && e.event === "add",
-              Effect.promise(() => fs.writeFile(file, "live")),
-            ),
+          const evt = await nextUpdate(
+            tmp.path,
+            (e) => e.file === file && e.event === "add",
+            () => fs.writeFile(file, "live"),
           )
 
           expect(evt).toEqual({ file, event: "add" })
@@ -245,15 +240,14 @@ describeWatcher("FileWatcher", () => {
     const gitIndex = path.join(tmp.path, ".git", "index")
     const edit = path.join(tmp.path, "tracked.txt")
 
-    await withWatcher(
-      tmp.path,
+    await withWatcher(tmp.path, () =>
       noUpdate(
         tmp.path,
         (e) => e.file === gitIndex,
-        Effect.promise(async () => {
+        async () => {
           await fs.writeFile(edit, "a")
           await $`git add .`.cwd(tmp.path).quiet().nothrow()
-        }),
+        },
       ),
     )
   })
@@ -264,20 +258,14 @@ describeWatcher("FileWatcher", () => {
     const branch = `watch-${Math.random().toString(36).slice(2)}`
     await $`git branch ${branch}`.cwd(tmp.path).quiet()
 
-    await withWatcher(
-      tmp.path,
-      nextUpdate(
+    await withWatcher(tmp.path, async () => {
+      const evt = await nextUpdate(
         tmp.path,
         (evt) => evt.file === head && evt.event !== "unlink",
-        Effect.promise(() => fs.writeFile(head, `ref: refs/heads/${branch}\n`)),
-      ).pipe(
-        Effect.tap((evt) =>
-          Effect.sync(() => {
-            expect(evt.file).toBe(head)
-            expect(["add", "change"]).toContain(evt.event)
-          }),
-        ),
-      ),
-    )
+        () => fs.writeFile(head, `ref: refs/heads/${branch}\n`),
+      )
+      expect(evt.file).toBe(head)
+      expect(["add", "change"]).toContain(evt.event)
+    })
   })
 })

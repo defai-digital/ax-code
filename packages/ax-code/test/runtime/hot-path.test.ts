@@ -20,7 +20,6 @@ describe("RuntimeHotPath", () => {
       "SessionStatus.service",
       "Permission.requests",
       "Question.requests",
-      "disposeInstance",
     ])
   })
 
@@ -36,7 +35,6 @@ describe("RuntimeHotPath", () => {
     const sessionStatus = RuntimeHotPath.get("SessionStatus.service")
     const permission = RuntimeHotPath.get("Permission.requests")
     const question = RuntimeHotPath.get("Question.requests")
-    const dispose = RuntimeHotPath.get("disposeInstance")
 
     expect(project).toMatchObject({
       dependencyMode: "promise",
@@ -82,13 +80,8 @@ describe("RuntimeHotPath", () => {
       dependencyMode: "promise",
       phase0Action: "observe_only",
     })
-    expect(dispose).toMatchObject({
-      dependencyMode: "promise",
-      phase0Action: "observe_only",
-    })
     expect(permission?.triggers).toContain("startup")
     expect(question?.triggers).toContain("live_update")
     expect(prewarm?.triggers).toContain("startup")
-    expect(dispose?.triggers).toContain("shutdown")
   })
 })

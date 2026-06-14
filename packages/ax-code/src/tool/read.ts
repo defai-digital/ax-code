@@ -14,7 +14,7 @@ import { Filesystem } from "../util/filesystem"
 import { DEFAULT_READ_LIMIT, MAX_LINE_LENGTH, MAX_LINE_SUFFIX, MAX_BYTES, MAX_BYTES_LABEL } from "@/constants/tool"
 import { toErrorMessage } from "@/util/error-message"
 import { Log } from "@/util/log"
-import { isHarmlessEffectInterrupt } from "@/effect/interrupt"
+import { isHarmlessInterrupt } from "@/util/harmless-interrupt"
 import { NULL_BYTE_PATH_ERROR, normalizeToWorkspacePath, resolveToolFilePath } from "./file-path"
 
 const log = Log.create({ service: "tool.read" })
@@ -28,7 +28,7 @@ function readError(name: string, message: string, cause?: unknown) {
 function warmSemanticLsp(filepath: string, signal?: AbortSignal) {
   const directory = Instance.directory
   const handle = (err: unknown) => {
-    if (isHarmlessEffectInterrupt(err)) return
+    if (isHarmlessInterrupt(err)) return
     log.warn("opportunistic lsp warmup failed", {
       filepath,
       error: toErrorMessage(err),

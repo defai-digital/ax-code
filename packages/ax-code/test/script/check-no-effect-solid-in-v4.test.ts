@@ -52,13 +52,16 @@ describe("script.check-no-effect-solid-in-v4 EffectGuard", () => {
     expect(violations).toEqual([{ file: "src/account/new.ts", spec: "effect" }])
   })
 
-  test("ignores effect imports inside runtime infrastructure and bridge file", async () => {
+  test("flags effect imports inside former runtime infrastructure and bridge file", async () => {
     await using tmp = await tmpdir()
     await mkdir(path.join(tmp.path, "src/effect"), { recursive: true })
     await mkdir(path.join(tmp.path, "src/util"), { recursive: true })
     await writeFile(path.join(tmp.path, "src/effect/ok.ts"), `import { Effect } from "effect"\n`)
     await writeFile(path.join(tmp.path, "src/util/effect-zod.ts"), `import { Schema } from "effect"\n`)
-    expect(await EffectGuard.check(tmp.path)).toEqual([])
+    expect(await EffectGuard.check(tmp.path)).toEqual([
+      { file: "src/effect/ok.ts", spec: "effect" },
+      { file: "src/util/effect-zod.ts", spec: "effect" },
+    ])
   })
 
   test("flags new session and file watcher effect imports", async () => {

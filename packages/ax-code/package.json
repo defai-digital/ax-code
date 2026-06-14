@@ -6,7 +6,6 @@
   "license": "MIT",
   "private": true,
   "scripts": {
-    "prepare": "effect-language-service patch || true",
     "typecheck": "tsgo --noEmit",
     "test": "bun test --timeout 30000",
     "test:unit": "bun run script/test-groups.ts unit",
@@ -39,7 +38,6 @@
   "devDependencies": {
     "@ax-code/script": "workspace:*",
     "@babel/core": "7.28.4",
-    "@effect/language-service": "0.79.0",
     "@octokit/webhooks-types": "catalog:",
     "@parcel/watcher-darwin-arm64": "2.5.1",
     "@parcel/watcher-linux-arm64-glibc": "2.5.1",
@@ -84,7 +82,6 @@
     "@ax-code/terminal": "workspace:*",
     "@ax-code/util": "workspace:*",
     "@clack/prompts": "1.0.0-alpha.1",
-    "@effect/platform-node": "catalog:",
     "@hono/standard-validator": "0.1.5",
     "@hono/zod-validator": "catalog:",
     "@modelcontextprotocol/sdk": "1.26.0",
@@ -115,7 +112,6 @@
     "decimal.js": "10.5.0",
     "diff": "catalog:",
     "drizzle-orm": "catalog:",
-    "effect": "catalog:",
     "fast-glob": "catalog:",
     "fuzzysort": "catalog:",
     "google-auth-library": "10.5.0",

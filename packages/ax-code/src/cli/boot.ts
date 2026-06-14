@@ -52,7 +52,7 @@ import { UI } from "./ui"
 import { Installation } from "../installation"
 import { Log } from "../util/log"
 import { DiagnosticLog } from "../debug/diagnostic-log"
-import { isHarmlessEffectInterrupt } from "../effect/interrupt"
+import { isHarmlessInterrupt } from "../util/harmless-interrupt"
 
 const cmds = [
   AcpCommand,
@@ -104,7 +104,7 @@ let forcedExitTimer: ReturnType<typeof setTimeout> | undefined
 let hooksInstalled = false
 
 function onUnhandledRejection(err: unknown) {
-  if (isHarmlessEffectInterrupt(err)) return
+  if (isHarmlessInterrupt(err)) return
   DiagnosticLog.recordProcess("cli.unhandledRejection", { error: err })
   Log.Default.error("rejection", {
     e: err instanceof Error ? err.message : err,
@@ -113,7 +113,7 @@ function onUnhandledRejection(err: unknown) {
 }
 
 function onUncaughtException(err: Error) {
-  if (isHarmlessEffectInterrupt(err)) return
+  if (isHarmlessInterrupt(err)) return
   DiagnosticLog.recordProcess("cli.uncaughtException", { error: err })
   Log.Default.error("exception", {
     e: err instanceof Error ? err.message : err,
