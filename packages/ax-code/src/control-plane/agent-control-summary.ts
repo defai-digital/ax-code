@@ -18,7 +18,7 @@ export namespace AgentControlSummary {
     blockedReason?: string
     completionGate?: {
       status: "allow" | "blocked"
-      reason?: "none" | "empty_subagent_result" | "unfinished_todos"
+      reason?: "none" | "empty_subagent_result" | "unfinished_todos" | "unexecutable_tool_text"
       message?: string
     }
     completed?: boolean

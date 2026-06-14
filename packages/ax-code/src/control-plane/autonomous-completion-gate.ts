@@ -42,8 +42,28 @@ export namespace AutonomousCompletionGate {
         message: string
         pendingTodos: Todo[]
       }
+    | {
+        status: "blocked"
+        reason: "unexecutable_tool_text"
+        signature: string
+        message: string
+        toolText: string
+      }
 
   export function evaluate(input: { messages: readonly Message[]; pendingTodos: readonly Todo[] }): Decision {
+    const unexecutableToolText = latestUnexecutableToolText(input.messages)
+    if (unexecutableToolText) {
+      return {
+        status: "blocked",
+        reason: "unexecutable_tool_text",
+        signature: `unexecutable-tool-text:${hashSignature(unexecutableToolText)}`,
+        message:
+          `The model returned a tool call as plain text instead of an executable AX Code tool call. ` +
+          `The session is stopped because no file, shell, or task action actually ran.`,
+        toolText: unexecutableToolText,
+      }
+    }
+
     const emptyResult = latestEmptySubagentResult(input.messages)
     if (emptyResult) {
       const subject = emptyResult.taskID ? `Subagent ${emptyResult.taskID}` : "A subagent"
@@ -76,6 +96,35 @@ export namespace AutonomousCompletionGate {
     }
 
     return { status: "allow" }
+  }
+
+  function latestUnexecutableToolText(messages: readonly Message[]): string | undefined {
+    let latest: string | undefined
+
+    for (const message of messages) {
+      if (!isAssistantMessage(message)) continue
+      for (const part of message.parts ?? []) {
+        const record = asRecord(part)
+        if (!record) continue
+        if (record["type"] !== "text" || typeof record["text"] !== "string") continue
+        if (record["synthetic"] === true || record["ignored"] === true) continue
+        if (looksLikeUnexecutableToolText(record["text"])) latest = record["text"]
+      }
+    }
+
+    return latest
+  }
+
+  function looksLikeUnexecutableToolText(text: string) {
+    return /<tool_call>[\s\S]{0,4000}<\/tool_call>/.test(text) || /<function=[A-Za-z0-9_-]+/.test(text)
+  }
+
+  function hashSignature(value: string) {
+    let hash = 0
+    for (let i = 0; i < value.length; i++) {
+      hash = (hash * 31 + value.charCodeAt(i)) | 0
+    }
+    return Math.abs(hash).toString(36)
   }
 
   function latestEmptySubagentResult(messages: readonly Message[]): EmptySubagentResult | undefined {

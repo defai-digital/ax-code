@@ -942,6 +942,87 @@ describe("session.prompt flow", () => {
     }
   })
 
+  test("stops when a non-toolcall model emits a tool call as text", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    const previousAutonomous = process.env["AX_CODE_AUTONOMOUS"]
+    process.env["AX_CODE_AUTONOMOUS"] = "true"
+
+    try {
+      modelSpy = spyOn(Provider, "getModel").mockResolvedValue({
+        ...model,
+        capabilities: {
+          ...model.capabilities,
+          toolcall: false,
+        },
+      })
+      summarySpy = spyOn(SessionSummary, "summarize").mockResolvedValue()
+      streamSpy = spyOn(LLM, "stream").mockImplementation(
+        async () =>
+          ({
+            fullStream: (async function* () {
+              yield { type: "start" }
+              yield { type: "start-step" }
+              yield { type: "text-start", id: "text_1" }
+              yield {
+                type: "text-delta",
+                id: "text_1",
+                text: [
+                  "I'll create the website now.",
+                  "<tool_call>",
+                  '<function=write_file write={"filepath":"/work/coffee-shop/index.html","content":"<html></html>"}>',
+                  "</tool_call>",
+                ].join("\n"),
+              }
+              yield { type: "text-end", id: "text_1" }
+              yield {
+                type: "finish-step",
+                finishReason: "stop",
+                usage: { inputTokens: 5, outputTokens: 2, totalTokens: 7 },
+              }
+              yield { type: "finish" }
+            })(),
+          }) as any,
+      )
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          let errorPublished = false
+          const busUnsub = Bus.subscribe(Session.Event.Error, () => {
+            errorPublished = true
+          })
+
+          const session = await Session.create({ title: "Fake Tool Text Test" })
+
+          await SessionPrompt.prompt({
+            sessionID: session.id,
+            agent: "build",
+            parts: [{ type: "text", text: "create a coffee shop website and save it in this project" }],
+          })
+
+          busUnsub()
+
+          expect(streamSpy).toHaveBeenCalledTimes(1)
+          expect(errorPublished).toBe(true)
+
+          const messages = await Session.messages({ sessionID: session.id })
+          const assistant = messages.findLast((message) => message.info.role === "assistant")
+          expect(JSON.stringify(assistant?.info)).toContain("plain text")
+          expect(
+            assistant?.parts.some((part) => part.type === "text" && part.text.includes("<function=write_file")),
+          ).toBe(true)
+          expect(await Bun.file(path.join(tmp.path, "coffee-shop/index.html")).exists()).toBe(false)
+
+          await Session.remove(session.id)
+        },
+      })
+    } finally {
+      if (previousAutonomous === undefined) delete process.env["AX_CODE_AUTONOMOUS"]
+      else process.env["AX_CODE_AUTONOMOUS"] = previousAutonomous
+    }
+  })
+
   test("nudges autonomous todo convergence before the final agent step", async () => {
     await using tmp = await tmpdir({
       git: true,

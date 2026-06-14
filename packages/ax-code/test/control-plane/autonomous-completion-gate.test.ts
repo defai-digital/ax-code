@@ -3,6 +3,58 @@ import { describe, expect, test } from "bun:test"
 import { AutonomousCompletionGate } from "../../src/control-plane/autonomous-completion-gate"
 
 describe("AutonomousCompletionGate", () => {
+  test("blocks completion when the assistant emits a tool call as plain text", () => {
+    const decision = AutonomousCompletionGate.evaluate({
+      pendingTodos: [],
+      messages: [
+        {
+          info: { role: "assistant" },
+          parts: [
+            {
+              type: "text",
+              text: [
+                "I'll write the file now.",
+                "<tool_call>",
+                '<function=write_file write={"filepath":"/work/index.html","content":"hello"}>',
+                "</tool_call>",
+              ].join("\n"),
+            },
+          ],
+        },
+      ],
+    })
+
+    expect(decision).toMatchObject({
+      status: "blocked",
+      reason: "unexecutable_tool_text",
+    })
+    if (decision.status !== "blocked" || decision.reason !== "unexecutable_tool_text") {
+      throw new Error("unexpected allow")
+    }
+    expect(decision.message).toContain("plain text")
+    expect(decision.toolText).toContain("write_file")
+  })
+
+  test("ignores synthetic text when checking for unexecutable tool text", () => {
+    const decision = AutonomousCompletionGate.evaluate({
+      pendingTodos: [],
+      messages: [
+        {
+          info: { role: "assistant" },
+          parts: [
+            {
+              type: "text",
+              text: "<tool_call><function=write_file></tool_call>",
+              synthetic: true,
+            },
+          ],
+        },
+      ],
+    })
+
+    expect(decision).toEqual({ status: "allow" })
+  })
+
   test("blocks completion when the latest task result is empty", () => {
     const decision = AutonomousCompletionGate.evaluate({
       pendingTodos: [],

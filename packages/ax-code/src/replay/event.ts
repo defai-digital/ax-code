@@ -268,7 +268,7 @@ export const AgentBlockedEvent = Base.extend({
 export const AgentCompletionGateDecidedEvent = Base.extend({
   type: z.literal("agent.completion_gate.decided"),
   status: z.enum(["allow", "blocked"]),
-  reason: z.enum(["none", "empty_subagent_result", "unfinished_todos"]).optional(),
+  reason: z.enum(["none", "empty_subagent_result", "unfinished_todos", "unexecutable_tool_text"]).optional(),
   message: z.string().optional(),
   retryCount: z.number().int().optional(),
   maxRetries: z.number().int().optional(),

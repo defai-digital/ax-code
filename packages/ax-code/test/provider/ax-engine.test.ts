@@ -14,6 +14,7 @@ import {
   AX_ENGINE_PROVIDER_ID,
   axEngineLoader,
   evaluateDiskStatus,
+  evaluateAxEngineCapabilityFromModels,
   evaluatePlatformEligibility,
   markPrepared,
   normalizeQuantization,
@@ -441,6 +442,25 @@ describe("ax-engine provider integration", () => {
 })
 
 describe("ax-engine doctor status", () => {
+  test("reads tool-call capability from ax-engine model metadata", () => {
+    expect(
+      evaluateAxEngineCapabilityFromModels({
+        data: [
+          {
+            capabilities: { toolcall: false, attachment: false },
+            ax_engine: { openai_tool_calling_supported: true },
+          },
+        ],
+      }),
+    ).toMatchObject({ toolcall: true, attachment: false, reason: undefined })
+
+    expect(
+      evaluateAxEngineCapabilityFromModels({
+        data: [{ capabilities: { toolcall: false, attachment: false } }],
+      }),
+    ).toMatchObject({ toolcall: false, attachment: false })
+  })
+
   test("reports disk blockers before model preparation when dependency is available", () => {
     const check = getAxEngineDoctorCheck({
       eligibility: { supported: true, blockers: [], warnings: [] },

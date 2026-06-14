@@ -44,6 +44,7 @@ import { markPromptLoopBusy } from "./prompt-loop-status"
 import { handlePromptLoopGlobalStepLimit } from "./prompt-loop-step-limit"
 import { preparePromptRequest, type PromptRequestCache } from "./prompt-request-build"
 import { createStructuredOutputTurn } from "./prompt-structured-output"
+import { publishPromptFailure } from "./prompt-loop-failure"
 import { executeSubtask, type SubtaskContext } from "./prompt-subtask"
 import { resolveTools, shouldBypassAgentCheck } from "./prompt-tools"
 import { clearPromptProcessorInstructions, createPromptProcessor } from "./prompt-processor"
@@ -591,6 +592,28 @@ export namespace SessionPrompt {
             text: emptyTurnTransition.text,
           })
           continue
+        }
+
+        if (
+          modelFinished &&
+          completionGate.status === "blocked" &&
+          completionGate.reason === "unexecutable_tool_text"
+        ) {
+          log.warn("autonomous completion gate stopped session", {
+            command: "session.prompt.loop",
+            status: "stopped",
+            errorCode: "UNEXECUTABLE_TOOL_TEXT",
+            sessionID,
+            reason: completionGate.reason,
+            message: completionGate.message,
+          })
+          await publishPromptFailure({
+            sessionID,
+            assistant: processor.message,
+            message: completionGate.message,
+          })
+          reason = "stalled"
+          break
         }
 
         if (shouldRecoverEmptySubagentResult) {

@@ -122,7 +122,7 @@ export namespace AgentControlEvents {
   export function completionGateDecided(
     input: BaseInput & {
       status: "allow" | "blocked"
-      reason?: "none" | "empty_subagent_result" | "unfinished_todos"
+      reason?: "none" | "empty_subagent_result" | "unfinished_todos" | "unexecutable_tool_text"
       message?: string
       retryCount?: number
       maxRetries?: number
