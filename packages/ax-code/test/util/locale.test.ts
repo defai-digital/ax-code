@@ -76,6 +76,14 @@ describe("Locale.truncateMiddle", () => {
     expect(out).toBe("abc…hij")
     expect(out.length).toBe(7)
   })
+
+  test("does not exceed maxLength when keepEnd is 0 (regression: slice(-0) returns whole string)", () => {
+    // maxLength 2 → available = 1, keepStart = ceil(1/2) = 1, keepEnd = floor(1/2) = 0.
+    // str.slice(-0) returns the WHOLE string, so the output used to be longer than input.
+    const out = Locale.truncateMiddle("abcdef", 2)
+    expect(out.length).toBeLessThanOrEqual(2)
+    expect(out).toBe("a…")
+  })
 })
 
 describe("Locale.titlecase", () => {
