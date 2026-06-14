@@ -1,91 +1,122 @@
-import { Schema } from "effect"
+type Brand<T, Name extends string> = T & { readonly __brand: Name }
 
-import { withStatics } from "@/util/schema"
+function stringBrand<Name extends string>() {
+  return {
+    make: (value: string) => value as Brand<string, Name>,
+  }
+}
 
-export const AccountID = Schema.String.pipe(
-  Schema.brand("AccountID"),
-  withStatics((s) => ({ make: (id: string) => s.makeUnsafe(id) })),
-)
-export type AccountID = Schema.Schema.Type<typeof AccountID>
+export type AccountID = Brand<string, "AccountID">
+export const AccountID = stringBrand<"AccountID">()
 
-export const OrgID = Schema.String.pipe(
-  Schema.brand("OrgID"),
-  withStatics((s) => ({ make: (id: string) => s.makeUnsafe(id) })),
-)
-export type OrgID = Schema.Schema.Type<typeof OrgID>
+export type OrgID = Brand<string, "OrgID">
+export const OrgID = stringBrand<"OrgID">()
 
-export const AccessToken = Schema.String.pipe(
-  Schema.brand("AccessToken"),
-  withStatics((s) => ({ make: (token: string) => s.makeUnsafe(token) })),
-)
-export type AccessToken = Schema.Schema.Type<typeof AccessToken>
+export type AccessToken = Brand<string, "AccessToken">
+export const AccessToken = stringBrand<"AccessToken">()
 
-export const RefreshToken = Schema.String.pipe(
-  Schema.brand("RefreshToken"),
-  withStatics((s) => ({ make: (token: string) => s.makeUnsafe(token) })),
-)
-export type RefreshToken = Schema.Schema.Type<typeof RefreshToken>
+export type RefreshToken = Brand<string, "RefreshToken">
+export const RefreshToken = stringBrand<"RefreshToken">()
 
-export const DeviceCode = Schema.String.pipe(
-  Schema.brand("DeviceCode"),
-  withStatics((s) => ({ make: (code: string) => s.makeUnsafe(code) })),
-)
-export type DeviceCode = Schema.Schema.Type<typeof DeviceCode>
+export type DeviceCode = Brand<string, "DeviceCode">
+export const DeviceCode = stringBrand<"DeviceCode">()
 
-export const UserCode = Schema.String.pipe(
-  Schema.brand("UserCode"),
-  withStatics((s) => ({ make: (code: string) => s.makeUnsafe(code) })),
-)
-export type UserCode = Schema.Schema.Type<typeof UserCode>
+export type UserCode = Brand<string, "UserCode">
+export const UserCode = stringBrand<"UserCode">()
 
-export class Info extends Schema.Class<Info>("Account")({
-  id: AccountID,
-  email: Schema.String,
-  url: Schema.String,
-  active_org_id: Schema.NullOr(OrgID),
-}) {}
+export interface Info {
+  id: AccountID
+  email: string
+  url: string
+  active_org_id: OrgID | null
+}
 
-export class Org extends Schema.Class<Org>("Org")({
-  id: OrgID,
-  name: Schema.String,
-}) {}
+export interface Org {
+  id: OrgID
+  name: string
+}
 
-export class AccountRepoError extends Schema.TaggedErrorClass<AccountRepoError>()("AccountRepoError", {
-  message: Schema.String,
-  cause: Schema.optional(Schema.Defect),
-}) {}
+export class AccountRepoError extends Error {
+  readonly _tag = "AccountRepoError"
+  override readonly cause?: unknown
 
-export class AccountServiceError extends Schema.TaggedErrorClass<AccountServiceError>()("AccountServiceError", {
-  message: Schema.String,
-  cause: Schema.optional(Schema.Defect),
-}) {}
+  constructor(input: { message: string; cause?: unknown }) {
+    super(input.message, { cause: input.cause })
+    this.name = "AccountRepoError"
+    this.cause = input.cause
+  }
+}
+
+export class AccountServiceError extends Error {
+  readonly _tag = "AccountServiceError"
+  override readonly cause?: unknown
+
+  constructor(input: { message: string; cause?: unknown }) {
+    super(input.message, { cause: input.cause })
+    this.name = "AccountServiceError"
+    this.cause = input.cause
+  }
+}
 
 export type AccountError = AccountRepoError | AccountServiceError
 
-export class Login extends Schema.Class<Login>("Login")({
-  code: DeviceCode,
-  user: UserCode,
-  url: Schema.String,
-  server: Schema.String,
-  expiry: Schema.Duration,
-  interval: Schema.Duration,
-}) {}
+export class Login {
+  readonly code: DeviceCode
+  readonly user: UserCode
+  readonly url: string
+  readonly server: string
+  readonly expiry: number
+  readonly interval: number
 
-export class PollSuccess extends Schema.TaggedClass<PollSuccess>()("PollSuccess", {
-  email: Schema.String,
-}) {}
+  constructor(input: {
+    code: DeviceCode
+    user: UserCode
+    url: string
+    server: string
+    expiry: number
+    interval: number
+  }) {
+    this.code = input.code
+    this.user = input.user
+    this.url = input.url
+    this.server = input.server
+    this.expiry = input.expiry
+    this.interval = input.interval
+  }
+}
 
-export class PollPending extends Schema.TaggedClass<PollPending>()("PollPending", {}) {}
+export class PollSuccess {
+  readonly _tag = "PollSuccess"
+  readonly email: string
 
-export class PollSlow extends Schema.TaggedClass<PollSlow>()("PollSlow", {}) {}
+  constructor(input: { email: string }) {
+    this.email = input.email
+  }
+}
 
-export class PollExpired extends Schema.TaggedClass<PollExpired>()("PollExpired", {}) {}
+export class PollPending {
+  readonly _tag = "PollPending"
+}
 
-export class PollDenied extends Schema.TaggedClass<PollDenied>()("PollDenied", {}) {}
+export class PollSlow {
+  readonly _tag = "PollSlow"
+}
 
-export class PollError extends Schema.TaggedClass<PollError>()("PollError", {
-  cause: Schema.Defect,
-}) {}
+export class PollExpired {
+  readonly _tag = "PollExpired"
+}
 
-export const PollResult = Schema.Union([PollSuccess, PollPending, PollSlow, PollExpired, PollDenied, PollError])
-export type PollResult = Schema.Schema.Type<typeof PollResult>
+export class PollDenied {
+  readonly _tag = "PollDenied"
+}
+
+export class PollError {
+  readonly _tag = "PollError"
+  readonly cause: unknown
+
+  constructor(input: { cause: unknown }) {
+    this.cause = input.cause
+  }
+}
+
+export type PollResult = PollSuccess | PollPending | PollSlow | PollExpired | PollDenied | PollError

@@ -73,11 +73,7 @@ describe("script.check-no-effect-solid-in-v4 EffectGuard", () => {
     ])
   })
 
-  test("does not double-report files listed in ExistingViolations", async () => {
-    // We can't add to ExistingViolations at runtime; confirm the set is
-    // exported and contains the expected legacy files so anyone editing
-    // it gets the type-level pin.
-    expect(EffectGuard.ExistingViolations.has("src/agent/agent.ts")).toBe(true)
-    expect(EffectGuard.ExistingViolations.has("src/provider/auth.ts")).toBe(true)
+  test("has no remaining grandfathered Effect importers", async () => {
+    expect(EffectGuard.ExistingViolations.size).toBe(0)
   })
 })

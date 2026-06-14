@@ -110,7 +110,7 @@ export namespace EffectGuard {
   // documented allowlist. Remove entries from this list as each file
   // migrates off Effect (per Phase 4 of the stability remediation PRD).
   // Sorted alphabetically — easy to diff against `git grep -l 'from "effect"'`.
-  export const ExistingViolations: ReadonlySet<string> = new Set(["src/account/index.ts", "src/account/schema.ts"])
+  export const ExistingViolations: ReadonlySet<string> = new Set()
 
   export interface Violation {
     file: string

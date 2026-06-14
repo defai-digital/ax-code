@@ -1,20 +1,22 @@
-import { Clock, Duration, Effect, Layer, Option, Schema, SchemaGetter, Schedule, ServiceMap } from "effect"
-import { FetchHttpClient, HttpClient, HttpClientRequest, HttpClientResponse } from "effect/unstable/http"
+import z from "zod"
 
-import { makeRunPromise } from "@/effect/run-service"
+import { Log } from "@/util/log"
 import { AccountRepo, type AccountRow } from "./repo"
 import {
   type AccountError,
   AccountRepoError,
   AccessToken,
+  type AccessToken as AccessTokenType,
   AccountID,
+  type AccountID as AccountIDType,
   DeviceCode,
-  Info,
+  type Info,
   RefreshToken,
   AccountServiceError,
   Login,
-  Org,
+  type Org,
   OrgID,
+  type OrgID as OrgIDType,
   PollDenied,
   PollError,
   PollExpired,
@@ -34,8 +36,8 @@ export {
   RefreshToken,
   DeviceCode,
   UserCode,
-  Info,
-  Org,
+  type Info,
+  type Org,
   OrgID,
   Login,
   PollSuccess,
@@ -44,7 +46,7 @@ export {
   PollExpired,
   PollDenied,
   PollError,
-  PollResult,
+  type PollResult,
 } from "./schema"
 
 export type AccountOrgs = {
@@ -52,277 +54,293 @@ export type AccountOrgs = {
   orgs: readonly Org[]
 }
 
-class RemoteConfig extends Schema.Class<RemoteConfig>("RemoteConfig")({
-  config: Schema.Record(Schema.String, Schema.Json),
-}) {}
+type Fetcher = typeof fetch
 
-const DurationFromSeconds = Schema.Number.pipe(
-  Schema.decodeTo(Schema.Duration, {
-    decode: SchemaGetter.transform((n) => Duration.seconds(n)),
-    encode: SchemaGetter.transform((d) => Duration.toSeconds(d)),
+const log = Log.create({ service: "account" })
+const clientId = "ax-code-cli"
+
+const JsonRecord = z.record(z.string(), z.unknown())
+const DurationFromSeconds = z.number().transform((seconds) => seconds * 1000)
+const AccessTokenSchema = z.string().transform(AccessToken.make)
+const RefreshTokenSchema = z.string().transform(RefreshToken.make)
+const AccountIDSchema = z.string().transform(AccountID.make)
+const OrgIDSchema = z.string().transform(OrgID.make)
+const DeviceCodeSchema = z.string().transform(DeviceCode.make)
+const UserCodeSchema = z.string().transform(UserCode.make)
+
+const RemoteConfig = z.object({
+  config: JsonRecord,
+})
+
+const TokenRefresh = z.object({
+  access_token: AccessTokenSchema,
+  refresh_token: RefreshTokenSchema,
+  expires_in: DurationFromSeconds,
+})
+
+const DeviceAuth = z.object({
+  device_code: DeviceCodeSchema,
+  user_code: UserCodeSchema,
+  verification_uri_complete: z.string(),
+  expires_in: DurationFromSeconds,
+  interval: DurationFromSeconds,
+})
+
+const DeviceTokenSuccess = z.object({
+  access_token: AccessTokenSchema,
+  refresh_token: RefreshTokenSchema,
+  token_type: z.literal("Bearer"),
+  expires_in: DurationFromSeconds,
+})
+
+const DeviceTokenError = z.object({
+  error: z.string(),
+  error_description: z.string(),
+})
+
+const DeviceToken = z.union([DeviceTokenSuccess, DeviceTokenError])
+
+const User = z.object({
+  id: AccountIDSchema,
+  email: z.string(),
+})
+
+const OrgList = z.array(
+  z.object({
+    id: OrgIDSchema,
+    name: z.string(),
   }),
 )
 
-class TokenRefresh extends Schema.Class<TokenRefresh>("TokenRefresh")({
-  access_token: AccessToken,
-  refresh_token: RefreshToken,
-  expires_in: DurationFromSeconds,
-}) {}
+function accountServiceError(message: string, cause: unknown): AccountServiceError {
+  return cause instanceof AccountServiceError ? cause : new AccountServiceError({ message, cause })
+}
 
-class DeviceAuth extends Schema.Class<DeviceAuth>("DeviceAuth")({
-  device_code: DeviceCode,
-  user_code: UserCode,
-  verification_uri_complete: Schema.String,
-  expires_in: DurationFromSeconds,
-  interval: DurationFromSeconds,
-}) {}
+function accountRepoError(cause: unknown): AccountRepoError {
+  return cause instanceof AccountRepoError
+    ? cause
+    : new AccountRepoError({ message: "Database operation failed", cause })
+}
 
-class DeviceTokenSuccess extends Schema.Class<DeviceTokenSuccess>("DeviceTokenSuccess")({
-  access_token: AccessToken,
-  refresh_token: RefreshToken,
-  token_type: Schema.Literal("Bearer"),
-  expires_in: DurationFromSeconds,
-}) {}
+function toPollResult(input: z.output<typeof DeviceTokenError>): PollResult {
+  if (input.error === "authorization_pending") return new PollPending()
+  if (input.error === "slow_down") return new PollSlow()
+  if (input.error === "expired_token") return new PollExpired()
+  if (input.error === "access_denied") return new PollDenied()
+  return new PollError({ cause: input.error })
+}
 
-class DeviceTokenError extends Schema.Class<DeviceTokenError>("DeviceTokenError")({
-  error: Schema.String,
-  error_description: Schema.String,
-}) {
-  toPollResult(): PollResult {
-    if (this.error === "authorization_pending") return new PollPending()
-    if (this.error === "slow_down") return new PollSlow()
-    if (this.error === "expired_token") return new PollExpired()
-    if (this.error === "access_denied") return new PollDenied()
-    return new PollError({ cause: this.error })
+function shouldRetry(response: Response) {
+  return response.status === 408 || response.status === 429 || response.status >= 500
+}
+
+async function fetchWithReadRetry(fetcher: Fetcher, input: string, init: RequestInit): Promise<Response> {
+  let lastError: unknown
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const response = await fetcher(input, init)
+      if (attempt < 2 && shouldRetry(response)) continue
+      return response
+    } catch (error) {
+      lastError = error
+      if (attempt === 2) break
+    }
+  }
+  throw accountServiceError("HTTP request failed", lastError)
+}
+
+async function request(fetcher: Fetcher, input: string, init: RequestInit = {}, retryRead = false): Promise<Response> {
+  try {
+    return retryRead ? await fetchWithReadRetry(fetcher, input, init) : await fetcher(input, init)
+  } catch (cause) {
+    throw accountServiceError("HTTP request failed", cause)
   }
 }
 
-const DeviceToken = Schema.Union([DeviceTokenSuccess, DeviceTokenError])
+async function jsonBody<T>(
+  response: Response,
+  schema: z.ZodType<T>,
+  message = "Failed to decode response",
+): Promise<T> {
+  let body: unknown
+  try {
+    body = await response.json()
+  } catch (cause) {
+    throw accountServiceError(message, cause)
+  }
 
-class User extends Schema.Class<User>("User")({
-  id: AccountID,
-  email: Schema.String,
-}) {}
+  const parsed = schema.safeParse(body)
+  if (!parsed.success) throw accountServiceError(message, parsed.error)
+  return parsed.data
+}
 
-class ClientId extends Schema.Class<ClientId>("ClientId")({ client_id: Schema.String }) {}
+function ok(response: Response): Response {
+  if (!response.ok) {
+    throw new AccountServiceError({
+      message: "HTTP request failed",
+      cause: `HTTP ${response.status}`,
+    })
+  }
+  return response
+}
 
-class DeviceTokenRequest extends Schema.Class<DeviceTokenRequest>("DeviceTokenRequest")({
-  grant_type: Schema.String,
-  device_code: DeviceCode,
-  client_id: Schema.String,
-}) {}
+function jsonPost(body: unknown, headers: HeadersInit = {}): RequestInit {
+  return {
+    method: "POST",
+    headers: {
+      accept: "application/json",
+      "content-type": "application/json",
+      ...headers,
+    },
+    body: JSON.stringify(body),
+  }
+}
 
-class TokenRefreshRequest extends Schema.Class<TokenRefreshRequest>("TokenRefreshRequest")({
-  grant_type: Schema.String,
-  refresh_token: RefreshToken,
-  client_id: Schema.String,
-}) {}
+function jsonGet(headers: HeadersInit = {}): RequestInit {
+  return {
+    method: "GET",
+    headers: {
+      accept: "application/json",
+      ...headers,
+    },
+  }
+}
 
-const clientId = "ax-code-cli"
+function bearer(accessToken: AccessTokenType): HeadersInit {
+  return { authorization: `Bearer ${accessToken}` }
+}
 
-const withTransientReadRetry = <E, R>(client: HttpClient.HttpClient.With<E, R>) =>
-  client.pipe(
-    HttpClient.retryTransient({
-      retryOn: "errors-and-responses",
-      times: 2,
-      schedule: Schedule.exponential(200).pipe(Schedule.jittered),
-    }),
-  )
-
-const mapAccountServiceError =
-  (message = "Account service operation failed") =>
-  <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, AccountServiceError, R> =>
-    effect.pipe(
-      Effect.mapError((cause) =>
-        cause instanceof AccountServiceError ? cause : new AccountServiceError({ message, cause }),
-      ),
-    )
+async function repo<A>(operation: () => Promise<A>): Promise<A> {
+  try {
+    return await operation()
+  } catch (cause) {
+    throw accountRepoError(cause)
+  }
+}
 
 export namespace Account {
   export interface Interface {
-    readonly active: () => Effect.Effect<Option.Option<Info>, AccountError>
-    readonly list: () => Effect.Effect<Info[], AccountError>
-    readonly orgsByAccount: () => Effect.Effect<readonly AccountOrgs[], AccountError>
-    readonly remove: (accountID: AccountID) => Effect.Effect<void, AccountError>
-    readonly use: (accountID: AccountID, orgID: Option.Option<OrgID>) => Effect.Effect<void, AccountError>
-    readonly orgs: (accountID: AccountID) => Effect.Effect<readonly Org[], AccountError>
-    readonly config: (
-      accountID: AccountID,
-      orgID: OrgID,
-    ) => Effect.Effect<Option.Option<Record<string, unknown>>, AccountError>
-    readonly token: (accountID: AccountID) => Effect.Effect<Option.Option<AccessToken>, AccountError>
-    readonly login: (url: string) => Effect.Effect<Login, AccountError>
-    readonly poll: (input: Login) => Effect.Effect<PollResult, AccountError>
+    readonly active: () => Promise<Info | undefined>
+    readonly list: () => Promise<Info[]>
+    readonly orgsByAccount: () => Promise<readonly AccountOrgs[]>
+    readonly remove: (accountID: AccountIDType) => Promise<void>
+    readonly use: (accountID: AccountIDType, orgID?: OrgIDType) => Promise<void>
+    readonly orgs: (accountID: AccountIDType) => Promise<readonly Org[]>
+    readonly config: (accountID: AccountIDType, orgID: OrgIDType) => Promise<Record<string, unknown> | undefined>
+    readonly token: (accountID: AccountIDType) => Promise<AccessTokenType | undefined>
+    readonly login: (url: string) => Promise<Login>
+    readonly poll: (input: Login) => Promise<PollResult>
   }
 
-  export class Service extends ServiceMap.Service<Service, Interface>()("@ax-code/Account") {}
+  export interface Options {
+    readonly fetch?: Fetcher
+    readonly now?: () => number
+  }
 
-  export const layer: Layer.Layer<Service, never, HttpClient.HttpClient> = Layer.effect(
-    Service,
-    Effect.gen(function* () {
-      const http = yield* HttpClient.HttpClient
-      const httpRead = withTransientReadRetry(http)
-      const httpOk = HttpClient.filterStatusOk(http)
-      const httpReadOk = HttpClient.filterStatusOk(httpRead)
+  export function create(options: Options = {}): Interface {
+    const fetcher = options.fetch ?? fetch
+    const now = options.now ?? Date.now
 
-      const repoEffect = <A>(operation: () => Promise<A>) =>
-        Effect.tryPromise({
-          try: operation,
-          catch: (cause) =>
-            cause instanceof AccountRepoError
-              ? cause
-              : new AccountRepoError({ message: "Database operation failed", cause }),
-        })
+    const resolveToken = async (row: AccountRow): Promise<AccessTokenType> => {
+      const currentTime = now()
+      if (row.token_expiry && row.token_expiry > currentTime) return row.access_token
 
-      const executeRead = (request: HttpClientRequest.HttpClientRequest) =>
-        httpRead.execute(request).pipe(mapAccountServiceError("HTTP request failed"))
-
-      const executeReadOk = (request: HttpClientRequest.HttpClientRequest) =>
-        httpReadOk.execute(request).pipe(mapAccountServiceError("HTTP request failed"))
-
-      const executeEffectOk = <E>(request: Effect.Effect<HttpClientRequest.HttpClientRequest, E>) =>
-        request.pipe(
-          Effect.flatMap((req) => httpOk.execute(req)),
-          mapAccountServiceError("HTTP request failed"),
-        )
-
-      const executeEffect = <E>(request: Effect.Effect<HttpClientRequest.HttpClientRequest, E>) =>
-        request.pipe(
-          Effect.flatMap((req) => http.execute(req)),
-          mapAccountServiceError("HTTP request failed"),
-        )
-
-      const resolveToken = Effect.fnUntraced(function* (row: AccountRow) {
-        const now = yield* Clock.currentTimeMillis
-        if (row.token_expiry && row.token_expiry > now) return row.access_token
-
-        const response = yield* executeEffectOk(
-          HttpClientRequest.post(`${row.url}/auth/device/token`).pipe(
-            HttpClientRequest.acceptJson,
-            HttpClientRequest.schemaBodyJson(TokenRefreshRequest)(
-              new TokenRefreshRequest({
-                grant_type: "refresh_token",
-                refresh_token: row.refresh_token,
-                client_id: clientId,
-              }),
-            ),
-          ),
-        )
-
-        const parsed = yield* HttpClientResponse.schemaBodyJson(TokenRefresh)(response).pipe(
-          mapAccountServiceError("Failed to decode response"),
-        )
-
-        yield* repoEffect(() =>
-          AccountRepo.persistToken({
-            accountID: row.id,
-            accessToken: parsed.access_token,
-            refreshToken: parsed.refresh_token,
-            expiry: now + Duration.toMillis(parsed.expires_in),
+      const response = ok(
+        await request(
+          fetcher,
+          `${row.url}/auth/device/token`,
+          jsonPost({
+            grant_type: "refresh_token",
+            refresh_token: row.refresh_token,
+            client_id: clientId,
           }),
-        )
-
-        return parsed.access_token
-      })
-
-      const resolveAccess = Effect.fnUntraced(function* (accountID: AccountID) {
-        const maybeAccount = yield* repoEffect(() => AccountRepo.getRow(accountID))
-        if (!maybeAccount) return Option.none()
-
-        const account = maybeAccount
-        const accessToken = yield* resolveToken(account)
-        return Option.some({ account, accessToken })
-      })
-
-      const fetchOrgs = Effect.fnUntraced(function* (url: string, accessToken: AccessToken) {
-        const response = yield* executeReadOk(
-          HttpClientRequest.get(`${url}/api/orgs`).pipe(
-            HttpClientRequest.acceptJson,
-            HttpClientRequest.bearerToken(accessToken),
-          ),
-        )
-
-        return yield* HttpClientResponse.schemaBodyJson(Schema.Array(Org))(response).pipe(
-          mapAccountServiceError("Failed to decode response"),
-        )
-      })
-
-      const fetchUser = Effect.fnUntraced(function* (url: string, accessToken: AccessToken) {
-        const response = yield* executeReadOk(
-          HttpClientRequest.get(`${url}/api/user`).pipe(
-            HttpClientRequest.acceptJson,
-            HttpClientRequest.bearerToken(accessToken),
-          ),
-        )
-
-        return yield* HttpClientResponse.schemaBodyJson(User)(response).pipe(
-          mapAccountServiceError("Failed to decode response"),
-        )
-      })
-
-      const token = Effect.fn("Account.token")((accountID: AccountID) =>
-        resolveAccess(accountID).pipe(Effect.map(Option.map((r) => r.accessToken))),
+        ),
       )
 
-      const orgsByAccount = Effect.fn("Account.orgsByAccount")(function* () {
-        const accounts = yield* repoEffect(() => AccountRepo.list())
-        const [errors, results] = yield* Effect.partition(
-          accounts,
-          (account) => orgs(account.id).pipe(Effect.map((orgs) => ({ account, orgs }))),
-          { concurrency: 3 },
+      const parsed = await jsonBody(response, TokenRefresh)
+      await repo(() =>
+        AccountRepo.persistToken({
+          accountID: row.id,
+          accessToken: parsed.access_token,
+          refreshToken: parsed.refresh_token,
+          expiry: currentTime + parsed.expires_in,
+        }),
+      )
+
+      return parsed.access_token
+    }
+
+    const resolveAccess = async (accountID: AccountIDType) => {
+      const account = await repo(() => AccountRepo.getRow(accountID))
+      if (!account) return
+      return { account, accessToken: await resolveToken(account) }
+    }
+
+    const fetchOrgs = async (url: string, accessToken: AccessTokenType): Promise<readonly Org[]> => {
+      const response = ok(await request(fetcher, `${url}/api/orgs`, jsonGet(bearer(accessToken)), true))
+      return jsonBody(response, OrgList)
+    }
+
+    const fetchUser = async (url: string, accessToken: AccessTokenType) => {
+      const response = ok(await request(fetcher, `${url}/api/user`, jsonGet(bearer(accessToken)), true))
+      return jsonBody(response, User)
+    }
+
+    const service: Interface = {
+      active: () => repo(() => AccountRepo.active()),
+      list: () => repo(() => AccountRepo.list()),
+      async orgsByAccount() {
+        const accounts = await repo(() => AccountRepo.list())
+        const results = await Promise.allSettled(
+          accounts.map(async (account) => ({ account, orgs: await service.orgs(account.id) })),
         )
-        for (const error of errors) {
-          yield* Effect.logWarning("failed to fetch orgs for account").pipe(
-            Effect.annotateLogs({ error: String(error) }),
-          )
-        }
-        return results
-      })
+        return results.flatMap((result) => {
+          if (result.status === "fulfilled") return [result.value]
+          log.warn("failed to fetch orgs for account", { error: String(result.reason) })
+          return []
+        })
+      },
+      remove: (accountID) => repo(() => AccountRepo.remove(accountID)),
+      use: (accountID, orgID) => repo(() => AccountRepo.use(accountID, orgID)),
+      async orgs(accountID) {
+        const resolved = await resolveAccess(accountID)
+        if (!resolved) return []
+        return fetchOrgs(resolved.account.url, resolved.accessToken)
+      },
+      async config(accountID, orgID) {
+        const resolved = await resolveAccess(accountID)
+        if (!resolved) return
 
-      const orgs = Effect.fn("Account.orgs")(function* (accountID: AccountID) {
-        const resolved = yield* resolveAccess(accountID)
-        if (Option.isNone(resolved)) return []
+        const response = await request(
+          fetcher,
+          `${resolved.account.url}/api/config`,
+          jsonGet({
+            ...bearer(resolved.accessToken),
+            "x-org-id": orgID,
+          }),
+          true,
+        )
 
-        const { account, accessToken } = resolved.value
-
-        return yield* fetchOrgs(account.url, accessToken)
-      })
-
-      const config = Effect.fn("Account.config")(function* (accountID: AccountID, orgID: OrgID) {
-        const resolved = yield* resolveAccess(accountID)
-        if (Option.isNone(resolved)) return Option.none()
-
-        const { account, accessToken } = resolved.value
-
-        const response = yield* executeRead(
-          HttpClientRequest.get(`${account.url}/api/config`).pipe(
-            HttpClientRequest.acceptJson,
-            HttpClientRequest.bearerToken(accessToken),
-            HttpClientRequest.setHeaders({ "x-org-id": orgID }),
+        if (response.status === 404) return
+        const parsed = await jsonBody(ok(response), RemoteConfig)
+        return parsed.config
+      },
+      async token(accountID) {
+        const resolved = await resolveAccess(accountID)
+        return resolved?.accessToken
+      },
+      async login(server) {
+        const response = ok(
+          await request(
+            fetcher,
+            `${server}/auth/device/code`,
+            jsonPost({
+              client_id: clientId,
+            }),
           ),
         )
 
-        if (response.status === 404) return Option.none()
-
-        const ok = yield* HttpClientResponse.filterStatusOk(response).pipe(mapAccountServiceError())
-
-        const parsed = yield* HttpClientResponse.schemaBodyJson(RemoteConfig)(ok).pipe(
-          mapAccountServiceError("Failed to decode response"),
-        )
-        return Option.some(parsed.config)
-      })
-
-      const login = Effect.fn("Account.login")(function* (server: string) {
-        const response = yield* executeEffectOk(
-          HttpClientRequest.post(`${server}/auth/device/code`).pipe(
-            HttpClientRequest.acceptJson,
-            HttpClientRequest.schemaBodyJson(ClientId)(new ClientId({ client_id: clientId })),
-          ),
-        )
-
-        const parsed = yield* HttpClientResponse.schemaBodyJson(DeviceAuth)(response).pipe(
-          mapAccountServiceError("Failed to decode response"),
-        )
+        const parsed = await jsonBody(response, DeviceAuth)
         return new Login({
           code: parsed.device_code,
           user: parsed.user_code,
@@ -331,115 +349,61 @@ export namespace Account {
           expiry: parsed.expires_in,
           interval: parsed.interval,
         })
-      })
-
-      const poll = Effect.fn("Account.poll")(function* (input: Login) {
-        const response = yield* executeEffect(
-          HttpClientRequest.post(`${input.server}/auth/device/token`).pipe(
-            HttpClientRequest.acceptJson,
-            HttpClientRequest.schemaBodyJson(DeviceTokenRequest)(
-              new DeviceTokenRequest({
-                grant_type: "urn:ietf:params:oauth:grant-type:device_code",
-                device_code: input.code,
-                client_id: clientId,
-              }),
-            ),
-          ),
+      },
+      async poll(input) {
+        const response = await request(
+          fetcher,
+          `${input.server}/auth/device/token`,
+          jsonPost({
+            grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+            device_code: input.code,
+            client_id: clientId,
+          }),
         )
 
-        const parsed = yield* HttpClientResponse.schemaBodyJson(DeviceToken)(response).pipe(
-          mapAccountServiceError("Failed to decode response"),
-        )
+        const parsed = await jsonBody(response, DeviceToken)
+        if ("error" in parsed) return toPollResult(parsed)
 
-        if (parsed instanceof DeviceTokenError) return parsed.toPollResult()
         const accessToken = parsed.access_token
+        const [account, remoteOrgs] = await Promise.all([
+          fetchUser(input.server, accessToken),
+          fetchOrgs(input.server, accessToken),
+        ])
+        const firstOrgID = remoteOrgs[0]?.id
 
-        const user = fetchUser(input.server, accessToken)
-        const orgs = fetchOrgs(input.server, accessToken)
-
-        const [account, remoteOrgs] = yield* Effect.all([user, orgs], { concurrency: 2 })
-
-        // TODO: When there are multiple orgs, let the user choose
-        const firstOrgID = remoteOrgs.length > 0 ? Option.some(remoteOrgs[0].id) : Option.none<OrgID>()
-
-        const now = yield* Clock.currentTimeMillis
-        const expiry = now + Duration.toMillis(parsed.expires_in)
-        const refreshToken = parsed.refresh_token
-
-        yield* repoEffect(() =>
+        await repo(() =>
           AccountRepo.persistAccount({
             id: account.id,
             email: account.email,
             url: input.server,
             accessToken,
-            refreshToken,
-            expiry,
-            orgID: Option.getOrUndefined(firstOrgID),
+            refreshToken: parsed.refresh_token,
+            expiry: now() + parsed.expires_in,
+            orgID: firstOrgID,
           }),
         )
 
         return new PollSuccess({ email: account.email })
-      })
+      },
+    }
 
-      return Service.of({
-        active: () => repoEffect(() => AccountRepo.active()).pipe(Effect.map(Option.fromNullishOr)),
-        list: () => repoEffect(() => AccountRepo.list()),
-        orgsByAccount,
-        remove: (accountID) => repoEffect(() => AccountRepo.remove(accountID)).pipe(Effect.asVoid),
-        use: (accountID, orgID) =>
-          repoEffect(() => AccountRepo.use(accountID, Option.getOrUndefined(orgID))).pipe(Effect.asVoid),
-        orgs,
-        config,
-        token,
-        login,
-        poll,
-      })
-    }),
-  )
-
-  export const defaultLayer = layer.pipe(Layer.provide(FetchHttpClient.layer))
-
-  export const runPromise = makeRunPromise(Service, defaultLayer)
-
-  export async function active(): Promise<Info | undefined> {
-    return Option.getOrUndefined(await runPromise((service) => service.active()))
+    return service
   }
 
-  export async function list(): Promise<Info[]> {
-    return runPromise((service) => service.list())
-  }
+  const defaultService = create()
 
-  export async function orgsByAccount(): Promise<readonly AccountOrgs[]> {
-    return runPromise((service) => service.orgsByAccount())
-  }
-
-  export async function remove(accountID: AccountID): Promise<void> {
-    await runPromise((service) => service.remove(accountID))
-  }
-
-  export async function use(accountID: AccountID, orgID?: OrgID): Promise<void> {
-    await runPromise((service) => service.use(accountID, orgID ? Option.some(orgID) : Option.none()))
-  }
-
-  export async function config(accountID: AccountID, orgID: OrgID): Promise<Record<string, unknown> | undefined> {
-    const cfg = await runPromise((service) => service.config(accountID, orgID))
-    return Option.getOrUndefined(cfg)
-  }
-
-  export async function token(accountID: AccountID): Promise<AccessToken | undefined> {
-    const t = await runPromise((service) => service.token(accountID))
-    return Option.getOrUndefined(t)
-  }
-
-  export async function login(url: string): Promise<Login> {
-    return runPromise((service) => service.login(url))
-  }
-
-  export async function poll(input: Login): Promise<PollResult> {
-    return runPromise((service) => service.poll(input))
-  }
+  export let active = defaultService.active
+  export let list = defaultService.list
+  export let orgsByAccount = defaultService.orgsByAccount
+  export let remove = defaultService.remove
+  export let use = defaultService.use
+  export let orgs = defaultService.orgs
+  export let config = defaultService.config
+  export let token = defaultService.token
+  export let login = defaultService.login
+  export let poll = defaultService.poll
 
   export function durationToMillis(duration: Login["interval"]): number {
-    return Duration.toMillis(duration)
+    return duration
   }
 }
