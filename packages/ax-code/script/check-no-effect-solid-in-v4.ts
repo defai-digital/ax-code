@@ -115,7 +115,6 @@ export namespace EffectGuard {
     "src/account/repo.ts",
     "src/account/schema.ts",
     "src/cli/cmd/account.ts",
-    "src/cli/effect/prompt.ts",
     "src/util/effect-http-client.ts",
   ])
 
