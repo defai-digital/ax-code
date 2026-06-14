@@ -1,6 +1,7 @@
 ---
 name: debug-n-fix
 description: Diagnose a bug and implement the fix. Confirms root cause before making changes, then verifies with the relevant tests.
+agent: debug
 argument-hint: <symptom, error message, or failing test>
 ---
 
@@ -46,4 +47,4 @@ Do not fix an unconfirmed hypothesis unless the user explicitly asks for a specu
 
 - Fix only what the root cause requires - one bug, one fix.
 - If the root cause reveals a design problem that needs more than a targeted fix, stop and describe the larger issue rather than attempting a partial rewrite.
-- Follow ax-code architecture rules: do not introduce Effect or Effect Schema; use Zod for validation; use `async/await` for async; use `Log.create` for structured logging.
+- Follow ax-code repository rules: do not introduce Effect or Effect Schema; use Zod for validation; use `async/await` for async; use `Log.create` for structured logging.

@@ -63,6 +63,51 @@ Instructions here.
   })
 })
 
+test("discovers optional skill agent metadata", async () => {
+  await using tmp = await tmpdir({
+    git: true,
+    init: async (dir) => {
+      const skillDir = path.join(dir, ".ax-code", "skill", "debug-helper")
+      await Bun.write(
+        path.join(skillDir, "SKILL.md"),
+        `---
+name: debug-helper
+description: Debug helper skill.
+agent: debug
+---
+
+# Debug Helper
+`,
+      )
+    },
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const skills = userSkills(await Skill.all())
+      expect(skills).toHaveLength(1)
+      expect(skills[0]).toMatchObject({
+        name: "debug-helper",
+        agent: "debug",
+      })
+    },
+  })
+})
+
+test("loads built-in debug skills with debug agent metadata", async () => {
+  await using tmp = await tmpdir({ git: true })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const skills = await Skill.all()
+      expect(skills.find((skill) => skill.name === "debug-only")?.agent).toBe("debug")
+      expect(skills.find((skill) => skill.name === "debug-n-fix")?.agent).toBe("debug")
+    },
+  })
+})
+
 test("returns skill directories from Skill.dirs", async () => {
   await using tmp = await tmpdir({
     git: true,

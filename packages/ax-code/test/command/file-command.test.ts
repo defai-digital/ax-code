@@ -60,6 +60,22 @@ Review branch $ARGUMENTS.
   })
 })
 
+test("exposes skill agent metadata on skill-backed commands", async () => {
+  await using tmp = await tmpdir({ git: true })
+
+  await withTestHome(path.join(tmp.path, "home"), async () => {
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const command = await Command.get("debug-n-fix")
+        expect(command).toBeDefined()
+        expect(command!.source).toBe("skill")
+        expect(command!.agent).toBe("debug")
+      },
+    })
+  })
+})
+
 test("discovers global .opencode commands and reports unsupported shell interpolation", async () => {
   await using tmp = await tmpdir({ git: true })
   const home = path.join(tmp.path, "home")

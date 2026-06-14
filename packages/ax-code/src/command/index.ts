@@ -261,6 +261,7 @@ export namespace Command {
       if (commands[skill.name]) continue
       commands[skill.name] = {
         name: skill.name,
+        agent: skill.agent,
         description: skill.description,
         source: "skill",
         get template() {

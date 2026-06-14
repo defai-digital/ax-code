@@ -28,6 +28,7 @@ export namespace Skill {
     description: z.string(),
     location: z.string(),
     content: z.string(),
+    agent: z.string().optional(),
     paths: z.array(z.string()).optional(),
     license: z.string().optional(),
     compatibility: z.string().optional(),
@@ -86,6 +87,7 @@ export namespace Skill {
         : undefined
     const license = typeof data.license === "string" ? data.license : undefined
     const compatibility = typeof data.compatibility === "string" ? data.compatibility : undefined
+    const agent = typeof data.agent === "string" ? data.agent : undefined
     const metadata = z.record(z.string(), z.string()).safeParse(data.metadata)
     const allowedTools =
       typeof data["allowed-tools"] === "string"
@@ -109,6 +111,7 @@ export namespace Skill {
       description: parsed.data.description,
       location: match,
       content: md.content,
+      ...(agent ? { agent } : {}),
       ...(paths?.length ? { paths } : {}),
       ...(license ? { license } : {}),
       ...(compatibility ? { compatibility } : {}),
@@ -180,12 +183,14 @@ export namespace Skill {
     const data = md.data as Record<string, unknown>
     const parsed = Info.pick({ name: true, description: true }).safeParse(data)
     if (!parsed.success) return
+    const agent = typeof data.agent === "string" ? data.agent : undefined
     const argumentHint = typeof data["argument-hint"] === "string" ? data["argument-hint"] : undefined
     state.skills[parsed.data.name] = {
       name: parsed.data.name,
       description: parsed.data.description,
       location: entry.location,
       content: md.content,
+      ...(agent ? { agent } : {}),
       ...(argumentHint ? { argumentHint } : {}),
       sourceTool: "builtin",
       scope: "builtin",

@@ -112,6 +112,14 @@ describe("v2-style keyword route", () => {
     const result = route("write a performance benchmark test", "build")
     expect(result?.agent).toBe("perf")
   })
+
+  test("debug-n-fix skill prompt does not route to architect", async () => {
+    const skill = await Bun.file(path.join(import.meta.dir, "../../skills/debug-n-fix/SKILL.md")).text()
+    const body = skill.replace(/^---[\s\S]*?---\n/, "").replaceAll("$ARGUMENTS", "")
+
+    expect(route(body, "build")?.agent).toBe("debug")
+    expect(route(body, "architect")?.agent).toBe("debug")
+  })
 })
 
 describe("classifyComplexity activation gating", () => {

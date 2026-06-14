@@ -76,6 +76,7 @@ export async function executePromptCommand(input: CommandInput, prompt: PromptRu
     messageID: input.messageID,
     model: prepared.user.model,
     agent: prepared.user.agent,
+    agentRouting: command.agent ? "preserve" : undefined,
     parts: prepared.parts,
     variant: input.variant,
   })

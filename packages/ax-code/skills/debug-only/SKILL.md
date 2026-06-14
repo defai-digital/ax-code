@@ -1,6 +1,7 @@
 ---
 name: debug-only
 description: Investigate and diagnose a bug or unexpected behaviour without modifying any files. Reports root cause, reproduction path, and affected scope.
+agent: debug
 argument-hint: <symptom, error message, or failing test>
 ---
 
