@@ -114,7 +114,6 @@ export namespace EffectGuard {
     "src/account/index.ts",
     "src/account/repo.ts",
     "src/account/schema.ts",
-    "src/cli/cmd/account.ts",
   ])
 
   export interface Violation {

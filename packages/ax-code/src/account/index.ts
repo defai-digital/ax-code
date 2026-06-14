@@ -393,6 +393,22 @@ export namespace Account {
     return Option.getOrUndefined(await runPromise((service) => service.active()))
   }
 
+  export async function list(): Promise<Info[]> {
+    return runPromise((service) => service.list())
+  }
+
+  export async function orgsByAccount(): Promise<readonly AccountOrgs[]> {
+    return runPromise((service) => service.orgsByAccount())
+  }
+
+  export async function remove(accountID: AccountID): Promise<void> {
+    await runPromise((service) => service.remove(accountID))
+  }
+
+  export async function use(accountID: AccountID, orgID?: OrgID): Promise<void> {
+    await runPromise((service) => service.use(accountID, orgID ? Option.some(orgID) : Option.none()))
+  }
+
   export async function config(accountID: AccountID, orgID: OrgID): Promise<Record<string, unknown> | undefined> {
     const cfg = await runPromise((service) => service.config(accountID, orgID))
     return Option.getOrUndefined(cfg)
@@ -401,5 +417,17 @@ export namespace Account {
   export async function token(accountID: AccountID): Promise<AccessToken | undefined> {
     const t = await runPromise((service) => service.token(accountID))
     return Option.getOrUndefined(t)
+  }
+
+  export async function login(url: string): Promise<Login> {
+    return runPromise((service) => service.login(url))
+  }
+
+  export async function poll(input: Login): Promise<PollResult> {
+    return runPromise((service) => service.poll(input))
+  }
+
+  export function durationToMillis(duration: Login["interval"]): number {
+    return Duration.toMillis(duration)
   }
 }
