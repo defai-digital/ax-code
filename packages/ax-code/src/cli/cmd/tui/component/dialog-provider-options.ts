@@ -38,6 +38,12 @@ export function providerDialogCategory(providerID: string) {
   return "API plan"
 }
 
+export function providerModelSelectable(input: { providerID: string; toolcall?: boolean }) {
+  if (input.toolcall !== false) return true
+  if (CLI_PROVIDERS.has(input.providerID)) return true
+  return input.providerID === "ax-engine"
+}
+
 export function providerDialogConnected(input: {
   providerID: string
   connected: string[]

@@ -9,7 +9,7 @@ import { useKeybind } from "../context/keybind"
 import * as fuzzysort from "fuzzysort"
 import { useConnected } from "./provider-state"
 import { modelDisplayInfo } from "./model-vision-label"
-import { CLI_PROVIDERS } from "./dialog-provider-options"
+import { CLI_PROVIDERS, providerModelSelectable } from "./dialog-provider-options"
 
 export function DialogModel(props: { providerID?: string }) {
   const local = useLocal()
@@ -74,7 +74,9 @@ export function DialogModel(props: { providerID?: string }) {
           provider.models,
           entries(),
           filter(([_, info]) => info.status !== "deprecated"),
-          filter(([_, info]) => info.capabilities.toolcall !== false || CLI_PROVIDERS.has(provider.id)),
+          filter(([_, info]) =>
+            providerModelSelectable({ providerID: provider.id, toolcall: info.capabilities.toolcall }),
+          ),
           filter(([_, info]) => (props.providerID ? info.providerID === props.providerID : true)),
           map(([model, info]) => {
             const display = modelDisplayInfo(model, info)

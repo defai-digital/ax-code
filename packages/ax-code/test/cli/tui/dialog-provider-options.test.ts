@@ -5,6 +5,7 @@ import {
   providerDialogCategory,
   providerDialogConnected,
   providerDialogProviders,
+  providerModelSelectable,
 } from "../../../src/cli/cmd/tui/component/dialog-provider-options"
 
 function provider(id: string, name = id) {
@@ -69,5 +70,12 @@ describe("provider dialog options", () => {
     expect(providerDialogCategory("xai")).toBe("API plan")
     expect(providerDialogCategory("grok-build-cli")).toBe("CLI plan")
     expect(providerDialogCategory("ollama")).toBe("Local runtime")
+  })
+
+  test("allows ax-engine models in the selector even without tool calling", () => {
+    expect(providerModelSelectable({ providerID: "ax-engine", toolcall: false })).toBe(true)
+    expect(providerModelSelectable({ providerID: "grok-build-cli", toolcall: false })).toBe(true)
+    expect(providerModelSelectable({ providerID: "xai", toolcall: false })).toBe(false)
+    expect(providerModelSelectable({ providerID: "xai", toolcall: true })).toBe(true)
   })
 })
