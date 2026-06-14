@@ -621,6 +621,7 @@ function decodeStruct(bytes: Uint8Array): Record<string, unknown> {
 
 function decodeStructEntry(bytes: Uint8Array): { key: string; value: unknown } | undefined {
   let key = ""
+  let hasKey = false
   let value: unknown
   let offset = 0
   while (offset < bytes.byteLength) {
@@ -630,10 +631,15 @@ function decodeStructEntry(bytes: Uint8Array): { key: string; value: unknown } |
     const wireType = tag.value & 7
     const read = readWireValue(bytes, offset, wireType)
     offset = read.offset
-    if (fieldNumber === 1 && read.value instanceof Uint8Array) key = textDecoder.decode(read.value)
+    if (fieldNumber === 1 && read.value instanceof Uint8Array) {
+      key = textDecoder.decode(read.value)
+      hasKey = true
+    }
     if (fieldNumber === 2 && read.value instanceof Uint8Array) value = decodeValue(read.value)
   }
-  return key ? { key, value } : undefined
+  // Track key presence rather than truthiness so a legitimate empty-string key
+  // ({ "": v }) is preserved instead of silently dropped.
+  return hasKey ? { key, value } : undefined
 }
 
 function encodeListValue(value: unknown[]): Uint8Array {

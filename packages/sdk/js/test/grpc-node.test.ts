@@ -108,6 +108,14 @@ describe("gRPC Node HTTP/2 host", () => {
     expect(response.grpcStatus).toBe("13")
   })
 
+  test("preserves empty-string struct keys through encode/decode", () => {
+    // A struct entry whose key is "" must survive the round-trip; the decoder
+    // previously dropped it by testing key truthiness instead of presence.
+    const message = { value: { "": 123, normal: 1, nested: { "": "kept" } } }
+    const encoded = encodeAxCodeGrpcProtoMessage("JsonResponse", message)
+    expect(decodeAxCodeGrpcProtoMessage("JsonResponse", encoded)).toEqual(message)
+  })
+
   test("serves bidirectional PTY protobuf streams over HTTP/2", async () => {
     const calls: unknown[] = []
     handle = await startAxCodeGrpcNodeHttp2Server({

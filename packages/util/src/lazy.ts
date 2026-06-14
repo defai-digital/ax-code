@@ -4,8 +4,11 @@ export function lazy<T>(fn: () => T) {
 
   return (): T => {
     if (loaded) return value as T
-    loaded = true
+    // Mark loaded only after fn() succeeds. If it throws synchronously, the
+    // value stays uncomputed so the next call retries instead of permanently
+    // returning undefined.
     value = fn()
+    loaded = true
     return value as T
   }
 }
