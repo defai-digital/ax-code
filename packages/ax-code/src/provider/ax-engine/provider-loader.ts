@@ -1,6 +1,6 @@
 import type { Provider } from "../provider"
 import type { CustomLoader } from "../loaders"
-import { AX_ENGINE_API_KEY, AX_ENGINE_DEFAULT_PORT, AX_ENGINE_MODEL_ID } from "./constants"
+import { AX_ENGINE_API_KEY, AX_ENGINE_API_MODEL_ID, AX_ENGINE_DEFAULT_PORT } from "./constants"
 import { isSupportedHost, requirePlatformEligibility } from "./platform"
 import { getDependencyStatus } from "./dependency"
 import { getModelStatus } from "./model-cache"
@@ -60,8 +60,8 @@ export function axEngineLoader(): CustomLoader {
       async discoverModels() {
         return {}
       },
-      async getModel(sdk: any, modelID: string) {
-        return sdk.languageModel(modelID || AX_ENGINE_MODEL_ID)
+      async getModel(sdk: any) {
+        return sdk.languageModel(AX_ENGINE_API_MODEL_ID)
       },
     }
   }

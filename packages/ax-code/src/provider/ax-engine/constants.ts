@@ -1,5 +1,6 @@
 export const AX_ENGINE_PROVIDER_ID = "ax-engine"
 export const AX_ENGINE_MODEL_ID = "qwen3-coder-next"
+export const AX_ENGINE_API_MODEL_ID = "qwen3"
 export const AX_ENGINE_DISPLAY_NAME = "AX Engine (Local)"
 export const AX_ENGINE_MODEL_DISPLAY_NAME = "Qwen3-Coder-Next (Local MLX)"
 export const AX_ENGINE_DEFAULT_PORT = 18181
