@@ -10,6 +10,7 @@ import { checkCliProviderAuth } from "./cli/connect"
 import { URL } from "url"
 import { Log } from "@/util/log"
 import { isLocalHostname } from "@/util/local-host"
+import { axEngineLoader } from "./ax-engine/provider-loader"
 
 const log = Log.create({ service: "provider.loaders" })
 
@@ -378,6 +379,7 @@ export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
   },
   ollama: ollamaCompatibleLoader("ollama", "OLLAMA_HOST", "http://localhost:11434"),
   "ax-studio": openAICompatibleLoader("ax-studio", "AX_STUDIO_HOST", "http://localhost:18080"),
+  "ax-engine": axEngineLoader(),
   "claude-code": cliLoader({
     providerID: "claude-code",
     binary: claudeCode.binary,

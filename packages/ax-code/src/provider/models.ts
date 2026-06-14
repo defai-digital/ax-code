@@ -8,6 +8,13 @@ import { Instance } from "../project/instance"
 import { Flag } from "../flag/flag"
 import { isModelSupportedForProvider } from "./model-support"
 import bundledSnapshot from "./models-snapshot.json"
+import {
+  AX_ENGINE_DEFAULT_PORT,
+  AX_ENGINE_DISPLAY_NAME,
+  AX_ENGINE_MODEL_DISPLAY_NAME,
+  AX_ENGINE_MODEL_ID,
+  AX_ENGINE_PROVIDER_ID,
+} from "./ax-engine/constants"
 
 export namespace ModelsDev {
   const log = Log.create({ service: "models" })
@@ -79,6 +86,38 @@ export namespace ModelsDev {
   export type Provider = z.infer<typeof Provider>
 
   const DataSchema = z.record(z.string(), Provider)
+
+  const BUILTIN_AX_ENGINE_PROVIDER: Provider = {
+    id: AX_ENGINE_PROVIDER_ID,
+    env: ["AX_ENGINE_HOST"],
+    npm: "@ai-sdk/openai-compatible",
+    api: `http://127.0.0.1:${AX_ENGINE_DEFAULT_PORT}/v1`,
+    name: AX_ENGINE_DISPLAY_NAME,
+    models: {
+      [AX_ENGINE_MODEL_ID]: {
+        id: AX_ENGINE_MODEL_ID,
+        name: AX_ENGINE_MODEL_DISPLAY_NAME,
+        family: AX_ENGINE_MODEL_ID,
+        release_date: "2026-06-14",
+        attachment: false,
+        reasoning: false,
+        temperature: true,
+        tool_call: false,
+        modalities: { input: ["text"], output: ["text"] },
+        limit: { context: 262000, output: 8192 },
+        status: "beta",
+        experimental: { localRuntime: AX_ENGINE_PROVIDER_ID },
+      },
+    },
+  }
+
+  function withBuiltIns(input: Record<string, Provider>) {
+    if (input[AX_ENGINE_PROVIDER_ID]) return input
+    return {
+      ...input,
+      [AX_ENGINE_PROVIDER_ID]: BUILTIN_AX_ENGINE_PROVIDER,
+    }
+  }
 
   function parse(input: unknown, source: string) {
     const result = DataSchema.safeParse(input)
@@ -162,7 +201,7 @@ export namespace ModelsDev {
 
   export async function get() {
     const data = await Data()
-    if (sanitized?.source !== data) sanitized = { source: data, result: sanitize(data) }
+    if (sanitized?.source !== data) sanitized = { source: data, result: sanitize(withBuiltIns(data)) }
     return sanitized.result
   }
 }

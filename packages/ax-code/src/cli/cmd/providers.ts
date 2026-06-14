@@ -19,6 +19,15 @@ import { Process } from "../../util/process"
 import { text } from "node:stream/consumers"
 import { Ssrf } from "../../util/ssrf"
 import { toErrorMessage } from "../../util/error-message"
+import {
+  downloadModel,
+  getAxEngineStatus,
+  getDependencyStatus,
+  getModelStatus,
+  markPrepared,
+  normalizeQuantization,
+  stopServer,
+} from "@/provider/ax-engine"
 
 type PluginAuth = NonNullable<Hooks["auth"]>
 
@@ -234,8 +243,120 @@ export const ProvidersCommand = cmd({
   aliases: ["auth"],
   describe: "manage AI providers and credentials",
   builder: (yargs) =>
-    yargs.command(ProvidersListCommand).command(ProvidersLoginCommand).command(ProvidersLogoutCommand).demandCommand(),
+    yargs
+      .command(ProvidersListCommand)
+      .command(ProvidersLoginCommand)
+      .command(ProvidersLogoutCommand)
+      .command(ProvidersAxEngineCommand)
+      .demandCommand(),
   async handler() {},
+})
+
+function printAxEngineStatus(status: Awaited<ReturnType<typeof getAxEngineStatus>>) {
+  prompts.intro("AX Engine")
+  const eligibilityStatus = status.eligibility.supported ? "ok" : "blocked"
+  prompts.log.info(`Eligibility: ${eligibilityStatus}`)
+  for (const blocker of status.eligibility.blockers ?? []) prompts.log.error(blocker)
+  for (const warning of status.eligibility.warnings ?? []) prompts.log.warn(warning)
+
+  prompts.log.info(
+    `Dependency: ${status.dependency.available ? status.dependency.binaryPath : "missing"}${
+      status.dependency.version ? ` (${status.dependency.version})` : ""
+    }`,
+  )
+  for (const blocker of status.dependency.blockers ?? []) prompts.log.error(blocker)
+
+  prompts.log.info(`Model: ${status.model.present ? status.model.path : "not prepared"}`)
+  for (const blocker of status.model.blockers ?? []) prompts.log.error(blocker)
+
+  prompts.log.info(
+    `Server: ${status.server.ready ? status.server.state?.baseURL : status.server.running ? "running but not ready" : "stopped"}`,
+  )
+  for (const blocker of status.server.blockers ?? []) prompts.log.warn(blocker)
+
+  if (!status.capability.toolcall && status.capability.reason) prompts.log.warn(status.capability.reason)
+  prompts.outro("Done")
+}
+
+export const ProvidersAxEngineCommand = cmd({
+  command: "ax-engine <action>",
+  describe: "manage the experimental AX Engine local provider",
+  builder: (yargs) =>
+    yargs
+      .positional("action", {
+        describe: "action to run",
+        choices: ["status", "prepare", "stop"] as const,
+      })
+      .option("json", {
+        describe: "print JSON output",
+        type: "boolean",
+      })
+      .option("model-path", {
+        describe: "existing Qwen3-Coder-Next MLX model directory to mark as prepared",
+        type: "string",
+      })
+      .option("binary-path", {
+        describe: "ax-engine CLI path",
+        type: "string",
+      })
+      .option("quantization", {
+        describe: "MLX quantization to prepare",
+        choices: ["mlx4bit", "mlx6bit"] as const,
+      })
+      .option("download", {
+        describe: "download the model through `ax-engine download`",
+        type: "boolean",
+      }),
+  async handler(args) {
+    const action = args.action
+    const options = {
+      binaryPath: args.binaryPath,
+      modelPath: args.modelPath,
+      quantization: args.quantization,
+    }
+
+    if (action === "status") {
+      const status = await getAxEngineStatus(options)
+      if (args.json) console.log(JSON.stringify(status, null, 2))
+      else printAxEngineStatus(status)
+      return
+    }
+
+    if (action === "stop") {
+      await stopServer()
+      if (args.json) console.log(JSON.stringify({ stopped: true }, null, 2))
+      else prompts.outro("AX Engine server stopped")
+      return
+    }
+
+    if (action === "prepare") {
+      const quantization = normalizeQuantization(args.quantization)
+      if (args.modelPath) {
+        const prepared = await markPrepared({ modelPath: args.modelPath, quantization })
+        if (args.json) console.log(JSON.stringify(prepared, null, 2))
+        else prompts.outro(`Prepared ${prepared.path}`)
+        return
+      }
+      if (!args.download) {
+        const status = await getModelStatus({ quantization })
+        if (args.json) console.log(JSON.stringify(status, null, 2))
+        else {
+          prompts.intro("AX Engine prepare")
+          if (status.present) prompts.log.success(`Model already prepared at ${status.path}`)
+          else prompts.log.warn("Model is not prepared. Re-run with --model-path <dir> or --download.")
+          prompts.outro("Done")
+        }
+        return
+      }
+      const dependency = await getDependencyStatus({ binaryPath: args.binaryPath })
+      if (!dependency.available || !dependency.binaryPath) {
+        throw new Error(dependency.blockers[0] ?? "ax-engine binary is not available")
+      }
+      const prepared = await downloadModel({ binaryPath: dependency.binaryPath, quantization })
+      if (args.json) console.log(JSON.stringify(prepared, null, 2))
+      else prompts.outro(`Prepared ${prepared.path}`)
+    }
+  },
 })
 
 export const ProvidersListCommand = cmd({

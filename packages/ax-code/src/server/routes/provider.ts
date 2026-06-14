@@ -12,12 +12,23 @@ import { lazy } from "../../util/lazy"
 import { PROVIDER_ID_PARAM, withProviderID } from "./route-params"
 import { redactProviderInfo } from "./config"
 import { Log } from "../../util/log"
+import {
+  getAxEngineStatus,
+  downloadModel,
+  getDependencyStatus,
+  getModelStatus,
+  markPrepared,
+  stopServer,
+} from "@/provider/ax-engine"
+import { isPlausiblySupportedHost } from "@/provider/ax-engine/platform"
+import { normalizeQuantization } from "@/provider/ax-engine/model-cache"
 
 const log = Log.create({ service: "server" })
 
 // Natively supported providers — shown by default when enabled_providers is not configured.
 // Users can expand this list via enabled_providers in ax-code.json.
 const NATIVE_PROVIDERS = new Set([
+  "ax-engine",
   "ax-studio",
   "ollama",
   "google",
@@ -71,6 +82,7 @@ export const ProviderRoutes = lazy(() =>
         const ALWAYS_SHOW = new Set(["ollama", "ax-studio"])
         for (const [key, value] of Object.entries(allProviders)) {
           if (disabled.has(key)) continue
+          if (key === "ax-engine" && !isPlausiblySupportedHost() && !enabled?.has(key)) continue
           if (ALWAYS_SHOW.has(key) || (enabled ? enabled.has(key) : NATIVE_PROVIDERS.has(key))) {
             filteredProviders[key] = value
           }
@@ -91,6 +103,95 @@ export const ProviderRoutes = lazy(() =>
           default: mapValues(providers, (item) => Provider.sort(Object.values(item.models))[0]?.id ?? ""),
           connected: Object.keys(connected),
         })
+      },
+    )
+    .get(
+      "/ax-engine/status",
+      describeRoute({
+        summary: "Get ax-engine local provider status",
+        description: "Inspect host eligibility, dependency, model cache, server, and capability state for ax-engine.",
+        operationId: "provider.axEngine.status",
+        responses: {
+          200: {
+            description: "ax-engine status",
+            content: {
+              "application/json": {
+                schema: resolver(z.any()),
+              },
+            },
+          },
+        },
+      }),
+      async (c) => {
+        const config = await Config.get().catch(() => undefined)
+        return c.json(await getAxEngineStatus(config?.provider?.["ax-engine"]?.options ?? {}))
+      },
+    )
+    .post(
+      "/ax-engine/prepare",
+      describeRoute({
+        summary: "Prepare ax-engine local provider",
+        description: "Mark an existing Qwen3-Coder-Next MLX path or explicitly download it through ax-engine.",
+        operationId: "provider.axEngine.prepare",
+        responses: {
+          200: {
+            description: "Preparation result",
+            content: {
+              "application/json": {
+                schema: resolver(z.any()),
+              },
+            },
+          },
+          ...errors(400),
+        },
+      }),
+      validator(
+        "json",
+        z
+          .object({
+            modelPath: z.string().optional(),
+            binaryPath: z.string().optional(),
+            quantization: z.enum(["mlx4bit", "mlx6bit"]).optional(),
+            download: z.boolean().optional(),
+          })
+          .optional()
+          .default({}),
+      ),
+      async (c) => {
+        const body = c.req.valid("json")
+        const quantization = normalizeQuantization(body.quantization)
+        if (body.modelPath) {
+          return c.json(await markPrepared({ modelPath: body.modelPath, quantization }))
+        }
+        if (!body.download) {
+          return c.json(await getModelStatus({ quantization }))
+        }
+        const dependency = await getDependencyStatus({ binaryPath: body.binaryPath })
+        if (!dependency.available || !dependency.binaryPath) {
+          throw new Error(dependency.blockers[0] ?? "ax-engine binary is not available")
+        }
+        return c.json(await downloadModel({ binaryPath: dependency.binaryPath, quantization }))
+      },
+    )
+    .post(
+      "/ax-engine/stop",
+      describeRoute({
+        summary: "Stop managed ax-engine server",
+        operationId: "provider.axEngine.stop",
+        responses: {
+          200: {
+            description: "Stopped",
+            content: {
+              "application/json": {
+                schema: resolver(z.boolean()),
+              },
+            },
+          },
+        },
+      }),
+      async (c) => {
+        await stopServer()
+        return c.json(true)
       },
     )
     .get(

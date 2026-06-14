@@ -30,6 +30,8 @@ import { DEFAULT_SERVER_PORT } from "@/server/constants"
 import type { Isolation as IsolationConfig } from "../../config/schema"
 import { Isolation } from "../../isolation"
 import { toErrorMessage } from "@/util/error-message"
+import { getAxEngineStatus } from "@/provider/ax-engine"
+import { isPlausiblySupportedHost } from "@/provider/ax-engine/platform"
 
 type DoctorCheck = { name: string; status: "ok" | "warn" | "fail"; detail: string }
 
@@ -75,6 +77,46 @@ export function getIsolationPolicyCheck(input: {
     name: "Isolation policy",
     status: "ok",
     detail,
+  }
+}
+
+export function getAxEngineDoctorCheck(status: Awaited<ReturnType<typeof getAxEngineStatus>>): DoctorCheck {
+  const configuredOrPrepared = status.model.present || status.server.running || status.dependency.available
+  const relevant = isPlausiblySupportedHost() || configuredOrPrepared
+  if (!relevant) {
+    return {
+      name: "AX Engine local provider",
+      status: "ok",
+      detail: "not enabled on this host",
+    }
+  }
+  if (!status.eligibility.supported) {
+    return {
+      name: "AX Engine local provider",
+      status: "warn",
+      detail: status.eligibility.blockers.join("; "),
+    }
+  }
+  if (!status.dependency.available) {
+    return {
+      name: "AX Engine local provider",
+      status: "warn",
+      detail: status.dependency.blockers.join("; "),
+    }
+  }
+  if (!status.model.present) {
+    return {
+      name: "AX Engine local provider",
+      status: "warn",
+      detail: "eligible; ax-engine available; Qwen3-Coder-Next MLX not prepared",
+    }
+  }
+  return {
+    name: "AX Engine local provider",
+    status: status.server.ready ? "ok" : "warn",
+    detail: status.server.ready
+      ? `ready at ${status.server.state?.baseURL}`
+      : `model prepared at ${status.model.path}; server not running`,
   }
 }
 
@@ -267,7 +309,9 @@ export const DoctorCommand: CommandModule = {
     checks.push({
       name: "AGENTS.md context",
       status: project.agentsPath ? "ok" : "warn",
-      detail: project.agentsPath ? "Found — project context will be injected" : 'Not found — run "ax-code init" to generate',
+      detail: project.agentsPath
+        ? "Found — project context will be injected"
+        : 'Not found — run "ax-code init" to generate',
     })
 
     // 8. Git
@@ -341,6 +385,17 @@ export const DoctorCommand: CommandModule = {
     // exhaust the port, or corrupt the shared SQLite database.
     const runningInstances = await getRunningInstancesCheck()
     if (runningInstances) checks.push(runningInstances)
+
+    try {
+      const config = await Config.get().catch(() => Config.global())
+      checks.push(getAxEngineDoctorCheck(await getAxEngineStatus(config?.provider?.["ax-engine"]?.options ?? {})))
+    } catch (error) {
+      checks.push({
+        name: "AX Engine local provider",
+        status: "warn",
+        detail: `Could not inspect ax-engine status: ${toErrorMessage(error)}`,
+      })
+    }
 
     // 11b. TUI startup — port conflict and server liveness
     try {
