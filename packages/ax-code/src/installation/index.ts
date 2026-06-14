@@ -164,9 +164,14 @@ export namespace Installation {
     }
   }
 
+  // Best-effort stdout capture for probe commands (brew list/info/--repo).
+  // Returns whatever the command wrote to stdout regardless of exit code —
+  // these tools write diagnostics to stderr, so a non-zero exit still leaves
+  // stdout either empty or holding the data callers parse. Only a spawn
+  // failure (e.g. the binary is missing) yields "".
   async function text(cmd: string[], opts?: RunOptions) {
     const out = await dependencies.run(cmd, opts).catch(() => ({ code: 1, stdout: "", stderr: "" }))
-    return out.code === 0 ? out.stdout : ""
+    return out.stdout
   }
 
   async function fetchOk(url: string, options?: RequestInit) {

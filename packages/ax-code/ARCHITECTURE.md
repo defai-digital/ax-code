@@ -44,13 +44,11 @@ New code must NOT introduce Effect dependencies unless modifying an existing Eff
 - `Log.create()` for structured logging
 - Plain TypeScript functions
 
-**Where new Effect imports are still allowed:**
-
-- `src/effect/` — runtime infrastructure
-- `src/util/effect-zod.ts` — deliberate bridge for legacy Effect Schema IDs
-
-Other Effect imports are legacy allowlist entries tracked by
-`script/check-no-effect-solid-in-v4.ts`; remove entries as modules migrate.
+**Effect imports are no longer allowed anywhere in `src/`.** The migration
+is complete (removal finished in v6.4.0): `src/effect/` and the
+`src/util/effect-zod.ts` bridge have been deleted, and no module imports
+`effect`/`@effect/*`. `script/check-no-effect-solid-in-v4.ts` enforces this
+with an empty allowlist — any new Effect import fails the build.
 
 ## Coding Patterns (AI-first)
 
@@ -98,12 +96,15 @@ Validate at edges (CLI args, config, tool input), trust internally. Use Zod, not
 | --------------- | ------------------------------------------------------ | ------------------------- |
 | Tool parameters | Zod (`z.object()`) in all 27 tools                     | Validated at runtime      |
 | Config          | Pure Zod strict mode (709 lines in `config/schema.ts`) | Complete                  |
-| ID types        | Effect Schema + Zod bridge (`util/effect-zod.ts`)      | Keep bridge               |
+| ID types        | Pure Zod branded helpers (`src/id/branded.ts`)         | Complete                  |
 | CLI args        | Yargs type inference                                   | Add Zod for critical args |
 
-### Effect-Zod Bridge
+### Branded ID types
 
-`src/util/effect-zod.ts` (99 lines) converts Effect Schema ASTs to Zod schemas. This bridge is **kept** — it allows existing Effect Schema ID types (SessionID, ToolID, etc.) to work with Zod-based validation. Do not rewrite ID schemas to pure Zod unless the module is being fully migrated from Effect.
+Branded ID types (SessionID, ToolID, etc.) are built with the pure-Zod
+helpers in `src/id/branded.ts` (`defineBrandedIdentifier` / `defineBrandedString`).
+The old `src/util/effect-zod.ts` Effect Schema → Zod bridge has been deleted;
+do not reintroduce Effect Schema for IDs.
 
 ### New Schema Pattern
 
