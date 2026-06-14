@@ -57,6 +57,10 @@ async function writeServerState(state: AxEngineServerState) {
   await Filesystem.writeJson(AxEnginePaths.serverState, state)
 }
 
+async function removeServerState() {
+  await fs.rm(AxEnginePaths.serverState, { force: true }).catch(() => undefined)
+}
+
 function pidLive(pid: number) {
   try {
     process.kill(pid, 0)
@@ -109,11 +113,17 @@ export async function getServerStatus(): Promise<AxEngineServerRuntimeStatus> {
   const state = await readServerState()
   if (!state) return { running: false, ready: false, blockers: [] }
   const running = pidLive(state.pid)
+  if (!running) {
+    await removeServerState()
+    return { running: false, ready: false, blockers: [] }
+  }
   const ready = running && (await isServerReady(state.baseURL))
+  const nextState = ready ? { ...state, lastHealthAt: Date.now() } : state
+  if (ready) await writeServerState(nextState).catch(() => undefined)
   return {
     running,
     ready,
-    state: ready ? { ...state, lastHealthAt: Date.now() } : state,
+    state: nextState,
     blockers: ready ? [] : [`${AX_ENGINE_ERROR.ServerHealthFailed}: ax-engine server is not ready`],
   }
 }
@@ -173,5 +183,5 @@ export async function stopServer() {
       // Already gone.
     }
   }
-  await fs.rm(AxEnginePaths.serverState, { force: true }).catch(() => undefined)
+  await removeServerState()
 }
