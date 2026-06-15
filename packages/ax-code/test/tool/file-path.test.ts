@@ -59,6 +59,14 @@ describe("withFilePathAliases", () => {
     })
   })
 
+  test("falls back to an alias when filePath is an empty string", () => {
+    // An empty canonical filePath is not a usable path; a valid alias present
+    // alongside it should be used instead of leaving the call to fail on "".
+    expect(schema.parse({ content: "x", filePath: "", file: "/a/b.html" })).toMatchObject({
+      filePath: "/a/b.html",
+    })
+  })
+
   test("still rejects when neither filePath nor an alias is present", () => {
     expect(schema.safeParse({ content: "x" }).success).toBe(false)
   })

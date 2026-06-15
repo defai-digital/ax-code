@@ -24,7 +24,7 @@ export function withFilePathAliases<T extends z.ZodType>(schema: T): z.ZodType<z
   return z.preprocess((raw) => {
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) return raw
     const record = raw as Record<string, unknown>
-    if (typeof record["filePath"] === "string") return raw
+    if (typeof record["filePath"] === "string" && record["filePath"].length > 0) return raw
     for (const key of FILE_PATH_ALIAS_KEYS) {
       const value = record[key]
       if (typeof value === "string" && value.length > 0) {
