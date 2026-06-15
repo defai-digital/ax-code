@@ -116,7 +116,11 @@ export namespace AutonomousCompletionGate {
   }
 
   function looksLikeUnexecutableToolText(text: string) {
-    return /<tool_call>[\s\S]{0,4000}<\/tool_call>/.test(text) || /<function=[A-Za-z0-9_-]+/.test(text)
+    return (
+      /<tool_call>[\s\S]{0,4000}<\/tool_call>/.test(text) ||
+      /<function=[A-Za-z0-9_-]+/.test(text) ||
+      /^\[([a-z][a-z0-9_]{2,64})\]\s*\n(?=[\s\S]{0,1200}(?:[A-Za-z_][A-Za-z0-9_.-]*\s*:|\{))/m.test(text)
+    )
   }
 
   function hashSignature(value: string) {

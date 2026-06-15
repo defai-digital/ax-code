@@ -35,6 +35,58 @@ describe("AutonomousCompletionGate", () => {
     expect(decision.toolText).toContain("write_file")
   })
 
+  test("blocks completion when the assistant emits a bracketed tool command as plain text", () => {
+    const decision = AutonomousCompletionGate.evaluate({
+      pendingTodos: [],
+      messages: [
+        {
+          info: { role: "assistant" },
+          parts: [
+            {
+              type: "text",
+              text: [
+                "First, let's check the current project structure.",
+                "",
+                "[debug_analyze]",
+                'path: "."',
+                'scope: "project_structure"',
+                'workflow: "explore"',
+              ].join("\n"),
+            },
+          ],
+        },
+      ],
+    })
+
+    expect(decision).toMatchObject({
+      status: "blocked",
+      reason: "unexecutable_tool_text",
+    })
+    if (decision.status !== "blocked" || decision.reason !== "unexecutable_tool_text") {
+      throw new Error("unexpected allow")
+    }
+    expect(decision.toolText).toContain("[debug_analyze]")
+  })
+
+  test("allows ordinary bracketed prose without tool parameters", () => {
+    const decision = AutonomousCompletionGate.evaluate({
+      pendingTodos: [],
+      messages: [
+        {
+          info: { role: "assistant" },
+          parts: [
+            {
+              type: "text",
+              text: ["[note]", "This is a normal explanation, not a tool command."].join("\n"),
+            },
+          ],
+        },
+      ],
+    })
+
+    expect(decision).toEqual({ status: "allow" })
+  })
+
   test("ignores synthetic text when checking for unexecutable tool text", () => {
     const decision = AutonomousCompletionGate.evaluate({
       pendingTodos: [],
