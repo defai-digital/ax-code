@@ -40,8 +40,6 @@ export namespace ProviderTransform {
   // to 2048 / 1024 via AX_CODE_ALIBABA_OUTPUT_TOKEN_MAX.
   const ALIBABA_OUTPUT_TOKEN_MAX_DEFAULT = 4_096
   const ALIBABA_OUTPUT_TOKEN_MAX = Flag.AX_CODE_ALIBABA_OUTPUT_TOKEN_MAX || ALIBABA_OUTPUT_TOKEN_MAX_DEFAULT
-  const AX_ENGINE_TOOL_DESCRIPTION_MAX = 180
-  const AX_ENGINE_SCHEMA_DESCRIPTION_MAX = 96
   // Cap for `budgetTokens` (Token Plan) and `thinking_budget` (Coding Plan)
   // on Alibaba reasoning models. 8192 matches the value in the upstream
   // OpenCode example. The effective budget is clamped further by
@@ -250,60 +248,6 @@ export namespace ProviderTransform {
   // platform, not the model.
   function isAlibabaShortWindowProvider(model: Provider.Model) {
     return model.providerID.startsWith("alibaba-")
-  }
-
-  function compactText(input: string, max: number) {
-    const text = input.replace(/\s+/g, " ").trim()
-    if (text.length <= max) return text
-    return `${text.slice(0, max - 3).trimEnd()}...`
-  }
-
-  function compactAxEngineSchemaNode(input: unknown, active = new WeakSet<object>()): unknown {
-    if (input === null || typeof input !== "object") return input
-    if (active.has(input)) return {}
-    active.add(input)
-    try {
-      if (Array.isArray(input)) return input.map((item) => compactAxEngineSchemaNode(item, active))
-
-      const result: Record<string, unknown> = {}
-      for (const [key, value] of Object.entries(input)) {
-        switch (key) {
-          case "$schema":
-          case "$id":
-          case "$comment":
-          case "examples":
-          case "default":
-          case "deprecated":
-          case "readOnly":
-          case "writeOnly":
-            continue
-          case "description":
-            if (typeof value === "string") {
-              const compact = compactText(value, AX_ENGINE_SCHEMA_DESCRIPTION_MAX)
-              if (compact) result[key] = compact
-            }
-            continue
-          case "title":
-            if (typeof value === "string" && value.length <= 32) result[key] = value
-            continue
-          default:
-            result[key] = compactAxEngineSchemaNode(value, active)
-        }
-      }
-      return result
-    } finally {
-      active.delete(input)
-    }
-  }
-
-  export function shouldCompactToolSchema(model: Provider.Model) {
-    return model.providerID === AX_ENGINE_PROVIDER_ID
-  }
-
-  export function toolDescription(model: Provider.Model, description: string | undefined) {
-    if (!description) return description
-    if (!shouldCompactToolSchema(model)) return description
-    return compactText(description, AX_ENGINE_TOOL_DESCRIPTION_MAX)
   }
 
   function alibabaThinkingBudget(model: Provider.Model, requested?: unknown) {
@@ -646,10 +590,6 @@ export namespace ProviderTransform {
       }
 
       schema = sanitizeGemini(schema)
-    }
-
-    if (shouldCompactToolSchema(model)) {
-      schema = compactAxEngineSchemaNode(schema) as JSONSchema.BaseSchema | JSONSchema7
     }
 
     return schema as JSONSchema7

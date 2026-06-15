@@ -11,7 +11,6 @@ import {
   type ToolSet,
   tool,
   jsonSchema,
-  asSchema,
 } from "ai"
 import { mergeDeep, pipe } from "remeda"
 import { ProviderTransform } from "@/provider/transform"
@@ -42,22 +41,6 @@ import { ReasoningPolicy } from "@/control-plane/reasoning-policy"
 export namespace LLM {
   const log = Log.create({ service: "llm" })
   const superLongPacing = new Map<string, SuperLongPolicy.PacingState>()
-
-  async function compactToolsForModel(model: Provider.Model, tools: Record<string, Tool>) {
-    if (!ProviderTransform.shouldCompactToolSchema(model)) return tools
-
-    const compacted: Record<string, Tool> = {}
-    for (const [name, item] of Object.entries(tools)) {
-      const schemaJson = await Promise.resolve(asSchema(item.inputSchema).jsonSchema)
-      compacted[name] = tool({
-        ...item,
-        description: ProviderTransform.toolDescription(model, item.description) ?? "",
-        inputSchema: jsonSchema(ProviderTransform.schema(model, schemaJson) as any),
-        execute: item.execute,
-      })
-    }
-    return compacted
-  }
 
   export type StreamInput = {
     user: MessageV2.User
@@ -308,7 +291,7 @@ export namespace LLM {
     const maxOutputTokens = ProviderTransform.maxOutputTokens(input.model)
 
     const supportsToolCalls = input.model.capabilities.toolcall !== false
-    const tools = supportsToolCalls ? await compactToolsForModel(input.model, await resolveTools(input, cfg)) : {}
+    const tools = supportsToolCalls ? await resolveTools(input, cfg) : {}
     const pacingReservation = await applySuperLongPacing({
       enabled: superLongEnabled,
       providerID: input.model.providerID,

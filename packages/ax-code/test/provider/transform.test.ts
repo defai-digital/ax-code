@@ -184,53 +184,6 @@ describe("ProviderTransform.providerOptions", () => {
       "ax-engine": { temperature: 0.2 },
     })
   })
-
-  test("compacts ax-engine tool descriptions and schema metadata", () => {
-    const model = createModel({
-      providerID: "ax-engine",
-      api: {
-        id: "qwen3",
-        url: "http://127.0.0.1:18181/v1",
-        npm: "@ai-sdk/openai-compatible",
-      },
-    })
-    const longDescription = "Use this tool carefully. ".repeat(40)
-    const schema = {
-      $schema: "http://json-schema.org/draft-07/schema#",
-      type: "object",
-      description: longDescription,
-      default: {},
-      examples: [{ path: "README.md" }],
-      properties: {
-        path: {
-          type: "string",
-          title: "path",
-          description: longDescription,
-          default: ".",
-        },
-        mode: {
-          type: "string",
-          enum: ["read", "write"],
-          description: "Operation mode",
-        },
-      },
-      required: ["path"],
-    } as any
-
-    const description = ProviderTransform.toolDescription(model, longDescription)
-    const compact = ProviderTransform.schema(model, schema) as any
-
-    if (!description) throw new Error("missing compacted description")
-    expect(description.length).toBeLessThanOrEqual(180)
-    expect(compact.$schema).toBeUndefined()
-    expect(compact.default).toBeUndefined()
-    expect(compact.examples).toBeUndefined()
-    expect(compact.description.length).toBeLessThanOrEqual(96)
-    expect(compact.properties.path.default).toBeUndefined()
-    expect(compact.properties.path.description.length).toBeLessThanOrEqual(96)
-    expect(compact.properties.mode.enum).toEqual(["read", "write"])
-    expect(compact.required).toEqual(["path"])
-  })
 })
 
 describe("ProviderTransform.schema - gemini array items", () => {
