@@ -41,22 +41,6 @@ describe("tool.registry", () => {
     }
   })
 
-  test("keeps ax-engine tool definitions within the local runtime core set", async () => {
-    await using tmp = await tmpdir()
-
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const model = { providerID: ProviderID.make("ax-engine"), modelID: ModelID.make("qwen3-coder-next") }
-
-        const tools = await ToolRegistry.tools(model)
-        const ids = tools.map((tool) => tool.id).sort()
-
-        expect(ids).toEqual(["bash", "edit", "glob", "grep", "invalid", "read", "write"])
-      },
-    })
-  })
-
   test("loads tools from .ax-code/tool (singular)", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {

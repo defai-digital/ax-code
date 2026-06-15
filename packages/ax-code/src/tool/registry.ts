@@ -52,11 +52,9 @@ import { DebugRepairFromEnvelopeTool } from "./debug_repair_from_envelope"
 import { Glob } from "../util/glob"
 import { pathToFileURL } from "url"
 import { Instance } from "@/project/instance"
-import { AX_ENGINE_PROVIDER_ID } from "@/provider/ax-engine/constants"
 
 export namespace ToolRegistry {
   const log = Log.create({ service: "tool.registry" })
-  const AX_ENGINE_CORE_TOOL_IDS = new Set(["invalid", "bash", "read", "glob", "grep", "edit", "write"])
   const DEBUG_ENGINE_TOOLS = [
     DebugAnalyzeTool,
     RefactorPlanTool,
@@ -265,10 +263,6 @@ export namespace ToolRegistry {
     const raw = await Promise.all(
       allTools
         .filter((tool) => {
-          if (model.providerID === AX_ENGINE_PROVIDER_ID) {
-            return AX_ENGINE_CORE_TOOL_IDS.has(tool.id)
-          }
-
           // Enable websearch/codesearch for zen users OR via enable flag
           if (tool.id === "codesearch" || tool.id === "websearch") {
             return model.providerID === ProviderID.axCode || Flag.AX_CODE_ENABLE_EXA
