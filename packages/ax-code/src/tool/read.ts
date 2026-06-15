@@ -15,7 +15,7 @@ import { DEFAULT_READ_LIMIT, MAX_LINE_LENGTH, MAX_LINE_SUFFIX, MAX_BYTES, MAX_BY
 import { toErrorMessage } from "@/util/error-message"
 import { Log } from "@/util/log"
 import { isHarmlessInterrupt } from "@/util/harmless-interrupt"
-import { NULL_BYTE_PATH_ERROR, normalizeToWorkspacePath, resolveToolFilePath } from "./file-path"
+import { NULL_BYTE_PATH_ERROR, normalizeToWorkspacePath, resolveToolFilePath, withFilePathAliases } from "./file-path"
 
 const log = Log.create({ service: "tool.read" })
 
@@ -69,17 +69,19 @@ function warmSemanticLsp(filepath: string, signal?: AbortSignal) {
 
 export const ReadTool = Tool.define("read", {
   description: DESCRIPTION,
-  parameters: z.object({
-    filePath: z.string().describe("The absolute path to the file or directory to read"),
-    offset: z.coerce.number().int().min(1).describe("The line number to start reading from (1-indexed)").optional(),
-    limit: z.coerce
-      .number()
-      .int()
-      .min(1)
-      .max(10000)
-      .describe("The maximum number of lines to read (defaults to 2000)")
-      .optional(),
-  }),
+  parameters: withFilePathAliases(
+    z.object({
+      filePath: z.string().describe("The absolute path to the file or directory to read"),
+      offset: z.coerce.number().int().min(1).describe("The line number to start reading from (1-indexed)").optional(),
+      limit: z.coerce
+        .number()
+        .int()
+        .min(1)
+        .max(10000)
+        .describe("The maximum number of lines to read (defaults to 2000)")
+        .optional(),
+    }),
+  ),
   async execute(params, ctx) {
     if (params.filePath.includes("\x00")) throw readError("ReadInvalidPathError", NULL_BYTE_PATH_ERROR)
     if (params.offset !== undefined && params.offset < 1) {

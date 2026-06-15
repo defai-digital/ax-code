@@ -19,7 +19,7 @@ import { BlastRadius } from "@/session/blast-radius"
 import { NativePerf } from "../perf/native"
 import { NativeAddon } from "../native/addon"
 import { parseNativeJson } from "../util/native-json"
-import { normalizeToWorkspacePath, resolveToolFilePath } from "./file-path"
+import { normalizeToWorkspacePath, resolveToolFilePath, withFilePathAliases } from "./file-path"
 import { toErrorMessage } from "../util/error-message"
 import {
   convertToLineEnding,
@@ -40,12 +40,14 @@ export function parseNativeEditReplaceResult(json: string): NativeEditReplaceRes
 
 export const EditTool = Tool.define("edit", {
   description: DESCRIPTION,
-  parameters: z.object({
-    filePath: z.string().describe("The absolute path to the file to modify"),
-    oldString: z.string().max(500_000).describe("The text to replace"),
-    newString: z.string().max(1_000_000).describe("The text to replace it with (must be different from oldString)"),
-    replaceAll: z.boolean().optional().describe("Replace all occurrences of oldString (default false)"),
-  }),
+  parameters: withFilePathAliases(
+    z.object({
+      filePath: z.string().describe("The absolute path to the file to modify"),
+      oldString: z.string().max(500_000).describe("The text to replace"),
+      newString: z.string().max(1_000_000).describe("The text to replace it with (must be different from oldString)"),
+      replaceAll: z.boolean().optional().describe("Replace all occurrences of oldString (default false)"),
+    }),
+  ),
   async execute(params, ctx) {
     if (!params.filePath) {
       throw new Error("filePath is required")

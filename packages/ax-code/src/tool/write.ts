@@ -11,7 +11,7 @@ import { assertExternalDirectory, assertSymlinkInsideProject } from "./external-
 import { notifyFileEdited, collectDiagnostics } from "./diagnostics"
 import { Isolation } from "@/isolation"
 import { BlastRadius } from "@/session/blast-radius"
-import { normalizeToWorkspacePath, resolveToolFilePath } from "./file-path"
+import { normalizeToWorkspacePath, resolveToolFilePath, withFilePathAliases } from "./file-path"
 
 function validateInternalBugReport(filepath: string, content: string) {
   const relative = normalizeToWorkspacePath(filepath, Instance.worktree)
@@ -43,10 +43,12 @@ function validateInternalBugReport(filepath: string, content: string) {
 
 export const WriteTool = Tool.define("write", {
   description: DESCRIPTION,
-  parameters: z.object({
-    content: z.string().describe("The content to write to the file"),
-    filePath: z.string().describe("The absolute path to the file to write (must be absolute, not relative)"),
-  }),
+  parameters: withFilePathAliases(
+    z.object({
+      content: z.string().describe("The content to write to the file"),
+      filePath: z.string().describe("The absolute path to the file to write (must be absolute, not relative)"),
+    }),
+  ),
   async execute(params, ctx) {
     const filepath = resolveToolFilePath(params.filePath, Instance.directory)
     const relativePath = normalizeToWorkspacePath(filepath, Instance.worktree)
