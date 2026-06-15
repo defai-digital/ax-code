@@ -40,6 +40,10 @@ export namespace ProviderTransform {
   // to 2048 / 1024 via AX_CODE_ALIBABA_OUTPUT_TOKEN_MAX.
   const ALIBABA_OUTPUT_TOKEN_MAX_DEFAULT = 4_096
   const ALIBABA_OUTPUT_TOKEN_MAX = Flag.AX_CODE_ALIBABA_OUTPUT_TOKEN_MAX || ALIBABA_OUTPUT_TOKEN_MAX_DEFAULT
+  // AX Engine currently serves local 16k-context models. Reserving the generic
+  // 2048-token output budget often pushes near-full prompts over the runtime's
+  // prompt + max_tokens admission check before generation starts.
+  const AX_ENGINE_OUTPUT_TOKEN_MAX = 512
   const AX_ENGINE_TOOL_DESCRIPTION_MAX = 180
   const AX_ENGINE_SCHEMA_DESCRIPTION_MAX = 96
   // Cap for `budgetTokens` (Token Plan) and `thinking_budget` (Coding Plan)
@@ -540,6 +544,10 @@ export namespace ProviderTransform {
     // If the model declares no output capability (0) or a missing limit,
     // fall back to OUTPUT_TOKEN_MAX. Math.min never returns nullish, so
     // the old `?? OUTPUT_TOKEN_MAX` was dead code.
+    if (model.providerID === AX_ENGINE_PROVIDER_ID) {
+      const limit = model.limit.output > 0 ? model.limit.output : AX_ENGINE_OUTPUT_TOKEN_MAX
+      return Math.min(limit, AX_ENGINE_OUTPUT_TOKEN_MAX)
+    }
     if (isAlibabaShortWindowProvider(model)) {
       const limit = model.limit.output > 0 ? model.limit.output : OUTPUT_TOKEN_MAX
       return Math.min(limit, OUTPUT_TOKEN_MAX, ALIBABA_OUTPUT_TOKEN_MAX)
