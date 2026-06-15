@@ -64,6 +64,7 @@ type ProcessorLoopDecision =
   | {
       action: "stop"
       reason: "completed" | "error"
+      message?: string
     }
   | {
       action: "compact"
@@ -268,14 +269,26 @@ export function processorLoopDecision(input: {
   result: SessionProcessor.Result
   messageFinish: string | undefined
   hasError: boolean
+  priorContextOverflowCompactions?: number
 }): ProcessorLoopDecision {
   if (input.result === "stop") {
     return { action: "stop", reason: input.hasError ? "error" : "completed" }
   }
   if (input.result !== "compact") return { action: "continue" }
+  const overflow = !input.messageFinish
+  if (overflow && (input.priorContextOverflowCompactions ?? 0) > 0) {
+    return {
+      action: "stop",
+      reason: "error",
+      message:
+        "The request still exceeds the model context window after compaction. " +
+        "This usually means the provider's fixed prompt/tool schema is too large for the selected local model. " +
+        "Try a model with a larger context window or reduce the provider tool surface.",
+    }
+  }
   return {
     action: "compact",
-    overflow: !input.messageFinish,
+    overflow,
     triggerReason: input.messageFinish ? "provider_usage" : "context_overflow_error",
   }
 }

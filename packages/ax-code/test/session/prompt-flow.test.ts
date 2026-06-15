@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, spyOn, test } from "bun:test"
+import { APICallError } from "ai"
 import path from "path"
 import { Instance } from "../../src/project/instance"
 import { Permission } from "../../src/permission"
@@ -191,6 +192,70 @@ describe("session.prompt flow", () => {
             (message) => message.info.role === "user" && message.parts.some((part) => part.type === "compaction"),
           ),
         ).toBe(true)
+        await Session.remove(session.id)
+      },
+    })
+  })
+
+  test("stops repeated context overflow after compaction instead of looping", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const agents: string[] = []
+    const contextOverflow = new APICallError({
+      message: "request requires 30144 tokens (28096 prompt + 2048 max output), exceeding model context length 16384",
+      url: "https://example.com/v1/chat/completions",
+      requestBodyValues: {},
+      statusCode: 400,
+      responseHeaders: { "content-type": "application/json" },
+      responseBody: JSON.stringify({
+        error: {
+          message: "request requires 30144 tokens (28096 prompt + 2048 max output), exceeding model context length 16384",
+          type: "invalid_request_error",
+          code: "context_length_exceeded",
+        },
+      }),
+      isRetryable: false,
+    })
+
+    modelSpy = spyOn(Provider, "getModel").mockResolvedValue(model)
+    summarySpy = spyOn(SessionSummary, "summarize").mockResolvedValue()
+    streamSpy = spyOn(LLM, "stream").mockImplementation(async (input) => {
+      agents.push(input.agent.name)
+      if (input.agent.name !== "compaction") throw contextOverflow
+      return {
+        fullStream: (async function* () {
+          yield { type: "start" }
+          yield { type: "start-step" }
+          yield { type: "text-start", id: "text_compaction" }
+          yield { type: "text-delta", id: "text_compaction", text: "compact summary" }
+          yield { type: "text-end", id: "text_compaction" }
+          yield {
+            type: "finish-step",
+            finishReason: "stop",
+            usage: { inputTokens: 10, outputTokens: 2, totalTokens: 12 },
+          }
+          yield { type: "finish" }
+        })(),
+      } as any
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ title: "Repeated Context Overflow Test" })
+        await SessionPrompt.prompt({
+          sessionID: session.id,
+          agent: "build",
+          parts: [{ type: "text", text: "create a website" }],
+        })
+
+        expect(agents).toEqual(["build", "compaction", "build"])
+        const messages = await Session.messages({ sessionID: session.id })
+        const lastAssistant = messages.findLast((message) => message.info.role === "assistant")
+        expect(lastAssistant?.info.role).toBe("assistant")
+        if (!lastAssistant || lastAssistant.info.role !== "assistant") throw new Error("missing assistant message")
+        expect(lastAssistant?.info.error?.data.message).toContain(
+          "still exceeds the model context window after compaction",
+        )
         await Session.remove(session.id)
       },
     })

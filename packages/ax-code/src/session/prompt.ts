@@ -260,6 +260,7 @@ export namespace SessionPrompt {
     // only triggers on a genuinely stuck in-flight compaction, not on
     // accumulated busy events across unrelated turns.
     let compactionBusyRetries = 0
+    let consecutiveContextOverflowCompactions = 0
     while (true) {
       await markPromptLoopBusy({ sessionID, step, maxSteps: sessionStepLimit, consecutiveErrors })
       if (abort.aborted) {
@@ -762,13 +763,27 @@ export namespace SessionPrompt {
         result,
         messageFinish: processor.message.finish,
         hasError: false,
+        priorContextOverflowCompactions: consecutiveContextOverflowCompactions,
       })
       if (processorDecision.action === "stop") {
+        if (processorDecision.message) {
+          await publishPromptFailure({
+            sessionID,
+            assistant: processor.message,
+            message: processorDecision.message,
+          })
+        }
         reason = processorDecision.reason
         break
       }
+      if (processorDecision.action === "continue") {
+        consecutiveContextOverflowCompactions = 0
+      }
 
       if (processorDecision.action === "compact") {
+        consecutiveContextOverflowCompactions = processorDecision.overflow
+          ? consecutiveContextOverflowCompactions + 1
+          : 0
         await SessionCompaction.create({
           sessionID,
           agent: lastUser.agent,

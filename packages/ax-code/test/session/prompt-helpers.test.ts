@@ -737,6 +737,19 @@ describe("session.prompt helpers", () => {
       overflow: true,
       triggerReason: "context_overflow_error",
     })
+    const repeatedOverflow = processorLoopDecision({
+      result: "compact",
+      messageFinish: undefined,
+      hasError: false,
+      priorContextOverflowCompactions: 1,
+    })
+    expect(repeatedOverflow.action).toBe("stop")
+    expect(repeatedOverflow).toMatchObject({
+      reason: "error",
+    })
+    if (repeatedOverflow.action === "stop") {
+      expect(repeatedOverflow.message).toContain("still exceeds the model context window after compaction")
+    }
   })
 
   test("detects whether an assistant response belongs after the current user turn", () => {
