@@ -39,6 +39,7 @@ import {
 import { ModelID, ProviderID } from "./schema"
 import { levenshtein } from "@/util/levenshtein"
 import { isModelSupportedForProvider } from "./model-support"
+import { modelSelectableForProvider } from "./model-selectability"
 import {
   CUSTOM_LOADERS,
   type CustomModelLoader,
@@ -1156,13 +1157,13 @@ export namespace Provider {
     for (const entry of recent) {
       const provider = providers[entry.providerID]
       if (!provider) continue
-      if (!provider.models[entry.modelID]) continue
+      if (!modelSelectableForProvider(entry.providerID, provider.models[entry.modelID])) continue
       return { providerID: entry.providerID, modelID: entry.modelID }
     }
 
     const provider = Object.values(providers).find((p) => !cfg.provider || Object.keys(cfg.provider).includes(p.id))
     if (provider) {
-      const [model] = sort(Object.values(provider.models))
+      const [model] = sort(Object.values(provider.models).filter((item) => modelSelectableForProvider(provider.id, item)))
       if (!model) throw new Error("no models found")
       return {
         providerID: provider.id,
@@ -1180,7 +1181,9 @@ export namespace Provider {
       return true
     })
     if (!fallback) throw new Error("no providers found")
-    const [model] = sort(Object.values(fallback.models))
+    const [model] = sort(
+      Object.values(fallback.models).filter((item) => modelSelectableForProvider(fallback.id, item)),
+    )
     if (!model) throw new Error("no models found")
     return {
       providerID: ProviderID.make(fallback.id),

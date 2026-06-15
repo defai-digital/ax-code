@@ -31,6 +31,7 @@ import {
 } from "./local-util"
 import { Log } from "@/util/log"
 import { modelDisplayInfo } from "@tui/component/model-vision-label"
+import { modelSelectableForProvider } from "@/provider/model-selectability"
 
 const log = Log.create({ service: "tui.local" })
 
@@ -43,7 +44,7 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
 
     function isModelValid(model: { providerID: string; modelID: string }) {
       const provider = sync.data.provider.find((x) => x.id === model.providerID)
-      return !!provider?.models[model.modelID]
+      return modelSelectableForProvider(model.providerID, provider?.models[model.modelID])
     }
 
     function getFirstValidModel(...modelFns: (() => { providerID: string; modelID: string } | undefined)[]) {
@@ -264,8 +265,9 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
         const provider = sync.data.provider[0]
         if (!provider) return undefined
         const defaultModel = sync.data.provider_default[provider.id]
-        const firstModel = Object.values(provider.models)[0]
-        const model = defaultModel ?? firstModel?.id
+        const defaultInfo = defaultModel ? provider.models[defaultModel] : undefined
+        const firstModel = Object.values(provider.models).find((item) => modelSelectableForProvider(provider.id, item))
+        const model = modelSelectableForProvider(provider.id, defaultInfo) ? defaultModel : firstModel?.id
         if (!model) return undefined
         return {
           providerID: provider.id,

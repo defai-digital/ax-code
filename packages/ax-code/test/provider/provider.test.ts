@@ -1,5 +1,6 @@
 import { test, expect } from "bun:test"
 import path from "path"
+import fs from "fs/promises"
 
 import { tmpdir } from "../fixture/fixture"
 import { Instance } from "../../src/project/instance"
@@ -9,6 +10,7 @@ import { Env } from "../../src/env"
 import { Auth } from "../../src/auth"
 import bundledSnapshot from "../../src/provider/models-snapshot.json"
 import { CUSTOM_LOADERS, type CustomLoader } from "../../src/provider/loaders"
+import { Global } from "../../src/global"
 
 function deferred<T = void>() {
   let resolve!: (value: T | PromiseLike<T>) => void
@@ -721,6 +723,64 @@ test("defaultModel respects config model setting", async () => {
       expect(String(model.modelID)).toBe("grok-4.3")
     },
   })
+})
+
+test("defaultModel skips recent models that are not selectable for agent tool use", async () => {
+  const statePath = path.join(Global.Path.state, "model.json")
+  const previousState = await Bun.file(statePath)
+    .text()
+    .catch(() => undefined)
+
+  await Bun.write(
+    statePath,
+    JSON.stringify({
+      recent: [
+        { providerID: "custom-openai", modelID: "text-only" },
+        { providerID: "custom-openai", modelID: "tool-model" },
+      ],
+    }),
+  )
+
+  try {
+    await using tmp = await tmpdir({
+      config: {
+        provider: {
+          "custom-openai": {
+            name: "Custom OpenAI",
+            npm: "@ai-sdk/openai-compatible",
+            options: {
+              apiKey: "test-key",
+              baseURL: "https://custom.openai.com/v1",
+            },
+            models: {
+              "text-only": {
+                name: "Text Only",
+                tool_call: false,
+                limit: { context: 128000, output: 4096 },
+              },
+              "tool-model": {
+                name: "Tool Model",
+                tool_call: true,
+                limit: { context: 128000, output: 4096 },
+              },
+            },
+          },
+        },
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const model = await Provider.defaultModel()
+        expect(String(model.providerID)).toBe("custom-openai")
+        expect(String(model.modelID)).toBe("tool-model")
+      },
+    })
+  } finally {
+    if (previousState === undefined) await fs.rm(statePath, { force: true })
+    else await Bun.write(statePath, previousState)
+  }
 })
 
 test("provider with baseURL from config", async () => {

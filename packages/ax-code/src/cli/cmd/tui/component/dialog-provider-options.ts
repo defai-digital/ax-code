@@ -1,4 +1,7 @@
 import { filter, pipe, sortBy } from "remeda"
+import { providerModelSelectable } from "@/provider/model-selectability"
+
+export { providerModelSelectable }
 
 export type ProviderDialogProvider = {
   id: string
@@ -36,11 +39,6 @@ export function providerDialogCategory(providerID: string) {
   if (OFFLINE_PROVIDERS.has(providerID)) return "Local runtime"
   if (CLI_PROVIDERS.has(providerID)) return "CLI plan"
   return "API plan"
-}
-
-export function providerModelSelectable(input: { providerID: string; toolcall?: boolean }) {
-  if (input.toolcall !== false) return true
-  return CLI_PROVIDERS.has(input.providerID)
 }
 
 export function configUpdateParams<T extends Record<string, unknown>>(config: T) {
