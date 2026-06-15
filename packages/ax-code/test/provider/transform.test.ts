@@ -159,6 +159,31 @@ describe("ProviderTransform.providerOptions", () => {
       release_date: "2024-01-01",
       ...overrides,
     }) as any
+
+  test("strips ax-engine runtime metadata before provider request options are built", () => {
+    const model = createModel({
+      providerID: "ax-engine",
+      api: {
+        id: "qwen3",
+        url: "http://127.0.0.1:18181/v1",
+        npm: "@ai-sdk/openai-compatible",
+      },
+    })
+    const sanitized = ProviderTransform.sanitizeOptions(model, {
+      modelID: "qwen3-coder-next",
+      quantization: "mlx4bit",
+      modelPath: "/models/qwen",
+      binaryPath: "/bin/ax-engine",
+      baseURL: "http://127.0.0.1:18181/v1",
+      port: 18181,
+      temperature: 0.2,
+    })
+
+    expect(sanitized).toEqual({ temperature: 0.2 })
+    expect(ProviderTransform.providerOptions(model, sanitized)).toEqual({
+      "ax-engine": { temperature: 0.2 },
+    })
+  })
 })
 
 describe("ProviderTransform.schema - gemini array items", () => {

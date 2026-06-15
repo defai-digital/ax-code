@@ -1,6 +1,6 @@
 import path from "path"
 import { Global } from "@/global"
-import { AX_ENGINE_MODEL_ID } from "./constants"
+import type { AxEngineModelID } from "./constants"
 
 export namespace AxEnginePaths {
   export const root = path.join(Global.Path.cache, "ax-engine")
@@ -15,8 +15,8 @@ export namespace AxEnginePaths {
   export const prepareLock = path.join(state, "prepare")
   export const serverLog = path.join(log, "server.log")
 
-  export function managedModelDir(quantization: string) {
-    return path.join(models, AX_ENGINE_MODEL_ID, quantization)
+  export function managedModelDir(modelID: AxEngineModelID, quantization: string) {
+    return path.join(models, modelID, quantization)
   }
 
   export function completionMarker(modelDir: string) {

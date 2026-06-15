@@ -7,19 +7,21 @@ import { Process } from "@/util/process"
 import { parseJsonResult } from "@/util/json-value"
 import { toErrorMessage } from "@/util/error-message"
 import {
+  AX_ENGINE_DEFAULT_MODEL_ID,
   AX_ENGINE_ERROR,
-  AX_ENGINE_HF_REPOS,
-  AX_ENGINE_MIN_DISK_BYTES,
-  AX_ENGINE_MODEL_ID,
+  AX_ENGINE_MODEL_DEFINITIONS,
+  AX_ENGINE_MODEL_IDS,
+  AX_ENGINE_QUANTIZATION_IDS,
   AX_ENGINE_DEFAULT_QUANTIZATION,
+  isAxEngineModelID,
 } from "./constants"
-import type { AxEngineQuantization } from "./constants"
+import type { AxEngineModelID, AxEngineQuantization } from "./constants"
 import { AxEnginePaths } from "./paths"
 
 export const AxEngineModelStatus = z.object({
   present: z.boolean(),
-  modelID: z.literal(AX_ENGINE_MODEL_ID),
-  quantization: z.enum(["mlx4bit", "mlx6bit"]),
+  modelID: z.enum(AX_ENGINE_MODEL_IDS),
+  quantization: z.enum(AX_ENGINE_QUANTIZATION_IDS),
   path: z.string().optional(),
   revision: z.string().optional(),
   bytes: z.number().optional(),
@@ -29,8 +31,8 @@ export const AxEngineModelStatus = z.object({
 export type AxEngineModelStatus = z.infer<typeof AxEngineModelStatus>
 
 export const AxEnginePrepareState = z.object({
-  modelID: z.literal(AX_ENGINE_MODEL_ID),
-  quantization: z.enum(["mlx4bit", "mlx6bit"]),
+  modelID: z.enum(AX_ENGINE_MODEL_IDS),
+  quantization: z.enum(AX_ENGINE_QUANTIZATION_IDS),
   path: z.string(),
   revision: z.string().optional(),
   preparedAt: z.number(),
@@ -39,7 +41,8 @@ export type AxEnginePrepareState = z.infer<typeof AxEnginePrepareState>
 
 export const AxEngineDiskStatus = z.object({
   path: z.string(),
-  quantization: z.enum(["mlx4bit", "mlx6bit"]),
+  modelID: z.enum(AX_ENGINE_MODEL_IDS),
+  quantization: z.enum(AX_ENGINE_QUANTIZATION_IDS),
   freeBytes: z.number().optional(),
   requiredBytes: z.number(),
   ok: z.boolean(),
@@ -48,14 +51,24 @@ export const AxEngineDiskStatus = z.object({
 export type AxEngineDiskStatus = z.infer<typeof AxEngineDiskStatus>
 
 export type AxEngineModelOptions = {
+  modelID?: unknown
   modelPath?: unknown
   quantization?: unknown
   downloadDir?: unknown
   [key: string]: unknown
 }
 
-export function normalizeQuantization(value: unknown): AxEngineQuantization {
-  return value === "mlx6bit" ? "mlx6bit" : AX_ENGINE_DEFAULT_QUANTIZATION
+export function normalizeModelID(value: unknown): AxEngineModelID {
+  return isAxEngineModelID(value) ? value : AX_ENGINE_DEFAULT_MODEL_ID
+}
+
+export function normalizeQuantization(
+  value: unknown,
+  modelID: AxEngineModelID = AX_ENGINE_DEFAULT_MODEL_ID,
+): AxEngineQuantization {
+  const model = AX_ENGINE_MODEL_DEFINITIONS[modelID]
+  if (typeof value === "string" && value in model.quantizations) return value as AxEngineQuantization
+  return model.defaultQuantization
 }
 
 async function exists(file: string) {
@@ -83,12 +96,17 @@ async function directorySize(dir: string): Promise<number | undefined> {
   }
 }
 
-export function requiredDiskBytes(quantization: AxEngineQuantization): number {
-  return AX_ENGINE_MIN_DISK_BYTES[quantization]
+export function requiredDiskBytes(modelID: AxEngineModelID, quantization: AxEngineQuantization): number {
+  const model = AX_ENGINE_MODEL_DEFINITIONS[modelID]
+  return model.quantizations[quantization as keyof typeof model.quantizations]?.minDiskBytes ?? 64 * 1024 ** 3
 }
 
-export function resolveDownloadDestination(quantization: AxEngineQuantization, dest?: string) {
-  return dest ?? AxEnginePaths.managedModelDir(quantization)
+export function resolveDownloadDestination(
+  modelID: AxEngineModelID,
+  quantization: AxEngineQuantization,
+  dest?: string,
+) {
+  return dest ?? AxEnginePaths.managedModelDir(modelID, quantization)
 }
 
 export function parseDfPkAvailableBytes(text: string): number | undefined {
@@ -107,12 +125,14 @@ export function parseDfPkAvailableBytes(text: string): number | undefined {
 
 export function evaluateDiskStatus(input: {
   path: string
+  modelID?: AxEngineModelID
   quantization?: AxEngineQuantization
   freeBytes?: number
   requiredBytes?: number
 }): AxEngineDiskStatus {
+  const modelID = input.modelID ?? AX_ENGINE_DEFAULT_MODEL_ID
   const quantization = input.quantization ?? AX_ENGINE_DEFAULT_QUANTIZATION
-  const requiredBytes = input.requiredBytes ?? requiredDiskBytes(quantization)
+  const requiredBytes = input.requiredBytes ?? requiredDiskBytes(modelID, quantization)
   const blockers: string[] = []
 
   if (input.freeBytes === undefined) {
@@ -125,6 +145,7 @@ export function evaluateDiskStatus(input: {
 
   return {
     path: input.path,
+    modelID,
     quantization,
     freeBytes: input.freeBytes,
     requiredBytes,
@@ -134,7 +155,8 @@ export function evaluateDiskStatus(input: {
 }
 
 export async function getDiskStatus(options: AxEngineModelOptions = {}): Promise<AxEngineDiskStatus> {
-  const quantization = normalizeQuantization(options.quantization)
+  const modelID = normalizeModelID(options.modelID)
+  const quantization = normalizeQuantization(options.quantization, modelID)
   const target =
     typeof options.downloadDir === "string" && options.downloadDir.trim()
       ? options.downloadDir.trim()
@@ -144,6 +166,7 @@ export async function getDiskStatus(options: AxEngineModelOptions = {}): Promise
   const freeBytes = result.code === 0 ? parseDfPkAvailableBytes(result.text) : undefined
   return evaluateDiskStatus({
     path: target,
+    modelID,
     quantization,
     freeBytes,
   })
@@ -186,25 +209,30 @@ async function writeCompletionMarker(state: AxEnginePrepareState) {
 }
 
 export async function getModelStatus(options: AxEngineModelOptions = {}): Promise<AxEngineModelStatus> {
-  const quantization = normalizeQuantization(options.quantization)
+  const modelID = normalizeModelID(options.modelID)
+  const quantization = normalizeQuantization(options.quantization, modelID)
   const configured =
     typeof options.modelPath === "string" && options.modelPath.trim() ? options.modelPath.trim() : undefined
+  const prepared = await readPrepareState()
+  const preparedPath =
+    prepared?.modelID === modelID && prepared.quantization === quantization ? prepared.path : undefined
 
-  const candidates = [configured, (await readPrepareState())?.path, AxEnginePaths.managedModelDir(quantization)].filter(
+  const candidates = [configured, preparedPath, AxEnginePaths.managedModelDir(modelID, quantization)].filter(
     (item): item is string => !!item,
   )
 
   for (const candidate of candidates) {
     if (!(await exists(candidate))) continue
     const marker = await readCompletionMarker(candidate)
-    const complete = !!marker || (await hasManifest(candidate))
+    const matchingMarker = marker?.modelID === modelID && marker.quantization === quantization ? marker : undefined
+    const complete = !!matchingMarker || (await hasManifest(candidate))
     if (!complete) continue
     return {
       present: true,
-      modelID: AX_ENGINE_MODEL_ID,
+      modelID,
       quantization,
       path: candidate,
-      revision: marker?.revision,
+      revision: matchingMarker?.revision,
       bytes: await directorySize(candidate),
       complete: true,
       blockers: [],
@@ -213,10 +241,12 @@ export async function getModelStatus(options: AxEngineModelOptions = {}): Promis
 
   return {
     present: false,
-    modelID: AX_ENGINE_MODEL_ID,
+    modelID,
     quantization,
     complete: false,
-    blockers: [`${AX_ENGINE_ERROR.ModelMissing}: prepare Qwen3-Coder-Next MLX before using ax-engine`],
+    blockers: [
+      `${AX_ENGINE_ERROR.ModelMissing}: prepare ${AX_ENGINE_MODEL_DEFINITIONS[modelID].name} before using ax-engine`,
+    ],
   }
 }
 
@@ -231,6 +261,7 @@ function parseDownloadJson(text: string): { dest?: string; revision?: string } {
 }
 
 export async function markPrepared(input: {
+  modelID?: AxEngineModelID
   modelPath: string
   quantization?: AxEngineQuantization
   revision?: string
@@ -242,9 +273,10 @@ export async function markPrepared(input: {
   if (!(await hasManifest(input.modelPath))) {
     throw new Error(`${AX_ENGINE_ERROR.ModelMissing}: model path is missing model-manifest.json`)
   }
+  const modelID = input.modelID ?? AX_ENGINE_DEFAULT_MODEL_ID
   const state: AxEnginePrepareState = {
-    modelID: AX_ENGINE_MODEL_ID,
-    quantization: input.quantization ?? AX_ENGINE_DEFAULT_QUANTIZATION,
+    modelID,
+    quantization: input.quantization ?? AX_ENGINE_MODEL_DEFINITIONS[modelID].defaultQuantization,
     path: input.modelPath,
     revision: input.revision,
     preparedAt: Date.now(),
@@ -255,12 +287,13 @@ export async function markPrepared(input: {
 }
 
 async function markPreparedWithLockHeld(input: {
+  modelID: AxEngineModelID
   modelPath: string
   quantization: AxEngineQuantization
   revision?: string
 }): Promise<AxEnginePrepareState> {
   const state: AxEnginePrepareState = {
-    modelID: AX_ENGINE_MODEL_ID,
+    modelID: input.modelID,
     quantization: input.quantization,
     path: input.modelPath,
     revision: input.revision,
@@ -273,13 +306,23 @@ async function markPreparedWithLockHeld(input: {
 
 export async function downloadModel(input: {
   binaryPath: string
+  modelID?: AxEngineModelID
   quantization?: AxEngineQuantization
   dest?: string
   signal?: AbortSignal
 }): Promise<AxEnginePrepareState> {
-  const quantization = input.quantization ?? AX_ENGINE_DEFAULT_QUANTIZATION
-  const repo = AX_ENGINE_HF_REPOS[quantization]
-  const dest = resolveDownloadDestination(quantization, input.dest)
+  const modelID = input.modelID ?? AX_ENGINE_DEFAULT_MODEL_ID
+  const quantization = input.quantization ?? AX_ENGINE_MODEL_DEFINITIONS[modelID].defaultQuantization
+  const repo =
+    AX_ENGINE_MODEL_DEFINITIONS[modelID].quantizations[
+      quantization as keyof (typeof AX_ENGINE_MODEL_DEFINITIONS)[typeof modelID]["quantizations"]
+    ]?.hfRepo
+  if (!repo) {
+    throw new Error(
+      `${AX_ENGINE_ERROR.DownloadFailed}: ${AX_ENGINE_MODEL_DEFINITIONS[modelID].name} does not support ${quantization}`,
+    )
+  }
+  const dest = resolveDownloadDestination(modelID, quantization, input.dest)
   const cmd = [input.binaryPath, "download", repo, "--json"]
   cmd.push("--dest", dest)
 
@@ -301,6 +344,7 @@ export async function downloadModel(input: {
     throw new Error(`${AX_ENGINE_ERROR.DownloadFailed}: downloaded model path is incomplete`)
   }
   return markPreparedWithLockHeld({
+    modelID,
     modelPath: parsed.dest,
     quantization,
     revision: parsed.revision,

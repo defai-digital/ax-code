@@ -9,9 +9,10 @@ import { Instance } from "../../src/project/instance"
 import { getAxEngineDoctorCheck } from "../../src/cli/cmd/doctor"
 import { shouldShowProviderInList } from "../../src/server/routes/provider"
 import {
-  AX_ENGINE_API_MODEL_ID,
-  AX_ENGINE_MODEL_ID,
+  AX_ENGINE_QWEN3_CODER_NEXT_API_MODEL_ID,
+  AX_ENGINE_QWEN3_CODER_NEXT_MODEL_ID,
   AX_ENGINE_PROVIDER_ID,
+  AX_ENGINE_QWEN36_35B_MODEL_ID,
   axEngineLoader,
   evaluateDiskStatus,
   evaluateAxEngineCapabilityFromModels,
@@ -110,9 +111,18 @@ describe("ax-engine model cache", () => {
   })
 
   test("defaults downloads into the deterministic AX Code managed model cache", () => {
-    expect(resolveDownloadDestination("mlx4bit")).toContain("ax-engine/models/qwen3-coder-next/mlx4bit")
-    expect(resolveDownloadDestination("mlx6bit")).toContain("ax-engine/models/qwen3-coder-next/mlx6bit")
-    expect(resolveDownloadDestination("mlx4bit", "/Volumes/Models/qwen")).toBe("/Volumes/Models/qwen")
+    expect(resolveDownloadDestination(AX_ENGINE_QWEN3_CODER_NEXT_MODEL_ID, "mlx4bit")).toContain(
+      "ax-engine/models/qwen3-coder-next/mlx4bit",
+    )
+    expect(resolveDownloadDestination(AX_ENGINE_QWEN3_CODER_NEXT_MODEL_ID, "mlx6bit")).toContain(
+      "ax-engine/models/qwen3-coder-next/mlx6bit",
+    )
+    expect(resolveDownloadDestination(AX_ENGINE_QWEN36_35B_MODEL_ID, "mlx4bit")).toContain(
+      "ax-engine/models/qwen3.6-35b-a3b/mlx4bit",
+    )
+    expect(resolveDownloadDestination(AX_ENGINE_QWEN3_CODER_NEXT_MODEL_ID, "mlx4bit", "/Volumes/Models/qwen")).toBe(
+      "/Volumes/Models/qwen",
+    )
   })
 
   test("parses POSIX df output and blocks downloads without enough free space", () => {
@@ -171,14 +181,14 @@ describe("ax-engine prepare lifecycle", () => {
   test("checks prepared model status without starting server unless requested", async () => {
     const calls: string[] = []
     const result = await prepareAxEngine(
-      { quantization: "mlx4bit" },
+      { modelID: AX_ENGINE_QWEN3_CODER_NEXT_MODEL_ID, quantization: "mlx4bit" },
       {
         requireEligibility: async () => eligibility,
         getModelStatus: async () => {
           calls.push("model")
           return {
             present: false,
-            modelID: AX_ENGINE_MODEL_ID,
+            modelID: AX_ENGINE_QWEN3_CODER_NEXT_MODEL_ID,
             quantization: "mlx4bit",
             complete: false,
             blockers: ["AX_ENGINE_MODEL_MISSING: missing"],
@@ -198,14 +208,14 @@ describe("ax-engine prepare lifecycle", () => {
   test("can start an already prepared model through the shared lifecycle helper", async () => {
     const calls: string[] = []
     const result = await prepareAxEngine(
-      { quantization: "mlx4bit", start: true },
+      { modelID: AX_ENGINE_QWEN3_CODER_NEXT_MODEL_ID, quantization: "mlx4bit", start: true },
       {
         requireEligibility: async () => eligibility,
         getModelStatus: async () => {
           calls.push("model")
           return {
             present: true,
-            modelID: AX_ENGINE_MODEL_ID,
+            modelID: AX_ENGINE_QWEN3_CODER_NEXT_MODEL_ID,
             quantization: "mlx4bit",
             path: "/models/qwen",
             revision: "abc123",
@@ -230,7 +240,8 @@ describe("ax-engine prepare lifecycle", () => {
             pid: 123,
             port: 18181,
             baseURL: "http://127.0.0.1:18181/v1",
-            modelID: AX_ENGINE_MODEL_ID,
+            modelID: AX_ENGINE_QWEN3_CODER_NEXT_MODEL_ID,
+            apiModelID: AX_ENGINE_QWEN3_CODER_NEXT_API_MODEL_ID,
             modelPath: input.modelPath,
             modelRevision: input.modelRevision,
             binaryPath: input.binaryPath,
@@ -248,7 +259,7 @@ describe("ax-engine prepare lifecycle", () => {
   test("download prepare reuses the resolved dependency when starting", async () => {
     const calls: string[] = []
     const result = await prepareAxEngine(
-      { quantization: "mlx4bit", download: true, start: true },
+      { modelID: AX_ENGINE_QWEN3_CODER_NEXT_MODEL_ID, quantization: "mlx4bit", download: true, start: true },
       {
         requireEligibility: async () => eligibility,
         getDependencyStatus: async () => {
@@ -264,7 +275,7 @@ describe("ax-engine prepare lifecycle", () => {
           calls.push("download")
           expect(input.binaryPath).toBe("/bin/ax-engine")
           return {
-            modelID: AX_ENGINE_MODEL_ID,
+            modelID: AX_ENGINE_QWEN3_CODER_NEXT_MODEL_ID,
             quantization: "mlx4bit",
             path: "/models/qwen",
             revision: "def456",
@@ -277,7 +288,8 @@ describe("ax-engine prepare lifecycle", () => {
             pid: 123,
             port: 18181,
             baseURL: "http://127.0.0.1:18181/v1",
-            modelID: AX_ENGINE_MODEL_ID,
+            modelID: AX_ENGINE_QWEN3_CODER_NEXT_MODEL_ID,
+            apiModelID: AX_ENGINE_QWEN3_CODER_NEXT_API_MODEL_ID,
             modelPath: "/models/qwen",
             modelRevision: "def456",
             binaryPath: "/bin/ax-engine",
@@ -294,15 +306,51 @@ describe("ax-engine prepare lifecycle", () => {
 })
 
 describe("ax-engine provider integration", () => {
-  test("built-in models declare only Qwen3-Coder-Next as an experimental local model", async () => {
+  test("built-in models declare Qwen3-Coder-Next and Qwen3.6 35B as experimental local models", async () => {
     const provider = (await ModelsDev.get())[AX_ENGINE_PROVIDER_ID]
     expect(provider).toBeDefined()
-    expect(Object.keys(provider.models)).toEqual([AX_ENGINE_MODEL_ID])
-    expect(provider.models[AX_ENGINE_MODEL_ID]).toMatchObject({
-      tool_call: false,
+    expect(Object.keys(provider.models)).toEqual([AX_ENGINE_QWEN3_CODER_NEXT_MODEL_ID, AX_ENGINE_QWEN36_35B_MODEL_ID])
+    expect(provider.models[AX_ENGINE_QWEN3_CODER_NEXT_MODEL_ID]).toMatchObject({
+      tool_call: true,
+      limit: { context: 16_384, output: 2_048 },
       status: "beta",
       experimental: { localRuntime: "ax-engine" },
     })
+    expect(provider.models[AX_ENGINE_QWEN36_35B_MODEL_ID]).toMatchObject({
+      tool_call: false,
+      limit: { context: 16_384, output: 2_048 },
+      status: "beta",
+      options: {
+        modelID: AX_ENGINE_QWEN36_35B_MODEL_ID,
+        quantization: "mlx4bit",
+      },
+      experimental: { localRuntime: "ax-engine" },
+    })
+  })
+
+  test("provider is not connected until the user configures ax-engine", async () => {
+    await using tmp = await tmpdir({ config: {} })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const providers = await Provider.list()
+        expect(providers[ProviderID.make(AX_ENGINE_PROVIDER_ID)]).toBeUndefined()
+      },
+    })
+  })
+
+  test("loader does not autoload ax-engine before explicit provider connection", async () => {
+    const loader = await axEngineLoader()({
+      id: AX_ENGINE_PROVIDER_ID,
+      name: "AX Engine",
+      source: "custom",
+      env: [],
+      options: {},
+      models: {},
+    } as any)
+
+    expect(loader.autoload).toBe(false)
   })
 
   test("configured provider is available without starting ax-engine during provider list", async () => {
@@ -324,7 +372,53 @@ describe("ax-engine provider integration", () => {
         const providers = await Provider.list()
         const axEngine = providers[ProviderID.make(AX_ENGINE_PROVIDER_ID)]
         expect(axEngine).toBeDefined()
-        expect(axEngine.models[AX_ENGINE_MODEL_ID]).toBeDefined()
+        expect(axEngine.models[AX_ENGINE_QWEN3_CODER_NEXT_MODEL_ID]).toBeDefined()
+        expect(axEngine.models[AX_ENGINE_QWEN36_35B_MODEL_ID]).toBeDefined()
+        expect(axEngine.options.baseURL).toBe("http://127.0.0.1:18181/v1")
+      },
+    })
+  })
+
+  test("empty configured provider is enough for TUI ax-engine connect flow", async () => {
+    await using tmp = await tmpdir({
+      config: {
+        provider: {
+          [AX_ENGINE_PROVIDER_ID]: {},
+        },
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const providers = await Provider.list()
+        const axEngine = providers[ProviderID.make(AX_ENGINE_PROVIDER_ID)]
+        expect(axEngine).toBeDefined()
+        expect(Object.keys(axEngine.models)).toContain(AX_ENGINE_QWEN3_CODER_NEXT_MODEL_ID)
+        expect(Object.keys(axEngine.models)).toContain(AX_ENGINE_QWEN36_35B_MODEL_ID)
+      },
+    })
+  })
+
+  test("name-only configured provider is enough for TUI ax-engine connect flow", async () => {
+    await using tmp = await tmpdir({
+      config: {
+        provider: {
+          [AX_ENGINE_PROVIDER_ID]: {
+            name: "AX Engine (Local)",
+          },
+        },
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const providers = await Provider.list()
+        const axEngine = providers[ProviderID.make(AX_ENGINE_PROVIDER_ID)]
+        expect(axEngine).toBeDefined()
+        expect(Object.keys(axEngine.models)).toContain(AX_ENGINE_QWEN3_CODER_NEXT_MODEL_ID)
+        expect(Object.keys(axEngine.models)).toContain(AX_ENGINE_QWEN36_35B_MODEL_ID)
         expect(axEngine.options.baseURL).toBe("http://127.0.0.1:18181/v1")
       },
     })
@@ -336,7 +430,7 @@ describe("ax-engine provider integration", () => {
       const url = String(input)
       seen.push(url)
       if (url === "http://127.0.0.1:18181/v1/models") {
-        return new Response(JSON.stringify({ data: [{ id: AX_ENGINE_MODEL_ID }] }), {
+        return new Response(JSON.stringify({ data: [{ id: AX_ENGINE_QWEN3_CODER_NEXT_MODEL_ID }] }), {
           status: 200,
           headers: { "content-type": "application/json" },
         })
@@ -358,10 +452,16 @@ describe("ax-engine provider integration", () => {
 
     const res = await loader.options!.fetch("http://127.0.0.1:18181/v1/chat/completions")
     expect(res.status).toBe(200)
-    expect(seen).toEqual(["http://127.0.0.1:18181/v1/models", "http://127.0.0.1:18181/v1/chat/completions"])
+    expect(seen).toEqual(["http://127.0.0.1:18181/v1/chat/completions"])
   })
 
   test("maps the public Qwen3-Coder-Next model id to the ax-engine runtime id", async () => {
+    globalThis.fetch = (async () =>
+      new Response(JSON.stringify({ data: [{ id: AX_ENGINE_QWEN3_CODER_NEXT_API_MODEL_ID }] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      })) as unknown as typeof fetch
+
     const loader = await axEngineLoader()({
       id: AX_ENGINE_PROVIDER_ID,
       name: "AX Engine",
@@ -379,11 +479,84 @@ describe("ax-engine provider integration", () => {
           return { id }
         },
       },
-      AX_ENGINE_MODEL_ID,
+      AX_ENGINE_QWEN3_CODER_NEXT_MODEL_ID,
     )
 
-    expect(model).toEqual({ id: AX_ENGINE_API_MODEL_ID })
-    expect(requested).toEqual([AX_ENGINE_API_MODEL_ID])
+    expect(model).toEqual({ id: AX_ENGINE_QWEN3_CODER_NEXT_API_MODEL_ID })
+    expect(requested).toEqual([AX_ENGINE_QWEN3_CODER_NEXT_API_MODEL_ID])
+  })
+
+  test("maps Qwen3.6 35B to the ax-engine Qwen3.6 runtime id", async () => {
+    globalThis.fetch = (async () =>
+      new Response(JSON.stringify({ data: [{ id: "qwen3.6-35b" }] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      })) as unknown as typeof fetch
+
+    const loader = await axEngineLoader()({
+      id: AX_ENGINE_PROVIDER_ID,
+      name: "AX Engine",
+      source: "config",
+      env: [],
+      options: { baseURL: "http://127.0.0.1:18181/v1" },
+      models: {},
+    } as any)
+
+    const requested: string[] = []
+    const model = await loader.getModel!(
+      {
+        languageModel(id: string) {
+          requested.push(id)
+          return { id }
+        },
+      },
+      AX_ENGINE_QWEN36_35B_MODEL_ID,
+      { modelID: AX_ENGINE_QWEN36_35B_MODEL_ID },
+    )
+
+    expect(model).toEqual({ id: "qwen3.6-35b" })
+    expect(requested).toEqual(["qwen3.6-35b"])
+  })
+
+  test("discovered Qwen3.6 model preserves the public model id for loader resolution", async () => {
+    globalThis.fetch = (async () =>
+      new Response(JSON.stringify({ data: [{ id: "qwen3.6-35b" }] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      })) as unknown as typeof fetch
+
+    const loader = await axEngineLoader()({
+      id: AX_ENGINE_PROVIDER_ID,
+      name: "AX Engine",
+      source: "config",
+      env: [],
+      options: { baseURL: "http://127.0.0.1:18181/v1" },
+      models: {},
+    } as any)
+
+    const discovered = await loader.discoverModels!({} as any)
+    const qwen36 = discovered[AX_ENGINE_QWEN36_35B_MODEL_ID]
+    expect(qwen36.capabilities.toolcall).toBe(false)
+    expect(qwen36.limit).toEqual({ context: 16_384, output: 2_048 })
+    expect(qwen36.options).toMatchObject({
+      modelID: AX_ENGINE_QWEN36_35B_MODEL_ID,
+      quantization: "mlx4bit",
+    })
+
+    const requested: string[] = []
+    const model = await loader.getModel!(
+      {
+        languageModel(id: string) {
+          requested.push(id)
+          return { id }
+        },
+      },
+      qwen36.api.id,
+      qwen36.options,
+    )
+
+    expect(model).toEqual({ id: "qwen3.6-35b" })
+    expect(requested).toEqual(["qwen3.6-35b"])
   })
 
   test("provider list exposes ax-engine only after full host eligibility passes", () => {

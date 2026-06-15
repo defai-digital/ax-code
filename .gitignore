@@ -52,6 +52,7 @@ auth.json
 # Local config
 .ax-code/
 .ax-grok/
+.qoder/
 .cursor/
 .gemini/
 .mcp.json

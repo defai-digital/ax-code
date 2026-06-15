@@ -61,6 +61,16 @@ function providerFallbackUnavailableMessage(input: {
   return `Provider ${input.providerID} failed: ${reason}${punctuation} No fallback provider available.`
 }
 
+function nonRetryableProviderError(error: unknown) {
+  if (!error || typeof error !== "object") return false
+  const name = (error as { name?: unknown }).name
+  if (name !== "APIError" && name !== "AI_APICallError") return false
+  const direct = (error as { isRetryable?: unknown }).isRetryable
+  if (direct === false) return true
+  const data = (error as { data?: unknown }).data
+  return Boolean(data && typeof data === "object" && (data as { isRetryable?: unknown }).isRetryable === false)
+}
+
 export async function handlePromptLoopError(
   input: {
     sessionID: SessionID
@@ -127,6 +137,18 @@ export async function handlePromptLoopError(
       })
       return { action: "stop", reason: "error", consecutiveErrors: input.consecutiveErrors }
     }
+  }
+
+  if (nonRetryableProviderError(input.error)) {
+    ;(deps.warn ?? log.warn)("non-retryable provider error, stopping", {
+      command: "session.prompt.loop",
+      status: "error",
+      errorCode: "NON_RETRYABLE_PROVIDER_ERROR",
+      consecutiveErrors: input.consecutiveErrors,
+      step: input.step,
+      sessionID: input.sessionID,
+    })
+    return { action: "stop", reason: "error", consecutiveErrors: input.consecutiveErrors }
   }
 
   ;(deps.warn ?? log.warn)("consecutive error", {

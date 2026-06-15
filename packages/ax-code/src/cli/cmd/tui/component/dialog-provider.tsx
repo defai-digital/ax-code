@@ -19,6 +19,7 @@ import {
   CLI_BINARIES,
   CLI_PROVIDERS,
   OFFLINE_PROVIDERS,
+  configUpdateParams,
   providerDialogCategory,
   providerDialogConnected,
   providerDialogProviders,
@@ -33,7 +34,7 @@ type AxEngineTuiStatus = {
   eligibility?: { supported?: boolean; blockers?: string[]; warnings?: string[] }
   dependency?: { available?: boolean; binaryPath?: string; blockers?: string[] }
   disk?: { ok?: boolean; blockers?: string[]; freeBytes?: number }
-  model?: { present?: boolean; path?: string; blockers?: string[] }
+  model?: { present?: boolean; modelID?: string; path?: string; blockers?: string[] }
   server?: { running?: boolean; ready?: boolean; state?: { baseURL?: string }; blockers?: string[] }
   capability?: { toolcall?: boolean; reason?: string }
 }
@@ -108,7 +109,7 @@ function renderAxEngineStatusText(status: AxEngineTuiStatus) {
     ...(status.dependency?.blockers ?? []),
     `Disk: ${status.disk?.ok ? "ok" : "blocked"}`,
     ...(status.disk?.blockers ?? []),
-    `Model: ${status.model?.present ? status.model.path : "not prepared"}`,
+    `Model: ${status.model?.present ? `${status.model.modelID ?? "unknown"} at ${status.model.path}` : "not prepared"}`,
     ...(status.model?.blockers ?? []),
     `Server: ${
       status.server?.ready ? status.server.state?.baseURL : status.server?.running ? "running but not ready" : "stopped"
@@ -150,6 +151,71 @@ export function createDialogProviderOptions() {
   const sdk = useSDK()
   const toast = useToast()
   const { theme } = useTheme()
+
+  async function refreshConfiguredProviders() {
+    const response = await sdk.client.config.providers({}, { throwOnError: true })
+    const data = response.data
+    if (!data) return
+    sync.set("provider", data.providers)
+    sync.set("provider_default", data.default)
+    sync.set("provider_loaded", true)
+    sync.set("provider_failed", false)
+  }
+
+  async function updateConfig(config: Record<string, unknown>) {
+    await sdk.client.config.update(configUpdateParams(config) as any, { throwOnError: true })
+  }
+
+  async function persistAxEngineProvider(providerName: string) {
+    await updateConfig({
+      provider: {
+        "ax-engine": {
+          name: providerName,
+        },
+      },
+    })
+    await sdk.client.instance.dispose()
+    await sync.bootstrap()
+    await refreshConfiguredProviders()
+  }
+
+  async function openModelDialogForProvider(providerID: string, providerName: string) {
+    await refreshConfiguredProviders()
+    let provider = sync.data.provider.find((item) => item.id === providerID)
+    if (providerID === "ax-engine" && (!provider || Object.keys(provider.models).length === 0)) {
+      await persistAxEngineProvider(providerName)
+      provider = sync.data.provider.find((item) => item.id === providerID)
+    }
+    if (!provider || Object.keys(provider.models).length === 0) {
+      const response = await sdk.client.provider.list({}, { throwOnError: true })
+      const data = response.data
+      const available = data?.all.find((item) => item.id === providerID) as
+        | (typeof sync.data.provider)[number]
+        | undefined
+      if (data) {
+        sync.set("provider_next", data)
+      }
+      if (providerID !== "ax-engine" && available && Object.keys(available.models).length > 0) {
+        const existing = sync.data.provider.filter((item) => item.id !== providerID)
+        sync.set("provider", [...existing, available])
+        sync.set("provider_default", providerID, data?.default[providerID] ?? Object.keys(available.models)[0] ?? "")
+        sync.set("provider_loaded", true)
+        sync.set("provider_failed", false)
+        provider = available
+      }
+    }
+    if (!provider || Object.keys(provider.models).length === 0) {
+      toast.show({
+        variant: "warning",
+        message: `${providerName} connected, but no selectable models are available yet`,
+        duration: 3000,
+      })
+      dialog.replace(() => <DialogProvider />)
+      return
+    }
+    dialog.replace(() => <DialogModel providerID={providerID} />)
+  }
+
   const options = createMemo(() => {
     return pipe(
       providerDialogProviders({
@@ -184,33 +250,53 @@ export function createDialogProviderOptions() {
 
                 if (provider.id === "ax-engine") {
                   const status = await axEngineRequest<AxEngineTuiStatus>(sdk, "status")
+
+                  // Not connected → connect immediately, like every other
+                  // provider. No intermediate menu / search field to type into;
+                  // the model is chosen afterwards in the model selector.
+                  if (!isConnected) {
+                    if (!status.eligibility?.supported) {
+                      throw new Error(
+                        status.eligibility?.blockers?.[0] ??
+                          status.dependency?.blockers?.[0] ??
+                          "AX Engine is not supported on this host",
+                      )
+                    }
+                    await updateConfig({
+                      provider: {
+                        [provider.id]: {
+                          name: provider.name,
+                        },
+                      },
+                    })
+                    await sdk.client.instance.dispose()
+                    await sync.bootstrap()
+                    toast.show({ variant: "success", message: `Connected ${provider.name}` })
+                    await openModelDialogForProvider(provider.id, provider.name)
+                    return
+                  }
+
+                  // Connected → offer model selection plus status/stop, matching
+                  // how other connected providers present their options.
                   const actions: Array<{
                     title: string
-                    value: "status" | "download-start" | "start" | "stop"
+                    value: "use" | "status" | "stop"
                     description?: string
                   }> = [
                     {
+                      title: "Select a model",
+                      value: "use",
+                      description: "Choose a local AX Engine model",
+                    },
+                    {
                       title: "View status",
                       value: "status",
-                      description: status.eligibility?.blockers?.[0] ?? status.model?.blockers?.[0],
+                      description: status.server?.ready
+                        ? status.server.state?.baseURL
+                        : (status.model?.blockers?.[0] ?? status.dependency?.blockers?.[0]),
                     },
                   ]
 
-                  if (status.eligibility?.supported && status.dependency?.available) {
-                    if (!status.model?.present) {
-                      actions.push({
-                        title: "Download and start",
-                        value: "download-start",
-                        description: "Downloads Qwen3-Coder-Next 4-bit, then waits for readiness",
-                      })
-                    } else {
-                      actions.push({
-                        title: status.server?.ready ? "Restart local server" : "Start local server",
-                        value: "start",
-                        description: status.model.path,
-                      })
-                    }
-                  }
                   if (status.server?.running) {
                     actions.push({
                       title: "Stop local server",
@@ -244,27 +330,14 @@ export function createDialogProviderOptions() {
                     dialog.clear()
                     return
                   }
-
-                  toast.show({
-                    variant: "info",
-                    message: action === "download-start" ? "Preparing AX Engine model" : "Starting AX Engine",
-                  })
-                  await axEngineRequest(sdk, action === "download-start" ? "prepare" : "start", {
-                    download: action === "download-start",
-                    start: true,
-                    quantization: "mlx4bit",
-                  })
-                  await sdk.client.instance.dispose()
-                  await sync.bootstrap()
-                  toast.show({ variant: "success", message: "AX Engine ready" })
-                  dialog.clear()
+                  await openModelDialogForProvider(provider.id, provider.name)
                   return
                 }
 
                 if (isOfflineKind) {
                   const saveEndpoint = async (value: string) => {
                     const baseURL = normalizeOfflineProviderBaseURL(value)
-                    await sdk.client.config.update({
+                    await updateConfig({
                       provider: {
                         [provider.id]: {
                           options: {
@@ -272,7 +345,7 @@ export function createDialogProviderOptions() {
                           },
                         },
                       },
-                    } as any)
+                    })
                     await sdk.client.instance.dispose()
                     await sync.bootstrap()
                     toast.show({ variant: "success", message: `Updated ${provider.name} endpoint` })

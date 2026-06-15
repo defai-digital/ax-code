@@ -9,12 +9,15 @@ import { Flag } from "../flag/flag"
 import { isModelSupportedForProvider } from "./model-support"
 import bundledSnapshot from "./models-snapshot.json"
 import {
+  AX_ENGINE_CONTEXT_TOKENS,
+  AX_ENGINE_OUTPUT_TOKENS,
   AX_ENGINE_DEFAULT_PORT,
   AX_ENGINE_DISPLAY_NAME,
-  AX_ENGINE_MODEL_DISPLAY_NAME,
-  AX_ENGINE_MODEL_ID,
+  AX_ENGINE_MODEL_DEFINITIONS,
+  AX_ENGINE_MODEL_IDS,
   AX_ENGINE_PROVIDER_ID,
 } from "./ax-engine/constants"
+import type { AxEngineModelID } from "./ax-engine/constants"
 
 export namespace ModelsDev {
   const log = Log.create({ service: "models" })
@@ -87,28 +90,35 @@ export namespace ModelsDev {
 
   const DataSchema = z.record(z.string(), Provider)
 
+  function builtinAxEngineModel(modelID: AxEngineModelID): Model {
+    const definition = AX_ENGINE_MODEL_DEFINITIONS[modelID]
+    return {
+      id: modelID,
+      name: definition.name,
+      family: modelID,
+      release_date: "2026-06-14",
+      attachment: false,
+      reasoning: false,
+      temperature: true,
+      tool_call: definition.toolcall,
+      modalities: { input: ["text"], output: ["text"] },
+      limit: { context: AX_ENGINE_CONTEXT_TOKENS, output: AX_ENGINE_OUTPUT_TOKENS },
+      status: "beta",
+      options: {
+        modelID,
+        quantization: definition.defaultQuantization,
+      },
+      experimental: { localRuntime: AX_ENGINE_PROVIDER_ID },
+    }
+  }
+
   const BUILTIN_AX_ENGINE_PROVIDER: Provider = {
     id: AX_ENGINE_PROVIDER_ID,
     env: ["AX_ENGINE_HOST"],
     npm: "@ai-sdk/openai-compatible",
     api: `http://127.0.0.1:${AX_ENGINE_DEFAULT_PORT}/v1`,
     name: AX_ENGINE_DISPLAY_NAME,
-    models: {
-      [AX_ENGINE_MODEL_ID]: {
-        id: AX_ENGINE_MODEL_ID,
-        name: AX_ENGINE_MODEL_DISPLAY_NAME,
-        family: AX_ENGINE_MODEL_ID,
-        release_date: "2026-06-14",
-        attachment: false,
-        reasoning: false,
-        temperature: true,
-        tool_call: false,
-        modalities: { input: ["text"], output: ["text"] },
-        limit: { context: 262000, output: 8192 },
-        status: "beta",
-        experimental: { localRuntime: AX_ENGINE_PROVIDER_ID },
-      },
-    },
+    models: Object.fromEntries(AX_ENGINE_MODEL_IDS.map((modelID) => [modelID, builtinAxEngineModel(modelID)])),
   }
 
   function withBuiltIns(input: Record<string, Provider>) {

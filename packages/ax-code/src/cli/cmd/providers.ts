@@ -19,7 +19,14 @@ import { Process } from "../../util/process"
 import { text } from "node:stream/consumers"
 import { Ssrf } from "../../util/ssrf"
 import { toErrorMessage } from "../../util/error-message"
-import { getAxEngineStatus, normalizeQuantization, prepareAxEngine, stopServer } from "@/provider/ax-engine"
+import {
+  AX_ENGINE_MODEL_IDS,
+  getAxEngineStatus,
+  normalizeModelID,
+  normalizeQuantization,
+  prepareAxEngine,
+  stopServer,
+} from "@/provider/ax-engine"
 
 type PluginAuth = NonNullable<Hooks["auth"]>
 
@@ -291,8 +298,12 @@ export const ProvidersAxEngineCommand = cmd({
         type: "boolean",
       })
       .option("model-path", {
-        describe: "existing Qwen3-Coder-Next MLX model directory to mark as prepared",
+        describe: "existing AX Engine MLX model directory to mark as prepared",
         type: "string",
+      })
+      .option("model", {
+        describe: "AX Engine model to prepare",
+        choices: AX_ENGINE_MODEL_IDS,
       })
       .option("binary-path", {
         describe: "ax-engine CLI path",
@@ -314,6 +325,7 @@ export const ProvidersAxEngineCommand = cmd({
     const action = args.action
     const options = {
       binaryPath: args.binaryPath,
+      modelID: args.model,
       modelPath: args.modelPath,
       quantization: args.quantization,
     }
@@ -334,8 +346,10 @@ export const ProvidersAxEngineCommand = cmd({
     }
 
     if (action === "prepare") {
-      const quantization = normalizeQuantization(args.quantization)
+      const modelID = normalizeModelID(args.model)
+      const quantization = normalizeQuantization(args.quantization, modelID)
       const result = await prepareAxEngine({
+        modelID,
         binaryPath: args.binaryPath,
         modelPath: args.modelPath,
         quantization,
@@ -355,8 +369,10 @@ export const ProvidersAxEngineCommand = cmd({
     }
 
     if (action === "start") {
-      const quantization = normalizeQuantization(args.quantization)
+      const modelID = normalizeModelID(args.model)
+      const quantization = normalizeQuantization(args.quantization, modelID)
       const result = await prepareAxEngine({
+        modelID,
         binaryPath: args.binaryPath,
         modelPath: args.modelPath,
         quantization,

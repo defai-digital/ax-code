@@ -12,9 +12,9 @@ import { lazy } from "../../util/lazy"
 import { PROVIDER_ID_PARAM, withProviderID } from "./route-params"
 import { redactProviderInfo } from "./config"
 import { Log } from "../../util/log"
-import { getAxEngineStatus, prepareAxEngine, stopServer } from "@/provider/ax-engine"
+import { AX_ENGINE_MODEL_IDS, getAxEngineStatus, prepareAxEngine, stopServer } from "@/provider/ax-engine"
 import { isSupportedHost } from "@/provider/ax-engine/platform"
-import { normalizeQuantization } from "@/provider/ax-engine/model-cache"
+import { normalizeModelID, normalizeQuantization } from "@/provider/ax-engine/model-cache"
 
 const log = Log.create({ service: "server" })
 
@@ -153,6 +153,7 @@ export const ProviderRoutes = lazy(() =>
           .object({
             modelPath: z.string().optional(),
             binaryPath: z.string().optional(),
+            modelID: z.enum(AX_ENGINE_MODEL_IDS).optional(),
             quantization: z.enum(["mlx4bit", "mlx6bit"]).optional(),
             download: z.boolean().optional(),
             start: z.boolean().optional(),
@@ -162,8 +163,10 @@ export const ProviderRoutes = lazy(() =>
       ),
       async (c) => {
         const body = c.req.valid("json")
-        const quantization = normalizeQuantization(body.quantization)
+        const modelID = normalizeModelID(body.modelID)
+        const quantization = normalizeQuantization(body.quantization, modelID)
         const result = await prepareAxEngine({
+          modelID,
           binaryPath: body.binaryPath,
           modelPath: body.modelPath,
           quantization,
@@ -201,6 +204,7 @@ export const ProviderRoutes = lazy(() =>
           .object({
             modelPath: z.string().optional(),
             binaryPath: z.string().optional(),
+            modelID: z.enum(AX_ENGINE_MODEL_IDS).optional(),
             quantization: z.enum(["mlx4bit", "mlx6bit"]).optional(),
             download: z.boolean().optional(),
           })
@@ -209,8 +213,10 @@ export const ProviderRoutes = lazy(() =>
       ),
       async (c) => {
         const body = c.req.valid("json")
-        const quantization = normalizeQuantization(body.quantization)
+        const modelID = normalizeModelID(body.modelID)
+        const quantization = normalizeQuantization(body.quantization, modelID)
         const result = await prepareAxEngine({
+          modelID,
           binaryPath: body.binaryPath,
           modelPath: body.modelPath,
           quantization,

@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import {
   CLI_BINARIES,
   CLI_PROVIDERS,
+  configUpdateParams,
   providerDialogCategory,
   providerDialogConnected,
   providerDialogProviders,
@@ -61,6 +62,29 @@ describe("provider dialog options", () => {
     ).toBe(true)
   })
 
+  test("does not treat transient ax-engine provider data as connected", () => {
+    expect(
+      providerDialogConnected({
+        providerID: "ax-engine",
+        connected: [],
+        configured: [provider("ax-engine", "AX Engine (Local)")],
+      }),
+    ).toBe(false)
+    expect(
+      providerDialogConnected({
+        providerID: "ax-engine",
+        connected: ["ax-engine"],
+        configured: [],
+      }),
+    ).toBe(true)
+  })
+
+  test("wraps config update body for the generated SDK", () => {
+    expect(configUpdateParams({ provider: { "ax-engine": { name: "AX Engine (Local)" } } })).toEqual({
+      config: { provider: { "ax-engine": { name: "AX Engine (Local)" } } },
+    })
+  })
+
   test("includes Grok Build CLI as a CLI provider", () => {
     expect(CLI_PROVIDERS.has("grok-build-cli")).toBe(true)
     expect(CLI_BINARIES["grok-build-cli"]).toBe("grok")
@@ -72,8 +96,8 @@ describe("provider dialog options", () => {
     expect(providerDialogCategory("ollama")).toBe("Local runtime")
   })
 
-  test("allows ax-engine models in the selector even without tool calling", () => {
-    expect(providerModelSelectable({ providerID: "ax-engine", toolcall: false })).toBe(true)
+  test("requires normal tool-call capability for local runtime models", () => {
+    expect(providerModelSelectable({ providerID: "ax-engine", toolcall: false })).toBe(false)
     expect(providerModelSelectable({ providerID: "grok-build-cli", toolcall: false })).toBe(true)
     expect(providerModelSelectable({ providerID: "xai", toolcall: false })).toBe(false)
     expect(providerModelSelectable({ providerID: "xai", toolcall: true })).toBe(true)

@@ -7,6 +7,7 @@ import { Flag } from "@/flag/flag"
 import { isRecord } from "@/util/record"
 import { buildSearchParameters, type LiveSearchConfig } from "./xai/server-tools"
 import { isQwen37MaxModel } from "./qwen37-readiness"
+import { AX_ENGINE_PROVIDER_ID } from "./ax-engine/constants"
 
 type Modality = NonNullable<ModelsDev.Model["modalities"]>["input"][number]
 
@@ -436,6 +437,19 @@ export namespace ProviderTransform {
               // Carry through preserve_thinking only when it was explicitly requested
               ...(requestedPreserve ? { preserve_thinking: true } : {}),
             }
+    }
+
+    if (model.providerID === AX_ENGINE_PROVIDER_ID) {
+      const {
+        baseURL: _baseURL,
+        binaryPath: _binaryPath,
+        modelID: _modelID,
+        modelPath: _modelPath,
+        port: _port,
+        quantization: _quantization,
+        ...rest
+      } = result
+      return rest
     }
 
     if (model.api.npm !== "@ai-sdk/xai") return result

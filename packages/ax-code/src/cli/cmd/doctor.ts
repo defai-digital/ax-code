@@ -115,7 +115,7 @@ export function getAxEngineDoctorCheck(status: Awaited<ReturnType<typeof getAxEn
     return {
       name: "AX Engine local provider",
       status: "warn",
-      detail: "eligible; ax-engine available; Qwen3-Coder-Next MLX not prepared",
+      detail: "eligible; ax-engine available; AX Engine MLX model not prepared",
     }
   }
   return {

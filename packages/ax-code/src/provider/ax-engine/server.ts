@@ -3,14 +3,16 @@ import z from "zod"
 import { FileLock } from "@/util/filelock"
 import { Filesystem } from "@/util/filesystem"
 import { Process } from "@/util/process"
-import { AX_ENGINE_API_KEY, AX_ENGINE_DEFAULT_PORT, AX_ENGINE_ERROR, AX_ENGINE_MODEL_ID } from "./constants"
+import { AX_ENGINE_API_KEY, AX_ENGINE_DEFAULT_PORT, AX_ENGINE_ERROR, AX_ENGINE_MODEL_IDS } from "./constants"
+import type { AxEngineModelID } from "./constants"
 import { AxEnginePaths } from "./paths"
 
 export const AxEngineServerState = z.object({
   pid: z.number().int().positive(),
   port: z.number().int().positive(),
   baseURL: z.string(),
-  modelID: z.literal(AX_ENGINE_MODEL_ID),
+  modelID: z.enum(AX_ENGINE_MODEL_IDS),
+  apiModelID: z.string().optional(),
   modelPath: z.string(),
   modelRevision: z.string().optional(),
   binaryPath: z.string(),
@@ -29,6 +31,8 @@ export type AxEngineServerRuntimeStatus = z.infer<typeof AxEngineServerRuntimeSt
 
 export type AxEngineServerOptions = {
   binaryPath: string
+  modelID: AxEngineModelID
+  apiModelID: string
   modelPath: string
   modelRevision?: string
   preferredPort?: number
@@ -109,6 +113,32 @@ async function selectPort(preferredPort?: number) {
   throw new Error(`${AX_ENGINE_ERROR.ServerStartFailed}: no local port available near ${start}`)
 }
 
+async function loadServerModel(input: {
+  baseURL: string
+  apiModelID: string
+  modelPath: string
+  signal?: AbortSignal
+}) {
+  const response = await fetch(`${input.baseURL.replace(/\/+$/, "")}/model/load`, {
+    method: "POST",
+    signal: input.signal ?? AbortSignal.timeout(120_000),
+    headers: {
+      authorization: `Bearer ${AX_ENGINE_API_KEY}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      model_id: input.apiModelID,
+      model_path: input.modelPath,
+    }),
+  })
+  if (!response.ok) {
+    const text = await response.text().catch(() => "")
+    throw new Error(
+      `${AX_ENGINE_ERROR.ServerStartFailed}: ax-engine model load failed with HTTP ${response.status}${text ? `: ${text}` : ""}`,
+    )
+  }
+}
+
 export async function getServerStatus(): Promise<AxEngineServerRuntimeStatus> {
   const state = await readServerState()
   if (!state) return { running: false, ready: false, blockers: [] }
@@ -132,7 +162,32 @@ export async function ensureServer(options: AxEngineServerOptions): Promise<AxEn
   using _ = await FileLock.acquire(AxEnginePaths.serverLock, { timeoutMs: 30_000, staleMs: 5 * 60_000 })
   const existing = await readServerState()
   if (existing && pidLive(existing.pid) && (await isServerReady(existing.baseURL, options.signal))) {
-    return existing
+    if (existing.modelID === options.modelID && existing.modelPath === options.modelPath) return existing
+    try {
+      await loadServerModel({
+        baseURL: existing.baseURL,
+        apiModelID: options.apiModelID,
+        modelPath: options.modelPath,
+        signal: options.signal,
+      })
+      const nextState: AxEngineServerState = {
+        ...existing,
+        modelID: options.modelID,
+        apiModelID: options.apiModelID,
+        modelPath: options.modelPath,
+        modelRevision: options.modelRevision,
+        lastHealthAt: Date.now(),
+      }
+      await writeServerState(nextState)
+      return nextState
+    } catch {
+      try {
+        process.kill(existing.pid, "SIGTERM")
+      } catch {
+        // Already gone.
+      }
+      await removeServerState()
+    }
   }
 
   await fs.mkdir(AxEnginePaths.state, { recursive: true })
@@ -145,12 +200,15 @@ export async function ensureServer(options: AxEngineServerOptions): Promise<AxEn
   const resolvedBaseURL = baseURL ?? baseURLForPort(port)
   const origin = originFromBaseURL(resolvedBaseURL)
   const logFile = await fs.open(AxEnginePaths.serverLog, "a")
-  const proc = Process.spawn([options.binaryPath, "serve", options.modelPath, "--port", String(port)], {
-    stdout: logFile.fd,
-    stderr: logFile.fd,
-    detached: true,
-    abort: options.signal,
-  })
+  const proc = Process.spawn(
+    [options.binaryPath, "serve", options.modelPath, "--port", String(port), "--", "--model-id", options.apiModelID],
+    {
+      stdout: logFile.fd,
+      stderr: logFile.fd,
+      detached: true,
+      abort: options.signal,
+    },
+  )
   await logFile.close().catch(() => undefined)
   proc.unref?.()
 
@@ -164,7 +222,8 @@ export async function ensureServer(options: AxEngineServerOptions): Promise<AxEn
     pid: proc.pid!,
     port,
     baseURL: resolvedBaseURL,
-    modelID: AX_ENGINE_MODEL_ID,
+    modelID: options.modelID,
+    apiModelID: options.apiModelID,
     modelPath: options.modelPath,
     modelRevision: options.modelRevision,
     binaryPath: options.binaryPath,

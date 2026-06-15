@@ -98,6 +98,13 @@ async function probeText(cmd: string[]) {
     .catch(() => undefined)
 }
 
+async function probeSystemProfilerChip() {
+  const text = await Process.text(["system_profiler", "SPHardwareDataType"], { timeout: 5000, nothrow: true })
+    .then((out) => (out.code === 0 ? out.text : undefined))
+    .catch(() => undefined)
+  return text?.match(/^\s*Chip:\s*(.+?)\s*$/m)?.[1]
+}
+
 export async function getPlatformEligibility(): Promise<AxEnginePlatformEligibility> {
   const platform = process.platform
   const arch = process.arch
@@ -105,7 +112,7 @@ export async function getPlatformEligibility(): Promise<AxEnginePlatformEligibil
     platform === "darwin"
       ? await Promise.all([
           probeText(["sw_vers", "-productVersion"]),
-          probeText(["sysctl", "-n", "machdep.cpu.brand_string"]),
+          probeText(["sysctl", "-n", "machdep.cpu.brand_string"]).then((value) => value || probeSystemProfilerChip()),
         ])
       : [undefined, undefined]
 

@@ -40,8 +40,11 @@ export function providerDialogCategory(providerID: string) {
 
 export function providerModelSelectable(input: { providerID: string; toolcall?: boolean }) {
   if (input.toolcall !== false) return true
-  if (CLI_PROVIDERS.has(input.providerID)) return true
-  return input.providerID === "ax-engine"
+  return CLI_PROVIDERS.has(input.providerID)
+}
+
+export function configUpdateParams<T extends Record<string, unknown>>(config: T) {
+  return { config }
 }
 
 export function providerDialogConnected(input: {
@@ -49,6 +52,7 @@ export function providerDialogConnected(input: {
   connected: string[]
   configured: ProviderDialogProvider[]
 }) {
+  if (input.providerID === "ax-engine") return input.connected.includes(input.providerID)
   return (
     input.connected.includes(input.providerID) || input.configured.some((provider) => provider.id === input.providerID)
   )

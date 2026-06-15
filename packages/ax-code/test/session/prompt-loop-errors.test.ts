@@ -200,6 +200,53 @@ describe("prompt loop error transitions", () => {
     ])
   })
 
+  test("stops immediately for non-retryable provider errors", async () => {
+    const sessionID = SessionID.descending()
+    const warnings: { message: string; fields: Record<string, unknown> }[] = []
+    const published: { sessionID: SessionID; message: string }[] = []
+
+    const result = await handlePromptLoopError(
+      {
+        sessionID,
+        currentModel: primaryModel,
+        error: {
+          name: "APIError",
+          data: {
+            statusCode: 400,
+            message: "request did not terminate",
+            isRetryable: false,
+          },
+        },
+        consecutiveErrors: 1,
+        step: 1,
+      },
+      {
+        warn(message, fields) {
+          warnings.push({ message, fields })
+        },
+        publishError(input) {
+          published.push(input)
+        },
+      },
+    )
+
+    expect(result).toEqual({ action: "stop", reason: "error", consecutiveErrors: 1 })
+    expect(warnings).toEqual([
+      {
+        message: "non-retryable provider error, stopping",
+        fields: {
+          command: "session.prompt.loop",
+          status: "error",
+          errorCode: "NON_RETRYABLE_PROVIDER_ERROR",
+          consecutiveErrors: 1,
+          step: 1,
+          sessionID,
+        },
+      },
+    ])
+    expect(published).toEqual([])
+  })
+
   test("publishes stop errors when the consecutive error limit is reached", async () => {
     const sessionID = SessionID.descending()
     const warnings: { message: string; fields: Record<string, unknown> }[] = []

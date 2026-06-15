@@ -19,6 +19,7 @@ import { tmpdir } from "node:os"
 import { runResilientStream, type StreamConnectionStatus } from "./util/resilient-stream"
 import { registerShutdownSignals } from "@/util/signals"
 import { toErrorMessage } from "@/util/error-message"
+import { stopServer as stopAxEngineServer } from "@/provider/ax-engine"
 
 type GlobalEvent = {
   directory?: string
@@ -256,6 +257,12 @@ export const rpc = {
       eventStream.done = undefined
       GlobalBus.off("event", handleGlobalEvent)
       await Instance.disposeAll()
+      // Stop the local ax-engine server on quit so the loaded model is
+      // unloaded and GPU/RAM is freed. No-op when we never started one
+      // (e.g. an externally managed server has no tracked state).
+      await stopAxEngineServer().catch((error) => {
+        Log.Default.warn("ax-engine server stop failed", { error })
+      })
       if (server) {
         const current = server
         server = undefined

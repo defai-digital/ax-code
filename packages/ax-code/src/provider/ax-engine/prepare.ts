@@ -1,6 +1,6 @@
 import z from "zod"
-import { AX_ENGINE_DEFAULT_PORT, AX_ENGINE_ERROR, AX_ENGINE_MODEL_ID } from "./constants"
-import type { AxEngineQuantization } from "./constants"
+import { AX_ENGINE_DEFAULT_PORT, AX_ENGINE_ERROR, AX_ENGINE_MODEL_DEFINITIONS } from "./constants"
+import type { AxEngineModelID, AxEngineQuantization } from "./constants"
 import { downloadModel, AxEngineModelStatus, AxEnginePrepareState, getModelStatus, markPrepared } from "./model-cache"
 import { getDependencyStatus } from "./dependency"
 import { AxEnginePlatformEligibility, requirePlatformEligibility } from "./platform"
@@ -15,6 +15,7 @@ export const AxEnginePrepareResult = z.object({
 export type AxEnginePrepareResult = z.infer<typeof AxEnginePrepareResult>
 
 export type AxEnginePrepareInput = {
+  modelID: AxEngineModelID
   modelPath?: string
   binaryPath?: string
   quantization: AxEngineQuantization
@@ -35,7 +36,7 @@ type AxEnginePrepareRuntime = {
 function modelFromPrepared(prepared: AxEnginePrepareState): AxEngineModelStatus {
   return {
     present: true,
-    modelID: AX_ENGINE_MODEL_ID,
+    modelID: prepared.modelID,
     quantization: prepared.quantization,
     path: prepared.path,
     revision: prepared.revision,
@@ -62,6 +63,7 @@ export async function prepareAxEngine(
 
   if (input.modelPath) {
     prepared = await mark({
+      modelID: input.modelID,
       modelPath: input.modelPath,
       quantization: input.quantization,
     })
@@ -73,12 +75,13 @@ export async function prepareAxEngine(
     }
     prepared = await download({
       binaryPath: dependency.binaryPath,
+      modelID: input.modelID,
       quantization: input.quantization,
       signal: input.signal,
     })
     model = modelFromPrepared(prepared)
   } else {
-    model = await modelStatus({ quantization: input.quantization })
+    model = await modelStatus({ modelID: input.modelID, quantization: input.quantization })
   }
 
   if (!input.start) {
@@ -96,6 +99,8 @@ export async function prepareAxEngine(
 
   const server = await startServer({
     binaryPath: dependency.binaryPath,
+    modelID: model.modelID,
+    apiModelID: AX_ENGINE_MODEL_DEFINITIONS[model.modelID].apiModelID,
     modelPath: model.path,
     modelRevision: model.revision,
     preferredPort: AX_ENGINE_DEFAULT_PORT,
