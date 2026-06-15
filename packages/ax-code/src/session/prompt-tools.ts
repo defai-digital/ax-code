@@ -271,7 +271,7 @@ export async function resolveTools(input: ResolveToolsInput) {
           })()
     tools[item.id] = tool({
       id: item.id as any,
-      description: item.description,
+      description: ProviderTransform.toolDescription(input.model, item.description),
       inputSchema: jsonSchema(schema as any),
       async execute(args, options) {
         const ctx = context(args, options)
@@ -395,6 +395,7 @@ export async function resolveTools(input: ResolveToolsInput) {
       model: input.model,
       inputSchema: mcpTool.inputSchema,
     })
+    mcpTool.description = ProviderTransform.toolDescription(input.model, mcpTool.description) ?? ""
     mcpTool.inputSchema = jsonSchema(transformed)
     // Wrap execute to add plugin hooks and format output
     mcpTool.execute = async (args, opts) => {
