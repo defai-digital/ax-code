@@ -41,6 +41,7 @@ const keep = [
   ".husky",
   ".internal",
   ".pnpm-store",
+  ".qoder",
   ".ruff_cache",
   ".tmp",
   ".turbo",

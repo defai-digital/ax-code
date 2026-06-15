@@ -54,6 +54,7 @@ If a file is over 500 lines and has natural split points, describe how it could 
 ## Rules
 
 - No changes to public API signatures, exported types, or observable behaviour.
+- do not introduce Effect or Effect Schema; follow the repository's current validation and async patterns.
 - Skip anything that touches more than 3 call sites without a clear mechanical transformation.
 - High-risk actions (renaming exports, reshaping interfaces, moving files referenced by CI) must be described and confirmed before execution.
 - Follow the current repository's instructions from AGENTS.md or equivalent local guidance.
@@ -61,6 +62,7 @@ If a file is over 500 lines and has natural split points, describe how it could 
 ## Verification
 
 - Run the most specific relevant tests for the touched behavior.
+- Run root `pnpm typecheck` when this repository provides it, or the nearest equivalent static validation command.
 - Run the repository's local typecheck or equivalent static validation when the change touches typed code.
 - Run broader workspace validation when the change crosses package, workspace, or shared library boundaries.
 - If no focused test exists, say that explicitly and explain why typecheck/static inspection is the available verification.

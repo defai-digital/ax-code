@@ -953,10 +953,11 @@ async function waitForQueueStatus(id: TaskQueue.Info["id"], status: TaskQueue.St
 }
 
 async function waitForValue<T>(label: string, read: () => T | undefined | Promise<T | undefined>): Promise<T> {
-  for (let attempt = 0; attempt < 25; attempt++) {
+  const deadline = Date.now() + 1_000
+  while (Date.now() < deadline) {
     const value = await read()
     if (value !== undefined) return value
-    await new Promise((resolve) => setTimeout(resolve, 0))
+    await new Promise((resolve) => setTimeout(resolve, 10))
   }
   throw new Error(`Timed out waiting for ${label}`)
 }
