@@ -41,6 +41,11 @@ import { ReasoningPolicy } from "@/control-plane/reasoning-policy"
 export namespace LLM {
   const log = Log.create({ service: "llm" })
   const superLongPacing = new Map<string, SuperLongPolicy.PacingState>()
+  const TOOL_NAME_ALIASES: Record<string, string> = {
+    list_directory: "list",
+    list_dir: "list",
+    ls: "list",
+  }
 
   export type StreamInput = {
     user: MessageV2.User
@@ -59,6 +64,18 @@ export namespace LLM {
   }
 
   export type StreamOutput = StreamTextResult<ToolSet, any>
+
+  export function repairedToolName(toolName: string, tools: Record<string, unknown>): string | undefined {
+    const lower = toolName.toLowerCase()
+    const snake = lower.replace(/[-\s]+/g, "_")
+    const candidates = [lower, snake, TOOL_NAME_ALIASES[lower], TOOL_NAME_ALIASES[snake]]
+
+    for (const candidate of candidates) {
+      if (!candidate || candidate === toolName) continue
+      if (tools[candidate]) return candidate
+    }
+    return undefined
+  }
 
   export async function stream(input: StreamInput) {
     const l = log
@@ -347,15 +364,15 @@ export namespace LLM {
           })
         },
         async experimental_repairToolCall(failed) {
-          const lower = failed.toolCall.toolName.toLowerCase()
-          if (lower !== failed.toolCall.toolName && tools[lower]) {
+          const repaired = repairedToolName(failed.toolCall.toolName, tools)
+          if (repaired) {
             l.info("repairing tool call", {
               tool: failed.toolCall.toolName,
-              repaired: lower,
+              repaired,
             })
             return {
               ...failed.toolCall,
-              toolName: lower,
+              toolName: repaired,
             }
           }
           return {

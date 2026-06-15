@@ -86,7 +86,11 @@ describe("InstructionPrompt.resolve", () => {
         expect(system.has(path.join(tmp.path, "AX.md"))).toBe(false)
         expect(system.has(path.join(tmp.path, "CONTEXT.md"))).toBe(false)
 
-        const results = await InstructionPrompt.resolve([], path.join(tmp.path, "src", "file.ts"), "test-message-legacy")
+        const results = await InstructionPrompt.resolve(
+          [],
+          path.join(tmp.path, "src", "file.ts"),
+          "test-message-legacy",
+        )
         expect(results).toEqual([])
       },
     })

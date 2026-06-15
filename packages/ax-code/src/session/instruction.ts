@@ -13,10 +13,7 @@ import type { MessageV2 } from "./message-v2"
 
 const log = Log.create({ service: "instruction" })
 
-const FILES = [
-  "AGENTS.md",
-  "CLAUDE.md",
-]
+const FILES = ["AGENTS.md", "CLAUDE.md"]
 
 async function realpathOrResolved(input: string) {
   return fs.realpath(input).catch(() => input)

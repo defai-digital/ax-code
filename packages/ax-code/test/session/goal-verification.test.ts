@@ -100,7 +100,15 @@ describe("GoalVerification.decide", () => {
   })
 
   test("trivial commands do not count as verification", () => {
-    for (const command of ["echo done", "true", "sleep 5", "echo a && echo b", "CI=1 echo ok", "(sleep 5)", "(echo done)"]) {
+    for (const command of [
+      "echo done",
+      "true",
+      "sleep 5",
+      "echo a && echo b",
+      "CI=1 echo ok",
+      "(sleep 5)",
+      "(echo done)",
+    ]) {
       const decision = GoalVerification.decide({
         messages: [assistant(toolPart("edit")), assistant(bashPart(command, 0))],
         pendingTodos: [],
@@ -110,7 +118,12 @@ describe("GoalVerification.decide", () => {
   })
 
   test("a passing real command counts as verification", () => {
-    for (const command of ["bun test", "echo start && bun run typecheck", "CI=1 bun test --timeout 30000", "(bun test)"]) {
+    for (const command of [
+      "bun test",
+      "echo start && bun run typecheck",
+      "CI=1 bun test --timeout 30000",
+      "(bun test)",
+    ]) {
       expect(
         GoalVerification.decide({
           messages: [assistant(toolPart("edit")), assistant(bashPart(command, 0))],

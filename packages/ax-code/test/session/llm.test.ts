@@ -20,6 +20,16 @@ import { createStructuredOutputTool } from "../../src/session/prompt-helpers"
 import { SuperLongRuntime } from "../../src/session/super-long-runtime"
 
 describe("session.llm.hasToolCalls", () => {
+  test("repairs common directory listing tool aliases", () => {
+    const tools = { list: {}, read: {} }
+
+    expect(LLM.repairedToolName("list_directory", tools)).toBe("list")
+    expect(LLM.repairedToolName("list-dir", tools)).toBe("list")
+    expect(LLM.repairedToolName("ls", tools)).toBe("list")
+    expect(LLM.repairedToolName("Read", tools)).toBe("read")
+    expect(LLM.repairedToolName("write_file", tools)).toBeUndefined()
+  })
+
   test("returns false for empty messages array", () => {
     expect(LLM.hasToolCalls([])).toBe(false)
   })

@@ -12,6 +12,18 @@ afterEach(async () => {
 })
 
 describe("tool.registry", () => {
+  test("includes the built-in list tool", async () => {
+    await using tmp = await tmpdir()
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const ids = await ToolRegistry.ids()
+        expect(ids).toContain("list")
+      },
+    })
+  })
+
   test("invalidates cached tool definitions when config-gated tools change", async () => {
     await using tmp = await tmpdir()
     let batchTool = false

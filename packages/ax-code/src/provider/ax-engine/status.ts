@@ -55,8 +55,7 @@ export type AxEngineCapabilityStatus = {
 export function evaluateAxEngineCapabilityFromModels(payload: unknown): AxEngineCapabilityStatus {
   const parsed = AxEngineModelsResponse.safeParse(payload)
   const model = parsed.success ? parsed.data.data[0] : undefined
-  const toolcall =
-    model?.ax_engine?.openai_tool_calling_supported ?? model?.capabilities?.toolcall ?? false
+  const toolcall = model?.ax_engine?.openai_tool_calling_supported ?? model?.capabilities?.toolcall ?? false
   const attachment =
     model?.ax_engine?.gemma4_unified_multimodal_input_supported ??
     model?.ax_engine?.native_multimodal_input_supported ??

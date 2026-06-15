@@ -208,7 +208,8 @@ describe("session.prompt flow", () => {
       responseHeaders: { "content-type": "application/json" },
       responseBody: JSON.stringify({
         error: {
-          message: "request requires 30144 tokens (28096 prompt + 2048 max output), exceeding model context length 16384",
+          message:
+            "request requires 30144 tokens (28096 prompt + 2048 max output), exceeding model context length 16384",
           type: "invalid_request_error",
           code: "context_length_exceeded",
         },
@@ -1514,6 +1515,85 @@ describe("session.prompt flow", () => {
           expect(lastAssistant?.role).toBe("assistant")
           if (lastAssistant?.role !== "assistant") throw new Error("expected assistant")
           expect(lastAssistant.error?.data.message).toContain("empty model turn")
+
+          await Session.remove(session.id)
+        },
+      })
+    } finally {
+      if (previousAutonomous === undefined) delete process.env["AX_CODE_AUTONOMOUS"]
+      else process.env["AX_CODE_AUTONOMOUS"] = previousAutonomous
+    }
+  })
+
+  test("does not complete autonomous mode after repeated truncated model turns", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      config: {
+        agent: {
+          build: {
+            steps: 10,
+          },
+        },
+      },
+    })
+
+    const previousAutonomous = process.env["AX_CODE_AUTONOMOUS"]
+    process.env["AX_CODE_AUTONOMOUS"] = "true"
+
+    try {
+      modelSpy = spyOn(Provider, "getModel").mockResolvedValue(model)
+      summarySpy = spyOn(SessionSummary, "summarize").mockResolvedValue()
+      streamSpy = spyOn(LLM, "stream").mockImplementation(
+        async () =>
+          ({
+            fullStream: (async function* () {
+              yield { type: "start" }
+              yield { type: "start-step" }
+              yield { type: "text-start", id: "text_1" }
+              yield { type: "text-delta", id: "text_1", text: "partial generated answer" }
+              yield { type: "text-end", id: "text_1" }
+              yield {
+                type: "finish-step",
+                finishReason: "length",
+                usage: { inputTokens: 10, outputTokens: 4, totalTokens: 14 },
+              }
+              yield { type: "finish" }
+            })(),
+          }) as any,
+      )
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const session = await Session.create({ title: "Truncated Model Turn Test" })
+
+          await SessionPrompt.prompt({
+            sessionID: session.id,
+            agent: "build",
+            parts: [{ type: "text", text: "create a small website" }],
+          })
+
+          expect(streamSpy).toHaveBeenCalledTimes(2)
+
+          const messages = await Session.messages({ sessionID: session.id })
+          expect(
+            messages.some(
+              (message) =>
+                message.info.role === "user" &&
+                message.parts.some(
+                  (part) =>
+                    part.type === "text" &&
+                    part.text.includes("The previous autonomous model turn was truncated by the provider") &&
+                    part.text.includes("truncated-turn recovery"),
+                ),
+            ),
+          ).toBe(true)
+
+          const assistantMessages = messages.filter((message) => message.info.role === "assistant")
+          const lastAssistant = assistantMessages.at(-1)?.info
+          expect(lastAssistant?.role).toBe("assistant")
+          if (lastAssistant?.role !== "assistant") throw new Error("expected assistant")
+          expect(lastAssistant.error?.data.message).toContain("truncated model turn")
 
           await Session.remove(session.id)
         },

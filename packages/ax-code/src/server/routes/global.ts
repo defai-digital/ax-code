@@ -138,8 +138,14 @@ function getRuntimeHealthInfo(rawDirectory?: string): z.infer<typeof GlobalHealt
 function readinessFromServices(runtime: z.infer<typeof GlobalHealthInfo>["runtime"], serviceNames: string[]) {
   const names = new Set(serviceNames)
   const services = runtime.services.filter((service) => names.has(service.name))
-  const tasks = ServiceManager.peek(runtime.directory)?.snapshot().tasks.filter((task) => names.has(task.service)) ?? []
-  if (services.some((service) => service.state === "failed" || service.lastError) || tasks.some((task) => task.state === "failed")) {
+  const tasks =
+    ServiceManager.peek(runtime.directory)
+      ?.snapshot()
+      .tasks.filter((task) => names.has(task.service)) ?? []
+  if (
+    services.some((service) => service.state === "failed" || service.lastError) ||
+    tasks.some((task) => task.state === "failed")
+  ) {
     return "degraded" as const
   }
   if (tasks.some((task) => task.state === "queued" || task.state === "running")) {

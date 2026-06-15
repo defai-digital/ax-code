@@ -136,14 +136,14 @@ To allow network while keeping write restrictions:
 
 Sandbox enforcement is application-layer, checked at each tool invocation:
 
-| Tool          | Check                                                           |
-| ------------- | --------------------------------------------------------------- |
+| Tool          | Check                                                                                                                  |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------- |
 | `bash`        | Working directory + all resolved paths must be inside workspace; network-only clients blocked when network is disabled |
-| `edit`        | Target file must be inside workspace and not protected          |
-| `write`       | Target file must be inside workspace and not protected          |
-| `apply_patch` | All target files must be inside workspace and not protected     |
-| `webfetch`    | Network access must be enabled                                  |
-| `websearch`   | Network access must be enabled                                  |
-| `codesearch`  | Network access must be enabled                                  |
+| `edit`        | Target file must be inside workspace and not protected                                                                 |
+| `write`       | Target file must be inside workspace and not protected                                                                 |
+| `apply_patch` | All target files must be inside workspace and not protected                                                            |
+| `webfetch`    | Network access must be enabled                                                                                         |
+| `websearch`   | Network access must be enabled                                                                                         |
+| `codesearch`  | Network access must be enabled                                                                                         |
 
 When a tool violates isolation, it throws an `IsolationDeniedError` with a clear message explaining what was blocked and why.

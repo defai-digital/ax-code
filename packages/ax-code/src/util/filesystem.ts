@@ -71,7 +71,12 @@ export namespace Filesystem {
     // executable bit, or a restrictive 0600) when the caller didn't request a
     // specific mode. Writing to a fresh temp file and renaming would otherwise
     // reset every edited file to the default umask mode.
-    const resolvedMode = mode ?? (await fs.stat(p).then((s) => s.mode & 0o777).catch(() => undefined))
+    const resolvedMode =
+      mode ??
+      (await fs
+        .stat(p)
+        .then((s) => s.mode & 0o777)
+        .catch(() => undefined))
     const writeOptions = resolvedMode !== undefined ? { mode: resolvedMode } : undefined
     try {
       await fs.mkdir(dir, { recursive: true })

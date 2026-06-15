@@ -1163,7 +1163,9 @@ export namespace Provider {
 
     const provider = Object.values(providers).find((p) => !cfg.provider || Object.keys(cfg.provider).includes(p.id))
     if (provider) {
-      const [model] = sort(Object.values(provider.models).filter((item) => modelSelectableForProvider(provider.id, item)))
+      const [model] = sort(
+        Object.values(provider.models).filter((item) => modelSelectableForProvider(provider.id, item)),
+      )
       if (!model) throw new Error("no models found")
       return {
         providerID: provider.id,
@@ -1181,9 +1183,7 @@ export namespace Provider {
       return true
     })
     if (!fallback) throw new Error("no providers found")
-    const [model] = sort(
-      Object.values(fallback.models).filter((item) => modelSelectableForProvider(fallback.id, item)),
-    )
+    const [model] = sort(Object.values(fallback.models).filter((item) => modelSelectableForProvider(fallback.id, item)))
     if (!model) throw new Error("no models found")
     return {
       providerID: ProviderID.make(fallback.id),

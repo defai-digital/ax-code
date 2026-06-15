@@ -34,6 +34,7 @@ import { handlePromptLoopAgentStepLimit } from "./prompt-loop-agent-step-limit"
 import { emitPromptLoopCompletionGateDecision } from "./prompt-loop-completion-gate"
 import { handlePromptLoopCompletionGateRetry } from "./prompt-loop-completion-gate-retry"
 import { handlePromptLoopEmptyTurn } from "./prompt-loop-empty-turn"
+import { handlePromptLoopTruncatedTurn } from "./prompt-loop-truncated-turn"
 import { handlePromptLoopTodoConvergence } from "./prompt-loop-todo-convergence"
 import { handlePromptLoopTodoContinuation } from "./prompt-loop-todo-continuation"
 import { loopMessages, scanLoopMessages } from "./prompt-loop-messages"
@@ -49,7 +50,7 @@ import { executeSubtask, type SubtaskContext } from "./prompt-subtask"
 import { resolveTools, shouldBypassAgentCheck } from "./prompt-tools"
 import { clearPromptProcessorInstructions, createPromptProcessor } from "./prompt-processor"
 import { addPromptGoalUsage } from "./prompt-goal-usage"
-import { isEmptyModelTurn, modelTurnFinished } from "./prompt-autonomous-decisions"
+import { isEmptyModelTurn, isTruncatedModelTurn, modelTurnFinished } from "./prompt-autonomous-decisions"
 import { insertReminders } from "./prompt-reminders"
 import { executeShellCommand } from "./prompt-shell-command"
 import { executePromptCommand } from "./prompt-command-execution"
@@ -193,6 +194,7 @@ export namespace SessionPrompt {
     let lastTodoContextSignature: string | undefined
     let stagnantTodoRetries = 0
     let emptyModelTurnRetries = 0
+    let truncatedModelTurnRetries = 0
     const cachedSystemPrompt: PromptRequestCache = {
       environment: undefined,
       environmentModelKey: undefined,
@@ -532,7 +534,11 @@ export namespace SessionPrompt {
         finish: processor.message.finish,
         tokens: processor.message.tokens,
       })
+      const truncatedModelTurn = isTruncatedModelTurn({
+        finish: processor.message.finish,
+      })
       if (!emptyModelTurn) emptyModelTurnRetries = 0
+      if (!truncatedModelTurn) truncatedModelTurnRetries = 0
 
       if (modelFinished && !processor.message.error) {
         if (await structuredOutput.failIfMissing(processor.message)) {
@@ -591,6 +597,30 @@ export namespace SessionPrompt {
             sessionID,
             messages: latestMessages,
             text: emptyTurnTransition.text,
+          })
+          continue
+        }
+
+        const truncatedTurnTransition = await handlePromptLoopTruncatedTurn({
+          sessionID,
+          assistant: processor.message,
+          truncatedModelTurn,
+          truncatedModelTurnRetries,
+          maxTruncatedModelTurnRetries: maxEmptyModelTurnRetries,
+          pendingCount: pendingTodos.length,
+        })
+        truncatedModelTurnRetries = truncatedTurnTransition.truncatedModelTurnRetries
+
+        if (truncatedTurnTransition.action === "stop") {
+          reason = truncatedTurnTransition.reason
+          break
+        }
+
+        if (truncatedTurnTransition.action === "recover") {
+          await createAutonomousTextContinuation({
+            sessionID,
+            messages: latestMessages,
+            text: truncatedTurnTransition.text,
           })
           continue
         }

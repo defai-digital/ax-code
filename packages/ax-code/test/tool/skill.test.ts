@@ -214,9 +214,7 @@ Use this skill.
           expect(result.output).toContain("unconfirmed hypothesis")
           expect(result.output).toContain("not reproduced")
           expect(result.output).toContain("Do not treat a plausible code smell")
-          expect(result.output).toContain(
-            "Include this only for `confirmed bug` or `confirmed by failing test`.",
-          )
+          expect(result.output).toContain("Include this only for `confirmed bug` or `confirmed by failing test`.")
 
           const fixResult = await tool.execute({ name: "debug-n-fix" }, ctx)
           expect(fixResult.metadata.dir).toBe("builtin://debug-n-fix")

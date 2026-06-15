@@ -7,7 +7,9 @@ import {
   globalStepLimitDecision,
   goalContinuationDecision,
   isEmptyModelTurn,
+  isTruncatedModelTurn,
   modelTurnFinished,
+  truncatedModelTurnDecision,
 } from "../../src/session/prompt-autonomous-decisions"
 
 function unfinishedTodosGate() {
@@ -35,6 +37,7 @@ describe("autonomous continuation decisions", () => {
     expect(modelTurnFinished(undefined)).toBe(false)
     expect(modelTurnFinished("tool-calls")).toBe(false)
     expect(modelTurnFinished("unknown")).toBe(false)
+    expect(modelTurnFinished("length")).toBe(false)
     expect(modelTurnFinished("stop")).toBe(true)
     expect(modelTurnFinished("other")).toBe(true)
   })
@@ -43,6 +46,12 @@ describe("autonomous continuation decisions", () => {
     expect(isEmptyModelTurn({ finish: "other", tokens: {} })).toBe(true)
     expect(isEmptyModelTurn({ finish: "other", tokens: { input: 1 } })).toBe(false)
     expect(isEmptyModelTurn({ finish: "stop", tokens: {} })).toBe(false)
+  })
+
+  test("detects truncated model turns from length finish reason", () => {
+    expect(isTruncatedModelTurn({ finish: "length" })).toBe(true)
+    expect(isTruncatedModelTurn({ finish: "stop" })).toBe(false)
+    expect(isTruncatedModelTurn({ finish: undefined })).toBe(false)
   })
 
   test("ignores global step limit before the configured boundary", () => {
@@ -591,5 +600,50 @@ describe("autonomous continuation decisions", () => {
     expect(decision.action).toBe("stop")
     if (decision.action !== "stop") throw new Error("expected stop decision")
     expect(decision.errorCode).toBe("EMPTY_MODEL_TURN")
+  })
+
+  test("recovers from the first truncated model turn", () => {
+    expect(
+      truncatedModelTurnDecision({
+        truncatedModelTurn: true,
+        truncatedModelTurnRetries: 0,
+        maxTruncatedModelTurnRetries: 1,
+      }),
+    ).toEqual({
+      action: "recover",
+      truncatedModelTurnRetries: 1,
+      attempt: 1,
+    })
+  })
+
+  test("resets truncated model turn retries when the turn is not truncated", () => {
+    expect(
+      truncatedModelTurnDecision({
+        truncatedModelTurn: false,
+        truncatedModelTurnRetries: 1,
+        maxTruncatedModelTurnRetries: 1,
+      }),
+    ).toEqual({
+      action: "ignore",
+      truncatedModelTurnRetries: 0,
+    })
+  })
+
+  test("stops after the truncated model turn retry budget is exhausted", () => {
+    const decision = truncatedModelTurnDecision({
+      truncatedModelTurn: true,
+      truncatedModelTurnRetries: 1,
+      maxTruncatedModelTurnRetries: 1,
+    })
+
+    expect(decision.action).toBe("stop")
+    if (decision.action !== "stop") throw new Error("expected stop decision")
+    expect(decision).toMatchObject({
+      action: "stop",
+      reason: "stalled",
+      errorCode: "TRUNCATED_MODEL_TURN",
+    })
+    expect(decision.message).toContain("truncated model turn")
+    expect(decision.message).toContain("should not be treated as complete")
   })
 })

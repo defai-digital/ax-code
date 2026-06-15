@@ -4,13 +4,17 @@ const EMPTY_MODEL_TURN_INCOMPLETE_MESSAGE =
   `Autonomous mode received an empty model turn: the provider returned finish=other with zero input, ` +
   `output, and reasoning tokens. The session is stopped, but the work should not be treated as complete.`
 
+const TRUNCATED_MODEL_TURN_INCOMPLETE_MESSAGE =
+  `Autonomous mode received a truncated model turn: the provider returned finish=length before the model ` +
+  `could complete its response. The session is stopped, but the work should not be treated as complete.`
+
 type ModelTurnTokens = {
   input?: number
   output?: number
   reasoning?: number
 }
 
-const UNFINISHED_MODEL_TURN_FINISH_REASONS = new Set(["tool-calls", "unknown"])
+const UNFINISHED_MODEL_TURN_FINISH_REASONS = new Set(["tool-calls", "unknown", "length"])
 
 export function modelTurnFinished(finish: string | undefined): boolean {
   return finish !== undefined && !UNFINISHED_MODEL_TURN_FINISH_REASONS.has(finish)
@@ -23,6 +27,10 @@ export function isEmptyModelTurn(input: { finish: string | undefined; tokens: Mo
     (input.tokens.output ?? 0) === 0 &&
     (input.tokens.reasoning ?? 0) === 0
   )
+}
+
+export function isTruncatedModelTurn(input: { finish: string | undefined }): boolean {
+  return input.finish === "length"
 }
 
 type EmptyModelTurnDecision =
@@ -40,6 +48,23 @@ type EmptyModelTurnDecision =
       action: "stop"
       reason: "stalled"
       errorCode: "EMPTY_MODEL_TURN"
+      message: string
+    }
+
+type TruncatedModelTurnDecision =
+  | {
+      action: "ignore"
+      truncatedModelTurnRetries: number
+    }
+  | {
+      action: "recover"
+      truncatedModelTurnRetries: number
+      attempt: number
+    }
+  | {
+      action: "stop"
+      reason: "stalled"
+      errorCode: "TRUNCATED_MODEL_TURN"
       message: string
     }
 
@@ -358,5 +383,35 @@ export function emptyModelTurnDecision(input: {
     emptyModelTurnRetries: nextEmptyModelTurnRetries,
     todoRetries: input.todoRetries,
     attempt: nextEmptyModelTurnRetries,
+  }
+}
+
+export function truncatedModelTurnDecision(input: {
+  truncatedModelTurn: boolean
+  truncatedModelTurnRetries: number
+  maxTruncatedModelTurnRetries: number
+}): TruncatedModelTurnDecision {
+  if (!input.truncatedModelTurn) {
+    return {
+      action: "ignore",
+      truncatedModelTurnRetries: 0,
+    }
+  }
+
+  const retries = normalizedDecisionCount(input.truncatedModelTurnRetries)
+  if (retryBudgetExhausted({ attempts: retries, maxAttempts: input.maxTruncatedModelTurnRetries })) {
+    return {
+      action: "stop",
+      reason: "stalled",
+      errorCode: "TRUNCATED_MODEL_TURN",
+      message: TRUNCATED_MODEL_TURN_INCOMPLETE_MESSAGE,
+    }
+  }
+
+  const nextRetries = nextDecisionCount(retries)
+  return {
+    action: "recover",
+    truncatedModelTurnRetries: nextRetries,
+    attempt: nextRetries,
   }
 }

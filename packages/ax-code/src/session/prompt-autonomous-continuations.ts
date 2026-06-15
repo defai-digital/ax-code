@@ -103,6 +103,15 @@ export namespace AutonomousContinuationPrompt {
     )
   }
 
+  export function truncatedModelTurnRecovery(input: { attempt: number; maxAttempts: number }) {
+    return (
+      `The previous autonomous model turn was truncated by the provider before it completed. ` +
+      `Do not summarize the truncated text as complete. Continue from the last valid tool results, ` +
+      `use the available tools to finish the concrete work, and verify the requested output exists before stopping. ` +
+      `This is truncated-turn recovery ${input.attempt}/${input.maxAttempts}.`
+    )
+  }
+
   export function completionGateRetry(input: { message: string; attempt: number; maxAttempts: number }) {
     return (
       `Control-plane completion gate blocked completion: ${input.message}\n` +

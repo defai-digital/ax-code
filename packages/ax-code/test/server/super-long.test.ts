@@ -190,10 +190,7 @@ describe("super-long route", () => {
           }),
         )
         const startedAt = Date.now() - 60_000
-        await Bun.write(
-          storePath,
-          JSON.stringify({ runs: { ses_status_test: { startedAt, lastSeenAt: startedAt } } }),
-        )
+        await Bun.write(storePath, JSON.stringify({ runs: { ses_status_test: { startedAt, lastSeenAt: startedAt } } }))
 
         await Instance.provide({
           directory: tmp.path,
@@ -234,7 +231,9 @@ describe("super-long route", () => {
       await Instance.provide({
         directory: tmp.path,
         fn: async () => {
-          const response = await Server.Default().request(`/super-long/status?directory=${encodeURIComponent(tmp.path)}`)
+          const response = await Server.Default().request(
+            `/super-long/status?directory=${encodeURIComponent(tmp.path)}`,
+          )
           expect(response.status).toBe(200)
           expect(await response.json()).toEqual({
             enabled: false,
