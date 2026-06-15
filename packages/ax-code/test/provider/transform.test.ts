@@ -1381,21 +1381,6 @@ describe("ProviderTransform.maxOutputTokens", () => {
     expect(ProviderTransform.maxOutputTokens(model)).toBe(512)
   })
 
-  test("caps AX Engine output reservation for local 16k context models", () => {
-    const model = {
-      id: "qwen3-coder-next",
-      providerID: ProviderID.make("ax-engine"),
-      api: {
-        id: "qwen3",
-      },
-      limit: {
-        output: 2_048,
-      },
-    } as any
-
-    expect(ProviderTransform.maxOutputTokens(model)).toBe(512)
-  })
-
   test("caps every Alibaba-backed model regardless of family — reservation is platform-level", () => {
     const model = {
       id: "alibaba-token-plan/deepseek-v3.2",

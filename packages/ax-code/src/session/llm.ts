@@ -59,132 +59,6 @@ export namespace LLM {
     return compacted
   }
 
-  type RepairableToolCall = {
-    toolName: string
-    input?: unknown
-    [key: string]: unknown
-  }
-
-  const axEngineToolAliases: Record<string, string> = {
-    edit_file: "edit",
-    list_files: "glob",
-    read_file: "read",
-    write_file: "write",
-  }
-
-  function parseToolInput(input: unknown): Record<string, unknown> | undefined {
-    if (input && typeof input === "object" && !Array.isArray(input)) return { ...(input as Record<string, unknown>) }
-    if (typeof input !== "string") return undefined
-    try {
-      const parsed = JSON.parse(input)
-      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return parsed as Record<string, unknown>
-    } catch {}
-    return undefined
-  }
-
-  function stringValue(input: Record<string, unknown>, keys: string[]) {
-    for (const key of keys) {
-      const value = input[key]
-      if (typeof value === "string" && value.length > 0) return value
-    }
-    return undefined
-  }
-
-  function setStringAlias(input: Record<string, unknown>, canonical: string, aliases: string[]) {
-    const value = stringValue(input, [canonical, ...aliases])
-    let changed = false
-    if (value !== undefined && input[canonical] !== value) {
-      input[canonical] = value
-      changed = true
-    }
-    for (const alias of aliases) {
-      if (alias in input) {
-        delete input[alias]
-        changed = true
-      }
-    }
-    return changed
-  }
-
-  function normalizeAxEngineToolInput(toolName: string, input: unknown) {
-    const next = parseToolInput(input)
-    if (!next) return { input, changed: false }
-    let changed = false
-
-    if (toolName === "read" || toolName === "write") {
-      changed = setStringAlias(next, "filePath", ["file_path", "filepath", "path", "filename"]) || changed
-    }
-
-    if (toolName === "edit") {
-      changed = setStringAlias(next, "filePath", ["file_path", "filepath", "path", "filename"]) || changed
-      changed = setStringAlias(next, "oldString", ["old_string", "old"]) || changed
-      changed = setStringAlias(next, "newString", ["new_string", "new"]) || changed
-      if (typeof next.replace_all === "boolean" && next.replaceAll === undefined) {
-        next.replaceAll = next.replace_all
-        changed = true
-      }
-      if ("replace_all" in next) {
-        delete next.replace_all
-        changed = true
-      }
-    }
-
-    if (toolName === "glob") {
-      if (typeof next.pattern !== "string" || next.pattern.length === 0) {
-        next.pattern = "**/*"
-        changed = true
-      }
-      const path = stringValue(next, ["path", "directory", "dir", "root", "file_path", "filepath"])
-      if (path && next.path !== path) {
-        next.path = path
-        changed = true
-      }
-      for (const alias of ["directory", "dir", "root", "file_path", "filepath"]) {
-        if (alias in next) {
-          delete next[alias]
-          changed = true
-        }
-      }
-    }
-
-    if (toolName === "bash") {
-      const command = typeof next.command === "string" ? next.command.trim() : ""
-      if (command && typeof next.description !== "string") {
-        next.description = command.slice(0, 160)
-        changed = true
-      }
-    }
-
-    return { input: next, changed }
-  }
-
-  function repairToolCallForModel<TToolCall extends RepairableToolCall>(input: {
-    model: Provider.Model
-    tools: Record<string, Tool>
-    toolCall: TToolCall
-  }): TToolCall | undefined {
-    if (!ProviderTransform.shouldCompactToolSchema(input.model)) return undefined
-
-    const rawName = input.toolCall.toolName
-    const lowerName = rawName.toLowerCase()
-    const repairedName = input.tools[lowerName]
-      ? lowerName
-      : input.tools[axEngineToolAliases[lowerName]]
-        ? axEngineToolAliases[lowerName]
-        : rawName
-    const normalized = normalizeAxEngineToolInput(repairedName, input.toolCall.input)
-    if (repairedName === rawName && !normalized.changed) return undefined
-    return {
-      ...input.toolCall,
-      toolName: repairedName,
-      input: normalized.input,
-    } as TToolCall
-  }
-
-  export function repairToolCallForTest(input: Parameters<typeof repairToolCallForModel>[0]) {
-    return repairToolCallForModel(input)
-  }
-
   export type StreamInput = {
     user: MessageV2.User
     sessionID: string
@@ -482,25 +356,14 @@ export namespace LLM {
     let output: StreamOutput
     try {
       output = streamText({
-        ...({ maxDuration: 300_000 } as Record<string, unknown>),
+        // @ts-expect-error
+        maxDuration: 300_000,
         onError(error) {
           l.error("stream error", {
             error: DiagnosticLog.redactForLog(error),
           })
         },
         async experimental_repairToolCall(failed) {
-          const repaired = repairToolCallForModel({
-            model: input.model,
-            tools,
-            toolCall: failed.toolCall,
-          })
-          if (repaired) {
-            l.info("repairing tool call", {
-              tool: failed.toolCall.toolName,
-              repaired: repaired.toolName,
-            })
-            return repaired
-          }
           const lower = failed.toolCall.toolName.toLowerCase()
           if (lower !== failed.toolCall.toolName && tools[lower]) {
             l.info("repairing tool call", {
