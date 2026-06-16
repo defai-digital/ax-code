@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { estimateRequestTokens, getLastUserInfo } from "../../src/session/prompt-request"
+import { estimateRequestTokens, estimateToolDefinitionTokens, getLastUserInfo } from "../../src/session/prompt-request"
 
 describe("session.prompt request helpers", () => {
   test("estimates request tokens with per-item overhead", () => {
@@ -29,6 +29,34 @@ describe("session.prompt request helpers", () => {
     // changes) must miss the cache and reflect its new content.
     const grown = [messages[0], { role: "assistant", content: [{ type: "text", text: "abcd".repeat(10) }] }] as any
     expect(estimateRequestTokens({ system: [], messages: grown })).toBeGreaterThan(first)
+  })
+
+  test("includes tool definitions in request-size estimates", () => {
+    const small = estimateToolDefinitionTokens([
+      {
+        id: "read",
+        description: "Read a file",
+        inputSchema: { type: "object", properties: { path: { type: "string" } }, required: ["path"] },
+      },
+    ])
+    const large = estimateToolDefinitionTokens([
+      {
+        id: "read",
+        description: "Read a file",
+        inputSchema: {
+          type: "object",
+          properties: {
+            path: { type: "string", description: "x".repeat(200) },
+            offset: { type: "number" },
+            limit: { type: "number" },
+          },
+          required: ["path"],
+        },
+      },
+    ])
+
+    expect(small).toBeGreaterThan(0)
+    expect(large).toBeGreaterThan(small)
   })
 
   test("returns the latest user info", () => {

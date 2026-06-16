@@ -29,6 +29,23 @@ export function estimateRequestTokens(input: { system: string[]; messages: Model
   return total
 }
 
+export function estimateToolDefinitionTokens(
+  tools: Iterable<{ id: string; description?: string; inputSchema: unknown }>,
+) {
+  let total = 0
+  for (const item of tools) {
+    total += Token.estimate(
+      JSON.stringify({
+        name: item.id,
+        description: item.description ?? "",
+        parameters: item.inputSchema,
+      }),
+    )
+    total += 8
+  }
+  return total
+}
+
 export function getLastUserInfo(messages: readonly MessageV2.WithParts[]): MessageV2.User | undefined {
   for (let index = messages.length - 1; index >= 0; index--) {
     const message = messages[index]

@@ -1,10 +1,13 @@
 import type { ModelMessage } from "ai"
 import { Log } from "../util/log"
+import type { Agent } from "../agent/agent"
 import type { Provider } from "../provider/provider"
+import type { Permission } from "@/permission"
 import { SessionCompaction } from "./compaction"
 import { MessageV2 } from "./message-v2"
 import { pendingCompactionDecision, shouldScheduleUsageCompaction } from "./prompt-loop-decisions"
 import { estimateRequestTokens } from "./prompt-request"
+import { estimateRegistryToolSchemaTokens } from "./prompt-tools"
 import { SessionRetry } from "./retry"
 import type { SessionID } from "./schema"
 
@@ -86,16 +89,26 @@ function isSyntheticContinuation(parts: MessageV2.Part[]) {
 export async function maybeSchedulePreflightCompaction(input: {
   sessionID: SessionID
   agent: string
+  agentInfo: Agent.Info
   userModel: MessageV2.User["model"]
   model: Provider.Model
   userParts: MessageV2.Part[]
   system: string[]
   requestMessages: ModelMessage[]
+  tools?: Record<string, boolean>
+  sessionPermission?: Permission.Ruleset
 }) {
   const tokenBudget = await SessionCompaction.budget(input.model)
   if (!tokenBudget || isSyntheticContinuation(input.userParts)) return false
 
-  const estimatedTokens = estimateRequestTokens({ system: input.system, messages: input.requestMessages })
+  const messageTokens = estimateRequestTokens({ system: input.system, messages: input.requestMessages })
+  const toolSchemaTokens = await estimateRegistryToolSchemaTokens({
+    agent: input.agentInfo,
+    model: input.model,
+    tools: input.tools,
+    sessionPermission: input.sessionPermission,
+  })
+  const estimatedTokens = messageTokens + toolSchemaTokens
   if (estimatedTokens < tokenBudget.usable) return false
 
   log.info("prompt preflight scheduled compaction", {
@@ -103,6 +116,8 @@ export async function maybeSchedulePreflightCompaction(input: {
     status: "ok",
     sessionID: input.sessionID,
     estimatedTokens,
+    messageTokens,
+    toolSchemaTokens,
     usableTokens: tokenBudget.usable,
     modelID: input.model.id,
     providerID: input.model.providerID,

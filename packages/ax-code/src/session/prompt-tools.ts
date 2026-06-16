@@ -26,6 +26,7 @@ import { Instance } from "../project/instance"
 import { Truncate } from "@/tool/truncate"
 import type { SessionProcessor } from "./processor"
 import { permissionRulesetFromLegacyTools } from "./prompt-permission"
+import { estimateToolDefinitionTokens } from "./prompt-request"
 
 const log = Log.create({ service: "session.prompt.tools" })
 
@@ -173,6 +174,36 @@ export function collectMcpToolContent(content: McpToolContentItem[]) {
   }
 
   return { textParts, attachments }
+}
+
+export async function estimateRegistryToolSchemaTokens(input: {
+  agent: Agent.Info
+  model: Provider.Model
+  tools?: Record<string, boolean>
+  sessionPermission?: Permission.Ruleset
+}) {
+  const ruleset = Permission.merge(
+    input.agent.permission,
+    input.sessionPermission ?? [],
+    permissionRulesetFromLegacyTools(input.tools),
+  )
+  const registryTools = await ToolRegistry.tools(
+    { modelID: ModelID.make(input.model.api.id), providerID: input.model.providerID },
+    input.agent,
+  )
+  const disabledRegistryTools = Permission.disabled(
+    registryTools.map((item) => item.id),
+    ruleset,
+  )
+  return estimateToolDefinitionTokens(
+    registryTools
+      .filter((item) => input.tools?.[item.id] !== false && !disabledRegistryTools.has(item.id))
+      .map((item) => ({
+        id: item.id,
+        description: item.description,
+        inputSchema: ProviderTransform.schema(input.model, z.toJSONSchema(item.parameters)),
+      })),
+  )
 }
 
 /**

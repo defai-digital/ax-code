@@ -470,11 +470,14 @@ export namespace SessionPrompt {
         await maybeSchedulePreflightCompaction({
           sessionID,
           agent: lastUser.agent,
+          agentInfo: agent,
           userModel: lastUser.model,
           model,
           userParts: lastUserParts ?? [],
           system: request.system,
           requestMessages: request.requestMessages,
+          tools: lastUser.tools,
+          sessionPermission: session.permission,
         })
       ) {
         cachedMsgs = undefined
