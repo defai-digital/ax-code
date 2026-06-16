@@ -190,15 +190,17 @@ const MODEL_REGISTRY: ModelRegistration[] = [
   },
 
   // Qwen 3.7 Max - Other providers (fallback)
+  // When provider is unknown, assume reasonable capabilities since Qwen 3.7 Max
+  // is known to support these features on most providers
   {
     pattern: /qwen[\.\-_]?3[\.\-_]?7[\.\-_]?max/i,
     capabilities: {
       contextWindow: 131_072,
-      thinking: "blocked",
-      preserveThinking: "blocked",
-      promptCache: "blocked",
-      toolCalling: "blocked",
-      structuredOutput: "blocked",
+      thinking: "supported",
+      preserveThinking: "experimental",
+      promptCache: "experimental",
+      toolCalling: "supported",
+      structuredOutput: "supported",
       webOrBuiltInTools: "blocked",
       rateLimitTier: "standard",
     },

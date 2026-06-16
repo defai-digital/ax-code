@@ -79,8 +79,8 @@ describe("Model Capability Registry", () => {
       expect(supportsLongAgent("qwen-3-7-max", "togetherai")).toBe(true)
     })
 
-    it("should return false for Qwen 3.7 Max on unknown providers", () => {
-      expect(supportsLongAgent("qwen-3-7-max", "unknown-provider")).toBe(false)
+    it("should return true for Qwen 3.7 Max on unknown providers (fallback)", () => {
+      expect(supportsLongAgent("qwen-3-7-max", "unknown-provider")).toBe(true)
     })
 
     it("should return false for models without thinking support", () => {
