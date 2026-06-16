@@ -8,6 +8,7 @@ import { Session } from "../../src/session"
 import type { SessionID } from "../../src/session/schema"
 import { LLM } from "../../src/session/llm"
 import { SessionPrompt } from "../../src/session/prompt"
+import { MAX_TRUNCATED_MODEL_TURN_RETRIES } from "../../src/session/prompt-loop-config"
 import { SessionStatus } from "../../src/session/status"
 import { SessionSummary } from "../../src/session/summary"
 import { Todo } from "../../src/session/todo"
@@ -1573,7 +1574,7 @@ describe("session.prompt flow", () => {
             parts: [{ type: "text", text: "create a small website" }],
           })
 
-          expect(streamSpy).toHaveBeenCalledTimes(2)
+          expect(streamSpy).toHaveBeenCalledTimes(MAX_TRUNCATED_MODEL_TURN_RETRIES + 1)
 
           const messages = await Session.messages({ sessionID: session.id })
           expect(

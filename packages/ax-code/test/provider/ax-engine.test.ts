@@ -17,6 +17,7 @@ import {
   evaluateDiskStatus,
   evaluateAxEngineCapabilityFromModels,
   evaluatePlatformEligibility,
+  isPlausiblySupportedHost,
   markPrepared,
   normalizeQuantization,
   parseDfPkAvailableBytes,
@@ -354,6 +355,8 @@ describe("ax-engine provider integration", () => {
   })
 
   test("configured provider is available without starting ax-engine during provider list", async () => {
+    if (!isPlausiblySupportedHost()) return
+
     await using tmp = await tmpdir({
       config: {
         provider: {
@@ -380,6 +383,8 @@ describe("ax-engine provider integration", () => {
   })
 
   test("empty configured provider is enough for TUI ax-engine connect flow", async () => {
+    if (!isPlausiblySupportedHost()) return
+
     await using tmp = await tmpdir({
       config: {
         provider: {
@@ -401,6 +406,8 @@ describe("ax-engine provider integration", () => {
   })
 
   test("name-only configured provider is enough for TUI ax-engine connect flow", async () => {
+    if (!isPlausiblySupportedHost()) return
+
     await using tmp = await tmpdir({
       config: {
         provider: {
