@@ -36,6 +36,27 @@ export namespace MCP {
   const isErrnoException = (error: unknown): error is NodeJS.ErrnoException =>
     error instanceof Error && "code" in error && typeof (error as NodeJS.ErrnoException).code === "string"
 
+  /**
+   * Detect when the MCP SDK wraps a non-JSON error body from a failed
+   * dynamic client registration (e.g. Figma returns HTTP 403 with plain
+   * text "Forbidden"). The SDK's parseErrorResponse throws a SyntaxError
+   * and surfaces it as "HTTP 403: Invalid OAuth error response:
+   * SyntaxError: …". Catch this pattern and surface an actionable hint
+   * instead of the raw parse error.
+   */
+  const DYNAMIC_REGISTRATION_REJECTED = /Invalid OAuth error response.*SyntaxError|Invalid OAuth error response.*JSON/i
+  function isDynamicRegistrationRejection(message: string): boolean {
+    // Match either the explicit registration keywords or the SDK's
+    // non-JSON-body wrapper that commonly accompanies a 403/401 from a
+    // server that advertises registration_endpoint but rejects unknown
+    // clients (e.g. Figma).
+    return (
+      message.includes("registration") ||
+      message.includes("client_id") ||
+      DYNAMIC_REGISTRATION_REJECTED.test(message)
+    )
+  }
+
   function killProcessTree(pid: number) {
     return Shell.killTree({
       pid,
@@ -512,8 +533,11 @@ export namespace MCP {
           if (isAuthError) {
             log.info("mcp server requires authentication", { key, transport: name })
 
-            // Check if this is a "needs registration" error
-            if (lastError.message.includes("registration") || lastError.message.includes("client_id")) {
+            // Check if this is a "needs registration" error — includes the
+            // case where the server rejects dynamic registration with a
+            // non-JSON body (HTTP 403 Forbidden), which the SDK wraps as a
+            // cryptic SyntaxError inside "Invalid OAuth error response".
+            if (isDynamicRegistrationRejection(lastError.message)) {
               // Registration failure: nothing left to reuse — close client
               // and the failed transport.
               if (client) {
@@ -1172,6 +1196,16 @@ export namespace MCP {
       }
       await transport.close?.().catch(() => {})
       await closeIfPossible(client, mcpName, "startAuth error recovery")
+      // Surface an actionable message when dynamic client registration was
+      // rejected with a non-JSON body (e.g. Figma returns HTTP 403
+      // "Forbidden" and the SDK wraps it as a SyntaxError).
+      const errMsg = toErrorMessage(error)
+      if (isDynamicRegistrationRejection(errMsg)) {
+        throw new Error(
+          `Dynamic client registration was rejected by "${mcpName}". ` +
+            `The server may require a pre-registered client ID — provide oauth.clientId and oauth.clientSecret in your MCP config.`,
+        )
+      }
       throw error
     }
   }

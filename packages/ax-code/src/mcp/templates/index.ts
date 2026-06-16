@@ -105,6 +105,30 @@ export const TEMPLATES: McpTemplate[] = [
     command: "npx",
     args: ["-y", "@modelcontextprotocol/server-puppeteer"],
   },
+  {
+    name: "playwright",
+    description: "Browser automation — screenshot, click, fill forms, navigate",
+    category: "Browser & Testing",
+    type: "local",
+    command: "npx",
+    args: ["-y", "@playwright/mcp@latest"],
+    docs: "https://github.com/microsoft/playwright-mcp",
+  },
+
+  // === Design ===
+  {
+    name: "figma",
+    description: "Figma designs — read files, components, styles, variables",
+    category: "Design",
+    type: "local",
+    command: "npx",
+    args: ["-y", "figma-developer-mcp"],
+    envRequired: ["FIGMA_API_KEY"],
+    envDescription: {
+      FIGMA_API_KEY: "Get a personal access token from https://www.figma.com/developers/api#access-tokens",
+    },
+    docs: "https://github.com/figma/figma-mcp",
+  },
 
   // === Cloud & Infrastructure ===
   {

@@ -121,3 +121,35 @@ The Playwright MCP server gains significant capability over your browser. When s
 ## Server Mode
 
 Mutating MCP HTTP routes require a process-local runtime authorization header in addition to general server protections. This protects local runtime-control actions such as adding, connecting, disconnecting, and authenticating MCP servers. Read-only MCP status remains available through `GET /mcp`.
+
+## Figma MCP
+
+AX Code bundles a local Figma template backed by the [`figma-developer-mcp`](https://github.com/figma/figma-mcp) npm package. Use it with a personal access token:
+
+```bash
+ax-code mcp add   # From template → figma
+# Provide your FIGMA_API_KEY when prompted
+```
+
+### Figma Remote OAuth (mcp.figma.com)
+
+Figma's remote MCP endpoint (`https://mcp.figma.com/mcp`) advertises a `registration_endpoint` but returns **HTTP 403 Forbidden** to clients that are not on Figma's allowlist during dynamic client registration (RFC 7591). This means the "Custom remote → No pre-registered client ID" path cannot succeed for Figma out of the box.
+
+To use the remote endpoint, register an OAuth application with Figma and provide the issued credentials in your config:
+
+```json
+{
+  "mcp": {
+    "figma-remote": {
+      "type": "remote",
+      "url": "https://mcp.figma.com/mcp",
+      "oauth": {
+        "clientId": "YOUR_FIGMA_CLIENT_ID",
+        "clientSecret": "YOUR_FIGMA_CLIENT_SECRET"
+      }
+    }
+  }
+}
+```
+
+For most local development workflows, the token-based local template (`figma-developer-mcp`) is simpler and does not require OAuth registration.
