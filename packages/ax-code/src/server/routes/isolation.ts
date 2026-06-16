@@ -2,13 +2,13 @@ import { Hono } from "hono"
 import { describeRoute, resolver } from "hono-openapi"
 import { validator } from "../validation"
 import z from "zod"
-import { Config } from "../../config/config"
 import { Isolation } from "../../isolation"
 import { Instance } from "../../project/instance"
 import { Log } from "../../util/log"
 import { lazy } from "../../util/lazy"
-import { persistProjectConfigFeatureResponse } from "./project-config"
+import { persistProjectConfigFeatureResponse, readProjectConfig } from "./project-config"
 import { FeatureFlag } from "@/util/feature-flags"
+import type { Config } from "../../config/config"
 
 const log = Log.create({ service: "isolation" })
 
@@ -20,6 +20,15 @@ const IsolationState = z
     network: z.boolean(),
   })
   .meta({ ref: "IsolationState" })
+
+function isolationConfigState(config: Config.Info | undefined) {
+  // Compute isolation state from config + default only, ignoring env vars.
+  // This is the source of truth for the UI: what the user persisted to
+  // ax-code.json (or the default when no explicit setting exists).
+  const mode = config?.isolation?.mode ?? Isolation.DEFAULT_MODE
+  const network = mode === "full-access" ? true : (config?.isolation?.network ?? false)
+  return { mode, network }
+}
 
 export const IsolationRoutes = lazy(() =>
   new Hono()
@@ -42,8 +51,17 @@ export const IsolationRoutes = lazy(() =>
         },
       }),
       async (c) => {
-        const cfg = await Config.get()
-        const state = Isolation.resolve(cfg.isolation, Instance.directory, Instance.worktree)
+        // Always reconcile from persisted config so an external edit to
+        // ax-code.json propagates without a server restart. The env vars
+        // are the runtime authority for in-process readers (Permission /
+        // prompt-tools / runtime-policy), so keep them in sync — but
+        // never let a stale env reading short-circuit the config read.
+        const config = await readProjectConfig()
+        const state = isolationConfigState(config)
+        // Reconcile env vars so in-process readers see the same value
+        // the UI does.
+        FeatureFlag.set("AX_CODE_ISOLATION_MODE", state.mode)
+        FeatureFlag.set("AX_CODE_ISOLATION_NETWORK", state.network)
         return c.json({ mode: state.mode, network: state.network })
       },
     )
