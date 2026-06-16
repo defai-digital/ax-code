@@ -35,7 +35,7 @@ export function createNoTimeoutFetch(): typeof fetch {
   return ((input: URL | RequestInfo, init?: RequestInit) => {
     if (input instanceof Request) {
       ;(input as Request & { timeout?: boolean }).timeout = false
-      return fetch(input, init)
+      return fetch(input, { timeout: false, ...init } as RequestInit)
     }
     return fetch(input, { timeout: false, ...init } as RequestInit)
   }) as typeof fetch

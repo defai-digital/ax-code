@@ -555,11 +555,24 @@ function encodeLengthDelimitedField(fieldNumber: number, value: Uint8Array) {
 function encodeValue(value: unknown): Uint8Array {
   if (value === null || value === undefined) return encodeVarintField(1, 0)
   if (typeof value === "number") return encodeFixed64Field(2, value)
-  if (typeof value === "string") return encodeLengthDelimitedField(3, textEncoder.encode(value))
+  if (typeof value === "string") {
+    // Return raw Value message bytes: field 3 (string_value) tag + length + content.
+    // Do NOT wrap with an extra field tag — callers (encodeProtoObject,
+    // encodeStruct, encodeListValue) add the outer field tag themselves.
+    const strBytes = textEncoder.encode(value)
+    return concatBytes([encodeFieldTag(3, 2), encodeVarint(strBytes.byteLength), strBytes])
+  }
   if (typeof value === "boolean") return encodeVarintField(4, value ? 1 : 0)
-  if (Array.isArray(value)) return encodeLengthDelimitedField(6, encodeListValue(value))
-  if (typeof value === "object") return encodeLengthDelimitedField(5, encodeStruct(value))
-  return encodeLengthDelimitedField(3, textEncoder.encode(String(value)))
+  if (Array.isArray(value)) {
+    const listBytes = encodeListValue(value)
+    return concatBytes([encodeFieldTag(6, 2), encodeVarint(listBytes.byteLength), listBytes])
+  }
+  if (typeof value === "object") {
+    const structBytes = encodeStruct(value)
+    return concatBytes([encodeFieldTag(5, 2), encodeVarint(structBytes.byteLength), structBytes])
+  }
+  const fallback = textEncoder.encode(String(value))
+  return concatBytes([encodeFieldTag(3, 2), encodeVarint(fallback.byteLength), fallback])
 }
 
 function decodeValue(bytes: Uint8Array): unknown {

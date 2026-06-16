@@ -7,23 +7,29 @@ import { OpencodeClient } from "./gen/sdk.gen.js"
 export { type Config as OpencodeClientConfig, OpencodeClient }
 export { type Config as AxCodeClientConfig, OpencodeClient as AxCodeClient }
 
-export function createAxCodeClient(config?: Config & { directory?: string; experimental_workspaceID?: string }) {
-  if (!config?.fetch) {
+export function createAxCodeClient(input?: Config & { directory?: string; experimental_workspaceID?: string }) {
+  // Always spread into a new object to avoid mutating the caller's config.
+  let config: Config & { directory?: string; experimental_workspaceID?: string } = { ...input }
+
+  if (!config.fetch) {
+    config = { ...config, fetch: createNoTimeoutFetch() }
+  }
+
+  if (config.directory) {
     config = {
       ...config,
-      fetch: createNoTimeoutFetch(),
+      headers: withDirectoryHeaders(config.headers as Record<string, string> | undefined, config.directory),
     }
   }
 
-  if (config?.directory) {
-    config.headers = withDirectoryHeaders(config.headers as Record<string, string> | undefined, config.directory)
-  }
-
-  if (config?.experimental_workspaceID) {
-    config.headers = withWorkspaceHeaders(
-      config.headers as Record<string, string> | undefined,
-      config.experimental_workspaceID,
-    )
+  if (config.experimental_workspaceID) {
+    config = {
+      ...config,
+      headers: withWorkspaceHeaders(
+        config.headers as Record<string, string> | undefined,
+        config.experimental_workspaceID,
+      ),
+    }
   }
 
   const client = createClient(config)
