@@ -122,12 +122,11 @@ describe("super-long route", () => {
     })
   })
 
-  test("session override wins over Qwen3.7-Max model default without rewriting config", async () => {
+  test("PUT persists super_long to config and overrides model default", async () => {
     await withCleanSuperLongEnv(async () => {
       await using tmp = await tmpdir({ git: true })
       const configPath = path.join(tmp.path, "ax-code.json")
-      const original = JSON.stringify({ model: "qwen3.7-max" })
-      await Bun.write(configPath, original)
+      await Bun.write(configPath, JSON.stringify({ model: "qwen3.7-max" }))
 
       await Instance.provide({
         directory: tmp.path,
@@ -142,7 +141,9 @@ describe("super-long route", () => {
 
           const get = await Server.Default().request(`/super-long?directory=${encodeURIComponent(tmp.path)}`)
           expect(await get.json()).toEqual({ enabled: false })
-          expect(await Bun.file(configPath).text()).toBe(original)
+          // PUT now persists to config, so the file should be updated.
+          const updated = JSON.parse(await Bun.file(configPath).text())
+          expect(updated.super_long).toBe(false)
         },
       })
     })

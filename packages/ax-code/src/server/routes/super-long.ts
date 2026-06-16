@@ -4,7 +4,11 @@ import { describeRoute, resolver } from "hono-openapi"
 import { validator } from "../validation"
 import { Log } from "../../util/log"
 import { lazy } from "../../util/lazy"
-import { BooleanFeatureState, readProjectConfig } from "./project-config"
+import {
+  BooleanFeatureState,
+  persistProjectConfigBooleanFeatureResponse,
+  readProjectConfig,
+} from "./project-config"
 import { FeatureFlag } from "../../util/feature-flags"
 import { Env } from "../../util/env"
 import { SuperLongPolicy } from "../../session/super-long-policy"
@@ -131,7 +135,7 @@ export const SuperLongRoutes = lazy(() =>
       "/",
       describeRoute({
         summary: "Set Super-Long mode",
-        description: "Toggle Super-Long mode on or off for the current runtime session.",
+        description: "Toggle Super-Long mode on or off. Persists to ax-code.json.",
         operationId: "superLong.set",
         responses: {
           200: {
@@ -157,10 +161,33 @@ export const SuperLongRoutes = lazy(() =>
             })
           }
         }
-        FeatureFlag.set("AX_CODE_SUPER_LONG", enabled)
+        // Persist first; only then update the in-process env. Writing
+        // env before persistence created a window where in-process
+        // readers saw a value the disk hadn't committed, and a
+        // subsequent crash would silently revert.
+        const state = await persistProjectConfigBooleanFeatureResponse({
+          log,
+          context: "super-long config",
+          featureFlag: "AX_CODE_SUPER_LONG",
+          enabled,
+          update: (config) => {
+            // Normalize the super_long field: when enabling, ensure the
+            // object form is used so we can set `enabled`. When
+            // disabling, just flip the boolean (or object) to false.
+            if (typeof config.super_long === "object" && config.super_long !== null) {
+              config.super_long = { ...config.super_long, enabled }
+            } else {
+              config.super_long = enabled
+            }
+          },
+        })
+        if ("error" in state) return c.json(state, 500)
+        // Keep the session override in sync for the current process so
+        // runtimeState() picks up the change immediately without a
+        // restart.
         FeatureFlag.set(SUPER_LONG_OVERRIDE, enabled)
-        log.info("super-long mode changed for session", { enabled })
-        return c.json({ enabled })
+        log.info("super-long mode changed", { enabled })
+        return c.json(state)
       },
     ),
 )
