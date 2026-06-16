@@ -21,10 +21,17 @@ describe("runMode", () => {
 })
 
 describe("nextRunMode", () => {
-  test("cycles none → auto → super-long → none", () => {
+  test("two-mode cycle (default): none → auto → none", () => {
     expect(nextRunMode("none")).toBe("auto")
-    expect(nextRunMode("auto")).toBe("super-long")
+    expect(nextRunMode("auto")).toBe("none")
+    // super-long collapses to auto in the two-mode system
     expect(nextRunMode("super-long")).toBe("none")
+  })
+
+  test("legacy three-mode cycle with enableSuperLong=true", () => {
+    expect(nextRunMode("none", true)).toBe("auto")
+    expect(nextRunMode("auto", true)).toBe("super-long")
+    expect(nextRunMode("super-long", true)).toBe("none")
   })
 })
 
@@ -32,7 +39,8 @@ describe("runModeLabel", () => {
   test("labels every mode", () => {
     expect(runModeLabel("none")).toBe("Manual")
     expect(runModeLabel("auto")).toBe("Autonomous")
-    expect(runModeLabel("super-long")).toBe("Super-Long")
+    // During deprecation, super-long shows as "Autonomous (Long-Run)"
+    expect(runModeLabel("super-long")).toBe("Autonomous (Long-Run)")
   })
 })
 
