@@ -215,7 +215,7 @@ jobs:
           # AX_CODE_MINISIGN_PASSWORD is intentionally NOT exported here — the
           # signing script reads the passphrase from the macOS Keychain via
           # minisignPasswordFromKeychain() in sign-release-assets.ts.
-          bun run script/sign-release-assets.ts --dist-dir packages/ax-code/dist --secret-key "$KEY_DIR/minisign.key" --public-key "$KEY_DIR/minisign.pub"
+          bun run script/sign-release-assets.ts --dist-dir packages/ax-code/dist --secret-key "$AX_CODE_MINISIGN_KEY_DIR/minisign.key" --public-key "$AX_CODE_MINISIGN_KEY_DIR/minisign.pub"
           shopt -s nullglob
           archives=(packages/ax-code/dist/*.tar.gz packages/ax-code/dist/*.zip)
           for archive in "${archives[@]}"; do
