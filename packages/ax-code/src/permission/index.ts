@@ -271,10 +271,22 @@ export namespace Permission {
     //     SafetyPolicy.decide(). Set
     //     `experimental.autonomous_strict_permission: false` only as an
     //     explicit compatibility escape hatch for the legacy allow behavior.
+    //
+    // When the isolation sandbox is set to `full-access` the user has
+    // explicitly opted out of all restrictions. In that posture, risk-class
+    // permissions are auto-approved so the sandbox toggle meaningfully
+    // controls whether the agent runs without approval prompts.
     if (Flag.AX_CODE_AUTONOMOUS && !INTERACTIVE_ONLY.has(request.permission)) {
       const riskClass = classifyRisk(request.permission)
       if (riskClass === "safe") {
         log.info("autonomous auto-approve (safe)", { permission: request.permission, patterns: request.patterns })
+        return
+      }
+      if (Flag.AX_CODE_ISOLATION_MODE === "full-access" && riskClass === "risk") {
+        log.info("autonomous auto-approve (risk, full-access sandbox)", {
+          permission: request.permission,
+          patterns: request.patterns,
+        })
         return
       }
       if (riskClass === "unknown") {

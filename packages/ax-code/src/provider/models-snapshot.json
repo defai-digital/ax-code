@@ -3997,8 +3997,7 @@
           {
             "type": "effort",
             "values": [
-              "low",
-              "medium",
+              "none",
               "high"
             ]
           }
@@ -6487,6 +6486,31 @@
           "output": 64000
         }
       },
+      "zai/glm-5.2": {
+        "id": "zai/glm-5.2",
+        "name": "GLM 5.2",
+        "family": "glm",
+        "attachment": false,
+        "reasoning": true,
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-06-16",
+        "last_updated": "2026-06-13",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 128000
+        }
+      },
       "zai/glm-5": {
         "id": "zai/glm-5",
         "name": "GLM-5",
@@ -6627,12 +6651,7 @@
         "reasoning": true,
         "reasoning_options": [
           {
-            "type": "effort",
-            "values": [
-              "low",
-              "medium",
-              "high"
-            ]
+            "type": "toggle"
           }
         ],
         "tool_call": true,
@@ -6807,12 +6826,7 @@
         "reasoning": true,
         "reasoning_options": [
           {
-            "type": "effort",
-            "values": [
-              "low",
-              "medium",
-              "high"
-            ]
+            "type": "toggle"
           }
         ],
         "tool_call": true,
@@ -7731,7 +7745,17 @@
         "family": "step",
         "attachment": false,
         "reasoning": true,
-        "reasoning_options": [],
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "none",
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        ],
         "tool_call": true,
         "temperature": true,
         "knowledge": "2025-01",
@@ -8288,7 +8312,17 @@
         "family": "sonar-reasoning",
         "attachment": false,
         "reasoning": true,
-        "reasoning_options": [],
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "minimal",
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        ],
         "tool_call": false,
         "temperature": true,
         "knowledge": "2025-09",
@@ -17026,6 +17060,7 @@
         "name": "Mixtral 8x7B Instruct v0.1",
         "attachment": false,
         "reasoning": true,
+        "reasoning_options": [],
         "tool_call": false,
         "temperature": true,
         "knowledge": "2023-09",
@@ -17051,6 +17086,7 @@
         "family": "llama",
         "attachment": false,
         "reasoning": true,
+        "reasoning_options": [],
         "tool_call": true,
         "temperature": true,
         "knowledge": "2023-12",
@@ -17286,6 +17322,16 @@
         "family": "gpt-oss",
         "attachment": false,
         "reasoning": false,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        ],
         "tool_call": true,
         "temperature": true,
         "knowledge": "2024-01",
@@ -17335,6 +17381,7 @@
         "name": "Hermes 4 70B",
         "attachment": false,
         "reasoning": true,
+        "reasoning_options": [],
         "tool_call": true,
         "temperature": true,
         "knowledge": "2023-12",
@@ -17387,6 +17434,16 @@
         "family": "gpt",
         "attachment": true,
         "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        ],
         "tool_call": true,
         "structured_output": true,
         "temperature": false,
@@ -17415,6 +17472,11 @@
         "family": "kimi-thinking",
         "attachment": false,
         "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          }
+        ],
         "tool_call": true,
         "interleaved": {
           "field": "reasoning_content"
@@ -17620,6 +17682,7 @@
         "name": "INTELLECT 3",
         "attachment": true,
         "reasoning": true,
+        "reasoning_options": [],
         "tool_call": true,
         "temperature": true,
         "knowledge": "2025-11",
@@ -17798,6 +17861,7 @@
         "family": "nemotron",
         "attachment": false,
         "reasoning": true,
+        "reasoning_options": [],
         "tool_call": true,
         "temperature": true,
         "knowledge": "2025-12",
@@ -20660,6 +20724,31 @@
         "limit": {
           "context": 256000,
           "output": 256000
+        }
+      },
+      "@cf/zai-org/glm-5.2": {
+        "id": "@cf/zai-org/glm-5.2",
+        "name": "Glm 5.2",
+        "family": "glm",
+        "attachment": false,
+        "reasoning": true,
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-06-13",
+        "last_updated": "2026-06-13",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 262144,
+          "output": 262144
         }
       },
       "@cf/deepseek-ai/deepseek-r1-distill-qwen-32b": {

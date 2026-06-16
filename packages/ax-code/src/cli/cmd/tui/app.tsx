@@ -1089,24 +1089,28 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
         sandboxPutController?.abort()
         const controller = new AbortController()
         sandboxPutController = controller
-        sync.set("isolation", "mode", next)
-        sync.set("isolation", "network", next === "full-access")
         const headers = directoryRequestHeaders({
           directory: sdk.directory,
           contentType: "application/json",
         })
-        void putJsonWithTimeout("/isolation", { mode: next }, headers, { signal: controller.signal }).catch((error) => {
-          if (controller.signal.aborted || sandboxPutController !== controller) return
-          Log.Default.warn("failed to update sandbox setting", { error, mode: next })
-          if (sync.data.isolation.mode === next) {
-            sync.set("isolation", "mode", previousMode)
-            sync.set("isolation", "network", previousNetwork)
+        // Await the PUT before updating sync state so the UI reflects the
+        // server-confirmed isolation mode. An optimistic update would let
+        // the user send prompts during the async gap while the server still
+        // enforces the previous mode, producing confusing isolation prompts.
+        void putJsonWithTimeout("/isolation", { mode: next }, headers, { signal: controller.signal })
+          .then(() => {
+            if (controller.signal.aborted || sandboxPutController !== controller) return
+            sync.set("isolation", "mode", next)
+            sync.set("isolation", "network", next === "full-access")
+          })
+          .catch((error) => {
+            if (controller.signal.aborted || sandboxPutController !== controller) return
+            Log.Default.warn("failed to update sandbox setting", { error, mode: next })
             toast.show({
               message: error instanceof Error ? error.message : "Failed to save sandbox setting",
               variant: "error",
             })
-          }
-        })
+          })
         dialog.clear()
       },
     },
