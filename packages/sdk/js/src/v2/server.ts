@@ -1,11 +1,14 @@
 import { spawn } from "node:child_process"
 import { randomBytes } from "node:crypto"
 import { type Config } from "./gen/types.gen.js"
-
-type Proc = ReturnType<typeof spawn> & {
-  on(event: "exit", listener: (code: number | null) => void): void
-  on(event: "error", listener: (error: Error) => void): void
-}
+import {
+  type Proc,
+  resolveServerDefaults,
+  buildServerArgs,
+  buildAuthHeaders,
+  waitForServerReady,
+  closeProcGracefully,
+} from "../internal/server-shared.js"
 
 export type ServerOptions = {
   hostname?: string
@@ -34,121 +37,29 @@ export type TuiOptions = {
 }
 
 export async function createAxCodeServer(options?: ServerOptions) {
-  options = Object.assign(
-    {
-      hostname: "127.0.0.1",
-      port: 4096,
-      timeout: 5000,
-    },
-    options ?? {},
-  )
-  const hostname = options.hostname ?? "127.0.0.1"
-  assertSdkHttpLoopbackBind(hostname, options.allowNetworkBind, "createAxCodeServer")
-
-  const args = [`serve`, `--hostname=${hostname}`, `--port=${options.port}`]
-  if (options.config?.logLevel) args.push(`--log-level=${options.config.logLevel}`)
-  const username = options.auth?.username ?? "ax-code"
-  const password = options.auth?.password ?? randomBytes(24).toString("base64url")
-  const headers = {
-    Authorization: "Basic " + Buffer.from(`${username}:${password}`).toString("base64"),
-  }
+  const resolved = resolveServerDefaults(options)
+  const args = buildServerArgs(resolved.hostname, resolved.port, options?.config?.logLevel)
+  const username = resolved.auth?.username ?? "ax-code"
+  const password = resolved.auth?.password ?? randomBytes(24).toString("base64url")
+  const headers = buildAuthHeaders(username, password)
 
   const proc = spawn(`ax-code`, args, {
-    signal: options.signal,
+    signal: resolved.signal,
     env: {
       ...process.env,
       AX_CODE_SERVER_USERNAME: username,
       AX_CODE_SERVER_PASSWORD: password,
-      AX_CODE_CONFIG_CONTENT: JSON.stringify(options.config ?? {}),
+      AX_CODE_CONFIG_CONTENT: JSON.stringify(resolved.config ?? {}),
     },
   }) as Proc
 
-  const url = await new Promise<string>((resolve, reject) => {
-    const id = setTimeout(() => {
-      fail(new Error(`Timeout waiting for server to start after ${options.timeout}ms`))
-    }, options.timeout)
-    let stdoutOutput = ""
-    let stderrOutput = ""
-    let settled = false
-    const onStdout = (chunk: any) => {
-      stdoutOutput += chunk.toString()
-      const lines = stdoutOutput.split("\n")
-      for (const line of lines) {
-        if (line.startsWith("ax-code server listening")) {
-          const match = line.match(/on\s+(https?:\/\/[^\s]+)/)
-          if (!match) {
-            fail(new Error(`Failed to parse server url from output: ${line}`))
-            return
-          }
-          succeed(match[1]!)
-          return
-        }
-      }
-    }
-    const onStderr = (chunk: any) => {
-      stderrOutput += chunk.toString()
-    }
-    const cleanup = () => {
-      proc.stdout?.removeListener("data", onStdout)
-      proc.stderr?.removeListener("data", onStderr)
-      if (options.signal) options.signal.removeEventListener("abort", onAbort)
-    }
-    const fail = (error: Error, kill = true) => {
-      if (settled) return
-      settled = true
-      clearTimeout(id)
-      cleanup()
-      if (kill) {
-        try {
-          proc.kill("SIGTERM")
-        } catch {}
-      }
-      reject(error)
-    }
-    const succeed = (url: string) => {
-      if (settled) return
-      settled = true
-      clearTimeout(id)
-      cleanup()
-      resolve(url)
-    }
-    const onAbort = () => {
-      fail(new Error("Aborted"))
-    }
-    proc.stdout?.on("data", onStdout)
-    proc.stderr?.on("data", onStderr)
-    proc.on("exit", (code) => {
-      const combined = [stdoutOutput, stderrOutput].filter(Boolean).join("\n")
-      let msg = `Server exited with code ${code}`
-      if (combined.trim()) {
-        msg += `\nServer output: ${combined}`
-      }
-      fail(new Error(msg), false)
-    })
-    proc.on("error", (error) => {
-      fail(error, false)
-    })
-    if (options.signal) {
-      options.signal.addEventListener("abort", onAbort, { once: true })
-    }
-  })
+  const url = await waitForServerReady(proc, { timeout: resolved.timeout, signal: resolved.signal })
 
   return {
     url,
     headers,
-    close() {
-      if (proc.exitCode !== null || proc.signalCode !== null) return
-      try {
-        proc.kill("SIGTERM")
-      } catch {
-        return
-      }
-      const timer = setTimeout(() => {
-        try {
-          proc.kill("SIGKILL")
-        } catch {}
-      }, 300)
-      proc.once("exit", () => clearTimeout(timer))
+    async close() {
+      await closeProcGracefully(proc)
     },
   }
 }
@@ -156,7 +67,7 @@ export async function createAxCodeServer(options?: ServerOptions) {
 export const createOpencodeServer = createAxCodeServer
 
 export function createAxCodeTui(options?: TuiOptions) {
-  const args = []
+  const args: string[] = []
 
   if (options?.project) {
     args.push(`--project=${options.project}`)
@@ -181,31 +92,10 @@ export function createAxCodeTui(options?: TuiOptions) {
   }) as Proc
 
   return {
-    close() {
-      proc.kill()
+    async close() {
+      await closeProcGracefully(proc)
     },
   }
 }
 
 export const createOpencodeTui = createAxCodeTui
-
-function assertSdkHttpLoopbackBind(hostname: string, allowNetworkBind: boolean | undefined, helper: string) {
-  if (allowNetworkBind || isLoopbackHostname(hostname)) return
-  throw new Error(
-    `${helper} only binds the HTTP API to loopback hostnames by default. ` +
-      `Refusing hostname ${hostname}. ` +
-      "Use @ax-code/sdk/grpc for desktop native transports, or pass allowNetworkBind: true only for an explicitly secured server.",
-  )
-}
-
-function isLoopbackHostname(hostname: string) {
-  const normalized = hostname.toLowerCase().replace(/^\[|\]$/g, "")
-  return normalized === "localhost" || normalized === "::1" || isIpv4Loopback(normalized)
-}
-
-function isIpv4Loopback(hostname: string) {
-  const parts = hostname.split(".")
-  if (parts.length !== 4) return false
-  const numbers = parts.map((part) => Number(part))
-  return numbers.every((part) => Number.isInteger(part) && part >= 0 && part <= 255) && numbers[0] === 127
-}

@@ -719,9 +719,12 @@ function readVarint(bytes: Uint8Array, offset: number) {
   let cursor = offset
   while (cursor < bytes.byteLength) {
     const byte = bytes[cursor++]!
-    value |= (byte & 0x7f) << shift
+    // Use multiplication instead of bitwise shift to avoid 32-bit signed
+    // integer overflow when shift >= 28 (values >= 2^28).
+    value += (byte & 0x7f) * Math.pow(2, shift)
     if ((byte & 0x80) === 0) return { value: value >>> 0, offset: cursor }
     shift += 7
+    if (shift > 35) throw new Error("Protobuf varint too large")
   }
   throw new Error("Truncated protobuf varint")
 }

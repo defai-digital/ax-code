@@ -1061,7 +1061,8 @@ function headersToRecord(headers: RequestInit["headers"] | undefined): Record<st
   if (!headers) return {}
   if (headers instanceof Headers) return Object.fromEntries(headers.entries())
   if (Array.isArray(headers)) return Object.fromEntries(headers)
-  return headers
+  // Spread to avoid mutating the caller's original object.
+  return { ...headers }
 }
 
 function headlessHeaders(input: {
