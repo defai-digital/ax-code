@@ -74,8 +74,8 @@ describe("sign-release-assets helpers", () => {
       fs.writeFileSync(
         matching,
         [
-          "untrusted comment: minisign public key 8138FAD32CAD95BA",
-          "RWS6la0s0/o4gdFUZ0Bk/BkrnN8qC2CFOfLXVP5OtQTrvm1BQeOvXgao",
+          "untrusted comment: minisign public key 5B7AB63CD6D674BE",
+          "RWS+dNbWPLZ6W9TH486c9zdH84NiiuFnm4VpVTRlXoMHClyQx/fY7W2A",
           "",
         ].join("\n"),
       )

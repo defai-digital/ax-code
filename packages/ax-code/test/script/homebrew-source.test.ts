@@ -114,7 +114,7 @@ describe("distribution support guardrails", () => {
     expect(job).toContain("AX_CODE_MINISIGN_SECRET_KEY_B64")
     expect(job).toContain("secrets.AX_CODE_MINISIGN_SECRET_KEY_B64")
     expect(job).toContain("chmod 600")
-    expect(job).toContain("RWS6la0s0/o4gdFUZ0Bk/BkrnN8qC2CFOfLXVP5OtQTrvm1BQeOvXgao")
+    expect(job).toContain("RWS+dNbWPLZ6W9TH486c9zdH84NiiuFnm4VpVTRlXoMHClyQx/fY7W2A")
     // The passphrase is stored in the macOS Keychain from the secret, then the
     // signing script reads it back via minisignPasswordFromKeychain().
     expect(job).toContain("secrets.AX_CODE_MINISIGN_PASSWORD")

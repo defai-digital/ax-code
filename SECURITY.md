@@ -73,7 +73,7 @@ MCP OAuth tokens, client secrets, and account access/refresh tokens are also enc
 The shell installer verifies downloaded GitHub release archives with minisign before extraction. The pinned AX Code release public key is:
 
 ```text
-RWS6la0s0/o4gdFUZ0Bk/BkrnN8qC2CFOfLXVP5OtQTrvm1BQeOvXgao
+RWS+dNbWPLZ6W9TH486c9zdH84NiiuFnm4VpVTRlXoMHClyQx/fY7W2A
 ```
 
 The installer downloads the matching `.minisig` asset for the selected archive and fails closed when `minisign` is unavailable or verification fails. Set `AX_CODE_SKIP_MINISIGN_VERIFY=1` only when you intentionally accept an unverifiable release download.
@@ -98,6 +98,26 @@ AX_CODE_MINISIGN_PASSWORD
 encrypted `ax-code.sec` minisign secret key. The workflow writes it to a
 temporary `0600` key file, verifies the pinned public key, signs each release
 archive, and uploads the matching `.minisig` assets with the archives.
+
+### Release signing key history
+
+| Effective date | Key ID             | Public key                                                 | Status      |
+| -------------- | ------------------ | ---------------------------------------------------------- | ----------- |
+| 2026-06-16     | `5B7AB63CD6D674BE` | `RWS+dNbWPLZ6W9TH486c9zdH84NiiuFnm4VpVTRlXoMHClyQx/fY7W2A` | **Current** |
+| pre-2026-06-16 | `8138FAD32CAD95BA` | `RWS6la0s0/o4gdFUZ0Bk/BkrnN8qC2CFOfLXVP5OtQTrvm1BQeOvXgao` | Rotated out |
+
+The release signing key was rotated on 2026-06-16. The installer and release
+workflow pin only the current key, so archives signed with the retired key will
+fail signature verification. Historical release archives are re-signed with the
+current key via `script/resign-release-assets.ts` so every published release
+verifies against the pinned key without trusting the retired key.
+
+To re-sign and re-upload an existing release's `.minisig` assets with the
+current key:
+
+```bash
+bun run script/resign-release-assets.ts --tag v5.5.0 --key-dir ~/signkey
+```
 
 ---
 
