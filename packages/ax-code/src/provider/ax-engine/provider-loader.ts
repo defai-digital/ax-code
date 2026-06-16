@@ -3,11 +3,9 @@ import type { CustomLoader } from "../loaders"
 import { ProviderID, ModelID } from "../schema"
 import {
   AX_ENGINE_API_KEY,
-  AX_ENGINE_CONTEXT_TOKENS,
   AX_ENGINE_DEFAULT_PORT,
   AX_ENGINE_MODEL_DEFINITIONS,
   AX_ENGINE_MODEL_IDS,
-  AX_ENGINE_OUTPUT_TOKENS,
   AX_ENGINE_PROVIDER_ID,
 } from "./constants"
 import { requirePlatformEligibility } from "./platform"
@@ -123,7 +121,7 @@ export function axEngineLoader(): CustomLoader {
               output: { text: true, audio: false, image: false, video: false, pdf: false },
               interleaved: false,
             },
-            limit: { context: AX_ENGINE_CONTEXT_TOKENS, output: AX_ENGINE_OUTPUT_TOKENS },
+            limit: { context: def.contextTokens, output: def.outputTokens },
             status: "active",
             options: {
               modelID,

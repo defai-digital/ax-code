@@ -8,7 +8,9 @@ export const AX_ENGINE_QWEN3_CODER_NEXT_MODEL_DISPLAY_NAME = "Qwen3-Coder-Next (
 export const AX_ENGINE_QWEN36_35B_MODEL_DISPLAY_NAME = "Qwen3.6-35B-A3B 4-bit (Local MLX)"
 export const AX_ENGINE_DEFAULT_PORT = 18181
 export const AX_ENGINE_API_KEY = "local"
+/** @deprecated Use per-model `contextTokens` from `AX_ENGINE_MODEL_DEFINITIONS` instead. */
 export const AX_ENGINE_CONTEXT_TOKENS = 16_384
+/** @deprecated Use per-model `outputTokens` from `AX_ENGINE_MODEL_DEFINITIONS` instead. */
 export const AX_ENGINE_OUTPUT_TOKENS = 2_048
 
 export const AX_ENGINE_MODEL_IDS = [AX_ENGINE_QWEN3_CODER_NEXT_MODEL_ID, AX_ENGINE_QWEN36_35B_MODEL_ID] as const
@@ -24,6 +26,8 @@ export const AX_ENGINE_MODEL_DEFINITIONS = {
     name: AX_ENGINE_QWEN3_CODER_NEXT_MODEL_DISPLAY_NAME,
     defaultQuantization: "mlx4bit",
     toolcall: true,
+    contextTokens: 32_768,
+    outputTokens: 8_192,
     quantizations: {
       mlx4bit: {
         hfRepo: "mlx-community/Qwen3-Coder-Next-4bit",
@@ -41,6 +45,8 @@ export const AX_ENGINE_MODEL_DEFINITIONS = {
     name: AX_ENGINE_QWEN36_35B_MODEL_DISPLAY_NAME,
     defaultQuantization: "mlx4bit",
     toolcall: false,
+    contextTokens: 65_536,
+    outputTokens: 16_384,
     quantizations: {
       mlx4bit: {
         hfRepo: "mlx-community/Qwen3.6-35B-A3B-4bit",

@@ -9,8 +9,6 @@ import { Flag } from "../flag/flag"
 import { isModelSupportedForProvider } from "./model-support"
 import bundledSnapshot from "./models-snapshot.json"
 import {
-  AX_ENGINE_CONTEXT_TOKENS,
-  AX_ENGINE_OUTPUT_TOKENS,
   AX_ENGINE_DEFAULT_PORT,
   AX_ENGINE_DISPLAY_NAME,
   AX_ENGINE_MODEL_DEFINITIONS,
@@ -102,7 +100,7 @@ export namespace ModelsDev {
       temperature: true,
       tool_call: definition.toolcall,
       modalities: { input: ["text"], output: ["text"] },
-      limit: { context: AX_ENGINE_CONTEXT_TOKENS, output: AX_ENGINE_OUTPUT_TOKENS },
+      limit: { context: definition.contextTokens, output: definition.outputTokens },
       status: "beta",
       options: {
         modelID,

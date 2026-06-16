@@ -312,13 +312,13 @@ describe("ax-engine provider integration", () => {
     expect(Object.keys(provider.models)).toEqual([AX_ENGINE_QWEN3_CODER_NEXT_MODEL_ID, AX_ENGINE_QWEN36_35B_MODEL_ID])
     expect(provider.models[AX_ENGINE_QWEN3_CODER_NEXT_MODEL_ID]).toMatchObject({
       tool_call: true,
-      limit: { context: 16_384, output: 2_048 },
+      limit: { context: 32_768, output: 8_192 },
       status: "beta",
       experimental: { localRuntime: "ax-engine" },
     })
     expect(provider.models[AX_ENGINE_QWEN36_35B_MODEL_ID]).toMatchObject({
       tool_call: false,
-      limit: { context: 16_384, output: 2_048 },
+      limit: { context: 65_536, output: 16_384 },
       status: "beta",
       options: {
         modelID: AX_ENGINE_QWEN36_35B_MODEL_ID,
@@ -537,7 +537,7 @@ describe("ax-engine provider integration", () => {
     const discovered = await loader.discoverModels!({} as any)
     const qwen36 = discovered[AX_ENGINE_QWEN36_35B_MODEL_ID]
     expect(qwen36.capabilities.toolcall).toBe(false)
-    expect(qwen36.limit).toEqual({ context: 16_384, output: 2_048 })
+    expect(qwen36.limit).toEqual({ context: 65_536, output: 16_384 })
     expect(qwen36.options).toMatchObject({
       modelID: AX_ENGINE_QWEN36_35B_MODEL_ID,
       quantization: "mlx4bit",
