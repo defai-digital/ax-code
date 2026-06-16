@@ -1,0 +1,19 @@
+diff --git a/lib/engines.js b/lib/engines.js
+index 38f993db06cf364191ac635a6590c2d29303297d..fb9a255991d4feb25e496223fe8c092c5e42880d 100644
+--- a/lib/engines.js
++++ b/lib/engines.js
+@@ -12,9 +12,12 @@ const engines = exports = module.exports;
+  * YAML
+  */
+ 
++// js-yaml 4 removed `safeLoad`/`safeDump` (they now throw); `load`/`dump` use the
++// safe schema by default and are behavior-equivalent. js-yaml is pinned to 4.x via
++// pnpm overrides, so call the modern API directly.
+ engines.yaml = {
+-  parse: yaml.safeLoad.bind(yaml),
+-  stringify: yaml.safeDump.bind(yaml)
++  parse: yaml.load.bind(yaml),
++  stringify: yaml.dump.bind(yaml)
+ };
+ 
+ /**
