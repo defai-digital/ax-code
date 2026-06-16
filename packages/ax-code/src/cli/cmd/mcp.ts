@@ -668,17 +668,37 @@ export const McpAddCommand = cmd({
             return
           }
 
-          // Prompt for required env vars
+          // Collect required env vars into the server config so it can
+          // authenticate. Local servers need them in `environment`; for
+          // remote servers there is no matching field (McpRemote has no
+          // `environment`), so we just inform the user.
+          const environment: Record<string, string> = {}
           if (template.envRequired?.length) {
-            for (const envVar of template.envRequired) {
-              if (!process.env[envVar]) {
+            if (template.type === "local") {
+              for (const envVar of template.envRequired) {
+                if (process.env[envVar]) {
+                  environment[envVar] = process.env[envVar] as string
+                  continue
+                }
                 const desc = template.envDescription?.[envVar] ?? ""
-                prompts.log.warn(`Required env: ${envVar}${desc ? ` (${desc})` : ""}`)
+                const value = await prompts.password({
+                  message: `Enter ${envVar}${desc ? ` — ${desc}` : ""}`,
+                  validate: (x) => (x && x.length > 0 ? undefined : "Required"),
+                })
+                if (prompts.isCancel(value)) throw new UI.CancelledError()
+                environment[envVar] = value
+              }
+            } else {
+              for (const envVar of template.envRequired) {
+                if (!process.env[envVar]) {
+                  const desc = template.envDescription?.[envVar] ?? ""
+                  prompts.log.warn(`Required env: ${envVar}${desc ? ` (${desc})` : ""}`)
+                }
               }
             }
           }
 
-          const mcpConfig = McpTemplates.toConfig(template) as Config.Mcp
+          const mcpConfig = McpTemplates.toConfig(template, environment) as Config.Mcp
           await addMcpToConfig(template.name, mcpConfig, configPath)
           prompts.log.success(`MCP server "${template.name}" added to ${configPath}`)
           if (template.docs) prompts.log.info(`Docs: ${template.docs}`)

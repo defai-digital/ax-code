@@ -212,8 +212,12 @@ export function names(): string[] {
  * (binary + args) and uses `environment` (not `env`) for env vars.
  * The McpRemote schema expects `url` and optional `headers`/`oauth`.
  * Both schemas are `.strict()`, so extra keys cause validation errors.
+ *
+ * `environment` carries the values collected for the template's
+ * `envRequired` vars (from process.env or the interactive prompt). It is
+ * only applied to local servers — `McpRemote` has no `environment` field.
  */
-export function toConfig(template: McpTemplate): Record<string, unknown> {
+export function toConfig(template: McpTemplate, environment?: Record<string, string>): Record<string, unknown> {
   const config: Record<string, unknown> = { type: template.type }
   if (template.type === "local") {
     // McpLocal.command is `string[]` — binary + args combined.
@@ -221,8 +225,10 @@ export function toConfig(template: McpTemplate): Record<string, unknown> {
     if (template.command) parts.push(template.command)
     if (template.args) parts.push(...template.args)
     if (parts.length > 0) config.command = parts
-    // McpLocal uses `environment`, not `env`.
-    if (template.env) config.environment = template.env
+    // McpLocal uses `environment`, not `env`. Prefer the collected values
+    // (envRequired), then fall back to any static `env` on the template.
+    const env = environment ?? template.env
+    if (env && Object.keys(env).length > 0) config.environment = env
   } else {
     // Remote: only `url` is relevant from the template fields.
     if (template.url) config.url = template.url
