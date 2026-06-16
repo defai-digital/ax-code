@@ -79,13 +79,18 @@ export async function isServerReady(baseURL: string, signal?: AbortSignal) {
     signal: signal ?? AbortSignal.timeout(2000),
     headers: { authorization: `Bearer ${AX_ENGINE_API_KEY}` },
   })
-    .then((res) => res.ok)
+    .then((res) => {
+      const ok = res.ok
+      if (!ok) res.body?.cancel()
+      return ok
+    })
     .catch(() => false)
 }
 
 async function waitForReady(baseURL: string, signal?: AbortSignal) {
   const deadline = Date.now() + 90_000
   while (Date.now() < deadline) {
+    if (signal?.aborted) return false
     if (await isServerReady(baseURL, signal)) return true
     await new Promise((resolve) => setTimeout(resolve, 500))
   }
@@ -133,6 +138,7 @@ async function loadServerModel(input: {
   })
   if (!response.ok) {
     const text = await response.text().catch(() => "")
+    response.body?.cancel()
     throw new Error(
       `${AX_ENGINE_ERROR.ServerStartFailed}: ax-engine model load failed with HTTP ${response.status}${text ? `: ${text}` : ""}`,
     )
@@ -200,16 +206,20 @@ export async function ensureServer(options: AxEngineServerOptions): Promise<AxEn
   const resolvedBaseURL = baseURL ?? baseURLForPort(port)
   const origin = originFromBaseURL(resolvedBaseURL)
   const logFile = await fs.open(AxEnginePaths.serverLog, "a")
-  const proc = Process.spawn(
-    [options.binaryPath, "serve", options.modelPath, "--port", String(port), "--", "--model-id", options.apiModelID],
-    {
-      stdout: logFile.fd,
-      stderr: logFile.fd,
-      detached: true,
-      abort: options.signal,
-    },
-  )
-  await logFile.close().catch(() => undefined)
+  let proc: ReturnType<typeof Process.spawn>
+  try {
+    proc = Process.spawn(
+      [options.binaryPath, "serve", options.modelPath, "--port", String(port), "--", "--model-id", options.apiModelID],
+      {
+        stdout: logFile.fd,
+        stderr: logFile.fd,
+        detached: true,
+        abort: options.signal,
+      },
+    )
+  } finally {
+    await logFile.close().catch(() => undefined)
+  }
   proc.unref?.()
 
   const ready = await waitForReady(resolvedBaseURL, options.signal)

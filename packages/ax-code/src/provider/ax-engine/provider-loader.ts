@@ -17,7 +17,7 @@ import {
   normalizeQuantization,
   type AxEngineModelOptions,
 } from "./model-cache"
-import { ensureServer, isServerReady } from "./server"
+import { ensureServer } from "./server"
 import { isLocalHostname } from "@/util/local-host"
 
 function configuredBaseURL(provider: Provider.Info) {
@@ -37,7 +37,10 @@ async function serverAdvertisesModel(baseURL: string, apiModelID: string, signal
       signal: signal ?? AbortSignal.timeout(2000),
       headers: { authorization: `Bearer ${AX_ENGINE_API_KEY}` },
     })
-    if (!response.ok) return false
+    if (!response.ok) {
+      response.body?.cancel()
+      return false
+    }
     const data = (await response.json()) as { data?: Array<{ id?: unknown }> }
     return data.data?.some((model) => model.id === apiModelID) ?? false
   } catch {
@@ -140,7 +143,7 @@ export function axEngineLoader(): CustomLoader {
           modelID: normalizeModelID(options?.modelID ?? modelID),
         }
         await ensureReady(provider, selectedOptions)
-        return sdk.languageModel(AX_ENGINE_MODEL_DEFINITIONS[normalizeModelID(selectedOptions.modelID)].apiModelID)
+        return sdk.languageModel(AX_ENGINE_MODEL_DEFINITIONS[selectedOptions.modelID].apiModelID)
       },
     }
   }

@@ -1,21 +1,24 @@
 import z from "zod"
-import { getPlatformEligibility } from "./platform"
-import { getDependencyStatus } from "./dependency"
-import { getDiskStatus, getModelStatus } from "./model-cache"
-import { getServerStatus, type AxEngineServerRuntimeStatus } from "./server"
+import { AxEnginePlatformEligibility, getPlatformEligibility } from "./platform"
+import { AxEngineDependencyStatus, getDependencyStatus } from "./dependency"
+import { AxEngineDiskStatus, AxEngineModelStatus, getDiskStatus, getModelStatus } from "./model-cache"
+import { AxEngineServerRuntimeStatus, getServerStatus } from "./server"
 import { AX_ENGINE_API_KEY, AX_ENGINE_ERROR } from "./constants"
 
+export const AxEngineCapabilityStatus = z.object({
+  toolcall: z.boolean(),
+  attachment: z.boolean(),
+  reason: z.string().optional(),
+})
+export type AxEngineCapabilityStatus = z.infer<typeof AxEngineCapabilityStatus>
+
 export const AxEngineStatus = z.object({
-  eligibility: z.any(),
-  dependency: z.any(),
-  disk: z.any(),
-  model: z.any(),
-  server: z.any(),
-  capability: z.object({
-    toolcall: z.boolean(),
-    attachment: z.boolean(),
-    reason: z.string().optional(),
-  }),
+  eligibility: AxEnginePlatformEligibility,
+  dependency: AxEngineDependencyStatus,
+  disk: AxEngineDiskStatus,
+  model: AxEngineModelStatus,
+  server: AxEngineServerRuntimeStatus,
+  capability: AxEngineCapabilityStatus,
 })
 export type AxEngineStatus = z.infer<typeof AxEngineStatus>
 
@@ -45,12 +48,6 @@ const AxEngineModelCard = z.object({
 const AxEngineModelsResponse = z.object({
   data: z.array(AxEngineModelCard).default([]),
 })
-
-export type AxEngineCapabilityStatus = {
-  toolcall: boolean
-  attachment: boolean
-  reason?: string
-}
 
 export function evaluateAxEngineCapabilityFromModels(payload: unknown): AxEngineCapabilityStatus {
   const parsed = AxEngineModelsResponse.safeParse(payload)
@@ -86,7 +83,10 @@ async function getCapabilityStatus(server: AxEngineServerRuntimeStatus): Promise
       signal: AbortSignal.timeout(2000),
       headers: { authorization: `Bearer ${AX_ENGINE_API_KEY}` },
     })
-    if (!response.ok) throw new Error(`HTTP ${response.status}`)
+    if (!response.ok) {
+      response.body?.cancel()
+      throw new Error(`HTTP ${response.status}`)
+    }
     return evaluateAxEngineCapabilityFromModels(await response.json())
   } catch (error) {
     return {
