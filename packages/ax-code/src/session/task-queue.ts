@@ -337,7 +337,13 @@ export namespace TaskQueue {
 
   export async function cancel(id: TaskQueueID): Promise<Info> {
     const current = await get(id)
-    assertActionStatus(current, "cancel", ["queued", "waiting_for_idle", "paused"])
+    assertActionStatus(current, "cancel", [
+      "queued",
+      "waiting_for_idle",
+      "paused",
+      "blocked_permission",
+      "blocked_question",
+    ])
     return setStatus({ id, status: "cancelled" })
   }
 
