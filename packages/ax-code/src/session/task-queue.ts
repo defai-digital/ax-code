@@ -517,11 +517,14 @@ export namespace TaskQueue {
     const current = await get(id)
     assertActionStatus(current, "send now", ["queued", "waiting_for_idle", "paused"])
     const now = Date.now()
-    const item = Database.transaction((db) => {
-      db.update(TaskQueueTable)
-        .set({ position: sql`${TaskQueueTable.position} + 1` })
-        .where(eq(TaskQueueTable.project_id, current.projectID))
-        .run()
+    const changed = Database.transaction((db) => {
+      const shifted = db
+        .update(TaskQueueTable)
+        .set({ position: sql`${TaskQueueTable.position} + 1`, time_updated: now })
+        .where(and(eq(TaskQueueTable.project_id, current.projectID), sql`${TaskQueueTable.id} != ${id}`))
+        .returning()
+        .all()
+        .map(fromRow)
       const row = db
         .update(TaskQueueTable)
         .set({ status: "queued", position: 0, time_updated: now })
@@ -529,11 +532,12 @@ export namespace TaskQueue {
         .returning()
         .get()
       if (!row) throw new NotFoundError({ message: `Task queue item not found: ${id}` })
-      return fromRow(row)
+      return { item: fromRow(row), shifted }
     })
-    assertProjectItem(item)
-    publishUpdated(item)
-    return item
+    assertProjectItem(changed.item)
+    for (const item of changed.shifted) publishUpdated(item)
+    publishUpdated(changed.item)
+    return changed.item
   }
 
   export async function remove(id: TaskQueueID): Promise<boolean> {
