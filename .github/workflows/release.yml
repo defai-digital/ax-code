@@ -191,8 +191,8 @@ jobs:
           printf '%s' "$AX_CODE_MINISIGN_SECRET_KEY_B64" | base64 -D > "$KEY_DIR/ax-code.sec"
           chmod 600 "$KEY_DIR/ax-code.sec"
           cat > "$KEY_DIR/ax-code.pub" <<'PUB'
-          untrusted comment: minisign public key 8138FAD32CAD95BA
-          RWS6la0s0/o4gdFUZ0Bk/BkrnN8qC2CFOfLXVP5OtQTrvm1BQeOvXgao
+          untrusted comment: minisign public key 5B7AB63CD6D674BE
+          RWS+dNbWPLZ6W9TH486c9zdH84NiiuFnm4VpVTRlXoMHClyQx/fY7W2A
           PUB
           echo "AX_CODE_MINISIGN_KEY_DIR=$KEY_DIR" >> "$GITHUB_ENV"
 
