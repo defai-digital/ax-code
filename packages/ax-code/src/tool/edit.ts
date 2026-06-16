@@ -42,7 +42,7 @@ export const EditTool = Tool.define("edit", {
   description: DESCRIPTION,
   parameters: withFilePathAliases(
     z.object({
-      filePath: z.string().describe("The absolute path to the file to modify"),
+      filePath: z.string().min(1).describe("The absolute path to the file to modify"),
       oldString: z.string().max(500_000).describe("The text to replace"),
       newString: z.string().max(1_000_000).describe("The text to replace it with (must be different from oldString)"),
       replaceAll: z.boolean().optional().describe("Replace all occurrences of oldString (default false)"),

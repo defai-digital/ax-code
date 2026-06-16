@@ -71,7 +71,7 @@ export const ReadTool = Tool.define("read", {
   description: DESCRIPTION,
   parameters: withFilePathAliases(
     z.object({
-      filePath: z.string().describe("The absolute path to the file or directory to read"),
+      filePath: z.string().min(1).describe("The absolute path to the file or directory to read"),
       offset: z.coerce.number().int().min(1).describe("The line number to start reading from (1-indexed)").optional(),
       limit: z.coerce
         .number()

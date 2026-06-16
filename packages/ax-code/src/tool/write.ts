@@ -46,7 +46,7 @@ export const WriteTool = Tool.define("write", {
   parameters: withFilePathAliases(
     z.object({
       content: z.string().describe("The content to write to the file"),
-      filePath: z.string().describe("The absolute path to the file to write (must be absolute, not relative)"),
+      filePath: z.string().min(1).describe("The absolute path to the file to write (must be absolute, not relative)"),
     }),
   ),
   async execute(params, ctx) {

@@ -27,7 +27,7 @@ describe("withFilePathAliases", () => {
   const schema = withFilePathAliases(
     z.object({
       content: z.string(),
-      filePath: z.string(),
+      filePath: z.string().min(1),
     }),
   )
 
@@ -65,6 +65,10 @@ describe("withFilePathAliases", () => {
     expect(schema.parse({ content: "x", filePath: "", file: "/a/b.html" })).toMatchObject({
       filePath: "/a/b.html",
     })
+  })
+
+  test("rejects an empty filePath when no alias is present", () => {
+    expect(schema.safeParse({ content: "x", filePath: "" }).success).toBe(false)
   })
 
   test("still rejects when neither filePath nor an alias is present", () => {
