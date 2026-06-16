@@ -150,7 +150,12 @@ jobs:
 
   publish:
     needs: build
-    runs-on: ubuntu-latest
+    # Runs on macOS so minisign can retrieve the signing passphrase from the
+    # Apple Keychain instead of a plaintext environment variable. The
+    # passphrase is injected into the ephemeral runner's login Keychain at
+    # runtime from AX_CODE_MINISIGN_PASSWORD, then removed before the job ends.
+    # See sign-release-assets.ts → minisignPasswordFromKeychain.
+    runs-on: macos-latest
     permissions:
       contents: write
     steps:
@@ -170,13 +175,12 @@ jobs:
           merge-multiple: true
 
       - name: Install minisign
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y minisign
+        run: brew install minisign
 
       - name: Prepare minisign release key
         env:
           AX_CODE_MINISIGN_SECRET_KEY_B64: ${{ secrets.AX_CODE_MINISIGN_SECRET_KEY_B64 }}
+          AX_CODE_MINISIGN_PASSWORD: ${{ secrets.AX_CODE_MINISIGN_PASSWORD }}
         run: |
           if [ -z "$AX_CODE_MINISIGN_SECRET_KEY_B64" ]; then
             echo "::error::AX_CODE_MINISIGN_SECRET_KEY_B64 is required to sign release assets"
@@ -184,7 +188,7 @@ jobs:
           fi
           KEY_DIR="$RUNNER_TEMP/ax-code-minisign"
           mkdir -p "$KEY_DIR"
-          printf '%s' "$AX_CODE_MINISIGN_SECRET_KEY_B64" | base64 -d > "$KEY_DIR/ax-code.sec"
+          printf '%s' "$AX_CODE_MINISIGN_SECRET_KEY_B64" | base64 -D > "$KEY_DIR/ax-code.sec"
           chmod 600 "$KEY_DIR/ax-code.sec"
           cat > "$KEY_DIR/ax-code.pub" <<'PUB'
           untrusted comment: minisign public key 8138FAD32CAD95BA
@@ -192,14 +196,25 @@ jobs:
           PUB
           echo "AX_CODE_MINISIGN_KEY_DIR=$KEY_DIR" >> "$GITHUB_ENV"
 
-      - name: Sign release assets
-        env:
-          AX_CODE_MINISIGN_PASSWORD: ${{ secrets.AX_CODE_MINISIGN_PASSWORD }}
-        run: |
+          # Store the passphrase in the macOS login Keychain so the signing
+          # script retrieves it via `security find-generic-password`. The
+          # passphrase never appears in the signing step's environment,
+          # reducing exposure in logs and process listings.
           if [ -z "$AX_CODE_MINISIGN_PASSWORD" ]; then
             echo "::error::AX_CODE_MINISIGN_PASSWORD is required to sign release assets"
             exit 1
           fi
+          security add-generic-password -U \
+            -s ax-code-minisign \
+            -a ax-code-release \
+            -w "$AX_CODE_MINISIGN_PASSWORD"
+          echo "Minisign passphrase stored in macOS Keychain (service: ax-code-minisign, account: ax-code-release)"
+
+      - name: Sign release assets
+        run: |
+          # AX_CODE_MINISIGN_PASSWORD is intentionally NOT exported here — the
+          # signing script reads the passphrase from the macOS Keychain via
+          # minisignPasswordFromKeychain() in sign-release-assets.ts.
           bun run script/sign-release-assets.ts --dist-dir packages/ax-code/dist
           shopt -s nullglob
           archives=(packages/ax-code/dist/*.tar.gz packages/ax-code/dist/*.zip)
@@ -209,6 +224,11 @@ jobs:
               exit 1
             fi
           done
+
+      - name: Clean up Keychain passphrase
+        if: always()
+        run: |
+          security delete-generic-password -s ax-code-minisign -a ax-code-release 2>/dev/null || true
 
       - name: Create GitHub release
         env:
