@@ -12,6 +12,7 @@ import {
 
 const log = Log.create({ service: "autonomous" })
 const SUPER_LONG_OVERRIDE = "AX_CODE_SUPER_LONG_SESSION_OVERRIDE"
+const SUPER_LONG_BASE = "AX_CODE_SUPER_LONG"
 
 const AutonomousState = BooleanFeatureState.meta({ ref: "AutonomousState" })
 
@@ -81,7 +82,14 @@ export const AutonomousRoutes = lazy(() =>
           },
         })
         if ("error" in state) return c.json(state, 500)
-        if (!enabled) FeatureFlag.set(SUPER_LONG_OVERRIDE, false)
+        if (!enabled) {
+          // When autonomous is disabled, super-long must also be
+          // suppressed. Clear both the session override AND the
+          // base env so a previously-reconciled base env doesn't
+          // shadow the config on subsequent super-long GETs.
+          FeatureFlag.set(SUPER_LONG_OVERRIDE, false)
+          process.env[SUPER_LONG_BASE] = "false"
+        }
         log.info("autonomous mode changed", { enabled })
         return c.json(state)
       },

@@ -18,6 +18,7 @@ import { errors, serviceUnavailable } from "../error"
 
 const log = Log.create({ service: "super-long" })
 const SUPER_LONG_OVERRIDE = "AX_CODE_SUPER_LONG_SESSION_OVERRIDE"
+const SUPER_LONG_BASE = "AX_CODE_SUPER_LONG"
 
 const SuperLongState = BooleanFeatureState.meta({ ref: "SuperLongState" })
 
@@ -61,6 +62,18 @@ function superLongRuntimeState(config: Config.Info | undefined, explicitModel?: 
   })
 }
 
+function superLongConfigState(config: Config.Info | undefined, explicitModel?: string) {
+  // Compute the super-long state from config + model default only,
+  // ignoring env vars. This is the source of truth for the UI:
+  // what the user persisted to ax-code.json (or the model default
+  // when no explicit setting exists). Env vars are reconciled to
+  // match this value after the GET returns.
+  return SuperLongPolicy.state({
+    modelID: configuredModelID(config, explicitModel),
+    config: SuperLongPolicy.fromConfig(config?.super_long),
+  })
+}
+
 function superLongDesired(config: Config.Info | undefined, explicitModel?: string) {
   return superLongRuntimeState(config, explicitModel).enabled
 }
@@ -86,8 +99,27 @@ export const SuperLongRoutes = lazy(() =>
       }),
       async (c) => {
         const config = await readProjectConfig()
-        const desired = superLongDesired(config, c.req.query("model"))
-        return c.json({ enabled: autonomousEnabled(config) && desired })
+        // Compute from config + model default (ignoring env) so the
+        // UI always reflects the persisted configuration. The env
+        // is then reconciled to match.
+        const state = superLongConfigState(config, c.req.query("model"))
+        const desired = autonomousEnabled(config) && state.enabled
+        // Reconcile from persisted config so an external edit to
+        // ax-code.json propagates without a server restart.
+        //
+        // The session override (AX_CODE_SUPER_LONG_SESSION_OVERRIDE) is
+        // cleared here so it never shadows the config on subsequent
+        // GETs — otherwise a PUT-set override would persist even after
+        // the config was externally edited.
+        //
+        // The base env (AX_CODE_SUPER_LONG) is set to the resolved
+        // value so in-process readers (Flag.AX_CODE_SUPER_LONG,
+        // prompt assembly, control-plane) see the same state the UI
+        // does. Without this, a stale base env from the shell could
+        // make runtime readers disagree with the UI.
+        delete process.env[SUPER_LONG_OVERRIDE]
+        process.env[SUPER_LONG_BASE] = String(desired)
+        return c.json({ enabled: desired })
       },
     )
     .get(
@@ -110,8 +142,19 @@ export const SuperLongRoutes = lazy(() =>
       }),
       async (c) => {
         const config = await readProjectConfig()
-        const state = superLongRuntimeState(config, c.req.query("model"))
-        const enabled = autonomousEnabled(config) && state.enabled
+        // Capture runtime state BEFORE reconciliation so the source
+        // field reflects the original runtime precedence (config,
+        // env, session override, or model default).
+        const runtimeState = superLongRuntimeState(config, c.req.query("model"))
+        // Compute from config + model default (ignoring env), same
+        // as GET /, so the status endpoint is consistent.
+        const configState = superLongConfigState(config, c.req.query("model"))
+        const enabled = autonomousEnabled(config) && configState.enabled
+        // Reconcile: clear the session override and align the base
+        // env so in-process readers see the config-derived state,
+        // same as GET /.
+        delete process.env[SUPER_LONG_OVERRIDE]
+        process.env[SUPER_LONG_BASE] = String(enabled)
         const runtimeConfig = SuperLongPolicy.fromConfig(config?.super_long)
         const durationDecision = SuperLongPolicy.duration(runtimeConfig.requestedDurationMs)
         const durationMs = durationDecision.ok ? durationDecision.durationMs : null
@@ -123,7 +166,7 @@ export const SuperLongRoutes = lazy(() =>
         const elapsedMs = startedAt === undefined ? null : Math.max(0, now - startedAt)
         return c.json({
           enabled,
-          source: state.source,
+          source: runtimeState.source,
           durationMs,
           startedAt: startedAt ?? null,
           elapsedMs,
@@ -186,6 +229,12 @@ export const SuperLongRoutes = lazy(() =>
         // runtimeState() picks up the change immediately without a
         // restart.
         FeatureFlag.set(SUPER_LONG_OVERRIDE, enabled)
+        // Also keep the base env aligned so readers that check
+        // AX_CODE_SUPER_LONG (without the session override prefix)
+        // see the correct value. Without this, a stale base env
+        // from the shell could shadow the PUT until the next GET
+        // reconciliation.
+        FeatureFlag.set(SUPER_LONG_BASE, enabled)
         log.info("super-long mode changed", { enabled })
         return c.json(state)
       },

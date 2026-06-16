@@ -41,18 +41,22 @@ describe("super-long route", () => {
           const response = await Server.Default().request(`/super-long?directory=${encodeURIComponent(tmp.path)}`)
           expect(response.status).toBe(200)
           expect(await response.json()).toEqual({ enabled: true })
-          expect(process.env.AX_CODE_SUPER_LONG).toBeUndefined()
+          // GET reconciliation sets the base env to match the resolved
+          // state so in-process readers (Flag.AX_CODE_SUPER_LONG) agree
+          // with the UI. This is the correct reconciliation behavior.
+          expect(process.env.AX_CODE_SUPER_LONG).toBe("true")
         },
       })
     })
   })
 
-  test("honors the AX_CODE_SUPER_LONG base env, matching runtime precedence", async () => {
+  test("config is the authority — base env does not override config for GET", async () => {
     await withCleanSuperLongEnv(async () => {
       await using tmp = await tmpdir({ git: true })
-      // Non-Qwen model: the model default is off, so only the base env can enable
-      // it here (no session override set). The runtime readers honor this base
-      // env, so GET must too.
+      // Non-Qwen model with no explicit super_long in config. Even
+      // though the base env says "true", the GET endpoint reconciles
+      // from config (model default is off for non-Qwen), so the UI
+      // sees false. The base env is then updated to match.
       await Bun.write(path.join(tmp.path, "ax-code.json"), JSON.stringify({ model: "anthropic/claude-opus-4-8" }))
       process.env.AX_CODE_SUPER_LONG = "true"
 
@@ -61,16 +65,24 @@ describe("super-long route", () => {
         fn: async () => {
           const response = await Server.Default().request(`/super-long?directory=${encodeURIComponent(tmp.path)}`)
           expect(response.status).toBe(200)
-          expect(await response.json()).toEqual({ enabled: true })
+          expect(await response.json()).toEqual({ enabled: false })
+          // Base env is reconciled to match the config-derived state.
+          expect(process.env.AX_CODE_SUPER_LONG).toBe("false")
         },
       })
     })
   })
 
-  test("base env false overrides the Qwen3.7-Max model default", async () => {
+  test("config true is honored even when base env says false", async () => {
     await withCleanSuperLongEnv(async () => {
       await using tmp = await tmpdir({ git: true })
-      await Bun.write(path.join(tmp.path, "ax-code.json"), JSON.stringify({ model: "alibaba-coding-plan/qwen3.7-max" }))
+      // Config explicitly enables super_long. Even though the base env
+      // says false, the config is the authority for the UI, so GET
+      // returns true. The base env is then reconciled to match.
+      await Bun.write(
+        path.join(tmp.path, "ax-code.json"),
+        JSON.stringify({ model: "alibaba-coding-plan/qwen3.7-max", super_long: true }),
+      )
       process.env.AX_CODE_SUPER_LONG = "false"
 
       await Instance.provide({
@@ -78,7 +90,8 @@ describe("super-long route", () => {
         fn: async () => {
           const response = await Server.Default().request(`/super-long?directory=${encodeURIComponent(tmp.path)}`)
           expect(response.status).toBe(200)
-          expect(await response.json()).toEqual({ enabled: false })
+          expect(await response.json()).toEqual({ enabled: true })
+          expect(process.env.AX_CODE_SUPER_LONG).toBe("true")
         },
       })
     })
@@ -249,7 +262,7 @@ describe("super-long route", () => {
     })
   })
 
-  test("disabling autonomous prevents a session Super-Long override from reviving", async () => {
+  test("disabling autonomous suppresses super-long; re-enabling restores config state", async () => {
     await withCleanSuperLongEnv(async () => {
       await using tmp = await tmpdir({ git: true })
       await Bun.write(path.join(tmp.path, "ax-code.json"), JSON.stringify({}))
@@ -258,6 +271,7 @@ describe("super-long route", () => {
         directory: tmp.path,
         fn: async () => {
           const directoryQuery = `directory=${encodeURIComponent(tmp.path)}`
+          // Enable super-long (persists super_long: true to config)
           const enabled = await Server.Default().request(`/super-long?${directoryQuery}`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
@@ -266,6 +280,8 @@ describe("super-long route", () => {
           expect(enabled.status).toBe(200)
           expect(await enabled.json()).toEqual({ enabled: true })
 
+          // Disabling autonomous forces super-long off (both at the
+          // gate level and via env reconciliation).
           const autonomousOff = await Server.Default().request(`/autonomous?${directoryQuery}`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
@@ -275,6 +291,15 @@ describe("super-long route", () => {
           expect(await autonomousOff.json()).toEqual({ enabled: false })
           expect(process.env[OVERRIDE]).toBe("false")
 
+          // While autonomous is off, super-long GET reports false
+          // (autonomous gate is off).
+          const superLongWhileOff = await Server.Default().request(`/super-long?${directoryQuery}`)
+          expect(superLongWhileOff.status).toBe(200)
+          expect(await superLongWhileOff.json()).toEqual({ enabled: false })
+
+          // Re-enabling autonomous restores the config-derived state.
+          // Since super_long: true was persisted in step 1, the GET
+          // now reports true — config is the authority.
           const autonomousOn = await Server.Default().request(`/autonomous?${directoryQuery}`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
@@ -285,7 +310,7 @@ describe("super-long route", () => {
 
           const superLong = await Server.Default().request(`/super-long?${directoryQuery}`)
           expect(superLong.status).toBe(200)
-          expect(await superLong.json()).toEqual({ enabled: false })
+          expect(await superLong.json()).toEqual({ enabled: true })
         },
       })
     })
