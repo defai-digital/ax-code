@@ -114,7 +114,7 @@ export function parsePublishGithubReleaseArgs(
       version: { type: "string", short: "v", default: packageVersion },
       tag: { type: "string" },
       repo: { type: "string", default: env.GH_REPO ?? "defai-digital/ax-code" },
-      "key-dir": { type: "string", default: env.AX_CODE_MINISIGN_KEY_DIR ?? "~/signkey" },
+      "key-dir": { type: "string", default: env.AX_CODE_MINISIGN_KEY_DIR ?? "~/.minisign" },
       "asset-dir": { type: "string" },
       "dry-run": { type: "boolean", default: false },
       "existing-tag": { type: "boolean", default: false },
@@ -138,7 +138,7 @@ export function parsePublishGithubReleaseArgs(
     version,
     tag: parsed.values.tag ?? defaultTag(version),
     repo: parsed.values.repo ?? env.GH_REPO ?? "defai-digital/ax-code",
-    keyDir: path.resolve(cwd, expandHome(parsed.values["key-dir"] ?? "~/signkey", home)),
+    keyDir: path.resolve(cwd, expandHome(parsed.values["key-dir"] ?? "~/.minisign", home)),
     assetDir: parsed.values["asset-dir"] ? path.resolve(cwd, expandHome(parsed.values["asset-dir"], home)) : undefined,
     dryRun: Boolean(parsed.values["dry-run"]),
     existingTag: Boolean(parsed.values["existing-tag"]),
@@ -160,7 +160,7 @@ Options:
   -v, --version <version>     Version to publish (default: packages/ax-code/package.json)
   --tag <tag>                 Git tag to publish (default: v<version>)
   --repo <owner/repo>         GitHub repo (default: defai-digital/ax-code)
-  --key-dir <dir>             Minisign key directory (default: ~/signkey)
+  --key-dir <dir>             Minisign key directory (default: ~/.minisign)
   --asset-dir <dir>           Directory used for downloaded release assets
   --existing-tag              Continue from an already-pushed release tag
   --allow-dirty               Allow a dirty worktree
@@ -234,8 +234,8 @@ function ensurePreflight(options: PublishGithubReleaseOptions) {
   }
 
   if (!options.skipSign) {
-    const secretKey = path.join(options.keyDir, "ax-code.sec")
-    const publicKey = path.join(options.keyDir, "ax-code.pub")
+    const secretKey = path.join(options.keyDir, "minisign.key")
+    const publicKey = path.join(options.keyDir, "minisign.pub")
     if (!fs.existsSync(publicKey)) throw new Error(`Minisign public key not found: ${publicKey}`)
     const actualPublicKey = fs
       .readFileSync(publicKey, "utf8")
@@ -428,7 +428,7 @@ export function publishPlan(options: PublishGithubReleaseOptions) {
     options.skipWatch ? "skip release workflow watch" : "watch release.yml",
     options.skipSign
       ? "skip minisign signatures"
-      : `sign release archives with ${path.join(options.keyDir, "ax-code.sec")}`,
+      : `sign release archives with ${path.join(options.keyDir, "minisign.key")}`,
     options.skipInstallSmoke ? "skip install matrix smoke" : `dispatch install-matrix-smoke.yml channel=${channel}`,
   ]
 }

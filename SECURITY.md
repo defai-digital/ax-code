@@ -95,7 +95,7 @@ AX_CODE_MINISIGN_PASSWORD
 ```
 
 `AX_CODE_MINISIGN_SECRET_KEY_B64` must be the base64-encoded contents of the
-encrypted `ax-code.sec` minisign secret key. The workflow writes it to a
+encrypted `minisign.key` minisign secret key. The workflow writes it to a
 temporary `0600` key file, verifies the pinned public key, signs each release
 archive, and uploads the matching `.minisig` assets with the archives.
 
@@ -116,7 +116,7 @@ To re-sign and re-upload an existing release's `.minisig` assets with the
 current key:
 
 ```bash
-bun run script/resign-release-assets.ts --tag v5.5.0 --key-dir ~/signkey
+bun run script/resign-release-assets.ts --tag v5.5.0 --key-dir ~/.minisign
 ```
 
 ---

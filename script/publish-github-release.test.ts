@@ -103,7 +103,7 @@ describe("publish-github-release helpers", () => {
       "publish v5.10.1-beta.1 to defai-digital/ax-code",
       "create and push annotated release tag",
       "watch release.yml",
-      "sign release archives with /home/ax/signkey/ax-code.sec",
+      "sign release archives with /home/ax/.minisign/minisign.key",
       "dispatch install-matrix-smoke.yml channel=windows",
     ])
   })

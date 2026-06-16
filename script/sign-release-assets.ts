@@ -29,10 +29,10 @@ export function expandHome(input: string, home = os.homedir()) {
 }
 
 export function defaultKeyPaths(env: NodeJS.ProcessEnv = process.env, home = os.homedir()) {
-  const keyDir = expandHome(env.AX_CODE_MINISIGN_KEY_DIR ?? "~/signkey", home)
+  const keyDir = expandHome(env.AX_CODE_MINISIGN_KEY_DIR ?? "~/.minisign", home)
   return {
-    secretKey: expandHome(env.AX_CODE_MINISIGN_SECRET_KEY ?? path.join(keyDir, "ax-code.sec"), home),
-    publicKey: expandHome(env.AX_CODE_MINISIGN_PUBLIC_KEY ?? path.join(keyDir, "ax-code.pub"), home),
+    secretKey: expandHome(env.AX_CODE_MINISIGN_SECRET_KEY ?? path.join(keyDir, "minisign.key"), home),
+    publicKey: expandHome(env.AX_CODE_MINISIGN_PUBLIC_KEY ?? path.join(keyDir, "minisign.pub"), home),
   }
 }
 
@@ -92,8 +92,8 @@ export function parseSignReleaseArgs(
   const keyDir = parsed.values["key-dir"] ? expandHome(parsed.values["key-dir"], home) : undefined
   const defaults = keyDir
     ? {
-        secretKey: path.join(keyDir, "ax-code.sec"),
-        publicKey: path.join(keyDir, "ax-code.pub"),
+        secretKey: path.join(keyDir, "minisign.key"),
+        publicKey: path.join(keyDir, "minisign.pub"),
       }
     : defaultKeyPaths(env, home)
 
@@ -119,10 +119,10 @@ function usage() {
 Options:
   --dist-dir <dir>      Directory to scan when no files are provided
                         (default: packages/ax-code/dist)
-  --key-dir <dir>       Directory containing ax-code.sec and ax-code.pub
-                        (default: ~/signkey)
-  --secret-key <file>   Secret key path (default: ~/signkey/ax-code.sec)
-  --public-key <file>   Public key path (default: ~/signkey/ax-code.pub)
+  --key-dir <dir>       Directory containing minisign.key and minisign.pub
+                        (default: ~/.minisign)
+  --secret-key <file>   Secret key path (default: ~/.minisign/minisign.key)
+  --public-key <file>   Public key path (default: ~/.minisign/minisign.pub)
   --verify-only         Verify existing .minisig files without signing
   --dry-run             Print the release archives that would be processed
   -f, --force           Replace existing .minisig files before signing
@@ -137,7 +137,7 @@ Environment:
   AX_CODE_MINISIGN_KEYCHAIN_ACCOUNT
 
 Generate a password-protected local key:
-  minisign -G -s ~/signkey/ax-code.sec -p ~/signkey/ax-code.pub
+  minisign -G -s ~/.minisign/minisign.key -p ~/.minisign/minisign.pub
 
 Store the release key passphrase in macOS Keychain:
   security add-generic-password -U -a ax-code-release -s ax-code-minisign -w

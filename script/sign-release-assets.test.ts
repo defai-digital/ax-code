@@ -19,11 +19,11 @@ import {
 
 describe("sign-release-assets helpers", () => {
   test("expands home-relative key paths", () => {
-    expect(expandHome("~/signkey", "/home/ax")).toBe(path.join("/home/ax", "signkey"))
+    expect(expandHome("~/.minisign", "/home/ax")).toBe(path.join("/home/ax", ".minisign"))
     expect(expandHome("relative", "/home/ax")).toBe("relative")
     expect(defaultKeyPaths({}, "/home/ax")).toEqual({
-      secretKey: path.join("/home/ax", "signkey", "ax-code.sec"),
-      publicKey: path.join("/home/ax", "signkey", "ax-code.pub"),
+      secretKey: path.join("/home/ax", ".minisign", "minisign.key"),
+      publicKey: path.join("/home/ax", ".minisign", "minisign.pub"),
     })
   })
 
@@ -60,7 +60,7 @@ describe("sign-release-assets helpers", () => {
       "/home/ax",
     )
 
-    expect(options.secretKey).toBe(path.join("/home/ax", "keys", "ax-code.sec"))
+    expect(options.secretKey).toBe(path.join("/home/ax", "keys", "minisign.key"))
     expect(options.publicKey).toBe(path.join("/home/ax", "keys", "release.pub"))
     expect(options.verifyOnly).toBe(true)
     expect(options.force).toBe(true)
