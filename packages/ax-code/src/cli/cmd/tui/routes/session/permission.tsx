@@ -184,6 +184,9 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
   const toast = useToast()
   const [store, setStore] = createStore({
     stage: "permission" as PermissionStage,
+    // Latch so repeated clicks/Enter while a reply is in flight cannot send
+    // duplicate replies for the same request. See #241.
+    submitting: false,
   })
 
   const session = createMemo(() => sync.data.session.find((s) => s.id === props.request.sessionID))
@@ -211,7 +214,22 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
 
   const { theme } = useTheme()
 
+  // Interactive-only permissions (e.g. isolation_escalation) are never
+  // persisted, so offering "Allow always" is misleading. Hide it for those
+  // permission types. See #239.
+  const INTERACTIVE_ONLY_PERMISSIONS = new Set(["isolation_escalation"])
+  const allowAlwaysAvailable = createMemo(() => !INTERACTIVE_ONLY_PERMISSIONS.has(props.request.permission))
+  const baseOptions = createMemo(() => {
+    const opts: Record<string, string> = { once: "Allow once", reject: "Reject" }
+    if (allowAlwaysAvailable()) opts.always = "Allow always"
+    return opts
+  })
+
   function submitPermissionReply(run: () => Promise<unknown>, failureLabel: string, failureMessage: string) {
+    // Idempotent guard: ignore further submissions once a reply for this
+    // request is already in flight. See #241.
+    if (store.submitting) return
+    setStore("submitting", true)
     void Promise.resolve()
       .then(run)
       .catch((error) => {
@@ -532,7 +550,7 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
             </box>
           }
           body={permissionInfo().body}
-          options={{ once: "Allow once", always: "Allow always", reject: "Reject" }}
+          options={baseOptions()}
           escapeKey="reject"
           fullscreen
           onSelect={(option) => {

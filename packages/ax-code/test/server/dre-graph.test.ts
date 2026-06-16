@@ -147,12 +147,14 @@ describe("dre graph quality readiness", () => {
             },
           ])
 
-          const base = await app.request(`/dre-graph/session/${sid}`)
+          const dir = encodeURIComponent(tmp.path)
+
+          const base = await app.request(`/dre-graph/session/${sid}?directory=${dir}`)
           expect(base.status).toBe(200)
           const baseHtml = await base.text()
           expect(baseHtml).not.toContain("Quality Readiness")
 
-          const enriched = await app.request(`/dre-graph/session/${sid}?quality=true`)
+          const enriched = await app.request(`/dre-graph/session/${sid}?quality=true&directory=${dir}`)
           expect(enriched.status).toBe(200)
           const enrichedHtml = await enriched.text()
           expect(enrichedHtml).toContain("Quality Readiness")
@@ -163,8 +165,10 @@ describe("dre graph quality readiness", () => {
           expect(enrichedHtml).not.toContain(">pass<")
           expect(enrichedHtml).toContain("first: bun test test/auth.test.ts")
 
-          const baseFingerprint = await app.request(`/dre-graph/session/${sid}/fingerprint`)
-          const enrichedFingerprint = await app.request(`/dre-graph/session/${sid}/fingerprint?quality=true`)
+          const baseFingerprint = await app.request(`/dre-graph/session/${sid}/fingerprint?directory=${dir}`)
+          const enrichedFingerprint = await app.request(
+            `/dre-graph/session/${sid}/fingerprint?quality=true&directory=${dir}`,
+          )
           expect(baseFingerprint.status).toBe(200)
           expect(enrichedFingerprint.status).toBe(200)
 
@@ -238,7 +242,7 @@ describe("dre graph quality readiness", () => {
 
           await new Promise((resolve) => setTimeout(resolve, 20))
 
-          const response = await app.request(`/dre-graph/session/${sid}`)
+          const response = await app.request(`/dre-graph/session/${sid}?directory=${encodeURIComponent(tmp.path)}`)
           expect(response.status).toBe(200)
           const html = await response.text()
 

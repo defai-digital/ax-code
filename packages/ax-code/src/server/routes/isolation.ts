@@ -63,10 +63,15 @@ export const IsolationRoutes = lazy(() =>
           },
         },
       }),
-      validator("json", z.object({ mode: IsolationMode })),
+      validator("json", z.object({ mode: IsolationMode, network: z.boolean().optional() })),
       async (c) => {
         const { mode } = c.req.valid("json")
-        const network = mode === "full-access"
+        // Network access is only meaningful for write-capable modes
+        // (workspace-write / full-access); read-only always implies no network.
+        // Accept an explicit network flag from the client instead of forcing it
+        // to false for workspace-write. See #240.
+        const requestedNetwork = c.req.valid("json").network
+        const network = mode === "read-only" ? false : (requestedNetwork ?? mode === "full-access")
         const state = Isolation.resolve({ mode, network }, Instance.directory, Instance.worktree)
         const persistedState = await persistProjectConfigFeatureResponse({
           log,

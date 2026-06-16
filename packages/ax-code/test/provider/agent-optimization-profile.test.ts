@@ -1,10 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import {
-  classifyTaskForModelRoute,
-  defaultLongAgentProfile,
-  longAgentProfileForModel,
-  qwen37MaxLongAgentProfile,
-} from "../../src/provider/agent-optimization-profile"
+import { classifyTaskForModelRoute, longAgentProfileForModel } from "../../src/provider/agent-optimization-profile"
 
 describe("classifyTaskForModelRoute", () => {
   test("short single-file edit is cheap", () => {
@@ -55,70 +50,88 @@ describe("classifyTaskForModelRoute", () => {
   })
 })
 
-describe("qwen37MaxLongAgentProfile", () => {
-  test("uses wide context packing budget", () => {
-    expect(qwen37MaxLongAgentProfile().contextPackingBudget).toBe("wide")
-  })
-
-  test("uses a long-context pack token budget", () => {
-    expect(qwen37MaxLongAgentProfile().contextPackTokenBudget).toBe(128_000)
-  })
-
-  test("enables thinking", () => {
-    expect(qwen37MaxLongAgentProfile().thinkingEnabled).toBe(true)
-  })
-
-  test("enables preserve-thinking eligibility", () => {
-    expect(qwen37MaxLongAgentProfile().preserveThinkingEligible).toBe(true)
-  })
-
-  test("enables prompt cache eligibility", () => {
-    expect(qwen37MaxLongAgentProfile().promptCacheEligible).toBe(true)
-  })
-
-  test("enables verification loop", () => {
-    expect(qwen37MaxLongAgentProfile().verificationLoopEnabled).toBe(true)
-  })
-
-  test("enables strict repeated-failure detection", () => {
-    expect(qwen37MaxLongAgentProfile().strictRepeatedFailureDetection).toBe(true)
-  })
-})
-
-describe("defaultLongAgentProfile", () => {
-  test("uses narrow context packing budget", () => {
-    expect(defaultLongAgentProfile().contextPackingBudget).toBe("narrow")
-    expect(defaultLongAgentProfile().contextPackTokenBudget).toBe(8_000)
-  })
-
-  test("disables all premium features", () => {
-    const profile = defaultLongAgentProfile()
-    expect(profile.thinkingEnabled).toBe(false)
-    expect(profile.preserveThinkingEligible).toBe(false)
-    expect(profile.promptCacheEligible).toBe(false)
-    expect(profile.verificationLoopEnabled).toBe(false)
-    expect(profile.strictRepeatedFailureDetection).toBe(false)
-  })
-})
-
 describe("longAgentProfileForModel", () => {
-  test("returns qwen37Max profile for qwen3.7-max", () => {
-    const profile = longAgentProfileForModel("qwen3.7-max")
-    expect(profile.contextPackingBudget).toBe("wide")
-    expect(profile.thinkingEnabled).toBe(true)
+  describe("Qwen 3.7 Max profiles", () => {
+    test("returns wide profile for qwen3.7-max on Alibaba", () => {
+      const profile = longAgentProfileForModel("qwen3.7-max", "alibaba-coding-plan")
+      expect(profile.contextPackingBudget).toBe("wide")
+      expect(profile.contextPackTokenBudget).toBe(128_000)
+      expect(profile.thinkingEnabled).toBe(true)
+      expect(profile.preserveThinkingEligible).toBe(true)
+      expect(profile.promptCacheEligible).toBe(true)
+      expect(profile.verificationLoopEnabled).toBe(true)
+      expect(profile.strictRepeatedFailureDetection).toBe(true)
+    })
+
+    test("returns wide profile for qwen37-max variant", () => {
+      const profile = longAgentProfileForModel("qwen37-max", "togetherai")
+      expect(profile.contextPackingBudget).toBe("wide")
+      expect(profile.thinkingEnabled).toBe(true)
+    })
+
+    test("is case-insensitive", () => {
+      const profile = longAgentProfileForModel("Qwen3.7-Max", "alibaba-coding-plan")
+      expect(profile.thinkingEnabled).toBe(true)
+    })
+
+    test("handles model ID variations", () => {
+      const profile1 = longAgentProfileForModel("qwen-3-7-max", "alibaba-coding-plan")
+      const profile2 = longAgentProfileForModel("qwen3.7-max", "alibaba-coding-plan")
+      const profile3 = longAgentProfileForModel("qwen3_7_max", "alibaba-coding-plan")
+
+      expect(profile1.contextPackingBudget).toBe("wide")
+      expect(profile2.contextPackingBudget).toBe("wide")
+      expect(profile3.contextPackingBudget).toBe("wide")
+    })
   })
 
-  test("returns qwen37Max profile for qwen37-max variant", () => {
-    expect(longAgentProfileForModel("qwen37-max").thinkingEnabled).toBe(true)
+  describe("Claude profiles", () => {
+    test("returns wide profile for Claude 3.7 Sonnet", () => {
+      const profile = longAgentProfileForModel("claude-3-7-sonnet", "anthropic")
+      expect(profile.contextPackingBudget).toBe("wide")
+      expect(profile.thinkingEnabled).toBe(true)
+      expect(profile.preserveThinkingEligible).toBe(false) // Claude doesn't support preserve thinking
+      expect(profile.promptCacheEligible).toBe(true)
+    })
+
+    test("returns narrow profile for Claude 3.5 Sonnet", () => {
+      const profile = longAgentProfileForModel("claude-3-5-sonnet", "anthropic")
+      expect(profile.contextPackingBudget).toBe("narrow")
+      expect(profile.thinkingEnabled).toBe(false)
+    })
   })
 
-  test("is case-insensitive", () => {
-    expect(longAgentProfileForModel("Qwen3.7-Max").thinkingEnabled).toBe(true)
+  describe("GPT profiles", () => {
+    test("returns wide profile for GPT-5", () => {
+      const profile = longAgentProfileForModel("gpt-5", "openai")
+      expect(profile.contextPackingBudget).toBe("wide")
+      expect(profile.thinkingEnabled).toBe(true)
+      expect(profile.preserveThinkingEligible).toBe(false)
+    })
+
+    test("returns narrow profile for GPT-4o (no thinking support)", () => {
+      const profile = longAgentProfileForModel("gpt-4o", "openai")
+      expect(profile.contextPackingBudget).toBe("narrow")
+      expect(profile.thinkingEnabled).toBe(false)
+    })
   })
 
-  test("returns default profile for non-qwen models", () => {
-    const profile = longAgentProfileForModel("claude-opus-4")
-    expect(profile.contextPackingBudget).toBe("narrow")
-    expect(profile.thinkingEnabled).toBe(false)
+  describe("Default profiles", () => {
+    test("returns narrow profile for unknown models", () => {
+      const profile = longAgentProfileForModel("unknown-model")
+      expect(profile.contextPackingBudget).toBe("narrow")
+      expect(profile.contextPackTokenBudget).toBe(8_000)
+      expect(profile.thinkingEnabled).toBe(false)
+      expect(profile.preserveThinkingEligible).toBe(false)
+      expect(profile.promptCacheEligible).toBe(false)
+      expect(profile.verificationLoopEnabled).toBe(false)
+      expect(profile.strictRepeatedFailureDetection).toBe(false)
+    })
+
+    test("returns narrow profile for models without provider context", () => {
+      const profile = longAgentProfileForModel("claude-3-7-sonnet") // No provider
+      expect(profile.contextPackingBudget).toBe("narrow")
+      expect(profile.thinkingEnabled).toBe(false)
+    })
   })
 })

@@ -195,6 +195,9 @@ export function buildChatHtml(nonce: string, cspSource: string): string {
     let activeAssistantEl = null;
     let toolEls = new Map();
     let isProcessing = false;
+    // Track whether the current assistant turn has finalized so late
+    // streamText events cannot recreate a duplicate bubble. See #252.
+    let turnFinalized = false;
 
     function send() {
       const text = inputEl.value.trim();
@@ -272,6 +275,7 @@ export function buildChatHtml(nonce: string, cspSource: string): string {
         case 'status':
           if (msg.status === 'thinking' || msg.status === 'initializing') {
             isProcessing = true; sendBtn.disabled = true;
+            turnFinalized = false;
             const label = msg.status === 'initializing' ? 'Starting ax-code...' : 'Thinking...';
             let live = messagesEl.querySelector('.status[data-live="1"]');
             if (!live) {
@@ -290,6 +294,9 @@ export function buildChatHtml(nonce: string, cspSource: string): string {
           }
           break;
         case 'streamText': {
+          // Ignore late stream chunks that arrive after the turn finalized to
+          // avoid rendering a duplicate assistant bubble. See #252.
+          if (turnFinalized) break;
           // First stream chunk — remove the live 'Thinking...' placeholder.
           messagesEl.querySelectorAll('.status[data-live="1"]').forEach(s => s.remove());
           const el = getOrCreateStreamEl(msg.partId);
@@ -316,6 +323,7 @@ export function buildChatHtml(nonce: string, cspSource: string): string {
           break;
         }
         case 'done':
+          turnFinalized = true;
           if (activeAssistantEl) {
             if (msg.html) activeAssistantEl.innerHTML = msg.html;
             const badge = document.createElement('div');

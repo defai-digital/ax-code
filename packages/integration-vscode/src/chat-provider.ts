@@ -141,14 +141,23 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     this.activeCancelReason = null
     this.postMessage({ type: "status", status: "thinking" })
 
+    // Create the cancellation controller BEFORE awaiting server startup so
+    // Stop/Clear during a slow startup can cancel the pending send. Previously
+    // activeController was created only after ensureStarted() resolved, so a
+    // cancel during startup was silently ignored. See #248.
+    const controller = new AbortController()
+    this.activeController = controller
+
     try {
       if (!this.server.url) {
         this.postMessage({ type: "status", status: "initializing" })
         await this.server.ensureStarted()
+        // If the user cancelled during startup, bail out before sending.
+        if (controller.signal.aborted) {
+          this.handleAbortError()
+          return
+        }
       }
-
-      const controller = new AbortController()
-      this.activeController = controller
 
       const { requestTimeoutMs } = getConfig()
       const timeoutId = setTimeout(() => controller.abort(), requestTimeoutMs)

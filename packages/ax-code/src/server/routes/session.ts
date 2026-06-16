@@ -28,9 +28,10 @@ import { Log } from "../../util/log"
 import { Permission } from "@/permission"
 import { PermissionID } from "@/permission/schema"
 import { ModelID, ProviderID } from "@/provider/schema"
-import { errors } from "../error"
+import { errors, notFound } from "../error"
 import { lazy } from "../../util/lazy"
 import { parseSessionID, type SessionRouteContext, SESSION_ID_PARAM } from "./route-params"
+import { parseCurrentProjectSessionID, requireCurrentProjectSession } from "./session-lookup"
 import { QueryBoolean } from "./query"
 
 const log = Log.create({ service: "server" })
@@ -54,18 +55,6 @@ type SessionJSONRouteContext = {
   req: {
     valid: ((input: "param") => { sessionID: string }) & ((input: "json") => Record<string, unknown>)
   }
-}
-
-async function parseCurrentProjectSession(c: SessionRouteContext) {
-  const sessionID = parseSessionID(c)
-  const session = await requireCurrentProjectSession(sessionID)
-  return { sessionID, session }
-}
-
-async function parseSessionJSONInput<TBody>(c: SessionJSONRouteContext) {
-  const sessionID = await parseCurrentProjectSessionID(c)
-  const body = c.req.valid("json") as TBody
-  return { sessionID: sessionID, body }
 }
 
 async function startAsyncSessionHandler<TBody>(
@@ -147,26 +136,24 @@ function asyncTaskQueueSourceMessageID(body: unknown) {
   return typeof messageID === "string" ? messageID : undefined
 }
 
+async function parseCurrentProjectSession(c: SessionRouteContext) {
+  const sessionID = parseSessionID(c)
+  const session = await requireCurrentProjectSession(sessionID)
+  return { sessionID, session }
+}
+
+async function parseSessionJSONInput<TBody>(c: SessionJSONRouteContext) {
+  const sessionID = await parseCurrentProjectSessionID(c)
+  const body = c.req.valid("json") as TBody
+  return { sessionID: sessionID, body }
+}
+
 async function runSessionRequest<TBody>(
   c: Context,
   start: (input: TBody & { sessionID: SessionID }) => Promise<unknown>,
 ) {
   const { sessionID, body } = await parseSessionJSONInput<TBody>(c as SessionJSONRouteContext)
   return start({ ...body, sessionID })
-}
-
-async function requireCurrentProjectSession(sessionID: SessionID) {
-  const session = await Session.get(sessionID)
-  if (Session.isCompatibleWithCurrentProject(session)) return session
-  throw new HTTPException(409, {
-    message: `Session ${sessionID} belongs to a different project directory; start a new session from the current project instead.`,
-  })
-}
-
-async function parseCurrentProjectSessionID(c: SessionRouteContext) {
-  const sessionID = parseSessionID(c)
-  await requireCurrentProjectSession(sessionID)
-  return sessionID
 }
 
 export const SessionRoutes = lazy(() =>
@@ -966,6 +953,7 @@ export const SessionRoutes = lazy(() =>
       validator("param", SESSION_MESSAGE_PARAM),
       async (c) => {
         const params = c.req.valid("param")
+        await parseCurrentProjectSessionID(c)
         const message = await MessageV2.get({
           sessionID: params.sessionID,
           messageID: params.messageID,
@@ -995,6 +983,7 @@ export const SessionRoutes = lazy(() =>
       validator("param", SESSION_MESSAGE_PARAM),
       async (c) => {
         const params = c.req.valid("param")
+        await parseCurrentProjectSessionID(c)
         // The busy gate exists to stop concurrent edits from racing
         // in-flight reads/writes of the conversation. It can be safely
         // skipped when the delete cannot affect any in-flight state:
@@ -1040,6 +1029,7 @@ export const SessionRoutes = lazy(() =>
       validator("param", SESSION_PART_PARAM),
       async (c) => {
         const params = c.req.valid("param")
+        await parseCurrentProjectSessionID(c)
         SessionPrompt.assertNotBusy(params.sessionID)
         await Session.removePart({
           sessionID: params.sessionID,
@@ -1070,6 +1060,7 @@ export const SessionRoutes = lazy(() =>
       validator("json", MessageV2.Part),
       async (c) => {
         const params = c.req.valid("param")
+        await parseCurrentProjectSessionID(c)
         SessionPrompt.assertNotBusy(params.sessionID)
         const body = c.req.valid("json")
         if (body.id !== params.partID || body.messageID !== params.messageID || body.sessionID !== params.sessionID) {
@@ -1318,6 +1309,15 @@ export const SessionRoutes = lazy(() =>
       validator("json", z.object({ response: Permission.Reply })),
       async (c) => {
         const params = c.req.valid("param")
+        await parseCurrentProjectSessionID(c)
+        const pending = await Permission.list()
+        if (!pending.some((request) => request.id === params.permissionID)) {
+          return notFound(c, {
+            name: "PermissionUnavailableError",
+            message: "Permission request is unavailable",
+            resource: "permission",
+          })
+        }
         await Permission.reply({
           requestID: params.permissionID,
           reply: c.req.valid("json").response,

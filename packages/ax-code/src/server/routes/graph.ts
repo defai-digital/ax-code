@@ -6,7 +6,8 @@ import { ExecutionGraph } from "../../graph"
 import { GraphFormat } from "../../graph/format"
 import { lazy } from "../../util/lazy"
 import { errors } from "../error"
-import { SESSION_ID_PARAM, parseExistingSessionID } from "./route-params"
+import { SESSION_ID_PARAM } from "./route-params"
+import { parseCurrentProjectSessionID } from "./session-lookup"
 
 export const GraphRoutes = lazy(() =>
   new Hono()
@@ -30,7 +31,7 @@ export const GraphRoutes = lazy(() =>
       }),
       validator("param", SESSION_ID_PARAM),
       async (c) => {
-        const sessionID = await parseExistingSessionID(c)
+        const sessionID = await parseCurrentProjectSessionID(c)
         const graph = ExecutionGraph.build(sessionID)
         return c.json({ data: GraphFormat.topologyLines(graph) } satisfies GraphFormat.TopologyResponse)
       },
@@ -66,7 +67,7 @@ export const GraphRoutes = lazy(() =>
         }),
       ),
       async (c) => {
-        const sessionID = await parseExistingSessionID(c)
+        const sessionID = await parseCurrentProjectSessionID(c)
         const format = c.req.valid("query").format
         const graph = ExecutionGraph.build(sessionID)
 

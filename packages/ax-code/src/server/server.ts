@@ -303,6 +303,20 @@ export namespace Server {
     cors?: string[]
   }) {
     assertAuthenticatedNetworkBind(opts.hostname)
+    // Warn loudly when Basic Auth is sent over plaintext to a non-loopback
+    // bind. Credentials can be sniffed/replayed on a LAN or by a MITM. The
+    // safe default is loopback; for network mode we recommend TLS or a
+    // reverse proxy. See #250.
+    if (
+      !isLoopbackHostname(opts.hostname) &&
+      Flag.AX_CODE_SERVER_PASSWORD &&
+      !Flag.AX_CODE_ALLOW_INSECURE_NETWORK_AUTH
+    ) {
+      log.warn(
+        `Server is binding to non-loopback address ${opts.hostname} using plaintext HTTP Basic Auth. ` +
+          "Credentials can be intercepted on the network. Use TLS / a reverse proxy, or set AX_CODE_ALLOW_INSECURE_NETWORK_AUTH=1 to acknowledge and suppress this warning.",
+      )
+    }
     const app = createApp(opts)
     const args = {
       hostname: opts.hostname,

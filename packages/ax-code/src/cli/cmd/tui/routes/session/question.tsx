@@ -31,6 +31,9 @@ export function QuestionPrompt(props: { request: QuestionRequest }) {
     custom: [] as string[],
     selected: 0,
     editing: false,
+    // Latch so repeated submits/clicks while a reply is in flight cannot send
+    // duplicate replies for the same request. See #241.
+    submitting: false,
   })
 
   let textarea: TextareaRenderable | undefined
@@ -49,6 +52,10 @@ export function QuestionPrompt(props: { request: QuestionRequest }) {
   })
 
   function submitQuestionRequest(run: () => Promise<unknown>, failureLabel: string, failureMessage: string) {
+    // Idempotent guard: ignore further submissions once a reply for this
+    // request is already in flight. See #241.
+    if (store.submitting) return
+    setStore("submitting", true)
     void Promise.resolve()
       .then(run)
       .catch((error) => {

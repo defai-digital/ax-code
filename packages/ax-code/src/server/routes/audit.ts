@@ -6,9 +6,12 @@ import { AuditExport } from "../../audit/export"
 import { parseAuditJsonLineResult } from "../../audit/json"
 import { Replay } from "../../replay/replay"
 import type { SessionID } from "../../session/schema"
+import { Session } from "../../session"
 import { lazy } from "../../util/lazy"
 import { Log } from "../../util/log"
-import { SESSION_ID_PARAM, parseSessionID } from "./route-params"
+import { SESSION_ID_PARAM } from "./route-params"
+import { parseCurrentProjectSessionID } from "./session-lookup"
+import { Instance } from "../../project/instance"
 
 const log = Log.create({ service: "audit.routes" })
 const AUDIT_EXPORT_DEFAULT_LIMIT = 10_000
@@ -95,7 +98,7 @@ export const AuditRoutes = lazy(() =>
       validator("param", SESSION_ID_PARAM),
       validator("query", AuditExportLimitQuery),
       async (c) => {
-        const sessionID = parseSessionID(c)
+        const sessionID = await parseCurrentProjectSessionID(c)
         const { limit } = c.req.valid("query")
         const records = await collectAuditExportRecords(AuditExport.stream(sessionID), { limit })
         return c.json({ data: records })
@@ -105,7 +108,7 @@ export const AuditRoutes = lazy(() =>
       "/export",
       describeRoute({
         summary: "Export all audit events",
-        description: "Export all audit events, optionally filtered by date.",
+        description: "Export all audit events for the current project, optionally filtered by date.",
         operationId: "audit.exportAll",
         responses: {
           200: { description: "JSON Lines audit export" },
@@ -114,7 +117,16 @@ export const AuditRoutes = lazy(() =>
       validator("query", AuditExportAllQuery),
       async (c) => {
         const { since, risk, type, limit } = c.req.valid("query")
-        const records = await collectAuditExportRecords(AuditExport.streamAll({ since }), { limit, risk, type })
+        // Scope the cross-session export to the current project directory so a
+        // client connected to one project cannot enumerate another project's
+        // audit events. AuditExport.streamAll does not itself filter by
+        // directory, so we resolve the set of session IDs that belong to the
+        // current project and only keep records for those sessions.
+        const directory = Instance.directory
+        const allowedSessions = new Set(Session.list({ directory }).map((s) => s.id))
+        const records = (
+          await collectAuditExportRecords(AuditExport.streamAll({ since }), { limit, risk, type })
+        ).filter((record) => allowedSessions.has(record.session_id as SessionID))
         return c.json({ data: records })
       },
     )
@@ -131,7 +143,7 @@ export const AuditRoutes = lazy(() =>
       validator("param", SESSION_ID_PARAM),
       validator("query", z.object({ fromStep: z.coerce.number().optional() })),
       async (c) => {
-        const sessionID = parseSessionID(c)
+        const sessionID = await parseCurrentProjectSessionID(c)
         const fromStep = c.req.valid("query").fromStep
         const { steps } = Replay.reconstructStream(sessionID, { fromStep })
         return c.json({ data: { steps } })

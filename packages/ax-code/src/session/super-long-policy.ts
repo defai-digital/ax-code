@@ -1,4 +1,4 @@
-import { isQwen37MaxModel } from "@/provider/qwen37-readiness"
+import { supportsLongAgent } from "@/provider/model-capabilities"
 import { Env } from "@/util/env"
 import { isLocalHostname } from "@/util/local-host"
 
@@ -110,18 +110,36 @@ export namespace SuperLongPolicy {
     return { ...policy }
   }
 
-  export function state(input: { modelID: string; config?: RuntimeConfig; sessionOverride?: boolean }): StateDecision {
+  /**
+   * Determine if long-run mode should be enabled based on config and model capabilities.
+   *
+   * Priority order:
+   * 1. Session override (explicit enable/disable for this session)
+   * 2. Config file setting
+   * 3. Model capability (auto-enable for models with long-agent support)
+   *
+   * This replaces the previous model-specific check (`isQwen37MaxModel()`) with
+   * a capability-based approach using `supportsLongAgent()`.
+   */
+  export function state(input: {
+    modelID: string
+    providerID?: string
+    config?: RuntimeConfig
+    sessionOverride?: boolean
+  }): StateDecision {
     if (input.sessionOverride !== undefined) {
       return { enabled: input.sessionOverride, source: "session-override" }
     }
     if (input.config?.enabled !== undefined) {
       return { enabled: input.config.enabled, source: "config" }
     }
-    return { enabled: isQwen37MaxModel(input.modelID), source: "model-default" }
+    // Use capability-based check instead of model-specific check
+    return { enabled: supportsLongAgent(input.modelID, input.providerID), source: "model-default" }
   }
 
   export function runtimeState(input: {
     modelID: string
+    providerID?: string
     config?: RuntimeConfig
     env?: Record<string, string | undefined>
   }): StateDecision {
@@ -136,6 +154,7 @@ export namespace SuperLongPolicy {
     }
     return state({
       modelID: input.modelID,
+      providerID: input.providerID,
       config: input.config,
     })
   }

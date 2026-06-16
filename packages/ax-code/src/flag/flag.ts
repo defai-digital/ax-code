@@ -90,6 +90,9 @@ export namespace Flag {
   export const AX_CODE_SERVER_PASSWORD = process.env["AX_CODE_SERVER_PASSWORD"]
   export const AX_CODE_SERVER_USERNAME = process.env["AX_CODE_SERVER_USERNAME"]
   export declare const AX_CODE_ENABLE_HTTP_DOCS: boolean
+  // Acknowledge and suppress the plaintext-Basic-Auth-over-non-loopback warning.
+  // See #250.
+  export declare const AX_CODE_ALLOW_INSECURE_NETWORK_AUTH: boolean
   export const AX_CODE_ENABLE_QUESTION_TOOL = truthy("AX_CODE_ENABLE_QUESTION_TOOL")
   export declare const AX_CODE_ISOLATION_MODE: "read-only" | "workspace-write" | "full-access" | undefined
   export declare const AX_CODE_ISOLATION_NETWORK: boolean | undefined
@@ -267,6 +270,11 @@ defineStringFlag("AX_CODE_OTLP_ENDPOINT")
 // The live OpenAPI docs route is gated at request time, so tests and
 // wrappers can opt in without reloading the server module graph.
 defineBooleanFlag("AX_CODE_ENABLE_HTTP_DOCS")
+
+// Plaintext HTTP Basic Auth over non-loopback is risky; this flag lets a user
+// who understands the threat model (e.g. isolated test network) acknowledge it
+// and silence the startup warning. See #250.
+defineBooleanFlag("AX_CODE_ALLOW_INSECURE_NETWORK_AUTH")
 
 // This must be evaluated at access time, not module load time,
 // because tests and external tooling may set this env var at runtime

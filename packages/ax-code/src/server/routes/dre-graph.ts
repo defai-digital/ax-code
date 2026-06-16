@@ -24,6 +24,7 @@ import { SessionID } from "../../session/schema"
 import { Log } from "../../util/log"
 import { lazy } from "../../util/lazy"
 import { SESSION_ID_PARAM, withSessionID } from "./route-params"
+import { requireCurrentProjectSession } from "./session-lookup"
 import { QueryBoolean } from "./query"
 
 const log = Log.create({ service: "server.dre-graph" })
@@ -179,6 +180,7 @@ export const DreGraphRoutes = lazy(() =>
       validator("param", SESSION_ID_PARAM),
       validator("query", DRE_GRAPH_QUALITY_QUERY),
       withSessionID(async (sessionID, c) => {
+        await requireCurrentProjectSession(sessionID)
         const quality = c.req.valid("query").quality
         const context = await loadSessionGraphContext(sessionID, quality)
         const search = c.req.url.includes("?") ? c.req.url.slice(c.req.url.indexOf("?")) : ""
@@ -203,6 +205,7 @@ export const DreGraphRoutes = lazy(() =>
       validator("param", SESSION_ID_PARAM),
       validator("query", DRE_GRAPH_QUALITY_QUERY),
       withSessionID(async (sessionID, c) => {
+        await requireCurrentProjectSession(sessionID)
         const quality = c.req.valid("query").quality
         const context = await loadSessionGraphContext(sessionID, quality)
 

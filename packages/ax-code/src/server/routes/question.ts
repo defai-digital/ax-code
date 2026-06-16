@@ -4,7 +4,7 @@ import { validator } from "../validation"
 import { resolver } from "hono-openapi"
 import { Question } from "../../question"
 import z from "zod"
-import { errors, notFound } from "../error"
+import { errors, invalidRequest, notFound } from "../error"
 import { lazy } from "../../util/lazy"
 import { QUESTION_REQUEST_ID_PARAM, withQuestionRequestID } from "./route-params"
 
@@ -55,12 +55,20 @@ export const QuestionRoutes = lazy(() =>
       withQuestionRequestID(async (requestID, c) => {
         const json = c.req.valid("json") as Question.Reply
         const pending = await Question.list()
-        if (!pending.some((request) => request.id === requestID)) {
+        const request = pending.find((r) => r.id === requestID)
+        if (!request) {
           return notFound(c, {
             name: "QuestionUnavailableError",
             message: "Question request is unavailable",
             resource: "question",
           })
+        }
+        // Validate the reply against the pending question definitions so
+        // malformed answers from SDK/external clients are rejected instead of
+        // silently becoming constraints for the assistant. See #242.
+        const validation = validateQuestionAnswers(request.questions, json.answers)
+        if (validation) {
+          return invalidRequest(c, { message: validation })
         }
         await Question.reply({ requestID, answers: json.answers })
         return c.json(true)
@@ -99,3 +107,46 @@ export const QuestionRoutes = lazy(() =>
       }),
     ),
 )
+
+/**
+ * Validate user answers against a pending question definition.
+ * Returns an error message string when invalid, or null when the answers are
+ * acceptable. Rules (see #242):
+ *  - answer count must match question count
+ *  - empty strings and whitespace-only values are rejected
+ *  - duplicate selections within a single answer are rejected
+ *  - when multiple !== true, an answer may contain at most one value
+ *  - when custom === false, every value must match one of the option labels
+ */
+function validateQuestionAnswers(questions: Question.Info[], answers: Question.Answer[]): string | null {
+  if (answers.length !== questions.length) {
+    return `Expected ${questions.length} answer(s) but received ${answers.length}`
+  }
+  for (let i = 0; i < questions.length; i++) {
+    const question = questions[i]
+    const answer = answers[i] ?? []
+    const index = i + 1
+    // Reject empty / whitespace-only answers.
+    const cleaned = answer.map((v) => (typeof v === "string" ? v.trim() : v))
+    if (cleaned.some((v) => !v)) {
+      return `Question ${index}: answers must not be empty`
+    }
+    // Reject duplicate selections within a single answer.
+    if (new Set(cleaned).size !== cleaned.length) {
+      return `Question ${index}: duplicate selections are not allowed`
+    }
+    // Single-select (multiple !== true) must contain at most one value.
+    if (question.multiple !== true && cleaned.length > 1) {
+      return `Question ${index}: only one selection is allowed`
+    }
+    // When custom answers are disabled, every value must be a known option.
+    if (question.custom === false) {
+      const labels = new Set(question.options.map((o) => o.label))
+      const unknown = cleaned.filter((v) => !labels.has(v as string))
+      if (unknown.length > 0) {
+        return `Question ${index}: invalid option "${unknown[0]}"`
+      }
+    }
+  }
+  return null
+}

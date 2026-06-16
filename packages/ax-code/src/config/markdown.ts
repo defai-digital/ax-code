@@ -68,6 +68,31 @@ export namespace ConfigMarkdown {
     return content.replace(frontmatter, () => processed)
   }
 
+  // Strict limits to prevent YAML DoS (quadratic alias/merge behavior in
+  // js-yaml 3.x via gray-matter). AX Code only needs simple key/value
+  // frontmatter for command/agent/mode/skill metadata, so we cap the
+  // frontmatter size and reject alias/merge-key syntax outright. See #251.
+  const MAX_FRONTMATTER_BYTES = 256 * 1024
+  const MAX_FRONTMATTER_LINES = 4000
+  // Matches YAML anchors (&anchor), aliases (*alias), and merge keys (<<:).
+  const YAML_ALIAS_PATTERN = /(^|\s)[&*]\S+|^<<:/m
+
+  function rejectDangerousFrontmatter(file: string, frontmatter: string): InstanceType<typeof FrontmatterError> | null {
+    if (Buffer.byteLength(frontmatter, "utf8") > MAX_FRONTMATTER_BYTES) {
+      return new FrontmatterError({ path: file, message: `${file}: Frontmatter exceeds maximum size limit` })
+    }
+    if (frontmatter.split(/\r?\n/).length > MAX_FRONTMATTER_LINES) {
+      return new FrontmatterError({ path: file, message: `${file}: Frontmatter exceeds maximum line limit` })
+    }
+    if (YAML_ALIAS_PATTERN.test(frontmatter)) {
+      return new FrontmatterError({
+        path: file,
+        message: `${file}: YAML anchors, aliases, and merge keys are not supported in frontmatter`,
+      })
+    }
+    return null
+  }
+
   const wrap = (file: string) => (err: unknown) =>
     new FrontmatterError(
       {
@@ -77,7 +102,19 @@ export namespace ConfigMarkdown {
       { cause: err },
     )
 
+  function extractFrontmatter(text: string): string | null {
+    const match = text.match(/^---\r?\n([\s\S]*?)\r?\n---/)
+    return match ? match[1] : null
+  }
+
   async function load(file: string, text: string) {
+    // Reject oversized or alias-heavy frontmatter before handing it to the
+    // YAML parser, which is vulnerable to quadratic alias expansion (#251).
+    const frontmatter = extractFrontmatter(text)
+    if (frontmatter) {
+      const rejection = rejectDangerousFrontmatter(file, frontmatter)
+      if (rejection) throw rejection
+    }
     try {
       return matter(text)
     } catch {

@@ -169,14 +169,17 @@ export namespace Pty {
 
   export type CreateInput = z.infer<typeof CreateInput>
 
+  // Bounded integer validation for terminal dimensions. Negative, zero,
+  // fractional, non-finite, and excessively large values previously reached
+  // the native PTY resize path and could cause undefined behavior. See #244.
+  const TerminalSize = z.object({
+    rows: z.number().int().min(1).max(1000),
+    cols: z.number().int().min(1).max(1000),
+  })
+
   export const UpdateInput = z.object({
     title: z.string().optional(),
-    size: z
-      .object({
-        rows: z.number(),
-        cols: z.number(),
-      })
-      .optional(),
+    size: TerminalSize.optional(),
   })
 
   export type UpdateInput = z.infer<typeof UpdateInput>
