@@ -169,7 +169,7 @@ export function createMockAgent(options: MockAgentOptions): Agent {
       }
       return handle
     },
-    async tool(name: string): Promise<unknown> {
+    async tool(name: string, _input: Record<string, unknown>): Promise<unknown> {
       const stub = options.toolCalls?.find((tc) => tc.tool === name)
       if (!stub) throw new Error(`Mock agent has no stub for tool "${name}"`)
       return stub.output

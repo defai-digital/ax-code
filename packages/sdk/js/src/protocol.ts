@@ -23,3 +23,20 @@ export function withWorkspaceHeaders(headers: Record<string, string> | undefined
     [LEGACY_OPENCODE_WORKSPACE_HEADER]: workspaceID,
   }
 }
+
+/**
+ * Create a fetch wrapper that disables Bun's per-request timeout.
+ *
+ * Bun extends `Request` with a `timeout` property (`false` = no per-request
+ * timeout). Without this wrapper, SSE connections and long agent sessions
+ * are killed by Bun's default connection timeout.
+ */
+export function createNoTimeoutFetch(): typeof fetch {
+  return ((input: URL | RequestInfo, init?: RequestInit) => {
+    if (input instanceof Request) {
+      ;(input as Request & { timeout?: boolean }).timeout = false
+      return fetch(input, init)
+    }
+    return fetch(input, { timeout: false, ...init } as RequestInit)
+  }) as typeof fetch
+}
