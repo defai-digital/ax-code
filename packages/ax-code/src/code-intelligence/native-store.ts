@@ -6,10 +6,20 @@ import { parseJsonPayload } from "../util/json-value"
 import type { ProjectID } from "../project/schema"
 import type { CodeNodeID, CodeEdgeID, CodeFileID } from "./id"
 import type { CodeNodeKind, CodeEdgeKind } from "./schema.sql"
+import type { CodeNodeTable, CodeEdgeTable, CodeFileTable, CodeIndexCursorTable } from "./schema.sql"
+import type { IndexStore } from "@ax-code/index-core"
+
+// Drizzle row types — the native store returns JSON that is structurally
+// identical to these row shapes (same columns, same names). The cast at
+// the parse boundary keeps callers type-safe without `any`.
+type NodeRow = typeof CodeNodeTable.$inferSelect
+type EdgeRow = typeof CodeEdgeTable.$inferSelect
+type FileRow = typeof CodeFileTable.$inferSelect
+type CursorRow = typeof CodeIndexCursorTable.$inferSelect
 
 const log = Log.create({ service: "code-intelligence.native-store" })
 
-let storeInstance: any | undefined
+let storeInstance: IndexStore | undefined
 // Once `NativeStore.close()` runs we must not lazily reopen a fresh
 // connection on the next op call — that would defeat the shutdown release
 // and resurface BUG-008. The flag stays set for the rest of the process
@@ -20,7 +30,7 @@ function getDbPath(): string {
   return Global.Path.data + "/ax-code-index.db"
 }
 
-function store(): any {
+function store(): IndexStore | undefined {
   if (storeClosed) return undefined
   if (storeInstance) return storeInstance
   const native = NativeAddon.index()
@@ -33,7 +43,7 @@ function store(): any {
   return storeInstance
 }
 
-function op<T>(name: string, input: unknown, fn: (store: any) => T): T | undefined {
+function op<T>(name: string, input: unknown, fn: (store: IndexStore) => T): T | undefined {
   const value = store()
   if (!value) return
   return NativePerf.run(`index.${name}`, input, () => fn(value))
@@ -66,7 +76,10 @@ export namespace NativeStore {
     }
   }
 
-  // Safe JSON.parse wrapper — returns fallback on corrupted native output (BUG-005)
+  // Safe JSON.parse wrapper — returns fallback on corrupted native output (BUG-005).
+  // The native store returns JSON strings from SQLite; the parsed shape is
+  // structurally equivalent to the Drizzle row types but not statically typed,
+  // so callers pass the expected type via the generic parameter.
   export function parseNativeStoreJson<T>(json: string, fallback: T): T {
     const parsed = parseJsonPayload(json)
     if (parsed === undefined) {
@@ -78,40 +91,40 @@ export namespace NativeStore {
 
   // ─── Node operations ──────────────────────────────────────────────
 
-  export function insertNodes(rows: any[]): void {
+  export function insertNodes(rows: unknown[]): void {
     op("insertNodes", { rows: rows.length }, (store) => store.insertNodes(JSON.stringify(rows)))
   }
 
-  export function getNode(projectID: ProjectID, id: CodeNodeID): any | undefined {
+  export function getNode(projectID: ProjectID, id: CodeNodeID): NodeRow | undefined {
     const result = op("getNode", { projectID, id }, (store) => store.getNode(projectID, id))
-    return result ? parseNativeStoreJson(result, undefined) : undefined
+    return result ? parseNativeStoreJson<NodeRow | undefined>(result, undefined) : undefined
   }
 
   export function findNodesByName(
     projectID: ProjectID,
     name: string,
     opts?: { kind?: CodeNodeKind; file?: string; limit?: number },
-  ): any[] {
+  ): NodeRow[] {
     const result = op("findNodesByName", { projectID, name, opts }, (store) =>
       store.findNodesByName(projectID, name, JSON.stringify(opts ?? {})),
     )
-    return result ? parseNativeStoreJson(result, []) : []
+    return result ? parseNativeStoreJson<NodeRow[]>(result, []) : []
   }
 
   export function findNodesByNamePrefix(
     projectID: ProjectID,
     prefix: string,
     opts?: { kind?: CodeNodeKind; limit?: number },
-  ): any[] {
+  ): NodeRow[] {
     const result = op("findNodesByPrefix", { projectID, prefix, opts }, (store) =>
       store.findNodesByPrefix(projectID, prefix, JSON.stringify(opts ?? {})),
     )
-    return result ? parseNativeStoreJson(result, []) : []
+    return result ? parseNativeStoreJson<NodeRow[]>(result, []) : []
   }
 
-  export function nodesInFile(projectID: ProjectID, file: string): any[] {
+  export function nodesInFile(projectID: ProjectID, file: string): NodeRow[] {
     const result = op("nodesInFile", { projectID, file }, (store) => store.nodesInFile(projectID, file))
-    return result ? parseNativeStoreJson(result, []) : []
+    return result ? parseNativeStoreJson<NodeRow[]>(result, []) : []
   }
 
   export function countNodes(projectID: ProjectID): number {
@@ -124,25 +137,25 @@ export namespace NativeStore {
 
   // ─── Edge operations ──────────────────────────────────────────────
 
-  export function insertEdges(rows: any[]): void {
+  export function insertEdges(rows: unknown[]): void {
     op("insertEdges", { rows: rows.length }, (store) => store.insertEdges(JSON.stringify(rows)))
   }
 
-  export function edgesFrom(projectID: ProjectID, fromNode: CodeNodeID, kind?: CodeEdgeKind): any[] {
+  export function edgesFrom(projectID: ProjectID, fromNode: CodeNodeID, kind?: CodeEdgeKind): EdgeRow[] {
     const result = op("edgesFrom", { projectID, fromNode, kind }, (store) =>
       store.edgesFrom(projectID, fromNode, kind ?? null),
     )
-    return result ? parseNativeStoreJson(result, []) : []
+    return result ? parseNativeStoreJson<EdgeRow[]>(result, []) : []
   }
 
-  export function edgesTo(projectID: ProjectID, toNode: CodeNodeID, kind?: CodeEdgeKind): any[] {
+  export function edgesTo(projectID: ProjectID, toNode: CodeNodeID, kind?: CodeEdgeKind): EdgeRow[] {
     const result = op("edgesTo", { projectID, toNode, kind }, (store) => store.edgesTo(projectID, toNode, kind ?? null))
-    return result ? parseNativeStoreJson(result, []) : []
+    return result ? parseNativeStoreJson<EdgeRow[]>(result, []) : []
   }
 
-  export function edgesInFile(projectID: ProjectID, file: string): any[] {
+  export function edgesInFile(projectID: ProjectID, file: string): EdgeRow[] {
     const result = op("edgesInFile", { projectID, file }, (store) => store.edgesInFile(projectID, file))
-    return result ? parseNativeStoreJson(result, []) : []
+    return result ? parseNativeStoreJson<EdgeRow[]>(result, []) : []
   }
 
   export function deleteEdgesInFile(projectID: ProjectID, file: string): void {
@@ -159,18 +172,18 @@ export namespace NativeStore {
 
   // ─── File operations ─────────��────────────────────────────────────
 
-  export function upsertFile(row: any): void {
+  export function upsertFile(row: { project_id: string; path: string }): void {
     op("upsertFile", { projectID: row.project_id, path: row.path }, (store) => store.upsertFile(JSON.stringify(row)))
   }
 
-  export function getFile(projectID: ProjectID, path: string): any | undefined {
+  export function getFile(projectID: ProjectID, path: string): FileRow | undefined {
     const result = op("getFile", { projectID, path }, (store) => store.getFile(projectID, path))
-    return result ? parseNativeStoreJson(result, undefined) : undefined
+    return result ? parseNativeStoreJson<FileRow | undefined>(result, undefined) : undefined
   }
 
-  export function listFiles(projectID: ProjectID): any[] {
+  export function listFiles(projectID: ProjectID): FileRow[] {
     const result = op("listFiles", { projectID }, (store) => store.listFiles(projectID))
-    return result ? parseNativeStoreJson(result, []) : []
+    return result ? parseNativeStoreJson<FileRow[]>(result, []) : []
   }
 
   export function pruneOrphanFiles(
@@ -186,9 +199,9 @@ export namespace NativeStore {
 
   // ─── Cursor operations ──────���─────────────────────────────────────
 
-  export function getCursor(projectID: ProjectID): any | undefined {
+  export function getCursor(projectID: ProjectID): CursorRow | undefined {
     const result = op("getCursor", { projectID }, (store) => store.getCursor(projectID))
-    return result ? parseNativeStoreJson(result, undefined) : undefined
+    return result ? parseNativeStoreJson<CursorRow | undefined>(result, undefined) : undefined
   }
 
   export function upsertCursor(
@@ -214,7 +227,7 @@ export namespace NativeStore {
 
   // ─── Atomic ingest ────���─────────────────────────────────��─────────
 
-  export function ingestFile(projectID: ProjectID, filePath: string, nodes: any[], edges: any[], fileMeta: any): void {
+  export function ingestFile(projectID: ProjectID, filePath: string, nodes: unknown[], edges: unknown[], fileMeta: unknown): void {
     op("ingestFile", { projectID, filePath, nodes: nodes.length, edges: edges.length }, (store) =>
       store.ingestFile(projectID, filePath, JSON.stringify(nodes), JSON.stringify(edges), JSON.stringify(fileMeta)),
     )

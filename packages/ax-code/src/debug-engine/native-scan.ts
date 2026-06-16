@@ -158,10 +158,11 @@ export function parseNativeDetectResult<F>(json: string): DetectResult<F> {
 
 function callNativeDetector<F>(fnName: string, input: DetectInput): DetectResult<F> | undefined {
   if (!nativeScanEnabled()) return undefined
-  const native = NativeAddon.fs()
+  const native = NativeAddon.fs() as Record<string, unknown> | undefined
   if (!native) return undefined
   if (typeof native[fnName] !== "function") return undefined
   try {
+    const fn = native[fnName] as (json: string) => string
     const json = NativePerf.run(
       `fs.${fnName}`,
       {
@@ -173,7 +174,7 @@ function callNativeDetector<F>(fnName: string, input: DetectInput): DetectResult
         excludeTests: input.excludeTests ?? true,
       },
       () =>
-        native[fnName](
+        fn(
           JSON.stringify({
             cwd: input.cwd,
             include: input.include,

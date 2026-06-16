@@ -1,4 +1,6 @@
-// @ts-ignore
+// @ts-ignore — @parcel/watcher ships types for the main entry but not for
+// the internal /wrapper subpath, which re-exports the platform-specific
+// binding behind a uniform API. The import is correct at runtime.
 import { createWrapper } from "@parcel/watcher/wrapper"
 import { readdir, stat } from "fs/promises"
 import { createRequire } from "node:module"

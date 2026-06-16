@@ -76,7 +76,8 @@ import {
   type ShellInput as ShellInputType,
 } from "./prompt-input"
 
-// @ts-ignore
+// @ts-ignore — suppresses ai-sdk stdout log warnings.
+// See: https://github.com/vercel/ai/blob/2dc67e0ef538307f21368db32d5a12345d98831b/packages/ai/src/logger/log-warnings.ts#L85
 globalThis.AI_SDK_LOG_WARNINGS = false
 
 const STRUCTURED_OUTPUT_SYSTEM_PROMPT = `IMPORTANT: The user has requested structured output. You MUST use the StructuredOutput tool to provide your final response. Do NOT respond with plain text - you MUST call the StructuredOutput tool with your answer formatted according to the schema.`

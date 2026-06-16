@@ -79,36 +79,38 @@ export namespace Permission {
   }
 
   export class RejectedError extends Error {
-    override name = "PermissionRejectedError"
+    override readonly name = "PermissionRejectedError"
 
-    constructor() {
-      super("The user rejected permission to use this specific tool call.")
+    constructor(options?: ErrorOptions) {
+      super("The user rejected permission to use this specific tool call.", options)
     }
   }
 
   export class CorrectedError extends Error {
-    override name = "PermissionCorrectedError"
+    override readonly name = "PermissionCorrectedError"
     readonly feedback: string
 
-    constructor(input: { feedback: string }) {
+    constructor(input: { feedback: string; options?: ErrorOptions }) {
       super(
         `The user rejected permission to use this specific tool call with the following feedback: ${input.feedback}`,
+        input.options,
       )
       this.feedback = input.feedback
     }
   }
 
   export class DeniedError extends Error {
-    override name = "PermissionDeniedError"
+    override readonly name = "PermissionDeniedError"
     readonly ruleset: unknown
     readonly agent?: string
 
-    constructor(input: { ruleset: unknown; agent?: string }) {
+    constructor(input: { ruleset: unknown; agent?: string; options?: ErrorOptions }) {
       const base = `The user has specified a rule which prevents you from using this specific tool call. Here are some of the relevant rules ${JSON.stringify(input.ruleset)}`
       super(
         input.agent
           ? `${base}\n\nThis is because you are running as the "${input.agent}" agent, which is read-only and cannot modify files. You should inform the user that this task requires code changes, and suggest they switch to the Dev agent (press Tab or use @build).`
           : base,
+        input.options,
       )
       this.ruleset = input.ruleset
       this.agent = input.agent
