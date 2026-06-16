@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { GLOBAL_STEP_LIMIT } from "../../src/constants/session"
-import { MAX_EMPTY_MODEL_TURN_RETRIES, promptLoopLimits } from "../../src/session/prompt-loop-config"
+import { MAX_EMPTY_MODEL_TURN_RETRIES, MAX_TRUNCATED_MODEL_TURN_RETRIES, promptLoopLimits } from "../../src/session/prompt-loop-config"
 
 describe("promptLoopLimits", () => {
   test("uses prompt loop defaults when session config is absent", () => {
@@ -10,6 +10,7 @@ describe("promptLoopLimits", () => {
       maxTodoRetries: 10,
       maxCompletionGateRetries: 2,
       maxEmptyModelTurnRetries: MAX_EMPTY_MODEL_TURN_RETRIES,
+      maxTruncatedModelTurnRetries: MAX_TRUNCATED_MODEL_TURN_RETRIES,
     })
   })
 
@@ -28,6 +29,7 @@ describe("promptLoopLimits", () => {
       maxTodoRetries: 1,
       maxCompletionGateRetries: 1,
       maxEmptyModelTurnRetries: MAX_EMPTY_MODEL_TURN_RETRIES,
+      maxTruncatedModelTurnRetries: MAX_TRUNCATED_MODEL_TURN_RETRIES,
     })
   })
 })

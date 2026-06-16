@@ -183,8 +183,14 @@ export namespace SessionPrompt {
     const session = await Session.get(sessionID)
     // Pre-load expensive resources once before the loop
     const cfg = await Config.get()
-    const { sessionStepLimit, maxContinuations, maxTodoRetries, maxCompletionGateRetries, maxEmptyModelTurnRetries } =
-      promptLoopLimits(cfg)
+    const {
+      sessionStepLimit,
+      maxContinuations,
+      maxTodoRetries,
+      maxCompletionGateRetries,
+      maxEmptyModelTurnRetries,
+      maxTruncatedModelTurnRetries,
+    } = promptLoopLimits(cfg)
     const autonomous = Flag.AX_CODE_AUTONOMOUS
     let todoRetries = 0
     let completionGateRetries = 0
@@ -609,7 +615,7 @@ export namespace SessionPrompt {
           assistant: processor.message,
           truncatedModelTurn,
           truncatedModelTurnRetries,
-          maxTruncatedModelTurnRetries: maxEmptyModelTurnRetries,
+          maxTruncatedModelTurnRetries,
           pendingCount: pendingTodos.length,
         })
         truncatedModelTurnRetries = truncatedTurnTransition.truncatedModelTurnRetries
