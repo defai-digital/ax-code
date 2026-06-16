@@ -36,7 +36,7 @@ afterEach(async () => {
 
 describe("ax-engine platform gate", () => {
   test("parses macOS versions and Apple Silicon generations", () => {
-    expect(parseMacosMajor("26.0")).toBe(26)
+    expect(parseMacosMajor("16.0")).toBe(16)
     expect(parseMacosMajor("15.6.1")).toBe(15)
     expect(parseMacosMajor("not-a-version")).toBeUndefined()
 
@@ -66,7 +66,7 @@ describe("ax-engine platform gate", () => {
       evaluatePlatformEligibility({
         platform: "darwin",
         arch: "arm64",
-        macosVersion: "25.0",
+        macosVersion: "14.0",
         chip: "Apple M1 Max",
       }),
     ).toMatchObject({
@@ -81,7 +81,7 @@ describe("ax-engine platform gate", () => {
       evaluatePlatformEligibility({
         platform: "darwin",
         arch: "arm64",
-        macosVersion: "26.0",
+        macosVersion: "15.0",
         chip: "Apple M2 Max",
         memoryBytes: 32 * 1024 ** 3,
       }),
@@ -94,7 +94,7 @@ describe("ax-engine platform gate", () => {
       evaluatePlatformEligibility({
         platform: "darwin",
         arch: "arm64",
-        macosVersion: "26.0",
+        macosVersion: "15.0",
         chip: "Apple M2 Max",
         memoryBytes: 64 * 1024 ** 3,
       }),
@@ -170,8 +170,8 @@ describe("ax-engine prepare lifecycle", () => {
     supported: true,
     platform: "darwin",
     arch: "arm64",
-    macosVersion: "26.0",
-    macosMajor: 26,
+    macosVersion: "15.0",
+    macosMajor: 15,
     chip: "Apple M2 Max",
     chipGeneration: "m2",
     memoryBytes: 64 * 1024 ** 3,
