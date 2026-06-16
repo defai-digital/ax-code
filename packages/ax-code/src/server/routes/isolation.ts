@@ -8,6 +8,7 @@ import { Instance } from "../../project/instance"
 import { Log } from "../../util/log"
 import { lazy } from "../../util/lazy"
 import { persistProjectConfigFeatureResponse } from "./project-config"
+import { FeatureFlag } from "@/util/feature-flags"
 
 const log = Log.create({ service: "isolation" })
 
@@ -84,6 +85,7 @@ export const IsolationRoutes = lazy(() =>
           },
         })
         if ("error" in persistedState) return c.json(persistedState, 500)
+        FeatureFlag.set("AX_CODE_ISOLATION_NETWORK", network)
         return c.json(persistedState)
       },
     ),
