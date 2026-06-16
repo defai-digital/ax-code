@@ -3,7 +3,6 @@ import { describeRoute, resolver } from "hono-openapi"
 import { validator } from "../validation"
 import z from "zod"
 import { Isolation } from "../../isolation"
-import { Instance } from "../../project/instance"
 import { Log } from "../../util/log"
 import { lazy } from "../../util/lazy"
 import { persistProjectConfigFeatureResponse, readProjectConfig } from "./project-config"
@@ -91,13 +90,19 @@ export const IsolationRoutes = lazy(() =>
         // to false for workspace-write. See #240.
         const requestedNetwork = c.req.valid("json").network
         const network = mode === "read-only" ? false : (requestedNetwork ?? mode === "full-access")
-        const state = Isolation.resolve({ mode, network }, Instance.directory, Instance.worktree)
+        // Use the explicitly requested mode and computed network for the
+        // response. Isolation.resolve() reads Flag.AX_CODE_ISOLATION_MODE
+        // (env var) first, which has the OLD value at this point — the
+        // env is only updated by persistProjectConfigFeatureResponse below.
+        // Using resolve()'s state.mode for the response would report the
+        // stale env value to the client, making the desktop UI show the
+        // wrong toggle state until the next GET reconciliation.
         const persistedState = await persistProjectConfigFeatureResponse({
           log,
           context: "isolation mode",
           featureFlag: "AX_CODE_ISOLATION_MODE",
           featureValue: mode,
-          responseState: { mode: state.mode, network: state.network },
+          responseState: { mode, network },
           update: (config) => {
             config.isolation = { mode, network }
           },

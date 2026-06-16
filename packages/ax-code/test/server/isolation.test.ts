@@ -170,4 +170,31 @@ describe("isolation route", () => {
       })
     })
   })
+
+  test("PUT response reports requested mode even when env var has a stale value", async () => {
+    await withCleanIsolationEnv(async () => {
+      await using tmp = await tmpdir({ git: true })
+      const configPath = path.join(tmp.path, "ax-code.json")
+      await Bun.write(configPath, JSON.stringify({}))
+      // Simulate a stale env var from --sandbox full-access at startup.
+      // The PUT requests workspace-write; the response must report
+      // workspace-write (the requested value), not full-access (stale).
+      process.env.AX_CODE_ISOLATION_MODE = "full-access"
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const put = await Server.Default().request(`/isolation?directory=${encodeURIComponent(tmp.path)}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ mode: "workspace-write" }),
+          })
+          expect(put.status).toBe(200)
+          // The response must report the requested mode, not the stale env.
+          expect(await put.json()).toEqual({ mode: "workspace-write", network: false })
+          expect(process.env.AX_CODE_ISOLATION_MODE).toBe("workspace-write")
+        },
+      })
+    })
+  })
 })
