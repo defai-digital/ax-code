@@ -75,7 +75,10 @@ export namespace ConfigMarkdown {
   const MAX_FRONTMATTER_BYTES = 256 * 1024
   const MAX_FRONTMATTER_LINES = 4000
   // Matches YAML anchors (&anchor), aliases (*alias), and merge keys (<<:).
-  const YAML_ALIAS_PATTERN = /(^|\s)[&*]\S+|^<<:/m
+  // Anchor/alias names must start with a letter or underscore and contain only
+  // word characters and hyphens, so glob patterns like `**/*.css` are not
+  // false-positive matches.
+  const YAML_ALIAS_PATTERN = /(^|\s)[&*][a-zA-Z_][\w-]*|^<<:/m
 
   function rejectDangerousFrontmatter(file: string, frontmatter: string): InstanceType<typeof FrontmatterError> | null {
     if (Buffer.byteLength(frontmatter, "utf8") > MAX_FRONTMATTER_BYTES) {

@@ -868,7 +868,7 @@ export namespace SessionProcessor {
                   }
                   // Phase 5: emit agent-optimization trace for local analysis.
                   {
-                    const profile = longAgentProfileForModel(input.model.id)
+                    const profile = longAgentProfileForModel(input.model.id, input.model.providerID)
                     const routeClass: AgentOptimizationTrace.RouteClass =
                       profile.contextPackingBudget === "wide" ? "premium" : "cheap"
                     const failureDetect = AgentOptimizationTrace.detectRepeatedFailure(stepErrorSurfaces)

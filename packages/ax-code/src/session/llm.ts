@@ -168,7 +168,7 @@ export namespace LLM {
     const reasoningPolicyReminder = ReasoningPolicy.systemReminder(reasoningPolicyDecision)
     if (reasoningPolicyReminder) system.push(reasoningPolicyReminder)
 
-    const longAgentProfile = longAgentProfileForModel(input.model.id)
+    const longAgentProfile = longAgentProfileForModel(input.model.id, input.model.providerID)
     const autonomousEnabled = Flag.AX_CODE_AUTONOMOUS
     const superLongEnabled =
       !input.small &&
