@@ -65,22 +65,12 @@ export const TEMPLATES: McpTemplate[] = [
     envDescription: { GITLAB_TOKEN: "Personal access token from GitLab settings" },
   },
   {
-    name: "linear",
-    description: "Linear project management — issues, projects, teams",
-    category: "Developer Tools",
-    type: "local",
-    command: "npx",
-    args: ["-y", "@modelcontextprotocol/server-linear"],
-    envRequired: ["LINEAR_API_KEY"],
-    envDescription: { LINEAR_API_KEY: "Get from https://linear.app/settings/api" },
-  },
-  {
     name: "sentry",
     description: "Sentry error tracking — issues, events, traces",
     category: "Developer Tools",
     type: "local",
     command: "npx",
-    args: ["-y", "@modelcontextprotocol/server-sentry"],
+    args: ["-y", "@sentry/mcp-server"],
     envRequired: ["SENTRY_AUTH_TOKEN"],
     envDescription: { SENTRY_AUTH_TOKEN: "Get from https://sentry.io/settings/auth-tokens/" },
   },
@@ -95,14 +85,6 @@ export const TEMPLATES: McpTemplate[] = [
     args: ["-y", "@modelcontextprotocol/server-postgres"],
     envRequired: ["DATABASE_URL"],
     envDescription: { DATABASE_URL: "PostgreSQL connection string (e.g., postgresql://user:pass@host/db)" },
-  },
-  {
-    name: "sqlite",
-    description: "SQLite database — query, schema, tables",
-    category: "Databases",
-    type: "local",
-    command: "npx",
-    args: ["-y", "@modelcontextprotocol/server-sqlite"],
   },
 
   // === File System & Storage ===
@@ -122,14 +104,6 @@ export const TEMPLATES: McpTemplate[] = [
     type: "local",
     command: "npx",
     args: ["-y", "@modelcontextprotocol/server-puppeteer"],
-  },
-  {
-    name: "playwright",
-    description: "Browser testing — navigate, test, screenshot",
-    category: "Browser & Testing",
-    type: "local",
-    command: "npx",
-    args: ["-y", "@anthropic/mcp-server-playwright"],
   },
 
   // === Cloud & Infrastructure ===
@@ -152,18 +126,6 @@ export const TEMPLATES: McpTemplate[] = [
     args: ["-y", "@cloudflare/mcp-server-cloudflare"],
     envRequired: ["CLOUDFLARE_API_TOKEN"],
     envDescription: { CLOUDFLARE_API_TOKEN: "Get from https://dash.cloudflare.com/profile/api-tokens" },
-  },
-
-  // === Design ===
-  {
-    name: "figma",
-    description: "Figma designs — read files, components, styles",
-    category: "Design",
-    type: "local",
-    command: "npx",
-    args: ["-y", "@anthropic/mcp-server-figma"],
-    envRequired: ["FIGMA_ACCESS_TOKEN"],
-    envDescription: { FIGMA_ACCESS_TOKEN: "Get from https://www.figma.com/developers/api#access-tokens" },
   },
 
   // === Communication ===
