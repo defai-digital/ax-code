@@ -206,13 +206,26 @@ export function names(): string[] {
 }
 
 /**
- * Convert a template to ax-code config format
+ * Convert a template to ax-code config format.
+ *
+ * The McpLocal schema expects `command` as a single string array
+ * (binary + args) and uses `environment` (not `env`) for env vars.
+ * The McpRemote schema expects `url` and optional `headers`/`oauth`.
+ * Both schemas are `.strict()`, so extra keys cause validation errors.
  */
 export function toConfig(template: McpTemplate): Record<string, unknown> {
   const config: Record<string, unknown> = { type: template.type }
-  if (template.command) config.command = template.command
-  if (template.args) config.args = template.args
-  if (template.url) config.url = template.url
-  if (template.env) config.env = template.env
+  if (template.type === "local") {
+    // McpLocal.command is `string[]` — binary + args combined.
+    const parts: string[] = []
+    if (template.command) parts.push(template.command)
+    if (template.args) parts.push(...template.args)
+    if (parts.length > 0) config.command = parts
+    // McpLocal uses `environment`, not `env`.
+    if (template.env) config.environment = template.env
+  } else {
+    // Remote: only `url` is relevant from the template fields.
+    if (template.url) config.url = template.url
+  }
   return config
 }
