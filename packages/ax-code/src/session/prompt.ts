@@ -408,6 +408,7 @@ export namespace SessionPrompt {
           model,
           lastFinished,
           superLong: superLongActive,
+          latestUserParts: lastUserParts ?? [],
         })
       ) {
         cachedMsgs = undefined // invalidate cache after compaction

@@ -13,6 +13,14 @@ import type { SessionID } from "./schema"
 
 const log = Log.create({ service: "session.prompt" })
 
+// True when a user turn carries media (image/PDF) attachments. Proactive
+// auto-compaction strips media to text placeholders, so compacting before such
+// a turn is answered loses the visual context the user just provided (and the
+// stale summary can then drive the successor turn off course). See #259.
+export function hasUnresolvedMedia(parts: MessageV2.Part[]): boolean {
+  return parts.some((part) => part.type === "file" && MessageV2.isMedia(part.mime))
+}
+
 type PendingCompactionResult =
   | { action: "break"; reason: "completed" | "error" }
   | { action: "retry"; busyRetries: number }
@@ -62,7 +70,18 @@ export async function maybeScheduleUsageCompaction(input: {
   model: Provider.Model
   lastFinished?: MessageV2.Assistant
   superLong?: boolean
+  latestUserParts?: MessageV2.Part[]
 }) {
+  // Don't proactively compact (and strip media) while the latest user turn
+  // still carries unanswered image/PDF attachments — answer it first. A genuine
+  // provider overflow still routes through the reactive overflow path. See #259.
+  if (input.latestUserParts && hasUnresolvedMedia(input.latestUserParts)) {
+    log.info("skipping usage compaction: latest user turn has unresolved media", {
+      sessionID: input.sessionID,
+    })
+    return false
+  }
+
   const overflow = input.lastFinished
     ? await SessionCompaction.isOverflow({
         tokens: input.lastFinished.tokens,
@@ -100,6 +119,16 @@ export async function maybeSchedulePreflightCompaction(input: {
 }) {
   const tokenBudget = await SessionCompaction.budget(input.model)
   if (!tokenBudget || isSyntheticContinuation(input.userParts)) return false
+
+  // The turn about to be sent carries media; don't strip it via a proactive
+  // pre-send compaction. The reactive overflow path still handles a real
+  // provider size rejection. See #259.
+  if (hasUnresolvedMedia(input.userParts)) {
+    log.info("skipping preflight compaction: user turn has unresolved media", {
+      sessionID: input.sessionID,
+    })
+    return false
+  }
 
   const messageTokens = estimateRequestTokens({ system: input.system, messages: input.requestMessages })
   const toolSchemaTokens = await estimateRegistryToolSchemaTokens({
