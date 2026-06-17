@@ -443,7 +443,6 @@ export const McpLogoutCommand = cmd({
         UI.empty()
         prompts.intro("MCP OAuth Logout")
 
-        const authPath = path.join(Global.Path.data, "mcp-auth.json")
         const credentials = await McpAuth.all()
         const serverNames = Object.keys(credentials)
 
@@ -917,6 +916,10 @@ export const McpDebugCommand = cmd({
           }
 
           if (response.status === 401) {
+            // Consume the response body to prevent resource leak.
+            // The body is unused in this path but the underlying socket
+            // stays open until consumed or cancelled.
+            await response.body?.cancel().catch(() => {})
             prompts.log.warn("Server returned 401 Unauthorized")
 
             // Try to discover OAuth metadata
@@ -965,6 +968,12 @@ export const McpDebugCommand = cmd({
               } else {
                 prompts.log.error(`Connection error: ${toErrorMessage(error)}`)
               }
+            } finally {
+              // Ensure the transport is always closed — the client created
+              // above is only closed on the success path inside the try block.
+              // Non-UnauthorizedError exceptions would otherwise leak the
+              // underlying socket.
+              await transport.close?.().catch(() => {})
             }
           } else if (response.status >= 200 && response.status < 300) {
             prompts.log.success("Server responded successfully (no auth required or already authenticated)")

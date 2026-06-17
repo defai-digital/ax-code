@@ -241,7 +241,12 @@ const CANDIDATES: Candidate[] = [
           method: "OPTIONS",
           signal: AbortSignal.timeout(3000),
         })
-        return res.status < 500
+        const ok = res.status < 500
+        // Cancel the response body to release the underlying socket.
+        // Without this, the unconsumed body leaks a TCP connection per
+        // discovery run.
+        await res.body?.cancel().catch(() => {})
+        return ok
       } catch {
         return false
       }
