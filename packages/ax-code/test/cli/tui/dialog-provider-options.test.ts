@@ -90,15 +90,22 @@ describe("provider dialog options", () => {
     expect(CLI_BINARIES["grok-build-cli"]).toBe("grok")
   })
 
+  test("includes Qoder CLI as a CLI provider", () => {
+    expect(CLI_PROVIDERS.has("qoder-cli")).toBe(true)
+    expect(CLI_BINARIES["qoder-cli"]).toBe("qodercli")
+  })
+
   test("separates API, CLI, and local provider categories", () => {
     expect(providerDialogCategory("xai")).toBe("API plan")
     expect(providerDialogCategory("grok-build-cli")).toBe("CLI plan")
+    expect(providerDialogCategory("qoder-cli")).toBe("CLI plan")
     expect(providerDialogCategory("ollama")).toBe("Local runtime")
   })
 
   test("requires normal tool-call capability for local runtime models", () => {
     expect(providerModelSelectable({ providerID: "ax-engine", toolcall: false })).toBe(false)
     expect(providerModelSelectable({ providerID: "grok-build-cli", toolcall: false })).toBe(true)
+    expect(providerModelSelectable({ providerID: "qoder-cli", toolcall: false })).toBe(true)
     expect(providerModelSelectable({ providerID: "xai", toolcall: false })).toBe(false)
     expect(providerModelSelectable({ providerID: "xai", toolcall: true })).toBe(true)
   })

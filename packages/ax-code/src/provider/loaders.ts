@@ -284,6 +284,7 @@ const CLI_DEFAULT_MODEL_NAMES: Record<string, string> = {
   "gemini-cli": "Gemini CLI default",
   "codex-cli": "Codex CLI default",
   "grok-build-cli": "Grok Build CLI default",
+  "qoder-cli": "Qoder CLI default",
 }
 
 function cliModels(providerID: string, provider: Provider.Info, resolved?: string): Record<string, Provider.Model> {
@@ -366,6 +367,7 @@ const claudeCode = getCliProviderDefinition("claude-code")!
 const geminiCli = getCliProviderDefinition("gemini-cli")!
 const codexCli = getCliProviderDefinition("codex-cli")!
 const grokBuildCli = getCliProviderDefinition("grok-build-cli")!
+const qoderCli = getCliProviderDefinition("qoder-cli")!
 
 export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
   xai: async () => {
@@ -411,5 +413,13 @@ export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
     parser: grokBuildCli.parser,
     promptMode: grokBuildCli.promptMode,
     promptFlag: grokBuildCli.promptFlag,
+  }),
+  "qoder-cli": cliLoader({
+    providerID: "qoder-cli",
+    binary: qoderCli.binary,
+    args: qoderCli.args,
+    parser: qoderCli.parser,
+    promptMode: qoderCli.promptMode,
+    promptFlag: qoderCli.promptFlag,
   }),
 }

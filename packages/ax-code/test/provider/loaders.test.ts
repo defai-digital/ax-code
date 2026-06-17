@@ -94,6 +94,15 @@ describe("CLI provider loaders", () => {
       discoveredModelIDs: ["grok-build-0.1", "grok-code-fast-1"],
     })
   })
+
+  test("qoder-cli configured provider does not discover runnable variants when binary missing", async () => {
+    await expectMissingCliProvider({
+      providerID: "qoder-cli",
+      binary: "qodercli",
+      baseModelID: "qoder-cli",
+      discoveredModelIDs: [],
+    })
+  })
 })
 
 describe("online provider loaders", () => {

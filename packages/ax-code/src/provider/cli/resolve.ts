@@ -15,6 +15,7 @@ const DEFAULTS: Record<string, string> = {
   "gemini-cli": "gemini-cli",
   "codex-cli": "codex-cli",
   "grok-build-cli": "grok-build-cli",
+  "qoder-cli": "qoder-cli",
 }
 
 type JsonLike = CliJsonObject
@@ -100,11 +101,22 @@ async function resolveCodexModel(): Promise<CliModelInfo> {
   return { model: DEFAULTS["codex-cli"]!, source: "default" }
 }
 
+async function resolveQoderModel(): Promise<CliModelInfo> {
+  return resolveModelFromJsonSettings({
+    envVar: "QODER_MODEL",
+    settingsPath: ".qoder/settings.json",
+    sourceLabel: "~/.qoder/settings.json",
+    defaultModel: DEFAULTS["qoder-cli"]!,
+    read: resolveJsonModelString,
+  })
+}
+
 const RESOLVERS: Record<string, () => Promise<CliModelInfo>> = {
   "claude-code": resolveClaudeModel,
   "gemini-cli": resolveGeminiModel,
   "codex-cli": resolveCodexModel,
   "grok-build-cli": async () => ({ model: DEFAULTS["grok-build-cli"]!, source: "default" }),
+  "qoder-cli": resolveQoderModel,
 }
 
 export async function resolveCliModel(providerID: string): Promise<CliModelInfo> {

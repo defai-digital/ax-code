@@ -1,4 +1,10 @@
-const TOOLCALL_OPTIONAL_PROVIDER_IDS = new Set(["claude-code", "gemini-cli", "codex-cli", "grok-build-cli"])
+const TOOLCALL_OPTIONAL_PROVIDER_IDS = new Set([
+  "claude-code",
+  "gemini-cli",
+  "codex-cli",
+  "grok-build-cli",
+  "qoder-cli",
+])
 
 export function providerModelSelectable(input: { providerID: string; toolcall?: boolean }) {
   if (input.toolcall !== false) return true

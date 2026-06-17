@@ -235,6 +235,7 @@ export const DEFAULT_LOGIN_PROVIDER_IDS = new Set([
   "gemini-cli",
   "codex-cli",
   "grok-build-cli",
+  "qoder-cli",
 ])
 
 export const ProvidersCommand = cmd({

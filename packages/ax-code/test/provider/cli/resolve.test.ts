@@ -80,6 +80,13 @@ describe("resolveCliModel", () => {
     expect(info.source).toBe("default")
   })
 
+  test("returns default for qoder-cli when no config", async () => {
+    const info = await resolveCliModel("qoder-cli")
+    if (info.source === "default") {
+      expect(info.model).toBe("qoder-cli")
+    }
+  })
+
   test("returns unknown for unrecognized provider", async () => {
     const info = await resolveCliModel("nonexistent")
     expect(info.model).toBe("unknown")

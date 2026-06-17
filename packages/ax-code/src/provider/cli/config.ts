@@ -1,4 +1,11 @@
-import { claudeCodeParser, codexCliParser, geminiCliParser, grokBuildCliParser, type CliOutputParser } from "./parser"
+import {
+  claudeCodeParser,
+  codexCliParser,
+  geminiCliParser,
+  grokBuildCliParser,
+  qoderCliParser,
+  type CliOutputParser,
+} from "./parser"
 
 export interface CliProviderDefinition {
   binary: string
@@ -32,6 +39,13 @@ export const CLI_PROVIDER_DEFINITIONS: Record<string, CliProviderDefinition> = {
     binary: "grok",
     args: [],
     parser: grokBuildCliParser,
+    promptMode: "arg",
+    promptFlag: "-p",
+  },
+  "qoder-cli": {
+    binary: "qodercli",
+    args: ["--output-format", "stream-json"],
+    parser: qoderCliParser,
     promptMode: "arg",
     promptFlag: "-p",
   },

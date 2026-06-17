@@ -16,7 +16,7 @@ describe("modelDisplayInfo", () => {
   })
 
   test("shows vision marker for CLI providers with image input", () => {
-    for (const providerID of ["claude-code", "codex-cli", "gemini-cli", "grok-build-cli"]) {
+    for (const providerID of ["claude-code", "codex-cli", "gemini-cli", "grok-build-cli", "qoder-cli"]) {
       const display = modelDisplayInfo(providerID, {
         providerID,
         name: `${providerID} default`,

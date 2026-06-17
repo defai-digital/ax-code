@@ -36,6 +36,7 @@ const NATIVE_PROVIDERS = new Set([
   "gemini-cli",
   "codex-cli",
   "grok-build-cli",
+  "qoder-cli",
 ])
 
 export function shouldShowProviderInList(input: {

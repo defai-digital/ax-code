@@ -13,10 +13,11 @@ export const CLI_BINARIES: Record<string, string> = {
   "gemini-cli": "gemini",
   "codex-cli": "codex",
   "grok-build-cli": "grok",
+  "qoder-cli": "qodercli",
 }
 
 export const OFFLINE_PROVIDERS = new Set(["ax-engine", "ax-studio", "ollama"])
-export const CLI_PROVIDERS = new Set(["claude-code", "gemini-cli", "codex-cli", "grok-build-cli"])
+export const CLI_PROVIDERS = new Set(["claude-code", "gemini-cli", "codex-cli", "grok-build-cli", "qoder-cli"])
 
 const HIDDEN_PROVIDERS = new Set(["google", "github-copilot"])
 

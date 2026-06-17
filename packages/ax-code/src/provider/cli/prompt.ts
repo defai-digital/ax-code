@@ -6,7 +6,7 @@ export interface CliPromptOptions {
   attachments?: CliAttachmentRef[]
 }
 
-const WEB_SEARCH_CLI_PROVIDERS = new Set(["claude-code", "codex-cli", "gemini-cli", "grok-build-cli"])
+const WEB_SEARCH_CLI_PROVIDERS = new Set(["claude-code", "codex-cli", "gemini-cli", "grok-build-cli", "qoder-cli"])
 
 const CLI_WEB_SEARCH_HINT = [
   "<cli_web_search>",
