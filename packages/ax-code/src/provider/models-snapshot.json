@@ -26993,6 +26993,42 @@
           "output": 16384
         }
       },
+      "zai-org-glm-5-2": {
+        "id": "zai-org-glm-5-2",
+        "name": "GLM 5.2",
+        "family": "glm",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "none",
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-06-16",
+        "last_updated": "2026-06-16",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 1000000,
+          "output": 24000
+        }
+      },
       "nvidia-nemotron-3-nano-30b-a3b": {
         "id": "nvidia-nemotron-3-nano-30b-a3b",
         "name": "NVIDIA Nemotron 3 Nano 30B",

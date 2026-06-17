@@ -49,10 +49,10 @@ Walks through scope (project vs global), source (template, custom local, custom 
 
 ### Config scope
 
-| Source | Path | Trust |
-|---|---|---|
-| Project | `ax-code.json` (repo root) | Untrusted by default |
-| Global | `~/.config/ax-code/ax-code.json` | Trusted by default |
+| Source  | Path                             | Trust                |
+| ------- | -------------------------------- | -------------------- |
+| Project | `ax-code.json` (repo root)       | Untrusted by default |
+| Global  | `~/.config/ax-code/ax-code.json` | Trusted by default   |
 
 ## Available Templates
 
@@ -130,14 +130,14 @@ In the **TUI**, toggle MCP servers on/off via the MCP dialog (space bar).
 
 ## Troubleshooting
 
-| Symptom | Likely cause | Fix |
-|---|---|---|
-| `needs_trust` status | Project config entry not trusted | `ax-code mcp trust <name>` |
-| `needs_auth` status | OAuth not completed | `ax-code mcp auth` |
-| `failed` status | Command not found or server unreachable | Check command/path, run `ax-code mcp debug` |
-| OAuth 403 on dynamic registration | Server requires pre-registered client | Add `oauth.clientId` and `oauth.clientSecret` to config |
-| Tool count warning (>30) | Too many MCP tools degrade LLM accuracy | Remove unused servers or deny rules |
-| Connection timeout | Default 5s timeout too short | Add `"timeout": 10000` to server config |
+| Symptom                           | Likely cause                            | Fix                                                     |
+| --------------------------------- | --------------------------------------- | ------------------------------------------------------- |
+| `needs_trust` status              | Project config entry not trusted        | `ax-code mcp trust <name>`                              |
+| `needs_auth` status               | OAuth not completed                     | `ax-code mcp auth`                                      |
+| `failed` status                   | Command not found or server unreachable | Check command/path, run `ax-code mcp debug`             |
+| OAuth 403 on dynamic registration | Server requires pre-registered client   | Add `oauth.clientId` and `oauth.clientSecret` to config |
+| Tool count warning (>30)          | Too many MCP tools degrade LLM accuracy | Remove unused servers or deny rules                     |
+| Connection timeout                | Default 5s timeout too short            | Add `"timeout": 10000` to server config                 |
 
 ### Debug command
 
