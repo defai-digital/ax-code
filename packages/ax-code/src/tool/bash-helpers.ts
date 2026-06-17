@@ -12,9 +12,19 @@ export function stripShellQuotes(value: string) {
   return value.replace(/^"(.*)"$|^'(.*)'$/s, "$1$2")
 }
 
+// Matches any shell metacharacter that makes an argument non-literal: variable
+// references ($f, ${f}), command/arithmetic substitution ($(...)), globs
+// (* ? [ ]), and brace expansion ({a,b}). Such args must NOT be treated as
+// static paths — the literal text (e.g. "$f" inside a `for f ...; do cat $f`
+// loop) would resolve to a bogus path and the preflight would report a false
+// "Path does not exist", blocking a valid command.
+const SHELL_EXPANSION_OR_GLOB = /[$*?[\]{}]/
+
 export function isStaticPathArg(value: string) {
   const stripped = stripShellQuotes(value)
   if (!stripped || hasDynamicShellExpansion(stripped)) return undefined
+  // Skip anything the shell expands or globs, and leading ~ home expansion.
+  if (SHELL_EXPANSION_OR_GLOB.test(stripped) || stripped.startsWith("~")) return undefined
   return stripped
 }
 
