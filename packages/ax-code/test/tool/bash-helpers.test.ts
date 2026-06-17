@@ -48,6 +48,7 @@ describe("tool.bash helpers", () => {
     // Globs and brace expansion are resolved by the shell, not statically.
     expect(isStaticPathArg("*.ts")).toBeUndefined()
     expect(isStaticPathArg("src/**/*.tsx")).toBeUndefined()
+    expect(isStaticPathArg(".internal/prd/prd-*.md")).toBeUndefined()
     expect(isStaticPathArg("file?.txt")).toBeUndefined()
     expect(isStaticPathArg("{a,b}.txt")).toBeUndefined()
     expect(isStaticPathArg("~/notes.txt")).toBeUndefined()
