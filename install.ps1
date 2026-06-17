@@ -86,10 +86,31 @@ function Get-LatestVersion {
   return $tag.TrimStart("v")
 }
 
-function Resolve-ReleaseDownload {
+# Returns $true / $false when AVX2 support can be determined, or $null when it
+# cannot (e.g. Windows PowerShell 5.1, whose .NET Framework lacks the intrinsics
+# type). The default x64 build requires AVX2; a CPU without it needs the
+# `-baseline` asset. See #274.
+function Get-Avx2Support {
+  try {
+    $type = [Type]::GetType("System.Runtime.Intrinsics.X86.Avx2")
+    if ($type) {
+      $prop = $type.GetProperty("IsSupported")
+      if ($prop) {
+        return [bool]$prop.GetValue($null)
+      }
+    }
+  } catch {
+    # Fall through to "unknown".
+  }
+  return $null
+}
+
+function Resolve-ReleaseDownload([bool]$Baseline = $false) {
   $requested = Get-RequestedVersion
   $arch = Get-TargetArch
-  $filename = "$App-windows-$arch.zip"
+  # The baseline (AVX2-free) variant is only published for Windows x64.
+  $variant = if ($Baseline -and $arch -eq "x64") { "-baseline" } else { "" }
+  $filename = "$App-windows-$arch$variant.zip"
 
   if ($requested) {
     $specificVersion = $requested.TrimStart("v")
@@ -117,8 +138,8 @@ function Install-FromBinary([string]$Path) {
   return "local"
 }
 
-function Install-FromRelease {
-  $release = Resolve-ReleaseDownload
+function Install-FromRelease([bool]$Baseline = $false) {
+  $release = Resolve-ReleaseDownload $Baseline
   $tmpDir = Join-Path ([System.IO.Path]::GetTempPath()) ("ax_code_install_" + [System.Guid]::NewGuid().ToString("N"))
   New-Item -ItemType Directory -Force -Path $tmpDir | Out-Null
 
@@ -141,12 +162,39 @@ function Install-FromRelease {
   }
 }
 
+# Runs the installed binary and returns its --version output, or $null if it
+# fails to run at all. A binary built for an unsupported instruction set (e.g.
+# an AVX2 build on a no_avx2 CPU) crashes here with a native illegal-instruction
+# fault, which surfaces as a thrown NativeCommandError or a non-zero exit. See #274.
+function Get-InstalledBinaryVersion {
+  if (-not (Test-Path -LiteralPath $InstallPath -PathType Leaf)) {
+    return $null
+  }
+  try {
+    $output = (& $InstallPath --version 2>$null)
+    if ($LASTEXITCODE -ne 0) {
+      return $null
+    }
+    $text = ($output | Out-String).Trim()
+    if (-not $text) {
+      return $null
+    }
+    return $text
+  } catch {
+    return $null
+  }
+}
+
 function Verify-InstalledBinary([string]$ExpectedVersion) {
   if (-not (Test-Path -LiteralPath $InstallPath -PathType Leaf)) {
     throw "Installed binary was not found at $InstallPath"
   }
 
-  $directVersion = (& $InstallPath --version 2>$null).Trim()
+  $directVersion = Get-InstalledBinaryVersion
+  if (-not $directVersion) {
+    Write-Warn "Installed binary at $InstallPath did not run cleanly."
+    return
+  }
   if ($ExpectedVersion -and $ExpectedVersion -ne "local") {
     if ($directVersion -ne $ExpectedVersion -and $directVersion -ne "v$ExpectedVersion") {
       Write-Warn "Installed binary at $InstallPath reported '$directVersion', expected '$ExpectedVersion'."
@@ -205,7 +253,32 @@ if ($Help) {
 if ($Binary) {
   $installedVersion = Install-FromBinary $Binary
 } else {
-  $installedVersion = Install-FromRelease
+  $arch = Get-TargetArch
+
+  # Prefer the AVX2-free baseline build up front when we can positively confirm
+  # the CPU lacks AVX2; this avoids downloading a binary that would crash.
+  $useBaseline = $false
+  if ($arch -eq "x64" -and (Get-Avx2Support) -eq $false) {
+    Write-Info "CPU does not support AVX2; installing the baseline ax-code build."
+    $useBaseline = $true
+  }
+
+  $installedVersion = Install-FromRelease $useBaseline
+
+  # Fallback for environments where AVX2 support could not be detected ahead of
+  # time (e.g. Windows PowerShell 5.1): if the default x64 build won't run, it is
+  # almost certainly an AVX2/no_avx2 mismatch — retry once with the baseline asset.
+  if ($arch -eq "x64" -and -not $useBaseline -and -not (Get-InstalledBinaryVersion)) {
+    Write-Warn "The default ax-code build failed to start (likely a CPU without AVX2 support)."
+    Write-Info "Retrying with the baseline (AVX2-free) build..."
+    try {
+      $installedVersion = Install-FromRelease $true
+      $useBaseline = $true
+    } catch {
+      Write-Warn "Could not install the baseline build: $($_.Exception.Message)"
+      Write-Warn "This ax-code version may not ship a baseline asset for your CPU."
+    }
+  }
 }
 
 Verify-InstalledBinary $installedVersion

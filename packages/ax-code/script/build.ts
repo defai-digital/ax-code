@@ -292,6 +292,14 @@ const allTargets: {
     os: "win32",
     arch: "x64",
   },
+  // AVX2-free build for Windows x64 CPUs that report `no_avx2`. The default
+  // win32-x64 binary targets AVX2 and faults with an illegal instruction on
+  // such machines; the installer selects this `-baseline` asset for them. See #274.
+  {
+    os: "win32",
+    arch: "x64",
+    avx2: false,
+  },
 ]
 
 const targets = singleFlag

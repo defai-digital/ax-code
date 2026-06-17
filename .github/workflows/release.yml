@@ -67,7 +67,9 @@ jobs:
             smoke-bin: dist/ax-code-darwin-arm64/bin/ax-code
           - os: windows-2022
             targets: win32-x64
-            build-args: --single --skip-install
+            # --baseline also emits ax-code-windows-x64-baseline.zip (AVX2-free)
+            # for no_avx2 CPUs; both x64 zips ship from this single job. See #274.
+            build-args: --single --baseline --skip-install
             smoke-bin: dist/ax-code-windows-x64/bin/ax-code.exe
           - os: windows-11-arm
             targets: win32-arm64
