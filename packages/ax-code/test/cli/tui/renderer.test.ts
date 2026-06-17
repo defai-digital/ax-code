@@ -9,6 +9,7 @@ import {
 import {
   disableTuiMouseTracking,
   flushTuiStdout,
+  TUI_MAIN_SCREEN_CLEAR_SEQUENCE,
   TUI_MOUSE_TRACKING_DISABLE_SEQUENCE,
 } from "../../../src/cli/cmd/tui/terminal-cleanup"
 
@@ -121,5 +122,59 @@ describe("tui renderer profile", () => {
     }
 
     expect(calls).toEqual(["title:", "destroy", "mouse-disable", "flush"])
+  })
+
+  test("destroyTuiRenderer clears the stale frame in main-screen mode", async () => {
+    const renderer = {
+      setTerminalTitle() {},
+      destroy() {},
+    }
+    const writes: string[] = []
+    const originalWrite = process.stdout.write
+    process.stdout.write = ((chunk: string, callback?: () => void) => {
+      writes.push(chunk)
+      if (callback) queueMicrotask(callback)
+      return true
+    }) as typeof process.stdout.write
+    try {
+      const profile = resolveTuiRenderProfile({
+        advancedTerminal: false,
+        terminalTitleDisabled: false,
+      })
+      expect(profile.screenMode).toBe("main-screen")
+      await destroyTuiRenderer(renderer, profile)
+    } finally {
+      process.stdout.write = originalWrite
+    }
+
+    // Main-screen teardown must emit the clear sequence after disabling mouse
+    // tracking and before the final flush.
+    expect(writes).toEqual([TUI_MOUSE_TRACKING_DISABLE_SEQUENCE, TUI_MAIN_SCREEN_CLEAR_SEQUENCE, ""])
+  })
+
+  test("destroyTuiRenderer leaves alternate-screen teardown unchanged", async () => {
+    const renderer = {
+      setTerminalTitle() {},
+      destroy() {},
+    }
+    const writes: string[] = []
+    const originalWrite = process.stdout.write
+    process.stdout.write = ((chunk: string, callback?: () => void) => {
+      writes.push(chunk)
+      if (callback) queueMicrotask(callback)
+      return true
+    }) as typeof process.stdout.write
+    try {
+      const profile = resolveTuiRenderProfile({
+        advancedTerminal: true,
+        terminalTitleDisabled: false,
+      })
+      await destroyTuiRenderer(renderer, profile)
+    } finally {
+      process.stdout.write = originalWrite
+    }
+
+    // Alternate-screen restores the prior view automatically, so no clear.
+    expect(writes).not.toContain(TUI_MAIN_SCREEN_CLEAR_SEQUENCE)
   })
 })

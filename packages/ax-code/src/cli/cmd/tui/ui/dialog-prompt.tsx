@@ -13,8 +13,15 @@ export type DialogPromptProps = {
   description?: () => JSX.Element
   placeholder?: string
   value?: string
-  onConfirm?: (value: string) => void
+  onConfirm?: (value: string) => unknown
   onCancel?: () => void
+  /**
+   * When false, the dialog is NOT auto-cleared after a successful confirm; the
+   * `onConfirm` handler owns the dialog lifecycle (e.g. navigating to another
+   * dialog or staying open to show an inline error). The dialog still stays
+   * open when `onConfirm` rejects. Defaults to true. See #257.
+   */
+  autoClose?: boolean
 }
 
 export function DialogPrompt(props: DialogPromptProps) {
@@ -27,7 +34,10 @@ export function DialogPrompt(props: DialogPromptProps) {
     void Promise.resolve()
       .then(action)
       .then(() => {
-        dialog.clear()
+        // Only auto-clear on success when the caller hasn't opted to manage the
+        // dialog lifecycle itself. Awaiting `action` first ensures async confirm
+        // handlers (e.g. provider auth) keep the prompt open until they resolve.
+        if (props.autoClose !== false) dialog.clear()
       })
       .catch((error) => {
         log.warn("dialog prompt confirm failed", { error, title: props.title })

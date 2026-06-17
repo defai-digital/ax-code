@@ -4,7 +4,7 @@ import { Clipboard } from "@tui/util/clipboard"
 import { Log } from "@/util/log"
 import { Flag } from "@/flag/flag"
 import { toErrorMessage } from "@/util/error-message"
-import { disableTuiMouseTracking, flushTuiStdout } from "./terminal-cleanup"
+import { clearTuiMainScreen, disableTuiMouseTracking, flushTuiStdout } from "./terminal-cleanup"
 
 const log = Log.create({ service: "tui.renderer" })
 
@@ -141,6 +141,10 @@ export async function destroyTuiRenderer(
     })
   }
   disableTuiMouseTracking()
+  // Alternate-screen mode restores the prior shell view automatically on exit.
+  // Main-screen mode paints on the normal buffer, so explicitly clear the stale
+  // TUI frame to avoid a dead full-screen UI lingering above the shell prompt.
+  if (profile.screenMode === "main-screen") clearTuiMainScreen()
   await flushTuiStdout()
   if (destroyError) throw destroyError
 }

@@ -59,6 +59,10 @@ export function QuestionPrompt(props: { request: QuestionRequest }) {
     void Promise.resolve()
       .then(run)
       .catch((error) => {
+        // Reset the in-flight guard on failure so a transient API/network
+        // error does not permanently wedge the prompt. The prompt stays
+        // mounted on failure, so the user can retry. See #255.
+        setStore("submitting", false)
         log.warn(failureLabel, { error, requestID: props.request.id })
         toast.show({
           message: error instanceof Error ? error.message : failureMessage,

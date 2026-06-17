@@ -719,34 +719,34 @@ function CodeMethod(props: CodeMethodProps) {
   const sdk = useSDK()
   const sync = useSync()
   const dialog = useDialog()
-  const toast = useToast()
   const [error, setError] = createSignal(false)
 
   return (
     <DialogPrompt
       title={props.title}
       placeholder="Authorization code"
-      onConfirm={(value) => {
-        runProviderDialogAction({
+      autoClose={false}
+      onConfirm={async (value) => {
+        // Keep the prompt open until auth resolves. On an invalid code, stay
+        // open and surface the inline "Invalid code" state instead of closing
+        // before the async result is known. See #257.
+        if (!value) {
+          setError(true)
+          return
+        }
+        const { error } = await sdk.client.provider.oauth.callback({
           providerID: props.providerID,
-          action: "oauth-code-confirm",
-          fallbackMessage: "Failed to complete provider authorization",
-          toast,
-          run: async () => {
-            const { error } = await sdk.client.provider.oauth.callback({
-              providerID: props.providerID,
-              method: props.index,
-              code: value,
-            })
-            if (!error) {
-              await sdk.client.instance.dispose()
-              await sync.bootstrap()
-              dialog.replace(() => <DialogModel providerID={props.providerID} />)
-              return
-            }
-            setError(true)
-          },
+          method: props.index,
+          code: value,
         })
+        if (error) {
+          setError(true)
+          return
+        }
+        setError(false)
+        await sdk.client.instance.dispose()
+        await sync.bootstrap()
+        dialog.replace(() => <DialogModel providerID={props.providerID} />)
       }}
       description={() => (
         <box gap={1}>
@@ -777,26 +777,25 @@ function ApiMethod(props: ApiMethodProps) {
       title={props.title}
       placeholder="API key"
       description={undefined}
-      onConfirm={(value) => {
-        if (!value) return
-        runProviderDialogAction({
+      autoClose={false}
+      onConfirm={async (value) => {
+        // An empty key must not close the prompt or clear auth state; keep the
+        // dialog open and tell the user. Async failures keep the dialog open
+        // (autoClose is false) and surface via toast. See #257.
+        if (!value) {
+          toast.show({ message: "API key is required", variant: "error" })
+          return
+        }
+        await sdk.client.auth.set({
           providerID: props.providerID,
-          action: "api-key-confirm",
-          fallbackMessage: "Failed to connect provider",
-          toast,
-          run: async () => {
-            await sdk.client.auth.set({
-              providerID: props.providerID,
-              auth: {
-                type: "api",
-                key: value,
-              },
-            })
-            await sdk.client.instance.dispose()
-            await sync.bootstrap()
-            dialog.replace(() => <DialogModel providerID={props.providerID} />)
+          auth: {
+            type: "api",
+            key: value,
           },
         })
+        await sdk.client.instance.dispose()
+        await sync.bootstrap()
+        dialog.replace(() => <DialogModel providerID={props.providerID} />)
       }}
     />
   )
