@@ -31,6 +31,6 @@ describe("root structure script", () => {
     expect(result.stdout).toContain("## Internal Files")
     expect(result.stdout).toContain("## Hotspot Thresholds")
     expect(result.stdout).toContain("## Boundaries")
-    expect(result.stdout).toContain("- ok: no .internal files are tracked")
+    expect(result.stdout).toContain("- ok: no ax-internal files are tracked")
   })
 })

@@ -15,8 +15,8 @@ import { normalizeToWorkspacePath, resolveToolFilePath, withFilePathAliases } fr
 
 function validateInternalBugReport(filepath: string, content: string) {
   const relative = normalizeToWorkspacePath(filepath, Instance.worktree)
-  if (!relative.startsWith(".internal/bugs/") || !relative.endsWith(".md")) return
-  if (relative === ".internal/bugs/README.md" || relative === ".internal/bugs/summary.md") return
+  if (!relative.startsWith("ax-internal/bugs/") || !relative.endsWith(".md")) return
+  if (relative === "ax-internal/bugs/README.md" || relative === "ax-internal/bugs/summary.md") return
 
   const missing: string[] = []
   if (
@@ -35,7 +35,7 @@ function validateInternalBugReport(filepath: string, content: string) {
 
   if (missing.length > 0) {
     throw new Error(
-      `Internal bug reports under .internal/bugs must include ${missing.join(", ")}. ` +
+      `Internal bug reports under ax-internal/bugs must include ${missing.join(", ")}. ` +
         `Use Classification=confirmed only for repo-validated defects; use suspected for unproven findings; use false_positive with a Closure section when closing scanner noise.`,
     )
   }

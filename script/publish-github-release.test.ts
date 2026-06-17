@@ -56,15 +56,15 @@ describe("publish-github-release helpers", () => {
     expect(trackedInternalPrivacyIssue([])).toBeUndefined()
     expect(
       trackedInternalPrivacyIssue([
-        ".internal/prd/private.md",
-        ".internal/adr/private.md",
-        ".internal/bugs/private.md",
-        ".internal/release/private.md",
-        ".internal/reports/private.md",
-        ".internal/archive/private.md",
+        "ax-internal/prd/private.md",
+        "ax-internal/adr/private.md",
+        "ax-internal/bugs/private.md",
+        "ax-internal/release/private.md",
+        "ax-internal/reports/private.md",
+        "ax-internal/archive/private.md",
       ]),
     ).toBe(
-      ".internal files are tracked: .internal/prd/private.md, .internal/adr/private.md, .internal/bugs/private.md, .internal/release/private.md, .internal/reports/private.md, and 1 more. Remove them from git index before publishing.",
+      "ax-internal files are tracked: ax-internal/prd/private.md, ax-internal/adr/private.md, ax-internal/bugs/private.md, ax-internal/release/private.md, ax-internal/reports/private.md, and 1 more. Remove them from git index before publishing.",
     )
   })
 

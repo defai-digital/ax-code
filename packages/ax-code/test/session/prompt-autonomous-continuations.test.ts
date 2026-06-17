@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { AutonomousContinuationPrompt } from "../../src/session/prompt-autonomous-continuations"
 
-const pendingTodos = [{ content: "Report confirmed bugs to .internal/bugs/", status: "in_progress", priority: "high" }]
+const pendingTodos = [{ content: "Report confirmed bugs to ax-internal/bugs/", status: "in_progress", priority: "high" }]
 
 describe("autonomous continuation prompt builders", () => {
   test("builds goal continuation guidance", () => {
@@ -81,7 +81,7 @@ describe("autonomous continuation prompt builders", () => {
     const text = AutonomousContinuationPrompt.contextConvergence({ pendingTodos })
 
     expect(text).toContain("large context")
-    expect(text).toContain("- [in_progress] Report confirmed bugs to .internal/bugs/")
+    expect(text).toContain("- [in_progress] Report confirmed bugs to ax-internal/bugs/")
     expect(text).toContain("context is already large")
   })
 

@@ -33,7 +33,7 @@ describe("session prompt todo continuation helpers", () => {
   })
 
   test("converges report-style todos at the context threshold", () => {
-    const pendingTodos = [{ content: "write .internal/bugs report" }]
+    const pendingTodos = [{ content: "write ax-internal/bugs report" }]
 
     expect(todoContextConvergenceDecision({ pendingTodos, inputTokens: 49_999 }).converge).toBe(false)
     expect(todoContextConvergenceDecision({ pendingTodos, inputTokens: 50_000 })).toEqual({
@@ -55,7 +55,7 @@ describe("session prompt todo continuation helpers", () => {
   })
 
   test("converges pending todos before the agent step deadline", () => {
-    const pendingTodos = [{ content: "write .internal/bugs report" }]
+    const pendingTodos = [{ content: "write ax-internal/bugs report" }]
 
     expect(
       todoDeadlineConvergenceDecision({
@@ -189,7 +189,7 @@ describe("session prompt todo continuation helpers", () => {
     expect(
       pendingTodoContinuationDecision(
         pendingTodoDecisionInput({
-          pendingTodos: [{ status: "pending", priority: "high", content: "write .internal/bugs report" }],
+          pendingTodos: [{ status: "pending", priority: "high", content: "write ax-internal/bugs report" }],
         }),
       ),
     ).toMatchObject({

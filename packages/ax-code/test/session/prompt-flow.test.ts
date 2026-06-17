@@ -363,7 +363,7 @@ describe("session.prompt flow", () => {
           const session = await Session.create({ title: "Todo Step Limit Test" })
           Todo.update({
             sessionID: session.id,
-            todos: [{ content: "Write bug reports to .internal/bugs/", status: "in_progress", priority: "high" }],
+            todos: [{ content: "Write bug reports to ax-internal/bugs/", status: "in_progress", priority: "high" }],
           })
 
           const msg = await SessionPrompt.prompt({
@@ -396,7 +396,7 @@ describe("session.prompt flow", () => {
           ).toBe(false)
 
           expect(Todo.get(session.id)).toEqual([
-            { content: "Write bug reports to .internal/bugs/", status: "in_progress", priority: "high" },
+            { content: "Write bug reports to ax-internal/bugs/", status: "in_progress", priority: "high" },
           ])
 
           await Session.remove(session.id)
@@ -1196,7 +1196,7 @@ describe("session.prompt flow", () => {
                   part.text.includes("Autonomous mode is approaching the agent step limit") &&
                   part.text.includes("Write remaining bug report") &&
                   part.text.includes("5 unfinished todos") &&
-                  part.text.includes("create the required .internal/bugs report now") &&
+                  part.text.includes("create the required ax-internal/bugs report now") &&
                   part.text.includes("cancel that report todo with the concrete reason"),
               ),
           )
@@ -1294,7 +1294,7 @@ describe("session.prompt flow", () => {
             sessionID: session.id,
             todos: [
               { content: "Manually inspect critical Rust code paths", status: "in_progress", priority: "high" },
-              { content: "Report confirmed bugs to .internal/bugs/", status: "pending", priority: "high" },
+              { content: "Report confirmed bugs to ax-internal/bugs/", status: "pending", priority: "high" },
             ],
           })
 
@@ -1312,7 +1312,7 @@ describe("session.prompt flow", () => {
                 (part) =>
                   part.type === "text" &&
                   part.text.includes("Autonomous mode has reached a large context") &&
-                  part.text.includes("Report confirmed bugs to .internal/bugs/") &&
+                  part.text.includes("Report confirmed bugs to ax-internal/bugs/") &&
                   part.text.includes("do not read more files for broad exploration"),
               ),
           )
@@ -1364,7 +1364,7 @@ describe("session.prompt flow", () => {
         if (call === 3 && sessionID) {
           Todo.update({
             sessionID,
-            todos: [{ content: "Report confirmed bugs to .internal/bugs/", status: "completed", priority: "high" }],
+            todos: [{ content: "Report confirmed bugs to ax-internal/bugs/", status: "completed", priority: "high" }],
           })
         }
 
@@ -1413,7 +1413,7 @@ describe("session.prompt flow", () => {
           sessionID = session.id
           Todo.update({
             sessionID: session.id,
-            todos: [{ content: "Report confirmed bugs to .internal/bugs/", status: "in_progress", priority: "high" }],
+            todos: [{ content: "Report confirmed bugs to ax-internal/bugs/", status: "in_progress", priority: "high" }],
           })
 
           await SessionPrompt.prompt({
@@ -1432,7 +1432,7 @@ describe("session.prompt flow", () => {
                 (part) =>
                   part.type === "text" &&
                   part.text.includes("Autonomous mode has reached a large context") &&
-                  part.text.includes("Report confirmed bugs to .internal/bugs/"),
+                  part.text.includes("Report confirmed bugs to ax-internal/bugs/"),
               ),
           )
           expect(convergenceMessages).toHaveLength(2)
@@ -1486,7 +1486,7 @@ describe("session.prompt flow", () => {
           const session = await Session.create({ title: "Empty Model Turn Test" })
           Todo.update({
             sessionID: session.id,
-            todos: [{ content: "Write bug reports to .internal/bugs/", status: "in_progress", priority: "high" }],
+            todos: [{ content: "Write bug reports to ax-internal/bugs/", status: "in_progress", priority: "high" }],
           })
 
           await SessionPrompt.prompt({

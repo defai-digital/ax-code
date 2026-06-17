@@ -236,14 +236,6 @@ describe("release check (full checks)", () => {
     expect(find(results, "working-tree").detail).toContain("uncommitted")
   })
 
-  test("missing release notes file warns", async () => {
-    const repo = await makeRepo("2.21.5", "v2.21.4")
-    const results = await runChecks(mkCtx(repo, "2.21.5"))
-
-    expect(find(results, "release-notes").status).toBe("warn")
-    expect(find(results, "release-notes").detail).toContain("no file at")
-  })
-
   test("skip option omits a check", async () => {
     const repo = await makeRepo("2.21.5", "v2.21.4")
     const ctx = mkCtx(repo, "2.21.5", {
@@ -319,7 +311,7 @@ describe("release check (full checks)", () => {
     expect(CHECK_IDS).toContain("phantom-imports")
     expect(CHECK_IDS).toContain("typecheck")
     expect(CHECK_IDS).toContain("tests")
-    expect(CHECK_IDS.length).toBeGreaterThanOrEqual(10)
+    expect(CHECK_IDS.length).toBeGreaterThanOrEqual(9)
   })
 
   // ── coverage for previously-untested checks ────────────────────

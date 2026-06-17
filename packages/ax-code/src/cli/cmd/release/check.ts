@@ -2,7 +2,7 @@
  * `ax-code release check` — validate release-critical conditions before tagging.
  *
  * Implements Phase 1 of the debugging-capability plan. See
- * .internal/prd/PRD-2026-04-13-release-readiness-check.md for rationale.
+ * ax-internal/prd/PRD-2026-04-13-release-readiness-check.md for rationale.
  *
  * Each check is a pure async function that returns `CheckResult`. Checks are
  * ordered fail-fast-cheap-first so the user sees feedback quickly. No side
@@ -10,7 +10,7 @@
  */
 
 import path from "node:path"
-import { readFile, stat } from "node:fs/promises"
+import { readFile } from "node:fs/promises"
 import { fileURLToPath } from "node:url"
 import semver from "semver"
 import { cmd } from "../cmd"
@@ -411,42 +411,6 @@ async function checkBranchSync(ctx: CheckContext): Promise<CheckResult> {
   return { ...r, durationMs }
 }
 
-async function checkReleaseNotes(ctx: CheckContext): Promise<CheckResult> {
-  const [r, durationMs] = await timed(async () => {
-    const notesPath = path.join(ctx.repoRoot, `.internal/release/release-notes-v${ctx.version}.md`)
-    try {
-      const s = await stat(notesPath)
-      if (s.size < 50) {
-        return mkResult(
-          "Release notes",
-          "release-notes",
-          "warn",
-          `${notesPath} exists but is suspiciously short (${s.size} bytes)`,
-          0,
-          "Flesh out the release notes.",
-        )
-      }
-      return mkResult(
-        "Release notes",
-        "release-notes",
-        "ok",
-        `found at .internal/release/release-notes-v${ctx.version}.md`,
-        0,
-      )
-    } catch {
-      return mkResult(
-        "Release notes",
-        "release-notes",
-        "warn",
-        `no file at .internal/release/release-notes-v${ctx.version}.md`,
-        0,
-        "CI will auto-generate notes, but a curated file is recommended for minor+ releases.",
-      )
-    }
-  })
-  return { ...r, durationMs }
-}
-
 async function checkPhantomImports(ctx: CheckContext): Promise<CheckResult> {
   const [r, durationMs] = await timed(async () => {
     // Scan: both src/ AND script/. The v2.21.2 failure — build.ts importing
@@ -685,7 +649,6 @@ const ALL_CHECKS: {
   { id: "remote-tag", name: "Remote tag", run: checkRemoteTag },
   { id: "working-tree", name: "Working tree", run: checkWorkingTree },
   { id: "branch-sync", name: "Branch sync", run: checkBranchSync },
-  { id: "release-notes", name: "Release notes", run: checkReleaseNotes },
   { id: "phantom-imports", name: "Phantom imports", run: checkPhantomImports },
   { id: "typecheck", name: "Typecheck", run: checkTypecheck },
   { id: "tests", name: "Tests", run: checkTests },

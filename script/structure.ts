@@ -39,7 +39,7 @@ const keep = [
   ".git",
   ".github",
   ".husky",
-  ".internal",
+  "ax-internal",
   ".pnpm-store",
   ".qoder",
   ".ruff_cache",
@@ -356,14 +356,14 @@ function roots() {
 }
 
 function trackedInternalFiles() {
-  const result = Bun.spawnSync(["git", "ls-files", ".internal"], {
+  const result = Bun.spawnSync(["git", "ls-files", "ax-internal"], {
     cwd: root,
     stdout: "pipe",
     stderr: "pipe",
   })
   if (result.exitCode !== 0) {
     const message = result.stderr.toString().trim()
-    throw new Error(message || "failed to inspect tracked .internal files")
+    throw new Error(message || "failed to inspect tracked ax-internal files")
   }
   return result.stdout
     .toString()
@@ -434,10 +434,10 @@ async function main() {
   out.push("")
   out.push("## Internal Files")
   if (trackedInternal.length) {
-    out.push("- error: .internal files are tracked; remove them from git index before publishing")
+    out.push("- error: ax-internal files are tracked; remove them from git index before publishing")
     for (const file of trackedInternal) out.push(`- ${file}`)
   } else {
-    out.push("- ok: no .internal files are tracked")
+    out.push("- ok: no ax-internal files are tracked")
   }
   out.push("")
   out.push("## V4 Guardrails")

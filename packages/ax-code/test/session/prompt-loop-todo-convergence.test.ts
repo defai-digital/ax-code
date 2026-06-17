@@ -4,7 +4,7 @@ import { pendingTodoSignature, type PromptTodo } from "../../src/session/prompt-
 import { SessionID } from "../../src/session/schema"
 
 const reportTodo: PromptTodo = {
-  content: "write .internal/bugs report for suspected issue",
+  content: "write ax-internal/bugs report for suspected issue",
   status: "pending",
   priority: "high",
 }
@@ -42,7 +42,7 @@ describe("prompt loop todo convergence", () => {
     if (result.action !== "continue") throw new Error("expected continuation")
     expect(result.lastTodoContextSignature).toBe(pendingTodoSignature([reportTodo]))
     expect(result.lastTodoDeadlineSignature).toBeUndefined()
-    expect(result.text).toContain(".internal/bugs report now")
+    expect(result.text).toContain("ax-internal/bugs report now")
     expect(info).toEqual([
       {
         message: "autonomous todo context convergence",

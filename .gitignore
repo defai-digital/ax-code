@@ -64,7 +64,7 @@ CLAUDE.md
 AGENTS.md
 
 # Internal project docs (not for public)
-.internal/
+ax-internal/
 ADRS/
 PRDS/
 TODOS/

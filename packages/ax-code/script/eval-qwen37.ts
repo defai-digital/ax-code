@@ -2,7 +2,7 @@
 // Local evaluation harness for Qwen3.7-Max (and other premium cloud backends).
 //
 // Usage:
-//   bun run script/eval-qwen37.ts [--fixture] [--dry-run] [--strict-gate] [--out .internal/reports/eval-YYYY-MM-DD.json]
+//   bun run script/eval-qwen37.ts [--fixture] [--dry-run] [--strict-gate] [--out ax-internal/reports/eval-YYYY-MM-DD.json]
 //
 // --fixture   Run against bundled fixture inputs instead of live provider calls.
 //             Always safe: no API keys required, no tokens spent.
@@ -162,7 +162,7 @@ const TASK_MATRIX: EvalTaskSpec[] = [
     prompt: "ADR-013 still says Proposed. Update status to Accepted and note shipped phases.",
     expectedRouteClass: "cheap",
     fixture: {
-      touchedFiles: [{ path: ".internal/adr/ADR-013-qwen37-max-cloud-agent-backend.md", summary: "ADR status field" }],
+      touchedFiles: [{ path: "ax-internal/adr/ADR-013-qwen37-max-cloud-agent-backend.md", summary: "ADR status field" }],
     },
   },
 ]

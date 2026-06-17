@@ -7,7 +7,7 @@ This file provides guidance to Qoder (qoder.com) when working with code in this 
 - Keep files written to disk in English unless a task explicitly requires another language.
 - Prefer evidence from the current repository over pasted diagnoses or assumptions.
 - In dirty worktrees, never revert unrelated local changes. Work around them or call them out if they block the task.
-- Keep commits and staged changes tightly scoped. Internal planning files under `.internal/` are gitignored by default; force-add only when the user explicitly wants them committed.
+- Keep commits and staged changes tightly scoped. Internal planning files under `ax-internal/` are gitignored by default; force-add only when the user explicitly wants them committed.
 
 ## Toolchain
 
@@ -97,10 +97,10 @@ This is a pnpm workspace monorepo plus a Cargo workspace:
 - `packages/ax-code-{fs,diff,parser,terminal}-native` and `packages/ax-code-index-core` - JS shims for native Rust addons.
 - `crates/` - Rust native addon implementations.
 - `docs/` - product-facing documentation only.
-- `.internal/{adr,prd,release,bugs,archive,architecture}` - internal planning workspace for ADRs, PRDs, release notes, bug reports, and strategy notes. Gitignored by default.
+- `ax-internal/{adr,prd,release,bugs,archive,architecture}` - internal planning workspace for ADRs, PRDs, release notes, bug reports, and strategy notes. Gitignored by default.
 - `script/` - repository automation.
 
-Keep development-stage planning out of `docs/`; use `.internal/` for internal PRDs, ADRs, bug reports, and temporary reports.
+Keep development-stage planning out of `docs/`; use `ax-internal/` for internal PRDs, ADRs, bug reports, and temporary reports.
 
 ## `packages/ax-code` Architecture
 
@@ -165,6 +165,8 @@ Keep development-stage planning out of `docs/`; use `.internal/` for internal PR
 - Prefer files under 300 lines, review carefully at 500+ lines, and split at 800+ lines unless there is a strong reason.
 - Avoid adding unrelated logic to interface-heavy folders when it belongs in a domain folder.
 - Enforced in CI via `.github/workflows/repo-structure.yml` and `pnpm run check:structure`.
+
+**Improvement skill guidance**: when running the `improve-overall` skill in this repo, follow `ax-internal/arch/improve-overall-guidance.md` (scope to the maintainability surface, tier actions by risk, treat `ax-internal` as bidirectional, prioritize by ADR alignment). The builtin skill's "follow local guidance" clause makes that doc authoritative here.
 
 ## Isolation / Sandbox Model
 
