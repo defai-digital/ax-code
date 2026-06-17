@@ -148,7 +148,7 @@ export namespace Skill {
     }
   }
 
-  export const BUILTIN_NAMES = new Set(["debug-only", "debug-n-fix", "improve-overall", "improve-security"])
+  export const BUILTIN_NAMES = new Set(["debug-only", "debug-n-fix", "improve-overall", "improve-security", "mcp"])
 
   declare const AX_CODE_BUILTIN_SKILLS: unknown
 
