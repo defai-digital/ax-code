@@ -804,9 +804,9 @@ export const McpAddCommand = cmd({
 
           await addMcpToConfig(name, mcpConfig, configPath)
           prompts.log.success(`MCP server "${name}" added to ${configPath}`)
+          prompts.outro("MCP server added successfully")
+          return
         }
-
-        prompts.outro("MCP server added successfully")
       },
     })
   },
