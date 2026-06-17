@@ -62,6 +62,9 @@ export async function fetchExaTool(config: {
 
     if (response.status >= 300 && response.status < 400) {
       const location = response.headers.get("location")
+      // Cancel the response body to release the underlying socket.
+      // Without this, the unconsumed body leaks a TCP connection.
+      await response.body?.cancel().catch(() => {})
       if (!location) throw new Error(`${config.errorPrefix}: redirect with no location`)
       await Ssrf.assertPublicUrl(new URL(location, `${EXA_BASE_URL}${EXA_ENDPOINT}`).toString(), "exa-fetch")
       throw new Error(`${config.errorPrefix}: redirect refused`)
