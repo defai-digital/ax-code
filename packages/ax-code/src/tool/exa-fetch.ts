@@ -47,8 +47,11 @@ export async function fetchExaTool(config: {
 }): Promise<{ output: string; title: string; metadata: Record<string, never> }> {
   const { signal, clearTimeout } = abortAfterAny(config.timeout, ...(config.abort ? [config.abort] : []))
 
+  let response: Response | undefined
+  let bodyConsumed = false
+
   try {
-    const response = await Ssrf.pinnedFetch(`${EXA_BASE_URL}${EXA_ENDPOINT}`, {
+    response = await Ssrf.pinnedFetch(`${EXA_BASE_URL}${EXA_ENDPOINT}`, {
       method: "POST",
       headers: {
         accept: "application/json, text/event-stream",
@@ -72,14 +75,40 @@ export async function fetchExaTool(config: {
 
     if (!response.ok) {
       const errorText = await response.text()
+      bodyConsumed = true
       throw new Error(`${config.errorPrefix} (${response.status}): ${errorText}`)
     }
 
-    const body = await response.bytes()
-    if (body.length > MAX_RESPONSE_BYTES) {
-      throw new Error(`${config.errorPrefix}: response too large`)
+    // Stream response with size limit to prevent OOM from responses
+    // that omit Content-Length. Previously the entire body was
+    // buffered via response.bytes() before the size check, meaning a
+    // server could send arbitrarily large payloads before we noticed.
+    const reader = response.body?.getReader()
+    if (!reader) throw new Error(`${config.errorPrefix}: response has no body`)
+    const chunks: Uint8Array[] = []
+    let totalBytes = 0
+    try {
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        totalBytes += value.byteLength
+        if (totalBytes > MAX_RESPONSE_BYTES) {
+          await reader.cancel().catch(() => {})
+          throw new Error(`${config.errorPrefix}: response too large`)
+        }
+        chunks.push(value)
+      }
+    } finally {
+      reader.releaseLock()
     }
-    const responseText = new TextDecoder().decode(body)
+    bodyConsumed = true
+    const assembled = new Uint8Array(totalBytes)
+    let byteOffset = 0
+    for (const chunk of chunks) {
+      assembled.set(chunk, byteOffset)
+      byteOffset += chunk.byteLength
+    }
+    const responseText = new TextDecoder().decode(assembled)
 
     // Parse SSE response. Collect every content-bearing event and
     // return the LAST one. Previously this returned on the first
@@ -113,5 +142,8 @@ export async function fetchExaTool(config: {
     throw error
   } finally {
     clearTimeout()
+    if (!bodyConsumed) {
+      await response?.body?.cancel().catch(() => {})
+    }
   }
 }
