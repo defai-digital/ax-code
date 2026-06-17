@@ -63,7 +63,7 @@ describe("session messages endpoint", () => {
     })
   })
 
-  test("keeps full-history responses when limit is omitted", async () => {
+  test("returns all messages when a small session omits the limit", async () => {
     await Instance.provide({
       directory: root,
       fn: async () => {
@@ -75,6 +75,28 @@ describe("session messages endpoint", () => {
         expect(res.status).toBe(200)
         const body = (await res.json()) as MessageV2.WithParts[]
         expect(body.map((item) => item.info.id)).toEqual(ids)
+        // Fits within the default page, so no pagination cursor is emitted.
+        expect(res.headers.get("x-next-cursor")).toBeNull()
+
+        await Session.remove(session.id)
+      },
+    })
+  })
+
+  test("bounds the default page when limit is omitted on a large session", async () => {
+    await Instance.provide({
+      directory: root,
+      fn: async () => {
+        const session = await Session.create({})
+        await fill(session.id, 150)
+        const app = Server.Default()
+
+        const res = await app.request(`/session/${session.id}/message`)
+        expect(res.status).toBe(200)
+        const body = (await res.json()) as MessageV2.WithParts[]
+        // Default page size is bounded (100), not the full 150-message history.
+        expect(body).toHaveLength(100)
+        expect(res.headers.get("x-next-cursor")).toBeTruthy()
 
         await Session.remove(session.id)
       },

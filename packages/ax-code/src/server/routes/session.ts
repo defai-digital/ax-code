@@ -36,6 +36,10 @@ import { QueryBoolean } from "./query"
 
 const log = Log.create({ service: "server" })
 
+// Bounded page size used when GET /session/:id/message is called without an
+// explicit limit, so omitted-limit requests no longer return full history.
+const DEFAULT_MESSAGE_PAGE_LIMIT = 100
+
 const SESSION_COMPARE_PARAM = z.object({ sessionID: SessionID.zod, otherSessionID: SessionID.zod })
 const SESSION_MESSAGE_PARAM = z.object({
   sessionID: SessionID.zod,
@@ -902,23 +906,23 @@ export const SessionRoutes = lazy(() =>
       async (c) => {
         const query = c.req.valid("query")
         const sessionID = await parseCurrentProjectSessionID(c)
-        if (query.limit === undefined) {
-          const messages = await Session.messages({ sessionID })
-          return c.json(messages)
-        }
+        // Default to a bounded page size when no limit is supplied so large
+        // sessions do not return their entire history in one response. Clients
+        // that need older messages page through the returned Link/X-Next-Cursor.
+        const limit = query.limit ?? DEFAULT_MESSAGE_PAGE_LIMIT
 
-        if (query.limit === 0) {
+        if (limit === 0) {
           return c.json([])
         }
 
         const page = await MessageV2.page({
           sessionID,
-          limit: query.limit,
+          limit,
           before: query.before,
         })
         if (page.cursor) {
           const url = new URL(c.req.url)
-          url.searchParams.set("limit", query.limit.toString())
+          url.searchParams.set("limit", limit.toString())
           url.searchParams.set("before", page.cursor)
           c.header("Access-Control-Expose-Headers", "Link, X-Next-Cursor")
           c.header("Link", `<${url.toString()}>; rel=\"next\"`)

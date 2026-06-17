@@ -101,6 +101,49 @@ function namedErrorEnvelope(error: NamedError, logRef?: string): AppErrorEnvelop
       details: { resource: "providerAuth" },
     }
   }
+  if (error.name === "ProviderAuthOauthMissing") {
+    return {
+      name: "InvalidRequestError",
+      message: "No pending authorization for this provider",
+      status: 400,
+      details: { resource: "providerAuth" },
+    }
+  }
+  if (error.name === "ProviderAuthOauthCodeMissing") {
+    return {
+      name: "InvalidRequestError",
+      message: "Authorization code is required",
+      status: 400,
+      details: { resource: "providerAuth" },
+    }
+  }
+  if (error.name === "ProviderAuthOauthCallbackFailed") {
+    return {
+      name: "InvalidRequestError",
+      message: "Provider authorization failed",
+      status: 400,
+      details: { resource: "providerAuth" },
+    }
+  }
+  if (error.name === "ScheduledTaskInvalidSchedule") {
+    const data = namedErrorData(error)
+    const resource = typeof data.resource === "string" ? data.resource : undefined
+    return {
+      name: "InvalidRequestError",
+      message: typeof data.message === "string" ? data.message : "Invalid schedule",
+      status: 400,
+      details: resource ? { resource } : undefined,
+    }
+  }
+  if (error.name === "FileAccessDenied") {
+    const data = namedErrorData(error)
+    return {
+      name: "ForbiddenError",
+      message: typeof data.message === "string" ? data.message : "Access denied",
+      status: 403,
+      details: { resource: "file" },
+    }
+  }
   if (error.name.startsWith("Worktree")) {
     return {
       name: "InvalidRequestError",
@@ -152,6 +195,14 @@ function plainErrorEnvelope(error: Error, logRef?: string): AppErrorEnvelope {
       message: "McpServer not found",
       status: 404,
       details: { resource: "mcpServer" },
+    }
+  }
+  if (/^Access denied:/i.test(error.message)) {
+    return {
+      name: "ForbiddenError",
+      message: error.message,
+      status: 403,
+      details: { resource: "file" },
     }
   }
   return {

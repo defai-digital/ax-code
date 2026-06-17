@@ -1,4 +1,5 @@
 import { BusEvent } from "@/bus/bus-event"
+import { NamedError } from "@ax-code/util/error"
 import { git } from "@/util/git"
 import { formatPatch, structuredPatch } from "diff"
 import fs from "fs"
@@ -15,6 +16,10 @@ import { Ripgrep } from "./ripgrep"
 import { deletedFileStatus, parseDeletedPaths, parseModifiedNumstat, untrackedFileStatus } from "./status"
 
 export namespace File {
+  // Thrown when a requested path escapes the project directory (directly or via
+  // a symlink). Surfaced as a 403 by the server error mapper instead of a 500.
+  export const AccessDeniedError = NamedError.create("FileAccessDenied", z.object({ message: z.string() }))
+
   export const Info = z
     .object({
       path: z.string(),
@@ -495,14 +500,14 @@ export namespace File {
     const full = path.join(Instance.directory, file)
 
     if (!Filesystem.contains(Instance.directory, full)) {
-      throw new Error("Access denied: path escapes project directory")
+      throw new AccessDeniedError({ message: "Access denied: path escapes project directory" })
     }
 
     const realFull = await fs.promises
       .realpath(full)
       .catch((error: NodeJS.ErrnoException) => (error.code === "ENOENT" ? null : Promise.reject(error)))
     if (realFull && !Filesystem.contains(Instance.directory, realFull)) {
-      throw new Error("Access denied: symlink target escapes project directory")
+      throw new AccessDeniedError({ message: "Access denied: symlink target escapes project directory" })
     }
     const readTarget = realFull ?? full
 
@@ -593,12 +598,12 @@ export namespace File {
 
     const resolved = dir ? path.join(Instance.directory, dir) : Instance.directory
     if (!Filesystem.contains(Instance.directory, resolved)) {
-      throw new Error("Access denied: path escapes project directory")
+      throw new AccessDeniedError({ message: "Access denied: path escapes project directory" })
     }
 
     const realResolved = await fs.promises.realpath(resolved).catch(() => null)
     if (realResolved && !Filesystem.contains(Instance.directory, realResolved)) {
-      throw new Error("Access denied: symlink target escapes project directory")
+      throw new AccessDeniedError({ message: "Access denied: symlink target escapes project directory" })
     }
 
     const nodes: File.Node[] = []

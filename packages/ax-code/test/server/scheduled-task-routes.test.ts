@@ -180,6 +180,65 @@ describe("scheduled task routes", () => {
     }
   })
 
+  test("rejects schedules that can never fire with a 400", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const app = Server.Default()
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const directoryQuery = `directory=${encodeURIComponent(tmp.path)}`
+        const cases: Array<{ schedule: unknown; resource: string }> = [
+          { schedule: { type: "daily", time: "99:99" }, resource: "schedule.time" },
+          { schedule: { type: "weekly", day: 2, time: "24:00" }, resource: "schedule.time" },
+          { schedule: { type: "cron", expression: "bad cron" }, resource: "schedule.cron" },
+          { schedule: { type: "daily", time: "09:00", timezone: "Not/AZone" }, resource: "schedule.timezone" },
+        ]
+
+        for (const { schedule, resource } of cases) {
+          const response = await app.request(`/scheduled-task?${directoryQuery}`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ title: "Bad schedule", prompt: "x", schedule }),
+          })
+          expect(response.status).toBe(400)
+          const body = (await response.json()) as { name: string; details?: { resource?: string } }
+          expect(body.name).toBe("InvalidRequestError")
+          expect(body.details?.resource).toBe(resource)
+        }
+
+        // No invalid task should have been persisted.
+        const list = (await (await app.request(`/scheduled-task?${directoryQuery}`)).json()) as unknown[]
+        expect(list).toHaveLength(0)
+      },
+    })
+  })
+
+  test("concurrent run-due enqueues a due task only once", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const runAt = Date.now() + 10
+        const task = await ScheduledTask.create({
+          title: "Due once",
+          prompt: "Run exactly once even under concurrent ticks.",
+          schedule: { type: "once", runAt },
+        })
+
+        const now = runAt + 1
+        const [a, b] = await Promise.all([ScheduledTask.runDue(now), ScheduledTask.runDue(now)])
+        const total = a.length + b.length
+        expect(total).toBe(1)
+
+        const queue = await TaskQueue.list()
+        const forTask = queue.filter((item) => item.sourceTaskID === task.id)
+        expect(forTask).toHaveLength(1)
+      },
+    })
+  })
+
   test("run-due records workflow scheduled task failures", async () => {
     await using tmp = await tmpdir({ git: true })
     const previous = process.env.AX_CODE_WORKFLOW_RUNTIME

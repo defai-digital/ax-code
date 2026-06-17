@@ -1,5 +1,6 @@
 import z from "zod"
 import { HTTPException } from "hono/http-exception"
+import { NamedError } from "@ax-code/util/error"
 import { Bus } from "@/bus"
 import { BusEvent } from "@/bus/bus-event"
 import { Instance } from "@/project/instance"
@@ -20,6 +21,14 @@ export namespace ScheduledTask {
 
   export const Status = z.enum(["active", "paused", "disabled"])
   export type Status = z.infer<typeof Status>
+
+  // Thrown when a schedule is syntactically shaped but semantically unusable
+  // (bad time-of-day, unparseable cron, or invalid timezone). Mapped to a 400
+  // by the server error mapper so clients can correct their input.
+  export const InvalidSchedule = NamedError.create(
+    "ScheduledTaskInvalidSchedule",
+    z.object({ resource: z.string(), message: z.string() }),
+  )
 
   const WorkflowTemplateIDSchema = z
     .string()
@@ -223,6 +232,7 @@ export namespace ScheduledTask {
 
   export async function create(input: CreateInput): Promise<Info> {
     const parsed = CreateInput.parse(input)
+    validateSchedule(parsed.schedule)
     const now = Date.now()
     const task = Database.use((db) => {
       const row = db
@@ -263,6 +273,7 @@ export namespace ScheduledTask {
 
   export async function update(input: UpdateInput): Promise<Info> {
     const parsed = UpdateInput.parse(input)
+    if (parsed.schedule !== undefined) validateSchedule(parsed.schedule)
     const current = await get(parsed.id)
     const now = Date.now()
     const nextSchedule = parsed.schedule ?? current.schedule
@@ -414,9 +425,15 @@ export namespace ScheduledTask {
     const results: RunNowResult[] = []
     for (const task of due) {
       if (task.nextRunAt === undefined || task.nextRunAt > now) continue
+      // Atomically claim the task by advancing next_run_at only if it still
+      // matches the value we read. Concurrent runDue() callers that read the
+      // same due task will fail this conditional update and skip it, so the
+      // task is enqueued exactly once per tick.
+      const next = nextRunAt(task.schedule, now + 1)
+      const claimed = claimDueTask(task.id, task.nextRunAt, next)
+      if (!claimed) continue
+      publishUpdated(claimed)
       try {
-        const next = nextRunAt(task.schedule, now + 1)
-        await updateNextRunAt(task.id, next)
         const result = await runNow(task.id)
         results.push(result)
       } catch (error) {
@@ -424,6 +441,32 @@ export namespace ScheduledTask {
       }
     }
     return results
+  }
+
+  // Conditional claim: advance next_run_at only when the row is still active and
+  // still carries the expected next_run_at. Runs inside a single synchronous
+  // Database.use() block, so two callers cannot both observe the pre-claim value.
+  function claimDueTask(
+    id: ScheduledTaskID,
+    expectedNextRunAt: number,
+    next: number | undefined,
+  ): Info | undefined {
+    const now = Date.now()
+    return Database.use((db) => {
+      const row = db
+        .update(ScheduledTaskTable)
+        .set({ next_run_at: next ?? null, time_updated: now })
+        .where(
+          and(
+            eq(ScheduledTaskTable.id, id),
+            eq(ScheduledTaskTable.status, "active"),
+            eq(ScheduledTaskTable.next_run_at, expectedNextRunAt),
+          ),
+        )
+        .returning()
+        .get()
+      return row ? fromRow(row) : undefined
+    })
   }
 
   export function initScheduler(input: { pollMs?: number } = {}) {
@@ -450,23 +493,29 @@ export namespace ScheduledTask {
     tick()
   }
 
-  async function updateNextRunAt(id: ScheduledTaskID, next: number | undefined): Promise<Info> {
-    const now = Date.now()
-    const task = Database.use((db) => {
-      const row = db
-        .update(ScheduledTaskTable)
-        .set({
-          next_run_at: next ?? null,
-          time_updated: now,
-        })
-        .where(eq(ScheduledTaskTable.id, id))
-        .returning()
-        .get()
-      if (!row) throw new NotFoundError({ message: `Scheduled task not found: ${id}` })
-      return fromRow(row)
-    })
-    publishUpdated(task)
-    return task
+  // Reject schedules that parse structurally but can never produce a run, so the
+  // API does not create "active" tasks that silently never fire.
+  export function validateSchedule(schedule: Schedule): void {
+    const timezone = "timezone" in schedule ? schedule.timezone : undefined
+    if (timezone !== undefined && !isValidTimeZone(timezone)) {
+      throw new InvalidSchedule({ resource: "schedule.timezone", message: `Invalid timezone: ${timezone}` })
+    }
+    switch (schedule.type) {
+      case "daily":
+      case "weekly":
+        if (!parseTimeOfDay(schedule.time)) {
+          throw new InvalidSchedule({ resource: "schedule.time", message: `Invalid time of day: ${schedule.time}` })
+        }
+        break
+      case "cron":
+        if (!isValidCronExpression(schedule.expression)) {
+          throw new InvalidSchedule({
+            resource: "schedule.cron",
+            message: `Invalid or unsupported cron expression: ${schedule.expression}`,
+          })
+        }
+        break
+    }
   }
 
   export function nextRunAt(schedule: Schedule, from = Date.now()): number | undefined {
@@ -481,6 +530,29 @@ export namespace ScheduledTask {
         return nextCronRun(schedule.expression, from, schedule.timezone)
     }
   }
+}
+
+function isValidTimeZone(timezone: string): boolean {
+  if (!timezone.trim()) return false
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: timezone })
+    return true
+  } catch {
+    return false
+  }
+}
+
+// Mirrors the field support of nextCronRun(): 5 fields, only minute/hour/dow are
+// honored, and day-of-month/month must be "*". Reject anything the engine cannot
+// actually schedule so we never persist an active-but-never-firing cron task.
+function isValidCronExpression(expression: string): boolean {
+  const fields = expression.trim().split(/\s+/)
+  if (fields.length !== 5) return false
+  if (!parseCronField(fields[0]!, 0, 59)) return false
+  if (!parseCronField(fields[1]!, 0, 23)) return false
+  if (fields[2] !== "*" || fields[3] !== "*") return false
+  if (!parseCronField(fields[4]!, 0, 6)) return false
+  return true
 }
 
 function makeTzFormatter(timezone: string) {
