@@ -4123,6 +4123,32 @@
           "output": 256000
         }
       },
+      "mistral/mistral-small": {
+        "id": "mistral/mistral-small",
+        "name": "Mistral Small (latest)",
+        "family": "mistral-small",
+        "attachment": true,
+        "reasoning": false,
+        "tool_call": true,
+        "temperature": true,
+        "knowledge": "2025-06",
+        "release_date": "2026-03-16",
+        "last_updated": "2026-03-16",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 256000,
+          "output": 256000
+        }
+      },
       "mistral/ministral-8b": {
         "id": "mistral/ministral-8b",
         "name": "Ministral 8B (latest)",
@@ -4146,41 +4172,6 @@
         "limit": {
           "context": 128000,
           "output": 128000
-        }
-      },
-      "mistral/mistral-small": {
-        "id": "mistral/mistral-small",
-        "name": "Mistral Small (latest)",
-        "family": "mistral-small",
-        "attachment": true,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "effort",
-            "values": [
-              "none",
-              "high"
-            ]
-          }
-        ],
-        "tool_call": true,
-        "temperature": true,
-        "knowledge": "2025-06",
-        "release_date": "2026-03-16",
-        "last_updated": "2026-03-16",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 256000,
-          "output": 256000
         }
       },
       "mistral/codestral": {
@@ -4994,7 +4985,14 @@
         "family": "gpt",
         "attachment": true,
         "reasoning": true,
-        "reasoning_options": [],
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "medium"
+            ]
+          }
+        ],
         "tool_call": true,
         "temperature": true,
         "knowledge": "2024-10",
@@ -5289,7 +5287,14 @@
         "family": "gpt",
         "attachment": true,
         "reasoning": true,
-        "reasoning_options": [],
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "medium"
+            ]
+          }
+        ],
         "tool_call": true,
         "temperature": true,
         "release_date": "2026-03-03",
@@ -5317,7 +5322,17 @@
         "family": "gpt",
         "attachment": true,
         "reasoning": true,
-        "reasoning_options": [],
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "none",
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        ],
         "tool_call": true,
         "temperature": true,
         "knowledge": "2024-10",
@@ -5496,6 +5511,7 @@
           {
             "type": "effort",
             "values": [
+              "none",
               "low",
               "medium",
               "high",
@@ -5937,7 +5953,14 @@
         "family": "gpt",
         "attachment": true,
         "reasoning": true,
-        "reasoning_options": [],
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "medium"
+            ]
+          }
+        ],
         "tool_call": true,
         "temperature": true,
         "knowledge": "2024-10",
@@ -6927,6 +6950,11 @@
         "family": "nemotron",
         "attachment": false,
         "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          }
+        ],
         "tool_call": true,
         "temperature": true,
         "release_date": "2026-06-04",
@@ -6951,6 +6979,11 @@
         "family": "nemotron",
         "attachment": false,
         "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          }
+        ],
         "tool_call": false,
         "temperature": true,
         "knowledge": "2024-10",
@@ -6976,6 +7009,11 @@
         "family": "nemotron",
         "attachment": false,
         "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          }
+        ],
         "tool_call": true,
         "temperature": true,
         "knowledge": "2024-10",
@@ -7026,6 +7064,11 @@
         "family": "nemotron",
         "attachment": true,
         "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          }
+        ],
         "tool_call": true,
         "temperature": true,
         "knowledge": "2024-10",
@@ -8719,6 +8762,11 @@
         "reasoning_options": [
           {
             "type": "toggle"
+          },
+          {
+            "type": "budget_tokens",
+            "min": 1,
+            "max": 262144
           }
         ],
         "tool_call": true,
@@ -22946,6 +22994,35 @@
           "output": 384000
         }
       },
+      "glm-5.2": {
+        "id": "glm-5.2",
+        "name": "GLM-5.2",
+        "family": "glm",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [],
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-06-13",
+        "last_updated": "2026-06-13",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 131072
+        }
+      },
       "minimax-m3": {
         "id": "minimax-m3",
         "name": "MiniMax M3 (3x usage)",
@@ -23224,7 +23301,8 @@
         "limit": {
           "context": 202752,
           "output": 32768
-        }
+        },
+        "status": "deprecated"
       },
       "qwen3.6-plus": {
         "id": "qwen3.6-plus",
@@ -34452,6 +34530,42 @@
           "output": 202736
         }
       },
+      "glm-5.2": {
+        "id": "glm-5.2",
+        "name": "GLM 5.2",
+        "family": "glm",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "minimal",
+              "low",
+              "medium",
+              "high",
+              "xhigh"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "temperature": true,
+        "release_date": "2026-06-17",
+        "last_updated": "2026-06-17",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 1048560,
+          "output": 1048560
+        }
+      },
       "qwen3.5-397b-fast": {
         "id": "qwen3.5-397b-fast",
         "name": "Qwen3.5 397B Fast",
@@ -34623,65 +34737,6 @@
           "output": 262128
         }
       },
-      "openai/gpt-oss-20b": {
-        "id": "openai/gpt-oss-20b",
-        "name": "GPT OSS 20B",
-        "family": "gpt-oss",
-        "attachment": false,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "effort",
-            "values": [
-              "low",
-              "medium",
-              "high"
-            ]
-          }
-        ],
-        "tool_call": true,
-        "temperature": true,
-        "release_date": "2025-08-05",
-        "last_updated": "2025-08-05",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 16368,
-          "output": 16368
-        }
-      },
-      "mistralai/Devstral-Small-2-24B-Instruct-2512": {
-        "id": "mistralai/Devstral-Small-2-24B-Instruct-2512",
-        "name": "Devstral Small 2 24B Instruct 2512",
-        "family": "devstral",
-        "attachment": true,
-        "reasoning": false,
-        "tool_call": true,
-        "temperature": true,
-        "release_date": "2025-12-09",
-        "last_updated": "2025-12-09",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 262128,
-          "output": 262128
-        }
-      },
       "zai-org/GLM-5.1-FP8": {
         "id": "zai-org/GLM-5.1-FP8",
         "name": "GLM 5.1 FP8",
@@ -34712,34 +34767,6 @@
         "limit": {
           "context": 202736,
           "output": 202736
-        }
-      },
-      "MiniMaxAI/MiniMax-M2.5": {
-        "id": "MiniMaxAI/MiniMax-M2.5",
-        "name": "MiniMax M2.5",
-        "family": "minimax",
-        "attachment": false,
-        "reasoning": true,
-        "reasoning_options": [],
-        "tool_call": true,
-        "interleaved": {
-          "field": "reasoning_content"
-        },
-        "temperature": true,
-        "release_date": "2026-02-12",
-        "last_updated": "2026-02-12",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 196592,
-          "output": 196592
         }
       }
     }
@@ -90507,6 +90534,17 @@
         "family": "grok",
         "attachment": true,
         "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "none",
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        ],
         "tool_call": true,
         "structured_output": true,
         "temperature": true,
@@ -90726,6 +90764,11 @@
         "family": "qwen3.6",
         "attachment": true,
         "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          }
+        ],
         "tool_call": true,
         "interleaved": {
           "field": "reasoning_content"
@@ -91190,6 +91233,11 @@
         "family": "kimi-k2",
         "attachment": true,
         "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          }
+        ],
         "tool_call": true,
         "interleaved": {
           "field": "reasoning_content"
@@ -91424,6 +91472,11 @@
         "family": "qwen3.6",
         "attachment": false,
         "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          }
+        ],
         "tool_call": true,
         "interleaved": {
           "field": "reasoning_content"
@@ -91482,6 +91535,11 @@
         "family": "qwen3.6",
         "attachment": true,
         "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          }
+        ],
         "tool_call": true,
         "interleaved": {
           "field": "reasoning_content"
