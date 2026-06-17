@@ -446,11 +446,7 @@ export namespace ScheduledTask {
   // Conditional claim: advance next_run_at only when the row is still active and
   // still carries the expected next_run_at. Runs inside a single synchronous
   // Database.use() block, so two callers cannot both observe the pre-claim value.
-  function claimDueTask(
-    id: ScheduledTaskID,
-    expectedNextRunAt: number,
-    next: number | undefined,
-  ): Info | undefined {
+  function claimDueTask(id: ScheduledTaskID, expectedNextRunAt: number, next: number | undefined): Info | undefined {
     const now = Date.now()
     return Database.use((db) => {
       const row = db

@@ -530,8 +530,20 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(dialogProvider).toContain("void Promise.resolve()")
     expect(dialogProvider).toContain('log.warn("provider dialog action failed"')
     expect(dialogProvider).toContain('action: "select-provider"')
-    expect(dialogProvider).toContain('fallbackMessage: "Failed to complete provider authorization"')
-    expect(dialogProvider).toContain('fallbackMessage: "Failed to connect provider"')
+  })
+
+  test("keeps the api-key and oauth-code prompts open until auth resolves (gh#257)", async () => {
+    const dialogProvider = await fs.readFile(DIALOG_PROVIDER_SRC, "utf8")
+
+    // The auth prompts await their result via DialogPrompt's onConfirm and opt
+    // out of auto-close so empty input / invalid codes keep the dialog open and
+    // can surface inline error state instead of closing before the async result.
+    expect(dialogProvider).toContain("onConfirm={async (value) =>")
+    expect(dialogProvider).toContain("autoClose={false}")
+    // Empty API key keeps the dialog open with a message instead of closing.
+    expect(dialogProvider).toContain('message: "API key is required"')
+    // Invalid oauth code stays in the dialog and shows the inline error state.
+    expect(dialogProvider).toContain("setError(true)")
   })
 
   test("refreshes provider-backed runtime state after connect and disconnect flows", async () => {
