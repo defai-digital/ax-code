@@ -71,6 +71,23 @@ export const RollbackCommand = cmd({
         const diff = await Session.diff(sessionID)
 
         if (!diff || diff.length === 0) {
+          // The rollback set comes from recorded snapshots/diffs. If no diff was
+          // recorded but the session's tool events show files were changed, those
+          // changes are real yet unrecoverable here — typically because the
+          // project is not a git repository, so snapshots are disabled. Surface
+          // that clearly and fail instead of reporting a misleading clean
+          // "nothing to roll back" success. See #254.
+          if (risk.signals.filesChanged > 0) {
+            const n = risk.signals.filesChanged
+            console.log(
+              `\n\x1b[31mDetected ${n} changed file${n === 1 ? "" : "s"}, but no rollback snapshot was recorded for this session.\x1b[0m`,
+            )
+            console.log(
+              "Rollback relies on snapshots, which are only captured for git-tracked projects. These changes cannot be rolled back automatically.",
+            )
+            process.exitCode = 1
+            return
+          }
           console.log("\nNo file changes to rollback.")
           return
         }
