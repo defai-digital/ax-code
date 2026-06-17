@@ -178,10 +178,10 @@ export function buildChatHtml(nonce: string, cspSource: string): string {
     <span id="model-label"></span>
   </div>
   <div id="messages">
-    <div class="status">Type a message to start chatting with ax-code</div>
+    <div class="status" data-placeholder="1">Type a message to start chatting with ax-code</div>
   </div>
   <div id="input-area">
-    <textarea id="input" rows="1" placeholder="Ask ax-code..."></textarea>
+    <textarea id="input" rows="1" placeholder="Ask ax-code..." aria-label="Ask ax-code"></textarea>
     <button id="send-btn">Send</button>
   </div>
 
@@ -193,6 +193,11 @@ export function buildChatHtml(nonce: string, cspSource: string): string {
     // partId -> DOM element for the streaming assistant text bubble.
     const streamEls = new Map();
     let activeAssistantEl = null;
+    // The assistant bubble for the current turn. Unlike activeAssistantEl (which
+    // 'done' nulls out), this survives until the next turn starts, so a 'done'
+    // event whose activeAssistantEl was lost still decorates the streamed bubble
+    // instead of appending a duplicate. See #262.
+    let turnAssistantEl = null;
     let toolEls = new Map();
     let isProcessing = false;
     // Track whether the current assistant turn has finalized so late
@@ -217,11 +222,19 @@ export function buildChatHtml(nonce: string, cspSource: string): string {
     }
 
     function clearChat() {
-      messagesEl.innerHTML = '<div class="status">Chat cleared</div>';
+      messagesEl.innerHTML = '<div class="status" data-placeholder="1">Chat cleared</div>';
       streamEls.clear();
       toolEls.clear();
       activeAssistantEl = null;
+      turnAssistantEl = null;
       vscode.postMessage({ type: 'clear' });
+    }
+
+    // Remove empty-state / 'Chat cleared' placeholder status text once real
+    // conversation content is rendered, so stale status lines don't look like
+    // part of the transcript. See #263.
+    function removePlaceholderStatus() {
+      messagesEl.querySelectorAll('.status[data-placeholder="1"]').forEach(s => s.remove());
     }
 
     function stopAgent() { vscode.postMessage({ type: 'stop' }); }
@@ -262,6 +275,7 @@ export function buildChatHtml(nonce: string, cspSource: string): string {
         messagesEl.appendChild(el);
         streamEls.set(partId, el);
         activeAssistantEl = el;
+        turnAssistantEl = el;
       }
       return el;
     }
@@ -270,12 +284,16 @@ export function buildChatHtml(nonce: string, cspSource: string): string {
       const msg = event.data;
       switch (msg.type) {
         case 'userMessage':
+          removePlaceholderStatus();
           addMessage('user', msg.text);
           break;
         case 'status':
           if (msg.status === 'thinking' || msg.status === 'initializing') {
             isProcessing = true; sendBtn.disabled = true;
             turnFinalized = false;
+            // A new turn is starting; drop the previous turn's bubble reference
+            // so 'done' can't decorate a stale element. See #262.
+            turnAssistantEl = null;
             const label = msg.status === 'initializing' ? 'Starting ax-code...' : 'Thinking...';
             let live = messagesEl.querySelector('.status[data-live="1"]');
             if (!live) {
@@ -297,8 +315,10 @@ export function buildChatHtml(nonce: string, cspSource: string): string {
           // Ignore late stream chunks that arrive after the turn finalized to
           // avoid rendering a duplicate assistant bubble. See #252.
           if (turnFinalized) break;
-          // First stream chunk — remove the live 'Thinking...' placeholder.
+          // First stream chunk — remove the live 'Thinking...' placeholder and
+          // any empty-state/cleared placeholder status. See #263.
           messagesEl.querySelectorAll('.status[data-live="1"]').forEach(s => s.remove());
+          removePlaceholderStatus();
           const el = getOrCreateStreamEl(msg.partId);
           el.innerHTML = msg.html || '';
           scrollToBottom(false);
@@ -322,31 +342,41 @@ export function buildChatHtml(nonce: string, cspSource: string): string {
           scrollToBottom(false);
           break;
         }
-        case 'done':
+        case 'done': {
           turnFinalized = true;
-          if (activeAssistantEl) {
-            if (msg.html) activeAssistantEl.innerHTML = msg.html;
+          removePlaceholderStatus();
+          // Prefer the live ref, but fall back to the turn's streamed bubble so
+          // a lost activeAssistantEl does not cause a duplicate append. Only
+          // append a fresh bubble when nothing was rendered for this turn, and
+          // never decorate the same bubble twice (idempotent done). See #262.
+          const target = activeAssistantEl || turnAssistantEl;
+          if (target && target.dataset.finalized !== '1') {
+            target.dataset.finalized = '1';
+            if (msg.html) target.innerHTML = msg.html;
             const badge = document.createElement('div');
             const agentSpan = document.createElement('span');
             agentSpan.className = 'agent-badge';
             agentSpan.textContent = msg.agent || 'build';
             badge.appendChild(agentSpan);
-            activeAssistantEl.prepend(badge);
+            target.prepend(badge);
             if (msg.tokens > 0) {
               const tok = document.createElement('div');
               tok.className = 'tokens';
               tok.textContent = msg.tokens.toLocaleString() + ' tokens';
-              activeAssistantEl.appendChild(tok);
+              target.appendChild(tok);
             }
-          } else if (msg.text) {
+          } else if (!target && msg.text) {
             // No stream came through — render the final text as a fallback.
             const el = document.createElement('div');
             el.className = 'message assistant md';
+            el.dataset.finalized = '1';
             el.innerHTML = msg.html || '';
             messagesEl.appendChild(el);
+            turnAssistantEl = el;
           }
           activeAssistantEl = null;
           break;
+        }
         case 'error':
           addMessage('error', msg.message);
           break;
@@ -354,6 +384,7 @@ export function buildChatHtml(nonce: string, cspSource: string): string {
           streamEls.clear();
           toolEls.clear();
           activeAssistantEl = null;
+          turnAssistantEl = null;
           break;
         case 'modelSelected':
           document.getElementById('model-label').textContent = msg.model;

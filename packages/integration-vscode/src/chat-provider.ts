@@ -112,7 +112,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       }
     }
     this.webviewView.show(true)
-    this.postMessage({ type: "userMessage", text })
+    // Do NOT echo the prompt here: handleUserMessage owns echoing so a prompt
+    // rejected by the isProcessing guard never appears in the transcript. See #267.
     await this.handleUserMessage(text)
   }
 
@@ -136,6 +137,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       vscode.window.showWarningMessage("ax-code is still processing...")
       return
     }
+
+    // Echo the accepted prompt now that it has passed the processing guard, so
+    // both the webview-typed and command-send paths render it exactly once and
+    // only after acceptance. See #267.
+    this.postMessage({ type: "userMessage", text })
 
     this.isProcessing = true
     this.activeCancelReason = null
@@ -228,11 +234,16 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   }
 
   private async handleSelectModel() {
+    // Tracks whether we put the webview into the disabled `initializing` state,
+    // so a startup/listing failure can always restore it to `idle`. See #256.
+    let postedInitializing = false
     try {
       if (!this.server.url) {
         this.postMessage({ type: "status", status: "initializing" })
+        postedInitializing = true
         await this.server.ensureStarted()
         this.postMessage({ type: "status", status: "idle" })
+        postedInitializing = false
       }
 
       const config = await this.session.listProviders()
@@ -258,6 +269,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         this.postMessage({ type: "modelSelected", model: selected.label })
       }
     } catch (error: any) {
+      // Re-enable the chat UI after surfacing the error; otherwise the webview
+      // stays stuck on "Starting ax-code..." with send disabled. See #256.
+      if (postedInitializing) this.postMessage({ type: "status", status: "idle" })
       vscode.window.showErrorMessage(`Failed to load models: ${error.message}`)
     }
   }
