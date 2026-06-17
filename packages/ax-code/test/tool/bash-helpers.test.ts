@@ -37,6 +37,25 @@ describe("tool.bash helpers", () => {
     expect(isStaticPathArg("$(pwd)/file.txt")).toBeUndefined()
   })
 
+  test("does not treat shell variable references or globs as static paths", () => {
+    // A bare variable reference (e.g. `cat $f` inside a `for f ...` loop) must not
+    // be statically path-checked — it would resolve to a literal "$f" and trigger
+    // a false "Path does not exist". Regression for the reported session error.
+    expect(isStaticPathArg("$f")).toBeUndefined()
+    expect(isStaticPathArg(".internal/prd/$f")).toBeUndefined()
+    expect(isStaticPathArg('"$f"')).toBeUndefined()
+    expect(isStaticPathArg("${file}")).toBeUndefined()
+    // Globs and brace expansion are resolved by the shell, not statically.
+    expect(isStaticPathArg("*.ts")).toBeUndefined()
+    expect(isStaticPathArg("src/**/*.tsx")).toBeUndefined()
+    expect(isStaticPathArg("file?.txt")).toBeUndefined()
+    expect(isStaticPathArg("{a,b}.txt")).toBeUndefined()
+    expect(isStaticPathArg("~/notes.txt")).toBeUndefined()
+    // Plain literal paths are still checkable.
+    expect(isStaticPathArg("src/index.ts")).toBe("src/index.ts")
+    expect(isStaticPathArg(".internal/prd/spec.md")).toBe(".internal/prd/spec.md")
+  })
+
   test("selects read-side path args for statically checkable commands", () => {
     expect(staticallyCheckablePathArgs("cd", ["one", "two"])).toEqual(["one"])
     expect(staticallyCheckablePathArgs("cat", ["a.txt", "b.txt"])).toEqual(["a.txt", "b.txt"])
