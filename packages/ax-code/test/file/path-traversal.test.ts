@@ -51,7 +51,10 @@ describe("File.read path traversal protection", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        await expect(File.read("../../../etc/passwd")).rejects.toThrow("Access denied: path escapes project directory")
+        await expect(File.read("../../../etc/passwd")).rejects.toMatchObject({
+          name: "FileAccessDenied",
+          data: { message: "Access denied: path escapes project directory" },
+        })
       },
     })
   })
@@ -62,9 +65,10 @@ describe("File.read path traversal protection", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        await expect(File.read("src/nested/../../../../../../../etc/passwd")).rejects.toThrow(
-          "Access denied: path escapes project directory",
-        )
+        await expect(File.read("src/nested/../../../../../../../etc/passwd")).rejects.toMatchObject({
+          name: "FileAccessDenied",
+          data: { message: "Access denied: path escapes project directory" },
+        })
       },
     })
   })
@@ -93,7 +97,10 @@ describe("File.list path traversal protection", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        await expect(File.list("../../../etc")).rejects.toThrow("Access denied: path escapes project directory")
+        await expect(File.list("../../../etc")).rejects.toMatchObject({
+          name: "FileAccessDenied",
+          data: { message: "Access denied: path escapes project directory" },
+        })
       },
     })
   })

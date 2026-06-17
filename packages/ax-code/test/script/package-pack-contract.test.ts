@@ -6,14 +6,21 @@ const repoRoot = path.resolve(import.meta.dir, "../../../..")
 
 type ExportTarget = string | { types?: string; default?: string; import?: string; require?: string }
 
-async function readManifest(relativePath: string) {
-  return JSON.parse(await fs.readFile(path.join(repoRoot, relativePath), "utf8")) as {
-    name: string
+type Manifest = {
+  name: string
+  main?: string
+  types?: string
+  exports?: Record<string, ExportTarget>
+  files?: string[]
+  publishConfig?: {
     main?: string
     types?: string
     exports?: Record<string, ExportTarget>
-    files?: string[]
   }
+}
+
+async function readManifest(relativePath: string) {
+  return JSON.parse(await fs.readFile(path.join(repoRoot, relativePath), "utf8")) as Manifest
 }
 
 function exportTargets(target: ExportTarget | undefined) {
@@ -30,7 +37,11 @@ describe("package pack contracts", () => {
     expect(manifest.main).toBe("./dist/index.js")
     expect(manifest.types).toBe("./dist/index.d.ts")
 
-    for (const target of Object.values(manifest.exports ?? {})) {
+    // The workspace package resolves dev consumers from TS source; npm publish
+    // applies `publishConfig` so the published package exports compiled dist.
+    const publishedExports = manifest.publishConfig?.exports ?? manifest.exports
+
+    for (const target of Object.values(publishedExports ?? {})) {
       for (const file of exportTargets(target)) {
         expect(file).toStartWith("./dist/")
         expect(file).not.toStartWith("./src/")

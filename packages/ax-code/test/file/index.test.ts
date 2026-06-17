@@ -404,7 +404,7 @@ describe("file/index Filesystem patterns", () => {
       await Instance.provide({
         directory: tmp.path,
         fn: async () => {
-          await expect(File.read("../outside.txt")).rejects.toThrow("Access denied")
+          await expect(File.read("../outside.txt")).rejects.toMatchObject({ name: "FileAccessDenied" })
         },
       })
     })
@@ -415,7 +415,7 @@ describe("file/index Filesystem patterns", () => {
       await Instance.provide({
         directory: tmp.path,
         fn: async () => {
-          await expect(File.read("../outside.txt")).rejects.toThrow("Access denied")
+          await expect(File.read("../outside.txt")).rejects.toMatchObject({ name: "FileAccessDenied" })
         },
       })
     })
@@ -708,7 +708,7 @@ describe("file/index Filesystem patterns", () => {
       await Instance.provide({
         directory: tmp.path,
         fn: async () => {
-          await expect(File.list("../outside")).rejects.toThrow("Access denied")
+          await expect(File.list("../outside")).rejects.toMatchObject({ name: "FileAccessDenied" })
         },
       })
     })
