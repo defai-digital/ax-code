@@ -94,6 +94,20 @@ function getFinalAssistantText(message: AssistantMessageRecord | undefined) {
   return textPart?.text
 }
 
+export function formatToolArgumentsForPrompt(input: Record<string, unknown>): string {
+  const seen = new WeakSet<object>()
+  return (
+    JSON.stringify(input, (_key, value) => {
+      if (typeof value === "bigint") return value.toString()
+      if (value && typeof value === "object") {
+        if (seen.has(value)) return "[Circular]"
+        seen.add(value)
+      }
+      return value
+    }) ?? "{}"
+  )
+}
+
 function getToolOutput(state: Extract<ApiPart, { type: "tool" }>["state"]) {
   return state.status === "completed" ? state.output : ""
 }
@@ -1123,7 +1137,7 @@ export async function createAgent(options?: AgentOptions): Promise<Agent> {
           parts: [
             {
               type: "text",
-              text: `Use the ${name} tool with these arguments: ${JSON.stringify(input)}. Only use this one tool, nothing else.`,
+              text: `Use the ${name} tool with these arguments: ${formatToolArgumentsForPrompt(input)}. Only use this one tool, nothing else.`,
             },
           ],
         })

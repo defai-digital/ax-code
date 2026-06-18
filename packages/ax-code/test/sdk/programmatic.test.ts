@@ -1,5 +1,13 @@
 import { expect, test } from "bun:test"
 import path from "path"
+import { formatToolArgumentsForPrompt } from "../../src/sdk/programmatic"
+
+test("programmatic tool argument formatting handles bigint and circular input", () => {
+  const input: Record<string, unknown> = { count: 1n }
+  input.self = input
+
+  expect(formatToolArgumentsForPrompt(input)).toBe('{"count":"1","self":"[Circular]"}')
+})
 
 test("programmatic stream removes abort listeners when prompt fails", async () => {
   const src = await Bun.file(path.join(import.meta.dir, "../../src/sdk/programmatic.ts")).text()
