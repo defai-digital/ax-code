@@ -1,4 +1,5 @@
 import z from "zod"
+import { JsonBoolean } from "@/util/schema"
 import { SessionID } from "../session/schema"
 import { WorkflowScheduler } from "./scheduler"
 import { WorkflowInputValues, WorkflowModelPolicyOverride } from "./spec"
@@ -43,7 +44,7 @@ export namespace WorkflowRoutineTrigger {
       schedule: Schedule.optional(),
       timezone: z.string().trim().min(1).max(120).optional(),
       webhookEvent: z.string().trim().min(1).max(160).optional(),
-      enabled: z.boolean().default(false),
+      enabled: JsonBoolean.default(false),
       securityGate: z.enum(["local-only", "required"]).optional(),
     })
     .superRefine((input, ctx) => {

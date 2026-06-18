@@ -577,7 +577,7 @@ describe("workflow routes", () => {
           templateID: "builtin:noop-dry-run",
           scope: "project",
           route: "workflow/route-created-noop",
-          enabled: true,
+          enabled: "true",
           trust: "trusted",
         }),
       })
