@@ -8,7 +8,8 @@ test("JDTLS cleanup is attached via process exit promise", async () => {
   expect(src).toMatch(/spawnJdtls[\s\S]*?JdtlsDataDir\.cleanupStale\(\)/)
   expect(src).toMatch(/spawnJdtls[\s\S]*?JdtlsDataDir\.create\(\)/)
   expect(src).toMatch(/spawnJdtls[\s\S]*?JdtlsDataDir\.remove\(dataDir\)/)
-  expect(src).toMatch(/spawnJdtls[\s\S]*?void proc\.exited\.finally/)
+  expect(src).toMatch(/spawnJdtls[\s\S]*?void proc\.exited[\s\S]*?\.finally/)
+  expect(src).toMatch(/spawnJdtls[\s\S]*?\.catch\(\(err\) => \{[\s\S]*?jdtls process exited with error/)
   expect(src).not.toMatch(/spawnJdtls[\s\S]*?proc\.once\(\"exit\"/)
 })
 

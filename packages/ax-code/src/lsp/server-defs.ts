@@ -824,9 +824,13 @@ const spawnJdtls = async (java: string, root: string, distPath: string, launcher
     throw err
   }
 
-  void proc.exited.finally(() => {
-    JdtlsDataDir.remove(dataDir).catch((err) => log.warn("failed to remove jdtls data dir", { dataDir, err }))
-  })
+  void proc.exited
+    .finally(() => {
+      JdtlsDataDir.remove(dataDir).catch((err) => log.warn("failed to remove jdtls data dir", { dataDir, err }))
+    })
+    .catch((err) => {
+      log.debug("jdtls process exited with error", { dataDir, err })
+    })
 
   return { process: proc }
 }
