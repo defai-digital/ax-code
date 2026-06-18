@@ -5,6 +5,7 @@ import type { Permission } from "../permission"
 import type { SessionID, MessageID } from "../session/schema"
 import { Truncate } from "./truncate"
 import { Log } from "../util/log"
+import { toErrorMessage } from "../util/error-message"
 
 const log = Log.create({ service: "tool" })
 
@@ -18,7 +19,7 @@ function errorMetadata(error: unknown) {
 
   return {
     errorCode: "Unknown",
-    errorMessage: String(error),
+    errorMessage: toErrorMessage(error),
   }
 }
 
