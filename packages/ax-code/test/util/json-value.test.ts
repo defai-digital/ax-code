@@ -30,4 +30,22 @@ describe("util.json-value", () => {
     expect(parseJsonStrict(JSON.stringify({ type: "event" }))).toEqual({ type: "event" })
     expect(() => parseJsonStrict("{not json")).toThrow(SyntaxError)
   })
+
+  test("parseJsonStrict wraps unprintable parse failures as SyntaxError", () => {
+    const originalParse = JSON.parse
+    const failure = {
+      toString() {
+        throw new Error("cannot print")
+      },
+    }
+    JSON.parse = (() => {
+      throw failure
+    }) as typeof JSON.parse
+    try {
+      expect(() => parseJsonStrict("{}")).toThrow(SyntaxError)
+      expect(() => parseJsonStrict("{}")).toThrow("Unknown error")
+    } finally {
+      JSON.parse = originalParse
+    }
+  })
 })

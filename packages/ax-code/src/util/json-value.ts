@@ -1,3 +1,5 @@
+import { toErrorMessage } from "./error-message"
+
 export type JsonParseResult =
   | {
       ok: true
@@ -21,7 +23,7 @@ export function parseJsonStrict(text: string): unknown {
   if (!parsed.ok) {
     const { error } = parsed
     if (error instanceof Error) throw error
-    throw new SyntaxError(String(error))
+    throw new SyntaxError(toErrorMessage(error))
   }
   return parsed.value
 }
