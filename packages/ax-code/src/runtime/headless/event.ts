@@ -13,7 +13,7 @@ export type HeadlessMessageEvent<
       type: "message.part.delta"
       properties: { sessionID: string; messageID: string; partID: string; field: string; delta: string }
     }
-  | { type: "message.part.removed"; properties: { messageID: string; partID: string } }
+  | { type: "message.part.removed"; properties: { sessionID: string; messageID: string; partID: string } }
 
 export type HeadlessRequestEvent =
   | { type: "permission.asked"; properties: PermissionRequest }

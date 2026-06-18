@@ -273,6 +273,8 @@ pub struct MessagePartDeltaProps {
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct MessagePartRemovedProps {
+    #[serde(rename = "sessionID", default)]
+    pub session_id: String,
     #[serde(rename = "messageID", default)]
     pub message_id: String,
     #[serde(rename = "partID", default)]

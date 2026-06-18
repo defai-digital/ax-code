@@ -215,11 +215,12 @@ async fn test_parse_message_removed() {
 
 #[tokio::test]
 async fn test_parse_message_part_removed() {
-    let json = r#"{"type":"message.part.removed","properties":{"messageID":"msg_123","partID":"part_456"}}"#;
+    let json = r#"{"type":"message.part.removed","properties":{"sessionID":"sess_123","messageID":"msg_123","partID":"part_456"}}"#;
     let event: RuntimeEvent = serde_json::from_str(json).unwrap();
 
     match event {
         RuntimeEvent::MessagePartRemoved { properties } => {
+            assert_eq!(properties.session_id, "sess_123");
             assert_eq!(properties.message_id, "msg_123");
             assert_eq!(properties.part_id, "part_456");
         }

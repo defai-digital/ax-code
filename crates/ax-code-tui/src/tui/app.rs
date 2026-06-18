@@ -308,7 +308,10 @@ impl App {
                 }
             }
             RuntimeEvent::MessagePartRemoved { properties } => {
-                if !self.message_targets_current_session(&properties.message_id) {
+                if !self.message_event_targets_current_session(
+                    &properties.session_id,
+                    &properties.message_id,
+                ) {
                     return;
                 }
                 self.message_text_parts.retain(|part| {
@@ -1452,12 +1455,39 @@ mod tests {
 
         app.handle_event(RuntimeEvent::MessagePartRemoved {
             properties: MessagePartRemovedProps {
+                session_id: "s".to_string(),
                 message_id: "m1".to_string(),
                 part_id: "p1".to_string(),
             },
         });
 
         assert_eq!(app.messages[0].content, "world");
+    }
+
+    #[test]
+    fn test_message_part_removed_ignores_other_session() {
+        let mut app = App::new();
+        app.session_id = Some("s1".to_string());
+        app.handle_event(RuntimeEvent::MessagePartDelta {
+            properties: MessagePartDeltaProps {
+                session_id: "s1".to_string(),
+                message_id: "m1".to_string(),
+                part_id: "p1".to_string(),
+                field: "text".to_string(),
+                delta: "visible".to_string(),
+            },
+        });
+
+        app.handle_event(RuntimeEvent::MessagePartRemoved {
+            properties: MessagePartRemovedProps {
+                session_id: "s2".to_string(),
+                message_id: "m1".to_string(),
+                part_id: "p1".to_string(),
+            },
+        });
+
+        assert_eq!(app.messages[0].content, "visible");
+        assert_eq!(app.message_text_parts.len(), 1);
     }
 
     #[test]
