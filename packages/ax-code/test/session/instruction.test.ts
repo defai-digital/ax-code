@@ -51,6 +51,28 @@ describe("InstructionPrompt.resolve", () => {
     })
   })
 
+  test("does not load instructions from sibling directories with matching prefixes", async () => {
+    await using tmp = await tmpdir()
+    const sibling = `${tmp.path}-sibling`
+    const nested = path.join(sibling, "nested")
+
+    await fs.mkdir(nested, { recursive: true })
+    await Bun.write(path.join(sibling, "AGENTS.md"), "# Sibling Instructions")
+    await Bun.write(path.join(nested, "file.ts"), "const x = 1")
+
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const results = await InstructionPrompt.resolve([], path.join(nested, "file.ts"), "test-message-sibling")
+          expect(results).toEqual([])
+        },
+      })
+    } finally {
+      await fs.rm(sibling, { recursive: true, force: true })
+    }
+  })
+
   test("doesn't reload AGENTS.md when reading it directly", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
