@@ -106,9 +106,18 @@ export namespace ProviderError {
       return JSON.stringify({
         type: "error",
         error: {
-          message: error instanceof Error ? error.message : String(error),
+          message: stringifyUnknownError(error),
         },
       })
+    }
+  }
+
+  function stringifyUnknownError(error: unknown): string {
+    if (error instanceof Error) return error.message
+    try {
+      return String(error)
+    } catch {
+      return "Unknown serialization error"
     }
   }
 

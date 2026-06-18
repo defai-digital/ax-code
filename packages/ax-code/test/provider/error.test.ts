@@ -58,6 +58,33 @@ describe("provider error decoding", () => {
     })
   })
 
+  test("parses stream errors when response body serialization throws non-printable values", () => {
+    const broken = function brokenThrowable() {
+      return undefined
+    }
+    Object.defineProperty(broken, Symbol.toPrimitive, {
+      value() {
+        throw new Error("cannot stringify")
+      },
+    })
+    const body = {
+      type: "error",
+      error: {
+        code: "context_length_exceeded",
+      },
+      toJSON() {
+        throw broken
+      },
+    }
+
+    const parsed = ProviderError.parseStreamError(body)
+
+    expect(parsed).toMatchObject({
+      type: "context_overflow",
+      responseBody: '{"type":"error","error":{"message":"Unknown serialization error"}}',
+    })
+  })
+
   test("ignores non-error stream records with non-JSON-native response body values", () => {
     const body: Record<string, unknown> = { type: "message", sequence: 1n }
     body.self = body
