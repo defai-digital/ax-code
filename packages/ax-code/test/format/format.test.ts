@@ -93,6 +93,27 @@ describe("Format", () => {
     })
   })
 
+  test("status() ignores formatter overrides with blank commands", async () => {
+    await using tmp = await tmpdir({
+      config: {
+        formatter: {
+          gofmt: { command: ["   "], extensions: [".brokenfmt"] },
+        },
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const statuses = await Format.status()
+        const gofmt = statuses.find((status) => status.name === "gofmt")
+        expect(gofmt).toBeDefined()
+        expect(gofmt!.extensions).toContain(".go")
+        expect(gofmt!.extensions).not.toContain(".brokenfmt")
+      },
+    })
+  })
+
   test("service initializes without error", async () => {
     await using tmp = await tmpdir()
 

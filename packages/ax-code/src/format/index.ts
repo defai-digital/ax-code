@@ -30,6 +30,13 @@ export namespace Format {
     unsubscribe: () => void
   }
 
+  function normalizeCommand(command: string[] | undefined): string[] | undefined {
+    if (command === undefined) return undefined
+    const normalized = command.map((item) => item.trim())
+    if (normalized.length === 0 || normalized.some((item) => item.length === 0)) return undefined
+    return normalized
+  }
+
   const state = Instance.state(
     async () => {
       const enabled: Record<string, boolean> = {}
@@ -46,6 +53,12 @@ export namespace Format {
             delete formatters[name]
             continue
           }
+          const command = normalizeCommand(item.command)
+          if (item.command !== undefined && command === undefined) {
+            log.warn("ignoring invalid formatter command", { name })
+            continue
+          }
+          const { command: _command, ...override } = item
           // Default to the built-in command/extensions so an override that
           // sets only one field (e.g. adding an extension to prettier) does not
           // clobber the other. mergeDeep replaces arrays, so a hard-coded
@@ -55,7 +68,8 @@ export namespace Format {
           const info = mergeDeep(formatters[name] ?? {}, {
             command: formatters[name]?.command ?? [],
             extensions: formatters[name]?.extensions ?? [],
-            ...item,
+            ...override,
+            ...(command ? { command } : {}),
           })
 
           if (info.command.length === 0) continue
