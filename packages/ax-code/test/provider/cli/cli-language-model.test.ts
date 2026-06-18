@@ -403,6 +403,37 @@ describe("CliLanguageModel", () => {
     expect(parts.find((part) => part.type === "finish")).toBeDefined()
   })
 
+  test("doStream preserves raw fallback whitespace", async () => {
+    const model = makeModel({
+      binary: process.execPath,
+      args: ["-e", "process.stdout.write('  indented answer  \\n')"],
+      parser: {
+        parseComplete: () => ({ text: "" }),
+        parseStreamLine: () => null,
+      },
+      promptMode: "stdin",
+    })
+
+    const { stream } = await model.doStream({
+      prompt: [{ role: "user", content: [{ type: "text", text: "hi" }] }],
+    })
+
+    const parts: any[] = []
+    const reader = stream.getReader()
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      parts.push(value)
+    }
+
+    const text = parts
+      .filter((part) => part.type === "text-delta")
+      .map((part) => part.delta)
+      .join("")
+    expect(text).toBe("  indented answer  ")
+    expect(parts.find((part) => part.type === "finish")).toBeDefined()
+  })
+
   test("doStream handles abort signal", async () => {
     const controller = new AbortController()
     const model = makeModel({

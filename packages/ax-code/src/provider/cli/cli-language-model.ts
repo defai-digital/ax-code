@@ -87,6 +87,11 @@ function estimatedUsage(input: string, output: string): LanguageModelV3Usage {
   })
 }
 
+function rawStreamFallbackText(output: string): string {
+  const text = output.replace(/\r?\n$/, "")
+  return text.trim().length > 0 ? text : ""
+}
+
 function readAbortError(signal: AbortSignal): Error {
   const reason = signal.reason
   if (reason instanceof Error) return reason
@@ -409,7 +414,7 @@ export class CliLanguageModel implements LanguageModelV3 {
             }
           }
           if (!emitted) {
-            const fallback = raw.join("").trim()
+            const fallback = rawStreamFallbackText(raw.join(""))
             if (fallback) {
               output.push(fallback)
               controller.enqueue({ type: "text-delta", id: textId, delta: fallback })
