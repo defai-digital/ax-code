@@ -3,6 +3,7 @@ import { createResource, createMemo } from "solid-js"
 import { useDialog } from "@tui/ui/dialog"
 import { useSDK } from "@tui/context/sdk"
 import { createAbortableResourceFetcher } from "../util/abortable-resource"
+import { normalizeDialogSkills } from "./skill-list-data"
 
 export type DialogSkillProps = {
   onSelect: (skill: string) => void
@@ -16,7 +17,7 @@ export function DialogSkill(props: DialogSkillProps) {
   const [skills] = createResource(
     createAbortableResourceFetcher(async (_ready: true, signal) => {
       const result = await sdk.client.app.skills(undefined, { signal })
-      return result.data ?? []
+      return normalizeDialogSkills(result.data)
     }),
   )
 
