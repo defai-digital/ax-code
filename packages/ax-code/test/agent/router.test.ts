@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import path from "path"
-import { route, classifyComplexity } from "../../src/agent/router"
+import { route, classifyComplexity, formatComplexityFailureError } from "../../src/agent/router"
 
 describe("v2-style keyword route", () => {
   test("schema descriptions do not claim specialist auto-routing is removed", async () => {
@@ -140,5 +140,15 @@ describe("classifyComplexity activation gating", () => {
     process.env["AX_CODE_SMART_LLM"] = "true"
     const result = await classifyComplexity("what is 2+2?")
     expect(result.complexity).toBe("low")
+  })
+
+  test("formats unprintable classifier failures safely", () => {
+    const failure = {
+      toString() {
+        throw new Error("cannot print")
+      },
+    }
+
+    expect(formatComplexityFailureError(failure)).toBe("Unknown error")
   })
 })

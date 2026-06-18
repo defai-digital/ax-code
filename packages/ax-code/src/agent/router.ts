@@ -17,6 +17,7 @@ import { generateObject } from "ai"
 import { Log } from "../util/log"
 import { Provider } from "../provider/provider"
 import { Flag } from "../flag/flag"
+import { toErrorMessage } from "../util/error-message"
 import z from "zod"
 
 const log = Log.create({ service: "agent.router" })
@@ -329,9 +330,13 @@ export async function classifyComplexity(message: string): Promise<MessageAnalys
     log.info("complexity-classify", { complexity: result.complexity })
     return { complexity: result.complexity }
   } catch (err) {
-    log.info("complexity-failed", { error: String(err) })
+    log.info("complexity-failed", { error: formatComplexityFailureError(err) })
     return { complexity: null }
   } finally {
     clearTimeout(timer)
   }
+}
+
+export function formatComplexityFailureError(error: unknown): string {
+  return toErrorMessage(error)
 }
