@@ -222,6 +222,46 @@ describe("DiagnosticLog", () => {
     })
   })
 
+  test("does not throw on bigint replay metadata when content logging is enabled", async () => {
+    await using tmp = await tmpdir()
+
+    await DiagnosticLog.configure({
+      enabled: true,
+      dir: tmp.path,
+      includeContent: true,
+      manifest: { component: "test", pid: 655 },
+    })
+
+    expect(() =>
+      DiagnosticLog.record(
+        {
+          type: "tool.result",
+          sessionID: "ses_bigint_raw",
+          tool: "bash",
+          callID: "call_bigint_raw",
+          status: "completed",
+          output: "ok",
+          metadata: { blocks: 12n },
+          durationMs: 1,
+        },
+        { id: "evt_bigint_raw", sequence: 4 },
+      ),
+    ).not.toThrow()
+    await DiagnosticLog.flush()
+
+    const replayEvents = await readJsonLines(path.join(tmp.path, "events.jsonl"))
+    expect(replayEvents[0]).toMatchObject({
+      kind: "replay.event",
+      id: "evt_bigint_raw",
+      eventType: "tool.result",
+      event: {
+        metadata: {
+          blocks: "12",
+        },
+      },
+    })
+  })
+
   test("redacts provider errors for normal logs", () => {
     const error = Object.assign(new Error("provider failed"), {
       body: { apiKey: "secret" },

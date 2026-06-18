@@ -139,7 +139,7 @@ export namespace DiagnosticLog {
       event: current.includeContent ? event : redactReplayEvent(event),
     }
 
-    const line = JSON.stringify(record) + "\n"
+    const line = safeJsonLine(record)
     writeQueue = writeQueue
       .then(() => fs.appendFile(current.eventsPath, line))
       .catch((error) => {
@@ -342,9 +342,33 @@ function redactValue(input: unknown) {
 
 function safeStringify(input: unknown) {
   try {
-    return JSON.stringify(input)
+    return JSON.stringify(input, createJsonReplacer())
   } catch {
     return undefined
+  }
+}
+
+function safeJsonLine(input: unknown) {
+  return (
+    safeStringify(input) ??
+    JSON.stringify({
+      schemaVersion: 1,
+      kind: "diagnostic.serialization_error",
+      time: new Date().toISOString(),
+      pid: process.pid,
+    })
+  ) + "\n"
+}
+
+function createJsonReplacer() {
+  const seen = new WeakSet<object>()
+  return (_key: string, value: unknown) => {
+    if (typeof value === "bigint") return value.toString()
+    if (value && typeof value === "object") {
+      if (seen.has(value)) return "[Circular]"
+      seen.add(value)
+    }
+    return value
   }
 }
 
