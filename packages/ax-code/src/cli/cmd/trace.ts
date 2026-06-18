@@ -44,6 +44,38 @@ export function parseTraceLogEntryJsonLine(line: string): LogEntry | undefined {
   return decodeTraceLogEntryValue(parsed)
 }
 
+function parseDecimalTraceDuration(value: string): number | undefined {
+  if (!/^\d+$/.test(value)) return undefined
+  const duration = Number(value)
+  return Number.isSafeInteger(duration) ? duration : undefined
+}
+
+export function parseTraceTextLogLine(line: string): LogEntry | undefined {
+  const match = line.match(/^(\w+)\s+(\S+)\s+\+(\d+)ms\s+(.*)$/)
+  if (!match) return undefined
+  const [, level, time, , rest] = match
+  const parts = rest.split(" ")
+  const entry: LogEntry = { level, time, service: "", msg: "" }
+  for (const part of parts) {
+    const eq = part.indexOf("=")
+    if (eq > 0) {
+      const key = part.slice(0, eq)
+      const val = part.slice(eq + 1)
+      if (key === "service") entry.service = val
+      else if (key === "command") entry.command = val
+      else if (key === "toolName") entry.toolName = val
+      else if (key === "status") entry.status = val
+      else if (key === "durationMs") entry.durationMs = parseDecimalTraceDuration(val)
+      else if (key === "errorCode") entry.errorCode = val
+      else if (key === "sessionId") entry.sessionId = val
+      else entry[key] = val
+    } else {
+      entry.msg = entry.msg ? entry.msg + " " + part : part
+    }
+  }
+  return entry
+}
+
 export const TraceCommand: CommandModule = {
   command: "trace [sessionID]",
   describe: "analyze execution trace from structured logs",
@@ -234,32 +266,8 @@ export const TraceCommand: CommandModule = {
     } else {
       // Parse text format: "LEVEL YYYY-MM-DDTHH:MM:SS +Nms key=value key=value message"
       entries = lines
-        .map((line) => {
-          const match = line.match(/^(\w+)\s+(\S+)\s+\+(\d+)ms\s+(.*)$/)
-          if (!match) return null
-          const [, level, time, , rest] = match
-          const parts = rest.split(" ")
-          const entry: LogEntry = { level, time, service: "", msg: "" }
-          for (const part of parts) {
-            const eq = part.indexOf("=")
-            if (eq > 0) {
-              const key = part.slice(0, eq)
-              const val = part.slice(eq + 1)
-              if (key === "service") entry.service = val
-              else if (key === "command") entry.command = val
-              else if (key === "toolName") entry.toolName = val
-              else if (key === "status") entry.status = val
-              else if (key === "durationMs") entry.durationMs = parseInt(val, 10)
-              else if (key === "errorCode") entry.errorCode = val
-              else if (key === "sessionId") entry.sessionId = val
-              else entry[key] = val
-            } else {
-              entry.msg = entry.msg ? entry.msg + " " + part : part
-            }
-          }
-          return entry
-        })
-        .filter((e): e is LogEntry => e !== null)
+        .map(parseTraceTextLogLine)
+        .filter((e): e is LogEntry => e !== undefined)
     }
 
     // Apply filters
