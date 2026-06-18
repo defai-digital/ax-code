@@ -46,4 +46,29 @@ describe("tool.batch", () => {
 
     await expect(pending).rejects.toThrow("cancelled")
   })
+
+  test("cleans up parent abort listeners when the tool throws synchronously", async () => {
+    const parent = new AbortController()
+    const originalRemoveEventListener = parent.signal.removeEventListener.bind(parent.signal)
+    let removedAbortListeners = 0
+
+    parent.signal.removeEventListener = ((...args: Parameters<typeof parent.signal.removeEventListener>) => {
+      const [type] = args
+      if (type === "abort") removedAbortListeners++
+      return originalRemoveEventListener(...args)
+    }) as typeof parent.signal.removeEventListener
+
+    await expect(
+      withToolTimeout({
+        tool: "sync-fail",
+        parent: parent.signal,
+        timeoutMs: 1000,
+        run() {
+          throw new Error("boom")
+        },
+      }),
+    ).rejects.toThrow("boom")
+
+    expect(removedAbortListeners).toBe(1)
+  })
 })

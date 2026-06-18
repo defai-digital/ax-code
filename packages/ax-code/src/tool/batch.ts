@@ -52,6 +52,8 @@ export function withToolTimeout<T>(input: {
       input.parent.addEventListener("abort", onParentAbort, { once: true })
     }
 
+    if (settled) return
+
     timer = setTimeout(() => {
       controller.abort(timeoutError)
     }, input.timeoutMs)
@@ -62,7 +64,15 @@ export function withToolTimeout<T>(input: {
       return
     }
 
-    input.run(controller.signal).then(
+    let result: Promise<T>
+    try {
+      result = input.run(controller.signal)
+    } catch (error) {
+      finish(() => reject(asError(error, `Tool '${input.tool}' failed`)))
+      return
+    }
+
+    result.then(
       (value) => finish(() => resolve(value)),
       (error) => finish(() => reject(asError(error, `Tool '${input.tool}' failed`))),
     )
