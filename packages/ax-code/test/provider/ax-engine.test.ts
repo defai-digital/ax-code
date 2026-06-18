@@ -18,6 +18,8 @@ import {
   evaluateDiskStatus,
   evaluateAxEngineCapabilityFromModels,
   evaluatePlatformEligibility,
+  ensureServer,
+  getServerStatus,
   getModelStatus,
   isPlausiblySupportedHost,
   markPrepared,
@@ -187,6 +189,55 @@ describe("ax-engine model cache", () => {
       expect(await fs.readFile(prepareState, "utf8")).toBe(malformed)
     } finally {
       ;(AxEnginePaths as { prepareState: string }).prepareState = originalPrepareState
+    }
+  })
+})
+
+describe("ax-engine server lifecycle", () => {
+  test("reports malformed server state without deleting it", async () => {
+    await using tmp = await tmpdir()
+    const originalServerState = AxEnginePaths.serverState
+    const serverState = path.join(tmp.path, "server.json")
+    const malformed = "{not json"
+    await fs.writeFile(serverState, malformed)
+
+    try {
+      ;(AxEnginePaths as { serverState: string }).serverState = serverState
+      const status = await getServerStatus()
+
+      expect(status.running).toBe(false)
+      expect(status.ready).toBe(false)
+      expect(status.blockers).toContainEqual(expect.stringContaining("failed to read server state"))
+      expect(await fs.readFile(serverState, "utf8")).toBe(malformed)
+    } finally {
+      ;(AxEnginePaths as { serverState: string }).serverState = originalServerState
+    }
+  })
+
+  test("does not start a new server over malformed server state", async () => {
+    await using tmp = await tmpdir()
+    const originalServerState = AxEnginePaths.serverState
+    const originalServerLock = AxEnginePaths.serverLock
+    const serverState = path.join(tmp.path, "server.json")
+    const serverLock = path.join(tmp.path, "server")
+    const malformed = "{not json"
+    await fs.writeFile(serverState, malformed)
+
+    try {
+      ;(AxEnginePaths as { serverState: string; serverLock: string }).serverState = serverState
+      ;(AxEnginePaths as { serverState: string; serverLock: string }).serverLock = serverLock
+      await expect(
+        ensureServer({
+          binaryPath: "/bin/ax-engine",
+          modelID: AX_ENGINE_QWEN3_CODER_NEXT_MODEL_ID,
+          apiModelID: AX_ENGINE_QWEN3_CODER_NEXT_API_MODEL_ID,
+          modelPath: "/models/qwen",
+        }),
+      ).rejects.toThrow("failed to read server state")
+      expect(await fs.readFile(serverState, "utf8")).toBe(malformed)
+    } finally {
+      ;(AxEnginePaths as { serverState: string; serverLock: string }).serverState = originalServerState
+      ;(AxEnginePaths as { serverState: string; serverLock: string }).serverLock = originalServerLock
     }
   })
 })

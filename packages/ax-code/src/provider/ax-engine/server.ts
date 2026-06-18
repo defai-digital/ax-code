@@ -49,11 +49,12 @@ function originFromBaseURL(baseURL: string) {
   return `${url.protocol}//${url.host}`
 }
 
-async function readServerState(): Promise<AxEngineServerState | undefined> {
+async function readServerState(): Promise<{ state?: AxEngineServerState; error?: unknown }> {
   try {
-    return AxEngineServerState.parse(await Filesystem.readJson(AxEnginePaths.serverState))
-  } catch {
-    return undefined
+    return { state: AxEngineServerState.parse(await Filesystem.readJson(AxEnginePaths.serverState)) }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException)?.code === "ENOENT") return {}
+    return { error }
   }
 }
 
@@ -146,7 +147,15 @@ async function loadServerModel(input: {
 }
 
 export async function getServerStatus(): Promise<AxEngineServerRuntimeStatus> {
-  const state = await readServerState()
+  const stateResult = await readServerState()
+  if (stateResult.error) {
+    return {
+      running: false,
+      ready: false,
+      blockers: [`${AX_ENGINE_ERROR.ServerHealthFailed}: failed to read server state`],
+    }
+  }
+  const state = stateResult.state
   if (!state) return { running: false, ready: false, blockers: [] }
   const running = pidLive(state.pid)
   if (!running) {
@@ -166,7 +175,11 @@ export async function getServerStatus(): Promise<AxEngineServerRuntimeStatus> {
 
 export async function ensureServer(options: AxEngineServerOptions): Promise<AxEngineServerState> {
   using _ = await FileLock.acquire(AxEnginePaths.serverLock, { timeoutMs: 30_000, staleMs: 5 * 60_000 })
-  const existing = await readServerState()
+  const existingResult = await readServerState()
+  if (existingResult.error) {
+    throw new Error(`${AX_ENGINE_ERROR.ServerStartFailed}: failed to read server state`)
+  }
+  const existing = existingResult.state
   if (existing && pidLive(existing.pid) && (await isServerReady(existing.baseURL, options.signal))) {
     if (existing.modelID === options.modelID && existing.modelPath === options.modelPath) return existing
     try {
@@ -246,7 +259,11 @@ export async function ensureServer(options: AxEngineServerOptions): Promise<AxEn
 
 export async function stopServer() {
   using _ = await FileLock.acquire(AxEnginePaths.serverLock, { timeoutMs: 10_000, staleMs: 60_000 })
-  const state = await readServerState()
+  const stateResult = await readServerState()
+  if (stateResult.error) {
+    throw new Error(`${AX_ENGINE_ERROR.ServerHealthFailed}: failed to read server state`)
+  }
+  const state = stateResult.state
   if (state && pidLive(state.pid)) {
     try {
       process.kill(state.pid, "SIGTERM")
