@@ -1,4 +1,4 @@
-import { test, expect, mock, beforeEach, afterAll } from "bun:test"
+import { test, expect, mock, beforeEach, afterAll, spyOn } from "bun:test"
 
 // Mock UnauthorizedError to match the SDK's class
 class MockUnauthorizedError extends Error {
@@ -45,10 +45,6 @@ function assertMockPublicUrl(url: string) {
     throw new Error(`mock-ssrf: refusing private address ${hostname}`)
   }
 }
-
-afterAll(() => {
-  mock.restore()
-})
 
 // Mock the transport constructors to simulate OAuth auto-auth on 401
 mock.module("@modelcontextprotocol/sdk/client/streamableHttp.js", () => ({
@@ -154,45 +150,14 @@ mock.module("@modelcontextprotocol/sdk/client/auth.js", () => ({
   UnauthorizedError: MockUnauthorizedError,
 }))
 
-mock.module("../../src/util/ssrf", () => ({
-  Ssrf: {
-    assertPublicUrl: async (url: string) => {
-      assertMockPublicUrl(url)
-    },
-    pinnedFetch: (url: string | URL | Request, init?: RequestInit) => fetch(url, init),
-  },
-}))
-
-mock.module("../../src/mcp/oauth-callback", () => ({
-  McpOAuthCallback: {
-    ensureRunning: async () => {
-      callbackRunning = true
-    },
-    waitForCallback: (oauthState: string, mcpName?: string) =>
-      new Promise<string>((_resolve, reject) => {
-        pendingOauthStates.set(oauthState, { reject })
-        if (mcpName) pendingOauthNames.set(mcpName, oauthState)
-      }),
-    cancelPending: (mcpName: string) => {
-      const oauthState = pendingOauthNames.get(mcpName)
-      if (!oauthState) return
-      const pending = pendingOauthStates.get(oauthState)
-      if (!pending) return
-      pendingOauthStates.delete(oauthState)
-      pendingOauthNames.delete(mcpName)
-      pending.reject(new Error("Authorization cancelled"))
-    },
-    stop: async () => {
-      callbackRunning = false
-      for (const oauthState of [...pendingOauthStates.keys()]) {
-        pendingOauthStates.delete(oauthState)
-      }
-      pendingOauthNames.clear()
-    },
-    isRunning: () => callbackRunning,
-    isPortInUse: async () => callbackRunning,
-  },
-}))
+function resetMockOAuthCallback(error?: Error) {
+  callbackRunning = false
+  for (const [_oauthState, pending] of pendingOauthStates) {
+    pending.reject(error ?? new Error("OAuth callback server stopped"))
+  }
+  pendingOauthStates.clear()
+  pendingOauthNames.clear()
+}
 
 beforeEach(() => {
   transportCalls.length = 0
@@ -200,16 +165,63 @@ beforeEach(() => {
   clientInstances.length = 0
   authenticatedUrls.clear()
   simulateAuthFlow = true
-  pendingOauthStates.clear()
-  pendingOauthNames.clear()
+  resetMockOAuthCallback()
 })
 
 // Import modules after mocking
+const { Ssrf } = await import("../../src/util/ssrf")
+const { McpOAuthCallback } = await import("../../src/mcp/oauth-callback")
 const { MCP } = await import("../../src/mcp/index")
 const { Instance } = await import("../../src/project/instance")
 const { tmpdir } = await import("../fixture/fixture")
 const { Config } = await import("../../src/config/config")
 const { McpTrust } = await import("../../src/mcp/trust")
+
+const assertPublicUrlSpy = spyOn(Ssrf, "assertPublicUrl")
+const pinnedFetchSpy = spyOn(Ssrf, "pinnedFetch")
+const ensureCallbackRunningSpy = spyOn(McpOAuthCallback, "ensureRunning")
+const waitForCallbackSpy = spyOn(McpOAuthCallback, "waitForCallback")
+const cancelPendingSpy = spyOn(McpOAuthCallback, "cancelPending")
+const stopCallbackSpy = spyOn(McpOAuthCallback, "stop")
+const isCallbackRunningSpy = spyOn(McpOAuthCallback, "isRunning")
+const isCallbackPortInUseSpy = spyOn(McpOAuthCallback, "isPortInUse")
+
+beforeEach(() => {
+  assertPublicUrlSpy.mockImplementation(async (url: string) => {
+    assertMockPublicUrl(url)
+  })
+  pinnedFetchSpy.mockImplementation((url: string | URL | Request, init?: RequestInit) => fetch(url, init))
+  ensureCallbackRunningSpy.mockImplementation(async () => {
+    callbackRunning = true
+  })
+  waitForCallbackSpy.mockImplementation(
+    (oauthState: string, mcpName?: string) =>
+      new Promise<string>((_resolve, reject) => {
+        pendingOauthStates.set(oauthState, { reject })
+        if (mcpName) pendingOauthNames.set(mcpName, oauthState)
+      }),
+  )
+  cancelPendingSpy.mockImplementation((mcpName: string) => {
+    const oauthState = pendingOauthNames.get(mcpName)
+    if (!oauthState) return
+    const pending = pendingOauthStates.get(oauthState)
+    if (!pending) return
+    pendingOauthStates.delete(oauthState)
+    pendingOauthNames.delete(mcpName)
+    pending.reject(new Error("Authorization cancelled"))
+  })
+  stopCallbackSpy.mockImplementation(async () => {
+    resetMockOAuthCallback()
+  })
+  isCallbackRunningSpy.mockImplementation(() => callbackRunning)
+  isCallbackPortInUseSpy.mockImplementation(async () => callbackRunning)
+})
+
+afterAll(async () => {
+  resetMockOAuthCallback()
+  mock.restore()
+  await McpOAuthCallback.stop()
+})
 
 async function trustConfiguredMcp(name: string) {
   const entry = await Config.mcpEntry(name)

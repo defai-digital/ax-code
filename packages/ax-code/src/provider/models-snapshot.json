@@ -34786,56 +34786,6 @@
     "name": "SiliconFlow (China)",
     "doc": "https://cloud.siliconflow.com/models",
     "models": {
-      "THUDM/GLM-Z1-9B-0414": {
-        "id": "THUDM/GLM-Z1-9B-0414",
-        "name": "THUDM/GLM-Z1-9B-0414",
-        "family": "glm-z",
-        "attachment": false,
-        "reasoning": true,
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2025-04-18",
-        "last_updated": "2025-11-25",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 131000,
-          "output": 131000
-        }
-      },
-      "THUDM/GLM-Z1-32B-0414": {
-        "id": "THUDM/GLM-Z1-32B-0414",
-        "name": "THUDM/GLM-Z1-32B-0414",
-        "family": "glm-z",
-        "attachment": false,
-        "reasoning": true,
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2025-04-18",
-        "last_updated": "2025-11-25",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 131000,
-          "output": 131000
-        }
-      },
       "baidu/ERNIE-4.5-300B-A47B": {
         "id": "baidu/ERNIE-4.5-300B-A47B",
         "name": "baidu/ERNIE-4.5-300B-A47B",
@@ -36182,7 +36132,12 @@
         "name": "tencent/Hunyuan-A13B-Instruct",
         "family": "hunyuan",
         "attachment": false,
-        "reasoning": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          }
+        ],
         "tool_call": true,
         "structured_output": true,
         "temperature": true,
@@ -36200,31 +36155,6 @@
         "limit": {
           "context": 131000,
           "output": 131000
-        }
-      },
-      "tencent/Hunyuan-MT-7B": {
-        "id": "tencent/Hunyuan-MT-7B",
-        "name": "tencent/Hunyuan-MT-7B",
-        "family": "hunyuan",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2025-09-18",
-        "last_updated": "2025-11-25",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 33000,
-          "output": 33000
         }
       },
       "deepseek-ai/DeepSeek-V4-Pro": {
@@ -60305,6 +60235,7 @@
         "family": "minimax",
         "attachment": false,
         "reasoning": true,
+        "reasoning_options": [],
         "tool_call": true,
         "interleaved": {
           "field": "reasoning_content"
@@ -60365,6 +60296,7 @@
         "family": "minimax",
         "attachment": false,
         "reasoning": true,
+        "reasoning_options": [],
         "tool_call": true,
         "interleaved": {
           "field": "reasoning_content"
@@ -60497,6 +60429,13 @@
         "family": "claude-sonnet",
         "attachment": true,
         "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "budget_tokens",
+            "min": 1024,
+            "max": 63999
+          }
+        ],
         "tool_call": true,
         "temperature": true,
         "knowledge": "2025-03-31",
@@ -60527,6 +60466,21 @@
         "family": "claude-opus",
         "attachment": true,
         "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high"
+            ]
+          },
+          {
+            "type": "budget_tokens",
+            "min": 1024,
+            "max": 63999
+          }
+        ],
         "tool_call": true,
         "temperature": true,
         "knowledge": "2025-03-31",
@@ -60632,6 +60586,11 @@
         "family": "minimax-m3-free",
         "attachment": false,
         "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          }
+        ],
         "tool_call": true,
         "temperature": true,
         "knowledge": "2025-01",
@@ -60766,6 +60725,13 @@
         "family": "claude-sonnet",
         "attachment": true,
         "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "budget_tokens",
+            "min": 1024,
+            "max": 63999
+          }
+        ],
         "tool_call": true,
         "interleaved": true,
         "temperature": true,
@@ -60797,6 +60763,18 @@
         "family": "claude-opus",
         "attachment": true,
         "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          }
+        ],
         "tool_call": true,
         "temperature": false,
         "knowledge": "2026-01-31",
@@ -61004,6 +60982,18 @@
         "family": "claude-opus",
         "attachment": true,
         "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          }
+        ],
         "tool_call": true,
         "temperature": false,
         "release_date": "2026-05-28",
@@ -61192,6 +61182,7 @@
         "family": "minimax",
         "attachment": false,
         "reasoning": true,
+        "reasoning_options": [],
         "tool_call": true,
         "interleaved": {
           "field": "reasoning_content"
@@ -61284,6 +61275,13 @@
         "family": "claude-opus",
         "attachment": true,
         "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "budget_tokens",
+            "min": 1024,
+            "max": 31999
+          }
+        ],
         "tool_call": true,
         "temperature": true,
         "knowledge": "2025-03-31",
@@ -61388,6 +61386,13 @@
         "family": "claude-haiku",
         "attachment": true,
         "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "budget_tokens",
+            "min": 1024,
+            "max": 63999
+          }
+        ],
         "tool_call": true,
         "temperature": true,
         "knowledge": "2025-02-28",
@@ -61482,6 +61487,7 @@
         "family": "minimax-free",
         "attachment": false,
         "reasoning": true,
+        "reasoning_options": [],
         "tool_call": true,
         "temperature": true,
         "knowledge": "2025-01",
@@ -61541,6 +61547,22 @@
         "family": "claude-opus",
         "attachment": true,
         "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high",
+              "max"
+            ]
+          },
+          {
+            "type": "budget_tokens",
+            "min": 1024,
+            "max": 127999
+          }
+        ],
         "tool_call": true,
         "temperature": true,
         "knowledge": "2025-05-31",
@@ -61571,6 +61593,7 @@
         "family": "minimax-free",
         "attachment": false,
         "reasoning": true,
+        "reasoning_options": [],
         "tool_call": true,
         "temperature": true,
         "knowledge": "2025-01",
@@ -61663,6 +61686,22 @@
         "family": "claude-sonnet",
         "attachment": true,
         "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high",
+              "max"
+            ]
+          },
+          {
+            "type": "budget_tokens",
+            "min": 1024,
+            "max": 63999
+          }
+        ],
         "tool_call": true,
         "interleaved": true,
         "temperature": true,
@@ -67403,56 +67442,6 @@
     "name": "SiliconFlow",
     "doc": "https://cloud.siliconflow.com/models",
     "models": {
-      "THUDM/GLM-Z1-32B-0414": {
-        "id": "THUDM/GLM-Z1-32B-0414",
-        "name": "THUDM/GLM-Z1-32B-0414",
-        "family": "glm-z",
-        "attachment": false,
-        "reasoning": true,
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2025-04-18",
-        "last_updated": "2025-11-25",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 131000,
-          "output": 131000
-        }
-      },
-      "THUDM/GLM-Z1-9B-0414": {
-        "id": "THUDM/GLM-Z1-9B-0414",
-        "name": "THUDM/GLM-Z1-9B-0414",
-        "family": "glm-z",
-        "attachment": false,
-        "reasoning": true,
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2025-04-18",
-        "last_updated": "2025-11-25",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 131000,
-          "output": 131000
-        }
-      },
       "moonshotai/Kimi-K2.6": {
         "id": "moonshotai/Kimi-K2.6",
         "name": "moonshotai/Kimi-K2.6",
@@ -68530,17 +68519,23 @@
           "output": 8000
         }
       },
-      "tencent/Hunyuan-MT-7B": {
-        "id": "tencent/Hunyuan-MT-7B",
-        "name": "tencent/Hunyuan-MT-7B",
-        "family": "hunyuan",
+      "tencent/Hy3-preview": {
+        "id": "tencent/Hy3-preview",
+        "name": "Hy3 preview",
+        "family": "Hy",
         "attachment": false,
-        "reasoning": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "budget_tokens",
+            "min": 128,
+            "max": 32768
+          }
+        ],
         "tool_call": true,
-        "structured_output": true,
         "temperature": true,
-        "release_date": "2025-09-18",
-        "last_updated": "2025-11-25",
+        "release_date": "2026-04-20",
+        "last_updated": "2026-04-20",
         "modalities": {
           "input": [
             "text"
@@ -68551,8 +68546,8 @@
         },
         "open_weights": false,
         "limit": {
-          "context": 33000,
-          "output": 33000
+          "context": 262144,
+          "output": 262144
         }
       },
       "tencent/Hunyuan-A13B-Instruct": {
@@ -68560,7 +68555,17 @@
         "name": "tencent/Hunyuan-A13B-Instruct",
         "family": "hunyuan",
         "attachment": false,
-        "reasoning": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          },
+          {
+            "type": "budget_tokens",
+            "min": 128,
+            "max": 32768
+          }
+        ],
         "tool_call": true,
         "structured_output": true,
         "temperature": true,
@@ -99604,6 +99609,16 @@
         "name": "Grok 4.3",
         "attachment": true,
         "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        ],
         "tool_call": true,
         "structured_output": true,
         "release_date": "2026-04-30",
@@ -99629,6 +99644,16 @@
         "name": "Grok Build 0.1",
         "attachment": true,
         "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        ],
         "tool_call": true,
         "structured_output": true,
         "release_date": "2026-05-20",
