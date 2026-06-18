@@ -688,6 +688,8 @@ export namespace MessageV2 {
     const result: UIMessage[] = []
     const toolNames = new Set<string>()
 
+    const isDataUrl = (url: string) => /^data:/i.test(url)
+
     const toModelOutput = (opts: { toolCallId: string; input: unknown; output: unknown } | unknown) => {
       // AI SDK v6 passes { toolCallId, input, output }, v5 passed output directly
       const output = isRecord(opts) && "output" in opts ? opts.output : opts
@@ -705,7 +707,7 @@ export namespace MessageV2 {
           attachments?: Array<{ mime: string; url: string }>
         }
         const attachments = (outputObject.attachments ?? []).filter((attachment) => {
-          return attachment.url.startsWith("data:") && attachment.url.includes(",")
+          return isDataUrl(attachment.url) && attachment.url.includes(",")
         })
 
         return {

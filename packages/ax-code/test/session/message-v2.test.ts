@@ -50,6 +50,15 @@ const model: Provider.Model = {
   release_date: "2026-01-01",
 }
 
+const mediaToolResultModel: Provider.Model = {
+  ...model,
+  api: {
+    ...model.api,
+    id: "gemini-3-pro",
+    npm: "@ai-sdk/google",
+  },
+}
+
 function userInfo(id: string): MessageV2.User {
   return {
     id,
@@ -367,6 +376,82 @@ describe("session.message-v2.toModelMessage", () => {
         content: [
           { type: "text", text: "Attached image(s) from tool result:" },
           { type: "file", data: "data:image/png;base64,Zm9v", filename: undefined, mediaType: "image/png" },
+        ],
+      },
+    ])
+  })
+
+  test("keeps tool-result data attachments case-insensitively for media-capable providers", async () => {
+    const userID = "m-user"
+    const assistantID = "m-assistant"
+
+    const input: MessageV2.WithParts[] = [
+      {
+        info: userInfo(userID),
+        parts: [{ ...basePart(userID, "u1"), type: "text", text: "run tool" }] as MessageV2.Part[],
+      },
+      {
+        info: assistantInfo(assistantID, userID),
+        parts: [
+          {
+            ...basePart(assistantID, "a2"),
+            type: "tool",
+            callID: "call-1",
+            tool: "bash",
+            state: {
+              status: "completed",
+              input: { cmd: "capture" },
+              output: "ok",
+              title: "Bash",
+              metadata: {},
+              time: { start: 0, end: 1 },
+              attachments: [
+                {
+                  ...basePart(assistantID, "file-1"),
+                  type: "file",
+                  mime: "image/png",
+                  filename: "attachment.png",
+                  url: "DATA:image/png;base64,Zm9v",
+                },
+              ],
+            },
+          },
+        ] as MessageV2.Part[],
+      },
+    ]
+
+    expect(await MessageV2.toModelMessages(input, mediaToolResultModel)).toStrictEqual([
+      {
+        role: "user",
+        content: [{ type: "text", text: "run tool" }],
+      },
+      {
+        role: "assistant",
+        content: [
+          {
+            type: "tool-call",
+            toolCallId: "call-1",
+            toolName: "bash",
+            input: { cmd: "capture" },
+            providerExecuted: undefined,
+          },
+        ],
+      },
+      {
+        role: "tool",
+        content: [
+          {
+            type: "tool-result",
+            toolCallId: "call-1",
+            toolName: "bash",
+            output: {
+              type: "content",
+              value: [
+                { type: "text", text: "ok" },
+                { type: "media", mediaType: "image/png", data: "Zm9v" },
+              ],
+            },
+          },
         ],
       },
     ])
