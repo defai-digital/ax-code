@@ -1118,6 +1118,34 @@ describe("tool.bash browser-open interception", () => {
     })
   })
 
+  test("does NOT intercept open targeting loopback-looking remote hostnames", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const bash = await BashTool.init()
+        const attempted: string[] = []
+        const trackCtx = {
+          ...ctx,
+          ask: async (req?: PermissionRequest) => {
+            attempted.push(...(req?.patterns ?? []))
+            throw new Error("stop after permission")
+          },
+        }
+
+        for (const command of ["open http://127.0.0.1.evil.com", "open http://localhost.evil.com"]) {
+          try {
+            await bash.execute({ command, description: "Open remote site" }, trackCtx)
+          } catch {
+            // permission throw is expected
+          }
+        }
+
+        expect(attempted).toEqual(["open http://127.0.0.1.evil.com", "open http://localhost.evil.com"])
+      },
+    })
+  })
+
   test("does NOT intercept open targeting a remote URL with .html extension", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({

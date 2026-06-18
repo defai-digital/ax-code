@@ -45,10 +45,9 @@ const DEFAULT_TIMEOUT = Flag.AX_CODE_EXPERIMENTAL_BASH_DEFAULT_TIMEOUT_MS || 2 *
 // Browser-launcher command names on macOS, Linux, Windows.
 const BROWSER_OPEN_RE = /^(open|xdg-open|start|sensible-browser)\s+/
 
-// Matches local HTML file paths OR localhost/127.0.0.1 URLs.
-// The first alternative uses a negative lookahead (?!https?://) to prevent
-// matching remote URLs that happen to end in .html (e.g. https://example.com/page.html).
-const LOCAL_HTML_TARGET_RE = /(?:^(?!https?:\/\/).*\.html?(?:\s*$|#|\?))|(?:^https?:\/\/(?:localhost|127\.0\.0\.1))/i
+// Matches local HTML file paths. The negative lookahead prevents matching
+// remote URLs that happen to end in .html (e.g. https://example.com/page.html).
+const LOCAL_HTML_PATH_RE = /^(?!https?:\/\/).*\.html?(?:\s*$|#|\?)/i
 
 // Patterns that identify intentional (non-development) browser opens.
 // These are allowed through even when targeting localhost/local files.
@@ -62,9 +61,19 @@ const BROWSER_INTENT_PASSTHROUGH_RE = /(?:callback|oauth|auth|token|dre-graph|mc
 function isBrowserOpenToLocal(command: string): string | null {
   if (!BROWSER_OPEN_RE.test(command)) return null
   const target = command.replace(BROWSER_OPEN_RE, "").trim()
-  if (!LOCAL_HTML_TARGET_RE.test(target)) return null
+  if (!LOCAL_HTML_PATH_RE.test(target) && !isLocalBrowserUrl(target)) return null
   if (BROWSER_INTENT_PASSTHROUGH_RE.test(target)) return null
   return target
+}
+
+function isLocalBrowserUrl(target: string) {
+  try {
+    const url = new URL(stripShellQuotes(target))
+    if (url.protocol !== "http:" && url.protocol !== "https:") return false
+    return url.hostname === "localhost" || url.hostname === "127.0.0.1" || url.hostname === "[::1]"
+  } catch {
+    return false
+  }
 }
 
 const log = Log.create({ service: "bash-tool" })
