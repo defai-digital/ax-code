@@ -383,6 +383,29 @@ describe("server route validation", () => {
     })
   })
 
+  test("experimental session list treats bare numeric query keys as omitted", async () => {
+    await Instance.provide({
+      directory: root,
+      fn: async () => {
+        let globalListInput: Parameters<typeof Session.listGlobal>[0]
+        const globalListSpy = spyOn(Session, "listGlobal").mockImplementation(function* (input) {
+          globalListInput = input
+        } as typeof Session.listGlobal)
+
+        try {
+          const res = await Server.Default().request("/experimental/session?start&cursor&limit")
+
+          expect(res.status).toBe(200)
+          expect(globalListInput?.start).toBeUndefined()
+          expect(globalListInput?.cursor).toBeUndefined()
+          expect(globalListInput?.limit).toBe(101)
+        } finally {
+          globalListSpy.mockRestore()
+        }
+      },
+    })
+  })
+
   test("session list query booleans parse explicit false values", async () => {
     await Instance.provide({
       directory: root,
