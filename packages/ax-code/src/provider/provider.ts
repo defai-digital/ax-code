@@ -181,10 +181,14 @@ export namespace Provider {
     const cleanup = () => {
       if (signal) signal.removeEventListener("abort", onAbort)
     }
-    const abortReader = (reason?: unknown) => {
+    const finish = () => {
       if (settled) return
       settled = true
       cleanup()
+    }
+    const abortReader = (reason?: unknown) => {
+      if (settled) return
+      finish()
       ctl.abort(reason)
       void reader.cancel(reason).catch(() => {})
     }
@@ -213,14 +217,14 @@ export namespace Provider {
             },
             (err) => {
               clearTimeout(id)
+              finish()
               reject(err)
             },
           )
         })
 
         if (part.done) {
-          settled = true
-          cleanup()
+          finish()
           ctrl.close()
           return
         }
@@ -228,7 +232,6 @@ export namespace Provider {
         ctrl.enqueue(part.value)
       },
       async cancel(reason) {
-        cleanup()
         abortReader(reason)
       },
     })

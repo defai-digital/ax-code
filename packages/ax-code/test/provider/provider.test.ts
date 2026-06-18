@@ -274,6 +274,33 @@ test("wrapSSE removes the outer abort listener when the chunk timeout fires", as
   expect(removed).toBe(1)
 })
 
+test("wrapSSE removes the outer abort listener when the underlying reader fails", async () => {
+  let removed = 0
+  const body = new ReadableStream<Uint8Array>({
+    pull() {
+      throw new Error("upstream stream failed")
+    },
+  })
+  const response = new Response(body, {
+    headers: {
+      "content-type": "text/event-stream",
+    },
+  })
+  const chunkAbort = new AbortController()
+  const outerAbort = new AbortController()
+  const originalRemove = outerAbort.signal.removeEventListener.bind(outerAbort.signal)
+  outerAbort.signal.removeEventListener = ((...args: Parameters<AbortSignal["removeEventListener"]>) => {
+    if (args[0] === "abort") removed += 1
+    return originalRemove(...args)
+  }) as AbortSignal["removeEventListener"]
+
+  const wrapped = Provider.wrapSSE(response, 60_000, chunkAbort, outerAbort.signal)
+  await expect(wrapped.body!.getReader().read()).rejects.toThrow("upstream stream failed")
+
+  expect(chunkAbort.signal.aborted).toBe(false)
+  expect(removed).toBe(1)
+})
+
 test("provider loaded from config with apiKey option", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
