@@ -142,7 +142,7 @@ function headersToRecord(headers: RequestInit["headers"] | undefined): Record<st
   if (!headers) return {}
   if (headers instanceof Headers) return Object.fromEntries(headers.entries())
   if (Array.isArray(headers)) return Object.fromEntries(headers)
-  return headers
+  return { ...headers }
 }
 
 function headlessHeaders(input: { headers?: RequestInit["headers"]; directory?: string }): Record<string, string> {

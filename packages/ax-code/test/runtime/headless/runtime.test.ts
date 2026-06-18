@@ -25,9 +25,11 @@ describe("headless runtime", () => {
 
   test("command posts include directory headers", async () => {
     let request: Request | undefined
+    const headers = { Authorization: "Basic token" }
     const runtime = createHeadlessAgentRuntime({
       baseUrl: "http://localhost",
       directory: "/tmp/測試",
+      headers,
       fetch: (async (input: RequestInfo | URL, init?: RequestInit) => {
         request = input instanceof Request ? input : new Request(input, init)
         return new Response("", { status: 202 })
@@ -41,5 +43,7 @@ describe("headless runtime", () => {
 
     expect(request?.headers.get("x-ax-code-directory")).toBe("%2Ftmp%2F%E6%B8%AC%E8%A9%A6")
     expect(request?.headers.get("x-opencode-directory")).toBe("%2Ftmp%2F%E6%B8%AC%E8%A9%A6")
+    expect(request?.headers.get("authorization")).toBe("Basic token")
+    expect(headers).toEqual({ Authorization: "Basic token" })
   })
 })
