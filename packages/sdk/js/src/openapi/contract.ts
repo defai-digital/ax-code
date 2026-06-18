@@ -1,5 +1,6 @@
 export const REQUIRED_OPENAPI_PATHS = [
   "/global/health",
+  "/global/capabilities",
   "/event",
   "/session",
   "/session/{sessionID}",
@@ -7,6 +8,13 @@ export const REQUIRED_OPENAPI_PATHS = [
   "/permission",
   "/permission/{requestID}/reply",
   "/provider",
+  "/provider/ax-engine/status",
+  "/super-long/status",
+  "/capability",
+  "/skill",
+  "/skill/validate",
+  "/skill/doctor",
+  "/skill/test-trigger",
 ] as const
 
 const HTTP_METHODS = ["get", "put", "post", "delete", "patch", "options", "head"] as const

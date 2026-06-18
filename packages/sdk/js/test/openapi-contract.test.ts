@@ -6,6 +6,10 @@ import { REQUIRED_OPENAPI_PATHS, parseOpenApiSnapshot, validateOpenApiSnapshot }
 const openApiSnapshotPath = fileURLToPath(new URL("../../openapi.json", import.meta.url))
 const generatedSdkPath = fileURLToPath(new URL("../src/gen/sdk.gen.ts", import.meta.url))
 
+function snapshotPaths(snapshot: unknown) {
+  return (snapshot as { paths?: Record<string, unknown> }).paths ?? {}
+}
+
 function generatedMethodSource(generated: string, className: string, methodName: string) {
   const classStart = generated.indexOf(`export class ${className} extends HeyApiClient`)
   expect(classStart).toBeGreaterThanOrEqual(0)
@@ -24,11 +28,27 @@ describe("OpenAPI snapshot contract", () => {
   })
 
   test("guards the cross-language route set", () => {
+    const snapshot = parseOpenApiSnapshot(readFileSync(openApiSnapshotPath, "utf8"))
+    const paths = snapshotPaths(snapshot)
+
     expect(REQUIRED_OPENAPI_PATHS).toContain("/global/health")
+    expect(REQUIRED_OPENAPI_PATHS).toContain("/global/capabilities")
     expect(REQUIRED_OPENAPI_PATHS).toContain("/event")
     expect(REQUIRED_OPENAPI_PATHS).toContain("/session")
     expect(REQUIRED_OPENAPI_PATHS).toContain("/session/{sessionID}/prompt_async")
     expect(REQUIRED_OPENAPI_PATHS).toContain("/permission/{requestID}/reply")
+    expect(REQUIRED_OPENAPI_PATHS).toContain("/provider/ax-engine/status")
+    expect(REQUIRED_OPENAPI_PATHS).toContain("/super-long/status")
+    expect(REQUIRED_OPENAPI_PATHS).toContain("/capability")
+    expect(REQUIRED_OPENAPI_PATHS).toContain("/skill")
+    expect(REQUIRED_OPENAPI_PATHS).toContain("/skill/validate")
+    expect(REQUIRED_OPENAPI_PATHS).toContain("/skill/doctor")
+    expect(REQUIRED_OPENAPI_PATHS).toContain("/skill/test-trigger")
+
+    for (const path of REQUIRED_OPENAPI_PATHS) {
+      expect(paths).toHaveProperty(path)
+    }
+    expect(paths).not.toHaveProperty("/session/{sessionID}/share")
   })
 
   test("keeps optional numeric query parameters optional in the generated SDK", () => {
