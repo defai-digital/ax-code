@@ -16,6 +16,7 @@ import { useToast } from "../ui/toast"
 import { createAbortableResourceFetcher } from "../util/abortable-resource"
 import { Log } from "@/util/log"
 import type { Session } from "@ax-code/sdk/v2"
+import { normalizeDialogSessions } from "./session-list-data"
 
 const log = Log.create({ service: "tui.dialog-session-list" })
 
@@ -39,7 +40,7 @@ export function DialogSessionList() {
       if (!query) return undefined
       try {
         const result = await sdk.client.session.list({ search: query, limit: 30 }, { signal })
-        return result.data ?? []
+        return normalizeDialogSessions(result.data)
       } catch (error) {
         log.warn("session list search failed", { error, query })
         toast.show({

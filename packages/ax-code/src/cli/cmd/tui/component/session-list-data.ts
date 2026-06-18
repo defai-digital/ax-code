@@ -11,6 +11,6 @@ function isRenderableSession(input: unknown): input is Session {
   )
 }
 
-export function normalizeWorkspaceDialogSessions(data: unknown): Session[] {
+export function normalizeDialogSessions(data: unknown): Session[] {
   return Array.isArray(data) ? data.filter(isRenderableSession) : []
 }

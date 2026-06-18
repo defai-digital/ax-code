@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { normalizeWorkspaceDialogSessions } from "../../../src/cli/cmd/tui/component/workspace/session-list-data"
+import { normalizeDialogSessions } from "../../../src/cli/cmd/tui/component/session-list-data"
 
 function session(id: string) {
   return {
@@ -16,16 +16,16 @@ function session(id: string) {
   }
 }
 
-describe("workspace session list data", () => {
+describe("session list data", () => {
   test("normalizes missing or malformed session list payloads to an empty list", () => {
-    expect(normalizeWorkspaceDialogSessions(undefined)).toEqual([])
-    expect(normalizeWorkspaceDialogSessions(null)).toEqual([])
-    expect(normalizeWorkspaceDialogSessions({ id: "ses_1" })).toEqual([])
+    expect(normalizeDialogSessions(undefined)).toEqual([])
+    expect(normalizeDialogSessions(null)).toEqual([])
+    expect(normalizeDialogSessions({ id: "ses_1" })).toEqual([])
   })
 
   test("drops session items that cannot be rendered safely", () => {
     expect(
-      normalizeWorkspaceDialogSessions([
+      normalizeDialogSessions([
         session("ses_1"),
         null,
         { id: "missing-title", time: { updated: 2 } },

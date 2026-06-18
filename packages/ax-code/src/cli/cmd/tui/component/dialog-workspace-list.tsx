@@ -11,7 +11,7 @@ import { DialogSessionList } from "./workspace/dialog-session-list"
 import { createOpencodeClient } from "@ax-code/sdk/v2"
 import { setTimeout as sleep } from "node:timers/promises"
 import path from "path"
-import { normalizeWorkspaceDialogSessions } from "./workspace/session-list-data"
+import { normalizeDialogSessions } from "./session-list-data"
 
 async function openWorkspace(input: {
   dialog: ReturnType<typeof useDialog>
@@ -47,7 +47,7 @@ async function openWorkspace(input: {
     })
     return
   }
-  const session = normalizeWorkspaceDialogSessions(listed?.data)[0]
+  const session = normalizeDialogSessions(listed?.data)[0]
   if (session?.id) {
     cacheSession(session)
     input.route.navigate({
@@ -225,7 +225,7 @@ export function DialogWorkspaceList() {
       })
       return
     }
-    if (normalizeWorkspaceDialogSessions(listed?.data).length) {
+    if (normalizeDialogSessions(listed?.data).length) {
       dialog.replace(() => <DialogSessionList workspaceID={workspaceID} />)
       return
     }
@@ -266,7 +266,7 @@ export function DialogWorkspaceList() {
           directory: workspace,
         })
         const result = await client.session.list({ roots: true }).catch(() => undefined)
-        return [workspace, result ? normalizeWorkspaceDialogSessions(result.data).length : null] as const
+        return [workspace, result ? normalizeDialogSessions(result.data).length : null] as const
       }),
     ).then((entries) => {
       if (run !== next) return
