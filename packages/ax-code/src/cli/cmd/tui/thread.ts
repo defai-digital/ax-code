@@ -25,6 +25,7 @@ import { spawn } from "node:child_process"
 import { flushTuiStdout } from "./terminal-cleanup"
 import { parseIntegerEnv } from "./util/env"
 import { parseTuiJsonPayload } from "./util/json"
+import { hasExplicitNetworkBindFlag } from "./util/network-flags"
 import { readOptionalJsonState } from "./util/optional-json-state"
 import { toErrorMessage } from "@/util/error-message"
 import { Shell } from "@/shell/shell"
@@ -664,9 +665,7 @@ export const TuiThreadCommand = cmd({
 
       const network = await resolveNetworkOptions(args)
       const external =
-        process.argv.includes("--port") ||
-        process.argv.includes("--hostname") ||
-        process.argv.includes("--mdns") ||
+        hasExplicitNetworkBindFlag() ||
         network.mdns ||
         network.port !== 0 ||
         network.hostname !== "127.0.0.1"
