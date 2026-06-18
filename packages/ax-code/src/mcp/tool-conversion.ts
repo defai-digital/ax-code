@@ -22,6 +22,14 @@ export function mcpToolPermissionKey(server: string, tool: string): string {
   return `${sanitizeMcpName(server)}_${sanitizeMcpName(tool)}`
 }
 
+export function mcpSchemaByteLength(schema: JSONSchema7): number {
+  try {
+    return Buffer.byteLength(JSON.stringify(schema), "utf8")
+  } catch (error) {
+    throw new Error(`MCP tool schema is not JSON-serializable: ${toErrorMessage(error)}`)
+  }
+}
+
 export async function convertMcpTool(mcpTool: MCPToolDef, client: Client, timeout?: number): Promise<ConvertedMcpTool> {
   const inputSchema = mcpTool.inputSchema
 
@@ -32,7 +40,7 @@ export async function convertMcpTool(mcpTool: MCPToolDef, client: Client, timeou
     properties: (inputSchema.properties ?? {}) as JSONSchema7["properties"],
     additionalProperties: (inputSchema as JSONSchema7).additionalProperties ?? false,
   }
-  const schemaBytes = Buffer.byteLength(JSON.stringify(schema), "utf8")
+  const schemaBytes = mcpSchemaByteLength(schema)
   if (schemaBytes > MAX_TOOL_SCHEMA_BYTES) {
     throw new Error(`MCP tool schema too large: ${mcpTool.name}`)
   }
