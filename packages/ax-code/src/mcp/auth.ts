@@ -33,6 +33,17 @@ export namespace McpAuth {
 
   const filepath = path.join(Global.Path.data, "mcp-auth.json")
 
+  function isEnoent(error: unknown): error is { code: "ENOENT" } {
+    return typeof error === "object" && error !== null && (error as { code?: unknown }).code === "ENOENT"
+  }
+
+  async function readRawFile(): Promise<Record<string, unknown>> {
+    return Filesystem.readJson<Record<string, unknown>>(filepath).catch((error) => {
+      if (isEnoent(error)) return {}
+      throw error
+    })
+  }
+
   export async function withLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
     using _lock = await Lock.write(key)
     return await fn()
@@ -89,19 +100,17 @@ export namespace McpAuth {
   }
 
   export async function all(): Promise<Record<string, Entry>> {
-    const raw = await Filesystem.readJson<Record<string, Record<string, unknown>>>(filepath).catch(() => ({}))
+    const raw = await readRawFile()
     const result: Record<string, Entry> = {}
     for (const [key, val] of Object.entries(raw)) {
-      result[key] = decryptEntry(val)
+      result[key] = decryptEntry(val as Record<string, unknown>)
     }
     return result
   }
 
   async function withFileEntryLock<T>(mcpName: string, fn: (entry: Entry) => Promise<T> | T): Promise<T> {
     return withLock(filepath, async () => {
-      const raw: Record<string, unknown> = await Filesystem.readJson<Record<string, unknown>>(filepath).catch(
-        () => ({}),
-      )
+      const raw = await readRawFile()
       const entry = raw[mcpName] ? decryptEntry(raw[mcpName] as Record<string, unknown>) : ({} as Entry)
       const result = await fn(entry)
       raw[mcpName] = encryptEntry(entry)
@@ -118,9 +127,7 @@ export namespace McpAuth {
   // drop an entry by last-write-wins.
   export async function set(mcpName: string, entry: Entry, serverUrl?: string): Promise<void> {
     return withLock(filepath, async () => {
-      const raw: Record<string, unknown> = await Filesystem.readJson<Record<string, unknown>>(filepath).catch(
-        () => ({}),
-      )
+      const raw = await readRawFile()
       if (serverUrl) {
         entry.serverUrl = serverUrl
       }
@@ -131,9 +138,7 @@ export namespace McpAuth {
 
   export async function remove(mcpName: string): Promise<void> {
     return withLock(filepath, async () => {
-      const raw: Record<string, unknown> = await Filesystem.readJson<Record<string, unknown>>(filepath).catch(
-        () => ({}),
-      )
+      const raw = await readRawFile()
       delete raw[mcpName]
       await Filesystem.writeJson(filepath, raw, 0o600)
     })
