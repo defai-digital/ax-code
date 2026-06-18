@@ -36,6 +36,9 @@ export function requestDirectory(c: Context): string | Response {
     }
   })()
   if (decoded === process.cwd()) return Filesystem.resolve(decoded)
+  if (decoded.includes("\0")) {
+    return invalidRequest(c, { message: "Directory contains null byte", details: { resource: "directory" } })
+  }
   if (!path.isAbsolute(decoded)) return invalidRequest(c, { message: "Directory must be absolute" })
   const directory = Filesystem.resolve(decoded)
   const realDirectory = (() => {

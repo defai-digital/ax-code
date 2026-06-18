@@ -125,6 +125,32 @@ test("path route still decodes encoded directory headers", async () => {
   expect(body.directory).toBe(target)
 })
 
+test("path route rejects null byte query directories with 400 instead of 500", async () => {
+  await using tmp = await tmpdir()
+  const response = await Server.Default().request(`/path?directory=${encodeURIComponent(path.join(tmp.path, "\0bad"))}`)
+
+  expect(response.status).toBe(400)
+  expect(await response.json()).toMatchObject({
+    name: "InvalidRequestError",
+    details: { resource: "directory" },
+  })
+})
+
+test("path route rejects null byte header directories with 400 instead of 500", async () => {
+  await using tmp = await tmpdir()
+  const response = await Server.Default().request("/path", {
+    headers: {
+      "x-opencode-directory": encodeURIComponent(path.join(tmp.path, "\0bad")),
+    },
+  })
+
+  expect(response.status).toBe(400)
+  expect(await response.json()).toMatchObject({
+    name: "InvalidRequestError",
+    details: { resource: "directory" },
+  })
+})
+
 test("runtime status routes stay mounted at their public paths", async () => {
   await using tmp = await tmpdir({ git: true })
   const app = Server.Default()
