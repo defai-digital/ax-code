@@ -33,6 +33,26 @@ function attachmentHint(refs: CliAttachmentRef[]): string {
   ].join("\n")
 }
 
+function stringifyPromptValue(value: unknown): string {
+  const seen = new WeakSet<object>()
+  try {
+    return (
+      JSON.stringify(value, (_key, next) => {
+        if (typeof next === "bigint") return next.toString()
+        if (typeof next === "object" && next !== null) {
+          if (seen.has(next)) return "[Circular]"
+          seen.add(next)
+        }
+        return next
+      }) ?? "null"
+    )
+  } catch (error) {
+    return JSON.stringify({
+      serialization_error: error instanceof Error ? error.message : String(error),
+    })
+  }
+}
+
 export function promptToText(prompt: LanguageModelV3Prompt, options: CliPromptOptions = {}): string {
   const parts: string[] = []
 
@@ -53,13 +73,13 @@ export function promptToText(prompt: LanguageModelV3Prompt, options: CliPromptOp
       for (const p of message.content) {
         if (p.type === "text") chunks.push(p.text)
         else if (p.type === "reasoning") chunks.push(p.text)
-        else if (p.type === "tool-call") chunks.push(`[Tool: ${p.toolName}(${JSON.stringify(p.input)})]`)
+        else if (p.type === "tool-call") chunks.push(`[Tool: ${p.toolName}(${stringifyPromptValue(p.input)})]`)
       }
       if (chunks.length) parts.push(`[Assistant]: ${chunks.join("\n")}`)
     } else if (message.role === "tool") {
       const text = message.content
         .filter((p): p is Extract<typeof p, { type: "tool-result" }> => p.type === "tool-result")
-        .map((p) => `[Tool Result: ${p.toolName}]: ${JSON.stringify(p.output)}`)
+        .map((p) => `[Tool Result: ${p.toolName}]: ${stringifyPromptValue(p.output)}`)
         .join("\n")
       if (text) parts.push(text)
     }

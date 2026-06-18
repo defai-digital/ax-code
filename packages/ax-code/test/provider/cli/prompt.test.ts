@@ -100,6 +100,19 @@ describe("promptToText", () => {
     expect(promptToText(prompt)).toBe('[Assistant]: [Tool: bash({"cmd":"ls"})]')
   })
 
+  test("formats assistant tool calls with non-JSON-native input values", () => {
+    const input: Record<string, unknown> = { count: 1n }
+    input.self = input
+    const prompt: LanguageModelV3Prompt = [
+      {
+        role: "assistant",
+        content: [{ type: "tool-call", toolCallId: "1", toolName: "debug", input }],
+      },
+    ] as unknown as LanguageModelV3Prompt
+
+    expect(promptToText(prompt)).toBe('[Assistant]: [Tool: debug({"count":"1","self":"[Circular]"})]')
+  })
+
   test("formats tool results", () => {
     const prompt: LanguageModelV3Prompt = [
       {
@@ -115,6 +128,28 @@ describe("promptToText", () => {
       },
     ]
     expect(promptToText(prompt)).toBe('[Tool Result: bash]: {"type":"json","value":{"files":["a.ts"]}}')
+  })
+
+  test("formats tool results with non-JSON-native output values", () => {
+    const value: Record<string, unknown> = { count: 1n }
+    value.self = value
+    const prompt: LanguageModelV3Prompt = [
+      {
+        role: "tool",
+        content: [
+          {
+            type: "tool-result",
+            toolCallId: "1",
+            toolName: "debug",
+            output: { type: "json", value },
+          },
+        ],
+      },
+    ] as unknown as LanguageModelV3Prompt
+
+    expect(promptToText(prompt)).toBe(
+      '[Tool Result: debug]: {"type":"json","value":{"count":"1","self":"[Circular]"}}',
+    )
   })
 
   test("skips tool-approval-response parts in tool messages", () => {
