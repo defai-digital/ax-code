@@ -19,6 +19,36 @@ describe("dre graph quality readiness", () => {
     }
   }
 
+  test("uses canonical request directory for dre graph session index", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const link = path.join(tmp.path, "..", `${path.basename(tmp.path)}-dre-link`)
+
+    await fsp.symlink(tmp.path, link, process.platform === "win32" ? "junction" : undefined)
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ title: "symlink-dre-session" })
+        const app = Server.Default()
+
+        try {
+          const directory = encodeURIComponent(link)
+          const response = await app.request(`/dre-graph?directory=${directory}`)
+          expect(response.status).toBe(200)
+          expect(await response.text()).toContain("symlink-dre-session")
+
+          const fingerprint = await app.request(`/dre-graph/fingerprint?directory=${directory}`)
+          expect(fingerprint.status).toBe(200)
+          const body = (await fingerprint.json()) as Array<{ id: string }>
+          expect(body.some((item) => item.id === session.id)).toBe(true)
+        } finally {
+          await Session.remove(session.id)
+          await fsp.unlink(link).catch(() => {})
+        }
+      },
+    })
+  })
+
   test("keeps quality readiness opt-in for dre graph session pages", async () => {
     await using tmp = await tmpdir({ git: true })
 

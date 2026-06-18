@@ -26,6 +26,7 @@ import { lazy } from "../../util/lazy"
 import { SESSION_ID_PARAM, withSessionID } from "./route-params"
 import { requireCurrentProjectSession } from "./session-lookup"
 import { QueryBoolean } from "./query"
+import { Instance } from "@/project/instance"
 
 const log = Log.create({ service: "server.dre-graph" })
 
@@ -60,8 +61,8 @@ async function loadSessionGraphContext(sessionID: SessionID, includeQuality: boo
   return { session, graph, dre, risk, rank, rollback }
 }
 
-async function loadSessionList(directory: string | undefined): Promise<Session.Info[]> {
-  return [...Session.list({ limit: 50, directory })]
+async function loadSessionList(): Promise<Session.Info[]> {
+  return [...Session.list({ limit: 50, directory: Instance.directory })]
 }
 
 function disableClientCache(c: { header: (name: string, value: string) => void }) {
@@ -163,15 +164,13 @@ export const DreGraphRoutes = lazy(() =>
   new Hono()
     .get("/", async (c) => {
       const search = c.req.url.includes("?") ? c.req.url.slice(c.req.url.indexOf("?")) : ""
-      const directory = c.req.query("directory") ?? undefined
-      const list = await loadSessionList(directory)
+      const list = await loadSessionList()
       disableClientCache(c)
       c.header("content-type", "text/html; charset=utf-8")
       return c.body(indexPage({ list, search }))
     })
     .get("/fingerprint", async (c) => {
-      const directory = c.req.query("directory") ?? undefined
-      const list = await loadSessionList(directory)
+      const list = await loadSessionList()
       disableClientCache(c)
       return c.json(indexFingerprint(list))
     })
