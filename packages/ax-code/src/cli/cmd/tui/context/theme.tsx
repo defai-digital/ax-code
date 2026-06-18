@@ -12,6 +12,9 @@ import { Filesystem } from "@/util/filesystem"
 import { useTuiConfig } from "./tui-config"
 import { scheduleDeferredStartupTask } from "../util/startup-task"
 import { Flag } from "@/flag/flag"
+import { Log } from "@/util/log"
+
+const log = Log.create({ service: "tui.theme" })
 
 type Theme = ThemeColors & {
   _hasSelectedListItemText: boolean
@@ -447,7 +450,14 @@ async function getCustomThemes() {
       symlink: true,
     })) {
       const name = path.basename(item, ".json")
-      result[name] = await Filesystem.readJson(item)
+      const theme = await Filesystem.readJson<ThemeJson>(item).catch((error) => {
+        log.warn("failed to load custom theme", {
+          path: item,
+          error,
+        })
+        return undefined
+      })
+      if (theme) result[name] = theme
     }
   }
   return result

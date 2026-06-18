@@ -517,6 +517,16 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(dialog).toContain("ensureCustomThemesLoaded")
   })
 
+  test("keeps one malformed custom theme from breaking custom theme hydration", async () => {
+    const theme = await fs.readFile(THEME_SRC, "utf8")
+
+    expect(theme).toContain('const log = Log.create({ service: "tui.theme" })')
+    expect(theme).toContain("Filesystem.readJson<ThemeJson>(item).catch")
+    expect(theme).toContain('log.warn("failed to load custom theme"')
+    expect(theme).toContain("if (theme) result[name] = theme")
+    expect(theme).not.toContain("result[name] = await Filesystem.readJson(item)")
+  })
+
   test("avoids async onMount in the provider oauth dialog flow", async () => {
     const dialogProvider = await fs.readFile(DIALOG_PROVIDER_SRC, "utf8")
 
