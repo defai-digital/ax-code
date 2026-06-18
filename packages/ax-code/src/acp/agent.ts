@@ -110,6 +110,11 @@ export namespace ACP {
     return decodeTodoPlanEntries(parsed)
   }
 
+  function isBase64Payload(value: string) {
+    const normalized = value.replace(/\s+/g, "")
+    return normalized.length > 0 && normalized.length % 4 !== 1 && /^[A-Za-z0-9+/]*={0,2}$/.test(normalized)
+  }
+
   export function decodeReplayDataUrl(url: string, fallbackMime: string) {
     const comma = url.indexOf(",")
     if (!url.startsWith("data:") || comma < 0) {
@@ -122,6 +127,7 @@ export namespace ACP {
     const mimeType = metadataParts.find((part) => part.includes("/")) ?? fallbackMime
     const isBase64 = metadataParts.some((part) => part.toLowerCase() === "base64")
     if (isBase64) {
+      if (!isBase64Payload(body)) return { mimeType, base64Data: "", text: "" }
       return {
         mimeType,
         base64Data: body,

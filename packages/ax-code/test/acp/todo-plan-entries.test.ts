@@ -48,6 +48,14 @@ describe("ACP replay data URL decoding", () => {
     })
   })
 
+  test("rejects invalid base64 data URL payloads", () => {
+    expect(ACP.decodeReplayDataUrl("data:text/plain;base64,not base64!!", "text/plain")).toEqual({
+      mimeType: "text/plain",
+      base64Data: "",
+      text: "",
+    })
+  })
+
   test("decodes plain text data URLs without dropping content", () => {
     expect(ACP.decodeReplayDataUrl("data:text/plain,hello%20world", "application/octet-stream")).toEqual({
       mimeType: "text/plain",
