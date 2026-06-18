@@ -720,6 +720,8 @@ describe("server route validation", () => {
     expect(defaulted.parse(undefined)).toBe(25)
     expect(defaulted.parse("10")).toBe(10)
     expect(optional.safeParse("abc").success).toBe(false)
+    expect(optional.safeParse("0x10").success).toBe(false)
+    expect(optional.safeParse("1e3").success).toBe(false)
 
     await Instance.provide({
       directory: root,
