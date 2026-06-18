@@ -90,6 +90,42 @@ describe("control-plane/sse", () => {
     ])
   })
 
+  test("ignores non-decimal retry fields", async () => {
+    const events: unknown[] = []
+    const stop = new AbortController()
+
+    await parseSSE(
+      stream([
+        "retry: 1e3\ndata: scientific\n\n",
+        "retry: 0x10\ndata: hex\n\n",
+        "retry: -1\ndata: negative\n\n",
+        "retry: 12.5\ndata: fractional\n\n",
+        "retry: 1500 \ndata: trailing-space\n\n",
+      ]),
+      stop.signal,
+      (event) => events.push(event),
+    )
+
+    expect(events).toEqual([
+      sseMessageData("scientific"),
+      sseMessageData("hex"),
+      sseMessageData("negative"),
+      sseMessageData("fractional"),
+      sseMessageData("trailing-space"),
+    ])
+  })
+
+  test("caps decimal retry fields at 60 seconds", async () => {
+    const events: unknown[] = []
+    const stop = new AbortController()
+
+    await parseSSE(stream(["retry: 99999999999999999999\ndata: capped\n\n"]), stop.signal, (event) =>
+      events.push(event),
+    )
+
+    expect(events).toEqual([sseMessageData("capped", { retry: 60_000 })])
+  })
+
   test("drops trailing carriage returns for mixed CRLF/LF block boundaries", async () => {
     const events: unknown[] = []
     const stop = new AbortController()

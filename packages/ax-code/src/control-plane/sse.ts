@@ -69,13 +69,17 @@ export async function parseSSE(
         continue
       }
       if (key === "retry") {
-        const val = Number(raw)
         // Reject NaN, negative, and Infinity; cap accepted value at 60s.
         // A buggy or malicious server sending `retry: "9".repeat(20)`
         // would otherwise coerce to Infinity, and a downstream
         // setTimeout on an Infinity delay never fires — blocking
         // reconnection forever.
-        if (Number.isFinite(val) && val >= 0) retry = Math.min(val, 60_000)
+        // The SSE retry field is an integer field; hex, scientific notation,
+        // signs, decimals, and surrounding whitespace must be ignored.
+        if (/^\d+$/.test(raw)) {
+          const val = Number(raw)
+          if (Number.isFinite(val)) retry = Math.min(val, 60_000)
+        }
       }
     }
 
