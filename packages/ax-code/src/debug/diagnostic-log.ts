@@ -58,7 +58,8 @@ const log = Log.create({ service: "diagnostic-log" })
 
 function replayEventTimestamp(time: number | undefined) {
   const value = typeof time === "number" && Number.isFinite(time) ? time : Date.now()
-  return new Date(value).toISOString()
+  const date = new Date(value)
+  return Number.isFinite(date.getTime()) ? date.toISOString() : new Date().toISOString()
 }
 
 export namespace DiagnosticLog {

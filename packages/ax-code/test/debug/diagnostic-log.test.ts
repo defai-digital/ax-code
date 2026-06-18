@@ -170,9 +170,22 @@ describe("DiagnosticLog", () => {
         { id: "evt_bad_time", sequence: 2, time: Number.NaN },
       ),
     ).not.toThrow()
+    expect(() =>
+      DiagnosticLog.record(
+        {
+          type: "session.start",
+          sessionID: "ses_out_of_range_time",
+          directory: "/repo/project",
+          agent: "build",
+          model: "test-model",
+        },
+        { id: "evt_out_of_range_time", sequence: 3, time: Number.MAX_VALUE },
+      ),
+    ).not.toThrow()
     await DiagnosticLog.flush()
 
     const replayEvents = await readJsonLines(path.join(tmp.path, "events.jsonl"))
+    expect(replayEvents).toHaveLength(2)
     expect(replayEvents[0]).toMatchObject({
       kind: "replay.event",
       id: "evt_bad_time",
@@ -180,6 +193,13 @@ describe("DiagnosticLog", () => {
       eventType: "session.start",
     })
     expect(Number.isFinite(Date.parse(replayEvents[0].time))).toBe(true)
+    expect(replayEvents[1]).toMatchObject({
+      kind: "replay.event",
+      id: "evt_out_of_range_time",
+      sequence: 3,
+      eventType: "session.start",
+    })
+    expect(Number.isFinite(Date.parse(replayEvents[1].time))).toBe(true)
   })
 
   test("does not throw on bigint replay metadata", async () => {
