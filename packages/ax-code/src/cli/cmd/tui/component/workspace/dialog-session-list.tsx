@@ -15,6 +15,7 @@ import { useToast } from "../../ui/toast"
 import { createAbortableResourceFetcher } from "../../util/abortable-resource"
 import { Log } from "@/util/log"
 import type { Session } from "@ax-code/sdk/v2"
+import { normalizeWorkspaceDialogSessions } from "./session-list-data"
 
 const log = Log.create({ service: "tui.workspace-dialog-session-list" })
 
@@ -37,7 +38,7 @@ export function DialogSessionList(props: { workspaceID?: string; localOnly?: boo
         if (!workspaceID) return undefined
         try {
           const result = await sdk.client.session.list({ directory: workspaceID, roots: true }, { signal })
-          return result.data ?? []
+          return normalizeWorkspaceDialogSessions(result.data)
         } catch (error) {
           log.warn("workspace session list load failed", { error, workspaceID })
           toast.show({
@@ -64,7 +65,7 @@ export function DialogSessionList(props: { workspaceID?: string; localOnly?: boo
           },
           { signal },
         )
-        return result.data ?? []
+        return normalizeWorkspaceDialogSessions(result.data)
       } catch (error) {
         log.warn("workspace session list search failed", {
           error,
