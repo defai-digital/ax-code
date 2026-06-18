@@ -18,6 +18,8 @@ import { Flag } from "../flag/flag"
 import { iife } from "@/util/iife"
 import { Global } from "../global"
 import path from "path"
+import fs from "fs/promises"
+import { fileURLToPath } from "url"
 import { Filesystem } from "../util/filesystem"
 import { withTimeout } from "../util/timeout"
 import { isNonEmptyRecord, recordCount } from "@/util/record"
@@ -875,13 +877,13 @@ export namespace Provider {
           // letting a compromised AX_CODE_MODELS_URL or a malicious config
           // entry trigger `import()` against an arbitrary path on disk —
           // i.e. RCE via file write + config injection.
-          const filePath = model.api.npm.replace(/^file:\/\//, "")
-          const resolved = path.resolve(filePath)
+          const filePath = fileURLToPath(model.api.npm)
+          const resolved = await fs.realpath(path.resolve(filePath)).catch(() => undefined)
           const allowedDirs = [Instance.worktree, Global.Path.data, Global.Path.cache, Global.Path.config]
-          const inAllowed = allowedDirs.some((dir) => {
-            const normalizedDir = path.resolve(dir) + path.sep
-            return (resolved + path.sep).startsWith(normalizedDir)
-          })
+          const realAllowedDirs = await Promise.all(
+            allowedDirs.map(async (dir) => fs.realpath(path.resolve(dir)).catch(() => path.resolve(dir))),
+          )
+          const inAllowed = resolved && realAllowedDirs.some((dir) => Filesystem.contains(dir, resolved))
           if (!inAllowed) {
             throw new InitError(
               { providerID: model.providerID },

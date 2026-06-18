@@ -1,6 +1,7 @@
 import { test, expect } from "bun:test"
 import path from "path"
 import fs from "fs/promises"
+import { pathToFileURL } from "url"
 
 import { tmpdir } from "../fixture/fixture"
 import { Instance } from "../../src/project/instance"
@@ -20,6 +21,16 @@ function deferred<T = void>() {
     reject = rej
   })
   return { promise, resolve, reject }
+}
+
+function errorCauseMessages(error: unknown) {
+  const messages: string[] = []
+  let current = error
+  while (current instanceof Error) {
+    messages.push(current.message)
+    current = current.cause
+  }
+  return messages
 }
 
 test("provider loaded from env variable", async () => {
@@ -857,6 +868,64 @@ test("provider with baseURL from config", async () => {
       const providers = await Provider.list()
       expect(providers[ProviderID.make("custom-openai")]).toBeDefined()
       expect(providers[ProviderID.make("custom-openai")].options.baseURL).toBe("https://custom.openai.com/v1")
+    },
+  })
+})
+
+test("local provider file URLs reject symlinks that escape allowed directories", async () => {
+  if (process.platform === "win32") return
+
+  await using outside = await tmpdir()
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      const outsideProvider = path.join(outside.path, "provider.mjs")
+      const linkedProvider = path.join(dir, "provider-link.mjs")
+      await Bun.write(
+        outsideProvider,
+        `export function createEscapedProvider() {
+  return {
+    languageModel() {
+      return { id: "escaped-language-model" }
+    }
+  }
+}
+`,
+      )
+      await fs.symlink(outsideProvider, linkedProvider)
+      await Bun.write(
+        path.join(dir, "ax-code.json"),
+        JSON.stringify({
+          $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+          provider: {
+            "local-file-provider": {
+              name: "Local File Provider",
+              npm: pathToFileURL(linkedProvider).href,
+              env: [],
+              models: {
+                "local-model": {
+                  name: "Local Model",
+                  tool_call: true,
+                  limit: { context: 1000, output: 100 },
+                },
+              },
+            },
+          },
+        }),
+      )
+    },
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const model = await Provider.getModel(ProviderID.make("local-file-provider"), ModelID.make("local-model"))
+      try {
+        await Provider.getLanguage(model)
+        throw new Error("expected local provider symlink escape to be rejected")
+      } catch (error) {
+        expect(error).toBeInstanceOf(Error)
+        expect(errorCauseMessages(error).some((message) => message.includes("outside allowed directories"))).toBe(true)
+      }
     },
   })
 })
