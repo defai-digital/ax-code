@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test"
+import { promises as fsp } from "fs"
+import path from "path"
 import { Instance } from "../../src/project/instance"
 import { Project } from "../../src/project/project"
+import { Server } from "../../src/server/server"
 import { Session } from "../../src/session"
 import { Log } from "../../src/util/log"
 import { tmpdir } from "../fixture/fixture"
@@ -85,5 +88,31 @@ describe("Session.listGlobal", () => {
 
     expect(ids).toContain(first.id)
     expect(ids).not.toContain(second.id)
+  })
+
+  test("experimental session route filters by canonical request directory", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const link = path.join(tmp.path, "..", `${path.basename(tmp.path)}-global-session-list-link`)
+
+    await fsp.symlink(tmp.path, link, process.platform === "win32" ? "junction" : undefined)
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ title: "symlink-global-session-list" })
+        const app = Server.Default()
+
+        try {
+          const response = await app.request(`/experimental/session?directory=${encodeURIComponent(link)}`)
+
+          expect(response.status).toBe(200)
+          const body = (await response.json()) as Array<{ id: string }>
+          expect(body.some((item) => item.id === session.id)).toBe(true)
+        } finally {
+          await Session.remove(session.id)
+          await fsp.unlink(link).catch(() => {})
+        }
+      },
+    })
   })
 })

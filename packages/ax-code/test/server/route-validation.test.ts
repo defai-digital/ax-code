@@ -353,6 +353,7 @@ describe("server route validation", () => {
           expect(globalRes.status).toBe(200)
           expect(sessionListInput?.directory).toBe(root)
           expect(sessionListInput?.roots).toBe(false)
+          expect(globalListInput?.directory).toBeUndefined()
           expect(globalListInput?.roots).toBe(false)
           expect(globalListInput?.archived).toBe(false)
         } finally {
