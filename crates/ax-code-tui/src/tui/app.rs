@@ -228,8 +228,8 @@ impl App {
                         return;
                     }
                     self.clear_active_session_state();
+                    self.status_message = Some("Session deleted".to_string());
                 }
-                self.status_message = Some("Session deleted".to_string());
             }
             RuntimeEvent::SessionStatus { properties } => {
                 if let Some(status) = properties.status {
@@ -1884,6 +1884,9 @@ mod tests {
                 call_id: "call_unscoped".to_string(),
                 tool_name: "bash".to_string(),
             },
+        });
+        app.handle_event(RuntimeEvent::SessionDeleted {
+            properties: crate::events::SessionInfo { info: None },
         });
 
         assert_eq!(app.session_id.as_deref(), Some("s1"));
