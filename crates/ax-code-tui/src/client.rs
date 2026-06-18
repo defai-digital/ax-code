@@ -8,7 +8,7 @@
 
 use anyhow::{Context, Result};
 use base64::{Engine, engine::general_purpose::STANDARD as BASE64_STANDARD};
-use reqwest::{Client, StatusCode};
+use reqwest::{Client, RequestBuilder, StatusCode};
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 
@@ -80,6 +80,14 @@ impl HeadlessClient {
     /// Get the base URL of the headless server.
     pub fn base_url(&self) -> &str {
         &self.config.base_url
+    }
+
+    fn with_directory_query(&self, request: RequestBuilder) -> RequestBuilder {
+        if let Some(directory) = self.config.directory.as_deref() {
+            request.query(&[("directory", directory)])
+        } else {
+            request
+        }
     }
 
     /// Connect to the server and verify availability.
@@ -161,8 +169,7 @@ impl HeadlessClient {
     pub async fn create_session(&self) -> Result<String> {
         let url = format!("{}/session", self.config.base_url);
         let response = self
-            .http
-            .post(&url)
+            .with_directory_query(self.http.post(&url))
             .send()
             .await
             .context("Failed to create session")?;
@@ -188,13 +195,11 @@ impl HeadlessClient {
     /// so callers can pass these IDs directly to launch policy auto-resume.
     pub async fn list_recent_session_ids(&self) -> Result<Vec<String>> {
         let url = format!("{}/session", self.config.base_url);
-        let mut request = self
+        let request = self
             .http
             .get(&url)
             .query(&[("roots", "true"), ("limit", "100")]);
-        if let Some(directory) = self.config.directory.as_deref() {
-            request = request.query(&[("directory", directory)]);
-        }
+        let request = self.with_directory_query(request);
 
         let response = request.send().await.context("Failed to list sessions")?;
 
@@ -234,8 +239,7 @@ impl HeadlessClient {
         }
 
         let response = self
-            .http
-            .post(&url)
+            .with_directory_query(self.http.post(&url))
             .json(&PromptBody {
                 prompt: prompt.to_string(),
             })
@@ -353,8 +357,7 @@ impl HeadlessClient {
         );
 
         let response = self
-            .http
-            .post(&url)
+            .with_directory_query(self.http.post(&url))
             .send()
             .await
             .context("Failed to abort session")?;

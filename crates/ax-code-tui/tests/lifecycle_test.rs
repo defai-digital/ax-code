@@ -103,6 +103,31 @@ async fn test_create_session_uses_headless_route() {
 }
 
 #[tokio::test]
+async fn test_create_session_uses_configured_directory() {
+    let server = MockServer::start().await;
+    let config = ClientConfig {
+        base_url: server.url(),
+        auth_token: None,
+        directory: Some("/workspace/project".to_string()),
+        session: None,
+        prompt: None,
+    };
+    let client = HeadlessClient::new(config).expect("Failed to create client");
+
+    let session_id = client.create_session().await.expect("create session");
+    assert_eq!(session_id, "mock-session");
+    assert!(
+        server
+            .requests()
+            .iter()
+            .any(|request| request == "POST /session?directory=%2Fworkspace%2Fproject HTTP/1.1"),
+        "create_session should scope the request to the configured directory"
+    );
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
 async fn test_list_recent_session_ids_uses_headless_session_route() {
     let server = MockServer::start().await;
     let config = ClientConfig {
@@ -119,6 +144,54 @@ async fn test_list_recent_session_ids_uses_headless_session_route() {
         .await
         .expect("list recent session ids");
     assert_eq!(session_ids, vec!["recent-session", "older-session"]);
+    assert!(
+        server.requests().iter().any(|request| {
+            request.contains("GET /session?")
+                && request.contains("roots=true")
+                && request.contains("limit=100")
+                && request.contains("directory=%2Fworkspace%2Fproject")
+        }),
+        "list_recent_session_ids should scope the request to the configured directory"
+    );
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn test_session_actions_use_configured_directory() {
+    let server = MockServer::start().await;
+    let config = ClientConfig {
+        base_url: server.url(),
+        auth_token: None,
+        directory: Some("/workspace/project".to_string()),
+        session: None,
+        prompt: None,
+    };
+    let client = HeadlessClient::new(config).expect("Failed to create client");
+
+    client
+        .send_prompt("sess_123", "hello")
+        .await
+        .expect("send prompt");
+    client
+        .abort_session("sess_123")
+        .await
+        .expect("abort session");
+
+    let requests = server.requests();
+    assert!(
+        requests.iter().any(|request| {
+            request
+                == "POST /session/sess_123/prompt_async?directory=%2Fworkspace%2Fproject HTTP/1.1"
+        }),
+        "send_prompt should scope the request to the configured directory"
+    );
+    assert!(
+        requests.iter().any(|request| {
+            request == "POST /session/sess_123/abort?directory=%2Fworkspace%2Fproject HTTP/1.1"
+        }),
+        "abort_session should scope the request to the configured directory"
+    );
 
     server.shutdown().await;
 }
