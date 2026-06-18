@@ -766,6 +766,12 @@ describe("gRPC SDK facade", () => {
         if (parsed.pathname === "/session/sess-1/children") return Response.json([{ id: "child-1" }])
         if (parsed.pathname === "/session/sess-1/diff") return Response.json({ files: [] })
         if (parsed.pathname === "/session/sess-1/todo") return Response.json([])
+        if (parsed.pathname === "/session/sess-1/share" && request.method === "POST") {
+          return Response.json({ id: "sess-1", share: { url: "https://share.example/sess-1" } })
+        }
+        if (parsed.pathname === "/session/sess-1/share" && request.method === "DELETE") {
+          return Response.json({ id: "sess-1" })
+        }
         return new Response("not found", { status: 404 })
       }) as typeof fetch,
     })
@@ -778,6 +784,11 @@ describe("gRPC SDK facade", () => {
     await expect(client.session.children("sess-1")).resolves.toEqual([{ id: "child-1" }])
     await expect(client.session.diff("sess-1", { messageID: "msg-1" })).resolves.toEqual({ files: [] })
     await expect(client.session.todo("sess-1")).resolves.toEqual([])
+    await expect(client.session.share("sess-1")).resolves.toEqual({
+      id: "sess-1",
+      share: { url: "https://share.example/sess-1" },
+    })
+    await expect(client.session.unshare("sess-1")).resolves.toEqual({ id: "sess-1" })
 
     expect(calls).toEqual([
       { path: "/session?limit=5", method: "GET", body: "" },
@@ -788,6 +799,8 @@ describe("gRPC SDK facade", () => {
       { path: "/session/sess-1/children", method: "GET", body: "" },
       { path: "/session/sess-1/diff?messageID=msg-1", method: "GET", body: "" },
       { path: "/session/sess-1/todo", method: "GET", body: "" },
+      { path: "/session/sess-1/share", method: "POST", body: "" },
+      { path: "/session/sess-1/share", method: "DELETE", body: "" },
     ])
   })
 

@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process"
 import { randomBytes } from "node:crypto"
 import { createServer } from "node:net"
+import { withDirectoryHeaders } from "../protocol.js"
 
 const SIGKILL_GRACE_MS = 300
 const EXIT_WAIT_MS = 2_000
@@ -103,7 +104,9 @@ export async function startHeadlessBackend(options: HeadlessBackendOptions = {})
   const username = options.auth?.username ?? "ax-code"
   const password = options.auth?.password ?? randomBytes(24).toString("base64url")
   const authHeader = "Basic " + Buffer.from(`${username}:${password}`).toString("base64")
-  const headers = { Authorization: authHeader }
+  const headers = options.directory
+    ? withDirectoryHeaders({ Authorization: authHeader }, options.directory)
+    : { Authorization: authHeader }
 
   const binary = options.binary?.trim() || "ax-code"
   const args = options.args ?? ["serve", `--hostname=${hostname}`, `--port=${port}`]

@@ -68,10 +68,23 @@ export type EventServerInstanceDisposed = {
   }
 }
 
-export type EventProviderUpdated = {
-  type: "provider.updated"
+export type EventSessionGoal = {
+  type: "session.goal"
   properties: {
-    [key: string]: unknown
+    sessionID: string
+    goal: {
+      sessionID: string
+      objective: string
+      status: "active" | "paused" | "complete" | "blocked" | "budget_limited"
+      tokenBudget?: number
+      tokensUsed: number
+      timeUsedSeconds: number
+      time: {
+        created: number
+        updated?: number
+      }
+      remainingTokens?: number
+    } | null
   }
 }
 
@@ -95,31 +108,6 @@ export type EventLspUpdated = {
   type: "lsp.updated"
   properties: {
     [key: string]: unknown
-  }
-}
-
-export type EventCodeIndexProgress = {
-  type: "code.index.progress"
-  properties: {
-    projectID: string
-    completed: number
-    total: number
-  }
-}
-
-export type EventCodeIndexState = {
-  type: "code.index.state"
-  properties: {
-    projectID: string
-    state: "idle" | "indexing" | "failed"
-    error?: string
-  }
-}
-
-export type EventFileEdited = {
-  type: "file.edited"
-  properties: {
-    file: string
   }
 }
 
@@ -584,6 +572,13 @@ export type EventMessagePartRemoved = {
   }
 }
 
+export type EventProviderUpdated = {
+  type: "provider.updated"
+  properties: {
+    [key: string]: unknown
+  }
+}
+
 export type PermissionRequest = {
   id: string
   sessionID: string
@@ -744,59 +739,8 @@ export type EventTodoUpdated = {
   }
 }
 
-export type EventSessionGoal = {
-  type: "session.goal"
-  properties: {
-    sessionID: string
-    goal: {
-      sessionID: string
-      objective: string
-      status: "active" | "paused" | "complete" | "blocked" | "budget_limited"
-      tokenBudget?: number
-      tokensUsed: number
-      timeUsedSeconds: number
-      time: {
-        created: number
-        updated?: number
-      }
-      remainingTokens?: number
-    } | null
-  }
-}
-
-export type EventTuiPromptAppend = {
-  type: "tui.prompt.append"
-  properties: {
-    text: string
-  }
-}
-
-export type EventTuiCommandExecute = {
-  type: "tui.command.execute"
-  properties: {
-    command:
-      | "session.list"
-      | "session.new"
-      | "session.share"
-      | "session.interrupt"
-      | "session.compact"
-      | "session.page.up"
-      | "session.page.down"
-      | "session.line.up"
-      | "session.line.down"
-      | "session.half.page.up"
-      | "session.half.page.down"
-      | "session.first"
-      | "session.last"
-      | "prompt.clear"
-      | "prompt.submit"
-      | "agent.cycle"
-      | string
-  }
-}
-
-export type EventTuiToastShow = {
-  type: "tui.toast.show"
+export type EventNotificationToastShow = {
+  type: "notification.toast.show"
   properties: {
     title?: string
     message: string
@@ -808,13 +752,10 @@ export type EventTuiToastShow = {
   }
 }
 
-export type EventTuiSessionSelect = {
-  type: "tui.session.select"
+export type EventFileEdited = {
+  type: "file.edited"
   properties: {
-    /**
-     * Session ID to navigate to
-     */
-    sessionID: string
+    file: string
   }
 }
 
@@ -1319,6 +1260,24 @@ export type EventWorkflowVerificationAttached = {
   }
 }
 
+export type EventCodeIndexProgress = {
+  type: "code.index.progress"
+  properties: {
+    projectID: string
+    completed: number
+    total: number
+  }
+}
+
+export type EventCodeIndexState = {
+  type: "code.index.state"
+  properties: {
+    projectID: string
+    state: "idle" | "indexing" | "failed"
+    error?: string
+  }
+}
+
 export type PermissionAction = "allow" | "deny" | "ask"
 
 export type PermissionRule = {
@@ -1408,10 +1367,56 @@ export type EventSessionError = {
   }
 }
 
-export type EventVcsBranchUpdated = {
-  type: "vcs.branch.updated"
+export type EventTuiPromptAppend = {
+  type: "tui.prompt.append"
   properties: {
-    branch?: string
+    text: string
+  }
+}
+
+export type EventTuiCommandExecute = {
+  type: "tui.command.execute"
+  properties: {
+    command:
+      | "session.list"
+      | "session.new"
+      | "session.interrupt"
+      | "session.compact"
+      | "session.page.up"
+      | "session.page.down"
+      | "session.line.up"
+      | "session.line.down"
+      | "session.half.page.up"
+      | "session.half.page.down"
+      | "session.first"
+      | "session.last"
+      | "prompt.clear"
+      | "prompt.submit"
+      | "agent.cycle"
+      | string
+  }
+}
+
+export type EventTuiToastShow = {
+  type: "tui.toast.show"
+  properties: {
+    title?: string
+    message: string
+    variant: "info" | "success" | "warning" | "error"
+    /**
+     * Duration in milliseconds
+     */
+    duration?: number
+  }
+}
+
+export type EventTuiSessionSelect = {
+  type: "tui.session.select"
+  properties: {
+    /**
+     * Session ID to navigate to
+     */
+    sessionID: string
   }
 }
 
@@ -1674,6 +1679,13 @@ export type EventScheduledTaskDeleted = {
   }
 }
 
+export type EventVcsBranchUpdated = {
+  type: "vcs.branch.updated"
+  properties: {
+    branch?: string
+  }
+}
+
 export type Event =
   | EventInstallationUpdated
   | EventInstallationUpdateAvailable
@@ -1681,18 +1693,16 @@ export type Event =
   | EventServerConnected
   | EventGlobalDisposed
   | EventServerInstanceDisposed
-  | EventProviderUpdated
+  | EventSessionGoal
   | EventLspClientDiagnostics
   | EventFileWatcherUpdated
   | EventLspUpdated
-  | EventCodeIndexProgress
-  | EventCodeIndexState
-  | EventFileEdited
   | EventMessageUpdated
   | EventMessageRemoved
   | EventMessagePartUpdated
   | EventMessagePartDelta
   | EventMessagePartRemoved
+  | EventProviderUpdated
   | EventPermissionAsked
   | EventPermissionReplied
   | EventSessionStatus
@@ -1702,11 +1712,8 @@ export type Event =
   | EventQuestionRejected
   | EventSessionCompacted
   | EventTodoUpdated
-  | EventSessionGoal
-  | EventTuiPromptAppend
-  | EventTuiCommandExecute
-  | EventTuiToastShow
-  | EventTuiSessionSelect
+  | EventNotificationToastShow
+  | EventFileEdited
   | EventMcpToolsChanged
   | EventMcpBrowserOpenFailed
   | EventCommandExecuted
@@ -1734,12 +1741,17 @@ export type Event =
   | EventWorkflowBudgetWarning
   | EventWorkflowBudgetExceeded
   | EventWorkflowVerificationAttached
+  | EventCodeIndexProgress
+  | EventCodeIndexState
   | EventSessionCreated
   | EventSessionUpdated
   | EventSessionDeleted
   | EventSessionDiff
   | EventSessionError
-  | EventVcsBranchUpdated
+  | EventTuiPromptAppend
+  | EventTuiCommandExecute
+  | EventTuiToastShow
+  | EventTuiSessionSelect
   | EventTaskQueueCreated
   | EventTaskQueueUpdated
   | EventTaskQueueDeleted
@@ -1752,6 +1764,7 @@ export type Event =
   | EventScheduledTaskCreated
   | EventScheduledTaskUpdated
   | EventScheduledTaskDeleted
+  | EventVcsBranchUpdated
 
 export type GlobalEvent = {
   directory: string
@@ -1822,7 +1835,7 @@ export type PermissionConfig =
   | PermissionActionConfig
 
 export type AgentConfig = {
-  model?: Model
+  model?: string
   /**
    * Default model variant for this agent (applies only when using the agent's configured model).
    */
@@ -1868,7 +1881,6 @@ export type AgentConfig = {
   permission?: PermissionConfig
   [key: string]:
     | unknown
-    | Model
     | string
     | number
     | {
@@ -2088,7 +2100,7 @@ export type Config = {
       template: string
       description?: string
       agent?: string
-      model?: Model
+      model?: string
       subtask?: boolean
       workflow?: string
       location?: string
@@ -2124,14 +2136,6 @@ export type Config = {
    */
   snapshot?: boolean
   /**
-   * Control sharing behavior:'manual' allows manual sharing via commands, 'auto' enables automatic sharing, 'disabled' disables all sharing
-   */
-  share?: "manual" | "auto" | "disabled"
-  /**
-   * @deprecated Use 'share' field instead. Share newly created sessions automatically
-   */
-  autoshare?: boolean
-  /**
    * Automatically update to the latest version. Set to true to auto-update, false to disable, or 'notify' to show update notifications
    */
   autoupdate?: boolean | "notify"
@@ -2151,8 +2155,14 @@ export type Config = {
    * When set, ONLY these providers will be enabled. All other providers will be ignored
    */
   enabled_providers?: Array<string>
-  model?: Model
-  small_model?: Model
+  /**
+   * Model to use in the format of provider/model, eg openai/gpt-5
+   */
+  model?: string
+  /**
+   * Small model to use for tasks like title generation in the format of provider/model
+   */
+  small_model?: string
   /**
    * Default agent to use when none is specified. Must be a primary agent. Falls back to 'build' if not set or if the specified agent is invalid.
    */
@@ -2221,6 +2231,7 @@ export type Config = {
           | {
               command?: Array<string>
               extensions?: Array<string>
+              languageId?: string
               disabled?: boolean
               semantic?: boolean
               priority?: number
@@ -2255,19 +2266,24 @@ export type Config = {
   /**
    * Enable Super-Long supervised long-run mode (default: on for Qwen3.7-Max, off otherwise)
    */
-  super_long?: boolean
+  super_long?:
+    | boolean
+    | {
+        /**
+         * Enable Super-Long supervised long-run mode
+         */
+        enabled?: boolean
+        /**
+         * Runtime ceiling for a Super-Long run in hours (default and hard maximum: 72)
+         */
+        duration_hours?: number
+      }
   isolation?: IsolationConfig
   /**
    * @deprecated Use 'permission' field instead
    */
   tools?: {
     [key: string]: boolean
-  }
-  enterprise?: {
-    /**
-     * Enterprise URL
-     */
-    url?: string
   }
   /**
    * Session lifecycle management
@@ -2431,27 +2447,24 @@ export type AppErrorEnvelope = {
   }
 }
 
-export type OAuth = {
-  type: "oauth"
-  refresh: string
-  access: string
-  expires: number
-  accountId?: string
-  enterpriseUrl?: string
-}
-
-export type ApiAuth = {
-  type: "api"
-  key: string
-}
-
-export type WellKnownAuth = {
-  type: "wellknown"
-  key: string
-  token: string
-}
-
-export type Auth = OAuth | ApiAuth | WellKnownAuth
+export type Auth =
+  | {
+      type: "oauth"
+      refresh: string
+      access: string
+      expires: number
+      accountId?: string
+      enterpriseUrl?: string
+    }
+  | {
+      type: "api"
+      key: string
+    }
+  | {
+      type: "wellknown"
+      key: string
+      token: string
+    }
 
 export type Model = {
   id: string
@@ -2537,6 +2550,15 @@ export type SmartLlmState = {
 
 export type SuperLongState = {
   enabled: boolean
+}
+
+export type SuperLongStatus = {
+  enabled: boolean
+  source: "session-override" | "env" | "config" | "model-default"
+  durationMs: number | null
+  startedAt: number | null
+  elapsedMs: number | null
+  remainingMs: number | null
 }
 
 export type WorkflowArtifactEventRecord = {
@@ -3528,7 +3550,7 @@ export type Command = {
   model?: string
   source?: "command" | "file" | "mcp" | "skill"
   sourceTool?: "ax-code" | "agents" | "opencode" | "claude" | "builtin" | "config"
-  scope?: "builtin" | "project" | "user" | "config" | "mcp"
+  scope?: "builtin" | "project" | "user" | "config" | "compat" | "mcp"
   location?: string
   warnings?: Array<{
     code: string
@@ -3537,6 +3559,8 @@ export type Command = {
   }>
   workflow?: string
   allowShell?: boolean
+  argumentHint?: string
+  requiresArguments?: boolean
   template: string
   subtask?: boolean
   hints: Array<string>
@@ -3597,10 +3621,105 @@ export type GlobalHealthResponses = {
   200: {
     healthy: true
     version: string
+    startup: {
+      startedAt: number
+      uptimeMs: number
+      checkedAt: number
+    }
+    readiness: {
+      processAlive: true
+      apiReady: true
+      providersReady: "ready" | "degraded" | "unknown"
+      indexReady: "ready" | "degraded" | "unknown"
+    }
+    runtime: {
+      directory: string
+      services: Array<{
+        name: string
+        /**
+         * Lifecycle state for a runtime service
+         */
+        state: "idle" | "starting" | "running" | "stopping" | "stopped" | "failed"
+        pendingTasks: number
+        startedAt?: number
+        stoppedAt?: number
+        lastError?: string
+      }>
+      taskSummary: {
+        queued: number
+        running: number
+        completed: number
+        failed: number
+        aborted: number
+      }
+    }
   }
 }
 
 export type GlobalHealthResponse = GlobalHealthResponses[keyof GlobalHealthResponses]
+
+export type GlobalCapabilitiesData = {
+  body?: never
+  path?: never
+  query?: never
+  url: "/global/capabilities"
+}
+
+export type GlobalCapabilitiesResponses = {
+  /**
+   * Runtime capability metadata
+   */
+  200: {
+    schemaVersion: 1
+    product: "ax-code"
+    version: string
+    compatibility: {
+      minDesktopVersion: string | null
+      sdkHeadless: {
+        schemaVersion: 1
+        supportsManagedLifecycle: true
+        supportsExplicitBinary: true
+        supportsExplicitArgs: true
+        supportsStructuredDiagnostics: true
+        authSchemes: Array<"basic">
+        defaultTransport: "http-sse"
+      }
+    }
+    endpoints: {
+      health: "/global/health"
+      events: "/global/event"
+      config: "/global/config"
+      capabilityCatalog: "/capability"
+      fileSearch: "/find/file"
+      sessions: "/session"
+      providers: "/config/providers"
+      agents: "/agent"
+    }
+    features: {
+      sessions: true
+      asyncPrompt: true
+      globalEvents: true
+      fileSearch: true
+      skills: true
+      plugins: true
+      mcp: true
+      worktrees: true
+      providerManagement: true
+      usage: true
+    }
+    events: {
+      heartbeat: "server.heartbeat"
+      connected: "server.connected"
+      sessionCreated: "session.created"
+      sessionStatus: "session.status"
+      sessionError: "session.error"
+      permission: "permission"
+      question: "question"
+    }
+  }
+}
+
+export type GlobalCapabilitiesResponse = GlobalCapabilitiesResponses[keyof GlobalCapabilitiesResponses]
 
 export type GlobalEventData = {
   body?: never
@@ -4133,6 +4252,7 @@ export type IsolationGetResponse = IsolationGetResponses[keyof IsolationGetRespo
 export type IsolationSetData = {
   body?: {
     mode: "read-only" | "workspace-write" | "full-access"
+    network?: boolean
   }
   path?: never
   query?: {
@@ -4273,12 +4393,30 @@ export type SuperLongSetResponses = {
 
 export type SuperLongSetResponse = SuperLongSetResponses[keyof SuperLongSetResponses]
 
-export type PromptHistoryListData = {
+export type SuperLongStatusData = {
   body?: never
   path?: never
   query?: {
     directory?: string
-    limit?: number
+  }
+  url: "/super-long/status"
+}
+
+export type SuperLongStatusResponses = {
+  /**
+   * Super-Long run status
+   */
+  200: SuperLongStatus
+}
+
+export type SuperLongStatusResponse = SuperLongStatusResponses[keyof SuperLongStatusResponses]
+
+export type PromptHistoryListData = {
+  body?: never
+  path?: never
+  query: {
+    directory?: string
+    limit: number
   }
   url: "/prompt-history"
 }
@@ -4400,7 +4538,7 @@ export type PromptHistoryAppendResponse = PromptHistoryAppendResponses[keyof Pro
 export type TaskQueueListData = {
   body?: never
   path?: never
-  query?: {
+  query: {
     directory?: string
     sessionID?: string
     status?:
@@ -4413,7 +4551,7 @@ export type TaskQueueListData = {
       | "failed"
       | "completed"
       | "cancelled"
-    limit?: number
+    limit: number
   }
   url: "/task-queue"
 }
@@ -5221,11 +5359,11 @@ export type TaskQueueReorderResponse = TaskQueueReorderResponses[keyof TaskQueue
 export type ScheduledTaskListData = {
   body?: never
   path?: never
-  query?: {
+  query: {
     directory?: string
     status?: "active" | "paused" | "disabled"
-    dueBefore?: number
-    limit?: number
+    dueBefore: number
+    limit: number
   }
   url: "/scheduled-task"
 }
@@ -5928,9 +6066,9 @@ export type ScheduledTaskRunNowResponse = ScheduledTaskRunNowResponses[keyof Sch
 export type ScheduledTaskRunDueData = {
   body?: never
   path?: never
-  query?: {
+  query: {
     directory?: string
-    now?: number
+    now: number
   }
   url: "/scheduled-task/run-due"
 }
@@ -6061,11 +6199,11 @@ export type ScheduledTaskRunDueResponse = ScheduledTaskRunDueResponses[keyof Sch
 export type WorkflowRunListData = {
   body?: never
   path?: never
-  query?: {
+  query: {
     directory?: string
     parentSessionID?: string
     status?: "queued" | "running" | "blocked" | "paused" | "failed" | "completed" | "cancelled"
-    limit?: number
+    limit: number
   }
   url: "/workflow-runs"
 }
@@ -6306,12 +6444,12 @@ export type WorkflowRunCreateResponse = WorkflowRunCreateResponses[keyof Workflo
 export type WorkflowRunDashboardData = {
   body?: never
   path?: never
-  query?: {
+  query: {
     directory?: string
     parentSessionID?: string
     status?: "queued" | "running" | "blocked" | "paused" | "failed" | "completed" | "cancelled"
-    limit?: number
-    now?: number
+    limit: number
+    now: number
   }
   url: "/workflow-runs/dashboard"
 }
@@ -10781,72 +10919,6 @@ export type SessionAbortResponses = {
 
 export type SessionAbortResponse = SessionAbortResponses[keyof SessionAbortResponses]
 
-export type SessionUnshareData = {
-  body?: never
-  path: {
-    sessionID: string
-  }
-  query?: {
-    directory?: string
-  }
-  url: "/session/{sessionID}/share"
-}
-
-export type SessionUnshareErrors = {
-  /**
-   * Bad request
-   */
-  400: AppErrorEnvelope
-  /**
-   * Not found
-   */
-  404: AppErrorEnvelope
-}
-
-export type SessionUnshareError = SessionUnshareErrors[keyof SessionUnshareErrors]
-
-export type SessionUnshareResponses = {
-  /**
-   * Successfully unshared session
-   */
-  200: Session
-}
-
-export type SessionUnshareResponse = SessionUnshareResponses[keyof SessionUnshareResponses]
-
-export type SessionShareData = {
-  body?: never
-  path: {
-    sessionID: string
-  }
-  query?: {
-    directory?: string
-  }
-  url: "/session/{sessionID}/share"
-}
-
-export type SessionShareErrors = {
-  /**
-   * Bad request
-   */
-  400: AppErrorEnvelope
-  /**
-   * Not found
-   */
-  404: AppErrorEnvelope
-}
-
-export type SessionShareError = SessionShareErrors[keyof SessionShareErrors]
-
-export type SessionShareResponses = {
-  /**
-   * Successfully shared session
-   */
-  200: Session
-}
-
-export type SessionShareResponse = SessionShareResponses[keyof SessionShareResponses]
-
 export type SessionDiffData = {
   body?: never
   path: {
@@ -11544,9 +11616,9 @@ export type AuditExportData = {
   path: {
     sessionID: string
   }
-  query?: {
+  query: {
     directory?: string
-    limit?: number
+    limit: number
   }
   url: "/audit/export/{sessionID}"
 }
@@ -11561,10 +11633,10 @@ export type AuditExportResponses = {
 export type AuditExportAllData = {
   body?: never
   path?: never
-  query?: {
+  query: {
     directory?: string
-    limit?: number
-    since?: number
+    limit: number
+    since: number
     /**
      * Filter sessions by minimum risk level
      */
@@ -11589,9 +11661,9 @@ export type AuditReplayData = {
   path: {
     sessionID: string
   }
-  query?: {
+  query: {
     directory?: string
-    fromStep?: number
+    fromStep: number
   }
   url: "/audit/replay/{sessionID}"
 }
@@ -11868,6 +11940,103 @@ export type ProviderListResponses = {
 
 export type ProviderListResponse = ProviderListResponses[keyof ProviderListResponses]
 
+export type ProviderAxEngineStatusData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/provider/ax-engine/status"
+}
+
+export type ProviderAxEngineStatusResponses = {
+  /**
+   * ax-engine status
+   */
+  200: unknown
+}
+
+export type ProviderAxEnginePrepareData = {
+  body?: {
+    modelPath?: string
+    binaryPath?: string
+    modelID?: "qwen3-coder-next" | "qwen3.6-35b-a3b"
+    quantization?: "mlx4bit" | "mlx6bit"
+    download?: boolean
+    start?: boolean
+  }
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/provider/ax-engine/prepare"
+}
+
+export type ProviderAxEnginePrepareErrors = {
+  /**
+   * Bad request
+   */
+  400: AppErrorEnvelope
+}
+
+export type ProviderAxEnginePrepareError = ProviderAxEnginePrepareErrors[keyof ProviderAxEnginePrepareErrors]
+
+export type ProviderAxEnginePrepareResponses = {
+  /**
+   * Preparation result
+   */
+  200: unknown
+}
+
+export type ProviderAxEngineStartData = {
+  body?: {
+    modelPath?: string
+    binaryPath?: string
+    modelID?: "qwen3-coder-next" | "qwen3.6-35b-a3b"
+    quantization?: "mlx4bit" | "mlx6bit"
+    download?: boolean
+  }
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/provider/ax-engine/start"
+}
+
+export type ProviderAxEngineStartErrors = {
+  /**
+   * Bad request
+   */
+  400: AppErrorEnvelope
+}
+
+export type ProviderAxEngineStartError = ProviderAxEngineStartErrors[keyof ProviderAxEngineStartErrors]
+
+export type ProviderAxEngineStartResponses = {
+  /**
+   * Start result
+   */
+  200: unknown
+}
+
+export type ProviderAxEngineStopData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/provider/ax-engine/stop"
+}
+
+export type ProviderAxEngineStopResponses = {
+  /**
+   * Stopped
+   */
+  200: boolean
+}
+
+export type ProviderAxEngineStopResponse = ProviderAxEngineStopResponses[keyof ProviderAxEngineStopResponses]
+
 export type ProviderAuthData = {
   body?: never
   path?: never
@@ -12015,7 +12184,7 @@ export type FindFilesData = {
     query: string
     dirs?: "true" | "false"
     type?: "file" | "directory"
-    limit?: number
+    limit: number
   }
   url: "/find/file"
 }
@@ -12782,6 +12951,24 @@ export type AppLogResponses = {
 
 export type AppLogResponse = AppLogResponses[keyof AppLogResponses]
 
+export type AppAgentsData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/agent"
+}
+
+export type AppAgentsResponses = {
+  /**
+   * List of agents
+   */
+  200: Array<Agent>
+}
+
+export type AppAgentsResponse = AppAgentsResponses[keyof AppAgentsResponses]
+
 export type AppContextData = {
   body?: never
   path?: never
@@ -12907,24 +13094,6 @@ export type AppContextMemoryClearResponses = {
 
 export type AppContextMemoryClearResponse = AppContextMemoryClearResponses[keyof AppContextMemoryClearResponses]
 
-export type AppAgentsData = {
-  body?: never
-  path?: never
-  query?: {
-    directory?: string
-  }
-  url: "/agent"
-}
-
-export type AppAgentsResponses = {
-  /**
-   * List of agents
-   */
-  200: Array<Agent>
-}
-
-export type AppAgentsResponse = AppAgentsResponses[keyof AppAgentsResponses]
-
 export type AppSkillsData = {
   body?: never
   path?: never
@@ -12943,6 +13112,7 @@ export type AppSkillsResponses = {
     description: string
     location: string
     content: string
+    agent?: string
     paths?: Array<string>
     license?: string
     compatibility?: string

@@ -47,6 +47,7 @@ import type {
   FormatterStatusResponses,
   GetDreGraphSessionSessionIdFingerprintResponses,
   GetDreGraphSessionSessionIdResponses,
+  GlobalCapabilitiesResponses,
   GlobalConfigGetResponses,
   GlobalConfigUpdateErrors,
   GlobalConfigUpdateResponses,
@@ -102,6 +103,12 @@ import type {
   PromptHistoryListErrors,
   PromptHistoryListResponses,
   ProviderAuthResponses,
+  ProviderAxEnginePrepareErrors,
+  ProviderAxEnginePrepareResponses,
+  ProviderAxEngineStartErrors,
+  ProviderAxEngineStartResponses,
+  ProviderAxEngineStatusResponses,
+  ProviderAxEngineStopResponses,
   ProviderListResponses,
   ProviderOauthAuthorizeErrors,
   ProviderOauthAuthorizeResponses,
@@ -190,8 +197,6 @@ import type {
   SessionRollbackPointsResponses,
   SessionSemanticDiffErrors,
   SessionSemanticDiffResponses,
-  SessionShareErrors,
-  SessionShareResponses,
   SessionShellAsyncErrors,
   SessionShellAsyncResponses,
   SessionShellErrors,
@@ -204,8 +209,6 @@ import type {
   SessionTodoResponses,
   SessionUnrevertErrors,
   SessionUnrevertResponses,
-  SessionUnshareErrors,
-  SessionUnshareResponses,
   SessionUpdateErrors,
   SessionUpdateResponses,
   SkillCreateErrors,
@@ -219,6 +222,7 @@ import type {
   SuperLongGetResponses,
   SuperLongSetErrors,
   SuperLongSetResponses,
+  SuperLongStatusResponses,
   TaskQueueCancelErrors,
   TaskQueueCancelResponses,
   TaskQueueDeleteErrors,
@@ -408,6 +412,18 @@ export class Global extends HeyApiClient {
   public health<ThrowOnError extends boolean = false>(options?: Options<never, ThrowOnError>) {
     return (options?.client ?? this.client).get<GlobalHealthResponses, unknown, ThrowOnError>({
       url: "/global/health",
+      ...options,
+    })
+  }
+
+  /**
+   * Get runtime capabilities
+   *
+   * Get stable runtime capability metadata for desktop and app integrations. This endpoint describes supported API contracts; use /capability for user-facing commands, skills, agents, and workflows.
+   */
+  public capabilities<ThrowOnError extends boolean = false>(options?: Options<never, ThrowOnError>) {
+    return (options?.client ?? this.client).get<GlobalCapabilitiesResponses, unknown, ThrowOnError>({
+      url: "/global/capabilities",
       ...options,
     })
   }
@@ -933,6 +949,7 @@ export class Isolation extends HeyApiClient {
     parameters?: {
       directory?: string
       mode?: "read-only" | "workspace-write" | "full-access"
+      network?: boolean
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -943,6 +960,7 @@ export class Isolation extends HeyApiClient {
           args: [
             { in: "query", key: "directory" },
             { in: "body", key: "mode" },
+            { in: "body", key: "network" },
           ],
         },
       ],
@@ -1095,7 +1113,7 @@ export class SuperLong extends HeyApiClient {
   /**
    * Set Super-Long mode
    *
-   * Toggle Super-Long mode on or off for the current runtime session.
+   * Toggle Super-Long mode on or off. Persists to ax-code.json.
    */
   public set<ThrowOnError extends boolean = false>(
     parameters?: {
@@ -1126,6 +1144,25 @@ export class SuperLong extends HeyApiClient {
       },
     })
   }
+
+  /**
+   * Get Super-Long run status
+   *
+   * Returns the resolved Super-Long state plus run timing: durable run start, elapsed time, and time remaining before the runtime ceiling. Pass sessionID to include per-session timing.
+   */
+  public status<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).get<SuperLongStatusResponses, unknown, ThrowOnError>({
+      url: "/super-long/status",
+      ...options,
+      ...params,
+    })
+  }
 }
 
 export class PromptHistory extends HeyApiClient {
@@ -1135,9 +1172,9 @@ export class PromptHistory extends HeyApiClient {
    * Return prompt recall history scoped to the current project.
    */
   public list<ThrowOnError extends boolean = false>(
-    parameters?: {
+    parameters: {
       directory?: string
-      limit?: number
+      limit: number
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -1214,7 +1251,7 @@ export class TaskQueue extends HeyApiClient {
    * Return server-owned task queue items scoped to the current project.
    */
   public list<ThrowOnError extends boolean = false>(
-    parameters?: {
+    parameters: {
       directory?: string
       sessionID?: string
       status?:
@@ -1227,7 +1264,7 @@ export class TaskQueue extends HeyApiClient {
         | "failed"
         | "completed"
         | "cancelled"
-      limit?: number
+      limit: number
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -1660,11 +1697,11 @@ export class ScheduledTask extends HeyApiClient {
    * Return project-scoped scheduled automation tasks.
    */
   public list<ThrowOnError extends boolean = false>(
-    parameters?: {
+    parameters: {
       directory?: string
       status?: "active" | "paused" | "disabled"
-      dueBefore?: number
-      limit?: number
+      dueBefore: number
+      limit: number
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -2004,9 +2041,9 @@ export class ScheduledTask extends HeyApiClient {
    * Run due active scheduled tasks, creating automation queue items or workflow runs as configured.
    */
   public runDue<ThrowOnError extends boolean = false>(
-    parameters?: {
+    parameters: {
       directory?: string
-      now?: number
+      now: number
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -2038,11 +2075,11 @@ export class WorkflowRun extends HeyApiClient {
    * Return durable workflow runs scoped to the current project.
    */
   public list<ThrowOnError extends boolean = false>(
-    parameters?: {
+    parameters: {
       directory?: string
       parentSessionID?: string
       status?: "queued" | "running" | "blocked" | "paused" | "failed" | "completed" | "cancelled"
-      limit?: number
+      limit: number
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -2291,12 +2328,12 @@ export class WorkflowRun extends HeyApiClient {
    * Return compact workflow run projections for TUI and desktop supervision surfaces.
    */
   public dashboard<ThrowOnError extends boolean = false>(
-    parameters?: {
+    parameters: {
       directory?: string
       parentSessionID?: string
       status?: "queued" | "running" | "blocked" | "paused" | "failed" | "completed" | "cancelled"
-      limit?: number
-      now?: number
+      limit: number
+      now: number
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -4053,66 +4090,6 @@ export class Session2 extends HeyApiClient {
   }
 
   /**
-   * Unshare session
-   *
-   * Remove the shareable link for a session, making it private again.
-   */
-  public unshare<ThrowOnError extends boolean = false>(
-    parameters: {
-      sessionID: string
-      directory?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "path", key: "sessionID" },
-            { in: "query", key: "directory" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).delete<SessionUnshareResponses, SessionUnshareErrors, ThrowOnError>({
-      url: "/session/{sessionID}/share",
-      ...options,
-      ...params,
-    })
-  }
-
-  /**
-   * Share session
-   *
-   * Create a shareable link for a session, allowing others to view the conversation.
-   */
-  public share<ThrowOnError extends boolean = false>(
-    parameters: {
-      sessionID: string
-      directory?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "path", key: "sessionID" },
-            { in: "query", key: "directory" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).post<SessionShareResponses, SessionShareErrors, ThrowOnError>({
-      url: "/session/{sessionID}/share",
-      ...options,
-      ...params,
-    })
-  }
-
-  /**
    * Get message diff
    *
    * Get the file changes (diff) that resulted from a specific user message in the session.
@@ -4867,7 +4844,7 @@ export class Audit extends HeyApiClient {
     parameters: {
       sessionID: string
       directory?: string
-      limit?: number
+      limit: number
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -4893,13 +4870,13 @@ export class Audit extends HeyApiClient {
   /**
    * Export all audit events
    *
-   * Export all audit events, optionally filtered by date.
+   * Export all audit events for the current project, optionally filtered by date.
    */
   public exportAll<ThrowOnError extends boolean = false>(
-    parameters?: {
+    parameters: {
       directory?: string
-      limit?: number
-      since?: number
+      limit: number
+      since: number
       risk?: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL"
       type?: string
     },
@@ -4935,7 +4912,7 @@ export class Audit extends HeyApiClient {
     parameters: {
       sessionID: string
       directory?: string
-      fromStep?: number
+      fromStep: number
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -5111,6 +5088,140 @@ export class Question extends HeyApiClient {
   }
 }
 
+export class AxEngine extends HeyApiClient {
+  /**
+   * Get ax-engine local provider status
+   *
+   * Inspect host eligibility, dependency, model cache, server, and capability state for ax-engine.
+   */
+  public status<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).get<ProviderAxEngineStatusResponses, unknown, ThrowOnError>({
+      url: "/provider/ax-engine/status",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Prepare ax-engine local provider
+   *
+   * Mark an existing Qwen3-Coder-Next MLX path or explicitly download it through ax-engine.
+   */
+  public prepare<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      modelPath?: string
+      binaryPath?: string
+      modelID?: "qwen3-coder-next" | "qwen3.6-35b-a3b"
+      quantization?: "mlx4bit" | "mlx6bit"
+      download?: boolean
+      start?: boolean
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "body", key: "modelPath" },
+            { in: "body", key: "binaryPath" },
+            { in: "body", key: "modelID" },
+            { in: "body", key: "quantization" },
+            { in: "body", key: "download" },
+            { in: "body", key: "start" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      ProviderAxEnginePrepareResponses,
+      ProviderAxEnginePrepareErrors,
+      ThrowOnError
+    >({
+      url: "/provider/ax-engine/prepare",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Start managed ax-engine server
+   *
+   * Start ax-engine for an already prepared or explicitly provided Qwen3-Coder-Next MLX model.
+   */
+  public start<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      modelPath?: string
+      binaryPath?: string
+      modelID?: "qwen3-coder-next" | "qwen3.6-35b-a3b"
+      quantization?: "mlx4bit" | "mlx6bit"
+      download?: boolean
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "body", key: "modelPath" },
+            { in: "body", key: "binaryPath" },
+            { in: "body", key: "modelID" },
+            { in: "body", key: "quantization" },
+            { in: "body", key: "download" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      ProviderAxEngineStartResponses,
+      ProviderAxEngineStartErrors,
+      ThrowOnError
+    >({
+      url: "/provider/ax-engine/start",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Stop managed ax-engine server
+   */
+  public stop<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).post<ProviderAxEngineStopResponses, unknown, ThrowOnError>({
+      url: "/provider/ax-engine/stop",
+      ...options,
+      ...params,
+    })
+  }
+}
+
 export class Oauth extends HeyApiClient {
   /**
    * OAuth authorize
@@ -5240,6 +5351,11 @@ export class Provider extends HeyApiClient {
     })
   }
 
+  private _axEngine?: AxEngine
+  get axEngine(): AxEngine {
+    return (this._axEngine ??= new AxEngine({ client: this.client }))
+  }
+
   private _oauth?: Oauth
   get oauth(): Oauth {
     return (this._oauth ??= new Oauth({ client: this.client }))
@@ -5288,7 +5404,7 @@ export class Find extends HeyApiClient {
       query: string
       dirs?: "true" | "false"
       type?: "file" | "directory"
-      limit?: number
+      limit: number
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -6162,6 +6278,25 @@ export class App extends HeyApiClient {
   }
 
   /**
+   * List agents
+   *
+   * Get a list of all available AI agents in the ax-code system.
+   */
+  public agents<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).get<AppAgentsResponses, unknown, ThrowOnError>({
+      url: "/agent",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
    * Get project context
    *
    * Get instruction-file and cached-memory metadata for the current project context.
@@ -6248,25 +6383,6 @@ export class App extends HeyApiClient {
     const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
     return (options?.client ?? this.client).delete<AppContextMemoryClearResponses, unknown, ThrowOnError>({
       url: "/context/memory",
-      ...options,
-      ...params,
-    })
-  }
-
-  /**
-   * List agents
-   *
-   * Get a list of all available AI agents in the ax-code system.
-   */
-  public agents<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
-    return (options?.client ?? this.client).get<AppAgentsResponses, unknown, ThrowOnError>({
-      url: "/agent",
       ...options,
       ...params,
     })
@@ -6431,7 +6547,7 @@ export class DebugEngine extends HeyApiClient {
   /**
    * DRE status and pending refactor plans
    *
-   * Return the current project's pending refactor plans plus DRE health information (graph node count, last-indexed timestamp, registered tool count). The TUI footer uses the plans count for its chip; the TUI sidebar uses the graph and tool fields to render the DRE section empty state so users can tell at a glance whether DRE is ready to use. Fields default to zero / null when the experimental DRE flag is off, so callers can poll unconditionally. The `graph` and `toolCount` fields were added in v2.3.6 — older clients ignore unknown fields and continue to work against the original `{ count, plans }` shape.
+   * Return the current project's pending refactor plans plus DRE health information (graph node count, last-indexed timestamp, registered tool count). The TUI footer uses the plans count for its chip; the TUI sidebar uses the graph and tool fields to render the DRE section empty state so users can tell at a glance whether DRE is ready to use. Fields default to zero / null when the experimental DRE flag is off, so callers can poll unconditionally. The `graph` and `toolCount` fields were added in v2.3.6 - older clients ignore unknown fields and continue to work against the original `{ count, plans }` shape.
    */
   public pendingPlans<ThrowOnError extends boolean = false>(
     parameters?: {

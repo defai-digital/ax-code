@@ -402,6 +402,28 @@ export function createHeadlessClient(input: HeadlessClientOptions) {
     abort(sessionID: string) {
       return send({ type: "session.abort", sessionID })
     },
+    shareSession(sessionID: string) {
+      return requestJson<unknown>({
+        baseUrl: input.baseUrl,
+        fetch: fetchFn,
+        headers: input.headers,
+        directory: input.directory,
+        experimental_workspaceID: input.experimental_workspaceID,
+        path: `/session/${encodeURIComponent(sessionID)}/share`,
+        method: "POST",
+      })
+    },
+    unshareSession(sessionID: string) {
+      return requestJson<unknown>({
+        baseUrl: input.baseUrl,
+        fetch: fetchFn,
+        headers: input.headers,
+        directory: input.directory,
+        experimental_workspaceID: input.experimental_workspaceID,
+        path: `/session/${encodeURIComponent(sessionID)}/share`,
+        method: "DELETE",
+      })
+    },
     replyPermission(body: HeadlessPermissionReplyBody) {
       return send({ type: "permission.reply", body })
     },

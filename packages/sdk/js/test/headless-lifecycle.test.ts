@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test"
-import { chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import {
@@ -31,9 +31,12 @@ afterEach(() => {
 describe("headless backend lifecycle", () => {
   test("starts with generated auth, verifies health, and terminates the backend", async () => {
     await using fake = await createReadyFakeAxCode()
+    const workspace = path.join(fake.dir, "workspace-測試")
+    await mkdir(workspace)
     const healthRequests: Request[] = []
 
     const backend = await startHeadlessBackend({
+      directory: workspace,
       auth: { username: "app", password: "secret" },
       reservePort: async () => 18456,
       fetch: (async (input: URL | RequestInfo, init?: RequestInit) => {
@@ -47,9 +50,12 @@ describe("headless backend lifecycle", () => {
 
     expect(backend.url).toBe("http://127.0.0.1:18456")
     expect(backend.headers.Authorization).toBe("Basic " + Buffer.from("app:secret").toString("base64"))
+    expect(backend.headers["x-ax-code-directory"]).toBe(encodeURIComponent(workspace))
+    expect(backend.headers["x-opencode-directory"]).toBe(encodeURIComponent(workspace))
     expect(backend.diagnostics).toMatchObject({
       binary: "ax-code",
       args: ["serve", "--hostname=127.0.0.1", "--port=18456"],
+      cwd: workspace,
       hostname: "127.0.0.1",
       port: 18456,
       authUsername: "app",
@@ -58,6 +64,8 @@ describe("headless backend lifecycle", () => {
     })
     expect(healthRequests.map((request) => new URL(request.url).pathname)).toEqual(["/global/health"])
     expect(healthRequests[0].headers.get("authorization")).toBe(backend.headers.Authorization)
+    expect(healthRequests[0].headers.get("x-ax-code-directory")).toBe(encodeURIComponent(workspace))
+    expect(healthRequests[0].headers.get("x-opencode-directory")).toBe(encodeURIComponent(workspace))
     expect(await waitForFile(fake.authFile)).toBe("app:secret\n")
     const args = await waitForFile(fake.argsFile)
     expect(args).toContain("serve --hostname=127.0.0.1 --port=")
@@ -421,6 +429,7 @@ async function createReadyFakeAxCode() {
   process.env.AX_CODE_FAKE_EXTRA_ENV_FILE = extraEnvFile
 
   return {
+    dir,
     bin,
     pidFile,
     termFile,

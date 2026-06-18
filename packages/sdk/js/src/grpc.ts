@@ -1901,15 +1901,9 @@ async function handleHttpBridgeUnary(
         ),
       )
     case AX_CODE_GRPC_METHOD.ShareSession:
-      return wrap(
-        unwrapHttpSdkResponse(await client.client.session.share({ sessionID: body.sessionID }, { throwOnError: true })),
-      )
+      return wrap(await client.shareSession(body.sessionID))
     case AX_CODE_GRPC_METHOD.UnshareSession:
-      return wrap(
-        unwrapHttpSdkResponse(
-          await client.client.session.unshare({ sessionID: body.sessionID }, { throwOnError: true }),
-        ),
-      )
+      return wrap(await client.unshareSession(body.sessionID))
     case AX_CODE_GRPC_METHOD.SummarizeSession:
       return wrap(
         unwrapHttpSdkResponse(

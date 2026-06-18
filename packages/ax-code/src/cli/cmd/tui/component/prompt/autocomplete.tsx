@@ -241,6 +241,7 @@ export function Autocomplete(props: {
       const result = await sdk.client.find.files(
         {
           query: baseQuery,
+          limit: 100,
         },
         { signal },
       )

@@ -42,7 +42,7 @@ export function DialogWorkflow() {
     refreshTick,
     createAbortableResourceFetcher<number, WorkflowDashboardRun[]>(async (_tick, signal, info) => {
       try {
-        const result = await sdk.client.workflowRun.dashboard({ limit: 30 }, { signal })
+        const result = await sdk.client.workflowRun.dashboard({ limit: 30, now: Date.now() }, { signal })
         if (result.error) {
           toast.show({ message: workflowErrorMessage(result.error, "Failed to load workflow runs"), variant: "error" })
           return info.value ?? []
