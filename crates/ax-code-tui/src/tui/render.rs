@@ -83,7 +83,7 @@ fn render_header(frame: &mut Frame, app: &App, area: Rect) {
     let session_info = app
         .session_id
         .as_ref()
-        .map(|id| format!(" [{}]", &id[..8.min(id.len())]))
+        .map(|id| format!(" [{}]", short_id(id)))
         .unwrap_or_default();
 
     // Status indicator
@@ -301,7 +301,7 @@ fn render_session_list(frame: &mut Frame, app: &App, area: Rect) {
 
             let prefix = if is_current { "▶ " } else { "  " };
             let title = session.title.as_deref().unwrap_or("Untitled");
-            let id_short = &session.id[..8.min(session.id.len())];
+            let id_short = short_id(&session.id);
 
             let style = if is_selected {
                 Style::default()
@@ -474,4 +474,8 @@ fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
             Constraint::Percentage((100 - percent_x) / 2),
         ])
         .split(popup_layout[1])[1]
+}
+
+fn short_id(id: &str) -> String {
+    id.chars().take(8).collect()
 }

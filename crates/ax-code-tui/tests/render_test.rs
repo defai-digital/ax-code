@@ -1,6 +1,8 @@
 //! Tests for rendering helper functions.
 
-use ax_code_tui::tui::app::{App, AppMode};
+use ax_code_tui::tui::app::{App, AppMode, SessionSummary};
+use ax_code_tui::tui::render;
+use ratatui::{Terminal, backend::TestBackend};
 
 // =============================================================================
 // Status Bar Formatting Tests
@@ -61,6 +63,39 @@ fn test_format_status_bar_exact_width() {
     // Width that fits the status exactly
     let result = App::format_status_bar(AppMode::Input, Some("OK"), 20);
     assert!(result.contains("OK"));
+}
+
+#[test]
+fn test_render_header_unicode_session_id_no_panic() {
+    let backend = TestBackend::new(80, 24);
+    let mut terminal = Terminal::new(backend).expect("terminal");
+    let mut app = App::new();
+    app.session_id = Some("会話セッション_001".to_string());
+
+    terminal.draw(|frame| render(frame, &app)).expect("render");
+}
+
+#[test]
+fn test_render_session_list_unicode_ids_no_panic() {
+    let backend = TestBackend::new(100, 24);
+    let mut terminal = Terminal::new(backend).expect("terminal");
+    let mut app = App::new();
+    app.show_session_list = true;
+    app.session_id = Some("会話セッション_current".to_string());
+    app.load_sessions(vec![
+        SessionSummary {
+            id: "会話セッション_current".to_string(),
+            title: Some("Current".to_string()),
+            message_count: 1,
+        },
+        SessionSummary {
+            id: "別のセッション_002".to_string(),
+            title: Some("Other".to_string()),
+            message_count: 2,
+        },
+    ]);
+
+    terminal.draw(|frame| render(frame, &app)).expect("render");
 }
 
 // =============================================================================
