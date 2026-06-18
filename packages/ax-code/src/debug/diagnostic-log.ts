@@ -259,6 +259,7 @@ export namespace DiagnosticLog {
 
 function redactLogValue(input: unknown, seen = new WeakSet<object>(), depth = 0): unknown {
   if (input === null || input === undefined) return input
+  if (typeof input === "bigint") return input.toString()
   if (typeof input !== "object") return input
   if (seen.has(input)) return "[Circular]"
   if (depth > 8) return "[MaxDepth]"
