@@ -150,6 +150,26 @@ describe("FileWatcher native event decoding", () => {
       SyntaxError,
     )
   })
+
+  test("poll snapshots do not treat unreadable directories as empty", async () => {
+    await using tmp = await tmpdir()
+    const blocked = path.join(tmp.path, "blocked")
+    await fs.mkdir(blocked)
+    await fs.writeFile(path.join(blocked, "file.txt"), "content")
+    await fs.chmod(blocked, 0)
+
+    try {
+      await expect(FileWatcher.snapshotPollTree(blocked, [])).rejects.toMatchObject({ code: "EACCES" })
+    } finally {
+      await fs.chmod(blocked, 0o700).catch(() => undefined)
+    }
+  })
+
+  test("poll snapshots still treat missing directories as empty", async () => {
+    await using tmp = await tmpdir()
+
+    await expect(FileWatcher.snapshotPollTree(path.join(tmp.path, "missing"), [])).resolves.toEqual(new Map())
+  })
 })
 
 describeWatcher("FileWatcher", () => {

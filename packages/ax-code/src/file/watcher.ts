@@ -115,17 +115,27 @@ export namespace FileWatcher {
     return defaultValue
   }
 
-  async function snapshot(dir: string, ignore: string[], root = dir, result = new Map<string, string>()) {
-    const entries = await readdir(dir, { withFileTypes: true }).catch(() => [])
+  function isMissingPathError(error: unknown) {
+    return (error as NodeJS.ErrnoException | undefined)?.code === "ENOENT"
+  }
+
+  export async function snapshotPollTree(dir: string, ignore: string[], root = dir, result = new Map<string, string>()) {
+    const entries = await readdir(dir, { withFileTypes: true }).catch((error) => {
+      if (isMissingPathError(error)) return []
+      throw error
+    })
     for (const entry of entries) {
       const file = path.join(dir, entry.name)
       if (ignored(root, ignore, file)) continue
       if (entry.isDirectory()) {
-        await snapshot(file, ignore, root, result)
+        await snapshotPollTree(file, ignore, root, result)
         continue
       }
       if (!entry.isFile()) continue
-      const info = await stat(file).catch(() => undefined)
+      const info = await stat(file).catch((error) => {
+        if (isMissingPathError(error)) return undefined
+        throw error
+      })
       if (!info?.isFile()) continue
       result.set(file, `${info.mtimeMs}:${info.size}`)
     }
@@ -239,7 +249,7 @@ export namespace FileWatcher {
       const subscribePoll = async (dir: string, ignore: string[]) => {
         try {
           let prev = await withTimeout(
-            snapshot(dir, ignore),
+            snapshotPollTree(dir, ignore),
             SUBSCRIBE_TIMEOUT_MS,
             `Timed out after ${SUBSCRIBE_TIMEOUT_MS}ms`,
           )
@@ -249,7 +259,7 @@ export namespace FileWatcher {
             if (busy) return
             busy = true
             try {
-              const next = await NativePerf.runAsync("fs.watcher.pollSnapshot", dir, () => snapshot(dir, ignore))
+              const next = await NativePerf.runAsync("fs.watcher.pollSnapshot", dir, () => snapshotPollTree(dir, ignore))
               for (const [file, hash] of next) {
                 const last = prev.get(file)
                 if (!last) await Bus.publish(Event.Updated, { file, event: "add" })
