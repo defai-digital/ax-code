@@ -109,6 +109,26 @@ describe("tool.webfetch", () => {
     )
   })
 
+  test("ignores non-decimal content-length headers and enforces the streamed size", async () => {
+    await withFetch(
+      async () =>
+        new Response("small body", {
+          status: 200,
+          headers: { "content-type": "text/plain; charset=utf-8", "content-length": "0x100000000" },
+        }),
+      async () => {
+        await Instance.provide({
+          directory: projectRoot,
+          fn: async () => {
+            const webfetch = await WebFetchTool.init()
+            const result = await webfetch.execute({ url: "https://93.184.216.34/file.txt", format: "text" }, ctx)
+            expect(result.output).toBe("small body")
+          },
+        })
+      },
+    )
+  })
+
   test("accepts URL schemes case-insensitively", async () => {
     await withFetch(
       async () =>

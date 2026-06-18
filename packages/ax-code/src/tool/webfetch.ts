@@ -10,6 +10,7 @@ import {
   WEBFETCH_MAX_TIMEOUT as MAX_TIMEOUT,
 } from "@/constants/network"
 import { Isolation } from "@/isolation"
+import { parseContentLengthHeader } from "@/util/http-header"
 
 // Block SSRF to private/reserved IP ranges. Uses pinnedFetch to
 // resolve DNS once and connect to the validated IP directly —
@@ -138,13 +139,8 @@ export const WebFetchTool = Tool.define("webfetch", {
       }
 
       // Check content length header first
-      const contentLength = response.headers.get("content-length")
-      const contentLengthBytes = contentLength ? Number(contentLength) : undefined
-      if (
-        contentLengthBytes !== undefined &&
-        !Number.isNaN(contentLengthBytes) &&
-        contentLengthBytes > MAX_RESPONSE_SIZE
-      ) {
+      const contentLengthBytes = parseContentLengthHeader(response.headers.get("content-length"))
+      if (contentLengthBytes !== undefined && contentLengthBytes > MAX_RESPONSE_SIZE) {
         throw new Error("Response too large (exceeds 5MB limit)")
       }
 

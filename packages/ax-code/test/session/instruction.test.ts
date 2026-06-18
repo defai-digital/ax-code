@@ -327,4 +327,33 @@ describe("InstructionPrompt.system remote instructions", () => {
       fetchSpy.mockRestore()
     }
   })
+
+  test("ignores non-decimal remote instruction content-length headers", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      config: {
+        instructions: ["https://example.com/AGENTS.md"],
+      },
+    })
+    const assertSpy = spyOn(Ssrf, "assertPublicUrl").mockResolvedValue(undefined as never)
+    const fetchSpy = spyOn(Ssrf, "pinnedFetch").mockResolvedValue(
+      new Response("# Remote Instructions", {
+        headers: { "content-length": "0x100000000" },
+      }) as never,
+    )
+
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const prompts = await InstructionPrompt.system()
+
+          expect(prompts).toContain("Instructions from: https://example.com/AGENTS.md\n# Remote Instructions")
+        },
+      })
+    } finally {
+      assertSpy.mockRestore()
+      fetchSpy.mockRestore()
+    }
+  })
 })

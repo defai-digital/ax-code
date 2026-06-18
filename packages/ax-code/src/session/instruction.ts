@@ -10,6 +10,7 @@ import { Log } from "../util/log"
 import { Glob } from "../util/glob"
 import { Ssrf } from "../util/ssrf"
 import type { MessageV2 } from "./message-v2"
+import { parseContentLengthHeader } from "@/util/http-header"
 
 const log = Log.create({ service: "instruction" })
 
@@ -209,12 +210,8 @@ export namespace InstructionPrompt {
             return ""
           }
           const contentLength = res.headers.get("content-length")
-          const contentLengthBytes = contentLength ? Number(contentLength) : undefined
-          if (
-            contentLengthBytes !== undefined &&
-            !Number.isNaN(contentLengthBytes) &&
-            contentLengthBytes > INSTRUCTION_MAX_BYTES
-          ) {
+          const contentLengthBytes = parseContentLengthHeader(contentLength)
+          if (contentLengthBytes !== undefined && contentLengthBytes > INSTRUCTION_MAX_BYTES) {
             log.warn("instruction URL response too large", { url, contentLength })
             return ""
           }
