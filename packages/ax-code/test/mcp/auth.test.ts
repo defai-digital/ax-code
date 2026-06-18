@@ -117,4 +117,34 @@ describe("McpAuth persistence", () => {
 
     expect(await Bun.file(authFile).text()).toBe(invalid)
   })
+
+  test("filters malformed auth entries without rewriting the file", async () => {
+    const stored = JSON.stringify({
+      server: {
+        tokens: {
+          accessToken: "access-token",
+        },
+        serverUrl: "https://example.com/mcp",
+      },
+      malformedPrimitive: "bad",
+      malformedTokens: {
+        tokens: {
+          accessToken: 1,
+        },
+      },
+    })
+    await Bun.write(authFile, stored)
+
+    const all = await McpAuth.all()
+
+    expect(all.server).toMatchObject({
+      tokens: {
+        accessToken: "access-token",
+      },
+      serverUrl: "https://example.com/mcp",
+    })
+    expect(all.malformedPrimitive).toBeUndefined()
+    expect(all.malformedTokens).toBeUndefined()
+    expect(await Bun.file(authFile).text()).toBe(stored)
+  })
 })

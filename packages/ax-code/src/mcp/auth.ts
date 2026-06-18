@@ -69,6 +69,12 @@ export namespace McpAuth {
     return decryptField(entry, "codeVerifier") as unknown as Entry
   }
 
+  function parseStoredEntry(value: unknown): Entry | undefined {
+    if (!isRecord(value)) return undefined
+    const parsed = Entry.safeParse(decryptEntry(value))
+    return parsed.success ? parsed.data : undefined
+  }
+
   function encryptEntry(entry: Entry): Record<string, unknown> {
     const out = { ...entry } as Record<string, unknown>
     if (entry.tokens) {
@@ -109,7 +115,8 @@ export namespace McpAuth {
     const raw = await readRawFile()
     const result: Record<string, Entry> = {}
     for (const [key, val] of Object.entries(raw)) {
-      result[key] = decryptEntry(val as Record<string, unknown>)
+      const entry = parseStoredEntry(val)
+      if (entry) result[key] = entry
     }
     return result
   }
