@@ -179,6 +179,25 @@ async fn test_parse_message_part_updated() {
 }
 
 #[tokio::test]
+async fn test_parse_tool_message_part_updated() {
+    let json = r#"{"type":"message.part.updated","properties":{"part":{"id":"part_tool","sessionID":"sess_123","messageID":"msg_123","type":"tool","callID":"call_1","tool":"bash","state":{"status":"completed","output":"done","title":"bash","input":{},"metadata":{},"time":{"start":1,"end":2}}}}}"#;
+    let event: RuntimeEvent = serde_json::from_str(json).unwrap();
+
+    match event {
+        RuntimeEvent::MessagePartUpdated { properties } => {
+            let part = properties.part.as_ref().unwrap();
+            assert_eq!(part.part_type, "tool");
+            assert_eq!(part.call_id.as_deref(), Some("call_1"));
+            assert_eq!(part.tool.as_deref(), Some("bash"));
+            let state = part.state.as_ref().unwrap();
+            assert_eq!(state.status, "completed");
+            assert_eq!(state.output.as_deref(), Some("done"));
+        }
+        _ => panic!("Expected MessagePartUpdated event"),
+    }
+}
+
+#[tokio::test]
 async fn test_parse_message_removed() {
     let json =
         r#"{"type":"message.removed","properties":{"sessionID":"sess_123","messageID":"msg_123"}}"#;

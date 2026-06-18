@@ -260,6 +260,10 @@ impl App {
                             &part.id,
                             part.text.as_deref().unwrap_or_default(),
                         );
+                    } else if part.part_type == "tool" {
+                        let call_id = part.call_id.as_deref().unwrap_or(&part.id);
+                        let tool_name = part.tool.as_deref().unwrap_or("tool");
+                        self.upsert_tool_part(call_id, tool_name, part.state.as_ref());
                     }
                 }
             }
@@ -432,6 +436,46 @@ impl App {
                 .filter(|part| part.message_id == message_id)
                 .map(|part| part.text.as_str())
                 .collect();
+        }
+    }
+
+    fn upsert_tool_part(
+        &mut self,
+        call_id: &str,
+        tool_name: &str,
+        state: Option<&crate::events::ToolPartState>,
+    ) {
+        let status = match state.map(|s| s.status.as_str()) {
+            Some("completed") => ToolCallStatus::Completed,
+            Some("error") => ToolCallStatus::Failed,
+            _ => ToolCallStatus::Running,
+        };
+        let result = state.and_then(|s| s.output.clone());
+        let error = state.and_then(|s| s.error.clone());
+
+        if let Some(tool_call) = self.tool_calls.iter_mut().find(|t| t.call_id == call_id) {
+            tool_call.tool_name = tool_name.to_string();
+            tool_call.status = status;
+            tool_call.result = result;
+            tool_call.error = error;
+        } else {
+            self.tool_calls.push(ToolCall {
+                call_id: call_id.to_string(),
+                tool_name: tool_name.to_string(),
+                status,
+                result,
+                error,
+            });
+        }
+
+        if self
+            .tool_calls
+            .iter()
+            .any(|t| t.status == ToolCallStatus::Running)
+        {
+            self.session_status = SessionStatus::Running;
+        } else {
+            self.session_status = SessionStatus::Idle;
         }
     }
 
@@ -853,6 +897,7 @@ mod tests {
     use crate::events::{
         MessageData, MessageInfo, MessagePartData, MessagePartDeltaProps, MessagePartInfo,
         MessagePartRemovedProps, MessageRemovedProps, RequestReplyProps, RuntimeEvent,
+        ToolPartState,
     };
 
     // === HIGH 1: multi-byte prompt editing must not panic ===
@@ -1141,6 +1186,9 @@ mod tests {
                     session_id: "s".to_string(),
                     message_id: "m1".to_string(),
                     part_type: "text".to_string(),
+                    call_id: None,
+                    tool: None,
+                    state: None,
                     text: Some("full text".to_string()),
                 }),
             },
@@ -1168,6 +1216,9 @@ mod tests {
                     session_id: "s".to_string(),
                     message_id: "m1".to_string(),
                     part_type: "text".to_string(),
+                    call_id: None,
+                    tool: None,
+                    state: None,
                     text: Some("partial final".to_string()),
                 }),
             },
@@ -1224,6 +1275,59 @@ mod tests {
         });
 
         assert_eq!(app.messages[0].content, "world");
+    }
+
+    #[test]
+    fn test_tool_message_part_updates_tool_state() {
+        let mut app = App::new();
+        app.handle_event(RuntimeEvent::MessagePartUpdated {
+            properties: MessagePartInfo {
+                part: Some(MessagePartData {
+                    id: "part_tool".to_string(),
+                    session_id: "s".to_string(),
+                    message_id: "m1".to_string(),
+                    part_type: "tool".to_string(),
+                    call_id: Some("call_1".to_string()),
+                    tool: Some("bash".to_string()),
+                    state: Some(ToolPartState {
+                        status: "running".to_string(),
+                        output: None,
+                        error: None,
+                    }),
+                    text: None,
+                }),
+            },
+        });
+
+        assert_eq!(app.tool_calls.len(), 1);
+        assert_eq!(app.tool_calls[0].call_id, "call_1");
+        assert_eq!(app.tool_calls[0].tool_name, "bash");
+        assert_eq!(app.tool_calls[0].status, ToolCallStatus::Running);
+        assert_eq!(app.session_status, SessionStatus::Running);
+
+        app.handle_event(RuntimeEvent::MessagePartUpdated {
+            properties: MessagePartInfo {
+                part: Some(MessagePartData {
+                    id: "part_tool".to_string(),
+                    session_id: "s".to_string(),
+                    message_id: "m1".to_string(),
+                    part_type: "tool".to_string(),
+                    call_id: Some("call_1".to_string()),
+                    tool: Some("bash".to_string()),
+                    state: Some(ToolPartState {
+                        status: "completed".to_string(),
+                        output: Some("done".to_string()),
+                        error: None,
+                    }),
+                    text: None,
+                }),
+            },
+        });
+
+        assert_eq!(app.tool_calls.len(), 1);
+        assert_eq!(app.tool_calls[0].status, ToolCallStatus::Completed);
+        assert_eq!(app.tool_calls[0].result.as_deref(), Some("done"));
+        assert_eq!(app.session_status, SessionStatus::Idle);
     }
 
     // === LOW 2: request_abort does not optimistically flip status ===

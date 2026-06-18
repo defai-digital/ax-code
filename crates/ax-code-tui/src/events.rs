@@ -237,8 +237,24 @@ pub struct MessagePartData {
     pub message_id: String,
     #[serde(rename = "type", default)]
     pub part_type: String,
+    #[serde(rename = "callID", default)]
+    pub call_id: Option<String>,
+    #[serde(default)]
+    pub tool: Option<String>,
+    #[serde(default)]
+    pub state: Option<ToolPartState>,
     #[serde(default)]
     pub text: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ToolPartState {
+    #[serde(default)]
+    pub status: String,
+    #[serde(default)]
+    pub output: Option<String>,
+    #[serde(default)]
+    pub error: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
