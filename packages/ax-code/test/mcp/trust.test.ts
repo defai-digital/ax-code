@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, expect, mock, test } from "bun:test"
+import fs from "fs/promises"
 import path from "path"
 
 const localTransports: Array<{ command: string; args: string[]; closeCalls: number }> = []
@@ -61,16 +62,26 @@ mock.module("@modelcontextprotocol/sdk/client/index.js", () => ({
 }))
 
 const { MCP } = await import("../../src/mcp/index")
+const { Global } = await import("../../src/global")
 const { Instance } = await import("../../src/project/instance")
+const { McpTrust } = await import("../../src/mcp/trust")
 const { tmpdir } = await import("../fixture/fixture")
 
-beforeEach(() => {
+const trustFile = path.join(Global.Path.data, "mcp-trust.json")
+
+async function resetTrustFile() {
+  await fs.rm(trustFile, { force: true }).catch(() => undefined)
+}
+
+beforeEach(async () => {
   localTransports.length = 0
   connectCalls = 0
+  await resetTrustFile()
 })
 
 afterEach(async () => {
   await Instance.disposeAll()
+  await resetTrustFile()
 })
 
 test("project MCP local command stays disconnected until explicitly trusted", async () => {
@@ -151,4 +162,60 @@ test("project MCP trust is invalidated when the command fingerprint changes", as
       expect(connectCalls).toBe(0)
     },
   })
+})
+
+test("project MCP trust updates do not overwrite malformed trust JSON", async () => {
+  await using tmp = await tmpdir({ git: true })
+  const malformed = "{not json"
+  await Bun.write(trustFile, malformed)
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await expect(
+        McpTrust.trust(
+          "local",
+          {
+            type: "local",
+            command: ["node", "server.js"],
+          },
+          {
+            kind: "project",
+            trustedByDefault: false,
+            path: tmp.path,
+          },
+        ),
+      ).rejects.toThrow("Failed to parse JSON")
+    },
+  })
+
+  expect(await Bun.file(trustFile).text()).toBe(malformed)
+})
+
+test("project MCP trust updates do not overwrite invalid trust store schema", async () => {
+  await using tmp = await tmpdir({ git: true })
+  const invalid = JSON.stringify({ version: 999, records: {} })
+  await Bun.write(trustFile, invalid)
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await expect(
+        McpTrust.trust(
+          "local",
+          {
+            type: "local",
+            command: ["node", "server.js"],
+          },
+          {
+            kind: "project",
+            trustedByDefault: false,
+            path: tmp.path,
+          },
+        ),
+      ).rejects.toThrow("Invalid MCP trust store")
+    },
+  })
+
+  expect(await Bun.file(trustFile).text()).toBe(invalid)
 })

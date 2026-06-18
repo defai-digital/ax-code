@@ -12,6 +12,10 @@ export namespace McpTrust {
   const fingerprintVersion = 1
   const filepath = path.join(Global.Path.data, "mcp-trust.json")
 
+  function isEnoent(error: unknown): error is { code: "ENOENT" } {
+    return typeof error === "object" && error !== null && (error as { code?: unknown }).code === "ENOENT"
+  }
+
   const Source = z.object({
     kind: z.string(),
     trustedByDefault: z.boolean(),
@@ -112,10 +116,13 @@ export namespace McpTrust {
   }
 
   async function read(): Promise<Store> {
-    const raw = await Filesystem.readJson<unknown>(filepath).catch(() => undefined)
+    const raw = await Filesystem.readJson<unknown>(filepath).catch((error) => {
+      if (isEnoent(error)) return { version: TRUST_FILE_VERSION, records: {} }
+      throw error
+    })
     const parsed = Store.safeParse(raw)
     if (parsed.success) return parsed.data
-    return { version: TRUST_FILE_VERSION, records: {} }
+    throw new Error(`Invalid MCP trust store in ${filepath}: ${parsed.error.message}`)
   }
 
   async function write(store: Store) {
