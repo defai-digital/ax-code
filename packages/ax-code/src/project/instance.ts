@@ -7,6 +7,7 @@ import { ServiceManager } from "@/runtime/service-manager"
 import { Filesystem } from "@/util/filesystem"
 import { iife } from "@/util/iife"
 import { Log } from "@/util/log"
+import { toErrorMessage } from "@/util/error-message"
 import { Context } from "../util/context"
 import { Project } from "./project"
 import { State } from "./state"
@@ -36,7 +37,7 @@ function errorMetadata(error: unknown) {
   }
   return {
     errorName: "Error",
-    errorMessage: String(error),
+    errorMessage: toErrorMessage(error),
   }
 }
 

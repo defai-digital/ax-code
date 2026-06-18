@@ -60,6 +60,43 @@ describe("Instance context extensions", () => {
     expect(Instance.list()).not.toContain(tmp.path)
   })
 
+  test("emits boot failure lifecycle events for unprintable init failures", async () => {
+    await using tmp = await tmpdir()
+    const failure = {
+      toString() {
+        throw new Error("cannot print")
+      },
+    }
+    const events = [] as Instance.LifecycleEvent[]
+    const unsubscribe = Instance.onLifecycle((event) => {
+      if (event.directory && event.directory !== tmp.path) return
+      events.push(event)
+    })
+
+    try {
+      await expect(
+        Instance.provide({
+          directory: tmp.path,
+          init: async () => {
+            throw failure
+          },
+          fn: async () => undefined,
+        }),
+      ).rejects.toBe(failure)
+    } finally {
+      unsubscribe()
+    }
+
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        kind: "boot.failed",
+        directory: tmp.path,
+        errorName: "Error",
+        errorMessage: "Unknown error",
+      }),
+    )
+  })
+
   test("builds runtime snapshots from tracked services in the current instance", async () => {
     await using tmp = await tmpdir()
 
