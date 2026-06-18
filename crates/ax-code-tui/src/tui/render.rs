@@ -264,11 +264,19 @@ fn render_question_modal(frame: &mut Frame, app: &App, area: Rect) {
             })
             .collect();
 
+        // Show progress indicator for multi-question requests so the user
+        // knows which sub-question they are answering (e.g. "(2/3)").
+        let progress = if req.total > 1 {
+            format!(" ({}/{})", req.index + 1, req.total)
+        } else {
+            String::new()
+        };
+
         let list = List::new(items)
             .block(
                 Block::default()
                     .borders(Borders::ALL)
-                    .title(format!(" {} ", req.question))
+                    .title(format!(" {}{} ", req.question, progress))
                     .style(Style::default().fg(Color::Cyan)),
             )
             .style(Style::default().fg(Color::White));
@@ -283,7 +291,7 @@ fn render_question_modal(frame: &mut Frame, app: &App, area: Rect) {
             width: modal_area.width,
             height: 1,
         };
-        let footer = Paragraph::new(" [↑↓] Navigate  [Enter] Select  [Esc] Cancel ")
+        let footer = Paragraph::new(" [↑↓] Navigate  [Enter/1-9] Select  [Esc] Cancel ")
             .style(Style::default().fg(Color::Black).bg(Color::Gray));
         frame.render_widget(footer, footer_area);
     }
