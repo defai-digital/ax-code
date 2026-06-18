@@ -340,6 +340,7 @@ describe("workflow routes", () => {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
+          now: "1234",
           baseline: {
             label: "single-agent",
             metrics: {
@@ -403,7 +404,7 @@ describe("workflow routes", () => {
       const evalResponse = await app.request(`/workflow-runs/${created.id}/eval-case?${directoryQuery}`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ caseID: "verified-bug-sweep-seeded" }),
+        body: JSON.stringify({ caseID: "verified-bug-sweep-seeded", now: "1234" }),
       })
       expect(evalResponse.status).toBe(200)
       expect(await evalResponse.json()).toMatchObject({
