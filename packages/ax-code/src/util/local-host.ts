@@ -8,6 +8,16 @@ export function isLocalHostname(hostname: string) {
   const host = hostname.startsWith("[") && hostname.endsWith("]") ? hostname.slice(1, -1) : hostname
   if (host === "localhost" || host === "0.0.0.0" || host === "::1") return true
   if (host.endsWith(".localhost")) return true
-  if (host.startsWith("127.")) return true
+  if (isIPv4Loopback(host)) return true
   return false
+}
+
+function isIPv4Loopback(hostname: string) {
+  const parts = hostname.split(".")
+  if (parts.length !== 4 || parts[0] !== "127") return false
+  return parts.every((part) => {
+    if (!/^\d{1,3}$/.test(part)) return false
+    const value = Number(part)
+    return value >= 0 && value <= 255
+  })
 }

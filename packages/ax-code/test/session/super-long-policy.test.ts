@@ -111,6 +111,7 @@ describe("SuperLongPolicy.providerPacing", () => {
 
   test("keeps pacing for remote endpoints and malformed base URLs", () => {
     expect(SuperLongPolicy.providerPacing("my-proxy", { baseURL: "https://api.example.com/v1" })?.maxRequests).toBe(6)
+    expect(SuperLongPolicy.providerPacing("my-proxy", { baseURL: "https://127.evil.com/v1" })?.maxRequests).toBe(6)
     expect(SuperLongPolicy.providerPacing("my-proxy", { baseURL: "not a url" })?.maxRequests).toBe(6)
     expect(SuperLongPolicy.providerPacing("alibaba-qwen", { baseURL: "https://dashscope.example" })?.maxRequests).toBe(
       4,
