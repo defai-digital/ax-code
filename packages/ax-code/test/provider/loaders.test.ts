@@ -532,6 +532,35 @@ describe("offline provider loaders", () => {
     })
   })
 
+  test("ollama ignores discovered models with blank names", async () => {
+    globalThis.fetch = (async (input: string | URL | Request) => {
+      const url = String(input)
+      if (url === "http://localhost:11434/api/tags") {
+        return new Response(JSON.stringify({ models: [{ name: "" }, { name: " \t" }, { name: "qwen:latest" }] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        })
+      }
+      throw new Error(`unexpected fetch: ${url}`)
+    }) as typeof fetch
+
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await Bun.write(path.join(dir, "ax-code.json"), JSON.stringify({}))
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await Provider.ready()
+        const providers = await Provider.list()
+        const ollama = providers[ProviderID.make("ollama")]
+        expect(Object.keys(ollama.models)).toEqual(["qwen:latest"])
+      },
+    })
+  })
+
   test("ollama provider autoloads when server reachable", async () => {
     // Test ollama discovery — this only passes when ollama is running locally
     const reachable = await fetch("http://localhost:11434/api/tags", { signal: AbortSignal.timeout(1000) })

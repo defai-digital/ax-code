@@ -51,7 +51,10 @@ function asOllamaTags(input: unknown): { models: { name: string }[] } | null {
   return {
     models: models.filter(
       (item): item is { name: string } =>
-        !!item && typeof item === "object" && typeof (item as { name?: unknown }).name === "string",
+        !!item &&
+        typeof item === "object" &&
+        typeof (item as { name?: unknown }).name === "string" &&
+        (item as { name: string }).name.trim().length > 0,
     ),
   }
 }
