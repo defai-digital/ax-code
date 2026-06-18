@@ -26,6 +26,8 @@ pub struct App {
     pub session_status: SessionStatus,
     /// Session messages (transcript).
     pub messages: Vec<Message>,
+    /// Text parts keyed by message, preserving event insertion order.
+    pub message_text_parts: Vec<MessageTextPart>,
     /// Current prompt input.
     pub prompt: String,
     /// Cursor position in prompt.
@@ -76,6 +78,14 @@ pub struct Message {
     pub content: String,
     /// Whether this message is currently being streamed (partial).
     pub is_streaming: bool,
+}
+
+/// A text part attached to a message.
+#[derive(Debug, Clone)]
+pub struct MessageTextPart {
+    pub message_id: String,
+    pub part_id: String,
+    pub text: String,
 }
 
 /// A pending permission request.
@@ -132,6 +142,7 @@ impl App {
             session_title: None,
             session_status: SessionStatus::Idle,
             messages: Vec::new(),
+            message_text_parts: Vec::new(),
             prompt: String::new(),
             cursor_position: 0,
             pending_permissions: Vec::new(),
@@ -227,14 +238,22 @@ impl App {
                 }
             }
             RuntimeEvent::MessagePartDelta { properties } => {
-                // Find message by ID and append delta to content
-                if let Some(msg) = self
-                    .messages
-                    .iter_mut()
-                    .find(|m| m.id == properties.message_id)
-                {
-                    if properties.field == "text" || properties.field == "content" {
-                        msg.content.push_str(&properties.delta);
+                if properties.field == "text" || properties.field == "content" {
+                    self.append_message_text_delta(
+                        &properties.message_id,
+                        &properties.part_id,
+                        &properties.delta,
+                    );
+                }
+            }
+            RuntimeEvent::MessagePartUpdated { properties } => {
+                if let Some(part) = properties.part {
+                    if part.part_type == "text" {
+                        self.upsert_message_text_part(
+                            &part.message_id,
+                            &part.id,
+                            part.text.as_deref().unwrap_or_default(),
+                        );
                     }
                 }
             }
@@ -342,6 +361,65 @@ impl App {
     /// Request app shutdown.
     pub fn quit(&mut self) {
         self.should_quit = true;
+    }
+
+    fn ensure_message(&mut self, message_id: &str) {
+        if self.messages.iter().any(|m| m.id == message_id) {
+            return;
+        }
+        self.messages.push(Message {
+            id: message_id.to_string(),
+            role: MessageRole::Assistant,
+            content: String::new(),
+            is_streaming: true,
+        });
+    }
+
+    fn upsert_message_text_part(&mut self, message_id: &str, part_id: &str, text: &str) {
+        self.ensure_message(message_id);
+        if let Some(part) = self
+            .message_text_parts
+            .iter_mut()
+            .find(|part| part.message_id == message_id && part.part_id == part_id)
+        {
+            part.text = text.to_string();
+        } else {
+            self.message_text_parts.push(MessageTextPart {
+                message_id: message_id.to_string(),
+                part_id: part_id.to_string(),
+                text: text.to_string(),
+            });
+        }
+        self.rebuild_message_content(message_id);
+    }
+
+    fn append_message_text_delta(&mut self, message_id: &str, part_id: &str, delta: &str) {
+        self.ensure_message(message_id);
+        if let Some(part) = self
+            .message_text_parts
+            .iter_mut()
+            .find(|part| part.message_id == message_id && part.part_id == part_id)
+        {
+            part.text.push_str(delta);
+        } else {
+            self.message_text_parts.push(MessageTextPart {
+                message_id: message_id.to_string(),
+                part_id: part_id.to_string(),
+                text: delta.to_string(),
+            });
+        }
+        self.rebuild_message_content(message_id);
+    }
+
+    fn rebuild_message_content(&mut self, message_id: &str) {
+        if let Some(msg) = self.messages.iter_mut().find(|m| m.id == message_id) {
+            msg.content = self
+                .message_text_parts
+                .iter()
+                .filter(|part| part.message_id == message_id)
+                .map(|part| part.text.as_str())
+                .collect();
+        }
     }
 
     /// Insert a character at the cursor position.
@@ -760,7 +838,8 @@ fn byte_index_at_char(s: &str, char_idx: usize) -> usize {
 mod tests {
     use super::*;
     use crate::events::{
-        MessageData, MessageInfo, MessagePartDeltaProps, RequestReplyProps, RuntimeEvent,
+        MessageData, MessageInfo, MessagePartData, MessagePartDeltaProps, MessagePartInfo,
+        RequestReplyProps, RuntimeEvent,
     };
 
     // === HIGH 1: multi-byte prompt editing must not panic ===
@@ -1027,6 +1106,61 @@ mod tests {
         });
 
         assert_eq!(app.messages[0].content, "streamed text");
+    }
+
+    #[test]
+    fn test_message_part_updated_sets_text_content() {
+        let mut app = App::new();
+        app.handle_event(RuntimeEvent::MessageUpdated {
+            properties: MessageInfo {
+                info: Some(MessageData {
+                    id: "m1".to_string(),
+                    session_id: "s".to_string(),
+                    role: Some(crate::events::MessageRole::Assistant),
+                }),
+            },
+        });
+
+        app.handle_event(RuntimeEvent::MessagePartUpdated {
+            properties: MessagePartInfo {
+                part: Some(MessagePartData {
+                    id: "p1".to_string(),
+                    session_id: "s".to_string(),
+                    message_id: "m1".to_string(),
+                    part_type: "text".to_string(),
+                    text: Some("full text".to_string()),
+                }),
+            },
+        });
+
+        assert_eq!(app.messages[0].content, "full text");
+    }
+
+    #[test]
+    fn test_message_part_updated_replaces_delta_content() {
+        let mut app = App::new();
+        app.handle_event(RuntimeEvent::MessagePartDelta {
+            properties: MessagePartDeltaProps {
+                message_id: "m1".to_string(),
+                part_id: "p1".to_string(),
+                field: "text".to_string(),
+                delta: "partial".to_string(),
+            },
+        });
+
+        app.handle_event(RuntimeEvent::MessagePartUpdated {
+            properties: MessagePartInfo {
+                part: Some(MessagePartData {
+                    id: "p1".to_string(),
+                    session_id: "s".to_string(),
+                    message_id: "m1".to_string(),
+                    part_type: "text".to_string(),
+                    text: Some("partial final".to_string()),
+                }),
+            },
+        });
+
+        assert_eq!(app.messages[0].content, "partial final");
     }
 
     // === LOW 2: request_abort does not optimistically flip status ===

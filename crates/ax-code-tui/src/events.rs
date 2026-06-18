@@ -55,6 +55,13 @@ pub enum RuntimeEvent {
         properties: MessageInfo,
     },
 
+    /// Message part updated.
+    #[serde(rename = "message.part.updated")]
+    MessagePartUpdated {
+        #[serde(default)]
+        properties: MessagePartInfo,
+    },
+
     /// Message part delta (streaming).
     #[serde(rename = "message.part.delta")]
     MessagePartDelta {
@@ -191,6 +198,25 @@ pub struct MessageData {
     pub session_id: String,
     #[serde(default)]
     pub role: Option<MessageRole>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct MessagePartInfo {
+    #[serde(default)]
+    pub part: Option<MessagePartData>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct MessagePartData {
+    pub id: String,
+    #[serde(rename = "sessionID", default)]
+    pub session_id: String,
+    #[serde(rename = "messageID", default)]
+    pub message_id: String,
+    #[serde(rename = "type", default)]
+    pub part_type: String,
+    #[serde(default)]
+    pub text: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]

@@ -161,6 +161,24 @@ async fn test_parse_message_part_delta() {
 }
 
 #[tokio::test]
+async fn test_parse_message_part_updated() {
+    let json = r#"{"type":"message.part.updated","properties":{"part":{"id":"part_456","sessionID":"sess_123","messageID":"msg_123","type":"text","text":"Hello world"}}}"#;
+    let event: RuntimeEvent = serde_json::from_str(json).unwrap();
+
+    match event {
+        RuntimeEvent::MessagePartUpdated { properties } => {
+            let part = properties.part.as_ref().unwrap();
+            assert_eq!(part.id, "part_456");
+            assert_eq!(part.session_id, "sess_123");
+            assert_eq!(part.message_id, "msg_123");
+            assert_eq!(part.part_type, "text");
+            assert_eq!(part.text.as_deref(), Some("Hello world"));
+        }
+        _ => panic!("Expected MessagePartUpdated event"),
+    }
+}
+
+#[tokio::test]
 async fn test_parse_todo_event() {
     let json = r#"{"type":"todo.updated","properties":{"sessionID":"sess_123","todos":[{"id":"todo_1","content":"Do something","status":"pending"}]}}"#;
     let event: RuntimeEvent = serde_json::from_str(json).unwrap();
