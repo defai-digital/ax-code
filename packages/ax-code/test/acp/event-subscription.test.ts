@@ -4,6 +4,7 @@ import type { AgentSideConnection } from "@agentclientprotocol/sdk"
 import type { Event, EventMessagePartUpdated, ToolStatePending, ToolStateRunning } from "@ax-code/sdk/v2"
 import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
+import { pathToFileURL } from "url"
 
 type SessionUpdateParams = Parameters<AgentSideConnection["sessionUpdate"]>[0]
 type RequestPermissionParams = Parameters<AgentSideConnection["requestPermission"]>[0]
@@ -709,6 +710,56 @@ describe("acp.agent event subscription", () => {
 
         expect(types).toEqual(["tool_call", "tool_call_update", "tool_call_update"])
         stop()
+      },
+    })
+  })
+
+  test("replays data URL file attachments case-insensitively", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const { agent, sessionUpdates, stop, sdk } = createFakeAgent()
+        const cwd = "/tmp/opencode-acp-test"
+        const sessionId = await agent.newSession({ cwd, mcpServers: [] } as any).then((x) => x.sessionId)
+
+        sdk.session.messages = async () => ({
+          data: [
+            {
+              info: {
+                role: "assistant",
+                sessionID: sessionId,
+              },
+              parts: [
+                {
+                  type: "file",
+                  url: `DATA:image/png;base64,${Buffer.from("png").toString("base64")}`,
+                  filename: "capture.png",
+                  mime: "image/png",
+                },
+              ],
+            },
+          ],
+        })
+
+        try {
+          await agent.loadSession({ sessionId, cwd, mcpServers: [] } as any)
+
+          expect(sessionUpdates).toContainEqual({
+            sessionId,
+            update: {
+              sessionUpdate: "agent_message_chunk",
+              content: {
+                type: "image",
+                mimeType: "image/png",
+                data: Buffer.from("png").toString("base64"),
+                uri: pathToFileURL("capture.png").href,
+              },
+            },
+          })
+        } finally {
+          stop()
+        }
       },
     })
   })

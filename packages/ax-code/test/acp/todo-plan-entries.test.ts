@@ -48,6 +48,17 @@ describe("ACP replay data URL decoding", () => {
     })
   })
 
+  test("decodes data URLs case-insensitively", () => {
+    const body = "hello world"
+    expect(
+      ACP.decodeReplayDataUrl(`DATA:text/plain;base64,${Buffer.from(body).toString("base64")}`, "text/plain"),
+    ).toEqual({
+      mimeType: "text/plain",
+      base64Data: Buffer.from(body).toString("base64"),
+      text: body,
+    })
+  })
+
   test("rejects invalid base64 data URL payloads", () => {
     expect(ACP.decodeReplayDataUrl("data:text/plain;base64,not base64!!", "text/plain")).toEqual({
       mimeType: "text/plain",

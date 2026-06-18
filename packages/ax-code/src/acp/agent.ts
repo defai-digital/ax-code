@@ -88,6 +88,14 @@ export namespace ACP {
     }
   }
 
+  function uriProtocol(uri: string) {
+    try {
+      return new URL(uri).protocol
+    } catch {
+      return undefined
+    }
+  }
+
   function toPlanEntryStatus(status: Todo.Info["status"]): PlanEntry["status"] {
     if (ACP_TODO_STATUSES.includes(status as PlanEntry["status"])) {
       return status as PlanEntry["status"]
@@ -126,7 +134,7 @@ export namespace ACP {
 
   export function decodeReplayDataUrl(url: string, fallbackMime: string) {
     const comma = url.indexOf(",")
-    if (!url.startsWith("data:") || comma < 0) {
+    if (!/^data:/i.test(url) || comma < 0) {
       return { mimeType: fallbackMime, base64Data: "", text: "" }
     }
 
@@ -818,7 +826,8 @@ export namespace ACP {
           const mime = part.mime || "application/octet-stream"
           const messageChunk = message.info.role === "user" ? "user_message_chunk" : "agent_message_chunk"
 
-          if (url.startsWith("file://")) {
+          const protocol = uriProtocol(url)
+          if (protocol === "file:") {
             // Local file reference - send as resource_link
             await this.connection
               .sessionUpdate({
@@ -831,7 +840,7 @@ export namespace ACP {
               .catch((err) => {
                 log.error("failed to send resource_link to ACP", { error: err })
               })
-          } else if (url.startsWith("data:")) {
+          } else if (protocol === "data:") {
             // Embedded content - parse data URL and send as appropriate block type
             const decoded = decodeReplayDataUrl(url, mime)
             const effectiveMime = decoded.mimeType
