@@ -502,6 +502,38 @@ describe("session.compaction.prune tool estimates", () => {
     })
   })
 
+  test("continues pruning when tool input cannot be stringified", async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await Bun.write(path.join(dir, "ax-code.json"), JSON.stringify({ compaction: { prune: true } }))
+      },
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const { session, targetPartID } = await createPrunableSession(tmp.path, {
+          input: { filePath: "large.txt" },
+          output: "x".repeat(260_000),
+        })
+
+        const messages = await Session.messages({ sessionID: session.id })
+        const part = findToolPart(messages, targetPartID)
+        expect(part?.state.status).toBe("completed")
+        if (!part || part.state.status !== "completed") throw new Error("expected completed tool part")
+        part.state.input = {
+          toJSON() {
+            throw new Error("cannot serialize")
+          },
+          toString() {
+            throw new Error("cannot print")
+          },
+        }
+
+        await SessionCompaction.prune({ sessionID: session.id, messages })
+      },
+    })
+  })
+
   test("prune uses compacted clones without mutating caller-owned message parts", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {

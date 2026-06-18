@@ -98,7 +98,15 @@ export namespace SessionCompaction {
     try {
       return JSON.stringify(value) ?? ""
     } catch {
+      return safeStringForEstimate(value)
+    }
+  }
+
+  function safeStringForEstimate(value: unknown) {
+    try {
       return String(value)
+    } catch {
+      return "[unprintable]"
     }
   }
 
