@@ -67,6 +67,26 @@ describe("ACP replay data URL decoding", () => {
     })
   })
 
+  test("decodes percent-escaped base64 data URL payloads", () => {
+    const body = Buffer.from([251, 255])
+    const base64 = body.toString("base64")
+    expect(ACP.decodeReplayDataUrl(`data:application/octet-stream;base64,${encodeURIComponent(base64)}`, "text/plain")).toEqual({
+      mimeType: "application/octet-stream",
+      base64Data: base64,
+      text: body.toString("utf-8"),
+    })
+  })
+
+  test("normalizes whitespace in base64 data URL payloads", () => {
+    const base64 = Buffer.from("wrapped").toString("base64")
+    const wrapped = `${base64.slice(0, 4)}\n ${base64.slice(4)}`
+    expect(ACP.decodeReplayDataUrl(`data:text/plain;base64,${wrapped}`, "text/plain")).toEqual({
+      mimeType: "text/plain",
+      base64Data: base64,
+      text: "wrapped",
+    })
+  })
+
   test("decodes plain text data URLs without dropping content", () => {
     expect(ACP.decodeReplayDataUrl("data:text/plain,hello%20world", "application/octet-stream")).toEqual({
       mimeType: "text/plain",

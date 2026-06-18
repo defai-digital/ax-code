@@ -128,8 +128,18 @@ export namespace ACP {
   }
 
   function isBase64Payload(value: string) {
-    const normalized = value.replace(/\s+/g, "")
-    return normalized.length > 0 && normalized.length % 4 !== 1 && /^[A-Za-z0-9+/]*={0,2}$/.test(normalized)
+    return value.length > 0 && value.length % 4 !== 1 && /^[A-Za-z0-9+/]*={0,2}$/.test(value)
+  }
+
+  function normalizeBase64DataUrlBody(value: string): string | undefined {
+    let decoded: string
+    try {
+      decoded = decodeURIComponent(value)
+    } catch {
+      return undefined
+    }
+    const normalized = decoded.replace(/\s+/g, "")
+    return isBase64Payload(normalized) ? normalized : undefined
   }
 
   export function decodeReplayDataUrl(url: string, fallbackMime: string) {
@@ -144,11 +154,12 @@ export namespace ACP {
     const mimeType = metadataParts.find((part) => part.includes("/")) ?? fallbackMime
     const isBase64 = metadataParts.some((part) => part.toLowerCase() === "base64")
     if (isBase64) {
-      if (!isBase64Payload(body)) return { mimeType, base64Data: "", text: "" }
+      const normalizedBody = normalizeBase64DataUrlBody(body)
+      if (!normalizedBody) return { mimeType, base64Data: "", text: "" }
       return {
         mimeType,
-        base64Data: body,
-        text: Buffer.from(body, "base64").toString("utf-8"),
+        base64Data: normalizedBody,
+        text: Buffer.from(normalizedBody, "base64").toString("utf-8"),
       }
     }
 
