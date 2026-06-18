@@ -4414,9 +4414,9 @@ export type SuperLongStatusResponse = SuperLongStatusResponses[keyof SuperLongSt
 export type PromptHistoryListData = {
   body?: never
   path?: never
-  query: {
+  query?: {
     directory?: string
-    limit: number
+    limit?: number
   }
   url: "/prompt-history"
 }
@@ -4538,7 +4538,7 @@ export type PromptHistoryAppendResponse = PromptHistoryAppendResponses[keyof Pro
 export type TaskQueueListData = {
   body?: never
   path?: never
-  query: {
+  query?: {
     directory?: string
     sessionID?: string
     status?:
@@ -4551,7 +4551,7 @@ export type TaskQueueListData = {
       | "failed"
       | "completed"
       | "cancelled"
-    limit: number
+    limit?: number
   }
   url: "/task-queue"
 }
@@ -5359,11 +5359,11 @@ export type TaskQueueReorderResponse = TaskQueueReorderResponses[keyof TaskQueue
 export type ScheduledTaskListData = {
   body?: never
   path?: never
-  query: {
+  query?: {
     directory?: string
     status?: "active" | "paused" | "disabled"
-    dueBefore: number
-    limit: number
+    dueBefore?: number
+    limit?: number
   }
   url: "/scheduled-task"
 }
@@ -6066,9 +6066,9 @@ export type ScheduledTaskRunNowResponse = ScheduledTaskRunNowResponses[keyof Sch
 export type ScheduledTaskRunDueData = {
   body?: never
   path?: never
-  query: {
+  query?: {
     directory?: string
-    now: number
+    now?: number
   }
   url: "/scheduled-task/run-due"
 }
@@ -6199,11 +6199,11 @@ export type ScheduledTaskRunDueResponse = ScheduledTaskRunDueResponses[keyof Sch
 export type WorkflowRunListData = {
   body?: never
   path?: never
-  query: {
+  query?: {
     directory?: string
     parentSessionID?: string
     status?: "queued" | "running" | "blocked" | "paused" | "failed" | "completed" | "cancelled"
-    limit: number
+    limit?: number
   }
   url: "/workflow-runs"
 }
@@ -6444,12 +6444,12 @@ export type WorkflowRunCreateResponse = WorkflowRunCreateResponses[keyof Workflo
 export type WorkflowRunDashboardData = {
   body?: never
   path?: never
-  query: {
+  query?: {
     directory?: string
     parentSessionID?: string
     status?: "queued" | "running" | "blocked" | "paused" | "failed" | "completed" | "cancelled"
-    limit: number
-    now: number
+    limit?: number
+    now?: number
   }
   url: "/workflow-runs/dashboard"
 }
@@ -11636,7 +11636,7 @@ export type AuditExportAllData = {
   query: {
     directory?: string
     limit: number
-    since: number
+    since?: number
     /**
      * Filter sessions by minimum risk level
      */
@@ -11661,9 +11661,9 @@ export type AuditReplayData = {
   path: {
     sessionID: string
   }
-  query: {
+  query?: {
     directory?: string
-    fromStep: number
+    fromStep?: number
   }
   url: "/audit/replay/{sessionID}"
 }
@@ -12184,7 +12184,7 @@ export type FindFilesData = {
     query: string
     dirs?: "true" | "false"
     type?: "file" | "directory"
-    limit: number
+    limit?: number
   }
   url: "/find/file"
 }

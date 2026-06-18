@@ -616,7 +616,9 @@ describe("server route validation", () => {
     const optional = OptionalQueryNumber(z.number().int().positive())
     const defaulted = DefaultQueryNumber(z.number().int().positive(), 25)
 
+    expect(optional.isOptional()).toBe(true)
     expect(optional.parse("")).toBeUndefined()
+    expect(optional.parse(undefined)).toBeUndefined()
     expect(defaulted.parse("")).toBe(25)
     expect(optional.safeParse("abc").success).toBe(false)
 

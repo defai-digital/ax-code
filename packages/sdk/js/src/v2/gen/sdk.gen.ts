@@ -1172,9 +1172,9 @@ export class PromptHistory extends HeyApiClient {
    * Return prompt recall history scoped to the current project.
    */
   public list<ThrowOnError extends boolean = false>(
-    parameters: {
+    parameters?: {
       directory?: string
-      limit: number
+      limit?: number
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -1251,7 +1251,7 @@ export class TaskQueue extends HeyApiClient {
    * Return server-owned task queue items scoped to the current project.
    */
   public list<ThrowOnError extends boolean = false>(
-    parameters: {
+    parameters?: {
       directory?: string
       sessionID?: string
       status?:
@@ -1264,7 +1264,7 @@ export class TaskQueue extends HeyApiClient {
         | "failed"
         | "completed"
         | "cancelled"
-      limit: number
+      limit?: number
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -1697,11 +1697,11 @@ export class ScheduledTask extends HeyApiClient {
    * Return project-scoped scheduled automation tasks.
    */
   public list<ThrowOnError extends boolean = false>(
-    parameters: {
+    parameters?: {
       directory?: string
       status?: "active" | "paused" | "disabled"
-      dueBefore: number
-      limit: number
+      dueBefore?: number
+      limit?: number
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -2041,9 +2041,9 @@ export class ScheduledTask extends HeyApiClient {
    * Run due active scheduled tasks, creating automation queue items or workflow runs as configured.
    */
   public runDue<ThrowOnError extends boolean = false>(
-    parameters: {
+    parameters?: {
       directory?: string
-      now: number
+      now?: number
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -2075,11 +2075,11 @@ export class WorkflowRun extends HeyApiClient {
    * Return durable workflow runs scoped to the current project.
    */
   public list<ThrowOnError extends boolean = false>(
-    parameters: {
+    parameters?: {
       directory?: string
       parentSessionID?: string
       status?: "queued" | "running" | "blocked" | "paused" | "failed" | "completed" | "cancelled"
-      limit: number
+      limit?: number
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -2328,12 +2328,12 @@ export class WorkflowRun extends HeyApiClient {
    * Return compact workflow run projections for TUI and desktop supervision surfaces.
    */
   public dashboard<ThrowOnError extends boolean = false>(
-    parameters: {
+    parameters?: {
       directory?: string
       parentSessionID?: string
       status?: "queued" | "running" | "blocked" | "paused" | "failed" | "completed" | "cancelled"
-      limit: number
-      now: number
+      limit?: number
+      now?: number
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -4876,7 +4876,7 @@ export class Audit extends HeyApiClient {
     parameters: {
       directory?: string
       limit: number
-      since: number
+      since?: number
       risk?: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL"
       type?: string
     },
@@ -4912,7 +4912,7 @@ export class Audit extends HeyApiClient {
     parameters: {
       sessionID: string
       directory?: string
-      fromStep: number
+      fromStep?: number
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -5404,7 +5404,7 @@ export class Find extends HeyApiClient {
       query: string
       dirs?: "true" | "false"
       type?: "file" | "directory"
-      limit: number
+      limit?: number
     },
     options?: Options<never, ThrowOnError>,
   ) {
