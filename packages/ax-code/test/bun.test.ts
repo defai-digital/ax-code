@@ -3,6 +3,7 @@ import fs from "fs/promises"
 import path from "path"
 import { BunProc } from "../src/bun"
 import { Global } from "../src/global"
+import { PackageRegistry } from "../src/bun/registry"
 import { tmpdir } from "./fixture/fixture"
 
 describe("BunProc registry structural guard", () => {
@@ -93,6 +94,38 @@ describe("BunProc registry behavior", () => {
       expect(await fs.readFile(manifest, "utf-8")).toBe(malformed)
     } finally {
       run.mockRestore()
+      ;(Global.Path as { cache: string }).cache = originalCache
+    }
+  })
+
+  test("does not overwrite malformed version check cache", async () => {
+    await using tmp = await tmpdir()
+    const originalCache = Global.Path.cache
+    const pkg = "example-plugin"
+    const manifest = path.join(tmp.path, "package.json")
+    const versionChecks = path.join(tmp.path, "version-checks.json")
+    const malformed = "{not json"
+
+    await fs.mkdir(path.join(tmp.path, "node_modules", pkg), { recursive: true })
+    await fs.writeFile(manifest, JSON.stringify({ dependencies: { [pkg]: "1.0.0" } }))
+    await fs.writeFile(versionChecks, malformed)
+
+    const outdated = spyOn(PackageRegistry, "isOutdated").mockImplementation(async () => false)
+    const run = spyOn(BunProc, "run").mockImplementation(async () => ({
+      code: 0,
+      stdout: Buffer.alloc(0),
+      stderr: Buffer.alloc(0),
+    }))
+
+    try {
+      ;(Global.Path as { cache: string }).cache = tmp.path
+      await expect(BunProc.install(pkg, "latest")).resolves.toBe(path.join(tmp.path, "node_modules", pkg))
+      expect(outdated).toHaveBeenCalled()
+      expect(run).not.toHaveBeenCalled()
+      expect(await fs.readFile(versionChecks, "utf-8")).toBe(malformed)
+    } finally {
+      run.mockRestore()
+      outdated.mockRestore()
       ;(Global.Path as { cache: string }).cache = originalCache
     }
   })

@@ -129,7 +129,12 @@ export namespace BunProc {
   }
 
   async function recordVersionChecked(pkg: string) {
-    const data = (await Filesystem.readJson<Record<string, number>>(versionCheckPath()).catch(() => null)) ?? {}
+    const data = await Filesystem.readJson<Record<string, number>>(versionCheckPath()).catch((err) => {
+      if ((err as NodeJS.ErrnoException | undefined)?.code === "ENOENT") return {} as Record<string, number>
+      log.warn("failed to read provider version check cache", { pkg, error: err })
+      return undefined
+    })
+    if (!data) return
     data[pkg] = Date.now()
     await Filesystem.writeJson(versionCheckPath(), data).catch((err) =>
       log.warn("failed to record provider version check", { pkg, error: err }),
