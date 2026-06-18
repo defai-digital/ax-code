@@ -209,6 +209,11 @@ impl App {
             }
             RuntimeEvent::SessionStatus { properties } => {
                 if let Some(status) = properties.status {
+                    if self.event_targets_current_session(&properties.session_id) {
+                        if let Some(mapped) = session_status_from_value(&status) {
+                            self.session_status = mapped;
+                        }
+                    }
                     self.status_message = Some(format!("Status: {}", status));
                 }
             }
@@ -378,6 +383,13 @@ impl App {
     /// Request app shutdown.
     pub fn quit(&mut self) {
         self.should_quit = true;
+    }
+
+    fn event_targets_current_session(&self, event_session_id: &str) -> bool {
+        match self.session_id.as_deref() {
+            Some(current) => current == event_session_id,
+            None => true,
+        }
     }
 
     fn ensure_message(&mut self, message_id: &str) {
@@ -909,13 +921,27 @@ fn byte_index_at_char(s: &str, char_idx: usize) -> usize {
         .unwrap_or_else(|| s.len())
 }
 
+fn session_status_from_value(value: &serde_json::Value) -> Option<SessionStatus> {
+    let status_type = value
+        .get("type")
+        .and_then(serde_json::Value::as_str)
+        .or_else(|| value.as_str())?;
+
+    match status_type {
+        "idle" => Some(SessionStatus::Idle),
+        "busy" | "retry" => Some(SessionStatus::Running),
+        "aborted" => Some(SessionStatus::Aborted),
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::events::{
         MessageData, MessageInfo, MessagePartData, MessagePartDeltaProps, MessagePartInfo,
         MessagePartRemovedProps, MessageRemovedProps, RequestReplyProps, RuntimeEvent,
-        ToolPartState,
+        SessionStatusProps, ToolPartState,
     };
 
     // === HIGH 1: multi-byte prompt editing must not panic ===
@@ -1293,6 +1319,54 @@ mod tests {
         });
 
         assert_eq!(app.messages[0].content, "world");
+    }
+
+    #[test]
+    fn test_session_status_event_updates_running_state() {
+        let mut app = App::new();
+        app.session_id = Some("s1".to_string());
+
+        app.handle_event(RuntimeEvent::SessionStatus {
+            properties: SessionStatusProps {
+                session_id: "s1".to_string(),
+                status: Some(serde_json::json!({ "type": "busy" })),
+            },
+        });
+        assert_eq!(app.session_status, SessionStatus::Running);
+
+        app.handle_event(RuntimeEvent::SessionStatus {
+            properties: SessionStatusProps {
+                session_id: "s1".to_string(),
+                status: Some(
+                    serde_json::json!({ "type": "retry", "attempt": 1, "message": "x", "next": 1 }),
+                ),
+            },
+        });
+        assert_eq!(app.session_status, SessionStatus::Running);
+
+        app.handle_event(RuntimeEvent::SessionStatus {
+            properties: SessionStatusProps {
+                session_id: "s1".to_string(),
+                status: Some(serde_json::json!({ "type": "idle" })),
+            },
+        });
+        assert_eq!(app.session_status, SessionStatus::Idle);
+    }
+
+    #[test]
+    fn test_session_status_event_ignores_other_session() {
+        let mut app = App::new();
+        app.session_id = Some("s1".to_string());
+        app.session_status = SessionStatus::Idle;
+
+        app.handle_event(RuntimeEvent::SessionStatus {
+            properties: SessionStatusProps {
+                session_id: "s2".to_string(),
+                status: Some(serde_json::json!({ "type": "busy" })),
+            },
+        });
+
+        assert_eq!(app.session_status, SessionStatus::Idle);
     }
 
     #[test]
