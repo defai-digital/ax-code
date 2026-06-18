@@ -65,10 +65,15 @@ describe("planner.llmReplanner wrapper", () => {
 
   test("throwing generator maps to null", async () => {
     const plan = Planner.create("x", [{ name: "first", fallbackStrategy: "replan", maxRetries: 0 }])
+    const failure = {
+      toString() {
+        throw new Error("cannot print")
+      },
+    }
 
     const result = await Planner.execute(plan, async (phase) => fail(phase.id), {
       onReplan: Planner.llmReplanner(async () => {
-        throw new Error("upstream LLM 500")
+        throw failure
       }),
     })
 

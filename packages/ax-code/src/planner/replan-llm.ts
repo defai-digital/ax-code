@@ -13,6 +13,7 @@
 import z from "zod"
 import type { ModelID, ProviderID } from "../provider/schema"
 import { Log } from "../util/log"
+import { toErrorMessage } from "../util/error-message"
 import type { Replanner, TaskPhase } from "./types"
 
 // Provider + AI SDK are imported lazily inside `providerReplanGenerator` so
@@ -57,7 +58,7 @@ export function llmReplanner(generator: ReplanGenerator, opts: LlmReplannerWrapO
       if (!phases || phases.length === 0) return null
       return phases.slice(0, cap)
     } catch (err) {
-      log.warn("replan generator failed", { failedId: failed.id, error: String(err) })
+      log.warn("replan generator failed", { failedId: failed.id, error: toErrorMessage(err) })
       return null
     }
   }
