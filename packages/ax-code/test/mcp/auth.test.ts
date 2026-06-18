@@ -102,4 +102,19 @@ describe("McpAuth persistence", () => {
 
     expect(await Bun.file(authFile).text()).toBe(malformed)
   })
+
+  test("does not silently ignore writes when auth JSON is not an object", async () => {
+    const invalid = "[]"
+    await Bun.write(authFile, invalid)
+
+    await expect(
+      McpAuth.set("server", {
+        tokens: {
+          accessToken: "access-token",
+        },
+      }),
+    ).rejects.toThrow("Invalid MCP auth store")
+
+    expect(await Bun.file(authFile).text()).toBe(invalid)
+  })
 })
