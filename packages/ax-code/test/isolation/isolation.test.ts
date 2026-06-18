@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test"
+import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import path from "path"
 import fs from "fs/promises"
 import { Isolation } from "../../src/isolation"
@@ -7,10 +7,16 @@ import { tmpdir } from "../fixture/fixture"
 const root = "/tmp/project"
 const worktree = "/tmp/worktree"
 
-afterEach(() => {
+// Clear both before and after so a test asserting the default is not skewed by
+// AX_CODE_ISOLATION_MODE / _NETWORK inherited from the parent shell (e.g. when
+// running the suite from inside an ax-code session in full-access mode).
+const clearIsolationEnv = () => {
   delete process.env.AX_CODE_ISOLATION_MODE
   delete process.env.AX_CODE_ISOLATION_NETWORK
-})
+}
+
+beforeEach(clearIsolationEnv)
+afterEach(clearIsolationEnv)
 
 describe("isolation.resolve", () => {
   test("defaults to workspace-write with network disabled", () => {
