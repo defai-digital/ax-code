@@ -9923,6 +9923,7 @@
         "family": "minimax",
         "attachment": true,
         "reasoning": true,
+        "reasoning_options": [],
         "tool_call": true,
         "temperature": true,
         "release_date": "2026-03-18",
@@ -9947,6 +9948,7 @@
         "family": "minimax",
         "attachment": false,
         "reasoning": true,
+        "reasoning_options": [],
         "tool_call": true,
         "temperature": true,
         "release_date": "2026-02-12",
@@ -9971,6 +9973,7 @@
         "family": "minimax",
         "attachment": false,
         "reasoning": true,
+        "reasoning_options": [],
         "tool_call": true,
         "interleaved": true,
         "temperature": true,
@@ -9997,6 +10000,11 @@
         "family": "minimax-m3",
         "attachment": true,
         "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          }
+        ],
         "tool_call": true,
         "temperature": true,
         "release_date": "2026-05-31",
@@ -10023,6 +10031,7 @@
         "family": "minimax",
         "attachment": false,
         "reasoning": true,
+        "reasoning_options": [],
         "tool_call": true,
         "interleaved": true,
         "temperature": true,
@@ -10049,6 +10058,7 @@
         "family": "minimax",
         "attachment": true,
         "reasoning": true,
+        "reasoning_options": [],
         "tool_call": true,
         "temperature": true,
         "release_date": "2026-03-18",
@@ -10073,6 +10083,7 @@
         "family": "minimax",
         "attachment": false,
         "reasoning": true,
+        "reasoning_options": [],
         "tool_call": true,
         "temperature": true,
         "release_date": "2026-02-12",
@@ -10097,6 +10108,7 @@
         "family": "minimax",
         "attachment": false,
         "reasoning": true,
+        "reasoning_options": [],
         "tool_call": true,
         "temperature": true,
         "knowledge": "2024-10",
@@ -109529,34 +109541,6 @@
     "name": "GitHub Copilot",
     "doc": "https://docs.github.com/en/copilot",
     "models": {
-      "raptor-mini": {
-        "id": "raptor-mini",
-        "name": "Raptor mini",
-        "family": "gpt-mini",
-        "attachment": true,
-        "reasoning": true,
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": false,
-        "knowledge": "2024-05-30",
-        "release_date": "2025-08-07",
-        "last_updated": "2025-08-07",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 400000,
-          "input": 272000,
-          "output": 128000
-        }
-      },
       "claude-sonnet-4.5": {
         "id": "claude-sonnet-4.5",
         "name": "Claude Sonnet 4.5 (latest)",
@@ -109647,6 +109631,22 @@
         "family": "gemini-flash",
         "attachment": true,
         "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "minimal",
+              "low",
+              "medium",
+              "high"
+            ]
+          },
+          {
+            "type": "budget_tokens",
+            "min": 256,
+            "max": 24000
+          }
+        ],
         "tool_call": true,
         "structured_output": true,
         "temperature": true,
@@ -109987,6 +109987,21 @@
         "family": "gemini-pro",
         "attachment": true,
         "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high"
+            ]
+          },
+          {
+            "type": "budget_tokens",
+            "min": 256,
+            "max": 32000
+          }
+        ],
         "tool_call": true,
         "structured_output": true,
         "temperature": true,
@@ -110074,6 +110089,21 @@
         "family": "gemini-flash",
         "attachment": true,
         "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high"
+            ]
+          },
+          {
+            "type": "budget_tokens",
+            "min": 256,
+            "max": 32000
+          }
+        ],
         "tool_call": true,
         "structured_output": true,
         "temperature": true,

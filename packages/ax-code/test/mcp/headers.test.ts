@@ -1,4 +1,4 @@
-import { test, expect, mock, beforeEach, afterAll } from "bun:test"
+import { test, expect, mock, beforeEach, afterAll, spyOn } from "bun:test"
 
 // Track what options were passed to each transport constructor
 const transportCalls: Array<{
@@ -10,19 +10,6 @@ const transportCalls: Array<{
     fetch?: (url: string | URL, init?: RequestInit) => Promise<Response>
   }
 }> = []
-
-let callbackRunning = false
-const pendingOauthStates = new Map<string, { reject: (error: Error) => void; timeout: ReturnType<typeof setTimeout> }>()
-const pendingOauthNames = new Map<string, string>()
-
-function resetMockOAuthCallback() {
-  callbackRunning = false
-  for (const { timeout } of pendingOauthStates.values()) {
-    clearTimeout(timeout)
-  }
-  pendingOauthStates.clear()
-  pendingOauthNames.clear()
-}
 
 // Mock the transport constructors to capture their arguments
 mock.module("@modelcontextprotocol/sdk/client/streamableHttp.js", () => ({
@@ -69,62 +56,20 @@ mock.module("@modelcontextprotocol/sdk/client/sse.js", () => ({
   },
 }))
 
-mock.module("../../src/mcp/oauth-callback", () => ({
-  McpOAuthCallback: {
-    ensureRunning: mock(async () => {
-      callbackRunning = true
-    }),
-    waitForCallback: (oauthState: string, mcpName?: string) =>
-      new Promise<string>((_resolve, reject) => {
-        const previous = pendingOauthStates.get(oauthState)
-        if (previous) {
-          clearTimeout(previous.timeout)
-          previous.reject(new Error("OAuth callback request superseded"))
-        }
-
-        const timeout = setTimeout(
-          () => {
-            pendingOauthStates.delete(oauthState)
-            if (mcpName) pendingOauthNames.delete(mcpName)
-            reject(new Error("OAuth callback timeout - authorization took too long"))
-          },
-          5 * 60 * 1000,
-        )
-
-        pendingOauthStates.set(oauthState, { reject, timeout })
-        if (mcpName) pendingOauthNames.set(mcpName, oauthState)
-      }),
-    cancelPending: (mcpName: string) => {
-      const oauthState = pendingOauthNames.get(mcpName)
-      if (!oauthState) return
-      const pending = pendingOauthStates.get(oauthState)
-      if (!pending) return
-      clearTimeout(pending.timeout)
-      pendingOauthStates.delete(oauthState)
-      pendingOauthNames.delete(mcpName)
-      pending.reject(new Error("Authorization cancelled"))
-    },
-    stop: async () => {
-      resetMockOAuthCallback()
-    },
-    isRunning: () => callbackRunning,
-    isPortInUse: async () => callbackRunning,
-  },
-}))
-
 beforeEach(() => {
   transportCalls.length = 0
-  resetMockOAuthCallback()
 })
 
 // Import MCP after mocking
 const { MCP } = await import("../../src/mcp/index")
+const { McpOAuthCallback } = await import("../../src/mcp/oauth-callback")
 const { Instance } = await import("../../src/project/instance")
 const { tmpdir } = await import("../fixture/fixture")
 const { Ssrf } = await import("../../src/util/ssrf")
 const originalAssertPublicUrl = Ssrf.assertPublicUrl
 const originalPinnedFetch = Ssrf.pinnedFetch
 const pinnedCalls: Array<{ url: string; init?: RequestInit & { label?: string } }> = []
+const ensureCallbackRunningSpy = spyOn(McpOAuthCallback, "ensureRunning")
 
 beforeEach(() => {
   Ssrf.assertPublicUrl = mock(async () => {})
@@ -133,12 +78,14 @@ beforeEach(() => {
     return new Response(null, { status: 204 })
   }) as typeof Ssrf.pinnedFetch
   pinnedCalls.length = 0
+  ensureCallbackRunningSpy.mockResolvedValue(undefined)
 })
 
-afterAll(() => {
+afterAll(async () => {
   Ssrf.assertPublicUrl = originalAssertPublicUrl
   Ssrf.pinnedFetch = originalPinnedFetch
   mock.restore()
+  await McpOAuthCallback.stop()
 })
 
 test("headers are passed to transports when oauth is enabled (default)", async () => {

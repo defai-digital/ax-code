@@ -57,14 +57,25 @@ test("timeout for superseded OAuth flow does not clear the active MCP name mappi
   ;(globalThis as any).clearTimeout = () => undefined
 
   try {
+    const oldTimeoutIndex = timeouts.length
     const old = McpOAuthCallback.waitForCallback("state-old", "github").catch((error) => error)
     const active = McpOAuthCallback.waitForCallback("state-active", "github")
 
-    timeouts[0]?.()
-    await expect(old).resolves.toThrow("OAuth callback timeout")
+    timeouts[oldTimeoutIndex]?.()
+    await Promise.race([
+      expect(old).resolves.toThrow("OAuth callback timeout"),
+      new Promise((_, reject) =>
+        originalSetTimeout(() => reject(new Error("timed out waiting for superseded OAuth timeout")), 500),
+      ),
+    ])
 
     McpOAuthCallback.cancelPending("github")
-    await expect(active).rejects.toThrow("Authorization cancelled")
+    await Promise.race([
+      expect(active).rejects.toThrow("Authorization cancelled"),
+      new Promise((_, reject) =>
+        originalSetTimeout(() => reject(new Error("timed out waiting for active OAuth cancellation")), 500),
+      ),
+    ])
   } finally {
     globalThis.setTimeout = originalSetTimeout
     globalThis.clearTimeout = originalClearTimeout
