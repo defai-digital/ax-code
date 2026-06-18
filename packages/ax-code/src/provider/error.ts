@@ -89,6 +89,29 @@ export namespace ProviderError {
     return undefined
   }
 
+  function stringifyResponseBody(body: Record<string, unknown>): string {
+    const seen = new WeakSet<object>()
+    try {
+      return (
+        JSON.stringify(body, (_key, value) => {
+          if (typeof value === "bigint") return value.toString()
+          if (typeof value === "object" && value !== null) {
+            if (seen.has(value)) return "[Circular]"
+            seen.add(value)
+          }
+          return value
+        }) ?? "{}"
+      )
+    } catch (error) {
+      return JSON.stringify({
+        type: "error",
+        error: {
+          message: error instanceof Error ? error.message : String(error),
+        },
+      })
+    }
+  }
+
   // DashScope (Coding Plan) and Token Plan both throttle on a sliding
   // short-window allocatable-token reservation. Same error class, same
   // mitigation — recognize either backend so retry/backoff applies uniformly.
@@ -128,7 +151,7 @@ export namespace ProviderError {
     if (!body) return
     const bodyError = isRecord(body.error) ? body.error : undefined
 
-    const responseBody = JSON.stringify(body)
+    const responseBody = stringifyResponseBody(body)
     if (body.type !== "error") return
 
     switch (bodyError?.code) {

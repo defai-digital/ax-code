@@ -39,4 +39,30 @@ describe("provider error decoding", () => {
       isRetryable: false,
     })
   })
+
+  test("parses stream errors with non-JSON-native response body values", () => {
+    const body: Record<string, unknown> = {
+      type: "error",
+      error: {
+        code: "context_length_exceeded",
+        sequence: 1n,
+      },
+    }
+    body.self = body
+
+    const parsed = ProviderError.parseStreamError(body)
+
+    expect(parsed).toMatchObject({
+      type: "context_overflow",
+      responseBody: '{"type":"error","error":{"code":"context_length_exceeded","sequence":"1"},"self":"[Circular]"}',
+    })
+  })
+
+  test("ignores non-error stream records with non-JSON-native response body values", () => {
+    const body: Record<string, unknown> = { type: "message", sequence: 1n }
+    body.self = body
+
+    expect(() => ProviderError.parseStreamError(body)).not.toThrow()
+    expect(ProviderError.parseStreamError(body)).toBeUndefined()
+  })
 })
