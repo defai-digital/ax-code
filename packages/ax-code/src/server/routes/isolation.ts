@@ -8,6 +8,7 @@ import { lazy } from "../../util/lazy"
 import { persistProjectConfigFeatureResponse, readProjectConfig } from "./project-config"
 import { FeatureFlag } from "@/util/feature-flags"
 import type { Config } from "../../config/config"
+import { JsonBoolean } from "./query"
 
 const log = Log.create({ service: "isolation" })
 
@@ -81,7 +82,7 @@ export const IsolationRoutes = lazy(() =>
           },
         },
       }),
-      validator("json", z.object({ mode: IsolationMode, network: z.boolean().optional() })),
+      validator("json", z.object({ mode: IsolationMode, network: JsonBoolean.optional() })),
       async (c) => {
         const { mode } = c.req.valid("json")
         // Network access is only meaningful for write-capable modes
