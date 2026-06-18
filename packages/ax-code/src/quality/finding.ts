@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto"
 import z from "zod"
+import { JsonNumber } from "@/util/schema"
 import { ArtifactRefKind, Category, EvidenceRefKind, Severity, Workflow } from "./finding-registry"
 
 export const SeverityEnum = z.enum(Severity)
@@ -43,7 +44,7 @@ export const FindingSchema = z.object({
   workflow: WorkflowEnum,
   category: CategoryEnum,
   severity: SeverityEnum,
-  confidence: z.coerce.number().min(0).max(1).optional(),
+  confidence: JsonNumber(z.number().min(0).max(1)).optional(),
   summary: z.string().min(1).max(200),
   file: z.string().min(1),
   anchor: FindingAnchor,

@@ -151,6 +151,11 @@ describe("RegisterFindingTool", () => {
     await expect(tool.execute({ ...validInput, summary: "x".repeat(201) } as any, ctx)).rejects.toThrow()
   })
 
+  test("rejects empty confidence values", async () => {
+    const tool = await RegisterFindingTool.init()
+    await expect(tool.execute({ ...validInput, confidence: "" } as any, ctx)).rejects.toThrow()
+  })
+
   test("findingId is deterministic across two calls with the same anchor and category", async () => {
     const tool = await RegisterFindingTool.init()
     const a = await tool.execute(validInput, ctx)

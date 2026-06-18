@@ -76,6 +76,10 @@ describe("FindingSchema", () => {
     expect(() => FindingSchema.parse({ ...validFinding, confidence: -0.1 })).toThrow()
   })
 
+  test("rejects empty confidence strings", () => {
+    expect(() => FindingSchema.parse({ ...validFinding, confidence: "" })).toThrow()
+  })
+
   test("rejects summary over 200 characters", () => {
     expect(() => FindingSchema.parse({ ...validFinding, summary: "x".repeat(201) })).toThrow()
   })

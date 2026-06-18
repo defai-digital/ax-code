@@ -13,6 +13,7 @@ import {
 } from "../quality/finding"
 import { Installation } from "../installation"
 import { SessionVerifications } from "../session/verifications"
+import { JsonNumber } from "../util/schema"
 import type { SessionID } from "../session/schema"
 
 export const RegisterFindingTool = Tool.define("register_finding", {
@@ -28,7 +29,7 @@ export const RegisterFindingTool = Tool.define("register_finding", {
     evidence: z.array(z.string()),
     evidenceRefs: z.array(EvidenceRef).optional(),
     suggestedNextAction: z.string().min(1),
-    confidence: z.coerce.number().min(0).max(1).optional(),
+    confidence: JsonNumber(z.number().min(0).max(1)).optional(),
     ruleId: z.string().regex(RULE_ID_PATTERN).optional(),
     tool: z.string().min(1).optional(),
   }),
