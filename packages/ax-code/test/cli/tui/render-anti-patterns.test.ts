@@ -48,6 +48,7 @@ const TOAST_SRC = path.join(TUI_ROOT, "ui/toast.tsx")
 const LINK_SRC = path.join(TUI_ROOT, "ui/link.tsx")
 const CLIPBOARD_SRC = path.join(TUI_ROOT, "util/clipboard.ts")
 const LOCAL_SRC = path.join(TUI_ROOT, "context/local.tsx")
+const KV_SRC = path.join(TUI_ROOT, "context/kv.tsx")
 const ROUTE_SRC = path.join(TUI_ROOT, "context/route.tsx")
 const SYNC_SRC = path.join(TUI_ROOT, "context/sync.tsx")
 const THEME_SRC = path.join(TUI_ROOT, "context/theme.tsx")
@@ -928,6 +929,19 @@ describe("tui OpenTUI stability guardrails", () => {
     expect(local).toContain("if (state.persistenceBlocked)")
     expect(local).toContain("persistence disabled to avoid overwriting state")
     expect(local).toContain('"Failed to load model preferences"')
+  })
+
+  test("preserves invalid kv state instead of overwriting it after load failure", async () => {
+    const kv = await fs.readFile(KV_SRC, "utf8")
+
+    expect(kv).toContain('const log = Log.create({ service: "tui.kv" })')
+    expect(kv).toContain("function isKVStore(input: unknown)")
+    expect(kv).toContain("createStore<Record<string, any>>({})")
+    expect(kv).toContain("readOptionalJsonState<Record<string, any>>(filePath)")
+    expect(kv).toContain("persistenceBlocked = true")
+    expect(kv).toContain("persistence disabled to avoid overwriting state")
+    expect(kv).toContain("persistence disabled to avoid overwriting invalid state")
+    expect(kv).toContain("if (persistenceBlocked) return")
   })
 
   test("surfaces prompt history persistence failures instead of silently dropping them", async () => {
