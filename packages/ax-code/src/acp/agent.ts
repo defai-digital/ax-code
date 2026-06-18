@@ -110,6 +110,37 @@ export namespace ACP {
     return decodeTodoPlanEntries(parsed)
   }
 
+  export function decodeReplayDataUrl(url: string, fallbackMime: string) {
+    const comma = url.indexOf(",")
+    if (!url.startsWith("data:") || comma < 0) {
+      return { mimeType: fallbackMime, base64Data: "", text: "" }
+    }
+
+    const metadata = url.slice("data:".length, comma)
+    const body = url.slice(comma + 1)
+    const metadataParts = metadata.split(";").filter(Boolean)
+    const mimeType = metadataParts.find((part) => part.includes("/")) ?? fallbackMime
+    const isBase64 = metadataParts.some((part) => part.toLowerCase() === "base64")
+    if (isBase64) {
+      return {
+        mimeType,
+        base64Data: body,
+        text: Buffer.from(body, "base64").toString("utf-8"),
+      }
+    }
+
+    try {
+      const text = decodeURIComponent(body)
+      return {
+        mimeType,
+        base64Data: Buffer.from(text, "utf-8").toString("base64"),
+        text,
+      }
+    } catch {
+      return { mimeType, base64Data: "", text: "" }
+    }
+  }
+
   async function getContextLimit(
     sdk: OpencodeClient,
     providerID: ProviderID,
@@ -776,11 +807,8 @@ export namespace ACP {
               })
           } else if (url.startsWith("data:")) {
             // Embedded content - parse data URL and send as appropriate block type
-            const base64Match = url.match(/^data:([^;]+);base64,(.*)$/)
-            const dataMime = base64Match?.[1]
-            const base64Data = base64Match?.[2] ?? ""
-
-            const effectiveMime = dataMime || mime
+            const decoded = decodeReplayDataUrl(url, mime)
+            const effectiveMime = decoded.mimeType
 
             if (effectiveMime.startsWith("image/")) {
               // Image - send as image block
@@ -792,7 +820,7 @@ export namespace ACP {
                     content: {
                       type: "image",
                       mimeType: effectiveMime,
-                      data: base64Data,
+                      data: decoded.base64Data,
                       uri: pathToFileURL(filename).href,
                     },
                   },
@@ -808,9 +836,9 @@ export namespace ACP {
                 ? {
                     uri: fileUri,
                     mimeType: effectiveMime,
-                    text: Buffer.from(base64Data, "base64").toString("utf-8"),
+                    text: decoded.text,
                   }
-                : { uri: fileUri, mimeType: effectiveMime, blob: base64Data }
+                : { uri: fileUri, mimeType: effectiveMime, blob: decoded.base64Data }
 
               await this.connection
                 .sessionUpdate({

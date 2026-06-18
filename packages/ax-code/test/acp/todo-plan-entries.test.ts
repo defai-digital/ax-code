@@ -35,3 +35,24 @@ describe("ACP todo plan entry decoding", () => {
     expect(ACP.decodeTodoPlanEntries([{ content: "Review", status: "blocked", priority: "medium" }])).toBeNull()
   })
 })
+
+describe("ACP replay data URL decoding", () => {
+  test("decodes base64 text data URLs", () => {
+    const body = "hello world"
+    expect(
+      ACP.decodeReplayDataUrl(`data:text/plain;base64,${Buffer.from(body).toString("base64")}`, "text/plain"),
+    ).toEqual({
+      mimeType: "text/plain",
+      base64Data: Buffer.from(body).toString("base64"),
+      text: body,
+    })
+  })
+
+  test("decodes plain text data URLs without dropping content", () => {
+    expect(ACP.decodeReplayDataUrl("data:text/plain,hello%20world", "application/octet-stream")).toEqual({
+      mimeType: "text/plain",
+      base64Data: Buffer.from("hello world").toString("base64"),
+      text: "hello world",
+    })
+  })
+})
