@@ -79,6 +79,15 @@ export namespace ACP {
 
   const ACP_TODO_STATUSES: ReadonlyArray<PlanEntry["status"]> = ["pending", "in_progress", "completed"]
 
+  function isHttpUri(uri: string) {
+    try {
+      const protocol = new URL(uri).protocol
+      return protocol === "http:" || protocol === "https:"
+    } catch {
+      return false
+    }
+  }
+
   function toPlanEntryStatus(status: Todo.Info["status"]): PlanEntry["status"] {
     if (ACP_TODO_STATUSES.includes(status as PlanEntry["status"])) {
       return status as PlanEntry["status"]
@@ -1432,11 +1441,8 @@ export namespace ACP {
                 filename,
                 mime: part.mimeType,
               })
-            } else if (part.uri && (part.uri.startsWith("http:") || part.uri.startsWith("https:"))) {
-              // Accept both http: and https: image URLs. Previously
-              // only http: was checked, so every modern (https) image
-              // URL from ACP clients was silently dropped and never
-              // attached to the outgoing message.
+            } else if (part.uri && isHttpUri(part.uri)) {
+              // Accept remote image URLs without depending on URL scheme casing.
               parts.push({
                 type: "file",
                 url: part.uri,
