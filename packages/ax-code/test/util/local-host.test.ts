@@ -6,7 +6,9 @@ describe("isLocalHostname", () => {
   test("accepts documented local hostnames", () => {
     for (const hostname of [
       "localhost",
+      "LOCALHOST",
       "api.localhost",
+      "API.LOCALHOST",
       "0.0.0.0",
       "::1",
       "[::1]",
