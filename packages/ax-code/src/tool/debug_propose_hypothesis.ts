@@ -11,12 +11,13 @@ import { classifyEnvelopeSet } from "../debug-engine/verify-after-fix"
 import { Installation } from "../installation"
 import { SessionDebug } from "../session/debug"
 import { SessionVerifications } from "../session/verifications"
+import { JsonNumber } from "../util/schema"
 import type { SessionID } from "../session/schema"
 
 const StaticAnalysisInput = z.object({
   sourceCallId: z.string().min(1),
-  chainLength: z.coerce.number().int().min(0),
-  chainConfidence: z.coerce.number().min(0).max(0.95),
+  chainLength: JsonNumber(z.number().int().min(0)),
+  chainConfidence: JsonNumber(z.number().min(0).max(0.95)),
 })
 
 // Combine static and runtime signals into a single confidence number

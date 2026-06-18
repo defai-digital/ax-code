@@ -573,6 +573,18 @@ describe("CodeIntelligence tool envelope (§S4)", () => {
     })
   })
 
+  test("buildContext rejects empty maxSnippets values", async () => {
+    const tool = await CodeIntelligenceTool.init()
+
+    expect(() =>
+      tool.parameters.parse({
+        operation: "buildContext",
+        query: "explain empty snippets",
+        maxSnippets: "",
+      }),
+    ).toThrow()
+  })
+
   test("buildContext accepts file seeds in the worktree outside the current directory", async () => {
     await using tmp = await tmpdir({ git: true })
     const subdir = path.join(tmp.path, "packages", "app")
