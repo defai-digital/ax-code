@@ -276,6 +276,31 @@ describe("tool.code_intelligence", () => {
     })
   })
 
+  test("missing required args fail before asking for permission", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const tool = await CodeIntelligenceTool.init()
+        let askCalls = 0
+        const testCtx = {
+          ...ctx,
+          ask: async () => {
+            askCalls++
+          },
+        }
+
+        await expect(tool.execute({ operation: "findSymbol", name: "   " } as never, testCtx)).rejects.toThrow(
+          "findSymbol requires `name`",
+        )
+        await expect(tool.execute({ operation: "buildContext", query: "" } as never, testCtx)).rejects.toThrow(
+          "buildContext requires `query`",
+        )
+        expect(askCalls).toBe(0)
+      },
+    })
+  })
+
   // ── Policy-aware scope filter ───────────────────────────────────────
   //
   // The tool defaults to worktree scope. Files outside Instance.worktree

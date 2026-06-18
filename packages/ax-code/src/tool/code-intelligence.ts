@@ -66,6 +66,23 @@ function formatCallChainNode(n: CodeIntelligence.CallChainNode): string {
   return `${formatSymbol(n.symbol)} (depth=${n.depth})`
 }
 
+function requiredArgError(args: {
+  operation: (typeof operations)[number]
+  name?: string
+  file?: string
+  symbolID?: string
+  query?: string
+}): string | undefined {
+  if (args.operation === "findSymbol" && !args.name?.trim()) return "findSymbol requires `name`"
+  if (args.operation === "findSymbolByPrefix" && !args.name?.trim()) return "findSymbolByPrefix requires `name`"
+  if (args.operation === "symbolsInFile" && !args.file?.trim()) return "symbolsInFile requires `file`"
+  if (args.operation === "findReferences" && !args.symbolID?.trim()) return "findReferences requires `symbolID`"
+  if (args.operation === "findCallers" && !args.symbolID?.trim()) return "findCallers requires `symbolID`"
+  if (args.operation === "findCallees" && !args.symbolID?.trim()) return "findCallees requires `symbolID`"
+  if (args.operation === "buildContext" && !args.query?.trim()) return "buildContext requires `query`"
+  return undefined
+}
+
 export const CodeIntelligenceTool = Tool.define("code_intelligence", {
   description: DESCRIPTION,
   parameters: z.object({
@@ -104,6 +121,9 @@ export const CodeIntelligenceTool = Tool.define("code_intelligence", {
       .describe("Freshness policy hint for buildContext"),
   }),
   execute: async (args, ctx) => {
+    const preflightError = requiredArgError(args)
+    if (preflightError) throw new Error(preflightError)
+
     await ctx.ask({
       permission: "code_intelligence",
       patterns: [args.operation],
