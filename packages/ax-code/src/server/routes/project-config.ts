@@ -9,6 +9,7 @@ import { Log } from "@/util/log"
 import { FeatureFlag } from "@/util/feature-flags"
 import { toErrorMessage } from "@/util/error-message"
 import { parseJsonResult } from "@/util/json-value"
+import { isRecord } from "@/util/record"
 
 const log = Log.create({ service: "project-config" })
 
@@ -97,6 +98,10 @@ async function readProjectConfigTextForUpdate(file: string) {
 }
 
 export function decodeProjectConfigValue(value: unknown): Config.Info {
+  if (!isRecord(value)) {
+    log.warn("project config was not an object, using empty config")
+    return {}
+  }
   const next = Config.Info.safeParse(value)
   if (next.success) return next.data
   // Strip unknown keys but keep valid ones instead of resetting to {}
@@ -134,6 +139,9 @@ export async function updateProjectConfig<T>(fn: (config: Config.Info) => T | Pr
     throw new Error(`Failed to parse project config JSON in ${file}: ${toErrorMessage(parsed.error)}`, {
       cause: parsed.error instanceof Error ? parsed.error : undefined,
     })
+  }
+  if (!isRecord(parsed.value)) {
+    throw new Error(`Project config must be a JSON object in ${file}`)
   }
   const config = decodeProjectConfigValue(parsed.value)
   const result = await fn(config)
