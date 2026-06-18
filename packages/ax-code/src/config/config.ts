@@ -575,9 +575,10 @@ export namespace Config {
     // Acquire install lock before read-modify-write to prevent races
     using _ = await Lock.write("bun-install")
 
-    const json = await Filesystem.readJson<{ dependencies?: Record<string, string> }>(pkg).catch(() => ({
-      dependencies: {},
-    }))
+    const json = await Filesystem.readJson<{ dependencies?: Record<string, string> }>(pkg).catch((error) => {
+      if ((error as NodeJS.ErrnoException | undefined)?.code === "ENOENT") return { dependencies: {} }
+      throw error
+    })
     json.dependencies = {
       ...json.dependencies,
       "@ax-code/plugin": targetVersion,

@@ -923,6 +923,27 @@ test("serializes concurrent config dependency installs", async () => {
   expect(await Filesystem.exists(path.join(dirs[1], "package.json"))).toBe(true)
 })
 
+test("does not overwrite malformed config package.json during dependency install", async () => {
+  await using tmp = await tmpdir()
+  const pkg = path.join(tmp.path, "package.json")
+  const malformed = "{not json"
+  await Filesystem.write(pkg, malformed)
+
+  const run = spyOn(BunProc, "run").mockImplementation(async () => ({
+    code: 0,
+    stdout: Buffer.alloc(0),
+    stderr: Buffer.alloc(0),
+  }))
+
+  try {
+    await expect(Config.installDependencies(tmp.path)).rejects.toThrow("Failed to parse JSON")
+    expect(run).not.toHaveBeenCalled()
+    expect(await Bun.file(pkg).text()).toBe(malformed)
+  } finally {
+    run.mockRestore()
+  }
+})
+
 test("resolves scoped npm plugins in config", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
