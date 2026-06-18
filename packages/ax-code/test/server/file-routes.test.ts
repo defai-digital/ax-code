@@ -6,6 +6,7 @@ import { Server } from "../../src/server/server"
 import { tmpdir } from "../fixture/fixture"
 import { LSP } from "../../src/lsp"
 import { Log } from "../../src/util/log"
+import { File } from "../../src/file"
 
 Log.init({ print: false })
 
@@ -17,6 +18,30 @@ afterEach(() => {
 })
 
 describe("file routes", () => {
+  test("find file treats bare dirs query flag as true", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        let searchInput: Parameters<typeof File.search>[0] | undefined
+        const searchSpy = spyOn(File, "search").mockImplementation(async (input) => {
+          searchInput = input
+          return ["needle-dir"]
+        })
+        try {
+          const dir = `directory=${encodeURIComponent(tmp.path)}`
+          const response = await Server.Default().request(`/find/file?query=needle&dirs&${dir}`)
+          expect(response.status).toBe(200)
+          expect(await response.json()).toEqual(["needle-dir"])
+          expect(searchInput?.dirs).toBe(true)
+        } finally {
+          searchSpy.mockRestore()
+        }
+      },
+    })
+  })
+
   test("find symbol delegates to LSP workspaceSymbol", async () => {
     await using tmp = await tmpdir({ git: true })
 

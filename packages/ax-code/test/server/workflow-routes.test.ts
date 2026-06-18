@@ -206,6 +206,20 @@ describe("workflow routes", () => {
         phaseID,
         specPhaseID: "noop",
       })
+      const bareRawArtifactsResponse = await app.request(
+        `/workflow-runs/${created.id}/artifacts?${directoryQuery}&phaseID=${phaseID}&kind=summary&includePayload`,
+      )
+      expect(bareRawArtifactsResponse.status).toBe(200)
+      const bareRawArtifacts = (await bareRawArtifactsResponse.json()) as Array<{
+        id: string
+        kind: string
+        payload?: unknown
+      }>
+      expect(bareRawArtifacts).toHaveLength(1)
+      expect(bareRawArtifacts[0]?.payload).toMatchObject({
+        phaseID,
+        specPhaseID: "noop",
+      })
       const artifactDrillDownResponse = await app.request(
         `/workflow-runs/${created.id}/artifacts?${directoryQuery}&artifactID=${rawArtifacts[0]!.id}&includePayload=true`,
       )

@@ -37,7 +37,7 @@ import {
 import type { SessionID } from "@/session/schema"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
-import { OptionalQueryNumber } from "./query"
+import { OptionalQueryNumber, QueryBoolean } from "./query"
 
 const WorkflowTemplateIDSchema = z
   .string()
@@ -76,7 +76,7 @@ const WorkflowArtifactListQuery = z.object({
   phaseID: z.string().min(1).optional(),
   childID: z.string().min(1).optional(),
   kind: WorkflowRunState.ArtifactKind.optional(),
-  includePayload: z.enum(["true", "false"]).optional(),
+  includePayload: QueryBoolean.optional(),
 })
 
 const WorkflowEvalSummaryBody = z
@@ -317,7 +317,7 @@ export const WorkflowRunRoutes = lazy(() =>
           .filter((artifact) => (query.childID ? artifact.childID === query.childID : true))
           .filter((artifact) => (query.kind ? artifact.kind === query.kind : true))
           .map((artifact) => {
-            if (query.includePayload === "true") return artifact
+            if (query.includePayload === true) return artifact
             return compactWorkflowArtifact(artifact)
           })
         return c.json(artifacts)

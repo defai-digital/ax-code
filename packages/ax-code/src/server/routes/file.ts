@@ -8,7 +8,7 @@ import { LSP } from "../../lsp"
 import { Instance } from "../../project/instance"
 import { lazy } from "../../util/lazy"
 import { MAX_PATH_LENGTH } from "../constants"
-import { OptionalQueryNumber } from "./query"
+import { OptionalQueryNumber, QueryBoolean } from "./query"
 
 const FilePathQuery = z.object({
   path: z.string().max(MAX_PATH_LENGTH),
@@ -70,7 +70,7 @@ export const FileRoutes = lazy(() =>
         "query",
         z.object({
           query: z.string(),
-          dirs: z.enum(["true", "false"]).optional(),
+          dirs: QueryBoolean.optional(),
           type: z.enum(["file", "directory"]).optional(),
           limit: OptionalQueryNumber(z.number().int().min(1).max(200)),
         }),
@@ -83,7 +83,7 @@ export const FileRoutes = lazy(() =>
         const results = await File.search({
           query,
           limit: limit ?? 10,
-          dirs: dirs !== "false",
+          dirs: dirs !== false,
           type,
         })
         return c.json(results)
