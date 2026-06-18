@@ -49,4 +49,40 @@ describe("QualityStabilityGuard", () => {
     expect(summary.recentRollbackCount).toBe(2)
     expect(summary.escalationRequired).toBe(true)
   })
+
+  test("warns and ignores malformed rollback timestamps", () => {
+    const summary = QualityStabilityGuard.summarize({
+      source: "corrupt-history-model-v1",
+      rollbacks: [
+        { source: "corrupt-history-model-v1", rolledBackAt: "not-a-date" },
+        { source: "corrupt-history-model-v1", rolledBackAt: "2026-04-19T12:00:00.000Z" },
+      ],
+      now: "2026-04-20T12:00:00.000Z",
+      cooldownHours: 1,
+    })
+
+    expect(summary.overallStatus).toBe("warn")
+    expect(summary.latestRollbackAt).toBe("2026-04-19T12:00:00.000Z")
+    expect(summary.gates).toContainEqual({
+      name: "time-input-integrity",
+      status: "warn",
+      detail: "1 invalid rollback timestamp(s) ignored",
+    })
+  })
+
+  test("warns instead of throwing for malformed evaluation timestamps", () => {
+    const summary = QualityStabilityGuard.summarize({
+      source: "bad-now-model-v1",
+      rollbacks: [],
+      now: "not-a-date",
+    })
+
+    expect(summary.evaluatedAt).toBe("1970-01-01T00:00:00.000Z")
+    expect(summary.overallStatus).toBe("warn")
+    expect(summary.gates).toContainEqual({
+      name: "time-input-integrity",
+      status: "warn",
+      detail: "invalid evaluation timestamp; defaulted to Unix epoch",
+    })
+  })
 })

@@ -35,8 +35,22 @@ export namespace QualityStabilityGuard {
     rolledBackAt: string
   }
 
+  type ParsedRollback = RollbackLike & {
+    rolledBackAtMs: number
+  }
+
   function isoAt(date: Date) {
-    return date.toISOString()
+    return Number.isFinite(date.getTime()) ? date.toISOString() : new Date(0).toISOString()
+  }
+
+  function parseTimestamp(value: string): number | undefined {
+    const ms = Date.parse(value)
+    return Number.isFinite(ms) ? ms : undefined
+  }
+
+  function normalizeTimestamp(value: string): string | undefined {
+    const ms = parseTimestamp(value)
+    return ms === undefined ? undefined : isoAt(new Date(ms))
   }
 
   function addHours(iso: string, hours: number) {
@@ -55,13 +69,26 @@ export namespace QualityStabilityGuard {
     repeatFailureWindowHours?: number
     repeatFailureThreshold?: number
   }): StabilitySummary {
-    const evaluatedAt = input.now ?? new Date().toISOString()
+    const normalizedNow = input.now === undefined ? new Date().toISOString() : normalizeTimestamp(input.now)
+    const evaluatedAt = normalizedNow ?? new Date(0).toISOString()
     const cooldownHours = Math.max(0, input.cooldownHours ?? DEFAULT_COOLDOWN_HOURS)
     const repeatFailureWindowHours = Math.max(1, input.repeatFailureWindowHours ?? DEFAULT_REPEAT_FAILURE_WINDOW_HOURS)
     const repeatFailureThreshold = Math.max(1, input.repeatFailureThreshold ?? DEFAULT_REPEAT_FAILURE_THRESHOLD)
-    const records = [...input.rollbacks]
-      .filter((record) => record.source === input.source)
-      .sort((a, b) => a.rolledBackAt.localeCompare(b.rolledBackAt))
+    const sourceRecords = input.rollbacks.filter((record) => record.source === input.source)
+    const records = sourceRecords
+      .flatMap((record): ParsedRollback[] => {
+        const rolledBackAtMs = parseTimestamp(record.rolledBackAt)
+        if (rolledBackAtMs === undefined) return []
+        return [
+          {
+            ...record,
+            rolledBackAt: isoAt(new Date(rolledBackAtMs)),
+            rolledBackAtMs,
+          },
+        ]
+      })
+      .sort((a, b) => a.rolledBackAtMs - b.rolledBackAtMs)
+    const invalidRollbackCount = sourceRecords.length - records.length
 
     const latestRollbackAt = records[records.length - 1]?.rolledBackAt ?? null
     const cooldownUntil = latestRollbackAt ? addHours(latestRollbackAt, cooldownHours) : null
@@ -73,6 +100,20 @@ export namespace QualityStabilityGuard {
     const escalationRequired = recentRollbackCount >= repeatFailureThreshold
 
     const gates: StabilityGate[] = [
+      ...(normalizedNow === undefined || invalidRollbackCount > 0
+        ? [
+            {
+              name: "time-input-integrity",
+              status: "warn" as const,
+              detail: [
+                normalizedNow === undefined ? "invalid evaluation timestamp; defaulted to Unix epoch" : undefined,
+                invalidRollbackCount > 0 ? `${invalidRollbackCount} invalid rollback timestamp(s) ignored` : undefined,
+              ]
+                .filter((item): item is string => !!item)
+                .join("; "),
+            },
+          ]
+        : []),
       {
         name: "cooling-window",
         status: coolingWindowActive ? "fail" : "pass",
