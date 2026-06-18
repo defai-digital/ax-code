@@ -92,6 +92,23 @@ async function emitDebugAnalyze(
 }
 
 describe("DebugProposeHypothesisTool", () => {
+  test("coerces staticAnalysis numeric fields from string values", async () => {
+    const tool = await DebugProposeHypothesisTool.init()
+
+    const parsed = tool.parameters.parse({
+      caseId: "0000aaaa1111bbbb",
+      claim: "Static call chain points at the failing module",
+      staticAnalysis: {
+        sourceCallId: "call_debug_analyze",
+        chainLength: "5",
+        chainConfidence: "0.62",
+      },
+    })
+
+    expect(parsed.staticAnalysis?.chainLength).toBe(5)
+    expect(parsed.staticAnalysis?.chainConfidence).toBe(0.62)
+  })
+
   test("rejects unknown caseId", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({

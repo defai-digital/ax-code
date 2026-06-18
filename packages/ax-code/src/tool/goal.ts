@@ -36,7 +36,12 @@ export const CreateGoalTool = Tool.define("create_goal", {
     "Create a goal only when explicitly requested by the user or system/developer instructions; do not infer goals from ordinary tasks. Set tokenBudget only when an explicit token budget is requested. Fails if an active goal already exists.",
   parameters: z.object({
     objective: z.string().min(1).describe("The concrete objective to start pursuing."),
-    tokenBudget: z.number().int().positive().optional().describe("Optional positive token budget for the new goal."),
+    tokenBudget: z.coerce
+      .number()
+      .int()
+      .positive()
+      .optional()
+      .describe("Optional positive token budget for the new goal."),
   }),
   async execute(params, ctx) {
     const goal = await SessionGoal.create({

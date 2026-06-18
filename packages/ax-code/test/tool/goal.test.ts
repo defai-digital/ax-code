@@ -20,6 +20,17 @@ function toolContext(sessionID: string, directory: string) {
 }
 
 describe("goal tools", () => {
+  test("create_goal coerces tokenBudget from string values", async () => {
+    const tool = await CreateGoalTool.init()
+
+    const parsed = tool.parameters.parse({
+      objective: "finish goal tool schema test",
+      tokenBudget: "100",
+    })
+
+    expect(parsed.tokenBudget).toBe(100)
+  })
+
   test("create, read, and update a durable session goal", async () => {
     await using tmp = await tmpdir({ git: true })
 

@@ -15,8 +15,8 @@ import type { SessionID } from "../session/schema"
 
 const StaticAnalysisInput = z.object({
   sourceCallId: z.string().min(1),
-  chainLength: z.number().int().min(0),
-  chainConfidence: z.number().min(0).max(0.95),
+  chainLength: z.coerce.number().int().min(0),
+  chainConfidence: z.coerce.number().min(0).max(0.95),
 })
 
 // Combine static and runtime signals into a single confidence number
