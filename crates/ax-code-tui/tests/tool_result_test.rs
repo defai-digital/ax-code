@@ -149,6 +149,38 @@ fn test_selected_completed_tool() {
 }
 
 #[test]
+fn test_selected_completed_tool_clamps_stale_index() {
+    let mut app = App::new();
+    app.selected_tool_index = 5;
+
+    app.handle_event(RuntimeEvent::ToolCallStart {
+        properties: ToolCallStartProps {
+            session_id: "sess_123".to_string(),
+            call_id: "call_001".to_string(),
+            tool_name: "bash".to_string(),
+        },
+    });
+    app.handle_event(RuntimeEvent::ToolCallComplete {
+        properties: ToolCallCompleteProps {
+            session_id: "sess_123".to_string(),
+            call_id: "call_001".to_string(),
+            tool_name: "bash".to_string(),
+            result: Some("output".to_string()),
+            error: None,
+        },
+    });
+
+    assert_eq!(
+        app.selected_completed_tool()
+            .map(|tool| tool.tool_name.as_str()),
+        Some("bash")
+    );
+
+    app.next_tool();
+    assert_eq!(app.selected_tool_index, 0);
+}
+
+#[test]
 fn test_truncate_result_short() {
     let result = "short text";
     let truncated = App::truncate_result(result, 50);

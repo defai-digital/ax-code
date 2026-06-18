@@ -478,8 +478,10 @@ impl App {
         if let Some(current_id) = &self.session_id {
             if let Some(idx) = self.sessions.iter().position(|s| &s.id == current_id) {
                 self.selected_session_index = idx;
+                return;
             }
         }
+        self.clamp_session_selection();
     }
 
     /// Toggle session list visibility.
@@ -487,8 +489,18 @@ impl App {
         self.show_session_list = !self.show_session_list;
     }
 
+    /// Keep the selected session index inside the current session list.
+    fn clamp_session_selection(&mut self) {
+        if self.sessions.is_empty() {
+            self.selected_session_index = 0;
+        } else if self.selected_session_index >= self.sessions.len() {
+            self.selected_session_index = self.sessions.len() - 1;
+        }
+    }
+
     /// Move to next session in list.
     pub fn next_session(&mut self) {
+        self.clamp_session_selection();
         if !self.sessions.is_empty() && self.selected_session_index < self.sessions.len() - 1 {
             self.selected_session_index += 1;
         }
@@ -496,6 +508,7 @@ impl App {
 
     /// Move to previous session in list.
     pub fn prev_session(&mut self) {
+        self.clamp_session_selection();
         if self.selected_session_index > 0 {
             self.selected_session_index -= 1;
         }
@@ -503,6 +516,7 @@ impl App {
 
     /// Select the currently highlighted session.
     pub fn select_session(&mut self) -> Option<String> {
+        self.clamp_session_selection();
         self.sessions.get(self.selected_session_index).map(|s| {
             self.show_session_list = false;
             s.id.clone()
@@ -531,6 +545,7 @@ impl App {
     pub fn clear_completed_tools(&mut self) {
         self.tool_calls
             .retain(|t| t.status == ToolCallStatus::Running);
+        self.clamp_tool_selection();
     }
 
     /// Get active (running) tool calls.
@@ -562,10 +577,26 @@ impl App {
             .collect()
     }
 
+    /// Keep the selected tool index inside the completed/failed tool list.
+    fn clamp_tool_selection(&mut self) {
+        let completed_count = self
+            .tool_calls
+            .iter()
+            .filter(|t| t.status == ToolCallStatus::Completed || t.status == ToolCallStatus::Failed)
+            .count();
+
+        if completed_count == 0 {
+            self.selected_tool_index = 0;
+        } else if self.selected_tool_index >= completed_count {
+            self.selected_tool_index = completed_count - 1;
+        }
+    }
+
     /// Move to next tool in tool panel.
     pub fn next_tool(&mut self) {
-        let completed = self.completed_tool_calls();
-        if !completed.is_empty() && self.selected_tool_index < completed.len() - 1 {
+        self.clamp_tool_selection();
+        let completed_count = self.completed_tool_calls().len();
+        if completed_count > 0 && self.selected_tool_index < completed_count - 1 {
             self.selected_tool_index += 1;
             self.tool_result_expanded = false;
         }
@@ -573,6 +604,7 @@ impl App {
 
     /// Move to previous tool in tool panel.
     pub fn prev_tool(&mut self) {
+        self.clamp_tool_selection();
         if self.selected_tool_index > 0 {
             self.selected_tool_index -= 1;
             self.tool_result_expanded = false;
@@ -586,9 +618,11 @@ impl App {
 
     /// Get the currently selected completed tool.
     pub fn selected_completed_tool(&self) -> Option<&ToolCall> {
-        self.completed_tool_calls()
-            .get(self.selected_tool_index)
-            .copied()
+        let completed = self.completed_tool_calls();
+        let selected_index = self
+            .selected_tool_index
+            .min(completed.len().saturating_sub(1));
+        completed.get(selected_index).copied()
     }
 
     /// Truncate a string to a maximum length with ellipsis.

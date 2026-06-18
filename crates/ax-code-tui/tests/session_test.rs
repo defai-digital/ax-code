@@ -266,6 +266,33 @@ fn test_session_selection() {
 }
 
 #[test]
+fn test_load_sessions_clamps_stale_selection() {
+    let mut app = App::new();
+    app.show_session_list = true;
+    app.selected_session_index = 4;
+
+    app.load_sessions(vec![SessionSummary {
+        id: "sess_only".to_string(),
+        title: None,
+        message_count: 0,
+    }]);
+
+    assert_eq!(app.selected_session_index, 0);
+    assert_eq!(app.select_session(), Some("sess_only".to_string()));
+}
+
+#[test]
+fn test_load_sessions_resets_empty_selection() {
+    let mut app = App::new();
+    app.selected_session_index = 3;
+
+    app.load_sessions(Vec::new());
+
+    assert_eq!(app.selected_session_index, 0);
+    assert!(app.select_session().is_none());
+}
+
+#[test]
 fn test_toggle_session_list() {
     let mut app = App::new();
 
