@@ -62,16 +62,20 @@ function decodeDataUrl(value: string): { bytes?: Uint8Array } {
   }
 }
 
+function isDataUrl(value: string) {
+  return /^data:/i.test(value)
+}
+
 function decodeFileData(data: unknown): { bytes?: Uint8Array; url?: string } {
   if (data instanceof Uint8Array) return { bytes: data }
   if (data instanceof ArrayBuffer) return { bytes: new Uint8Array(data) }
   if (typeof Buffer !== "undefined" && Buffer.isBuffer(data)) return { bytes: new Uint8Array(data) }
   if (data instanceof URL) {
     const value = data.toString()
-    return value.startsWith("data:") ? decodeDataUrl(value) : { url: value }
+    return isDataUrl(value) ? decodeDataUrl(value) : { url: value }
   }
   if (typeof data === "string") {
-    if (data.startsWith("data:")) return decodeDataUrl(data)
+    if (isDataUrl(data)) return decodeDataUrl(data)
     if (/^https?:\/\//i.test(data)) return { url: data }
     // Bare string is assumed to be base64-encoded bytes.
     return { bytes: decodeBase64Bytes(data) }

@@ -43,6 +43,21 @@ describe("materializeCliAttachments", () => {
     }
   })
 
+  test("decodes data URLs case-insensitively", async () => {
+    const dataUrl = "DATA:image/png;base64," + Buffer.from("png-bytes").toString("base64")
+    const prompt: LanguageModelV3Prompt = [
+      { role: "user", content: [{ type: "file", data: dataUrl, mediaType: "image/png" } as any] },
+    ]
+    const result = await materializeCliAttachments(prompt)
+    try {
+      expect(result.refs).toHaveLength(1)
+      expect(result.refs[0]!.path!.endsWith(".png")).toBe(true)
+      expect(existsSync(result.refs[0]!.path!)).toBe(true)
+    } finally {
+      await result.cleanup()
+    }
+  })
+
   test("skips invalid base64 attachment payloads instead of materializing garbage", async () => {
     const prompt: LanguageModelV3Prompt = [
       {
