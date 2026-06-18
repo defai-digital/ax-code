@@ -80,6 +80,13 @@ async fn test_server_attach_with_auth() {
         result.is_ok(),
         "Health check should succeed with auth token"
     );
+    assert!(
+        server
+            .requests()
+            .iter()
+            .any(|request| request == "GET /global/health?directory=%2Ftest%2Fdir HTTP/1.1"),
+        "connect should scope the health check to the configured directory"
+    );
 
     server.shutdown().await;
 }

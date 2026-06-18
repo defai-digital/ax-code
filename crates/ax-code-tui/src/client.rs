@@ -94,8 +94,7 @@ impl HeadlessClient {
     pub async fn connect(&self) -> Result<()> {
         let url = format!("{}/global/health", self.config.base_url);
         let response = self
-            .http
-            .get(&url)
+            .with_directory_query(self.http.get(&url))
             .send()
             .await
             .context("Failed to connect to headless server")?;
