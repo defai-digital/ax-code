@@ -1,6 +1,9 @@
 //! Tests for tool calls, session switching, and abort functionality.
 
-use ax_code_tui::events::{RuntimeEvent, ToolCallCompleteProps, ToolCallStartProps};
+use ax_code_tui::events::{
+    MessageData, MessageInfo, MessagePartDeltaProps, MessageRole, RuntimeEvent,
+    ToolCallCompleteProps, ToolCallStartProps,
+};
 use ax_code_tui::tui::{App, InputAction, SessionStatus, SessionSummary, ToolCallStatus};
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 
@@ -393,6 +396,60 @@ fn test_input_session_navigation() {
     }
 
     assert!(!app.show_session_list);
+}
+
+#[test]
+fn test_select_session_updates_active_session_and_clears_stale_state() {
+    let mut app = App::new();
+    app.session_id = Some("sess_001".to_string());
+    app.show_session_list = true;
+    app.load_sessions(vec![
+        SessionSummary {
+            id: "sess_001".to_string(),
+            title: Some("Old".to_string()),
+            message_count: 1,
+        },
+        SessionSummary {
+            id: "sess_002".to_string(),
+            title: Some("New".to_string()),
+            message_count: 0,
+        },
+    ]);
+    app.selected_session_index = 1;
+    app.handle_event(RuntimeEvent::MessageUpdated {
+        properties: MessageInfo {
+            info: Some(MessageData {
+                id: "msg_old".to_string(),
+                session_id: "sess_001".to_string(),
+                role: Some(MessageRole::Assistant),
+            }),
+        },
+    });
+    app.handle_event(RuntimeEvent::MessagePartDelta {
+        properties: MessagePartDeltaProps {
+            message_id: "msg_old".to_string(),
+            part_id: "part_old".to_string(),
+            field: "text".to_string(),
+            delta: "old transcript".to_string(),
+        },
+    });
+    app.handle_event(RuntimeEvent::ToolCallStart {
+        properties: ToolCallStartProps {
+            session_id: "sess_001".to_string(),
+            call_id: "call_old".to_string(),
+            tool_name: "bash".to_string(),
+        },
+    });
+
+    let selected = app.select_session();
+
+    assert_eq!(selected.as_deref(), Some("sess_002"));
+    assert_eq!(app.session_id.as_deref(), Some("sess_002"));
+    assert_eq!(app.session_title.as_deref(), Some("New"));
+    assert!(app.messages.is_empty());
+    assert!(app.message_text_parts.is_empty());
+    assert!(app.tool_calls.is_empty());
+    assert_eq!(app.session_status, SessionStatus::Idle);
 }
 
 #[test]

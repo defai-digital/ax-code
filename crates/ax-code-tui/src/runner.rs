@@ -276,8 +276,7 @@ impl Runner {
                         }
                     }
                     InputAction::SwitchSession { session_id } => {
-                        // TODO: Implement session switching via client
-                        app.set_status(format!("Switching to session: {}", session_id));
+                        app.set_status(format!("Switched to session: {}", session_id));
                     }
                 }
             }

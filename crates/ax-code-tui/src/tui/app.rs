@@ -660,10 +660,28 @@ impl App {
     /// Select the currently highlighted session.
     pub fn select_session(&mut self) -> Option<String> {
         self.clamp_session_selection();
-        self.sessions.get(self.selected_session_index).map(|s| {
+        let summary = self.sessions.get(self.selected_session_index).cloned();
+        summary.map(|s| {
             self.show_session_list = false;
+            self.switch_to_session(&s);
             s.id.clone()
         })
+    }
+
+    fn switch_to_session(&mut self, summary: &SessionSummary) {
+        self.session_id = Some(summary.id.clone());
+        self.session_title = summary.title.clone();
+        self.session_status = SessionStatus::Idle;
+        self.messages.clear();
+        self.message_text_parts.clear();
+        self.pending_permissions.clear();
+        self.pending_questions.clear();
+        self.tool_calls.clear();
+        self.mode = AppMode::Input;
+        self.scroll_offset = 0;
+        self.selected_tool_index = 0;
+        self.tool_result_expanded = false;
+        self.status_message = Some(format!("Switched to session: {}", summary.id));
     }
 
     // === Interrupt/Abort ===
