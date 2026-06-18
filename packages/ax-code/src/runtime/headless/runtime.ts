@@ -34,6 +34,7 @@ export function createHeadlessAgentRuntime(input: HeadlessAgentRuntimeInput) {
         baseUrl: input.baseUrl,
         fetch: fetchFn,
         headers: input.headers,
+        directory: input.directory,
         client,
       })
     },
@@ -51,6 +52,7 @@ async function sendHeadlessRuntimeCommand(input: {
   baseUrl: string
   fetch: typeof fetch
   headers?: RequestInit["headers"]
+  directory?: string
   client: ReturnType<typeof createOpencodeClient>
 }): Promise<HeadlessRuntimeCommandResult> {
   switch (input.command.type) {
@@ -105,7 +107,7 @@ async function postJson(
   const response = await input.fetch(new URL(path, input.baseUrl), {
     method: "POST",
     headers: {
-      ...headersToRecord(input.headers),
+      ...headlessHeaders(input),
       ...(body ? { "Content-Type": "application/json" } : {}),
     },
     body: body ? JSON.stringify(body) : undefined,
@@ -140,5 +142,17 @@ function headersToRecord(headers: RequestInit["headers"] | undefined): Record<st
   if (!headers) return {}
   if (headers instanceof Headers) return Object.fromEntries(headers.entries())
   if (Array.isArray(headers)) return Object.fromEntries(headers)
+  return headers
+}
+
+function headlessHeaders(input: { headers?: RequestInit["headers"]; directory?: string }): Record<string, string> {
+  const headers = headersToRecord(input.headers)
+  if (input.directory) {
+    const encodedDirectory = /[^\x00-\x7F]/.test(input.directory)
+      ? encodeURIComponent(input.directory)
+      : input.directory
+    headers["x-ax-code-directory"] = encodedDirectory
+    headers["x-opencode-directory"] = encodedDirectory
+  }
   return headers
 }

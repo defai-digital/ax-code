@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test"
-import { parseHeadlessRuntimeJsonBody, parseHeadlessRuntimeResponseBody } from "../../../src/runtime/headless"
+import {
+  createHeadlessAgentRuntime,
+  parseHeadlessRuntimeJsonBody,
+  parseHeadlessRuntimeResponseBody,
+} from "../../../src/runtime/headless"
 
 describe("headless runtime", () => {
   test("parseHeadlessRuntimeResponseBody decodes JSON bodies", () => {
@@ -17,5 +21,25 @@ describe("headless runtime", () => {
   test("parseHeadlessRuntimeResponseBody reports invalid JSON with a bounded preview", () => {
     expect(() => parseHeadlessRuntimeResponseBody("{not json")).toThrow("Headless runtime returned invalid JSON")
     expect(() => parseHeadlessRuntimeJsonBody("{not json")).toThrow("Headless runtime returned invalid JSON")
+  })
+
+  test("command posts include directory headers", async () => {
+    let request: Request | undefined
+    const runtime = createHeadlessAgentRuntime({
+      baseUrl: "http://localhost",
+      directory: "/tmp/測試",
+      fetch: (async (input: RequestInfo | URL, init?: RequestInit) => {
+        request = input instanceof Request ? input : new Request(input, init)
+        return new Response("", { status: 202 })
+      }) as typeof fetch,
+    })
+
+    await runtime.send({
+      type: "session.abort",
+      sessionID: "ses_123",
+    })
+
+    expect(request?.headers.get("x-ax-code-directory")).toBe("%2Ftmp%2F%E6%B8%AC%E8%A9%A6")
+    expect(request?.headers.get("x-opencode-directory")).toBe("%2Ftmp%2F%E6%B8%AC%E8%A9%A6")
   })
 })
