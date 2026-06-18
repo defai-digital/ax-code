@@ -3,6 +3,7 @@ import { afterEach, expect, test } from "bun:test"
 import { ModelsDev } from "../../src/provider/models"
 import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
+import fs from "fs/promises"
 
 const originalFile = process.env["AX_CODE_MODELS_PATH"]
 const originalUrl = process.env["AX_CODE_MODELS_URL"]
@@ -88,6 +89,53 @@ test("loads custom models file from the active project directory", async () => {
       ModelsDev.Data.reset()
       const data = await ModelsDev.get()
       expect(data["custom"]?.models["custom-model"]?.name).toBe("Custom Model")
+    },
+  })
+})
+
+test("ignores custom models path symlinks that escape allowed directories", async () => {
+  if (process.platform === "win32") return
+
+  await using project = await tmpdir({ git: true })
+  await using outside = await tmpdir()
+  const outsideFile = path.join(outside.path, "models.json")
+  const link = path.join(project.path, "models-link.json")
+  await Bun.write(
+    outsideFile,
+    JSON.stringify({
+      escaped: {
+        id: "escaped",
+        name: "Escaped",
+        env: [],
+        npm: "@escaped/provider",
+        models: {
+          "escaped-model": {
+            id: "escaped-model",
+            name: "Escaped Model",
+            release_date: "2026-01-01",
+            attachment: false,
+            reasoning: false,
+            tool_call: true,
+            limit: {
+              context: 1000,
+              output: 100,
+            },
+          },
+        },
+      },
+    }),
+  )
+  await fs.symlink(outsideFile, link)
+
+  process.env["AX_CODE_MODELS_PATH"] = link
+  delete process.env["AX_CODE_MODELS_URL"]
+
+  await Instance.provide({
+    directory: project.path,
+    fn: async () => {
+      ModelsDev.Data.reset()
+      const data = await ModelsDev.get()
+      expect(data["escaped"]).toBeUndefined()
     },
   })
 })

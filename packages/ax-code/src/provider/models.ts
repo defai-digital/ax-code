@@ -16,6 +16,7 @@ import {
   AX_ENGINE_PROVIDER_ID,
 } from "./ax-engine/constants"
 import type { AxEngineModelID } from "./ax-engine/constants"
+import fs from "fs/promises"
 
 export namespace ModelsDev {
   const log = Log.create({ service: "models" })
@@ -139,8 +140,9 @@ export namespace ModelsDev {
     return result.data
   }
 
-  function isAllowedModelPath(file: string) {
-    const resolved = Filesystem.resolve(file)
+  async function isAllowedModelPath(file: string) {
+    const resolved = await fs.realpath(Filesystem.resolve(file)).catch(() => undefined)
+    if (!resolved) return false
     const allowedDirs: string[] = [Global.Path.config, Global.Path.data, Global.Path.home]
     try {
       if (Instance.worktree && Instance.worktree !== "/") allowedDirs.push(Instance.worktree)
@@ -168,7 +170,7 @@ export namespace ModelsDev {
 
     const file = Flag.AX_CODE_MODELS_PATH
     if (file) {
-      if (!isAllowedModelPath(file)) {
+      if (!(await isAllowedModelPath(file))) {
         log.warn("AX_CODE_MODELS_PATH outside allowed directories; ignoring", {
           file,
         })
