@@ -1,9 +1,29 @@
 import { isHeadlessRuntimeEvent, type HeadlessRuntimeEvent } from "./event"
 import { parseJsonPayload } from "@/util/json-value"
+import { toErrorMessage } from "@/util/error-message"
 
 export function encodeHeadlessEventLogRecord(record: unknown) {
-  const encoded = JSON.stringify(record)
+  const encoded = stringifyHeadlessEventLogRecord(record)
   return `${encoded ?? "null"}\n`
+}
+
+function stringifyHeadlessEventLogRecord(record: unknown) {
+  const seen = new WeakSet<object>()
+  try {
+    return JSON.stringify(record, (_key, value) => {
+      if (typeof value === "bigint") return value.toString()
+      if (typeof value === "object" && value !== null) {
+        if (seen.has(value)) return "[Circular]"
+        seen.add(value)
+      }
+      return value
+    })
+  } catch (error) {
+    return JSON.stringify({
+      type: "headless.event_log.serialization_error",
+      error: toErrorMessage(error),
+    })
+  }
 }
 
 export function decodeHeadlessEventLogRecord<

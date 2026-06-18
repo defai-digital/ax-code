@@ -12,6 +12,40 @@ describe("headless event log", () => {
     expect(encodeHeadlessEventLogRecord(undefined)).toBe("null\n")
   })
 
+  test("encodes records with bigint and circular payloads without throwing", () => {
+    const record: Record<string, unknown> = {
+      type: "message.updated",
+      properties: {
+        info: {
+          id: "msg_1",
+          sessionID: "ses_1",
+          sequence: 1n,
+        },
+      },
+    }
+    record.self = record
+
+    const encoded = encodeHeadlessEventLogRecord(record)
+
+    expect(encoded).toBe(
+      '{"type":"message.updated","properties":{"info":{"id":"msg_1","sessionID":"ses_1","sequence":"1"}},"self":"[Circular]"}\n',
+    )
+    expect(decodeHeadlessEventLogLine(encoded)?.type).toBe("message.updated")
+  })
+
+  test("encodes a serialization error record when JSON conversion throws", () => {
+    const encoded = encodeHeadlessEventLogRecord({
+      toJSON() {
+        throw new Error("cannot serialize")
+      },
+    })
+
+    expect(JSON.parse(encoded)).toEqual({
+      type: "headless.event_log.serialization_error",
+      error: "cannot serialize",
+    })
+  })
+
   test("decodes raw events and server event envelopes through the same boundary", () => {
     const raw = {
       type: "message.updated",
