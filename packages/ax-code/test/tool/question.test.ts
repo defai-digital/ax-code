@@ -65,6 +65,22 @@ describe("tool.question", () => {
     expect(result.output).toContain(`"What is your favorite animal?"="Dog"`)
   })
 
+  test("parses string boolean flags in question parameters", async () => {
+    const tool = await QuestionTool.init()
+    const parsed = tool.parameters.parse({
+      questions: [
+        {
+          question: "Pick targets",
+          header: "Targets",
+          options: [{ label: "Core", description: "Core implementation" }],
+          multiple: "false",
+        },
+      ],
+    })
+
+    expect(parsed.questions[0]?.multiple).toBe(false)
+  })
+
   test("marks autonomous answers in output metadata", async () => {
     const original = process.env.AX_CODE_AUTONOMOUS
     process.env.AX_CODE_AUTONOMOUS = "true"

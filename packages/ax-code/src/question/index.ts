@@ -5,6 +5,7 @@ import { Instance } from "@/project/instance"
 import { Recorder } from "@/replay/recorder"
 import { SessionID, MessageID } from "@/session/schema"
 import { Log } from "@/util/log"
+import { JsonBoolean } from "@/util/schema"
 import z from "zod"
 import { AutonomousQuestion } from "./autonomous"
 import * as Clarify from "./clarify"
@@ -28,8 +29,8 @@ export namespace Question {
       question: z.string().describe("Complete question"),
       header: z.string().describe("Very short label (max 30 chars)"),
       options: z.array(Option).describe("Available choices"),
-      multiple: z.boolean().optional().describe("Allow selecting multiple choices"),
-      custom: z.boolean().optional().describe("Allow typing a custom answer (default: true)"),
+      multiple: JsonBoolean.optional().describe("Allow selecting multiple choices"),
+      custom: JsonBoolean.optional().describe("Allow typing a custom answer (default: true)"),
     })
     .meta({ ref: "QuestionInfo" })
   export type Info = z.infer<typeof Info>
