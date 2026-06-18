@@ -16,6 +16,7 @@ import { Question } from "../../src/question"
 import { QuestionID } from "../../src/question/schema"
 import { appErrorEnvelope } from "../../src/server/error"
 import { DefaultQueryNumber, OptionalQueryNumber } from "../../src/server/routes/query"
+import { parsePtyReconnectCursor } from "../../src/server/routes/pty"
 
 const root = path.join(__dirname, "../..")
 Log.init({ print: false })
@@ -607,6 +608,20 @@ describe("server route validation", () => {
     const src = await Bun.file(path.join(import.meta.dir, "../../src/server/routes/pty.ts")).text()
     expect(src).toContain('throw new NotFoundError({ message: "Session not found" })')
     expect(src).not.toContain('throw new Error("Session not found")')
+  })
+
+  test("pty reconnect cursor accepts only decimal integers", () => {
+    expect(parsePtyReconnectCursor(undefined)).toBeUndefined()
+    expect(parsePtyReconnectCursor("")).toBeUndefined()
+    expect(parsePtyReconnectCursor("  ")).toBeUndefined()
+    expect(parsePtyReconnectCursor("-1")).toBe(-1)
+    expect(parsePtyReconnectCursor("0")).toBe(0)
+    expect(parsePtyReconnectCursor(" 42 ")).toBe(42)
+    expect(parsePtyReconnectCursor("42")).toBe(42)
+    expect(parsePtyReconnectCursor("-2")).toBeUndefined()
+    expect(parsePtyReconnectCursor("1.5")).toBeUndefined()
+    expect(parsePtyReconnectCursor("1e3")).toBeUndefined()
+    expect(parsePtyReconnectCursor("0x10")).toBeUndefined()
   })
 
   test("sse stop handlers always close their queues even if unsubscribe throws", async () => {

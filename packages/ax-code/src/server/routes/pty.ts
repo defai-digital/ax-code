@@ -12,6 +12,15 @@ import { PTY_ID_PARAM, withPtyID } from "./route-params"
 
 const log = Log.create({ service: "server.pty" })
 
+export function parsePtyReconnectCursor(value: string | undefined): number | undefined {
+  if (!value) return undefined
+  const trimmed = value.trim()
+  if (!trimmed || !/^(?:-1|\d+)$/.test(trimmed)) return undefined
+  const parsed = Number(trimmed)
+  if (!Number.isSafeInteger(parsed) || parsed < -1) return undefined
+  return parsed
+}
+
 export const PtyRoutes = lazy(() =>
   new Hono()
     .get(
@@ -156,13 +165,7 @@ export const PtyRoutes = lazy(() =>
       validator("param", PTY_ID_PARAM),
       withPtyID((id) =>
         upgradeWebSocket(async (c) => {
-          const cursor = (() => {
-            const value = c.req.query("cursor")
-            if (!value) return
-            const parsed = Number(value)
-            if (!Number.isSafeInteger(parsed) || parsed < -1) return
-            return parsed
-          })()
+          const cursor = parsePtyReconnectCursor(c.req.query("cursor"))
           let handler: Awaited<ReturnType<typeof Pty.connect>>
           if (!(await Pty.get(id))) throw new NotFoundError({ message: "Session not found" })
 
