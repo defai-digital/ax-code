@@ -191,6 +191,9 @@ impl App {
         match event {
             RuntimeEvent::SessionCreated { properties } => {
                 if let Some(info) = properties.info {
+                    if !self.event_targets_current_session(&info.id) {
+                        return;
+                    }
                     self.session_id = Some(info.id);
                     self.session_title = info.title;
                     self.status_message = Some("Session created".to_string());
@@ -198,13 +201,21 @@ impl App {
             }
             RuntimeEvent::SessionUpdated { properties } => {
                 if let Some(info) = properties.info {
+                    if !self.event_targets_current_session(&info.id) {
+                        return;
+                    }
                     self.session_id = Some(info.id);
                     if info.title.is_some() {
                         self.session_title = info.title;
                     }
                 }
             }
-            RuntimeEvent::SessionDeleted { .. } => {
+            RuntimeEvent::SessionDeleted { properties } => {
+                if let Some(info) = properties.info {
+                    if !self.event_targets_current_session(&info.id) {
+                        return;
+                    }
+                }
                 self.status_message = Some("Session deleted".to_string());
             }
             RuntimeEvent::SessionStatus { properties } => {
@@ -218,12 +229,18 @@ impl App {
                 }
             }
             RuntimeEvent::SessionError { properties } => {
+                if !self.event_targets_current_session_option(properties.session_id.as_deref()) {
+                    return;
+                }
                 if let Some(error) = properties.error {
                     self.status_message = Some(format!("Error: {}", error));
                 }
             }
             RuntimeEvent::MessageUpdated { properties } => {
                 if let Some(info) = properties.info {
+                    if !self.event_targets_current_session(&info.session_id) {
+                        return;
+                    }
                     // Check if message already exists, update or add
                     if let Some(msg) = self.messages.iter_mut().find(|m| m.id == info.id) {
                         if let Some(role) = info.role {
@@ -243,12 +260,18 @@ impl App {
                 }
             }
             RuntimeEvent::MessageRemoved { properties } => {
+                if !self.event_targets_current_session(&properties.session_id) {
+                    return;
+                }
                 self.messages.retain(|m| m.id != properties.message_id);
                 self.message_text_parts
                     .retain(|part| part.message_id != properties.message_id);
                 self.scroll_offset = self.scroll_offset.min(self.messages.len());
             }
             RuntimeEvent::MessagePartDelta { properties } => {
+                if !self.message_targets_current_session(&properties.message_id) {
+                    return;
+                }
                 if properties.field == "text" || properties.field == "content" {
                     self.append_message_text_delta(
                         &properties.message_id,
@@ -259,6 +282,9 @@ impl App {
             }
             RuntimeEvent::MessagePartUpdated { properties } => {
                 if let Some(part) = properties.part {
+                    if !self.event_targets_current_session(&part.session_id) {
+                        return;
+                    }
                     if part.part_type == "text" {
                         self.upsert_message_text_part(
                             &part.message_id,
@@ -273,6 +299,9 @@ impl App {
                 }
             }
             RuntimeEvent::MessagePartRemoved { properties } => {
+                if !self.message_targets_current_session(&properties.message_id) {
+                    return;
+                }
                 self.message_text_parts.retain(|part| {
                     !(part.message_id == properties.message_id
                         && part.part_id == properties.part_id)
@@ -280,6 +309,9 @@ impl App {
                 self.rebuild_message_content(&properties.message_id);
             }
             RuntimeEvent::PermissionAsked { properties } => {
+                if !self.event_targets_current_session(&properties.session_id) {
+                    return;
+                }
                 let permission_type = properties.permission_type.unwrap_or_default();
                 let description = if properties.description.is_empty() {
                     permission_type.clone()
@@ -295,6 +327,9 @@ impl App {
                 self.mode = AppMode::Permission;
             }
             RuntimeEvent::PermissionReplied { properties } => {
+                if !self.event_targets_current_session(&properties.session_id) {
+                    return;
+                }
                 // The server confirmed a permission reply (may be our own, an
                 // out-of-band desktop reply, or a server-side timeout). Remove
                 // the matching request by id so we don't keep showing a stale
@@ -304,6 +339,9 @@ impl App {
                 self.reset_mode_if_idle();
             }
             RuntimeEvent::QuestionAsked { properties } => {
+                if !self.event_targets_current_session(&properties.session_id) {
+                    return;
+                }
                 let question = properties.display_question();
                 let options = properties.display_options();
                 self.pending_questions.push(QuestionRequest {
@@ -316,11 +354,17 @@ impl App {
                 self.mode = AppMode::Question;
             }
             RuntimeEvent::QuestionReplied { properties } => {
+                if !self.event_targets_current_session(&properties.session_id) {
+                    return;
+                }
                 self.pending_questions
                     .retain(|q| q.request_id != properties.request_id);
                 self.reset_mode_if_idle();
             }
             RuntimeEvent::QuestionRejected { properties } => {
+                if !self.event_targets_current_session(&properties.session_id) {
+                    return;
+                }
                 self.pending_questions
                     .retain(|q| q.request_id != properties.request_id);
                 self.reset_mode_if_idle();
@@ -332,6 +376,9 @@ impl App {
                 // TODO: Update diff display
             }
             RuntimeEvent::ToolCallStart { properties } => {
+                if !self.event_targets_current_session(&properties.session_id) {
+                    return;
+                }
                 self.tool_calls.push(ToolCall {
                     call_id: properties.call_id,
                     tool_name: properties.tool_name,
@@ -342,6 +389,9 @@ impl App {
                 self.session_status = SessionStatus::Running;
             }
             RuntimeEvent::ToolCallComplete { properties } => {
+                if !self.event_targets_current_session(&properties.session_id) {
+                    return;
+                }
                 if let Some(tool_call) = self
                     .tool_calls
                     .iter_mut()
@@ -386,10 +436,23 @@ impl App {
     }
 
     fn event_targets_current_session(&self, event_session_id: &str) -> bool {
+        if event_session_id.is_empty() {
+            return true;
+        }
         match self.session_id.as_deref() {
             Some(current) => current == event_session_id,
             None => true,
         }
+    }
+
+    fn event_targets_current_session_option(&self, event_session_id: Option<&str>) -> bool {
+        event_session_id
+            .map(|session_id| self.event_targets_current_session(session_id))
+            .unwrap_or(true)
+    }
+
+    fn message_targets_current_session(&self, message_id: &str) -> bool {
+        self.session_id.is_none() || self.messages.iter().any(|m| m.id == message_id)
     }
 
     fn ensure_message(&mut self, message_id: &str) {
@@ -1366,6 +1429,71 @@ mod tests {
             },
         });
 
+        assert_eq!(app.session_status, SessionStatus::Idle);
+    }
+
+    #[test]
+    fn test_ignores_events_for_other_sessions() {
+        let mut app = App::new();
+        app.session_id = Some("s1".to_string());
+        app.session_title = Some("Current".to_string());
+
+        app.handle_event(RuntimeEvent::SessionUpdated {
+            properties: crate::events::SessionInfo {
+                info: Some(crate::events::SessionData {
+                    id: "s2".to_string(),
+                    title: Some("Other".to_string()),
+                }),
+            },
+        });
+        app.handle_event(RuntimeEvent::MessageUpdated {
+            properties: MessageInfo {
+                info: Some(MessageData {
+                    id: "msg_s2".to_string(),
+                    session_id: "s2".to_string(),
+                    role: Some(crate::events::MessageRole::Assistant),
+                }),
+            },
+        });
+        app.handle_event(RuntimeEvent::MessagePartDelta {
+            properties: MessagePartDeltaProps {
+                message_id: "msg_s2".to_string(),
+                part_id: "part_s2".to_string(),
+                field: "text".to_string(),
+                delta: "wrong session".to_string(),
+            },
+        });
+        app.handle_event(RuntimeEvent::PermissionAsked {
+            properties: crate::events::PermissionRequestProps {
+                session_id: "s2".to_string(),
+                id: "perm_s2".to_string(),
+                description: "other".to_string(),
+                permission_type: Some("bash".to_string()),
+            },
+        });
+        app.handle_event(RuntimeEvent::QuestionAsked {
+            properties: crate::events::QuestionRequestProps {
+                session_id: "s2".to_string(),
+                id: "q_s2".to_string(),
+                question: "other?".to_string(),
+                options: vec!["yes".to_string()],
+            },
+        });
+        app.handle_event(RuntimeEvent::ToolCallStart {
+            properties: crate::events::ToolCallStartProps {
+                session_id: "s2".to_string(),
+                call_id: "call_s2".to_string(),
+                tool_name: "bash".to_string(),
+            },
+        });
+
+        assert_eq!(app.session_id.as_deref(), Some("s1"));
+        assert_eq!(app.session_title.as_deref(), Some("Current"));
+        assert!(app.messages.is_empty());
+        assert!(app.pending_permissions.is_empty());
+        assert!(app.pending_questions.is_empty());
+        assert!(app.tool_calls.is_empty());
+        assert_eq!(app.mode, AppMode::Input);
         assert_eq!(app.session_status, SessionStatus::Idle);
     }
 
