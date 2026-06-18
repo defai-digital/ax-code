@@ -1,5 +1,18 @@
-import { expect, spyOn, test } from "bun:test"
-import { displayStats } from "../../src/cli/cmd/stats"
+import { afterEach, expect, spyOn, test } from "bun:test"
+import { aggregateSessionStats, displayStats } from "../../src/cli/cmd/stats"
+import { Instance } from "../../src/project/instance"
+import { Session } from "../../src/session"
+import { tmpdir } from "../fixture/fixture"
+
+let messagesSpy: { mockRestore(): void } | undefined
+let warnSpy: ReturnType<typeof spyOn<typeof console, "warn">> | undefined
+
+afterEach(() => {
+  messagesSpy?.mockRestore()
+  warnSpy?.mockRestore()
+  messagesSpy = undefined
+  warnSpy = undefined
+})
 
 test("displayStats respects toolLimit=0 by hiding tool rows", () => {
   const logs: string[] = []
@@ -98,4 +111,40 @@ test("displayStats sanitizes non-finite numbers", () => {
   expect(output).toContain("TOOL USAGE")
   expect(output).not.toContain("Infinity")
   expect(output).not.toContain("NaN")
+})
+
+test("aggregateSessionStats skips sessions whose messages fail with an unprintable reason", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const first = await Session.create({})
+      const second = await Session.create({})
+      const failure = {
+        toString() {
+          throw new Error("cannot print")
+        },
+      }
+      const sessionMessagesTarget = Session as unknown as {
+        messages(input: Parameters<typeof Session.messages>[0]): Promise<Awaited<ReturnType<typeof Session.messages>>>
+      }
+      messagesSpy = spyOn(sessionMessagesTarget, "messages").mockImplementation(async (input) => {
+        if (input.sessionID === first.id) throw failure
+        return []
+      })
+      const warnings: string[] = []
+      warnSpy = spyOn(console, "warn").mockImplementation((...args) => {
+        warnings.push(args.join(" "))
+      })
+
+      const stats = await aggregateSessionStats(undefined, "")
+
+      expect(stats.totalSessions).toBe(2)
+      expect(stats.totalMessages).toBe(0)
+      expect(warnings.join("\n")).toContain("Warning: stats batch failed: Unknown error")
+
+      await Session.remove(first.id)
+      await Session.remove(second.id)
+    },
+  })
 })

@@ -8,6 +8,7 @@ import { SessionTable } from "../../session/session.sql"
 import { Project } from "../../project/project"
 import { Instance } from "../../project/instance"
 import { isNonEmptyRecord } from "../../util/record"
+import { toErrorMessage } from "../../util/error-message"
 
 interface SessionStats {
   totalSessions: number
@@ -239,7 +240,7 @@ export async function aggregateSessionStats(days?: number, projectFilter?: strin
 
     for (const entry of settled) {
       if (entry.status === "rejected") {
-        console.warn("Warning: stats batch failed:", String(entry.reason))
+        console.warn("Warning: stats batch failed:", toErrorMessage(entry.reason))
         continue
       }
       const result = entry.value
