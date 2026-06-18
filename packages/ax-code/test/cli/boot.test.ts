@@ -3,6 +3,7 @@ import { afterEach, describe, expect, spyOn, test } from "bun:test"
 import os from "os"
 import path from "path"
 import z from "zod"
+import { cliBooleanFlagValue } from "../../src/cli/boolean-flag"
 import { clearForcedExitTimer, scheduleForcedExit } from "../../src/cli/boot"
 import { apply, debugOptions, debugRunDir, init, level, restoreOriginalCwd } from "../../src/cli/bootstrap/env"
 import { data, fatal } from "../../src/cli/bootstrap/fatal"
@@ -175,6 +176,53 @@ describe("cli.boot.init", () => {
     ])
     expect(env.AX_CODE_ISOLATION_MODE).toBe("read-only")
     expect(env.AX_CODE_PID).toBe("9")
+  })
+
+  test("honors parsed printLogs option over argv", async () => {
+    const log: unknown[] = []
+
+    await init(
+      { printLogs: false },
+      {
+        argv: ["bun", "ax-code", "--print-logs=true", "run"],
+        log: async (opts) => void log.push(opts),
+      },
+    )
+
+    expect(log[0]).toMatchObject({ print: false })
+  })
+
+  test("detects equals-form print logs when init is called with raw argv only", async () => {
+    const log: unknown[] = []
+
+    await init(
+      {},
+      {
+        argv: ["bun", "ax-code", "--print-logs=true", "run"],
+        log: async (opts) => void log.push(opts),
+      },
+    )
+
+    expect(log[0]).toMatchObject({ print: true })
+  })
+})
+
+describe("cliBooleanFlagValue", () => {
+  test("parses true and false boolean flag forms", () => {
+    expect(cliBooleanFlagValue(["ax-code", "--print-logs"], "--print-logs")).toBe(true)
+    expect(cliBooleanFlagValue(["ax-code", "--print-logs=true"], "--print-logs")).toBe(true)
+    expect(cliBooleanFlagValue(["ax-code", "--print-logs=false"], "--print-logs")).toBe(false)
+    expect(cliBooleanFlagValue(["ax-code", "--no-print-logs"], "--print-logs")).toBe(false)
+  })
+
+  test("uses the last explicit boolean flag value", () => {
+    expect(cliBooleanFlagValue(["ax-code", "--print-logs=false", "--print-logs"], "--print-logs")).toBe(true)
+    expect(cliBooleanFlagValue(["ax-code", "--print-logs", "--no-print-logs"], "--print-logs")).toBe(false)
+  })
+
+  test("ignores absent flags and similar prefixes", () => {
+    expect(cliBooleanFlagValue(["ax-code"], "--print-logs")).toBeUndefined()
+    expect(cliBooleanFlagValue(["ax-code", "--print-logs-file=true"], "--print-logs")).toBeUndefined()
   })
 })
 

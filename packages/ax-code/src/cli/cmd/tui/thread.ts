@@ -1,4 +1,5 @@
 import { cmd } from "@/cli/cmd/cmd"
+import { cliBooleanFlagValue } from "@/cli/boolean-flag"
 import { Rpc } from "@/util/rpc"
 import { type rpc } from "./worker"
 import path from "path"
@@ -535,7 +536,7 @@ export const TuiThreadCommand = cmd({
       const cwd = Filesystem.resolve(process.cwd())
 
       const sanitized = Env.sanitize()
-      if (process.argv.includes("--print-logs")) sanitized.AX_CODE_PRINT_LOGS = "1"
+      if (cliBooleanFlagValue(process.argv, "--print-logs") === true) sanitized.AX_CODE_PRINT_LOGS = "1"
       const backend = await createBackendRuntime({
         mode: backendTransport,
         workerTarget: file,

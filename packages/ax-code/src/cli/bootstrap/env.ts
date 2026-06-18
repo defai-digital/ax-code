@@ -6,11 +6,13 @@ import path from "path"
 import os from "os"
 import { DiagnosticLog } from "../../debug/diagnostic-log"
 import { startShellEnvLoad } from "../../runtime/shell-env"
+import { cliBooleanFlagValue } from "../boolean-flag"
 
 export { ensureShellEnv } from "../../runtime/shell-env"
 
 export type Opts = {
   logLevel?: string
+  printLogs?: boolean
   sandbox?: string
   debug?: boolean
   debugDir?: string
@@ -154,7 +156,7 @@ export async function init(opts: Opts, dep: InitDep = {}) {
   if (debug.enabled) DiagnosticLog.installProcessDiagnostics()
 
   await log({
-    print: argv.includes("--print-logs"),
+    print: opts.printLogs ?? (cliBooleanFlagValue(argv, "--print-logs") === true),
     dev: local,
     level: level(opts.logLevel, local, debug.enabled),
     ...(debugDir ? { dir: debugDir, name: "main" } : { name: Log.stampedName("main", now) }),

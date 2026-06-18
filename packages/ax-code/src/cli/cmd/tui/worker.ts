@@ -1,4 +1,5 @@
 import { Installation } from "@/installation"
+import { cliBooleanFlagValue } from "@/cli/boolean-flag"
 import { runtimeMode } from "@/installation/runtime-mode"
 import { Server } from "@/server/server"
 import { Log } from "@/util/log"
@@ -44,7 +45,7 @@ await DiagnosticLog.configure({
 if (debugDir) DiagnosticLog.installProcessDiagnostics()
 
 await Log.init({
-  print: process.argv.includes("--print-logs") || Flag.AX_CODE_PRINT_LOGS,
+  print: cliBooleanFlagValue(process.argv, "--print-logs") === true || Flag.AX_CODE_PRINT_LOGS,
   dev: Installation.isLocal(),
   level: (() => {
     if (debugDir) return "DEBUG"
