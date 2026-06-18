@@ -43,6 +43,16 @@ describe("parseGoalArguments", () => {
       tokenBudget: 1200,
       objective: "ship the feature",
     })
+    expect(parseGoalArguments("--budget=500 fix the bug")).toEqual({
+      action: "create",
+      tokenBudget: 500,
+      objective: "fix the bug",
+    })
+    expect(parseGoalArguments("--token-budget=1200 ship the feature")).toEqual({
+      action: "create",
+      tokenBudget: 1200,
+      objective: "ship the feature",
+    })
   })
 
   test("the budget flag is case-insensitive, matching the control keywords", () => {
@@ -68,6 +78,7 @@ describe("parseGoalArguments", () => {
 
   test("a budget flag with no objective falls back to view", () => {
     expect(parseGoalArguments("--budget 500")).toEqual({ action: "view" })
+    expect(parseGoalArguments("--budget=500")).toEqual({ action: "view" })
     expect(parseGoalArguments("--BUDGET 500")).toEqual({ action: "view" })
   })
 })
