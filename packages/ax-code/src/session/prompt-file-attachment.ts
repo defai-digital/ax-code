@@ -86,7 +86,12 @@ export async function resolveFileAttachmentPart(input: {
     })
 
   const part = input.part
-  const url = new URL(part.url)
+  let url: URL
+  try {
+    url = new URL(part.url)
+  } catch {
+    return [input.draftSyntheticTextPart(`Invalid file URL: ${part.url}`)]
+  }
   switch (url.protocol) {
     case "data:":
       if (part.mime === "text/plain") {
