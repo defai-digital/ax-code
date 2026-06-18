@@ -8,6 +8,10 @@ describe("decodeDataUrl", () => {
     expect(decodeDataUrl(url)).toBe(body)
   })
 
+  test("returns an empty string for invalid base64 data URLs", () => {
+    expect(decodeDataUrl("data:text/plain;base64,not base64!!")).toBe("")
+  })
+
   test("decodes plain data URLs", () => {
     expect(decodeDataUrl("data:text/plain,hello%20world")).toBe("hello world")
   })
