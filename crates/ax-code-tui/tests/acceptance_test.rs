@@ -15,6 +15,7 @@ use ax_code_tui::diagnostics::{DiagnosticEvent, LaunchSource};
 use ax_code_tui::launch_policy::{
     LaunchInput, LaunchRoute, is_legacy_home_requested, resolve_launch_route,
 };
+use ax_code_tui::runner::resolve_runner_launch_route;
 use ax_code_tui::tui::app::{App, AppMode, SessionStatus};
 
 // =============================================================================
@@ -328,6 +329,24 @@ fn acceptance_rollback_diagnostic_event() {
         reason: "AX_CODE_TUI_LEGACY_HOME=1".to_string(),
     };
     assert_eq!(event.event_name(), "tui.rollback.legacyHome");
+}
+
+#[test]
+fn acceptance_rollback_skips_session_first_runner_route() {
+    let input = LaunchInput {
+        explicit_session_id: Some("s1".to_string()),
+        explicit_prompt: Some("ignored".to_string()),
+        recent_session_ids: vec!["recent".to_string()],
+        has_project_context: true,
+    };
+
+    assert_eq!(resolve_runner_launch_route(&input, true), None);
+    assert_eq!(
+        resolve_runner_launch_route(&input, false),
+        Some(LaunchRoute::Session {
+            session_id: "s1".to_string()
+        })
+    );
 }
 
 // =============================================================================

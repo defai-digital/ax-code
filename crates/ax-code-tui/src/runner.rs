@@ -102,7 +102,8 @@ impl Runner {
         let mut app = App::new();
 
         // Check for legacy home rollback (ADR-035 Phase 5)
-        if diagnostics::check_legacy_rollback() {
+        let legacy_home_requested = diagnostics::check_legacy_rollback();
+        if legacy_home_requested {
             app.set_status("Legacy home route active (AX_CODE_TUI_LEGACY_HOME=1)".to_string());
         }
 
@@ -116,7 +117,7 @@ impl Runner {
             recent_session_ids: Vec::new(),
             has_project_context: false,
         };
-        let route = launch_policy::resolve_launch_route(&launch_input);
+        let route = resolve_runner_launch_route(&launch_input, legacy_home_requested);
 
         // Emit renderer startup diagnostic
         DiagnosticEvent::RendererStartup {
@@ -170,8 +171,8 @@ impl Runner {
         // or create a new one (optionally sending an initial prompt).
         // This runs after SSE subscription so SessionCreated events are
         // captured by the event stream.
-        if let Some(ref client) = client {
-            match &route {
+        if let (Some(client), Some(route)) = (&client, &route) {
+            match route {
                 LaunchRoute::Session { session_id } => {
                     app.session_id = Some(session_id.clone());
                     app.set_status(format!("Attached to session: {}", session_id));
@@ -296,6 +297,20 @@ impl Runner {
 
         Ok(())
     }
+}
+
+/// Resolve the runner's startup route, honoring the temporary legacy-home rollback.
+///
+/// `None` means the runner should skip session-first attach/create behavior and
+/// leave the app in its initial legacy home state.
+pub fn resolve_runner_launch_route(
+    input: &LaunchInput,
+    legacy_home_requested: bool,
+) -> Option<LaunchRoute> {
+    if legacy_home_requested {
+        return None;
+    }
+    Some(launch_policy::resolve_launch_route(input))
 }
 
 #[cfg(test)]
