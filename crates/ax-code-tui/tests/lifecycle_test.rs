@@ -245,6 +245,31 @@ async fn test_interactive_replies_use_configured_directory() {
 }
 
 #[tokio::test]
+async fn test_event_subscription_uses_configured_directory() {
+    let server = MockServer::start().await;
+    let config = ClientConfig {
+        base_url: server.url(),
+        auth_token: None,
+        directory: Some("/workspace/project".to_string()),
+        session: None,
+        prompt: None,
+    };
+    let client = HeadlessClient::new(config).expect("Failed to create client");
+
+    let _events = client.subscribe().await.expect("subscribe");
+
+    assert!(
+        server
+            .requests()
+            .iter()
+            .any(|request| request == "GET /global/event?directory=%2Fworkspace%2Fproject HTTP/1.1"),
+        "subscribe should scope the event stream to the configured directory"
+    );
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
 async fn test_permission_reply_uses_headless_route() {
     let server = MockServer::start().await;
     let config = ClientConfig {

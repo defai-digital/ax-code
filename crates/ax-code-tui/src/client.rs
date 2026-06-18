@@ -114,11 +114,11 @@ impl HeadlessClient {
     /// by dropping the returned receiver.
     pub async fn subscribe(&self) -> Result<mpsc::Receiver<RuntimeEvent>> {
         let url = format!("{}/global/event", self.config.base_url);
-        let response = self
-            .http
-            .get(&url)
+        let request = self
+            .with_directory_query(self.http.get(&url))
             .header(reqwest::header::ACCEPT, "text/event-stream")
-            .header("X-Accel-Buffering", "no")
+            .header("X-Accel-Buffering", "no");
+        let response = request
             .send()
             .await
             .context("Failed to subscribe to event stream")?;

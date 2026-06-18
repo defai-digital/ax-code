@@ -137,15 +137,12 @@ async fn handle_connection(
     healthy: &Arc<Mutex<bool>>,
     requests: &Arc<Mutex<Vec<String>>>,
 ) {
-    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    use tokio::io::AsyncWriteExt;
 
-    let mut buf = vec![0u8; 4096];
-    let n = match stream.read(&mut buf).await {
-        Ok(n) => n,
-        Err(_) => return,
+    let request = match read_http_request(stream).await {
+        Some(request) => request,
+        None => return,
     };
-
-    let request = String::from_utf8_lossy(&buf[..n]);
     if let Some(line) = request.lines().next() {
         requests.lock().unwrap().push(line.to_string());
     }
@@ -190,6 +187,59 @@ async fn handle_connection(
     };
 
     let _ = stream.write_all(response.as_bytes()).await;
+}
+
+/// Read a full HTTP/1 request, including the body advertised by Content-Length.
+///
+/// reqwest may send headers and JSON request bodies in separate TCP chunks. The
+/// mock server must not respond and close the socket after the first read, or
+/// client tests can fail with "connection closed before message completed".
+async fn read_http_request(stream: &mut tokio::net::TcpStream) -> Option<String> {
+    use tokio::io::AsyncReadExt;
+
+    const MAX_REQUEST_BYTES: usize = 1024 * 1024;
+
+    let mut bytes = Vec::new();
+    let mut chunk = [0u8; 4096];
+
+    loop {
+        let n = stream.read(&mut chunk).await.ok()?;
+        if n == 0 {
+            break;
+        }
+        bytes.extend_from_slice(&chunk[..n]);
+        if bytes.len() > MAX_REQUEST_BYTES {
+            return None;
+        }
+
+        if let Some(header_end) = find_header_end(&bytes) {
+            let headers = String::from_utf8_lossy(&bytes[..header_end]);
+            let content_length = parse_content_length(&headers);
+            if bytes.len() >= header_end + 4 + content_length {
+                break;
+            }
+        }
+    }
+
+    Some(String::from_utf8_lossy(&bytes).to_string())
+}
+
+fn find_header_end(bytes: &[u8]) -> Option<usize> {
+    bytes.windows(4).position(|window| window == b"\r\n\r\n")
+}
+
+fn parse_content_length(headers: &str) -> usize {
+    headers
+        .lines()
+        .find_map(|line| {
+            let (name, value) = line.split_once(':')?;
+            if name.eq_ignore_ascii_case("content-length") {
+                value.trim().parse::<usize>().ok()
+            } else {
+                None
+            }
+        })
+        .unwrap_or(0)
 }
 
 /// Create a session created event JSON.
