@@ -33,6 +33,13 @@ export namespace LSPServerConfig {
     }
   }
 
+  function normalizeCommand(command: string[] | undefined): string[] | undefined {
+    if (command === undefined) return undefined
+    const normalized = command.map((item) => item.trim())
+    if (normalized.length === 0 || normalized.some((item) => item.length === 0)) return undefined
+    return normalized
+  }
+
   export function buildEnabledServers(cfg: Pick<Config.Info, "lsp">): Record<string, LSPServer.Info> {
     const servers: Record<string, LSPServer.Info> = {}
 
@@ -59,6 +66,10 @@ export namespace LSPServerConfig {
         delete servers[name]
         continue
       }
+      const command = normalizeCommand(item.command)
+      if (item.command !== undefined && command === undefined) {
+        log.warn("ignoring invalid LSP server command", { name })
+      }
 
       servers[name] = {
         ...existing,
@@ -71,9 +82,9 @@ export namespace LSPServerConfig {
         root: existing?.root ?? (async () => Instance.directory),
         extensions: item.extensions ?? existing?.extensions ?? [],
         spawn: async (root) => {
-          if (item.command) {
+          if (command) {
             return {
-              process: lspspawn(item.command[0], item.command.slice(1), {
+              process: lspspawn(command[0], command.slice(1), {
                 cwd: root,
                 env: {
                   ...Env.sanitize(),

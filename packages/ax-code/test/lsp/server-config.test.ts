@@ -1,7 +1,8 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, spyOn, test } from "bun:test"
 import path from "path"
 import { LSPServerConfig } from "../../src/lsp/server-config"
 import { Instance } from "../../src/project/instance"
+import { Process } from "../../src/util/process"
 import { tmpdir } from "../fixture/fixture"
 
 describe("LSPServerConfig", () => {
@@ -81,6 +82,32 @@ describe("LSPServerConfig", () => {
         expect(typeof servers.custom?.spawn).toBe("function")
       },
     })
+  })
+
+  test("empty custom command does not spawn an undefined executable", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const spawnSpy = spyOn(Process, "spawn")
+
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const servers = LSPServerConfig.buildEnabledServers({
+            lsp: {
+              custom: {
+                command: [],
+                extensions: [".custom"],
+              },
+            },
+          })
+
+          expect(await servers.custom?.spawn?.(tmp.path)).toBeUndefined()
+          expect(spawnSpy).not.toHaveBeenCalled()
+        },
+      })
+    } finally {
+      spawnSpy.mockRestore()
+    }
   })
 
   test("ansible server only resolves roots with ansible project markers", async () => {
