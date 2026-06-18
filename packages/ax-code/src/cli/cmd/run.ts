@@ -95,12 +95,29 @@ function block(info: Inline, output?: string) {
   UI.empty()
 }
 
+export function formatRunToolFallbackInput(input: unknown): string {
+  if (!isNonEmptyRecord(input)) return "Unknown"
+  const seen = new WeakSet<object>()
+  try {
+    return (
+      JSON.stringify(input, (_key, value) => {
+        if (typeof value === "bigint") return value.toString()
+        if (value && typeof value === "object") {
+          if (seen.has(value)) return "[Circular]"
+          seen.add(value)
+        }
+        return value
+      }) ?? "Unknown"
+    )
+  } catch {
+    return "Unknown"
+  }
+}
+
 function fallback(part: ToolPart) {
   const state = part.state
   const input = "input" in state ? state.input : undefined
-  const title =
-    ("title" in state && state.title ? state.title : undefined) ||
-    (isNonEmptyRecord(input) ? JSON.stringify(input) : "Unknown")
+  const title = ("title" in state && state.title ? state.title : undefined) || formatRunToolFallbackInput(input)
   inline({
     icon: "⚙",
     title: `${part.tool} ${title}`,

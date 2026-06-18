@@ -1,5 +1,20 @@
 import { expect, test } from "bun:test"
 import path from "path"
+import { formatRunToolFallbackInput } from "../../src/cli/cmd/run"
+
+test("run command fallback tool formatter handles non-json-safe input", () => {
+  const input: Record<string, unknown> = { count: 1n }
+  input.self = input
+
+  expect(formatRunToolFallbackInput(input)).toBe('{"count":"1","self":"[Circular]"}')
+  expect(
+    formatRunToolFallbackInput({
+      toJSON: () => {
+        throw new Error("boom")
+      },
+    }),
+  ).toBe("Unknown")
+})
 
 test("run command awaits the event loop before bootstrap cleanup", async () => {
   const src = await Bun.file(path.join(import.meta.dir, "../../src/cli/cmd/run.ts")).text()
