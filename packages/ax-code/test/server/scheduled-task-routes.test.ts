@@ -149,7 +149,7 @@ describe("scheduled task routes", () => {
               prompt: "Run the saved workflow template.",
               schedule: { type: "once", runAt: Date.now() + 86_400_000 },
               workflowTemplateID: "builtin:noop-dry-run",
-              workflowStartOptions: { enqueueChildren: true },
+              workflowStartOptions: { enqueueChildren: "true", allowScaleBeyondDefaults: "false" },
             }),
           })
           expect(createdResponse.status).toBe(200)

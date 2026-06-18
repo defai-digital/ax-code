@@ -8,6 +8,7 @@ import { ProjectID } from "@/project/schema"
 import { Database, NotFoundError, and, asc, desc, eq, lte } from "@/storage/db"
 import { toErrorMessage } from "@/util/error-message"
 import { Log } from "@/util/log"
+import { JsonBoolean } from "@/util/schema"
 import { ScheduledTaskID } from "./schema"
 import { ScheduledTaskTable } from "./session.sql"
 import { TaskQueue } from "./task-queue"
@@ -36,10 +37,10 @@ export namespace ScheduledTask {
     .max(120)
     .regex(/^(builtin|user|project):[a-z][a-z0-9-]*$/)
   const WorkflowStartOptionsSchema = z.object({
-    allowScaleBeyondDefaults: z.boolean().optional(),
-    allowWriteWorkflows: z.boolean().optional(),
-    durableChildren: z.boolean().optional(),
-    enqueueChildren: z.boolean().optional(),
+    allowScaleBeyondDefaults: JsonBoolean.optional(),
+    allowWriteWorkflows: JsonBoolean.optional(),
+    durableChildren: JsonBoolean.optional(),
+    enqueueChildren: JsonBoolean.optional(),
   })
   const WorkflowRunSummary = z
     .object({
