@@ -248,7 +248,7 @@ async function dispatchUntil(
             // runOne is supposed to never throw — every error becomes a
             // result. Be defensive: log and treat as failed so we don't
             // hang the dispatch.
-            log.warn("runOne threw unexpectedly", { agent: spec.agent, error: String(err) })
+            log.warn("runOne threw unexpectedly", { agent: spec.agent, error: toErrorMessage(err) })
             if (resolved) return
             results[idx] = {
               agent: spec.agent,
@@ -283,7 +283,7 @@ function safeCallback<T>(fn: ((arg: T) => void) | undefined, arg: T, label: stri
   } catch (err) {
     // Caller-supplied callbacks must not be allowed to crash the whole
     // dispatch — log and continue. The contract is "all results returned".
-    log.warn("dispatch callback threw", { label, error: String(err) })
+    log.warn("dispatch callback threw", { label, error: toErrorMessage(err) })
   }
 }
 

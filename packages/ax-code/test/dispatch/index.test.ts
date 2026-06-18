@@ -186,9 +186,14 @@ describe("dispatch primitive", () => {
   test("survives a callback that throws — log and continue", async () => {
     const executor: DispatchExecutor = async (s) => ({ output: s.agent })
     const completed: string[] = []
+    const unprintable = {
+      toString() {
+        throw new Error("cannot print")
+      },
+    }
     const results = await dispatch([spec("a"), spec("b"), spec("c")], executor, {
       onSubagentStart: (s) => {
-        if (s.agent === "b") throw new Error("bad start callback")
+        if (s.agent === "b") throw unprintable
       },
       onSubagentComplete: (r) => {
         if (r.agent === "c") throw new Error("bad complete callback")
