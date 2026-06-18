@@ -44,6 +44,16 @@ export function validateAuditPruneDays(days: unknown): number {
   return value
 }
 
+export function parseAuditExportSince(input: unknown): number | undefined {
+  if (input === undefined || input === null) return undefined
+  if (typeof input !== "string") throw new Error("--since must be a valid date")
+  const trimmed = input.trim()
+  if (!trimmed) return undefined
+  const value = new Date(trimmed).getTime()
+  if (!Number.isFinite(value)) throw new Error("--since must be a valid date")
+  return value
+}
+
 const AuditExportCommand = cmd({
   command: "export [sessionID]",
   describe: "export audit events as JSON Lines",
@@ -79,7 +89,7 @@ const AuditExportCommand = cmd({
           process.stdout.write(line + EOL)
         }
       } else if (args.all) {
-        const since = args.since ? new Date(args.since).getTime() : undefined
+        const since = parseAuditExportSince(args.since)
         const riskFilter = args.risk as string | undefined
         process.stderr.write(
           `Exporting all events${since ? ` since ${args.since}` : ""}${riskFilter ? ` (risk >= ${riskFilter})` : ""}${EOL}`,
