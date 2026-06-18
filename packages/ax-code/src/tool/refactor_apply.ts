@@ -7,6 +7,7 @@ import { RefactorPlanID } from "../debug-engine/id"
 import { extractFilesFromDiff } from "../debug-engine/analyze-impact"
 import { fromRefactorApplyResult } from "../quality/verification-envelope-builder"
 import { normalizeToWorkspacePath } from "./file-path"
+import { ToolBoolean } from "./schema"
 
 // Tool wrapper around DebugEngine.applySafeRefactor. This is the ONLY
 // DRE tool that writes files. It goes through the permission system
@@ -34,8 +35,8 @@ export const RefactorApplyTool = Tool.define("refactor_apply", {
       .enum(MODES)
       .optional()
       .describe("'safe' runs every check (default); 'aggressive' allows skipLint/skipTests"),
-    skipLint: z.boolean().optional().describe("Aggressive mode only: skip lint"),
-    skipTests: z.boolean().optional().describe("Aggressive mode only: skip tests"),
+    skipLint: ToolBoolean.optional().describe("Aggressive mode only: skip lint"),
+    skipTests: ToolBoolean.optional().describe("Aggressive mode only: skip tests"),
     commands: CommandOverrides.optional().describe(
       "Optional command overrides. Omit a field to infer defaults, set it to null to skip, or set it to a command string to run exactly that command.",
     ),

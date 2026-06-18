@@ -9,6 +9,7 @@ import { CodeNodeID } from "../code-intelligence/id"
 import { assertSymlinkInsideProject } from "./external-directory"
 import type { CodeNodeKind } from "../code-intelligence/schema.sql"
 import { resolveToolFilePath } from "./file-path"
+import { ToolBoolean } from "./schema"
 
 // Semantic Trust v2 §S4: every operation returns an envelope stamped
 // with graph provenance (source, timestamp, degraded). The `output`
@@ -115,7 +116,7 @@ export const CodeIntelligenceTool = Tool.define("code_intelligence", {
     maxSymbols: z.coerce.number().int().min(1).max(20).optional().describe("Max selected symbols for buildContext"),
     maxSnippets: z.coerce.number().int().min(0).max(12).optional().describe("Max source snippets for buildContext"),
     maxDepth: z.coerce.number().int().min(1).max(3).optional().describe("Max graph depth for buildContext impact summary"),
-    includeImpact: z.boolean().optional().describe("Whether buildContext should include a bounded impact summary"),
+    includeImpact: ToolBoolean.optional().describe("Whether buildContext should include a bounded impact summary"),
     freshness: z
       .enum(["preferGraph", "requireFresh", "allowStaleWithWarning"])
       .optional()

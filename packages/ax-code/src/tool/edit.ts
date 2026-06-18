@@ -21,6 +21,7 @@ import { NativeAddon } from "../native/addon"
 import { parseNativeJson } from "../util/native-json"
 import { normalizeToWorkspacePath, resolveToolFilePath, withFilePathAliases } from "./file-path"
 import { toErrorMessage } from "../util/error-message"
+import { ToolBoolean } from "./schema"
 import {
   convertToLineEnding,
   detectLineEnding,
@@ -45,7 +46,7 @@ export const EditTool = Tool.define("edit", {
       filePath: z.string().min(1).describe("The absolute path to the file to modify"),
       oldString: z.string().max(500_000).describe("The text to replace"),
       newString: z.string().max(1_000_000).describe("The text to replace it with (must be different from oldString)"),
-      replaceAll: z.boolean().optional().describe("Replace all occurrences of oldString (default false)"),
+      replaceAll: ToolBoolean.optional().describe("Replace all occurrences of oldString (default false)"),
     }),
   ),
   async execute(params, ctx) {

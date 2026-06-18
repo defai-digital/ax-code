@@ -14,6 +14,7 @@ import DESCRIPTION from "./multiedit.txt"
 import { Log } from "@/util/log"
 import { BlastRadius } from "@/session/blast-radius"
 import { normalizeToWorkspacePath, resolveToolFilePath, withFilePathAliases } from "./file-path"
+import { ToolBoolean } from "./schema"
 
 const log = Log.create({ service: "multiedit-tool" })
 
@@ -28,7 +29,7 @@ export const MultiEditTool = Tool.define("multiedit", {
             filePath: z.string().min(1).describe("The absolute path to the file to modify"),
             oldString: z.string().describe("The text to replace"),
             newString: z.string().describe("The text to replace it with (must be different from oldString)"),
-            replaceAll: z.boolean().optional().describe("Replace all occurrences of oldString (default false)"),
+            replaceAll: ToolBoolean.optional().describe("Replace all occurrences of oldString (default false)"),
           }),
         )
         .min(1)
