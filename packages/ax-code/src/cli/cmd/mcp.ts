@@ -736,9 +736,13 @@ export const McpAddCommand = cmd({
             placeholder: "e.g., https://example.com/mcp",
             validate: (x) => {
               if (!x) return "Required"
-              if (x.length === 0) return "Required"
-              const isValid = URL.canParse(x)
-              return isValid ? undefined : "Invalid URL"
+              try {
+                const url = new URL(x)
+                if (url.protocol !== "http:" && url.protocol !== "https:") return "URL must use http or https"
+              } catch {
+                return "Invalid URL"
+              }
+              return undefined
             },
           })
           if (prompts.isCancel(url)) throw new UI.CancelledError()
