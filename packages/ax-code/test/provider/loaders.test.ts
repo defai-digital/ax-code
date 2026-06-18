@@ -335,7 +335,7 @@ describe("offline provider loaders", () => {
       if (url === "http://localhost:18080/v1/models") {
         return new Response(
           JSON.stringify({
-            data: [{ id: 123 }, { id: "" }, { id: "valid-model" }],
+            data: [{ id: 123 }, { id: "" }, { id: " \t" }, { id: "valid-model" }],
           }),
           {
             status: 200,

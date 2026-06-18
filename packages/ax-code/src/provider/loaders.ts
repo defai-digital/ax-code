@@ -278,7 +278,7 @@ function openAICompatibleLoader(providerID: string, envKey: string, defaultHost:
         if (!discovered) return {}
         const models: Record<string, Provider.Model> = {}
         for (const item of discovered.data ?? []) {
-          if (typeof item.id !== "string" || !item.id) continue
+          if (typeof item.id !== "string" || !item.id.trim()) continue
           const id = ModelID.make(item.id)
           models[id] = {
             id,
