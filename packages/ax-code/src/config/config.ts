@@ -696,6 +696,20 @@ export namespace Config {
     })
   }
 
+  async function isConfigDirectoryFile(dir: string, item: string) {
+    const root = await fs.realpath(path.resolve(dir)).catch(() => path.resolve(dir))
+    const resolved = await fs.realpath(path.resolve(item)).catch(() => undefined)
+    return !!resolved && Filesystem.contains(root, resolved)
+  }
+
+  async function loadContainedMarkdownConfig(dir: string, item: string, kind: ConfigLoadKind) {
+    if (!(await isConfigDirectoryFile(dir, item))) {
+      log.warn("ignoring markdown config symlink outside config directory", { [kind]: item, dir })
+      return undefined
+    }
+    return loadMarkdownConfig(item, kind)
+  }
+
   async function loadCommand(dir: string, scope: FileCommand.Scope) {
     const result: Record<string, Command> = {}
     for (const item of await Glob.scan("{command,commands}/**/*.md", {
@@ -704,7 +718,7 @@ export namespace Config {
       dot: true,
       symlink: true,
     })) {
-      const md = await loadMarkdownConfig(item, "command")
+      const md = await loadContainedMarkdownConfig(dir, item, "command")
       if (!md) continue
 
       const patterns = ["/.ax-code/command/", "/.ax-code/commands/", "/command/", "/commands/"]
@@ -751,7 +765,7 @@ export namespace Config {
       dot: true,
       symlink: true,
     })) {
-      const md = await loadMarkdownConfig(item, "agent")
+      const md = await loadContainedMarkdownConfig(dir, item, "agent")
       if (!md) continue
 
       const patterns = ["/.ax-code/agent/", "/.ax-code/agents/", "/agent/", "/agents/"]
@@ -781,7 +795,7 @@ export namespace Config {
       dot: true,
       symlink: true,
     })) {
-      const md = await loadMarkdownConfig(item, "mode")
+      const md = await loadContainedMarkdownConfig(dir, item, "mode")
       if (!md) continue
 
       const config = {

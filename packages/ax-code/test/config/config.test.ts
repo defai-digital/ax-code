@@ -471,6 +471,34 @@ test("handles agent configuration", async () => {
   })
 })
 
+test.skipIf(process.platform === "win32")("drops markdown config files that resolve outside the config directory", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      const outside = path.join(dir, "..", `${path.basename(dir)}-outside-agent.md`)
+      await Filesystem.write(
+        outside,
+        `---
+model: test/model
+---
+external prompt should not load`,
+      )
+
+      const agentDir = path.join(dir, ".ax-code", "agent")
+      await fs.mkdir(agentDir, { recursive: true })
+      await fs.symlink(outside, path.join(agentDir, "escape.md"))
+    },
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const config = await Config.get()
+      expect(config.agent?.["escape"]).toBeUndefined()
+      expect(JSON.stringify(config.agent ?? {})).not.toContain("external prompt should not load")
+    },
+  })
+})
+
 test("treats agent variant as model-scoped setting (not provider option)", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
