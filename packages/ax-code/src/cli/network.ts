@@ -1,6 +1,7 @@
 import type { Argv, InferredOptionTypes } from "yargs"
 import { Config } from "../config/config"
 import { Flag } from "../flag/flag"
+import { isLoopbackHostname } from "../runtime/listen-security"
 
 const options = {
   port: {
@@ -63,10 +64,8 @@ export async function resolveNetworkOptions(args: NetworkOptions) {
   return { hostname, port, mdns, mdnsDomain, cors }
 }
 
-const LOCALHOST_ADDRESSES = new Set(["127.0.0.1", "localhost", "::1"])
-
 export function isLocalhostOnly(hostname: string) {
-  return LOCALHOST_ADDRESSES.has(hostname)
+  return isLoopbackHostname(hostname)
 }
 
 export function requireAuthForNetwork(hostname: string) {

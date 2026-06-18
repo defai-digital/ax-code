@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, spyOn, test } from "bun:test"
 import { Config } from "../../src/config/config"
-import { resolveNetworkOptions, type NetworkOptions } from "../../src/cli/network"
+import { isLocalhostOnly, resolveNetworkOptions, type NetworkOptions } from "../../src/cli/network"
 
 const ORIGINAL_ARGV = process.argv
 let configSpy: ReturnType<typeof spyOn<typeof Config, "global">> | undefined
@@ -58,5 +58,19 @@ describe("resolveNetworkOptions explicit-flag detection", () => {
     const result = await resolveNetworkOptions(defaults({ hostname: "0.0.0.0" }))
 
     expect(result.hostname).toBe("0.0.0.0")
+  })
+})
+
+describe("isLocalhostOnly", () => {
+  test("accepts loopback hostnames and literals", () => {
+    for (const hostname of ["localhost", "127.0.0.1", "127.12.0.1", "::1", "[::1]"]) {
+      expect(isLocalhostOnly(hostname)).toBe(true)
+    }
+  })
+
+  test("rejects network and loopback-looking hostnames", () => {
+    for (const hostname of ["0.0.0.0", "127.0.0.1.evil.com", "localhost.evil.com"]) {
+      expect(isLocalhostOnly(hostname)).toBe(false)
+    }
   })
 })

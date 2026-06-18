@@ -1,9 +1,19 @@
 import { Flag } from "@/flag/flag"
 
-const LOOPBACK_HOSTNAMES = new Set(["127.0.0.1", "localhost", "::1"])
-
 export function isLoopbackHostname(hostname: string): boolean {
-  return LOOPBACK_HOSTNAMES.has(hostname)
+  const host = hostname.startsWith("[") && hostname.endsWith("]") ? hostname.slice(1, -1) : hostname
+  if (host === "localhost" || host === "::1") return true
+  return isIPv4Loopback(host)
+}
+
+function isIPv4Loopback(hostname: string): boolean {
+  const parts = hostname.split(".")
+  if (parts.length !== 4 || parts[0] !== "127") return false
+  return parts.every((part) => {
+    if (!/^\d{1,3}$/.test(part)) return false
+    const value = Number(part)
+    return value >= 0 && value <= 255
+  })
 }
 
 export function assertAuthenticatedNetworkBind(hostname: string): void {
