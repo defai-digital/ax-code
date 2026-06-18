@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { AsyncQueue } from "../../src/util/queue"
-import { pushSseFrame, SSE_HARD_MAX } from "../../src/server/sse-queue"
+import { encodeSsePayload, pushSseFrame, SSE_HARD_MAX } from "../../src/server/sse-queue"
 
 describe("server/sse-queue", () => {
   test("enqueues frames while under the hard limit", () => {
@@ -43,5 +43,43 @@ describe("server/sse-queue", () => {
 
     expect(pushSseFrame(q, { type: "server.heartbeat" })).toBe("overflow")
     expect(q.size).toBe(SSE_HARD_MAX)
+  })
+
+  test("encodes bigint and circular payloads without throwing", async () => {
+    const q = new AsyncQueue<string | null>()
+    const payload: Record<string, unknown> = {
+      type: "tool.result",
+      properties: {
+        sequence: 1n,
+      },
+    }
+    payload.self = payload
+
+    expect(pushSseFrame(q, payload)).toBe("queued")
+
+    const frame = await q.next()
+    expect(frame).not.toBeNull()
+    expect(JSON.parse(frame as string)).toEqual({
+      type: "tool.result",
+      properties: {
+        sequence: "1",
+      },
+      self: "[Circular]",
+    })
+  })
+
+  test("encodes a serialization error frame when JSON conversion throws", () => {
+    const encoded = encodeSsePayload({
+      toJSON() {
+        throw new Error("cannot serialize")
+      },
+    })
+
+    expect(JSON.parse(encoded)).toEqual({
+      type: "server.serialization_error",
+      properties: {
+        error: "cannot serialize",
+      },
+    })
   })
 })

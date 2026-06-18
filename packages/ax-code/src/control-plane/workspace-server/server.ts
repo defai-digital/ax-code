@@ -8,6 +8,7 @@ import { Flag } from "@/flag/flag"
 import { WorkspaceID } from "../schema"
 import { Log } from "@/util/log"
 import { assertAuthenticatedNetworkBind } from "@/runtime/listen-security"
+import { pushSseFrame } from "@/server/sse-queue"
 
 const log = Log.create({ service: "workspace-server" })
 
@@ -55,7 +56,7 @@ export namespace WorkspaceServer {
               }
               return
             }
-            q.push(JSON.stringify(event.payload))
+            void pushSseFrame(q, event.payload, { maxQueueSize: SSE_MAX_QUEUE })
           }
 
           const heartbeat = setInterval(() => {

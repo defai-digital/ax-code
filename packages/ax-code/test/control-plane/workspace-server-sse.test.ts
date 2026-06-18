@@ -86,6 +86,65 @@ describe("control-plane/workspace-server SSE", () => {
     }
   })
 
+  test("streams GlobalBus events with non-JSON-native payload values", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const app = WorkspaceServer.App()
+    const stop = new AbortController()
+    const seen: unknown[] = []
+    try {
+      const response = await app.request("/event", {
+        signal: stop.signal,
+        headers: {
+          "x-opencode-workspace": "wrk_test_workspace",
+          "x-opencode-directory": tmp.path,
+        },
+      })
+
+      expect(response.status).toBe(200)
+      expect(response.body).toBeDefined()
+
+      const payload: Record<string, unknown> = {
+        type: "workspace.test",
+        properties: { sequence: 1n },
+      }
+      payload.self = payload
+
+      const done = new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          reject(new Error("timed out waiting for serializable workspace.test event"))
+        }, 3000)
+
+        void parseSSE(response.body!, stop.signal, (event) => {
+          seen.push(event)
+          const next = event as { type?: string }
+          if (next.type === "server.connected") {
+            GlobalBus.emit("event", {
+              directory: "wrk_test_workspace",
+              payload,
+            })
+            return
+          }
+          if (next.type !== "workspace.test") return
+          clearTimeout(timeout)
+          resolve()
+        }).catch((error) => {
+          clearTimeout(timeout)
+          reject(error)
+        })
+      })
+
+      await done
+
+      expect(seen).toContainEqual({
+        type: "workspace.test",
+        properties: { sequence: "1" },
+        self: "[Circular]",
+      })
+    } finally {
+      stop.abort()
+    }
+  })
+
   test("heartbeat respects the workspace SSE queue cap", async () => {
     const src = await Bun.file(path.join(import.meta.dir, "../../src/control-plane/workspace-server/server.ts")).text()
     const start = src.indexOf("const heartbeat = setInterval")
