@@ -520,6 +520,48 @@ describe("SessionGoal", () => {
     })
   })
 
+  test("goal command safely formats non-printable control errors", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        modelSpy = spyOn(Provider, "getModel").mockResolvedValue(model)
+        streamSpy = spyOn(LLM, "stream").mockResolvedValue({
+          fullStream: (async function* () {})(),
+        } as any)
+        const broken = function brokenThrowable() {
+          return undefined
+        }
+        Object.defineProperty(broken, Symbol.toPrimitive, {
+          value() {
+            throw new Error("cannot stringify")
+          },
+        })
+        const createSpy = spyOn(SessionGoal, "create").mockRejectedValue(broken)
+
+        try {
+          const message = await SessionPrompt.command({
+            sessionID: session.id,
+            command: "goal",
+            arguments: "ship it",
+            agent: "build",
+            model: "test/test-model",
+          })
+
+          expect(message.parts.some((part) => part.type === "text" && part.text.includes("Goal command failed."))).toBe(
+            true,
+          )
+          expect(streamSpy).not.toHaveBeenCalled()
+        } finally {
+          createSpy.mockRestore()
+          await Session.remove(session.id)
+        }
+      },
+    })
+  })
+
   test("active goal continues until model marks it complete", async () => {
     await using tmp = await tmpdir({ git: true })
 

@@ -9,7 +9,12 @@ import { createUserMessage } from "./prompt-user-message"
 type PromptRunner = (input: PromptInput) => Promise<MessageV2.WithParts>
 
 function goalErrorMessage(error: unknown) {
-  return error instanceof Error ? error.message : String(error)
+  if (error instanceof Error) return error.message
+  try {
+    return String(error)
+  } catch {
+    return "Goal command failed."
+  }
 }
 
 // Run a goal status transition that may reject (pause/resume throw when no goal
