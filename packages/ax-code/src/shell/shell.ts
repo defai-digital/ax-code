@@ -55,6 +55,15 @@ export namespace Shell {
   }
   const BLACKLIST = new Set(["fish", "nu"])
 
+  function shellName(shell: string, platform = process.platform) {
+    const base = platform === "win32" ? path.win32.basename(shell) : path.basename(shell)
+    return platform === "win32" ? base.replace(/\.(?:exe|cmd|bat|com)$/i, "").toLowerCase() : base.toLowerCase()
+  }
+
+  export function isAcceptable(shell: string, platform = process.platform) {
+    return !BLACKLIST.has(shellName(shell, platform))
+  }
+
   function fallback() {
     if (process.platform === "win32") {
       if (Flag.AX_CODE_GIT_BASH_PATH) return Flag.AX_CODE_GIT_BASH_PATH
@@ -78,10 +87,7 @@ export namespace Shell {
   })
 
   const _acceptable = lazy(() => {
-    return resolveShellFromEnv((shell) => {
-      const base = process.platform === "win32" ? path.win32.basename(shell) : path.basename(shell)
-      return !BLACKLIST.has(base)
-    })
+    return resolveShellFromEnv((shell) => isAcceptable(shell))
   })
 
   export function preferred(configShell?: string): string {
@@ -91,8 +97,7 @@ export namespace Shell {
 
   export function acceptable(configShell?: string): string {
     if (configShell) {
-      const base = process.platform === "win32" ? path.win32.basename(configShell) : path.basename(configShell)
-      if (!BLACKLIST.has(base)) return configShell
+      if (isAcceptable(configShell)) return configShell
     }
     return _acceptable()
   }
