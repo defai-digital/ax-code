@@ -1,0 +1,287 @@
+//! Runtime event types from the headless server.
+//!
+//! These events drive the TUI state. The TUI subscribes to SSE events
+//! and updates its rendering accordingly.
+//!
+//! Event format: `{ "type": "event.name", "properties": { ... } }`
+
+use serde::{Deserialize, Serialize};
+
+/// A runtime event from the headless server.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum RuntimeEvent {
+    // === Session events ===
+    /// Session created.
+    #[serde(rename = "session.created")]
+    SessionCreated {
+        #[serde(default)]
+        properties: SessionInfo,
+    },
+
+    /// Session updated.
+    #[serde(rename = "session.updated")]
+    SessionUpdated {
+        #[serde(default)]
+        properties: SessionInfo,
+    },
+
+    /// Session deleted.
+    #[serde(rename = "session.deleted")]
+    SessionDeleted {
+        #[serde(default)]
+        properties: SessionInfo,
+    },
+
+    /// Session status changed.
+    #[serde(rename = "session.status")]
+    SessionStatus {
+        #[serde(default)]
+        properties: SessionStatusProps,
+    },
+
+    /// Session error.
+    #[serde(rename = "session.error")]
+    SessionError {
+        #[serde(default)]
+        properties: SessionErrorProps,
+    },
+
+    // === Message events ===
+    /// Message updated.
+    #[serde(rename = "message.updated")]
+    MessageUpdated {
+        #[serde(default)]
+        properties: MessageInfo,
+    },
+
+    /// Message part delta (streaming).
+    #[serde(rename = "message.part.delta")]
+    MessagePartDelta {
+        #[serde(default)]
+        properties: MessagePartDeltaProps,
+    },
+
+    // === Permission/Question events ===
+    /// Permission requested.
+    #[serde(rename = "permission.asked")]
+    PermissionAsked {
+        #[serde(default)]
+        properties: PermissionRequestProps,
+    },
+
+    /// Permission replied.
+    #[serde(rename = "permission.replied")]
+    PermissionReplied {
+        #[serde(default)]
+        properties: RequestReplyProps,
+    },
+
+    /// Question requested.
+    #[serde(rename = "question.asked")]
+    QuestionAsked {
+        #[serde(default)]
+        properties: QuestionRequestProps,
+    },
+
+    /// Question replied.
+    #[serde(rename = "question.replied")]
+    QuestionReplied {
+        #[serde(default)]
+        properties: RequestReplyProps,
+    },
+
+    /// Question rejected.
+    #[serde(rename = "question.rejected")]
+    QuestionRejected {
+        #[serde(default)]
+        properties: RequestReplyProps,
+    },
+
+    // === Todo events ===
+    /// Todo list updated.
+    #[serde(rename = "todo.updated")]
+    TodoUpdated {
+        #[serde(default)]
+        properties: TodoUpdatedProps,
+    },
+
+    // === Diff events ===
+    /// Session diff updated.
+    #[serde(rename = "session.diff")]
+    SessionDiff {
+        #[serde(default)]
+        properties: SessionDiffProps,
+    },
+
+    // === Tool call events ===
+    /// Tool call started.
+    #[serde(rename = "tool.call.start")]
+    ToolCallStart {
+        #[serde(default)]
+        properties: ToolCallStartProps,
+    },
+
+    /// Tool call completed.
+    #[serde(rename = "tool.call.complete")]
+    ToolCallComplete {
+        #[serde(default)]
+        properties: ToolCallCompleteProps,
+    },
+
+    // === Control events ===
+    /// Server connected.
+    #[serde(rename = "server.connected")]
+    ServerConnected,
+
+    /// Server heartbeat.
+    #[serde(rename = "server.heartbeat")]
+    ServerHeartbeat,
+
+    /// Server instance disposed.
+    #[serde(rename = "server.instance.disposed")]
+    ServerInstanceDisposed,
+
+    /// Unknown event (forward compatibility).
+    #[serde(other)]
+    Unknown,
+}
+
+// === Property structs ===
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct SessionInfo {
+    #[serde(default)]
+    pub info: Option<SessionData>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct SessionData {
+    pub id: String,
+    #[serde(default)]
+    pub title: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct SessionStatusProps {
+    #[serde(rename = "sessionID", default)]
+    pub session_id: String,
+    #[serde(default)]
+    pub status: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct SessionErrorProps {
+    #[serde(rename = "sessionID", default)]
+    pub session_id: Option<String>,
+    #[serde(default)]
+    pub error: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct MessageInfo {
+    #[serde(default)]
+    pub info: Option<MessageData>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct MessageData {
+    pub id: String,
+    #[serde(rename = "sessionID", default)]
+    pub session_id: String,
+    #[serde(default)]
+    pub role: Option<MessageRole>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct MessagePartDeltaProps {
+    #[serde(rename = "messageID", default)]
+    pub message_id: String,
+    #[serde(rename = "partID", default)]
+    pub part_id: String,
+    #[serde(default)]
+    pub field: String,
+    #[serde(default)]
+    pub delta: String,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct PermissionRequestProps {
+    #[serde(rename = "sessionID", default)]
+    pub session_id: String,
+    #[serde(default)]
+    pub id: String,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default)]
+    pub permission_type: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct QuestionRequestProps {
+    #[serde(rename = "sessionID", default)]
+    pub session_id: String,
+    #[serde(default)]
+    pub id: String,
+    #[serde(default)]
+    pub question: String,
+    #[serde(default)]
+    pub options: Vec<String>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct RequestReplyProps {
+    #[serde(rename = "sessionID", default)]
+    pub session_id: String,
+    #[serde(rename = "requestID", default)]
+    pub request_id: String,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct TodoUpdatedProps {
+    #[serde(rename = "sessionID", default)]
+    pub session_id: String,
+    #[serde(default)]
+    pub todos: Vec<serde_json::Value>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct SessionDiffProps {
+    #[serde(rename = "sessionID", default)]
+    pub session_id: String,
+    #[serde(default)]
+    pub diff: Vec<serde_json::Value>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ToolCallStartProps {
+    #[serde(rename = "sessionID", default)]
+    pub session_id: String,
+    #[serde(default)]
+    pub call_id: String,
+    #[serde(default)]
+    pub tool_name: String,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ToolCallCompleteProps {
+    #[serde(rename = "sessionID", default)]
+    pub session_id: String,
+    #[serde(default)]
+    pub call_id: String,
+    #[serde(default)]
+    pub tool_name: String,
+    #[serde(default)]
+    pub result: Option<String>,
+    #[serde(default)]
+    pub error: Option<String>,
+}
+
+/// Message role in a session.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum MessageRole {
+    User,
+    Assistant,
+    System,
+}

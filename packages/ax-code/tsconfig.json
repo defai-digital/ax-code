@@ -12,7 +12,7 @@
     "jsx": "preserve",
     "jsxImportSource": "@opentui/solid",
     "lib": ["ESNext", "DOM", "DOM.Iterable"],
-    "types": [],
+    "types": ["bun"],
     "noUncheckedIndexedAccess": false,
     "customConditions": ["browser"],
     "paths": {

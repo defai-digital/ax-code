@@ -73,6 +73,8 @@ export namespace Flag {
   export declare const AX_CODE_AUTONOMOUS: boolean
   export declare const AX_CODE_SMART_LLM: boolean
   export declare const AX_CODE_WORKFLOW_RUNTIME: boolean
+  export declare const AX_CODE_TUI_SESSION_FIRST: boolean
+  export declare const AX_CODE_TUI_DISABLE_WORKFLOW_DASHBOARD_POLL: boolean
   export declare const AX_CODE_SUPER_LONG: boolean
   export declare const AX_CODE_CALLER: string | undefined
   export declare const AX_CODE_ORIGINAL_CWD: string | undefined
@@ -162,6 +164,10 @@ export namespace Flag {
   export const AX_CODE_EXPERIMENTAL_OXFMT = AX_CODE_EXPERIMENTAL || truthy("AX_CODE_EXPERIMENTAL_OXFMT")
   export const AX_CODE_EXPERIMENTAL_LSP_TY = truthy("AX_CODE_EXPERIMENTAL_LSP_TY")
   export const AX_CODE_EXPERIMENTAL_LSP_TOOL = AX_CODE_EXPERIMENTAL || truthy("AX_CODE_EXPERIMENTAL_LSP_TOOL")
+  // Ratatui TUI (ADR-035): Experimental native Rust TUI client that connects
+  // to the headless ax-code server via HTTP/SSE. Enable with =1 to access the
+  // lean terminal UI for testing and development.
+  export const AX_CODE_EXPERIMENTAL_RATATUI_TUI = truthy("AX_CODE_EXPERIMENTAL_RATATUI_TUI")
   export declare const AX_CODE_EXPERIMENTAL_QUALITY_SHADOW: boolean
   export declare const AX_CODE_EXPERIMENTAL_QUALITY_SHADOW_MODEL: string | undefined
   export declare const AX_CODE_EXPERIMENTAL_QUALITY_SHADOW_PREDICTIONS: string | undefined
@@ -305,6 +311,16 @@ defineBooleanFlag("AX_CODE_NATIVE_DIFF", true)
 defineBooleanFlag("AX_CODE_NATIVE_PARSER", true)
 
 defineBooleanFlag("AX_CODE_DISABLE_FILETIME_CHECK")
+
+// Session-first TUI launch is on by default (ADR-035). When enabled, the TUI
+// auto-resumes the most recent session instead of landing on the home/new-session
+// screen. Opt out with AX_CODE_TUI_SESSION_FIRST=0 for the legacy behavior.
+defineBooleanFlag("AX_CODE_TUI_SESSION_FIRST", true)
+
+// Periodic workflow dashboard polling adds background fetches every 10s when
+// AX_CODE_WORKFLOW_RUNTIME is enabled. Disable with this flag to reduce startup
+// overhead and terminal polling (ADR-035). The one-shot bootstrap fetch is unaffected.
+defineBooleanFlag("AX_CODE_TUI_DISABLE_WORKFLOW_DASHBOARD_POLL")
 
 // Dynamic getter for AX_CODE_ISOLATION_MODE
 // Must be evaluated at access time because --sandbox CLI flag

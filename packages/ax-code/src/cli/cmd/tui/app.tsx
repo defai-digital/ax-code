@@ -72,6 +72,8 @@ import { directoryRequestHeaders } from "@tui/util/request-headers"
 import { scheduleDeferredStartupTask } from "@tui/util/startup-task"
 import { beginTuiStartup, createTuiStartupSpan, recordTuiStartup, recordTuiStartupOnce } from "@tui/util/startup-trace"
 import { responseErrorMessage, unknownErrorMessage } from "@tui/util/error-message"
+import { resolveSessionFirstRoute } from "./navigation/launch-policy"
+import { resolveDesktopHandoff } from "./navigation/desktop-handoff"
 
 const FALLBACK_COLOR_MODE = "dark" as const
 
@@ -660,6 +662,30 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
     }
   })
 
+  // Session-first launch (ADR-035): when no explicit --session/--continue/--prompt
+  // is given and AX_CODE_TUI_SESSION_FIRST is enabled, auto-resume the most recent
+  // session instead of landing on the home/new-session screen.
+  let sessionFirstApplied = false
+  createEffect(() => {
+    if (sessionFirstApplied || !sync.data.session_loaded) return
+    if (!Flag.AX_CODE_TUI_SESSION_FIRST) return
+    if (args.sessionID || args.continue || args.prompt) return
+    if (route.data.type !== "home") return
+    const recentSessionIDs = sync.data.session
+      .filter((x) => x.parentID === undefined)
+      .toSorted((a, b) => b.time.updated - a.time.updated)
+      .map((x) => x.id)
+    const decision = resolveSessionFirstRoute({
+      recentSessionIDs,
+      hasProjectContext: true,
+    })
+    if (decision.type === "session") {
+      sessionFirstApplied = true
+      recordTuiStartupOnce("tui.startup.sessionFirst", { sessionID: decision.sessionID })
+      route.navigate({ type: "session", sessionID: decision.sessionID })
+    }
+  })
+
   // Handle --session with --fork: wait for the session list to settle before forking
   // (session list loads in non-blocking phase for --session, so we must wait for it
   // to avoid a race where reconcile overwrites the newly forked session)
@@ -939,6 +965,28 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
         dialog.clear()
       },
       category: "System",
+    },
+    {
+      title: "Open Desktop",
+      value: "desktop.handoff",
+      slash: {
+        name: "desktop",
+      },
+      description: "Get guidance for AX Code Desktop dashboards and workflow supervision",
+      category: "System",
+      onSelect: (dialog) => {
+        const result = resolveDesktopHandoff({
+          platform: process.platform,
+          desktopUrl: undefined,
+        })
+        DiagnosticLog.recordProcess("desktop.dashboard.handoff", { result: result.type })
+        toast.show({
+          message: result.message,
+          variant: "info",
+          duration: 5000,
+        })
+        dialog.clear()
+      },
     },
     {
       title: "Exit the app",

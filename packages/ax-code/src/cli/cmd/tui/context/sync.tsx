@@ -187,6 +187,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
       runBootstrapInBackground: () => bootstrapController.runInBackground(),
       debugEngineEnabled: Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE,
       workflowRuntimeEnabled: Flag.AX_CODE_WORKFLOW_RUNTIME,
+      disableWorkflowDashboardPoll: Flag.AX_CODE_TUI_DISABLE_WORKFLOW_DASHBOARD_POLL,
       pollDebugEngine: () => {
         void syncDebugEngine()
       },

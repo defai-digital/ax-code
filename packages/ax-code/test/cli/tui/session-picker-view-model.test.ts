@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
-import { recentSessions, recentSessionTitle } from "@/cli/cmd/tui/component/home-view-model"
+import { recentSessions, recentSessionTitle } from "@/cli/cmd/tui/component/session-picker-view-model"
+import { resolveSessionFirstRoute } from "@/cli/cmd/tui/navigation/launch-policy"
 import { detectNerdFontTerminal, resolveNerdFontEnabled } from "@/cli/cmd/tui/ui/glyphs"
 
 function session(id: string, updated: number, extra: { title?: string; parentID?: string } = {}) {
@@ -45,6 +46,37 @@ describe("recentSessionTitle", () => {
 
   test("keeps short titles unchanged", () => {
     expect(recentSessionTitle({ title: "Fix tests" })).toBe("Fix tests")
+  })
+})
+
+describe("session-first launch integration", () => {
+  test("recentSessions output feeds resolveSessionFirstRoute", () => {
+    const sessions = [
+      session("old", 1, { title: "Old session" }),
+      session("new", 5, { title: "New session" }),
+      session("mid", 3, { title: "Mid session" }),
+    ]
+    const recent = recentSessions(sessions)
+    const ids = recent.map((s) => s.id)
+
+    const decision = resolveSessionFirstRoute({
+      recentSessionIDs: ids,
+      hasProjectContext: true,
+    })
+
+    expect(decision).toEqual({ type: "session", sessionID: "new" })
+  })
+
+  test("empty recentSessions yields new-session decision", () => {
+    const sessions = [session("child", 5, { parentID: "parent" })]
+    const recent = recentSessions(sessions)
+
+    const decision = resolveSessionFirstRoute({
+      recentSessionIDs: recent.map((s) => s.id),
+      hasProjectContext: true,
+    })
+
+    expect(decision).toEqual({ type: "new-session" })
   })
 })
 

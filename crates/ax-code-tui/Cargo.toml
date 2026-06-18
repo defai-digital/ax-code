@@ -1,0 +1,43 @@
+[package]
+name = "ax-code-tui"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "ax-code-tui"
+path = "src/main.rs"
+
+[dependencies]
+# TUI rendering
+ratatui = "0.29"
+crossterm = "0.28"
+
+# HTTP/SSE client for headless server
+reqwest = { version = "0.12", features = ["json", "stream"] }
+eventsource-stream = "0.2"
+futures-util = "0.3"
+tokio = { version = "1", features = ["full"] }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Error handling
+thiserror = { workspace = true }
+anyhow = "1"
+
+# Utilities
+base64 = "0.22"
+urlencoding = "2.1"
+clap = { version = "4", features = ["derive", "env"] }
+
+# Logging
+tracing = "0.1"
+
+[dev-dependencies]
+tokio-test = "0.4"

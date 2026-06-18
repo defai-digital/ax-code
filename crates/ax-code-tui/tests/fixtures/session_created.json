@@ -1,0 +1,32 @@
+[
+  {
+    "type": "session.created",
+    "properties": {
+      "info": {
+        "id": "session-001",
+        "sessionID": "session-001",
+        "title": "Test Session",
+        "role": "assistant"
+      }
+    }
+  },
+  {
+    "type": "message.updated",
+    "properties": {
+      "info": {
+        "id": "msg-001",
+        "sessionID": "session-001",
+        "role": "user"
+      }
+    }
+  },
+  {
+    "type": "message.part.delta",
+    "properties": {
+      "messageID": "msg-001",
+      "partID": "part-1",
+      "field": "content",
+      "delta": "Hello, this is a test message."
+    }
+  }
+]
