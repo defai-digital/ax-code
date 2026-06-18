@@ -33,6 +33,14 @@ test("run command restores cwd after a requested directory run", async () => {
   expect(src).toContain("process.chdir(previousCwd)")
 })
 
+test("run command scopes the local SDK client to the runtime directory", async () => {
+  const src = await Bun.file(path.join(import.meta.dir, "../../src/cli/cmd/run.ts")).text()
+
+  expect(src).toContain("const runtimeDirectory = directory || callerCwd")
+  expect(src).toContain("await bootstrap(runtimeDirectory")
+  expect(src).toContain("createOpencodeClient({ baseUrl: internalBaseUrl(), fetch: fetchFn, directory: runtimeDirectory })")
+})
+
 test("run command logs tool renderer fallback errors", async () => {
   const src = await Bun.file(path.join(import.meta.dir, "../../src/cli/cmd/run.ts")).text()
 

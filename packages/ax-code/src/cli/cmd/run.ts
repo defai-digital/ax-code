@@ -361,6 +361,7 @@ export const RunCommand = cmd({
         exitEarly("Failed to change directory to " + args.dir)
       }
     })()
+    const runtimeDirectory = directory || callerCwd
     const pathDisplayRoot = directory && path.isAbsolute(directory) ? path.resolve(directory) : process.cwd()
 
     const files: { type: "file"; url: string; filename: string; mime: string }[] = []
@@ -731,7 +732,7 @@ export const RunCommand = cmd({
       }
 
       await pathDisplayRootContext.run(pathDisplayRoot, async () => {
-        await bootstrap(directory || Filesystem.callerCwd(), async () => {
+        await bootstrap(runtimeDirectory, async () => {
           const fetchFn = (async (input: RequestInfo | URL, init?: RequestInit) => {
             const request = new Request(input, init)
             const url = new URL(request.url)
@@ -739,7 +740,7 @@ export const RunCommand = cmd({
             ServerRuntimeAuth.apply(request.headers)
             return Server.Default().fetch(request)
           }) as typeof globalThis.fetch
-          const sdk = createOpencodeClient({ baseUrl: internalBaseUrl(), fetch: fetchFn })
+          const sdk = createOpencodeClient({ baseUrl: internalBaseUrl(), fetch: fetchFn, directory: runtimeDirectory })
           await execute(sdk)
         })
       })
