@@ -60,6 +60,9 @@ export type HeadlessCreateSessionInput = {
 
 export type HeadlessClient = ReturnType<typeof createHeadlessClient>
 
+const SESSION_SHARE_UNSUPPORTED_MESSAGE =
+  "Session sharing is not supported by this headless backend; the HTTP /session/{sessionID}/share route has been removed."
+
 export type HeadlessGlobalHealth = {
   healthy: true
   version: string
@@ -403,26 +406,12 @@ export function createHeadlessClient(input: HeadlessClientOptions) {
       return send({ type: "session.abort", sessionID })
     },
     shareSession(sessionID: string) {
-      return requestJson<unknown>({
-        baseUrl: input.baseUrl,
-        fetch: fetchFn,
-        headers: input.headers,
-        directory: input.directory,
-        experimental_workspaceID: input.experimental_workspaceID,
-        path: `/session/${encodeURIComponent(sessionID)}/share`,
-        method: "POST",
-      })
+      void sessionID
+      return Promise.reject(new Error(SESSION_SHARE_UNSUPPORTED_MESSAGE))
     },
     unshareSession(sessionID: string) {
-      return requestJson<unknown>({
-        baseUrl: input.baseUrl,
-        fetch: fetchFn,
-        headers: input.headers,
-        directory: input.directory,
-        experimental_workspaceID: input.experimental_workspaceID,
-        path: `/session/${encodeURIComponent(sessionID)}/share`,
-        method: "DELETE",
-      })
+      void sessionID
+      return Promise.reject(new Error(SESSION_SHARE_UNSUPPORTED_MESSAGE))
     },
     replyPermission(body: HeadlessPermissionReplyBody) {
       return send({ type: "permission.reply", body })
