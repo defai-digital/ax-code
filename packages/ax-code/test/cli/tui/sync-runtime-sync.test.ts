@@ -116,6 +116,39 @@ describe("tui sync runtime sync", () => {
     expect(applied).toEqual([["repo-a", "repo-b"]])
   })
 
+  test("normalizes malformed workspace list payload containers before applying them", async () => {
+    const applied: string[][] = []
+
+    const actions = createRuntimeSyncActions({
+      url: "http://localhost",
+      fetch: async () => okJson({}),
+      client: createClient({
+        worktree: {
+          list: async () => ({
+            data: { directory: "repo-a" } as unknown as Awaited<
+              ReturnType<RuntimeSyncClient["worktree"]["list"]>
+            >["data"],
+          }),
+        },
+      }),
+      debugEngineEnabled: true,
+      applyWorkspaceList(value) {
+        applied.push(value)
+      },
+      applyMcp: () => undefined,
+      applyLsp: () => undefined,
+      applyDebugEngine: () => undefined,
+      applyAutonomous: () => undefined,
+      applySmartLlm: () => undefined,
+      applySuperLong: () => undefined,
+      applyIsolation: () => undefined,
+    })
+
+    await actions.syncWorkspaces()
+
+    expect(applied).toEqual([[]])
+  })
+
   test("normalizes malformed mcp and lsp status payload containers before applying them", async () => {
     const applied = {
       mcp: [] as Array<Record<string, unknown>>,

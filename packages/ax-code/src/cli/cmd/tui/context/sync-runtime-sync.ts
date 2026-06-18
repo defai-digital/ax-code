@@ -65,8 +65,9 @@ export function createRuntimeSyncActions(input: {
   applySuperLong: (value: boolean) => void
   applyIsolation: (value: ReturnType<typeof normalizeIsolationState>) => void
 }): RuntimeSyncActions {
-  function normalizeWorkspaceList(input: RuntimeSyncWorktree[]) {
-    return input.flatMap((item) => {
+  function normalizeWorkspaceList(input: unknown) {
+    if (!Array.isArray(input)) return []
+    return input.flatMap((item: RuntimeSyncWorktree | null) => {
       if (typeof item === "string" && item.trim().length > 0) return [item]
       if (
         item &&
