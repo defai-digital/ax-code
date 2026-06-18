@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, spyOn, test } from "bun:test"
 import path from "path"
 import { tmpdir } from "../fixture/fixture"
-import { LspTool } from "../../src/tool/lsp"
+import { LspTool, normalizeLspToolEnvelopeData } from "../../src/tool/lsp"
 import { Instance } from "../../src/project/instance"
 import { LSP } from "../../src/lsp"
 import { SessionID, MessageID } from "../../src/session/schema"
@@ -55,6 +55,13 @@ afterEach(() => {
 })
 
 describe("tool.lsp", () => {
+  test("normalizes malformed envelope data to an empty result array", () => {
+    expect(normalizeLspToolEnvelopeData(undefined)).toEqual([])
+    expect(normalizeLspToolEnvelopeData(null)).toEqual([])
+    expect(normalizeLspToolEnvelopeData({ uri: "file:///demo.ts" })).toEqual([])
+    expect(normalizeLspToolEnvelopeData([{ uri: "file:///demo.ts" }])).toEqual([{ uri: "file:///demo.ts" }])
+  })
+
   test("workspaceSymbol returns envelope with provenance", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({

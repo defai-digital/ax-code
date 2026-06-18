@@ -30,6 +30,10 @@ function syntheticEnvelope(data: unknown[]): {
   }
 }
 
+export function normalizeLspToolEnvelopeData(data: unknown): unknown[] {
+  return Array.isArray(data) ? data : []
+}
+
 const operations = [
   "goToDefinition",
   "findReferences",
@@ -354,7 +358,7 @@ export const LspTool = Tool.define("lsp", {
     // Unwrap the envelope's data for the tool output shape (bare
     // array). Existing AI consumers of the file-ops path still see
     // the same shape they did before S3.
-    const result: unknown[] = ((envelope as { data: unknown[] }).data ?? []) as unknown[]
+    const result = normalizeLspToolEnvelopeData((envelope as { data?: unknown }).data)
 
     const output = (() => {
       if (result.length === 0) return `No results found for ${args.operation}`
