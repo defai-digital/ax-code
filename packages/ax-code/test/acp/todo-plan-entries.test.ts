@@ -88,6 +88,8 @@ describe("ACP session list cursor parsing", () => {
   test("rejects invalid cursors instead of treating them as the first page", () => {
     expect(() => ACP.parseListSessionsCursor("abc")).toThrow()
     expect(() => ACP.parseListSessionsCursor("1.5")).toThrow()
+    expect(() => ACP.parseListSessionsCursor("1e3")).toThrow()
+    expect(() => ACP.parseListSessionsCursor("0x10")).toThrow()
     expect(() => ACP.parseListSessionsCursor("-1")).toThrow()
   })
 })

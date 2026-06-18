@@ -168,6 +168,9 @@ export namespace ACP {
     if (cursor === undefined || cursor === null) return undefined
     const trimmed = cursor.trim()
     if (!trimmed) return undefined
+    if (!/^\d+$/.test(trimmed)) {
+      throw RequestError.invalidParams(JSON.stringify({ error: "Invalid session list cursor" }))
+    }
     const parsed = Number(trimmed)
     if (!Number.isSafeInteger(parsed) || parsed < 0) {
       throw RequestError.invalidParams(JSON.stringify({ error: "Invalid session list cursor" }))
