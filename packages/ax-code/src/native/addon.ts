@@ -15,6 +15,7 @@
 
 import { createRequire } from "node:module"
 import { Flag } from "../flag/flag"
+import { toErrorMessage } from "../util/error-message"
 import { Log } from "../util/log"
 
 // Type-only imports — erased at compile time, no runtime dependency.
@@ -37,6 +38,10 @@ const _require = createRequire(import.meta.url)
 type CacheEntry = { value: unknown }
 const cache = new Map<string, CacheEntry>()
 
+export function formatNativeAddonLoadError(error: unknown): string {
+  return toErrorMessage(error)
+}
+
 function loadAddon(pkg: string, enabled: boolean): unknown {
   if (!enabled) return undefined
   const cached = cache.get(pkg)
@@ -47,7 +52,7 @@ function loadAddon(pkg: string, enabled: boolean): unknown {
   } catch (e: unknown) {
     const code = (e as { code?: string })?.code
     if (code !== "MODULE_NOT_FOUND" && code !== "ERR_MODULE_NOT_FOUND") {
-      log.warn("failed to load native addon", { pkg, error: String(e) })
+      log.warn("failed to load native addon", { pkg, error: formatNativeAddonLoadError(e) })
     }
     value = undefined
   }
