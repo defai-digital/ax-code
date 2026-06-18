@@ -8,6 +8,7 @@ import { TaskQueueExecutor } from "@/session/task-queue-executor"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
 import { OptionalQueryNumber } from "./query"
+import { JsonNumber } from "@/util/schema"
 
 const TASK_QUEUE_ID_PARAM = z.object({ taskID: TaskQueueID.zod })
 
@@ -29,7 +30,7 @@ const TaskQueueStatusHeaders = z.object({
   [INTERNAL_LIFECYCLE_HEADER]: z.literal(INTERNAL_LIFECYCLE_VALUE),
 })
 const TaskQueueReorderBody = z.object({
-  position: z.coerce.number().int().min(0),
+  position: JsonNumber(z.number().int().min(0)),
 })
 
 function taskID(c: { req: { valid: (input: "param") => { taskID: TaskQueueID } } }) {

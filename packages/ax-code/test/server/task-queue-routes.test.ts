@@ -122,6 +122,13 @@ describe("task queue routes", () => {
         expect(reorderResponse.status).toBe(200)
         expect(await reorderResponse.json()).toMatchObject({ id: created.id, position: 0 })
 
+        const emptyReorderResponse = await app.request(`/task-queue/${created.id}/reorder?${directoryQuery}`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ position: "" }),
+        })
+        expect(emptyReorderResponse.status).toBe(400)
+
         const deleteResponse = await app.request(`/task-queue/${created.id}?${directoryQuery}`, {
           method: "DELETE",
         })
