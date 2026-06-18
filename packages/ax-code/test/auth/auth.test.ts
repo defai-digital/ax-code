@@ -69,11 +69,13 @@ test("set and remove are no-ops on keys without trailing slashes", async () => {
   expect(after["anthropic"]).toBeUndefined()
 })
 
-test("all returns empty for corrupted auth file", async () => {
-  await Bun.write(file, "{ invalid json")
+test("all does not overwrite corrupted auth file", async () => {
+  const corrupted = "{ invalid json"
+  await Bun.write(file, corrupted)
 
-  expect(await Auth.all()).toEqual({})
-  expect(await Auth.get("anthropic")).toBeUndefined()
+  await expect(Auth.all()).rejects.toMatchObject({ name: "AuthError" })
+  await expect(Auth.get("anthropic")).rejects.toMatchObject({ name: "AuthError" })
+  expect(await Bun.file(file).text()).toBe(corrupted)
 })
 
 test("set does not overwrite corrupted auth file", async () => {

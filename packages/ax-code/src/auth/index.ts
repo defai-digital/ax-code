@@ -267,7 +267,7 @@ export namespace Auth {
   export async function all(): Promise<Record<string, Info>> {
     let data: Record<string, unknown>
     try {
-      data = await Filesystem.readJson<Record<string, unknown>>(file).catch(() => ({}) as Record<string, unknown>)
+      data = await readAuthData()
     } catch (cause) {
       throw authError("Failed to read auth data", cause)
     }
