@@ -715,13 +715,13 @@ export const McpAddCommand = cmd({
           const command = await prompts.text({
             message: "Enter command to run",
             placeholder: "e.g., ax-code x @modelcontextprotocol/server-filesystem",
-            validate: (x) => (x && x.length > 0 ? undefined : "Required"),
+            validate: (x) => (x && x.trim().length > 0 ? undefined : "Required"),
           })
           if (prompts.isCancel(command)) throw new UI.CancelledError()
 
           const mcpConfig: Config.Mcp = {
             type: "local",
-            command: command.split(" "),
+            command: command.trim().split(/\s+/),
           }
 
           await addMcpToConfig(name, mcpConfig, configPath)

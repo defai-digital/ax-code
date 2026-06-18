@@ -13,6 +13,13 @@ const PROVIDER_TIMEOUT_MINUTES = 5
 const RFC_DYNAMIC_CLIENT_REGISTRATION = "RFC 7591"
 
 const ModelId = z.string().meta({ $ref: MODEL_SCHEMA_URL })
+const McpLocalCommand = z
+  .array(z.string())
+  .min(1, "Command must include an executable")
+  .refine((command) => command[0]?.trim().length > 0, {
+    message: "Command executable must be a non-empty string",
+    path: [0],
+  })
 
 const McpTimeout = z
   .number()
@@ -26,7 +33,7 @@ const McpTimeout = z
 export const McpLocal = z
   .object({
     type: z.literal("local").describe("Type of MCP server connection"),
-    command: z.string().array().describe("Command and arguments to run the MCP server"),
+    command: McpLocalCommand.describe("Command and arguments to run the MCP server"),
     environment: z
       .record(z.string(), z.string())
       .optional()

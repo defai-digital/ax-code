@@ -47,6 +47,12 @@ describe("mcp templates", () => {
       expect(config).toEqual({ type: "local" })
     })
 
+    test("local schema rejects blank command executables", () => {
+      expect(Config.McpLocal.safeParse({ type: "local", command: [] }).success).toBe(false)
+      expect(Config.McpLocal.safeParse({ type: "local", command: ["   "] }).success).toBe(false)
+      expect(Config.McpLocal.safeParse({ type: "local", command: ["node", "server.js"] }).success).toBe(true)
+    })
+
     test("empty environment map does not add the field", () => {
       const github = find("github")!
       const config = toConfig(github, {})

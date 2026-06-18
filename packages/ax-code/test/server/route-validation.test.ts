@@ -383,6 +383,39 @@ describe("server route validation", () => {
     })
   })
 
+  test("mcp add rejects local configs without an executable", async () => {
+    await Instance.provide({
+      directory: root,
+      fn: async () => {
+        const emptyCommand = await Server.Default().request("/mcp", {
+          method: "POST",
+          headers: { "content-type": "application/json", ...ServerRuntimeAuth.headers() },
+          body: JSON.stringify({
+            name: "local",
+            config: {
+              type: "local",
+              command: [],
+            },
+          }),
+        })
+        expect(emptyCommand.status).toBe(400)
+
+        const blankExecutable = await Server.Default().request("/mcp", {
+          method: "POST",
+          headers: { "content-type": "application/json", ...ServerRuntimeAuth.headers() },
+          body: JSON.stringify({
+            name: "local",
+            config: {
+              type: "local",
+              command: ["   "],
+            },
+          }),
+        })
+        expect(blankExecutable.status).toBe(400)
+      },
+    })
+  })
+
   test("mutating mcp routes require runtime authorization", async () => {
     await Instance.provide({
       directory: root,
