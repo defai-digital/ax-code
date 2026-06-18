@@ -98,6 +98,25 @@ describe("provider routes", () => {
     })
   })
 
+  test("oauth callback coerces method index from string values", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const response = await Server.Default().request(`/provider/xai/oauth/callback`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ method: "0" }),
+        })
+        expect(response.status).toBe(400)
+        const body = (await response.json()) as { name: string; details?: { resource?: string } }
+        expect(body.name).toBe("InvalidRequestError")
+        expect(body.details?.resource).toBe("providerAuth")
+      },
+    })
+  })
+
   test("oauth authorize rejects negative method index at validation", async () => {
     await using tmp = await tmpdir({ git: true })
 

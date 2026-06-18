@@ -298,7 +298,7 @@ export const ProviderRoutes = lazy(() =>
       validator(
         "json",
         z.object({
-          method: z.number().int().min(0).meta({ description: "Auth method index" }),
+          method: z.coerce.number().int().min(0).meta({ description: "Auth method index" }),
           inputs: z.record(z.string(), z.string()).optional().meta({ description: "Prompt inputs" }),
         }),
       ),
@@ -334,7 +334,7 @@ export const ProviderRoutes = lazy(() =>
       validator(
         "json",
         z.object({
-          method: z.number().int().min(0).meta({ description: "Auth method index" }),
+          method: z.coerce.number().int().min(0).meta({ description: "Auth method index" }),
           code: z.string().optional().meta({ description: "OAuth authorization code" }),
         }),
       ),
