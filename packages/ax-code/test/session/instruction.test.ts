@@ -6,6 +6,7 @@ import { InstructionPrompt } from "../../src/session/instruction"
 import { Instance } from "../../src/project/instance"
 import { Global } from "../../src/global"
 import { tmpdir } from "../fixture/fixture"
+import { Ssrf } from "../../src/util/ssrf"
 
 describe("InstructionPrompt.resolve", () => {
   test("returns empty when AGENTS.md is at project root (already in systemPaths)", async () => {
@@ -293,6 +294,37 @@ describe("InstructionPrompt.systemPaths AX_CODE_CONFIG_DIR", () => {
       })
     } finally {
       homedir.mockRestore()
+    }
+  })
+})
+
+describe("InstructionPrompt.system remote instructions", () => {
+  test("loads HTTP instruction URLs case-insensitively", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      config: {
+        instructions: ["HTTPS://example.com/AGENTS.md"],
+      },
+    })
+    const assertSpy = spyOn(Ssrf, "assertPublicUrl").mockResolvedValue(undefined as never)
+    const fetchSpy = spyOn(Ssrf, "pinnedFetch").mockResolvedValue(new Response("# Remote Instructions") as never)
+
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const paths = await InstructionPrompt.systemPaths()
+          const prompts = await InstructionPrompt.system()
+
+          expect(Array.from(paths)).not.toContain("HTTPS://example.com/AGENTS.md")
+          expect(assertSpy).toHaveBeenCalledWith("HTTPS://example.com/AGENTS.md", "instruction-url")
+          expect(fetchSpy).toHaveBeenCalledWith("HTTPS://example.com/AGENTS.md", expect.any(Object))
+          expect(prompts).toContain("Instructions from: HTTPS://example.com/AGENTS.md\n# Remote Instructions")
+        },
+      })
+    } finally {
+      assertSpy.mockRestore()
+      fetchSpy.mockRestore()
     }
   })
 })

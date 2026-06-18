@@ -53,6 +53,15 @@ function globalFiles() {
   return files
 }
 
+function isHttpInstructionUrl(input: string) {
+  try {
+    const protocol = new URL(input).protocol
+    return protocol === "http:" || protocol === "https:"
+  } catch {
+    return false
+  }
+}
+
 async function resolveRelative(instruction: string): Promise<string[]> {
   if (!Flag.AX_CODE_DISABLE_PROJECT_CONFIG) {
     return Filesystem.globUp(instruction, Instance.directory, Instance.worktree).catch(() => [])
@@ -118,7 +127,7 @@ export namespace InstructionPrompt {
 
     if (config.instructions) {
       for (let instruction of config.instructions) {
-        if (instruction.startsWith("https://") || instruction.startsWith("http://")) continue
+        if (isHttpInstructionUrl(instruction)) continue
         if (instruction.startsWith("~/")) {
           const resolved = await resolveHomeInstructionPath(instruction)
           if (!resolved) continue
@@ -171,7 +180,7 @@ export namespace InstructionPrompt {
     const urls: string[] = []
     if (config.instructions) {
       for (const instruction of config.instructions) {
-        if (instruction.startsWith("https://") || instruction.startsWith("http://")) {
+        if (isHttpInstructionUrl(instruction)) {
           urls.push(instruction)
         }
       }
