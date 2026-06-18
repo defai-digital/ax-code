@@ -31,6 +31,25 @@ const CATEGORY: Record<CapabilityCatalogItem["kind"], string> = {
 }
 
 const CATEGORY_ORDER = new Map(Object.values(CATEGORY).map((category, index) => [category, index]))
+const CAPABILITY_KINDS = new Set<CapabilityCatalogItem["kind"]>([
+  "instruction",
+  "command",
+  "skill",
+  "agent",
+  "workflow",
+])
+
+function isCapabilityCatalogItem(input: unknown): input is CapabilityCatalogItem {
+  return (
+    isRecord(input) &&
+    typeof input.name === "string" &&
+    CAPABILITY_KINDS.has(input.kind as CapabilityCatalogItem["kind"])
+  )
+}
+
+export function normalizeCapabilityCatalogItems(data: unknown): CapabilityCatalogItem[] {
+  return Array.isArray(data) ? data.filter(isCapabilityCatalogItem) : []
+}
 
 export function capabilityCatalogOptions(capabilities: CapabilityCatalogItem[]): CapabilityCatalogOption[] {
   return [...capabilities]

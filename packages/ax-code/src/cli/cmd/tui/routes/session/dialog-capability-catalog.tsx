@@ -3,7 +3,11 @@ import { DialogSelect, type DialogSelectOption } from "@tui/ui/dialog-select"
 import { useDialog } from "@tui/ui/dialog"
 import { useSDK } from "@tui/context/sdk"
 import { createAbortableResourceFetcher } from "../../util/abortable-resource"
-import { capabilityCatalogOptions, type CapabilityCatalogItem } from "./capability-catalog"
+import {
+  capabilityCatalogOptions,
+  normalizeCapabilityCatalogItems,
+  type CapabilityCatalogItem,
+} from "./capability-catalog"
 
 type CapabilityClient = {
   capability?: {
@@ -18,14 +22,14 @@ async function loadCapabilityCatalog(sdk: ReturnType<typeof useSDK>, signal: Abo
   const client = sdk.client as typeof sdk.client & CapabilityClient
   if (client.capability) {
     const result = await client.capability.list(undefined, { signal })
-    return result.data ?? []
+    return normalizeCapabilityCatalogItems(result.data)
   }
 
   const url = new URL("/capability", sdk.url)
   if (sdk.directory) url.searchParams.set("directory", sdk.directory)
   const response = await sdk.fetch(url, { signal })
   if (!response.ok) throw new Error(`Failed to load capability catalog: ${response.status}`)
-  return (await response.json()) as CapabilityCatalogItem[]
+  return normalizeCapabilityCatalogItems(await response.json())
 }
 
 export function DialogCapabilityCatalog() {

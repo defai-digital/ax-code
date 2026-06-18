@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import {
   capabilityCatalogDescription,
   capabilityCatalogOptions,
+  normalizeCapabilityCatalogItems,
 } from "../../../src/cli/cmd/tui/routes/session/capability-catalog"
 
 describe("tui capability catalog", () => {
@@ -75,5 +76,18 @@ describe("tui capability catalog", () => {
         },
       }),
     ).toBe("permission default agent permissions")
+  })
+
+  test("normalizes malformed catalog payloads before rendering options", () => {
+    expect(normalizeCapabilityCatalogItems(null)).toEqual([])
+    expect(normalizeCapabilityCatalogItems({ kind: "skill", name: "release-check" })).toEqual([])
+    expect(
+      normalizeCapabilityCatalogItems([
+        { kind: "skill", name: "release-check" },
+        { kind: "unknown", name: "bad-kind" },
+        { kind: "agent" },
+        null,
+      ]),
+    ).toEqual([{ kind: "skill", name: "release-check" }])
   })
 })
