@@ -245,10 +245,8 @@ impl App {
                     if let Some(mapped) = session_status_from_value(&status) {
                         self.session_status = mapped;
                     }
-                    self.status_message = Some(format!(
-                        "Status: {}",
-                        status_text.unwrap_or("unknown")
-                    ));
+                    self.status_message =
+                        Some(format!("Status: {}", status_text.unwrap_or("unknown")));
                 }
             }
             RuntimeEvent::SessionError { properties } => {
