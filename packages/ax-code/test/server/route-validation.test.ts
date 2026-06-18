@@ -577,4 +577,36 @@ describe("server route validation", () => {
       await fs.rm(home, { recursive: true, force: true })
     }
   })
+
+  test("session list query booleans parse bare flags as true", async () => {
+    await Instance.provide({
+      directory: root,
+      fn: async () => {
+        let sessionListInput: Parameters<typeof Session.list>[0]
+        let globalListInput: Parameters<typeof Session.listGlobal>[0]
+        const sessionListSpy = spyOn(Session, "list").mockImplementation(function* (input) {
+          sessionListInput = input
+        } as typeof Session.list)
+        const globalListSpy = spyOn(Session, "listGlobal").mockImplementation(function* (input) {
+          globalListInput = input
+        } as typeof Session.listGlobal)
+
+        try {
+          const sessionRes = await Server.Default().request("/session?roots")
+          const globalRes = await Server.Default().request("/experimental/session?roots&archived")
+
+          expect(sessionRes.status).toBe(200)
+          expect(globalRes.status).toBe(200)
+          expect(sessionListInput?.directory).toBe(root)
+          expect(sessionListInput?.roots).toBe(true)
+          expect(globalListInput?.directory).toBeUndefined()
+          expect(globalListInput?.roots).toBe(true)
+          expect(globalListInput?.archived).toBe(true)
+        } finally {
+          sessionListSpy.mockRestore()
+          globalListSpy.mockRestore()
+        }
+      },
+    })
+  })
 })
