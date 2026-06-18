@@ -328,6 +328,41 @@ describe("offline provider loaders", () => {
     })
   })
 
+  test("ax-studio ignores discovered models with non-string ids", async () => {
+    process.env.AX_STUDIO_HOST = "http://localhost:18080"
+    globalThis.fetch = (async (input: string | URL | Request) => {
+      const url = String(input)
+      if (url === "http://localhost:18080/v1/models") {
+        return new Response(
+          JSON.stringify({
+            data: [{ id: 123 }, { id: "" }, { id: "valid-model" }],
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        )
+      }
+      throw new Error(`unexpected fetch: ${url}`)
+    }) as typeof fetch
+
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await Bun.write(path.join(dir, "ax-code.json"), JSON.stringify({}))
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await Provider.ready()
+        const providers = await Provider.list()
+        const axStudio = providers[ProviderID.make("ax-studio")]
+        expect(Object.keys(axStudio.models)).toEqual(["valid-model"])
+      },
+    })
+  })
+
   test("ax-studio applies model filters to discovered models", async () => {
     process.env.AX_STUDIO_HOST = "http://localhost:18080"
     globalThis.fetch = (async (input: string | URL | Request) => {
