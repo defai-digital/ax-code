@@ -224,6 +224,12 @@ describe("session.prompt helpers", () => {
     )
   })
 
+  test("does not partially replace numbered placeholder prefixes", async () => {
+    await expect(
+      commandTemplateText({ template: "keep $1abc and $1_name but replace $1", arguments: "file.ts" }),
+    ).resolves.toBe("keep $1abc and $1_name but replace file.ts")
+  })
+
   test("lets the final placeholder absorb extra args", async () => {
     await expect(
       commandTemplateText({

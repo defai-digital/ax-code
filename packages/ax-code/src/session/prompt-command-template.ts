@@ -3,7 +3,7 @@ import { Shell } from "../shell/shell"
 import { Process } from "../util/process"
 
 const argsRegex = /(?:\[Image\s+\d+\]|"[^"]*"|'[^']*'|[^\s"']+)/gi
-const placeholderRegex = /\$(\d+)/g
+const placeholderRegex = /\$(\d+)(?![A-Za-z0-9_])/g
 const quoteTrimRegex = /^["']|["']$/g
 const bashRegex = /!`([^`]+)`/g
 
