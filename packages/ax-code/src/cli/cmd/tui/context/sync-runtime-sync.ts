@@ -15,7 +15,7 @@ export interface RuntimeSyncResponse<T> {
   data: T | undefined
 }
 
-export type RuntimeSyncWorktree = string | { directory?: string }
+export type RuntimeSyncWorktree = string | { directory?: unknown }
 
 export interface RuntimeSyncClient {
   worktree: {
@@ -65,8 +65,15 @@ export function createRuntimeSyncActions(input: {
 }): RuntimeSyncActions {
   function normalizeWorkspaceList(input: RuntimeSyncWorktree[]) {
     return input.flatMap((item) => {
-      if (typeof item === "string" && item.length > 0) return [item]
-      if (typeof item === "object" && item?.directory) return [item.directory]
+      if (typeof item === "string" && item.trim().length > 0) return [item]
+      if (
+        item &&
+        typeof item === "object" &&
+        typeof item.directory === "string" &&
+        item.directory.trim().length > 0
+      ) {
+        return [item.directory]
+      }
       return []
     })
   }

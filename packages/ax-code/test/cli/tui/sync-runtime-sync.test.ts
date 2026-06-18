@@ -78,6 +78,44 @@ describe("tui sync runtime sync", () => {
     })
   })
 
+  test("filters invalid workspace list entries before applying them", async () => {
+    const applied: string[][] = []
+
+    const actions = createRuntimeSyncActions({
+      url: "http://localhost",
+      fetch: async () => okJson({}),
+      client: createClient({
+        worktree: {
+          list: async () => ({
+            data: [
+              "repo-a",
+              "",
+              { directory: "repo-b" },
+              { directory: 123 },
+              { directory: "" },
+              null,
+            ] as unknown as Awaited<ReturnType<RuntimeSyncClient["worktree"]["list"]>>["data"],
+          }),
+        },
+      }),
+      debugEngineEnabled: true,
+      applyWorkspaceList(value) {
+        applied.push(value)
+      },
+      applyMcp: () => undefined,
+      applyLsp: () => undefined,
+      applyDebugEngine: () => undefined,
+      applyAutonomous: () => undefined,
+      applySmartLlm: () => undefined,
+      applySuperLong: () => undefined,
+      applyIsolation: () => undefined,
+    })
+
+    await actions.syncWorkspaces()
+
+    expect(applied).toEqual([["repo-a", "repo-b"]])
+  })
+
   test("skips debug-engine fetches when the feature is disabled", async () => {
     const fetchCalls: string[] = []
 
