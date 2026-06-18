@@ -3,6 +3,8 @@ import { directoryRequestHeaders } from "../util/request-headers"
 import {
   normalizeDebugEngineState,
   normalizeIsolationState,
+  normalizeLspStatusState,
+  normalizeMcpStatusState,
   normalizeRuntimeFlagState,
   normalizeWorkflowDashboardState,
   type DebugEnginePayload,
@@ -119,12 +121,12 @@ export function createRuntimeSyncActions(input: {
     async syncMcpStatus() {
       const result = await input.client.mcp.status().catch(() => undefined)
       if (!result?.data) return
-      input.applyMcp(result.data)
+      input.applyMcp(normalizeMcpStatusState(result.data) as Record<string, McpStatus>)
     },
     async syncLspStatus() {
       const result = await input.client.lsp.status().catch(() => undefined)
       if (!result?.data) return
-      input.applyLsp(result.data)
+      input.applyLsp(normalizeLspStatusState<LspStatus>(result.data))
     },
     async syncDebugEngine() {
       if (!input.debugEngineEnabled) return

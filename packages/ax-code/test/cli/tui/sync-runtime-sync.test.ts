@@ -116,6 +116,43 @@ describe("tui sync runtime sync", () => {
     expect(applied).toEqual([["repo-a", "repo-b"]])
   })
 
+  test("normalizes malformed mcp and lsp status payload containers before applying them", async () => {
+    const applied = {
+      mcp: [] as Array<Record<string, unknown>>,
+      lsp: [] as unknown[][],
+    }
+
+    const actions = createRuntimeSyncActions({
+      url: "http://localhost",
+      fetch: async () => okJson({}),
+      client: createClient({
+        mcp: { status: async () => ({ data: ["bad"] as unknown as Record<string, never> }) },
+        lsp: { status: async () => ({ data: { bad: true } as unknown as never[] }) },
+      }),
+      debugEngineEnabled: true,
+      applyWorkspaceList: () => undefined,
+      applyMcp(value) {
+        applied.mcp.push(value)
+      },
+      applyLsp(value) {
+        applied.lsp.push(value as unknown[])
+      },
+      applyDebugEngine: () => undefined,
+      applyAutonomous: () => undefined,
+      applySmartLlm: () => undefined,
+      applySuperLong: () => undefined,
+      applyIsolation: () => undefined,
+    })
+
+    await actions.syncMcpStatus()
+    await actions.syncLspStatus()
+
+    expect(applied).toEqual({
+      mcp: [{}],
+      lsp: [[]],
+    })
+  })
+
   test("skips debug-engine fetches when the feature is disabled", async () => {
     const fetchCalls: string[] = []
 

@@ -109,6 +109,14 @@ export function normalizeIsolationState(body: unknown) {
   }
 }
 
+export function normalizeMcpStatusState(body: unknown) {
+  return isRecord(body) ? body : {}
+}
+
+export function normalizeLspStatusState<T>(body: unknown): T[] {
+  return Array.isArray(body) ? (body as T[]) : []
+}
+
 export function emptyWorkflowDashboardState(): WorkflowDashboardState {
   return {
     runs: [],

@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test"
 import {
   normalizeDebugEngineState,
   normalizeIsolationState,
+  normalizeLspStatusState,
+  normalizeMcpStatusState,
   normalizeRuntimeFlagState,
   normalizeWorkflowDashboardState,
   type WorkflowDashboardRun,
@@ -140,6 +142,18 @@ describe("tui sync runtime store", () => {
       mode: "workspace-write",
       network: false,
     })
+  })
+
+  test("normalizes runtime mcp and lsp status payload containers", () => {
+    expect(normalizeMcpStatusState({ server: { status: "connected" } })).toEqual({
+      server: { status: "connected" },
+    })
+    expect(normalizeMcpStatusState(null)).toEqual({})
+    expect(normalizeMcpStatusState(["server"])).toEqual({})
+
+    expect(normalizeLspStatusState([{ language: "ts" }])).toEqual([{ language: "ts" }])
+    expect(normalizeLspStatusState(null)).toEqual([])
+    expect(normalizeLspStatusState({ language: "ts" })).toEqual([])
   })
 
   test("normalizes workflow dashboard projections for supervision state", () => {
