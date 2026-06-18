@@ -262,11 +262,8 @@ impl Runner {
                         session_id,
                         request_id,
                     } => {
-                        // Treat rejection as answering with empty string
                         if let Some(ref client) = client {
-                            if let Err(e) =
-                                client.reply_question(&session_id, &request_id, "").await
-                            {
+                            if let Err(e) = client.reject_question(&session_id, &request_id).await {
                                 app.set_status(format!("Question reject failed: {}", e));
                             }
                         }

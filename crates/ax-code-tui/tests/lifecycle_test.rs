@@ -84,6 +84,54 @@ async fn test_server_attach_with_auth() {
     server.shutdown().await;
 }
 
+#[tokio::test]
+async fn test_permission_reply_uses_headless_route() {
+    let server = MockServer::start().await;
+    let config = ClientConfig {
+        base_url: server.url(),
+        auth_token: None,
+        directory: None,
+        session: None,
+        prompt: None,
+    };
+    let client = HeadlessClient::new(config).expect("Failed to create client");
+
+    let result = client.reply_permission("sess_123", "perm_123", true).await;
+    assert!(
+        result.is_ok(),
+        "Permission reply should use /permission/:requestID/reply"
+    );
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
+async fn test_question_reply_and_reject_use_headless_routes() {
+    let server = MockServer::start().await;
+    let config = ClientConfig {
+        base_url: server.url(),
+        auth_token: None,
+        directory: None,
+        session: None,
+        prompt: None,
+    };
+    let client = HeadlessClient::new(config).expect("Failed to create client");
+
+    let reply = client.reply_question("sess_123", "q_123", "A").await;
+    assert!(
+        reply.is_ok(),
+        "Question reply should use /question/:requestID/reply"
+    );
+
+    let reject = client.reject_question("sess_123", "q_123").await;
+    assert!(
+        reject.is_ok(),
+        "Question reject should use /question/:requestID/reject"
+    );
+
+    server.shutdown().await;
+}
+
 // =============================================================================
 // Connection Failure Tests
 // =============================================================================

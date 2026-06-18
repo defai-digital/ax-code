@@ -211,26 +211,26 @@ impl HeadlessClient {
     /// Reply to a permission request.
     pub async fn reply_permission(
         &self,
-        session_id: &str,
+        _session_id: &str,
         permission_id: &str,
         accepted: bool,
     ) -> Result<()> {
-        let url = format!("{}/permission/reply", self.config.base_url);
+        let url = format!(
+            "{}/permission/{}/reply",
+            self.config.base_url,
+            urlencoding::encode(permission_id)
+        );
 
         #[derive(Serialize)]
         struct PermissionReply {
-            session_id: String,
-            id: String,
-            accepted: bool,
+            reply: &'static str,
         }
 
         let response = self
             .http
             .post(&url)
             .json(&PermissionReply {
-                session_id: session_id.to_string(),
-                id: permission_id.to_string(),
-                accepted,
+                reply: if accepted { "once" } else { "reject" },
             })
             .send()
             .await
@@ -247,26 +247,26 @@ impl HeadlessClient {
     /// Reply to a question.
     pub async fn reply_question(
         &self,
-        session_id: &str,
+        _session_id: &str,
         question_id: &str,
         answer: &str,
     ) -> Result<()> {
-        let url = format!("{}/question/reply", self.config.base_url);
+        let url = format!(
+            "{}/question/{}/reply",
+            self.config.base_url,
+            urlencoding::encode(question_id)
+        );
 
         #[derive(Serialize)]
         struct QuestionReply {
-            session_id: String,
-            id: String,
-            answer: String,
+            answers: Vec<Vec<String>>,
         }
 
         let response = self
             .http
             .post(&url)
             .json(&QuestionReply {
-                session_id: session_id.to_string(),
-                id: question_id.to_string(),
-                answer: answer.to_string(),
+                answers: vec![vec![answer.to_string()]],
             })
             .send()
             .await
@@ -275,6 +275,29 @@ impl HeadlessClient {
         if !response.status().is_success() {
             let text = response.text().await.unwrap_or_default();
             anyhow::bail!("Question reply failed: {}", text);
+        }
+
+        Ok(())
+    }
+
+    /// Reject a question without providing an answer.
+    pub async fn reject_question(&self, _session_id: &str, question_id: &str) -> Result<()> {
+        let url = format!(
+            "{}/question/{}/reject",
+            self.config.base_url,
+            urlencoding::encode(question_id)
+        );
+
+        let response = self
+            .http
+            .post(&url)
+            .send()
+            .await
+            .context("Failed to reject question")?;
+
+        if !response.status().is_success() {
+            let text = response.text().await.unwrap_or_default();
+            anyhow::bail!("Question reject failed: {}", text);
         }
 
         Ok(())

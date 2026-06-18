@@ -90,6 +90,21 @@ async fn test_parse_permission_event() {
 }
 
 #[tokio::test]
+async fn test_parse_headless_permission_event() {
+    let json = r#"{"type":"permission.asked","properties":{"sessionID":"sess_123","id":"perm_789","permission":"file_write","patterns":["/tmp/file"],"metadata":{},"always":[]}}"#;
+    let event: RuntimeEvent = serde_json::from_str(json).unwrap();
+
+    match event {
+        RuntimeEvent::PermissionAsked { properties } => {
+            assert_eq!(properties.session_id, "sess_123");
+            assert_eq!(properties.id, "perm_789");
+            assert_eq!(properties.permission_type.as_deref(), Some("file_write"));
+        }
+        _ => panic!("Expected PermissionAsked event"),
+    }
+}
+
+#[tokio::test]
 async fn test_parse_question_event() {
     let json = r#"{"type":"question.asked","properties":{"sessionID":"sess_123","id":"q_001","question":"Which option?","options":["A","B","C"]}}"#;
     let event: RuntimeEvent = serde_json::from_str(json).unwrap();
@@ -100,6 +115,22 @@ async fn test_parse_question_event() {
             assert_eq!(properties.id, "q_001");
             assert_eq!(properties.question, "Which option?");
             assert_eq!(properties.options, vec!["A", "B", "C"]);
+        }
+        _ => panic!("Expected QuestionAsked event"),
+    }
+}
+
+#[tokio::test]
+async fn test_parse_headless_question_event() {
+    let json = r#"{"type":"question.asked","properties":{"sessionID":"sess_123","id":"q_001","questions":[{"question":"Which option?","header":"Choice","options":[{"label":"A","description":"first"},{"label":"B","description":"second"}],"custom":false}]}}"#;
+    let event: RuntimeEvent = serde_json::from_str(json).unwrap();
+
+    match event {
+        RuntimeEvent::QuestionAsked { properties } => {
+            assert_eq!(properties.session_id, "sess_123");
+            assert_eq!(properties.id, "q_001");
+            assert_eq!(properties.display_question(), "Which option?");
+            assert_eq!(properties.display_options(), vec!["A", "B"]);
         }
         _ => panic!("Expected QuestionAsked event"),
     }
@@ -140,6 +171,21 @@ async fn test_parse_todo_event() {
             assert_eq!(properties.todos.len(), 1);
         }
         _ => panic!("Expected TodoUpdated event"),
+    }
+}
+
+#[tokio::test]
+async fn test_parse_headless_tool_call_event() {
+    let json = r#"{"type":"tool.call.start","properties":{"sessionID":"sess_123","callID":"call_1","toolName":"bash"}}"#;
+    let event: RuntimeEvent = serde_json::from_str(json).unwrap();
+
+    match event {
+        RuntimeEvent::ToolCallStart { properties } => {
+            assert_eq!(properties.session_id, "sess_123");
+            assert_eq!(properties.call_id, "call_1");
+            assert_eq!(properties.tool_name, "bash");
+        }
+        _ => panic!("Expected ToolCallStart event"),
     }
 }
 

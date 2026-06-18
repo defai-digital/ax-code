@@ -160,8 +160,9 @@ async fn handle_connection(
         response
     } else if request.starts_with("POST /session/") {
         "HTTP/1.1 202 Accepted\r\nContent-Length: 0\r\n\r\n".to_string()
-    } else if request.starts_with("POST /permission/reply")
-        || request.starts_with("POST /question/reply")
+    } else if is_permission_reply_request(&request)
+        || is_question_reply_request(&request)
+        || is_question_reject_request(&request)
     {
         "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n".to_string()
     } else {
@@ -206,7 +207,7 @@ pub fn permission_asked_event(
     description: &str,
 ) -> String {
     format!(
-        r#"{{"type":"permission.asked","properties":{{"sessionID":"{}","requestID":"{}","permissionType":"{}","description":"{}"}}}}"#,
+        r#"{{"type":"permission.asked","properties":{{"sessionID":"{}","id":"{}","permission":"{}","patterns":[],"metadata":{{"description":"{}"}},"always":[]}}}}"#,
         session_id, request_id, perm_type, description
     )
 }
@@ -218,14 +219,29 @@ pub fn question_asked_event(
     question: &str,
     options: &[&str],
 ) -> String {
-    let options_json: Vec<String> = options.iter().map(|o| format!(r#""{}""#, o)).collect();
+    let options_json: Vec<String> = options
+        .iter()
+        .map(|o| format!(r#"{{"label":"{}","description":""}}"#, o))
+        .collect();
     format!(
-        r#"{{"type":"question.asked","properties":{{"sessionID":"{}","requestID":"{}","question":"{}","options":[{}]}}}}"#,
+        r#"{{"type":"question.asked","properties":{{"sessionID":"{}","id":"{}","questions":[{{"question":"{}","header":"Question","options":[{}]}}]}}}}"#,
         session_id,
         request_id,
         question,
         options_json.join(",")
     )
+}
+
+fn is_permission_reply_request(request: &str) -> bool {
+    request.starts_with("POST /permission/") && request.contains("/reply ")
+}
+
+fn is_question_reply_request(request: &str) -> bool {
+    request.starts_with("POST /question/") && request.contains("/reply ")
+}
+
+fn is_question_reject_request(request: &str) -> bool {
+    request.starts_with("POST /question/") && request.contains("/reject ")
 }
 
 /// Create a tool call start event JSON.

@@ -239,11 +239,17 @@ impl App {
                 }
             }
             RuntimeEvent::PermissionAsked { properties } => {
+                let permission_type = properties.permission_type.unwrap_or_default();
+                let description = if properties.description.is_empty() {
+                    permission_type.clone()
+                } else {
+                    properties.description
+                };
                 self.pending_permissions.push(PermissionRequest {
                     session_id: properties.session_id,
                     request_id: properties.id,
-                    permission_type: properties.permission_type.unwrap_or_default(),
-                    description: properties.description,
+                    permission_type,
+                    description,
                 });
                 self.mode = AppMode::Permission;
             }
@@ -257,11 +263,13 @@ impl App {
                 self.reset_mode_if_idle();
             }
             RuntimeEvent::QuestionAsked { properties } => {
+                let question = properties.display_question();
+                let options = properties.display_options();
                 self.pending_questions.push(QuestionRequest {
                     session_id: properties.session_id,
                     request_id: properties.id,
-                    question: properties.question,
-                    options: properties.options,
+                    question,
+                    options,
                     selected: 0,
                 });
                 self.mode = AppMode::Question;

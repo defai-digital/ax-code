@@ -209,24 +209,108 @@ pub struct MessagePartDeltaProps {
 pub struct PermissionRequestProps {
     #[serde(rename = "sessionID", default)]
     pub session_id: String,
-    #[serde(default)]
+    #[serde(default, alias = "requestID")]
     pub id: String,
     #[serde(default)]
     pub description: String,
-    #[serde(default)]
+    #[serde(
+        default,
+        rename = "permission_type",
+        alias = "permissionType",
+        alias = "permission"
+    )]
     pub permission_type: Option<String>,
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize)]
 pub struct QuestionRequestProps {
-    #[serde(rename = "sessionID", default)]
     pub session_id: String,
-    #[serde(default)]
     pub id: String,
-    #[serde(default)]
     pub question: String,
-    #[serde(default)]
     pub options: Vec<String>,
+}
+
+impl QuestionRequestProps {
+    pub fn display_question(&self) -> String {
+        self.question.clone()
+    }
+
+    pub fn display_options(&self) -> Vec<String> {
+        self.options.clone()
+    }
+}
+
+impl<'de> Deserialize<'de> for QuestionRequestProps {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Default, Deserialize)]
+        struct RawQuestionRequestProps {
+            #[serde(rename = "sessionID", default)]
+            session_id: String,
+            #[serde(default, alias = "requestID")]
+            id: String,
+            #[serde(default)]
+            question: String,
+            #[serde(default)]
+            options: Vec<String>,
+            #[serde(default)]
+            questions: Vec<QuestionInfoProps>,
+        }
+
+        let raw = RawQuestionRequestProps::deserialize(deserializer)?;
+        let first_question = raw.questions.first();
+        let question = if !raw.question.is_empty() {
+            raw.question
+        } else {
+            first_question
+                .map(|q| {
+                    if !q.question.is_empty() {
+                        q.question.clone()
+                    } else {
+                        q.header.clone()
+                    }
+                })
+                .unwrap_or_default()
+        };
+
+        let options = if !raw.options.is_empty() {
+            raw.options
+        } else {
+            first_question
+                .map(|q| {
+                    q.options
+                        .iter()
+                        .map(|option| option.label.clone())
+                        .collect()
+                })
+                .unwrap_or_default()
+        };
+
+        Ok(Self {
+            session_id: raw.session_id,
+            id: raw.id,
+            question,
+            options,
+        })
+    }
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+struct QuestionInfoProps {
+    #[serde(default)]
+    question: String,
+    #[serde(default)]
+    header: String,
+    #[serde(default)]
+    options: Vec<QuestionOptionProps>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+struct QuestionOptionProps {
+    #[serde(default)]
+    label: String,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -257,9 +341,9 @@ pub struct SessionDiffProps {
 pub struct ToolCallStartProps {
     #[serde(rename = "sessionID", default)]
     pub session_id: String,
-    #[serde(default)]
+    #[serde(rename = "callID", alias = "call_id", default)]
     pub call_id: String,
-    #[serde(default)]
+    #[serde(rename = "toolName", alias = "tool_name", default)]
     pub tool_name: String,
 }
 
@@ -267,9 +351,9 @@ pub struct ToolCallStartProps {
 pub struct ToolCallCompleteProps {
     #[serde(rename = "sessionID", default)]
     pub session_id: String,
-    #[serde(default)]
+    #[serde(rename = "callID", alias = "call_id", default)]
     pub call_id: String,
-    #[serde(default)]
+    #[serde(rename = "toolName", alias = "tool_name", default)]
     pub tool_name: String,
     #[serde(default)]
     pub result: Option<String>,
