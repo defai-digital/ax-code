@@ -350,14 +350,30 @@ pub(crate) fn drain_complete_sse_lines(buffer: &mut String) -> Vec<RuntimeEvent>
             .map(str::trim_start)
             .filter(|data| !data.is_empty())
         {
-            match serde_json::from_str::<RuntimeEvent>(data) {
-                Ok(event) => events.push(event),
-                Err(_) => tracing::debug!("Failed to parse SSE event: {}", data),
+            match parse_sse_runtime_event(data) {
+                Some(event) => events.push(event),
+                None => tracing::debug!("Failed to parse SSE event: {}", data),
             }
         }
     }
 
     events
+}
+
+fn parse_sse_runtime_event(data: &str) -> Option<RuntimeEvent> {
+    if let Ok(event) = serde_json::from_str::<RuntimeEvent>(data) {
+        return Some(event);
+    }
+
+    let value = serde_json::from_str::<serde_json::Value>(data).ok()?;
+    for key in ["payload", "details"] {
+        if let Some(inner) = value.get(key) {
+            if let Ok(event) = serde_json::from_value::<RuntimeEvent>(inner.clone()) {
+                return Some(event);
+            }
+        }
+    }
+    None
 }
 
 #[cfg(test)]
@@ -405,6 +421,28 @@ mod tests {
         // SSE allows "data:<payload>" as well as "data: <payload>". Some
         // proxies normalize the whitespace, so the parser must accept both.
         let mut buf = "data:{\"type\":\"server.heartbeat\"}\n".to_string();
+        let events = drain_complete_sse_lines(&mut buf);
+        assert_eq!(events.len(), 1);
+        assert!(matches!(events[0], RuntimeEvent::ServerHeartbeat));
+    }
+
+    #[test]
+    fn test_sse_unwraps_global_payload_envelope() {
+        // /global/event emits {"payload": RuntimeEvent}; parsing only the
+        // outer object drops every real event from that stream.
+        let mut buf =
+            "data: {\"payload\":{\"type\":\"server.connected\",\"properties\":{}}}\n".to_string();
+        let events = drain_complete_sse_lines(&mut buf);
+        assert_eq!(events.len(), 1);
+        assert!(matches!(events[0], RuntimeEvent::ServerConnected));
+    }
+
+    #[test]
+    fn test_sse_unwraps_headless_details_envelope() {
+        // The headless runtime type also documents a details envelope. Keep
+        // this accepted so desktop/headless emitters can share the client.
+        let mut buf =
+            "data: {\"details\":{\"type\":\"server.heartbeat\",\"properties\":{}}}\n".to_string();
         let events = drain_complete_sse_lines(&mut buf);
         assert_eq!(events.len(), 1);
         assert!(matches!(events[0], RuntimeEvent::ServerHeartbeat));
