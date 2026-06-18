@@ -18,6 +18,7 @@ import {
   evaluateDiskStatus,
   evaluateAxEngineCapabilityFromModels,
   evaluatePlatformEligibility,
+  formatAxEngineCapabilityInspectionFailureReason,
   ensureServer,
   getServerStatus,
   getModelStatus,
@@ -109,6 +110,20 @@ describe("ax-engine platform gate", () => {
       supported: true,
       blockers: [],
     })
+  })
+})
+
+describe("ax-engine capability status", () => {
+  test("formats unprintable capability inspection failures safely", () => {
+    const failure = {
+      toString() {
+        throw new Error("cannot print")
+      },
+    }
+
+    expect(formatAxEngineCapabilityInspectionFailureReason(failure)).toBe(
+      "AX_ENGINE_TOOLCALL_UNSUPPORTED: failed to inspect ax-engine /v1/models capability (Unknown error)",
+    )
   })
 })
 

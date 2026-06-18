@@ -4,6 +4,7 @@ import { AxEngineDependencyStatus, getDependencyStatus } from "./dependency"
 import { AxEngineDiskStatus, AxEngineModelStatus, getDiskStatus, getModelStatus } from "./model-cache"
 import { AxEngineServerRuntimeStatus, getServerStatus } from "./server"
 import { AX_ENGINE_API_KEY, AX_ENGINE_ERROR } from "./constants"
+import { toErrorMessage } from "../../util/error-message"
 
 export const AxEngineCapabilityStatus = z.object({
   toolcall: z.boolean(),
@@ -68,6 +69,10 @@ export function evaluateAxEngineCapabilityFromModels(payload: unknown): AxEngine
   }
 }
 
+export function formatAxEngineCapabilityInspectionFailureReason(error: unknown): string {
+  return `${AX_ENGINE_ERROR.ToolcallUnsupported}: failed to inspect ax-engine /v1/models capability (${toErrorMessage(error)})`
+}
+
 async function getCapabilityStatus(server: AxEngineServerRuntimeStatus): Promise<AxEngineCapabilityStatus> {
   if (!server.ready || !server.state?.baseURL) {
     return {
@@ -92,7 +97,7 @@ async function getCapabilityStatus(server: AxEngineServerRuntimeStatus): Promise
     return {
       toolcall: false,
       attachment: false,
-      reason: `${AX_ENGINE_ERROR.ToolcallUnsupported}: failed to inspect ax-engine /v1/models capability (${error instanceof Error ? error.message : String(error)})`,
+      reason: formatAxEngineCapabilityInspectionFailureReason(error),
     }
   }
 }
