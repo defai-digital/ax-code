@@ -21,6 +21,18 @@ describe("task queue routes", () => {
         const session = await Session.create({})
         const directoryQuery = `directory=${encodeURIComponent(tmp.path)}`
 
+        const emptyCreatePriorityResponse = await app.request(`/task-queue?${directoryQuery}`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            sessionID: session.id,
+            kind: "automation",
+            title: "Queue an empty-priority task",
+            priority: "",
+          }),
+        })
+        expect(emptyCreatePriorityResponse.status).toBe(400)
+
         const createdResponse = await app.request(`/task-queue?${directoryQuery}`, {
           method: "POST",
           headers: { "content-type": "application/json" },
@@ -70,6 +82,13 @@ describe("task queue routes", () => {
           payload: { prompt: "ship edited gui" },
           priority: 3,
         })
+
+        const emptyEditPriorityResponse = await app.request(`/task-queue/${created.id}/edit?${directoryQuery}`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ priority: "" }),
+        })
+        expect(emptyEditPriorityResponse.status).toBe(400)
 
         const externalStatusResponse = await app.request(`/task-queue/${created.id}/status?${directoryQuery}`, {
           method: "POST",
