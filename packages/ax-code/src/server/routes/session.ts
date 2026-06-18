@@ -32,7 +32,7 @@ import { errors, notFound } from "../error"
 import { lazy } from "../../util/lazy"
 import { parseSessionID, type SessionRouteContext, SESSION_ID_PARAM } from "./route-params"
 import { parseCurrentProjectSessionID, requireCurrentProjectSession } from "./session-lookup"
-import { QueryBoolean } from "./query"
+import { OptionalQueryNumber, QueryBoolean } from "./query"
 import { Instance } from "@/project/instance"
 
 const log = Log.create({ service: "server" })
@@ -185,18 +185,12 @@ export const SessionRoutes = lazy(() =>
         z.object({
           directory: z.string().optional().meta({ description: "Filter sessions by project directory" }),
           roots: QueryBoolean.optional().meta({ description: "Only return root sessions (no parentID)" }),
-          start: z.coerce
-            .number()
-            .optional()
+          start: OptionalQueryNumber(z.number())
             .meta({ description: "Filter sessions updated on or after this timestamp (milliseconds since epoch)" }),
           search: z.string().optional().meta({ description: "Filter sessions by title (case-insensitive)" }),
-          limit: z.coerce
-            .number()
-            .int()
-            .min(1)
-            .max(1000)
-            .optional()
-            .meta({ description: "Maximum number of sessions to return (1-1000)" }),
+          limit: OptionalQueryNumber(z.number().int().min(1).max(1000)).meta({
+            description: "Maximum number of sessions to return (1-1000)",
+          }),
         }),
       ),
       async (c) => {
