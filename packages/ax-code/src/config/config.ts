@@ -568,6 +568,14 @@ export namespace Config {
     await withTimeout(Promise.all(deps), 60_000, "config dependency installation timed out after 60s")
   }
 
+  function normalizeDependencyPackageJson(pkg: string, value: unknown) {
+    if (!isRecord(value)) throw new Error(`Config package.json must be a JSON object in ${pkg}`)
+    if (value.dependencies !== undefined && !isRecord(value.dependencies)) {
+      throw new Error(`Config package.json dependencies must be a JSON object in ${pkg}`)
+    }
+    return value as Record<string, unknown> & { dependencies?: Record<string, string> }
+  }
+
   export async function installDependencies(dir: string) {
     const pkg = path.join(dir, "package.json")
     const targetVersion = Installation.isLocal() ? "*" : Installation.VERSION
@@ -575,10 +583,11 @@ export namespace Config {
     // Acquire install lock before read-modify-write to prevent races
     using _ = await Lock.write("bun-install")
 
-    const json = await Filesystem.readJson<{ dependencies?: Record<string, string> }>(pkg).catch((error) => {
+    const raw = await Filesystem.readJson<unknown>(pkg).catch((error) => {
       if ((error as NodeJS.ErrnoException | undefined)?.code === "ENOENT") return { dependencies: {} }
       throw error
     })
+    const json = normalizeDependencyPackageJson(pkg, raw)
     json.dependencies = {
       ...json.dependencies,
       "@ax-code/plugin": targetVersion,

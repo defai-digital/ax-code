@@ -944,6 +944,50 @@ test("does not overwrite malformed config package.json during dependency install
   }
 })
 
+test("does not overwrite non-object config package.json during dependency install", async () => {
+  await using tmp = await tmpdir()
+  const pkg = path.join(tmp.path, "package.json")
+  const invalid = "[]"
+  await Filesystem.write(pkg, invalid)
+
+  const run = spyOn(BunProc, "run").mockImplementation(async () => ({
+    code: 0,
+    stdout: Buffer.alloc(0),
+    stderr: Buffer.alloc(0),
+  }))
+
+  try {
+    await expect(Config.installDependencies(tmp.path)).rejects.toThrow("Config package.json must be a JSON object")
+    expect(run).not.toHaveBeenCalled()
+    expect(await Bun.file(pkg).text()).toBe(invalid)
+  } finally {
+    run.mockRestore()
+  }
+})
+
+test("does not overwrite config package.json with non-object dependencies during dependency install", async () => {
+  await using tmp = await tmpdir()
+  const pkg = path.join(tmp.path, "package.json")
+  const invalid = JSON.stringify({ dependencies: [] })
+  await Filesystem.write(pkg, invalid)
+
+  const run = spyOn(BunProc, "run").mockImplementation(async () => ({
+    code: 0,
+    stdout: Buffer.alloc(0),
+    stderr: Buffer.alloc(0),
+  }))
+
+  try {
+    await expect(Config.installDependencies(tmp.path)).rejects.toThrow(
+      "Config package.json dependencies must be a JSON object",
+    )
+    expect(run).not.toHaveBeenCalled()
+    expect(await Bun.file(pkg).text()).toBe(invalid)
+  } finally {
+    run.mockRestore()
+  }
+})
+
 test("resolves scoped npm plugins in config", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
