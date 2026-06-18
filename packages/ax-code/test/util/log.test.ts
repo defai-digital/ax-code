@@ -126,4 +126,30 @@ describe("Log.create", () => {
 
     expect(lines.join("")).toContain('metadata={"name":"root","self":"[Circular]"}')
   })
+
+  test("does not throw when log messages or extras cannot be stringified", async () => {
+    const lines: string[] = []
+    await Log.init(
+      { print: true },
+      {
+        stderrWrite: (msg) => {
+          lines.push(msg)
+        },
+      },
+    )
+    const broken = function brokenThrowable() {
+      return undefined
+    }
+    Object.defineProperty(broken, Symbol.toPrimitive, {
+      value() {
+        throw new Error("cannot stringify")
+      },
+    })
+
+    expect(() => Log.create({ service: "test-log-unprintable" }).error(broken, { error: broken })).not.toThrow()
+
+    const text = lines.join("")
+    expect(text).toContain("error=[Unprintable]")
+    expect(text).toContain("[Unprintable]")
+  })
 })

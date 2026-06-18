@@ -295,10 +295,18 @@ export namespace Log {
             seen.add(next)
           }
           return next
-        }) ?? String(value)
+        }) ?? safeLogString(value)
       )
     } catch (error) {
       return `[Unserializable: ${toErrorMessage(error)}]`
+    }
+  }
+
+  function safeLogString(value: unknown): string {
+    try {
+      return String(value)
+    } catch {
+      return "[Unprintable]"
     }
   }
 
@@ -327,13 +335,15 @@ export namespace Log {
           const prefix = `${key}=`
           if (value instanceof Error) return prefix + formatError(value)
           if (typeof value === "object") return prefix + stringifyLogObject(value)
-          return prefix + value
+          return prefix + safeLogString(value)
         })
         .join(" ")
       const next = new Date()
       const diff = next.getTime() - last
       last = next.getTime()
-      return [next.toISOString().split(".")[0], "+" + diff + "ms", prefix, message].filter(Boolean).join(" ") + "\n"
+      return [next.toISOString().split(".")[0], "+" + diff + "ms", prefix, safeLogString(message)]
+        .filter(Boolean)
+        .join(" ") + "\n"
     }
     // Pino child is created lazily — only when pinoLogger is active (file mode)
     let child: pino.Logger | undefined
@@ -342,25 +352,25 @@ export namespace Log {
       debug(message?: unknown, extra?: Record<string, unknown>) {
         if (shouldLog("DEBUG")) {
           write("DEBUG " + build(message, extra))
-          pino_child()?.debug(extra || {}, String(message ?? ""))
+          pino_child()?.debug(extra || {}, safeLogString(message ?? ""))
         }
       },
       info(message?: unknown, extra?: Record<string, unknown>) {
         if (shouldLog("INFO")) {
           write("INFO  " + build(message, extra))
-          pino_child()?.info(extra || {}, String(message ?? ""))
+          pino_child()?.info(extra || {}, safeLogString(message ?? ""))
         }
       },
       error(message?: unknown, extra?: Record<string, unknown>) {
         if (shouldLog("ERROR")) {
           write("ERROR " + build(message, extra))
-          pino_child()?.error(extra || {}, String(message ?? ""))
+          pino_child()?.error(extra || {}, safeLogString(message ?? ""))
         }
       },
       warn(message?: unknown, extra?: Record<string, unknown>) {
         if (shouldLog("WARN")) {
           write("WARN  " + build(message, extra))
-          pino_child()?.warn(extra || {}, String(message ?? ""))
+          pino_child()?.warn(extra || {}, safeLogString(message ?? ""))
         }
       },
       tag(key: string, value: string) {

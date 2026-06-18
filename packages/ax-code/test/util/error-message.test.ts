@@ -12,6 +12,20 @@ describe("toErrorMessage", () => {
     expect(toErrorMessage(null)).toBe("null")
   })
 
+  test("falls back when non-Error string conversion throws", () => {
+    const broken = function brokenThrowable() {
+      return undefined
+    }
+    Object.defineProperty(broken, Symbol.toPrimitive, {
+      value() {
+        throw new Error("cannot stringify")
+      },
+    })
+
+    expect(toErrorMessage(broken)).toBe("Unknown error")
+    expect(toError(broken)).toMatchObject({ message: "Unknown error" })
+  })
+
   test("preserves Error values", () => {
     const error = new TypeError("invalid value")
     expect(toError(error)).toBe(error)

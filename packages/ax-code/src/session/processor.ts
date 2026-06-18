@@ -90,13 +90,38 @@ export namespace SessionProcessor {
   }) {
     const toolcalls: Record<string, MessageV2.ToolPart> = {}
     const toolInputCache: Record<string, string> = {}
+    const safeString = (value: unknown): string => {
+      try {
+        return String(value)
+      } catch {
+        return "[unprintable]"
+      }
+    }
     const safeStringify = (value: unknown): string => {
       try {
         const serialized = JSON.stringify(value)
-        if (serialized === undefined) return String(value)
+        if (serialized === undefined) return safeString(value)
         return serialized
       } catch {
-        return String(value)
+        return safeString(value)
+      }
+    }
+    const jsonSafeInput = (value: unknown): Record<string, any> => {
+      const seen = new WeakSet<object>()
+      try {
+        const serialized = JSON.stringify(value, (_key, next) => {
+          if (typeof next === "bigint") return next.toString()
+          if (typeof next === "object" && next !== null) {
+            if (seen.has(next)) return "[Circular]"
+            seen.add(next)
+          }
+          return next
+        })
+        if (serialized === undefined) return { value: safeString(value) }
+        const parsed = JSON.parse(serialized)
+        return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : { value: parsed }
+      } catch (error) {
+        return { serialization_error: safeString(error) }
       }
     }
     const canonicalize = (obj: unknown): string => {
@@ -451,12 +476,13 @@ export namespace SessionProcessor {
                     toolcalls[value.toolCallId] = match
                   }
                   if (match) {
+                    const storedInput = jsonSafeInput(value.input)
                     const part = await Session.updatePart.force({
                       ...match,
                       tool: value.toolName,
                       state: {
                         status: "running",
-                        input: value.input,
+                        input: storedInput,
                         time: {
                           start: Date.now(),
                         },
@@ -523,7 +549,7 @@ export namespace SessionProcessor {
                             sessionID: input.assistantMessage.sessionID,
                             metadata: {
                               tool: value.toolName,
-                              input: value.input,
+                              input: storedInput,
                             },
                             always: [value.toolName],
                             ruleset: agent?.permission ?? [],
@@ -551,6 +577,7 @@ export namespace SessionProcessor {
                   if (match && match.state.status === "running") {
                     const toolEndTime = Date.now()
                     const doomLoopWarning = doomLoopWarnings[value.toolCallId]
+                    const storedInput = value.input === undefined ? match.state.input : jsonSafeInput(value.input)
                     const output =
                       doomLoopWarning && typeof value.output.output === "string"
                         ? `${sanitizeForXmlTag(value.output.output)}\n\n<system-reminder>\n${doomLoopWarning}\n</system-reminder>`
@@ -559,7 +586,7 @@ export namespace SessionProcessor {
                       ...match,
                       state: {
                         status: "completed",
-                        input: value.input ?? match.state.input,
+                        input: storedInput,
                         output,
                         metadata: value.output.metadata,
                         title: value.output.title,
@@ -585,7 +612,7 @@ export namespace SessionProcessor {
                     })
                     stepToolObservations.push({
                       tool: match.tool,
-                      input: value.input ?? match.state.input,
+                      input: storedInput,
                       status: "completed",
                     })
 
@@ -616,7 +643,7 @@ export namespace SessionProcessor {
                     const errorMsg = toErrorMessage(value.error)
                     const errorCode = value.error instanceof Error ? value.error.name : "Unknown"
                     const toolErrorEnd = Date.now()
-                    const toolInput = value.input ?? match.state.input
+                    const toolInput = value.input === undefined ? match.state.input : jsonSafeInput(value.input)
 
                     // Self-correction: analyze the failure BEFORE persisting
                     // the tool error so we can append the reflection prompt

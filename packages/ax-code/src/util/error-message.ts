@@ -1,5 +1,10 @@
 export function toErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
+  if (error instanceof Error) return error.message
+  try {
+    return String(error)
+  } catch {
+    return "Unknown error"
+  }
 }
 
 export function toError(error: unknown): Error {
