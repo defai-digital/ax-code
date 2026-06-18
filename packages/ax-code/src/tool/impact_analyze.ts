@@ -30,9 +30,15 @@ export const ImpactAnalyzeTool = Tool.define("impact_analyze", {
   description: DESCRIPTION,
   parameters: z.object({
     changes: z.array(changeSchema).min(1).describe("Change seeds (symbol, file, or diff)"),
-    depth: z.number().int().min(1).max(MAX_DEPTH).optional().describe(`BFS depth cap (default 3, max ${MAX_DEPTH})`),
-    maxVisited: z
+    depth: z.coerce
       .number()
+      .int()
+      .min(1)
+      .max(MAX_DEPTH)
+      .optional()
+      .describe(`BFS depth cap (default 3, max ${MAX_DEPTH})`),
+    maxVisited: z
+      .coerce.number()
       .int()
       .min(10)
       .max(10000)

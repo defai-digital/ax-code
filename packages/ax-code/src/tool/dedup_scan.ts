@@ -28,15 +28,21 @@ export const DedupScanTool = Tool.define("dedup_scan", {
   description: DESCRIPTION,
   parameters: z.object({
     kinds: z.array(z.enum(NODE_KINDS)).optional().describe("Node kinds to scan (default: function, method)"),
-    minSignatureLength: z.number().int().min(1).optional().describe("Skip signatures shorter than this (default 20)"),
+    minSignatureLength: z.coerce.number().int().min(1).optional().describe("Skip signatures shorter than this (default 20)"),
     similarityThreshold: z
-      .number()
+      .coerce.number()
       .min(0)
       .max(1)
       .optional()
       .describe("Jaccard threshold for near-match clustering (default 0.85)"),
     excludeTests: z.boolean().optional().describe("Skip test files (default true)"),
-    maxCandidates: z.number().int().min(10).max(10000).optional().describe("Hard cap on candidate pool (default 2000)"),
+    maxCandidates: z.coerce
+      .number()
+      .int()
+      .min(10)
+      .max(10000)
+      .optional()
+      .describe("Hard cap on candidate pool (default 2000)"),
   }),
   execute: async (args) => {
     const projectID = Instance.project.id
