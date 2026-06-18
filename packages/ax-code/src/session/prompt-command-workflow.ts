@@ -18,7 +18,7 @@ export function parseWorkflowCommandArguments(input: string): Record<string, unk
   if (!trimmed) return {}
 
   const result: Record<string, unknown> = {}
-  const parts = trimmed.match(/"[^"]*"|'[^']*'|[^\s"']+/g) ?? []
+  const parts = splitWorkflowCommandParts(trimmed)
   let parsedAssignments = 0
   for (const part of parts) {
     const index = part.indexOf("=")
@@ -159,6 +159,35 @@ function stripQuotes(input: string) {
     return input.slice(1, -1)
   }
   return input
+}
+
+function splitWorkflowCommandParts(input: string) {
+  const parts: string[] = []
+  let current = ""
+  let quote: '"' | "'" | undefined
+  for (let i = 0; i < input.length; i++) {
+    const char = input[i]!
+    if (quote) {
+      current += char
+      if (char === quote) quote = undefined
+      continue
+    }
+    if (char === '"' || char === "'") {
+      quote = char
+      current += char
+      continue
+    }
+    if (/\s/.test(char)) {
+      if (current) {
+        parts.push(current)
+        current = ""
+      }
+      continue
+    }
+    current += char
+  }
+  if (current) parts.push(current)
+  return parts
 }
 
 function parseWorkflowValue(input: string): unknown {

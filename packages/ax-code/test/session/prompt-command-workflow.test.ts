@@ -25,6 +25,11 @@ test("parseWorkflowCommandArguments supports key=value JSON assignments and raw 
   expect(parseWorkflowCommandArguments("release readiness")).toEqual({
     arguments: "release readiness",
   })
+  expect(parseWorkflowCommandArguments('label="release readiness" owner=\'build agent\' enabled=true')).toEqual({
+    label: "release readiness",
+    owner: "build agent",
+    enabled: true,
+  })
   expect(parseWorkflowCommandArguments("")).toEqual({})
 })
 
