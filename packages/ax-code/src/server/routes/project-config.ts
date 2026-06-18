@@ -85,6 +85,17 @@ function filepath() {
   return path.join(Instance.directory, "ax-code.json")
 }
 
+function isEnoent(error: unknown): error is { code: "ENOENT" } {
+  return typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT"
+}
+
+async function readProjectConfigTextForUpdate(file: string) {
+  return Filesystem.readText(file).catch((error) => {
+    if (isEnoent(error)) return "{}"
+    throw error
+  })
+}
+
 export function decodeProjectConfigValue(value: unknown): Config.Info {
   const next = Config.Info.safeParse(value)
   if (next.success) return next.data
@@ -117,8 +128,14 @@ export async function updateProjectConfig<T>(fn: (config: Config.Info) => T | Pr
   const file = filepath()
   using _inProcess = await Lock.write(file)
   using _crossProcess = await FileLock.acquire(file)
-  const text = await Filesystem.readText(file).catch(() => "{}")
-  const config = parseProjectConfigText(text)
+  const text = await readProjectConfigTextForUpdate(file)
+  const parsed = parseJsonResult(text)
+  if (!parsed.ok) {
+    throw new Error(`Failed to parse project config JSON in ${file}: ${toErrorMessage(parsed.error)}`, {
+      cause: parsed.error instanceof Error ? parsed.error : undefined,
+    })
+  }
+  const config = decodeProjectConfigValue(parsed.value)
   const result = await fn(config)
   await Filesystem.writeJson(file, config)
   return result

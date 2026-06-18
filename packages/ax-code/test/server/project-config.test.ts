@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test"
-import { decodeProjectConfigValue, parseProjectConfigText } from "../../src/server/routes/project-config"
+import path from "path"
+import { Instance } from "../../src/project/instance"
+import { decodeProjectConfigValue, parseProjectConfigText, updateProjectConfig } from "../../src/server/routes/project-config"
+import { tmpdir } from "../fixture/fixture"
 
 describe("project config route decoding", () => {
   test("decodes already-parsed project config values", () => {
@@ -31,5 +34,41 @@ describe("project config route decoding", () => {
 
   test("falls back to an empty config for malformed JSON", () => {
     expect(parseProjectConfigText("{not json")).toEqual({})
+  })
+
+  test("does not overwrite malformed project config during updates", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const file = path.join(tmp.path, "ax-code.json")
+    const malformed = "{not json"
+    await Bun.write(file, malformed)
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await expect(
+          updateProjectConfig((config) => {
+            config.super_long = true
+          }),
+        ).rejects.toThrow("Failed to parse project config JSON")
+      },
+    })
+
+    expect(await Bun.file(file).text()).toBe(malformed)
+  })
+
+  test("creates project config when it does not exist", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const file = path.join(tmp.path, "ax-code.json")
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await updateProjectConfig((config) => {
+          config.super_long = true
+        })
+      },
+    })
+
+    expect(JSON.parse(await Bun.file(file).text())).toEqual({ super_long: true })
   })
 })
