@@ -4,6 +4,7 @@ import type { LspCacheOperation } from "../code-intelligence/schema.sql"
 import { Flag } from "../flag/flag"
 import { Instance } from "../project/instance"
 import { Log } from "../util/log"
+import { toErrorMessage } from "../util/error-message"
 
 export namespace LSPCache {
   const log = Log.create({ service: "lsp.cache" })
@@ -67,7 +68,7 @@ export namespace LSPCache {
       const buf = await Bun.file(file).arrayBuffer()
       return Bun.hash(new Uint8Array(buf)).toString()
     } catch (err) {
-      log.warn("cache: failed to hash file; skipping cache", { file, err: String(err) })
+      log.warn("cache: failed to hash file; skipping cache", { file, err: toErrorMessage(err) })
       return undefined
     }
   }
@@ -93,7 +94,7 @@ export namespace LSPCache {
         now: Date.now(),
       })
     } catch (err) {
-      log.warn("cache: lookup failed", { err: String(err) })
+      log.warn("cache: lookup failed", { err: toErrorMessage(err) })
       return undefined
     }
     if (!row) return undefined
@@ -142,7 +143,7 @@ export namespace LSPCache {
         expiresAt: now + TTL_MS,
       })
     } catch (err) {
-      log.warn("cache: write failed", { err: String(err) })
+      log.warn("cache: write failed", { err: toErrorMessage(err) })
       return
     }
 
@@ -151,7 +152,7 @@ export namespace LSPCache {
         const removed = CodeGraphQuery.pruneExpiredLspCache(now)
         if (removed > 0) log.info("cache: pruned expired rows", { removed })
       } catch (err) {
-        log.warn("cache: prune failed", { err: String(err) })
+        log.warn("cache: prune failed", { err: toErrorMessage(err) })
       }
     }
   }

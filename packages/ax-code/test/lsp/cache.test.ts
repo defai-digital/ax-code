@@ -5,14 +5,17 @@ import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
 
 let upsertSpy: ReturnType<typeof spyOn> | undefined
+let lookupSpy: ReturnType<typeof spyOn> | undefined
 let nowSpy: ReturnType<typeof spyOn> | undefined
 let randomSpy: ReturnType<typeof spyOn> | undefined
 
 afterEach(() => {
   upsertSpy?.mockRestore()
+  lookupSpy?.mockRestore()
   nowSpy?.mockRestore()
   randomSpy?.mockRestore()
   upsertSpy = undefined
+  lookupSpy = undefined
   nowSpy = undefined
   randomSpy = undefined
 })
@@ -56,5 +59,35 @@ describe("LSPCache", () => {
 
     expect(upsertSpy).toHaveBeenCalledTimes(1)
     expect(captured?.expiresAt).toBe(now + 24 * 60 * 60 * 1000)
+  })
+
+  test("lookup degrades on unprintable cache failures", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const failure = {
+      toString() {
+        throw new Error("cannot print")
+      },
+    }
+    lookupSpy = spyOn(CodeGraphQuery, "getLspCache").mockImplementation(() => {
+      throw failure
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        expect(
+          LSPCache.lookup({
+            operation: "documentSymbol",
+            filePath: "src/demo.ts",
+            contentHash: "hash",
+            line: 1,
+            character: 2,
+            enabled: true,
+          }),
+        ).toBeUndefined()
+      },
+    })
+
+    expect(lookupSpy).toHaveBeenCalledTimes(1)
   })
 })
