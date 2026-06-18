@@ -171,7 +171,7 @@ export namespace DiagnosticLog {
     }
 
     try {
-      appendFileSync(current.processPath, JSON.stringify(record) + "\n")
+      appendFileSync(current.processPath, safeJsonLine(record))
     } catch {
       // Process diagnostics are best-effort and must never crash the app.
     }

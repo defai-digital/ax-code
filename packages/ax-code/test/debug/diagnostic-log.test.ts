@@ -262,6 +262,28 @@ describe("DiagnosticLog", () => {
     })
   })
 
+  test("preserves process diagnostics with bigint fields", async () => {
+    await using tmp = await tmpdir()
+
+    await DiagnosticLog.configure({
+      enabled: true,
+      dir: tmp.path,
+      includeContent: true,
+      manifest: { component: "test", pid: 656 },
+    })
+
+    expect(() => DiagnosticLog.recordProcess("process.bigint", { blocks: 12n })).not.toThrow()
+
+    const processEvents = await readJsonLines(path.join(tmp.path, "process.jsonl"))
+    expect(processEvents.at(-1)).toMatchObject({
+      kind: "process.event",
+      eventType: "process.bigint",
+      data: {
+        blocks: "12",
+      },
+    })
+  })
+
   test("redacts provider errors for normal logs", () => {
     const error = Object.assign(new Error("provider failed"), {
       body: { apiKey: "secret" },
