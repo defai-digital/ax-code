@@ -3,6 +3,7 @@ import { Global } from "../global"
 import { NativePerf } from "../perf/native"
 import { NativeAddon } from "../native/addon"
 import { parseJsonPayload } from "../util/json-value"
+import { toErrorMessage } from "../util/error-message"
 import type { ProjectID } from "../project/schema"
 import type { CodeNodeID, CodeEdgeID, CodeFileID } from "./id"
 import type { CodeNodeKind, CodeEdgeKind } from "./schema.sql"
@@ -38,7 +39,7 @@ function store(): IndexStore | undefined {
   try {
     storeInstance = new native.IndexStore(getDbPath())
   } catch (err) {
-    log.warn("failed to initialize native IndexStore", { error: String(err) })
+    log.warn("failed to initialize native IndexStore", { error: toErrorMessage(err) })
   }
   return storeInstance
 }
@@ -72,7 +73,7 @@ export namespace NativeStore {
     try {
       instance.close()
     } catch (err) {
-      log.warn("native IndexStore close failed", { error: String(err) })
+      log.warn("native IndexStore close failed", { error: toErrorMessage(err) })
     }
   }
 
