@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { Instance } from "../../src/project/instance"
 import { Server } from "../../src/server/server"
+import { Database } from "../../src/storage/db"
 import { ScheduledTask } from "../../src/session/scheduled-task"
-import { TaskQueueID } from "../../src/session/schema"
+import { ScheduledTaskID, TaskQueueID } from "../../src/session/schema"
+import { ScheduledTaskTable } from "../../src/session/session.sql"
 import { TaskQueue } from "../../src/session/task-queue"
 import { tmpdir } from "../fixture/fixture"
 
@@ -210,6 +212,40 @@ describe("scheduled task routes", () => {
         // No invalid task should have been persisted.
         const list = (await (await app.request(`/scheduled-task?${directoryQuery}`)).json()) as unknown[]
         expect(list).toHaveLength(0)
+      },
+    })
+  })
+
+  test("list skips corrupt persisted scheduled task rows", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const valid = await ScheduledTask.create({
+          title: "Valid review",
+          prompt: "Review the current branch.",
+          schedule: { type: "once", runAt: Date.now() + 86_400_000 },
+        })
+        const now = Date.now()
+        Database.use((db) => {
+          db.insert(ScheduledTaskTable)
+            .values({
+              id: ScheduledTaskID.make("sch_corrupt_schedule"),
+              project_id: Instance.project.id,
+              directory: Instance.directory,
+              title: "Corrupt schedule",
+              prompt: "This row should be skipped.",
+              schedule: { type: "daily" },
+              status: "active",
+              next_run_at: now,
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+        })
+
+        expect((await ScheduledTask.list()).map((task) => task.id)).toEqual([valid.id])
       },
     })
   })

@@ -125,10 +125,18 @@ export namespace SessionSummary {
       messageID: MessageID.zod.optional(),
     }),
     async (input) => {
-      const diffs = await Storage.read<Snapshot.FileDiff[]>(["session_diff", input.sessionID]).catch((err) => {
+      const raw = await Storage.read<unknown>(["session_diff", input.sessionID]).catch((err) => {
         if (Storage.NotFoundError.isInstance(err)) return []
         throw err
       })
+      // Persisted JSON is read back with only a type assertion, so a corrupt or
+      // legacy-shaped file would otherwise crash `.map` below. Drop bad entries.
+      const diffs = Array.isArray(raw)
+        ? raw.flatMap((item) => {
+            const result = Snapshot.FileDiff.safeParse(item)
+            return result.success ? [result.data] : []
+          })
+        : []
       const next = diffs.map((item) => {
         const file = unquoteGitPath(item.file)
         if (file === item.file) return item

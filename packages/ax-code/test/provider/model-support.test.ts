@@ -66,6 +66,14 @@ describe("isModelSupportedForProvider", () => {
     expect(isModelSupportedForProvider("google", "imagen-4")).toBe(true)
   })
 
+  test("matches Gemini 3 regardless of separator style", () => {
+    expect(isModelSupportedForProvider("google", "gemini_3_pro")).toBe(true)
+    expect(isModelSupportedForProvider("google", "gemini 3 pro")).toBe(true)
+    expect(isModelSupportedForProvider("google-vertex", "gemini_2.5_pro")).toBe(false)
+    expect(isModelSupportedForProvider("google", "models/preview-latest", { name: "Gemini 3 Pro Preview" })).toBe(true)
+    expect(isModelSupportedForProvider("google", "models/preview-latest", { name: "Gemini 2.5 Pro" })).toBe(false)
+  })
+
   test("applies OpenAI, xAI, and GLM provider filters from model probes", () => {
     expect(isModelSupportedForProvider("openai", "gpt-4.1")).toBe(true)
     expect(isModelSupportedForProvider("openai", "gpt-3.5")).toBe(false)

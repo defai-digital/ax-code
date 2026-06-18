@@ -165,8 +165,8 @@ export namespace ScheduledTask {
     },
   )
 
-  function fromRow(row: typeof ScheduledTaskTable.$inferSelect): Info {
-    return Info.parse({
+  function fromRowInput(row: typeof ScheduledTaskTable.$inferSelect) {
+    return {
       id: row.id,
       projectID: row.project_id,
       directory: row.directory,
@@ -187,7 +187,11 @@ export namespace ScheduledTask {
         created: row.time_created,
         updated: row.time_updated ?? undefined,
       },
-    })
+    }
+  }
+
+  function fromRow(row: typeof ScheduledTaskTable.$inferSelect): Info {
+    return Info.parse(fromRowInput(row))
   }
 
   function publishCreated(task: Info) {
@@ -226,7 +230,14 @@ export namespace ScheduledTask {
         )
         .$dynamic()
       if (parsed.limit) query = query.limit(parsed.limit)
-      return query.all().map(fromRow)
+      // A single corrupt row must not wedge the scheduler tick or 500 the list
+      // endpoint — skip rows whose persisted schedule no longer parses.
+      return query.all().flatMap((row) => {
+        const result = Info.safeParse(fromRowInput(row))
+        if (result.success) return [result.data]
+        log.warn("skipping corrupt scheduled task row", { id: row.id })
+        return []
+      })
     })
   }
 

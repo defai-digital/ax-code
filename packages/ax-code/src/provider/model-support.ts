@@ -29,13 +29,12 @@ export function buildModelProbes(modelID: string, model?: { id?: unknown; name?:
 
 export function isModelSupportedForProvider(providerID: string, modelID: string, model?: ModelSupportProbeInput) {
   const probes = buildModelProbes(modelID, model)
-  const lower = probes[0] ?? modelID.toLowerCase()
   if (probes.some((probe) => probe.includes("gpt-5.5") || probe.includes("gpt-5-5") || probe.includes("gpt55"))) {
     return false
   }
   if (providerID === "google" || providerID === "google-vertex") {
-    if (!lower.includes("gemini")) return true
-    return lower.includes("gemini-3")
+    if (!probes.some((probe) => probe.includes("gemini"))) return true
+    return probes.some((probe) => probe.includes("gemini-3"))
   }
   if (providerID === "openai") {
     return supportsOpenAIGptModels(probes)

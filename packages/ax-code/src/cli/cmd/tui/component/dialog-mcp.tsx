@@ -7,6 +7,7 @@ import { useTheme } from "../context/theme"
 import { Keybind } from "@/util/keybind"
 import { TextAttributes } from "@opentui/core"
 import { useSDK } from "@tui/context/sdk"
+import { normalizeMcpStatusState } from "@tui/context/sync-runtime-store"
 import { Log } from "@/util/log"
 
 const log = Log.create({ service: "tui.dialog-mcp" })
@@ -62,7 +63,7 @@ export function DialogMcp() {
           // Refresh MCP status from server
           const status = await sdk.client.mcp.status()
           if (status.data) {
-            sync.set("mcp", status.data)
+            sync.set("mcp", normalizeMcpStatusState(status.data) as (typeof sync.data)["mcp"])
           } else {
             log.warn("failed to refresh MCP status: no data returned")
           }

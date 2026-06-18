@@ -52,6 +52,36 @@ describe("session.summary", () => {
     }
   })
 
+  test("diff drops corrupt persisted session_diff payloads instead of crashing", async () => {
+    const sessionID = SessionID.make("ses_summary_corrupt")
+    for (const corrupt of [null, {}, 42, [{ file: 123 }]]) {
+      const storageRead = spyOn(Storage, "read").mockResolvedValue(corrupt as any)
+      try {
+        expect(await SessionSummary.diff({ sessionID })).toEqual([])
+      } finally {
+        storageRead.mockRestore()
+      }
+    }
+  })
+
+  test("diff preserves valid entries when persisted session_diff has corrupt items", async () => {
+    const sessionID = SessionID.make("ses_summary_partial_corrupt")
+    const valid = {
+      file: "src/app.ts",
+      before: "old",
+      after: "new",
+      additions: 1,
+      deletions: 1,
+      status: "modified" as const,
+    }
+    const storageRead = spyOn(Storage, "read").mockResolvedValue([valid, { file: 123 }] as any)
+    try {
+      expect(await SessionSummary.diff({ sessionID })).toEqual([valid])
+    } finally {
+      storageRead.mockRestore()
+    }
+  })
+
   test("rethrows non-NotFound errors even when another summary branch returns NotFound", async () => {
     const sessionID = SessionID.make("ses_summary_errors")
     const messageID = MessageID.make("msg_summary_errors")

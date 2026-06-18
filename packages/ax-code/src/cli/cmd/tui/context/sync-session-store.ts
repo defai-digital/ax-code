@@ -14,11 +14,21 @@ export function createSessionSyncSnapshot<TSession, TTodo, TMessage, TPart, TDif
   goal?: TGoal | null
 }) {
   if (!input.session) return
+  // A malformed (non-array) payload, or entries missing `info`, would pass the
+  // `?? []` fallback and then crash `applySessionSyncSnapshot` (`.map`,
+  // `message.info.id`). Coerce to renderable entries here.
+  const messages = (Array.isArray(input.messages) ? input.messages : []).flatMap((message) => {
+    if (!message || typeof message !== "object") return []
+    const info = (message as { info?: unknown }).info
+    if (!info || typeof info !== "object" || typeof (info as { id?: unknown }).id !== "string") return []
+    const parts = (message as { parts?: unknown }).parts
+    return [{ info: info as TMessage, parts: Array.isArray(parts) ? (parts as TPart[]) : [] }]
+  })
   return {
     session: input.session,
-    todo: input.todo ?? [],
-    messages: input.messages ?? [],
-    diff: input.diff ?? [],
+    todo: Array.isArray(input.todo) ? input.todo : [],
+    messages,
+    diff: Array.isArray(input.diff) ? input.diff : [],
     risk: input.risk,
     goal: input.goal,
   }

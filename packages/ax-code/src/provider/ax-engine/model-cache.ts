@@ -67,7 +67,9 @@ export function normalizeQuantization(
   modelID: AxEngineModelID = AX_ENGINE_DEFAULT_MODEL_ID,
 ): AxEngineQuantization {
   const model = AX_ENGINE_MODEL_DEFINITIONS[modelID]
-  if (typeof value === "string" && value in model.quantizations) return value as AxEngineQuantization
+  // `in` walks the prototype chain, so "toString"/"constructor" would pass —
+  // restrict to own keys of the quantization map.
+  if (typeof value === "string" && Object.hasOwn(model.quantizations, value)) return value as AxEngineQuantization
   return model.defaultQuantization
 }
 

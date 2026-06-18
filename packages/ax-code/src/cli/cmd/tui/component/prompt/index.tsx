@@ -1286,6 +1286,7 @@ export function Prompt(props: PromptProps) {
           `Session creation timed out after ${SUBMIT_ACCEPT_TIMEOUT_MS}ms`,
         )
         if (res.error) throw new Error(errorMessage(res.error))
+        if (!res.data?.id) throw new Error("Session creation returned no data")
 
         const createdSession = res.data as (typeof sync.data.session)[number]
         sessionID = res.data.id

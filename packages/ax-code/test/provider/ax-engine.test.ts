@@ -114,6 +114,8 @@ describe("ax-engine model cache", () => {
   test("normalizes unknown quantization to the conservative default", () => {
     expect(normalizeQuantization("mlx6bit")).toBe("mlx6bit")
     expect(normalizeQuantization("surprise")).toBe("mlx4bit")
+    expect(normalizeQuantization("toString")).toBe("mlx4bit")
+    expect(normalizeQuantization("constructor")).toBe("mlx4bit")
   })
 
   test("defaults downloads into the deterministic AX Code managed model cache", () => {

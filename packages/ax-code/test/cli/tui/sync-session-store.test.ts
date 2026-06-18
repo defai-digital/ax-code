@@ -39,6 +39,56 @@ describe("tui sync session store", () => {
     })
   })
 
+  test("drops malformed message payloads that would crash snapshot application", () => {
+    expect(
+      createSessionSyncSnapshot({
+        session: { id: "ses_1", title: "current" },
+        todo: { not: "an array" } as any,
+        messages: [{ info: { id: "msg_1" }, parts: [] }, null, { parts: [] }, { info: null, parts: [] }] as any,
+        diff: "nope" as any,
+        risk: undefined,
+        goal: undefined,
+      }),
+    ).toEqual({
+      session: { id: "ses_1", title: "current" },
+      todo: [],
+      messages: [{ info: { id: "msg_1" }, parts: [] }],
+      diff: [],
+      risk: undefined,
+      goal: undefined,
+    })
+  })
+
+  test("coerces malformed session snapshot collections before hydration", () => {
+    expect(
+      createSessionSyncSnapshot({
+        session: { id: "ses_1", title: "current" },
+        todo: { id: "not-array" },
+        messages: [
+          null,
+          {},
+          { info: {} },
+          { info: { id: 42 }, parts: [] },
+          { info: { id: "msg_1" }, parts: "not-array" },
+          { info: { id: "msg_2" }, parts: [{ id: "part_1" }] },
+        ],
+        diff: { path: "not-array" },
+        risk: undefined,
+        goal: undefined,
+      } as any),
+    ).toEqual({
+      session: { id: "ses_1", title: "current" },
+      todo: [],
+      messages: [
+        { info: { id: "msg_1" }, parts: [] },
+        { info: { id: "msg_2" }, parts: [{ id: "part_1" }] },
+      ],
+      diff: [],
+      risk: undefined,
+      goal: undefined,
+    })
+  })
+
   test("hydrates session state and removes stale part buckets on full sync", () => {
     const store: {
       session: Array<{ id: string; title: string }>
