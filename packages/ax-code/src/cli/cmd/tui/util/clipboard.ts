@@ -21,6 +21,7 @@ const log = Log.create({ service: "tui.clipboard" })
  */
 const OSC52_MAX_BYTES = 100_000
 const CLIPBOARD_PROC_TIMEOUT_MS = 5_000
+const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]
 
 type ProcWithStdin = {
   exited: Promise<unknown>
@@ -129,6 +130,15 @@ async function writeViaProcessStdin(proc: ProcWithStdin, text: string) {
   await waitForExit(proc)
 }
 
+export function decodePngClipboardBase64(value: string): Buffer | undefined {
+  const normalized = value.replace(/\s+/g, "")
+  if (!normalized || normalized.length % 4 === 1 || !/^[A-Za-z0-9+/]*={0,2}$/.test(normalized)) return undefined
+  const imageBuffer = Buffer.from(normalized, "base64")
+  if (imageBuffer.length < PNG_SIGNATURE.length) return undefined
+  if (!PNG_SIGNATURE.every((byte, index) => imageBuffer[index] === byte)) return undefined
+  return imageBuffer
+}
+
 export namespace Clipboard {
   export interface Content {
     data: string
@@ -178,12 +188,8 @@ export namespace Clipboard {
         nothrow: true,
       })
       if (base64.text) {
-        try {
-          const imageBuffer = Buffer.from(base64.text.trim(), "base64")
-          if (imageBuffer.length > 0) {
-            return { data: imageBuffer.toString("base64"), mime: "image/png" }
-          }
-        } catch {}
+        const imageBuffer = decodePngClipboardBase64(base64.text)
+        if (imageBuffer) return { data: imageBuffer.toString("base64"), mime: "image/png" }
       }
     }
 
