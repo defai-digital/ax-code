@@ -14,6 +14,15 @@ export type FatalDep = {
   text?: (err: unknown) => string
 }
 
+function safeCauseString(cause: unknown) {
+  if (cause === undefined) return undefined
+  try {
+    return String(cause)
+  } catch {
+    return "[unprintable cause]"
+  }
+}
+
 export function data(err: unknown) {
   const data: Record<string, any> = {}
 
@@ -26,7 +35,7 @@ export function data(err: unknown) {
     Object.assign(data, {
       name: err.name,
       message: err.message,
-      cause: err.cause?.toString(),
+      cause: safeCauseString(err.cause),
       stack: err.stack,
     })
   }

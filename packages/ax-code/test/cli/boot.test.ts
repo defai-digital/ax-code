@@ -292,6 +292,21 @@ describe("cli.boot.data", () => {
       code: "E1",
     })
   })
+
+  test("does not throw when Error cause string conversion fails", () => {
+    const brokenCause = {
+      toString() {
+        throw new Error("cannot stringify")
+      },
+    }
+    const error = new Error("boom", { cause: brokenCause })
+
+    expect(data(error)).toMatchObject({
+      name: "Error",
+      message: "boom",
+      cause: "[unprintable cause]",
+    })
+  })
 })
 
 describe("cli.boot.fatal", () => {

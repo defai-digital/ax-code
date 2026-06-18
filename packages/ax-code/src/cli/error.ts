@@ -54,5 +54,9 @@ export function FormatUnknownError(input: unknown): string {
     }
   }
 
-  return String(input)
+  try {
+    return String(input)
+  } catch {
+    return "Unexpected error"
+  }
 }
